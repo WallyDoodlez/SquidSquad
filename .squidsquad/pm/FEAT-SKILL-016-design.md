@@ -230,9 +230,9 @@ PM creates two artifacts:
 │   └── working-state.md
 ```
 
-Planning files are created per-feature and persist until the feature ships. After shipping, they can be archived or deleted (they're in git history).
+Planning files are created per-feature and auto-deleted after the feature ships (they're preserved in git history).
 
-For bugs: the same flow applies but lighter — research is optional for simple bugs, test plan focuses on regression prevention.
+Bugs do NOT go through this flow — they use the current lightweight process (fix, verify, close). Only features get the full research → discussion → planning → QA lifecycle.
 
 ---
 
@@ -275,17 +275,17 @@ Existing features in the tracker don't need planning artifacts. The new flow app
 
 ---
 
-## Concerns / Open Questions for Human
+## Decisions (Human Approved)
 
-1. **Overhead for small features** — Should there be a "light" mode that skips research for trivial changes (typo fixes, config tweaks)? Or should everything go through the full flow?
+1. **Light mode for trivial changes** — YES. PM can skip research for trivial features (typo fixes, config tweaks, documentation). PM uses judgment to classify: if the feature touches behavior or user-facing systems, full flow. If it's cosmetic or documentation-only, light mode (skip Phase 1, abbreviated Phase 2).
 
-2. **Research agent cost** — Spawning a research agent per feature request adds token usage. Acceptable?
+2. **Research agent token cost** — YES, acceptable. Deep research upfront prevents costly rework and bug-filing later. Better to spend tokens on thinking than on fixing.
 
-3. **Planning file cleanup** — After a feature ships, should planning files be auto-deleted, archived to a separate dir, or left in place?
+3. **Planning file cleanup** — YES, auto-delete after ship. Planning files are auto-deleted from `.squidsquad/[role]/planning/` when PM marks a feature as `Shipped`. Git history preserves them if ever needed.
 
-4. **Bug flow** — Should bugs also go through research + test plan, or is that overkill? Proposed: bugs get a lighter flow (optional research, always get a regression test case).
+4. **Bug flow** — NO. Bugs do NOT go through the full research/planning flow. Bugs use the current lightweight process: fix → verify → close. Only features get the 5-phase lifecycle.
 
-5. **Feature rejection** — If research reveals the feature is a bad idea, should PM explicitly recommend against it? Current process has no "reject" path.
+5. **Feature rejection** — YES. If research reveals the feature is a bad idea (high risk, low value, breaks existing behavior), PM should explicitly recommend against it. New status: `Rejected` with a Discussion entry explaining why. Human can override and approve anyway.
 
 ---
 
