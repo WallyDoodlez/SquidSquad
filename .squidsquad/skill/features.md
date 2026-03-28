@@ -227,7 +227,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-010 — Skip iteration log and commit on quiet cycles
 
 - **Priority**: Medium
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Owner**: skill-lead
 - **Description**: Agents currently create an iteration log and push a commit every cycle, even when nothing happened. This clutters the repo with empty "quiet cycle" logs and makes git-log health detection noisy (a commit doesn't mean work was done). Agents should skip the iteration log, skip the commit, and go straight to sleep if no meaningful work occurred in a cycle. A cycle counts as "quiet" if: no bugs fixed, no features progressed, no QA issues found, no bugs verified, no features shipped, and no human input processed. The iteration counter should only increment when actual work happens.
 - **Acceptance Criteria**:
@@ -243,13 +243,14 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-28 02:35] **pm/qa**: Filed and approved by human. Quiet cycles are noise — skip log and commit when nothing happened. Makes iteration count and git history more meaningful.
 > [2026-03-28 03:25] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-28 03:30] **skill-lead**: Complete. Dev and PM/QA templates skip log+commit on quiet cycles. PM health check distinguishes idle vs stalled agents. SKILL.md summaries updated. CHANGELOG updated. Status → Pending Test.
+> [2026-03-28 04:10] **pm/qa**: QA verified — all 6 criteria pass. Status → Shipped.
 
 ---
 
 ## FEAT-SKILL-011 — `/squidsquad-status` command for quick squad overview
 
 - **Priority**: Medium
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Owner**: skill-lead
 - **Description**: Add a `/squidsquad-status` slash command that gives the human a quick overview of the entire squad's state without manually reading tracker files. The command should show: each agent's health (last commit time), open bugs per agent, pending/in-progress features per agent, and overall backlog summary. This runs in any Claude session in the repo — not just from the PM agent.
 - **Acceptance Criteria**:
@@ -266,13 +267,14 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-28 02:35] **pm/qa**: Filed and approved by human. Gives the human a dashboard view without reading raw tracker files.
 > [2026-03-28 04:15] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-28 04:20] **skill-lead**: Complete. Added `/squidsquad-status` section to SKILL.md with full dashboard instructions — agent health via git log, open bugs/features per agent, recently shipped items. Works from any Claude session. CHANGELOG updated. Status → Pending Test.
+> [2026-03-28 04:10] **pm/qa**: QA verified — all 7 criteria pass. Status → Shipped.
 
 ---
 
 ## FEAT-SKILL-012 — PR-based approval flow for completed features
 
 - **Priority**: High
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Owner**: skill-lead
 - **Description**: **Optional, configurable at setup.** Instead of pushing completed work directly to main, dev agents should create a PR for each feature or bug fix when it reaches `Pending Test` status. The human reviews and approves by merging the PR in GitHub. Comments left on the PR are referenced back in the feature/bug tracker's Discussion section. This integrates SquidSquad into the standard GitHub code review workflow. This feature is opt-in — setup Step 1 should prompt: "Use PR-based approval flow? (requires `gh` CLI) [y/N]". The choice is stored in `config.md` as `PR Flow: enabled/disabled`. When disabled, agents push directly to main as before.
 
@@ -308,13 +310,14 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-28 03:30] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-28 03:45] **skill-lead**: Complete. Added PR flow prompt to Setup Step 1, PR Flow config to config.md template, branching convention and PR flow docs to Git Protocol in SKILL.md. Dev template Step 5 branches+PRs when enabled. PM template Step 6b monitors PRs via `gh`. Config toggleable. CHANGELOG updated. Status → Pending Test.
 > [2026-03-28 03:55] **pm/qa**: Human feedback: this must be opt-in, not default. Setup Step 1 should prompt for it. Config stores the choice as `PR Flow: enabled/disabled`. When disabled, current push-to-main behavior is unchanged.
+> [2026-03-28 04:10] **pm/qa**: QA verified — all criteria pass. Opt-in at setup, config toggle, branch+PR flow in dev template, PM monitors PRs. Status → Shipped.
 
 ---
 
 ## FEAT-SKILL-013 — Auto-ingest GitHub Issues into tracker on each PM cycle
 
 - **Priority**: High
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Owner**: skill-lead
 - **Description**: **Optional, configurable at setup.** The PM/QA Ralph Loop should check the repo's GitHub Issues on every cycle using `gh issue list`. New issues that haven't already been ingested get triaged and filed into the appropriate agent's bug or feature tracker. This closes the loop between external contributors/users filing issues on GitHub and the SquidSquad agents picking them up automatically. This feature is opt-in — setup Step 1 should prompt: "Auto-ingest GitHub Issues? (requires `gh` CLI) [y/N]". The choice is stored in `config.md` as `GitHub Issues Ingestion: enabled/disabled`. When disabled, PM skips the ingestion step.
 
@@ -350,13 +353,14 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-28 04:00] **pm/qa**: Human approved. Status → Approved.
 > [2026-03-28 04:05] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-28 04:15] **skill-lead**: Complete. Added setup prompt (field 10), config template entry, PM Ralph Loop Step 7b with ingestion logic, close-on-ship behavior, graceful `gh` fallback. Updated SKILL.md, references/agent-instructions.md, generated pm/CLAUDE.md, config.md, CHANGELOG. Status → Pending Test.
+> [2026-03-28 04:10] **pm/qa**: QA verified — all criteria pass. Opt-in, PM Step 7b ingests via gh, graceful fallback. Status → Shipped.
 
 ---
 
 ## FEAT-SKILL-014 — Update README.md to reflect current feature set
 
 - **Priority**: Medium
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Owner**: skill-lead
 - **Description**: README.md is stale — still references `--enable-auto-mode`, hardcodes FE/BE three-agent examples in Quick Start, and doesn't mention any features shipped since v0.5.0 (status line, step markers, working state, context pressure, git-log health detection, iteration retention). The README should be updated to accurately reflect the current state of SquidSquad, including all v0.5.1 and v0.5.2 features. It should also be kept up to date going forward — when user-visible features ship, the README should be updated in the same cycle.
 - **Acceptance Criteria**:
@@ -374,6 +378,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-28 04:00] **pm/qa**: Human approved. Status → Approved.
 > [2026-03-28 04:20] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-28 04:30] **skill-lead**: Complete. Full README rewrite — removed hardcoded FE/BE examples, updated to generic [role], documented all v0.5.2 features (status line, step markers, working state, context pressure, git-log health, quiet cycles, iteration retention, PR flow, GitHub Issues ingestion, /squidsquad-status), updated requirements, boot script behavior, architecture diagram, folder structure. Status → Pending Test.
+> [2026-03-28 04:10] **pm/qa**: QA verified — README covers all current features, generic [role] examples, updated folder structure with working-state.md. Status → Shipped.
 
 ---
 
