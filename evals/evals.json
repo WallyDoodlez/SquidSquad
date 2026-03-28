@@ -1,0 +1,20 @@
+{
+  "skill_name": "squidsquad",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Set up Squidsquad for my project kubex. It's a Next.js frontend with FastAPI backend. Repo: github.com/wallace/kubex. FE tests: cd frontend && npx playwright test. BE tests: cd backend && pytest tests/e2e/. E2E tests: cd e2e && npx playwright test",
+      "expected_output": "Complete .squidsquad/ folder with config.md, fe/ and be/ trackers with Discussion sections, pm/ QA log, boot scripts, CLAUDE.md templates with Ralph Loop, iteration directories"
+    },
+    {
+      "id": 2,
+      "prompt": "Set up Squidsquad for my project. Next.js + Express. Repo: github.com/wallace/myapp. Seed these items: Bug - Safari login page crashes on submit (FE, High). Bug - API returns 500 on /api/users when DB pool is cold (BE, High). Feature - Add dark mode toggle to settings page (FE, Medium). Feature - Implement rate limiting on auth endpoints (BE, High).",
+      "expected_output": "Complete .squidsquad/ with seeded bugs in correct team trackers (FE bug in fe/bugs.md, BE bug in be/bugs.md), features in correct trackers, all with Discussion sections"
+    },
+    {
+      "id": 3,
+      "prompt": "Set up Squidsquad for a Rust + React monorepo. Packages at packages/web (React) and packages/api (Rust). Tests: FE cd packages/web && pnpm test:e2e, BE cd packages/api && cargo test --test e2e, Full-stack pnpm -w test:e2e. No initial bugs or features.",
+      "expected_output": "Complete .squidsquad/ with empty templates, correct Rust/React test commands in config and boot scripts, iteration directories ready"
+    }
+  ]
+}
