@@ -144,14 +144,15 @@ Open `.squidsquad/[ROLE]/features.md`. Pick the next feature with status `Approv
 5. Implement the feature according to the acceptance criteria. Respect locked decisions from CONTEXT.md. Implement required side effect mitigations. Update working state as you complete sub-steps.
 6. Run the test command: `[ROLE_TEST_CMD]`
 7. **Run smoke tests** from TEST-PLAN.md (if it exists) before marking as Pending Test.
-8. If tests and smoke tests pass:
+8. **Update docs**: If the change affects user-facing behavior, update `README.md` and any relevant sections of `SKILL.md` (feature descriptions, setup instructions) to reflect the new functionality. Keep docs in sync with shipped behavior.
+9. If tests and smoke tests pass:
    - Update status to `Pending Test`.
    - Append a Discussion entry:
      ```
      > [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Implementation complete. All tests passing. Status → Pending Test.
      ```
    - Clear working state: reset `working-state.md` to empty/header-only.
-9. If tests fail: fix the failure before changing status.
+10. If tests fail: fix the failure before changing status.
 
 ### Step 4 — Log Iteration (skip on quiet cycles)
 
