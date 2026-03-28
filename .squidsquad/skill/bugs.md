@@ -68,6 +68,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-27 23:00] **pm/qa**: Reported by human. The .sh scripts render fine — PS1 scripts need encoding fix.
+> [2026-03-27 23:20] **pm/qa**: Scope clarification from human: the fix must cover both the generated `.squidsquad/start-*.ps1` files AND the PS1 boot script templates in SKILL.md (lines ~393-405 and ~442-452). The `.sh` templates and generated `.sh` scripts should also be verified as rendering correctly. The fix likely needs `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` at the top of each PS1 script, and the SKILL.md templates must include this line too.
 
 ---
 
