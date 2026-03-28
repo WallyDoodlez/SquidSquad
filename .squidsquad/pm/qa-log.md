@@ -105,3 +105,15 @@ _Each PM/QA iteration logs a manual coherence check here._
 - **Issues**: none
 - **Agent Health**: skill — STALLED (last commit 63 minutes ago). 3 open bugs (010, 011, 012) waiting.
 - **Notes**: Iteration 19. Fresh PM session. No new skill file changes to review. Skill agent needs restart.
+
+---
+
+## QA Run — 2026-03-28 06:15
+
+- **Result**: Issues Found
+- **Files Reviewed**: references/agent-instructions.md, SKILL.md, .squidsquad/pm/CLAUDE.md, .squidsquad/skill/bugs.md, .gitignore
+- **Issues**:
+  - `bash.exe.stackdump` committed to repo in f8d0b14 — filed as BUG-SKILL-013
+- **Verified**: BUG-SKILL-010 (interactive Phase 2 format confirmed), BUG-SKILL-011 (Planning status gate confirmed across all files)
+- **Agent Health**: skill — healthy (commit f8d0b14 this cycle)
+- **Notes**: Iteration 20. Skill agent back online. 2 bugs closed, 1 filed. BUG-012 still Open.

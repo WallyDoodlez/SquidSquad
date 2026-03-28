@@ -20,7 +20,7 @@
 
 ## ID Counters
 
-- **BUG-SKILL**: 12
+- **BUG-SKILL**: 13
 - **FEAT-SKILL**: 17
 
 ## Git Protocol

@@ -227,7 +227,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-010 — Phase 2 (Discussion) dumps all questions at once instead of interactive flow
 
 - **Severity**: High
-- **Status**: Fixed
+- **Status**: Closed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: The FEAT-SKILL-016 Feature Intake Process Phase 2 (Discussion) is supposed to be interactive — walking through questions one at a time with the human. But the current PM template doesn't specify the interaction format clearly enough, resulting in the PM dumping all research questions as a wall of text.
@@ -263,13 +263,14 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 
 > [2026-03-28 05:20] **pm/qa**: Found during first real test of FEAT-SKILL-016 (planning FEAT-SKILL-015). The research output is good — listing everything together first is fine. But the discussion phase needs to be truly interactive: one question at a time, two suggestions per question, option for freeform, option for deeper discussion.
 > [2026-03-28 05:38] **skill-lead**: Fixed in agent-instructions.md Phase 2 section. Replaced generic numbered list with explicit one-at-a-time Q[N] format including (a)(b)(c)(d) options and handling rules for each response type. Added "Do NOT present all questions at once" directive. Status → Fixed.
+> [2026-03-28 06:15] **pm/qa**: Verified. agent-instructions.md line 672 has "Do NOT present all questions at once" directive. Q[N] format with (a)(b)(c)(d) options confirmed at lines 653-670. Handling rules for each response type present. Status → Verified → Closed.
 
 ---
 
 ## BUG-SKILL-011 — Feature requests go straight to `Pending` approval instead of requiring planning flow first
 
 - **Severity**: High
-- **Status**: Fixed
+- **Status**: Closed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: When a human mentions a feature request, the PM currently files it as `Pending` (awaiting human approval) and once approved, the dev agent can immediately pick it up. This bypasses the entire 5-phase planning flow introduced in FEAT-SKILL-016. Features should not be implementable until they've gone through research → discussion → planning.
@@ -304,6 +305,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 
 > [2026-03-28 05:25] **pm/qa**: Found during FEAT-SKILL-015 planning. The 5-phase lifecycle (FEAT-SKILL-016) added the research/discussion/planning process but didn't gate the status flow. A feature can still go from Pending → Approved → picked up by dev without any planning. Need a `Planning` status to enforce the gate.
 > [2026-03-28 05:42] **skill-lead**: Fixed. Added `Planning` status between `Pending` and `Approved` in: (1) agent-instructions.md — approval flow now goes to `Planning`, Feature Approval Gate updated with full status descriptions, (2) SKILL.md — all 4 status flow references updated, (3) generated pm/CLAUDE.md — approval action updated. Flow is now Pending → Planning → Approved. Status → Fixed.
+> [2026-03-28 06:15] **pm/qa**: Verified. `Planning` status present in SKILL.md (lines 124, 140, 142, 687, 891), agent-instructions.md (lines 423, 771), and generated pm/CLAUDE.md (lines 83, 85, 87). Approval flow correctly gates through Planning before Approved. Status → Verified → Closed.
 
 ---
 
@@ -343,3 +345,26 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 
 > [2026-03-28 05:30] **pm/qa**: Reported by human. The markers need to be both complete (every action) and visually outstanding (ANSI pink bg + black fg + squid emoji). Shortening to `[🦑]` also saves horizontal space.
 > [2026-03-28 05:58] **skill-lead**: Fixed. Replaced all `[squidsquad]` markers with ANSI-styled `\033[45m\033[30m[🦑]\033[0m` across: agent-instructions.md (both dev and PM templates), skill/CLAUDE.md, pm/CLAUDE.md, SKILL.md, and README.md. All step markers and sub-action markers now use the styled format. Status → Fixed.
+
+---
+
+## BUG-SKILL-013 — `bash.exe.stackdump` committed to repo
+
+- **Severity**: Low
+- **Status**: Open
+- **Reported By**: pm/qa
+- **Assigned To**: skill-lead
+- **Description**: A `bash.exe.stackdump` file was committed in `f8d0b14`. This is a Windows/MSYS crash dump artifact — not a project file. It should be removed from tracking and added to `.gitignore`.
+
+  **Fix needed:**
+  1. `git rm bash.exe.stackdump`
+  2. Add `*.stackdump` to `.gitignore`
+
+- **Steps to Reproduce**:
+  1. `ls bash.exe.stackdump` — file exists in repo root
+- **Expected**: Crash dumps not tracked in git
+- **Actual**: `bash.exe.stackdump` is tracked
+
+### Discussion
+
+> [2026-03-28 06:15] **pm/qa**: Found during QA review of commit f8d0b14. Crash dump artifact accidentally committed alongside BUG-010/011 fixes.
