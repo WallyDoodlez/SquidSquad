@@ -262,3 +262,72 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-28 02:35] **pm/qa**: Filed and approved by human. Gives the human a dashboard view without reading raw tracker files.
+
+---
+
+## FEAT-SKILL-012 — PR-based approval flow for completed features
+
+- **Priority**: High
+- **Status**: Approved
+- **Owner**: skill-lead
+- **Description**: Instead of pushing completed work directly to main, dev agents should create a PR for each feature or bug fix when it reaches `Pending Test` status. The human reviews and approves by merging the PR in GitHub. Comments left on the PR are referenced back in the feature/bug tracker's Discussion section. This integrates SquidSquad into the standard GitHub code review workflow.
+
+  **Flow:**
+  1. Dev agent completes a feature/bug fix → creates a branch (e.g. `squidsquad/feat-skill-008`) and opens a PR via `gh pr create`
+  2. Status updates to `Pending Test` with the PR link in the Discussion
+  3. PM/QA verifies the change and adds a review comment or approval
+  4. Human reviews the PR on GitHub — can approve, request changes, or leave comments
+  5. If human leaves PR comments: PM picks them up via `gh pr view` and appends them to the feature's Discussion section
+  6. If human merges the PR: PM detects the merge and updates status to `Shipped`
+  7. If human requests changes: PM updates status back to `In Progress` with the feedback
+
+- **Acceptance Criteria**:
+  - [ ] Dev agent Ralph Loop creates a feature branch and PR when marking work as `Pending Test`
+  - [ ] PR title and body reference the feature/bug ID and include acceptance criteria
+  - [ ] PR link is recorded in the tracker Discussion
+  - [ ] PM/QA Ralph Loop checks for PR comments via `gh api` or `gh pr view` and appends new comments to the tracker Discussion
+  - [ ] PM/QA detects merged PRs and updates feature status to `Shipped`
+  - [ ] PM/QA detects PRs with requested changes and updates status back to `In Progress` with feedback
+  - [ ] Both dev and PM/QA CLAUDE.md templates updated with the PR workflow
+  - [ ] SKILL.md documents the PR-based approval flow
+  - [ ] Git protocol section updated with branching convention (e.g. `squidsquad/feat-xxx`, `squidsquad/bug-xxx`)
+  - [ ] Works with `gh` CLI (GitHub CLI) — documented as a prerequisite
+
+### Discussion
+
+> [2026-03-28 03:40] **pm/qa**: Filed from human request. Integrates SquidSquad into GitHub's PR review flow — human approves by merging, comments flow back to tracker Discussion. Status: Pending — awaiting human approval.
+> [2026-03-28 03:45] **pm/qa**: Human approved. Status → Approved.
+
+---
+
+## FEAT-SKILL-013 — Auto-ingest GitHub Issues into tracker on each PM cycle
+
+- **Priority**: High
+- **Status**: Pending
+- **Owner**: skill-lead
+- **Description**: The PM/QA Ralph Loop should check the repo's GitHub Issues on every cycle using `gh issue list`. New issues that haven't already been ingested get triaged and filed into the appropriate agent's bug or feature tracker. This closes the loop between external contributors/users filing issues on GitHub and the SquidSquad agents picking them up automatically.
+
+  **Flow:**
+  1. PM runs `gh issue list --state open --json number,title,labels,body` each cycle
+  2. For each open issue, PM checks if it's already been ingested (search tracker Discussion for `GitHub Issue #N`)
+  3. If new: PM reads the issue body, determines if it's a bug or feature request, routes to the correct dev agent's tracker
+  4. Files it with a Discussion entry: `> [DATE] **pm/qa**: Ingested from GitHub Issue #N. [link]`
+  5. Labels on the issue can hint at routing (e.g. `bug`, `enhancement`, `frontend`, `backend`)
+  6. If the issue is ambiguous, PM files it as a bug to the first dev agent and notes the ambiguity
+  7. When a tracked bug/feature is shipped, PM adds a comment to the original GitHub Issue and closes it via `gh issue close`
+
+- **Acceptance Criteria**:
+  - [ ] PM Ralph Loop includes a new step that runs `gh issue list` to fetch open issues
+  - [ ] New issues are detected by checking tracker Discussion for prior ingestion
+  - [ ] Issues are classified as bug or feature based on labels and content
+  - [ ] Issues are routed to the correct dev agent's tracker based on labels or content heuristics
+  - [ ] Each ingested item gets a Discussion entry referencing the GitHub Issue number and URL
+  - [ ] When a tracked item is shipped, PM comments on and closes the GitHub Issue
+  - [ ] PM/QA CLAUDE.md template updated with the ingestion step
+  - [ ] SKILL.md documents the GitHub Issues integration
+  - [ ] Works with `gh` CLI — documented as a prerequisite
+  - [ ] Graceful fallback if `gh` is not available (skip the step, log a note)
+
+### Discussion
+
+> [2026-03-28 03:45] **pm/qa**: Filed from human request. Bridges GitHub Issues and SquidSquad trackers — PM auto-ingests new issues each cycle, closes them when shipped. Status: Pending — awaiting human approval.
