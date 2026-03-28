@@ -98,7 +98,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-005 — PM CLAUDE.md Step 2 blocks on human input instead of continuing autonomously
 
 - **Severity**: Medium
-- **Status**: Fixed
+- **Status**: Closed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: The PM/QA Ralph Loop Step 2 ("Check In With Human") is written as a blocking prompt — it asks the human a question and waits for a response before continuing. This defeats the purpose of an autonomous loop. The PM should print a one-liner noting the human can chime in anytime, then immediately continue to Step 3. The human will speak up when they have input.
@@ -112,13 +112,14 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 
 > [2026-03-28 00:45] **pm/qa**: Reported by human. The PM should never block the loop waiting for input — the human will interrupt when they have something.
 > [2026-03-28 02:10] **skill-lead**: Fixed. Updated PM/QA template in references/agent-instructions.md Step 2 to be non-blocking (print note, continue immediately). Also updated SKILL.md PM/QA Ralph Loop summary. The generated pm/CLAUDE.md was already correct. Status → Fixed.
+> [2026-03-28 02:15] **pm/qa**: Verified. Template Step 2 is now non-blocking — prints note, continues immediately. Status → Verified → Closed.
 
 ---
 
 ## BUG-SKILL-006 — Boot script templates use `-p` which makes agents non-interactive
 
 - **Severity**: High
-- **Status**: Fixed
+- **Status**: Closed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: The SKILL.md boot script templates for dev agents (`.sh` version, line 386) use `claude --permission-mode auto -p "..." --continue`. The `-p` flag runs Claude in non-interactive print mode — it processes the prompt and exits. `--continue` only resumes from a previous conversation, it doesn't make the session interactive. All agents should be interactive so the human can interrupt anytime. The correct approach is `claude --permission-mode auto` (no `-p`, no `--continue`) and rely on the `CLAUDE.md` auto-boot section to detect the role and start the Ralph Loop. The generated `.ps1` script already does this correctly. The `.sh` templates and generated `.sh` scripts need to be fixed to match.
@@ -134,6 +135,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 > [2026-03-28 01:50] **pm/qa**: Revised bug description. The fix is: (1) remove `-p "..." --continue` from `.sh` boot script templates in SKILL.md, (2) update generated `.sh` scripts to just use `claude --permission-mode auto`, (3) ensure CLAUDE.md auto-boot section is present so agents self-start.
 > [2026-03-28 01:55] **pm/qa**: Further correction from human. `claude "message"` (positional arg, no `-p`) starts an interactive session with that message sent immediately. The fix for all boot scripts (both `.sh` and `.ps1`, both templates and generated) is: `claude --permission-mode auto "Read .squidsquad/.active-role to find your role, then read .squidsquad/<role>/CLAUDE.md and execute your first Ralph Loop cycle now."` — no `-p`, no `--continue`, just a positional arg. This gives instructions AND stays interactive. The `.sh` scripts need `-p` and `--continue` removed, replaced with positional arg. The `.ps1` scripts need the positional arg added.
 > [2026-03-28 02:10] **skill-lead**: Fixed. Replaced `-p "..." --continue` with positional arg `"start the loop"` in all 4 SKILL.md boot script templates and all 4 generated scripts. Updated explanatory text to match. Status → Fixed.
+> [2026-03-28 02:15] **pm/qa**: Verified. All 4 boot scripts (generated + templates) use `claude --permission-mode auto "start the loop"`. Interactive + immediate start. Status → Verified → Closed.
 
 ---
 
