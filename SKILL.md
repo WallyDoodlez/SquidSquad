@@ -323,34 +323,54 @@ Use the templates in `references/agent-instructions.md` to generate role-specifi
 
 Generate both a `.sh` (bash) and a `.ps1` (PowerShell) boot script for each dev agent, plus PM/QA. Script names use the role name, e.g. `start-be.sh`, `start-api.sh`, `start-worker.ps1`.
 
-**`start-fe.sh`**:
+The shell owns the loop — each `claude -p` invocation handles one Ralph Loop cycle. Substitute `[ROLE]` with the actual role name and `[INTERVAL]` from `config.md`.
+
+**`start-[role].sh`**:
 ```bash
 #!/bin/bash
 cd "$(git rev-parse --show-toplevel)"
-claude --permission-mode auto --enable-auto-mode -p "$(cat .squidsquad/fe/CLAUDE.md)"
+
+INTERVAL=$(grep "Minutes" .squidsquad/config.md | grep -o '[0-9]*' | head -1)
+INTERVAL=${INTERVAL:-10}
+
+echo "[squidsquad] [ROLE] agent starting. loop interval: ${INTERVAL}min"
+echo "[squidsquad] press Ctrl+C to stop"
+echo ""
+
+N=0
+while true; do
+  N=$((N + 1))
+  echo "[squidsquad] ---- cycle $N started at $(date '+%H:%M:%S') ----"
+  claude --permission-mode auto --enable-auto-mode -p "$(cat .squidsquad/[ROLE]/CLAUDE.md)"
+  echo ""
+  echo "[squidsquad] ---- cycle $N complete. sleeping ${INTERVAL}min ----"
+  sleep $((INTERVAL * 60))
+done
 ```
 
-**`start-fe.ps1`**:
+**`start-[role].ps1`**:
 ```powershell
 $repoRoot = git rev-parse --show-toplevel
 Set-Location $repoRoot
-$prompt = Get-Content .squidsquad/fe/CLAUDE.md -Raw
-claude --permission-mode auto --enable-auto-mode -p $prompt
-```
 
-**`start-be.sh`**:
-```bash
-#!/bin/bash
-cd "$(git rev-parse --show-toplevel)"
-claude --permission-mode auto --enable-auto-mode -p "$(cat .squidsquad/be/CLAUDE.md)"
-```
+$config = Get-Content .squidsquad/config.md -Raw
+$interval = if ($config -match "Minutes.*?(\d+)") { [int]$Matches[1] } else { 10 }
 
-**`start-be.ps1`**:
-```powershell
-$repoRoot = git rev-parse --show-toplevel
-Set-Location $repoRoot
-$prompt = Get-Content .squidsquad/be/CLAUDE.md -Raw
-claude --permission-mode auto --enable-auto-mode -p $prompt
+Write-Host "[squidsquad] [ROLE] agent starting. loop interval: ${interval}min"
+Write-Host "[squidsquad] press Ctrl+C to stop"
+Write-Host ""
+
+$n = 0
+while ($true) {
+    $n++
+    $time = Get-Date -Format "HH:mm:ss"
+    Write-Host "[squidsquad] ---- cycle $n started at $time ----"
+    $prompt = Get-Content .squidsquad/[ROLE]/CLAUDE.md -Raw
+    claude --permission-mode auto --enable-auto-mode -p $prompt
+    Write-Host ""
+    Write-Host "[squidsquad] ---- cycle $n complete. sleeping ${interval}min ----"
+    Start-Sleep -Seconds ($interval * 60)
+}
 ```
 
 **`start-pm.sh`**:
@@ -367,7 +387,7 @@ Set-Location $repoRoot
 claude --permission-mode auto
 ```
 
-> **Note:** PM/QA runs in interactive mode (no `-p`) so it can check in with you each cycle. `-p` is non-interactive print mode and would prevent any back-and-forth. The `.squidsquad/pm/CLAUDE.md` role instructions are loaded automatically by Claude Code. `--permission-mode auto` is kept so tracker file operations don't prompt.
+> **Note:** PM/QA runs in interactive mode (no `-p`) so it can check in with you each cycle. Dev agent scripts use a `while true` shell loop — each `claude -p` call handles one cycle, the shell sleeps between them.
 
 Make the `.sh` scripts executable (`chmod +x`).
 
