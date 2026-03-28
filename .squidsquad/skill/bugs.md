@@ -114,22 +114,23 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 
 ---
 
-## BUG-SKILL-006 — Generated PS1 boot script missing -p prompt and --continue flag
+## BUG-SKILL-006 — Boot script templates use `-p` which makes agents non-interactive
 
 - **Severity**: High
 - **Status**: Open
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
-- **Description**: The generated `start-skill.ps1` (line 19) runs `claude --permission-mode auto` with no `-p` prompt and no `--continue` flag. The SKILL.md template (line 409) correctly specifies `-p "Read .squidsquad/.active-role..." --continue`, but the actually generated script is missing both. This means the skill lead starts as a blank interactive session with no instructions to begin the Ralph Loop.
+- **Description**: The SKILL.md boot script templates for dev agents (`.sh` version, line 386) use `claude --permission-mode auto -p "..." --continue`. The `-p` flag runs Claude in non-interactive print mode — it processes the prompt and exits. `--continue` only resumes from a previous conversation, it doesn't make the session interactive. All agents should be interactive so the human can interrupt anytime. The correct approach is `claude --permission-mode auto` (no `-p`, no `--continue`) and rely on the `CLAUDE.md` auto-boot section to detect the role and start the Ralph Loop. The generated `.ps1` script already does this correctly. The `.sh` templates and generated `.sh` scripts need to be fixed to match.
 - **Steps to Reproduce**:
-  1. Open `.squidsquad/start-skill.ps1`
-  2. Compare line 19 with SKILL.md template line 409
-- **Expected**: `claude --permission-mode auto -p "Read .squidsquad/.active-role to find your role, then read .squidsquad/<role>/CLAUDE.md and execute your first Ralph Loop cycle now." --continue`
-- **Actual**: `claude --permission-mode auto` (no prompt, no continue)
+  1. Run `bash .squidsquad/start-skill.sh`
+  2. Claude processes the `-p` prompt, runs one cycle, and exits — not interactive
+- **Expected**: `claude --permission-mode auto` — interactive session, auto-boot handles the rest
+- **Actual**: `claude --permission-mode auto -p "..." --continue` — non-interactive, exits after one response
 
 ### Discussion
 
-> [2026-03-28 01:40] **pm/qa**: Found while investigating why skill lead has been inactive for 8+ cycles. This is likely the root cause — the PS1 script never tells Claude what to do.
+> [2026-03-28 01:40] **pm/qa**: Originally filed as "PS1 missing -p". After discussion with human, clarified that `-p` is wrong — all agents must be interactive. PS1 is actually correct; the `.sh` templates need fixing to remove `-p` and `--continue`.
+> [2026-03-28 01:50] **pm/qa**: Revised bug description. The fix is: (1) remove `-p "..." --continue` from `.sh` boot script templates in SKILL.md, (2) update generated `.sh` scripts to just use `claude --permission-mode auto`, (3) ensure CLAUDE.md auto-boot section is present so agents self-start.
 
 ---
 
