@@ -79,7 +79,8 @@ When you invoke SquidSquad, it creates the following inside your project root:
     ├── CLAUDE.md              ← PM/QA role instructions + Ralph Loop
     ├── qa-log.md              ← QA test run results
     ├── enhancements.md        ← product backlog / enhancement proposals
-    └── iterations/            ← iter-N.md logs per cycle
+    ├── iterations/            ← iter-N.md logs per cycle
+    └── migrations/            ← migration logs written when tracker schema changes
 ```
 
 ---
@@ -261,6 +262,7 @@ Create the full directory tree as specified above.
 # SquidSquad Config
 
 - **SquidSquad Version**: 0.5.0
+- **Tracker Schema**: 1
 
 ## Project
 
@@ -474,3 +476,85 @@ Print a summary:
 ║                                                            ║
 ╚════════════════════════════════════════════════════════════╝
 ```
+
+---
+
+## Upgrade Instructions
+
+When the user says "upgrade squidsquad" (or similar), perform the following:
+
+### Step 1 — Read Installed Versions
+
+Read `.squidsquad/config.md` and extract:
+- `SquidSquad Version` — the skill version that last ran setup or upgrade
+- `Tracker Schema` — the schema version of the tracker files
+
+Compare both against the current skill version (`0.5.0`) and current schema version (`1`).
+
+If both match, tell the user their installation is already up to date and stop.
+
+### Step 2 — Skill Upgrade (if SquidSquad Version differs)
+
+Regenerate all scaffolding files unconditionally. These contain no user data:
+
+- `.squidsquad/start-fe.sh` and `start-fe.ps1`
+- `.squidsquad/start-be.sh` and `start-be.ps1`
+- `.squidsquad/start-pm.sh` and `start-pm.ps1`
+- `.squidsquad/fe/CLAUDE.md`
+- `.squidsquad/be/CLAUDE.md`
+- `.squidsquad/pm/CLAUDE.md`
+- `.claude/settings.json` (merge only — never overwrite unrelated hooks)
+
+Do **not** touch:
+- Any `bugs.md`, `features.md`, `qa-log.md`, `enhancements.md`, or `iterations/` files
+- The project values in `config.md` (Name, Repo, Test Commands, ID Counters)
+
+Update `SquidSquad Version` in `config.md` to the current skill version.
+
+### Step 3 — Schema Migration (if Tracker Schema differs)
+
+Schema migrations are the only time tracker files may be rewritten. Each migration is documented below under its version number. If no migration exists for the detected gap, skip this step.
+
+For each migration applied:
+
+1. Read all existing entries from the affected tracker file.
+2. Rewrite the file with the updated structure.
+3. Append a `> [DATE] **migration**: schema N→M applied. [What changed.]` note to the `### Discussion` section of any modified entries.
+4. Write a log to `pm/migrations/schema-N-to-M.md`:
+
+```markdown
+# Schema Migration N → M
+
+- **Date**: YYYY-MM-DD
+- **Files Modified**: [list]
+- **Changes**: [what fields were added, renamed, or removed]
+- **Entries Updated**: [count]
+```
+
+Update `Tracker Schema` in `config.md` to the new schema version.
+
+### Step 4 — Commit and Push
+
+```bash
+git add .squidsquad/ .claude/
+git commit -m "squidsquad: upgrade to [VERSION]"
+git push
+```
+
+Tell the user what was upgraded and whether any schema migrations ran.
+
+---
+
+## Schema Changelog
+
+### Schema 1 (current — introduced in v0.5.0)
+
+**Bug fields**: ID, Title, Severity, Status, Reported By, Assigned To, Description, Steps to Reproduce, Expected, Actual, Discussion
+
+**Feature fields**: ID, Title, Priority, Status, Owner, Description, Acceptance Criteria, Discussion
+
+**Bug status values**: `Open` → `Investigating` → `Fixed` → `Verified` → `Closed`
+
+**Feature status values**: `Pending` → `Approved` → `In Progress` → `Pending Test` → `Shipped`
+
+Future schema changes will be documented here with their migration instructions before being released.

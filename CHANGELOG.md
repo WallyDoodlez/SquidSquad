@@ -41,6 +41,13 @@ Initial release.
 - FE and BE use `--permission-mode auto --enable-auto-mode -p` (fully autonomous)
 - PM uses `--permission-mode auto` (interactive — you talk to this one)
 
+### Versioning
+
+- Skill version (`0.5.0`) and tracker schema version (`1`) stored separately in `config.md`
+- Upgrade path distinguishes scaffolding-only upgrades (safe to regenerate) from schema migrations (targeted rewrite of tracker files with migration log)
+- Schema migrations logged to `pm/migrations/` with a discussion note on each modified entry
+- Schema changelog in SKILL.md documents all fields and status values for schema 1
+
 ### SessionStart Hook
 
 - `.claude/settings.json` hook prints the squid logo + version number on every Claude Code boot in a SquidSquad repo
