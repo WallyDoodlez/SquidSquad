@@ -331,16 +331,17 @@ claude --permission-mode auto --enable-auto-mode -p $prompt
 ```bash
 #!/bin/bash
 cd "$(git rev-parse --show-toplevel)"
-claude --permission-mode auto --enable-auto-mode -p "$(cat .squidsquad/pm/CLAUDE.md)"
+claude --permission-mode auto
 ```
 
 **`start-pm.ps1`**:
 ```powershell
 $repoRoot = git rev-parse --show-toplevel
 Set-Location $repoRoot
-$prompt = Get-Content .squidsquad/pm/CLAUDE.md -Raw
-claude --permission-mode auto --enable-auto-mode -p $prompt
+claude --permission-mode auto
 ```
+
+> **Note:** PM/QA runs in interactive mode (no `-p`) so it can check in with you each cycle. `-p` is non-interactive print mode and would prevent any back-and-forth. The `.squidsquad/pm/CLAUDE.md` role instructions are loaded automatically by Claude Code. `--permission-mode auto` is kept so tracker file operations don't prompt.
 
 Make the `.sh` scripts executable (`chmod +x`).
 
@@ -439,31 +440,34 @@ Print a summary:
   ▌▖           ▗▌
   ▝▘          ▝▘
 
-╔══════════════════════════════════════════════════════╗
-║                                                      ║
-║   🦑  SQUIDSQUAD IS READY TO DEPLOY  🦑             ║
-║                                                      ║
-║   Project  : [PROJECT_NAME]                          ║
-║   Repo     : [REPO_URL]                              ║
-║   Pushed   : ✓ .squidsquad/ committed to origin      ║
-║                                                      ║
-╠══════════════════════════════════════════════════════╣
-║                                                      ║
-║   Three agents. One repo. Zero meetings.             ║
-║                                                      ║
-║   Open 3 terminals and launch your squad:            ║
-║                                                      ║
-║   bash / zsh:                                        ║
-║   Terminal 1 →  bash .squidsquad/start-fe.sh         ║
-║   Terminal 2 →  bash .squidsquad/start-be.sh         ║
-║   Terminal 3 →  bash .squidsquad/start-pm.sh         ║
-║                                                      ║
-║   PowerShell:                                        ║
-║   Terminal 1 →  .\.squidsquad\start-fe.ps1           ║
-║   Terminal 2 →  .\.squidsquad\start-be.ps1           ║
-║   Terminal 3 →  .\.squidsquad\start-pm.ps1           ║
-║                                                      ║
-║   The squad takes it from here.                      ║
-║                                                      ║
-╚══════════════════════════════════════════════════════╝
+╔════════════════════════════════════════════════════════════╗
+║                                                            ║
+║   🦑  SQUIDSQUAD IS READY TO DEPLOY  🦑                    ║
+║                                                            ║
+║   Project  : [PROJECT_NAME]                                ║
+║   Repo     : [REPO_URL]                                    ║
+║   Pushed   : ✓ .squidsquad/ committed to origin           ║
+║                                                            ║
+╠════════════════════════════════════════════════════════════╣
+║                                                            ║
+║   Three agents. One repo. Zero meetings.                   ║
+║                                                            ║
+║   Open 3 terminals and launch your squad:                  ║
+║                                                            ║
+║   bash / zsh:                                              ║
+║   Terminal 1 →  bash .squidsquad/start-fe.sh               ║
+║   Terminal 2 →  bash .squidsquad/start-be.sh               ║
+║   Terminal 3 →  bash .squidsquad/start-pm.sh  ← interactive ║
+║                                                            ║
+║   PowerShell:                                              ║
+║   Terminal 1 →  .\.squidsquad\start-fe.ps1                 ║
+║   Terminal 2 →  .\.squidsquad\start-be.ps1                 ║
+║   Terminal 3 →  .\.squidsquad\start-pm.ps1   ← interactive ║
+║                                                            ║
+║   PM/QA is interactive — it will check in with you.        ║
+║   FE + BE run autonomously in the background.              ║
+║                                                            ║
+║   The squad takes it from here.                            ║
+║                                                            ║
+╚════════════════════════════════════════════════════════════╝
 ```

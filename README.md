@@ -122,27 +122,29 @@ Open three terminal windows and run:
 
 **bash / zsh:**
 ```bash
-# Terminal 1 — FE Lead
+# Terminal 1 — FE Lead (autonomous)
 bash .squidsquad/start-fe.sh
 
-# Terminal 2 — BE Lead
+# Terminal 2 — BE Lead (autonomous)
 bash .squidsquad/start-be.sh
 
-# Terminal 3 — PM/QA
+# Terminal 3 — PM/QA (interactive — you talk to this one)
 bash .squidsquad/start-pm.sh
 ```
 
 **PowerShell:**
 ```powershell
-# Terminal 1 — FE Lead
+# Terminal 1 — FE Lead (autonomous)
 .\.squidsquad\start-fe.ps1
 
-# Terminal 2 — BE Lead
+# Terminal 2 — BE Lead (autonomous)
 .\.squidsquad\start-be.ps1
 
-# Terminal 3 — PM/QA
+# Terminal 3 — PM/QA (interactive — you talk to this one)
 .\.squidsquad\start-pm.ps1
 ```
+
+FE and BE run in auto mode (`--permission-mode auto --enable-auto-mode -p`) and loop without any input from you. PM/QA runs as a normal interactive Claude Code session — this is your terminal. You talk to the PM to report bugs, request features, and give approvals. The PM coordinates the rest.
 
 The agents will start their Ralph Loops immediately. Check `.squidsquad/fe/bugs.md`, `.squidsquad/be/features.md`, and `.squidsquad/pm/qa-log.md` to see activity as it accumulates.
 
