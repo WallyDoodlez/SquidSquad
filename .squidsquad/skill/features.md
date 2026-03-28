@@ -116,3 +116,22 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-27 23:25] **pm/qa**: Filed from human request.
 > [2026-03-27 23:25] **pm/qa**: Human approved. Status → Approved.
 > [2026-03-27 23:30] **pm/qa**: Folded in human request for next-iteration countdown in status bar. Added acceptance criterion for `next in ~Xm` display in statusline.sh.
+
+---
+
+## FEAT-SKILL-006 — Git-log based agent health detection
+
+- **Priority**: High
+- **Status**: Approved
+- **Owner**: skill-lead
+- **Description**: Agents run in separate local repos, so local heartbeat files aren't visible cross-agent. Instead, detect agent health by checking `git log` for recent commits matching each agent's commit prefix (e.g. `skill:`, `pm:`). If no commits from an agent within 2x the loop interval, flag as stalled. This should be used by both the PM's QA step and the `statusline.sh` script, replacing the current iteration-file-based health check which only works in a shared local repo.
+- **Acceptance Criteria**:
+  - [ ] `statusline.sh` health check uses `git log --oneline --since="[2x interval] minutes ago"` filtered by agent commit prefix instead of checking local iteration file mod times
+  - [ ] PM/QA Ralph Loop includes an agent health check step that runs `git log` per agent and flags stalled agents in the QA log
+  - [ ] If an agent is stalled, PM appends a Discussion note to the agent's bugs.md or logs a warning in qa-log.md
+  - [ ] SKILL.md documents the git-log health detection mechanism
+  - [ ] PM and dev agent CLAUDE.md templates updated to document the expected commit prefix convention (e.g. `skill:`, `fe:`, `pm:`)
+
+### Discussion
+
+> [2026-03-27 23:50] **pm/qa**: Filed from human request. Local heartbeat files don't work across separate clones. Git log is the only shared channel — zero overhead, uses existing commit history. Human approved. Status → Approved.
