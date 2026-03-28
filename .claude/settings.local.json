@@ -24,7 +24,8 @@
       "Bash(locate gsd.md)",
       "Bash(find /c/Users/naaht -type f -name *.md)",
       "Bash(mkdir:*)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(grep -r \"context_window\\\\|used_percentage\\\\|remaining_percentage\" D:/Dev/Dev/SquidSquad --include=*.md)"
     ]
   }
 }

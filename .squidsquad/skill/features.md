@@ -583,7 +583,7 @@ _Features start as Pending (awaiting human approval) and move through Approved â
 
 - **Priority**: High
 - **Owner**: skill-lead
-- **Status**: Pending
+- **Status**: Planning
 - **Description**: The current SquidSquad setup overwrites the user's entire `statusLine` config in `.claude/settings.json`. This replaces whatever custom status bar the user had before (context window usage, repo info, etc.) with the SquidSquad status line. Related to BUG-SKILL-009 which added a "check before overwriting" prompt, but the underlying design is still wrong.
 
   **The fix:** SquidSquad should only add its status info to the **last line** of the status bar output, preserving whatever the user's existing status bar shows above it. If the user has no custom statusLine, SquidSquad's line is the only one. If they do, SquidSquad appends below.
@@ -605,3 +605,4 @@ _Features start as Pending (awaiting human approval) and move through Approved â
 ### Discussion
 
 > [2026-03-28 10:00] **pm/qa**: Filed from human request. The status bar overwrite was flagged before (BUG-009 added a prompt), but the real fix is architectural: SquidSquad should only own the last line of the status bar, not the entire thing. Status: Pending â€” awaiting human approval.
+> [2026-03-28 10:30] **pm/qa**: Human approved. Status â†’ Planning. Beginning intake process. Running Phase 1 (Research).
