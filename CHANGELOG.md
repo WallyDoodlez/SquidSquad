@@ -11,6 +11,14 @@ All notable changes to SquidSquad will be documented here.
 - Status line for all SquidSquad agents via Claude Code's `statusLine` setting. Shows squid emoji (green ANSI), role label, iteration number, backlog pulse (open bugs + features), and time since last cycle. PM/QA status line additionally shows agent health — green squid for recently active agents, red squid with `✖` for silent agents.
 - `.squidsquad/statusline.sh` generated during setup (Step 5b) and referenced from `.claude/settings.json`.
 - Dev agent and PM/QA CLAUDE.md templates now document status line behavior.
+- Ralph Loop cycle markers: agents print `[squidsquad] ---- cycle N started/complete at HH:MM:SS ----` for visible cycle boundaries in scrollback.
+- Status line shows next-cycle countdown (e.g. `next in ~2m`) when within the interval window.
+- PM/QA explicitly prohibited from implementing code — must always file bugs/features to dev agents.
+
+### Fixed
+
+- Status line now parses JSON stdin for context window usage (color-coded: dim < 70%, yellow 70-90%, red > 90%).
+- PowerShell boot scripts render Unicode correctly via `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`.
 
 ---
 

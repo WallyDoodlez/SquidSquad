@@ -145,7 +145,7 @@ Status flow: `Pending` → `Approved` → `In Progress` → `Pending Test` → `
 
 ## The Ralph Loop
 
-Each agent runs its own Ralph Loop — an autonomous work cycle that repeats on an interval.
+Each agent runs its own Ralph Loop — an autonomous work cycle that repeats on an interval. Each cycle prints visible start/stop markers with timestamps (e.g. `[squidsquad] ---- cycle 3 started at 14:32:07 ----`) so the human can spot cycle boundaries in terminal scrollback.
 
 ### [Role] Lead Ralph Loop
 
@@ -474,9 +474,11 @@ Generate `.squidsquad/statusline.sh` — a bash script that powers the Claude Co
 - **Context window usage** (parsed from JSON stdin, color-coded: dim < 70%, yellow 70-90%, red > 90%)
 - **Time since last cycle** (file modification time of latest iteration log)
 
+- **Next-cycle countdown** (e.g. `next in ~2m`) when elapsed < interval
+
 Output format (single line, ANSI-colored):
-- Dev agent: `🦑 be │ iter 5 │ 2 bugs 1 feat │ ctx:45% │ 3m ago`
-- PM/QA: `🦑 PM/QA │ iter 3 │ 🦑be 🦑✖fe │ ctx:45% │ 1m ago`
+- Dev agent: `🦑 be │ iter 5 │ 2 bugs 1 feat │ ctx:45% │ 3m ago │ next in ~7m`
+- PM/QA: `🦑 PM/QA │ iter 3 │ 🦑be 🦑✖fe │ ctx:45% │ 1m ago │ next in ~9m`
 
 ```bash
 #!/bin/bash
@@ -602,11 +604,18 @@ if [ "$ROLE" = "pm" ]; then
   done
 fi
 
+# Estimate time until next cycle
+NEXT_STR=""
+if [ -n "$LAST_MOD" ] && [ "$ELAPSED" -lt "$INTERVAL" ]; then
+  REMAINING=$(( INTERVAL - ELAPSED ))
+  NEXT_STR=" │ next in ~${REMAINING}m"
+fi
+
 # Output
 if [ "$ROLE" = "pm" ]; then
-  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │${HEALTH} │ ${CTX_STR} │ ${DIM}${TIME_STR}${RESET}"
+  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │${HEALTH} │ ${CTX_STR} │ ${DIM}${TIME_STR}${NEXT_STR}${RESET}"
 else
-  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │ ${BACKLOG} │ ${CTX_STR} │ ${DIM}${TIME_STR}${RESET}"
+  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │ ${BACKLOG} │ ${CTX_STR} │ ${DIM}${TIME_STR}${NEXT_STR}${RESET}"
 fi
 ```
 

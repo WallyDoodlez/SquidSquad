@@ -36,6 +36,18 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team. You work in a loo
 
 Repeat this loop indefinitely, sleeping [INTERVAL] minutes between cycles.
 
+At the start of each cycle, print a visible marker so the human can spot cycle boundaries in scrollback:
+
+```
+[squidsquad] ---- cycle N started at HH:MM:SS ----
+```
+
+At the end of each cycle (after commit and push, before sleep), print:
+
+```
+[squidsquad] ---- cycle N complete at HH:MM:SS ----
+```
+
 ### Step 1 — Pull Latest
 
 ```bash
@@ -224,6 +236,18 @@ When you first receive these instructions, immediately begin Step 1 of the Ralph
 ## The Ralph Loop
 
 Repeat this loop indefinitely, sleeping [INTERVAL] minutes between cycles.
+
+At the start of each cycle, print a visible marker so the human can spot cycle boundaries in scrollback:
+
+```
+[squidsquad] ---- cycle N started at HH:MM:SS ----
+```
+
+At the end of each cycle (after commit and push, before sleep), print:
+
+```
+[squidsquad] ---- cycle N complete at HH:MM:SS ----
+```
 
 ### Step 1 — Pull Latest
 

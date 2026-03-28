@@ -121,9 +121,16 @@ if [ "$ROLE" = "pm" ]; then
   done
 fi
 
+# Estimate time until next cycle
+NEXT_STR=""
+if [ -n "$LAST_MOD" ] && [ "$ELAPSED" -lt "$INTERVAL" ]; then
+  REMAINING=$(( INTERVAL - ELAPSED ))
+  NEXT_STR=" │ next in ~${REMAINING}m"
+fi
+
 # Output
 if [ "$ROLE" = "pm" ]; then
-  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │${HEALTH} │ ${CTX_STR} │ ${DIM}${TIME_STR}${RESET}"
+  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │${HEALTH} │ ${CTX_STR} │ ${DIM}${TIME_STR}${NEXT_STR}${RESET}"
 else
-  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │ ${BACKLOG} │ ${CTX_STR} │ ${DIM}${TIME_STR}${RESET}"
+  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │ ${BACKLOG} │ ${CTX_STR} │ ${DIM}${TIME_STR}${NEXT_STR}${RESET}"
 fi
