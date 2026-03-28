@@ -111,3 +111,42 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-28 00:45] **pm/qa**: Reported by human. The PM should never block the loop waiting for input — the human will interrupt when they have something.
+
+---
+
+## BUG-SKILL-006 — Generated PS1 boot script missing -p prompt and --continue flag
+
+- **Severity**: High
+- **Status**: Open
+- **Reported By**: pm/qa
+- **Assigned To**: skill-lead
+- **Description**: The generated `start-skill.ps1` (line 19) runs `claude --permission-mode auto` with no `-p` prompt and no `--continue` flag. The SKILL.md template (line 409) correctly specifies `-p "Read .squidsquad/.active-role..." --continue`, but the actually generated script is missing both. This means the skill lead starts as a blank interactive session with no instructions to begin the Ralph Loop.
+- **Steps to Reproduce**:
+  1. Open `.squidsquad/start-skill.ps1`
+  2. Compare line 19 with SKILL.md template line 409
+- **Expected**: `claude --permission-mode auto -p "Read .squidsquad/.active-role to find your role, then read .squidsquad/<role>/CLAUDE.md and execute your first Ralph Loop cycle now." --continue`
+- **Actual**: `claude --permission-mode auto` (no prompt, no continue)
+
+### Discussion
+
+> [2026-03-28 01:40] **pm/qa**: Found while investigating why skill lead has been inactive for 8+ cycles. This is likely the root cause — the PS1 script never tells Claude what to do.
+
+---
+
+## BUG-SKILL-007 — Boot script templates lack while-loop for multi-cycle execution
+
+- **Severity**: High
+- **Status**: Open
+- **Reported By**: pm/qa
+- **Assigned To**: skill-lead
+- **Description**: Neither the SKILL.md boot script templates nor the generated boot scripts have a `while true` loop. The CHANGELOG for v0.5.1 claims "Boot scripts now own the loop via `while true` in the shell", but this was never actually implemented. Both `.sh` and `.ps1` templates run `claude -p` once and then exit. Since `claude -p` handles one Ralph Loop cycle and exits, the agent runs one cycle and dies. The boot scripts need a `while true` loop that restarts `claude -p` after each cycle, with a sleep interval between cycles.
+- **Steps to Reproduce**:
+  1. Read SKILL.md boot script templates (lines 365-410)
+  2. Note there is no loop — just a single `claude` invocation
+  3. Start a skill lead — it runs once and exits
+- **Expected**: Boot scripts wrap `claude -p` in a `while true` / `while ($true)` loop with a sleep between iterations
+- **Actual**: Single `claude -p` call, script exits after one cycle
+
+### Discussion
+
+> [2026-03-28 01:40] **pm/qa**: Found while investigating skill lead inactivity. CHANGELOG says the loop exists but templates don't have it. This affects all agents — both dev and PM boot scripts.
