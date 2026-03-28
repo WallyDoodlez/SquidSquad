@@ -245,7 +245,7 @@ SquidSquad PM check-in: Any new requirements, bugs to report, or priority change
 
 If the human provides:
 - **A bug report**: File it to the appropriate agent's tracker. Use your judgment based on which domain the failure is in.
-- **A feature request**: Add it to the relevant tracker with status `Pending`. Do not approve it yet — get explicit human confirmation first.
+- **A feature request**: Run the **Feature Intake Process** (see below).
 - **A priority change**: Update the `Priority` field on the relevant item and append a Discussion entry.
 - **Approval for a Pending feature**: Change status to `Approved` and append a Discussion entry:
   ```
@@ -333,6 +333,54 @@ Wait [INTERVAL] minutes, then return to Step 1.
 File bugs directly to the agent whose domain the failure is in — do not route through intermediaries.
 
 If you cannot determine ownership, file to all relevant trackers and cross-link them in Discussion.
+
+---
+
+## Feature Intake Process
+
+When the human suggests a new feature, do NOT immediately file it. Run this 4-step process first:
+
+### Step A — Duplicate & Overlap Check
+
+Use the Agent tool to spawn a research agent that:
+1. Searches all agent tracker files (`features.md`, `bugs.md`) for existing items that overlap with the request — exact matches, partial implementations, or related work.
+2. Searches the codebase for any existing implementation that already covers part or all of the request.
+3. Returns a summary: **"No overlap found"**, **"Partial overlap: [details]"**, or **"Already exists: [pointer]"**.
+
+If the feature already exists, tell the human and stop. If partially implemented, tell the human what exists and ask if they want to extend it or file a new feature for the remaining gap.
+
+### Step B — Feasibility Research
+
+Use the Agent tool to spawn a research agent that:
+1. Examines the current codebase architecture to assess where the feature would fit.
+2. Identifies dependencies, potential conflicts, and technical constraints.
+3. Checks if required APIs, libraries, or infrastructure are available.
+4. Returns a feasibility verdict: **"Straightforward"**, **"Feasible with caveats: [details]"**, or **"Blocked: [reason]"**.
+
+Present the feasibility findings to the human. If blocked, discuss alternatives before proceeding.
+
+### Step C — Interactive Refinement
+
+Work with the human to resolve ambiguity and define the feature precisely:
+1. Identify any open questions from steps A and B (scope boundaries, edge cases, UX decisions, priority relative to existing work).
+2. Ask the human these questions — do not guess or assume.
+3. Draft acceptance criteria based on the human's answers.
+4. Confirm the final scope and acceptance criteria with the human before proceeding.
+
+### Step D — Implementation Plan & Filing
+
+Once the human confirms the refined feature:
+1. Determine which agent(s) own the work. If it spans multiple agents, break it into one feature per agent with cross-references.
+2. File each feature to the appropriate tracker with status `Pending`, including:
+   - Clear description incorporating the research findings
+   - Acceptance criteria from Step C
+   - Feasibility notes from Step B
+   - Implementation approach (high-level steps)
+3. Append a Discussion entry summarizing the intake process:
+   ```
+   > [YYYY-MM-DD HH:MM] **pm/qa**: Feature intake complete. Overlap check: [result]. Feasibility: [result]. Scope confirmed with human. Filed as FEAT-[ROLE_UPPER]-XXX.
+   ```
+4. Ask the human if they want to approve the feature now or leave it as `Pending` for later.
 
 ---
 

@@ -19,15 +19,15 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-27 20:00] **pm/qa**: Seeded at initialization. Approved by human at setup time.
-> [2026-03-27 23:05] **skill-lead**: Picking up. Status → In Progress.
-> [2026-03-27 23:10] **skill-lead**: Complete. Rewrote Step 1 with structured field definitions, defaults, validation rules, and a confirm-or-override prompting flow. Supports single-sentence setup extraction. Status → Pending Test.
+> [2026-03-27 23:16] **skill-lead**: Picking up. Status → In Progress.
+> [2026-03-27 23:20] **skill-lead**: Complete. Step 1 rewritten with structured field table (label, description, default, validation per field), quick-start mode for single-sentence setup, and confirmation summary before proceeding. Status → Pending Test.
 
 ---
 
 ## FEAT-SKILL-002 — Import existing bugs and features from external sources during setup
 
 - **Priority**: High
-- **Status**: In Progress
+- **Status**: Pending Test
 - **Owner**: skill-lead
 - **Description**: During setup Step 1, after gathering project details, offer to import existing bugs or features from an external source. Sources should include: pasting raw text, pointing to a local file, or pulling from a connected MCP (e.g. GitHub Issues, Jira, Linear, Notion) if one is available in the session. Each imported item gets normalized into the standard BUG-XXX or FEAT-XXX format and seeded into the correct tracker.
 - **Acceptance Criteria**:
@@ -42,4 +42,29 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-27 20:00] **pm/qa**: Seeded at initialization. Approved by human at setup time.
-> [2026-03-27 23:12] **skill-lead**: Picking up. Status → In Progress.
+> [2026-03-27 23:45] **skill-lead**: Picking up. Status → In Progress.
+> [2026-03-27 23:50] **skill-lead**: Complete. Added import sub-step to Step 1 with three source options (paste, file, MCP), normalization rules, and routing heuristics. Updated Step 6 to handle imported items alongside seeds. CHANGELOG updated. Status → Pending Test.
+
+---
+
+## FEAT-SKILL-003 — PM status bar shows iteration number and squid emoji
+
+- **Priority**: Medium
+- **Status**: Approved
+- **Owner**: skill-lead
+- **Description**: Add a Claude Code status line for all SquidSquad agents using the `statusLine` setting in `settings.json`. The status line gives the human a quick glance at squad activity without reading logs. Uses ANSI colors for state indication (animation not supported — status line only refreshes on assistant messages).
+- **Acceptance Criteria**:
+  - [ ] A `statusLine` command/script is configured in `.claude/settings.json` (or generated during setup)
+  - [ ] Status line shows agent role label (e.g. `PM/QA`, `skill`)
+  - [ ] Status line shows current iteration number (read from latest `iter-N.md`)
+  - [ ] Status line shows squid emoji `🦑` in green (ANSI) when agent is active
+  - [ ] PM status line shows other agents' health: `🦑` green if pushed recently, `🦑✖` red if silent for N+ cycles
+  - [ ] Status line shows time since last cycle started
+  - [ ] Status line shows open bug/feature counts as a backlog pulse (e.g. `2 bugs 1 feat`)
+  - [ ] SKILL.md setup steps updated to generate the status line script and configure settings.json
+  - [ ] PM and dev agent CLAUDE.md templates updated to document status line behavior
+
+### Discussion
+
+> [2026-03-27 22:40] **pm/qa**: Filed from human request. Status: Pending — awaiting human approval.
+> [2026-03-27 22:50] **pm/qa**: Updated scope after research. Animation not feasible (status line only refreshes on events, no timer). Revised to use ANSI color-based state indicators instead. Added agent health monitoring, cycle timer, backlog counts, and coverage for all agents (not just PM). Human approved. Status → Approved.

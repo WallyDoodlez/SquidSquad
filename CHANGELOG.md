@@ -6,8 +6,15 @@ All notable changes to SquidSquad will be documented here.
 
 ## [0.5.1] — 2026-03-27
 
+### Changed
+
+- Setup Step 1 now uses structured prompts with labels, descriptions, defaults, and validation rules for each field. Supports quick-start mode where all details can be provided in a single sentence. Displays a confirmation summary before proceeding.
+- Setup now offers to import existing bugs and features after gathering project details. Supports three sources: pasted text, local file path, or connected MCP tools (GitHub Issues, Jira, Linear, etc.). Imported items are normalized into standard tracker format, routed to the correct dev agent, and seeded with Discussion notes. Step 6 updated to handle imported items alongside manual seed items.
+
 ### Fixed
 
+- Opening paragraph, architecture diagram, and Step 9 confirm message in SKILL.md no longer hardcode "three agents" or FE/BE roles — they now use dynamic `[Role]` and `[N]` placeholders matching the flexible team shape introduced in v0.5.0.
+- Ralph Loop section collapsed from separate FE/BE loops into a single generic `[Role] Lead` template. PM/QA loop and setup Steps 4/6 updated to use `[role]/` paths instead of hardcoded `fe/`/`be/`.
 - Boot scripts (`start-[role].sh/.ps1`) now own the loop via `while true` in the shell — each `claude -p` invocation handles one Ralph Loop cycle. Previously the loop was only described in CLAUDE.md but `claude -p` exits after one turn.
 - Console now shows cycle number and timestamp between iterations so the agent's activity is visible.
 - `.claude/settings.json` pre-grants `Edit`/`Write` permissions on `.squidsquad/**` and git commands so agents never pause mid-cycle to ask for write permission.

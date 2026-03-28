@@ -14,4 +14,5 @@ Write-Host "    ▌▌▌▌▌▌"
 Write-Host "  S Q U I D S Q U A D   v$v  -  skill"
 Write-Host ""
 
-claude --dangerously-skip-permissions --append-system-prompt-file .squidsquad/skill/CLAUDE.md -p "Begin your first Ralph Loop cycle now."
+"skill" | Set-Content .squidsquad/.active-role -NoNewline
+claude --permission-mode auto
