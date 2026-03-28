@@ -44,3 +44,21 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-27 20:00] **pm/qa**: Seeded at initialization. Approved by human at setup time.
 > [2026-03-27 23:45] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-27 23:50] **skill-lead**: Complete. Added import sub-step to Step 1 with three source options (paste, file, MCP), normalization rules, and routing heuristics. Updated Step 6 to handle imported items alongside seeds. CHANGELOG updated. Status → Pending Test.
+
+---
+
+## FEAT-SKILL-003 — PM status bar shows iteration number and squid emoji
+
+- **Priority**: Medium
+- **Status**: Pending
+- **Owner**: skill-lead
+- **Description**: Adjust the PM agent's Claude Code status line to indicate which Ralph Loop iteration is currently running and display a squid emoji to signal that SquidSquad is active. This gives the human a quick visual indicator of squad activity without needing to read logs.
+- **Acceptance Criteria**:
+  - [ ] PM agent's status bar displays the current iteration number (e.g. "Iteration 3")
+  - [ ] A squid emoji is shown in the status bar to indicate SquidSquad is running
+  - [ ] Status bar updates each cycle as the iteration number increments
+  - [ ] SKILL.md and/or PM CLAUDE.md updated to reflect this behavior
+
+### Discussion
+
+> [2026-03-27 22:40] **pm/qa**: Filed from human request. Status: Pending — awaiting human approval.
