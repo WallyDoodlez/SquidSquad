@@ -29,20 +29,34 @@ git pull --rebase
 
 If there is a rebase conflict in a tracker file, resolve it by keeping both versions. Never discard entries.
 
+### Step 1b — Context Pressure Check
+
+Check `context_window.used_percentage`. If above 80% (configurable in `config.md`):
+1. Save current working state to `.squidsquad/skill/working-state.md`.
+2. Commit and push all pending work.
+3. Print: `[squidsquad] Context pressure at [X]% — exiting for fresh context.`
+4. Exit the conversation. The boot script will restart you.
+
+### Step 1c — Resume From Working State
+
+Read `.squidsquad/skill/working-state.md`. If it has an active task (status `in-progress`), resume that task using the saved context instead of starting fresh.
+
 ### Step 2 — Triage Bugs
 
 Open `.squidsquad/skill/bugs.md`. For each bug with status `Open` or `Investigating`:
 
-1. Read the bug description and any Discussion entries.
-2. Locate the affected skill files.
-3. Fix the issue.
-4. Verify manually: does SKILL.md still have valid YAML frontmatter? Does the setup flow still read coherently end-to-end?
-5. If verified:
+1. Update `.squidsquad/skill/working-state.md` with the bug ID and status `in-progress`.
+2. Read the bug description and any Discussion entries.
+3. Locate the affected skill files.
+4. Fix the issue.
+5. Verify manually: does SKILL.md still have valid YAML frontmatter? Does the setup flow still read coherently end-to-end?
+6. If verified:
    - Update the bug's `Status` field to `Fixed`.
    - Append a Discussion entry:
      ```
      > [YYYY-MM-DD HH:MM] **skill-lead**: Fixed in commit [hash]. [Brief explanation]. Status → Fixed.
      ```
+   - Clear working state (reset to header-only).
 
 ### Step 3 — Implement Features
 
@@ -53,13 +67,15 @@ Open `.squidsquad/skill/features.md`. Pick the next feature with status `Approve
    > [YYYY-MM-DD HH:MM] **skill-lead**: Picking up. Status → In Progress.
    ```
 2. Update the feature's `Status` to `In Progress`.
-3. Implement the feature in the relevant skill files.
-4. Do a final read-through of the affected sections for coherence.
-5. Update `CHANGELOG.md` if the change is user-visible.
-6. Update status to `Pending Test`:
+3. Update `.squidsquad/skill/working-state.md` with the feature ID, status `in-progress`, and planned approach.
+4. Implement the feature in the relevant skill files. Update working state as sub-steps complete.
+5. Do a final read-through of the affected sections for coherence.
+6. Update `CHANGELOG.md` if the change is user-visible.
+7. Update status to `Pending Test`:
    ```
    > [YYYY-MM-DD HH:MM] **skill-lead**: Complete. Status → Pending Test.
    ```
+8. Clear working state (reset to header-only).
 
 ### Step 4 — Log Iteration
 
@@ -124,10 +140,36 @@ Increment `BUG-SKILL` counter in `config.md` after filing.
 
 ---
 
+## Working State File
+
+Maintain `.squidsquad/skill/working-state.md` to persist context across context window resets:
+
+```markdown
+# Working State
+
+- **Task**: [BUG-SKILL-XXX or FEAT-SKILL-XXX, or "none"]
+- **Status**: [in-progress / blocked / none]
+- **Started**: [YYYY-MM-DD HH:MM]
+
+## Completed Steps
+- [what has been done so far]
+
+## Remaining Steps
+- [what still needs to be done]
+
+## Key Decisions
+- [important choices made during this task, with rationale]
+```
+
+Create/update when starting a task. Clear when complete. Read on startup (Step 1c) to resume after context reset.
+
+---
+
 ## File Conventions
 
 - Your tracker files: `.squidsquad/skill/bugs.md`, `.squidsquad/skill/features.md`
 - Your iteration logs: `.squidsquad/skill/iterations/iter-N.md`
+- Your working state: `.squidsquad/skill/working-state.md`
 - Config (read-only except counters): `.squidsquad/config.md`
 - PM tracker (do not write): `.squidsquad/pm/`
 

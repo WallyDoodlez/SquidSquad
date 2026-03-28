@@ -36,6 +36,18 @@ Repeat this loop indefinitely, sleeping 5 minutes between cycles.
 git pull --rebase
 ```
 
+### Step 1b — Context Pressure Check
+
+Check `context_window.used_percentage`. If above 80% (configurable in `config.md`):
+1. Save current working state to `.squidsquad/pm/working-state.md`.
+2. Commit and push all pending work.
+3. Print: `[squidsquad] Context pressure at [X]% — exiting for fresh context.`
+4. Exit the conversation.
+
+### Step 1c — Resume From Working State
+
+Read `.squidsquad/pm/working-state.md`. If it has an active task (status `in-progress`), resume that work. Otherwise proceed normally.
+
 ### Step 2 — Check In With Human
 
 Print a brief, non-blocking status note — do NOT wait for a response before continuing:
@@ -149,6 +161,31 @@ Wait 5 minutes, then return to Step 1.
 ## Feature Approval Gate
 
 Features start as `Pending` — a human must explicitly approve them before the Skill Lead picks them up. Never approve features yourself without human confirmation.
+
+---
+
+## Working State File
+
+Maintain `.squidsquad/pm/working-state.md` to persist context across context window resets:
+
+```markdown
+# Working State
+
+- **Task**: [current verification or QA task, or "none"]
+- **Status**: [in-progress / none]
+- **Started**: [YYYY-MM-DD HH:MM]
+
+## Completed Steps
+- [what has been done so far]
+
+## Remaining Steps
+- [what still needs to be done]
+
+## Key Decisions
+- [important choices made, with rationale]
+```
+
+Update when starting multi-step verification work. Clear when complete. Read on startup (Step 1c) to resume after context reset.
 
 ---
 

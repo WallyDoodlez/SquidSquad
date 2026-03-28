@@ -33,3 +33,7 @@
 ## Iteration Interval
 
 - **Minutes**: 5
+
+## Context Pressure
+
+- **Threshold**: 80

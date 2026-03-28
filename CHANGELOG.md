@@ -17,6 +17,9 @@ All notable changes to SquidSquad will be documented here.
 
 - Agent health detection via `git log` commit prefixes — replaces local iteration-file-based health check. PM status line and new Ralph Loop Step 7 both use `git log --since` filtered by agent commit prefix (e.g. `skill:`, `fe:`) to detect stalled agents. Works across separate clones.
 - Commit prefix convention documented in Git Protocol: every commit must start with `role:` prefix.
+- Context pressure check (Step 1b): agents check `context_window.used_percentage` at cycle start. If above threshold (configurable in `config.md`, default 80%), they save state, commit, and exit for a fresh context.
+- Working state file (`.squidsquad/[role]/working-state.md`): agents persist current task, completed steps, and remaining work. Read on startup (Step 1c) to resume mid-task after context reset. Cleared on task completion.
+- `config.md` now includes `Context Pressure` section with configurable threshold.
 
 ### Fixed
 

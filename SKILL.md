@@ -147,20 +147,24 @@ Status flow: `Pending` → `Approved` → `In Progress` → `Pending Test` → `
 
 Each agent runs its own Ralph Loop — an autonomous work cycle that repeats on an interval. Each cycle prints visible start/stop markers with timestamps (e.g. `[squidsquad] ---- cycle 3 started at 14:32:07 ----`) so the human can spot cycle boundaries in terminal scrollback.
 
+All agents maintain a **working state file** (`.squidsquad/[role]/working-state.md`) that tracks the current task, completed steps, and remaining work. This file is read on startup to resume mid-task after a context window reset. Agents also check **context pressure** at the start of each cycle — if `context_window.used_percentage` exceeds the threshold in `config.md` (default 80%), they save state, commit, and exit so the boot script can restart them with a fresh context.
+
 ### [Role] Lead Ralph Loop
 
 Each dev agent follows this loop, substituting its own role name and tracker paths:
 
 ```
 1. git pull --rebase
+1b. Context pressure check — if above threshold, save state and exit
+1c. Resume from working-state.md if active task exists
 2. Scan [role]/bugs.md for Open or Investigating items
-   → Fix each bug in code
+   → Write working state, fix bug, clear state on completion
    → If bug touches another agent's domain, file BUG-[OTHER]-XXX in [other]/bugs.md
    → Update bug status to Fixed, append Discussion entry
 3. Scan [role]/features.md for Approved items
-   → Implement next feature
+   → Write working state, implement feature, update state as sub-steps complete
    → Update status to In Progress, then Pending Test
-   → Append Discussion entry
+   → Clear working state on completion, append Discussion entry
 4. Run [role] test command (from config.md)
 5. Log iteration to [role]/iterations/iter-N.md
 6. git add -A && git commit && git push
@@ -171,6 +175,8 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 
 ```
 1. git pull --rebase
+1b. Context pressure check — if above threshold, save state and exit
+1c. Resume from working-state.md if active task exists
 2. Non-blocking human check-in (print note, continue immediately)
    → If human has provided input: file bugs/features to appropriate tracker
    → Await human approval before marking features Approved
@@ -330,6 +336,10 @@ Always create `.squidsquad/pm/` with its full structure regardless of team shape
 ## Iteration Interval
 
 - **Minutes**: [INTERVAL]  ← minimum 1, default 10
+
+## Context Pressure
+
+- **Threshold**: [THRESHOLD]  ← percentage (1-99), default 80
 ```
 
 ### Step 4 — Generate CLAUDE.md Files

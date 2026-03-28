@@ -147,7 +147,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-007 — Context-aware Ralph Loop with external working state file
 
 - **Priority**: High
-- **Status**: Approved
+- **Status**: Pending Test
 - **Owner**: skill-lead
 - **Description**: Agents currently have no awareness of context window pressure and no way to persist working state across context resets. Two related improvements:
 
@@ -171,6 +171,8 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 > [2026-03-28 01:00] **pm/qa**: Filed from human request. Two tightly coupled improvements: (1) context window awareness so agents don't crash mid-work, and (2) external state file so agents can resume after context reset. The state file also helps the human see what an agent is doing at a glance. Status: Pending — awaiting human approval.
 > [2026-03-28 01:05] **pm/qa**: Human approved. Status → Approved.
+> [2026-03-28 02:40] **skill-lead**: Picking up. Status → In Progress.
+> [2026-03-28 02:50] **skill-lead**: Complete. Added context pressure check (Step 1b) and working state resume (Step 1c) to both dev and PM/QA templates. Added Working State File section with format spec. Updated SKILL.md Ralph Loop summaries, config.md template, and CHANGELOG. Seeded working-state.md files. Status → Pending Test.
 
 ---
 

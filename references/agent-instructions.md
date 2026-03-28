@@ -56,27 +56,51 @@ git pull --rebase
 
 If there is a rebase conflict in a tracker file, resolve it by keeping both versions — append the conflicting section below the existing one. Never discard entries.
 
+### Step 1b — Context Pressure Check
+
+Check `context_window.used_percentage` from the status line JSON (available as the `$CONTEXT_USED` environment hint, or by reading the last status line output). Compare against the threshold in `config.md` (default 80%).
+
+If context usage **exceeds the threshold**:
+1. Compact your current working state into `.squidsquad/[ROLE]/working-state.md` (see Working State File below).
+2. Commit and push all pending work.
+3. Print: `[squidsquad] Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
+4. Exit the conversation. The boot script will restart you with a fresh context window.
+
+If context usage is below threshold, continue normally.
+
+### Step 1c — Resume From Working State
+
+Read `.squidsquad/[ROLE]/working-state.md`. If it contains an active task (status `in-progress`):
+- Read the task ID, completed steps, remaining steps, and key decisions.
+- Resume work on that task instead of starting fresh from the tracker.
+- Skip re-analyzing code you've already understood — trust the working state summary.
+
+If the file is empty or has no active task, proceed normally to Step 2.
+
 ### Step 2 — Triage Bugs
 
 Open `.squidsquad/[ROLE]/bugs.md`. For each bug with status `Open` or `Investigating`:
 
-1. Read the bug description, steps to reproduce, and any Discussion entries.
-2. Locate the relevant code.
-3. Fix the bug.
-4. Run the test command: `[ROLE_TEST_CMD]`
-5. If tests pass:
+1. Write working state: update `.squidsquad/[ROLE]/working-state.md` with the bug ID, status `in-progress`, and planned approach.
+2. Read the bug description, steps to reproduce, and any Discussion entries.
+3. Locate the relevant code.
+4. Fix the bug.
+5. Run the test command: `[ROLE_TEST_CMD]`
+6. If tests pass:
    - Update the bug's `Status` field to `Fixed`.
    - Append a Discussion entry:
      ```
      > [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Fixed in commit [hash]. [Brief explanation]. Status → Fixed.
      ```
-6. If the root cause belongs to another agent's domain:
+   - Clear working state: reset `working-state.md` to empty/header-only.
+7. If the root cause belongs to another agent's domain:
    - Do NOT mark this bug as Fixed.
    - File a new bug in `.squidsquad/[OTHER_ROLE]/bugs.md` as `BUG-[OTHER_ROLE_UPPER]-XXX`.
    - Append a Discussion entry:
      ```
      > [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Root cause is in [OTHER_ROLE]. Filed BUG-[OTHER_ROLE_UPPER]-XXX. Blocking.
      ```
+   - Clear working state.
 
 ### Step 3 — Implement Features
 
@@ -87,15 +111,17 @@ Open `.squidsquad/[ROLE]/features.md`. Pick the next feature with status `Approv
    > [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Picking up. Status → In Progress.
    ```
 2. Update the feature's `Status` field to `In Progress`.
-3. Implement the feature according to the acceptance criteria.
-4. Run the test command: `[ROLE_TEST_CMD]`
-5. If tests pass:
+3. Write working state: update `.squidsquad/[ROLE]/working-state.md` with the feature ID, status `in-progress`, planned approach, and acceptance criteria checklist.
+4. Implement the feature according to the acceptance criteria. Update working state as you complete sub-steps.
+5. Run the test command: `[ROLE_TEST_CMD]`
+6. If tests pass:
    - Update status to `Pending Test`.
    - Append a Discussion entry:
      ```
      > [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Implementation complete. All tests passing. Status → Pending Test.
      ```
-6. If tests fail: fix the failure before changing status.
+   - Clear working state: reset `working-state.md` to empty/header-only.
+7. If tests fail: fix the failure before changing status.
 
 ### Step 4 — Log Iteration
 
@@ -169,10 +195,40 @@ Increment the `BUG-[OTHER_ROLE_UPPER]` counter in `config.md` after cross-filing
 
 ---
 
+## Working State File
+
+Maintain `.squidsquad/[ROLE]/working-state.md` to persist context across context window resets:
+
+```markdown
+# Working State
+
+- **Task**: [BUG-XXX or FEAT-XXX, or "none"]
+- **Status**: [in-progress / blocked / none]
+- **Started**: [YYYY-MM-DD HH:MM]
+
+## Completed Steps
+- [what has been done so far]
+
+## Remaining Steps
+- [what still needs to be done]
+
+## Key Decisions
+- [important choices made during this task, with rationale]
+```
+
+- **Create/update** when starting a bug fix or feature implementation.
+- **Update** as you complete sub-steps — this is your safety net if context resets.
+- **Clear** (reset to `# Working State\n\n- **Task**: none\n- **Status**: none`) when a task is complete.
+- **Read on startup** (Step 1c) to resume mid-task after a context reset.
+- Before a **context pressure exit** (Step 1b), compact your current understanding into this file.
+
+---
+
 ## File Conventions
 
 - Your tracker files: `.squidsquad/[ROLE]/bugs.md`, `.squidsquad/[ROLE]/features.md`
 - Your iteration logs: `.squidsquad/[ROLE]/iterations/iter-N.md`
+- Your working state: `.squidsquad/[ROLE]/working-state.md`
 - Config (read-only except counters): `.squidsquad/config.md`
 - Other agent trackers (write only when cross-filing): `.squidsquad/[OTHER_ROLE]/bugs.md`
 - PM tracker (do not write): `.squidsquad/pm/`
@@ -256,6 +312,20 @@ git pull --rebase
 ```
 
 If there is a rebase conflict in a tracker file, resolve it by keeping both versions. Never discard entries.
+
+### Step 1b — Context Pressure Check
+
+Check `context_window.used_percentage`. Compare against the threshold in `config.md` (default 80%).
+
+If context usage **exceeds the threshold**:
+1. Compact your current working state into `.squidsquad/pm/working-state.md`.
+2. Commit and push all pending work.
+3. Print: `[squidsquad] Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
+4. Exit the conversation.
+
+### Step 1c — Resume From Working State
+
+Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `in-progress`), resume that work. Otherwise proceed normally.
 
 ### Step 2 — Check In With Human
 
@@ -450,10 +520,36 @@ Do not approve features yourself without human confirmation.
 
 ---
 
+## Working State File
+
+Maintain `.squidsquad/pm/working-state.md` to persist context across context window resets. Same format as dev agents:
+
+```markdown
+# Working State
+
+- **Task**: [current verification or QA task, or "none"]
+- **Status**: [in-progress / none]
+- **Started**: [YYYY-MM-DD HH:MM]
+
+## Completed Steps
+- [what has been done so far]
+
+## Remaining Steps
+- [what still needs to be done]
+
+## Key Decisions
+- [important choices made, with rationale]
+```
+
+Update when starting multi-step verification work. Clear when complete. Read on startup to resume after context reset.
+
+---
+
 ## File Conventions
 
 - Your tracker files: `.squidsquad/pm/qa-log.md`, `.squidsquad/pm/enhancements.md`
 - Your iteration logs: `.squidsquad/pm/iterations/iter-N.md`
+- Your working state: `.squidsquad/pm/working-state.md`
 - All agent trackers (you can write to all): `.squidsquad/[ROLE]/bugs.md`, `.squidsquad/[ROLE]/features.md`
 - Config (read-only except counters): `.squidsquad/config.md`
 
@@ -465,7 +561,7 @@ A status line is shown at the bottom of your Claude Code session. It displays:
 
 - `🦑` (green) — you are active
 - `PM/QA` role label and current iteration number
-- **Agent health**: for each dev agent, `🦑` (green) if they pushed an iteration within 2× the loop interval, or `🦑✖` (red) if silent for longer — helps you spot stalled agents
+- **Agent health**: for each dev agent, `🦑` (green) if they committed within 2× the loop interval (checked via `git log --grep`), or `🦑✖` (red) if silent for longer — helps you spot stalled agents
 - Time since your last completed cycle
 
 The status line updates automatically after each assistant message. No action is required from you — it reads from iteration logs across all agents.
