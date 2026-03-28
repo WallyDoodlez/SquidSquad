@@ -7,7 +7,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-001 — Use structured prompts during setup
 
 - **Priority**: High
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Owner**: skill-lead
 - **Description**: The current setup flow asks freeform questions. Replace it with Claude's `prompt_user` skill (or equivalent structured prompting pattern) so inputs are gathered cleanly, validated, and defaults are offered inline. This makes setup more reliable and easier to script.
 - **Acceptance Criteria**:
@@ -21,13 +21,14 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-27 20:00] **pm/qa**: Seeded at initialization. Approved by human at setup time.
 > [2026-03-27 23:16] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-27 23:20] **skill-lead**: Complete. Step 1 rewritten with structured field table (label, description, default, validation per field), quick-start mode for single-sentence setup, and confirmation summary before proceeding. Status → Pending Test.
+> [2026-03-27 23:15] **pm/qa**: QA verified — all 4 acceptance criteria confirmed in SKILL.md Step 1. Status → Shipped.
 
 ---
 
 ## FEAT-SKILL-002 — Import existing bugs and features from external sources during setup
 
 - **Priority**: High
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Owner**: skill-lead
 - **Description**: During setup Step 1, after gathering project details, offer to import existing bugs or features from an external source. Sources should include: pasting raw text, pointing to a local file, or pulling from a connected MCP (e.g. GitHub Issues, Jira, Linear, Notion) if one is available in the session. Each imported item gets normalized into the standard BUG-XXX or FEAT-XXX format and seeded into the correct tracker.
 - **Acceptance Criteria**:
@@ -44,13 +45,14 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-27 20:00] **pm/qa**: Seeded at initialization. Approved by human at setup time.
 > [2026-03-27 23:45] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-27 23:50] **skill-lead**: Complete. Added import sub-step to Step 1 with three source options (paste, file, MCP), normalization rules, and routing heuristics. Updated Step 6 to handle imported items alongside seeds. CHANGELOG updated. Status → Pending Test.
+> [2026-03-27 23:15] **pm/qa**: QA verified — all 7 acceptance criteria confirmed in SKILL.md Step 1 and Step 6. Status → Shipped.
 
 ---
 
 ## FEAT-SKILL-003 — PM status bar shows iteration number and squid emoji
 
 - **Priority**: Medium
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Owner**: skill-lead
 - **Description**: Add a Claude Code status line for all SquidSquad agents using the `statusLine` setting in `settings.json`. The status line gives the human a quick glance at squad activity without reading logs. Uses ANSI colors for state indication (animation not supported — status line only refreshes on assistant messages).
 - **Acceptance Criteria**:
@@ -70,3 +72,23 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-27 22:50] **pm/qa**: Updated scope after research. Animation not feasible (status line only refreshes on events, no timer). Revised to use ANSI color-based state indicators instead. Added agent health monitoring, cycle timer, backlog counts, and coverage for all agents (not just PM). Human approved. Status → Approved.
 > [2026-03-28 00:00] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-28 00:15] **skill-lead**: Complete. Created `.squidsquad/statusline.sh` with role detection, iteration tracking, backlog pulse, PM agent health, and ANSI coloring. Updated `settings.json` template with `statusLine` config. Updated SKILL.md Step 5b and Step 7. Updated dev and PM/QA CLAUDE.md templates with Status Line section. CHANGELOG updated. Status → Pending Test.
+> [2026-03-27 23:15] **pm/qa**: QA verified — all 9 acceptance criteria pass. However, statusline.sh discards JSON stdin (context window %, repo info) — filed as BUG-SKILL-004. Status → Shipped (with caveat).
+
+---
+
+## FEAT-SKILL-004 — PM/QA agent must never implement code directly
+
+- **Priority**: High
+- **Status**: Approved
+- **Owner**: skill-lead
+- **Description**: The PM/QA agent should be explicitly prohibited from implementing code or making direct changes to skill files, application code, or any non-tracker files. When PM/QA identifies something that needs changing, it must always file a bug or feature request to the appropriate dev agent's tracker instead of making the change itself. This should be enforced in both the PM/QA CLAUDE.md template (in `references/agent-instructions.md`) and the generated PM CLAUDE.md files.
+- **Acceptance Criteria**:
+  - [ ] PM/QA CLAUDE.md template in `references/agent-instructions.md` explicitly states PM/QA must never implement code changes
+  - [ ] "What You Must Never Do" section includes: "Never implement fixes or features directly — always file to the appropriate agent's bug or feature tracker"
+  - [ ] Ralph Loop steps reinforce this: if PM/QA finds an issue during QA, it files a bug rather than fixing it
+  - [ ] Generated `pm/CLAUDE.md` files include this constraint
+
+### Discussion
+
+> [2026-03-27 23:05] **pm/qa**: Filed from human request. PM/QA's role is coordination and verification, not implementation. Any code-level fix must go through a dev agent's tracker.
+> [2026-03-27 23:10] **pm/qa**: Human approved. Status → Approved.

@@ -17,4 +17,4 @@ if (Test-Path .squidsquad) {
 }
 
 "pm" | Set-Content .squidsquad/.active-role -NoNewline
-claude --permission-mode auto
+claude --permission-mode auto -p "Read .squidsquad/.active-role to find your role, then read .squidsquad/<role>/CLAUDE.md and execute your first Ralph Loop cycle now." --continue

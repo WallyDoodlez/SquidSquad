@@ -15,4 +15,4 @@ Write-Host "  S Q U I D S Q U A D   v$v  -  skill"
 Write-Host ""
 
 "skill" | Set-Content .squidsquad/.active-role -NoNewline
-claude --permission-mode auto
+claude --permission-mode auto -p "Read .squidsquad/.active-role to find your role, then read .squidsquad/<role>/CLAUDE.md and execute your first Ralph Loop cycle now." --continue

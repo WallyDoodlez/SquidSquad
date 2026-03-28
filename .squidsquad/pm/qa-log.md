@@ -22,3 +22,40 @@ _Each PM/QA iteration logs a manual coherence check here._
 - **Files Reviewed**: SKILL.md, references/agent-instructions.md, CHANGELOG.md, .squidsquad/skill/bugs.md, .squidsquad/skill/features.md
 - **Issues**: BUG-SKILL-001 still Open — no fix committed yet by skill lead. No new issues found.
 - **Notes**: Iteration 2. references/agent-instructions.md placeholders are correct. CHANGELOG.md is up to date. FEAT-SKILL-001 and FEAT-SKILL-002 both Approved, awaiting skill lead pickup.
+
+---
+
+## QA Run — 2026-03-27 23:15
+
+- **Result**: Issues Found
+- **Files Reviewed**: SKILL.md, references/agent-instructions.md, CHANGELOG.md, .claude/settings.json, .squidsquad/statusline.sh, .squidsquad/skill/bugs.md, .squidsquad/skill/features.md
+- **Verification — BUG-SKILL-001 (Fixed)**: VERIFIED. Line 9 now says "one per dev role you define, plus a PM/QA". Diagram uses `[Role] Lead` placeholders. Step 9 uses `[N] agents`. All three items resolved. → Closed.
+- **Verification — BUG-SKILL-002 (Fixed)**: VERIFIED. No remaining `fe/bugs`, `be/bugs`, `FE Lead Ralph`, or `BE Lead Ralph` references in SKILL.md. Ralph Loop consolidated into generic template. → Closed.
+- **Verification — FEAT-SKILL-001 (Pending Test)**:
+  - [x] Structured field table with label, description, default, validation — present in Step 1
+  - [x] Quick-start mode for single-sentence setup — documented
+  - [x] Validation summary with re-prompt — documented
+  - [x] SKILL.md Step 1 updated — confirmed
+  - VERDICT: All criteria pass. → Shipped.
+- **Verification — FEAT-SKILL-002 (Pending Test)**:
+  - [x] Import prompt offered after project details — present as "Import Existing Items" sub-step
+  - [x] Paste text parsing with normalization — documented with heuristics
+  - [x] File path input — documented
+  - [x] MCP source option — documented with tool detection
+  - [x] Routing to correct tracker — documented with heuristics
+  - [x] Discussion note on each imported entry — documented
+  - [x] Step 1 and Step 6 updated — confirmed
+  - VERDICT: All criteria pass. → Shipped.
+- **Verification — FEAT-SKILL-003 (Pending Test)**:
+  - [x] statusLine configured in settings.json — present (line 1-4)
+  - [x] Role label shown — yes (line 71-75 of statusline.sh)
+  - [x] Iteration number shown — yes (line 22-30)
+  - [x] Green squid emoji — yes (ANSI green on line 111)
+  - [x] PM shows agent health with green/red squid — yes (lines 78-107)
+  - [x] Time since last cycle — yes (lines 37-49)
+  - [x] Backlog pulse counts — yes (lines 52-68)
+  - [x] SKILL.md Step 5b added — confirmed
+  - [x] CLAUDE.md templates updated — confirmed in agent-instructions.md
+  - **ISSUE**: statusline.sh line 5 discards JSON stdin (`cat > /dev/null`), losing context window % and workspace info that the default status bar shows. This is BUG-SKILL-004.
+  - VERDICT: All acceptance criteria pass, but BUG-SKILL-004 blocks full satisfaction — context window bar is missing. → Shipped with caveat (bug filed).
+- **Notes**: Major progress from skill lead — 2 bugs fixed, 3 features implemented. BUG-SKILL-003 (PS1 logo) and BUG-SKILL-004 (status line missing context window) remain open.

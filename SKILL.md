@@ -360,7 +360,7 @@ Add `.squidsquad/.active-role` to `.gitignore` (create the file if it doesn't ex
 
 Generate both a `.sh` (bash) and a `.ps1` (PowerShell) boot script for each dev agent, plus PM/QA. Script names use the role name, e.g. `start-be.sh`, `start-api.sh`, `start-worker.ps1`.
 
-All agents run interactively. The boot script writes `.squidsquad/.active-role` (git-ignored) with the role name, then launches `claude --permission-mode auto`. The root `CLAUDE.md` detects this file and auto-starts the correct role.
+All agents run interactively. The boot script writes `.squidsquad/.active-role` (git-ignored) with the role name, then uses `-p` to send the first message (which triggers the agent to read its CLAUDE.md and start working), followed by `--continue` to resume that session interactively.
 
 **`start-[role].sh`**:
 ```bash
@@ -383,7 +383,7 @@ LOGO
 fi
 
 echo "[ROLE]" > .squidsquad/.active-role
-claude --permission-mode auto
+claude --permission-mode auto -p "Read .squidsquad/.active-role to find your role, then read .squidsquad/<role>/CLAUDE.md and execute your first Ralph Loop cycle now." --continue
 ```
 
 **`start-[role].ps1`**:
@@ -405,7 +405,7 @@ Write-Host "  S Q U I D S Q U A D   v$v  -  [ROLE]"
 Write-Host ""
 
 "[ROLE]" | Set-Content .squidsquad/.active-role -NoNewline
-claude --permission-mode auto
+claude --permission-mode auto -p "Read .squidsquad/.active-role to find your role, then read .squidsquad/<role>/CLAUDE.md and execute your first Ralph Loop cycle now." --continue
 ```
 
 **`start-pm.sh`**:
@@ -429,7 +429,7 @@ LOGO
 fi
 
 echo "pm" > .squidsquad/.active-role
-claude --permission-mode auto
+claude --permission-mode auto -p "Read .squidsquad/.active-role to find your role, then read .squidsquad/<role>/CLAUDE.md and execute your first Ralph Loop cycle now." --continue
 ```
 
 **`start-pm.ps1`**:
@@ -453,10 +453,10 @@ if (Test-Path .squidsquad) {
 }
 
 "pm" | Set-Content .squidsquad/.active-role -NoNewline
-claude --permission-mode auto
+claude --permission-mode auto -p "Read .squidsquad/.active-role to find your role, then read .squidsquad/<role>/CLAUDE.md and execute your first Ralph Loop cycle now." --continue
 ```
 
-> **Note:** All agents run interactively with `--permission-mode auto`. The boot script writes `.squidsquad/.active-role` (git-ignored) before launching Claude. The root `CLAUDE.md` detects this file on startup and auto-loads the correct role instructions. The user can observe progress and comment in any agent's terminal.
+> **Note:** All agents use `-p` to send the first message (kickstarting the Ralph Loop), then `--continue` to resume that session interactively. The user can observe progress and comment in any agent's terminal.
 
 Make the `.sh` scripts executable (`chmod +x`).
 

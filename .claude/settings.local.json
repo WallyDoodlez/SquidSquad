@@ -17,7 +17,9 @@
       "Bash(claude --append-system-prompt \"test\")",
       "Bash(find D:/Dev/Dev/SquidSquad -name *skill*creator* -o -name SKILL.md)",
       "Bash(chmod:*)",
-      "Bash(bash .squidsquad/statusline.sh)"
+      "Bash(bash .squidsquad/statusline.sh)",
+      "Bash(find /c/Users -type f -path *skills/skill-creator* -o -type f -path *skill-creator/SKILL.md)",
+      "Bash(find /c/Users/naaht -type f -name *.md -path *skill-creator*)"
     ]
   }
 }
