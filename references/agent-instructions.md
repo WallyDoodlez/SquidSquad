@@ -117,14 +117,20 @@ Wait 10 minutes, then return to Step 1.
 
 ---
 
-## Filing BE Bugs
+## Filing Bugs (Self and Cross-Team)
 
-When a bug in `fe/bugs.md` has a backend root cause, file a new entry in `be/bugs.md`:
+You can file bugs to your own tracker (`fe/bugs.md`) or directly to the BE tracker (`be/bugs.md`). You do not need to wait for PM/QA to discover and file issues you notice yourself.
+
+**Self-file to `fe/bugs.md`** when you discover a standalone FE issue during feature work — for example, a pre-existing regression you spot while implementing something new, or a known edge case you want to track separately. Use `Reported By: fe-lead` and `Assigned To: fe-lead`.
+
+**Cross-file to `be/bugs.md`** when a bug has a backend root cause.
+
+Cross-team bug format:
 
 ```markdown
 ## BUG-BE-XXX — [Title]
 
-- **Severity**: [High/Medium/Low — match or escalate from the FE bug]
+- **Severity**: [High/Medium/Low — match or escalate from the originating bug]
 - **Status**: Open
 - **Reported By**: fe-lead
 - **Assigned To**: be-lead
@@ -139,7 +145,7 @@ When a bug in `fe/bugs.md` has a backend root cause, file a new entry in `be/bug
 > [YYYY-MM-DD HH:MM] **fe-lead**: Filed from BUG-FE-XXX. [Context].
 ```
 
-Increment the `BUG-BE` counter in `config.md` after filing.
+Increment the `BUG-BE` counter in `config.md` after cross-filing. Increment `BUG-FE` after self-filing.
 
 ---
 
@@ -277,9 +283,15 @@ Wait 10 minutes, then return to Step 1.
 
 ---
 
-## Filing FE Bugs
+## Filing Bugs (Self and Cross-Team)
 
-When a bug in `be/bugs.md` has a frontend root cause, file a new entry in `fe/bugs.md`:
+You can file bugs to your own tracker (`be/bugs.md`) or directly to the FE tracker (`fe/bugs.md`). You do not need to wait for PM/QA to discover and file issues you notice yourself.
+
+**Self-file to `be/bugs.md`** when you discover a standalone BE issue during feature work — for example, a performance problem you notice while implementing an endpoint, a missing validation, or a known edge case worth tracking. Use `Reported By: be-lead` and `Assigned To: be-lead`.
+
+**Cross-file to `fe/bugs.md`** when a bug has a frontend root cause.
+
+Cross-team bug format:
 
 ```markdown
 ## BUG-FE-XXX — [Title]
@@ -299,7 +311,7 @@ When a bug in `be/bugs.md` has a frontend root cause, file a new entry in `fe/bu
 > [YYYY-MM-DD HH:MM] **be-lead**: Filed from BUG-BE-XXX. [Context].
 ```
 
-Increment the `BUG-FE` counter in `config.md` after filing.
+Increment the `BUG-FE` counter in `config.md` after cross-filing. Increment `BUG-BE` after self-filing.
 
 ---
 

@@ -196,11 +196,13 @@ The PM/QA agent will check in with you each cycle. You can:
 
 ## Cross-Team Bug Filing
 
-One of SquidSquad's core design principles: **any agent can file a bug to any team, directly, with no routing bottleneck.**
+One of SquidSquad's core design principles: **any agent can file a bug to any team — including their own — directly, with no routing bottleneck.**
 
 | Who discovers the bug | Files to | Format |
 |-----------------------|----------|--------|
+| FE Lead (FE issue found during feature work) | `fe/bugs.md` | `BUG-FE-XXX` |
 | FE Lead (root cause is in BE) | `be/bugs.md` | `BUG-BE-XXX` |
+| BE Lead (BE issue found during feature work) | `be/bugs.md` | `BUG-BE-XXX` |
 | BE Lead (root cause is in FE) | `fe/bugs.md` | `BUG-FE-XXX` |
 | PM/QA (FE failure) | `fe/bugs.md` | `BUG-FE-XXX` |
 | PM/QA (BE failure) | `be/bugs.md` | `BUG-BE-XXX` |
