@@ -41,3 +41,7 @@
 ## PR Flow
 
 - **Enabled**: no
+
+## GitHub Issues Ingestion
+
+- **Enabled**: no

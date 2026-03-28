@@ -24,6 +24,9 @@ All notable changes to SquidSquad will be documented here.
 - Iteration log retention: agents keep the last 20 iteration files and delete older ones. Git history preserves them.
 - Quiet cycle detection: agents skip iteration log and commit when no work was done. Iteration counter only increments on productive cycles.
 - **PR-based approval flow** (optional): dev agents create PRs via `gh` CLI instead of pushing to main. Human reviews and merges on GitHub. PM monitors PR state and syncs comments/decisions back to tracker Discussion. Opt-in at setup or via `config.md` `PR Flow: yes`.
+- **GitHub Issues ingestion** (optional): PM auto-ingests open GitHub Issues into agent trackers each cycle via `gh issue list`. Issues are classified as bugs/features, routed to the right agent, and tracked with `GitHub Issue #N` references. Shipped items auto-close the original issue. Opt-in at setup or via `config.md` `GitHub Issues Ingestion: yes`.
+- `/squidsquad-status` command: type in any Claude session to get a dashboard — agent health, open bugs/features per agent, recently shipped items.
+- README.md fully rewritten to reflect current feature set, generic `[role]` examples, and all v0.5.2 features.
 
 ### Fixed
 

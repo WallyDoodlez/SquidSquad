@@ -145,6 +145,26 @@ git log --oneline --since="10 minutes ago" --grep="^[AGENT]:"
   ```
 - If agent has never committed: agent may not have started yet — note in QA log.
 
+### Step 7b — Ingest GitHub Issues (if enabled)
+
+If `GitHub Issues Ingestion: yes` in `config.md`:
+
+Print: `[squidsquad] Checking GitHub Issues...`
+
+```bash
+gh issue list --state open --json number,title,labels,body,url --limit 50
+```
+
+For each new issue (not already referenced in tracker Discussions as `GitHub Issue #N`):
+1. Classify as bug or feature based on labels and content.
+2. Route to skill agent (the only dev agent in this project).
+3. File as `BUG-SKILL-XXX` (Open) or `FEAT-SKILL-XXX` (Pending). Increment counter.
+4. Append Discussion: `> [YYYY-MM-DD HH:MM] **pm/qa**: Ingested from GitHub Issue #N. [URL]`
+
+When verifying shipped features or closed bugs, if the item has a `GitHub Issue #N` reference, close the issue via `gh issue close N --comment "Resolved by SquidSquad."`.
+
+If `GitHub Issues Ingestion: no` (current setting), skip this step.
+
 ### Step 8 — Log Iteration (skip on quiet cycles)
 
 If no QA issues were found, no bugs were verified, no features were shipped, and no human input was processed this cycle, this is a **quiet cycle**. Print: `[squidsquad] Quiet cycle — no work done. Skipping log/commit.` and skip directly to Step 10 (Sleep).

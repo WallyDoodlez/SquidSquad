@@ -189,7 +189,9 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 4. Log results to pm/qa-log.md
 5. If tests fail: file BUG-[ROLE]-XXX to the appropriate dev agent's tracker
 6. Scan each dev agent's features.md for Pending Test items → verify → update to Shipped
+6b. If PR Flow enabled: monitor open PRs, sync comments/merges/changes to trackers
 7. Scan each dev agent's bugs.md for Fixed items → verify → update to Verified/Closed
+7b. If GitHub Issues ingestion enabled: `gh issue list` → ingest new issues into trackers
 8. Agent health check: git log per agent, flag stalled/idle agents (no commits in 2× interval)
 9. If quiet cycle (no issues found, no verifications, no human input): skip log/commit, go to sleep
 10. Log iteration to pm/iterations/iter-N.md
@@ -271,6 +273,7 @@ Collect these fields:
 | 7 | **Loop interval** | Minutes between Ralph Loop cycles | `10` | Must be an integer >= 1; re-prompt if invalid |
 | 8 | **Seed items** | Bugs or features to pre-populate into trackers | _(none)_ | Optional |
 | 9 | **PR-based approval flow** | Create PRs instead of pushing to main? Requires `gh` CLI. | `N` (disabled) | `y`/`n` — if `y`, verify `gh auth status` succeeds |
+| 10 | **GitHub Issues ingestion** | Auto-ingest GitHub Issues into trackers each PM cycle? Requires `gh` CLI. | `N` (disabled) | `y`/`n` — if `y`, verify `gh auth status` succeeds |
 
 #### Import Existing Items
 
@@ -364,6 +367,10 @@ Always create `.squidsquad/pm/` with its full structure regardless of team shape
 ## PR Flow
 
 - **Enabled**: [yes/no]  ← if yes, dev agents create PRs instead of pushing to main; requires `gh` CLI
+
+## GitHub Issues Ingestion
+
+- **Enabled**: [yes/no]  ← if yes, PM auto-ingests new GitHub Issues each cycle; requires `gh` CLI
 ```
 
 ### Step 4 — Generate CLAUDE.md Files
@@ -861,3 +868,41 @@ Tell the user: version upgraded from → to, files regenerated per agent, any sc
 **Feature status values**: `Pending` → `Approved` → `In Progress` → `Pending Test` → `Shipped`
 
 Future schema changes will be documented here with their migration instructions before being released.
+
+---
+
+## `/squidsquad-status` — Squad Overview Command
+
+When the user says `/squidsquad-status` (or "squad status", "show me the squad", etc.), generate a quick dashboard of the entire SquidSquad team. This works from any Claude session in the repo — not just the PM agent.
+
+**Instructions:**
+
+1. Read `.squidsquad/config.md` to get the list of dev agents and the loop interval.
+2. For each agent (dev agents + PM):
+   - Check health via `git log --oneline --since="[2×interval] minutes ago" --grep="^[agent]:"` — if commits found, show as `active`; if prior commits exist but none recent, show as `stalled`; else `unknown`.
+   - Show last commit time: `git log --oneline --grep="^[agent]:" -1 --format="%ar"`
+3. For each dev agent, read their `bugs.md` and `features.md`:
+   - Count and list open bugs (status `Open` or `Investigating`)
+   - Count and list in-progress/approved features
+4. List the last 5 shipped features across all agents (status `Shipped`), most recent first.
+5. Format as a clean dashboard:
+
+```
+🦑 SquidSquad Status — [project name]
+══════════════════════════════════════
+
+Agent        Health     Last Commit
+─────        ──────     ───────────
+skill        active     2 minutes ago
+pm           active     3 minutes ago
+
+Backlog
+───────
+skill: 2 open bugs (BUG-SKILL-005, BUG-SKILL-006), 1 approved feat (FEAT-SKILL-007)
+
+Recently Shipped
+────────────────
+1. FEAT-SKILL-006 — Git-log based agent health detection
+2. FEAT-SKILL-005 — Show timestamp at iteration start and stop
+3. ...
+```
