@@ -170,9 +170,10 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
    → Update status to In Progress, then Pending Test
    → Clear working state on completion, append Discussion entry
 4. Run [role] test command (from config.md)
-5. Log iteration to [role]/iterations/iter-N.md
-6. git add -A && git commit && git push
-7. Sleep [INTERVAL] minutes (from config.md) → repeat
+5. If quiet cycle (no bugs fixed, no features progressed): skip log/commit, go to sleep
+6. Log iteration to [role]/iterations/iter-N.md
+7. git add -A && git commit && git push
+8. Sleep [INTERVAL] minutes (from config.md) → repeat
 ```
 
 ### PM/QA Ralph Loop
@@ -189,10 +190,11 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 5. If tests fail: file BUG-[ROLE]-XXX to the appropriate dev agent's tracker
 6. Scan each dev agent's features.md for Pending Test items → verify → update to Shipped
 7. Scan each dev agent's bugs.md for Fixed items → verify → update to Verified/Closed
-8. Agent health check: git log per agent, flag stalled agents (no commits in 2× interval)
-9. Log iteration to pm/iterations/iter-N.md
-10. git add -A && git commit && git push
-11. Sleep [INTERVAL] minutes (from config.md) → repeat
+8. Agent health check: git log per agent, flag stalled/idle agents (no commits in 2× interval)
+9. If quiet cycle (no issues found, no verifications, no human input): skip log/commit, go to sleep
+10. Log iteration to pm/iterations/iter-N.md
+11. git add -A && git commit && git push
+12. Sleep [INTERVAL] minutes (from config.md) → repeat
 ```
 
 ---
@@ -207,6 +209,19 @@ All agents follow these rules to minimize merge conflicts on shared tracker file
 - Push after completing each work unit (bug fix, feature, test run).
 - **Commit prefix convention**: every commit message must start with the agent's role name followed by a colon (e.g. `skill: fix bug`, `fe: add button`, `pm: verify features`). This prefix is used by the status line and PM health checks to detect agent activity via `git log --grep`.
 - If a rebase conflict occurs: keep both versions of the conflicted tracker section by appending, never discard.
+
+### PR-Based Approval Flow (optional)
+
+When `PR Flow: yes` is set in `config.md`, dev agents create PRs instead of pushing directly to main:
+
+- **Branching convention**: `squidsquad/feat-[role]-NNN` or `squidsquad/bug-[role]-NNN` (e.g. `squidsquad/feat-skill-008`)
+- **Dev agent workflow**: when marking work as `Pending Test`, create a branch, push it, and open a PR via `gh pr create`. Record the PR link in the tracker Discussion.
+- **PM/QA workflow**: each cycle, check open SquidSquad PRs via `gh pr list`. For each PR:
+  - If merged: update the tracker item status to `Shipped`
+  - If changes requested: update status back to `In Progress` and append the feedback to Discussion
+  - If new comments: append them to the tracker Discussion
+- **PM/QA still pushes to main** — only dev agent feature/bug work goes through PRs. PM tracker updates (bugs.md, features.md status changes, qa-log, iterations) continue to push directly to main.
+- When `PR Flow: no` (default), agents push directly to main as before.
 
 ---
 
@@ -255,6 +270,7 @@ Collect these fields:
 | 6 | **E2E test command** | Full-stack test command run by PM/QA each cycle | _(none)_ | Optional — if none, PM skips the test step |
 | 7 | **Loop interval** | Minutes between Ralph Loop cycles | `10` | Must be an integer >= 1; re-prompt if invalid |
 | 8 | **Seed items** | Bugs or features to pre-populate into trackers | _(none)_ | Optional |
+| 9 | **PR-based approval flow** | Create PRs instead of pushing to main? Requires `gh` CLI. | `N` (disabled) | `y`/`n` — if `y`, verify `gh auth status` succeeds |
 
 #### Import Existing Items
 
@@ -344,6 +360,10 @@ Always create `.squidsquad/pm/` with its full structure regardless of team shape
 ## Context Pressure
 
 - **Threshold**: [THRESHOLD]  ← percentage (1-99), default 80
+
+## PR Flow
+
+- **Enabled**: [yes/no]  ← if yes, dev agents create PRs instead of pushing to main; requires `gh` CLI
 ```
 
 ### Step 4 — Generate CLAUDE.md Files

@@ -136,9 +136,11 @@ Open `.squidsquad/[ROLE]/features.md`. Pick the next feature with status `Approv
    - Clear working state: reset `working-state.md` to empty/header-only.
 7. If tests fail: fix the failure before changing status.
 
-### Step 4 — Log Iteration
+### Step 4 — Log Iteration (skip on quiet cycles)
 
-Print: `[squidsquad] Logging iteration...`
+If no bugs were fixed and no features were progressed this cycle, this is a **quiet cycle**. Print: `[squidsquad] Quiet cycle — no work done. Skipping log/commit.` and skip directly to Step 6 (Sleep).
+
+Otherwise, print: `[squidsquad] Logging iteration...`
 
 Create `.squidsquad/[ROLE]/iterations/iter-N.md` (increment N from last log):
 
@@ -154,9 +156,34 @@ Create `.squidsquad/[ROLE]/iterations/iter-N.md` (increment N from last log):
 
 After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones. Git history preserves them if ever needed.
 
-### Step 5 — Commit and Push
+### Step 5 — Commit and Push (skip on quiet cycles)
 
 Print: `[squidsquad] Committing and pushing...`
+
+**If `PR Flow: yes` in config.md** and this cycle completed a feature or bug fix (status changed to `Pending Test`):
+
+1. Create a branch: `squidsquad/feat-[ROLE]-NNN` or `squidsquad/bug-[ROLE]-NNN`
+2. Commit all changes to the branch:
+   ```bash
+   git checkout -b squidsquad/[type]-[ROLE]-[NNN]
+   git add -A
+   git commit -m "[ROLE]: [brief description]"
+   git push -u origin squidsquad/[type]-[ROLE]-[NNN]
+   ```
+3. Open a PR:
+   ```bash
+   gh pr create --title "[ROLE]: [FEAT/BUG-ID] — [title]" --body "## [FEAT/BUG-ID]\n\n[acceptance criteria]\n\nStatus: Pending Test"
+   ```
+4. Record the PR URL in the tracker Discussion:
+   ```
+   > [YYYY-MM-DD HH:MM] **[ROLE]-lead**: PR opened: [URL]. Status → Pending Test.
+   ```
+5. Switch back to main:
+   ```bash
+   git checkout main
+   ```
+
+**If `PR Flow: no`** (default) or this cycle only updated tracker files (no feature/bug completion):
 
 ```bash
 git add -A
@@ -427,6 +454,25 @@ For each active agent, open their `features.md`. For each feature with status `P
 2. If all criteria pass: update to `Shipped`, append Discussion entry.
 3. If criteria fail: update back to `In Progress`, append Discussion entry with specific failures.
 
+### Step 6b — Monitor PRs (if PR Flow enabled)
+
+If `PR Flow: yes` in `config.md`:
+
+Print: `[squidsquad] Checking open PRs...`
+
+List open SquidSquad PRs:
+```bash
+gh pr list --search "squidsquad/" --state all --json number,title,state,mergedAt,url --limit 20
+```
+
+For each PR:
+- **If merged**: find the corresponding tracker item (parse the feature/bug ID from the PR title). Update status to `Shipped`. Append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm/qa**: PR [URL] merged by human. Status → Shipped.`
+- **If closed without merge**: update status back to `In Progress`. Append Discussion entry with note.
+- **If open with new comments**: fetch comments via `gh pr view [N] --comments`. Append any new comments to the tracker Discussion: `> [YYYY-MM-DD HH:MM] **pm/qa**: PR comment from [author]: [summary]`
+- **If open with "changes requested" review**: update status back to `In Progress`. Append Discussion entry with the requested changes.
+
+If `PR Flow: no`, skip this step.
+
 ### Step 7 — Agent Health Check
 
 Print: `[squidsquad] Checking agent health...`
@@ -440,15 +486,17 @@ git log --oneline --since="[2 × INTERVAL] minutes ago" --grep="^[AGENT]:"
 ```
 
 - If commits found: agent is healthy.
-- If no recent commits but agent has committed before: agent is **stalled** — log a warning in `qa-log.md` and append a Discussion note to the agent's `bugs.md`:
+- If no recent commits but agent has committed before: agent may be on a **quiet cycle** (no work to do) or **stalled**. Check their tracker — if they have no open bugs and no approved features, they are idle (not stalled). Otherwise, log a warning in `qa-log.md` and append a Discussion note to the agent's `bugs.md`:
   ```
   > [YYYY-MM-DD HH:MM] **pm/qa**: Agent appears stalled — no commits in last [2 × INTERVAL] minutes. Please check.
   ```
 - If agent has never committed: agent may not have started yet — note in QA log.
 
-### Step 8 — Log Iteration
+### Step 8 — Log Iteration (skip on quiet cycles)
 
-Print: `[squidsquad] Logging iteration...`
+If no QA issues were found, no bugs were verified, no features were shipped, and no human input was processed this cycle, this is a **quiet cycle**. Print: `[squidsquad] Quiet cycle — no work done. Skipping log/commit.` and skip directly to Step 10 (Sleep).
+
+Otherwise, print: `[squidsquad] Logging iteration...`
 
 Create `.squidsquad/pm/iterations/iter-N.md`:
 
@@ -467,7 +515,7 @@ Create `.squidsquad/pm/iterations/iter-N.md`:
 
 After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones. Git history preserves them if ever needed.
 
-### Step 9 — Commit and Push
+### Step 9 — Commit and Push (skip on quiet cycles)
 
 Print: `[squidsquad] Committing and pushing...`
 

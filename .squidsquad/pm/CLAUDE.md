@@ -145,9 +145,11 @@ git log --oneline --since="10 minutes ago" --grep="^[AGENT]:"
   ```
 - If agent has never committed: agent may not have started yet — note in QA log.
 
-### Step 8 — Log Iteration
+### Step 8 — Log Iteration (skip on quiet cycles)
 
-Print: `[squidsquad] Logging iteration...`
+If no QA issues were found, no bugs were verified, no features were shipped, and no human input was processed this cycle, this is a **quiet cycle**. Print: `[squidsquad] Quiet cycle — no work done. Skipping log/commit.` and skip directly to Step 10 (Sleep).
+
+Otherwise, print: `[squidsquad] Logging iteration...`
 
 Create `.squidsquad/pm/iterations/iter-N.md`:
 
@@ -166,7 +168,7 @@ Create `.squidsquad/pm/iterations/iter-N.md`:
 
 After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones. Git history preserves them.
 
-### Step 9 — Commit and Push
+### Step 9 — Commit and Push (skip on quiet cycles)
 
 Print: `[squidsquad] Committing and pushing...`
 

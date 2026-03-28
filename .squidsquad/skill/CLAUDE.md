@@ -89,9 +89,11 @@ Open `.squidsquad/skill/features.md`. Pick the next feature with status `Approve
    ```
 8. Clear working state (reset to header-only).
 
-### Step 4 — Log Iteration
+### Step 4 — Log Iteration (skip on quiet cycles)
 
-Print: `[squidsquad] Logging iteration...`
+If no bugs were fixed and no features were progressed this cycle, this is a **quiet cycle**. Print: `[squidsquad] Quiet cycle — no work done. Skipping log/commit.` and skip directly to Step 6 (Sleep).
+
+Otherwise, print: `[squidsquad] Logging iteration...`
 
 Create `.squidsquad/skill/iterations/iter-N.md` (increment N from last log):
 
@@ -107,7 +109,7 @@ Create `.squidsquad/skill/iterations/iter-N.md` (increment N from last log):
 
 After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones. Git history preserves them.
 
-### Step 5 — Commit and Push
+### Step 5 — Commit and Push (skip on quiet cycles)
 
 Print: `[squidsquad] Committing and pushing...`
 

@@ -227,7 +227,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-010 — Skip iteration log and commit on quiet cycles
 
 - **Priority**: Medium
-- **Status**: Approved
+- **Status**: Pending Test
 - **Owner**: skill-lead
 - **Description**: Agents currently create an iteration log and push a commit every cycle, even when nothing happened. This clutters the repo with empty "quiet cycle" logs and makes git-log health detection noisy (a commit doesn't mean work was done). Agents should skip the iteration log, skip the commit, and go straight to sleep if no meaningful work occurred in a cycle. A cycle counts as "quiet" if: no bugs fixed, no features progressed, no QA issues found, no bugs verified, no features shipped, and no human input processed. The iteration counter should only increment when actual work happens.
 - **Acceptance Criteria**:
@@ -241,6 +241,8 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-28 02:35] **pm/qa**: Filed and approved by human. Quiet cycles are noise — skip log and commit when nothing happened. Makes iteration count and git history more meaningful.
+> [2026-03-28 03:25] **skill-lead**: Picking up. Status → In Progress.
+> [2026-03-28 03:30] **skill-lead**: Complete. Dev and PM/QA templates skip log+commit on quiet cycles. PM health check distinguishes idle vs stalled agents. SKILL.md summaries updated. CHANGELOG updated. Status → Pending Test.
 
 ---
 
@@ -268,7 +270,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-012 — PR-based approval flow for completed features
 
 - **Priority**: High
-- **Status**: Approved
+- **Status**: Pending Test
 - **Owner**: skill-lead
 - **Description**: **Optional, configurable at setup.** Instead of pushing completed work directly to main, dev agents should create a PR for each feature or bug fix when it reaches `Pending Test` status. The human reviews and approves by merging the PR in GitHub. Comments left on the PR are referenced back in the feature/bug tracker's Discussion section. This integrates SquidSquad into the standard GitHub code review workflow. This feature is opt-in — setup Step 1 should prompt: "Use PR-based approval flow? (requires `gh` CLI) [y/N]". The choice is stored in `config.md` as `PR Flow: enabled/disabled`. When disabled, agents push directly to main as before.
 
@@ -301,6 +303,8 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 > [2026-03-28 03:40] **pm/qa**: Filed from human request. Integrates SquidSquad into GitHub's PR review flow — human approves by merging, comments flow back to tracker Discussion. Status: Pending — awaiting human approval.
 > [2026-03-28 03:45] **pm/qa**: Human approved. Status → Approved.
+> [2026-03-28 03:30] **skill-lead**: Picking up. Status → In Progress.
+> [2026-03-28 03:45] **skill-lead**: Complete. Added PR flow prompt to Setup Step 1, PR Flow config to config.md template, branching convention and PR flow docs to Git Protocol in SKILL.md. Dev template Step 5 branches+PRs when enabled. PM template Step 6b monitors PRs via `gh`. Config toggleable. CHANGELOG updated. Status → Pending Test.
 > [2026-03-28 03:55] **pm/qa**: Human feedback: this must be opt-in, not default. Setup Step 1 should prompt for it. Config stores the choice as `PR Flow: enabled/disabled`. When disabled, current push-to-main behavior is unchanged.
 
 ---

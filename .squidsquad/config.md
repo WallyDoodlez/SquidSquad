@@ -37,3 +37,7 @@
 ## Context Pressure
 
 - **Threshold**: 80
+
+## PR Flow
+
+- **Enabled**: no

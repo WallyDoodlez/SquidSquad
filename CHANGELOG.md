@@ -22,6 +22,8 @@ All notable changes to SquidSquad will be documented here.
 - `config.md` now includes `Context Pressure` section with configurable threshold.
 - Annotated step markers: every Ralph Loop step prints a `[squidsquad]` prefixed status line (e.g. `[squidsquad] Pulling latest...`, `[squidsquad] Triaging bugs...`). Key sub-actions get their own markers too. Makes SquidSquad activity easy to scan in terminal scrollback.
 - Iteration log retention: agents keep the last 20 iteration files and delete older ones. Git history preserves them.
+- Quiet cycle detection: agents skip iteration log and commit when no work was done. Iteration counter only increments on productive cycles.
+- **PR-based approval flow** (optional): dev agents create PRs via `gh` CLI instead of pushing to main. Human reviews and merges on GitHub. PM monitors PR state and syncs comments/decisions back to tracker Discussion. Opt-in at setup or via `config.md` `PR Flow: yes`.
 
 ### Fixed
 
