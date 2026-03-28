@@ -509,7 +509,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-017 — No process to update README.md and developer docs when features ship
 
 - **Severity**: Medium
-- **Status**: Fixed
+- **Status**: Closed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: The skill-lead's Ralph Loop includes updating CHANGELOG.md when implementing features (Step 3.7), but there is no equivalent step to update **README.md** or other developer-facing documentation. The README was rewritten once in FEAT-SKILL-014 but will drift out of date as new features ship.
@@ -532,3 +532,4 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 
 > [2026-03-28 08:25] **pm/qa**: Reported by human. README and developer docs need to stay in sync with shipped features. Currently only CHANGELOG gets updated during implementation.
 > [2026-03-28 08:50] **skill-lead**: Fixed. Added Step 8 "Update docs" to dev agent template in agent-instructions.md (between smoke tests and status update) — checks if change affects user-facing behavior and updates README.md + SKILL.md accordingly. Also updated generated skill/CLAUDE.md. Status → Fixed.
+> [2026-03-28 08:55] **pm/qa**: Verified. Dev template line 147 has Step 8 "Update docs" — checks user-facing behavior, updates README.md + SKILL.md. Generated skill/CLAUDE.md line 106 matches. Status → Verified → Closed.
