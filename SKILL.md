@@ -214,6 +214,29 @@ All agents follow these rules to minimize merge conflicts on shared tracker file
 
 When this skill is invoked, perform the following steps:
 
+### Step 0 — Clean Worktree Check
+
+Run:
+```bash
+git status --porcelain
+```
+
+If the output is non-empty, stop immediately and tell the user:
+
+```
+SquidSquad setup aborted: your working tree has uncommitted changes.
+
+Please commit or stash your changes before initializing SquidSquad.
+This ensures the .squidsquad/ setup commit is clean and isolated.
+
+  git stash        (to stash changes temporarily)
+  git commit -am   (to commit changes first)
+
+Then re-run SquidSquad setup.
+```
+
+Do not proceed until `git status --porcelain` returns no output.
+
 ### Step 1 — Gather Project Details
 
 Ask the user (or read from context) for:
@@ -337,11 +360,25 @@ _Product ideas and enhancement proposals surfaced during QA cycles or human chec
 
 If the user provided seed items, add them to the appropriate tracker files using the full bug or feature format, with `Open` / `Pending` status and an initial Discussion entry from `pm/qa` noting when it was seeded.
 
-### Step 7 — Confirm Setup
+### Step 7 — Commit and Push
+
+Commit the entire `.squidsquad/` folder and push so the other agents can pull the setup the moment they boot:
+
+```bash
+git add .squidsquad/
+git commit -m "squidsquad: initialize coordination folder"
+git push
+```
+
+If the push fails, surface the error to the user and ask them to resolve it (e.g. `git push --set-upstream origin main`) before proceeding. Do not skip this step — agents that boot before the setup is pushed will be working from a stale state.
+
+### Step 8 — Confirm Setup
 
 Print a summary:
 ```
 SquidSquad initialized for [PROJECT_NAME].
+
+  Setup committed and pushed to origin.
 
   Agents:
     FE Lead → .squidsquad/fe/CLAUDE.md  (start: bash .squidsquad/start-fe.sh)
