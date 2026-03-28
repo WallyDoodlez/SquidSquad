@@ -178,6 +178,37 @@ The PM/QA agent will check in with you each cycle. You can:
 
 ---
 
+## Cross-Team Bug Filing
+
+One of SquidSquad's core design principles: **any agent can file a bug to any team, directly, with no routing bottleneck.**
+
+| Who discovers the bug | Files to | Format |
+|-----------------------|----------|--------|
+| FE Lead (root cause is in BE) | `be/bugs.md` | `BUG-BE-XXX` |
+| BE Lead (root cause is in FE) | `fe/bugs.md` | `BUG-FE-XXX` |
+| PM/QA (FE failure) | `fe/bugs.md` | `BUG-FE-XXX` |
+| PM/QA (BE failure) | `be/bugs.md` | `BUG-BE-XXX` |
+| PM/QA (unclear boundary) | both trackers | cross-linked via Discussion |
+
+### How it plays out
+
+**FE Lead hits a backend wall:**
+The FE Lead is fixing a login bug and discovers the session token validation logic is wrong on the server. Rather than leaving a comment and hoping someone notices, they file `BUG-BE-XXX` directly in `be/bugs.md`, append a Discussion note to the original FE bug linking the two, and move on. The BE Lead picks it up on their next pull.
+
+**PM/QA sees an API failure in e2e tests:**
+The PM doesn't need to ask the FE Lead to relay the issue to the BE Lead. They file `BUG-BE-XXX` directly, with full reproduction steps from the test output. Zero hops.
+
+**BE Lead exposes a contract mismatch:**
+The BE Lead ships a new endpoint but notices the expected request shape doesn't match what the FE is sending. They file `BUG-FE-XXX` in `fe/bugs.md` describing the contract, without touching any frontend code themselves.
+
+### Why this matters
+
+In traditional team setups, cross-team bugs get stuck in handoff — someone has to triage, assign, and re-explain the issue at every boundary. SquidSquad eliminates this: the agent that discovers the problem has full write access to both trackers and files the bug with complete context, right then. The receiving agent picks it up on their next pull with everything they need.
+
+No standup required.
+
+---
+
 ## Requirements
 
 - [Claude Code CLI](https://claude.ai/code) with `claude -p` support
