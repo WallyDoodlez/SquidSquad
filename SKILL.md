@@ -47,41 +47,48 @@ No meetings. No message queues. Just markdown.
 
 ### Roles
 
+SquidSquad always has a **PM/QA** agent. Dev agents are flexible — you define them at setup time.
+
 | Agent | Owns | Loop |
 |-------|------|------|
-| **FE Lead** | Frontend code, `fe/bugs.md`, `fe/features.md` | Ralph Loop (fix bugs → implement features → test → push) |
-| **BE Lead** | Backend code, `be/bugs.md`, `be/features.md` | Ralph Loop (fix bugs → implement features → test → push) |
+| **[role] Lead** (one per dev role) | Code for that role, `[role]/bugs.md`, `[role]/features.md` | Ralph Loop (fix bugs → implement features → test → push) |
 | **PM/QA** | Product backlog, `pm/qa-log.md`, `pm/enhancements.md`, human interaction | Ralph Loop (check human → run e2e → log → file bugs → verify → push) |
+
+**Common team shapes:**
+
+| Shape | Dev agents | Use when |
+|-------|-----------|----------|
+| `fe, be` | FE Lead + BE Lead | Full-stack app with separate frontend and backend |
+| `be` | BE Lead only | API-only, CLI tool, library, or skill repo |
+| `api, worker` | API Lead + Worker Lead | Backend split across services |
+| `web, ios, api` | Web + iOS + API | Multi-platform product |
+| _(any names)_ | Whatever you define | Custom team topology |
 
 ---
 
 ## File Structure Generated
 
-When you invoke SquidSquad, it creates the following inside your project root:
+When you invoke SquidSquad, it creates the following inside your project root. One folder is generated per dev agent — the example below shows a `be`-only setup:
 
 ```
 .squidsquad/
-├── config.md                  ← project config, test commands, counters, git protocol
-├── start-fe.sh / start-fe.ps1 ← boot script: launches FE Lead via `claude -p`
-├── start-be.sh / start-be.ps1 ← boot script: launches BE Lead via `claude -p`
-├── start-pm.sh / start-pm.ps1 ← boot script: launches PM/QA via `claude -p`
-├── fe/
-│   ├── CLAUDE.md              ← FE Lead role instructions + Ralph Loop
-│   ├── bugs.md                ← BUG-FE-XXX tracker with Discussion sections
-│   ├── features.md            ← FEAT-FE-XXX tracker with Discussion sections
-│   └── iterations/            ← iter-N.md logs per cycle
-├── be/
-│   ├── CLAUDE.md              ← BE Lead role instructions + Ralph Loop
-│   ├── bugs.md                ← BUG-BE-XXX tracker
-│   ├── features.md            ← FEAT-BE-XXX tracker
-│   └── iterations/            ← iter-N.md logs per cycle
+├── config.md                   ← project config, test commands, counters, git protocol
+├── start-be.sh / start-be.ps1  ← boot script: launches BE Lead (autonomous)
+├── start-pm.sh / start-pm.ps1  ← boot script: launches PM/QA (interactive)
+├── be/                         ← one folder per dev agent, named after the role
+│   ├── CLAUDE.md               ← BE Lead role instructions + Ralph Loop
+│   ├── bugs.md                 ← BUG-BE-XXX tracker with Discussion sections
+│   ├── features.md             ← FEAT-BE-XXX tracker with Discussion sections
+│   └── iterations/             ← iter-N.md logs per cycle
 └── pm/
-    ├── CLAUDE.md              ← PM/QA role instructions + Ralph Loop
-    ├── qa-log.md              ← QA test run results
-    ├── enhancements.md        ← product backlog / enhancement proposals
-    ├── iterations/            ← iter-N.md logs per cycle
-    └── migrations/            ← migration logs written when tracker schema changes
+    ├── CLAUDE.md               ← PM/QA role instructions + Ralph Loop
+    ├── qa-log.md               ← QA test run results
+    ├── enhancements.md         ← product backlog / enhancement proposals
+    ├── iterations/             ← iter-N.md logs per cycle
+    └── migrations/             ← migration logs written when tracker schema changes
 ```
+
+For `fe, be` the structure gains a `fe/` folder and `start-fe.sh/.ps1` alongside `be/`.
 
 ---
 
@@ -160,7 +167,7 @@ Each agent runs its own Ralph Loop — an autonomous work cycle that repeats on 
 4. Run FE test command (from config.md)
 5. Log iteration to fe/iterations/iter-N.md
 6. git add -A && git commit && git push
-7. Sleep 10 minutes → repeat
+7. Sleep [INTERVAL] minutes (from config.md) → repeat
 ```
 
 ### BE Lead Ralph Loop
@@ -177,7 +184,7 @@ Each agent runs its own Ralph Loop — an autonomous work cycle that repeats on 
 4. Run BE test command (from config.md)
 5. Log iteration to be/iterations/iter-N.md
 6. git add -A && git commit && git push
-7. Sleep 10 minutes → repeat
+7. Sleep [INTERVAL] minutes (from config.md) → repeat
 ```
 
 ### PM/QA Ralph Loop
@@ -195,7 +202,7 @@ Each agent runs its own Ralph Loop — an autonomous work cycle that repeats on 
 7. Scan fe/ and be/ bugs.md for Fixed items → verify → update to Verified/Closed
 8. Log iteration to pm/iterations/iter-N.md
 9. git add -A && git commit && git push
-10. Sleep 10 minutes → repeat
+10. Sleep [INTERVAL] minutes (from config.md) → repeat
 ```
 
 ---
@@ -245,16 +252,25 @@ Ask the user (or read from context) for:
 
 1. **Project name** — used in config.md and commit messages
 2. **Repository URL** — e.g. `github.com/alice/myapp`
-3. **Frontend framework** — e.g. Next.js, React, Vue
-4. **Backend framework** — e.g. FastAPI, Express, Rails, Rust/Axum
-5. **FE test command** — e.g. `cd frontend && npx playwright test`
-6. **BE test command** — e.g. `cd backend && pytest tests/`
-7. **E2E / full-stack test command** — e.g. `cd e2e && npx playwright test`
+3. **Dev agents** — comma-separated role names, e.g. `fe, be` / `be` / `api, worker`. Default: `fe, be`. Each role gets its own folder, tracker files, CLAUDE.md, and boot scripts.
+4. **Framework / language for each dev agent** — e.g. BE: FastAPI, FE: Next.js
+5. **Test command for each dev agent** — e.g. `cd backend && pytest tests/`
+6. **E2E / full-stack test command** — run by PM/QA each cycle. Optional — if none, PM skips the test step.
+7. **Loop interval** — how many minutes between Ralph Loop cycles. Default: 10. Minimum: 1.
 8. **Any seed items** — bugs or features to pre-populate into the trackers
 
 ### Step 2 — Create `.squidsquad/` Folder Structure
 
-Create the full directory tree as specified above.
+For each dev agent role defined in Step 1, create:
+```
+.squidsquad/[role]/
+    CLAUDE.md
+    bugs.md
+    features.md
+    iterations/
+```
+
+Always create `.squidsquad/pm/` with its full structure regardless of team shape.
 
 ### Step 3 — Generate `config.md`
 
@@ -269,18 +285,23 @@ Create the full directory tree as specified above.
 - **Name**: [PROJECT_NAME]
 - **Repo**: [REPO_URL]
 
+## Agents
+
+- **Dev Agents**: [ROLE1], [ROLE2], ...  ← one entry per dev role defined at setup
+- **PM/QA**: always present
+
 ## Test Commands
 
-- **FE Tests**: [FE_TEST_CMD]
-- **BE Tests**: [BE_TEST_CMD]
-- **E2E Tests**: [E2E_TEST_CMD]
+- **[ROLE1] Tests**: [ROLE1_TEST_CMD]
+- **[ROLE2] Tests**: [ROLE2_TEST_CMD]  ← one entry per dev agent; omit if none
+- **E2E Tests**: [E2E_TEST_CMD]  ← omit if none
 
 ## ID Counters
 
-- **BUG-FE**: 0
-- **BUG-BE**: 0
-- **FEAT-FE**: 0
-- **FEAT-BE**: 0
+- **BUG-[ROLE1]**: 0
+- **FEAT-[ROLE1]**: 0
+- **BUG-[ROLE2]**: 0  ← one pair per dev agent
+- **FEAT-[ROLE2]**: 0
 
 ## Git Protocol
 
@@ -291,7 +312,7 @@ Create the full directory tree as specified above.
 
 ## Iteration Interval
 
-- Default: 10 minutes between loop cycles.
+- **Minutes**: [INTERVAL]  ← minimum 1, default 10
 ```
 
 ### Step 4 — Generate CLAUDE.md Files
@@ -300,7 +321,7 @@ Use the templates in `references/agent-instructions.md` to generate role-specifi
 
 ### Step 5 — Generate Boot Scripts
 
-Generate both a `.sh` (bash) and a `.ps1` (PowerShell) version of each boot script so the squad can be launched on any platform.
+Generate both a `.sh` (bash) and a `.ps1` (PowerShell) boot script for each dev agent, plus PM/QA. Script names use the role name, e.g. `start-be.sh`, `start-api.sh`, `start-worker.ps1`.
 
 **`start-fe.sh`**:
 ```bash
@@ -460,17 +481,16 @@ Print a summary:
 ║   Open 3 terminals and launch your squad:                  ║
 ║                                                            ║
 ║   bash / zsh:                                              ║
-║   Terminal 1 →  bash .squidsquad/start-fe.sh               ║
-║   Terminal 2 →  bash .squidsquad/start-be.sh               ║
-║   Terminal 3 →  bash .squidsquad/start-pm.sh  ← interactive ║
+║   [one line per dev agent]  bash .squidsquad/start-[role].sh ║
+║   Terminal N →  bash .squidsquad/start-pm.sh  ← interactive ║
 ║                                                            ║
 ║   PowerShell:                                              ║
-║   Terminal 1 →  .\.squidsquad\start-fe.ps1                 ║
-║   Terminal 2 →  .\.squidsquad\start-be.ps1                 ║
-║   Terminal 3 →  .\.squidsquad\start-pm.ps1   ← interactive ║
+║   [one line per dev agent]  .\.squidsquad\start-[role].ps1  ║
+║   Terminal N →  .\.squidsquad\start-pm.ps1   ← interactive ║
 ║                                                            ║
 ║   PM/QA is interactive — it will check in with you.        ║
-║   FE + BE run autonomously in the background.              ║
+║   Dev agents run autonomously in the background.           ║
+║   Loop interval: [INTERVAL] minutes                        ║
 ║                                                            ║
 ║   The squad takes it from here.                            ║
 ║                                                            ║
