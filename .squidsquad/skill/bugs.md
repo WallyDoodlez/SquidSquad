@@ -457,3 +457,41 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 > [2026-03-28 07:30] **pm/qa**: Human clarified: two-part flow. Part 1: show all questions at once for context. Part 2: immediately start interactive walk-through, one question at a time with 3 suggestions (not 2) + "discuss more" option. Human picks or types freeform. Updated description.
 > [2026-03-28 07:35] **skill-lead**: Fixed in agent-instructions.md Phase 2 section. Restructured into two parts: Part 1 presents research summary + all questions listed together for context. Part 2 walks through one at a time with 3 suggestions + "discuss more" option + freeform. Status → Fixed.
 > [2026-03-28 07:40] **pm/qa**: Verified. agent-instructions.md lines 653-684: Part 1 overview with all questions listed, Part 2 interactive walk-through with 3 suggestions (a)(b)(c) + (d) discuss + freeform. Handling rules correct. Status → Verified → Closed.
+
+---
+
+## BUG-SKILL-016 — Phase 2 discussion blocks the Ralph Loop
+
+- **Severity**: High
+- **Status**: Open
+- **Reported By**: pm/qa
+- **Assigned To**: skill-lead
+- **Description**: Phase 2 (Discussion) is currently a synchronous dialog — the PM presents Q1, waits for the human's answer, presents Q2, waits again, etc. This gates the entire Ralph Loop. While the PM is waiting for Q1's answer, cycles just idle with "quiet cycle" and no other work gets done.
+
+  The discussion should be **async relative to the loop**:
+
+  **Current (broken):**
+  1. PM presents Q1 with suggestions → waits
+  2. Loop cycles idle ("quiet cycle") until human answers
+  3. Human answers Q1 → PM presents Q2 → waits again
+  4. Loop blocked for entire discussion duration
+
+  **Expected:**
+  1. PM presents all questions + starts walk-through with Q1 (Part 1 + Part 2 from BUG-015)
+  2. Loop continues cycling normally
+  3. When human responds (between cycles), PM picks it up in Step 2 (check-in / human input processing)
+  4. PM locks the decision, advances to next question in the same cycle's output
+  5. If human answered multiple questions at once, PM locks all of them
+
+  The key insight: Phase 2 is a **conversation** that happens over multiple loop cycles via the check-in step, not a blocking dialog that stops the loop. The PM tracks which questions are resolved in the CONTEXT.md file and presents the next unresolved question each cycle the human provides input.
+
+- **Steps to Reproduce**:
+  1. Approve a feature, PM starts Phase 2
+  2. PM presents Q1 and waits
+  3. Observe loop cycles all say "quiet cycle" until human answers
+- **Expected**: Loop keeps working; discussion progresses via check-in step
+- **Actual**: Loop effectively blocked — all cycles are quiet while waiting for dialog
+
+### Discussion
+
+> [2026-03-28 08:00] **pm/qa**: Reported by human. Phase 2 discussion is a "dialog" that blocks the loop. Should be async — PM tracks discussion state, processes human answers during check-in step, and advances questions across cycles. This is the third iteration on Phase 2 format (BUG-010 → BUG-015 → this).
