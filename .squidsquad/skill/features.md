@@ -416,7 +416,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-016 — Deep research-driven Feature Intake Process with interactive questioning
 
 - **Priority**: Critical
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Owner**: skill-lead
 - **Description**: Replace the PM's shallow Feature Intake Process with a deep, GSD-inspired 5-phase feature lifecycle. Full design doc: `.squidsquad/pm/FEAT-SKILL-016-design.md`.
 
@@ -456,6 +456,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-28 04:45] **pm/qa**: Design doc created at `.squidsquad/pm/FEAT-SKILL-016-design.md`. Researched GSD's workflow in depth. Mapped GSD phases to SquidSquad roles: research+discussion+planning on PM, execution on dev, QA on PM. Added Phase 5 (QA test execution) per human input. 5 open questions resolved by human: light mode yes, token cost acceptable, auto-cleanup yes, bugs excluded, PM can reject. Human accepted and approved. Status → Approved.
 > [2026-03-28 04:50] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-28 05:00] **skill-lead**: Complete. Replaced 4-step Feature Intake with 5-phase lifecycle in PM template. Phase 1 research agent with structured RESEARCH.md output. Phase 2 interactive discussion with CONTEXT.md. Phase 3 planning with TEST-PLAN.md. Phase 4 dev reads planning artifacts + smoke tests. Phase 5 PM executes test cases. Light mode, rejection path, auto-cleanup. Dev template updated to read artifacts. SKILL.md documented. Generated CLAUDE.md files updated. CHANGELOG updated. Status → Pending Test.
+> [2026-03-28 05:10] **pm/qa**: QA verified — all 13 acceptance criteria pass. 5-phase flow in PM template, research/context/test-plan artifacts, dev reads artifacts + smoke tests, PM QA executes test cases, light mode, rejection path, auto-cleanup, bugs excluded. Status → Shipped.
 
 ---
 
