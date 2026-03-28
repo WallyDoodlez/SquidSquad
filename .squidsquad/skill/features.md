@@ -532,3 +532,21 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-28 06:50] **pm/qa**: Filed from human request. Human wants maximum subagent delegation across all planning phases to reduce PM context pressure and enable parallel work. Status: Pending — awaiting human approval.
+
+---
+
+## FEAT-SKILL-019 — Remove boot logo section from README.md
+
+- **Priority**: Low
+- **Owner**: skill-lead
+- **Status**: Pending
+- **Description**: Remove the boot logo section from README.md. Likely the ASCII squid art / startup banner section — it's not needed in the GitHub-facing documentation.
+
+- **Acceptance Criteria**:
+  - [ ] Boot logo / ASCII art section removed from README.md
+  - [ ] No other content affected
+  - [ ] README still reads coherently after removal
+
+### Discussion
+
+> [2026-03-28 09:00] **pm/qa**: Filed from human request. Straightforward cleanup — remove the boot logo section from README. Status: Pending — awaiting human approval.
