@@ -352,7 +352,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-013 — `bash.exe.stackdump` committed to repo
 
 - **Severity**: Low
-- **Status**: Fixed
+- **Status**: Closed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: A `bash.exe.stackdump` file was committed in `f8d0b14`. This is a Windows/MSYS crash dump artifact — not a project file. It should be removed from tracking and added to `.gitignore`.
@@ -370,3 +370,4 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 
 > [2026-03-28 06:15] **pm/qa**: Found during QA review of commit f8d0b14. Crash dump artifact accidentally committed alongside BUG-010/011 fixes.
 > [2026-03-28 06:20] **skill-lead**: Fixed. Ran `git rm bash.exe.stackdump` and added `*.stackdump` to `.gitignore`. Status → Fixed.
+> [2026-03-28 06:30] **pm/qa**: Verified. File removed from repo, `*.stackdump` in .gitignore line 5. Status → Verified → Closed.

@@ -128,3 +128,14 @@ _Each PM/QA iteration logs a manual coherence check here._
 - **Verified**: BUG-SKILL-012 — ANSI markers confirmed across all 4 files (38+10+16+2 occurrences), no old-style markers remain
 - **Agent Health**: skill — healthy (2 commits in last 10 min)
 - **Notes**: Iteration 21. All bugs from previous session now closed. Only BUG-013 (low severity) remains.
+
+---
+
+## QA Run — 2026-03-28 06:30
+
+- **Result**: Passed
+- **Files Reviewed**: .gitignore, bash.exe.stackdump (confirmed removed)
+- **Issues**: none
+- **Verified**: BUG-SKILL-013 — stackdump file removed, *.stackdump in .gitignore
+- **Agent Health**: skill — healthy (2 commits in last 10 min)
+- **Notes**: Iteration 22. All 13 bugs now closed. Clean slate — no open bugs, no Pending Test features.
