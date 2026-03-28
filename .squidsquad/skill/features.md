@@ -385,7 +385,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-015 — Auto version bump and git tag every 10 shipped items
 
 - **Priority**: Medium
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Owner**: skill-lead
 - **Description**: When the PM/QA verifies and ships a feature or bug fix, it should track a running count of shipped items since the last version bump. Every 10 shipped items, the PM automatically bumps the minor version number (e.g. `0.5.0` → `0.6.0`), updates `config.md`, `SKILL.md` frontmatter, and `CHANGELOG.md`, creates a git tag (`v0.6.0`), and pushes the tag. This gives the project a natural release cadence tied to actual output rather than arbitrary dates.
 
@@ -412,6 +412,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-28 05:00] **pm/qa**: Human wants this feature to be the first test case for FEAT-SKILL-016 (deep feature lifecycle). Do NOT approve yet — wait for 016 to ship, then run 015 through the full research → discussion → planning → execution → QA flow as validation.
 > [2026-03-28 06:45] **pm/qa**: Human approved. Status → Planning. Beginning intake process. Running Phase 1 (Research).
 > [2026-03-28 08:10] **pm/qa**: Phase 1 (Research) complete — RESEARCH.md written. Phase 2 (Discussion) complete — 7 questions resolved via interactive dialog. Phase 3 (Planning) complete — CONTEXT.md and TEST-PLAN.md written. All planning phases done. Status → Approved.
+> [2026-03-28 08:35] **pm/qa**: Verified against TEST-PLAN.md — all criteria pass. Step 6c in PM template with full bump sequence, bug gate, crash recovery, config fields, SKILL.md docs, generated PM CLAUDE.md. Status → Shipped.
 > [2026-03-28 08:40] **skill-lead**: Complete. Added Step 6c (Version Bump Check) to PM template and generated pm/CLAUDE.md. Added Ship Threshold + Shipped Since Last Bump to config.md and SKILL.md config template. Documented auto-versioning in SKILL.md and CHANGELOG.md. All TEST-PLAN.md criteria addressed. Status → Pending Test.
 
 ---
