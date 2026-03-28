@@ -270,9 +270,9 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 - **Priority**: High
 - **Status**: Approved
 - **Owner**: skill-lead
-- **Description**: Instead of pushing completed work directly to main, dev agents should create a PR for each feature or bug fix when it reaches `Pending Test` status. The human reviews and approves by merging the PR in GitHub. Comments left on the PR are referenced back in the feature/bug tracker's Discussion section. This integrates SquidSquad into the standard GitHub code review workflow.
+- **Description**: **Optional, configurable at setup.** Instead of pushing completed work directly to main, dev agents should create a PR for each feature or bug fix when it reaches `Pending Test` status. The human reviews and approves by merging the PR in GitHub. Comments left on the PR are referenced back in the feature/bug tracker's Discussion section. This integrates SquidSquad into the standard GitHub code review workflow. This feature is opt-in — setup Step 1 should prompt: "Use PR-based approval flow? (requires `gh` CLI) [y/N]". The choice is stored in `config.md` as `PR Flow: enabled/disabled`. When disabled, agents push directly to main as before.
 
-  **Flow:**
+  **Flow (when enabled):**
   1. Dev agent completes a feature/bug fix → creates a branch (e.g. `squidsquad/feat-skill-008`) and opens a PR via `gh pr create`
   2. Status updates to `Pending Test` with the PR link in the Discussion
   3. PM/QA verifies the change and adds a review comment or approval
@@ -292,11 +292,16 @@ _Features start as Pending (awaiting human approval) and move through Approved �
   - [ ] SKILL.md documents the PR-based approval flow
   - [ ] Git protocol section updated with branching convention (e.g. `squidsquad/feat-xxx`, `squidsquad/bug-xxx`)
   - [ ] Works with `gh` CLI (GitHub CLI) — documented as a prerequisite
+  - [ ] Setup Step 1 includes a prompt: "Use PR-based approval flow? (requires `gh` CLI) [y/N]"
+  - [ ] Choice stored in `config.md` as `PR Flow: enabled/disabled`
+  - [ ] When disabled, agents push directly to main (current behavior unchanged)
+  - [ ] Can be toggled post-setup by editing `config.md`
 
 ### Discussion
 
 > [2026-03-28 03:40] **pm/qa**: Filed from human request. Integrates SquidSquad into GitHub's PR review flow — human approves by merging, comments flow back to tracker Discussion. Status: Pending — awaiting human approval.
 > [2026-03-28 03:45] **pm/qa**: Human approved. Status → Approved.
+> [2026-03-28 03:55] **pm/qa**: Human feedback: this must be opt-in, not default. Setup Step 1 should prompt for it. Config stores the choice as `PR Flow: enabled/disabled`. When disabled, current push-to-main behavior is unchanged.
 
 ---
 
@@ -305,7 +310,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 - **Priority**: High
 - **Status**: Pending
 - **Owner**: skill-lead
-- **Description**: The PM/QA Ralph Loop should check the repo's GitHub Issues on every cycle using `gh issue list`. New issues that haven't already been ingested get triaged and filed into the appropriate agent's bug or feature tracker. This closes the loop between external contributors/users filing issues on GitHub and the SquidSquad agents picking them up automatically.
+- **Description**: **Optional, configurable at setup.** The PM/QA Ralph Loop should check the repo's GitHub Issues on every cycle using `gh issue list`. New issues that haven't already been ingested get triaged and filed into the appropriate agent's bug or feature tracker. This closes the loop between external contributors/users filing issues on GitHub and the SquidSquad agents picking them up automatically. This feature is opt-in — setup Step 1 should prompt: "Auto-ingest GitHub Issues? (requires `gh` CLI) [y/N]". The choice is stored in `config.md` as `GitHub Issues Ingestion: enabled/disabled`. When disabled, PM skips the ingestion step.
 
   **Flow:**
   1. PM runs `gh issue list --state open --json number,title,labels,body` each cycle
@@ -327,10 +332,15 @@ _Features start as Pending (awaiting human approval) and move through Approved �
   - [ ] SKILL.md documents the GitHub Issues integration
   - [ ] Works with `gh` CLI — documented as a prerequisite
   - [ ] Graceful fallback if `gh` is not available (skip the step, log a note)
+  - [ ] Setup Step 1 includes a prompt: "Auto-ingest GitHub Issues? (requires `gh` CLI) [y/N]"
+  - [ ] Choice stored in `config.md` as `GitHub Issues Ingestion: enabled/disabled`
+  - [ ] When disabled, PM skips the ingestion step entirely
+  - [ ] Can be toggled post-setup by editing `config.md`
 
 ### Discussion
 
 > [2026-03-28 03:45] **pm/qa**: Filed from human request. Bridges GitHub Issues and SquidSquad trackers — PM auto-ingests new issues each cycle, closes them when shipped. Status: Pending — awaiting human approval.
+> [2026-03-28 03:55] **pm/qa**: Human feedback: this must be opt-in, same as FEAT-SKILL-012. Setup prompts for it, config stores the choice. When disabled, PM skips the step.
 
 ---
 
