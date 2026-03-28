@@ -30,13 +30,19 @@ When you first receive these instructions, immediately begin Step 1 of the Ralph
 
 Repeat this loop indefinitely, sleeping 5 minutes between cycles.
 
+**Step markers**: At the start of each step, print a one-line `[squidsquad]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line.
+
 ### Step 1 — Pull Latest
+
+Print: `[squidsquad] Pulling latest...`
 
 ```bash
 git pull --rebase
 ```
 
 ### Step 1b — Context Pressure Check
+
+Print: `[squidsquad] Checking context pressure...`
 
 Check `context_window.used_percentage`. If above 80% (configurable in `config.md`):
 1. Save current working state to `.squidsquad/pm/working-state.md`.
@@ -45,6 +51,8 @@ Check `context_window.used_percentage`. If above 80% (configurable in `config.md
 4. Exit the conversation.
 
 ### Step 1c — Resume From Working State
+
+Print: `[squidsquad] Checking working state...`
 
 Read `.squidsquad/pm/working-state.md`. If it has an active task (status `in-progress`), resume that work. Otherwise proceed normally.
 
@@ -69,6 +77,8 @@ If the human has already provided input (earlier in the conversation or between 
 
 ### Step 3 — QA Check
 
+Print: `[squidsquad] Running QA pass...`
+
 No automated test suite. Instead, do a manual coherence pass:
 
 - Read any skill files changed since last iteration (check git log).
@@ -89,12 +99,16 @@ Log results in `pm/qa-log.md`:
 
 ### Step 4 — File Bugs From QA
 
+Print: `[squidsquad] Filing bugs from QA...` (or skip if no issues)
+
 For each issue found in Step 3:
 
 1. Check if a bug already exists. If yes, append a Discussion note.
 2. If new: file to `.squidsquad/skill/bugs.md` as `BUG-SKILL-XXX`. Increment counter in `config.md`.
 
 ### Step 5 — Verify Fixed Bugs
+
+Print: `[squidsquad] Verifying fixed bugs...`
 
 Open `.squidsquad/skill/bugs.md`. For each bug with status `Fixed`:
 
@@ -104,6 +118,8 @@ Open `.squidsquad/skill/bugs.md`. For each bug with status `Fixed`:
 
 ### Step 6 — Verify Pending Test Features
 
+Print: `[squidsquad] Verifying pending test features...`
+
 Open `.squidsquad/skill/features.md`. For each feature with status `Pending Test`:
 
 1. Manually test against the acceptance criteria by reading the skill files.
@@ -111,6 +127,8 @@ Open `.squidsquad/skill/features.md`. For each feature with status `Pending Test
 3. If criteria fail: update back to `In Progress`. Append Discussion entry with specific failures.
 
 ### Step 7 — Agent Health Check
+
+Print: `[squidsquad] Checking agent health...`
 
 Check each dev agent's health using git log. An agent is healthy if it has pushed a commit within the last 10 minutes (2 × loop interval). Commits are identified by their prefix (e.g. `skill:`).
 
@@ -129,6 +147,8 @@ git log --oneline --since="10 minutes ago" --grep="^[AGENT]:"
 
 ### Step 8 — Log Iteration
 
+Print: `[squidsquad] Logging iteration...`
+
 Create `.squidsquad/pm/iterations/iter-N.md`:
 
 ```markdown
@@ -144,7 +164,11 @@ Create `.squidsquad/pm/iterations/iter-N.md`:
 - **Notes**: [anything notable]
 ```
 
+After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones. Git history preserves them.
+
 ### Step 9 — Commit and Push
+
+Print: `[squidsquad] Committing and pushing...`
 
 ```bash
 git add -A

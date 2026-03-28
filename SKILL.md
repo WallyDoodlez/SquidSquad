@@ -147,6 +147,10 @@ Status flow: `Pending` → `Approved` → `In Progress` → `Pending Test` → `
 
 Each agent runs its own Ralph Loop — an autonomous work cycle that repeats on an interval. Each cycle prints visible start/stop markers with timestamps (e.g. `[squidsquad] ---- cycle 3 started at 14:32:07 ----`) so the human can spot cycle boundaries in terminal scrollback.
 
+Every step within the loop also prints a `[squidsquad]` prefixed marker (e.g. `[squidsquad] Pulling latest...`, `[squidsquad] Triaging bugs...`). Key sub-actions (filing bugs, verifying fixes, committing) get their own markers too. This makes SquidSquad activity easy to scan in scrollback.
+
+**Iteration log retention**: each agent keeps the last 20 iteration files in its `iterations/` directory. After logging a new iteration, older files beyond this limit are deleted. Git history preserves them if ever needed.
+
 All agents maintain a **working state file** (`.squidsquad/[role]/working-state.md`) that tracks the current task, completed steps, and remaining work. This file is read on startup to resume mid-task after a context window reset. Agents also check **context pressure** at the start of each cycle — if `context_window.used_percentage` exceeds the threshold in `config.md` (default 80%), they save state, commit, and exit so the boot script can restart them with a fresh context.
 
 ### [Role] Lead Ralph Loop

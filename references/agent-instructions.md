@@ -48,7 +48,11 @@ At the end of each cycle (after commit and push, before sleep), print:
 [squidsquad] ---- cycle N complete at HH:MM:SS ----
 ```
 
+**Step markers**: At the start of each step, print a one-line `[squidsquad]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, committing) also get markers. Keep each marker to one concise line.
+
 ### Step 1 — Pull Latest
+
+Print: `[squidsquad] Pulling latest...`
 
 ```bash
 git pull --rebase
@@ -57,6 +61,8 @@ git pull --rebase
 If there is a rebase conflict in a tracker file, resolve it by keeping both versions — append the conflicting section below the existing one. Never discard entries.
 
 ### Step 1b — Context Pressure Check
+
+Print: `[squidsquad] Checking context pressure...`
 
 Check `context_window.used_percentage` from the status line JSON (available as the `$CONTEXT_USED` environment hint, or by reading the last status line output). Compare against the threshold in `config.md` (default 80%).
 
@@ -70,7 +76,10 @@ If context usage is below threshold, continue normally.
 
 ### Step 1c — Resume From Working State
 
+Print: `[squidsquad] Checking working state...`
+
 Read `.squidsquad/[ROLE]/working-state.md`. If it contains an active task (status `in-progress`):
+- Print: `[squidsquad] Resuming [TASK_ID]...`
 - Read the task ID, completed steps, remaining steps, and key decisions.
 - Resume work on that task instead of starting fresh from the tracker.
 - Skip re-analyzing code you've already understood — trust the working state summary.
@@ -78,6 +87,8 @@ Read `.squidsquad/[ROLE]/working-state.md`. If it contains an active task (statu
 If the file is empty or has no active task, proceed normally to Step 2.
 
 ### Step 2 — Triage Bugs
+
+Print: `[squidsquad] Triaging bugs...`
 
 Open `.squidsquad/[ROLE]/bugs.md`. For each bug with status `Open` or `Investigating`:
 
@@ -104,7 +115,9 @@ Open `.squidsquad/[ROLE]/bugs.md`. For each bug with status `Open` or `Investiga
 
 ### Step 3 — Implement Features
 
-Open `.squidsquad/[ROLE]/features.md`. Pick the next feature with status `Approved` (highest priority first).
+Print: `[squidsquad] Checking features...`
+
+Open `.squidsquad/[ROLE]/features.md`. Pick the next feature with status `Approved` (highest priority first). When picking up a feature, print: `[squidsquad] Implementing FEAT-[ROLE_UPPER]-XXX...`
 
 1. Append a Discussion entry:
    ```
@@ -125,6 +138,8 @@ Open `.squidsquad/[ROLE]/features.md`. Pick the next feature with status `Approv
 
 ### Step 4 — Log Iteration
 
+Print: `[squidsquad] Logging iteration...`
+
 Create `.squidsquad/[ROLE]/iterations/iter-N.md` (increment N from last log):
 
 ```markdown
@@ -137,7 +152,11 @@ Create `.squidsquad/[ROLE]/iterations/iter-N.md` (increment N from last log):
 - **Notes**: [anything notable]
 ```
 
+After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones. Git history preserves them if ever needed.
+
 ### Step 5 — Commit and Push
+
+Print: `[squidsquad] Committing and pushing...`
 
 ```bash
 git add -A
@@ -305,7 +324,11 @@ At the end of each cycle (after commit and push, before sleep), print:
 [squidsquad] ---- cycle N complete at HH:MM:SS ----
 ```
 
+**Step markers**: At the start of each step, print a one-line `[squidsquad]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line.
+
 ### Step 1 — Pull Latest
+
+Print: `[squidsquad] Pulling latest...`
 
 ```bash
 git pull --rebase
@@ -314,6 +337,8 @@ git pull --rebase
 If there is a rebase conflict in a tracker file, resolve it by keeping both versions. Never discard entries.
 
 ### Step 1b — Context Pressure Check
+
+Print: `[squidsquad] Checking context pressure...`
 
 Check `context_window.used_percentage`. Compare against the threshold in `config.md` (default 80%).
 
@@ -324,6 +349,8 @@ If context usage **exceeds the threshold**:
 4. Exit the conversation.
 
 ### Step 1c — Resume From Working State
+
+Print: `[squidsquad] Checking working state...`
 
 Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `in-progress`), resume that work. Otherwise proceed normally.
 
@@ -348,6 +375,8 @@ If the human has already provided input (earlier in the conversation or between 
 
 ### Step 3 — Run E2E Tests
 
+Print: `[squidsquad] Running E2E tests...` (or `[squidsquad] No E2E command — skipping tests.`)
+
 If `E2E Tests` is configured in `config.md`, run: `[E2E_TEST_CMD]`
 
 If no E2E command is configured, skip this step.
@@ -365,7 +394,9 @@ Log results in `pm/qa-log.md`:
 
 ### Step 4 — File Bugs From Test Failures
 
-For each test failure:
+Print: `[squidsquad] Filing bugs from failures...` (or skip if no failures)
+
+For each test failure, print: `[squidsquad] Filing BUG-[ROLE]-XXX...`
 
 1. Determine which agent's domain the failure is in.
 2. Check if a bug for this failure already exists (search by keywords). If yes, append a Discussion note — do not duplicate.
@@ -373,6 +404,8 @@ For each test failure:
 4. If the failure spans multiple domains: file in each relevant tracker with cross-linking Discussion notes.
 
 ### Step 5 — Verify Fixed Bugs
+
+Print: `[squidsquad] Verifying fixed bugs...`
 
 For each active agent, open their `bugs.md`. For each bug with status `Fixed`:
 
@@ -386,6 +419,8 @@ For each active agent, open their `bugs.md`. For each bug with status `Fixed`:
 
 ### Step 6 — Verify Pending Test Features
 
+Print: `[squidsquad] Verifying pending test features...`
+
 For each active agent, open their `features.md`. For each feature with status `Pending Test`:
 
 1. Test against the acceptance criteria.
@@ -393,6 +428,8 @@ For each active agent, open their `features.md`. For each feature with status `P
 3. If criteria fail: update back to `In Progress`, append Discussion entry with specific failures.
 
 ### Step 7 — Agent Health Check
+
+Print: `[squidsquad] Checking agent health...`
 
 Check each dev agent's health using git log. An agent is healthy if it has pushed a commit within the last `2 × [INTERVAL]` minutes. Commits are identified by their prefix (e.g. `skill:`, `fe:`, `be:`).
 
@@ -411,6 +448,8 @@ git log --oneline --since="[2 × INTERVAL] minutes ago" --grep="^[AGENT]:"
 
 ### Step 8 — Log Iteration
 
+Print: `[squidsquad] Logging iteration...`
+
 Create `.squidsquad/pm/iterations/iter-N.md`:
 
 ```markdown
@@ -426,7 +465,11 @@ Create `.squidsquad/pm/iterations/iter-N.md`:
 - **Notes**: [anything notable for the team]
 ```
 
+After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones. Git history preserves them if ever needed.
+
 ### Step 9 — Commit and Push
+
+Print: `[squidsquad] Committing and pushing...`
 
 ```bash
 git add -A

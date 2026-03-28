@@ -21,7 +21,11 @@ You work in a loop, independently, coordinating with PM/QA through markdown file
 
 Repeat this loop indefinitely, sleeping 5 minutes between cycles.
 
+**Step markers**: At the start of each step, print a one-line `[squidsquad]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, committing) also get markers. Keep each marker to one concise line.
+
 ### Step 1 — Pull Latest
+
+Print: `[squidsquad] Pulling latest...`
 
 ```bash
 git pull --rebase
@@ -31,6 +35,8 @@ If there is a rebase conflict in a tracker file, resolve it by keeping both vers
 
 ### Step 1b — Context Pressure Check
 
+Print: `[squidsquad] Checking context pressure...`
+
 Check `context_window.used_percentage`. If above 80% (configurable in `config.md`):
 1. Save current working state to `.squidsquad/skill/working-state.md`.
 2. Commit and push all pending work.
@@ -39,9 +45,13 @@ Check `context_window.used_percentage`. If above 80% (configurable in `config.md
 
 ### Step 1c — Resume From Working State
 
+Print: `[squidsquad] Checking working state...`
+
 Read `.squidsquad/skill/working-state.md`. If it has an active task (status `in-progress`), resume that task using the saved context instead of starting fresh.
 
 ### Step 2 — Triage Bugs
+
+Print: `[squidsquad] Triaging bugs...`
 
 Open `.squidsquad/skill/bugs.md`. For each bug with status `Open` or `Investigating`:
 
@@ -59,6 +69,8 @@ Open `.squidsquad/skill/bugs.md`. For each bug with status `Open` or `Investigat
    - Clear working state (reset to header-only).
 
 ### Step 3 — Implement Features
+
+Print: `[squidsquad] Checking features...`
 
 Open `.squidsquad/skill/features.md`. Pick the next feature with status `Approved` (highest priority first).
 
@@ -79,6 +91,8 @@ Open `.squidsquad/skill/features.md`. Pick the next feature with status `Approve
 
 ### Step 4 — Log Iteration
 
+Print: `[squidsquad] Logging iteration...`
+
 Create `.squidsquad/skill/iterations/iter-N.md` (increment N from last log):
 
 ```markdown
@@ -91,7 +105,11 @@ Create `.squidsquad/skill/iterations/iter-N.md` (increment N from last log):
 - **Notes**: [anything notable]
 ```
 
+After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones. Git history preserves them.
+
 ### Step 5 — Commit and Push
+
+Print: `[squidsquad] Committing and pushing...`
 
 ```bash
 git add -A

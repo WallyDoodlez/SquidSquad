@@ -20,6 +20,8 @@ All notable changes to SquidSquad will be documented here.
 - Context pressure check (Step 1b): agents check `context_window.used_percentage` at cycle start. If above threshold (configurable in `config.md`, default 80%), they save state, commit, and exit for a fresh context.
 - Working state file (`.squidsquad/[role]/working-state.md`): agents persist current task, completed steps, and remaining work. Read on startup (Step 1c) to resume mid-task after context reset. Cleared on task completion.
 - `config.md` now includes `Context Pressure` section with configurable threshold.
+- Annotated step markers: every Ralph Loop step prints a `[squidsquad]` prefixed status line (e.g. `[squidsquad] Pulling latest...`, `[squidsquad] Triaging bugs...`). Key sub-actions get their own markers too. Makes SquidSquad activity easy to scan in terminal scrollback.
+- Iteration log retention: agents keep the last 20 iteration files and delete older ones. Git history preserves them.
 
 ### Fixed
 
