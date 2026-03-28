@@ -408,14 +408,16 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 - **Assigned To**: skill-lead
 - **Description**: BUG-SKILL-010 introduced a one-at-a-time (a)(b)(c)(d) format for Phase 2 discussion questions. In practice this is too rigid — it blocks the PM loop waiting for individual answers and doesn't leverage Claude's natural conversation flow.
 
-  The correct approach: after Phase 1 research completes, the PM should **present the full research summary AND all open questions together in a single output**, then let the human respond naturally via Claude's normal user prompt. The human can answer multiple questions at once, ask follow-ups, or address them in any order. The PM captures decisions from the human's freeform responses.
+  The correct approach is a **two-part flow**:
+
+  **Part 1 — Overview**: Present the full research summary AND all open questions together in a single output, so the human sees the full picture upfront.
+
+  **Part 2 — Interactive walk-through**: Immediately start walking through questions one at a time. Each question gets 3 suggestions (PM's recommendations based on research) plus a "discuss more" option. Human picks one or types freeform. PM locks the decision, moves to next question.
 
   **Current (broken):**
   ```
   Q1: [question] ... (a)(b)(c)(d) Your choice:
-  [wait for answer]
-  Q2: [question] ... (a)(b)(c)(d) Your choice:
-  [wait for answer]
+  [wait — human never saw Q2-Q7]
   ```
 
   **Expected:**
@@ -423,14 +425,24 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
   [Research summary]
 
   Open questions:
-  Q1: [question] — Why it matters: [risk]. Recommendation: [X]
-  Q2: [question] — Why it matters: [risk]. Recommendation: [Y]
-  ...Q7: [question] — Why it matters: [risk]. Recommendation: [Z]
+  Q1: [question] — Why it matters: [risk]
+  Q2: [question] — Why it matters: [risk]
+  ...Q7: [question] — Why it matters: [risk]
 
-  Share your thoughts on any/all of these — I'll capture decisions as we go.
+  Let's walk through these one at a time.
+
+  Q1: [question]
+  Why this matters: [consequence]
+
+  (a) [Suggestion 1 — recommended]
+  (b) [Suggestion 2]
+  (c) [Suggestion 3]
+  (d) Let's discuss this more
+
+  Your choice:
   ```
 
-  The human then responds naturally. PM locks decisions from the response, asks clarifying questions if needed, and continues until all questions are resolved.
+  Key difference from BUG-010: the human sees ALL questions listed first for context, THEN the interactive walk-through begins with 3 suggestions (not 2) per question plus a discuss option.
 
 - **Steps to Reproduce**:
   1. Approve a feature for planning
@@ -442,3 +454,4 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-28 07:25] **pm/qa**: Reported by human. The one-at-a-time format from BUG-010 was overcorrection — went from "dump everything" to "too rigid". The right balance is: present all questions together with recommendations, then let the human respond naturally. This supersedes BUG-SKILL-010's (a)(b)(c)(d) format.
+> [2026-03-28 07:30] **pm/qa**: Human clarified: two-part flow. Part 1: show all questions at once for context. Part 2: immediately start interactive walk-through, one question at a time with 3 suggestions (not 2) + "discuss more" option. Human picks or types freeform. Updated description.
