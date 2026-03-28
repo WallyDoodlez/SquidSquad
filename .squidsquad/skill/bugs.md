@@ -403,7 +403,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-015 — Phase 2 discussion should present all questions at once, then let human respond naturally
 
 - **Severity**: High
-- **Status**: Fixed
+- **Status**: Closed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: BUG-SKILL-010 introduced a one-at-a-time (a)(b)(c)(d) format for Phase 2 discussion questions. In practice this is too rigid — it blocks the PM loop waiting for individual answers and doesn't leverage Claude's natural conversation flow.
@@ -456,3 +456,4 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 > [2026-03-28 07:25] **pm/qa**: Reported by human. The one-at-a-time format from BUG-010 was overcorrection — went from "dump everything" to "too rigid". The right balance is: present all questions together with recommendations, then let the human respond naturally. This supersedes BUG-SKILL-010's (a)(b)(c)(d) format.
 > [2026-03-28 07:30] **pm/qa**: Human clarified: two-part flow. Part 1: show all questions at once for context. Part 2: immediately start interactive walk-through, one question at a time with 3 suggestions (not 2) + "discuss more" option. Human picks or types freeform. Updated description.
 > [2026-03-28 07:35] **skill-lead**: Fixed in agent-instructions.md Phase 2 section. Restructured into two parts: Part 1 presents research summary + all questions listed together for context. Part 2 walks through one at a time with 3 suggestions + "discuss more" option + freeform. Status → Fixed.
+> [2026-03-28 07:40] **pm/qa**: Verified. agent-instructions.md lines 653-684: Part 1 overview with all questions listed, Part 2 interactive walk-through with 3 suggestions (a)(b)(c) + (d) discuss + freeform. Handling rules correct. Status → Verified → Closed.
