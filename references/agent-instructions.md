@@ -51,20 +51,20 @@ Each invocation executes **one cycle** through the steps below. The `/loop` comm
 At the start of each cycle, print:
 
 ```
-\033[45m\033[30m[🦑]\033[0m ---- cycle N started at HH:MM:SS ----
+[🦑] ---- cycle N started at HH:MM:SS ----
 ```
 
 At the end of each cycle, print:
 
 ```
-\033[45m\033[30m[🦑]\033[0m ---- cycle N complete at HH:MM:SS ----
+[🦑] ---- cycle N complete at HH:MM:SS ----
 ```
 
-**Step markers**: At the start of each step, print a one-line `\033[45m\033[30m[🦑]\033[0m` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, committing) also get markers. Keep each marker to one concise line.
+**Step markers**: At the start of each step, print a one-line `[🦑]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, committing) also get markers. Keep each marker to one concise line.
 
 ### Step 1 — Pull Latest
 
-Print: `\033[45m\033[30m[🦑]\033[0m Pulling latest...`
+Print: `[🦑] Pulling latest...`
 
 ```bash
 git pull --rebase
@@ -74,24 +74,24 @@ If there is a rebase conflict in a tracker file, resolve it by keeping both vers
 
 ### Step 1b — Context Pressure Check
 
-Print: `\033[45m\033[30m[🦑]\033[0m Checking context pressure...`
+Print: `[🦑] Checking context pressure...`
 
 Check `context_window.used_percentage` from the status line JSON (available as the `$CONTEXT_USED` environment hint, or by reading the last status line output). Compare against the threshold in `config.md` (default 80%).
 
 If context usage **exceeds the threshold**:
 1. Compact your current working state into `.squidsquad/[ROLE]/working-state.md` (see Working State File below).
 2. Commit and push all pending work.
-3. Print: `\033[45m\033[30m[🦑]\033[0m Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
+3. Print: `[🦑] Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
 4. Exit the conversation. The boot script will restart you with a fresh context window.
 
 If context usage is below threshold, continue normally.
 
 ### Step 1c — Resume From Working State
 
-Print: `\033[45m\033[30m[🦑]\033[0m Checking working state...`
+Print: `[🦑] Checking working state...`
 
 Read `.squidsquad/[ROLE]/working-state.md`. If it contains an active task (status `in-progress`):
-- Print: `\033[45m\033[30m[🦑]\033[0m Resuming [TASK_ID]...`
+- Print: `[🦑] Resuming [TASK_ID]...`
 - Read the task ID, completed steps, remaining steps, and key decisions.
 - Resume work on that task instead of starting fresh from the tracker.
 - Skip re-analyzing code you've already understood — trust the working state summary.
@@ -100,7 +100,7 @@ If the file is empty or has no active task, proceed normally to Step 2.
 
 ### Step 2 — Triage Bugs
 
-Print: `\033[45m\033[30m[🦑]\033[0m Triaging bugs...`
+Print: `[🦑] Triaging bugs...`
 
 Open `.squidsquad/[ROLE]/bugs.md`. For each bug with status `Open` or `Investigating`:
 
@@ -127,9 +127,9 @@ Open `.squidsquad/[ROLE]/bugs.md`. For each bug with status `Open` or `Investiga
 
 ### Step 3 — Implement Features
 
-Print: `\033[45m\033[30m[🦑]\033[0m Checking features...`
+Print: `[🦑] Checking features...`
 
-Open `.squidsquad/[ROLE]/features.md`. Pick the next feature with status `Approved` (highest priority first). When picking up a feature, print: `\033[45m\033[30m[🦑]\033[0m Implementing FEAT-[ROLE_UPPER]-XXX...`
+Open `.squidsquad/[ROLE]/features.md`. Pick the next feature with status `Approved` (highest priority first). When picking up a feature, print: `[🦑] Implementing FEAT-[ROLE_UPPER]-XXX...`
 
 1. Append a Discussion entry:
    ```
@@ -155,9 +155,9 @@ Open `.squidsquad/[ROLE]/features.md`. Pick the next feature with status `Approv
 
 ### Step 4 — Log Iteration (skip on quiet cycles)
 
-If no bugs were fixed and no features were progressed this cycle, this is a **quiet cycle**. Print: `\033[45m\033[30m[🦑]\033[0m Quiet cycle — no work done. Skipping log/commit.` and skip directly to Step 6 (Sleep).
+If no bugs were fixed and no features were progressed this cycle, this is a **quiet cycle**. Print: `[🦑] Quiet cycle — no work done. Skipping log/commit.` and skip directly to Step 6 (Sleep).
 
-Otherwise, print: `\033[45m\033[30m[🦑]\033[0m Logging iteration...`
+Otherwise, print: `[🦑] Logging iteration...`
 
 Create `.squidsquad/[ROLE]/iterations/iter-N.md` (increment N from last log):
 
@@ -175,7 +175,7 @@ After creating the log, clean up old iteration files: if more than 20 `iter-*.md
 
 ### Step 5 — Commit and Push (skip on quiet cycles)
 
-Print: `\033[45m\033[30m[🦑]\033[0m Committing and pushing...`
+Print: `[🦑] Committing and pushing...`
 
 **If `PR Flow: yes` in config.md** and this cycle completed a feature or bug fix (status changed to `Pending Test`):
 
@@ -341,7 +341,7 @@ When you first receive these instructions, invoke the `/loop` command to schedul
 /loop [INTERVAL]m execute one Ralph Loop cycle
 ```
 
-This externalizes the cycle timing — `/loop` handles the interval and re-invocation. Each cycle is a single pass through the steps below. Do NOT manually sleep or try to self-loop. Print a brief one-line status as you go (e.g. `\033[45m\033[30m[🦑]\033[0m Pulling latest...`, `\033[45m\033[30m[🦑]\033[0m Running QA pass...`).
+This externalizes the cycle timing — `/loop` handles the interval and re-invocation. Each cycle is a single pass through the steps below. Do NOT manually sleep or try to self-loop. Print a brief one-line status as you go (e.g. `[🦑] Pulling latest...`, `[🦑] Running QA pass...`).
 
 ---
 
@@ -365,20 +365,20 @@ Each invocation executes **one cycle** through the steps below. The `/loop` comm
 At the start of each cycle, print:
 
 ```
-\033[45m\033[30m[🦑]\033[0m ---- cycle N started at HH:MM:SS ----
+[🦑] ---- cycle N started at HH:MM:SS ----
 ```
 
 At the end of each cycle, print:
 
 ```
-\033[45m\033[30m[🦑]\033[0m ---- cycle N complete at HH:MM:SS ----
+[🦑] ---- cycle N complete at HH:MM:SS ----
 ```
 
-**Step markers**: At the start of each step, print a one-line `\033[45m\033[30m[🦑]\033[0m` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line.
+**Step markers**: At the start of each step, print a one-line `[🦑]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line.
 
 ### Step 1 — Pull Latest
 
-Print: `\033[45m\033[30m[🦑]\033[0m Pulling latest...`
+Print: `[🦑] Pulling latest...`
 
 ```bash
 git pull --rebase
@@ -388,19 +388,19 @@ If there is a rebase conflict in a tracker file, resolve it by keeping both vers
 
 ### Step 1b — Context Pressure Check
 
-Print: `\033[45m\033[30m[🦑]\033[0m Checking context pressure...`
+Print: `[🦑] Checking context pressure...`
 
 Check `context_window.used_percentage`. Compare against the threshold in `config.md` (default 80%).
 
 If context usage **exceeds the threshold**:
 1. Compact your current working state into `.squidsquad/pm/working-state.md`.
 2. Commit and push all pending work.
-3. Print: `\033[45m\033[30m[🦑]\033[0m Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
+3. Print: `[🦑] Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
 4. Exit the conversation.
 
 ### Step 1c — Resume From Working State
 
-Print: `\033[45m\033[30m[🦑]\033[0m Checking working state...`
+Print: `[🦑] Checking working state...`
 
 Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `in-progress`), resume that work. Otherwise proceed normally.
 
@@ -409,7 +409,7 @@ Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `i
 Print a brief, non-blocking status note — do NOT wait for a response before continuing:
 
 ```
-\033[45m\033[30m[🦑]\033[0m PM check-in: drop a message anytime to file bugs, features, or priority changes. Continuing to Step 3.
+[🦑] PM check-in: drop a message anytime to file bugs, features, or priority changes. Continuing to Step 3.
 ```
 
 Then immediately proceed to Step 3. The human will interrupt when they have input — you do not need to block the loop waiting for them.
@@ -426,7 +426,7 @@ If the human has already provided input (earlier in the conversation or between 
 
 ### Step 3 — Run E2E Tests
 
-Print: `\033[45m\033[30m[🦑]\033[0m Running E2E tests...` (or `\033[45m\033[30m[🦑]\033[0m No E2E command — skipping tests.`)
+Print: `[🦑] Running E2E tests...` (or `[🦑] No E2E command — skipping tests.`)
 
 If `E2E Tests` is configured in `config.md`, run: `[E2E_TEST_CMD]`
 
@@ -445,9 +445,9 @@ Log results in `pm/qa-log.md`:
 
 ### Step 4 — File Bugs From Test Failures
 
-Print: `\033[45m\033[30m[🦑]\033[0m Filing bugs from failures...` (or skip if no failures)
+Print: `[🦑] Filing bugs from failures...` (or skip if no failures)
 
-For each test failure, print: `\033[45m\033[30m[🦑]\033[0m Filing BUG-[ROLE]-XXX...`
+For each test failure, print: `[🦑] Filing BUG-[ROLE]-XXX...`
 
 1. Determine which agent's domain the failure is in.
 2. Check if a bug for this failure already exists (search by keywords). If yes, append a Discussion note — do not duplicate.
@@ -456,7 +456,7 @@ For each test failure, print: `\033[45m\033[30m[🦑]\033[0m Filing BUG-[ROLE]-X
 
 ### Step 5 — Verify Fixed Bugs
 
-Print: `\033[45m\033[30m[🦑]\033[0m Verifying fixed bugs...`
+Print: `[🦑] Verifying fixed bugs...`
 
 For each active agent, open their `bugs.md`. For each bug with status `Fixed`:
 
@@ -470,7 +470,7 @@ For each active agent, open their `bugs.md`. For each bug with status `Fixed`:
 
 ### Step 6 — Verify Pending Test Features
 
-Print: `\033[45m\033[30m[🦑]\033[0m Verifying pending test features...`
+Print: `[🦑] Verifying pending test features...`
 
 For each active agent, open their `features.md`. For each feature with status `Pending Test`:
 
@@ -482,7 +482,7 @@ For each active agent, open their `features.md`. For each feature with status `P
 
 If `PR Flow: yes` in `config.md`:
 
-Print: `\033[45m\033[30m[🦑]\033[0m Checking open PRs...`
+Print: `[🦑] Checking open PRs...`
 
 List open SquidSquad PRs:
 ```bash
@@ -499,7 +499,7 @@ If `PR Flow: no`, skip this step.
 
 ### Step 7 — Agent Health Check
 
-Print: `\033[45m\033[30m[🦑]\033[0m Checking agent health...`
+Print: `[🦑] Checking agent health...`
 
 Check each dev agent's health using git log. An agent is healthy if it has pushed a commit within the last `2 × [INTERVAL]` minutes. Commits are identified by their prefix (e.g. `skill:`, `fe:`, `be:`).
 
@@ -520,14 +520,14 @@ git log --oneline --since="[2 × INTERVAL] minutes ago" --grep="^[AGENT]:"
 
 If `GitHub Issues Ingestion: yes` in `config.md`:
 
-Print: `\033[45m\033[30m[🦑]\033[0m Checking GitHub Issues...`
+Print: `[🦑] Checking GitHub Issues...`
 
 Fetch open issues:
 ```bash
 gh issue list --state open --json number,title,labels,body,url --limit 50
 ```
 
-If `gh` is not available or fails, print: `\033[45m\033[30m[🦑]\033[0m gh CLI not available — skipping issue ingestion.` and continue.
+If `gh` is not available or fails, print: `[🦑] gh CLI not available — skipping issue ingestion.` and continue.
 
 For each open issue:
 1. Check if already ingested: search all agent tracker Discussions for `GitHub Issue #[N]`. If found, skip.
@@ -557,9 +557,9 @@ If `GitHub Issues Ingestion: no`, skip this step entirely.
 
 ### Step 8 — Log Iteration (skip on quiet cycles)
 
-If no QA issues were found, no bugs were verified, no features were shipped, and no human input was processed this cycle, this is a **quiet cycle**. Print: `\033[45m\033[30m[🦑]\033[0m Quiet cycle — no work done. Skipping log/commit.` and skip directly to Step 10 (Sleep).
+If no QA issues were found, no bugs were verified, no features were shipped, and no human input was processed this cycle, this is a **quiet cycle**. Print: `[🦑] Quiet cycle — no work done. Skipping log/commit.` and skip directly to Step 10 (Sleep).
 
-Otherwise, print: `\033[45m\033[30m[🦑]\033[0m Logging iteration...`
+Otherwise, print: `[🦑] Logging iteration...`
 
 Create `.squidsquad/pm/iterations/iter-N.md`:
 
@@ -580,7 +580,7 @@ After creating the log, clean up old iteration files: if more than 20 `iter-*.md
 
 ### Step 9 — Commit and Push (skip on quiet cycles)
 
-Print: `\033[45m\033[30m[🦑]\033[0m Committing and pushing...`
+Print: `[🦑] Committing and pushing...`
 
 ```bash
 git add -A

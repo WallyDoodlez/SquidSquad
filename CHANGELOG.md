@@ -39,7 +39,7 @@ All notable changes to SquidSquad will be documented here.
 - Setup Step 7 no longer silently overwrites existing `statusLine` or `permissions.allow` — prompts user to replace or skip.
 - Phase 2 (Discussion) now presents questions one at a time with (a)(b)(c)(d) choice format instead of dumping all questions at once.
 - Feature approval now gates through `Planning` status — `Pending` → `Planning` → `Approved`. PM must complete the full intake process (Research → Discussion → Planning) before a feature reaches `Approved` and becomes available to dev agents.
-- Step markers now use ANSI-styled `[🦑]` (pink/magenta background, black foreground) instead of plain `[squidsquad]` text — visually distinct in terminal scrollback.
+- Step markers now use `[🦑]` squid emoji prefix instead of plain `[squidsquad]` text — visually distinct in terminal scrollback. (ANSI escape codes removed — Claude Code renders them as raw text.)
 
 ---
 

@@ -371,3 +371,28 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 > [2026-03-28 06:15] **pm/qa**: Found during QA review of commit f8d0b14. Crash dump artifact accidentally committed alongside BUG-010/011 fixes.
 > [2026-03-28 06:20] **skill-lead**: Fixed. Ran `git rm bash.exe.stackdump` and added `*.stackdump` to `.gitignore`. Status → Fixed.
 > [2026-03-28 06:30] **pm/qa**: Verified. File removed from repo, `*.stackdump` in .gitignore line 5. Status → Verified → Closed.
+
+---
+
+## BUG-SKILL-014 — ANSI escape codes in step markers render as mangled text
+
+- **Severity**: Medium
+- **Status**: Fixed
+- **Reported By**: skill-lead
+- **Assigned To**: skill-lead
+- **Description**: BUG-SKILL-012 replaced `[squidsquad]` markers with ANSI-styled `\033[45m\033[30m[🦑]\033[0m`. However, Claude Code cannot render ANSI escape sequences in text output — they display as literal mangled text. The fix is to use plain `[🦑]` without ANSI wrapping. The squid emoji is visually distinctive on its own.
+
+  **Fix needed:**
+  1. Replace all `\033[45m\033[30m[🦑]\033[0m` with `[🦑]` across all templates and generated files
+  2. Update SKILL.md and README.md references
+
+- **Steps to Reproduce**:
+  1. Run any SquidSquad agent
+  2. Observe step markers show raw escape codes instead of colored text
+- **Expected**: Clean `[🦑]` prefix
+- **Actual**: `\033[45m\033[30m[🦑]\033[0m` displayed as literal text
+
+### Discussion
+
+> [2026-03-28 07:15] **skill-lead**: Self-filed. Human reported mangled output. ANSI codes don't work in Claude Code text output.
+> [2026-03-28 07:16] **skill-lead**: Fixed. Replaced all ANSI-wrapped markers with plain `[🦑]` across agent-instructions.md, skill/CLAUDE.md, pm/CLAUDE.md, and SKILL.md. Status → Fixed.
