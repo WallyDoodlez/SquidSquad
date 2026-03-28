@@ -16,4 +16,4 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
-claude --permission-mode auto --append-system-prompt-file .squidsquad/pm/CLAUDE.md
+claude --permission-mode auto

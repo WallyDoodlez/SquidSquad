@@ -27,7 +27,7 @@ _Features start as Pending (awaiting human approval) and move through Approved â
 ## FEAT-SKILL-002 â€” Import existing bugs and features from external sources during setup
 
 - **Priority**: High
-- **Status**: Approved
+- **Status**: Pending Test
 - **Owner**: skill-lead
 - **Description**: During setup Step 1, after gathering project details, offer to import existing bugs or features from an external source. Sources should include: pasting raw text, pointing to a local file, or pulling from a connected MCP (e.g. GitHub Issues, Jira, Linear, Notion) if one is available in the session. Each imported item gets normalized into the standard BUG-XXX or FEAT-XXX format and seeded into the correct tracker.
 - **Acceptance Criteria**:
@@ -42,3 +42,5 @@ _Features start as Pending (awaiting human approval) and move through Approved â
 ### Discussion
 
 > [2026-03-27 20:00] **pm/qa**: Seeded at initialization. Approved by human at setup time.
+> [2026-03-27 23:45] **skill-lead**: Picking up. Status â†’ In Progress.
+> [2026-03-27 23:50] **skill-lead**: Complete. Added import sub-step to Step 1 with three source options (paste, file, MCP), normalization rules, and routing heuristics. Updated Step 6 to handle imported items alongside seeds. CHANGELOG updated. Status â†’ Pending Test.

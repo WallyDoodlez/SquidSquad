@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git init:*)",
+      "Bash(git remote:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(git pull:*)",
+      "Bash(git rebase:*)",
+      "Bash(git tag:*)",
+      "Bash(chmod +x /d/Dev/Dev/SquidSquad/.squidsquad/start-skill.sh /d/Dev/Dev/SquidSquad/.squidsquad/start-pm.sh)",
+      "Bash(git:*)",
+      "Bash(claude --append-system-prompt-file)",
+      "Bash(claude --system-prompt-file)"
+    ]
+  }
+}

@@ -147,37 +147,22 @@ Status flow: `Pending` → `Approved` → `In Progress` → `Pending Test` → `
 
 Each agent runs its own Ralph Loop — an autonomous work cycle that repeats on an interval.
 
-### FE Lead Ralph Loop
+### [Role] Lead Ralph Loop
+
+Each dev agent follows this loop, substituting its own role name and tracker paths:
 
 ```
 1. git pull --rebase
-2. Scan fe/bugs.md for Open or Investigating items
+2. Scan [role]/bugs.md for Open or Investigating items
    → Fix each bug in code
-   → If bug touches BE, open BUG-BE-XXX in be/bugs.md
+   → If bug touches another agent's domain, file BUG-[OTHER]-XXX in [other]/bugs.md
    → Update bug status to Fixed, append Discussion entry
-3. Scan fe/features.md for Approved items
+3. Scan [role]/features.md for Approved items
    → Implement next feature
    → Update status to In Progress, then Pending Test
    → Append Discussion entry
-4. Run FE test command (from config.md)
-5. Log iteration to fe/iterations/iter-N.md
-6. git add -A && git commit && git push
-7. Sleep [INTERVAL] minutes (from config.md) → repeat
-```
-
-### BE Lead Ralph Loop
-
-```
-1. git pull --rebase
-2. Scan be/bugs.md for Open or Investigating items
-   → Fix each bug in code
-   → Update bug status to Fixed, append Discussion entry
-3. Scan be/features.md for Approved items
-   → Implement next feature
-   → Update status to In Progress, then Pending Test
-   → Append Discussion entry
-4. Run BE test command (from config.md)
-5. Log iteration to be/iterations/iter-N.md
+4. Run [role] test command (from config.md)
+5. Log iteration to [role]/iterations/iter-N.md
 6. git add -A && git commit && git push
 7. Sleep [INTERVAL] minutes (from config.md) → repeat
 ```
@@ -187,14 +172,14 @@ Each agent runs its own Ralph Loop — an autonomous work cycle that repeats on 
 ```
 1. git pull --rebase
 2. Check with human: any new requirements, bugs, or priorities?
-   → If yes: file new bugs to fe/bugs.md or be/bugs.md directly
-   → If yes: add features to fe/features.md or be/features.md as Pending
+   → If yes: file new bugs to [role]/bugs.md for the appropriate dev agent
+   → If yes: add features to [role]/features.md as Pending
    → Await human approval before marking features Approved
 3. Run full e2e test command (from config.md)
 4. Log results to pm/qa-log.md
-5. If tests fail: file BUG-FE-XXX or BUG-BE-XXX as appropriate
-6. Scan fe/ and be/ features.md for Pending Test items → verify → update to Shipped
-7. Scan fe/ and be/ bugs.md for Fixed items → verify → update to Verified/Closed
+5. If tests fail: file BUG-[ROLE]-XXX to the appropriate dev agent's tracker
+6. Scan each dev agent's features.md for Pending Test items → verify → update to Shipped
+7. Scan each dev agent's bugs.md for Fixed items → verify → update to Verified/Closed
 8. Log iteration to pm/iterations/iter-N.md
 9. git add -A && git commit && git push
 10. Sleep [INTERVAL] minutes (from config.md) → repeat
@@ -260,7 +245,35 @@ Collect these fields:
 | 7 | **Loop interval** | Minutes between Ralph Loop cycles | `10` | Must be an integer >= 1; re-prompt if invalid |
 | 8 | **Seed items** | Bugs or features to pre-populate into trackers | _(none)_ | Optional |
 
-**Validation:** After collecting all fields, display a summary table and ask the user to confirm or correct any values before proceeding. If any required field is empty or any value fails validation (e.g. interval < 1), highlight the issue and re-prompt for that specific field.
+#### Import Existing Items
+
+After collecting the fields above (and before the validation summary), offer to import existing bugs or features from an external source:
+
+```
+Do you have existing bugs or features to import?
+  (1) Paste text — I'll parse and normalize it
+  (2) File path  — point to a local file (markdown, CSV, plain text)
+  (3) MCP source — pull from GitHub Issues, Jira, Linear, etc. (if connected)
+  (4) Skip
+```
+
+**Handling each source:**
+
+- **Pasted text / File path**: Parse each item, inferring title, severity/priority, description, and owner (which dev agent). Use heuristics — e.g. items mentioning "UI", "frontend", "CSS" route to `fe`; items mentioning "API", "database", "server" route to `be`. If the team shape has only one dev agent, route everything there. If ambiguous, default to the first dev agent and note it in the Discussion entry.
+- **MCP source**: Check if relevant MCP tools are available in the session (e.g. `mcp__claude_ai_Atlassian__searchJiraIssuesUsingJql`, GitHub Issues via `gh`, etc.). If available, prompt the user for a query or project filter, fetch items, and map each to the tracker format. If no MCP tools are available, inform the user and offer the other import options instead.
+
+**Normalization rules:**
+
+- Each imported item is assigned the next available `BUG-[ROLE]-XXX` or `FEAT-[ROLE]-XXX` ID based on the counters that will be set in `config.md`.
+- Bugs get status `Open`, features get status `Pending`.
+- Each imported entry gets an initial Discussion note:
+  ```
+  > [YYYY-MM-DD HH:MM] **pm/qa**: Imported from [source] at setup.
+  ```
+- Increment the corresponding ID counters in `config.md` for each imported item.
+- Imported items are merged with any manually provided seed items from field 8.
+
+**Validation:** After collecting all fields (including any imported items), display a summary table and ask the user to confirm or correct any values before proceeding. If any required field is empty or any value fails validation (e.g. interval < 1), highlight the issue and re-prompt for that specific field. If items were imported, include a count (e.g. "Imported: 3 bugs, 2 features → be/").
 
 ### Step 2 — Create `.squidsquad/` Folder Structure
 
@@ -320,7 +333,7 @@ Always create `.squidsquad/pm/` with its full structure regardless of team shape
 
 ### Step 4 — Generate CLAUDE.md Files
 
-Use the templates in `references/agent-instructions.md` to generate role-specific CLAUDE.md files inside `fe/`, `be/`, and `pm/`, substituting in the project's actual test commands and repo URL from config.md.
+Use the templates in `references/agent-instructions.md` to generate role-specific CLAUDE.md files inside each `[role]/` folder and `pm/`, substituting in the project's actual test commands and repo URL from config.md.
 
 ### Step 5 — Generate Boot Scripts
 
@@ -348,7 +361,22 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
-claude --dangerously-skip-permissions -p "Read .squidsquad/[ROLE]/CLAUDE.md for your instructions. Begin your first Ralph Loop cycle now."
+INTERVAL=$(grep "Minutes" .squidsquad/config.md | grep -o '[0-9]*' | head -1)
+INTERVAL=${INTERVAL:-10}
+
+echo "[squidsquad] [ROLE] agent starting. loop interval: ${INTERVAL}min"
+echo "[squidsquad] press Ctrl+C to stop"
+echo ""
+
+N=0
+while true; do
+  N=$((N + 1))
+  echo "[squidsquad] ---- cycle $N started at $(date '+%H:%M:%S') ----"
+  claude --dangerously-skip-permissions --verbose -p "Read .squidsquad/[ROLE]/CLAUDE.md for your instructions. Begin your Ralph Loop cycle now." 2>&1
+  echo ""
+  echo "[squidsquad] ---- cycle $N complete. sleeping ${INTERVAL}min ----"
+  sleep $((INTERVAL * 60))
+done
 ```
 
 **`start-[role].ps1`**:
@@ -369,7 +397,22 @@ Write-Host "    ▌▌▌▌▌▌"
 Write-Host "  S Q U I D S Q U A D   v$v  -  [ROLE]"
 Write-Host ""
 
-claude --dangerously-skip-permissions -p "Read .squidsquad/[ROLE]/CLAUDE.md for your instructions. Begin your first Ralph Loop cycle now."
+$interval = if ($config -match "Minutes.*?(\d+)") { [int]$Matches[1] } else { 10 }
+
+Write-Host "[squidsquad] [ROLE] agent starting. loop interval: ${interval}min"
+Write-Host "[squidsquad] press Ctrl+C to stop"
+Write-Host ""
+
+$n = 0
+while ($true) {
+    $n++
+    $time = Get-Date -Format "HH:mm:ss"
+    Write-Host "[squidsquad] ---- cycle $n started at $time ----"
+    claude --dangerously-skip-permissions --verbose -p "Read .squidsquad/[ROLE]/CLAUDE.md for your instructions. Begin your Ralph Loop cycle now." 2>&1
+    Write-Host ""
+    Write-Host "[squidsquad] ---- cycle $n complete. sleeping ${interval}min ----"
+    Start-Sleep -Seconds ($interval * 60)
+}
 ```
 
 **`start-pm.sh`**:
@@ -392,7 +435,7 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
-claude --permission-mode auto -p "Read .squidsquad/pm/CLAUDE.md for your instructions. Begin your first cycle now."
+claude --permission-mode auto
 ```
 
 **`start-pm.ps1`**:
@@ -415,10 +458,10 @@ if (Test-Path .squidsquad) {
     Write-Host ""
 }
 
-claude --permission-mode auto -p "Read .squidsquad/pm/CLAUDE.md for your instructions. Begin your first cycle now."
+claude --permission-mode auto
 ```
 
-> **Note:** All agents run interactively. PM/QA uses `--permission-mode auto` so it can check in with you. Dev agents use `--dangerously-skip-permissions` to run fully autonomous. Both load their instructions via `--system-prompt-file`.
+> **Note:** Dev agents use `-p` with a shell loop — each cycle runs one `claude -p` invocation, then sleeps. PM/QA runs interactively (no `-p`) so it can check in with you. You tell the PM what to do by typing in its terminal.
 
 Make the `.sh` scripts executable (`chmod +x`).
 
@@ -426,7 +469,7 @@ Make the `.sh` scripts executable (`chmod +x`).
 
 Initialize empty tracker files with headers:
 
-**`fe/bugs.md`** and **`be/bugs.md`**:
+**`[role]/bugs.md`** (one per dev agent):
 ```markdown
 # Bug Tracker
 
@@ -435,7 +478,7 @@ _Bugs are filed in BUG-[TEAM]-XXX format. Each entry includes a Discussion secti
 ---
 ```
 
-**`fe/features.md`** and **`be/features.md`**:
+**`[role]/features.md`** (one per dev agent):
 ```markdown
 # Feature Tracker
 
@@ -462,7 +505,14 @@ _Product ideas and enhancement proposals surfaced during QA cycles or human chec
 ---
 ```
 
-If the user provided seed items, add them to the appropriate tracker files using the full bug or feature format, with `Open` / `Pending` status and an initial Discussion entry from `pm/qa` noting when it was seeded.
+If the user provided seed items (field 8) or imported items (from the import step), add them to the appropriate tracker files using the full bug or feature format:
+
+- Bugs get status `Open`, features get status `Pending`.
+- Each entry gets an initial Discussion note from `pm/qa`:
+  - Seed items: `> [YYYY-MM-DD HH:MM] **pm/qa**: Seeded at setup.`
+  - Imported items: `> [YYYY-MM-DD HH:MM] **pm/qa**: Imported from [source] at setup.`
+- Route each item to the correct `[role]/bugs.md` or `[role]/features.md` based on the owner assigned during import/seeding.
+- Update ID counters in `config.md` to reflect all seeded and imported items.
 
 ### Step 7 — Configure SessionStart Hook
 

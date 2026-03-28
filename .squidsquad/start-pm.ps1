@@ -1,4 +1,4 @@
-﻿$repoRoot = git rev-parse --show-toplevel
+$repoRoot = git rev-parse --show-toplevel
 Set-Location $repoRoot
 
 if (Test-Path .squidsquad) {
@@ -16,4 +16,4 @@ if (Test-Path .squidsquad) {
     Write-Host ""
 }
 
-claude --permission-mode auto --append-system-prompt-file .squidsquad/pm/CLAUDE.md
+claude --permission-mode auto
