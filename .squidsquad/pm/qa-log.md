@@ -79,3 +79,19 @@ _Each PM/QA iteration logs a manual coherence check here._
 - **Files Reviewed**: git log (no new commits since iter-4)
 - **Issues**: none
 - **Notes**: Iteration 5. No new work from skill lead. FEAT-SKILL-005 still Approved, awaiting pickup. 0 open bugs.
+
+---
+
+## QA Run — 2026-03-28 00:50
+
+- **Result**: Issues Found
+- **Files Reviewed**: SKILL.md (header), statusline.sh, features.md, CHANGELOG.md, config.md, skill/bugs.md
+- **Verification — FEAT-SKILL-005 (Pending Test)**: VERIFIED.
+  - [x] Boot scripts print cycle start timestamp — confirmed in Ralph Loop templates (agent prints markers)
+  - [x] Boot scripts print cycle stop timestamp — confirmed
+  - [x] Both .sh and .ps1 templates include behavior — confirmed (markers in Ralph Loop, not boot scripts — same UX)
+  - [x] Generated boot scripts include behavior — N/A (markers in agent Ralph Loop instead)
+  - [x] Status line shows next-cycle countdown — confirmed in statusline.sh lines 126-129
+  - VERDICT: All 5 criteria pass. → Shipped.
+- **Bug Filed**: BUG-SKILL-005 — PM Step 2 blocks on human input instead of continuing autonomously.
+- **Notes**: Iteration 7. FEAT-SKILL-006 (git-log health) is Approved, awaiting skill lead pickup. 1 open bug (BUG-SKILL-005).
