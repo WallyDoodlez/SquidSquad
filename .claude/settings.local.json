@@ -22,7 +22,9 @@
       "Bash(find /c/Users/naaht -type f -name *.md -path *skill-creator*)",
       "Bash(find /d/Dev/Dev/SquidSquad -type f -name *PLAN* -o -name *RESEARCH*)",
       "Bash(locate gsd.md)",
-      "Bash(find /c/Users/naaht -type f -name *.md)"
+      "Bash(find /c/Users/naaht -type f -name *.md)",
+      "Bash(mkdir:*)",
+      "Bash(xargs grep:*)"
     ]
   }
 }
