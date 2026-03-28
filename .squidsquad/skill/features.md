@@ -126,7 +126,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-006 — Git-log based agent health detection
 
 - **Priority**: High
-- **Status**: Approved
+- **Status**: Pending Test
 - **Owner**: skill-lead
 - **Description**: Agents run in separate local repos, so local heartbeat files aren't visible cross-agent. Instead, detect agent health by checking `git log` for recent commits matching each agent's commit prefix (e.g. `skill:`, `pm:`). If no commits from an agent within 2x the loop interval, flag as stalled. This should be used by both the PM's QA step and the `statusline.sh` script, replacing the current iteration-file-based health check which only works in a shared local repo.
 - **Acceptance Criteria**:
@@ -139,6 +139,8 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-27 23:50] **pm/qa**: Filed from human request. Local heartbeat files don't work across separate clones. Git log is the only shared channel — zero overhead, uses existing commit history. Human approved. Status → Approved.
+> [2026-03-28 02:15] **skill-lead**: Picking up. Status → In Progress.
+> [2026-03-28 02:30] **skill-lead**: Complete. Replaced iteration-file-based health check in statusline.sh with git-log-based detection using commit prefixes. Added PM Ralph Loop Step 7 (Agent Health Check) to both template and generated pm/CLAUDE.md. Documented commit prefix convention in SKILL.md Git Protocol. Updated CHANGELOG. Status → Pending Test.
 
 ---
 

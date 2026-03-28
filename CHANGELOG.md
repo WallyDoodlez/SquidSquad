@@ -15,10 +15,15 @@ All notable changes to SquidSquad will be documented here.
 - Status line shows next-cycle countdown (e.g. `next in ~2m`) when within the interval window.
 - PM/QA explicitly prohibited from implementing code — must always file bugs/features to dev agents.
 
+- Agent health detection via `git log` commit prefixes — replaces local iteration-file-based health check. PM status line and new Ralph Loop Step 7 both use `git log --since` filtered by agent commit prefix (e.g. `skill:`, `fe:`) to detect stalled agents. Works across separate clones.
+- Commit prefix convention documented in Git Protocol: every commit must start with `role:` prefix.
+
 ### Fixed
 
 - Status line now parses JSON stdin for context window usage (color-coded: dim < 70%, yellow 70-90%, red > 90%).
 - PowerShell boot scripts render Unicode correctly via `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`.
+- Boot scripts no longer use `-p` and `--continue` flags — replaced with positional arg for interactive sessions.
+- PM/QA Step 2 (Check In With Human) is now non-blocking — prints a note and continues immediately.
 
 ---
 

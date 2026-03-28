@@ -17,4 +17,4 @@ LOGO
 fi
 
 echo "pm" > .squidsquad/.active-role
-claude --permission-mode auto -p "Read .squidsquad/.active-role to find your role, then read .squidsquad/<role>/CLAUDE.md and execute your first Ralph Loop cycle now." --continue
+claude --permission-mode auto "start the loop"

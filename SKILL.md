@@ -171,18 +171,18 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 
 ```
 1. git pull --rebase
-2. Check with human: any new requirements, bugs, or priorities?
-   → If yes: file new bugs to [role]/bugs.md for the appropriate dev agent
-   → If yes: add features to [role]/features.md as Pending
+2. Non-blocking human check-in (print note, continue immediately)
+   → If human has provided input: file bugs/features to appropriate tracker
    → Await human approval before marking features Approved
 3. Run full e2e test command (from config.md)
 4. Log results to pm/qa-log.md
 5. If tests fail: file BUG-[ROLE]-XXX to the appropriate dev agent's tracker
 6. Scan each dev agent's features.md for Pending Test items → verify → update to Shipped
 7. Scan each dev agent's bugs.md for Fixed items → verify → update to Verified/Closed
-8. Log iteration to pm/iterations/iter-N.md
-9. git add -A && git commit && git push
-10. Sleep [INTERVAL] minutes (from config.md) → repeat
+8. Agent health check: git log per agent, flag stalled agents (no commits in 2× interval)
+9. Log iteration to pm/iterations/iter-N.md
+10. git add -A && git commit && git push
+11. Sleep [INTERVAL] minutes (from config.md) → repeat
 ```
 
 ---
@@ -195,6 +195,7 @@ All agents follow these rules to minimize merge conflicts on shared tracker file
 - Tracker files (bugs.md, features.md, qa-log.md) are **append-only**: never edit or delete existing entries — only append new entries or update the status field of your own items.
 - Discussion sections are append-only: always add new lines at the bottom of the `### Discussion` block.
 - Push after completing each work unit (bug fix, feature, test run).
+- **Commit prefix convention**: every commit message must start with the agent's role name followed by a colon (e.g. `skill: fix bug`, `fe: add button`, `pm: verify features`). This prefix is used by the status line and PM health checks to detect agent activity via `git log --grep`.
 - If a rebase conflict occurs: keep both versions of the conflicted tracker section by appending, never discard.
 
 ---
@@ -360,7 +361,7 @@ Add `.squidsquad/.active-role` to `.gitignore` (create the file if it doesn't ex
 
 Generate both a `.sh` (bash) and a `.ps1` (PowerShell) boot script for each dev agent, plus PM/QA. Script names use the role name, e.g. `start-be.sh`, `start-api.sh`, `start-worker.ps1`.
 
-All agents run interactively. The boot script writes `.squidsquad/.active-role` (git-ignored) with the role name, then uses `-p` to send the first message (which triggers the agent to read its CLAUDE.md and start working), followed by `--continue` to resume that session interactively.
+All agents run interactively. The boot script writes `.squidsquad/.active-role` (git-ignored) with the role name, then launches `claude` with a positional arg message. The CLAUDE.md auto-boot section detects the role and starts the Ralph Loop. The human can observe progress and comment in any agent's terminal.
 
 **`start-[role].sh`**:
 ```bash
@@ -383,7 +384,7 @@ LOGO
 fi
 
 echo "[ROLE]" > .squidsquad/.active-role
-claude --permission-mode auto -p "Read .squidsquad/.active-role to find your role, then read .squidsquad/<role>/CLAUDE.md and execute your first Ralph Loop cycle now." --continue
+claude --permission-mode auto "start the loop"
 ```
 
 **`start-[role].ps1`**:
@@ -406,7 +407,7 @@ Write-Host "  S Q U I D S Q U A D   v$v  -  [ROLE]"
 Write-Host ""
 
 "[ROLE]" | Set-Content .squidsquad/.active-role -NoNewline
-claude --permission-mode auto -p "Read .squidsquad/.active-role to find your role, then read .squidsquad/<role>/CLAUDE.md and execute your first Ralph Loop cycle now." --continue
+claude --permission-mode auto "start the loop"
 ```
 
 **`start-pm.sh`**:
@@ -430,7 +431,7 @@ LOGO
 fi
 
 echo "pm" > .squidsquad/.active-role
-claude --permission-mode auto -p "Read .squidsquad/.active-role to find your role, then read .squidsquad/<role>/CLAUDE.md and execute your first Ralph Loop cycle now." --continue
+claude --permission-mode auto "start the loop"
 ```
 
 **`start-pm.ps1`**:
@@ -455,10 +456,10 @@ if (Test-Path .squidsquad) {
 }
 
 "pm" | Set-Content .squidsquad/.active-role -NoNewline
-claude --permission-mode auto -p "Read .squidsquad/.active-role to find your role, then read .squidsquad/<role>/CLAUDE.md and execute your first Ralph Loop cycle now." --continue
+claude --permission-mode auto "start the loop"
 ```
 
-> **Note:** All agents use `-p` to send the first message (kickstarting the Ralph Loop), then `--continue` to resume that session interactively. The user can observe progress and comment in any agent's terminal.
+> **Note:** All agents use a positional arg to send the first message (kickstarting the Ralph Loop) in an interactive session. The user can observe progress and comment in any agent's terminal.
 
 Make the `.sh` scripts executable (`chmod +x`).
 
@@ -572,7 +573,7 @@ else
   ROLE_LABEL="$ROLE"
 fi
 
-# PM: show other agents' health
+# PM: show other agents' health via git log commit prefixes
 HEALTH=""
 if [ "$ROLE" = "pm" ]; then
   AGENTS=$(grep 'Dev Agents' "$SQDIR/config.md" 2>/dev/null | sed 's/.*: //' | tr ',' ' ')
@@ -580,26 +581,18 @@ if [ "$ROLE" = "pm" ]; then
   for AGENT in $AGENTS; do
     AGENT=$(echo "$AGENT" | tr -d '[:space:]')
     [ -z "$AGENT" ] && continue
-    A_DIR="$SQDIR/$AGENT/iterations"
-    A_LATEST=$(ls "$A_DIR"/iter-*.md 2>/dev/null | sort -t- -k2 -n | tail -1)
-    if [ -n "$A_LATEST" ]; then
-      if stat --version >/dev/null 2>&1; then
-        A_MOD=$(stat -c %Y "$A_LATEST" 2>/dev/null)
-      else
-        A_MOD=$(stat -f %m "$A_LATEST" 2>/dev/null)
-      fi
-      if [ -n "$A_MOD" ]; then
-        A_ELAPSED=$(( (NOW - A_MOD) / 60 ))
-        if [ "$A_ELAPSED" -le "$THRESHOLD" ]; then
-          HEALTH="${HEALTH} ${GREEN}🦑${RESET}${AGENT}"
-        else
-          HEALTH="${HEALTH} ${RED}🦑✖${RESET}${AGENT}"
-        fi
+    # Check git log for recent commits with this agent's prefix
+    RECENT=$(git log --oneline --since="${THRESHOLD} minutes ago" --grep="^${AGENT}:" 2>/dev/null | head -1)
+    if [ -n "$RECENT" ]; then
+      HEALTH="${HEALTH} ${GREEN}🦑${RESET}${AGENT}"
+    else
+      # Check if agent has ever committed
+      EVER=$(git log --oneline --grep="^${AGENT}:" -1 2>/dev/null)
+      if [ -n "$EVER" ]; then
+        HEALTH="${HEALTH} ${RED}🦑✖${RESET}${AGENT}"
       else
         HEALTH="${HEALTH} ${DIM}🦑?${RESET}${AGENT}"
       fi
-    else
-      HEALTH="${HEALTH} ${DIM}🦑?${RESET}${AGENT}"
     fi
   done
 fi

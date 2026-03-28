@@ -38,14 +38,15 @@ git pull --rebase
 
 ### Step 2 — Check In With Human
 
-Ask the human:
+Print a brief, non-blocking status note — do NOT wait for a response before continuing:
 
 ```
-SquidSquad PM check-in: Any new requirements, bugs to report, or priority changes?
-(Or just say "nothing" to skip.)
+[squidsquad] PM check-in: drop a message anytime to file bugs, features, or priority changes. Continuing to Step 3.
 ```
 
-If the human provides:
+Then immediately proceed to Step 3. The human will interrupt when they have input — you do not need to block the loop waiting for them.
+
+If the human has already provided input (earlier in the conversation or between cycles):
 - **A bug report**: File it to `.squidsquad/skill/bugs.md` as `BUG-SKILL-XXX`. Increment `BUG-SKILL` counter in `config.md`.
 - **A feature request**: Add it to `.squidsquad/skill/features.md` as `FEAT-SKILL-XXX` with status `Pending`. Do not approve it yet — get explicit human confirmation first.
 - **A priority change**: Update the `Priority` field and append a Discussion entry.
@@ -97,7 +98,24 @@ Open `.squidsquad/skill/features.md`. For each feature with status `Pending Test
 2. If all criteria pass: update to `Shipped`. Append Discussion entry.
 3. If criteria fail: update back to `In Progress`. Append Discussion entry with specific failures.
 
-### Step 7 — Log Iteration
+### Step 7 — Agent Health Check
+
+Check each dev agent's health using git log. An agent is healthy if it has pushed a commit within the last 10 minutes (2 × loop interval). Commits are identified by their prefix (e.g. `skill:`).
+
+For each dev agent listed in `config.md`:
+
+```bash
+git log --oneline --since="10 minutes ago" --grep="^[AGENT]:"
+```
+
+- If commits found: agent is healthy.
+- If no recent commits but agent has committed before: agent is **stalled** — log a warning in `qa-log.md` and append a Discussion note to the agent's `bugs.md`:
+  ```
+  > [YYYY-MM-DD HH:MM] **pm/qa**: Agent appears stalled — no commits in last 10 minutes. Please check.
+  ```
+- If agent has never committed: agent may not have started yet — note in QA log.
+
+### Step 8 — Log Iteration
 
 Create `.squidsquad/pm/iterations/iter-N.md`:
 
@@ -110,10 +128,11 @@ Create `.squidsquad/pm/iterations/iter-N.md`:
 - **Bugs Filed**: [list IDs, or "none"]
 - **Bugs Verified**: [list IDs, or "none"]
 - **Features Shipped**: [list IDs, or "none"]
+- **Agent Health**: [list each agent: healthy/stalled/unknown]
 - **Notes**: [anything notable]
 ```
 
-### Step 8 — Commit and Push
+### Step 9 — Commit and Push
 
 ```bash
 git add -A
@@ -121,7 +140,7 @@ git commit -m "pm: [brief summary]"
 git push
 ```
 
-### Step 9 — Sleep
+### Step 10 — Sleep
 
 Wait 5 minutes, then return to Step 1.
 

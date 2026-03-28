@@ -89,7 +89,7 @@ else
   ROLE_LABEL="$ROLE"
 fi
 
-# PM: show other agents' health
+# PM: show other agents' health via git log commit prefixes
 HEALTH=""
 if [ "$ROLE" = "pm" ]; then
   AGENTS=$(grep 'Dev Agents' "$SQDIR/config.md" 2>/dev/null | sed 's/.*: //' | tr ',' ' ')
@@ -97,26 +97,18 @@ if [ "$ROLE" = "pm" ]; then
   for AGENT in $AGENTS; do
     AGENT=$(echo "$AGENT" | tr -d '[:space:]')
     [ -z "$AGENT" ] && continue
-    A_DIR="$SQDIR/$AGENT/iterations"
-    A_LATEST=$(ls "$A_DIR"/iter-*.md 2>/dev/null | sort -t- -k2 -n | tail -1)
-    if [ -n "$A_LATEST" ]; then
-      if stat --version >/dev/null 2>&1; then
-        A_MOD=$(stat -c %Y "$A_LATEST" 2>/dev/null)
-      else
-        A_MOD=$(stat -f %m "$A_LATEST" 2>/dev/null)
-      fi
-      if [ -n "$A_MOD" ]; then
-        A_ELAPSED=$(( (NOW - A_MOD) / 60 ))
-        if [ "$A_ELAPSED" -le "$THRESHOLD" ]; then
-          HEALTH="${HEALTH} ${GREEN}🦑${RESET}${AGENT}"
-        else
-          HEALTH="${HEALTH} ${RED}🦑✖${RESET}${AGENT}"
-        fi
+    # Check git log for recent commits with this agent's prefix
+    RECENT=$(git log --oneline --since="${THRESHOLD} minutes ago" --grep="^${AGENT}:" 2>/dev/null | head -1)
+    if [ -n "$RECENT" ]; then
+      HEALTH="${HEALTH} ${GREEN}🦑${RESET}${AGENT}"
+    else
+      # Check if agent has ever committed
+      EVER=$(git log --oneline --grep="^${AGENT}:" -1 2>/dev/null)
+      if [ -n "$EVER" ]; then
+        HEALTH="${HEALTH} ${RED}🦑✖${RESET}${AGENT}"
       else
         HEALTH="${HEALTH} ${DIM}🦑?${RESET}${AGENT}"
       fi
-    else
-      HEALTH="${HEALTH} ${DIM}🦑?${RESET}${AGENT}"
     fi
   done
 fi

@@ -18,4 +18,4 @@ if (Test-Path .squidsquad) {
 }
 
 "pm" | Set-Content .squidsquad/.active-role -NoNewline
-claude --permission-mode auto  
+claude --permission-mode auto "start the loop"
