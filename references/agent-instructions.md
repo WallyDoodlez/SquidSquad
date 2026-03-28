@@ -650,26 +650,38 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 
 ### Phase 2 — Discussion (PM + Human)
 
-Present the full research summary to the human first (Phase 1 output). Then walk through open questions **one at a time** using this format:
+**Part 1 — Overview**: Present the full research summary (Phase 1 output) AND list all open questions together so the human sees the full picture upfront:
+
+```
+[Research summary]
+
+Open questions:
+Q1: [question] — Why it matters: [risk]
+Q2: [question] — Why it matters: [risk]
+...
+QN: [question] — Why it matters: [risk]
+
+Let's walk through these one at a time.
+```
+
+**Part 2 — Interactive walk-through**: Immediately start walking through questions one at a time. Each question gets 3 suggestions (PM's recommendations based on research) plus a "discuss more" option:
 
 ```
 Q[N]: [Question text]
 Why this matters: [consequence of getting it wrong]
 
-(a) [Suggestion 1 — PM's recommended option, marked as such]
-(b) [Suggestion 2 — alternative approach]
-(c) Type your own answer
-(d) Let's discuss this further
+(a) [Suggestion 1 — recommended]
+(b) [Suggestion 2 — alternative]
+(c) [Suggestion 3 — another approach]
+(d) Let's discuss this more
 
-Your choice:
+Your choice (or type your own answer):
 ```
 
 **Handling responses:**
-- **(a) or (b)**: Lock the decision, move to the next question.
-- **(c)**: Human types a freeform answer. Capture it as a locked decision, move on.
+- **(a), (b), or (c)**: Lock the decision, move to the next question.
 - **(d)**: Enter a longer back-and-forth discussion about this question. When the human is satisfied, lock the decision and move on.
-
-Do NOT present all questions at once. Wait for the human's answer to each question before presenting the next one.
+- **Freeform text**: Human typed their own answer. Capture it as a locked decision, move on.
 
 Continue until all questions are resolved. Capture decisions in `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-CONTEXT.md`:
 
