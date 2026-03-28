@@ -1,4 +1,4 @@
-$repoRoot = git rev-parse --show-toplevel
+﻿$repoRoot = git rev-parse --show-toplevel
 Set-Location $repoRoot
 
 if (Test-Path .squidsquad) {
@@ -6,20 +6,15 @@ if (Test-Path .squidsquad) {
     $v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
 
     Write-Host ""
-    Write-Host "      ▗▄▄▄▄▖"
-    Write-Host "     ▟██████▙"
-    Write-Host "      ▐▌▀  ▀▐▌"
-    Write-Host "    ▝▜████▛▘"
-    Write-Host "      ▐████▌"
-    Write-Host "     ▗██████▖"
-    Write-Host "    ▐███    ███▌"
-    Write-Host "   ▐██▘      ▝██▌"
-    Write-Host "  ▐▛▘          ▝▜▌"
-    Write-Host "  ▌▖            ▗▌"
-    Write-Host "  ▝▘            ▝▘"
-    Write-Host ""
-    Write-Host "  S Q U I D S Q U A D   v$v  —  PM / QA"
+    Write-Host "    ▗▄▄▄▄▖"
+    Write-Host "   ▟██████▙"
+    Write-Host "    ▐▌▀ ▀▐▌"
+    Write-Host "  ▜██████▛▘"
+    Write-Host "   ▐██████"
+    Write-Host "    ▌▌▌▌▌▌"
+    Write-Host "  S Q U I D S Q U A D   v$v  -  PM / QA"
     Write-Host ""
 }
 
-claude --permission-mode auto
+$prompt = Get-Content .squidsquad/pm/CLAUDE.md -Raw
+claude --permission-mode auto $prompt

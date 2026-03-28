@@ -334,18 +334,12 @@ if [ -d .squidsquad ]; then
   V=$(grep -o '[0-9][0-9.]*[0-9]' .squidsquad/config.md 2>/dev/null | head -1)
   cat << LOGO
 
-      ▗▄▄▄▄▖
-     ▟██████▙
-      ▐▌▀  ▀▐▌
-    ▝▜████▛▘
-      ▐████▌
-     ▗██████▖
-    ▐███    ███▌
-   ▐██▘      ▝██▌
-  ▐▛▘          ▝▜▌
-  ▌▖            ▗▌
-  ▝▘            ▝▘
-
+    ▗▄▄▄▄▖
+   ▟██████▙
+    ▐▌▀ ▀▐▌
+  ▜██████▛▘
+   ▐██████
+    ▌▌▌▌▌▌
   S Q U I D S Q U A D   v${V:-?}  —  [ROLE]
 
 LOGO
@@ -378,18 +372,12 @@ $config = Get-Content .squidsquad/config.md -Raw
 $v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
 
 Write-Host ""
-Write-Host "      ▗▄▄▄▄▖"
-Write-Host "     ▟██████▙"
-Write-Host "      ▐▌▀  ▀▐▌"
-Write-Host "    ▝▜████▛▘"
-Write-Host "      ▐████▌"
-Write-Host "     ▗██████▖"
-Write-Host "    ▐███    ███▌"
-Write-Host "   ▐██▘      ▝██▌"
-Write-Host "  ▐▛▘          ▝▜▌"
-Write-Host "  ▌▖            ▗▌"
-Write-Host "  ▝▘            ▝▘"
-Write-Host ""
+Write-Host "    ▗▄▄▄▄▖"
+Write-Host "   ▟██████▙"
+Write-Host "    ▐▌▀ ▀▐▌"
+Write-Host "  ▜██████▛▘"
+Write-Host "   ▐██████"
+Write-Host "    ▌▌▌▌▌▌"
 Write-Host "  S Q U I D S Q U A D   v$v  —  [ROLE]"
 Write-Host ""
 
@@ -421,24 +409,18 @@ if [ -d .squidsquad ]; then
   V=$(grep -o '[0-9][0-9.]*[0-9]' .squidsquad/config.md 2>/dev/null | head -1)
   cat << LOGO
 
-      ▗▄▄▄▄▖
-     ▟██████▙
-      ▐▌▀  ▀▐▌
-    ▝▜████▛▘
-      ▐████▌
-     ▗██████▖
-    ▐███    ███▌
-   ▐██▘      ▝██▌
-  ▐▛▘          ▝▜▌
-  ▌▖            ▗▌
-  ▝▘            ▝▘
-
+    ▗▄▄▄▄▖
+   ▟██████▙
+    ▐▌▀ ▀▐▌
+  ▜██████▛▘
+   ▐██████
+    ▌▌▌▌▌▌
   S Q U I D S Q U A D   v${V:-?}  —  PM / QA
 
 LOGO
 fi
 
-claude --permission-mode auto
+claude --permission-mode auto "$(cat .squidsquad/pm/CLAUDE.md)"
 ```
 
 **`start-pm.ps1`**:
@@ -451,23 +433,18 @@ if (Test-Path .squidsquad) {
     $v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
 
     Write-Host ""
-    Write-Host "      ▗▄▄▄▄▖"
-    Write-Host "     ▟██████▙"
-    Write-Host "      ▐▌▀  ▀▐▌"
-    Write-Host "    ▝▜████▛▘"
-    Write-Host "      ▐████▌"
-    Write-Host "     ▗██████▖"
-    Write-Host "    ▐███    ███▌"
-    Write-Host "   ▐██▘      ▝██▌"
-    Write-Host "  ▐▛▘          ▝▜▌"
-    Write-Host "  ▌▖            ▗▌"
-    Write-Host "  ▝▘            ▝▘"
-    Write-Host ""
+    Write-Host "    ▗▄▄▄▄▖"
+    Write-Host "   ▟██████▙"
+    Write-Host "    ▐▌▀ ▀▐▌"
+    Write-Host "  ▜██████▛▘"
+    Write-Host "   ▐██████"
+    Write-Host "    ▌▌▌▌▌▌"
     Write-Host "  S Q U I D S Q U A D   v$v  —  PM / QA"
     Write-Host ""
 }
 
-claude --permission-mode auto
+$prompt = Get-Content .squidsquad/pm/CLAUDE.md -Raw
+claude --permission-mode auto $prompt
 ```
 
 > **Note:** PM/QA runs in interactive mode (no `-p`) so it can check in with you each cycle. Dev agent scripts use a `while true` shell loop — each `claude -p` call handles one cycle, the shell sleeps between them.
@@ -541,7 +518,7 @@ Create or update `.claude/settings.json` in the project root to add a `SessionSt
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'if [ -d .squidsquad ]; then V=$(grep -o [0-9][0-9.]*[0-9] .squidsquad/config.md 2>/dev/null | head -1); cat <<LOGO\n\n      ▗▄▄▄▄▖\n     ▟██████▙\n      ▐▌▀  ▀▐▌\n    ▝▜████▛▘\n      ▐████▌\n     ▗██████▖\n    ▐███    ███▌\n   ▐██▘      ▝██▌\n  ▐▛▘          ▝▜▌\n  ▌▖            ▗▌\n  ▝▘            ▝▘\n\n  S Q U I D S Q U A D   v${V:-?}\n\nLOGO\nfi'"
+            "command": "bash -c 'if [ -d .squidsquad ]; then V=$(grep -o [0-9][0-9.]*[0-9] .squidsquad/config.md 2>/dev/null | head -1); cat <<LOGO\n\n    ▗▄▄▄▄▖\n   ▟██████▙\n    ▐▌▀ ▀▐▌\n  ▜██████▛▘\n   ▐██████\n    ▌▌▌▌▌▌\n  S Q U I D S Q U A D   v${V:-?}\n\nLOGO\nfi'"
           }
         ]
       }
@@ -570,16 +547,12 @@ If the push fails, surface the error to the user and ask them to resolve it (e.g
 
 Print a summary:
 ```
-      ▗▄▄▄▄▖
-     ▟██████▙
-      ▐▌▀  ▀▐▌
-     ▝▜████▛▘
-     ▗██████▖
-    ▐███    ███▌
-   ▐██      ▝██▌
-  ▐▛▘         ▜▌
-  ▌▖           ▗▌
-  ▝▘          ▝▘
+    ▗▄▄▄▄▖
+   ▟██████▙
+    ▐▌▀ ▀▐▌
+  ▜██████▛▘
+   ▐██████
+    ▌▌▌▌▌▌
 
 ╔════════════════════════════════════════════════════════════╗
 ║                                                            ║
