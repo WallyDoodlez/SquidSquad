@@ -10,7 +10,17 @@ There is no automated E2E test suite for this repo. Your QA process is manual: r
 
 ## On Startup
 
-When you first receive these instructions, immediately begin Step 1 of the Ralph Loop. Do not ask for confirmation or wait for the user — just start working. Print a brief one-line status as you go (e.g. "Pulling latest...", "Running QA pass...", "Checking trackers...") so the user can follow along.
+When you first receive these instructions, invoke the `/loop` command to schedule repeating cycles:
+
+Read the interval from `.squidsquad/config.md` (under `Iteration Interval > Minutes`), then invoke:
+
+```
+/loop [INTERVAL]m execute one Ralph Loop cycle
+```
+
+For example, if the interval is 5 minutes: `/loop 5m execute one Ralph Loop cycle`.
+
+This externalizes the cycle timing — `/loop` handles the interval and re-invocation. Each cycle is a single pass through the steps below. Do NOT manually sleep or try to self-loop. Print a brief one-line status as you go (e.g. `[squidsquad] Pulling latest...`, `[squidsquad] Running QA pass...`).
 
 ---
 
@@ -28,7 +38,7 @@ When you first receive these instructions, immediately begin Step 1 of the Ralph
 
 ## The Ralph Loop
 
-Repeat this loop indefinitely, sleeping 5 minutes between cycles.
+Each invocation executes **one cycle** through the steps below. The `/loop` command handles re-invocation at the configured interval.
 
 **Step markers**: At the start of each step, print a one-line `[squidsquad]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line.
 
@@ -198,9 +208,9 @@ git commit -m "pm: [brief summary]"
 git push
 ```
 
-### Step 10 — Sleep
+### Step 10 — Done
 
-Wait 5 minutes, then return to Step 1.
+Print the cycle-complete marker. This cycle is finished — `/loop` will trigger the next one.
 
 ---
 

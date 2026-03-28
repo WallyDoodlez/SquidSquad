@@ -17,9 +17,25 @@ You work in a loop, independently, coordinating with PM/QA through markdown file
 
 ---
 
+## On Startup
+
+When you first receive these instructions, invoke the `/loop` command to schedule repeating cycles:
+
+Read the interval from `.squidsquad/config.md` (under `Iteration Interval > Minutes`), then invoke:
+
+```
+/loop [INTERVAL]m execute one Ralph Loop cycle
+```
+
+For example, if the interval is 5 minutes: `/loop 5m execute one Ralph Loop cycle`.
+
+This externalizes the cycle timing — `/loop` handles the interval and re-invocation. Each cycle is a single pass through Steps 1-5, then returns. Do NOT manually sleep or try to self-loop.
+
+---
+
 ## The Ralph Loop
 
-Repeat this loop indefinitely, sleeping 5 minutes between cycles.
+Each invocation executes **one cycle** through the steps below. The `/loop` command handles re-invocation at the configured interval.
 
 **Step markers**: At the start of each step, print a one-line `[squidsquad]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, committing) also get markers. Keep each marker to one concise line.
 
@@ -79,15 +95,20 @@ Open `.squidsquad/skill/features.md`. Pick the next feature with status `Approve
    > [YYYY-MM-DD HH:MM] **skill-lead**: Picking up. Status → In Progress.
    ```
 2. Update the feature's `Status` to `In Progress`.
-3. Update `.squidsquad/skill/working-state.md` with the feature ID, status `in-progress`, and planned approach.
-4. Implement the feature in the relevant skill files. Update working state as sub-steps complete.
-5. Do a final read-through of the affected sections for coherence.
-6. Update `CHANGELOG.md` if the change is user-visible.
-7. Update status to `Pending Test`:
+3. **Read planning artifacts** (if they exist in `.squidsquad/skill/planning/`):
+   - `FEAT-SKILL-XXX-RESEARCH.md` — understand impact, side effects, constraints
+   - `FEAT-SKILL-XXX-CONTEXT.md` — respect locked decisions, note dev discretion areas
+   - `FEAT-SKILL-XXX-TEST-PLAN.md` — understand what PM will test during QA
+4. Update `.squidsquad/skill/working-state.md` with the feature ID, status `in-progress`, and planned approach.
+5. Implement the feature in the relevant skill files. Respect locked decisions from CONTEXT.md. Update working state as sub-steps complete.
+6. Do a final read-through of the affected sections for coherence.
+7. Update `CHANGELOG.md` if the change is user-visible.
+8. Run smoke tests from TEST-PLAN.md (if it exists).
+9. Update status to `Pending Test`:
    ```
    > [YYYY-MM-DD HH:MM] **skill-lead**: Complete. Status → Pending Test.
    ```
-8. Clear working state (reset to header-only).
+10. Clear working state (reset to header-only).
 
 ### Step 4 — Log Iteration (skip on quiet cycles)
 
@@ -119,9 +140,9 @@ git commit -m "skill: [brief description of work done this cycle]"
 git push
 ```
 
-### Step 6 — Sleep
+### Step 6 — Done
 
-Wait 5 minutes, then return to Step 1.
+Print the cycle-complete marker. This cycle is finished — `/loop` will trigger the next one.
 
 ---
 

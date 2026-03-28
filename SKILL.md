@@ -137,15 +137,27 @@ Status flow: `Open` → `Investigating` → `Fixed` → `Verified` → `Closed`
 > [2026-01-15 13:00] **pm/qa**: Tested and passing. Status → Shipped.
 ```
 
-Status flow: `Pending` → `Approved` → `In Progress` → `Pending Test` → `Shipped`
+Status flow: `Pending` → `Approved` → `In Progress` → `Pending Test` → `Shipped` (or `Rejected`)
 
-> **Note:** `Pending` means it needs human approval via a PM discussion entry before any agent picks it up. `Approved` means it is ready to be implemented.
+> **Note:** `Pending` means it needs human approval via a PM discussion entry before any agent picks it up. `Approved` means it is ready to be implemented. `Rejected` means PM recommends against it based on research — human can override.
+
+### Feature Lifecycle (5-Phase)
+
+Features go through a deep, research-driven lifecycle before reaching the dev agent:
+
+1. **Research (PM)** — Spawn research agent: codebase impact, side effects, edge cases, integration risks → `FEAT-XXX-RESEARCH.md`
+2. **Discussion (PM + Human)** — Present findings, ask targeted questions with WHY, capture locked decisions vs dev discretion → `FEAT-XXX-CONTEXT.md`
+3. **Planning (PM)** — Write feature entry + test cases → `FEAT-XXX-TEST-PLAN.md`
+4. **Execution (Dev)** — Implement reading planning artifacts, run smoke tests before Pending Test
+5. **QA (PM)** — Execute test cases from TEST-PLAN.md, record pass/fail, only ship when all pass
+
+Planning files live in `.squidsquad/[role]/planning/` and are auto-deleted after ship (git preserves them). Bugs are excluded — they use the current lightweight flow. Trivial/cosmetic features can use light mode (PM skips research).
 
 ---
 
 ## The Ralph Loop
 
-Each agent runs its own Ralph Loop — an autonomous work cycle that repeats on an interval. Each cycle prints visible start/stop markers with timestamps (e.g. `[squidsquad] ---- cycle 3 started at 14:32:07 ----`) so the human can spot cycle boundaries in terminal scrollback.
+Each agent runs its own Ralph Loop — an autonomous work cycle that repeats on an interval. On startup, agents invoke `/loop [INTERVAL]m execute one Ralph Loop cycle` to schedule repeating cycles. The `/loop` command handles timing and re-invocation reliably — agents do NOT manually sleep or self-loop. Each cycle prints visible start/stop markers with timestamps (e.g. `[squidsquad] ---- cycle 3 started at 14:32:07 ----`) so the human can spot cycle boundaries in terminal scrollback.
 
 Every step within the loop also prints a `[squidsquad]` prefixed marker (e.g. `[squidsquad] Pulling latest...`, `[squidsquad] Triaging bugs...`). Key sub-actions (filing bugs, verifying fixes, committing) get their own markers too. This makes SquidSquad activity easy to scan in scrollback.
 
@@ -744,7 +756,18 @@ Create or update `.claude/settings.json` in the project root to add a `SessionSt
 
 > **Why these permissions?** Dev agents run with `--permission-mode auto` but still need explicit allow rules for writing tracker files and running git commands without being prompted mid-cycle. Without these, the agent will pause and ask for permission on every file write.
 
-**If `.claude/settings.json` already exists**, merge the SquidSquad hook into the existing `SessionStart` array (or create the `SessionStart` key if absent). Also add the `statusLine` key if not already present. Do not overwrite any existing hooks or status line config — append or add only.
+**If `.claude/settings.json` already exists**, merge carefully:
+
+1. **`SessionStart` hooks**: append the SquidSquad hook to the existing array. If the key doesn't exist, create it. Never remove existing hooks.
+2. **`statusLine`**: if the user already has a `statusLine` configured, **do NOT overwrite it**. Instead, ask the user:
+   ```
+   You already have a statusLine configured. How should SquidSquad handle this?
+     (1) Replace — use SquidSquad's status line (your current one will be lost)
+     (2) Skip — keep your current status line (you won't see SquidSquad status info)
+   ```
+   If the user chooses (1), replace it. If (2), skip the statusLine config entirely.
+   If no existing `statusLine` exists, add the SquidSquad one silently.
+3. **`permissions.allow`**: append the SquidSquad entries without removing or duplicating existing entries. Check for each entry before adding.
 
 ### Step 8 — Commit and Push
 

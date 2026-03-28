@@ -27,6 +27,8 @@ All notable changes to SquidSquad will be documented here.
 - **GitHub Issues ingestion** (optional): PM auto-ingests open GitHub Issues into agent trackers each cycle via `gh issue list`. Issues are classified as bugs/features, routed to the right agent, and tracked with `GitHub Issue #N` references. Shipped items auto-close the original issue. Opt-in at setup or via `config.md` `GitHub Issues Ingestion: yes`.
 - `/squidsquad-status` command: type in any Claude session to get a dashboard — agent health, open bugs/features per agent, recently shipped items.
 - README.md fully rewritten to reflect current feature set, generic `[role]` examples, and all v0.5.2 features.
+- **Deep 5-phase Feature Lifecycle**: replaces shallow intake process. Research → Discussion → Planning → Execution → QA. PM spawns research agents, asks targeted questions with WHY, creates test plans. Dev reads planning artifacts. PM executes test cases before shipping. Light mode for trivial features. `Rejected` status for features research shows are bad ideas.
+- Agents now use `/loop [INTERVAL]m` for reliable cycling instead of self-managed sleep loops.
 
 ### Fixed
 
@@ -34,6 +36,7 @@ All notable changes to SquidSquad will be documented here.
 - PowerShell boot scripts render Unicode correctly via `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`.
 - Boot scripts no longer use `-p` and `--continue` flags — replaced with positional arg for interactive sessions.
 - PM/QA Step 2 (Check In With Human) is now non-blocking — prints a note and continues immediately.
+- Setup Step 7 no longer silently overwrites existing `statusLine` or `permissions.allow` — prompts user to replace or skip.
 
 ---
 

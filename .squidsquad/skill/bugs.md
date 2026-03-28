@@ -163,7 +163,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-008 — Agents don't reliably self-loop — should use `/loop` command
 
 - **Severity**: Critical
-- **Status**: Open
+- **Status**: Fixed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: The Ralph Loop instructs agents to "sleep N minutes, then return to Step 1" but Claude doesn't reliably self-manage repeating cycles in an interactive session. In practice, agents do one burst of work (1-3 cycles) then go silent. This is the root cause of the skill lead repeatedly dying after each work session — observed across multiple restarts.
@@ -189,13 +189,14 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-28 04:05] **pm/qa**: Root cause of repeated skill lead inactivity. Self-managed sleep loops don't work reliably in Claude interactive sessions. The `/loop` command is purpose-built for this — externalizes timing so the agent just needs to execute one cycle per invocation.
+> [2026-03-28 04:40] **skill-lead**: Fixed. Added On Startup section to both dev and PM/QA templates — agents read interval from config.md and invoke `/loop [INTERVAL]m`. Replaced Sleep step with Done step. Updated all generated CLAUDE.md files. SKILL.md documents the `/loop` approach. Status → Fixed.
 
 ---
 
 ## BUG-SKILL-009 — Setup overwrites user's existing statusLine and settings.json config
 
 - **Severity**: High
-- **Status**: Open
+- **Status**: Fixed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: The setup Step 7 writes a `statusLine` config to `.claude/settings.json`. If the user already has a custom `statusLine` configured (e.g. their own status bar script), the setup overwrites it. The merge logic says "do not overwrite existing hooks" for SessionStart, but there's no equivalent protection for `statusLine`. The user's personalized settings get wiped.
@@ -217,3 +218,4 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-28 04:15] **pm/qa**: Reported by human. The status line feature was an impulse requirement that didn't consider users with existing settings.json customizations. Setup must be non-destructive.
+> [2026-03-28 04:45] **skill-lead**: Fixed. SKILL.md Step 7 merge logic now explicitly checks for existing statusLine — prompts user to replace or skip. permissions.allow deduplicates. Status → Fixed.

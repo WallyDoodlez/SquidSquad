@@ -32,17 +32,29 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team. You work in a loo
 
 ---
 
+## On Startup
+
+When you first receive these instructions, invoke the `/loop` command to schedule repeating cycles:
+
+```
+/loop [INTERVAL]m execute one Ralph Loop cycle
+```
+
+This externalizes the cycle timing — `/loop` handles the interval and re-invocation. Each cycle is a single pass through Steps 1-5, then returns. Do NOT manually sleep or try to self-loop.
+
+---
+
 ## The Ralph Loop
 
-Repeat this loop indefinitely, sleeping [INTERVAL] minutes between cycles.
+Each invocation executes **one cycle** through the steps below. The `/loop` command handles re-invocation every [INTERVAL] minutes.
 
-At the start of each cycle, print a visible marker so the human can spot cycle boundaries in scrollback:
+At the start of each cycle, print:
 
 ```
 [squidsquad] ---- cycle N started at HH:MM:SS ----
 ```
 
-At the end of each cycle (after commit and push, before sleep), print:
+At the end of each cycle, print:
 
 ```
 [squidsquad] ---- cycle N complete at HH:MM:SS ----
@@ -124,17 +136,22 @@ Open `.squidsquad/[ROLE]/features.md`. Pick the next feature with status `Approv
    > [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Picking up. Status → In Progress.
    ```
 2. Update the feature's `Status` field to `In Progress`.
-3. Write working state: update `.squidsquad/[ROLE]/working-state.md` with the feature ID, status `in-progress`, planned approach, and acceptance criteria checklist.
-4. Implement the feature according to the acceptance criteria. Update working state as you complete sub-steps.
-5. Run the test command: `[ROLE_TEST_CMD]`
-6. If tests pass:
+3. **Read planning artifacts** (if they exist in `.squidsquad/[ROLE]/planning/`):
+   - `FEAT-[ROLE_UPPER]-XXX-RESEARCH.md` — understand impact, side effects, constraints
+   - `FEAT-[ROLE_UPPER]-XXX-CONTEXT.md` — respect locked decisions, note dev discretion areas
+   - `FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md` — understand what will be tested during QA
+4. Write working state: update `.squidsquad/[ROLE]/working-state.md` with the feature ID, status `in-progress`, planned approach, and acceptance criteria checklist.
+5. Implement the feature according to the acceptance criteria. Respect locked decisions from CONTEXT.md. Implement required side effect mitigations. Update working state as you complete sub-steps.
+6. Run the test command: `[ROLE_TEST_CMD]`
+7. **Run smoke tests** from TEST-PLAN.md (if it exists) before marking as Pending Test.
+8. If tests and smoke tests pass:
    - Update status to `Pending Test`.
    - Append a Discussion entry:
      ```
      > [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Implementation complete. All tests passing. Status → Pending Test.
      ```
    - Clear working state: reset `working-state.md` to empty/header-only.
-7. If tests fail: fix the failure before changing status.
+9. If tests fail: fix the failure before changing status.
 
 ### Step 4 — Log Iteration (skip on quiet cycles)
 
@@ -191,9 +208,9 @@ git commit -m "[ROLE]: [brief description of work done this cycle]"
 git push
 ```
 
-### Step 6 — Sleep
+### Step 6 — Done
 
-Wait [INTERVAL] minutes, then return to Step 1.
+Print the cycle-complete marker. This cycle is finished — `/loop` will trigger the next one.
 
 ---
 
@@ -318,7 +335,13 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 
 ## On Startup
 
-When you first receive these instructions, immediately begin Step 1 of the Ralph Loop. Do not ask for confirmation or wait for the user — just start working. Print a brief one-line status as you go (e.g. "Pulling latest...", "Running QA pass...", "Checking trackers...") so the user can follow along.
+When you first receive these instructions, invoke the `/loop` command to schedule repeating cycles:
+
+```
+/loop [INTERVAL]m execute one Ralph Loop cycle
+```
+
+This externalizes the cycle timing — `/loop` handles the interval and re-invocation. Each cycle is a single pass through the steps below. Do NOT manually sleep or try to self-loop. Print a brief one-line status as you go (e.g. `[squidsquad] Pulling latest...`, `[squidsquad] Running QA pass...`).
 
 ---
 
@@ -337,15 +360,15 @@ When you first receive these instructions, immediately begin Step 1 of the Ralph
 
 ## The Ralph Loop
 
-Repeat this loop indefinitely, sleeping [INTERVAL] minutes between cycles.
+Each invocation executes **one cycle** through the steps below. The `/loop` command handles re-invocation every [INTERVAL] minutes.
 
-At the start of each cycle, print a visible marker so the human can spot cycle boundaries in scrollback:
+At the start of each cycle, print:
 
 ```
 [squidsquad] ---- cycle N started at HH:MM:SS ----
 ```
 
-At the end of each cycle (after commit and push, before sleep), print:
+At the end of each cycle, print:
 
 ```
 [squidsquad] ---- cycle N complete at HH:MM:SS ----
@@ -564,9 +587,9 @@ git commit -m "pm: [brief summary — e2e results, bugs filed, features verified
 git push
 ```
 
-### Step 10 — Sleep
+### Step 10 — Done
 
-Wait [INTERVAL] minutes, then return to Step 1.
+Print the cycle-complete marker. This cycle is finished — `/loop` will trigger the next one.
 
 ---
 
@@ -578,57 +601,150 @@ If you cannot determine ownership, file to all relevant trackers and cross-link 
 
 ---
 
-## Feature Intake Process
+## Feature Lifecycle (5-Phase)
 
-When the human suggests a new feature, do NOT immediately file it. Run this 4-step process first:
+When the human suggests a new feature, do NOT immediately file it. Run the full 5-phase lifecycle. Bugs are excluded — they use the current lightweight fix → verify → close flow.
 
-### Step A — Duplicate & Overlap Check
+**Light mode**: For trivial/cosmetic features (typo fixes, config tweaks, doc-only changes), skip Phase 1 (Research) and abbreviate Phase 2. Use your judgment: if the feature touches behavior or user-facing systems, use the full flow.
 
-Use the Agent tool to spawn a research agent that:
-1. Searches all agent tracker files (`features.md`, `bugs.md`) for existing items that overlap with the request — exact matches, partial implementations, or related work.
-2. Searches the codebase for any existing implementation that already covers part or all of the request.
-3. Returns a summary: **"No overlap found"**, **"Partial overlap: [details]"**, or **"Already exists: [pointer]"**.
+### Phase 1 — Research
 
-If the feature already exists, tell the human and stop. If partially implemented, tell the human what exists and ask if they want to extend it or file a new feature for the remaining gap.
+Spawn a research agent (via the Agent tool) that analyzes:
+1. **Codebase impact**: files, templates, systems touched; behavior changes
+2. **Side effects**: what could break for users with existing configs, different team shapes, different OS/shells, different project types
+3. **Edge cases**: unusual inputs, failure modes, race conditions, empty states
+4. **Integration risks**: how this interacts with other features
+5. **Prior art**: has something similar been done? What can we learn?
 
-### Step B — Feasibility Research
+The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-RESEARCH.md`:
 
-Use the Agent tool to spawn a research agent that:
-1. Examines the current codebase architecture to assess where the feature would fit.
-2. Identifies dependencies, potential conflicts, and technical constraints.
-3. Checks if required APIs, libraries, or infrastructure are available.
-4. Returns a feasibility verdict: **"Straightforward"**, **"Feasible with caveats: [details]"**, or **"Blocked: [reason]"**.
+```markdown
+# FEAT-[ROLE_UPPER]-XXX Research — [Title]
 
-Present the feasibility findings to the human. If blocked, discuss alternatives before proceeding.
+## Summary
+[2-3 paragraphs: what was researched, recommendation, primary risks]
 
-### Step C — Interactive Refinement
+## Impact Analysis
+- **Files touched**: [list]
+- **Behavior changes**: [list]
+- **Dependencies**: [list]
 
-Work with the human to resolve ambiguity and define the feature precisely:
-1. Identify any open questions from steps A and B (scope boundaries, edge cases, UX decisions, priority relative to existing work).
-2. Ask the human these questions — do not guess or assume.
-3. Draft acceptance criteria based on the human's answers.
-4. Confirm the final scope and acceptance criteria with the human before proceeding.
+## Side Effects
+- **Risk 1**: [description] — Severity: [H/M/L] — Mitigation: [how]
 
-### Step D — Implementation Plan & Filing
+## Edge Cases
+- [Case]: [what happens, how to handle]
 
-Once the human confirms the refined feature:
-1. Determine which agent(s) own the work. If it spans multiple agents, break it into one feature per agent with cross-references.
-2. File each feature to the appropriate tracker with status `Pending`, including:
-   - Clear description incorporating the research findings
-   - Acceptance criteria from Step C
-   - Feasibility notes from Step B
-   - Implementation approach (high-level steps)
-3. Append a Discussion entry summarizing the intake process:
+## Integration Risks
+- [Risk]: [how this interacts with feature X]
+
+## Open Questions
+- **Q1**: [question] — **Why**: [consequence of getting wrong]
+
+## Recommendation
+[Straightforward / Feasible with caveats / Needs rethinking]
+```
+
+**If research reveals significant risks**, present your recommendation to the human: "Based on research, this feature would [risk]. Recommend: proceed / adjust scope / reject." If warranted, recommend `Rejected` status with justification. Human can override.
+
+### Phase 2 — Discussion (PM + Human)
+
+Present the research summary to the human. For each open question:
+1. Explain what the question is
+2. Explain WHY it matters (what breaks if we get it wrong)
+3. Present the options and your recommendation
+4. Capture the human's answer
+
+Continue until all questions are resolved. Capture decisions in `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-CONTEXT.md`:
+
+```markdown
+# FEAT-[ROLE_UPPER]-XXX Context — [Title]
+
+## Scope
+[What this feature delivers — clear boundary]
+
+## Locked Decisions (human decided)
+- [Decision]: [what and why]
+
+## Dev Discretion (dev agent can choose)
+- [Area]: [what the dev can decide]
+
+## Side Effect Mitigations (required)
+- [Mitigation]: [from research, must be implemented]
+
+## Out of Scope
+- [Thing]: [explicitly excluded]
+```
+
+### Phase 3 — Planning
+
+Create two artifacts:
+
+**A) Feature entry** in `features.md` — with status `Pending`, referencing planning artifacts:
+- Description includes research-informed constraints
+- Acceptance criteria include edge case handling and side effect mitigations
+- References RESEARCH.md and CONTEXT.md
+
+**B) Test plan** in `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md`:
+
+```markdown
+# FEAT-[ROLE_UPPER]-XXX Test Plan — [Title]
+
+## Test Cases
+
+### TC-1: [Happy path]
+- **Precondition**: [setup]
+- **Steps**: [what to do]
+- **Expected**: [result]
+- **Verification**: [command or file check]
+
+### TC-2: [Edge case]
+...
+
+### TC-3: [Side effect regression]
+- **Precondition**: [existing state that should NOT change]
+- **Steps**: [exercise new feature]
+- **Expected**: [existing behavior preserved]
+- **Verification**: [how to check]
+
+## Smoke Tests
+- [ ] [Quick check 1]
+- [ ] [Quick check 2]
+
+## Regression Risks
+- [Risk]: [what to watch for]
+```
+
+Ask the human if they want to approve the feature now or leave as `Pending`.
+
+### Phase 4 — Execution (Dev Agent)
+
+_(Handled by the dev agent — see dev template Step 3)_
+
+### Phase 5 — QA Test Execution
+
+When verifying features with status `Pending Test` (in Step 6), if a TEST-PLAN.md exists:
+
+1. Read the TEST-PLAN.md
+2. Execute each test case: read relevant files, run verification commands, check regressions
+3. Record results in TEST-PLAN.md:
    ```
-   > [YYYY-MM-DD HH:MM] **pm/qa**: Feature intake complete. Overlap check: [result]. Feasibility: [result]. Scope confirmed with human. Filed as FEAT-[ROLE_UPPER]-XXX.
+   - **Result**: PASS / FAIL
+   - **Notes**: [what was observed]
+   - **Verified at**: [timestamp]
    ```
-4. Ask the human if they want to approve the feature now or leave it as `Pending` for later.
+4. **All pass** → Status → `Shipped`. Delete planning files (`.squidsquad/[ROLE]/planning/FEAT-XXX-*`). Append Discussion entry.
+5. **Any fail** → Status → `In Progress`. Append Discussion with which test cases failed and what was observed.
 
 ---
 
 ## Feature Approval Gate
 
 Features start as `Pending` — **a human must explicitly approve them** before any agent picks them up.
+
+Status values: `Pending` → `Approved` → `In Progress` → `Pending Test` → `Shipped`
+
+Additional status: `Rejected` — PM recommends against the feature based on research. Human can override to `Approved`.
 
 To approve a feature:
 1. Present it to the human during the check-in step.
