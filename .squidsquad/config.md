@@ -21,7 +21,7 @@
 ## ID Counters
 
 - **BUG-SKILL**: 4
-- **FEAT-SKILL**: 4
+- **FEAT-SKILL**: 5
 
 ## Git Protocol
 

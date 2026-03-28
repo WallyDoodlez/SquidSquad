@@ -92,3 +92,22 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 > [2026-03-27 23:05] **pm/qa**: Filed from human request. PM/QA's role is coordination and verification, not implementation. Any code-level fix must go through a dev agent's tracker.
 > [2026-03-27 23:10] **pm/qa**: Human approved. Status → Approved.
+
+---
+
+## FEAT-SKILL-005 — Show timestamp at iteration start and stop
+
+- **Priority**: Medium
+- **Status**: Approved
+- **Owner**: skill-lead
+- **Description**: Each Ralph Loop iteration should print a visible timestamp when it starts and when it finishes, so the human can see cycle timing in the terminal output. This applies to all agents (dev and PM/QA). The timestamps should be printed by the boot scripts (`.sh` and `.ps1`) that wrap each cycle, making cycle boundaries easy to spot in scrollback.
+- **Acceptance Criteria**:
+  - [ ] Boot scripts print a start timestamp at the beginning of each cycle (e.g. `[squidsquad] ---- cycle 3 started at 14:32:07 ----`)
+  - [ ] Boot scripts print a stop timestamp when the cycle ends (e.g. `[squidsquad] ---- cycle 3 complete at 14:33:42 ----`)
+  - [ ] Both `.sh` and `.ps1` boot script templates in SKILL.md include this behavior
+  - [ ] Generated boot scripts include this behavior
+
+### Discussion
+
+> [2026-03-27 23:25] **pm/qa**: Filed from human request.
+> [2026-03-27 23:25] **pm/qa**: Human approved. Status → Approved.
