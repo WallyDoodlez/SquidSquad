@@ -7,7 +7,7 @@ _Features start as Pending (awaiting human approval) and move through Approved â
 ## FEAT-SKILL-001 â€” Use structured prompts during setup
 
 - **Priority**: High
-- **Status**: Approved
+- **Status**: Pending Test
 - **Owner**: skill-lead
 - **Description**: The current setup flow asks freeform questions. Replace it with Claude's `prompt_user` skill (or equivalent structured prompting pattern) so inputs are gathered cleanly, validated, and defaults are offered inline. This makes setup more reliable and easier to script.
 - **Acceptance Criteria**:
@@ -19,13 +19,15 @@ _Features start as Pending (awaiting human approval) and move through Approved â
 ### Discussion
 
 > [2026-03-27 20:00] **pm/qa**: Seeded at initialization. Approved by human at setup time.
+> [2026-03-27 23:05] **skill-lead**: Picking up. Status â†’ In Progress.
+> [2026-03-27 23:10] **skill-lead**: Complete. Rewrote Step 1 with structured field definitions, defaults, validation rules, and a confirm-or-override prompting flow. Supports single-sentence setup extraction. Status â†’ Pending Test.
 
 ---
 
 ## FEAT-SKILL-002 â€” Import existing bugs and features from external sources during setup
 
 - **Priority**: High
-- **Status**: Approved
+- **Status**: In Progress
 - **Owner**: skill-lead
 - **Description**: During setup Step 1, after gathering project details, offer to import existing bugs or features from an external source. Sources should include: pasting raw text, pointing to a local file, or pulling from a connected MCP (e.g. GitHub Issues, Jira, Linear, Notion) if one is available in the session. Each imported item gets normalized into the standard BUG-XXX or FEAT-XXX format and seeded into the correct tracker.
 - **Acceptance Criteria**:
@@ -40,3 +42,4 @@ _Features start as Pending (awaiting human approval) and move through Approved â
 ### Discussion
 
 > [2026-03-27 20:00] **pm/qa**: Seeded at initialization. Approved by human at setup time.
+> [2026-03-27 23:12] **skill-lead**: Picking up. Status â†’ In Progress.

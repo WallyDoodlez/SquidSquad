@@ -12,6 +12,14 @@ All notable changes to SquidSquad will be documented here.
 - Console now shows cycle number and timestamp between iterations so the agent's activity is visible.
 - `.claude/settings.json` pre-grants `Edit`/`Write` permissions on `.squidsquad/**` and git commands so agents never pause mid-cycle to ask for write permission.
 - `SKILL.md` Step 7 settings.json template updated to include the permissions block for all future setups.
+- Opening paragraph, ASCII architecture diagram, and Step 9 confirm message no longer hardcode FE/BE three-agent setup — now use generic `[role]`/`[N]` placeholders matching the flexible team shape introduced in v0.5.0.
+- Ralph Loop section consolidated from two hardcoded FE/BE loops into a single generic `[role] Lead` loop. PM/QA loop updated to reference `[role]/` paths instead of hardcoded `fe/`/`be/`.
+
+### Added
+
+- Structured setup prompts: Step 1 now uses labeled fields with defaults, validation, and examples instead of freeform questions.
+- Single-sentence setup support: "Set up SquidSquad for kubex, BE only, 5 min interval" extracts all values and only prompts for gaps.
+- Confirm-or-override flow: all pre-filled values shown at once for the user to review before proceeding.
 
 ---
 
@@ -21,7 +29,7 @@ Initial release.
 
 ### Core
 
-- Three-agent coordination model: FE Lead, BE Lead, PM/QA
+- Flexible multi-agent coordination model: user-defined dev roles + PM/QA
 - Shared `.squidsquad/` folder as the coordination layer — no message queues, no servers
 - All communication through append-only markdown tracker files committed to git
 
