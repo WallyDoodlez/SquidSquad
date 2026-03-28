@@ -513,57 +513,42 @@ Print a summary:
 
 ## Upgrade Instructions
 
-When the user says "upgrade squidsquad" (or similar), perform the following:
+When the user invokes upgrade (via `/squidsquad-upgrade` or "upgrade squidsquad"), use the following agent-based parallel approach.
 
-### Step 1 — Read Installed Versions
+### Step 1 — Detect Version Gap (orchestrator)
 
-Read `.squidsquad/config.md` and extract:
-- `SquidSquad Version` — the skill version that last ran setup or upgrade
-- `Tracker Schema` — the schema version of the tracker files
+Read `.squidsquad/config.md` to get installed `SquidSquad Version` and `Tracker Schema`.
+Read `SKILL.md` frontmatter and Schema Changelog for current versions.
 
-Compare both against the current skill version (`0.5.0`) and current schema version (`1`).
+If both match: tell the user they're up to date and stop.
 
-If both match, tell the user their installation is already up to date and stop.
+Also read the `Agents` section of `config.md` to get the list of active dev role names.
 
-### Step 2 — Skill Upgrade (if SquidSquad Version differs)
+### Step 2 — Fan Out Agents in Parallel
 
-Regenerate all scaffolding files unconditionally. These contain no user data:
+Spawn all applicable agents simultaneously. Each agent writes only its assigned files and does not commit.
 
-- `.squidsquad/start-fe.sh` and `start-fe.ps1`
-- `.squidsquad/start-be.sh` and `start-be.ps1`
-- `.squidsquad/start-pm.sh` and `start-pm.ps1`
-- `.squidsquad/fe/CLAUDE.md`
-- `.squidsquad/be/CLAUDE.md`
-- `.squidsquad/pm/CLAUDE.md`
-- `.claude/settings.json` (merge only — never overwrite unrelated hooks)
+#### If skill version differs — spawn these agents in parallel:
 
-Do **not** touch:
-- Any `bugs.md`, `features.md`, `qa-log.md`, `enhancements.md`, or `iterations/` files
-- The project values in `config.md` (Name, Repo, Test Commands, ID Counters)
+**One agent per active dev role:**
+> Regenerate `.squidsquad/[role]/CLAUDE.md`, `.squidsquad/start-[role].sh`, and `.squidsquad/start-[role].ps1` using the Dev Agent template from `references/agent-instructions.md`. Substitute `[ROLE]`, `[ROLE_UPPER]`, `[ROLE_TEST_CMD]`, `[OTHER_ROLES]`, and `[INTERVAL]` with values from `config.md`. Do not touch `bugs.md`, `features.md`, or `iterations/`.
 
-Update `SquidSquad Version` in `config.md` to the current skill version.
+**One agent for PM/QA:**
+> Regenerate `.squidsquad/pm/CLAUDE.md`, `.squidsquad/start-pm.sh`, and `.squidsquad/start-pm.ps1` using the PM/QA template from `references/agent-instructions.md`. Substitute `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]` from `config.md`. Do not touch `qa-log.md`, `enhancements.md`, `iterations/`, or `migrations/`.
 
-### Step 3 — Schema Migration (if Tracker Schema differs)
+**One agent for settings:**
+> Update `.claude/settings.json`: ensure `permissions.allow` contains `Edit(.squidsquad/**)`, `Write(.squidsquad/**)`, and the four git commands. Ensure the `SessionStart` hook is present and matches the current template. Merge into existing content — never remove unrelated keys.
 
-Schema migrations are the only time tracker files may be rewritten. Each migration is documented below under its version number. If no migration exists for the detected gap, skip this step.
+#### If tracker schema differs — additionally spawn:
 
-For each migration applied:
+**One agent per affected tracker file:**
+> Apply the schema migration documented in the Schema Changelog for the detected version gap. Read all existing entries, rewrite the file with updated structure, append a `> [DATE] **migration**: schema N→M applied.` Discussion note to each modified entry, and write a log to `pm/migrations/schema-N-to-M.md`.
 
-1. Read all existing entries from the affected tracker file.
-2. Rewrite the file with the updated structure.
-3. Append a `> [DATE] **migration**: schema N→M applied. [What changed.]` note to the `### Discussion` section of any modified entries.
-4. Write a log to `pm/migrations/schema-N-to-M.md`:
+### Step 3 — Update config.md (orchestrator)
 
-```markdown
-# Schema Migration N → M
-
-- **Date**: YYYY-MM-DD
-- **Files Modified**: [list]
-- **Changes**: [what fields were added, renamed, or removed]
-- **Entries Updated**: [count]
-```
-
-Update `Tracker Schema` in `config.md` to the new schema version.
+After all agents complete, update `.squidsquad/config.md`:
+- Set `SquidSquad Version` to current skill version
+- Set `Tracker Schema` to current schema version
 
 ### Step 4 — Commit and Push
 
@@ -573,7 +558,9 @@ git commit -m "squidsquad: upgrade to [VERSION]"
 git push
 ```
 
-Tell the user what was upgraded and whether any schema migrations ran.
+### Step 5 — Report
+
+Tell the user: version upgraded from → to, files regenerated per agent, any schema migrations applied, any failures.
 
 ---
 
