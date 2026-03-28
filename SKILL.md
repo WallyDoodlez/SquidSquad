@@ -276,21 +276,21 @@ Use the templates in `references/agent-instructions.md` to generate role-specifi
 ```bash
 #!/bin/bash
 cd "$(git rev-parse --show-toplevel)"
-claude -p "$(cat .squidsquad/fe/CLAUDE.md)"
+claude --permission-mode auto --enable-auto-mode -p "$(cat .squidsquad/fe/CLAUDE.md)"
 ```
 
 **`start-be.sh`**:
 ```bash
 #!/bin/bash
 cd "$(git rev-parse --show-toplevel)"
-claude -p "$(cat .squidsquad/be/CLAUDE.md)"
+claude --permission-mode auto --enable-auto-mode -p "$(cat .squidsquad/be/CLAUDE.md)"
 ```
 
 **`start-pm.sh`**:
 ```bash
 #!/bin/bash
 cd "$(git rev-parse --show-toplevel)"
-claude -p "$(cat .squidsquad/pm/CLAUDE.md)"
+claude --permission-mode auto --enable-auto-mode -p "$(cat .squidsquad/pm/CLAUDE.md)"
 ```
 
 Make all three scripts executable.

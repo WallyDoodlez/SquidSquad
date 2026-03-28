@@ -1,11 +1,17 @@
 ```
-    .-----.
-   (  · ·  )
-    '-----'
-    | | | |
-   /| | | |\
-  / | | | | \
- ~  ~     ~  ~
+      ▗▄▄▄▄▖
+     ▟██████▙
+     ▐▌▀  ▀▐▌
+     ▝▜████▛▘
+      ▐████▌
+     ▗██████▖
+    ▐███    ███▌
+   ▐██▘      ▝██▌
+  ▐▛▘          ▝▜▌
+  ▌▖            ▗▌
+  ▝▘            ▝▘
+
+  S Q U I D S Q U A D
 ```
 
 # SquidSquad
@@ -222,6 +228,7 @@ No standup required.
 ## Requirements
 
 - [Claude Code CLI](https://claude.ai/code) with `claude -p` support
+- Claude Code auto mode (`--permission-mode auto --enable-auto-mode`) — agents run unattended and need permission to read/write files and run tests without prompting
 - A git repository with a remote (GitHub, GitLab, etc.)
 - FE, BE, and e2e test commands that can be run from the repo root
 
