@@ -19,7 +19,10 @@
       "Bash(chmod:*)",
       "Bash(bash .squidsquad/statusline.sh)",
       "Bash(find /c/Users -type f -path *skills/skill-creator* -o -type f -path *skill-creator/SKILL.md)",
-      "Bash(find /c/Users/naaht -type f -name *.md -path *skill-creator*)"
+      "Bash(find /c/Users/naaht -type f -name *.md -path *skill-creator*)",
+      "Bash(find /d/Dev/Dev/SquidSquad -type f -name *PLAN* -o -name *RESEARCH*)",
+      "Bash(locate gsd.md)",
+      "Bash(find /c/Users/naaht -type f -name *.md)"
     ]
   }
 }
