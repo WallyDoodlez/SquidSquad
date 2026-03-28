@@ -192,3 +192,22 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 > [2026-03-28 02:20] **pm/qa**: Filed from human request. Human wants visible, annotated step markers so SquidSquad activity is easy to spot in scrollback. Status: Pending — awaiting human approval.
 > [2026-03-28 02:25] **pm/qa**: Human approved. Status → Approved.
+
+---
+
+## FEAT-SKILL-009 — Iteration log retention — keep last 20, delete older
+
+- **Priority**: Low
+- **Status**: Approved
+- **Owner**: skill-lead
+- **Description**: The `iterations/` folders grow indefinitely as agents cycle. Old iteration logs have minimal value — the real record is in git commits and tracker Discussion entries. Add a cleanup step at the start of each Ralph Loop cycle: if more than 20 iteration files exist, delete the oldest ones. Git history preserves them if ever needed.
+- **Acceptance Criteria**:
+  - [ ] Ralph Loop for dev agents includes a cleanup step: if `iterations/` has more than 20 `iter-*.md` files, delete the oldest ones
+  - [ ] Ralph Loop for PM/QA includes the same cleanup step
+  - [ ] Both CLAUDE.md templates in `references/agent-instructions.md` include the cleanup step
+  - [ ] Retention limit (20) is documented in SKILL.md
+  - [ ] Deleted files are committed as part of the normal cycle commit
+
+### Discussion
+
+> [2026-03-28 02:30] **pm/qa**: Filed and approved by human. Simple approach — old logs are in git history, no need for archive files. Keep last 20 (~1.5 hours at 5min interval). Status → Approved.
