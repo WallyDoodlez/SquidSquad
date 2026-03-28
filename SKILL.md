@@ -460,6 +460,140 @@ claude --permission-mode auto
 
 Make the `.sh` scripts executable (`chmod +x`).
 
+### Step 5b — Generate Status Line Script
+
+Generate `.squidsquad/statusline.sh` — a bash script that powers the Claude Code status bar for all SquidSquad agents. The script reads `.squidsquad/.active-role` to determine the current agent, then displays:
+
+- **Squid emoji** `🦑` in green (ANSI `\033[32m`) when the agent is active
+- **Role label** (e.g. `PM/QA`, `be`, `fe`)
+- **Iteration number** (read from the highest `iter-N.md` in the role's `iterations/` folder)
+- **Backlog pulse** (dev agents): count of open bugs + actionable features (e.g. `2 bugs 1 feat` or `clear`)
+- **Agent health** (PM only): for each dev agent, show `🦑` green if their latest iteration is within 2× the loop interval, or `🦑✖` red if silent for longer
+- **Time since last cycle** (file modification time of latest iteration log)
+
+Output format (single line, ANSI-colored):
+- Dev agent: `🦑 be │ iter 5 │ 2 bugs 1 feat │ 3m ago`
+- PM/QA: `🦑 PM/QA │ iter 3 │ 🦑be 🦑✖fe │ 1m ago`
+
+```bash
+#!/bin/bash
+# SquidSquad Status Line — shown in Claude Code's status bar
+# Receives JSON session data on stdin; prints ANSI-colored status to stdout
+
+cat > /dev/null &  # consume stdin (not used — we read from .squidsquad/ files)
+
+SQDIR=".squidsquad"
+[ ! -d "$SQDIR" ] && exit 0
+
+# Read role
+ROLE_FILE="$SQDIR/.active-role"
+[ ! -f "$ROLE_FILE" ] && exit 0
+ROLE=$(cat "$ROLE_FILE" | tr -d '[:space:]')
+[ -z "$ROLE" ] && exit 0
+
+# ANSI colors
+GREEN='\033[32m'
+RED='\033[31m'
+DIM='\033[2m'
+RESET='\033[0m'
+
+# Get iteration number from latest iter-N.md
+ITER_DIR="$SQDIR/$ROLE/iterations"
+ITER_NUM=0
+if [ -d "$ITER_DIR" ]; then
+  LATEST=$(ls "$ITER_DIR"/iter-*.md 2>/dev/null | sort -t- -k2 -n | tail -1)
+  if [ -n "$LATEST" ]; then
+    ITER_NUM=$(echo "$LATEST" | grep -oE '[0-9]+\.md$' | grep -oE '[0-9]+')
+  fi
+fi
+
+# Get interval from config
+INTERVAL=$(grep 'Minutes' "$SQDIR/config.md" 2>/dev/null | grep -oE '[0-9]+')
+INTERVAL=${INTERVAL:-10}
+
+# Time since last iteration (file modification time)
+TIME_STR="-"
+NOW=$(date +%s)
+if [ -n "$LATEST" ]; then
+  if stat --version >/dev/null 2>&1; then
+    LAST_MOD=$(stat -c %Y "$LATEST" 2>/dev/null)
+  else
+    LAST_MOD=$(stat -f %m "$LATEST" 2>/dev/null)
+  fi
+  if [ -n "$LAST_MOD" ]; then
+    ELAPSED=$(( (NOW - LAST_MOD) / 60 ))
+    TIME_STR="${ELAPSED}m ago"
+  fi
+fi
+
+# Count open bugs and actionable features
+BUGS_FILE="$SQDIR/$ROLE/bugs.md"
+FEATS_FILE="$SQDIR/$ROLE/features.md"
+BUG_COUNT=0
+FEAT_COUNT=0
+[ -f "$BUGS_FILE" ] && BUG_COUNT=$(grep -cE '^\- \*\*Status\*\*: (Open|Investigating)' "$BUGS_FILE" 2>/dev/null) || true
+[ -f "$FEATS_FILE" ] && FEAT_COUNT=$(grep -cE '^\- \*\*Status\*\*: (Approved|In Progress)' "$FEATS_FILE" 2>/dev/null) || true
+BUG_COUNT=${BUG_COUNT:-0}
+FEAT_COUNT=${FEAT_COUNT:-0}
+
+# Build backlog string
+BACKLOG=""
+[ "$BUG_COUNT" -gt 0 ] && BACKLOG="${BUG_COUNT} bug$([ "$BUG_COUNT" -gt 1 ] && echo s)"
+if [ "$FEAT_COUNT" -gt 0 ]; then
+  [ -n "$BACKLOG" ] && BACKLOG="$BACKLOG "
+  BACKLOG="${BACKLOG}${FEAT_COUNT} feat$([ "$FEAT_COUNT" -gt 1 ] && echo s)"
+fi
+[ -z "$BACKLOG" ] && BACKLOG="clear"
+
+# Role label
+if [ "$ROLE" = "pm" ]; then
+  ROLE_LABEL="PM/QA"
+else
+  ROLE_LABEL="$ROLE"
+fi
+
+# PM: show other agents' health
+HEALTH=""
+if [ "$ROLE" = "pm" ]; then
+  AGENTS=$(grep 'Dev Agents' "$SQDIR/config.md" 2>/dev/null | sed 's/.*: //' | tr ',' ' ')
+  THRESHOLD=$(( INTERVAL * 2 ))
+  for AGENT in $AGENTS; do
+    AGENT=$(echo "$AGENT" | tr -d '[:space:]')
+    [ -z "$AGENT" ] && continue
+    A_DIR="$SQDIR/$AGENT/iterations"
+    A_LATEST=$(ls "$A_DIR"/iter-*.md 2>/dev/null | sort -t- -k2 -n | tail -1)
+    if [ -n "$A_LATEST" ]; then
+      if stat --version >/dev/null 2>&1; then
+        A_MOD=$(stat -c %Y "$A_LATEST" 2>/dev/null)
+      else
+        A_MOD=$(stat -f %m "$A_LATEST" 2>/dev/null)
+      fi
+      if [ -n "$A_MOD" ]; then
+        A_ELAPSED=$(( (NOW - A_MOD) / 60 ))
+        if [ "$A_ELAPSED" -le "$THRESHOLD" ]; then
+          HEALTH="${HEALTH} ${GREEN}🦑${RESET}${AGENT}"
+        else
+          HEALTH="${HEALTH} ${RED}🦑✖${RESET}${AGENT}"
+        fi
+      else
+        HEALTH="${HEALTH} ${DIM}🦑?${RESET}${AGENT}"
+      fi
+    else
+      HEALTH="${HEALTH} ${DIM}🦑?${RESET}${AGENT}"
+    fi
+  done
+fi
+
+# Output
+if [ "$ROLE" = "pm" ]; then
+  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │${HEALTH} │ ${DIM}${TIME_STR}${RESET}"
+else
+  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │ ${BACKLOG} │ ${DIM}${TIME_STR}${RESET}"
+fi
+```
+
+Make the script executable (`chmod +x`).
+
 ### Step 6 — Seed Tracker Files
 
 Initialize empty tracker files with headers:
@@ -517,6 +651,10 @@ Create or update `.claude/settings.json` in the project root to add a `SessionSt
 
 ```json
 {
+  "statusLine": {
+    "type": "command",
+    "command": "bash .squidsquad/statusline.sh"
+  },
   "permissions": {
     "allow": [
       "Edit(.squidsquad/**)",
@@ -545,7 +683,7 @@ Create or update `.claude/settings.json` in the project root to add a `SessionSt
 
 > **Why these permissions?** Dev agents run with `--permission-mode auto` but still need explicit allow rules for writing tracker files and running git commands without being prompted mid-cycle. Without these, the agent will pause and ask for permission on every file write.
 
-**If `.claude/settings.json` already exists**, merge the SquidSquad hook into the existing `SessionStart` array (or create the `SessionStart` key if absent). Do not overwrite any existing hooks — append the new entry.
+**If `.claude/settings.json` already exists**, merge the SquidSquad hook into the existing `SessionStart` array (or create the `SessionStart` key if absent). Also add the `statusLine` key if not already present. Do not overwrite any existing hooks or status line config — append or add only.
 
 ### Step 8 — Commit and Push
 
@@ -629,7 +767,7 @@ Spawn all applicable agents simultaneously. Each agent writes only its assigned 
 > Regenerate `.squidsquad/pm/CLAUDE.md`, `.squidsquad/start-pm.sh`, and `.squidsquad/start-pm.ps1` using the PM/QA template from `references/agent-instructions.md`. Substitute `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]` from `config.md`. Do not touch `qa-log.md`, `enhancements.md`, `iterations/`, or `migrations/`.
 
 **One agent for settings:**
-> Update `.claude/settings.json`: ensure `permissions.allow` contains `Edit(.squidsquad/**)`, `Write(.squidsquad/**)`, and the four git commands. Ensure the `SessionStart` hook is present and matches the current template. Merge into existing content — never remove unrelated keys.
+> Update `.claude/settings.json`: ensure `permissions.allow` contains `Edit(.squidsquad/**)`, `Write(.squidsquad/**)`, and the four git commands. Ensure the `SessionStart` hook is present and matches the current template. Ensure the `statusLine` key is present and points to `bash .squidsquad/statusline.sh`. Regenerate `.squidsquad/statusline.sh` from the current template. Merge into existing content — never remove unrelated keys.
 
 #### If tracker schema differs — additionally spawn:
 

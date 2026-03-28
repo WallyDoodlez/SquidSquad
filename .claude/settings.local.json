@@ -15,7 +15,9 @@
       "Bash(claude --append-system-prompt-file)",
       "Bash(claude --system-prompt-file)",
       "Bash(claude --append-system-prompt \"test\")",
-      "Bash(find D:/Dev/Dev/SquidSquad -name *skill*creator* -o -name SKILL.md)"
+      "Bash(find D:/Dev/Dev/SquidSquad -name *skill*creator* -o -name SKILL.md)",
+      "Bash(chmod:*)",
+      "Bash(bash .squidsquad/statusline.sh)"
     ]
   }
 }

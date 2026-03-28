@@ -4,6 +4,16 @@ All notable changes to SquidSquad will be documented here.
 
 ---
 
+## [0.5.2] — 2026-03-28
+
+### Added
+
+- Status line for all SquidSquad agents via Claude Code's `statusLine` setting. Shows squid emoji (green ANSI), role label, iteration number, backlog pulse (open bugs + features), and time since last cycle. PM/QA status line additionally shows agent health — green squid for recently active agents, red squid with `✖` for silent agents.
+- `.squidsquad/statusline.sh` generated during setup (Step 5b) and referenced from `.claude/settings.json`.
+- Dev agent and PM/QA CLAUDE.md templates now document status line behavior.
+
+---
+
 ## [0.5.1] — 2026-03-27
 
 ### Changed

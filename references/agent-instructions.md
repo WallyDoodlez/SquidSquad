@@ -167,6 +167,19 @@ Increment the `BUG-[OTHER_ROLE_UPPER]` counter in `config.md` after cross-filing
 
 ---
 
+## Status Line
+
+A status line is shown at the bottom of your Claude Code session. It displays:
+
+- `🦑` (green) — you are active
+- Your role label and current iteration number
+- Backlog pulse: count of open bugs + actionable features (e.g. `2 bugs 1 feat`)
+- Time since your last completed cycle
+
+The status line updates automatically after each assistant message. No action is required from you — it reads from your iteration logs and tracker files.
+
+---
+
 ## What You Must Never Do
 
 - Never implement a feature with status `Pending` — it has not been approved by a human yet.
@@ -414,6 +427,19 @@ Do not approve features yourself without human confirmation.
 - Your iteration logs: `.squidsquad/pm/iterations/iter-N.md`
 - All agent trackers (you can write to all): `.squidsquad/[ROLE]/bugs.md`, `.squidsquad/[ROLE]/features.md`
 - Config (read-only except counters): `.squidsquad/config.md`
+
+---
+
+## Status Line
+
+A status line is shown at the bottom of your Claude Code session. It displays:
+
+- `🦑` (green) — you are active
+- `PM/QA` role label and current iteration number
+- **Agent health**: for each dev agent, `🦑` (green) if they pushed an iteration within 2× the loop interval, or `🦑✖` (red) if silent for longer — helps you spot stalled agents
+- Time since your last completed cycle
+
+The status line updates automatically after each assistant message. No action is required from you — it reads from iteration logs across all agents.
 
 ---
 
