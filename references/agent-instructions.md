@@ -650,9 +650,9 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 
 ### Phase 2 — Discussion (PM + Human)
 
-Phase 2 is an **async conversation** that progresses over multiple loop cycles via the check-in step. It does NOT block the loop.
+Phase 2 is an interactive discussion. It is fine for it to block the loop — discussion is inherently interactive.
 
-**Starting Phase 2**: On the first cycle, present the full research summary (Phase 1 output) AND list all open questions, then present Q1 with suggestions:
+**Part 1 — Overview**: Present the full research summary (Phase 1 output) AND list all open questions so the human sees the full picture:
 
 ```
 [Research summary]
@@ -662,37 +662,24 @@ Q1: [question] — Why it matters: [risk]
 Q2: [question] — Why it matters: [risk]
 ...
 QN: [question] — Why it matters: [risk]
-
-Let's walk through these. Starting with Q1:
-
-Q1: [Question text]
-Why this matters: [consequence of getting it wrong]
-
-(a) [Suggestion 1 — recommended]
-(b) [Suggestion 2 — alternative]
-(c) [Suggestion 3 — another approach]
-(d) Let's discuss this more
-
-Your choice (or type your own answer):
 ```
 
-**Tracking state**: Create/update the CONTEXT.md file immediately with all questions listed. Mark each as `pending`, `locked`, or `discussing`. The PM reads this file each cycle to know where the discussion stands.
+**Part 2 — Interactive walk-through**: Walk through questions one at a time using the `AskUserQuestion` tool to present each as an interactive choosable dialog. For each question, call `AskUserQuestion` with:
+- `question`: The question text + "Why this matters: [consequence]"
+- `options`: 3 suggestions (PM's recommendations based on research) + "Let's discuss this more"
 
-**Processing answers**: When the human responds (picked up in Step 2 — check-in/human input), the PM:
-1. Locks the answered question(s) in CONTEXT.md — if the human answered multiple questions at once, lock all of them.
-2. Presents the next unresolved question with 3 suggestions + discuss option.
-3. Continues the normal loop cycle (Steps 3+).
+Example `AskUserQuestion` call:
+```
+question: "Should version bumps require zero open bugs?\n\nWhy this matters: If bugs are allowed, shipped versions may have known issues."
+options: ["No — bump unconditionally (recommended)", "Soft gate — warn but allow", "Yes — all bugs must be closed first", "Let's discuss this more"]
+```
 
 **Handling responses:**
-- **(a), (b), or (c)**: Lock the decision, advance to next question.
-- **(d)**: Note the question as `discussing` in CONTEXT.md. Continue the discussion when the human responds further.
-- **Freeform text**: Capture as a locked decision, advance.
+- **Selected option (a/b/c)**: Lock the decision in CONTEXT.md, move to next question.
+- **"Let's discuss this more"**: Enter a longer back-and-forth discussion. When resolved, lock the decision and move on.
+- **Freeform text**: Capture as a locked decision, move on.
 
-**Completing Phase 2**: When all questions are locked, Phase 2 is complete. Proceed to Phase 3.
-
-The loop keeps cycling normally throughout — Phase 2 discussion is interleaved with regular work, not a blocking dialog.
-
-Capture decisions in `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-CONTEXT.md`:
+Continue until all questions are resolved. Capture decisions in `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-CONTEXT.md`:
 
 ```markdown
 # FEAT-[ROLE_UPPER]-XXX Context — [Title]

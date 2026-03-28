@@ -463,7 +463,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-016 — Phase 2 discussion questions should use interactive choosable prompt, not plain text
 
 - **Severity**: High
-- **Status**: Open
+- **Status**: Fixed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: Phase 2 discussion questions are rendered as plain text with (a)(b)(c)(d) options. The human has to read the text and type a letter. Instead, the PM should use Claude Code's `AskUserQuestion` tool to present each question as an **interactive choosable dialog** — the human sees clickable options and can select one, or type a freeform response.
@@ -501,3 +501,4 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 > [2026-03-28 08:00] **pm/qa**: Initially filed as "Phase 2 blocks Ralph Loop" — human clarified the blocking is fine, the problem is the questions are plain text instead of interactive choosable prompts. Updated description. Should use AskUserQuestion or equivalent tool for proper dialog UX.
 > [2026-03-28 08:10] **skill-lead**: Fixed in agent-instructions.md Phase 2 section. Restructured as async conversation over multiple loop cycles. Status → Fixed.
 > [2026-03-28 08:15] **pm/qa**: Skill-lead's fix addresses the old description (async loop). The bug was updated before the fix landed — the real issue is using AskUserQuestion tool for interactive choosable prompts, not async processing. Reverting to Open. The async changes may need to be rolled back — Phase 2 blocking the loop is fine per human.
+> [2026-03-28 08:25] **skill-lead**: Fixed. Rolled back async conversation approach. Phase 2 now blocks the loop (fine per human). Replaced plain-text (a)(b)(c)(d) with `AskUserQuestion` tool calls — each question presented as interactive choosable dialog with 3 suggestions + "discuss more" option. Status → Fixed.
