@@ -18,7 +18,7 @@
 
 **Your AI dev team that coordinates through markdown, not meetings.**
 
-SquidSquad is a Claude Code skill that spins up three autonomous AI agents — a Frontend Lead, a Backend Lead, and a PM/QA — that work on your codebase in parallel and coordinate through a shared `.squidsquad/` folder. No message queues. No orchestration servers. Just markdown files and git.
+SquidSquad is a Claude Code skill that spins up autonomous AI agents — one per dev role you define, plus a PM/QA — that work on your codebase in parallel and coordinate through a shared `.squidsquad/` folder. No message queues. No orchestration servers. Just markdown files and git.
 
 ---
 
@@ -32,71 +32,90 @@ The result: bugs get filed, triaged, fixed, and verified. Features move from bac
 
 ## How It Works
 
-### Three Agents
+### Agents
 
-| Agent | Role | Loop |
+SquidSquad always has a **PM/QA** agent. Dev agents are defined by you at setup time — one agent per role.
+
+| Agent | Loop | Mode |
 |-------|------|------|
-| **FE Lead** | Owns frontend code. Fixes FE bugs. Implements FE features. | Fix bugs → implement features → run FE tests → push |
-| **BE Lead** | Owns backend code. Fixes BE bugs. Implements BE features. | Fix bugs → implement features → run BE tests → push |
-| **PM/QA** | Runs e2e tests. Files bugs. Verifies fixes. Checks in with you. | Human check-in → e2e tests → file bugs → verify work → push |
+| **[role] Lead** (one per dev role) | Fix bugs → implement features → run tests → push | Autonomous (`--enable-auto-mode`) |
+| **PM/QA** | Human check-in → e2e tests → file bugs → verify work → push | Interactive (you talk to this one) |
+
+**Common team shapes:**
+
+| You say at setup | Agents created |
+|-----------------|----------------|
+| `fe, be` | FE Lead + BE Lead + PM/QA |
+| `be` | BE Lead + PM/QA |
+| `api, worker` | API Lead + Worker Lead + PM/QA |
+| `web, ios, api` | Web Lead + iOS Lead + API Lead + PM/QA |
 
 ### The Ralph Loop
 
-Every agent runs the Ralph Loop — an autonomous work cycle that repeats every 10 minutes:
-
+```mermaid
+flowchart LR
+    A([git pull --rebase]) --> B{bugs\nOpen?}
+    B -- yes --> C[fix bug\nrun tests] --> B
+    B -- no --> D{features\nApproved?}
+    D -- yes --> E[implement\nrun tests] --> D
+    D -- no --> F[log iteration\ngit push]
+    F --> G([sleep N min])
+    G --> A
 ```
-pull → scan for work → do work → run tests → log iteration → push → sleep
-```
 
-FE and BE leads pick up the highest-priority open bugs first, then move to approved features. PM/QA runs the full test suite, files bugs to the right team, and verifies completed work.
-
-### Shared `.squidsquad/` Folder
-
-All coordination happens through markdown files committed to your repo:
-
-```
-.squidsquad/
-├── config.md              ← project config, test commands, ID counters
-├── start-fe.sh / start-fe.ps1  ← launch FE Lead
-├── start-be.sh / start-be.ps1  ← launch BE Lead
-├── start-pm.sh / start-pm.ps1  ← launch PM/QA
-├── fe/
-│   ├── CLAUDE.md          ← FE Lead instructions
-│   ├── bugs.md            ← BUG-FE-XXX tracker
-│   ├── features.md        ← FEAT-FE-XXX tracker
-│   └── iterations/        ← per-cycle logs
-├── be/
-│   ├── CLAUDE.md          ← BE Lead instructions
-│   ├── bugs.md            ← BUG-BE-XXX tracker
-│   ├── features.md        ← FEAT-BE-XXX tracker
-│   └── iterations/        ← per-cycle logs
-└── pm/
-    ├── CLAUDE.md          ← PM/QA instructions
-    ├── qa-log.md          ← test run results
-    ├── enhancements.md    ← product backlog
-    └── iterations/        ← per-cycle logs
-```
+Dev agents loop autonomously. PM/QA follows the same cadence but checks in with you at the start of each cycle and runs the full e2e suite.
 
 ### Architecture
 
-```
-                        ┌──────────────────────┐
-                        │   You (the human)    │
-                        └──────────┬───────────┘
-                                   │ check-ins every cycle
-                                   ▼
-┌───────────────┐        ┌──────────────────┐        ┌───────────────┐
-│   FE Lead     │        │    PM / QA       │        │   BE Lead     │
-│  Claude CLI   │◄──────►│   Claude CLI     │◄──────►│  Claude CLI   │
-└───────┬───────┘        └────────┬─────────┘        └───────┬───────┘
-        │                         │                          │
-        └─────────────────────────┼──────────────────────────┘
-                                  │
-                           .squidsquad/
-                          (shared via git)
+```mermaid
+graph TD
+    H(["👤 You"])
+
+    subgraph squad["SquidSquad Agents"]
+        PM["PM / QA\n(interactive)"]
+        R1["[role] Lead\n(autonomous)"]
+        R2["[role] Lead\n(autonomous)"]
+    end
+
+    subgraph repo["Git Repository"]
+        CFG[".squidsquad/config.md"]
+        T1[".squidsquad/[role]/\nbugs.md · features.md"]
+        T2[".squidsquad/[role]/\nbugs.md · features.md"]
+        PM_T[".squidsquad/pm/\nqa-log.md · enhancements.md"]
+    end
+
+    H -- "check-in each cycle" --> PM
+    PM -- reads/writes --> CFG
+    PM -- files bugs, verifies --> T1
+    PM -- files bugs, verifies --> T2
+    PM -- writes --> PM_T
+    R1 -- reads/writes --> T1
+    R2 -- reads/writes --> T2
+    R1 -- cross-files bugs --> T2
+    R2 -- cross-files bugs --> T1
 ```
 
-Agents communicate asynchronously — each agent reads the latest state on `git pull` and writes new entries on `git push`. No direct agent-to-agent communication is needed.
+All coordination is asynchronous through git — agents pull to read the latest state and push after each work unit. No direct agent-to-agent communication needed.
+
+### Shared `.squidsquad/` Folder
+
+```
+.squidsquad/
+├── config.md                   ← versions, agents, test commands, counters, interval
+├── start-[role].sh/.ps1        ← one boot script pair per dev agent
+├── start-pm.sh/.ps1            ← PM/QA boot scripts
+├── [role]/                     ← one folder per dev agent
+│   ├── CLAUDE.md               ← role instructions + Ralph Loop
+│   ├── bugs.md                 ← BUG-[ROLE]-XXX tracker
+│   ├── features.md             ← FEAT-[ROLE]-XXX tracker
+│   └── iterations/             ← per-cycle logs
+└── pm/
+    ├── CLAUDE.md               ← PM/QA instructions + Ralph Loop
+    ├── qa-log.md               ← test run results
+    ├── enhancements.md         ← product backlog
+    ├── iterations/             ← per-cycle logs
+    └── migrations/             ← schema migration logs
+```
 
 ---
 
@@ -114,7 +133,7 @@ In a Claude Code session, say:
 Set up Squidsquad for my project.
 ```
 
-Claude will ask for your project name, repo URL, FE/BE frameworks, and test commands, then generate the full `.squidsquad/` folder structure.
+Claude will ask for your project name, repo URL, dev agent roles (e.g. `be` for BE-only, or `fe, be`, or any custom names), test commands, and loop interval, then generate the full `.squidsquad/` folder structure.
 
 ### 3. Launch the Agents
 
