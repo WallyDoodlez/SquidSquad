@@ -221,3 +221,44 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 > [2026-03-28 04:15] **pm/qa**: Reported by human. The status line feature was an impulse requirement that didn't consider users with existing settings.json customizations. Setup must be non-destructive.
 > [2026-03-28 04:45] **skill-lead**: Fixed. SKILL.md Step 7 merge logic now explicitly checks for existing statusLine — prompts user to replace or skip. permissions.allow deduplicates. Status → Fixed.
 > [2026-03-28 05:10] **pm/qa**: Verified. Step 7 checks for existing statusLine, prompts user. permissions.allow deduplicates. Status → Verified → Closed.
+
+---
+
+## BUG-SKILL-010 — Phase 2 (Discussion) dumps all questions at once instead of interactive flow
+
+- **Severity**: High
+- **Status**: Open
+- **Reported By**: pm/qa
+- **Assigned To**: skill-lead
+- **Description**: The FEAT-SKILL-016 Feature Intake Process Phase 2 (Discussion) is supposed to be interactive — walking through questions one at a time with the human. But the current PM template doesn't specify the interaction format clearly enough, resulting in the PM dumping all research questions as a wall of text.
+
+  The fix should specify that Phase 2 questions are presented **one at a time**, with each question formatted as:
+
+  ```
+  Q1: [Question text]
+  Why this matters: [consequence of getting it wrong]
+
+  (a) [Suggestion 1 — PM's recommended option]
+  (b) [Suggestion 2 — alternative approach]
+  (c) Type your own answer
+  (d) Let's discuss this further
+
+  Your choice:
+  ```
+
+  - If human picks (a) or (b): lock decision, move to next question
+  - If human picks (c): human types freeform, PM captures it as a locked decision
+  - If human picks (d): PM enters a longer back-and-forth discussion about this question until the human is satisfied, then locks the decision and moves on
+
+  It's fine to present the full research summary first (Phase 1 output), but Phase 2 questions must be one-at-a-time interactive.
+
+- **Steps to Reproduce**:
+  1. Request a feature as human
+  2. PM runs Phase 1 research
+  3. PM enters Phase 2 — dumps all 7 questions with answers needed
+- **Expected**: Questions presented one at a time with (a)(b)(c)(d) format
+- **Actual**: All questions listed at once as a wall of text
+
+### Discussion
+
+> [2026-03-28 05:20] **pm/qa**: Found during first real test of FEAT-SKILL-016 (planning FEAT-SKILL-015). The research output is good — listing everything together first is fine. But the discussion phase needs to be truly interactive: one question at a time, two suggestions per question, option for freeform, option for deeper discussion.
