@@ -2,10 +2,28 @@ $repoRoot = git rev-parse --show-toplevel
 Set-Location $repoRoot
 
 $config = Get-Content .squidsquad/config.md -Raw
+$v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
+
+Write-Host ""
+Write-Host "      ▗▄▄▄▄▖"
+Write-Host "     ▟██████▙"
+Write-Host "      ▐▌▀  ▀▐▌"
+Write-Host "    ▝▜████▛▘"
+Write-Host "      ▐████▌"
+Write-Host "     ▗██████▖"
+Write-Host "    ▐███    ███▌"
+Write-Host "   ▐██▘      ▝██▌"
+Write-Host "  ▐▛▘          ▝▜▌"
+Write-Host "  ▌▖            ▗▌"
+Write-Host "  ▝▘            ▝▘"
+Write-Host ""
+Write-Host "  S Q U I D S Q U A D   v$v  —  skill"
+Write-Host ""
+
 $interval = if ($config -match "Minutes.*?(\d+)") { [int]$Matches[1] } else { 10 }
 
 Write-Host "[squidsquad] skill agent starting. loop interval: ${interval}min"
-Write-Host "[squadsquad] press Ctrl+C to stop"
+Write-Host "[squidsquad] press Ctrl+C to stop"
 Write-Host ""
 
 $n = 0
