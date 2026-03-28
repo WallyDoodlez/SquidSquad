@@ -37,6 +37,8 @@ All notable changes to SquidSquad will be documented here.
 - Boot scripts no longer use `-p` and `--continue` flags — replaced with positional arg for interactive sessions.
 - PM/QA Step 2 (Check In With Human) is now non-blocking — prints a note and continues immediately.
 - Setup Step 7 no longer silently overwrites existing `statusLine` or `permissions.allow` — prompts user to replace or skip.
+- Phase 2 (Discussion) now presents questions one at a time with (a)(b)(c)(d) choice format instead of dumping all questions at once.
+- Feature approval now gates through `Planning` status — `Pending` → `Planning` → `Approved`. PM must complete the full intake process (Research → Discussion → Planning) before a feature reaches `Approved` and becomes available to dev agents.
 
 ---
 

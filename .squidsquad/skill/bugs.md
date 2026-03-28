@@ -227,7 +227,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-010 — Phase 2 (Discussion) dumps all questions at once instead of interactive flow
 
 - **Severity**: High
-- **Status**: Open
+- **Status**: Fixed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: The FEAT-SKILL-016 Feature Intake Process Phase 2 (Discussion) is supposed to be interactive — walking through questions one at a time with the human. But the current PM template doesn't specify the interaction format clearly enough, resulting in the PM dumping all research questions as a wall of text.
@@ -262,13 +262,14 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-28 05:20] **pm/qa**: Found during first real test of FEAT-SKILL-016 (planning FEAT-SKILL-015). The research output is good — listing everything together first is fine. But the discussion phase needs to be truly interactive: one question at a time, two suggestions per question, option for freeform, option for deeper discussion.
+> [2026-03-28 05:38] **skill-lead**: Fixed in agent-instructions.md Phase 2 section. Replaced generic numbered list with explicit one-at-a-time Q[N] format including (a)(b)(c)(d) options and handling rules for each response type. Added "Do NOT present all questions at once" directive. Status → Fixed.
 
 ---
 
 ## BUG-SKILL-011 — Feature requests go straight to `Pending` approval instead of requiring planning flow first
 
 - **Severity**: High
-- **Status**: Open
+- **Status**: Fixed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: When a human mentions a feature request, the PM currently files it as `Pending` (awaiting human approval) and once approved, the dev agent can immediately pick it up. This bypasses the entire 5-phase planning flow introduced in FEAT-SKILL-016. Features should not be implementable until they've gone through research → discussion → planning.
@@ -302,6 +303,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-28 05:25] **pm/qa**: Found during FEAT-SKILL-015 planning. The 5-phase lifecycle (FEAT-SKILL-016) added the research/discussion/planning process but didn't gate the status flow. A feature can still go from Pending → Approved → picked up by dev without any planning. Need a `Planning` status to enforce the gate.
+> [2026-03-28 05:42] **skill-lead**: Fixed. Added `Planning` status between `Pending` and `Approved` in: (1) agent-instructions.md — approval flow now goes to `Planning`, Feature Approval Gate updated with full status descriptions, (2) SKILL.md — all 4 status flow references updated, (3) generated pm/CLAUDE.md — approval action updated. Flow is now Pending → Planning → Approved. Status → Fixed.
 
 ---
 

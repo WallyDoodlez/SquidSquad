@@ -418,10 +418,11 @@ If the human has already provided input (earlier in the conversation or between 
 - **A bug report**: File it to the appropriate agent's tracker. Use your judgment based on which domain the failure is in.
 - **A feature request**: Run the **Feature Intake Process** (see below).
 - **A priority change**: Update the `Priority` field on the relevant item and append a Discussion entry.
-- **Approval for a Pending feature**: Change status to `Approved` and append a Discussion entry:
+- **Approval for a Pending feature**: Change status to `Planning` and begin the **Feature Intake Process** (Phases 1-3). Append a Discussion entry:
   ```
-  > [YYYY-MM-DD HH:MM] **pm/qa**: Human approved. Status → Approved.
+  > [YYYY-MM-DD HH:MM] **pm/qa**: Human approved. Status → Planning. Beginning intake process.
   ```
+  Only after all planning phases (Research → Discussion → Planning) are complete, change status to `Approved`.
 
 ### Step 3 — Run E2E Tests
 
@@ -649,11 +650,26 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 
 ### Phase 2 — Discussion (PM + Human)
 
-Present the research summary to the human. For each open question:
-1. Explain what the question is
-2. Explain WHY it matters (what breaks if we get it wrong)
-3. Present the options and your recommendation
-4. Capture the human's answer
+Present the full research summary to the human first (Phase 1 output). Then walk through open questions **one at a time** using this format:
+
+```
+Q[N]: [Question text]
+Why this matters: [consequence of getting it wrong]
+
+(a) [Suggestion 1 — PM's recommended option, marked as such]
+(b) [Suggestion 2 — alternative approach]
+(c) Type your own answer
+(d) Let's discuss this further
+
+Your choice:
+```
+
+**Handling responses:**
+- **(a) or (b)**: Lock the decision, move to the next question.
+- **(c)**: Human types a freeform answer. Capture it as a locked decision, move on.
+- **(d)**: Enter a longer back-and-forth discussion about this question. When the human is satisfied, lock the decision and move on.
+
+Do NOT present all questions at once. Wait for the human's answer to each question before presenting the next one.
 
 Continue until all questions are resolved. Capture decisions in `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-CONTEXT.md`:
 
@@ -742,16 +758,22 @@ When verifying features with status `Pending Test` (in Step 6), if a TEST-PLAN.m
 
 Features start as `Pending` — **a human must explicitly approve them** before any agent picks them up.
 
-Status values: `Pending` → `Approved` → `In Progress` → `Pending Test` → `Shipped`
+Status values: `Pending` → `Planning` → `Approved` → `In Progress` → `Pending Test` → `Shipped`
 
-Additional status: `Rejected` — PM recommends against the feature based on research. Human can override to `Approved`.
+- `Pending`: Filed, awaiting human approval to begin planning.
+- `Planning`: Human approved. PM is running the Feature Intake Process (Phases 1-3: Research → Discussion → Planning).
+- `Approved`: Planning complete. Dev agent can pick this up.
+- `Rejected`: PM recommends against the feature based on research. Human can override.
 
 To approve a feature:
 1. Present it to the human during the check-in step.
 2. Get explicit confirmation ("yes", "approved", "go ahead", etc.).
-3. Update status to `Approved` and append the Discussion entry.
+3. Update status to `Planning` (NOT `Approved`) and begin the Feature Intake Process.
+4. After all planning phases complete (RESEARCH.md, CONTEXT.md, TEST-PLAN.md created), update status to `Approved`.
 
-Do not approve features yourself without human confirmation.
+Light mode (trivial features): PM can fast-track through planning with abbreviated research, but status still transitions through `Planning` → `Approved`.
+
+Do not set status to `Approved` without completing the planning phases. Do not approve features yourself without human confirmation.
 
 ---
 

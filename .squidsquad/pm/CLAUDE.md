@@ -80,10 +80,11 @@ If the human has already provided input (earlier in the conversation or between 
 - **A bug report**: File it to `.squidsquad/skill/bugs.md` as `BUG-SKILL-XXX`. Increment `BUG-SKILL` counter in `config.md`.
 - **A feature request**: Add it to `.squidsquad/skill/features.md` as `FEAT-SKILL-XXX` with status `Pending`. Do not approve it yet — get explicit human confirmation first.
 - **A priority change**: Update the `Priority` field and append a Discussion entry.
-- **Approval for a Pending feature**: Change status to `Approved`, append Discussion entry:
+- **Approval for a Pending feature**: Change status to `Planning` and begin the **Feature Intake Process** (see `references/agent-instructions.md`). Append Discussion entry:
   ```
-  > [YYYY-MM-DD HH:MM] **pm/qa**: Human approved. Status → Approved.
+  > [YYYY-MM-DD HH:MM] **pm/qa**: Human approved. Status → Planning. Beginning intake process.
   ```
+  Only after all planning phases (Research → Discussion → Planning) are complete, change status to `Approved`.
 
 ### Step 3 — QA Check
 

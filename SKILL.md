@@ -121,7 +121,7 @@ Status flow: `Open` → `Investigating` → `Fixed` → `Verified` → `Closed`
 ## FEAT-FE-001 — [Title]
 
 - **Priority**: Critical | High | Medium | Low
-- **Status**: Pending | Approved | In Progress | Pending Test | Shipped
+- **Status**: Pending | Planning | Approved | In Progress | Pending Test | Shipped
 - **Owner**: fe-lead
 - **Description**: What to build.
 - **Acceptance Criteria**:
@@ -137,9 +137,9 @@ Status flow: `Open` → `Investigating` → `Fixed` → `Verified` → `Closed`
 > [2026-01-15 13:00] **pm/qa**: Tested and passing. Status → Shipped.
 ```
 
-Status flow: `Pending` → `Approved` → `In Progress` → `Pending Test` → `Shipped` (or `Rejected`)
+Status flow: `Pending` → `Planning` → `Approved` → `In Progress` → `Pending Test` → `Shipped` (or `Rejected`)
 
-> **Note:** `Pending` means it needs human approval via a PM discussion entry before any agent picks it up. `Approved` means it is ready to be implemented. `Rejected` means PM recommends against it based on research — human can override.
+> **Note:** `Pending` means awaiting human approval. `Planning` means human approved and PM is running the Feature Intake Process (Research → Discussion → Planning). `Approved` means planning is complete and a dev agent can pick it up. `Rejected` means PM recommends against it — human can override.
 
 ### Feature Lifecycle (5-Phase)
 
@@ -684,7 +684,7 @@ _Bugs are filed in BUG-[TEAM]-XXX format. Each entry includes a Discussion secti
 ```markdown
 # Feature Tracker
 
-_Features start as Pending (awaiting human approval) and move through Approved → In Progress → Pending Test → Shipped._
+_Features start as Pending (awaiting human approval) and move through Planning → Approved → In Progress → Pending Test → Shipped._
 
 ---
 ```
@@ -888,7 +888,7 @@ Tell the user: version upgraded from → to, files regenerated per agent, any sc
 
 **Bug status values**: `Open` → `Investigating` → `Fixed` → `Verified` → `Closed`
 
-**Feature status values**: `Pending` → `Approved` → `In Progress` → `Pending Test` → `Shipped`
+**Feature status values**: `Pending` → `Planning` → `Approved` → `In Progress` → `Pending Test` → `Shipped`
 
 Future schema changes will be documented here with their migration instructions before being released.
 
