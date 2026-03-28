@@ -1,3 +1,20 @@
+```
+          *    ·    *
+       ·    *   *    ·
+     *    .--------.    *
+     ·   /  ·    ·  \   ·
+     *  |  (◉)  (◉)  |  *
+     ·   \    ~~    /   ·
+     *    '--------'    *
+       ·   | |~~| |   ·
+          *| |  | |*
+           \|/  \|/
+         ___||  ||___
+        /    |  |    \
+       / /\  |  |  /\ \
+      ~ ~  ~ ~  ~ ~  ~ ~
+```
+
 # SquidSquad
 
 **Your AI dev team that coordinates through markdown, not meetings.**
