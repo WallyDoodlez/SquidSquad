@@ -302,3 +302,41 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-28 05:25] **pm/qa**: Found during FEAT-SKILL-015 planning. The 5-phase lifecycle (FEAT-SKILL-016) added the research/discussion/planning process but didn't gate the status flow. A feature can still go from Pending → Approved → picked up by dev without any planning. Need a `Planning` status to enforce the gate.
+
+---
+
+## BUG-SKILL-012 — Step markers inconsistent and not visually distinct enough
+
+- **Severity**: Medium
+- **Status**: Open
+- **Reported By**: pm/qa
+- **Assigned To**: skill-lead
+- **Description**: Two issues with the `[squidsquad]` step markers from FEAT-SKILL-008:
+
+  1. **Not all actions are prefixed** — Some PM and dev actions (filing bugs, updating trackers, research spawning, discussion questions) happen without a marker. Every SquidSquad action should have one.
+
+  2. **Not visually distinct** — Plain `[squidsquad]` text blends in with normal Claude output. The markers should use ANSI styling to stand out:
+     - Replace `[squidsquad]` with `[🦑]`
+     - Background: pink/magenta (`\033[45m`)
+     - Foreground: black (`\033[30m`)
+     - Reset after the prefix
+
+  **Example output:**
+  ```
+  \033[45m\033[30m[🦑]\033[0m Pulling latest...
+  \033[45m\033[30m[🦑]\033[0m Triaging bugs...
+  \033[45m\033[30m[🦑]\033[0m Filing BUG-SKILL-012...
+  ```
+
+  The ANSI styling makes SquidSquad actions immediately scannable in scrollback — pink background with squid emoji is unmistakable.
+
+- **Steps to Reproduce**:
+  1. Run any SquidSquad agent
+  2. Observe some actions have `[squidsquad]` prefix, others don't
+  3. The prefixed ones blend in with normal text
+- **Expected**: Every SquidSquad action prefixed with `[🦑]` in pink background / black foreground ANSI
+- **Actual**: Inconsistent prefixing, plain text styling
+
+### Discussion
+
+> [2026-03-28 05:30] **pm/qa**: Reported by human. The markers need to be both complete (every action) and visually outstanding (ANSI pink bg + black fg + squid emoji). Shortening to `[🦑]` also saves horizontal space.
