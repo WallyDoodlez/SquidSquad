@@ -20,7 +20,7 @@ Read the interval from `.squidsquad/config.md` (under `Iteration Interval > Minu
 
 For example, if the interval is 5 minutes: `/loop 5m execute one Ralph Loop cycle`.
 
-This externalizes the cycle timing — `/loop` handles the interval and re-invocation. Each cycle is a single pass through the steps below. Do NOT manually sleep or try to self-loop. Print a brief one-line status as you go (e.g. `[squidsquad] Pulling latest...`, `[squidsquad] Running QA pass...`).
+This externalizes the cycle timing — `/loop` handles the interval and re-invocation. Each cycle is a single pass through the steps below. Do NOT manually sleep or try to self-loop. Print a brief one-line status as you go (e.g. `\033[45m\033[30m[🦑]\033[0m Pulling latest...`, `\033[45m\033[30m[🦑]\033[0m Running QA pass...`).
 
 ---
 
@@ -40,11 +40,11 @@ This externalizes the cycle timing — `/loop` handles the interval and re-invoc
 
 Each invocation executes **one cycle** through the steps below. The `/loop` command handles re-invocation at the configured interval.
 
-**Step markers**: At the start of each step, print a one-line `[squidsquad]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line.
+**Step markers**: At the start of each step, print a one-line `\033[45m\033[30m[🦑]\033[0m` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line.
 
 ### Step 1 — Pull Latest
 
-Print: `[squidsquad] Pulling latest...`
+Print: `\033[45m\033[30m[🦑]\033[0m Pulling latest...`
 
 ```bash
 git pull --rebase
@@ -52,17 +52,17 @@ git pull --rebase
 
 ### Step 1b — Context Pressure Check
 
-Print: `[squidsquad] Checking context pressure...`
+Print: `\033[45m\033[30m[🦑]\033[0m Checking context pressure...`
 
 Check `context_window.used_percentage`. If above 80% (configurable in `config.md`):
 1. Save current working state to `.squidsquad/pm/working-state.md`.
 2. Commit and push all pending work.
-3. Print: `[squidsquad] Context pressure at [X]% — exiting for fresh context.`
+3. Print: `\033[45m\033[30m[🦑]\033[0m Context pressure at [X]% — exiting for fresh context.`
 4. Exit the conversation.
 
 ### Step 1c — Resume From Working State
 
-Print: `[squidsquad] Checking working state...`
+Print: `\033[45m\033[30m[🦑]\033[0m Checking working state...`
 
 Read `.squidsquad/pm/working-state.md`. If it has an active task (status `in-progress`), resume that work. Otherwise proceed normally.
 
@@ -71,7 +71,7 @@ Read `.squidsquad/pm/working-state.md`. If it has an active task (status `in-pro
 Print a brief, non-blocking status note — do NOT wait for a response before continuing:
 
 ```
-[squidsquad] PM check-in: drop a message anytime to file bugs, features, or priority changes. Continuing to Step 3.
+\033[45m\033[30m[🦑]\033[0m PM check-in: drop a message anytime to file bugs, features, or priority changes. Continuing to Step 3.
 ```
 
 Then immediately proceed to Step 3. The human will interrupt when they have input — you do not need to block the loop waiting for them.
@@ -88,7 +88,7 @@ If the human has already provided input (earlier in the conversation or between 
 
 ### Step 3 — QA Check
 
-Print: `[squidsquad] Running QA pass...`
+Print: `\033[45m\033[30m[🦑]\033[0m Running QA pass...`
 
 No automated test suite. Instead, do a manual coherence pass:
 
@@ -110,7 +110,7 @@ Log results in `pm/qa-log.md`:
 
 ### Step 4 — File Bugs From QA
 
-Print: `[squidsquad] Filing bugs from QA...` (or skip if no issues)
+Print: `\033[45m\033[30m[🦑]\033[0m Filing bugs from QA...` (or skip if no issues)
 
 For each issue found in Step 3:
 
@@ -119,7 +119,7 @@ For each issue found in Step 3:
 
 ### Step 5 — Verify Fixed Bugs
 
-Print: `[squidsquad] Verifying fixed bugs...`
+Print: `\033[45m\033[30m[🦑]\033[0m Verifying fixed bugs...`
 
 Open `.squidsquad/skill/bugs.md`. For each bug with status `Fixed`:
 
@@ -129,7 +129,7 @@ Open `.squidsquad/skill/bugs.md`. For each bug with status `Fixed`:
 
 ### Step 6 — Verify Pending Test Features
 
-Print: `[squidsquad] Verifying pending test features...`
+Print: `\033[45m\033[30m[🦑]\033[0m Verifying pending test features...`
 
 Open `.squidsquad/skill/features.md`. For each feature with status `Pending Test`:
 
@@ -139,7 +139,7 @@ Open `.squidsquad/skill/features.md`. For each feature with status `Pending Test
 
 ### Step 7 — Agent Health Check
 
-Print: `[squidsquad] Checking agent health...`
+Print: `\033[45m\033[30m[🦑]\033[0m Checking agent health...`
 
 Check each dev agent's health using git log. An agent is healthy if it has pushed a commit within the last 10 minutes (2 × loop interval). Commits are identified by their prefix (e.g. `skill:`).
 
@@ -160,7 +160,7 @@ git log --oneline --since="10 minutes ago" --grep="^[AGENT]:"
 
 If `GitHub Issues Ingestion: yes` in `config.md`:
 
-Print: `[squidsquad] Checking GitHub Issues...`
+Print: `\033[45m\033[30m[🦑]\033[0m Checking GitHub Issues...`
 
 ```bash
 gh issue list --state open --json number,title,labels,body,url --limit 50
@@ -178,9 +178,9 @@ If `GitHub Issues Ingestion: no` (current setting), skip this step.
 
 ### Step 8 — Log Iteration (skip on quiet cycles)
 
-If no QA issues were found, no bugs were verified, no features were shipped, and no human input was processed this cycle, this is a **quiet cycle**. Print: `[squidsquad] Quiet cycle — no work done. Skipping log/commit.` and skip directly to Step 10 (Sleep).
+If no QA issues were found, no bugs were verified, no features were shipped, and no human input was processed this cycle, this is a **quiet cycle**. Print: `\033[45m\033[30m[🦑]\033[0m Quiet cycle — no work done. Skipping log/commit.` and skip directly to Step 10 (Sleep).
 
-Otherwise, print: `[squidsquad] Logging iteration...`
+Otherwise, print: `\033[45m\033[30m[🦑]\033[0m Logging iteration...`
 
 Create `.squidsquad/pm/iterations/iter-N.md`:
 
@@ -201,7 +201,7 @@ After creating the log, clean up old iteration files: if more than 20 `iter-*.md
 
 ### Step 9 — Commit and Push (skip on quiet cycles)
 
-Print: `[squidsquad] Committing and pushing...`
+Print: `\033[45m\033[30m[🦑]\033[0m Committing and pushing...`
 
 ```bash
 git add -A

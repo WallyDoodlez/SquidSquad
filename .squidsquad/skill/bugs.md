@@ -310,7 +310,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-012 — Step markers inconsistent and not visually distinct enough
 
 - **Severity**: Medium
-- **Status**: Open
+- **Status**: Fixed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: Two issues with the `[squidsquad]` step markers from FEAT-SKILL-008:
@@ -342,3 +342,4 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-28 05:30] **pm/qa**: Reported by human. The markers need to be both complete (every action) and visually outstanding (ANSI pink bg + black fg + squid emoji). Shortening to `[🦑]` also saves horizontal space.
+> [2026-03-28 05:58] **skill-lead**: Fixed. Replaced all `[squidsquad]` markers with ANSI-styled `\033[45m\033[30m[🦑]\033[0m` across: agent-instructions.md (both dev and PM templates), skill/CLAUDE.md, pm/CLAUDE.md, SKILL.md, and README.md. All step markers and sub-action markers now use the styled format. Status → Fixed.

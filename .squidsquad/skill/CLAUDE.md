@@ -37,11 +37,11 @@ This externalizes the cycle timing — `/loop` handles the interval and re-invoc
 
 Each invocation executes **one cycle** through the steps below. The `/loop` command handles re-invocation at the configured interval.
 
-**Step markers**: At the start of each step, print a one-line `[squidsquad]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, committing) also get markers. Keep each marker to one concise line.
+**Step markers**: At the start of each step, print a one-line `\033[45m\033[30m[🦑]\033[0m` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, committing) also get markers. Keep each marker to one concise line.
 
 ### Step 1 — Pull Latest
 
-Print: `[squidsquad] Pulling latest...`
+Print: `\033[45m\033[30m[🦑]\033[0m Pulling latest...`
 
 ```bash
 git pull --rebase
@@ -51,23 +51,23 @@ If there is a rebase conflict in a tracker file, resolve it by keeping both vers
 
 ### Step 1b — Context Pressure Check
 
-Print: `[squidsquad] Checking context pressure...`
+Print: `\033[45m\033[30m[🦑]\033[0m Checking context pressure...`
 
 Check `context_window.used_percentage`. If above 80% (configurable in `config.md`):
 1. Save current working state to `.squidsquad/skill/working-state.md`.
 2. Commit and push all pending work.
-3. Print: `[squidsquad] Context pressure at [X]% — exiting for fresh context.`
+3. Print: `\033[45m\033[30m[🦑]\033[0m Context pressure at [X]% — exiting for fresh context.`
 4. Exit the conversation. The boot script will restart you.
 
 ### Step 1c — Resume From Working State
 
-Print: `[squidsquad] Checking working state...`
+Print: `\033[45m\033[30m[🦑]\033[0m Checking working state...`
 
 Read `.squidsquad/skill/working-state.md`. If it has an active task (status `in-progress`), resume that task using the saved context instead of starting fresh.
 
 ### Step 2 — Triage Bugs
 
-Print: `[squidsquad] Triaging bugs...`
+Print: `\033[45m\033[30m[🦑]\033[0m Triaging bugs...`
 
 Open `.squidsquad/skill/bugs.md`. For each bug with status `Open` or `Investigating`:
 
@@ -86,7 +86,7 @@ Open `.squidsquad/skill/bugs.md`. For each bug with status `Open` or `Investigat
 
 ### Step 3 — Implement Features
 
-Print: `[squidsquad] Checking features...`
+Print: `\033[45m\033[30m[🦑]\033[0m Checking features...`
 
 Open `.squidsquad/skill/features.md`. Pick the next feature with status `Approved` (highest priority first).
 
@@ -112,9 +112,9 @@ Open `.squidsquad/skill/features.md`. Pick the next feature with status `Approve
 
 ### Step 4 — Log Iteration (skip on quiet cycles)
 
-If no bugs were fixed and no features were progressed this cycle, this is a **quiet cycle**. Print: `[squidsquad] Quiet cycle — no work done. Skipping log/commit.` and skip directly to Step 6 (Sleep).
+If no bugs were fixed and no features were progressed this cycle, this is a **quiet cycle**. Print: `\033[45m\033[30m[🦑]\033[0m Quiet cycle — no work done. Skipping log/commit.` and skip directly to Step 6 (Sleep).
 
-Otherwise, print: `[squidsquad] Logging iteration...`
+Otherwise, print: `\033[45m\033[30m[🦑]\033[0m Logging iteration...`
 
 Create `.squidsquad/skill/iterations/iter-N.md` (increment N from last log):
 
@@ -132,7 +132,7 @@ After creating the log, clean up old iteration files: if more than 20 `iter-*.md
 
 ### Step 5 — Commit and Push (skip on quiet cycles)
 
-Print: `[squidsquad] Committing and pushing...`
+Print: `\033[45m\033[30m[🦑]\033[0m Committing and pushing...`
 
 ```bash
 git add -A

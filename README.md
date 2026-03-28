@@ -65,7 +65,7 @@ flowchart LR
 
 Dev agents loop autonomously. PM/QA follows the same cadence but runs a QA pass, verifies completed work, monitors agent health, and checks in with you non-blockingly at the start of each cycle.
 
-Every step prints a `[squidsquad]` prefixed marker (e.g. `[squidsquad] Pulling latest...`, `[squidsquad] Triaging bugs...`) so SquidSquad activity is easy to spot in terminal scrollback.
+Every step prints a `[🦑]` prefixed marker (e.g. `[🦑] Pulling latest...`, `[🦑] Triaging bugs...`) so SquidSquad activity is easy to spot in terminal scrollback.
 
 ### Architecture
 
@@ -131,7 +131,7 @@ All coordination is asynchronous through git — agents pull to read the latest 
 A live status bar at the bottom of each agent's Claude Code session showing: squid emoji, role label, iteration number, backlog pulse (open bugs + features), context window usage (color-coded), and time since last cycle. PM's status line also shows other agents' health.
 
 ### Step Markers
-Every Ralph Loop step prints a `[squidsquad]` prefixed line (e.g. `[squidsquad] Pulling latest...`, `[squidsquad] Triaging bugs...`, `[squidsquad] Committing and pushing...`). Makes SquidSquad activity easy to scan in terminal scrollback.
+Every Ralph Loop step prints a `[🦑]` prefixed line (e.g. `[🦑] Pulling latest...`, `[🦑] Triaging bugs...`, `[🦑] Committing and pushing...`). Makes SquidSquad activity easy to scan in terminal scrollback.
 
 ### Working State File
 Agents persist current task progress to `.squidsquad/[role]/working-state.md` — what they're working on, completed steps, remaining steps, key decisions. If a context window fills up, the agent saves state and exits cleanly. On restart, it resumes from the saved state instead of starting over.
