@@ -16,4 +16,5 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
+echo "skill" > .squidsquad/.active-role
 claude --permission-mode auto

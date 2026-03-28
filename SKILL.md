@@ -335,11 +335,32 @@ Always create `.squidsquad/pm/` with its full structure regardless of team shape
 
 Use the templates in `references/agent-instructions.md` to generate role-specific CLAUDE.md files inside each `[role]/` folder and `pm/`, substituting in the project's actual test commands and repo URL from config.md.
 
+Also create or update the **root `CLAUDE.md`** in the project root. If a root `CLAUDE.md` already exists, append the SquidSquad boot block below. If it does not exist, create it with only this content:
+
+```markdown
+# SquidSquad Auto-Boot
+
+If the file `.squidsquad/.active-role` exists, you are running as a SquidSquad agent:
+
+1. Read `.squidsquad/.active-role` to get your role name (e.g. `fe`, `be`, `skill`, `pm`).
+2. Read `.squidsquad/<role>/CLAUDE.md` for your full instructions.
+3. Follow those instructions exactly — begin your first Ralph Loop cycle immediately without waiting for user input.
+
+If `.squidsquad/.active-role` does not exist, ignore this section — you are a normal Claude session.
+```
+
+Add `.squidsquad/.active-role` to `.gitignore` (create the file if it doesn't exist):
+
+```
+# SquidSquad runtime (not committed)
+.squidsquad/.active-role
+```
+
 ### Step 5 — Generate Boot Scripts
 
 Generate both a `.sh` (bash) and a `.ps1` (PowerShell) boot script for each dev agent, plus PM/QA. Script names use the role name, e.g. `start-be.sh`, `start-api.sh`, `start-worker.ps1`.
 
-All agents run interactively. Substitute `[ROLE]` with the actual role name. The agent's CLAUDE.md instructions handle the loop internally — no shell loop needed.
+All agents run interactively. The boot script writes `.squidsquad/.active-role` (git-ignored) with the role name, then launches `claude --permission-mode auto`. The root `CLAUDE.md` detects this file and auto-starts the correct role.
 
 **`start-[role].sh`**:
 ```bash
@@ -361,6 +382,7 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
+echo "[ROLE]" > .squidsquad/.active-role
 claude --permission-mode auto
 ```
 
@@ -382,6 +404,7 @@ Write-Host "    ▌▌▌▌▌▌"
 Write-Host "  S Q U I D S Q U A D   v$v  -  [ROLE]"
 Write-Host ""
 
+"[ROLE]" | Set-Content .squidsquad/.active-role -NoNewline
 claude --permission-mode auto
 ```
 
@@ -405,6 +428,7 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
+echo "pm" > .squidsquad/.active-role
 claude --permission-mode auto
 ```
 
@@ -428,10 +452,11 @@ if (Test-Path .squidsquad) {
     Write-Host ""
 }
 
+"pm" | Set-Content .squidsquad/.active-role -NoNewline
 claude --permission-mode auto
 ```
 
-> **Note:** All agents run interactively with `--permission-mode auto`. The user can observe progress and comment in any agent's terminal. The CLAUDE.md instructions handle the Ralph Loop internally — the agent reads its instructions on first message and loops from there.
+> **Note:** All agents run interactively with `--permission-mode auto`. The boot script writes `.squidsquad/.active-role` (git-ignored) before launching Claude. The root `CLAUDE.md` detects this file on startup and auto-loads the correct role instructions. The user can observe progress and comment in any agent's terminal.
 
 Make the `.sh` scripts executable (`chmod +x`).
 

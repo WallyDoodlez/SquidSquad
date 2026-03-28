@@ -13,7 +13,9 @@
       "Bash(chmod +x /d/Dev/Dev/SquidSquad/.squidsquad/start-skill.sh /d/Dev/Dev/SquidSquad/.squidsquad/start-pm.sh)",
       "Bash(git:*)",
       "Bash(claude --append-system-prompt-file)",
-      "Bash(claude --system-prompt-file)"
+      "Bash(claude --system-prompt-file)",
+      "Bash(claude --append-system-prompt \"test\")",
+      "Bash(find D:/Dev/Dev/SquidSquad -name *skill*creator* -o -name SKILL.md)"
     ]
   }
 }

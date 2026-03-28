@@ -16,4 +16,5 @@ if (Test-Path .squidsquad) {
     Write-Host ""
 }
 
+"pm" | Set-Content .squidsquad/.active-role -NoNewline
 claude --permission-mode auto

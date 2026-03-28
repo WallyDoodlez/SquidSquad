@@ -50,15 +50,21 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-003 — PM status bar shows iteration number and squid emoji
 
 - **Priority**: Medium
-- **Status**: Pending
+- **Status**: Approved
 - **Owner**: skill-lead
-- **Description**: Adjust the PM agent's Claude Code status line to indicate which Ralph Loop iteration is currently running and display a squid emoji to signal that SquidSquad is active. This gives the human a quick visual indicator of squad activity without needing to read logs.
+- **Description**: Add a Claude Code status line for all SquidSquad agents using the `statusLine` setting in `settings.json`. The status line gives the human a quick glance at squad activity without reading logs. Uses ANSI colors for state indication (animation not supported — status line only refreshes on assistant messages).
 - **Acceptance Criteria**:
-  - [ ] PM agent's status bar displays the current iteration number (e.g. "Iteration 3")
-  - [ ] A squid emoji is shown in the status bar to indicate SquidSquad is running
-  - [ ] Status bar updates each cycle as the iteration number increments
-  - [ ] SKILL.md and/or PM CLAUDE.md updated to reflect this behavior
+  - [ ] A `statusLine` command/script is configured in `.claude/settings.json` (or generated during setup)
+  - [ ] Status line shows agent role label (e.g. `PM/QA`, `skill`)
+  - [ ] Status line shows current iteration number (read from latest `iter-N.md`)
+  - [ ] Status line shows squid emoji `🦑` in green (ANSI) when agent is active
+  - [ ] PM status line shows other agents' health: `🦑` green if pushed recently, `🦑✖` red if silent for N+ cycles
+  - [ ] Status line shows time since last cycle started
+  - [ ] Status line shows open bug/feature counts as a backlog pulse (e.g. `2 bugs 1 feat`)
+  - [ ] SKILL.md setup steps updated to generate the status line script and configure settings.json
+  - [ ] PM and dev agent CLAUDE.md templates updated to document status line behavior
 
 ### Discussion
 
 > [2026-03-27 22:40] **pm/qa**: Filed from human request. Status: Pending — awaiting human approval.
+> [2026-03-27 22:50] **pm/qa**: Updated scope after research. Animation not feasible (status line only refreshes on events, no timer). Revised to use ANSI color-based state indicators instead. Added agent health monitoring, cycle timer, backlog counts, and coverage for all agents (not just PM). Human approved. Status → Approved.
