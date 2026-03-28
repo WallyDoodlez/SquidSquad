@@ -6,7 +6,7 @@ version: 0.5.1
 
 # SquidSquad
 
-You are activating the SquidSquad multi-agent development coordination system. SquidSquad spins up three Claude Code CLI instances — a Frontend Lead, a Backend Lead, and a PM/QA — that work autonomously on a shared codebase by coordinating through markdown files in a `.squidsquad/` folder.
+You are activating the SquidSquad multi-agent development coordination system. SquidSquad spins up Claude Code CLI instances — one per dev role you define, plus a PM/QA — that work autonomously on a shared codebase by coordinating through markdown files in a `.squidsquad/` folder.
 
 No meetings. No message queues. Just markdown.
 
@@ -15,34 +15,29 @@ No meetings. No message queues. Just markdown.
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    Git Repository                    │
-│                                                     │
-│  ┌──────────────┐  ┌──────────────┐  ┌───────────┐ │
-│  │   FE Lead    │  │   BE Lead    │  │  PM / QA  │ │
-│  │ (Claude CLI) │  │ (Claude CLI) │  │(Claude CLI│ │
-│  └──────┬───────┘  └──────┬───────┘  └─────┬─────┘ │
-│         │                 │                │       │
-│         └────────┬────────┘                │       │
-│                  ▼                         │       │
-│           .squidsquad/                     │       │
-│           ├── config.md  ◄─────────────────┘       │
-│           ├── fe/                                   │
-│           │   ├── CLAUDE.md                         │
-│           │   ├── bugs.md                           │
-│           │   ├── features.md                       │
-│           │   └── iterations/                       │
-│           ├── be/                                   │
-│           │   ├── CLAUDE.md                         │
-│           │   ├── bugs.md                           │
-│           │   ├── features.md                       │
-│           │   └── iterations/                       │
-│           └── pm/                                   │
-│               ├── CLAUDE.md                         │
-│               ├── qa-log.md                         │
-│               ├── enhancements.md                   │
-│               └── iterations/                       │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                      Git Repository                       │
+│                                                          │
+│  ┌──────────────┐        ┌──────────────┐  ┌──────────┐ │
+│  │  [Role] Lead │  ...   │  [Role] Lead │  │  PM / QA │ │
+│  │ (Claude CLI) │        │ (Claude CLI) │  │(Claude CLI│ │
+│  └──────┬───────┘        └──────┬───────┘  └─────┬────┘ │
+│         │                       │                │      │
+│         └───────────┬───────────┘                │      │
+│                     ▼                            │      │
+│              .squidsquad/                        │      │
+│              ├── config.md  ◄────────────────────┘      │
+│              ├── [role]/          ← one per dev agent    │
+│              │   ├── CLAUDE.md                           │
+│              │   ├── bugs.md                             │
+│              │   ├── features.md                         │
+│              │   └── iterations/                         │
+│              └── pm/                                     │
+│                  ├── CLAUDE.md                            │
+│                  ├── qa-log.md                            │
+│                  ├── enhancements.md                      │
+│                  └── iterations/                          │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ### Roles
@@ -248,16 +243,24 @@ Do not proceed until `git status --porcelain` returns no output.
 
 ### Step 1 — Gather Project Details
 
-Ask the user (or read from context) for:
+**Quick-start mode:** If the user provides all details in a single sentence (e.g. "Set up SquidSquad for kubex, BE only, 5 min interval"), extract all values from it. Fill any missing fields with defaults and skip straight to validation. Only prompt for fields that cannot be inferred.
 
-1. **Project name** — used in config.md and commit messages
-2. **Repository URL** — e.g. `github.com/alice/myapp`
-3. **Dev agents** — comma-separated role names, e.g. `fe, be` / `be` / `api, worker`. Default: `fe, be`. Each role gets its own folder, tracker files, CLAUDE.md, and boot scripts.
-4. **Framework / language for each dev agent** — e.g. BE: FastAPI, FE: Next.js
-5. **Test command for each dev agent** — e.g. `cd backend && pytest tests/`
-6. **E2E / full-stack test command** — run by PM/QA each cycle. Optional — if none, PM skips the test step.
-7. **Loop interval** — how many minutes between Ralph Loop cycles. Default: 10. Minimum: 1.
-8. **Any seed items** — bugs or features to pre-populate into the trackers
+**Interactive mode:** If the user does not provide details upfront, prompt for each field using the structured format below. Present each prompt with its label, description, and default value so the user can accept defaults by pressing Enter or provide a custom value.
+
+Collect these fields:
+
+| # | Field | Description | Default | Validation |
+|---|-------|-------------|---------|------------|
+| 1 | **Project name** | Used in config.md and commit messages | Name of the current git repo directory | Must be non-empty |
+| 2 | **Repository URL** | e.g. `github.com/alice/myapp` | Infer from `git remote get-url origin` if available | Must be non-empty |
+| 3 | **Dev agents** | Comma-separated role names, e.g. `fe, be` / `be` / `api, worker` | `fe, be` | At least one role required; each name must be a simple lowercase identifier |
+| 4 | **Framework / language** | One per dev agent, e.g. BE: FastAPI, FE: Next.js | _(none)_ | Optional per agent |
+| 5 | **Test command** | One per dev agent, e.g. `cd backend && pytest tests/` | _(none)_ | Optional per agent |
+| 6 | **E2E test command** | Full-stack test command run by PM/QA each cycle | _(none)_ | Optional — if none, PM skips the test step |
+| 7 | **Loop interval** | Minutes between Ralph Loop cycles | `10` | Must be an integer >= 1; re-prompt if invalid |
+| 8 | **Seed items** | Bugs or features to pre-populate into trackers | _(none)_ | Optional |
+
+**Validation:** After collecting all fields, display a summary table and ask the user to confirm or correct any values before proceeding. If any required field is empty or any value fails validation (e.g. interval < 1), highlight the issue and re-prompt for that specific field.
 
 ### Step 2 — Create `.squidsquad/` Folder Structure
 
@@ -345,7 +348,7 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
-claude --dangerously-skip-permissions --append-system-prompt-file .squidsquad/[ROLE]/CLAUDE.md -p "Begin your first Ralph Loop cycle now."
+claude --dangerously-skip-permissions -p "Read .squidsquad/[ROLE]/CLAUDE.md for your instructions. Begin your first Ralph Loop cycle now."
 ```
 
 **`start-[role].ps1`**:
@@ -366,7 +369,7 @@ Write-Host "    ▌▌▌▌▌▌"
 Write-Host "  S Q U I D S Q U A D   v$v  -  [ROLE]"
 Write-Host ""
 
-claude --dangerously-skip-permissions --append-system-prompt-file .squidsquad/[ROLE]/CLAUDE.md -p "Begin your first Ralph Loop cycle now."
+claude --dangerously-skip-permissions -p "Read .squidsquad/[ROLE]/CLAUDE.md for your instructions. Begin your first Ralph Loop cycle now."
 ```
 
 **`start-pm.sh`**:
@@ -389,7 +392,7 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
-claude --permission-mode auto --append-system-prompt-file .squidsquad/pm/CLAUDE.md
+claude --permission-mode auto -p "Read .squidsquad/pm/CLAUDE.md for your instructions. Begin your first cycle now."
 ```
 
 **`start-pm.ps1`**:
@@ -412,7 +415,7 @@ if (Test-Path .squidsquad) {
     Write-Host ""
 }
 
-claude --permission-mode auto --append-system-prompt-file .squidsquad/pm/CLAUDE.md
+claude --permission-mode auto -p "Read .squidsquad/pm/CLAUDE.md for your instructions. Begin your first cycle now."
 ```
 
 > **Note:** All agents run interactively. PM/QA uses `--permission-mode auto` so it can check in with you. Dev agents use `--dangerously-skip-permissions` to run fully autonomous. Both load their instructions via `--system-prompt-file`.
@@ -532,9 +535,9 @@ Print a summary:
 ║                                                            ║
 ╠════════════════════════════════════════════════════════════╣
 ║                                                            ║
-║   Three agents. One repo. Zero meetings.                   ║
+║   [N] agents. One repo. Zero meetings.                     ║
 ║                                                            ║
-║   Open 3 terminals and launch your squad:                  ║
+║   Open [N] terminals and launch your squad:                ║
 ║                                                            ║
 ║   bash / zsh:                                              ║
 ║   [one line per dev agent]  bash .squidsquad/start-[role].sh ║

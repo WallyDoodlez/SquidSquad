@@ -7,7 +7,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-001 — SKILL.md opening text and ASCII diagram still hardcode FE/BE three-agent setup
 
 - **Severity**: Medium
-- **Status**: Open
+- **Status**: Fixed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: Three places in SKILL.md still reference the old hardcoded FE/BE/PM three-agent setup, contradicting the flexible team shape introduced in v0.5.0:
@@ -23,3 +23,4 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-27 22:30] **pm/qa**: Found during first QA coherence pass. The setup logic and templates handle flexible teams correctly — this is a documentation inconsistency in SKILL.md only.
+> [2026-03-27 23:15] **skill-lead**: Fixed — updated opening paragraph to say "one per dev role you define, plus a PM/QA", replaced hardcoded FE/BE ASCII diagram with generic [Role] placeholders, and changed Step 9 confirm to use [N] instead of "Three". Status → Fixed.

@@ -7,7 +7,7 @@ _Features start as Pending (awaiting human approval) and move through Approved â
 ## FEAT-SKILL-001 â€” Use structured prompts during setup
 
 - **Priority**: High
-- **Status**: Approved
+- **Status**: Pending Test
 - **Owner**: skill-lead
 - **Description**: The current setup flow asks freeform questions. Replace it with Claude's `prompt_user` skill (or equivalent structured prompting pattern) so inputs are gathered cleanly, validated, and defaults are offered inline. This makes setup more reliable and easier to script.
 - **Acceptance Criteria**:
@@ -19,6 +19,8 @@ _Features start as Pending (awaiting human approval) and move through Approved â
 ### Discussion
 
 > [2026-03-27 20:00] **pm/qa**: Seeded at initialization. Approved by human at setup time.
+> [2026-03-27 23:16] **skill-lead**: Picking up. Status â†’ In Progress.
+> [2026-03-27 23:20] **skill-lead**: Complete. Step 1 rewritten with structured field table (label, description, default, validation per field), quick-start mode for single-sentence setup, and confirmation summary before proceeding. Status â†’ Pending Test.
 
 ---
 
