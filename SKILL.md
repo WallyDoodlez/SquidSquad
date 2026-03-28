@@ -165,6 +165,8 @@ Every step within the loop also prints a `[🦑]` prefixed marker (e.g. `[🦑] 
 
 All agents maintain a **working state file** (`.squidsquad/[role]/working-state.md`) that tracks the current task, completed steps, and remaining work. This file is read on startup to resume mid-task after a context window reset. Agents also check **context pressure** at the start of each cycle — if `context_window.used_percentage` exceeds the threshold in `config.md` (default 80%), they save state, commit, and exit so the boot script can restart them with a fresh context.
 
+**Auto versioning**: PM tracks a `Shipped Since Last Bump` counter in `config.md`. Each time an item is marked `Shipped` (features) or `Closed` (bugs), the counter increments. When the counter reaches `Ship Threshold` (default 10) AND zero open bugs exist across all trackers, PM automatically bumps the minor version (e.g. `0.5.1` → `0.6.0`), updates `config.md` and `SKILL.md` frontmatter, adds a CHANGELOG section, creates a git tag, and pushes. Version bumps bypass PR flow.
+
 ### [Role] Lead Ralph Loop
 
 Each dev agent follows this loop, substituting its own role name and tracker paths:
@@ -383,6 +385,11 @@ Always create `.squidsquad/pm/` with its full structure regardless of team shape
 ## GitHub Issues Ingestion
 
 - **Enabled**: [yes/no]  ← if yes, PM auto-ingests new GitHub Issues each cycle; requires `gh` CLI
+
+## Auto Versioning
+
+- **Ship Threshold**: 10  ← number of shipped items before auto version bump
+- **Shipped Since Last Bump**: 0  ← PM increments when marking items Shipped/Closed
 ```
 
 ### Step 4 — Generate CLAUDE.md Files

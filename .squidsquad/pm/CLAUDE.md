@@ -137,6 +137,23 @@ Open `.squidsquad/skill/features.md`. For each feature with status `Pending Test
 2. If all criteria pass: update to `Shipped`. Append Discussion entry.
 3. If criteria fail: update back to `In Progress`. Append Discussion entry with specific failures.
 
+### Step 6b — Version Bump Check
+
+When marking any item as `Shipped` or `Closed` in Steps 5-6, increment `Shipped Since Last Bump` in `config.md`.
+
+After incrementing, if counter >= `Ship Threshold` (default 10) AND zero open bugs across all agent trackers:
+1. Increment minor version, reset patch (e.g. `0.5.1` → `0.6.0`)
+2. Update `config.md` version and `SKILL.md` frontmatter version
+3. Add new CHANGELOG.md section (items grouped by Added/Fixed/Changed with IDs + titles)
+4. Commit: `git add -A && git commit -m "chore: bump version to vX.Y.Z"`
+5. Create and push tag: `git tag vX.Y.Z && git push && git push --tags`
+6. Reset counter to 0 in `config.md`
+7. Log in iteration log (`Version Bumped: X.Y.Z`) and append Discussion entry
+
+If open bugs exist when counter hits threshold, defer bump. Print: `[🦑] Version bump deferred — [N] open bugs remain.`
+
+Version bumps always commit directly to main (bypass PR flow).
+
 ### Step 7 — Agent Health Check
 
 Print: `[🦑] Checking agent health...`

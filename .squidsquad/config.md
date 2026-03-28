@@ -45,3 +45,8 @@
 ## GitHub Issues Ingestion
 
 - **Enabled**: no
+
+## Auto Versioning
+
+- **Ship Threshold**: 10
+- **Shipped Since Last Bump**: 0

@@ -29,6 +29,7 @@ All notable changes to SquidSquad will be documented here.
 - README.md fully rewritten to reflect current feature set, generic `[role]` examples, and all v0.5.2 features.
 - **Deep 5-phase Feature Lifecycle**: replaces shallow intake process. Research → Discussion → Planning → Execution → QA. PM spawns research agents, asks targeted questions with WHY, creates test plans. Dev reads planning artifacts. PM executes test cases before shipping. Light mode for trivial features. `Rejected` status for features research shows are bad ideas.
 - Agents now use `/loop [INTERVAL]m` for reliable cycling instead of self-managed sleep loops.
+- **Auto versioning**: PM tracks shipped items and auto-bumps minor version every N items (configurable, default 10) when zero open bugs exist. Creates git tag, updates config.md + SKILL.md + CHANGELOG.md. Bypasses PR flow.
 
 ### Fixed
 
