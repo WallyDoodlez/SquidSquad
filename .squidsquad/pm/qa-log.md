@@ -59,3 +59,14 @@ _Each PM/QA iteration logs a manual coherence check here._
   - **ISSUE**: statusline.sh line 5 discards JSON stdin (`cat > /dev/null`), losing context window % and workspace info that the default status bar shows. This is BUG-SKILL-004.
   - VERDICT: All acceptance criteria pass, but BUG-SKILL-004 blocks full satisfaction — context window bar is missing. → Shipped with caveat (bug filed).
 - **Notes**: Major progress from skill lead — 2 bugs fixed, 3 features implemented. BUG-SKILL-003 (PS1 logo) and BUG-SKILL-004 (status line missing context window) remain open.
+
+---
+
+## QA Run — 2026-03-27 23:35
+
+- **Result**: Passed
+- **Files Reviewed**: .squidsquad/start-skill.ps1, .squidsquad/start-pm.ps1, .squidsquad/statusline.sh, SKILL.md (PS1 templates), references/agent-instructions.md, .squidsquad/pm/CLAUDE.md
+- **Verification — BUG-SKILL-003 (Fixed)**: VERIFIED. UTF-8 encoding added to both generated PS1 files and both SKILL.md PS1 templates. → Closed.
+- **Verification — BUG-SKILL-004 (Fixed)**: VERIFIED. statusline.sh now reads JSON stdin, parses used_percentage, displays color-coded context usage. → Closed.
+- **Verification — FEAT-SKILL-004 (Pending Test)**: VERIFIED. All 4 criteria confirmed — "never implement code" in Responsibilities + "What You Must Never Do" in both template and generated CLAUDE.md. → Shipped.
+- **Notes**: All bugs now closed. FEAT-SKILL-005 (iteration timestamps + countdown) still Approved, awaiting skill lead.
