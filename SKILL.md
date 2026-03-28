@@ -376,22 +376,37 @@ If the push fails, surface the error to the user and ask them to resolve it (e.g
 
 Print a summary:
 ```
-SquidSquad initialized for [PROJECT_NAME].
+      ▗▄▄▄▄▖
+     ▟██████▙
+     ▐▌▀  ▀▐▌
+     ▝▜████▛▘
+      ▐████▌
+     ▗██████▖
+    ▐███    ███▌
+   ▐██▘      ▝██▌
+  ▐▛▘          ▝▜▌
+  ▌▖            ▗▌
+  ▝▘            ▝▘
 
-  Setup committed and pushed to origin.
-
-  Agents:
-    FE Lead → .squidsquad/fe/CLAUDE.md  (start: bash .squidsquad/start-fe.sh)
-    BE Lead → .squidsquad/be/CLAUDE.md  (start: bash .squidsquad/start-be.sh)
-    PM/QA   → .squidsquad/pm/CLAUDE.md  (start: bash .squidsquad/start-pm.sh)
-
-  Trackers:
-    FE bugs:     .squidsquad/fe/bugs.md
-    FE features: .squidsquad/fe/features.md
-    BE bugs:     .squidsquad/be/bugs.md
-    BE features: .squidsquad/be/features.md
-    QA log:      .squidsquad/pm/qa-log.md
-
-  Next step: open three terminals and run each start script.
-  The agents will coordinate autonomously from there.
+╔══════════════════════════════════════════════════════╗
+║                                                      ║
+║   🦑  SQUIDSQUAD IS READY TO DEPLOY  🦑              ║
+║                                                      ║
+║   Project  : [PROJECT_NAME]                          ║
+║   Repo     : [REPO_URL]                              ║
+║   Pushed   : ✓ .squidsquad/ committed to origin     ║
+║                                                      ║
+╠══════════════════════════════════════════════════════╣
+║                                                      ║
+║   Three agents. One repo. Zero meetings.             ║
+║                                                      ║
+║   Open 3 terminals and launch your squad:            ║
+║                                                      ║
+║   Terminal 1 →  bash .squidsquad/start-fe.sh         ║
+║   Terminal 2 →  bash .squidsquad/start-be.sh         ║
+║   Terminal 3 →  bash .squidsquad/start-pm.sh         ║
+║                                                      ║
+║   The squad takes it from here.                      ║
+║                                                      ║
+╚══════════════════════════════════════════════════════╝
 ```
