@@ -213,3 +213,44 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-28 02:30] **pm/qa**: Filed and approved by human. Simple approach — old logs are in git history, no need for archive files. Keep last 20 (~1.5 hours at 5min interval). Status → Approved.
+
+---
+
+## FEAT-SKILL-010 — Skip iteration log and commit on quiet cycles
+
+- **Priority**: Medium
+- **Status**: Approved
+- **Owner**: skill-lead
+- **Description**: Agents currently create an iteration log and push a commit every cycle, even when nothing happened. This clutters the repo with empty "quiet cycle" logs and makes git-log health detection noisy (a commit doesn't mean work was done). Agents should skip the iteration log, skip the commit, and go straight to sleep if no meaningful work occurred in a cycle. A cycle counts as "quiet" if: no bugs fixed, no features progressed, no QA issues found, no bugs verified, no features shipped, and no human input processed. The iteration counter should only increment when actual work happens.
+- **Acceptance Criteria**:
+  - [ ] Dev agent Ralph Loop skips log + commit + push if no bugs fixed and no features progressed
+  - [ ] PM/QA Ralph Loop skips log + commit + push if no QA issues found, no bugs verified, no features shipped, and no human input processed
+  - [ ] Iteration counter only increments on non-quiet cycles
+  - [ ] Both CLAUDE.md templates in `references/agent-instructions.md` updated
+  - [ ] SKILL.md Ralph Loop summaries updated to document skip behavior
+  - [ ] Git-log health detection accounts for this: a quiet agent isn't necessarily stalled
+
+### Discussion
+
+> [2026-03-28 02:35] **pm/qa**: Filed and approved by human. Quiet cycles are noise — skip log and commit when nothing happened. Makes iteration count and git history more meaningful.
+
+---
+
+## FEAT-SKILL-011 — `/squidsquad-status` command for quick squad overview
+
+- **Priority**: Medium
+- **Status**: Approved
+- **Owner**: skill-lead
+- **Description**: Add a `/squidsquad-status` slash command that gives the human a quick overview of the entire squad's state without manually reading tracker files. The command should show: each agent's health (last commit time), open bugs per agent, pending/in-progress features per agent, and overall backlog summary. This runs in any Claude session in the repo — not just from the PM agent.
+- **Acceptance Criteria**:
+  - [ ] A new skill entry or slash command `/squidsquad-status` is defined (could be a simple script or a skill instruction block in SKILL.md)
+  - [ ] Output shows each agent's last commit time and health status (active/stalled/unknown)
+  - [ ] Output shows open bug count and IDs per agent
+  - [ ] Output shows in-progress and approved feature count and IDs per agent
+  - [ ] Output shows recently shipped features (last 5)
+  - [ ] Works from any Claude session in the repo, not just PM
+  - [ ] SKILL.md documents the command
+
+### Discussion
+
+> [2026-03-28 02:35] **pm/qa**: Filed and approved by human. Gives the human a dashboard view without reading raw tracker files.
