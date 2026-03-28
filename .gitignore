@@ -1,2 +1,5 @@
 # SquidSquad runtime (not committed)
 .squidsquad/.active-role
+
+# OS/shell artifacts
+*.stackdump
