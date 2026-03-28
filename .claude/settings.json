@@ -1,4 +1,14 @@
 {
+  "permissions": {
+    "allow": [
+      "Edit(.squidsquad/**)",
+      "Write(.squidsquad/**)",
+      "Bash(git pull*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git push*)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {

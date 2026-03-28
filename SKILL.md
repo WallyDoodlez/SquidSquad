@@ -421,6 +421,16 @@ Create or update `.claude/settings.json` in the project root to add a `SessionSt
 
 ```json
 {
+  "permissions": {
+    "allow": [
+      "Edit(.squidsquad/**)",
+      "Write(.squidsquad/**)",
+      "Bash(git pull*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git push*)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
@@ -436,6 +446,8 @@ Create or update `.claude/settings.json` in the project root to add a `SessionSt
   }
 }
 ```
+
+> **Why these permissions?** Dev agents run with `--permission-mode auto` but still need explicit allow rules for writing tracker files and running git commands without being prompted mid-cycle. Without these, the agent will pause and ask for permission on every file write.
 
 **If `.claude/settings.json` already exists**, merge the SquidSquad hook into the existing `SessionStart` array (or create the `SessionStart` key if absent). Do not overwrite any existing hooks — append the new entry.
 
