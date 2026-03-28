@@ -100,14 +100,16 @@ _Features start as Pending (awaiting human approval) and move through Approved â
 - **Priority**: Medium
 - **Status**: Approved
 - **Owner**: skill-lead
-- **Description**: Each Ralph Loop iteration should print a visible timestamp when it starts and when it finishes, so the human can see cycle timing in the terminal output. This applies to all agents (dev and PM/QA). The timestamps should be printed by the boot scripts (`.sh` and `.ps1`) that wrap each cycle, making cycle boundaries easy to spot in scrollback.
+- **Description**: Each Ralph Loop iteration should print a visible timestamp when it starts and when it finishes, so the human can see cycle timing in the terminal output. This applies to all agents (dev and PM/QA). The timestamps should be printed by the boot scripts (`.sh` and `.ps1`) that wrap each cycle, making cycle boundaries easy to spot in scrollback. Additionally, the status bar should show a countdown estimate to the next iteration.
 - **Acceptance Criteria**:
   - [ ] Boot scripts print a start timestamp at the beginning of each cycle (e.g. `[squidsquad] ---- cycle 3 started at 14:32:07 ----`)
   - [ ] Boot scripts print a stop timestamp when the cycle ends (e.g. `[squidsquad] ---- cycle 3 complete at 14:33:42 ----`)
   - [ ] Both `.sh` and `.ps1` boot script templates in SKILL.md include this behavior
   - [ ] Generated boot scripts include this behavior
+  - [ ] Status line script (`statusline.sh`) shows estimated time until next cycle (e.g. `next in ~2m`) by calculating `interval - elapsed`. Note: only updates on assistant messages, not live.
 
 ### Discussion
 
 > [2026-03-27 23:25] **pm/qa**: Filed from human request.
 > [2026-03-27 23:25] **pm/qa**: Human approved. Status â†’ Approved.
+> [2026-03-27 23:30] **pm/qa**: Folded in human request for next-iteration countdown in status bar. Added acceptance criterion for `next in ~Xm` display in statusline.sh.
