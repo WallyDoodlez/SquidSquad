@@ -339,7 +339,7 @@ Use the templates in `references/agent-instructions.md` to generate role-specifi
 
 Generate both a `.sh` (bash) and a `.ps1` (PowerShell) boot script for each dev agent, plus PM/QA. Script names use the role name, e.g. `start-be.sh`, `start-api.sh`, `start-worker.ps1`.
 
-The shell owns the loop — each `claude -p` invocation handles one Ralph Loop cycle. Substitute `[ROLE]` with the actual role name and `[INTERVAL]` from `config.md`.
+All agents run interactively. Substitute `[ROLE]` with the actual role name. The agent's CLAUDE.md instructions handle the loop internally — no shell loop needed.
 
 **`start-[role].sh`**:
 ```bash
@@ -361,22 +361,7 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
-INTERVAL=$(grep "Minutes" .squidsquad/config.md | grep -o '[0-9]*' | head -1)
-INTERVAL=${INTERVAL:-10}
-
-echo "[squidsquad] [ROLE] agent starting. loop interval: ${INTERVAL}min"
-echo "[squidsquad] press Ctrl+C to stop"
-echo ""
-
-N=0
-while true; do
-  N=$((N + 1))
-  echo "[squidsquad] ---- cycle $N started at $(date '+%H:%M:%S') ----"
-  claude --dangerously-skip-permissions --verbose -p "Read .squidsquad/[ROLE]/CLAUDE.md for your instructions. Begin your Ralph Loop cycle now." 2>&1
-  echo ""
-  echo "[squidsquad] ---- cycle $N complete. sleeping ${INTERVAL}min ----"
-  sleep $((INTERVAL * 60))
-done
+claude --permission-mode auto
 ```
 
 **`start-[role].ps1`**:
@@ -397,22 +382,7 @@ Write-Host "    ▌▌▌▌▌▌"
 Write-Host "  S Q U I D S Q U A D   v$v  -  [ROLE]"
 Write-Host ""
 
-$interval = if ($config -match "Minutes.*?(\d+)") { [int]$Matches[1] } else { 10 }
-
-Write-Host "[squidsquad] [ROLE] agent starting. loop interval: ${interval}min"
-Write-Host "[squidsquad] press Ctrl+C to stop"
-Write-Host ""
-
-$n = 0
-while ($true) {
-    $n++
-    $time = Get-Date -Format "HH:mm:ss"
-    Write-Host "[squidsquad] ---- cycle $n started at $time ----"
-    claude --dangerously-skip-permissions --verbose -p "Read .squidsquad/[ROLE]/CLAUDE.md for your instructions. Begin your Ralph Loop cycle now." 2>&1
-    Write-Host ""
-    Write-Host "[squidsquad] ---- cycle $n complete. sleeping ${interval}min ----"
-    Start-Sleep -Seconds ($interval * 60)
-}
+claude --permission-mode auto
 ```
 
 **`start-pm.sh`**:
@@ -461,7 +431,7 @@ if (Test-Path .squidsquad) {
 claude --permission-mode auto
 ```
 
-> **Note:** Dev agents use `-p` with a shell loop — each cycle runs one `claude -p` invocation, then sleeps. PM/QA runs interactively (no `-p`) so it can check in with you. You tell the PM what to do by typing in its terminal.
+> **Note:** All agents run interactively with `--permission-mode auto`. The user can observe progress and comment in any agent's terminal. The CLAUDE.md instructions handle the Ralph Loop internally — the agent reads its instructions on first message and loops from there.
 
 Make the `.sh` scripts executable (`chmod +x`).
 
