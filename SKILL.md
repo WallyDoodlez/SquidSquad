@@ -61,9 +61,9 @@ When you invoke SquidSquad, it creates the following inside your project root:
 ```
 .squidsquad/
 ├── config.md                  ← project config, test commands, counters, git protocol
-├── start-fe.sh                ← boot script: launches FE Lead via `claude -p`
-├── start-be.sh                ← boot script: launches BE Lead via `claude -p`
-├── start-pm.sh                ← boot script: launches PM/QA via `claude -p`
+├── start-fe.sh / start-fe.ps1 ← boot script: launches FE Lead via `claude -p`
+├── start-be.sh / start-be.ps1 ← boot script: launches BE Lead via `claude -p`
+├── start-pm.sh / start-pm.ps1 ← boot script: launches PM/QA via `claude -p`
 ├── fe/
 │   ├── CLAUDE.md              ← FE Lead role instructions + Ralph Loop
 │   ├── bugs.md                ← BUG-FE-XXX tracker with Discussion sections
@@ -295,11 +295,21 @@ Use the templates in `references/agent-instructions.md` to generate role-specifi
 
 ### Step 5 — Generate Boot Scripts
 
+Generate both a `.sh` (bash) and a `.ps1` (PowerShell) version of each boot script so the squad can be launched on any platform.
+
 **`start-fe.sh`**:
 ```bash
 #!/bin/bash
 cd "$(git rev-parse --show-toplevel)"
 claude --permission-mode auto --enable-auto-mode -p "$(cat .squidsquad/fe/CLAUDE.md)"
+```
+
+**`start-fe.ps1`**:
+```powershell
+$repoRoot = git rev-parse --show-toplevel
+Set-Location $repoRoot
+$prompt = Get-Content .squidsquad/fe/CLAUDE.md -Raw
+claude --permission-mode auto --enable-auto-mode -p $prompt
 ```
 
 **`start-be.sh`**:
@@ -309,6 +319,14 @@ cd "$(git rev-parse --show-toplevel)"
 claude --permission-mode auto --enable-auto-mode -p "$(cat .squidsquad/be/CLAUDE.md)"
 ```
 
+**`start-be.ps1`**:
+```powershell
+$repoRoot = git rev-parse --show-toplevel
+Set-Location $repoRoot
+$prompt = Get-Content .squidsquad/be/CLAUDE.md -Raw
+claude --permission-mode auto --enable-auto-mode -p $prompt
+```
+
 **`start-pm.sh`**:
 ```bash
 #!/bin/bash
@@ -316,7 +334,15 @@ cd "$(git rev-parse --show-toplevel)"
 claude --permission-mode auto --enable-auto-mode -p "$(cat .squidsquad/pm/CLAUDE.md)"
 ```
 
-Make all three scripts executable.
+**`start-pm.ps1`**:
+```powershell
+$repoRoot = git rev-parse --show-toplevel
+Set-Location $repoRoot
+$prompt = Get-Content .squidsquad/pm/CLAUDE.md -Raw
+claude --permission-mode auto --enable-auto-mode -p $prompt
+```
+
+Make the `.sh` scripts executable (`chmod +x`).
 
 ### Step 6 — Seed Tracker Files
 
@@ -428,9 +454,15 @@ Print a summary:
 ║                                                      ║
 ║   Open 3 terminals and launch your squad:            ║
 ║                                                      ║
+║   bash / zsh:                                        ║
 ║   Terminal 1 →  bash .squidsquad/start-fe.sh         ║
 ║   Terminal 2 →  bash .squidsquad/start-be.sh         ║
 ║   Terminal 3 →  bash .squidsquad/start-pm.sh         ║
+║                                                      ║
+║   PowerShell:                                        ║
+║   Terminal 1 →  .\.squidsquad\start-fe.ps1           ║
+║   Terminal 2 →  .\.squidsquad\start-be.ps1           ║
+║   Terminal 3 →  .\.squidsquad\start-pm.ps1           ║
 ║                                                      ║
 ║   The squad takes it from here.                      ║
 ║                                                      ║

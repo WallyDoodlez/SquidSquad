@@ -57,9 +57,9 @@ All coordination happens through markdown files committed to your repo:
 ```
 .squidsquad/
 ├── config.md              ← project config, test commands, ID counters
-├── start-fe.sh            ← launch FE Lead
-├── start-be.sh            ← launch BE Lead
-├── start-pm.sh            ← launch PM/QA
+├── start-fe.sh / start-fe.ps1  ← launch FE Lead
+├── start-be.sh / start-be.ps1  ← launch BE Lead
+├── start-pm.sh / start-pm.ps1  ← launch PM/QA
 ├── fe/
 │   ├── CLAUDE.md          ← FE Lead instructions
 │   ├── bugs.md            ← BUG-FE-XXX tracker
@@ -120,6 +120,7 @@ Claude will ask for your project name, repo URL, FE/BE frameworks, and test comm
 
 Open three terminal windows and run:
 
+**bash / zsh:**
 ```bash
 # Terminal 1 — FE Lead
 bash .squidsquad/start-fe.sh
@@ -129,6 +130,18 @@ bash .squidsquad/start-be.sh
 
 # Terminal 3 — PM/QA
 bash .squidsquad/start-pm.sh
+```
+
+**PowerShell:**
+```powershell
+# Terminal 1 — FE Lead
+.\.squidsquad\start-fe.ps1
+
+# Terminal 2 — BE Lead
+.\.squidsquad\start-be.ps1
+
+# Terminal 3 — PM/QA
+.\.squidsquad\start-pm.ps1
 ```
 
 The agents will start their Ralph Loops immediately. Check `.squidsquad/fe/bugs.md`, `.squidsquad/be/features.md`, and `.squidsquad/pm/qa-log.md` to see activity as it accumulates.
