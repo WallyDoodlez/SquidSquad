@@ -1,6 +1,7 @@
 ---
 name: squidsquad
 description: "Your AI dev team that coordinates through markdown, not meetings."
+version: 0.5.0
 ---
 
 # SquidSquad
@@ -259,6 +260,8 @@ Create the full directory tree as specified above.
 ```markdown
 # SquidSquad Config
 
+- **SquidSquad Version**: 0.5.0
+
 ## Project
 
 - **Name**: [PROJECT_NAME]
@@ -402,7 +405,7 @@ Create or update `.claude/settings.json` in the project root to add a `SessionSt
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'if [ -d .squidsquad ]; then cat <<\"LOGO\"\n\n      ▗▄▄▄▄▖\n     ▟██████▙\n      ▐▌▀  ▀▐▌\n    ▝▜████▛▘\n      ▐████▌\n     ▗██████▖\n    ▐███    ███▌\n   ▐██▘      ▝██▌\n  ▐▛▘          ▝▜▌\n  ▌▖            ▗▌\n  ▝▘            ▝▘\n\n  S Q U I D S Q U A D\n\nLOGO\nfi'"
+            "command": "bash -c 'if [ -d .squidsquad ]; then V=$(grep -o [0-9][0-9.]*[0-9] .squidsquad/config.md 2>/dev/null | head -1); cat <<LOGO\n\n      ▗▄▄▄▄▖\n     ▟██████▙\n      ▐▌▀  ▀▐▌\n    ▝▜████▛▘\n      ▐████▌\n     ▗██████▖\n    ▐███    ███▌\n   ▐██▘      ▝██▌\n  ▐▛▘          ▝▜▌\n  ▌▖            ▗▌\n  ▝▘            ▝▘\n\n  S Q U I D S Q U A D   v${V:-?}\n\nLOGO\nfi'"
           }
         ]
       }

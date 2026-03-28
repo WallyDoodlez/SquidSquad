@@ -269,6 +269,32 @@ SquidSquad agents follow strict append-only conventions to minimize conflicts:
 
 ---
 
+## Versioning
+
+SquidSquad uses [semver](https://semver.org). Releases are tagged on GitHub (`v0.5.0`, `v1.0.0`, etc.).
+
+The installed version is stored in `.squidsquad/config.md` and shown in the boot logo on every Claude Code session start.
+
+### Installing a specific version
+
+```bash
+# clone and checkout a tag
+git clone https://github.com/WallyDoodlez/SquidSquad
+cd SquidSquad && git checkout v0.5.0
+```
+
+Then copy or reference `SKILL.md` as your Claude Code skill.
+
+### Upgrading
+
+1. Pull the latest `SKILL.md` (or check out the new tag)
+2. In your project, say: **"upgrade squidsquad"**
+3. The skill reads the version in `.squidsquad/config.md`, compares it to the current skill version, and migrates — regenerating boot scripts, CLAUDE.md templates, and the `settings.json` hook without touching your tracker files or config values
+
+See [CHANGELOG.md](./CHANGELOG.md) for what changed between versions.
+
+---
+
 ## License
 
 MIT
