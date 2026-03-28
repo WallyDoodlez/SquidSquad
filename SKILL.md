@@ -430,23 +430,22 @@ Print a summary:
 ```
       ▗▄▄▄▄▖
      ▟██████▙
-     ▐▌▀  ▀▐▌
+      ▐▌▀  ▀▐▌
      ▝▜████▛▘
-      ▐████▌
      ▗██████▖
     ▐███    ███▌
-   ▐██▘      ▝██▌
-  ▐▛▘          ▝▜▌
-  ▌▖            ▗▌
-  ▝▘            ▝▘
+   ▐██      ▝██▌
+  ▐▛▘         ▜▌
+  ▌▖           ▗▌
+  ▝▘          ▝▘
 
 ╔══════════════════════════════════════════════════════╗
 ║                                                      ║
-║   🦑  SQUIDSQUAD IS READY TO DEPLOY  🦑              ║
+║   🦑  SQUIDSQUAD IS READY TO DEPLOY  🦑             ║
 ║                                                      ║
 ║   Project  : [PROJECT_NAME]                          ║
 ║   Repo     : [REPO_URL]                              ║
-║   Pushed   : ✓ .squidsquad/ committed to origin     ║
+║   Pushed   : ✓ .squidsquad/ committed to origin      ║
 ║                                                      ║
 ╠══════════════════════════════════════════════════════╣
 ║                                                      ║
