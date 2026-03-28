@@ -234,6 +234,12 @@ No standup required.
 - A git repository with a remote (GitHub, GitLab, etc.)
 - FE, BE, and e2e test commands that can be run from the repo root
 
+## Boot Logo
+
+SquidSquad setup writes a `SessionStart` hook to `.claude/settings.json` in your project. Every time Claude Code starts in a repo with a `.squidsquad/` folder, the squid logo appears in the terminal automatically — a quick visual signal that the squad is active on this project.
+
+If the project already has a `.claude/settings.json`, SquidSquad merges into the existing `SessionStart` array without overwriting anything.
+
 ---
 
 ## Git Protocol

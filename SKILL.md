@@ -360,7 +360,33 @@ _Product ideas and enhancement proposals surfaced during QA cycles or human chec
 
 If the user provided seed items, add them to the appropriate tracker files using the full bug or feature format, with `Open` / `Pending` status and an initial Discussion entry from `pm/qa` noting when it was seeded.
 
-### Step 7 — Commit and Push
+### Step 7 — Configure SessionStart Hook
+
+Create or update `.claude/settings.json` in the project root to add a `SessionStart` hook that prints the SquidSquad logo whenever Claude Code boots in this repo.
+
+**If `.claude/settings.json` does not exist**, create it:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'if [ -d .squidsquad ]; then cat <<\"LOGO\"\n\n      ▗▄▄▄▄▖\n     ▟██████▙\n      ▐▌▀  ▀▐▌\n    ▝▜████▛▘\n      ▐████▌\n     ▗██████▖\n    ▐███    ███▌\n   ▐██▘      ▝██▌\n  ▐▛▘          ▝▜▌\n  ▌▖            ▗▌\n  ▝▘            ▝▘\n\n  S Q U I D S Q U A D\n\nLOGO\nfi'"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**If `.claude/settings.json` already exists**, merge the SquidSquad hook into the existing `SessionStart` array (or create the `SessionStart` key if absent). Do not overwrite any existing hooks — append the new entry.
+
+### Step 8 — Commit and Push
 
 Commit the entire `.squidsquad/` folder and push so the other agents can pull the setup the moment they boot:
 
@@ -372,7 +398,7 @@ git push
 
 If the push fails, surface the error to the user and ask them to resolve it (e.g. `git push --set-upstream origin main`) before proceeding. Do not skip this step — agents that boot before the setup is pushed will be working from a stale state.
 
-### Step 8 — Confirm Setup
+### Step 9 — Confirm Setup
 
 Print a summary:
 ```

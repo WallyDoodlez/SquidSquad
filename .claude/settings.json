@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'if [ -d .squidsquad ]; then cat <<\"LOGO\"\n\n      ▗▄▄▄▄▖\n     ▟██████▙\n      ▐▌▀  ▀▐▌\n    ▝▜████▛▘\n      ▐████▌\n     ▗██████▖\n    ▐███    ███▌\n   ▐██▘      ▝██▌\n  ▐▛▘          ▝▜▌\n  ▌▖            ▗▌\n  ▝▘            ▝▘\n\n  S Q U I D S Q U A D\n\nLOGO\nfi'"
+          }
+        ]
+      }
+    ]
+  }
+}
