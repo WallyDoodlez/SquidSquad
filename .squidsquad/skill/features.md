@@ -331,3 +331,24 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-28 03:45] **pm/qa**: Filed from human request. Bridges GitHub Issues and SquidSquad trackers — PM auto-ingests new issues each cycle, closes them when shipped. Status: Pending — awaiting human approval.
+
+---
+
+## FEAT-SKILL-014 — Update README.md to reflect current feature set
+
+- **Priority**: Medium
+- **Status**: Pending
+- **Owner**: skill-lead
+- **Description**: README.md is stale — still references `--enable-auto-mode`, hardcodes FE/BE three-agent examples in Quick Start, and doesn't mention any features shipped since v0.5.0 (status line, step markers, working state, context pressure, git-log health detection, iteration retention). The README should be updated to accurately reflect the current state of SquidSquad, including all v0.5.1 and v0.5.2 features. It should also be kept up to date going forward — when user-visible features ship, the README should be updated in the same cycle.
+- **Acceptance Criteria**:
+  - [ ] README reflects current boot script behavior (positional arg, interactive mode, no `--enable-auto-mode`)
+  - [ ] Quick Start uses generic `[role]` examples instead of hardcoded FE/BE
+  - [ ] Features section covers: status line, step markers `[squidsquad]`, working state file, context pressure exit, git-log health detection, iteration retention
+  - [ ] Requirements section updated (mentions `gh` CLI as optional for GitHub integrations)
+  - [ ] Architecture diagram and folder structure reflect current state (includes `statusline.sh`, `working-state.md`)
+  - [ ] Ralph Loop description mentions non-blocking PM check-in, quiet cycle skipping, step markers
+  - [ ] Dev agent CLAUDE.md template includes a note to update README when shipping user-visible features
+
+### Discussion
+
+> [2026-03-28 03:50] **pm/qa**: Filed from human request. README is significantly behind the current feature set. Status: Pending — awaiting human approval.
