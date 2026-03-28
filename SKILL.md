@@ -345,22 +345,7 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
-INTERVAL=$(grep "Minutes" .squidsquad/config.md | grep -o '[0-9]*' | head -1)
-INTERVAL=${INTERVAL:-10}
-
-echo "[squidsquad] [ROLE] agent starting. loop interval: ${INTERVAL}min"
-echo "[squidsquad] press Ctrl+C to stop"
-echo ""
-
-N=0
-while true; do
-  N=$((N + 1))
-  echo "[squidsquad] ---- cycle $N started at $(date '+%H:%M:%S') ----"
-  claude --permission-mode auto --enable-auto-mode -p "$(cat .squidsquad/[ROLE]/CLAUDE.md)"
-  echo ""
-  echo "[squidsquad] ---- cycle $N complete. sleeping ${INTERVAL}min ----"
-  sleep $((INTERVAL * 60))
-done
+claude --dangerously-skip-permissions --system-prompt-file .squidsquad/[ROLE]/CLAUDE.md
 ```
 
 **`start-[role].ps1`**:
@@ -378,26 +363,10 @@ Write-Host "    ▐▌▀ ▀▐▌"
 Write-Host "  ▜██████▛▘"
 Write-Host "   ▐██████"
 Write-Host "    ▌▌▌▌▌▌"
-Write-Host "  S Q U I D S Q U A D   v$v  —  [ROLE]"
+Write-Host "  S Q U I D S Q U A D   v$v  -  [ROLE]"
 Write-Host ""
 
-$interval = if ($config -match "Minutes.*?(\d+)") { [int]$Matches[1] } else { 10 }
-
-Write-Host "[squidsquad] [ROLE] agent starting. loop interval: ${interval}min"
-Write-Host "[squidsquad] press Ctrl+C to stop"
-Write-Host ""
-
-$n = 0
-while ($true) {
-    $n++
-    $time = Get-Date -Format "HH:mm:ss"
-    Write-Host "[squidsquad] ---- cycle $n started at $time ----"
-    $prompt = Get-Content .squidsquad/[ROLE]/CLAUDE.md -Raw
-    claude --permission-mode auto --enable-auto-mode -p $prompt
-    Write-Host ""
-    Write-Host "[squidsquad] ---- cycle $n complete. sleeping ${interval}min ----"
-    Start-Sleep -Seconds ($interval * 60)
-}
+claude --dangerously-skip-permissions --system-prompt-file .squidsquad/[ROLE]/CLAUDE.md
 ```
 
 **`start-pm.sh`**:
@@ -420,7 +389,7 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
-claude --permission-mode auto "$(cat .squidsquad/pm/CLAUDE.md)"
+claude --permission-mode auto --system-prompt-file .squidsquad/pm/CLAUDE.md
 ```
 
 **`start-pm.ps1`**:
@@ -439,15 +408,14 @@ if (Test-Path .squidsquad) {
     Write-Host "  ▜██████▛▘"
     Write-Host "   ▐██████"
     Write-Host "    ▌▌▌▌▌▌"
-    Write-Host "  S Q U I D S Q U A D   v$v  —  PM / QA"
+    Write-Host "  S Q U I D S Q U A D   v$v  -  PM / QA"
     Write-Host ""
 }
 
-$prompt = Get-Content .squidsquad/pm/CLAUDE.md -Raw
-claude --permission-mode auto $prompt
+claude --permission-mode auto --system-prompt-file .squidsquad/pm/CLAUDE.md
 ```
 
-> **Note:** PM/QA runs in interactive mode (no `-p`) so it can check in with you each cycle. Dev agent scripts use a `while true` shell loop — each `claude -p` call handles one cycle, the shell sleeps between them.
+> **Note:** All agents run interactively. PM/QA uses `--permission-mode auto` so it can check in with you. Dev agents use `--dangerously-skip-permissions` to run fully autonomous. Both load their instructions via `--system-prompt-file`.
 
 Make the `.sh` scripts executable (`chmod +x`).
 

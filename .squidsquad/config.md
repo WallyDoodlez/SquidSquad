@@ -1,6 +1,6 @@
 # SquidSquad Config
 
-- **SquidSquad Version**: 0.5.0
+- **SquidSquad Version**: 0.5.1
 - **Tracker Schema**: 1
 
 ## Agents
@@ -20,7 +20,7 @@
 
 ## ID Counters
 
-- **BUG-SKILL**: 0
+- **BUG-SKILL**: 1
 - **FEAT-SKILL**: 2
 
 ## Git Protocol

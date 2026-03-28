@@ -5,35 +5,13 @@ $config = Get-Content .squidsquad/config.md -Raw
 $v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
 
 Write-Host ""
-Write-Host "      ▗▄▄▄▄▖"
-Write-Host "     ▟██████▙"
-Write-Host "      ▐▌▀  ▀▐▌"
-Write-Host "    ▝▜████▛▘"
-Write-Host "      ▐████▌"
-Write-Host "     ▗██████▖"
-Write-Host "    ▐███    ███▌"
-Write-Host "   ▐██▘      ▝██▌"
-Write-Host "  ▐▛▘          ▝▜▌"
-Write-Host "  ▌▖            ▗▌"
-Write-Host "  ▝▘            ▝▘"
-Write-Host ""
-Write-Host "  S Q U I D S Q U A D   v$v  —  skill"
+Write-Host "    ▗▄▄▄▄▖"
+Write-Host "   ▟██████▙"
+Write-Host "    ▐▌▀ ▀▐▌"
+Write-Host "  ▜██████▛▘"
+Write-Host "   ▐██████"
+Write-Host "    ▌▌▌▌▌▌"
+Write-Host "  S Q U I D S Q U A D   v$v  -  skill"
 Write-Host ""
 
-$interval = if ($config -match "Minutes.*?(\d+)") { [int]$Matches[1] } else { 10 }
-
-Write-Host "[squidsquad] skill agent starting. loop interval: ${interval}min"
-Write-Host "[squidsquad] press Ctrl+C to stop"
-Write-Host ""
-
-$n = 0
-while ($true) {
-    $n++
-    $time = Get-Date -Format "HH:mm:ss"
-    Write-Host "[squidsquad] ---- cycle $n started at $time ----"
-    $prompt = Get-Content .squidsquad/skill/CLAUDE.md -Raw
-    claude --permission-mode auto --enable-auto-mode -p $prompt
-    Write-Host ""
-    Write-Host "[squidsquad] ---- cycle $n complete. sleeping ${interval}min ----"
-    Start-Sleep -Seconds ($interval * 60)
-}
+claude --dangerously-skip-permissions --system-prompt-file .squidsquad/skill/CLAUDE.md

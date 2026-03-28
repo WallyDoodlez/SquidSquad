@@ -16,5 +16,4 @@ if (Test-Path .squidsquad) {
     Write-Host ""
 }
 
-$prompt = Get-Content .squidsquad/pm/CLAUDE.md -Raw
-claude --permission-mode auto $prompt
+claude --permission-mode auto --system-prompt-file .squidsquad/pm/CLAUDE.md
