@@ -385,7 +385,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-015 — Auto version bump and git tag every 10 shipped items
 
 - **Priority**: Medium
-- **Status**: Pending
+- **Status**: Planning
 - **Owner**: skill-lead
 - **Description**: When the PM/QA verifies and ships a feature or bug fix, it should track a running count of shipped items since the last version bump. Every 10 shipped items, the PM automatically bumps the minor version number (e.g. `0.5.0` → `0.6.0`), updates `config.md`, `SKILL.md` frontmatter, and `CHANGELOG.md`, creates a git tag (`v0.6.0`), and pushes the tag. This gives the project a natural release cadence tied to actual output rather than arbitrary dates.
 
@@ -410,6 +410,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 > [2026-03-28 04:00] **pm/qa**: Filed from human request. Auto-version based on shipped output — every 10 items triggers a minor version bump and git tag. Status: Pending — awaiting human approval.
 > [2026-03-28 05:00] **pm/qa**: Human wants this feature to be the first test case for FEAT-SKILL-016 (deep feature lifecycle). Do NOT approve yet — wait for 016 to ship, then run 015 through the full research → discussion → planning → execution → QA flow as validation.
+> [2026-03-28 06:45] **pm/qa**: Human approved. Status → Planning. Beginning intake process. Running Phase 1 (Research).
 
 ---
 
@@ -500,3 +501,31 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-28 04:25] **pm/qa**: Filed from human request. Architectural improvement — externalize templates so they're maintained once and referenced at runtime. Reduces duplication, simplifies upgrades, and keeps generated files small. Status: Pending — awaiting human approval.
+
+---
+
+## FEAT-SKILL-018 — All planning phases should maximize subagent usage
+
+- **Priority**: High
+- **Owner**: skill-lead
+- **Status**: Pending
+- **Description**: The 5-phase Feature Intake Process (FEAT-SKILL-016) should leverage Claude Code subagents (via the Agent tool) as much as possible across all phases. Currently Phase 1 (Research) spawns a research agent, but the other phases run inline. The PM should delegate heavy lifting to subagents wherever feasible:
+
+  **Potential subagent usage per phase:**
+  1. **Phase 1 (Research)** — Already uses a research subagent ✅
+  2. **Phase 2 (Discussion)** — Could spawn an agent to prepare question recommendations and option analysis before presenting to human
+  3. **Phase 3 (Planning)** — Could spawn an agent to draft the TEST-PLAN.md and feature entry based on locked decisions
+  4. **Phase 4 (Execution)** — Dev agent already handles this
+  5. **Phase 5 (QA)** — Could spawn an agent to do the file-level verification pass
+
+  Benefits: reduces context pressure on the main PM agent, enables parallel work, and keeps the PM's context window focused on coordination rather than deep file reads.
+
+- **Acceptance Criteria**:
+  - [ ] All 5 phases documented with explicit subagent delegation where applicable
+  - [ ] PM template in `references/agent-instructions.md` updated with subagent spawn instructions per phase
+  - [ ] Phases that remain inline have documented rationale (e.g., Phase 2 discussion must be interactive with human)
+  - [ ] Generated PM CLAUDE.md reflects the subagent approach
+
+### Discussion
+
+> [2026-03-28 06:50] **pm/qa**: Filed from human request. Human wants maximum subagent delegation across all planning phases to reduce PM context pressure and enable parallel work. Status: Pending — awaiting human approval.
