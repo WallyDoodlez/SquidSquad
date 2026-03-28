@@ -308,7 +308,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-013 — Auto-ingest GitHub Issues into tracker on each PM cycle
 
 - **Priority**: High
-- **Status**: Pending
+- **Status**: Approved
 - **Owner**: skill-lead
 - **Description**: **Optional, configurable at setup.** The PM/QA Ralph Loop should check the repo's GitHub Issues on every cycle using `gh issue list`. New issues that haven't already been ingested get triaged and filed into the appropriate agent's bug or feature tracker. This closes the loop between external contributors/users filing issues on GitHub and the SquidSquad agents picking them up automatically. This feature is opt-in — setup Step 1 should prompt: "Auto-ingest GitHub Issues? (requires `gh` CLI) [y/N]". The choice is stored in `config.md` as `GitHub Issues Ingestion: enabled/disabled`. When disabled, PM skips the ingestion step.
 
@@ -341,13 +341,14 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 > [2026-03-28 03:45] **pm/qa**: Filed from human request. Bridges GitHub Issues and SquidSquad trackers — PM auto-ingests new issues each cycle, closes them when shipped. Status: Pending — awaiting human approval.
 > [2026-03-28 03:55] **pm/qa**: Human feedback: this must be opt-in, same as FEAT-SKILL-012. Setup prompts for it, config stores the choice. When disabled, PM skips the step.
+> [2026-03-28 04:00] **pm/qa**: Human approved. Status → Approved.
 
 ---
 
 ## FEAT-SKILL-014 — Update README.md to reflect current feature set
 
 - **Priority**: Medium
-- **Status**: Pending
+- **Status**: Approved
 - **Owner**: skill-lead
 - **Description**: README.md is stale — still references `--enable-auto-mode`, hardcodes FE/BE three-agent examples in Quick Start, and doesn't mention any features shipped since v0.5.0 (status line, step markers, working state, context pressure, git-log health detection, iteration retention). The README should be updated to accurately reflect the current state of SquidSquad, including all v0.5.1 and v0.5.2 features. It should also be kept up to date going forward — when user-visible features ship, the README should be updated in the same cycle.
 - **Acceptance Criteria**:
@@ -362,3 +363,34 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-28 03:50] **pm/qa**: Filed from human request. README is significantly behind the current feature set. Status: Pending — awaiting human approval.
+> [2026-03-28 04:00] **pm/qa**: Human approved. Status → Approved.
+
+---
+
+## FEAT-SKILL-015 — Auto version bump and git tag every 10 shipped items
+
+- **Priority**: Medium
+- **Status**: Pending
+- **Owner**: skill-lead
+- **Description**: When the PM/QA verifies and ships a feature or bug fix, it should track a running count of shipped items since the last version bump. Every 10 shipped items, the PM automatically bumps the minor version number (e.g. `0.5.0` → `0.6.0`), updates `config.md`, `SKILL.md` frontmatter, and `CHANGELOG.md`, creates a git tag (`v0.6.0`), and pushes the tag. This gives the project a natural release cadence tied to actual output rather than arbitrary dates.
+
+  **Mechanics:**
+  1. `config.md` gets a new counter: `Shipped Since Last Bump: N`
+  2. PM increments the counter each time it marks an item as `Shipped`
+  3. When the counter reaches 10: bump minor version, reset counter to 0, update version in `config.md` + `SKILL.md` frontmatter, add a new section to `CHANGELOG.md`, create and push a git tag
+  4. The bump is logged in the PM iteration log
+
+- **Acceptance Criteria**:
+  - [ ] `config.md` template includes `Shipped Since Last Bump: 0` counter
+  - [ ] PM increments the counter when marking any item as `Shipped`
+  - [ ] At count 10: PM bumps minor version (e.g. `0.5.x` → `0.6.0`)
+  - [ ] PM updates version in `config.md` and `SKILL.md` frontmatter
+  - [ ] PM adds a new version section to `CHANGELOG.md` summarizing the 10 shipped items
+  - [ ] PM creates and pushes a git tag (e.g. `v0.6.0`)
+  - [ ] Counter resets to 0 after bump
+  - [ ] PM/QA CLAUDE.md template updated with the version bump logic
+  - [ ] SKILL.md documents the auto-versioning behavior
+
+### Discussion
+
+> [2026-03-28 04:00] **pm/qa**: Filed from human request. Auto-version based on shipped output — every 10 items triggers a minor version bump and git tag. Status: Pending — awaiting human approval.
