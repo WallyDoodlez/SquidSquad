@@ -415,49 +415,44 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-016 — Deep research-driven Feature Intake Process with interactive questioning
 
 - **Priority**: Critical
-- **Status**: Pending
+- **Status**: Approved
 - **Owner**: skill-lead
-- **Description**: The current PM Feature Intake Process is too shallow — it does a basic duplicate check and feasibility scan but doesn't deeply consider side effects, edge cases, broader user impact, or integration risks. Features filed from impulse requests (e.g. the statusLine feature that wiped user settings) end up causing bugs because the requirements weren't thought through.
+- **Description**: Replace the PM's shallow Feature Intake Process with a deep, GSD-inspired 5-phase feature lifecycle. Full design doc: `.squidsquad/pm/FEAT-SKILL-016-design.md`.
 
-  The PM must be upgraded to use a deep research-driven intake process, similar to GSD's `research-phase` → `discuss-phase` → `plan-phase` flow:
+  **The 5 phases:**
+  1. **Research (PM)** — Spawn research agent: codebase impact, side effects, edge cases, integration risks → RESEARCH.md
+  2. **Discussion (PM + Human)** — Present findings, ask targeted questions with WHY, capture locked decisions vs dev discretion → CONTEXT.md
+  3. **Planning (PM)** — Write feature entry informed by research + discussion, AND create test cases upfront → TEST-PLAN.md
+  4. **Execution (Dev)** — Implement reading RESEARCH.md + CONTEXT.md + TEST-PLAN.md, run smoke tests before Pending Test
+  5. **QA (PM)** — Execute test cases from TEST-PLAN.md, record pass/fail per case, only ship when all pass
 
-  **Phase 1 — Deep Research (before writing anything)**
-  When the human requests a feature, the PM spawns a research agent that:
-  1. Analyzes the codebase to understand what the feature touches
-  2. Identifies side effects — what existing behavior could break or change
-  3. Maps edge cases — unusual inputs, failure modes, platform differences
-  4. Considers broader user impact — users with custom configs, different team shapes, different OS/shells, different project types
-  5. Checks for integration risks with existing features
-  6. Produces a structured research summary: what's straightforward, what's risky, what needs human input
-
-  **Phase 2 — Interactive Questioning**
-  Based on the research, the PM works with the human interactively:
-  1. Presents the research findings — "here's what I found, here are the risks"
-  2. Asks targeted questions about unresolved ambiguities, scope boundaries, and tradeoffs
-  3. Asks as many questions as needed — don't rush to file. The goal is to fully understand the requirement before writing it down
-  4. Each question should explain WHY it matters (e.g. "If we overwrite the statusLine, users with custom status bars lose their config — should we merge, prompt, or skip?")
-  5. Continues until all ambiguities are resolved
-
-  **Phase 3 — Write the Requirement**
-  Only after research and questioning are complete does the PM write the feature with:
-  - Detailed description incorporating research findings
-  - Acceptance criteria that cover the edge cases identified in research
-  - Notes on side effects and how to handle them
-  - Implementation constraints from the research
+  **Locked decisions:**
+  - Light mode for trivial features (PM judgment — skip research for cosmetic/doc changes)
+  - Research agent token cost is acceptable
+  - Planning files auto-deleted after ship (git preserves)
+  - Bugs excluded — current lightweight flow stays
+  - PM can recommend rejection → new `Rejected` status
+  - Planning files stored in `.squidsquad/[role]/planning/FEAT-XXX-*.md`
 
 - **Acceptance Criteria**:
-  - [ ] PM Feature Intake Process in `references/agent-instructions.md` replaced with the three-phase approach
-  - [ ] Phase 1 uses Agent tool to spawn a research agent that analyzes codebase impact, side effects, edge cases, and integration risks
-  - [ ] Phase 2 is interactive — PM asks the human targeted questions based on research, with WHY context for each question
-  - [ ] PM does not file the feature until all questions are resolved
-  - [ ] Filed features include research findings, edge case handling, and side effect mitigations in the acceptance criteria
-  - [ ] SKILL.md documents the deep intake process
-  - [ ] Generated PM CLAUDE.md updated
-  - [ ] The research should consider: existing user configs, different OS/shell environments, different team shapes, different project types
+  - [ ] PM Feature Intake Process in `references/agent-instructions.md` replaced with 5-phase flow
+  - [ ] Phase 1: Research agent produces FEAT-XXX-RESEARCH.md (impact, side effects, edge cases, integration risks, open questions)
+  - [ ] Phase 2: PM presents research, asks questions with WHY, captures locked vs discretion decisions in FEAT-XXX-CONTEXT.md
+  - [ ] Phase 3: Feature entry references planning artifacts; TEST-PLAN.md created with test cases, smoke tests, regression risks
+  - [ ] Phase 4: Dev agent template updated to read planning artifacts and run smoke tests before Pending Test
+  - [ ] Phase 5: PM QA step executes test cases from TEST-PLAN.md, records results, only ships on all-pass
+  - [ ] Light mode: PM can skip research for trivial/cosmetic features
+  - [ ] Rejection path: PM can recommend `Rejected` status with research justification; human can override
+  - [ ] Planning files auto-deleted after ship
+  - [ ] `.squidsquad/[role]/planning/` directory structure documented in SKILL.md
+  - [ ] RESEARCH.md, CONTEXT.md, TEST-PLAN.md file formats documented
+  - [ ] Generated PM and dev CLAUDE.md files updated
+  - [ ] Bugs excluded from this flow — current process unchanged
 
 ### Discussion
 
 > [2026-03-28 04:20] **pm/qa**: Filed from human request. The current intake process is too shallow — the statusLine feature (FEAT-SKILL-003) is a concrete example of an impulse requirement that caused BUG-SKILL-009 because side effects weren't considered. The PM needs to do GSD-level research before writing requirements, then ask the human deep questions. Status: Pending — awaiting human approval.
+> [2026-03-28 04:45] **pm/qa**: Design doc created at `.squidsquad/pm/FEAT-SKILL-016-design.md`. Researched GSD's workflow in depth. Mapped GSD phases to SquidSquad roles: research+discussion+planning on PM, execution on dev, QA on PM. Added Phase 5 (QA test execution) per human input. 5 open questions resolved by human: light mode yes, token cost acceptable, auto-cleanup yes, bugs excluded, PM can reject. Human accepted and approved. Status → Approved.
 
 ---
 
