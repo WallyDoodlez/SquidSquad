@@ -16,4 +16,4 @@ if (Test-Path .squidsquad) {
     Write-Host ""
 }
 
-claude --permission-mode auto --system-prompt-file .squidsquad/pm/CLAUDE.md
+claude --permission-mode auto --append-system-prompt-file .squidsquad/pm/CLAUDE.md

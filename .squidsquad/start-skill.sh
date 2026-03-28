@@ -16,4 +16,4 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
-claude --dangerously-skip-permissions --system-prompt-file .squidsquad/skill/CLAUDE.md
+claude --dangerously-skip-permissions --append-system-prompt-file .squidsquad/skill/CLAUDE.md -p "Begin your first Ralph Loop cycle now."

@@ -345,7 +345,7 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
-claude --dangerously-skip-permissions --system-prompt-file .squidsquad/[ROLE]/CLAUDE.md
+claude --dangerously-skip-permissions --append-system-prompt-file .squidsquad/[ROLE]/CLAUDE.md -p "Begin your first Ralph Loop cycle now."
 ```
 
 **`start-[role].ps1`**:
@@ -366,7 +366,7 @@ Write-Host "    ▌▌▌▌▌▌"
 Write-Host "  S Q U I D S Q U A D   v$v  -  [ROLE]"
 Write-Host ""
 
-claude --dangerously-skip-permissions --system-prompt-file .squidsquad/[ROLE]/CLAUDE.md
+claude --dangerously-skip-permissions --append-system-prompt-file .squidsquad/[ROLE]/CLAUDE.md -p "Begin your first Ralph Loop cycle now."
 ```
 
 **`start-pm.sh`**:
@@ -389,7 +389,7 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
-claude --permission-mode auto --system-prompt-file .squidsquad/pm/CLAUDE.md
+claude --permission-mode auto --append-system-prompt-file .squidsquad/pm/CLAUDE.md
 ```
 
 **`start-pm.ps1`**:
@@ -412,7 +412,7 @@ if (Test-Path .squidsquad) {
     Write-Host ""
 }
 
-claude --permission-mode auto --system-prompt-file .squidsquad/pm/CLAUDE.md
+claude --permission-mode auto --append-system-prompt-file .squidsquad/pm/CLAUDE.md
 ```
 
 > **Note:** All agents run interactively. PM/QA uses `--permission-mode auto` so it can check in with you. Dev agents use `--dangerously-skip-permissions` to run fully autonomous. Both load their instructions via `--system-prompt-file`.
