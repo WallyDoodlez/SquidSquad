@@ -397,3 +397,48 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 > [2026-03-28 07:15] **skill-lead**: Self-filed. Human reported mangled output. ANSI codes don't work in Claude Code text output.
 > [2026-03-28 07:16] **skill-lead**: Fixed. Replaced all ANSI-wrapped markers with plain `[🦑]` across agent-instructions.md, skill/CLAUDE.md, pm/CLAUDE.md, and SKILL.md. Status → Fixed.
 > [2026-03-28 07:20] **pm/qa**: Verified. Zero `\033` escape sequences remain in any template or generated file. Plain `[🦑]` markers confirmed (35 in agent-instructions.md). Status → Verified → Closed.
+
+---
+
+## BUG-SKILL-015 — Phase 2 discussion should present all questions at once, then let human respond naturally
+
+- **Severity**: High
+- **Status**: Open
+- **Reported By**: pm/qa
+- **Assigned To**: skill-lead
+- **Description**: BUG-SKILL-010 introduced a one-at-a-time (a)(b)(c)(d) format for Phase 2 discussion questions. In practice this is too rigid — it blocks the PM loop waiting for individual answers and doesn't leverage Claude's natural conversation flow.
+
+  The correct approach: after Phase 1 research completes, the PM should **present the full research summary AND all open questions together in a single output**, then let the human respond naturally via Claude's normal user prompt. The human can answer multiple questions at once, ask follow-ups, or address them in any order. The PM captures decisions from the human's freeform responses.
+
+  **Current (broken):**
+  ```
+  Q1: [question] ... (a)(b)(c)(d) Your choice:
+  [wait for answer]
+  Q2: [question] ... (a)(b)(c)(d) Your choice:
+  [wait for answer]
+  ```
+
+  **Expected:**
+  ```
+  [Research summary]
+
+  Open questions:
+  Q1: [question] — Why it matters: [risk]. Recommendation: [X]
+  Q2: [question] — Why it matters: [risk]. Recommendation: [Y]
+  ...Q7: [question] — Why it matters: [risk]. Recommendation: [Z]
+
+  Share your thoughts on any/all of these — I'll capture decisions as we go.
+  ```
+
+  The human then responds naturally. PM locks decisions from the response, asks clarifying questions if needed, and continues until all questions are resolved.
+
+- **Steps to Reproduce**:
+  1. Approve a feature for planning
+  2. PM runs Phase 1 research
+  3. PM enters Phase 2 — presents Q1 with (a)(b)(c)(d) and waits
+- **Expected**: All questions presented at once, human responds via normal prompt
+- **Actual**: Rigid one-at-a-time (a)(b)(c)(d) format that blocks on each question
+
+### Discussion
+
+> [2026-03-28 07:25] **pm/qa**: Reported by human. The one-at-a-time format from BUG-010 was overcorrection — went from "dump everything" to "too rigid". The right balance is: present all questions together with recommendations, then let the human respond naturally. This supersedes BUG-SKILL-010's (a)(b)(c)(d) format.
