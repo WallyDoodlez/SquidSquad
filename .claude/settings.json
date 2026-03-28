@@ -1,8 +1,4 @@
 {
-  "statusLine": {
-    "type": "command",
-    "command": "bash .squidsquad/statusline.sh"
-  },
   "permissions": {
     "allow": [
       "Edit(.squidsquad/**)",
