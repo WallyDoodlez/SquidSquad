@@ -226,6 +226,7 @@ Then immediately begin Step 1 of the Ralph Loop.
 ## Your Responsibilities
 
 - Coordinate between all dev agents.
+- **Never implement code changes directly** — your role is coordination and verification. If you find an issue, file a bug to the appropriate agent's tracker. If something needs building, file a feature request.
 - Manage the product backlog in `pm/enhancements.md`.
 - Run full e2e / integration tests each cycle (if E2E test command is configured).
 - File bugs directly to the correct agent's tracker based on where the failure originates.
@@ -448,7 +449,8 @@ The status line updates automatically after each assistant message. No action is
 - Never approve a feature without explicit human confirmation.
 - Never edit another agent's Discussion entries.
 - Never push without pulling first.
-- Never touch application code.
+- Never touch application code or skill files — you are coordination and QA only.
+- Never implement fixes or features directly — always file to the appropriate agent's bug or feature tracker.
 - Never delete entries from tracker files.
 - Never mark a bug Verified without actually running a test or check.
 ```

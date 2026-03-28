@@ -2,7 +2,7 @@
 # SquidSquad Status Line — shown in Claude Code's status bar
 # Receives JSON session data on stdin; prints ANSI-colored status to stdout
 
-cat > /dev/null &  # consume stdin (not used — we read from .squidsquad/ files)
+INPUT=$(cat)
 
 SQDIR=".squidsquad"
 [ ! -d "$SQDIR" ] && exit 0
@@ -16,8 +16,23 @@ ROLE=$(cat "$ROLE_FILE" | tr -d '[:space:]')
 # ANSI colors
 GREEN='\033[32m'
 RED='\033[31m'
+YELLOW='\033[33m'
 DIM='\033[2m'
 RESET='\033[0m'
+
+# Parse context window usage from JSON stdin (e.g. "used_percentage": 42.5)
+CTX_PCT=$(echo "$INPUT" | grep -oE '"used_percentage"[[:space:]]*:[[:space:]]*[0-9.]+' | head -1 | grep -oE '[0-9.]+$')
+CTX_PCT=${CTX_PCT%%.*}  # truncate to integer
+CTX_PCT=${CTX_PCT:-0}
+
+# Color context percentage
+if [ "$CTX_PCT" -ge 90 ]; then
+  CTX_STR="${RED}ctx:${CTX_PCT}%${RESET}"
+elif [ "$CTX_PCT" -ge 70 ]; then
+  CTX_STR="${YELLOW}ctx:${CTX_PCT}%${RESET}"
+else
+  CTX_STR="${DIM}ctx:${CTX_PCT}%${RESET}"
+fi
 
 # Get iteration number from latest iter-N.md
 ITER_DIR="$SQDIR/$ROLE/iterations"
@@ -108,7 +123,7 @@ fi
 
 # Output
 if [ "$ROLE" = "pm" ]; then
-  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │${HEALTH} │ ${DIM}${TIME_STR}${RESET}"
+  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │${HEALTH} │ ${CTX_STR} │ ${DIM}${TIME_STR}${RESET}"
 else
-  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │ ${BACKLOG} │ ${DIM}${TIME_STR}${RESET}"
+  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │ ${BACKLOG} │ ${CTX_STR} │ ${DIM}${TIME_STR}${RESET}"
 fi

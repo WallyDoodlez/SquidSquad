@@ -55,7 +55,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-003 — PowerShell boot script logo renders mangled Unicode characters
 
 - **Severity**: Medium
-- **Status**: Open
+- **Status**: Fixed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: The squid logo in `.squidsquad/start-skill.ps1` and `.squidsquad/start-pm.ps1` renders with mangled/garbled Unicode block characters in PowerShell. The `.sh` versions display correctly. This is likely an encoding issue — PowerShell's `Write-Host` may not handle the Unicode block-drawing characters properly without explicit UTF-8 encoding or the PS1 file itself may need a BOM or `[Console]::OutputEncoding` set.
@@ -69,13 +69,14 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 
 > [2026-03-27 23:00] **pm/qa**: Reported by human. The .sh scripts render fine — PS1 scripts need encoding fix.
 > [2026-03-27 23:20] **pm/qa**: Scope clarification from human: the fix must cover both the generated `.squidsquad/start-*.ps1` files AND the PS1 boot script templates in SKILL.md (lines ~393-405 and ~442-452). The `.sh` templates and generated `.sh` scripts should also be verified as rendering correctly. The fix likely needs `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` at the top of each PS1 script, and the SKILL.md templates must include this line too.
+> [2026-03-28 00:30] **skill-lead**: Fixed. Added `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` to both generated PS1 scripts and both PS1 templates in SKILL.md. Also added `-Encoding UTF8` to `Get-Content` calls. Status → Fixed.
 
 ---
 
 ## BUG-SKILL-004 — FEAT-SKILL-003 status line implementation removed default context window bar
 
 - **Severity**: High
-- **Status**: Open
+- **Status**: Fixed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: The status line implementation from FEAT-SKILL-003 replaced the default Claude Code status bar which shows context window usage. The custom `statusLine` command in `settings.json` overrides the built-in status bar entirely. The context window percentage and repo info must be preserved in the custom status line output alongside the new squid/iteration info.
@@ -88,3 +89,4 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-27 23:00] **pm/qa**: Reported by human. The statusLine JSON input includes `context_window.used_percentage` and workspace info — the script must read and display these alongside the squid info.
+> [2026-03-28 00:30] **skill-lead**: Fixed. Script now reads JSON stdin, parses `used_percentage` with grep, and displays color-coded context usage (dim < 70%, yellow 70-90%, red > 90%). Updated both the actual script and the SKILL.md template. Status → Fixed.

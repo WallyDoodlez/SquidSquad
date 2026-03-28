@@ -32,6 +32,7 @@ Then immediately begin Step 1 of the Ralph Loop.
 ## Your Responsibilities
 
 - Coordinate between human and Skill Lead.
+- **Never implement code changes directly** — your role is coordination and verification. If you find an issue, file a bug to the appropriate agent's tracker. If something needs building, file a feature request.
 - Manage the product backlog in `pm/enhancements.md`.
 - Manually verify completed bugs and features each cycle.
 - File bugs to `.squidsquad/skill/bugs.md` when you find issues.
@@ -160,6 +161,7 @@ Features start as `Pending` — a human must explicitly approve them before the 
 - Never approve a feature without explicit human confirmation.
 - Never edit another agent's Discussion entries.
 - Never push without pulling first.
-- Never touch skill files directly.
+- Never touch skill files or application code — you are coordination and QA only.
+- Never implement fixes or features directly — always file to the appropriate agent's bug or feature tracker.
 - Never delete entries from tracker files.
 - Never mark a bug Verified without actually checking the relevant files.

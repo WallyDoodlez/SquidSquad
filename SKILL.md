@@ -388,10 +388,11 @@ claude --permission-mode auto -p "Read .squidsquad/.active-role to find your rol
 
 **`start-[role].ps1`**:
 ```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $repoRoot = git rev-parse --show-toplevel
 Set-Location $repoRoot
 
-$config = Get-Content .squidsquad/config.md -Raw
+$config = Get-Content .squidsquad/config.md -Raw -Encoding UTF8
 $v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
 
 Write-Host ""
@@ -434,11 +435,12 @@ claude --permission-mode auto -p "Read .squidsquad/.active-role to find your rol
 
 **`start-pm.ps1`**:
 ```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $repoRoot = git rev-parse --show-toplevel
 Set-Location $repoRoot
 
 if (Test-Path .squidsquad) {
-    $config = Get-Content .squidsquad/config.md -Raw -ErrorAction SilentlyContinue
+    $config = Get-Content .squidsquad/config.md -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
     $v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
 
     Write-Host ""
@@ -469,18 +471,19 @@ Generate `.squidsquad/statusline.sh` — a bash script that powers the Claude Co
 - **Iteration number** (read from the highest `iter-N.md` in the role's `iterations/` folder)
 - **Backlog pulse** (dev agents): count of open bugs + actionable features (e.g. `2 bugs 1 feat` or `clear`)
 - **Agent health** (PM only): for each dev agent, show `🦑` green if their latest iteration is within 2× the loop interval, or `🦑✖` red if silent for longer
+- **Context window usage** (parsed from JSON stdin, color-coded: dim < 70%, yellow 70-90%, red > 90%)
 - **Time since last cycle** (file modification time of latest iteration log)
 
 Output format (single line, ANSI-colored):
-- Dev agent: `🦑 be │ iter 5 │ 2 bugs 1 feat │ 3m ago`
-- PM/QA: `🦑 PM/QA │ iter 3 │ 🦑be 🦑✖fe │ 1m ago`
+- Dev agent: `🦑 be │ iter 5 │ 2 bugs 1 feat │ ctx:45% │ 3m ago`
+- PM/QA: `🦑 PM/QA │ iter 3 │ 🦑be 🦑✖fe │ ctx:45% │ 1m ago`
 
 ```bash
 #!/bin/bash
 # SquidSquad Status Line — shown in Claude Code's status bar
 # Receives JSON session data on stdin; prints ANSI-colored status to stdout
 
-cat > /dev/null &  # consume stdin (not used — we read from .squidsquad/ files)
+INPUT=$(cat)
 
 SQDIR=".squidsquad"
 [ ! -d "$SQDIR" ] && exit 0
@@ -494,8 +497,23 @@ ROLE=$(cat "$ROLE_FILE" | tr -d '[:space:]')
 # ANSI colors
 GREEN='\033[32m'
 RED='\033[31m'
+YELLOW='\033[33m'
 DIM='\033[2m'
 RESET='\033[0m'
+
+# Parse context window usage from JSON stdin (e.g. "used_percentage": 42.5)
+CTX_PCT=$(echo "$INPUT" | grep -oE '"used_percentage"[[:space:]]*:[[:space:]]*[0-9.]+' | head -1 | grep -oE '[0-9.]+$')
+CTX_PCT=${CTX_PCT%%.*}  # truncate to integer
+CTX_PCT=${CTX_PCT:-0}
+
+# Color context percentage
+if [ "$CTX_PCT" -ge 90 ]; then
+  CTX_STR="${RED}ctx:${CTX_PCT}%${RESET}"
+elif [ "$CTX_PCT" -ge 70 ]; then
+  CTX_STR="${YELLOW}ctx:${CTX_PCT}%${RESET}"
+else
+  CTX_STR="${DIM}ctx:${CTX_PCT}%${RESET}"
+fi
 
 # Get iteration number from latest iter-N.md
 ITER_DIR="$SQDIR/$ROLE/iterations"
@@ -586,9 +604,9 @@ fi
 
 # Output
 if [ "$ROLE" = "pm" ]; then
-  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │${HEALTH} │ ${DIM}${TIME_STR}${RESET}"
+  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │${HEALTH} │ ${CTX_STR} │ ${DIM}${TIME_STR}${RESET}"
 else
-  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │ ${BACKLOG} │ ${DIM}${TIME_STR}${RESET}"
+  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │ ${BACKLOG} │ ${CTX_STR} │ ${DIM}${TIME_STR}${RESET}"
 fi
 ```
 

@@ -1,7 +1,8 @@
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $repoRoot = git rev-parse --show-toplevel
 Set-Location $repoRoot
 
-$config = Get-Content .squidsquad/config.md -Raw
+$config = Get-Content .squidsquad/config.md -Raw -Encoding UTF8
 $v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
 
 Write-Host ""
