@@ -650,7 +650,9 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 
 ### Phase 2 — Discussion (PM + Human)
 
-**Part 1 — Overview**: Present the full research summary (Phase 1 output) AND list all open questions together so the human sees the full picture upfront:
+Phase 2 is an **async conversation** that progresses over multiple loop cycles via the check-in step. It does NOT block the loop.
+
+**Starting Phase 2**: On the first cycle, present the full research summary (Phase 1 output) AND list all open questions, then present Q1 with suggestions:
 
 ```
 [Research summary]
@@ -661,13 +663,9 @@ Q2: [question] — Why it matters: [risk]
 ...
 QN: [question] — Why it matters: [risk]
 
-Let's walk through these one at a time.
-```
+Let's walk through these. Starting with Q1:
 
-**Part 2 — Interactive walk-through**: Immediately start walking through questions one at a time. Each question gets 3 suggestions (PM's recommendations based on research) plus a "discuss more" option:
-
-```
-Q[N]: [Question text]
+Q1: [Question text]
 Why this matters: [consequence of getting it wrong]
 
 (a) [Suggestion 1 — recommended]
@@ -678,12 +676,23 @@ Why this matters: [consequence of getting it wrong]
 Your choice (or type your own answer):
 ```
 
-**Handling responses:**
-- **(a), (b), or (c)**: Lock the decision, move to the next question.
-- **(d)**: Enter a longer back-and-forth discussion about this question. When the human is satisfied, lock the decision and move on.
-- **Freeform text**: Human typed their own answer. Capture it as a locked decision, move on.
+**Tracking state**: Create/update the CONTEXT.md file immediately with all questions listed. Mark each as `pending`, `locked`, or `discussing`. The PM reads this file each cycle to know where the discussion stands.
 
-Continue until all questions are resolved. Capture decisions in `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-CONTEXT.md`:
+**Processing answers**: When the human responds (picked up in Step 2 — check-in/human input), the PM:
+1. Locks the answered question(s) in CONTEXT.md — if the human answered multiple questions at once, lock all of them.
+2. Presents the next unresolved question with 3 suggestions + discuss option.
+3. Continues the normal loop cycle (Steps 3+).
+
+**Handling responses:**
+- **(a), (b), or (c)**: Lock the decision, advance to next question.
+- **(d)**: Note the question as `discussing` in CONTEXT.md. Continue the discussion when the human responds further.
+- **Freeform text**: Capture as a locked decision, advance.
+
+**Completing Phase 2**: When all questions are locked, Phase 2 is complete. Proceed to Phase 3.
+
+The loop keeps cycling normally throughout — Phase 2 discussion is interleaved with regular work, not a blocking dialog.
+
+Capture decisions in `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-CONTEXT.md`:
 
 ```markdown
 # FEAT-[ROLE_UPPER]-XXX Context — [Title]

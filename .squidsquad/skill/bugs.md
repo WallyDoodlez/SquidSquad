@@ -463,7 +463,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-016 — Phase 2 discussion blocks the Ralph Loop
 
 - **Severity**: High
-- **Status**: Open
+- **Status**: Fixed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: Phase 2 (Discussion) is currently a synchronous dialog — the PM presents Q1, waits for the human's answer, presents Q2, waits again, etc. This gates the entire Ralph Loop. While the PM is waiting for Q1's answer, cycles just idle with "quiet cycle" and no other work gets done.
@@ -495,3 +495,4 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-28 08:00] **pm/qa**: Reported by human. Phase 2 discussion is a "dialog" that blocks the loop. Should be async — PM tracks discussion state, processes human answers during check-in step, and advances questions across cycles. This is the third iteration on Phase 2 format (BUG-010 → BUG-015 → this).
+> [2026-03-28 08:10] **skill-lead**: Fixed in agent-instructions.md Phase 2 section. Restructured as async conversation over multiple loop cycles: PM presents questions on first cycle, tracks state in CONTEXT.md (pending/locked/discussing), processes human answers during Step 2 check-in, advances to next question. Loop keeps cycling normally throughout. Status → Fixed.
