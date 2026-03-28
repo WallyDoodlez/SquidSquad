@@ -1,7 +1,7 @@
 ---
 name: squidsquad
 description: "Your AI dev team that coordinates through markdown, not meetings."
-version: 0.5.0
+version: 0.5.1
 ---
 
 # SquidSquad
@@ -277,7 +277,7 @@ Always create `.squidsquad/pm/` with its full structure regardless of team shape
 ```markdown
 # SquidSquad Config
 
-- **SquidSquad Version**: 0.5.0
+- **SquidSquad Version**: 0.5.1
 - **Tracker Schema**: 1
 
 ## Project

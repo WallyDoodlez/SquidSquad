@@ -4,6 +4,17 @@ All notable changes to SquidSquad will be documented here.
 
 ---
 
+## [0.5.1] — 2026-03-27
+
+### Fixed
+
+- Boot scripts (`start-[role].sh/.ps1`) now own the loop via `while true` in the shell — each `claude -p` invocation handles one Ralph Loop cycle. Previously the loop was only described in CLAUDE.md but `claude -p` exits after one turn.
+- Console now shows cycle number and timestamp between iterations so the agent's activity is visible.
+- `.claude/settings.json` pre-grants `Edit`/`Write` permissions on `.squidsquad/**` and git commands so agents never pause mid-cycle to ask for write permission.
+- `SKILL.md` Step 7 settings.json template updated to include the permissions block for all future setups.
+
+---
+
 ## [0.5.0] — 2026-03-27
 
 Initial release.
