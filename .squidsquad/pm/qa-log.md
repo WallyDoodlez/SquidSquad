@@ -117,3 +117,14 @@ _Each PM/QA iteration logs a manual coherence check here._
 - **Verified**: BUG-SKILL-010 (interactive Phase 2 format confirmed), BUG-SKILL-011 (Planning status gate confirmed across all files)
 - **Agent Health**: skill — healthy (commit f8d0b14 this cycle)
 - **Notes**: Iteration 20. Skill agent back online. 2 bugs closed, 1 filed. BUG-012 still Open.
+
+---
+
+## QA Run — 2026-03-28 06:25
+
+- **Result**: Passed
+- **Files Reviewed**: references/agent-instructions.md, SKILL.md, .squidsquad/skill/CLAUDE.md, .squidsquad/pm/CLAUDE.md
+- **Issues**: none
+- **Verified**: BUG-SKILL-012 — ANSI markers confirmed across all 4 files (38+10+16+2 occurrences), no old-style markers remain
+- **Agent Health**: skill — healthy (2 commits in last 10 min)
+- **Notes**: Iteration 21. All bugs from previous session now closed. Only BUG-013 (low severity) remains.
