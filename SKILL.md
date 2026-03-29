@@ -939,3 +939,22 @@ Recently Shipped
 2. FEAT-SKILL-005 — Show timestamp at iteration start and stop
 3. ...
 ```
+
+## `/squidsquad-interval` — Change Loop Interval On The Fly
+
+When the user says `/squidsquad-interval <Nm>` (e.g. `/squidsquad-interval 10m`), change the Ralph Loop interval for all agents without restarting.
+
+**Instructions:**
+
+1. **Parse input**: Extract the number and validate:
+   - Must be an integer followed by `m` (e.g. `5m`, `10m`, `15m`). The `m` suffix is optional — bare integers are accepted (e.g. `10` is treated as `10m`).
+   - Must be >= 5 (minimum enforced to prevent git conflicts between concurrent agents).
+   - If invalid or missing, print usage: `/squidsquad-interval <Nm>` (e.g. `/squidsquad-interval 10m`). Minimum 5 minutes.
+2. **Read current interval** from `.squidsquad/config.md` under `Iteration Interval > Minutes`.
+3. **Update config.md**: Replace the `Minutes` value with the new interval.
+4. **Reschedule current agent's cron**:
+   - Call `CronDelete` with the existing cron job ID.
+   - Call `CronCreate` with `*/N * * * *` (or appropriate cron expression for larger intervals), the same prompt (`execute one Ralph Loop cycle`), and `recurring: true`.
+5. **Print confirmation**: `Interval changed from [old]m to [new]m. All agents will pick up the change on their next cycle.`
+
+Other agents detect the change automatically: each agent re-reads `config.md` at the start of every cycle (Step 1d — Interval Sync) and re-schedules its cron if the interval has changed.

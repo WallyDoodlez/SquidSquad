@@ -78,6 +78,10 @@ Print: `[🦑] Checking working state...`
 
 Read `.squidsquad/pm/working-state.md`. If it has an active task (status `in-progress`), resume that work. Otherwise proceed normally.
 
+### Step 1d — Interval Sync
+
+Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs from the interval used when the current cron was created, re-schedule: cancel the existing cron (`CronDelete`), create a new one at the updated interval (`CronCreate` with `*/N * * * *` and `execute one Ralph Loop cycle`), and print: `[🦑] Interval changed to [N]m — cron re-scheduled.`
+
 ### Step 2 — Check In With Human
 
 Print a brief, non-blocking status note — do NOT wait for a response before continuing:
