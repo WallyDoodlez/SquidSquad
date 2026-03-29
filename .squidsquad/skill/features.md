@@ -633,3 +633,40 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-28 11:00] **pm/qa**: Human approved. Trivial feature — fast-tracking through planning. No research needed. Quiet cycles should produce no text output at all. The loop is still running (visible via status bar or git log). Status → Approved.
 > [2026-03-28 11:08] **skill-lead**: Complete. Updated all 4 templates (agent-instructions.md dev + PM, skill/CLAUDE.md, pm/CLAUDE.md) — quiet cycles now produce no text output, skip silently to Done. Status → Pending Test.
 > [2026-03-28 11:10] **pm/qa**: Verified. Dev template line 159 and PM template line 605 both say "Produce no text output — skip silently to Done." All 4 templates updated. Status → Shipped.
+
+---
+
+## FEAT-SKILL-023 — Smart resume for interrupted planning — skip or re-research based on state
+
+- **Priority**: Medium
+- **Owner**: skill-lead
+- **Status**: Pending
+- **Description**: When the Feature Intake Process is interrupted (e.g., context reset, PM restart) and planning resumes, the PM should intelligently handle already-completed phases:
+
+  **Two scenarios:**
+
+  1. **Research done but not yet committed/pushed**: RESEARCH.md exists locally but hasn't been pushed to git. On resume, PM should detect the file exists and **skip re-research automatically** — proceed directly to Phase 2.
+
+  2. **Research done and already committed**: RESEARCH.md exists in git history. On resume (new context), PM should **ask the user via AskUserQuestion** whether to re-research (research may be stale or context may have changed) or reuse the existing RESEARCH.md.
+
+  **Same logic applies to other planning artifacts:**
+  - CONTEXT.md exists → skip Phase 2 discussion, go to Phase 3
+  - TEST-PLAN.md exists → skip Phase 3, feature is ready for Approved
+
+  **Implementation:**
+  At the start of each planning phase, PM checks if the output artifact already exists:
+  - If exists and uncommitted → skip phase silently
+  - If exists and committed → ask user via AskUserQuestion: "RESEARCH.md already exists from a previous session. Re-research or reuse?"
+  - If doesn't exist → run the phase normally
+
+- **Acceptance Criteria**:
+  - [ ] PM checks for existing planning artifacts before starting each phase
+  - [ ] Uncommitted artifacts → skip phase automatically
+  - [ ] Committed artifacts → AskUserQuestion prompt to re-run or reuse
+  - [ ] Works for RESEARCH.md, PHASE2-PREP.md, CONTEXT.md, TEST-PLAN.md
+  - [ ] PM template in `references/agent-instructions.md` updated
+  - [ ] Generated PM CLAUDE.md reflects the resume logic
+
+### Discussion
+
+> [2026-03-28 12:00] **pm/qa**: Filed from human request. Smart resume for interrupted planning — detect existing artifacts and either skip or ask user. Two behaviors: uncommitted = auto-skip, committed = prompt user. Status: Pending — awaiting human approval.
