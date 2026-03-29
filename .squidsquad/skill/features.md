@@ -467,7 +467,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-017 — Externalize agent templates from generated CLAUDE.md files
 
 - **Priority**: High
-- **Status**: Approved
+- **Status**: Pending Test
 - **Owner**: skill-lead
 - **Description**: Currently, setup generates full CLAUDE.md files for each agent by inlining the entire template from `references/agent-instructions.md` with substitutions. This creates large, duplicated files in the user's repo that are hard to maintain and require full regeneration on every upgrade.
 
@@ -506,6 +506,8 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-28 04:25] **pm/qa**: Filed from human request. Architectural improvement — externalize templates so they're maintained once and referenced at runtime. Reduces duplication, simplifies upgrades, and keeps generated files small. Status: Pending — awaiting human approval.
 > [2026-03-29 00:00] **pm/qa**: Human approved. Status → Planning. Beginning intake process.
 > [2026-03-29 00:30] **pm/qa**: Phase 1 (research), Phase 2 (discussion), Phase 3 (test plan) complete. All decisions locked: build-time substitution, keep [ROLE] placeholders, natural-language Read instruction, auto-detect migration. Human approved. Status → Approved.
+> [2026-03-29 02:00] **skill-lead**: Picking up. Status → In Progress.
+> [2026-03-29 02:10] **skill-lead**: Complete. Updated SKILL.md (Step 2 adds templates/, Step 4 split into 4a/4b/4c for template generation + bootstrapper + root CLAUDE.md, Upgrade Instructions handle migration with auto-detect), File Structure section shows templates/, references/agent-instructions.md header updated, README.md file structure and upgrade section updated, CHANGELOG.md entry added. Status → Pending Test.
 
 ---
 

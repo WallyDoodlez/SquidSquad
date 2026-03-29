@@ -105,17 +105,20 @@ All coordination is asynchronous through git — agents pull to read the latest 
 ```
 .squidsquad/
 ├── config.md                   <- versions, agents, test commands, counters, interval, thresholds
+├── templates/                  <- shared agent instruction templates (build-time substituted)
+│   ├── dev-agent-[role].md     <- full Ralph Loop instructions per dev agent
+│   └── pm-agent.md             <- full Ralph Loop instructions for PM/QA
 ├── statusline.sh               <- powers the Claude Code status bar for all agents
 ├── start-[role].sh/.ps1        <- one boot script pair per dev agent
 ├── start-pm.sh/.ps1            <- PM/QA boot scripts
 ├── [role]/                     <- one folder per dev agent
-│   ├── CLAUDE.md               <- role instructions + Ralph Loop
+│   ├── CLAUDE.md               <- bootstrapper: role config + Read instruction to template
 │   ├── bugs.md                 <- BUG-[ROLE]-XXX tracker
 │   ├── features.md             <- FEAT-[ROLE]-XXX tracker
 │   ├── working-state.md        <- persists task progress across context resets
 │   └── iterations/             <- per-cycle logs (last 20 kept)
 └── pm/
-    ├── CLAUDE.md               <- PM/QA instructions + Ralph Loop
+    ├── CLAUDE.md               <- bootstrapper: role config + Read instruction to template
     ├── qa-log.md               <- test run results
     ├── enhancements.md         <- product backlog
     ├── working-state.md        <- persists PM task progress
@@ -260,7 +263,7 @@ The installed version is stored in `.squidsquad/config.md` and shown in the boot
 
 1. Pull the latest `SKILL.md` (or check out the new tag)
 2. In your project, say: **"upgrade squidsquad"**
-3. The skill reads the version in `.squidsquad/config.md`, compares it to the current skill version, and migrates — regenerating boot scripts, CLAUDE.md templates, and the `settings.json` hook without touching your tracker files or config values
+3. The skill reads the version in `.squidsquad/config.md`, compares it to the current skill version, and migrates — regenerating templates in `.squidsquad/templates/`, boot scripts, and the `settings.json` hook without touching your tracker files, bootstrapper CLAUDE.md files, or config values
 
 See [CHANGELOG.md](./CHANGELOG.md) for what changed between versions.
 

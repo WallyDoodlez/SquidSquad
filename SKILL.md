@@ -68,15 +68,18 @@ When you invoke SquidSquad, it creates the following inside your project root. O
 ```
 .squidsquad/
 ├── config.md                   ← project config, test commands, counters, git protocol
+├── templates/                  ← shared agent instruction templates (build-time substituted)
+│   ├── dev-agent-be.md         ← full Ralph Loop instructions for BE Lead
+│   └── pm-agent.md             ← full Ralph Loop instructions for PM/QA
 ├── start-be.sh / start-be.ps1  ← boot script: launches BE Lead (autonomous)
 ├── start-pm.sh / start-pm.ps1  ← boot script: launches PM/QA (interactive)
 ├── be/                         ← one folder per dev agent, named after the role
-│   ├── CLAUDE.md               ← BE Lead role instructions + Ralph Loop
+│   ├── CLAUDE.md               ← bootstrapper (~20 lines): role config + Read instruction to template
 │   ├── bugs.md                 ← BUG-BE-XXX tracker with Discussion sections
 │   ├── features.md             ← FEAT-BE-XXX tracker with Discussion sections
 │   └── iterations/             ← iter-N.md logs per cycle
 └── pm/
-    ├── CLAUDE.md               ← PM/QA role instructions + Ralph Loop
+    ├── CLAUDE.md               ← bootstrapper (~20 lines): role config + Read instruction to template
     ├── qa-log.md               ← QA test run results
     ├── enhancements.md         ← product backlog / enhancement proposals
     ├── iterations/             ← iter-N.md logs per cycle
@@ -321,6 +324,11 @@ Do you have existing bugs or features to import?
 
 ### Step 2 — Create `.squidsquad/` Folder Structure
 
+Create the shared templates directory:
+```
+.squidsquad/templates/
+```
+
 For each dev agent role defined in Step 1, create:
 ```
 .squidsquad/[role]/
@@ -392,9 +400,60 @@ Always create `.squidsquad/pm/` with its full structure regardless of team shape
 - **Shipped Since Last Bump**: 0  ← PM increments when marking items Shipped/Closed
 ```
 
-### Step 4 — Generate CLAUDE.md Files
+### Step 4 — Generate Templates and Bootstrapper CLAUDE.md Files
 
-Use the templates in `references/agent-instructions.md` to generate role-specific CLAUDE.md files inside each `[role]/` folder and `pm/`, substituting in the project's actual test commands and repo URL from config.md.
+This step creates two things per agent: a **template** (full instructions with all placeholders substituted) and a **bootstrapper** (small CLAUDE.md that points to the template).
+
+#### Step 4a — Generate Template Files
+
+Read `references/agent-instructions.md`. For each dev agent role, copy Template 1 (Dev Agent) into `.squidsquad/templates/dev-agent-[role].md`, substituting all placeholders (`[ROLE]`, `[ROLE_UPPER]`, `[ROLE_TEST_CMD]`, `[OTHER_ROLES]`, `[INTERVAL]`) with values from config.md. For PM/QA, copy Template 2 into `.squidsquad/templates/pm-agent.md`, substituting `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]`.
+
+The resulting template files contain the complete Ralph Loop instructions with no remaining placeholders — agents never see `[ROLE]` syntax.
+
+#### Step 4b — Generate Bootstrapper CLAUDE.md Files
+
+For each dev agent role, generate a short bootstrapper at `.squidsquad/[role]/CLAUDE.md` (~20 lines):
+
+```markdown
+# SquidSquad — [ROLE] Lead
+
+## Role Config
+
+- **Role**: [role]
+- **Role Upper**: [ROLE_UPPER]
+- **Test Command**: [ROLE_TEST_CMD]
+- **Other Roles**: [OTHER_ROLES]
+- **Interval**: [INTERVAL] minutes
+- **Template**: `.squidsquad/templates/dev-agent-[role].md`
+
+## Instructions
+
+You MUST read `.squidsquad/templates/dev-agent-[role].md` NOW for your complete Ralph Loop instructions. Follow them exactly — begin your first cycle immediately.
+
+If the template file cannot be read, print: "ERROR: Template file `.squidsquad/templates/dev-agent-[role].md` not found. Run `/squidsquad-upgrade` to regenerate templates." and stop.
+```
+
+For PM/QA, generate `.squidsquad/pm/CLAUDE.md`:
+
+```markdown
+# SquidSquad — PM/QA
+
+## Role Config
+
+- **Role**: pm
+- **Active Agents**: [ACTIVE_AGENTS]
+- **E2E Test Command**: [E2E_TEST_CMD]
+- **Interval**: [INTERVAL] minutes
+- **Template**: `.squidsquad/templates/pm-agent.md`
+
+## Instructions
+
+You MUST read `.squidsquad/templates/pm-agent.md` NOW for your complete Ralph Loop instructions. Follow them exactly — begin your first cycle immediately.
+
+If the template file cannot be read, print: "ERROR: Template file `.squidsquad/templates/pm-agent.md` not found. Run `/squidsquad-upgrade` to regenerate templates." and stop.
+```
+
+#### Step 4c — Root CLAUDE.md
 
 Also create or update the **root `CLAUDE.md`** in the project root. If a root `CLAUDE.md` already exists, append the SquidSquad boot block below. If it does not exist, create it with only this content:
 
@@ -856,10 +915,12 @@ Spawn all applicable agents simultaneously. Each agent writes only its assigned 
 #### If skill version differs — spawn these agents in parallel:
 
 **One agent per active dev role:**
-> Regenerate `.squidsquad/[role]/CLAUDE.md`, `.squidsquad/start-[role].sh`, and `.squidsquad/start-[role].ps1` using the Dev Agent template from `references/agent-instructions.md`. Substitute `[ROLE]`, `[ROLE_UPPER]`, `[ROLE_TEST_CMD]`, `[OTHER_ROLES]`, and `[INTERVAL]` with values from `config.md`. Do not touch `bugs.md`, `features.md`, or `iterations/`.
+> Regenerate `.squidsquad/templates/dev-agent-[role].md` from the Dev Agent template in `references/agent-instructions.md`, substituting `[ROLE]`, `[ROLE_UPPER]`, `[ROLE_TEST_CMD]`, `[OTHER_ROLES]`, and `[INTERVAL]` with values from `config.md`. Also regenerate `.squidsquad/start-[role].sh` and `.squidsquad/start-[role].ps1`. **Migration**: if `.squidsquad/[role]/CLAUDE.md` contains `## The Ralph Loop` (inline format, >50 lines), replace it with the bootstrapper format (see Step 4b in Setup Instructions). If it is already a bootstrapper (<50 lines, no `## The Ralph Loop`), leave it untouched. Do not touch `bugs.md`, `features.md`, or `iterations/`.
 
 **One agent for PM/QA:**
-> Regenerate `.squidsquad/pm/CLAUDE.md`, `.squidsquad/start-pm.sh`, and `.squidsquad/start-pm.ps1` using the PM/QA template from `references/agent-instructions.md`. Substitute `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]` from `config.md`. Do not touch `qa-log.md`, `enhancements.md`, `iterations/`, or `migrations/`.
+> Regenerate `.squidsquad/templates/pm-agent.md` from the PM/QA template in `references/agent-instructions.md`, substituting `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]` from `config.md`. Also regenerate `.squidsquad/start-pm.sh` and `.squidsquad/start-pm.ps1`. **Migration**: if `.squidsquad/pm/CLAUDE.md` contains `## The Ralph Loop` (inline format), replace it with the bootstrapper format (see Step 4b in Setup Instructions). If already a bootstrapper, leave it untouched. Do not touch `qa-log.md`, `enhancements.md`, `iterations/`, or `migrations/`.
+
+> **Note:** Create `.squidsquad/templates/` if it does not exist (first upgrade from pre-template architecture).
 
 **One agent for settings:**
 > Update `.claude/settings.json`: ensure `permissions.allow` contains `Edit(.squidsquad/**)`, `Write(.squidsquad/**)`, and the four git commands. Ensure the `SessionStart` hook is present and matches the current template. Ensure the `statusLine` key is present and points to `bash .squidsquad/statusline.sh`. Regenerate `.squidsquad/statusline.sh` from the current template. Merge into existing content — never remove unrelated keys.

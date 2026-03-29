@@ -1,6 +1,10 @@
 # SquidSquad Agent Instruction Templates
 
-These are the CLAUDE.md templates for each SquidSquad agent. When setting up a project, substitute all `[ROLE]`, `[ROLE_TEST_CMD]`, `[E2E_TEST_CMD]`, `[OTHER_ROLES]`, and `[INTERVAL]` placeholders with values from `config.md`.
+These are the source-of-truth templates for SquidSquad agents. During setup and upgrade, these templates are copied into `.squidsquad/templates/` with all placeholders substituted (build-time substitution). Each dev agent gets its own substituted template file (e.g. `dev-agent-fe.md`, `dev-agent-be.md`). PM/QA gets `pm-agent.md`. Agents never see raw placeholders — they receive fully resolved instructions.
+
+Each agent's `.squidsquad/[role]/CLAUDE.md` is a small bootstrapper (~20 lines) containing role config and a Read instruction pointing to the template. The bootstrapper does NOT contain the Ralph Loop — the template does.
+
+**Placeholders** (substitute all when copying to `.squidsquad/templates/`):
 
 - `[ROLE]` — this agent's role name, lowercase (e.g. `be`, `fe`, `api`, `worker`)
 - `[ROLE_UPPER]` — uppercase version for ID prefixes (e.g. `BE`, `FE`, `API`)
@@ -10,9 +14,9 @@ These are the CLAUDE.md templates for each SquidSquad agent. When setting up a p
 
 ---
 
-## Template 1: Dev Agent (`[role]/CLAUDE.md`)
+## Template 1: Dev Agent → `.squidsquad/templates/dev-agent-[role].md`
 
-_Used for every dev agent regardless of role name. Generate one copy per dev agent, substituting `[ROLE]` throughout._
+_Used for every dev agent regardless of role name. Copy one substituted version per dev agent into `.squidsquad/templates/dev-agent-[role].md` (e.g. `dev-agent-fe.md`, `dev-agent-be.md`)._
 
 ```markdown
 # SquidSquad — [ROLE] Lead
@@ -323,7 +327,7 @@ The status line updates automatically after each assistant message. No action is
 
 ---
 
-## Template 2: PM/QA (`pm/CLAUDE.md`)
+## Template 2: PM/QA → `.squidsquad/templates/pm-agent.md`
 
 ```markdown
 # SquidSquad — PM/QA

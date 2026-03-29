@@ -4,6 +4,14 @@ All notable changes to SquidSquad will be documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Externalized agent templates** (FEAT-SKILL-017): Agent CLAUDE.md files are no longer 200+ line monoliths. Setup now generates shared template files in `.squidsquad/templates/` (e.g. `dev-agent-fe.md`, `pm-agent.md`) with all placeholders substituted at build time. Each agent's `.squidsquad/[role]/CLAUDE.md` is a small ~20-line bootstrapper containing role config and a Read instruction pointing to the template. Benefits: templates maintained in one place, upgrades only regenerate `templates/` without touching bootstrappers, much smaller per-agent files, cleaner separation of config and instructions. Upgrade auto-detects inline CLAUDE.md files (by checking for `## The Ralph Loop` heading) and migrates them to bootstrapper + template format.
+
+---
+
 ## [0.5.2] — 2026-03-28
 
 ### Added
