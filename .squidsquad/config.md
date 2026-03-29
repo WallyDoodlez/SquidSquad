@@ -32,7 +32,7 @@
 
 ## Iteration Interval
 
-- **Minutes**: 5
+- **Minutes**: 30
 
 ## Heartbeat
 
