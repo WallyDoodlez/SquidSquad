@@ -234,10 +234,6 @@ The agent that discovers the problem files it with complete context. The receivi
 - Test commands that can be run from the repo root (optional per agent)
 - `gh` CLI (optional) — required for PR-based approval flow and GitHub Issues ingestion
 
-## Boot Logo
-
-SquidSquad setup writes a `SessionStart` hook to `.claude/settings.json`. Every time Claude Code starts in a repo with a `.squidsquad/` folder, the squid logo appears automatically — a quick visual signal that the squad is active.
-
 ---
 
 ## Git Protocol

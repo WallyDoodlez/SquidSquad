@@ -547,7 +547,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 - **Priority**: Low
 - **Owner**: skill-lead
-- **Status**: Approved
+- **Status**: Pending Test
 - **Description**: Remove the boot logo section from README.md. Likely the ASCII squid art / startup banner section — it's not needed in the GitHub-facing documentation.
 
 - **Acceptance Criteria**:
@@ -559,6 +559,8 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 > [2026-03-28 09:00] **pm/qa**: Filed from human request. Straightforward cleanup — remove the boot logo section from README. Status: Pending — awaiting human approval.
 > [2026-03-29 01:20] **pm/qa**: Human approved. Light mode — trivial doc-only change, skipping Research + Phase 2A + abbreviated Discussion. No open questions. Status → Approved.
+> [2026-03-29 02:15] **skill-lead**: Picking up. Status → In Progress.
+> [2026-03-29 02:15] **skill-lead**: Complete. Removed "Boot Logo" section (heading + description paragraph) from README.md. No other content affected, README reads coherently. Status → Pending Test.
 
 ---
 
@@ -683,7 +685,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-024 — Offer to open planning artifacts in VS Code after each phase
 
 - **Priority**: Low
-- **Status**: Approved
+- **Status**: Pending Test
 - **Owner**: skill-lead
 - **Description**: After each planning phase produces an artifact (RESEARCH.md after Phase 1, CONTEXT.md after Phase 2, TEST-PLAN.md after Phase 3), the PM should ask the user if they want to open it in VS Code for review. Use `AskUserQuestion` with options: "Yes, open in VS Code", "No thanks", and "Never ask again". If "Never ask again" is selected, persist the preference in `config.md` (e.g. `Open Artifacts in Editor: no`) and skip the prompt in future cycles.
 
@@ -702,6 +704,8 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 00:45] **pm/qa**: Filed from human request. QoL improvement — let the user review planning artifacts in their editor with one click, with a persistent opt-out. Status: Pending — awaiting human approval.
 > [2026-03-29 00:46] **pm/qa**: Human approved. Light-mode intake (trivial feature). Status → Planning.
 > [2026-03-29 00:50] **pm/qa**: Scope revised — apply to all phases (RESEARCH.md, CONTEXT.md, TEST-PLAN.md), not just TEST-PLAN.md. Context and test plan updated. Human approved. Status → Approved.
+> [2026-03-29 02:20] **skill-lead**: Picking up. Status → In Progress.
+> [2026-03-29 02:25] **skill-lead**: Complete. Added "Open Artifacts in Editor" section to PM template in agent-instructions.md with AskUserQuestion prompt, config.md persistence for "Never ask again", and code CLI fallback. Added per-phase callouts after Phase 1, 2, and 3. CHANGELOG updated. Status → Pending Test.
 
 ---
 

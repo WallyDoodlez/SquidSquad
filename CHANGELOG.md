@@ -9,6 +9,7 @@ All notable changes to SquidSquad will be documented here.
 ### Added
 
 - **Externalized agent templates** (FEAT-SKILL-017): Agent CLAUDE.md files are no longer 200+ line monoliths. Setup now generates shared template files in `.squidsquad/templates/` (e.g. `dev-agent-fe.md`, `pm-agent.md`) with all placeholders substituted at build time. Each agent's `.squidsquad/[role]/CLAUDE.md` is a small ~20-line bootstrapper containing role config and a Read instruction pointing to the template. Benefits: templates maintained in one place, upgrades only regenerate `templates/` without touching bootstrappers, much smaller per-agent files, cleaner separation of config and instructions. Upgrade auto-detects inline CLAUDE.md files (by checking for `## The Ralph Loop` heading) and migrates them to bootstrapper + template format.
+- **Open planning artifacts in VS Code** (FEAT-SKILL-024): After each planning phase (Research, Discussion, Planning), PM offers to open the artifact in VS Code via `AskUserQuestion` with three options: "Yes, open in VS Code", "No thanks", "Never ask again". "Never ask again" persists to `config.md` (`Open Artifacts in Editor: no`) and suppresses all future prompts. Falls back to printing the file path if `code` CLI is not available.
 
 ---
 

@@ -697,6 +697,8 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 
 **If research reveals significant risks**, present your recommendation to the human: "Based on research, this feature would [risk]. Recommend: proceed / adjust scope / reject." If warranted, recommend `Rejected` status with justification. Human can override.
 
+**Open in editor**: After RESEARCH.md is created, offer to open it (see "Open Artifacts in Editor" below).
+
 ### Phase 2A — Discussion Prep (Subagent)
 
 For non-trivial features, spawn a prep subagent (via the Agent tool) before starting the interactive discussion. The subagent reads the RESEARCH.md and produces a discussion prep file.
@@ -768,6 +770,8 @@ Continue until all questions are resolved. Capture decisions in `.squidsquad/[RO
 - [Thing]: [explicitly excluded]
 ```
 
+**Open in editor**: After CONTEXT.md is created, offer to open it (see "Open Artifacts in Editor" below).
+
 ### Phase 3 — Planning
 
 Create two artifacts:
@@ -820,6 +824,8 @@ PM reviews the subagent's draft, adjusts as needed, and saves the final version.
 ## Regression Risks
 - [Risk]: [what to watch for]
 ```
+
+**Open in editor**: After TEST-PLAN.md is created, offer to open it (see "Open Artifacts in Editor" below).
 
 Ask the human if they want to approve the feature now or leave as `Pending`.
 
@@ -874,6 +880,22 @@ To approve a feature:
 Light mode (trivial features): PM can fast-track through planning with abbreviated research, but status still transitions through `Planning` → `Approved`.
 
 Do not set status to `Approved` without completing the planning phases. Do not approve features yourself without human confirmation.
+
+---
+
+## Open Artifacts in Editor
+
+After each planning phase creates an artifact (RESEARCH.md, CONTEXT.md, TEST-PLAN.md), check `config.md` for an `Open Artifacts in Editor` setting. If it is set to `no`, skip silently. Otherwise, use the `AskUserQuestion` tool:
+
+```
+question: "Would you like to review [ARTIFACT_NAME] in VS Code?"
+options: ["Yes, open in VS Code", "No thanks", "Never ask again"]
+```
+
+**Handling responses:**
+- **"Yes, open in VS Code"**: Run `code [artifact_path]`. If the `code` command fails (not on PATH), print the full file path instead so the user can open it manually.
+- **"No thanks"**: Continue to the next phase.
+- **"Never ask again"**: Add `- **Open Artifacts in Editor**: no` under a new `## Editor Integration` section in `config.md`, then continue.
 
 ---
 
