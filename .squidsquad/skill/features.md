@@ -1043,6 +1043,7 @@ _Features start as Pending (awaiting human approval) and move through Approved â
   - [ ] SKILL.md setup/templates updated accordingly
   - [ ] SKILL.md upgrade steps populate `Heartbeat Interval Seconds` in existing config.md (default 10s if missing)
   - [ ] Works across machines (agents on different hosts)
+  - [ ] README.md includes a dedicated section explaining heartbeat branches (what they are, how they work, how to configure interval, how PM uses them for health detection)
 
 ### Discussion
 
@@ -1052,6 +1053,7 @@ _Features start as Pending (awaiting human approval) and move through Approved â
 > [2026-03-29 12:50] **pm/qa**: Human requested upgrade steps also populate the heartbeat interval config var for existing installs. Added to acceptance criteria.
 > [2026-03-29 12:55] **pm/qa**: Human: heartbeat must NOT be done by agents â€” must be a standalone shell script launched by boot scripts as background process. Updated acceptance criteria: `references/heartbeat.sh` runs independently, agents are unaware. Human approved. Status â†’ Planning. Beginning intake process.
 > [2026-03-29 13:00] **pm/qa**: Planning complete. RESEARCH.md, CONTEXT.md, TEST-PLAN.md created. All key decisions locked by human during discussion. Status â†’ Approved.
+> [2026-03-29 13:15] **pm/qa**: Human requested heartbeat branches get their own dedicated section in README.md documentation. Added to acceptance criteria.
 
 ---
 

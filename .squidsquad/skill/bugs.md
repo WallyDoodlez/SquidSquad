@@ -659,8 +659,8 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 
 ## BUG-SKILL-023 — Status bar line 2 disappears when PM is in Planning phase
 
-- **Severity**: Medium
-- **Status**: Open
+- **Severity**: Low
+- **Status**: Closed (Won't Fix — Claude Code platform limitation)
 - **Reported By**: pm/qa (human report)
 - **Assigned To**: skill-lead
 - **Description**: The status bar's second line (agent health icons + rest nudge) disappears when the PM is actively doing feature planning (Feature Intake Process). The status bar should always show both lines regardless of what the PM is doing. Likely the statusline.sh script's PM-specific segment conditionally omits line 2 in some code path, or the planning activity (which involves subagent calls and longer operations) interferes with the status bar rendering.
@@ -674,3 +674,4 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-29 13:10] **pm/qa**: Filed from human report. Human noticed line 2 gone during FEAT-SKILL-033 planning. Need to investigate whether this is a statusline.sh issue or a rendering/timing issue with Claude Code during long operations.
+> [2026-03-29 13:15] **pm/qa**: Research complete. This is a **Claude Code platform limitation**, not a statusline.sh bug. The script always outputs both lines unconditionally (lines 169-170). During long-running Agent tool calls (which only happen during PM's Feature Intake Process), Claude Code's status bar rendering truncates multi-line output. No fix possible in statusline.sh. Closing as Won't Fix (platform limitation).
