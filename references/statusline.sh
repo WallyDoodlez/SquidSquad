@@ -94,6 +94,76 @@ else
   ROLE_LABEL="$ROLE"
 fi
 
+# --- Read current-state file for line 2 ---
+STATE_FILE="$SQDIR/$ROLE/current-state"
+CURRENT_PHASE=""
+CURRENT_DESC=""
+if [ -f "$STATE_FILE" ]; then
+  STATE_LINE=$(head -1 "$STATE_FILE" 2>/dev/null)
+  CURRENT_PHASE=$(echo "$STATE_LINE" | cut -d'|' -f1)
+  CURRENT_DESC=$(echo "$STATE_LINE" | cut -d'|' -f2-)
+fi
+
+# --- Resolve line 2: current step or rotating hint ---
+get_line2() {
+  local role_type="$1"  # "dev" or "pm"
+
+  # If there's an active step description, show it
+  if [ -n "$CURRENT_DESC" ]; then
+    # Truncate at 60 chars
+    if [ "${#CURRENT_DESC}" -gt 60 ]; then
+      CURRENT_DESC="${CURRENT_DESC:0:57}..."
+    fi
+    echo "  $CURRENT_DESC"
+    return
+  fi
+
+  # Otherwise show rotating hint based on phase
+  local hint_file="$SQDIR/hints-${role_type}.txt"
+  [ ! -f "$hint_file" ] && return
+
+  local phase="${CURRENT_PHASE:-idle}"
+
+  # Collect matching hints for this phase
+  local hints=()
+  while IFS= read -r line; do
+    # Skip comments and empty lines
+    [[ "$line" =~ ^# ]] && continue
+    [ -z "$line" ] && continue
+    local h_phase=$(echo "$line" | cut -d'|' -f1)
+    local h_text=$(echo "$line" | cut -d'|' -f2-)
+    if [ "$h_phase" = "$phase" ] && [ -n "$h_text" ]; then
+      hints+=("$h_text")
+    fi
+  done < "$hint_file"
+
+  # Fallback to idle hints if no phase match
+  if [ ${#hints[@]} -eq 0 ] && [ "$phase" != "idle" ]; then
+    while IFS= read -r line; do
+      [[ "$line" =~ ^# ]] && continue
+      [ -z "$line" ] && continue
+      local h_phase=$(echo "$line" | cut -d'|' -f1)
+      local h_text=$(echo "$line" | cut -d'|' -f2-)
+      if [ "$h_phase" = "idle" ] && [ -n "$h_text" ]; then
+        hints+=("$h_text")
+      fi
+    done < "$hint_file"
+  fi
+
+  [ ${#hints[@]} -eq 0 ] && return
+
+  # Rotate every 60 seconds
+  local idx=$(( (NOW / 60) % ${#hints[@]} ))
+  local hint="${hints[$idx]}"
+
+  # Truncate at 60 chars
+  if [ "${#hint}" -gt 60 ]; then
+    hint="${hint:0:57}..."
+  fi
+
+  echo "  $hint"
+}
+
 # === PM-specific segments ===
 if [ "$ROLE" = "pm" ]; then
   # Ship counter: 📦 N/threshold, 🚀 if near bump
@@ -127,15 +197,8 @@ if [ "$ROLE" = "pm" ]; then
     fi
   done
 
-  # Build PM line 1
-  LINE1="🦑 ${ROLE_LABEL} v${VERSION} │ ${SHIP_STR}"
-  [ -n "$PLANNING_STR" ] && LINE1="${LINE1} │ ${PLANNING_STR}"
-  [ -n "$GIT_SYNC" ] && LINE1="${LINE1} │ ${GIT_SYNC}"
-  LINE1="${LINE1} │ ${CTX_STR} │ ${TIMER_STR}"
-
-  # Agent health icons for line 2: 🦑 healthy, 👻 stalled, 🥚 never started
+  # Agent health icons: 🦑 healthy, 👻 stalled, 🥚 never started
   # Uses heartbeat branches (heartbeat/<role>) for accurate health detection
-  # Include PM + all dev agents for full squad visibility
   ALL_AGENTS="pm $AGENTS"
   HEALTH=""
   HB_INTERVAL=$(grep 'Heartbeat Interval Seconds' "$SQDIR/config.md" 2>/dev/null | grep -oE '[0-9]+')
@@ -159,22 +222,29 @@ if [ "$ROLE" = "pm" ]; then
     fi
   done
 
-  # Rest nudge (right-aligned on line 2)
+  # Rest nudge
   HOUR=$(date +%H)
   REST=""
   if [ "$HOUR" -ge 22 ]; then
-    REST="🌙 late"
+    REST="🌙"
   elif [ "$HOUR" -ge 0 ] && [ "$HOUR" -lt 2 ]; then
-    REST="😴 rest?"
+    REST="😴"
   elif [ "$HOUR" -ge 2 ] && [ "$HOUR" -lt 6 ]; then
-    REST="🛏️ sleep!"
+    REST="🛏️"
   fi
 
-  LINE2="  ${HEALTH}"
-  [ -n "$REST" ] && LINE2="${LINE2}                                    ${REST}"
+  # Build PM line 1 — health icons right-aligned
+  LINE1="🦑 ${ROLE_LABEL} v${VERSION} │ ${SHIP_STR}"
+  [ -n "$PLANNING_STR" ] && LINE1="${LINE1} │ ${PLANNING_STR}"
+  [ -n "$GIT_SYNC" ] && LINE1="${LINE1} │ ${GIT_SYNC}"
+  LINE1="${LINE1} │ ${CTX_STR} │ ${TIMER_STR} │ ${HEALTH}"
+  [ -n "$REST" ] && LINE1="${LINE1} ${REST}"
+
+  # Line 2: current step or rotating hint
+  LINE2=$(get_line2 "pm")
 
   echo -e "${LINE1}"
-  echo -e "${LINE2}"
+  [ -n "$LINE2" ] && echo -e "${LINE2}"
 
 # === Dev agent segments ===
 else
@@ -217,5 +287,9 @@ else
   [ -n "$GIT_SYNC" ] && LINE1="${LINE1} │ ${GIT_SYNC}"
   LINE1="${LINE1} │ ${CTX_STR} │ ${TIMER_STR}"
 
+  # Line 2: current step or rotating hint
+  LINE2=$(get_line2 "dev")
+
   echo -e "${LINE1}"
+  [ -n "$LINE2" ] && echo -e "${LINE2}"
 fi

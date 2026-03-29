@@ -478,6 +478,7 @@ Add `.squidsquad/.active-role` to `.gitignore` (create the file if it doesn't ex
 ```
 # SquidSquad runtime (not committed)
 .squidsquad/.active-role
+.squidsquad/*/current-state
 ```
 
 ### Step 5 — Generate Boot Scripts
@@ -507,6 +508,10 @@ LOGO
 fi
 
 echo "[ROLE]" > .squidsquad/.active-role
+
+# Clear and initialize status bar state
+rm -f .squidsquad/[ROLE]/current-state
+echo "idle|Initializing..." > .squidsquad/[ROLE]/current-state
 
 # Launch heartbeat in background
 HB_INTERVAL=$(grep 'Heartbeat Interval Seconds' .squidsquad/config.md 2>/dev/null | grep -oE '[0-9]+')
@@ -539,6 +544,10 @@ Write-Host ""
 
 "[ROLE]" | Set-Content .squidsquad/.active-role -NoNewline
 
+# Clear and initialize status bar state
+Remove-Item .squidsquad/[ROLE]/current-state -ErrorAction SilentlyContinue
+"idle|Initializing..." | Set-Content .squidsquad/[ROLE]/current-state -NoNewline
+
 # Launch heartbeat in background
 $hbInterval = if ($config -match 'Heartbeat Interval Seconds.*?(\d+)') { $Matches[1] } else { '10' }
 $hbProc = Start-Process -FilePath "bash" -ArgumentList ".squidsquad/heartbeat.sh", "[ROLE]", $hbInterval -PassThru -NoNewWindow
@@ -570,6 +579,10 @@ LOGO
 fi
 
 echo "pm" > .squidsquad/.active-role
+
+# Clear and initialize status bar state
+rm -f .squidsquad/pm/current-state
+echo "idle|Initializing..." > .squidsquad/pm/current-state
 
 # Launch heartbeat in background
 HB_INTERVAL=$(grep 'Heartbeat Interval Seconds' .squidsquad/config.md 2>/dev/null | grep -oE '[0-9]+')
@@ -604,6 +617,10 @@ if (Test-Path .squidsquad) {
 
 "pm" | Set-Content .squidsquad/.active-role -NoNewline
 
+# Clear and initialize status bar state
+Remove-Item .squidsquad/pm/current-state -ErrorAction SilentlyContinue
+"idle|Initializing..." | Set-Content .squidsquad/pm/current-state -NoNewline
+
 # Launch heartbeat in background
 $hbInterval = if ($config -match 'Heartbeat Interval Seconds.*?(\d+)') { $Matches[1] } else { '10' }
 $hbProc = Start-Process -FilePath "bash" -ArgumentList ".squidsquad/heartbeat.sh", "pm", $hbInterval -PassThru -NoNewWindow
@@ -636,13 +653,14 @@ The script implements the **Emoji Rich** status bar design:
 - **✅ clear** — dev backlog empty, no active task
 - **🧠** — context always shown; 🧠🔥 at 50-74% (yellow text); 🧠💀 at 75%+ (red text); green text < 50%
 - **🔄 Nm** — next-cycle countdown; switches to **🔜 <1m** when under 1 minute
-- **PM line 2** — team health icons (🦑 healthy, 👻 stalled, 🥚 never started) + rest nudge (🌙 late 10pm-12am, 😴 rest? 12am-2am, 🛏️ sleep! 2am-6am)
+- **Line 1 health icons** — (PM only, right-aligned) 🦑 healthy, 👻 stalled, 🥚 never started + rest nudge emoji
+- **Line 2** — current step (emoji + description from `current-state` file, truncated at 60 chars) OR rotating contextual hints when idle (from hint pool files, rotates every 60s, phase-aware)
 
 Output examples:
-- Dev idle: `🦑 skill v0.5.1 │ 🐛3 ⭐2 │ 🧠 42% │ 🔄 4m`
-- Dev working: `🦑 skill v0.5.1 │ 🔨 FEAT-017 │ 🧠 31% │ 🔄 3m`
-- Dev clear: `🦑 be v0.5.1 │ ✅ clear │ 🧠 12% │ 🔄 5m`
-- PM: `🦑 PM/QA v0.5.1 │ 📦 9/10 🚀 │ 📋 FEAT-017 P2 │ 🧠 42% │ 🔄 2m` + line 2: `  🦑🦑🦑`
+- Dev idle: `🦑 skill v0.5.1 │ 🐛3 ⭐2 │ 🧠 42% │ 🔄 4m` + line 2: `  Msg me any time to file a bug or request a feature`
+- Dev working: `🦑 skill v0.5.1 │ 🔨 FEAT-017 │ 🧠 31% │ 🔄 3m` + line 2: `  🔨 FEAT-SKILL-017...`
+- Dev clear: `🦑 be v0.5.1 │ ✅ clear │ 🧠 12% │ 🔄 5m` + line 2: `  All clear — ready for the next task`
+- PM: `🦑 PM/QA v0.5.1 │ 📦 9/10 🚀 │ 📋 FEAT-017 P2 │ 🧠 42% │ 🔄 2m │ 🦑🦑🦑` + line 2: `  Running tests to check system health...`
 
 Make the copied script executable (`chmod +x`).
 
@@ -657,6 +675,10 @@ Ask the user for the heartbeat interval (default: 10 seconds). Explain:
 > SquidSquad agents push a lightweight heartbeat branch (`heartbeat/<role>`) every N seconds so the PM can detect agent health even during quiet cycles (no work to commit). This creates unprotected branches on your remote — no repo config needed. Default: 10 seconds.
 
 Store the value in `config.md` under `## Heartbeat` → `Heartbeat Interval Seconds`.
+
+### Step 5d — Copy Hint Pool Files
+
+Copy `references/hints-dev.txt` to `.squidsquad/hints-dev.txt` and `references/hints-pm.txt` to `.squidsquad/hints-pm.txt`. These files contain phase-aware hint pools that the status bar rotates through when agents are idle or between steps. The format is `phase|hint text` — one hint per line, comments start with `#`.
 
 ### Step 6 — Seed Tracker Files
 
@@ -838,7 +860,7 @@ Spawn all applicable agents simultaneously. Each agent writes only its assigned 
 > **Note:** Create `.squidsquad/templates/` if it does not exist (first upgrade from pre-template architecture).
 
 **One agent for settings:**
-> Update `.claude/settings.json`: ensure `permissions.allow` contains `Edit(.squidsquad/**)`, `Write(.squidsquad/**)`, and the four git commands. Ensure the `SessionStart` hook is present and matches the current template. Ensure the `statusLine` key is present and points to `bash .squidsquad/statusline.sh`. Regenerate `.squidsquad/statusline.sh` by copying `references/statusline.sh`. Regenerate `.squidsquad/heartbeat.sh` by copying `references/heartbeat.sh`. Merge into existing content — never remove unrelated keys.
+> Update `.claude/settings.json`: ensure `permissions.allow` contains `Edit(.squidsquad/**)`, `Write(.squidsquad/**)`, and the four git commands. Ensure the `SessionStart` hook is present and matches the current template. Ensure the `statusLine` key is present and points to `bash .squidsquad/statusline.sh`. Regenerate `.squidsquad/statusline.sh` by copying `references/statusline.sh`. Regenerate `.squidsquad/heartbeat.sh` by copying `references/heartbeat.sh`. Copy `references/hints-dev.txt` to `.squidsquad/hints-dev.txt` and `references/hints-pm.txt` to `.squidsquad/hints-pm.txt`. Merge into existing content — never remove unrelated keys.
 
 #### If tracker schema differs — additionally spawn:
 

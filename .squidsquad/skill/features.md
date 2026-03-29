@@ -1138,7 +1138,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-037 — Show current Ralph Loop step in status bar line 2
 
 - **Priority**: Medium
-- **Status**: Approved
+- **Status**: Pending Test
 - **Requested By**: human
 - **Description**: Display the agent's current Ralph Loop step in the status bar's second line. Currently line 2 shows agent health icons and rest nudge, but not what the agent is actively doing. Adding the current step (e.g. "Step 3 — QA Check", "Step 5 — Verify Bugs") would give the human real-time visibility into each agent's progress without needing to read scrollback.
 - **Rationale**: When multiple agents are running, the human can't tell at a glance what each agent is doing. The `[🦑]` step markers scroll by in the terminal output, but the status bar is always visible. Showing the current step there gives persistent visibility.
@@ -1169,3 +1169,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 15:15] **pm/qa**: Human resolved open questions: (1) Agents write state to file on each phase change — statusline.sh reads it (no tracker parsing in shell). (2) Hint pools live in templates (references/) — copied during setup. (3) Enough granularity in the state file so hints always make sense for what's happening. Architecture: agent writes `.squidsquad/<role>/current-state` → statusline.sh reads state + hint pool file → picks matching pool → rotates via timestamp modulo. Updated acceptance criteria.
 > [2026-03-29 16:00] **pm/qa**: Human approved. FEAT-SKILL-036 put on hold (wt dependency not wanted). Status → Planning. Beginning intake process.
 > [2026-03-29 16:25] **pm/qa**: Phase 2 complete. All 5 decisions locked: (D1) health icons → line 1 right-aligned, (D2) hints rotate every 60s phase-aware, (D3) 60 chars truncation all roles, (D4) DM hints deferred, (D5) boot clear + Initializing write. RESEARCH.md, CONTEXT.md, TEST-PLAN.md created. Status → Approved.
+
+> [2026-03-29 16:30] **skill-lead**: Picking up. Status → In Progress.
+
+> [2026-03-29 16:45] **skill-lead**: Complete. Created `references/hints-dev.txt` and `references/hints-pm.txt` hint pool files. Updated `references/agent-instructions.md` with current-state writing protocol for both dev and PM templates. Rewrote `references/statusline.sh`: health icons moved to PM line 1 (right-aligned), line 2 shows current step from `current-state` file or rotating phase-aware hints from hint pools (60s rotation via timestamp modulo, 60 char truncation). Updated boot script templates in SKILL.md to clear and initialize `current-state` on startup. Added Step 5d for hint file copying during setup. Added `current-state` to `.gitignore`. Updated upgrade flow, CHANGELOG.md, README.md. Status → Pending Test.
