@@ -869,20 +869,31 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 - **Status**: Pending
 - **Description**: Redesign the status bar (`statusline.sh`) with an emoji-rich visual style. Replaces the current ANSI-only design with expressive emoji indicators. PM gets a two-line bar with team health on a separate line.
 
-  **PM view (2 lines):**
+  **PM view (2 lines) — mid-planning, in sync:**
   ```
-  🦑 PM/QA v0.5.1 │ 📦 9/10 🚀 │ 🧠 [green]42%[/green] │ ⏳ 2m
+  🦑 PM/QA v0.5.1 │ 📦 9/10 🚀 │ 📋 FEAT-017 P2 │ 🧠 [green]42%[/green] │ 🔄 2m
     🟢skill 🔴fe ⚪api
+  ```
+
+  **PM view — no planning, behind remote:**
+  ```
+  🦑 PM/QA v0.5.1 │ 📦 5/10 │ ↓3 │ 🧠🔥 [yellow]62%[/yellow] │ 🔜 <1m
+    🟢skill 🟢fe
   ```
 
   **Dev view (idle):**
   ```
-  🦑 skill v0.5.1 │ 🐛3 ⭐2 │ 🧠 [green]25%[/green] │ ⏳ 4m
+  🦑 skill v0.5.1 │ 🐛3 ⭐2 │ 🧠 [green]25%[/green] │ 🔄 4m
   ```
 
   **Dev view (working on a task):**
   ```
-  🦑 skill v0.5.1 │ 🔨 FEAT-017 │ 🧠 [green]25%[/green] │ ⏳ 4m
+  🦑 skill v0.5.1 │ 🔨 FEAT-017 │ 🧠 [green]25%[/green] │ 🔄 3m
+  ```
+
+  **Dev view (unpushed commits, almost next cycle):**
+  ```
+  🦑 fe v0.5.1 │ ↑2 │ 🔨 BUG-FE-004 │ 🧠💀 [red]85%[/red] │ 🔜 <1m
   ```
 
   **Locked design decisions:**
@@ -895,7 +906,10 @@ _Features start as Pending (awaiting human approval) and move through Approved �
   - **Agent health**: 🟢 healthy, 🔴 stalled, ⚪ never started — displayed on PM's **second line** (not inline with main bar)
   - **Active task**: 🔨 FEAT-XXX or BUG-XXX shown on dev bar when working-state has an in-progress task, replaces backlog counts
   - **Version**: shown after role name, always present
-  - **Timer**: ⏳ Nm shows time until next cycle (replaces "Nm ago │ next in ~Nm")
+  - **Ship counter position**: 📦 is position 2 (right after identity), before planning phase
+  - **Git sync**: ↑N (unpushed) / ↓N (behind remote) — only shown when out of sync, hidden when clean
+  - **Planning phase**: 📋 FEAT-XXX PN — shown on PM bar only during active feature intake, hidden otherwise
+  - **Timer**: 🔄 Nm for normal countdown, 🔜 <1m when under 1 minute (replaces ⏳)
   - **Dropped**: iteration number (low value), "time since last" (replaced by countdown only)
   - **Emoji key** (for reference in docs):
     - 🦑 = SquidSquad brand
@@ -909,7 +923,10 @@ _Features start as Pending (awaiting human approval) and move through Approved �
     - 🔥 = context caution (50-74%, stacked with 🧠)
     - 💀 = context danger (75%+, stacked with 🧠)
     - green/yellow/red ANSI = context percentage text color
-    - ⏳ = next cycle countdown
+    - 🔄 = next cycle countdown (normal)
+    - 🔜 = next cycle imminent (<1m)
+    - 📋 = planning phase in progress (PM only)
+    - ↑N/↓N = git sync status (only when out of sync)
 
 - **Acceptance Criteria**:
   - [ ] `statusline.sh` rewritten with emoji-rich output matching the design above
@@ -920,7 +937,10 @@ _Features start as Pending (awaiting human approval) and move through Approved �
   - [ ] Context: 🧠 always shown, 🔥 stacked at 50-74%, 💀 stacked at 75%+
   - [ ] Context percentage text colored: green <50%, yellow 50-74%, red 75%+
   - [ ] Version read from config.md
-  - [ ] Timer shows countdown to next cycle (not time since last)
+  - [ ] Timer: 🔄 Nm for countdown, switches to 🔜 <1m when under 1 minute
+  - [ ] Git sync: ↑N/↓N shown only when out of sync with remote
+  - [ ] Planning phase: 📋 FEAT-XXX PN shown on PM bar during active intake
+  - [ ] Ship counter at position 2 (after identity, before planning/git sync)
   - [ ] Iteration number removed from display
   - [ ] SKILL.md status bar documentation updated
   - [ ] README status bar section updated with new examples
@@ -929,3 +949,4 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 > [2026-03-29 03:20] **pm/qa**: Filed with full design locked by human. Style: Emoji Rich. Key decisions: PM gets two-line bar with team health on line 2, ship counter with 🚀 at 9+, three-tier context emoji (🧠/⚠️/🔥), active task display replaces backlog when working, version always shown, iteration number dropped, timer condensed to countdown only. Status: Pending — awaiting human approval.
 > [2026-03-29 03:30] **pm/qa**: Design refinement — context display updated: 🧠 always shown, 🔥 stacked at 50-74% (caution), 💀 stacked at 75%+ (danger). Percentage text ANSI-colored: green <50%, yellow 50-74%, red 75%+. Locked, not yet approved.
+> [2026-03-29 03:40] **pm/qa**: Design refinement batch — added: git sync (↑N/↓N, hidden when clean), planning phase (📋 FEAT-XXX PN on PM bar), timer changed to 🔄 with 🔜 <1m when imminent, ship counter moved to position 2. All locked, not yet approved.
