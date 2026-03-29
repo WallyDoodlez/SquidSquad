@@ -583,7 +583,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 - **Priority**: High
 - **Owner**: skill-lead
-- **Status**: Planning
+- **Status**: Approved
 - **Description**: The current SquidSquad setup overwrites the user's entire `statusLine` config in `.claude/settings.json`. This replaces whatever custom status bar the user had before (context window usage, repo info, etc.) with the SquidSquad status line. Related to BUG-SKILL-009 which added a "check before overwriting" prompt, but the underlying design is still wrong.
 
   **The fix:** SquidSquad should only add its status info to the **last line** of the status bar output, preserving whatever the user's existing status bar shows above it. If the user has no custom statusLine, SquidSquad's line is the only one. If they do, SquidSquad appends below.
@@ -606,3 +606,23 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 > [2026-03-28 10:00] **pm/qa**: Filed from human request. The status bar overwrite was flagged before (BUG-009 added a prompt), but the real fix is architectural: SquidSquad should only own the last line of the status bar, not the entire thing. Status: Pending — awaiting human approval.
 > [2026-03-28 10:30] **pm/qa**: Human approved. Status → Planning. Beginning intake process. Running Phase 1 (Research).
+> [2026-03-28 10:45] **pm/qa**: Phase 1 (Research) complete. Phase 2 (Discussion) complete — 5 questions resolved. Multi-line status bar confirmed working. Option A (chain user command) selected. Phase 3 (Planning) complete — CONTEXT.md + TEST-PLAN.md written. Status → Approved.
+
+---
+
+## FEAT-SKILL-022 — Silent message output for quiet/silent cycles
+
+- **Priority**: Low
+- **Owner**: skill-lead
+- **Status**: Pending
+- **Description**: When the Ralph Loop runs a quiet cycle (no work done), the PM currently prints a short text message like `[🦑] Quiet cycle. Cycle N.` This still produces visible output in the conversation. The feature request is to make quiet cycles truly silent — either no output at all, or a minimal non-intrusive indicator that doesn't clutter the conversation.
+
+- **Acceptance Criteria**:
+  - [ ] Quiet cycles produce minimal or no visible output
+  - [ ] Human can still tell the loop is running (e.g., via status bar, not conversation text)
+  - [ ] PM and dev agent templates updated
+  - [ ] Non-quiet cycles still print full step markers as before
+
+### Discussion
+
+> [2026-03-28 10:50] **pm/qa**: Filed from human request. Quiet cycles currently print text that clutters the conversation. Should be truly silent or minimal. Status: Pending — awaiting human approval.
