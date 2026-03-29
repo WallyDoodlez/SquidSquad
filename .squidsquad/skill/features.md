@@ -1145,10 +1145,12 @@ _Features start as Pending (awaiting human approval) and move through Approved �
   - [ ] Agent writes current step to `.squidsquad/<role>/current-step` at each step transition
   - [ ] `statusline.sh` reads THIS agent's current-step file and displays it on line 2
   - [ ] Active step format: emoji + description (e.g. "🔨 Planning for FEAT-SKILL-033..."), truncated with "..." if too long
-  - [ ] When no active step, line 2 shows contextual HINTS — role-specific, priority-ordered
-  - [ ] Hints are human-facing friendly prompts (not metric dumps) — e.g. "Msg me any time to talk about a feature", "Drop a bug report here if something looks off"
-  - [ ] PM hints: invite human to discuss features, file bugs, review priorities
-  - [ ] Dev agent hints: contextual nudges relevant to dev role
+  - [ ] When no active step, line 2 shows rotating contextual HINTS
+  - [ ] Hints are human-facing friendly prompts (not metric dumps) — e.g. "Msg me any time to talk about a feature"
+  - [ ] Hints rotate each cycle — different hint shown each time
+  - [ ] Each role has its own hint pool; each phase within a role may have its own sub-pool
+  - [ ] Hint selection is state-driven (considers open bugs, pending features, etc.)
+  - [ ] All hint logic lives in `statusline.sh` (shell-driven, not agent-driven)
   - [ ] Falls back gracefully if current-step file is missing or empty
   - [ ] CLAUDE.md templates updated to write current step at each `[🦑]` marker
   - [ ] SKILL.md templates and references updated
@@ -1159,3 +1161,4 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 13:57] **pm/qa**: Filed from human request. Human wants real-time step visibility in the status bar. Approach: agents write current step to a file, statusline.sh reads it. Status: Pending — awaiting human approval.
 > [2026-03-29 14:20] **pm/qa**: Human clarified: show current step of THIS agent only (not all agents). Format: emoji + description, e.g. "🔨 Planning for FEAT-SKILL-033..." — truncate with "..." if too long. Also wants contextual HINTS on line 2 when idle (role-specific). Updating acceptance criteria to reflect.
 > [2026-03-29 14:40] **pm/qa**: Human clarified hints further: hints are for HUMANS, not system status. They should be friendly prompts reminding the human what they can do — e.g. "Msg me any time to talk about a feature". NOT metric dumps like "3 bugs open". Think of them as gentle nudges to interact. Updated acceptance criteria.
+> [2026-03-29 15:10] **pm/qa**: Human clarified hint behavior: (1) hints ROTATE each cycle, not static, (2) each role AND each phase has its own hint pool, (3) state-driven — hint selection considers current state, (4) shell-driven — statusline.sh handles all hint logic, not the agent. Open questions: rotation mechanism (minute-based modulo vs counter file), performance of reading tracker state in shell, hint pools hardcoded in script vs config file, granularity of state awareness for hint selection.
