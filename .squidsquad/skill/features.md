@@ -467,7 +467,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-017 — Externalize agent templates from generated CLAUDE.md files
 
 - **Priority**: High
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Owner**: skill-lead
 - **Description**: Currently, setup generates full CLAUDE.md files for each agent by inlining the entire template from `references/agent-instructions.md` with substitutions. This creates large, duplicated files in the user's repo that are hard to maintain and require full regeneration on every upgrade.
 
@@ -508,6 +508,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 00:30] **pm/qa**: Phase 1 (research), Phase 2 (discussion), Phase 3 (test plan) complete. All decisions locked: build-time substitution, keep [ROLE] placeholders, natural-language Read instruction, auto-detect migration. Human approved. Status → Approved.
 > [2026-03-29 02:00] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-29 02:10] **skill-lead**: Complete. Updated SKILL.md (Step 2 adds templates/, Step 4 split into 4a/4b/4c for template generation + bootstrapper + root CLAUDE.md, Upgrade Instructions handle migration with auto-detect), File Structure section shows templates/, references/agent-instructions.md header updated, README.md file structure and upgrade section updated, CHANGELOG.md entry added. Status → Pending Test.
+> [2026-03-29 02:30] **pm/qa**: QA verified — setup generates templates + bootstrappers, upgrade path handles inline-to-bootstrapper migration via auto-detect heuristic, SKILL.md and README updated. Status → Shipped.
 
 ---
 
@@ -547,7 +548,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 - **Priority**: Low
 - **Owner**: skill-lead
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Description**: Remove the boot logo section from README.md. Likely the ASCII squid art / startup banner section — it's not needed in the GitHub-facing documentation.
 
 - **Acceptance Criteria**:
@@ -561,6 +562,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 01:20] **pm/qa**: Human approved. Light mode — trivial doc-only change, skipping Research + Phase 2A + abbreviated Discussion. No open questions. Status → Approved.
 > [2026-03-29 02:15] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-29 02:15] **skill-lead**: Complete. Removed "Boot Logo" section (heading + description paragraph) from README.md. No other content affected, README reads coherently. Status → Pending Test.
+> [2026-03-29 02:30] **pm/qa**: QA verified — Boot Logo section removed, README reads coherently, no other content affected. Status → Shipped.
 
 ---
 
@@ -685,7 +687,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-024 — Offer to open planning artifacts in VS Code after each phase
 
 - **Priority**: Low
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Owner**: skill-lead
 - **Description**: After each planning phase produces an artifact (RESEARCH.md after Phase 1, CONTEXT.md after Phase 2, TEST-PLAN.md after Phase 3), the PM should ask the user if they want to open it in VS Code for review. Use `AskUserQuestion` with options: "Yes, open in VS Code", "No thanks", and "Never ask again". If "Never ask again" is selected, persist the preference in `config.md` (e.g. `Open Artifacts in Editor: no`) and skip the prompt in future cycles.
 
@@ -706,6 +708,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 00:50] **pm/qa**: Scope revised — apply to all phases (RESEARCH.md, CONTEXT.md, TEST-PLAN.md), not just TEST-PLAN.md. Context and test plan updated. Human approved. Status → Approved.
 > [2026-03-29 02:20] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-29 02:25] **skill-lead**: Complete. Added "Open Artifacts in Editor" section to PM template in agent-instructions.md with AskUserQuestion prompt, config.md persistence for "Never ask again", and code CLI fallback. Added per-phase callouts after Phase 1, 2, and 3. CHANGELOG updated. Status → Pending Test.
+> [2026-03-29 02:30] **pm/qa**: QA verified — all 3 phases have "Open in editor" callouts, dedicated section in agent-instructions.md with AskUserQuestion flow, config persistence for opt-out. Status → Shipped.
 
 ---
 
