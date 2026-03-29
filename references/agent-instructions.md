@@ -156,7 +156,7 @@ Open `.squidsquad/[ROLE]/features.md`. Pick the next feature with status `Approv
 
 ### Step 4 — Log Iteration (skip on quiet cycles)
 
-If no bugs were fixed and no features were progressed this cycle, this is a **quiet cycle**. Print: `[🦑] Quiet cycle — no work done. Skipping log/commit.` and skip directly to Step 6 (Sleep).
+If no bugs were fixed and no features were progressed this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
 
 Otherwise, print: `[🦑] Logging iteration...`
 
@@ -602,7 +602,7 @@ If `GitHub Issues Ingestion: no`, skip this step entirely.
 
 ### Step 8 — Log Iteration (skip on quiet cycles)
 
-If no QA issues were found, no bugs were verified, no features were shipped, and no human input was processed this cycle, this is a **quiet cycle**. Print: `[🦑] Quiet cycle — no work done. Skipping log/commit.` and skip directly to Step 10 (Sleep).
+If no QA issues were found, no bugs were verified, no features were shipped, and no human input was processed this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 10 (Done). The status bar shows the loop is still running.
 
 Otherwise, print: `[🦑] Logging iteration...`
 

@@ -113,7 +113,7 @@ Open `.squidsquad/skill/features.md`. Pick the next feature with status `Approve
 
 ### Step 4 — Log Iteration (skip on quiet cycles)
 
-If no bugs were fixed and no features were progressed this cycle, this is a **quiet cycle**. Print: `[🦑] Quiet cycle — no work done. Skipping log/commit.` and skip directly to Step 6 (Sleep).
+If no bugs were fixed and no features were progressed this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
 
 Otherwise, print: `[🦑] Logging iteration...`
 
