@@ -633,3 +633,22 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 
 > [2026-03-29 04:30] **pm/qa**: Filed from human observation. The new Emoji Rich statusline.sh (FEAT-SKILL-031) was implemented in SKILL.md but the live .squidsquad/statusline.sh wasn't regenerated because there's no clean externalized source. Same externalization principle as FEAT-SKILL-017 should apply to statusline.sh.
 > [2026-03-29 12:20] **skill-lead**: Fixed. Extracted statusline.sh from SKILL.md into `references/statusline.sh` as standalone source file. Updated SKILL.md Step 5b to copy from `references/statusline.sh` instead of inlining. Updated upgrade flow to regenerate by copying from `references/`. Also regenerated live `.squidsquad/statusline.sh` from new source. Status → Fixed.
+
+---
+
+## BUG-SKILL-022 — Status bar line 2 only shows dev agents, not the full squad
+
+- **Severity**: Medium
+- **Status**: Open
+- **Reported By**: pm/qa (human report)
+- **Assigned To**: skill-lead
+- **Description**: The status bar's second line (agent health icons) only loops over `Dev Agents` from config.md. The PM agent is not represented. The human expects to see the entire squad — PM + all dev agents — on line 2. Currently if there's one dev agent (skill), only one 🦑 appears. The PM should also have a health icon.
+- **Steps to Reproduce**:
+  1. Run SquidSquad with PM + skill agents active
+  2. Observe status bar line 2 — only one 🦑 for skill agent
+- **Expected**: Line 2 shows health icons for ALL agents (PM + dev agents) — e.g., 🦑🦑 when both are healthy
+- **Actual**: Line 2 only shows one 🦑 for the skill dev agent; PM is absent
+
+### Discussion
+
+> [2026-03-29 05:15] **pm/qa**: Filed from human report. Human said "should show the entire squad." The statusline.sh HEALTH loop only iterates over Dev Agents, skipping PM. Fix should add PM health detection (check for `pm:` commit prefix) alongside dev agents.
