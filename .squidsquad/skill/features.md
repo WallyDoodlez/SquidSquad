@@ -511,7 +511,7 @@ _Features start as Pending (awaiting human approval) and move through Approved â
 
 - **Priority**: High
 - **Owner**: skill-lead
-- **Status**: Pending
+- **Status**: Planning
 - **Description**: The 5-phase Feature Intake Process (FEAT-SKILL-016) should leverage Claude Code subagents (via the Agent tool) as much as possible across all phases. Currently Phase 1 (Research) spawns a research agent, but the other phases run inline. The PM should delegate heavy lifting to subagents wherever feasible:
 
   **Potential subagent usage per phase:**
@@ -532,6 +532,7 @@ _Features start as Pending (awaiting human approval) and move through Approved â
 ### Discussion
 
 > [2026-03-28 06:50] **pm/qa**: Filed from human request. Human wants maximum subagent delegation across all planning phases to reduce PM context pressure and enable parallel work. Status: Pending â€” awaiting human approval.
+> [2026-03-28 11:30] **pm/qa**: Human approved. Status â†’ Planning. Beginning intake process. Running Phase 1 (Research).
 
 ---
 
