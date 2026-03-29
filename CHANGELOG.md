@@ -4,7 +4,7 @@ All notable changes to SquidSquad will be documented here.
 
 ---
 
-## [Unreleased]
+## [0.6.0] — 2026-03-29
 
 ### Added
 

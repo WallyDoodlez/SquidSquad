@@ -539,7 +539,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-018 — Generated CLAUDE.md files missing cycle start/complete markers and feature pickup marker
 
 - **Severity**: Low
-- **Status**: Fixed
+- **Status**: Closed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: The generated `skill/CLAUDE.md` and `pm/CLAUDE.md` are missing several `[🦑]` status markers that exist in the template (`references/agent-instructions.md`):
@@ -561,7 +561,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-019 — Boot logo in settings.json startup hook doesn't match README logo
 
 - **Severity**: Low
-- **Status**: Fixed
+- **Status**: Closed
 - **Reported By**: human (via pm/qa)
 - **Assigned To**: skill-lead
 - **Description**: The ASCII squid art in the startup hook (`.claude/settings.json`) uses a different squid design than the canonical logo in `README.md`. The startup hook should use the README version.
@@ -590,7 +590,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-020 — README.md not updated when features ship
 
 - **Severity**: Medium
-- **Status**: Fixed
+- **Status**: Closed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: Dev agent template Step 8 ("Update docs") requires updating README.md when user-facing behavior changes, but README has not been updated since BUG-SKILL-012. At least 3 shipped features are missing from README:
@@ -613,7 +613,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-021 — statusline.sh template inlined in SKILL.md instead of externalized as a file
 
 - **Severity**: Medium
-- **Status**: Fixed
+- **Status**: Closed
 - **Reported By**: human (via pm/qa)
 - **Assigned To**: skill-lead
 - **Description**: The statusline.sh script is embedded as a code block inside SKILL.md rather than stored as a standalone file in `references/` (e.g. `references/statusline.sh`). This means:
