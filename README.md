@@ -267,4 +267,4 @@ See [CHANGELOG.md](./CHANGELOG.md) for what changed between versions.
 
 ## License
 
-MIT
+[AGPL-3.0](./LICENSE)
