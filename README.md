@@ -146,7 +146,7 @@ At the start of each cycle, agents check `context_window.used_percentage`. If ab
 PM detects agent health by checking `git log` for recent commits with each agent's prefix (e.g. `skill:`, `fe:`). No heartbeat files needed — works across separate clones. Stalled agents are flagged in the QA log. Quiet agents (no work to do) are distinguished from truly stalled ones.
 
 ### Quiet Cycle Skipping
-Agents skip the iteration log and commit when no work was done. Iteration counters only increment on productive cycles. Keeps git history and iteration logs meaningful.
+Agents skip the iteration log and commit when no work was done — and produce no text output at all on quiet cycles. Iteration counters only increment on productive cycles. Keeps git history, iteration logs, and terminal scrollback meaningful.
 
 ### Iteration Log Retention
 Each agent keeps the last 20 iteration files. Older logs are deleted — git history preserves them if needed.
@@ -156,6 +156,21 @@ When enabled (`config.md` `PR Flow: yes`), dev agents create feature branches an
 
 ### GitHub Issues Ingestion (optional)
 When enabled (`config.md` `GitHub Issues Ingestion: yes`), PM auto-ingests open GitHub Issues into agent trackers each cycle. Issues are classified as bugs/features, routed to the right agent, and tracked with `GitHub Issue #N` references. Shipped items auto-close the original issue.
+
+### Subagent Delegation (Planning Phases)
+PM spawns subagents for research-heavy planning phases — Research, Discussion, Planning — so the main PM context stays lean. Each phase produces an artifact (`RESEARCH.md`, `CONTEXT.md`, `TEST-PLAN.md`) that dev agents consume during implementation. Light mode skips subagents for trivial features.
+
+### Status Bar Chaining
+SquidSquad no longer replaces the user's existing Claude Code status bar. Setup saves the current `statusLine` command to `.squidsquad/.user-statusline`, and `statusline.sh` chains it — user's output appears first, SquidSquad appends as the last line. Silent 1-second timeout fallback if the user's command hangs.
+
+### Auto Versioning
+PM tracks shipped items and auto-bumps the minor version every N items (configurable in `config.md`, default 10) when zero open bugs exist. Creates a git tag, updates `config.md`, `SKILL.md`, and `CHANGELOG.md`. Bypasses PR flow to avoid blocking on review.
+
+### Externalized Agent Templates
+Agent `CLAUDE.md` files are small ~20-line bootstrappers containing role config and a Read instruction pointing to a shared template in `.squidsquad/templates/`. Templates are maintained in one place and regenerated on upgrade without touching bootstrappers or tracker files.
+
+### Open Planning Artifacts in VS Code
+After each planning phase (Research, Discussion, Planning), PM offers to open the artifact in VS Code. "Never ask again" persists to `config.md` and suppresses all future prompts. Falls back to printing the file path if the `code` CLI is not available.
 
 ### `/squidsquad-status` Command
 Type `/squidsquad-status` in any Claude session in the repo to get a quick dashboard: agent health, open bugs/features per agent, recently shipped items.

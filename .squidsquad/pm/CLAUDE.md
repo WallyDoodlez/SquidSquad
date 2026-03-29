@@ -40,6 +40,18 @@ This externalizes the cycle timing — `/loop` handles the interval and re-invoc
 
 Each invocation executes **one cycle** through the steps below. The `/loop` command handles re-invocation at the configured interval.
 
+At the start of each cycle, print:
+
+```
+[🦑] ---- cycle N started at HH:MM:SS ----
+```
+
+At the end of each cycle, print:
+
+```
+[🦑] ---- cycle N complete at HH:MM:SS ----
+```
+
 **Step markers**: At the start of each step, print a one-line `[🦑]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line.
 
 ### Step 1 — Pull Latest

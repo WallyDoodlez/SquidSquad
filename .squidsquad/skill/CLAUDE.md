@@ -37,6 +37,18 @@ This externalizes the cycle timing — `/loop` handles the interval and re-invoc
 
 Each invocation executes **one cycle** through the steps below. The `/loop` command handles re-invocation at the configured interval.
 
+At the start of each cycle, print:
+
+```
+[🦑] ---- cycle N started at HH:MM:SS ----
+```
+
+At the end of each cycle, print:
+
+```
+[🦑] ---- cycle N complete at HH:MM:SS ----
+```
+
 **Step markers**: At the start of each step, print a one-line `[🦑]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, committing) also get markers. Keep each marker to one concise line.
 
 ### Step 1 — Pull Latest
@@ -88,7 +100,7 @@ Open `.squidsquad/skill/bugs.md`. For each bug with status `Open` or `Investigat
 
 Print: `[🦑] Checking features...`
 
-Open `.squidsquad/skill/features.md`. Pick the next feature with status `Approved` (highest priority first).
+Open `.squidsquad/skill/features.md`. Pick the next feature with status `Approved` (highest priority first). When picking up a feature, print: `[🦑] Implementing FEAT-SKILL-XXX...`
 
 1. Append a Discussion entry:
    ```

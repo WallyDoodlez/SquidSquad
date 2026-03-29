@@ -491,12 +491,12 @@ if [ -d .squidsquad ]; then
   V=$(grep -o '[0-9][0-9.]*[0-9]' .squidsquad/config.md 2>/dev/null | head -1)
   cat << LOGO
 
-    ▗▄▄▄▄▖
-   ▟██████▙
-    ▐▌▀ ▀▐▌
-  ▜██████▛▘
-   ▐██████
-    ▌▌▌▌▌▌
+      ▗▄▖
+     ▟█ █▙
+    ▐█• •█▌
+   ███████
+   ▐█████▌
+    ▐▌▐▌▐▌
   S Q U I D S Q U A D   v${V:-?}  —  [ROLE]
 
 LOGO
@@ -516,12 +516,12 @@ $config = Get-Content .squidsquad/config.md -Raw -Encoding UTF8
 $v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
 
 Write-Host ""
-Write-Host "    ▗▄▄▄▄▖"
-Write-Host "   ▟██████▙"
-Write-Host "    ▐▌▀ ▀▐▌"
-Write-Host "  ▜██████▛▘"
-Write-Host "   ▐██████"
-Write-Host "    ▌▌▌▌▌▌"
+Write-Host "      ▗▄▖"
+Write-Host "     ▟█ █▙"
+Write-Host "    ▐█• •█▌"
+Write-Host "   ███████"
+Write-Host "   ▐█████▌"
+Write-Host "    ▐▌▐▌▐▌"
 Write-Host "  S Q U I D S Q U A D   v$v  -  [ROLE]"
 Write-Host ""
 
@@ -538,12 +538,12 @@ if [ -d .squidsquad ]; then
   V=$(grep -o '[0-9][0-9.]*[0-9]' .squidsquad/config.md 2>/dev/null | head -1)
   cat << LOGO
 
-    ▗▄▄▄▄▖
-   ▟██████▙
-    ▐▌▀ ▀▐▌
-  ▜██████▛▘
-   ▐██████
-    ▌▌▌▌▌▌
+      ▗▄▖
+     ▟█ █▙
+    ▐█• •█▌
+   ███████
+   ▐█████▌
+    ▐▌▐▌▐▌
   S Q U I D S Q U A D   v${V:-?}  —  PM / QA
 
 LOGO
@@ -913,7 +913,7 @@ Create or update `.claude/settings.json` in the project root to add a `SessionSt
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'if [ -d .squidsquad ]; then V=$(grep -o [0-9][0-9.]*[0-9] .squidsquad/config.md 2>/dev/null | head -1); cat <<LOGO\n\n    ▗▄▄▄▄▖\n   ▟██████▙\n    ▐▌▀ ▀▐▌\n  ▜██████▛▘\n   ▐██████\n    ▌▌▌▌▌▌\n  S Q U I D S Q U A D   v${V:-?}\n\nLOGO\nfi'"
+            "command": "bash -c 'if [ -d .squidsquad ]; then V=$(grep -o [0-9][0-9.]*[0-9] .squidsquad/config.md 2>/dev/null | head -1); cat <<LOGO\n\n      ▗▄▖\n     ▟█ █▙\n    ▐█• •█▌\n   ███████\n   ▐█████▌\n    ▐▌▐▌▐▌\n  S Q U I D S Q U A D   v${V:-?}\n\nLOGO\nfi'"
           }
         ]
       }
@@ -947,12 +947,12 @@ If the push fails, surface the error to the user and ask them to resolve it (e.g
 
 Print a summary:
 ```
-    ▗▄▄▄▄▖
-   ▟██████▙
-    ▐▌▀ ▀▐▌
-  ▜██████▛▘
-   ▐██████
-    ▌▌▌▌▌▌
+      ▗▄▖
+     ▟█ █▙
+    ▐█• •█▌
+   ███████
+   ▐█████▌
+    ▐▌▐▌▐▌
 
 ╔════════════════════════════════════════════════════════════╗
 ║                                                            ║
