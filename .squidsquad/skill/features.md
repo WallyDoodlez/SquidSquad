@@ -1138,17 +1138,19 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-037 — Show current Ralph Loop step in status bar line 2
 
 - **Priority**: Medium
-- **Status**: Planning
+- **Status**: Approved
 - **Requested By**: human
 - **Description**: Display the agent's current Ralph Loop step in the status bar's second line. Currently line 2 shows agent health icons and rest nudge, but not what the agent is actively doing. Adding the current step (e.g. "Step 3 — QA Check", "Step 5 — Verify Bugs") would give the human real-time visibility into each agent's progress without needing to read scrollback.
 - **Rationale**: When multiple agents are running, the human can't tell at a glance what each agent is doing. The `[🦑]` step markers scroll by in the terminal output, but the status bar is always visible. Showing the current step there gives persistent visibility.
 - **Acceptance Criteria**:
   - [ ] Agent writes current state to `.squidsquad/<role>/current-state` on each phase/step change (step name, phase, state flags)
   - [ ] `statusline.sh` reads THIS agent's current-state file and displays active step on line 2
-  - [ ] Active step format: emoji + description (e.g. "🔨 Planning for FEAT-SKILL-033..."), truncated with "..." if too long
+  - [ ] Active step format: emoji + description (e.g. "🔨 Planning for FEAT-SKILL-033..."), truncated at 60 chars with "..."
+  - [ ] Health icons moved from line 2 to line 1 (right-aligned) — line 2 fully dedicated to step/hint
+  - [ ] Boot scripts clear current-state on startup (`rm -f`) and agent writes "Initializing..." as first action
   - [ ] When no active step, line 2 shows rotating contextual HINTS
   - [ ] Hints are human-facing friendly prompts (not metric dumps) — e.g. "Msg me any time to talk about a feature"
-  - [ ] Hints rotate each cycle — different hint shown each time (timestamp modulo)
+  - [ ] Hints rotate every 60 seconds (timestamp modulo), phase-aware
   - [ ] Each role has its own hint pool; each phase within a role has its own sub-pool
   - [ ] Hint selection is state-driven — current-state file provides enough granularity for hints to make sense
   - [ ] Hint pools defined in templates (`references/`) — copied during setup, not hardcoded in statusline.sh
@@ -1166,3 +1168,4 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 15:10] **pm/qa**: Human clarified hint behavior: (1) hints ROTATE each cycle, not static, (2) each role AND each phase has its own hint pool, (3) state-driven — hint selection considers current state, (4) shell-driven — statusline.sh handles all hint logic, not the agent. Open questions: rotation mechanism (minute-based modulo vs counter file), performance of reading tracker state in shell, hint pools hardcoded in script vs config file, granularity of state awareness for hint selection.
 > [2026-03-29 15:15] **pm/qa**: Human resolved open questions: (1) Agents write state to file on each phase change — statusline.sh reads it (no tracker parsing in shell). (2) Hint pools live in templates (references/) — copied during setup. (3) Enough granularity in the state file so hints always make sense for what's happening. Architecture: agent writes `.squidsquad/<role>/current-state` → statusline.sh reads state + hint pool file → picks matching pool → rotates via timestamp modulo. Updated acceptance criteria.
 > [2026-03-29 16:00] **pm/qa**: Human approved. FEAT-SKILL-036 put on hold (wt dependency not wanted). Status → Planning. Beginning intake process.
+> [2026-03-29 16:25] **pm/qa**: Phase 2 complete. All 5 decisions locked: (D1) health icons → line 1 right-aligned, (D2) hints rotate every 60s phase-aware, (D3) 60 chars truncation all roles, (D4) DM hints deferred, (D5) boot clear + Initializing write. RESEARCH.md, CONTEXT.md, TEST-PLAN.md created. Status → Approved.
