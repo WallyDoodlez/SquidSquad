@@ -158,3 +158,14 @@ _Each PM/QA iteration logs a manual coherence check here._
 - **Issues**: none
 - **Agent Health**: skill — ⚠️ stalled (no commits in last 10 min)
 - **Notes**: Iteration 36. BUG-SKILL-022 filed last cycle, awaiting skill pickup. Skill agent may be between context resets or idle.
+
+---
+
+## QA Run — 2026-03-29 12:35
+
+- **Result**: Passed
+- **Files Reviewed**: .squidsquad/statusline.sh, references/statusline.sh, .squidsquad/skill/bugs.md
+- **Issues**: none
+- **Verified**: BUG-SKILL-022 — status bar now shows full squad (PM + dev agents)
+- **Agent Health**: skill — healthy (2 commits)
+- **Notes**: Iteration 118. Skill agent returned after extended idle period. Fix is clean — adds PM to ALL_AGENTS loop variable.
