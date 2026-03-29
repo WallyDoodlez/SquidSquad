@@ -871,24 +871,27 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
   **PM view (2 lines):**
   ```
-  🦑 PM/QA v0.5.1 │ 📦 9/10 🚀 │ 🧠 42% │ ⏳ 2m
+  🦑 PM/QA v0.5.1 │ 📦 9/10 🚀 │ 🧠 [green]42%[/green] │ ⏳ 2m
     🟢skill 🔴fe ⚪api
   ```
 
   **Dev view (idle):**
   ```
-  🦑 skill v0.5.1 │ 🐛3 ⭐2 │ 🧠 25% │ ⏳ 4m
+  🦑 skill v0.5.1 │ 🐛3 ⭐2 │ 🧠 [green]25%[/green] │ ⏳ 4m
   ```
 
   **Dev view (working on a task):**
   ```
-  🦑 skill v0.5.1 │ 🔨 FEAT-017 │ 🧠 25% │ ⏳ 4m
+  🦑 skill v0.5.1 │ 🔨 FEAT-017 │ 🧠 [green]25%[/green] │ ⏳ 4m
   ```
 
   **Locked design decisions:**
-  - **Style**: Emoji Rich — emoji for all indicators, no ANSI color codes for segment differentiation
+  - **Style**: Emoji Rich — emoji for all indicators, ANSI colors used for context percentage text
   - **Ship counter**: 📦 N/threshold shown on PM bar. 🚀 appears when counter >= 9 (one away from bump)
-  - **Context tiers**: 🧠 when <70%, ⚠️ when 70-89%, 🔥 when 90%+
+  - **Context display**: Brain emoji always shown. Stacked indicator emoji at higher tiers. Percentage text is ANSI-colored:
+    - 🧠 `\033[32mNN%\033[0m` — <50% (green text)
+    - 🧠🔥 `\033[33mNN%\033[0m` — 50-74% (yellow text)
+    - 🧠💀 `\033[31mNN%\033[0m` — 75%+ (red text)
   - **Agent health**: 🟢 healthy, 🔴 stalled, ⚪ never started — displayed on PM's **second line** (not inline with main bar)
   - **Active task**: 🔨 FEAT-XXX or BUG-XXX shown on dev bar when working-state has an in-progress task, replaces backlog counts
   - **Version**: shown after role name, always present
@@ -902,7 +905,10 @@ _Features start as Pending (awaiting human approval) and move through Approved �
     - 🐛 = open bugs
     - ⭐ = actionable features
     - 🔨 = active task
-    - 🧠/⚠️/🔥 = context pressure (low/medium/high)
+    - 🧠 = context (always shown)
+    - 🔥 = context caution (50-74%, stacked with 🧠)
+    - 💀 = context danger (75%+, stacked with 🧠)
+    - green/yellow/red ANSI = context percentage text color
     - ⏳ = next cycle countdown
 
 - **Acceptance Criteria**:
@@ -911,7 +917,8 @@ _Features start as Pending (awaiting human approval) and move through Approved �
   - [ ] Dev bar shows active task (from working-state.md) when in-progress, backlog counts otherwise
   - [ ] Ship counter reads from config.md `Shipped Since Last Bump` and `Ship Threshold`
   - [ ] 🚀 appears when ship counter >= threshold - 1
-  - [ ] Context emoji changes at 70% and 90% thresholds
+  - [ ] Context: 🧠 always shown, 🔥 stacked at 50-74%, 💀 stacked at 75%+
+  - [ ] Context percentage text colored: green <50%, yellow 50-74%, red 75%+
   - [ ] Version read from config.md
   - [ ] Timer shows countdown to next cycle (not time since last)
   - [ ] Iteration number removed from display
@@ -921,3 +928,4 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-29 03:20] **pm/qa**: Filed with full design locked by human. Style: Emoji Rich. Key decisions: PM gets two-line bar with team health on line 2, ship counter with 🚀 at 9+, three-tier context emoji (🧠/⚠️/🔥), active task display replaces backlog when working, version always shown, iteration number dropped, timer condensed to countdown only. Status: Pending — awaiting human approval.
+> [2026-03-29 03:30] **pm/qa**: Design refinement — context display updated: 🧠 always shown, 🔥 stacked at 50-74% (caution), 💀 stacked at 75%+ (danger). Percentage text ANSI-colored: green <50%, yellow 50-74%, red 75%+. Locked, not yet approved.
