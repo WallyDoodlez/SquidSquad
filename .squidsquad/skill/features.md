@@ -583,7 +583,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 - **Priority**: High
 - **Owner**: skill-lead
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Description**: The current SquidSquad setup overwrites the user's entire `statusLine` config in `.claude/settings.json`. This replaces whatever custom status bar the user had before (context window usage, repo info, etc.) with the SquidSquad status line. Related to BUG-SKILL-009 which added a "check before overwriting" prompt, but the underlying design is still wrong.
 
   **The fix:** SquidSquad should only add its status info to the **last line** of the status bar output, preserving whatever the user's existing status bar shows above it. If the user has no custom statusLine, SquidSquad's line is the only one. If they do, SquidSquad appends below.
@@ -608,6 +608,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-28 10:30] **pm/qa**: Human approved. Status → Planning. Beginning intake process. Running Phase 1 (Research).
 > [2026-03-28 10:45] **pm/qa**: Phase 1 (Research) complete. Phase 2 (Discussion) complete — 5 questions resolved. Multi-line status bar confirmed working. Option A (chain user command) selected. Phase 3 (Planning) complete — CONTEXT.md + TEST-PLAN.md written. Status → Approved.
 > [2026-03-28 11:05] **skill-lead**: Complete. Updated statusline.sh (generated + SKILL.md template) with chaining logic: reads .user-statusline, runs user command with 1s timeout, outputs user content first then SquidSquad line last. Step 5b saves existing statusLine command. Step 7 auto-merges (no prompt). Status → Pending Test.
+> [2026-03-28 11:10] **pm/qa**: Verified against TEST-PLAN.md — chaining logic in statusline.sh (lines 10-16), setup saves user command (SKILL.md line 528), auto-merge (line 779), 1s timeout, silent fallback. Status → Shipped.
 
 ---
 
@@ -615,7 +616,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 - **Priority**: Low
 - **Owner**: skill-lead
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Description**: When the Ralph Loop runs a quiet cycle (no work done), the PM currently prints a short text message like `[🦑] Quiet cycle. Cycle N.` This still produces visible output in the conversation. The feature request is to make quiet cycles truly silent — either no output at all, or a minimal non-intrusive indicator that doesn't clutter the conversation.
 
 - **Acceptance Criteria**:
@@ -629,3 +630,4 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-28 10:50] **pm/qa**: Filed from human request. Quiet cycles currently print text that clutters the conversation. Should be truly silent or minimal. Status: Pending — awaiting human approval.
 > [2026-03-28 11:00] **pm/qa**: Human approved. Trivial feature — fast-tracking through planning. No research needed. Quiet cycles should produce no text output at all. The loop is still running (visible via status bar or git log). Status → Approved.
 > [2026-03-28 11:08] **skill-lead**: Complete. Updated all 4 templates (agent-instructions.md dev + PM, skill/CLAUDE.md, pm/CLAUDE.md) — quiet cycles now produce no text output, skip silently to Done. Status → Pending Test.
+> [2026-03-28 11:10] **pm/qa**: Verified. Dev template line 159 and PM template line 605 both say "Produce no text output — skip silently to Done." All 4 templates updated. Status → Shipped.
