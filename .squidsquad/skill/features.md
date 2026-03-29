@@ -982,3 +982,39 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 04:00] **pm/qa**: Final design refinements — agent health: 🦑 healthy, 👻 stalled, 🥚 never started (no names, just icons). Rest nudge on PM line 2: 🌙 late (10pm-12am), 😴 rest? (12am-2am), 🛏️ sleep! (2am-6am). ✅ clear for empty dev backlog. Human approved. Status → Approved.
 > [2026-03-29 04:05] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-29 04:15] **skill-lead**: Complete. Full rewrite of statusline.sh in SKILL.md with Emoji Rich design. PM two-line output with team health + rest nudge. Dev shows active task/backlog/clear. Ship counter, planning phase, git sync, context tiers, countdown timer all implemented. SKILL.md docs, README status line section, CHANGELOG updated. Status → Pending Test.
+
+---
+
+## FEAT-SKILL-032 — Auto-configure permissions during setup and learn from prompt pressure
+
+- **Priority**: High
+- **Owner**: skill-lead
+- **Status**: Pending
+- **Description**: Two-part feature to eliminate permission prompt friction for SquidSquad agents:
+
+  **1. Pre-configure common permissions at setup:**
+  During setup, the boot scripts (`.sh`/`.ps1`) automatically add known-required permissions to `.claude/settings.json` `permissions.allow`. This includes:
+  - `Edit(.squidsquad/**)`, `Write(.squidsquad/**)` — tracker/config writes
+  - `Bash(git *)` — pull, push, commit, log, status, diff, stash, tag
+  - `Bash(code *)` — open files in VS Code (FEAT-SKILL-024)
+  - Any test commands from `config.md`
+  The boot script handles this via `jq` or sed — no agent involvement, runs before Claude starts.
+
+  **2. Learn from permission prompts:**
+  When an agent hits a permission prompt during operation, capture the denied/prompted tool pattern and auto-add it to `.claude/settings.json` via the boot script on next startup. Mechanism:
+  - Agent writes prompted permissions to `.squidsquad/[role]/.permission-requests` (gitignored)
+  - Boot script reads the file on next start, merges new patterns into `settings.json`, clears the file
+  - Over time, the permission set converges to what agents actually need — zero prompts after a few cycles
+
+- **Acceptance Criteria**:
+  - [ ] Boot scripts (`.sh`/`.ps1`) auto-add baseline permissions to `settings.json` before launching Claude
+  - [ ] Baseline permissions cover all standard SquidSquad operations (git, file edits, test commands)
+  - [ ] Permission learning: agents write unrecognized permission requests to a gitignored file
+  - [ ] Boot script reads learned permissions on next start and merges into `settings.json`
+  - [ ] No duplicate permission entries created
+  - [ ] SKILL.md setup documentation updated
+  - [ ] Works on both bash and PowerShell
+
+### Discussion
+
+> [2026-03-29 04:10] **pm/qa**: Filed from human request. Two parts: (1) boot scripts pre-configure baseline permissions at setup, (2) agents log permission prompts to a gitignored file, boot script learns and adds them on next startup. Both via shell script, not agent-driven. Status: Pending — awaiting human approval.
