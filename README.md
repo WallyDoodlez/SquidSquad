@@ -130,8 +130,8 @@ All coordination is asynchronous through git — agents pull to read the latest 
 
 ## Features
 
-### Status Line
-A live status bar at the bottom of each agent's Claude Code session showing: squid emoji, role label, iteration number, backlog pulse (open bugs + features), context window usage (color-coded), and time since last cycle. PM's status line also shows other agents' health.
+### Status Line (Emoji Rich)
+A live status bar at the bottom of each agent's Claude Code session. Dev agents see: 🦑 + role/version, backlog (🐛 bugs, ⭐ features) or active task (🔨 FEAT-XXX), context pressure (🧠/🧠🔥/🧠💀 with colored percentage), and cycle countdown (🔄/🔜). PM sees: ship counter (📦 N/threshold, 🚀 when near bump), planning phase (📋), git sync (↑N/↓N), plus a second line with team health icons (🦑 healthy, 👻 stalled, 🥚 never started) and optional rest nudge (🌙/😴/🛏️).
 
 ### Step Markers
 Every Ralph Loop step prints a `[🦑]` prefixed line (e.g. `[🦑] Pulling latest...`, `[🦑] Triaging bugs...`, `[🦑] Committing and pushing...`). Makes SquidSquad activity easy to scan in terminal scrollback.

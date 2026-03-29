@@ -866,7 +866,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 - **Priority**: Medium
 - **Owner**: skill-lead
-- **Status**: Approved
+- **Status**: Pending Test
 - **Description**: Redesign the status bar (`statusline.sh`) with an emoji-rich visual style. Replaces the current ANSI-only design with expressive emoji indicators. PM gets a two-line bar with team health and optional rest nudge on a separate line.
 
   **PM — all healthy, mid-planning, normal hours:**
@@ -980,3 +980,5 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 03:30] **pm/qa**: Design refinement — context display updated: 🧠 always shown, 🔥 stacked at 50-74% (caution), 💀 stacked at 75%+ (danger). Percentage text ANSI-colored: green <50%, yellow 50-74%, red 75%+. Locked, not yet approved.
 > [2026-03-29 03:40] **pm/qa**: Design refinement batch — added: git sync (↑N/↓N, hidden when clean), planning phase (📋 FEAT-XXX PN on PM bar), timer changed to 🔄 with 🔜 <1m when imminent, ship counter moved to position 2. All locked, not yet approved.
 > [2026-03-29 04:00] **pm/qa**: Final design refinements — agent health: 🦑 healthy, 👻 stalled, 🥚 never started (no names, just icons). Rest nudge on PM line 2: 🌙 late (10pm-12am), 😴 rest? (12am-2am), 🛏️ sleep! (2am-6am). ✅ clear for empty dev backlog. Human approved. Status → Approved.
+> [2026-03-29 04:05] **skill-lead**: Picking up. Status → In Progress.
+> [2026-03-29 04:15] **skill-lead**: Complete. Full rewrite of statusline.sh in SKILL.md with Emoji Rich design. PM two-line output with team health + rest nudge. Dev shows active task/backlog/clear. Ship counter, planning phase, git sync, context tiers, countdown timer all implemented. SKILL.md docs, README status line section, CHANGELOG updated. Status → Pending Test.

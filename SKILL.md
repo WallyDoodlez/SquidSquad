@@ -586,26 +586,32 @@ Make the `.sh` scripts executable (`chmod +x`).
 
 **Before generating**, check if the user already has a `statusLine` command configured in `.claude/settings.json`. If so, save the exact command string to `.squidsquad/.user-statusline` (one line, as-is, no path resolution). This allows the generated script to chain the user's existing status bar output above the SquidSquad line.
 
-Generate `.squidsquad/statusline.sh` — a bash script that powers the Claude Code status bar for all SquidSquad agents. The script first chains the user's original status bar command (from `.user-statusline`, if it exists, with a 1-second timeout and silent fallback), then appends the SquidSquad status line on the last line. The script reads `.squidsquad/.active-role` to determine the current agent, then displays:
+Generate `.squidsquad/statusline.sh` — a bash script that powers the Claude Code status bar for all SquidSquad agents. The script first chains the user's original status bar command (from `.user-statusline`, if it exists, with a 1-second timeout and silent fallback), then appends the SquidSquad status line(s).
 
-- **Squid emoji** `🦑` in green (ANSI `\033[32m`) when the agent is active
-- **Role label** (e.g. `PM/QA`, `be`, `fe`)
-- **Iteration number** (read from the highest `iter-N.md` in the role's `iterations/` folder)
-- **Backlog pulse** (dev agents): count of open bugs + actionable features (e.g. `2 bugs 1 feat` or `clear`)
-- **Agent health** (PM only): for each dev agent, show `🦑` green if their latest iteration is within 2× the loop interval, or `🦑✖` red if silent for longer
-- **Context window usage** (parsed from JSON stdin, color-coded: dim < 70%, yellow 70-90%, red > 90%)
-- **Time since last cycle** (file modification time of latest iteration log)
+**Emoji Rich design:**
 
-- **Next-cycle countdown** (e.g. `next in ~2m`) when elapsed < interval
+- **🦑** — SquidSquad brand, always present
+- **Role + version** — e.g. `PM/QA v0.5.1`, `skill v0.5.1`
+- **📦 N/threshold** — ship counter (PM only), 🚀 appears when counter >= threshold - 1
+- **📋 FEAT-XXX PN** — planning phase in progress (PM only, shown when a feature is in `Planning` status)
+- **↑N / ↓N** — git sync status, only shown when out of sync with remote
+- **🐛N ⭐N** — open bugs + actionable features (dev only, when no active task)
+- **🔨 FEAT-XXX / BUG-XXX** — active task from working-state.md (dev only, replaces backlog)
+- **✅ clear** — dev backlog empty, no active task
+- **🧠** — context always shown; 🧠🔥 at 50-74% (yellow text); 🧠💀 at 75%+ (red text); green text < 50%
+- **🔄 Nm** — next-cycle countdown; switches to **🔜 <1m** when under 1 minute
+- **PM line 2** — team health icons (🦑 healthy, 👻 stalled, 🥚 never started) + rest nudge (🌙 late 10pm-12am, 😴 rest? 12am-2am, 🛏️ sleep! 2am-6am)
 
-Output format (single line, ANSI-colored):
-- Dev agent: `🦑 be │ iter 5 │ 2 bugs 1 feat │ ctx:45% │ 3m ago │ next in ~7m`
-- PM/QA: `🦑 PM/QA │ iter 3 │ 🦑be 🦑✖fe │ ctx:45% │ 1m ago │ next in ~9m`
+Output examples:
+- Dev idle: `🦑 skill v0.5.1 │ 🐛3 ⭐2 │ 🧠 42% │ 🔄 4m`
+- Dev working: `🦑 skill v0.5.1 │ 🔨 FEAT-017 │ 🧠 31% │ 🔄 3m`
+- Dev clear: `🦑 be v0.5.1 │ ✅ clear │ 🧠 12% │ 🔄 5m`
+- PM: `🦑 PM/QA v0.5.1 │ 📦 9/10 🚀 │ 📋 FEAT-017 P2 │ 🧠 42% │ 🔄 2m` + line 2: `  🦑🦑🦑`
 
 ```bash
 #!/bin/bash
-# SquidSquad Status Line — shown in Claude Code's status bar
-# Receives JSON session data on stdin; prints ANSI-colored status to stdout
+# SquidSquad Status Line — Emoji Rich design
+# Receives JSON session data on stdin; prints status to stdout
 
 INPUT=$(cat)
 
@@ -630,39 +636,38 @@ ROLE=$(cat "$ROLE_FILE" | tr -d '[:space:]')
 GREEN='\033[32m'
 RED='\033[31m'
 YELLOW='\033[33m'
-DIM='\033[2m'
 RESET='\033[0m'
 
-# Parse context window usage from JSON stdin (e.g. "used_percentage": 42.5)
+# Read version from config
+VERSION=$(grep 'SquidSquad Version' "$SQDIR/config.md" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+[.0-9]*')
+VERSION=${VERSION:-'?'}
+
+# Parse context window usage from JSON stdin
 CTX_PCT=$(echo "$INPUT" | grep -oE '"used_percentage"[[:space:]]*:[[:space:]]*[0-9.]+' | head -1 | grep -oE '[0-9.]+$')
-CTX_PCT=${CTX_PCT%%.*}  # truncate to integer
+CTX_PCT=${CTX_PCT%%.*}
 CTX_PCT=${CTX_PCT:-0}
 
-# Color context percentage
-if [ "$CTX_PCT" -ge 90 ]; then
-  CTX_STR="${RED}ctx:${CTX_PCT}%${RESET}"
-elif [ "$CTX_PCT" -ge 70 ]; then
-  CTX_STR="${YELLOW}ctx:${CTX_PCT}%${RESET}"
+# Context emoji + colored percentage text
+if [ "$CTX_PCT" -ge 75 ]; then
+  CTX_STR="🧠💀 ${RED}${CTX_PCT}%${RESET}"
+elif [ "$CTX_PCT" -ge 50 ]; then
+  CTX_STR="🧠🔥 ${YELLOW}${CTX_PCT}%${RESET}"
 else
-  CTX_STR="${DIM}ctx:${CTX_PCT}%${RESET}"
-fi
-
-# Get iteration number from latest iter-N.md
-ITER_DIR="$SQDIR/$ROLE/iterations"
-ITER_NUM=0
-if [ -d "$ITER_DIR" ]; then
-  LATEST=$(ls "$ITER_DIR"/iter-*.md 2>/dev/null | sort -t- -k2 -n | tail -1)
-  if [ -n "$LATEST" ]; then
-    ITER_NUM=$(echo "$LATEST" | grep -oE '[0-9]+\.md$' | grep -oE '[0-9]+')
-  fi
+  CTX_STR="🧠 ${GREEN}${CTX_PCT}%${RESET}"
 fi
 
 # Get interval from config
 INTERVAL=$(grep 'Minutes' "$SQDIR/config.md" 2>/dev/null | grep -oE '[0-9]+')
 INTERVAL=${INTERVAL:-10}
 
-# Time since last iteration (file modification time)
-TIME_STR="-"
+# Time since last iteration → countdown timer
+ITER_DIR="$SQDIR/$ROLE/iterations"
+LATEST=""
+if [ -d "$ITER_DIR" ]; then
+  LATEST=$(ls "$ITER_DIR"/iter-*.md 2>/dev/null | sort -t- -k2 -n | tail -1)
+fi
+
+TIMER_STR="🔄 ${INTERVAL}m"
 NOW=$(date +%s)
 if [ -n "$LATEST" ]; then
   if stat --version >/dev/null 2>&1; then
@@ -672,28 +677,26 @@ if [ -n "$LATEST" ]; then
   fi
   if [ -n "$LAST_MOD" ]; then
     ELAPSED=$(( (NOW - LAST_MOD) / 60 ))
-    TIME_STR="${ELAPSED}m ago"
+    REMAINING=$(( INTERVAL - ELAPSED ))
+    if [ "$REMAINING" -le 0 ]; then
+      TIMER_STR="🔜 <1m"
+    elif [ "$REMAINING" -le 1 ]; then
+      TIMER_STR="🔜 <1m"
+    else
+      TIMER_STR="🔄 ${REMAINING}m"
+    fi
   fi
 fi
 
-# Count open bugs and actionable features
-BUGS_FILE="$SQDIR/$ROLE/bugs.md"
-FEATS_FILE="$SQDIR/$ROLE/features.md"
-BUG_COUNT=0
-FEAT_COUNT=0
-[ -f "$BUGS_FILE" ] && BUG_COUNT=$(grep -cE '^\- \*\*Status\*\*: (Open|Investigating)' "$BUGS_FILE" 2>/dev/null) || true
-[ -f "$FEATS_FILE" ] && FEAT_COUNT=$(grep -cE '^\- \*\*Status\*\*: (Approved|In Progress)' "$FEATS_FILE" 2>/dev/null) || true
-BUG_COUNT=${BUG_COUNT:-0}
-FEAT_COUNT=${FEAT_COUNT:-0}
-
-# Build backlog string
-BACKLOG=""
-[ "$BUG_COUNT" -gt 0 ] && BACKLOG="${BUG_COUNT} bug$([ "$BUG_COUNT" -gt 1 ] && echo s)"
-if [ "$FEAT_COUNT" -gt 0 ]; then
-  [ -n "$BACKLOG" ] && BACKLOG="$BACKLOG "
-  BACKLOG="${BACKLOG}${FEAT_COUNT} feat$([ "$FEAT_COUNT" -gt 1 ] && echo s)"
+# Git sync: ↑N unpushed / ↓N behind remote
+GIT_SYNC=""
+AHEAD=$(git rev-list --count @{u}..HEAD 2>/dev/null)
+BEHIND=$(git rev-list --count HEAD..@{u} 2>/dev/null)
+[ -n "$AHEAD" ] && [ "$AHEAD" -gt 0 ] && GIT_SYNC="↑${AHEAD}"
+if [ -n "$BEHIND" ] && [ "$BEHIND" -gt 0 ]; then
+  [ -n "$GIT_SYNC" ] && GIT_SYNC="${GIT_SYNC} "
+  GIT_SYNC="${GIT_SYNC}↓${BEHIND}"
 fi
-[ -z "$BACKLOG" ] && BACKLOG="clear"
 
 # Role label
 if [ "$ROLE" = "pm" ]; then
@@ -702,42 +705,131 @@ else
   ROLE_LABEL="$ROLE"
 fi
 
-# PM: show other agents' health via git log commit prefixes
-HEALTH=""
+# === PM-specific segments ===
 if [ "$ROLE" = "pm" ]; then
+  # Ship counter: 📦 N/threshold, 🚀 if near bump
+  SHIPPED=$(grep 'Shipped Since Last Bump' "$SQDIR/config.md" 2>/dev/null | grep -oE '[0-9]+')
+  SHIP_THRESHOLD=$(grep 'Ship Threshold' "$SQDIR/config.md" 2>/dev/null | grep -oE '[0-9]+')
+  SHIPPED=${SHIPPED:-0}
+  SHIP_THRESHOLD=${SHIP_THRESHOLD:-10}
+  SHIP_STR="📦 ${SHIPPED}/${SHIP_THRESHOLD}"
+  NEAR_BUMP=$(( SHIP_THRESHOLD - 1 ))
+  [ "$SHIPPED" -ge "$NEAR_BUMP" ] && SHIP_STR="${SHIP_STR} 🚀"
+
+  # Planning phase: 📋 FEAT-XXX PN — check all dev agent features for Planning status
+  PLANNING_STR=""
   AGENTS=$(grep 'Dev Agents' "$SQDIR/config.md" 2>/dev/null | sed 's/.*: //' | tr ',' ' ')
-  THRESHOLD=$(( INTERVAL * 2 ))
   for AGENT in $AGENTS; do
     AGENT=$(echo "$AGENT" | tr -d '[:space:]')
     [ -z "$AGENT" ] && continue
-    # Check git log for recent commits with this agent's prefix
-    RECENT=$(git log --oneline --since="${THRESHOLD} minutes ago" --grep="^${AGENT}:" 2>/dev/null | head -1)
-    if [ -n "$RECENT" ]; then
-      HEALTH="${HEALTH} ${GREEN}🦑${RESET}${AGENT}"
-    else
-      # Check if agent has ever committed
-      EVER=$(git log --oneline --grep="^${AGENT}:" -1 2>/dev/null)
-      if [ -n "$EVER" ]; then
-        HEALTH="${HEALTH} ${RED}🦑✖${RESET}${AGENT}"
-      else
-        HEALTH="${HEALTH} ${DIM}🦑?${RESET}${AGENT}"
+    FEATS_FILE="$SQDIR/$AGENT/features.md"
+    if [ -f "$FEATS_FILE" ]; then
+      PLANNING_FEAT=$(grep -B5 'Status\*\*: Planning' "$FEATS_FILE" 2>/dev/null | grep -oE 'FEAT-[A-Z]+-[0-9]+' | head -1)
+      if [ -n "$PLANNING_FEAT" ]; then
+        # Detect which phase by checking for existing artifacts
+        PLAN_DIR="$SQDIR/$AGENT/planning"
+        PHASE="P1"
+        [ -f "$PLAN_DIR/${PLANNING_FEAT}-RESEARCH.md" ] && PHASE="P2"
+        [ -f "$PLAN_DIR/${PLANNING_FEAT}-CONTEXT.md" ] && PHASE="P3"
+        [ -f "$PLAN_DIR/${PLANNING_FEAT}-TEST-PLAN.md" ] && PHASE="P3✓"
+        PLANNING_STR="📋 ${PLANNING_FEAT} ${PHASE}"
+        break
       fi
     fi
   done
-fi
 
-# Estimate time until next cycle
-NEXT_STR=""
-if [ -n "$LAST_MOD" ] && [ "$ELAPSED" -lt "$INTERVAL" ]; then
-  REMAINING=$(( INTERVAL - ELAPSED ))
-  NEXT_STR=" │ next in ~${REMAINING}m"
-fi
+  # Build PM line 1
+  LINE1="🦑 ${ROLE_LABEL} v${VERSION} │ ${SHIP_STR}"
+  [ -n "$PLANNING_STR" ] && LINE1="${LINE1} │ ${PLANNING_STR}"
+  [ -n "$GIT_SYNC" ] && LINE1="${LINE1} │ ${GIT_SYNC}"
+  LINE1="${LINE1} │ ${CTX_STR} │ ${TIMER_STR}"
 
-# Output
-if [ "$ROLE" = "pm" ]; then
-  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │${HEALTH} │ ${CTX_STR} │ ${DIM}${TIME_STR}${NEXT_STR}${RESET}"
+  # Agent health icons for line 2: 🦑 healthy, 👻 stalled, 🥚 never started
+  HEALTH=""
+  THRESHOLD_SECS=$(( INTERVAL * 2 * 60 ))
+  for AGENT in $AGENTS; do
+    AGENT=$(echo "$AGENT" | tr -d '[:space:]')
+    [ -z "$AGENT" ] && continue
+    RECENT=$(git log --oneline --since="${INTERVAL}2 minutes ago" --grep="^${AGENT}:" 2>/dev/null | head -1)
+    if [ -n "$RECENT" ]; then
+      HEALTH="${HEALTH}🦑"
+    else
+      EVER=$(git log --oneline --grep="^${AGENT}:" -1 2>/dev/null)
+      if [ -n "$EVER" ]; then
+        HEALTH="${HEALTH}👻"
+      else
+        HEALTH="${HEALTH}🥚"
+      fi
+    fi
+  done
+
+  # Rest nudge (right-aligned on line 2)
+  HOUR=$(date +%H)
+  REST=""
+  if [ "$HOUR" -ge 22 ] || [ "$HOUR" -lt 0 ]; then
+    REST="🌙 late"
+  elif [ "$HOUR" -ge 0 ] && [ "$HOUR" -lt 2 ]; then
+    REST="😴 rest?"
+  elif [ "$HOUR" -ge 2 ] && [ "$HOUR" -lt 6 ]; then
+    REST="🛏️ sleep!"
+  fi
+  # Handle 10pm-midnight (hour 22-23)
+  if [ "$HOUR" -ge 22 ]; then
+    REST="🌙 late"
+  elif [ "$HOUR" -ge 0 ] && [ "$HOUR" -lt 2 ]; then
+    REST="😴 rest?"
+  elif [ "$HOUR" -ge 2 ] && [ "$HOUR" -lt 6 ]; then
+    REST="🛏️ sleep!"
+  fi
+
+  LINE2="  ${HEALTH}"
+  [ -n "$REST" ] && LINE2="${LINE2}                                    ${REST}"
+
+  echo -e "${LINE1}"
+  echo -e "${LINE2}"
+
+# === Dev agent segments ===
 else
-  echo -e "${GREEN}🦑${RESET} ${ROLE_LABEL} │ iter ${ITER_NUM} │ ${BACKLOG} │ ${CTX_STR} │ ${DIM}${TIME_STR}${NEXT_STR}${RESET}"
+  # Check working state for active task
+  WS_FILE="$SQDIR/$ROLE/working-state.md"
+  ACTIVE_TASK=""
+  if [ -f "$WS_FILE" ]; then
+    WS_STATUS=$(grep '^\- \*\*Status\*\*:' "$WS_FILE" 2>/dev/null | head -1)
+    if echo "$WS_STATUS" | grep -q 'in-progress'; then
+      ACTIVE_TASK=$(grep '^\- \*\*Task\*\*:' "$WS_FILE" 2>/dev/null | sed 's/.*: //' | tr -d '[:space:]')
+    fi
+  fi
+
+  if [ -n "$ACTIVE_TASK" ] && [ "$ACTIVE_TASK" != "none" ]; then
+    WORK_STR="🔨 ${ACTIVE_TASK}"
+  else
+    # Backlog counts
+    BUGS_FILE="$SQDIR/$ROLE/bugs.md"
+    FEATS_FILE="$SQDIR/$ROLE/features.md"
+    BUG_COUNT=0
+    FEAT_COUNT=0
+    [ -f "$BUGS_FILE" ] && BUG_COUNT=$(grep -cE '^\- \*\*Status\*\*: (Open|Investigating)' "$BUGS_FILE" 2>/dev/null) || true
+    [ -f "$FEATS_FILE" ] && FEAT_COUNT=$(grep -cE '^\- \*\*Status\*\*: (Approved|In Progress)' "$FEATS_FILE" 2>/dev/null) || true
+    BUG_COUNT=${BUG_COUNT:-0}
+    FEAT_COUNT=${FEAT_COUNT:-0}
+
+    if [ "$BUG_COUNT" -eq 0 ] && [ "$FEAT_COUNT" -eq 0 ]; then
+      WORK_STR="✅ clear"
+    else
+      WORK_STR=""
+      [ "$BUG_COUNT" -gt 0 ] && WORK_STR="🐛${BUG_COUNT}"
+      if [ "$FEAT_COUNT" -gt 0 ]; then
+        [ -n "$WORK_STR" ] && WORK_STR="${WORK_STR} "
+        WORK_STR="${WORK_STR}⭐${FEAT_COUNT}"
+      fi
+    fi
+  fi
+
+  LINE1="🦑 ${ROLE_LABEL} v${VERSION} │ ${WORK_STR}"
+  [ -n "$GIT_SYNC" ] && LINE1="${LINE1} │ ${GIT_SYNC}"
+  LINE1="${LINE1} │ ${CTX_STR} │ ${TIMER_STR}"
+
+  echo -e "${LINE1}"
 fi
 ```
 
