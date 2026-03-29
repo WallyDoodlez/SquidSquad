@@ -545,7 +545,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 - **Priority**: Low
 - **Owner**: skill-lead
-- **Status**: Pending
+- **Status**: Approved
 - **Description**: Remove the boot logo section from README.md. Likely the ASCII squid art / startup banner section — it's not needed in the GitHub-facing documentation.
 
 - **Acceptance Criteria**:
@@ -556,6 +556,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-28 09:00] **pm/qa**: Filed from human request. Straightforward cleanup — remove the boot logo section from README. Status: Pending — awaiting human approval.
+> [2026-03-29 01:20] **pm/qa**: Human approved. Light mode — trivial doc-only change, skipping Research + Phase 2A + abbreviated Discussion. No open questions. Status → Approved.
 
 ---
 
