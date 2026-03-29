@@ -1142,17 +1142,18 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 - **Description**: Display the agent's current Ralph Loop step in the status bar's second line. Currently line 2 shows agent health icons and rest nudge, but not what the agent is actively doing. Adding the current step (e.g. "Step 3 — QA Check", "Step 5 — Verify Bugs") would give the human real-time visibility into each agent's progress without needing to read scrollback.
 - **Rationale**: When multiple agents are running, the human can't tell at a glance what each agent is doing. The `[🦑]` step markers scroll by in the terminal output, but the status bar is always visible. Showing the current step there gives persistent visibility.
 - **Acceptance Criteria**:
-  - [ ] Agent writes current step to `.squidsquad/<role>/current-step` at each step transition
-  - [ ] `statusline.sh` reads THIS agent's current-step file and displays it on line 2
+  - [ ] Agent writes current state to `.squidsquad/<role>/current-state` on each phase/step change (step name, phase, state flags)
+  - [ ] `statusline.sh` reads THIS agent's current-state file and displays active step on line 2
   - [ ] Active step format: emoji + description (e.g. "🔨 Planning for FEAT-SKILL-033..."), truncated with "..." if too long
   - [ ] When no active step, line 2 shows rotating contextual HINTS
   - [ ] Hints are human-facing friendly prompts (not metric dumps) — e.g. "Msg me any time to talk about a feature"
-  - [ ] Hints rotate each cycle — different hint shown each time
-  - [ ] Each role has its own hint pool; each phase within a role may have its own sub-pool
-  - [ ] Hint selection is state-driven (considers open bugs, pending features, etc.)
-  - [ ] All hint logic lives in `statusline.sh` (shell-driven, not agent-driven)
-  - [ ] Falls back gracefully if current-step file is missing or empty
-  - [ ] CLAUDE.md templates updated to write current step at each `[🦑]` marker
+  - [ ] Hints rotate each cycle — different hint shown each time (timestamp modulo)
+  - [ ] Each role has its own hint pool; each phase within a role has its own sub-pool
+  - [ ] Hint selection is state-driven — current-state file provides enough granularity for hints to make sense
+  - [ ] Hint pools defined in templates (`references/`) — copied during setup, not hardcoded in statusline.sh
+  - [ ] `statusline.sh` reads hint pools and current-state, picks the matching pool, rotates through it
+  - [ ] Falls back gracefully if current-state file is missing or empty
+  - [ ] CLAUDE.md templates updated to write current state at each `[🦑]` marker
   - [ ] SKILL.md templates and references updated
   - [ ] All roles covered (PM, dev agents, future DM)
 
@@ -1162,3 +1163,4 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 14:20] **pm/qa**: Human clarified: show current step of THIS agent only (not all agents). Format: emoji + description, e.g. "🔨 Planning for FEAT-SKILL-033..." — truncate with "..." if too long. Also wants contextual HINTS on line 2 when idle (role-specific). Updating acceptance criteria to reflect.
 > [2026-03-29 14:40] **pm/qa**: Human clarified hints further: hints are for HUMANS, not system status. They should be friendly prompts reminding the human what they can do — e.g. "Msg me any time to talk about a feature". NOT metric dumps like "3 bugs open". Think of them as gentle nudges to interact. Updated acceptance criteria.
 > [2026-03-29 15:10] **pm/qa**: Human clarified hint behavior: (1) hints ROTATE each cycle, not static, (2) each role AND each phase has its own hint pool, (3) state-driven — hint selection considers current state, (4) shell-driven — statusline.sh handles all hint logic, not the agent. Open questions: rotation mechanism (minute-based modulo vs counter file), performance of reading tracker state in shell, hint pools hardcoded in script vs config file, granularity of state awareness for hint selection.
+> [2026-03-29 15:15] **pm/qa**: Human resolved open questions: (1) Agents write state to file on each phase change — statusline.sh reads it (no tracker parsing in shell). (2) Hint pools live in templates (references/) — copied during setup. (3) Enough granularity in the state file so hints always make sense for what's happening. Architecture: agent writes `.squidsquad/<role>/current-state` → statusline.sh reads state + hint pool file → picks matching pool → rotates via timestamp modulo. Updated acceptance criteria.
