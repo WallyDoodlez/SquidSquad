@@ -134,9 +134,11 @@ if [ "$ROLE" = "pm" ]; then
   LINE1="${LINE1} │ ${CTX_STR} │ ${TIMER_STR}"
 
   # Agent health icons for line 2: 🦑 healthy, 👻 stalled, 🥚 never started
+  # Include PM + all dev agents for full squad visibility
+  ALL_AGENTS="pm $AGENTS"
   HEALTH=""
   THRESHOLD_SECS=$(( INTERVAL * 2 * 60 ))
-  for AGENT in $AGENTS; do
+  for AGENT in $ALL_AGENTS; do
     AGENT=$(echo "$AGENT" | tr -d '[:space:]')
     [ -z "$AGENT" ] && continue
     RECENT=$(git log --oneline --since="${INTERVAL}2 minutes ago" --grep="^${AGENT}:" 2>/dev/null | head -1)
