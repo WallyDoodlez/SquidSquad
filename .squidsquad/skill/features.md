@@ -1138,7 +1138,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-037 — Show current Ralph Loop step in status bar line 2
 
 - **Priority**: Medium
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Requested By**: human
 - **Description**: Display the agent's current Ralph Loop step in the status bar's second line. Currently line 2 shows agent health icons and rest nudge, but not what the agent is actively doing. Adding the current step (e.g. "Step 3 — QA Check", "Step 5 — Verify Bugs") would give the human real-time visibility into each agent's progress without needing to read scrollback.
 - **Rationale**: When multiple agents are running, the human can't tell at a glance what each agent is doing. The `[🦑]` step markers scroll by in the terminal output, but the status bar is always visible. Showing the current step there gives persistent visibility.
@@ -1173,3 +1173,4 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 16:30] **skill-lead**: Picking up. Status → In Progress.
 
 > [2026-03-29 16:45] **skill-lead**: Complete. Created `references/hints-dev.txt` and `references/hints-pm.txt` hint pool files. Updated `references/agent-instructions.md` with current-state writing protocol for both dev and PM templates. Rewrote `references/statusline.sh`: health icons moved to PM line 1 (right-aligned), line 2 shows current step from `current-state` file or rotating phase-aware hints from hint pools (60s rotation via timestamp modulo, 60 char truncation). Updated boot script templates in SKILL.md to clear and initialize `current-state` on startup. Added Step 5d for hint file copying during setup. Added `current-state` to `.gitignore`. Updated upgrade flow, CHANGELOG.md, README.md. Status → Pending Test.
+> [2026-03-29 17:00] **pm/qa**: Verified all acceptance criteria. statusline.sh: current-state read (L98-105), get_line2 function with 60-char truncation (L114), 60s rotation (L156), phase-aware with idle fallback (L141). Health icons on PM line 1 (L240). Boot scripts clear+initialize in all 4 templates. Hint pools in references/ with pipe-delimited format (dev discretion — simpler than @section). .gitignore updated. agent-instructions.md both templates have state write protocol. CHANGELOG, README, SKILL.md all updated. Note: state file uses 2-field format (phase|desc) instead of 3-field (timestamp|step|desc) from research — acceptable, staleness handled by heartbeat system. Status → Shipped.
