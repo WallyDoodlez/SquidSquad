@@ -525,7 +525,9 @@ Make the `.sh` scripts executable (`chmod +x`).
 
 ### Step 5b — Generate Status Line Script
 
-Generate `.squidsquad/statusline.sh` — a bash script that powers the Claude Code status bar for all SquidSquad agents. The script reads `.squidsquad/.active-role` to determine the current agent, then displays:
+**Before generating**, check if the user already has a `statusLine` command configured in `.claude/settings.json`. If so, save the exact command string to `.squidsquad/.user-statusline` (one line, as-is, no path resolution). This allows the generated script to chain the user's existing status bar output above the SquidSquad line.
+
+Generate `.squidsquad/statusline.sh` — a bash script that powers the Claude Code status bar for all SquidSquad agents. The script first chains the user's original status bar command (from `.user-statusline`, if it exists, with a 1-second timeout and silent fallback), then appends the SquidSquad status line on the last line. The script reads `.squidsquad/.active-role` to determine the current agent, then displays:
 
 - **Squid emoji** `🦑` in green (ANSI `\033[32m`) when the agent is active
 - **Role label** (e.g. `PM/QA`, `be`, `fe`)
@@ -550,6 +552,14 @@ INPUT=$(cat)
 
 SQDIR=".squidsquad"
 [ ! -d "$SQDIR" ] && exit 0
+
+# Chain user's original status bar (if saved during setup)
+USER_STATUSLINE="$SQDIR/.user-statusline"
+if [ -f "$USER_STATUSLINE" ] && [ -s "$USER_STATUSLINE" ]; then
+  USER_CMD=$(cat "$USER_STATUSLINE")
+  USER_OUTPUT=$(echo "$INPUT" | timeout 1 bash -c "$USER_CMD" 2>/dev/null) || true
+  [ -n "$USER_OUTPUT" ] && echo "$USER_OUTPUT"
+fi
 
 # Read role
 ROLE_FILE="$SQDIR/.active-role"
@@ -766,13 +776,7 @@ Create or update `.claude/settings.json` in the project root to add a `SessionSt
 **If `.claude/settings.json` already exists**, merge carefully:
 
 1. **`SessionStart` hooks**: append the SquidSquad hook to the existing array. If the key doesn't exist, create it. Never remove existing hooks.
-2. **`statusLine`**: if the user already has a `statusLine` configured, **do NOT overwrite it**. Instead, ask the user:
-   ```
-   You already have a statusLine configured. How should SquidSquad handle this?
-     (1) Replace — use SquidSquad's status line (your current one will be lost)
-     (2) Skip — keep your current status line (you won't see SquidSquad status info)
-   ```
-   If the user chooses (1), replace it. If (2), skip the statusLine config entirely.
+2. **`statusLine`**: if the user already has a `statusLine` configured, the existing command was already saved to `.squidsquad/.user-statusline` in Step 5b. Replace the `statusLine` with SquidSquad's version — it chains the user's original command automatically. No prompt needed.
    If no existing `statusLine` exists, add the SquidSquad one silently.
 3. **`permissions.allow`**: append the SquidSquad entries without removing or duplicating existing entries. Check for each entry before adding.
 

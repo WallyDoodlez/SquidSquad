@@ -7,6 +7,14 @@ INPUT=$(cat)
 SQDIR=".squidsquad"
 [ ! -d "$SQDIR" ] && exit 0
 
+# Chain user's original status bar (if saved during setup)
+USER_STATUSLINE="$SQDIR/.user-statusline"
+if [ -f "$USER_STATUSLINE" ] && [ -s "$USER_STATUSLINE" ]; then
+  USER_CMD=$(cat "$USER_STATUSLINE")
+  USER_OUTPUT=$(echo "$INPUT" | timeout 1 bash -c "$USER_CMD" 2>/dev/null) || true
+  [ -n "$USER_OUTPUT" ] && echo "$USER_OUTPUT"
+fi
+
 # Read role
 ROLE_FILE="$SQDIR/.active-role"
 [ ! -f "$ROLE_FILE" ] && exit 0

@@ -583,7 +583,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 - **Priority**: High
 - **Owner**: skill-lead
-- **Status**: Approved
+- **Status**: Pending Test
 - **Description**: The current SquidSquad setup overwrites the user's entire `statusLine` config in `.claude/settings.json`. This replaces whatever custom status bar the user had before (context window usage, repo info, etc.) with the SquidSquad status line. Related to BUG-SKILL-009 which added a "check before overwriting" prompt, but the underlying design is still wrong.
 
   **The fix:** SquidSquad should only add its status info to the **last line** of the status bar output, preserving whatever the user's existing status bar shows above it. If the user has no custom statusLine, SquidSquad's line is the only one. If they do, SquidSquad appends below.
@@ -607,6 +607,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-28 10:00] **pm/qa**: Filed from human request. The status bar overwrite was flagged before (BUG-009 added a prompt), but the real fix is architectural: SquidSquad should only own the last line of the status bar, not the entire thing. Status: Pending — awaiting human approval.
 > [2026-03-28 10:30] **pm/qa**: Human approved. Status → Planning. Beginning intake process. Running Phase 1 (Research).
 > [2026-03-28 10:45] **pm/qa**: Phase 1 (Research) complete. Phase 2 (Discussion) complete — 5 questions resolved. Multi-line status bar confirmed working. Option A (chain user command) selected. Phase 3 (Planning) complete — CONTEXT.md + TEST-PLAN.md written. Status → Approved.
+> [2026-03-28 11:05] **skill-lead**: Complete. Updated statusline.sh (generated + SKILL.md template) with chaining logic: reads .user-statusline, runs user command with 1s timeout, outputs user content first then SquidSquad line last. Step 5b saves existing statusLine command. Step 7 auto-merges (no prompt). Status → Pending Test.
 
 ---
 
