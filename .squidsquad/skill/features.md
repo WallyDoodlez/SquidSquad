@@ -1025,20 +1025,21 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-033 — Heartbeat branches for agent health detection
 
 - **Priority**: Medium
-- **Status**: Pending
+- **Status**: Approved
 - **Requested By**: human
 - **Description**: Replace git-commit-based agent health detection with lightweight heartbeat branches. Each agent force-pushes a single-commit orphan branch (`heartbeat/<role>`) every cycle with a timestamp. The PM fetches and reads these branches to determine agent health, instead of relying on `git log --grep` which only detects agents that have work to commit. This solves the false-stalled problem where agents on quiet cycles (nothing to commit) appear dead.
 - **Rationale**: Current health detection requires agents to push commits to main. Agents on quiet cycles produce no commits and appear stalled indefinitely. Heartbeat branches are git-native, work across machines, don't pollute main branch history, and unprotected branches allow force-push by default on GitHub (no repo config needed).
 - **Acceptance Criteria**:
-  - [ ] Each agent pushes `heartbeat/<role>` branch every cycle (even quiet cycles)
+  - [ ] `references/heartbeat.sh` — standalone shell script that pushes orphan `heartbeat/<role>` branch on a loop (no agent involvement)
+  - [ ] Boot scripts (`start-<role>.sh`) launch `heartbeat.sh` as a background process with role and interval args
+  - [ ] Heartbeat script uses `git mktree` + `git commit-tree` + `git push -f` (no checkout, no working tree impact)
   - [ ] PM reads `heartbeat/<role>` via `git fetch` + `git log` to check agent liveness
   - [ ] No commits added to main branch for heartbeat purposes
-  - [ ] Heartbeat branches are orphan (single commit, force-pushed each cycle)
   - [ ] Heartbeat interval is configurable in `config.md` (e.g. `Heartbeat Interval Seconds: 10`), default 10 seconds
   - [ ] SKILL.md setup flow includes a step asking the user to configure heartbeat interval (default 10s), explaining that agents will push lightweight `heartbeat/<role>` branches
-  - [ ] PM uses configured heartbeat interval as the staleness threshold (agent stalled if heartbeat older than N seconds)
+  - [ ] PM uses configured heartbeat interval as the staleness threshold (agent stalled if heartbeat older than configured interval)
   - [ ] PM CLAUDE.md Step 7 updated to use heartbeat branches instead of `git log --grep`
-  - [ ] Dev agent CLAUDE.md updated with heartbeat push step
+  - [ ] Dev agent CLAUDE.md does NOT reference heartbeat — it's entirely handled by shell script
   - [ ] SKILL.md setup/templates updated accordingly
   - [ ] SKILL.md upgrade steps populate `Heartbeat Interval Seconds` in existing config.md (default 10s if missing)
   - [ ] Works across machines (agents on different hosts)
@@ -1049,3 +1050,25 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 12:45] **pm/qa**: Human requested heartbeat interval be configurable in config.md, independent of iteration interval. Added to acceptance criteria.
 > [2026-03-29 12:48] **pm/qa**: Human wants heartbeat setup as an explicit step in SKILL.md setup flow so the user is aware agents will push heartbeat branches. Default interval 10 seconds. Updated acceptance criteria.
 > [2026-03-29 12:50] **pm/qa**: Human requested upgrade steps also populate the heartbeat interval config var for existing installs. Added to acceptance criteria.
+> [2026-03-29 12:55] **pm/qa**: Human: heartbeat must NOT be done by agents — must be a standalone shell script launched by boot scripts as background process. Updated acceptance criteria: `references/heartbeat.sh` runs independently, agents are unaware. Human approved. Status → Planning. Beginning intake process.
+> [2026-03-29 13:00] **pm/qa**: Planning complete. RESEARCH.md, CONTEXT.md, TEST-PLAN.md created. All key decisions locked by human during discussion. Status → Approved.
+
+---
+
+## FEAT-SKILL-034 — Planning process must always consider upgrade and migration paths
+
+- **Priority**: High
+- **Status**: Pending
+- **Requested By**: human
+- **Description**: The Feature Intake Process (Phases 1-3) must always include upgrade and migration path analysis as a required section. Every feature that adds config values, new files, template changes, or behavioral changes must have explicit upgrade/migration steps documented in RESEARCH.md and CONTEXT.md. This should be baked into the research subagent prompt and the CONTEXT.md template so it's never forgotten.
+- **Rationale**: FEAT-SKILL-033 needed multiple rounds of human feedback to add upgrade steps. This should be automatic — the planning process should always ask: "How do existing installs get this?"
+- **Acceptance Criteria**:
+  - [ ] Research subagent prompt (Phase 1) includes explicit instruction to analyze upgrade/migration impact
+  - [ ] RESEARCH.md template includes an "Upgrade & Migration" section
+  - [ ] CONTEXT.md template includes a "Locked Decisions — Upgrade Path" section
+  - [ ] TEST-PLAN.md template includes upgrade verification tests
+  - [ ] `references/agent-instructions.md` Phase 1 and Phase 2 updated with upgrade/migration requirements
+
+### Discussion
+
+> [2026-03-29 13:05] **pm/qa**: Filed from human feedback during FEAT-SKILL-033 planning. Human noted that upgrade/migration paths should be a standard part of every feature's planning process, not something added after human prompting. Status: Pending — awaiting human approval.
