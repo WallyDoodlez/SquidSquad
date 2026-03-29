@@ -1131,3 +1131,24 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-29 13:50] **pm/qa**: Filed from human request. Human wants terminal tabs to identify which SquidSquad role is running. Approach: change the first positional argument in boot scripts from `"start the loop"` to a two-line message with role on line 1. Status: Pending — awaiting human approval.
+
+---
+
+## FEAT-SKILL-037 — Show current Ralph Loop step in status bar line 2
+
+- **Priority**: Low
+- **Status**: Pending
+- **Requested By**: human
+- **Description**: Display the agent's current Ralph Loop step in the status bar's second line. Currently line 2 shows agent health icons and rest nudge, but not what the agent is actively doing. Adding the current step (e.g. "Step 3 — QA Check", "Step 5 — Verify Bugs") would give the human real-time visibility into each agent's progress without needing to read scrollback.
+- **Rationale**: When multiple agents are running, the human can't tell at a glance what each agent is doing. The `[🦑]` step markers scroll by in the terminal output, but the status bar is always visible. Showing the current step there gives persistent visibility.
+- **Acceptance Criteria**:
+  - [ ] Agents write their current step to a file (e.g. `.squidsquad/<role>/current-step`) at each step transition
+  - [ ] `statusline.sh` reads each agent's current-step file and displays it on line 2
+  - [ ] Display is concise (e.g. "QA" or "Bugs" not the full step title)
+  - [ ] Falls back gracefully if file is missing or empty
+  - [ ] CLAUDE.md templates updated to write current step at each `[🦑]` marker
+  - [ ] SKILL.md templates and references updated
+
+### Discussion
+
+> [2026-03-29 13:57] **pm/qa**: Filed from human request. Human wants real-time step visibility in the status bar. Approach: agents write current step to a file, statusline.sh reads it. Status: Pending — awaiting human approval.
