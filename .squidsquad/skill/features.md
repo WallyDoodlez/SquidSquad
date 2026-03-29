@@ -1142,13 +1142,18 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 - **Description**: Display the agent's current Ralph Loop step in the status bar's second line. Currently line 2 shows agent health icons and rest nudge, but not what the agent is actively doing. Adding the current step (e.g. "Step 3 — QA Check", "Step 5 — Verify Bugs") would give the human real-time visibility into each agent's progress without needing to read scrollback.
 - **Rationale**: When multiple agents are running, the human can't tell at a glance what each agent is doing. The `[🦑]` step markers scroll by in the terminal output, but the status bar is always visible. Showing the current step there gives persistent visibility.
 - **Acceptance Criteria**:
-  - [ ] Agents write their current step to a file (e.g. `.squidsquad/<role>/current-step`) at each step transition
-  - [ ] `statusline.sh` reads each agent's current-step file and displays it on line 2
-  - [ ] Display is concise (e.g. "QA" or "Bugs" not the full step title)
-  - [ ] Falls back gracefully if file is missing or empty
+  - [ ] Agent writes current step to `.squidsquad/<role>/current-step` at each step transition
+  - [ ] `statusline.sh` reads THIS agent's current-step file and displays it on line 2
+  - [ ] Active step format: emoji + description (e.g. "🔨 Planning for FEAT-SKILL-033..."), truncated with "..." if too long
+  - [ ] When no active step, line 2 shows contextual HINTS — role-specific, priority-ordered
+  - [ ] PM hints: backlog nudges, open bug count, ship counter progress, agent health alerts
+  - [ ] Dev agent hints: open bugs waiting, approved features ready, clean slate message
+  - [ ] Falls back gracefully if current-step file is missing or empty
   - [ ] CLAUDE.md templates updated to write current step at each `[🦑]` marker
   - [ ] SKILL.md templates and references updated
+  - [ ] All roles covered (PM, dev agents, future DM)
 
 ### Discussion
 
 > [2026-03-29 13:57] **pm/qa**: Filed from human request. Human wants real-time step visibility in the status bar. Approach: agents write current step to a file, statusline.sh reads it. Status: Pending — awaiting human approval.
+> [2026-03-29 14:20] **pm/qa**: Human clarified: show current step of THIS agent only (not all agents). Format: emoji + description, e.g. "🔨 Planning for FEAT-SKILL-033..." — truncate with "..." if too long. Also wants contextual HINTS on line 2 when idle (role-specific). PM hints: backlog nudges, open bug counts, ship counter progress, agent health alerts. Dev hints: open bugs waiting, approved features ready to pick up. Hints fill the gap when no active step is running. Updating acceptance criteria to reflect.
