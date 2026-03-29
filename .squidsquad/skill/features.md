@@ -1040,6 +1040,7 @@ _Features start as Pending (awaiting human approval) and move through Approved â
   - [ ] PM CLAUDE.md Step 7 updated to use heartbeat branches instead of `git log --grep`
   - [ ] Dev agent CLAUDE.md updated with heartbeat push step
   - [ ] SKILL.md setup/templates updated accordingly
+  - [ ] SKILL.md upgrade steps populate `Heartbeat Interval Seconds` in existing config.md (default 10s if missing)
   - [ ] Works across machines (agents on different hosts)
 
 ### Discussion
@@ -1047,3 +1048,4 @@ _Features start as Pending (awaiting human approval) and move through Approved â
 > [2026-03-29 12:40] **pm/qa**: Filed from human discussion. Human identified that git-commit-based health detection causes false stalls on quiet cycles. Explored options: gitignored files (local only), GitHub Issues (API abuse), git notes (not pushed by default), heartbeat branches (git-native, cross-machine). Human approved heartbeat branches approach. Status: Pending â€” awaiting human approval.
 > [2026-03-29 12:45] **pm/qa**: Human requested heartbeat interval be configurable in config.md, independent of iteration interval. Added to acceptance criteria.
 > [2026-03-29 12:48] **pm/qa**: Human wants heartbeat setup as an explicit step in SKILL.md setup flow so the user is aware agents will push heartbeat branches. Default interval 10 seconds. Updated acceptance criteria.
+> [2026-03-29 12:50] **pm/qa**: Human requested upgrade steps also populate the heartbeat interval config var for existing installs. Added to acceptance criteria.
