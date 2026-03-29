@@ -164,7 +164,8 @@ Open `.squidsquad/[ROLE]/features.md`. Pick the next feature with status `Approv
 6. Run the test command: `[ROLE_TEST_CMD]`
 7. **Run smoke tests** from TEST-PLAN.md (if it exists) before marking as Pending Test.
 8. **Update docs**: If the change affects user-facing behavior, update `README.md` and any relevant sections of `SKILL.md` (feature descriptions, setup instructions) to reflect the new functionality. Keep docs in sync with shipped behavior.
-9. If tests and smoke tests pass:
+9. **Copy changed references to live**: If any files in `references/` were modified (e.g. `statusline.sh`, `hints-*.txt`, `agent-instructions.md`), copy them to the live `.squidsquad/` location so changes take effect immediately. For example: `cp references/statusline.sh .squidsquad/statusline.sh`, `cp references/hints-*.txt .squidsquad/`.
+10. If tests and smoke tests pass:
    - Update status to `Pending Test`.
    - Append a Discussion entry:
      ```

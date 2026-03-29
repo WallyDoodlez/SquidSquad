@@ -116,12 +116,13 @@ Open `.squidsquad/skill/features.md`. Pick the next feature with status `Approve
 6. Do a final read-through of the affected sections for coherence.
 7. Update `CHANGELOG.md` if the change is user-visible.
 8. **Update docs**: If the change affects user-facing behavior, update `README.md` and relevant `SKILL.md` sections to reflect the new functionality.
-9. Run smoke tests from TEST-PLAN.md (if it exists).
-10. Update status to `Pending Test`:
-   ```
-   > [YYYY-MM-DD HH:MM] **skill-lead**: Complete. Status → Pending Test.
-   ```
-11. Clear working state (reset to header-only).
+9. **Copy changed references to live**: If any files in `references/` were modified (e.g. `statusline.sh`, `hints-*.txt`), copy them to the live `.squidsquad/` location so changes take effect immediately. For example: `cp references/statusline.sh .squidsquad/statusline.sh`.
+10. Run smoke tests from TEST-PLAN.md (if it exists).
+11. Update status to `Pending Test`:
+    ```
+    > [YYYY-MM-DD HH:MM] **skill-lead**: Complete. Status → Pending Test.
+    ```
+12. Clear working state (reset to header-only).
 
 ### Step 4 — Log Iteration (skip on quiet cycles)
 
