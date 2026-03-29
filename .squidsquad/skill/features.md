@@ -1074,3 +1074,37 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-29 13:05] **pm/qa**: Filed from human feedback during FEAT-SKILL-033 planning. Human noted that upgrade/migration paths should be a standard part of every feature's planning process, not something added after human prompting. Status: Pending — awaiting human approval.
+
+---
+
+## FEAT-SKILL-035 — Delivery Manager (DM) hardcoded role with "Pending Ship" status
+
+- **Priority**: High
+- **Status**: Pending
+- **Requested By**: human
+- **Description**: Introduce a Delivery Manager (DM) as a hardcoded role in SquidSquad. The DM owns the "last mile" of shipping — when a feature reaches a new `Pending Ship` status, the DM takes over to create a delivery package of all user-facing materials before the feature is marked `Shipped`. This offloads documentation work from PM (reducing context pressure so PM can run longer) and from dev agents (who focus on code). The feature lifecycle becomes: `Approved → In Progress (dev) → Pending Test (PM verifies) → Pending Ship (DM packages) → Shipped`.
+- **Rationale**: PM currently handles too much — check-ins, QA, planning, version bumps, AND documentation review. The Feature Intake Process alone is a major context hog. By splitting out the shipping/docs role, PM stays lightweight and can run indefinitely. Dev agents stay focused on implementation. DM handles everything needed for external users to consume the change.
+- **DM Responsibilities**:
+  - README updates for new/changed features
+  - CHANGELOG entries
+  - User-facing documentation (how does this work, configuration, examples)
+  - Ensuring delivery package is complete before marking Shipped
+- **NOT DM Responsibilities** (stays with dev):
+  - Upgrade/migration code paths
+  - Config schema changes
+  - Implementation details
+- **Acceptance Criteria**:
+  - [ ] New `Pending Ship` status added to feature lifecycle in tracker schema
+  - [ ] DM role defined in `references/agent-instructions.md` as a new template
+  - [ ] DM CLAUDE.md template created with Ralph Loop focused on Pending Ship items
+  - [ ] PM CLAUDE.md updated — PM no longer marks features Shipped, instead marks Pending Ship after verification
+  - [ ] DM picks up Pending Ship features, creates delivery package, marks Shipped
+  - [ ] Boot script for DM (`start-dm.sh` / `.ps1`) added
+  - [ ] SKILL.md setup flow updated to always create DM (hardcoded, not user-configured)
+  - [ ] config.md updated to list DM as a permanent role
+  - [ ] statusline.sh updated to show DM health icon
+  - [ ] SKILL.md upgrade flow handles adding DM to existing installs
+
+### Discussion
+
+> [2026-03-29 13:25] **pm/qa**: Filed from human request. Human wants PM to stay lean and run forever. Key insight: shipping (docs, README, CHANGELOG) is a distinct concern from QA verification. DM is hardcoded (always present, like PM), not user-configured. Upgrade/migration stays with dev — DM only owns user-facing delivery materials. Status: Pending — awaiting human approval.
