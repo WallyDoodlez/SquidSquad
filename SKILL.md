@@ -200,8 +200,8 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 1b. Context pressure check — if above threshold, save state and exit
 1c. Resume from working-state.md if active task exists
 2. Non-blocking human check-in (print note, continue immediately)
-   → If human has provided input: file bugs/features to appropriate tracker
-   → Await human approval before marking features Approved
+   → If human has provided input: file bugs to tracker; for features, discuss first (predict intent, surface questions, invite refinement), then file and run Feature Intake Process
+   → Await human approval before marking features Approved (approval only offered after planning completes)
 3. Run full e2e test command (from config.md)
 4. Log results to pm/qa-log.md
 5. If tests fail: file BUG-[ROLE]-XXX to the appropriate dev agent's tracker

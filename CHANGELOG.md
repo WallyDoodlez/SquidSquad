@@ -16,6 +16,7 @@ All notable changes to SquidSquad will be documented here.
 
 ### Fixed
 
+- PM no longer asks "approve?" immediately after filing a feature — now predicts user intent, surfaces questions, and invites discussion first. Approval only offered after full planning process completes (BUG-SKILL-024).
 - Status bar line 2 now shows full squad (PM + all dev agents) instead of dev agents only (BUG-SKILL-022).
 - Status bar git commands now have 2-second timeouts to prevent line 2 disappearing during concurrent git operations (BUG-SKILL-023).
 

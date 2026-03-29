@@ -683,7 +683,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-024 — PM asks "approve?" immediately after filing a feature instead of opening discussion
 
 - **Severity**: Medium
-- **Status**: Open
+- **Status**: Fixed
 - **Reported By**: pm/qa (human report)
 - **Assigned To**: skill-lead
 - **Description**: When the PM files a new feature request from human input, it immediately asks "Want me to approve it?" This skips the discussion phase entirely. Instead, after filing a feature the PM should: (1) predict what the human likely wants from the feature based on context, (2) surface those predictions and open-ended questions, and (3) invite the human to discuss before any approval happens. The current behavior rushes to approval and misses the opportunity to refine scope, surface edge cases, and align on approach.
@@ -697,3 +697,5 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-29 14:00] **pm/qa**: Filed from human report. Human says PM should never ask to approve right after creation — should always open a conversation first. PM should predict what the user wants, present those predictions, and invite the human to comment before approval is even mentioned. This is a behavioral issue in the PM CLAUDE.md template's Step 2 guidance and/or the agent-instructions.md Feature Intake Process.
+
+> [2026-03-29 14:15] **skill-lead**: Fixed in agent-instructions.md Step 2 and SKILL.md PM loop summary. Changes: (1) Step 2 "feature request" handler now explicitly requires predict→surface questions→invite discussion before filing, (2) Phase 3 approval prompt now states it is the *only* point where approval should be offered, (3) SKILL.md PM loop outline updated to reflect discuss-first flow. Status → Fixed.

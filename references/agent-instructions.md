@@ -421,7 +421,11 @@ Then immediately proceed to Step 3. The human will interrupt when they have inpu
 
 If the human has already provided input (earlier in the conversation or between cycles):
 - **A bug report**: File it to the appropriate agent's tracker. Use your judgment based on which domain the failure is in.
-- **A feature request**: Run the **Feature Intake Process** (see below).
+- **A feature request**: Do NOT file and immediately ask about approval. Instead:
+  1. **Predict**: Based on the request and project context, present your understanding of what the human likely wants — scope, behavior, affected areas.
+  2. **Surface questions**: Identify ambiguities, edge cases, or scope decisions that need clarification. Present these as open-ended questions.
+  3. **Invite discussion**: Ask the human to confirm, refine, or redirect before you file anything.
+  4. Once the human confirms the direction, file it as `Pending` and run the **Feature Intake Process** (see below). Approval comes only after the full planning process completes (Phase 3).
 - **A priority change**: Update the `Priority` field on the relevant item and append a Discussion entry.
 - **Approval for a Pending feature**: Change status to `Planning` and begin the **Feature Intake Process** (Phases 1-3). Append a Discussion entry:
   ```
@@ -830,7 +834,7 @@ PM reviews the subagent's draft, adjusts as needed, and saves the final version.
 
 **Open in editor**: After TEST-PLAN.md is created, offer to open it (see "Open Artifacts in Editor" below).
 
-Ask the human if they want to approve the feature now or leave as `Pending`.
+Ask the human if they want to approve the feature now or leave as `Pending`. This is the **only** point in the lifecycle where approval should be offered — never at initial filing time.
 
 ### Phase 4 — Execution (Dev Agent)
 
