@@ -1117,7 +1117,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-036 — Boot script first message includes role for terminal title
 
 - **Priority**: Low
-- **Status**: Pending
+- **Status**: On Hold
 - **Requested By**: human
 - **Description**: Change the boot scripts' first message to Claude so the first line is `🦑 [role] — [project]` and the second line is `start the loop`. This way the terminal title/tab shows which SquidSquad agent is running in that terminal (e.g. "🦑 skill — MyProject", "🦑 pm — MyProject"). Currently all agents send the same `"start the loop"` message, making terminal tabs indistinguishable.
 - **Rationale**: When running multiple SquidSquad agents in separate terminals, there's no way to tell which tab is which agent at a glance. Terminal emulators typically show the command arguments in the tab title, so putting the role identifier in the first line of the message makes tabs self-identifying.
@@ -1137,8 +1137,8 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 ## FEAT-SKILL-037 — Show current Ralph Loop step in status bar line 2
 
-- **Priority**: Low
-- **Status**: Pending
+- **Priority**: Medium
+- **Status**: Planning
 - **Requested By**: human
 - **Description**: Display the agent's current Ralph Loop step in the status bar's second line. Currently line 2 shows agent health icons and rest nudge, but not what the agent is actively doing. Adding the current step (e.g. "Step 3 — QA Check", "Step 5 — Verify Bugs") would give the human real-time visibility into each agent's progress without needing to read scrollback.
 - **Rationale**: When multiple agents are running, the human can't tell at a glance what each agent is doing. The `[🦑]` step markers scroll by in the terminal output, but the status bar is always visible. Showing the current step there gives persistent visibility.
@@ -1165,3 +1165,4 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 14:40] **pm/qa**: Human clarified hints further: hints are for HUMANS, not system status. They should be friendly prompts reminding the human what they can do — e.g. "Msg me any time to talk about a feature". NOT metric dumps like "3 bugs open". Think of them as gentle nudges to interact. Updated acceptance criteria.
 > [2026-03-29 15:10] **pm/qa**: Human clarified hint behavior: (1) hints ROTATE each cycle, not static, (2) each role AND each phase has its own hint pool, (3) state-driven — hint selection considers current state, (4) shell-driven — statusline.sh handles all hint logic, not the agent. Open questions: rotation mechanism (minute-based modulo vs counter file), performance of reading tracker state in shell, hint pools hardcoded in script vs config file, granularity of state awareness for hint selection.
 > [2026-03-29 15:15] **pm/qa**: Human resolved open questions: (1) Agents write state to file on each phase change — statusline.sh reads it (no tracker parsing in shell). (2) Hint pools live in templates (references/) — copied during setup. (3) Enough granularity in the state file so hints always make sense for what's happening. Architecture: agent writes `.squidsquad/<role>/current-state` → statusline.sh reads state + hint pool file → picks matching pool → rotates via timestamp modulo. Updated acceptance criteria.
+> [2026-03-29 16:00] **pm/qa**: Human approved. FEAT-SKILL-036 put on hold (wt dependency not wanted). Status → Planning. Beginning intake process.
