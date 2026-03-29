@@ -859,3 +859,65 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-29 03:10] **pm/qa**: Filed from human request. Foundational platform initiative — plugin system, hardened non-interactive phase execution, external interaction surfaces, and Claude API considerations. Human specifically called out: (1) preventing conversational override of phase behavior, (2) exploring non-interactive mode + structured output, (3) interaction outside Claude CLI, (4) navigating Claude API agreements. Ties into FEAT-SKILL-020 (web UI), FEAT-SKILL-028 (VS Code extension). Large scope, parked for planning. Status: Pending — awaiting human approval.
+
+---
+
+## FEAT-SKILL-031 — Status bar redesign (Emoji Rich style)
+
+- **Priority**: Medium
+- **Owner**: skill-lead
+- **Status**: Pending
+- **Description**: Redesign the status bar (`statusline.sh`) with an emoji-rich visual style. Replaces the current ANSI-only design with expressive emoji indicators. PM gets a two-line bar with team health on a separate line.
+
+  **PM view (2 lines):**
+  ```
+  🦑 PM/QA v0.5.1 │ 📦 9/10 🚀 │ 🧠 42% │ ⏳ 2m
+    🟢skill 🔴fe ⚪api
+  ```
+
+  **Dev view (idle):**
+  ```
+  🦑 skill v0.5.1 │ 🐛3 ⭐2 │ 🧠 25% │ ⏳ 4m
+  ```
+
+  **Dev view (working on a task):**
+  ```
+  🦑 skill v0.5.1 │ 🔨 FEAT-017 │ 🧠 25% │ ⏳ 4m
+  ```
+
+  **Locked design decisions:**
+  - **Style**: Emoji Rich — emoji for all indicators, no ANSI color codes for segment differentiation
+  - **Ship counter**: 📦 N/threshold shown on PM bar. 🚀 appears when counter >= 9 (one away from bump)
+  - **Context tiers**: 🧠 when <70%, ⚠️ when 70-89%, 🔥 when 90%+
+  - **Agent health**: 🟢 healthy, 🔴 stalled, ⚪ never started — displayed on PM's **second line** (not inline with main bar)
+  - **Active task**: 🔨 FEAT-XXX or BUG-XXX shown on dev bar when working-state has an in-progress task, replaces backlog counts
+  - **Version**: shown after role name, always present
+  - **Timer**: ⏳ Nm shows time until next cycle (replaces "Nm ago │ next in ~Nm")
+  - **Dropped**: iteration number (low value), "time since last" (replaced by countdown only)
+  - **Emoji key** (for reference in docs):
+    - 🦑 = SquidSquad brand
+    - 🟢/🔴/⚪ = agent health (healthy/stalled/unknown)
+    - 📦 = ship counter
+    - 🚀 = version bump imminent
+    - 🐛 = open bugs
+    - ⭐ = actionable features
+    - 🔨 = active task
+    - 🧠/⚠️/🔥 = context pressure (low/medium/high)
+    - ⏳ = next cycle countdown
+
+- **Acceptance Criteria**:
+  - [ ] `statusline.sh` rewritten with emoji-rich output matching the design above
+  - [ ] PM bar outputs two lines: main info + team health
+  - [ ] Dev bar shows active task (from working-state.md) when in-progress, backlog counts otherwise
+  - [ ] Ship counter reads from config.md `Shipped Since Last Bump` and `Ship Threshold`
+  - [ ] 🚀 appears when ship counter >= threshold - 1
+  - [ ] Context emoji changes at 70% and 90% thresholds
+  - [ ] Version read from config.md
+  - [ ] Timer shows countdown to next cycle (not time since last)
+  - [ ] Iteration number removed from display
+  - [ ] SKILL.md status bar documentation updated
+  - [ ] README status bar section updated with new examples
+
+### Discussion
+
+> [2026-03-29 03:20] **pm/qa**: Filed with full design locked by human. Style: Emoji Rich. Key decisions: PM gets two-line bar with team health on line 2, ship counter with 🚀 at 9+, three-tier context emoji (🧠/⚠️/🔥), active task display replaces backlog when working, version always shown, iteration number dropped, timer condensed to countdown only. Status: Pending — awaiting human approval.
