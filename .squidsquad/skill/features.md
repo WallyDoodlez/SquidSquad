@@ -1111,3 +1111,23 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-29 13:25] **pm/qa**: Filed from human request. Human wants PM to stay lean and run forever. Key insight: shipping (docs, README, CHANGELOG) is a distinct concern from QA verification. DM is hardcoded (always present, like PM), not user-configured. Upgrade/migration stays with dev — DM only owns user-facing delivery materials. Status: Pending — awaiting human approval.
+
+---
+
+## FEAT-SKILL-036 — Boot script first message includes role for terminal title
+
+- **Priority**: Low
+- **Status**: Pending
+- **Requested By**: human
+- **Description**: Change the boot scripts' first message to Claude so the first line is `🦑 [role]` and the second line is `start the loop`. This way the terminal title/tab shows which SquidSquad agent is running in that terminal (e.g. "🦑 skill", "🦑 pm"). Currently all agents send the same `"start the loop"` message, making terminal tabs indistinguishable.
+- **Rationale**: When running multiple SquidSquad agents in separate terminals, there's no way to tell which tab is which agent at a glance. Terminal emulators typically show the command arguments in the tab title, so putting the role identifier in the first line of the message makes tabs self-identifying.
+- **Acceptance Criteria**:
+  - [ ] Boot script templates (`.sh` and `.ps1` for both dev and PM) send multi-line first message with `🦑 [role]` on line 1 and `start the loop` on line 2
+  - [ ] CLAUDE.md auto-boot section updated to handle the new message format (still reads role from `.active-role`, ignores the first line)
+  - [ ] Terminal tab/title shows the role identifier in Windows Terminal
+  - [ ] SKILL.md boot script templates updated
+  - [ ] Upgrade steps update existing boot scripts
+
+### Discussion
+
+> [2026-03-29 13:50] **pm/qa**: Filed from human request. Human wants terminal tabs to identify which SquidSquad role is running. Approach: change the first positional argument in boot scripts from `"start the loop"` to a two-line message with role on line 1. Status: Pending — awaiting human approval.
