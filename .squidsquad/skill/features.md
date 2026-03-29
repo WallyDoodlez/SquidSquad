@@ -1034,8 +1034,9 @@ _Features start as Pending (awaiting human approval) and move through Approved â
   - [ ] PM reads `heartbeat/<role>` via `git fetch` + `git log` to check agent liveness
   - [ ] No commits added to main branch for heartbeat purposes
   - [ ] Heartbeat branches are orphan (single commit, force-pushed each cycle)
-  - [ ] Heartbeat interval is configurable in `config.md` (e.g. `Heartbeat Interval Minutes: 5`), independent of iteration interval
-  - [ ] PM uses configured heartbeat interval as the staleness threshold (agent stalled if heartbeat older than N minutes)
+  - [ ] Heartbeat interval is configurable in `config.md` (e.g. `Heartbeat Interval Seconds: 10`), default 10 seconds
+  - [ ] SKILL.md setup flow includes a step asking the user to configure heartbeat interval (default 10s), explaining that agents will push lightweight `heartbeat/<role>` branches
+  - [ ] PM uses configured heartbeat interval as the staleness threshold (agent stalled if heartbeat older than N seconds)
   - [ ] PM CLAUDE.md Step 7 updated to use heartbeat branches instead of `git log --grep`
   - [ ] Dev agent CLAUDE.md updated with heartbeat push step
   - [ ] SKILL.md setup/templates updated accordingly
@@ -1045,3 +1046,4 @@ _Features start as Pending (awaiting human approval) and move through Approved â
 
 > [2026-03-29 12:40] **pm/qa**: Filed from human discussion. Human identified that git-commit-based health detection causes false stalls on quiet cycles. Explored options: gitignored files (local only), GitHub Issues (API abuse), git notes (not pushed by default), heartbeat branches (git-native, cross-machine). Human approved heartbeat branches approach. Status: Pending â€” awaiting human approval.
 > [2026-03-29 12:45] **pm/qa**: Human requested heartbeat interval be configurable in config.md, independent of iteration interval. Added to acceptance criteria.
+> [2026-03-29 12:48] **pm/qa**: Human wants heartbeat setup as an explicit step in SKILL.md setup flow so the user is aware agents will push heartbeat branches. Default interval 10 seconds. Updated acceptance criteria.
