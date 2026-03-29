@@ -1019,3 +1019,26 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-29 04:10] **pm/qa**: Filed from human request. Two parts: (1) boot scripts pre-configure baseline permissions at setup, (2) agents log permission prompts to a gitignored file, boot script learns and adds them on next startup. Both via shell script, not agent-driven. Status: Pending — awaiting human approval.
+
+---
+
+## FEAT-SKILL-033 — Heartbeat branches for agent health detection
+
+- **Priority**: Medium
+- **Status**: Pending
+- **Requested By**: human
+- **Description**: Replace git-commit-based agent health detection with lightweight heartbeat branches. Each agent force-pushes a single-commit orphan branch (`heartbeat/<role>`) every cycle with a timestamp. The PM fetches and reads these branches to determine agent health, instead of relying on `git log --grep` which only detects agents that have work to commit. This solves the false-stalled problem where agents on quiet cycles (nothing to commit) appear dead.
+- **Rationale**: Current health detection requires agents to push commits to main. Agents on quiet cycles produce no commits and appear stalled indefinitely. Heartbeat branches are git-native, work across machines, don't pollute main branch history, and unprotected branches allow force-push by default on GitHub (no repo config needed).
+- **Acceptance Criteria**:
+  - [ ] Each agent pushes `heartbeat/<role>` branch every cycle (even quiet cycles)
+  - [ ] PM reads `heartbeat/<role>` via `git fetch` + `git log` to check agent liveness
+  - [ ] No commits added to main branch for heartbeat purposes
+  - [ ] Heartbeat branches are orphan (single commit, force-pushed each cycle)
+  - [ ] PM CLAUDE.md Step 7 updated to use heartbeat branches instead of `git log --grep`
+  - [ ] Dev agent CLAUDE.md updated with heartbeat push step
+  - [ ] SKILL.md setup/templates updated accordingly
+  - [ ] Works across machines (agents on different hosts)
+
+### Discussion
+
+> [2026-03-29 12:40] **pm/qa**: Filed from human discussion. Human identified that git-commit-based health detection causes false stalls on quiet cycles. Explored options: gitignored files (local only), GitHub Issues (API abuse), git notes (not pushed by default), heartbeat branches (git-native, cross-machine). Human approved heartbeat branches approach. Status: Pending — awaiting human approval.
