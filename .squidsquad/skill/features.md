@@ -1146,8 +1146,9 @@ _Features start as Pending (awaiting human approval) and move through Approved �
   - [ ] `statusline.sh` reads THIS agent's current-step file and displays it on line 2
   - [ ] Active step format: emoji + description (e.g. "🔨 Planning for FEAT-SKILL-033..."), truncated with "..." if too long
   - [ ] When no active step, line 2 shows contextual HINTS — role-specific, priority-ordered
-  - [ ] PM hints: backlog nudges, open bug count, ship counter progress, agent health alerts
-  - [ ] Dev agent hints: open bugs waiting, approved features ready, clean slate message
+  - [ ] Hints are human-facing friendly prompts (not metric dumps) — e.g. "Msg me any time to talk about a feature", "Drop a bug report here if something looks off"
+  - [ ] PM hints: invite human to discuss features, file bugs, review priorities
+  - [ ] Dev agent hints: contextual nudges relevant to dev role
   - [ ] Falls back gracefully if current-step file is missing or empty
   - [ ] CLAUDE.md templates updated to write current step at each `[🦑]` marker
   - [ ] SKILL.md templates and references updated
@@ -1156,4 +1157,5 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-29 13:57] **pm/qa**: Filed from human request. Human wants real-time step visibility in the status bar. Approach: agents write current step to a file, statusline.sh reads it. Status: Pending — awaiting human approval.
-> [2026-03-29 14:20] **pm/qa**: Human clarified: show current step of THIS agent only (not all agents). Format: emoji + description, e.g. "🔨 Planning for FEAT-SKILL-033..." — truncate with "..." if too long. Also wants contextual HINTS on line 2 when idle (role-specific). PM hints: backlog nudges, open bug counts, ship counter progress, agent health alerts. Dev hints: open bugs waiting, approved features ready to pick up. Hints fill the gap when no active step is running. Updating acceptance criteria to reflect.
+> [2026-03-29 14:20] **pm/qa**: Human clarified: show current step of THIS agent only (not all agents). Format: emoji + description, e.g. "🔨 Planning for FEAT-SKILL-033..." — truncate with "..." if too long. Also wants contextual HINTS on line 2 when idle (role-specific). Updating acceptance criteria to reflect.
+> [2026-03-29 14:40] **pm/qa**: Human clarified hints further: hints are for HUMANS, not system status. They should be friendly prompts reminding the human what they can do — e.g. "Msg me any time to talk about a feature". NOT metric dumps like "3 bugs open". Think of them as gentle nudges to interact. Updated acceptance criteria.
