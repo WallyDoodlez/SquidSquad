@@ -651,7 +651,7 @@ If you cannot determine ownership, file to all relevant trackers and cross-link 
 
 When the human suggests a new feature, do NOT immediately file it. Run the full 5-phase lifecycle. Bugs are excluded — they use the current lightweight fix → verify → close flow.
 
-**Light mode**: For trivial/cosmetic features (typo fixes, config tweaks, doc-only changes), skip Phase 1 (Research) and abbreviate Phase 2. Use your judgment: if the feature touches behavior or user-facing systems, use the full flow.
+**Light mode**: For trivial/cosmetic features (typo fixes, config tweaks, doc-only changes), skip Phase 1 (Research) and Phase 2A (prep), abbreviate Phase 2. Phase 3 (test plan subagent) and Phase 5 (QA subagent) still run. Use your judgment: if the feature touches behavior or user-facing systems, use the full flow.
 
 ### Phase 1 — Research
 
@@ -692,6 +692,25 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 ```
 
 **If research reveals significant risks**, present your recommendation to the human: "Based on research, this feature would [risk]. Recommend: proceed / adjust scope / reject." If warranted, recommend `Rejected` status with justification. Human can override.
+
+### Phase 2A — Discussion Prep (Subagent)
+
+For non-trivial features, spawn a prep subagent (via the Agent tool) before starting the interactive discussion. The subagent reads the RESEARCH.md and produces a discussion prep file.
+
+Subagent prompt:
+```
+Read .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-RESEARCH.md. For each open question in the research:
+1. Categorize it (scope, behavior, compatibility, performance, etc.)
+2. Suggest 3 concrete options with pros/cons for each
+3. Mark your recommended option
+4. Suggest an optimal question order (dependencies first, controversial last)
+
+Write output to .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-PHASE2-PREP.md
+```
+
+The PM reads PHASE2-PREP.md to inform the discussion suggestions. Delete PHASE2-PREP.md after Phase 2 completes — CONTEXT.md captures the final decisions.
+
+Light-mode features skip Phase 2A entirely.
 
 ### Phase 2 — Discussion (PM + Human)
 
@@ -749,12 +768,26 @@ Continue until all questions are resolved. Capture decisions in `.squidsquad/[RO
 
 Create two artifacts:
 
-**A) Feature entry** in `features.md` — with status `Pending`, referencing planning artifacts:
+**A) Feature entry** in `features.md` — written by PM directly, with status `Pending`, referencing planning artifacts:
 - Description includes research-informed constraints
 - Acceptance criteria include edge case handling and side effect mitigations
 - References RESEARCH.md and CONTEXT.md
 
-**B) Test plan** in `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md`:
+**B) Test plan** — spawn a subagent (via the Agent tool) to draft the test plan.
+
+Subagent prompt:
+```
+Read .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-RESEARCH.md and .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-CONTEXT.md. Draft a test plan covering:
+1. Happy path test cases with preconditions, steps, expected results, and verification commands
+2. Edge case test cases from research findings
+3. Side effect regression tests (existing behavior that must NOT change)
+4. Smoke tests (quick checks)
+5. Regression risks
+
+Write output to .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md
+```
+
+PM reviews the subagent's draft, adjusts as needed, and saves the final version. The format should be:
 
 ```markdown
 # FEAT-[ROLE_UPPER]-XXX Test Plan — [Title]
@@ -790,20 +823,30 @@ Ask the human if they want to approve the feature now or leave as `Pending`.
 
 _(Handled by the dev agent — see dev template Step 3)_
 
-### Phase 5 — QA Test Execution
+### Phase 5 — QA Test Execution (Subagent)
 
-When verifying features with status `Pending Test` (in Step 6), if a TEST-PLAN.md exists:
+When verifying features with status `Pending Test` (in Step 6), if a TEST-PLAN.md exists, spawn a QA subagent (via the Agent tool) to execute the test plan.
 
-1. Read the TEST-PLAN.md
-2. Execute each test case: read relevant files, run verification commands, check regressions
-3. Record results in TEST-PLAN.md:
-   ```
-   - **Result**: PASS / FAIL
-   - **Notes**: [what was observed]
-   - **Verified at**: [timestamp]
-   ```
-4. **All pass** → Status → `Shipped`. Delete planning files (`.squidsquad/[ROLE]/planning/FEAT-XXX-*`). Append Discussion entry.
-5. **Any fail** → Status → `In Progress`. Append Discussion with which test cases failed and what was observed.
+Subagent prompt:
+```
+Read .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md. Execute each test case:
+1. Read the relevant files mentioned in preconditions
+2. Run any verification commands
+3. Check regression risks
+4. For each test case, record PASS or FAIL with notes on what was observed
+
+Write results to .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-QA-RESULTS.md with format:
+### TC-N: [title]
+- **Result**: PASS / FAIL
+- **Notes**: [what was observed]
+- **Verified at**: [timestamp]
+```
+
+PM reviews QA-RESULTS.md and makes the final decision:
+- **All pass** → Status → `Shipped`. Delete planning files (`.squidsquad/[ROLE]/planning/FEAT-XXX-*`). Append Discussion entry.
+- **Any fail** → Status → `In Progress`. Append Discussion with which test cases failed and what was observed.
+
+The PM decides — the subagent only reports results.
 
 ---
 

@@ -85,6 +85,7 @@ If the human has already provided input (earlier in the conversation or between 
   > [YYYY-MM-DD HH:MM] **pm/qa**: Human approved. Status → Planning. Beginning intake process.
   ```
   Only after all planning phases (Research → Discussion → Planning) are complete, change status to `Approved`.
+  **Subagent delegation**: Use the Agent tool to spawn subagents for Phase 1 (research), Phase 2A (discussion prep), Phase 3 (test plan drafting), and Phase 5 (QA verification). See `references/agent-instructions.md` for subagent prompts per phase. PM writes the feature entry and makes final ship/reject decisions.
 
 ### Step 3 — QA Check
 
