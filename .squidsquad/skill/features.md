@@ -1025,7 +1025,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-033 — Heartbeat branches for agent health detection
 
 - **Priority**: Medium
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Requested By**: human
 - **Description**: Replace git-commit-based agent health detection with lightweight heartbeat branches. Each agent force-pushes a single-commit orphan branch (`heartbeat/<role>`) every cycle with a timestamp. The PM fetches and reads these branches to determine agent health, instead of relying on `git log --grep` which only detects agents that have work to commit. This solves the false-stalled problem where agents on quiet cycles (nothing to commit) appear dead.
 - **Rationale**: Current health detection requires agents to push commits to main. Agents on quiet cycles produce no commits and appear stalled indefinitely. Heartbeat branches are git-native, work across machines, don't pollute main branch history, and unprotected branches allow force-push by default on GitHub (no repo config needed).
@@ -1056,6 +1056,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 13:04] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-29 13:10] **skill-lead**: Complete. Created `references/heartbeat.sh`, updated boot script templates with heartbeat launch + PID management, added `Heartbeat Interval Seconds` to config.md template and live config, added Step 5c to SKILL.md setup, updated PM Step 7 in agent-instructions.md to use heartbeat branches, updated statusline.sh health icons to read heartbeat branches, added upgrade migration for heartbeat config, updated CHANGELOG.md and README.md. Status → Pending Test.
 > [2026-03-29 13:15] **pm/qa**: Human requested heartbeat branches get their own dedicated section in README.md documentation. Added to acceptance criteria.
+> [2026-03-29 13:35] **pm/qa**: Verified all 13 acceptance criteria. heartbeat.sh exists and matches reference, boot scripts launch it with PID management, uses mktree+commit-tree+push-f, PM reads heartbeat branches via fetch+log with 3× staleness threshold, config.md has Heartbeat Interval Seconds, SKILL.md Step 5c added, agent-instructions.md PM Step 7 updated, dev CLAUDE.md has no heartbeat references, upgrade migration included, README.md has dedicated section. Status → Shipped.
 
 ---
 
