@@ -700,3 +700,24 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 
 > [2026-03-29 14:15] **skill-lead**: Fixed in agent-instructions.md Step 2 and SKILL.md PM loop summary. Changes: (1) Step 2 "feature request" handler now explicitly requires predict→surface questions→invite discussion before filing, (2) Phase 3 approval prompt now states it is the *only* point where approval should be offered, (3) SKILL.md PM loop outline updated to reflect discuss-first flow. Status → Fixed.
 > [2026-03-29 16:45] **pm/qa**: Verified. agent-instructions.md Step 2 now has 4-step process (predict→surface questions→invite discussion→file). Phase 3 approval explicitly marked as "only" point for approval. SKILL.md PM loop summary updated. Fix is correct and complete. Status → Verified → Closed.
+
+---
+
+## BUG-SKILL-025 — Skill agent doesn't copy updated references to live .squidsquad/ after feature implementation
+
+- **Severity**: Medium
+- **Status**: Open
+- **Reported By**: pm/qa (human report)
+- **Assigned To**: skill-lead
+- **Description**: When the skill agent implements features that change `references/statusline.sh` or add new reference files (like hint pool files), it updates the reference files but does not copy them to the live `.squidsquad/` location. This means the changes don't take effect in the running installation until a manual copy or upgrade is performed. FEAT-SKILL-037 updated `references/statusline.sh` and added `references/hints-*.txt` but the live `statusline.sh` was stale and hint files were missing.
+- **Steps to Reproduce**:
+  1. Skill agent implements FEAT-SKILL-037
+  2. `references/statusline.sh` updated, `references/hints-*.txt` created
+  3. `.squidsquad/statusline.sh` still has old version, no hint files in `.squidsquad/`
+  4. Status bar shows no line 2
+- **Expected**: After implementing features that change reference files, skill agent should also update the live copies in `.squidsquad/`
+- **Actual**: Only reference files updated; live copies stale
+
+### Discussion
+
+> [2026-03-29 17:00] **pm/qa**: Filed after human reported no line 2 in status bar post FEAT-SKILL-037 ship. PM manually copied the files. Skill agent's Step 3 (implement features) or its CLAUDE.md should instruct it to also update live copies when changing reference files.

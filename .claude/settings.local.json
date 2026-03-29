@@ -28,7 +28,10 @@
       "Bash(grep -r \"context_window\\\\|used_percentage\\\\|remaining_percentage\" D:/Dev/Dev/SquidSquad --include=*.md)",
       "Bash(ls D:/Dev/Dev/SquidSquad-2/LICENSE*)",
       "Bash(curl -sL \"https://www.gnu.org/licenses/agpl-3.0.txt\" -o /dev/null)",
-      "Bash(git -C:*)"
+      "Bash(git -C:*)",
+      "Bash(cp references/statusline.sh .squidsquad/statusline.sh)",
+      "Bash(cp references/hints-pm.txt .squidsquad/hints-pm.txt)",
+      "Bash(cp references/hints-dev.txt .squidsquad/hints-dev.txt)"
     ]
   }
 }
