@@ -382,6 +382,10 @@ Always create `.squidsquad/pm/` with its full structure regardless of team shape
 
 - **Minutes**: [INTERVAL]  ← minimum 1, default 10
 
+## Heartbeat
+
+- **Heartbeat Interval Seconds**: [HB_INTERVAL]  ← seconds between heartbeat pushes, default 10
+
 ## Context Pressure
 
 - **Threshold**: [THRESHOLD]  ← percentage (1-99), default 80
@@ -503,6 +507,14 @@ LOGO
 fi
 
 echo "[ROLE]" > .squidsquad/.active-role
+
+# Launch heartbeat in background
+HB_INTERVAL=$(grep 'Heartbeat Interval Seconds' .squidsquad/config.md 2>/dev/null | grep -oE '[0-9]+')
+HB_INTERVAL=${HB_INTERVAL:-10}
+bash .squidsquad/heartbeat.sh "[ROLE]" "$HB_INTERVAL" &
+HB_PID=$!
+trap "kill $HB_PID 2>/dev/null" EXIT
+
 claude --permission-mode auto "start the loop"
 ```
 
@@ -526,7 +538,15 @@ Write-Host "  S Q U I D S Q U A D   v$v  -  [ROLE]"
 Write-Host ""
 
 "[ROLE]" | Set-Content .squidsquad/.active-role -NoNewline
-claude --permission-mode auto "start the loop"
+
+# Launch heartbeat in background
+$hbInterval = if ($config -match 'Heartbeat Interval Seconds.*?(\d+)') { $Matches[1] } else { '10' }
+$hbProc = Start-Process -FilePath "bash" -ArgumentList ".squidsquad/heartbeat.sh", "[ROLE]", $hbInterval -PassThru -NoNewWindow
+try {
+    claude --permission-mode auto "start the loop"
+} finally {
+    Stop-Process -Id $hbProc.Id -ErrorAction SilentlyContinue
+}
 ```
 
 **`start-pm.sh`**:
@@ -550,6 +570,14 @@ LOGO
 fi
 
 echo "pm" > .squidsquad/.active-role
+
+# Launch heartbeat in background
+HB_INTERVAL=$(grep 'Heartbeat Interval Seconds' .squidsquad/config.md 2>/dev/null | grep -oE '[0-9]+')
+HB_INTERVAL=${HB_INTERVAL:-10}
+bash .squidsquad/heartbeat.sh "pm" "$HB_INTERVAL" &
+HB_PID=$!
+trap "kill $HB_PID 2>/dev/null" EXIT
+
 claude --permission-mode auto "start the loop"
 ```
 
@@ -564,18 +592,26 @@ if (Test-Path .squidsquad) {
     $v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
 
     Write-Host ""
-    Write-Host "    ▗▄▄▄▄▖"
-    Write-Host "   ▟██████▙"
-    Write-Host "    ▐▌▀ ▀▐▌"
-    Write-Host "  ▜██████▛▘"
-    Write-Host "   ▐██████"
-    Write-Host "    ▌▌▌▌▌▌"
+    Write-Host "      ▗▄▖"
+    Write-Host "     ▟█ █▙"
+    Write-Host "    ▐█• •█▌"
+    Write-Host "   ███████"
+    Write-Host "   ▐█████▌"
+    Write-Host "    ▐▌▐▌▐▌"
     Write-Host "  S Q U I D S Q U A D   v$v  -  PM / QA"
     Write-Host ""
 }
 
 "pm" | Set-Content .squidsquad/.active-role -NoNewline
-claude --permission-mode auto "start the loop"
+
+# Launch heartbeat in background
+$hbInterval = if ($config -match 'Heartbeat Interval Seconds.*?(\d+)') { $Matches[1] } else { '10' }
+$hbProc = Start-Process -FilePath "bash" -ArgumentList ".squidsquad/heartbeat.sh", "pm", $hbInterval -PassThru -NoNewWindow
+try {
+    claude --permission-mode auto "start the loop"
+} finally {
+    Stop-Process -Id $hbProc.Id -ErrorAction SilentlyContinue
+}
 ```
 
 > **Note:** All agents use a positional arg to send the first message (kickstarting the Ralph Loop) in an interactive session. The user can observe progress and comment in any agent's terminal.
@@ -609,6 +645,18 @@ Output examples:
 - PM: `🦑 PM/QA v0.5.1 │ 📦 9/10 🚀 │ 📋 FEAT-017 P2 │ 🧠 42% │ 🔄 2m` + line 2: `  🦑🦑🦑`
 
 Make the copied script executable (`chmod +x`).
+
+### Step 5c — Generate Heartbeat Script
+
+Copy `references/heartbeat.sh` to `.squidsquad/heartbeat.sh`. Make it executable (`chmod +x`).
+
+This script runs as a background process (launched by boot scripts) and pushes lightweight orphan `heartbeat/<role>` branches every N seconds for agent health detection. It uses `git mktree` + `git commit-tree` + `git push -f` — no checkout, no working tree impact, no commits on main.
+
+Ask the user for the heartbeat interval (default: 10 seconds). Explain:
+
+> SquidSquad agents push a lightweight heartbeat branch (`heartbeat/<role>`) every N seconds so the PM can detect agent health even during quiet cycles (no work to commit). This creates unprotected branches on your remote — no repo config needed. Default: 10 seconds.
+
+Store the value in `config.md` under `## Heartbeat` → `Heartbeat Interval Seconds`.
 
 ### Step 6 — Seed Tracker Files
 
@@ -790,7 +838,7 @@ Spawn all applicable agents simultaneously. Each agent writes only its assigned 
 > **Note:** Create `.squidsquad/templates/` if it does not exist (first upgrade from pre-template architecture).
 
 **One agent for settings:**
-> Update `.claude/settings.json`: ensure `permissions.allow` contains `Edit(.squidsquad/**)`, `Write(.squidsquad/**)`, and the four git commands. Ensure the `SessionStart` hook is present and matches the current template. Ensure the `statusLine` key is present and points to `bash .squidsquad/statusline.sh`. Regenerate `.squidsquad/statusline.sh` by copying `references/statusline.sh`. Merge into existing content — never remove unrelated keys.
+> Update `.claude/settings.json`: ensure `permissions.allow` contains `Edit(.squidsquad/**)`, `Write(.squidsquad/**)`, and the four git commands. Ensure the `SessionStart` hook is present and matches the current template. Ensure the `statusLine` key is present and points to `bash .squidsquad/statusline.sh`. Regenerate `.squidsquad/statusline.sh` by copying `references/statusline.sh`. Regenerate `.squidsquad/heartbeat.sh` by copying `references/heartbeat.sh`. Merge into existing content — never remove unrelated keys.
 
 #### If tracker schema differs — additionally spawn:
 
@@ -802,6 +850,7 @@ Spawn all applicable agents simultaneously. Each agent writes only its assigned 
 After all agents complete, update `.squidsquad/config.md`:
 - Set `SquidSquad Version` to current skill version
 - Set `Tracker Schema` to current schema version
+- If `Heartbeat Interval Seconds` is missing, add `## Heartbeat` section with `Heartbeat Interval Seconds: 10` (default). Do NOT overwrite an existing custom value.
 
 ### Step 4 — Commit and Push
 

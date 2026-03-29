@@ -79,8 +79,8 @@ fi
 
 # Git sync: ↑N unpushed / ↓N behind remote
 GIT_SYNC=""
-AHEAD=$(git rev-list --count @{u}..HEAD 2>/dev/null)
-BEHIND=$(git rev-list --count HEAD..@{u} 2>/dev/null)
+AHEAD=$(timeout 2 git rev-list --count @{u}..HEAD 2>/dev/null) || true
+BEHIND=$(timeout 2 git rev-list --count HEAD..@{u} 2>/dev/null) || true
 [ -n "$AHEAD" ] && [ "$AHEAD" -gt 0 ] && GIT_SYNC="↑${AHEAD}"
 if [ -n "$BEHIND" ] && [ "$BEHIND" -gt 0 ]; then
   [ -n "$GIT_SYNC" ] && GIT_SYNC="${GIT_SYNC} "
@@ -134,23 +134,28 @@ if [ "$ROLE" = "pm" ]; then
   LINE1="${LINE1} │ ${CTX_STR} │ ${TIMER_STR}"
 
   # Agent health icons for line 2: 🦑 healthy, 👻 stalled, 🥚 never started
+  # Uses heartbeat branches (heartbeat/<role>) for accurate health detection
   # Include PM + all dev agents for full squad visibility
   ALL_AGENTS="pm $AGENTS"
   HEALTH=""
-  THRESHOLD_SECS=$(( INTERVAL * 2 * 60 ))
+  HB_INTERVAL=$(grep 'Heartbeat Interval Seconds' "$SQDIR/config.md" 2>/dev/null | grep -oE '[0-9]+')
+  HB_INTERVAL=${HB_INTERVAL:-10}
+  HB_STALE_THRESHOLD=$(( HB_INTERVAL * 3 ))
   for AGENT in $ALL_AGENTS; do
     AGENT=$(echo "$AGENT" | tr -d '[:space:]')
     [ -z "$AGENT" ] && continue
-    RECENT=$(git log --oneline --since="${INTERVAL}2 minutes ago" --grep="^${AGENT}:" 2>/dev/null | head -1)
-    if [ -n "$RECENT" ]; then
-      HEALTH="${HEALTH}🦑"
-    else
-      EVER=$(git log --oneline --grep="^${AGENT}:" -1 2>/dev/null)
-      if [ -n "$EVER" ]; then
-        HEALTH="${HEALTH}👻"
+    # Fetch heartbeat branch silently
+    timeout 2 git fetch origin "heartbeat/${AGENT}" 2>/dev/null || true
+    HB_EPOCH=$(timeout 2 git log -1 --format="%ct" "origin/heartbeat/${AGENT}" 2>/dev/null) || true
+    if [ -n "$HB_EPOCH" ]; then
+      HB_AGE=$(( NOW - HB_EPOCH ))
+      if [ "$HB_AGE" -le "$HB_STALE_THRESHOLD" ]; then
+        HEALTH="${HEALTH}🦑"
       else
-        HEALTH="${HEALTH}🥚"
+        HEALTH="${HEALTH}👻"
       fi
+    else
+      HEALTH="${HEALTH}🥚"
     fi
   done
 

@@ -550,20 +550,23 @@ Print: `[🦑] Version bumped to vX.Y.Z — tag created and pushed.`
 
 Print: `[🦑] Checking agent health...`
 
-Check each dev agent's health using git log. An agent is healthy if it has pushed a commit within the last `2 × [INTERVAL]` minutes. Commits are identified by their prefix (e.g. `skill:`, `fe:`, `be:`).
+Check each agent's health using heartbeat branches. Each agent's boot script launches a background heartbeat process that pushes an orphan `heartbeat/<role>` branch every N seconds (configurable in `config.md` as `Heartbeat Interval Seconds`, default 10s).
 
 For each dev agent listed in `config.md`:
 
 ```bash
-git log --oneline --since="[2 × INTERVAL] minutes ago" --grep="^[AGENT]:"
+git fetch origin "heartbeat/[AGENT]" 2>/dev/null
+TIMESTAMP=$(git log -1 --format="%ai" "origin/heartbeat/[AGENT]" 2>/dev/null)
 ```
 
-- If commits found: agent is healthy.
-- If no recent commits but agent has committed before: agent may be on a **quiet cycle** (no work to do) or **stalled**. Check their tracker — if they have no open bugs and no approved features, they are idle (not stalled). Otherwise, log a warning in `qa-log.md` and append a Discussion note to the agent's `bugs.md`:
+Read the `Heartbeat Interval Seconds` value from `config.md` (default 10). An agent is stalled if the heartbeat timestamp is older than 3× the heartbeat interval.
+
+- If heartbeat branch exists and timestamp is recent: agent is healthy.
+- If heartbeat branch exists but timestamp is stale: agent is **stalled**. Log a warning in `qa-log.md` and append a Discussion note to the agent's `bugs.md`:
   ```
-  > [YYYY-MM-DD HH:MM] **pm/qa**: Agent appears stalled — no commits in last [2 × INTERVAL] minutes. Please check.
+  > [YYYY-MM-DD HH:MM] **pm/qa**: Agent appears stalled — heartbeat older than [3 × heartbeat interval]s. Please check.
   ```
-- If agent has never committed: agent may not have started yet — note in QA log.
+- If heartbeat branch does not exist: agent may not have started yet — note in QA log.
 
 ### Step 7b — Ingest GitHub Issues (if enabled)
 
@@ -951,7 +954,7 @@ A status line is shown at the bottom of your Claude Code session. It displays:
 
 - `🦑` (green) — you are active
 - `PM/QA` role label and current iteration number
-- **Agent health**: for each dev agent, `🦑` (green) if they committed within 2× the loop interval (checked via `git log --grep`), or `🦑✖` (red) if silent for longer — helps you spot stalled agents
+- **Agent health**: for each agent (PM + dev), `🦑` if heartbeat branch is recent (within 3× heartbeat interval), `👻` if stalled (heartbeat older than threshold), `🥚` if never started (no heartbeat branch)
 - Time since your last completed cycle
 
 The status line updates automatically after each assistant message. No action is required from you — it reads from iteration logs across all agents.

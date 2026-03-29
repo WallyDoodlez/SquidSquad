@@ -12,8 +12,12 @@ All notable changes to SquidSquad will be documented here.
 - **Open planning artifacts in VS Code** (FEAT-SKILL-024): After each planning phase (Research, Discussion, Planning), PM offers to open the artifact in VS Code via `AskUserQuestion` with three options: "Yes, open in VS Code", "No thanks", "Never ask again". "Never ask again" persists to `config.md` (`Open Artifacts in Editor: no`) and suppresses all future prompts. Falls back to printing the file path if `code` CLI is not available.
 - **Status bar redesign — Emoji Rich** (FEAT-SKILL-031): Complete rewrite of `statusline.sh`. Replaces ANSI-only design with expressive emoji indicators. Dev bar shows active task (🔨) or backlog (🐛/⭐/✅), version, context (🧠/🧠🔥/🧠💀 with colored text), countdown (🔄/🔜), git sync (↑N/↓N). PM bar adds ship counter (📦 with 🚀 near bump), planning phase (📋), and a second line with team health icons (🦑/👻/🥚) plus time-based rest nudge (🌙/😴/🛏️). Iteration number dropped; "time since" replaced by countdown only.
 - **Externalized statusline.sh** (BUG-SKILL-021): `statusline.sh` moved from inline code block in SKILL.md to `references/statusline.sh` as a standalone source file. Setup copies it to `.squidsquad/statusline.sh`; upgrade regenerates from the source. Consistent with the agent template externalization pattern.
+- **Heartbeat branches for agent health detection** (FEAT-SKILL-033): Replaces git-commit-based health detection with lightweight heartbeat branches. Each agent's boot script launches `heartbeat.sh` as a background process that force-pushes an orphan `heartbeat/<role>` branch every N seconds (configurable, default 10s) using `git mktree` + `git commit-tree` + `git push -f` — no checkout, no working tree impact, no commits on main. PM reads heartbeat timestamps to detect agent liveness. Solves false-stalled problem where agents on quiet cycles appeared dead. Works across machines.
 
 ### Fixed
+
+- Status bar line 2 now shows full squad (PM + all dev agents) instead of dev agents only (BUG-SKILL-022).
+- Status bar git commands now have 2-second timeouts to prevent line 2 disappearing during concurrent git operations (BUG-SKILL-023).
 
 - Boot logo in `settings.json` startup hook and all SKILL.md boot script templates now uses the canonical README squid design (BUG-SKILL-019).
 - Generated `skill/CLAUDE.md` and `pm/CLAUDE.md` now include cycle start/complete markers (`[🦑] ---- cycle N started/complete ----`) and feature pickup marker, matching the template spec (BUG-SKILL-018).
