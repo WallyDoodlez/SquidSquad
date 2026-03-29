@@ -11,6 +11,13 @@ All notable changes to SquidSquad will be documented here.
 - **Externalized agent templates** (FEAT-SKILL-017): Agent CLAUDE.md files are no longer 200+ line monoliths. Setup now generates shared template files in `.squidsquad/templates/` (e.g. `dev-agent-fe.md`, `pm-agent.md`) with all placeholders substituted at build time. Each agent's `.squidsquad/[role]/CLAUDE.md` is a small ~20-line bootstrapper containing role config and a Read instruction pointing to the template. Benefits: templates maintained in one place, upgrades only regenerate `templates/` without touching bootstrappers, much smaller per-agent files, cleaner separation of config and instructions. Upgrade auto-detects inline CLAUDE.md files (by checking for `## The Ralph Loop` heading) and migrates them to bootstrapper + template format.
 - **Open planning artifacts in VS Code** (FEAT-SKILL-024): After each planning phase (Research, Discussion, Planning), PM offers to open the artifact in VS Code via `AskUserQuestion` with three options: "Yes, open in VS Code", "No thanks", "Never ask again". "Never ask again" persists to `config.md` (`Open Artifacts in Editor: no`) and suppresses all future prompts. Falls back to printing the file path if `code` CLI is not available.
 - **Status bar redesign — Emoji Rich** (FEAT-SKILL-031): Complete rewrite of `statusline.sh`. Replaces ANSI-only design with expressive emoji indicators. Dev bar shows active task (🔨) or backlog (🐛/⭐/✅), version, context (🧠/🧠🔥/🧠💀 with colored text), countdown (🔄/🔜), git sync (↑N/↓N). PM bar adds ship counter (📦 with 🚀 near bump), planning phase (📋), and a second line with team health icons (🦑/👻/🥚) plus time-based rest nudge (🌙/😴/🛏️). Iteration number dropped; "time since" replaced by countdown only.
+- **Externalized statusline.sh** (BUG-SKILL-021): `statusline.sh` moved from inline code block in SKILL.md to `references/statusline.sh` as a standalone source file. Setup copies it to `.squidsquad/statusline.sh`; upgrade regenerates from the source. Consistent with the agent template externalization pattern.
+
+### Fixed
+
+- Boot logo in `settings.json` startup hook and all SKILL.md boot script templates now uses the canonical README squid design (BUG-SKILL-019).
+- Generated `skill/CLAUDE.md` and `pm/CLAUDE.md` now include cycle start/complete markers (`[🦑] ---- cycle N started/complete ----`) and feature pickup marker, matching the template spec (BUG-SKILL-018).
+- README.md updated with 5 missing shipped features: Subagent Delegation, Status Bar Chaining, Auto Versioning, Externalized Agent Templates, Open Planning Artifacts in VS Code. Quiet Cycle Skipping updated to mention silent output (BUG-SKILL-020).
 
 ---
 

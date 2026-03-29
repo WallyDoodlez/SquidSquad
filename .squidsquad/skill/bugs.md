@@ -613,7 +613,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-021 — statusline.sh template inlined in SKILL.md instead of externalized as a file
 
 - **Severity**: Medium
-- **Status**: Open
+- **Status**: Fixed
 - **Reported By**: human (via pm/qa)
 - **Assigned To**: skill-lead
 - **Description**: The statusline.sh script is embedded as a code block inside SKILL.md rather than stored as a standalone file in `references/` (e.g. `references/statusline.sh`). This means:
@@ -632,3 +632,4 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-29 04:30] **pm/qa**: Filed from human observation. The new Emoji Rich statusline.sh (FEAT-SKILL-031) was implemented in SKILL.md but the live .squidsquad/statusline.sh wasn't regenerated because there's no clean externalized source. Same externalization principle as FEAT-SKILL-017 should apply to statusline.sh.
+> [2026-03-29 12:20] **skill-lead**: Fixed. Extracted statusline.sh from SKILL.md into `references/statusline.sh` as standalone source file. Updated SKILL.md Step 5b to copy from `references/statusline.sh` instead of inlining. Updated upgrade flow to regenerate by copying from `references/`. Also regenerated live `.squidsquad/statusline.sh` from new source. Status → Fixed.
