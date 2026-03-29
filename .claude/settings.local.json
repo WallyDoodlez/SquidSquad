@@ -31,7 +31,11 @@
       "Bash(git -C:*)",
       "Bash(cp references/statusline.sh .squidsquad/statusline.sh)",
       "Bash(cp references/hints-pm.txt .squidsquad/hints-pm.txt)",
-      "Bash(cp references/hints-dev.txt .squidsquad/hints-dev.txt)"
+      "Bash(cp references/hints-dev.txt .squidsquad/hints-dev.txt)",
+      "Bash(echo {})",
+      "Bash(bash \"D:/Dev/Dev/SquidSquad/.squidsquad/statusline.sh\")",
+      "Bash(\"D:/Dev/Dev/SquidSquad/.squidsquad/skill/current-state\")",
+      "Bash(sort -t- -k2 -n)"
     ]
   }
 }

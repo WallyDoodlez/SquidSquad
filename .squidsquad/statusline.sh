@@ -108,13 +108,13 @@ fi
 get_line2() {
   local role_type="$1"  # "dev" or "pm"
 
-  # If there's an active step description, show it
+  # If there's an active step description, show it (🚧 prefix)
   if [ -n "$CURRENT_DESC" ]; then
-    # Truncate at 60 chars
-    if [ "${#CURRENT_DESC}" -gt 60 ]; then
-      CURRENT_DESC="${CURRENT_DESC:0:57}..."
+    # Truncate at 58 chars (60 minus 🚧 emoji width)
+    if [ "${#CURRENT_DESC}" -gt 58 ]; then
+      CURRENT_DESC="${CURRENT_DESC:0:55}..."
     fi
-    echo "  $CURRENT_DESC"
+    echo "  🚧 $CURRENT_DESC"
     return
   fi
 
@@ -156,12 +156,12 @@ get_line2() {
   local idx=$(( (NOW / 60) % ${#hints[@]} ))
   local hint="${hints[$idx]}"
 
-  # Truncate at 60 chars
-  if [ "${#hint}" -gt 60 ]; then
-    hint="${hint:0:57}..."
+  # Truncate at 58 chars (60 minus 💡 emoji width)
+  if [ "${#hint}" -gt 58 ]; then
+    hint="${hint:0:55}..."
   fi
 
-  echo "  $hint"
+  echo "  💡 $hint"
 }
 
 # === PM-specific segments ===

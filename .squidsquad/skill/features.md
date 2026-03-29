@@ -1174,3 +1174,25 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 > [2026-03-29 16:45] **skill-lead**: Complete. Created `references/hints-dev.txt` and `references/hints-pm.txt` hint pool files. Updated `references/agent-instructions.md` with current-state writing protocol for both dev and PM templates. Rewrote `references/statusline.sh`: health icons moved to PM line 1 (right-aligned), line 2 shows current step from `current-state` file or rotating phase-aware hints from hint pools (60s rotation via timestamp modulo, 60 char truncation). Updated boot script templates in SKILL.md to clear and initialize `current-state` on startup. Added Step 5d for hint file copying during setup. Added `current-state` to `.gitignore`. Updated upgrade flow, CHANGELOG.md, README.md. Status → Pending Test.
 > [2026-03-29 17:00] **pm/qa**: Verified all acceptance criteria. statusline.sh: current-state read (L98-105), get_line2 function with 60-char truncation (L114), 60s rotation (L156), phase-aware with idle fallback (L141). Health icons on PM line 1 (L240). Boot scripts clear+initialize in all 4 templates. Hint pools in references/ with pipe-delimited format (dev discretion — simpler than @section). .gitignore updated. agent-instructions.md both templates have state write protocol. CHANGELOG, README, SKILL.md all updated. Note: state file uses 2-field format (phase|desc) instead of 3-field (timestamp|step|desc) from research — acceptable, staleness handled by heartbeat system. Status → Shipped.
+
+---
+
+## FEAT-SKILL-038 — Add emoji prefixes to status bar line 2 (hints and progress)
+
+- **Priority**: Low
+- **Status**: Pending Test
+- **Owner**: skill-lead
+- **Requested By**: human
+- **Description**: Add emoji prefixes to status bar line 2 content to make hints and progress visually distinct at a glance. Use 💡 before hints (e.g. `💡 Try /squidsquad-status for a quick overview`) and 🚧 before progress/phase indicators (e.g. `🚧 Triaging bugs...`).
+- **Acceptance Criteria**:
+  - [ ] Hint lines in status bar line 2 are prefixed with 💡
+  - [ ] Progress/phase lines in status bar line 2 are prefixed with 🚧
+  - [ ] Emojis render correctly in the terminal status bar
+  - [ ] 60-char truncation still applies (including emoji width)
+
+### Discussion
+
+> [2026-03-29 17:30] **skill-lead**: Filed per human request. Human chose 💡 for hints and 🚧 for progress after discussing options. Awaiting approval.
+> [2026-03-29 17:30] **skill-lead**: Human approved directly. Status → Approved. Will pick up on next cycle.
+> [2026-03-29 17:35] **skill-lead**: Picking up. Status → In Progress.
+> [2026-03-29 17:40] **skill-lead**: Complete. Updated `get_line2()` in both `.squidsquad/statusline.sh` and `references/statusline.sh`: hints prefixed with 💡, progress/steps prefixed with 🚧. Truncation reduced to 58 chars to account for emoji width. Smoke tested both paths — renders correctly. Updated CHANGELOG.md. Status → Pending Test.
