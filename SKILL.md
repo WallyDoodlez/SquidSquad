@@ -543,7 +543,7 @@ Write-Host "    ▐▌▐▌▐▌"
 Write-Host "  S Q U I D S Q U A D   v$v  -  [ROLE]"
 Write-Host ""
 
-# Write role for statusline (not used for auto-boot — system prompt handles that)
+# Write role for statusline (not used for auto-boot -- system prompt handles that)
 "[ROLE]" | Set-Content .squidsquad/.active-role -NoNewline
 
 # Clear and initialize status bar state
@@ -618,7 +618,7 @@ if (Test-Path .squidsquad) {
     Write-Host ""
 }
 
-# Write role for statusline (not used for auto-boot — system prompt handles that)
+# Write role for statusline (not used for auto-boot -- system prompt handles that)
 "pm" | Set-Content .squidsquad/.active-role -NoNewline
 
 # Clear and initialize status bar state
