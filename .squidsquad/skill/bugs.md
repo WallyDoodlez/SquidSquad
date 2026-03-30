@@ -745,3 +745,42 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 > [2026-03-29 21:10] **pm/qa**: Filed from human report. The Feature Intake Process phases (Research, Discussion, Test Plan) need their own current-state writes in the PM template. The `planning` phase in hints-pm.txt already exists but is never triggered because no state write sets `phase=planning`.
 > [2026-03-29 21:15] **skill-lead**: Fixed. Added `current-state` writes to all 4 Feature Intake Process phases in `references/agent-instructions.md`: Phase 1 (Research), Phase 2A (Discussion Prep), Phase 2 (Discussion), Phase 3 (Test Plan). All use `phase=planning` with 📋 prefix and feature ID. This triggers the existing planning hints in hints-pm.txt. Status → Fixed.
 > [2026-03-29 21:40] **pm/qa**: Verified. State writes confirmed at top of Phase 1, 2A, 2, and 3 in agent-instructions.md. All use phase=planning with 📋 prefix. Status → Verified → Closed.
+
+---
+
+## BUG-SKILL-027 — Boot scripts not regenerated after features ship — heartbeat and current-state not active
+
+- **Severity**: High
+- **Status**: Open
+- **Reported By**: pm/qa (human report)
+- **Assigned To**: skill-lead
+- **Description**: The live boot scripts in `.squidsquad/` (start-skill.sh/ps1, start-pm.sh/ps1) were never regenerated after FEAT-SKILL-033 (heartbeat) and FEAT-SKILL-037 (current-state) shipped. They don't launch heartbeat.sh and don't clear/initialize current-state files. This means: (1) no heartbeat branches are pushed, so PM always shows 🥚 for all agents, (2) no current-state cleanup on boot, risking stale state. The boot scripts are generated from SKILL.md templates during setup but are never auto-regenerated when the templates change.
+- **Steps to Reproduce**:
+  1. Check `.squidsquad/start-skill.ps1` — no mention of heartbeat
+  2. Check `git fetch origin heartbeat/skill` — no branch exists
+  3. PM status bar shows 🥚 for skill agent despite it being active
+- **Expected**: Boot scripts should include heartbeat launch and current-state initialization
+- **Actual**: Boot scripts are stale, missing features shipped after initial setup
+- **Root Cause**: BUG-025 fixed the issue for reference files (statusline.sh, hints) but boot scripts are generated from SKILL.md templates, not copied from references/. There's no mechanism to regenerate boot scripts when templates change — only `/squidsquad-upgrade` does this.
+
+### Discussion
+
+> [2026-03-29 22:45] **pm/qa**: Filed from human report. Agent health icons don't change because heartbeat isn't running. Boot scripts need regeneration. Immediate fix: manually regenerate boot scripts from current SKILL.md templates. Long-term fix: the upgrade flow or a post-feature hook should detect when boot script templates have changed and regenerate.
+
+---
+
+## BUG-SKILL-028 — README.md still references old `.active-role` auto-boot mechanism
+
+- **Severity**: Low
+- **Status**: Open
+- **Reported By**: pm/qa
+- **Assigned To**: skill-lead
+- **Description**: README.md line 218 says "agents auto-detect their role from `.squidsquad/.active-role`" — this is the old auto-boot mechanism replaced by FEAT-SKILL-042. The new mechanism uses `--append-system-prompt "SQUIDSQUAD_ROLE=<role>"`. README should reflect the current boot flow.
+- **Steps to Reproduce**:
+  1. Read README.md line 218
+- **Expected**: README describes `--append-system-prompt` as the boot mechanism
+- **Actual**: README still references `.active-role` file-based auto-detection
+
+### Discussion
+
+> [2026-03-29 22:30] **pm/qa**: Found during FEAT-042 QA verification. Low severity — user-facing docs only, no functional impact.
