@@ -651,7 +651,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 - **Priority**: Medium
 - **Owner**: skill-lead
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Description**: When the Feature Intake Process is interrupted (e.g., context reset, PM restart) and planning resumes, the PM should intelligently handle already-completed phases:
 
   **Two scenarios:**
@@ -686,6 +686,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 21:10] **pm/qa**: Human approved. Refined staleness logic: auto-reuse if no code changes since artifact commit (check git log for commits touching references/, SKILL.md, CHANGELOG.md). Only ask user if code has changed since the artifact was created. Status → Approved.
 > [2026-03-29 21:35] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-29 21:40] **skill-lead**: Complete. Added "Artifact Resume Logic" section to `references/agent-instructions.md` before Phase 1, defining the 3-case check (uncommitted→skip, committed+no changes→reuse, committed+changes→ask user). Added resume check references to all 4 phases (Phase 1, 2A, 2, 3). Updated CHANGELOG.md. Status → Pending Test.
+> [2026-03-29 22:10] **pm/qa**: Verified all acceptance criteria. Artifact Resume Logic section defines 3 cases. All 4 phases have resume checks. Code change detection via git log on references/, SKILL.md, CHANGELOG.md. CHANGELOG updated. Status → Shipped.
 
 ---
 
@@ -1290,3 +1291,34 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 21:20] **skill-lead**: Filed per human request. Key design question: should auto-explore be a subagent or inline? Subagent is better for context isolation. Status: Pending — awaiting human approval.
 > [2026-03-29 21:25] **skill-lead**: Updated per human feedback. Expanded scope: not just codebase scanning but also interviewing the user about their goals, priorities, and how they want to work. CLAUDE.md becomes a full project context doc, not just a tech summary. Added skip option.
 > [2026-03-29 21:30] **skill-lead**: Updated again per human feedback. Added Part B — guided agent selection. Current Step 1 asks for dev agents as freeform list; should instead walk through each role type SquidSquad supports (dev, DM, designer) one at a time. Dev agents are named (BE/FE/etc.), other roles are yes/no. Human redirecting to PM for further discussion and approval.
+> [2026-03-29 21:45] **pm/qa**: Human feedback on Part B role descriptions. Each role step should briefly describe the role so the user understands what they're adding:
+> - **Dev agent**: All-around developer. Just give it a name (e.g. FE, BE, DevOps, skill). Can add multiple.
+> - **Delivery Manager (DM)**: Owns the "last mile" of shipping — README updates, CHANGELOG entries, user-facing documentation. Takes over after PM verifies a feature, packages it for users.
+> - **Designer**: (description TBD when FEAT-SKILL-027 is designed)
+>
+> **Dependency note**: DM role (FEAT-SKILL-035) and Designer role (FEAT-SKILL-027) are both Pending. Part B of this feature can only fully offer those roles once their templates exist. Options: (1) ship Part B with dev-only now, add DM/designer prompts as those features ship, or (2) wait until at least FEAT-035 ships. Recommend option 1 — ship dev-only guided selection now, wire in new roles as they land.
+
+---
+
+## FEAT-SKILL-042 — SquidSquad only activates when launched via boot scripts, never on normal Claude sessions
+
+- **Priority**: High
+- **Status**: Approved
+- **Requested By**: human
+- **Description**: Change the auto-boot mechanism so SquidSquad ONLY activates when launched via a boot script (`start-*.sh` / `start-*.ps1`). A normal `claude` session in the same repo must never trigger SquidSquad auto-boot — no Ralph Loop, no status bar override, no heartbeat. Currently the auto-boot block in CLAUDE.md checks for `.squidsquad/.active-role`, which can be left over from another terminal's boot script, causing unintended SquidSquad activation.
+- **Rationale**: The user should be able to open Claude in a SquidSquad-enabled repo and get a normal Claude session. Only explicitly launching via boot scripts should activate SquidSquad. The current file-based trigger (`.active-role`) leaks across terminals.
+- **Acceptance Criteria**:
+  - [ ] Normal `claude` sessions in a SquidSquad repo do NOT auto-boot into SquidSquad
+  - [ ] Boot scripts are the ONLY way to activate SquidSquad agents
+  - [ ] No leftover files from one session can trigger auto-boot in another
+  - [ ] Boot scripts set a session-only signal (e.g. env var `SQUIDSQUAD=1`) that CLAUDE.md checks instead of a file
+  - [ ] CLAUDE.md auto-boot block updated to check the new signal
+  - [ ] `.active-role` file no longer used as the trigger (may still be used internally after boot)
+  - [ ] Status bar, heartbeat, and all SquidSquad features only activate in boot-script sessions
+  - [ ] SKILL.md boot script templates updated
+  - [ ] Upgrade steps migrate existing installs
+
+### Discussion
+
+> [2026-03-29 21:50] **pm/qa**: Filed from human request. Original filing was about a "normal mode" boot script, but human clarified: the issue is that SquidSquad should NEVER activate on normal Claude sessions — only via boot scripts. Reframed as an auto-boot mechanism change. Recommended approach: boot scripts set env var `SQUIDSQUAD=1`, CLAUDE.md checks env var instead of `.active-role` file. No file = no leakage across terminals.
+> [2026-03-29 21:55] **pm/qa**: Human approved. Status → Approved.
