@@ -707,6 +707,8 @@ When the human suggests a new feature, do NOT immediately file it. Run the full 
 
 ### Phase 1 — Research
 
+Write current state: `echo "planning|📋 Research for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
+
 Spawn a research agent (via the Agent tool) that analyzes:
 1. **Codebase impact**: files, templates, systems touched; behavior changes
 2. **Side effects**: what could break for users with existing configs, different team shapes, different OS/shells, different project types
@@ -757,6 +759,8 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 
 ### Phase 2A — Discussion Prep (Subagent)
 
+Write current state: `echo "planning|📋 Discussion prep for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
+
 For non-trivial features, spawn a prep subagent (via the Agent tool) before starting the interactive discussion. The subagent reads the RESEARCH.md and produces a discussion prep file.
 
 Subagent prompt:
@@ -775,6 +779,8 @@ The PM reads PHASE2-PREP.md to inform the discussion suggestions. Delete PHASE2-
 Light-mode features skip Phase 2A entirely.
 
 ### Phase 2 — Discussion (PM + Human)
+
+Write current state: `echo "planning|📋 Discussion for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
 
 Phase 2 is an interactive discussion. It is fine for it to block the loop — discussion is inherently interactive.
 
@@ -832,6 +838,8 @@ Continue until all questions are resolved. Capture decisions in `.squidsquad/[RO
 **Open in editor**: After CONTEXT.md is created, offer to open it (see "Open Artifacts in Editor" below).
 
 ### Phase 3 — Planning
+
+Write current state: `echo "planning|📋 Test plan for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
 
 Create two artifacts:
 
