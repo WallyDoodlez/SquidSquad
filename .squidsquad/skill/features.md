@@ -651,7 +651,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 - **Priority**: Medium
 - **Owner**: skill-lead
-- **Status**: Approved
+- **Status**: Pending Test
 - **Description**: When the Feature Intake Process is interrupted (e.g., context reset, PM restart) and planning resumes, the PM should intelligently handle already-completed phases:
 
   **Two scenarios:**
@@ -684,6 +684,8 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 > [2026-03-28 12:00] **pm/qa**: Filed from human request. Smart resume for interrupted planning — detect existing artifacts and either skip or ask user. Two behaviors: uncommitted = auto-skip, committed = prompt user. Status: Pending — awaiting human approval.
 > [2026-03-29 21:10] **pm/qa**: Human approved. Refined staleness logic: auto-reuse if no code changes since artifact commit (check git log for commits touching references/, SKILL.md, CHANGELOG.md). Only ask user if code has changed since the artifact was created. Status → Approved.
+> [2026-03-29 21:35] **skill-lead**: Picking up. Status → In Progress.
+> [2026-03-29 21:40] **skill-lead**: Complete. Added "Artifact Resume Logic" section to `references/agent-instructions.md` before Phase 1, defining the 3-case check (uncommitted→skip, committed+no changes→reuse, committed+changes→ask user). Added resume check references to all 4 phases (Phase 1, 2A, 2, 3). Updated CHANGELOG.md. Status → Pending Test.
 
 ---
 

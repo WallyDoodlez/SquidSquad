@@ -705,9 +705,27 @@ When the human suggests a new feature, do NOT immediately file it. Run the full 
 
 **Light mode**: For trivial/cosmetic features (typo fixes, config tweaks, doc-only changes), skip Phase 1 (Research) and Phase 2A (prep), abbreviate Phase 2. Phase 3 (test plan subagent) and Phase 5 (QA subagent) still run. Use your judgment: if the feature touches behavior or user-facing systems, use the full flow.
 
+### Artifact Resume Logic
+
+Before starting each planning phase, check if its output artifact already exists in `.squidsquad/[ROLE]/planning/`:
+
+1. **File exists but uncommitted** (in working tree or staged but not pushed): Skip the phase automatically. Print: `[🦑] RESEARCH.md already exists (uncommitted) — skipping Phase 1.`
+2. **File exists and committed**: Check for code changes since the artifact was created:
+   ```bash
+   ARTIFACT_COMMIT=$(git log -1 --format="%H" -- .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-RESEARCH.md)
+   CHANGES=$(git log --oneline "$ARTIFACT_COMMIT"..HEAD -- references/ SKILL.md CHANGELOG.md)
+   ```
+   - If no changes: auto-reuse silently. Print: `[🦑] RESEARCH.md exists and code unchanged — reusing.`
+   - If changes found: ask the user via `AskUserQuestion`: "RESEARCH.md exists from a previous session but code has changed since. Re-research or reuse?" Options: `["Re-research (recommended)", "Reuse existing"]`.
+3. **File doesn't exist**: Run the phase normally.
+
+Apply this logic to: `RESEARCH.md` (Phase 1), `PHASE2-PREP.md` (Phase 2A), `CONTEXT.md` (Phase 2), `TEST-PLAN.md` (Phase 3).
+
 ### Phase 1 — Research
 
 Write current state: `echo "planning|📋 Research for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
+
+**Check artifact resume** (see above) for `FEAT-[ROLE_UPPER]-XXX-RESEARCH.md`. If skipping, proceed to Phase 2A.
 
 Spawn a research agent (via the Agent tool) that analyzes:
 1. **Codebase impact**: files, templates, systems touched; behavior changes
@@ -761,6 +779,8 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 
 Write current state: `echo "planning|📋 Discussion prep for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
 
+**Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-PHASE2-PREP.md`. If skipping, proceed to Phase 2.
+
 For non-trivial features, spawn a prep subagent (via the Agent tool) before starting the interactive discussion. The subagent reads the RESEARCH.md and produces a discussion prep file.
 
 Subagent prompt:
@@ -781,6 +801,8 @@ Light-mode features skip Phase 2A entirely.
 ### Phase 2 — Discussion (PM + Human)
 
 Write current state: `echo "planning|📋 Discussion for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
+
+**Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-CONTEXT.md`. If skipping, proceed to Phase 3.
 
 Phase 2 is an interactive discussion. It is fine for it to block the loop — discussion is inherently interactive.
 
@@ -840,6 +862,8 @@ Continue until all questions are resolved. Capture decisions in `.squidsquad/[RO
 ### Phase 3 — Planning
 
 Write current state: `echo "planning|📋 Test plan for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
+
+**Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md`. If skipping, the feature is ready — update status to `Approved`.
 
 Create two artifacts:
 
