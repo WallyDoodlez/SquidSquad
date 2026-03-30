@@ -752,7 +752,7 @@ The script implements the **Emoji Rich** status bar design:
 - **🔨 FEAT-XXX / BUG-XXX** — active task from working-state.md (dev only, replaces backlog)
 - **✅ clear** — dev backlog empty, no active task
 - **🧠** — context always shown; 🧠🔥 at 50-74% (yellow text); 🧠💀 at 75%+ (red text); green text < 50%
-- **🔄 Nm** — next-cycle countdown; switches to **🔜 <1m** when under 1 minute
+- **🔄 Nm** — next-cycle countdown; switches to **🔜 <1m** when under 1 minute; switches to **⏰ +Nm** when overdue (agent's cycle exceeded the iteration interval — triggers immediately at boundary, no grace period)
 - **Line 1 health icons** — (PM only, right-aligned) 🦑 healthy, 👻 stalled, 🥚 never started + rest nudge emoji
 - **Line 2** — current step (emoji + description from `current-state` file, truncated at 60 chars) OR rotating contextual hints when idle (from hint pool files, rotates every 60s, phase-aware)
 

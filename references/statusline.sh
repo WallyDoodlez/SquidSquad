@@ -68,7 +68,8 @@ if [ -n "$LATEST" ]; then
     ELAPSED=$(( (NOW - LAST_MOD) / 60 ))
     REMAINING=$(( INTERVAL - ELAPSED ))
     if [ "$REMAINING" -le 0 ]; then
-      TIMER_STR="🔜 <1m"
+      OVERDUE=$(( ELAPSED - INTERVAL ))
+      TIMER_STR="⏰ +${OVERDUE}m"
     elif [ "$REMAINING" -le 1 ]; then
       TIMER_STR="🔜 <1m"
     else
