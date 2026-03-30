@@ -144,7 +144,7 @@ Open `.squidsquad/skill/features.md`. Pick the next feature with status `Approve
 5. Implement the feature according to the acceptance criteria. Respect locked decisions from CONTEXT.md. Implement required side effect mitigations. Update working state as you complete sub-steps.
 6. Run the test command: `echo "Skill repo — no automated tests. Validate SKILL.md manually."`
 7. **Run smoke tests** from TEST-PLAN.md (if it exists) before marking as Pending Test.
-8. **Update docs**: If the change affects user-facing behavior, update `README.md` and any relevant sections of `SKILL.md` (feature descriptions, setup instructions) to reflect the new functionality. Keep docs in sync with shipped behavior.
+8. **Update docs**: Update only technical documentation (API docs, code comments, architecture notes). User-facing docs (README user guides, CHANGELOG, "what's new") are handled by the Delivery Manager (DM). If the change affects user-facing behavior, append delivery notes to the Discussion describing what changed and what users need to know — DM will consume these when creating the delivery package.
 9. **Copy changed references to live**: If any files in `references/` were modified (e.g. `statusline.sh`, `hints-*.txt`, `agent-instructions.md`), copy them to the live `.squidsquad/` location so changes take effect immediately. For example: `cp references/statusline.sh .squidsquad/statusline.sh`, `cp references/hints-*.txt .squidsquad/`.
 10. If tests and smoke tests pass:
    - Update status to `Pending Test`.

@@ -199,7 +199,10 @@ if [ "$ROLE" = "pm" ]; then
 
   # Agent health icons: 🦑 healthy, 👻 stalled, 🥚 never started
   # Uses heartbeat branches (heartbeat/<role>) for accurate health detection
-  ALL_AGENTS="pm $AGENTS"
+  # Include DM in health check if it exists
+  DM_AGENT=""
+  [ -d "$SQDIR/dm" ] && DM_AGENT="dm"
+  ALL_AGENTS="pm $AGENTS $DM_AGENT"
   HEALTH=""
   HB_INTERVAL=$(grep 'Heartbeat Interval Seconds' "$SQDIR/config.md" 2>/dev/null | grep -oE '[0-9]+')
   HB_INTERVAL=${HB_INTERVAL:-10}
@@ -242,6 +245,53 @@ if [ "$ROLE" = "pm" ]; then
 
   # Line 2: current step or rotating hint
   LINE2=$(get_line2 "pm")
+
+  echo -e "${LINE1}"
+  [ -n "$LINE2" ] && echo -e "${LINE2}"
+
+# === DM segments ===
+elif [ "$ROLE" = "dm" ]; then
+  ROLE_LABEL="DM"
+
+  # Check working state for active task
+  WS_FILE="$SQDIR/$ROLE/working-state.md"
+  ACTIVE_TASK=""
+  if [ -f "$WS_FILE" ]; then
+    WS_STATUS=$(grep '^\- \*\*Status\*\*:' "$WS_FILE" 2>/dev/null | head -1)
+    if echo "$WS_STATUS" | grep -q 'in-progress'; then
+      ACTIVE_TASK=$(grep '^\- \*\*Task\*\*:' "$WS_FILE" 2>/dev/null | sed 's/.*: //' | tr -d '[:space:]')
+    fi
+  fi
+
+  if [ -n "$ACTIVE_TASK" ] && [ "$ACTIVE_TASK" != "none" ]; then
+    WORK_STR="📦 ${ACTIVE_TASK}"
+  else
+    # Count Pending Ship items across all dev agent trackers
+    AGENTS=$(grep 'Dev Agents' "$SQDIR/config.md" 2>/dev/null | sed 's/.*: //' | tr ',' ' ')
+    PSHIP_COUNT=0
+    for AGENT in $AGENTS; do
+      AGENT=$(echo "$AGENT" | tr -d '[:space:]')
+      [ -z "$AGENT" ] && continue
+      FEATS_FILE="$SQDIR/$AGENT/features.md"
+      if [ -f "$FEATS_FILE" ]; then
+        C=$(grep -cE '^\- \*\*Status\*\*: Pending Ship' "$FEATS_FILE" 2>/dev/null) || true
+        PSHIP_COUNT=$(( PSHIP_COUNT + ${C:-0} ))
+      fi
+    done
+
+    if [ "$PSHIP_COUNT" -eq 0 ]; then
+      WORK_STR="✅ clear"
+    else
+      WORK_STR="📦${PSHIP_COUNT} pending"
+    fi
+  fi
+
+  LINE1="🦑 ${ROLE_LABEL} v${VERSION} │ ${WORK_STR}"
+  [ -n "$GIT_SYNC" ] && LINE1="${LINE1} │ ${GIT_SYNC}"
+  LINE1="${LINE1} │ ${CTX_STR} │ ${TIMER_STR}"
+
+  # Line 2: current step or rotating hint
+  LINE2=$(get_line2 "dm")
 
   echo -e "${LINE1}"
   [ -n "$LINE2" ] && echo -e "${LINE2}"

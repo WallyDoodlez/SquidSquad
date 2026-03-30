@@ -1,12 +1,13 @@
 # SquidSquad Config
 
 - **SquidSquad Version**: 0.7.0
-- **Tracker Schema**: 1
+- **Tracker Schema**: 2
 
 ## Agents
 
 - **Dev Agents**: skill
 - **PM/QA**: always present
+- **DM**: always present
 
 ## Project
 

@@ -70,13 +70,19 @@ When you invoke SquidSquad, it creates the following inside your project root. O
 ├── config.md                   ← project config, test commands, counters, git protocol
 ├── templates/                  ← shared agent instruction templates (build-time substituted)
 │   ├── dev-agent-be.md         ← full Ralph Loop instructions for BE Lead
-│   └── pm-agent.md             ← full Ralph Loop instructions for PM/QA
+│   ├── pm-agent.md             ← full Ralph Loop instructions for PM/QA
+│   └── dm-agent.md             ← full Ralph Loop instructions for Delivery Manager
 ├── start-be.sh / start-be.ps1  ← boot script: launches BE Lead (autonomous)
 ├── start-pm.sh / start-pm.ps1  ← boot script: launches PM/QA (interactive)
+├── start-dm.sh / start-dm.ps1  ← boot script: launches Delivery Manager (autonomous)
 ├── be/                         ← one folder per dev agent, named after the role
 │   ├── CLAUDE.md               ← bootstrapper (~20 lines): role config + Read instruction to template
 │   ├── bugs.md                 ← BUG-BE-XXX tracker with Discussion sections
 │   ├── features.md             ← FEAT-BE-XXX tracker with Discussion sections
+│   └── iterations/             ← iter-N.md logs per cycle
+├── dm/                         ← Delivery Manager (hardcoded, always present)
+│   ├── CLAUDE.md               ← bootstrapper: role config + Read instruction to template
+│   ├── working-state.md        ← crash recovery state
 │   └── iterations/             ← iter-N.md logs per cycle
 └── pm/
     ├── CLAUDE.md               ← bootstrapper (~20 lines): role config + Read instruction to template
@@ -85,6 +91,8 @@ When you invoke SquidSquad, it creates the following inside your project root. O
     ├── iterations/             ← iter-N.md logs per cycle
     └── migrations/             ← migration logs written when tracker schema changes
 ```
+
+> **Note:** DM uses shared dev agent trackers (no `dm/features.md` or `dm/bugs.md`). DM reads `Pending Ship` items from dev agent trackers and writes Discussion entries directly there.
 
 For `fe, be` the structure gains a `fe/` folder and `start-fe.sh/.ps1` alongside `be/`.
 
@@ -124,7 +132,7 @@ Status flow: `Open` → `Investigating` → `Fixed` → `Verified` → `Closed`
 ## FEAT-FE-001 — [Title]
 
 - **Priority**: Critical | High | Medium | Low
-- **Status**: Pending | Planning | Approved | In Progress | Pending Test | Shipped
+- **Status**: Pending | Planning | Approved | In Progress | Pending Test | Pending Ship | Shipped
 - **Owner**: fe-lead
 - **Description**: What to build.
 - **Acceptance Criteria**:
@@ -137,12 +145,13 @@ Status flow: `Open` → `Investigating` → `Fixed` → `Verified` → `Closed`
 > [2026-01-15 09:30] **human**: Approved. Go ahead.
 > [2026-01-15 10:00] **fe-lead**: Picking this up. Status → In Progress.
 > [2026-01-15 12:00] **fe-lead**: Complete. Status → Pending Test.
-> [2026-01-15 13:00] **pm/qa**: Tested and passing. Status → Shipped.
+> [2026-01-15 13:00] **pm/qa**: Tested and passing. Status → Pending Ship.
+> [2026-01-15 14:00] **dm**: Delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped.
 ```
 
-Status flow: `Pending` → `Planning` → `Approved` → `In Progress` → `Pending Test` → `Shipped` (or `Rejected`)
+Status flow: `Pending` → `Planning` → `Approved` → `In Progress` → `Pending Test` → `Pending Ship` → `Shipped` (or `Rejected`)
 
-> **Note:** `Pending` means awaiting human approval. `Planning` means human approved and PM is running the Feature Intake Process (Research → Discussion → Planning). `Approved` means planning is complete and a dev agent can pick it up. `Rejected` means PM recommends against it — human can override.
+> **Note:** `Pending` means awaiting human approval. `Planning` means human approved and PM is running the Feature Intake Process (Research → Discussion → Planning). `Approved` means planning is complete and a dev agent can pick it up. `Pending Ship` means PM verified and DM will handle delivery (docs, CHANGELOG, version bump). `Rejected` means PM recommends against it — human can override.
 
 ### Feature Lifecycle (5-Phase)
 
@@ -205,7 +214,7 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 3. Run full e2e test command (from config.md)
 4. Log results to pm/qa-log.md
 5. If tests fail: file BUG-[ROLE]-XXX to the appropriate dev agent's tracker
-6. Scan each dev agent's features.md for Pending Test items → verify → update to Shipped
+6. Scan each dev agent's features.md for Pending Test items → verify → update to Pending Ship (DM handles delivery → Shipped)
 6b. If PR Flow enabled: monitor open PRs, sync comments/merges/changes to trackers
 7. Scan each dev agent's bugs.md for Fixed items → verify → update to Verified/Closed
 7b. If GitHub Issues ingestion enabled: `gh issue list` → ingest new issues into trackers
@@ -410,7 +419,7 @@ This step creates two things per agent: a **template** (full instructions with a
 
 #### Step 4a — Generate Template Files
 
-Read `references/agent-instructions.md`. For each dev agent role, copy Template 1 (Dev Agent) into `.squidsquad/templates/dev-agent-[role].md`, substituting all placeholders (`[ROLE]`, `[ROLE_UPPER]`, `[ROLE_TEST_CMD]`, `[OTHER_ROLES]`, `[INTERVAL]`) with values from config.md. For PM/QA, copy Template 2 into `.squidsquad/templates/pm-agent.md`, substituting `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]`.
+Read `references/agent-instructions.md`. For each dev agent role, copy Template 1 (Dev Agent) into `.squidsquad/templates/dev-agent-[role].md`, substituting all placeholders (`[ROLE]`, `[ROLE_UPPER]`, `[ROLE_TEST_CMD]`, `[OTHER_ROLES]`, `[INTERVAL]`) with values from config.md. For PM/QA, copy Template 2 into `.squidsquad/templates/pm-agent.md`, substituting `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]`. For DM, copy Template 3 into `.squidsquad/templates/dm-agent.md`, substituting `[ACTIVE_AGENTS]`, `[INTERVAL]`, and `[ROLE_UPPER]` placeholders.
 
 The resulting template files contain the complete Ralph Loop instructions with no remaining placeholders — agents never see `[ROLE]` syntax.
 
@@ -456,6 +465,18 @@ You MUST read `.squidsquad/templates/pm-agent.md` NOW for your complete Ralph Lo
 
 If the template file cannot be read, print: "ERROR: Template file `.squidsquad/templates/pm-agent.md` not found. Run `/squidsquad-upgrade` to regenerate templates." and stop.
 ```
+
+For DM (Delivery Manager), generate `.squidsquad/dm/CLAUDE.md`:
+
+```markdown
+# SquidSquad — Delivery Manager (DM)
+
+You are the Delivery Manager on the SquidSquad autonomous dev team. You own the "last mile" of shipping — when a feature reaches `Pending Ship` status, you take over to create a delivery package of all user-facing materials before marking the feature `Shipped`.
+
+Read `.squidsquad/templates/dm-agent.md` for your full instructions. Follow the Ralph Loop defined there.
+```
+
+Also create `.squidsquad/dm/working-state.md` (empty working state) and `.squidsquad/dm/iterations/` directory.
 
 #### Step 4c — Root CLAUDE.md
 
@@ -637,6 +658,81 @@ try {
 
 > **Note:** All agents use a positional arg to send the first message (kickstarting the Ralph Loop) in an interactive session. The user can observe progress and comment in any agent's terminal.
 
+**`start-dm.sh`** (DM uses the same pattern as dev agents — it's autonomous):
+```bash
+#!/bin/bash
+cd "$(git rev-parse --show-toplevel)"
+
+if [ -d .squidsquad ]; then
+  V=$(grep -o '[0-9][0-9.]*[0-9]' .squidsquad/config.md 2>/dev/null | head -1)
+  cat << LOGO
+
+      ▗▄▖
+     ▟█ █▙
+    ▐█• •█▌
+   ███████
+   ▐█████▌
+    ▐▌▐▌▐▌
+  S Q U I D S Q U A D   v${V:-?}  —  DM
+
+LOGO
+fi
+
+# Write role for statusline
+echo "dm" > .squidsquad/.active-role
+
+# Clear and initialize status bar state
+rm -f .squidsquad/dm/current-state
+echo "idle|Initializing..." > .squidsquad/dm/current-state
+
+# Launch heartbeat in background
+HB_INTERVAL=$(grep 'Heartbeat Interval Seconds' .squidsquad/config.md 2>/dev/null | grep -oE '[0-9]+')
+HB_INTERVAL=${HB_INTERVAL:-10}
+bash .squidsquad/heartbeat.sh "dm" "$HB_INTERVAL" &
+HB_PID=$!
+trap "kill $HB_PID 2>/dev/null" EXIT
+
+claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=dm" "start the loop"
+```
+
+**`start-dm.ps1`**:
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$repoRoot = git rev-parse --show-toplevel
+Set-Location $repoRoot
+
+if (Test-Path .squidsquad) {
+    $config = Get-Content .squidsquad/config.md -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
+    $v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
+
+    Write-Host ""
+    Write-Host "      ▗▄▖"
+    Write-Host "     ▟█ █▙"
+    Write-Host "    ▐█• •█▌"
+    Write-Host "   ███████"
+    Write-Host "   ▐█████▌"
+    Write-Host "    ▐▌▐▌▐▌"
+    Write-Host "  S Q U I D S Q U A D   v$v  -  DM"
+    Write-Host ""
+}
+
+# Write role for statusline
+"dm" | Set-Content .squidsquad/.active-role -NoNewline
+
+# Clear and initialize status bar state
+Remove-Item .squidsquad/dm/current-state -ErrorAction SilentlyContinue
+"idle|Initializing..." | Set-Content .squidsquad/dm/current-state -NoNewline
+
+# Launch heartbeat in background
+$hbInterval = if ($config -match 'Heartbeat Interval Seconds.*?(\d+)') { $Matches[1] } else { '10' }
+$hbProc = Start-Process -FilePath "bash" -ArgumentList ".squidsquad/heartbeat.sh", "dm", $hbInterval -PassThru -NoNewWindow
+try {
+    claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=dm" "start the loop"
+} finally {
+    Stop-Process -Id $hbProc.Id -ErrorAction SilentlyContinue
+}
+```
+
 Make the `.sh` scripts executable (`chmod +x`).
 
 ### Step 5b — Generate Status Line Script
@@ -701,7 +797,7 @@ _Bugs are filed in BUG-[TEAM]-XXX format. Each entry includes a Discussion secti
 ```markdown
 # Feature Tracker
 
-_Features start as Pending (awaiting human approval) and move through Planning → Approved → In Progress → Pending Test → Shipped._
+_Features start as Pending (awaiting human approval) and move through Planning → Approved → In Progress → Pending Test → Pending Ship → Shipped._
 
 ---
 ```
@@ -819,13 +915,16 @@ Print a summary:
 ║                                                            ║
 ║   bash / zsh:                                              ║
 ║   [one line per dev agent]  bash .squidsquad/start-[role].sh ║
+║   Terminal N →  bash .squidsquad/start-dm.sh  ← delivery    ║
 ║   Terminal N →  bash .squidsquad/start-pm.sh  ← interactive ║
 ║                                                            ║
 ║   PowerShell:                                              ║
 ║   [one line per dev agent]  .\.squidsquad\start-[role].ps1  ║
+║   Terminal N →  .\.squidsquad\start-dm.ps1   ← delivery    ║
 ║   Terminal N →  .\.squidsquad\start-pm.ps1   ← interactive ║
 ║                                                            ║
 ║   PM/QA is interactive — it will check in with you.        ║
+║   DM handles delivery (docs, CHANGELOG, version bumps).    ║
 ║   Dev agents run autonomously in the background.           ║
 ║   Loop interval: [INTERVAL] minutes                        ║
 ║                                                            ║
@@ -861,10 +960,13 @@ Spawn all applicable agents simultaneously. Each agent writes only its assigned 
 **One agent for PM/QA:**
 > Regenerate `.squidsquad/templates/pm-agent.md` from the PM/QA template in `references/agent-instructions.md`, substituting `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]` from `config.md`. Also regenerate `.squidsquad/start-pm.sh` and `.squidsquad/start-pm.ps1`. **Migration**: if `.squidsquad/pm/CLAUDE.md` contains `## The Ralph Loop` (inline format), replace it with the bootstrapper format (see Step 4b in Setup Instructions). If already a bootstrapper, leave it untouched. Do not touch `qa-log.md`, `enhancements.md`, `iterations/`, or `migrations/`.
 
+**One agent for DM (Delivery Manager):**
+> If `.squidsquad/dm/` does not exist, create it with `CLAUDE.md` bootstrapper, `working-state.md`, and `iterations/` directory. Generate `.squidsquad/templates/dm-agent.md` from Template 3 in `references/agent-instructions.md`, substituting `[ACTIVE_AGENTS]`, `[INTERVAL]`, and `[ROLE_UPPER]`. Generate `.squidsquad/start-dm.sh` and `.squidsquad/start-dm.ps1`. If DM directory already exists, regenerate the template and boot scripts only. Add `- **DM**: always present` to the Agents section in `config.md` if not already present.
+
 > **Note:** Create `.squidsquad/templates/` if it does not exist (first upgrade from pre-template architecture).
 
 **One agent for settings:**
-> Update `.claude/settings.json`: ensure `permissions.allow` contains `Edit(.squidsquad/**)`, `Write(.squidsquad/**)`, and the four git commands. Ensure the `SessionStart` hook is present and matches the current template. Ensure the `statusLine` key is present and points to `bash .squidsquad/statusline.sh`. Regenerate `.squidsquad/statusline.sh` by copying `references/statusline.sh`. Regenerate `.squidsquad/heartbeat.sh` by copying `references/heartbeat.sh`. Copy `references/hints-dev.txt` to `.squidsquad/hints-dev.txt` and `references/hints-pm.txt` to `.squidsquad/hints-pm.txt`. Merge into existing content — never remove unrelated keys.
+> Update `.claude/settings.json`: ensure `permissions.allow` contains `Edit(.squidsquad/**)`, `Write(.squidsquad/**)`, and the four git commands. Ensure the `SessionStart` hook is present and matches the current template. Ensure the `statusLine` key is present and points to `bash .squidsquad/statusline.sh`. Regenerate `.squidsquad/statusline.sh` by copying `references/statusline.sh`. Regenerate `.squidsquad/heartbeat.sh` by copying `references/heartbeat.sh`. Copy `references/hints-dev.txt` to `.squidsquad/hints-dev.txt`, `references/hints-pm.txt` to `.squidsquad/hints-pm.txt`, and `references/hints-dm.txt` to `.squidsquad/hints-dm.txt`. Merge into existing content — never remove unrelated keys.
 
 #### If tracker schema differs — additionally spawn:
 
@@ -894,7 +996,15 @@ Tell the user: version upgraded from → to, files regenerated per agent, any sc
 
 ## Schema Changelog
 
-### Schema 1 (current — introduced in v0.5.0)
+### Schema 2 (current — introduced in v0.8.0)
+
+Added `Pending Ship` status to the feature lifecycle. After PM/QA verifies a feature (`Pending Test`), it transitions to `Pending Ship` where the Delivery Manager (DM) handles user-facing delivery (docs, CHANGELOG, version bump, git tag). DM then marks it `Shipped`.
+
+**Migration from Schema 1**: No data migration needed. Existing `Shipped` items remain `Shipped`. Existing `Pending Test` items flow through `Pending Ship` naturally. PM's version bump logic (Step 6c) moves to DM. PM fallback: if no `dm/` directory exists, PM treats `Pending Ship` as `Shipped` (old behavior).
+
+**Feature status values**: `Pending` → `Planning` → `Approved` → `In Progress` → `Pending Test` → `Pending Ship` → `Shipped`
+
+### Schema 1 (introduced in v0.5.0)
 
 **Bug fields**: ID, Title, Severity, Status, Reported By, Assigned To, Description, Steps to Reproduce, Expected, Actual, Discussion
 
@@ -903,8 +1013,6 @@ Tell the user: version upgraded from → to, files regenerated per agent, any sc
 **Bug status values**: `Open` → `Investigating` → `Fixed` → `Verified` → `Closed`
 
 **Feature status values**: `Pending` → `Planning` → `Approved` → `In Progress` → `Pending Test` → `Shipped`
-
-Future schema changes will be documented here with their migration instructions before being released.
 
 ---
 

@@ -185,7 +185,7 @@ Print: `[🦑] Verifying pending test features...`
 For each active agent, open their `features.md`. For each feature with status `Pending Test`:
 
 1. Test against the acceptance criteria.
-2. If all criteria pass: update to `Shipped`, append Discussion entry.
+2. If all criteria pass: update to `Pending Ship`, append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm/qa**: Verified. Status → Pending Ship.` If no `.squidsquad/dm/` directory exists (DM not installed), treat as `Shipped` instead and increment `Shipped Since Last Bump`.
 3. If criteria fail: update back to `In Progress`, append Discussion entry with specific failures.
 
 ### Step 6b — Monitor PRs (if PR Flow enabled)
@@ -200,56 +200,16 @@ gh pr list --search "squidsquad/" --state all --json number,title,state,mergedAt
 ```
 
 For each PR:
-- **If merged**: find the corresponding tracker item (parse the feature/bug ID from the PR title). Update status to `Shipped`. Append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm/qa**: PR [URL] merged by human. Status → Shipped.`
+- **If merged**: find the corresponding tracker item (parse the feature/bug ID from the PR title). Update status to `Pending Ship`. Append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm/qa**: PR [URL] merged by human. Status → Pending Ship.` If no `.squidsquad/dm/` directory exists (DM not installed), treat as `Shipped` instead and increment `Shipped Since Last Bump`.
 - **If closed without merge**: update status back to `In Progress`. Append Discussion entry with note.
 - **If open with new comments**: fetch comments via `gh pr view [N] --comments`. Append any new comments to the tracker Discussion: `> [YYYY-MM-DD HH:MM] **pm/qa**: PR comment from [author]: [summary]`
 - **If open with "changes requested" review**: update status back to `In Progress`. Append Discussion entry with the requested changes.
 
 If `PR Flow: no`, skip this step.
 
-### Step 6c — Version Bump Check
+### Step 6c — Increment Ship Counter for Closed Bugs
 
-When marking any item as `Shipped` (features) or `Closed` (bugs) in Steps 5-6b, increment the `Shipped Since Last Bump` counter in `config.md`.
-
-After incrementing, check if a version bump is due:
-
-1. Read `Ship Threshold` from `config.md` (default 10 if missing).
-2. Read `Shipped Since Last Bump` from `config.md`.
-3. If counter < threshold: no bump needed, continue.
-4. If counter >= threshold: check all agent bug trackers for open bugs (`Status: Open` or `Investigating`).
-   - If open bugs exist: defer the bump. Print: `[🦑] Version bump deferred — [N] open bugs remain.` Counter stays at current value.
-   - If zero open bugs: **perform the bump**.
-
-**Bump sequence** (use working-state.md to track progress for crash recovery):
-
-1. Read current version from `config.md` (e.g. `0.5.1`).
-2. Increment minor version, reset patch to 0 (e.g. `0.5.1` → `0.6.0`).
-3. Update `config.md`: set `SquidSquad Version` to new version.
-4. Update `SKILL.md` YAML frontmatter: set `version` to new version.
-5. Add new section to top of `CHANGELOG.md`:
-   ```markdown
-   ## [X.Y.Z] — YYYY-MM-DD
-
-   ### Added
-   - FEAT-[ROLE]-XXX — Title
-   ...
-
-   ### Fixed
-   - BUG-[ROLE]-XXX — Title
-   ...
-   ```
-   List all items shipped since the last bump (scan tracker Discussions for `Status → Shipped` or `Status → Closed` entries since the previous version's date).
-6. Commit: `git add -A && git commit -m "chore: bump version to vX.Y.Z"`
-7. Check if tag exists: `git tag -l "vX.Y.Z"`. If it exists, skip tagging.
-8. Create tag: `git tag vX.Y.Z`
-9. Push: `git push && git push --tags`
-10. Reset `Shipped Since Last Bump` to `0` in `config.md`.
-11. Log in iteration log: add `Version Bumped: X.Y.Z` field.
-12. Append Discussion entry to the feature that triggered the bump.
-
-Print: `[🦑] Version bumped to vX.Y.Z — tag created and pushed.`
-
-**Version bumps always commit directly to main**, even if PR Flow is enabled.
+When marking any bug as `Closed` in Step 5, increment the `Shipped Since Last Bump` counter in `config.md`. Version bumps are now handled by the Delivery Manager (DM) — PM no longer performs version bumps.
 
 ### Step 7 — Agent Health Check
 
@@ -257,7 +217,7 @@ Print: `[🦑] Checking agent health...`
 
 Check each agent's health using heartbeat branches. Each agent's boot script launches a background heartbeat process that pushes an orphan `heartbeat/<role>` branch every N seconds (configurable in `config.md` as `Heartbeat Interval Seconds`, default 10s).
 
-For each dev agent listed in `config.md`:
+For each dev agent listed in `config.md`, plus the DM agent (if `.squidsquad/dm/` exists):
 
 ```bash
 git fetch origin "heartbeat/[AGENT]" 2>/dev/null
@@ -627,7 +587,7 @@ The PM decides — the subagent only reports results.
 
 Features start as `Pending` — **a human must explicitly approve them** before any agent picks them up.
 
-Status values: `Pending` -> `Planning` -> `Approved` -> `In Progress` -> `Pending Test` -> `Shipped`
+Status values: `Pending` -> `Planning` -> `Approved` -> `In Progress` -> `Pending Test` -> `Pending Ship` -> `Shipped`
 
 - `Pending`: Filed, awaiting human approval to begin planning.
 - `Planning`: Human approved. PM is running the Feature Intake Process (Phases 1-3: Research -> Discussion -> Planning).

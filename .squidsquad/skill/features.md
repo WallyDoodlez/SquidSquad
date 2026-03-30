@@ -1093,7 +1093,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-035 — Delivery Manager (DM) hardcoded role with "Pending Ship" status
 
 - **Priority**: High
-- **Status**: Approved
+- **Status**: Pending Test
 - **Requested By**: human
 - **Description**: Introduce a Delivery Manager (DM) as a hardcoded role in SquidSquad. The DM owns the "last mile" of shipping — when a feature reaches a new `Pending Ship` status, the DM takes over to create a delivery package of all user-facing materials before the feature is marked `Shipped`. This offloads documentation work from PM (reducing context pressure so PM can run longer) and from dev agents (who focus on code). The feature lifecycle becomes: `Approved → In Progress (dev) → Pending Test (PM verifies) → Pending Ship (DM packages) → Shipped`.
 - **Rationale**: PM currently handles too much — check-ins, QA, planning, version bumps, AND documentation review. The Feature Intake Process alone is a major context hog. By splitting out the shipping/docs role, PM stays lightweight and can run indefinitely. Dev agents stay focused on implementation. DM handles everything needed for external users to consume the change.
@@ -1127,6 +1127,8 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 22:25] **pm/qa**: Human clarified filing permissions: ALL agents can file bugs. DM and PM can file features. Only PM approves features (with human confirmation). DM proactively files features when it spots client-facing gaps.
 > [2026-03-30 00:00] **pm/qa**: Human approved. Status → Planning. Beginning intake process.
 > [2026-03-30 00:30] **pm/qa**: Phase 1 (research), Phase 2 (discussion), Phase 3 (test plan) complete. All decisions locked: single shared tracker, audience-based doc split (dev=tech, DM=user-story), PM zero delivery responsibilities, DM owns full delivery pipeline (CHANGELOG + version bump + git tag + release), delivery:skip tag for internal features, same loop interval, ship 035 before 043. Human approved. Status → Approved.
+> [2026-03-30 01:00] **skill-lead**: Picking up. Status → In Progress.
+> [2026-03-30 01:30] **skill-lead**: Implementation complete. Created DM template (Template 3 in agent-instructions.md + live dm-agent.md), DM CLAUDE.md bootstrapper, DM boot scripts (start-dm.sh/.ps1), hints-dm.txt. Updated PM template: removed version bump (Step 6c), changed Shipped→Pending Ship in Steps 6/6b, added DM to health check. Updated dev template: Step 8 now tech docs only with delivery notes. Updated statusline.sh: DM segments + DM health icon. Updated SKILL.md: setup flow, upgrade flow, Schema 2, status flow, file structure. Updated config.md: Schema 2, DM always present. All 15 smoke tests pass. Delivery notes: DM is a new hardcoded role — user-facing docs needed for README (role descriptions, launch instructions, delivery workflow). Status → Pending Test.
 
 ---
 
