@@ -7,7 +7,7 @@ idle|Msg me any time to talk about a feature or report a bug
 idle|I'm monitoring the squad — all good so far
 idle|Drop a message to adjust priorities or file new work
 idle|Watching over the team — chime in whenever
-idle|Checkout the 🦑SquidSquad🦑 repo at https://github.com/WallyDoodlez/SquidSquad
+idle|Quiet cycle — ready for your input
 
 pulling|Syncing with remote...
 pulling|Checking for upstream changes...
