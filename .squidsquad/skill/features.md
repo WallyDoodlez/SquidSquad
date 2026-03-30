@@ -1386,7 +1386,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-044 — Granular status phases with item names across all agents
 
 - **Priority**: Medium
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Requested By**: human
 - **Description**: Replace generic status phases with distinct, granular phases that include the specific item being worked on. The status bar should telegraph the real status — not just "verifying" but "verifying BUG-SKILL-029". Applies to all agent roles (PM, dev, future DM/QA). PM currently has generic phases (`pulling`, `checkin`, `testing`, `verifying`, `planning`, `health`, `idle`); these should be expanded with distinct phases like `researching`, `discussing`, `test-planning` for the Feature Intake flow. Dev agents should similarly include item names in all phases.
 - **Current PM phases**: `pulling`, `checkin`, `testing`, `verifying`, `planning`, `health`, `idle`
@@ -1408,6 +1408,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-30 00:15] **pm/qa**: Phase 2 complete. Locked: all agents, distinct phases (researching/discussing/test-planning), uniform styling, per-item updates. Phase 3 complete — TEST-PLAN.md created (20 TCs, 9 smoke, 6 regression risks). Status → Approved.
 > [2026-03-30 00:45] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-30 00:50] **skill-lead**: Implementation complete. Updated: references/agent-instructions.md (dev + PM templates — new phases, item names in all examples), live .squidsquad/pm/CLAUDE.md (phase list + Feature Intake phase writes), live .squidsquad/skill/CLAUDE.md (item names in examples). statusline.sh already handles unknown phases gracefully — no changes needed. All smoke tests passing. Status → Pending Test.
+> [2026-03-30 01:30] **pm/qa**: QA verified — 19/19 verifiable TCs PASS, 9/9 smoke tests PASS. PM template has all 10 phases including researching/discussing/test-planning with item IDs. Dev template has item IDs in examples. statusline.sh handles new phases gracefully. Status → Shipped.
 
 ---
 
