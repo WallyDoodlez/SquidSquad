@@ -1093,7 +1093,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-035 — Delivery Manager (DM) hardcoded role with "Pending Ship" status
 
 - **Priority**: High
-- **Status**: Pending
+- **Status**: Approved
 - **Requested By**: human
 - **Description**: Introduce a Delivery Manager (DM) as a hardcoded role in SquidSquad. The DM owns the "last mile" of shipping — when a feature reaches a new `Pending Ship` status, the DM takes over to create a delivery package of all user-facing materials before the feature is marked `Shipped`. This offloads documentation work from PM (reducing context pressure so PM can run longer) and from dev agents (who focus on code). The feature lifecycle becomes: `Approved → In Progress (dev) → Pending Test (PM verifies) → Pending Ship (DM packages) → Shipped`.
 - **Rationale**: PM currently handles too much — check-ins, QA, planning, version bumps, AND documentation review. The Feature Intake Process alone is a major context hog. By splitting out the shipping/docs role, PM stays lightweight and can run indefinitely. Dev agents stay focused on implementation. DM handles everything needed for external users to consume the change.
@@ -1125,6 +1125,8 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 22:15] **pm/qa**: Human clarified: DM also owns configuration changes (config.md, settings.json, new config values) and migration/upgrade steps — not just docs. Updated responsibilities. Dev only owns implementation code and bug fixes. With FEAT-043 (QA split), the full role picture is: PM (talks), QA (tests), DM (ships + configures), Dev (builds).
 > [2026-03-29 22:20] **pm/qa**: Human further clarified: DM owns ALL client-facing work that isn't code. Not just shipping features — also direct client requests like CMS entries, content updates, configuration changes. DM is the "everything the client sees" agent. Updated responsibilities.
 > [2026-03-29 22:25] **pm/qa**: Human clarified filing permissions: ALL agents can file bugs. DM and PM can file features. Only PM approves features (with human confirmation). DM proactively files features when it spots client-facing gaps.
+> [2026-03-30 00:00] **pm/qa**: Human approved. Status → Planning. Beginning intake process.
+> [2026-03-30 00:30] **pm/qa**: Phase 1 (research), Phase 2 (discussion), Phase 3 (test plan) complete. All decisions locked: single shared tracker, audience-based doc split (dev=tech, DM=user-story), PM zero delivery responsibilities, DM owns full delivery pipeline (CHANGELOG + version bump + git tag + release), delivery:skip tag for internal features, same loop interval, ship 035 before 043. Human approved. Status → Approved.
 
 ---
 
@@ -1376,3 +1378,57 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-29 22:15] **pm/qa**: Filed from human request. Human wants PM to be "primarily the talker" — no testing. QA becomes its own hardcoded agent that runs independently. Key design decisions needed: does QA share PM's trackers or have its own? Does QA report findings to PM (who relays to human) or directly to dev agents? How does version bump work — PM decides but QA provides the ship count?
+
+---
+
+## FEAT-SKILL-044 — Granular status phases with item names across all agents
+
+- **Priority**: Medium
+- **Status**: Approved
+- **Requested By**: human
+- **Description**: Replace generic status phases with distinct, granular phases that include the specific item being worked on. The status bar should telegraph the real status — not just "verifying" but "verifying BUG-SKILL-029". Applies to all agent roles (PM, dev, future DM/QA). PM currently has generic phases (`pulling`, `checkin`, `testing`, `verifying`, `planning`, `health`, `idle`); these should be expanded with distinct phases like `researching`, `discussing`, `test-planning` for the Feature Intake flow. Dev agents should similarly include item names in all phases.
+- **Current PM phases**: `pulling`, `checkin`, `testing`, `verifying`, `planning`, `health`, `idle`
+- **Proposed PM additions**: `researching` (Phase 1), `discussing` (Phase 2), `test-planning` (Phase 3), plus item names in all existing phases (e.g. `verifying|Verifying BUG-SKILL-029...`)
+- **Scope**: All agent CLAUDE.md templates, agent-instructions.md, statusline.sh (if phase display needs updating)
+- **Acceptance Criteria**:
+  - [ ] PM status phases expanded: `researching`, `discussing`, `test-planning` added as distinct phases
+  - [ ] All PM status writes include item name (e.g. `verifying|Verifying BUG-SKILL-029...`, `researching|Researching FEAT-SKILL-035...`)
+  - [ ] Dev agent status writes include item name (e.g. `implementing|🔨 FEAT-SKILL-037...`, `triaging|Fixing BUG-SKILL-029...`)
+  - [ ] Future DM/QA templates follow the same pattern
+  - [ ] statusline.sh handles new phase values correctly (display, colors if applicable)
+  - [ ] SKILL.md templates updated with new phase vocabulary
+  - [ ] agent-instructions.md updated with new phase examples
+
+### Discussion
+
+> [2026-03-30 00:05] **pm/qa**: Filed from human request. Human wants the status bar to "telegram the real status" — distinct phases with item names, not generic labels. Applies to all agents. Status: Pending — awaiting human approval.
+> [2026-03-30 00:10] **pm/qa**: Human approved. Light mode — cosmetic/template change, no behavioral risk. Skipping Phase 1 (Research) and Phase 2A. Status → Planning. Beginning intake process.
+> [2026-03-30 00:15] **pm/qa**: Phase 2 complete. Locked: all agents, distinct phases (researching/discussing/test-planning), uniform styling, per-item updates. Phase 3 complete — TEST-PLAN.md created (20 TCs, 9 smoke, 6 regression risks). Status → Approved.
+
+---
+
+## FEAT-SKILL-045 — Overdue emoji on status bar when loop iteration is delayed
+
+- **Priority**: Medium
+- **Status**: Approved
+- **Requested By**: human
+- **Description**: When an agent's Ralph Loop cycle runs longer than the configured iteration interval (e.g. 30 minutes) because it's blocked on work (long Feature Intake discussion, big implementation, etc.), show an overdue emoji in the statusline next to the countdown timer. This gives the human an at-a-glance indicator that an agent is running long and the next cycle is delayed.
+- **Behavior**:
+  - Overdue triggers immediately when elapsed time exceeds the iteration interval (no grace period)
+  - Emoji appears at/near the countdown timer position in the statusline
+  - Applies to all agents (PM, dev, future DM/QA)
+  - When not overdue, no indicator shown (clean default state)
+- **Acceptance Criteria**:
+  - [ ] statusline.sh detects when an agent's current cycle has exceeded the iteration interval
+  - [ ] Overdue emoji displayed next to the countdown/timer area when interval exceeded
+  - [ ] Works for all agent roles
+  - [ ] No indicator shown when cycle is within normal interval
+  - [ ] Triggers immediately at interval boundary (no grace period)
+  - [ ] SKILL.md statusline documentation updated
+  - [ ] agent-instructions.md statusline section updated
+
+### Discussion
+
+> [2026-03-30 00:20] **pm/qa**: Filed from human request. Human wants visibility into when agents are running long. Overdue emoji at the countdown timer, all agents, immediate trigger at interval boundary. Status: Pending — awaiting human approval.
+> [2026-03-30 00:25] **pm/qa**: Human approved. Light mode — statusline-only change, low risk. Skipping Research + Phase 2A. No open questions (behavior fully specified). CONTEXT.md and TEST-PLAN.md to follow. Status → Planning.
+> [2026-03-30 00:35] **pm/qa**: Phase 2 (no open questions) and Phase 3 complete. CONTEXT.md and TEST-PLAN.md created (13 TCs, 9 smoke, 5 regression risks). Status → Approved.
