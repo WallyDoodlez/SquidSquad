@@ -1063,7 +1063,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-034 — Planning process must always consider upgrade and migration paths
 
 - **Priority**: High
-- **Status**: Pending
+- **Status**: Approved
 - **Requested By**: human
 - **Description**: The Feature Intake Process (Phases 1-3) must always include upgrade and migration path analysis as a required section. Every feature that adds config values, new files, template changes, or behavioral changes must have explicit upgrade/migration steps documented in RESEARCH.md and CONTEXT.md. This should be baked into the research subagent prompt and the CONTEXT.md template so it's never forgotten.
 - **Rationale**: FEAT-SKILL-033 needed multiple rounds of human feedback to add upgrade steps. This should be automatic — the planning process should always ask: "How do existing installs get this?"
@@ -1077,6 +1077,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-29 13:05] **pm/qa**: Filed from human feedback during FEAT-SKILL-033 planning. Human noted that upgrade/migration paths should be a standard part of every feature's planning process, not something added after human prompting. Status: Pending — awaiting human approval.
+> [2026-03-29 20:10] **pm/qa**: Human approved. Decision: Upgrade & Migration section is ALWAYS required in RESEARCH.md — even trivial features get "N/A — no upgrade impact." This ensures nothing slips through. Light-mode intake — no separate RESEARCH/CONTEXT files needed, feature is self-contained. Status → Approved.
 
 ---
 
