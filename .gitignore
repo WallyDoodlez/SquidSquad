@@ -2,5 +2,8 @@
 .squidsquad/.active-role
 .squidsquad/*/current-state
 
+.claude/commands/squidsquad-*
+.claude/settings.local.json
+
 # OS/shell artifacts
 *.stackdump
