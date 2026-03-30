@@ -178,7 +178,7 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 1. git pull --rebase
 1b. Context pressure check — if above threshold, save state and exit
 1c. Resume from working-state.md if active task exists
-2. Scan [role]/bugs.md for Open or Investigating items
+2. Scan [role]/bugs.md for Open or Investigating items (match `**Status**: Open` — tracker uses markdown bold)
    → Write working state, fix bug, clear state on completion
    → If bug touches another agent's domain, file BUG-[OTHER]-XXX in [other]/bugs.md
    → Update bug status to Fixed, append Discussion entry
@@ -521,7 +521,7 @@ bash .squidsquad/heartbeat.sh "[ROLE]" "$HB_INTERVAL" &
 HB_PID=$!
 trap "kill $HB_PID 2>/dev/null" EXIT
 
-claude --permission-mode auto --append-system-prompt "SQUIDSQUAD_ROLE=[ROLE]" "start the loop"
+claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=[ROLE]" "start the loop"
 ```
 
 **`start-[role].ps1`**:
@@ -554,7 +554,7 @@ Remove-Item .squidsquad/[ROLE]/current-state -ErrorAction SilentlyContinue
 $hbInterval = if ($config -match 'Heartbeat Interval Seconds.*?(\d+)') { $Matches[1] } else { '10' }
 $hbProc = Start-Process -FilePath "bash" -ArgumentList ".squidsquad/heartbeat.sh", "[ROLE]", $hbInterval -PassThru -NoNewWindow
 try {
-    claude --permission-mode auto --append-system-prompt "SQUIDSQUAD_ROLE=[ROLE]" "start the loop"
+    claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=[ROLE]" "start the loop"
 } finally {
     Stop-Process -Id $hbProc.Id -ErrorAction SilentlyContinue
 }
@@ -594,7 +594,7 @@ bash .squidsquad/heartbeat.sh "pm" "$HB_INTERVAL" &
 HB_PID=$!
 trap "kill $HB_PID 2>/dev/null" EXIT
 
-claude --permission-mode auto --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
+claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
 ```
 
 **`start-pm.ps1`**:
@@ -629,7 +629,7 @@ Remove-Item .squidsquad/pm/current-state -ErrorAction SilentlyContinue
 $hbInterval = if ($config -match 'Heartbeat Interval Seconds.*?(\d+)') { $Matches[1] } else { '10' }
 $hbProc = Start-Process -FilePath "bash" -ArgumentList ".squidsquad/heartbeat.sh", "pm", $hbInterval -PassThru -NoNewWindow
 try {
-    claude --permission-mode auto --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
+    claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
 } finally {
     Stop-Process -Id $hbProc.Id -ErrorAction SilentlyContinue
 }
@@ -771,7 +771,7 @@ Create or update `.claude/settings.json` in the project root to add a `SessionSt
 }
 ```
 
-> **Why these permissions?** Dev agents run with `--permission-mode auto` but still need explicit allow rules for writing tracker files and running git commands without being prompted mid-cycle. Without these, the agent will pause and ask for permission on every file write.
+> **Why these permissions?** Dev agents run with `--enable-auto-mode` but still need explicit allow rules for writing tracker files and running git commands without being prompted mid-cycle. Without these, the agent will pause and ask for permission on every file write.
 
 **If `.claude/settings.json` already exists**, merge carefully:
 

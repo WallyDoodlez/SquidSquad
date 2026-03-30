@@ -28,7 +28,7 @@ Remove-Item .squidsquad/pm/current-state -ErrorAction SilentlyContinue
 $hbInterval = if ($config -match 'Heartbeat Interval Seconds.*?(\d+)') { $Matches[1] } else { '10' }
 $hbProc = Start-Process -FilePath "bash" -ArgumentList ".squidsquad/heartbeat.sh", "pm", $hbInterval -PassThru -NoNewWindow
 try {
-    claude --permission-mode auto --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
+    claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
 } finally {
     Stop-Process -Id $hbProc.Id -ErrorAction SilentlyContinue
 }

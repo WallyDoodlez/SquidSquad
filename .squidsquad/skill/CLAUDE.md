@@ -109,7 +109,7 @@ If the interval matches, continue silently.
 
 Print: `[🦑] Triaging bugs...`
 
-Open `.squidsquad/skill/bugs.md`. For each bug with status `Open` or `Investigating`:
+Open `.squidsquad/skill/bugs.md`. For each bug with status `Open` or `Investigating` (note: tracker uses markdown bold formatting — search for `**Status**: Open` or `**Status**: Investigating`, not plain `Status:`):
 
 1. Write working state: update `.squidsquad/skill/working-state.md` with the bug ID, status `in-progress`, and planned approach.
 2. Read the bug description, steps to reproduce, and any Discussion entries.
