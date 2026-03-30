@@ -712,7 +712,8 @@ Spawn a research agent (via the Agent tool) that analyzes:
 2. **Side effects**: what could break for users with existing configs, different team shapes, different OS/shells, different project types
 3. **Edge cases**: unusual inputs, failure modes, race conditions, empty states
 4. **Integration risks**: how this interacts with other features
-5. **Prior art**: has something similar been done? What can we learn?
+5. **Upgrade & migration**: how do existing installs get this feature? What config values, files, templates, or behavioral changes need migration steps? What happens if an existing install doesn't upgrade — does it break or gracefully degrade? This section is ALWAYS required — even trivial features must state "N/A — no upgrade impact."
+6. **Prior art**: has something similar been done? What can we learn?
 
 The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-RESEARCH.md`:
 
@@ -735,6 +736,13 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 
 ## Integration Risks
 - [Risk]: [how this interacts with feature X]
+
+## Upgrade & Migration
+- **New config values**: [list, with defaults — or "none"]
+- **New files**: [list files added — or "none"]
+- **Template changes**: [what changed in agent templates — or "none"]
+- **Upgrade steps**: [what `/squidsquad-upgrade` must do — or "N/A — no upgrade impact"]
+- **Graceful degradation**: [what happens if user doesn't upgrade — or "N/A"]
 
 ## Open Questions
 - **Q1**: [question] — **Why**: [consequence of getting wrong]
@@ -814,6 +822,9 @@ Continue until all questions are resolved. Capture decisions in `.squidsquad/[RO
 ## Side Effect Mitigations (required)
 - [Mitigation]: [from research, must be implemented]
 
+## Upgrade Path (required)
+- [Step]: [what upgrade must do — or "N/A — no upgrade impact"]
+
 ## Out of Scope
 - [Thing]: [explicitly excluded]
 ```
@@ -837,8 +848,9 @@ Read .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-RESEARCH.md and .squidsqu
 1. Happy path test cases with preconditions, steps, expected results, and verification commands
 2. Edge case test cases from research findings
 3. Side effect regression tests (existing behavior that must NOT change)
-4. Smoke tests (quick checks)
-5. Regression risks
+4. Upgrade verification tests (existing installs get the feature correctly via upgrade, no breakage for non-upgraded installs)
+5. Smoke tests (quick checks)
+6. Regression risks
 
 Write output to .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md
 ```
