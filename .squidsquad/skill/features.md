@@ -1310,7 +1310,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-042 — SquidSquad only activates when launched via boot scripts, never on normal Claude sessions
 
 - **Priority**: High
-- **Status**: Approved
+- **Status**: Pending Test
 - **Requested By**: human
 - **Description**: Change the auto-boot mechanism so SquidSquad ONLY activates when launched via a boot script (`start-*.sh` / `start-*.ps1`). A normal `claude` session in the same repo must never trigger SquidSquad auto-boot — no Ralph Loop, no status bar override, no heartbeat. Currently the auto-boot block in CLAUDE.md checks for `.squidsquad/.active-role`, which can be left over from another terminal's boot script, causing unintended SquidSquad activation.
 - **Rationale**: The user should be able to open Claude in a SquidSquad-enabled repo and get a normal Claude session. Only explicitly launching via boot scripts should activate SquidSquad. The current file-based trigger (`.active-role`) leaks across terminals.
@@ -1329,6 +1329,8 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 > [2026-03-29 21:50] **pm/qa**: Filed from human request. Original filing was about a "normal mode" boot script, but human clarified: the issue is that SquidSquad should NEVER activate on normal Claude sessions — only via boot scripts. Reframed as an auto-boot mechanism change. Recommended approach: boot scripts set env var `SQUIDSQUAD=1`, CLAUDE.md checks env var instead of `.active-role` file. No file = no leakage across terminals.
 > [2026-03-29 21:55] **pm/qa**: Human approved. Status → Approved.
+> [2026-03-29 22:00] **skill-lead**: Picking up. Status → In Progress.
+> [2026-03-29 22:10] **skill-lead**: Complete. Changed auto-boot to use `--append-system-prompt "SQUIDSQUAD_ROLE=<role>"` — session-only, no cross-terminal leakage. Updated CLAUDE.md to check system prompt instead of `.active-role` file. Updated all 4 boot script templates in SKILL.md and all 4 generated scripts in `.squidsquad/`. Boot scripts still write `.active-role` for statusline use only. Updated CHANGELOG.md. Status → Pending Test.
 
 ---
 

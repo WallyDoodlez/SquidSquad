@@ -4,6 +4,7 @@
 
 .claude/commands/squidsquad-*
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
 
 # OS/shell artifacts
 *.stackdump

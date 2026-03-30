@@ -17,5 +17,7 @@ if (Test-Path .squidsquad) {
     Write-Host ""
 }
 
+# Write role for statusline (not used for auto-boot — that uses system prompt)
 "pm" | Set-Content .squidsquad/.active-role -NoNewline
-claude --permission-mode auto "start the loop"
+
+claude --permission-mode auto --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"

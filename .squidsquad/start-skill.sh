@@ -16,5 +16,7 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
+# Write role for statusline (not used for auto-boot — that uses system prompt)
 echo "skill" > .squidsquad/.active-role
-claude --permission-mode auto "start the loop"
+
+claude --permission-mode auto --append-system-prompt "SQUIDSQUAD_ROLE=skill" "start the loop"

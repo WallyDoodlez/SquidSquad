@@ -15,5 +15,7 @@ Write-Host "    ▌▌▌▌▌▌"
 Write-Host "  S Q U I D S Q U A D   v$v  -  skill"
 Write-Host ""
 
+# Write role for statusline (not used for auto-boot — that uses system prompt)
 "skill" | Set-Content .squidsquad/.active-role -NoNewline
-claude --permission-mode auto "start the loop"
+
+claude --permission-mode auto --append-system-prompt "SQUIDSQUAD_ROLE=skill" "start the loop"

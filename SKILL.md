@@ -464,16 +464,16 @@ Also create or update the **root `CLAUDE.md`** in the project root. If a root `C
 ```markdown
 # SquidSquad Auto-Boot
 
-If the file `.squidsquad/.active-role` exists, you are running as a SquidSquad agent:
+If your system prompt contains a line matching `SQUIDSQUAD_ROLE=<role>` (e.g. `SQUIDSQUAD_ROLE=skill`, `SQUIDSQUAD_ROLE=pm`), you are running as a SquidSquad agent:
 
-1. Read `.squidsquad/.active-role` to get your role name (e.g. `fe`, `be`, `skill`, `pm`).
+1. Extract the role name from the `SQUIDSQUAD_ROLE=` line.
 2. Read `.squidsquad/<role>/CLAUDE.md` for your full instructions.
 3. Follow those instructions exactly — begin your first Ralph Loop cycle immediately without waiting for user input.
 
-If `.squidsquad/.active-role` does not exist, ignore this section — you are a normal Claude session.
+If no `SQUIDSQUAD_ROLE=` line is present, ignore this section — you are a normal Claude session. The presence of `.squidsquad/` in the repo does NOT mean you should auto-boot.
 ```
 
-Add `.squidsquad/.active-role` to `.gitignore` (create the file if it doesn't exist):
+Add runtime files to `.gitignore` (create the file if it doesn't exist):
 
 ```
 # SquidSquad runtime (not committed)
@@ -485,7 +485,7 @@ Add `.squidsquad/.active-role` to `.gitignore` (create the file if it doesn't ex
 
 Generate both a `.sh` (bash) and a `.ps1` (PowerShell) boot script for each dev agent, plus PM/QA. Script names use the role name, e.g. `start-be.sh`, `start-api.sh`, `start-worker.ps1`.
 
-All agents run interactively. The boot script writes `.squidsquad/.active-role` (git-ignored) with the role name, then launches `claude` with a positional arg message. The CLAUDE.md auto-boot section detects the role and starts the Ralph Loop. The human can observe progress and comment in any agent's terminal.
+All agents run interactively. The boot script passes the role via `--append-system-prompt "SQUIDSQUAD_ROLE=[ROLE]"` — a session-only signal that never leaks across terminals. The CLAUDE.md auto-boot section detects this in the system prompt and starts the Ralph Loop. The human can observe progress and comment in any agent's terminal.
 
 **`start-[role].sh`**:
 ```bash
@@ -507,6 +507,7 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
+# Write role for statusline (not used for auto-boot — system prompt handles that)
 echo "[ROLE]" > .squidsquad/.active-role
 
 # Clear and initialize status bar state
@@ -520,7 +521,7 @@ bash .squidsquad/heartbeat.sh "[ROLE]" "$HB_INTERVAL" &
 HB_PID=$!
 trap "kill $HB_PID 2>/dev/null" EXIT
 
-claude --permission-mode auto "start the loop"
+claude --permission-mode auto --append-system-prompt "SQUIDSQUAD_ROLE=[ROLE]" "start the loop"
 ```
 
 **`start-[role].ps1`**:
@@ -542,6 +543,7 @@ Write-Host "    ▐▌▐▌▐▌"
 Write-Host "  S Q U I D S Q U A D   v$v  -  [ROLE]"
 Write-Host ""
 
+# Write role for statusline (not used for auto-boot — system prompt handles that)
 "[ROLE]" | Set-Content .squidsquad/.active-role -NoNewline
 
 # Clear and initialize status bar state
@@ -552,7 +554,7 @@ Remove-Item .squidsquad/[ROLE]/current-state -ErrorAction SilentlyContinue
 $hbInterval = if ($config -match 'Heartbeat Interval Seconds.*?(\d+)') { $Matches[1] } else { '10' }
 $hbProc = Start-Process -FilePath "bash" -ArgumentList ".squidsquad/heartbeat.sh", "[ROLE]", $hbInterval -PassThru -NoNewWindow
 try {
-    claude --permission-mode auto "start the loop"
+    claude --permission-mode auto --append-system-prompt "SQUIDSQUAD_ROLE=[ROLE]" "start the loop"
 } finally {
     Stop-Process -Id $hbProc.Id -ErrorAction SilentlyContinue
 }
@@ -578,6 +580,7 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
+# Write role for statusline (not used for auto-boot — system prompt handles that)
 echo "pm" > .squidsquad/.active-role
 
 # Clear and initialize status bar state
@@ -591,7 +594,7 @@ bash .squidsquad/heartbeat.sh "pm" "$HB_INTERVAL" &
 HB_PID=$!
 trap "kill $HB_PID 2>/dev/null" EXIT
 
-claude --permission-mode auto "start the loop"
+claude --permission-mode auto --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
 ```
 
 **`start-pm.ps1`**:
@@ -615,6 +618,7 @@ if (Test-Path .squidsquad) {
     Write-Host ""
 }
 
+# Write role for statusline (not used for auto-boot — system prompt handles that)
 "pm" | Set-Content .squidsquad/.active-role -NoNewline
 
 # Clear and initialize status bar state
@@ -625,7 +629,7 @@ Remove-Item .squidsquad/pm/current-state -ErrorAction SilentlyContinue
 $hbInterval = if ($config -match 'Heartbeat Interval Seconds.*?(\d+)') { $Matches[1] } else { '10' }
 $hbProc = Start-Process -FilePath "bash" -ArgumentList ".squidsquad/heartbeat.sh", "pm", $hbInterval -PassThru -NoNewWindow
 try {
-    claude --permission-mode auto "start the loop"
+    claude --permission-mode auto --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
 } finally {
     Stop-Process -Id $hbProc.Id -ErrorAction SilentlyContinue
 }
