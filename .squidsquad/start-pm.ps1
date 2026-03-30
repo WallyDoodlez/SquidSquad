@@ -17,7 +17,7 @@ if (Test-Path .squidsquad) {
     Write-Host ""
 }
 
-# Write role for statusline (not used for auto-boot — system prompt handles that)
+# Write role for statusline (not used for auto-boot -- system prompt handles that)
 "pm" | Set-Content .squidsquad/.active-role -NoNewline
 
 # Clear and initialize status bar state

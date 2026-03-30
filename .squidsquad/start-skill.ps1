@@ -15,7 +15,7 @@ Write-Host "    ▐▌▐▌▐▌"
 Write-Host "  S Q U I D S Q U A D   v$v  -  skill"
 Write-Host ""
 
-# Write role for statusline (not used for auto-boot — system prompt handles that)
+# Write role for statusline (not used for auto-boot -- system prompt handles that)
 "skill" | Set-Content .squidsquad/.active-role -NoNewline
 
 # Clear and initialize status bar state
