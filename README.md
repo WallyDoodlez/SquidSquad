@@ -215,7 +215,7 @@ bash .squidsquad/start-pm.sh
 .\.squidsquad\start-pm.ps1
 ```
 
-All agents run interactively with `--permission-mode auto`. The boot script sets the role and sends a startup message — agents auto-detect their role from `.squidsquad/.active-role` and start their Ralph Loop immediately.
+All agents run interactively with `--permission-mode auto`. The boot script injects the role via `--append-system-prompt "SQUIDSQUAD_ROLE=<role>"` — agents read this from their system prompt, load their role-specific instructions from `.squidsquad/<role>/CLAUDE.md`, and start their Ralph Loop immediately.
 
 ### 4. Interact Via PM
 
