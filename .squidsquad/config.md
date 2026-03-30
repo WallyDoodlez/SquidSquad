@@ -1,6 +1,6 @@
 # SquidSquad Config
 
-- **SquidSquad Version**: 0.6.0
+- **SquidSquad Version**: 0.7.0
 - **Tracker Schema**: 1
 
 ## Agents
@@ -53,4 +53,4 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-- **Shipped Since Last Bump**: 9
+- **Shipped Since Last Bump**: 0

@@ -4,6 +4,17 @@ All notable changes to SquidSquad will be documented here.
 
 ---
 
+## [0.7.0] — 2026-03-30
+
+### Fixed
+
+- Boot scripts now include heartbeat launch and current-state initialization — previously stale after FEAT-033 and FEAT-037 shipped (BUG-SKILL-027).
+- README.md no longer references old `.active-role` file-based auto-boot mechanism — updated to reflect `--append-system-prompt` flow (BUG-SKILL-028).
+- All boot scripts and SKILL.md templates use correct `--enable-auto-mode` flag instead of invalid `--permission-mode auto` (BUG-SKILL-029).
+- Dev agent grep pattern for open bugs now matches markdown bold formatting (`**Status**: Open`) — previously skipped all open bugs silently (BUG-SKILL-030).
+
+---
+
 ## [0.6.0] — 2026-03-29
 
 ### Added

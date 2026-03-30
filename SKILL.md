@@ -1,7 +1,7 @@
 ---
 name: squidsquad
 description: "Your AI dev team that coordinates through markdown, not meetings."
-version: 0.6.0
+version: 0.7.0
 ---
 
 # SquidSquad
