@@ -59,11 +59,15 @@ At the end of each cycle, print:
 echo "phase|emoji description" > .squidsquad/pm/current-state
 ```
 
-Phase is one of: `pulling`, `checkin`, `testing`, `verifying`, `planning`, `health`, `idle`. The description is a short (<=60 char) human-readable label. Examples:
+Phase is one of: `pulling`, `checkin`, `testing`, `verifying`, `planning`, `researching`, `discussing`, `test-planning`, `health`, `idle`. The description is a short (<=60 char) human-readable label. **Include the specific item ID** (e.g. BUG-SKILL-029, FEAT-SKILL-037) in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
 
 - `echo "pulling|Syncing with remote..." > .squidsquad/pm/current-state`
 - `echo "testing|Running E2E tests..." > .squidsquad/pm/current-state`
+- `echo "verifying|Verifying BUG-SKILL-029..." > .squidsquad/pm/current-state`
 - `echo "planning|FEAT-SKILL-037 intake..." > .squidsquad/pm/current-state`
+- `echo "researching|Researching FEAT-SKILL-035..." > .squidsquad/pm/current-state`
+- `echo "discussing|Discussion for FEAT-SKILL-035..." > .squidsquad/pm/current-state`
+- `echo "test-planning|Test plan for FEAT-SKILL-035..." > .squidsquad/pm/current-state`
 - `echo "idle|" > .squidsquad/pm/current-state`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
@@ -379,7 +383,7 @@ Apply this logic to: `RESEARCH.md` (Phase 1), `PHASE2-PREP.md` (Phase 2A), `CONT
 
 ### Phase 1 — Research
 
-Write current state: `echo "planning|Research for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
+Write current state: `echo "researching|Researching FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
 
 **Check artifact resume** (see above) for `FEAT-[ROLE_UPPER]-XXX-RESEARCH.md`. If skipping, proceed to Phase 2A.
 
@@ -433,7 +437,7 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 
 ### Phase 2A — Discussion Prep (Subagent)
 
-Write current state: `echo "planning|Discussion prep for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
+Write current state: `echo "discussing|Discussion prep for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
 
 **Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-PHASE2-PREP.md`. If skipping, proceed to Phase 2.
 
@@ -456,7 +460,7 @@ Light-mode features skip Phase 2A entirely.
 
 ### Phase 2 — Discussion (PM + Human)
 
-Write current state: `echo "planning|Discussion for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
+Write current state: `echo "discussing|Discussion for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
 
 **Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-CONTEXT.md`. If skipping, proceed to Phase 3.
 
@@ -528,7 +532,7 @@ options: ["Approve — proceed to test plan", "More discussion needed", "Reject 
 
 ### Phase 3 — Planning
 
-Write current state: `echo "planning|Test plan for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
+Write current state: `echo "test-planning|Test plan for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
 
 **Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md`. If skipping, the feature is ready — update status to `Approved`.
 

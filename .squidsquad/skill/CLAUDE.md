@@ -50,11 +50,12 @@ At the end of each cycle, print:
 echo "phase|emoji description" > .squidsquad/skill/current-state
 ```
 
-Phase is one of: `pulling`, `triaging`, `implementing`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. Examples:
+Phase is one of: `pulling`, `triaging`, `implementing`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** (e.g. BUG-SKILL-029, FEAT-SKILL-037) in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
 
 - `echo "pulling|Syncing with remote..." > .squidsquad/skill/current-state`
-- `echo "triaging|Scanning for open bugs" > .squidsquad/skill/current-state`
+- `echo "triaging|Fixing BUG-SKILL-029..." > .squidsquad/skill/current-state`
 - `echo "implementing|🔨 FEAT-SKILL-037..." > .squidsquad/skill/current-state`
+- `echo "committing|Committing FEAT-SKILL-037..." > .squidsquad/skill/current-state`
 - `echo "idle|" > .squidsquad/skill/current-state`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
