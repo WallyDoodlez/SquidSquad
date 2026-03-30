@@ -35,7 +35,9 @@
       "Bash(echo {})",
       "Bash(bash \"D:/Dev/Dev/SquidSquad/.squidsquad/statusline.sh\")",
       "Bash(\"D:/Dev/Dev/SquidSquad/.squidsquad/skill/current-state\")",
-      "Bash(sort -t- -k2 -n)"
+      "Bash(sort -t- -k2 -n)",
+      "Bash(grep -ri \"github.com\\\\|email\\\\|@\\\\|user\\\\|name\" /d/Dev/Dev/SquidSquad --include=*.json --include=*.md)",
+      "Bash(ls -la /d/Dev/Dev/SquidSquad/*.stackdump)"
     ]
   }
 }

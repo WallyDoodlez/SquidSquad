@@ -1241,7 +1241,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-040 — Explicit approval gate after Phase 2 discussion before proceeding to Phase 3
 
 - **Priority**: Medium
-- **Status**: Approved
+- **Status**: Pending Test
 - **Requested By**: human
 - **Description**: After all Phase 2 interactive questions are completed and CONTEXT.md is written, PM should present an explicit confirmation prompt via AskUserQuestion before moving to Phase 3 (test plan). Options: "Approve — proceed to test plan", "More discussion needed", or "Reject this feature". Currently PM moves directly from Phase 2 to Phase 3 without a final check, which means the human can't pause to reconsider or add more context after seeing the full picture of locked decisions.
 - **Rationale**: The Phase 2 discussion can cover many questions quickly. After all decisions are locked, the human should see a summary of what was decided and explicitly confirm they're ready to proceed. This prevents the PM from rushing into Phase 3 when the human might want to revisit a decision or add something they forgot.
@@ -1257,6 +1257,8 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 > [2026-03-29 21:15] **pm/qa**: Filed from human request. Human wants an explicit checkpoint between Phase 2 and Phase 3 to confirm all decisions before test planning begins. Status: Pending — awaiting human approval.
 > [2026-03-29 21:15] **pm/qa**: Human approved. Straightforward — add AskUserQuestion gate at end of Phase 2 in agent-instructions.md. Status → Approved.
+> [2026-03-29 21:45] **skill-lead**: Picking up. Status → In Progress.
+> [2026-03-29 21:45] **skill-lead**: Complete. Added "Phase 2 Approval Gate" to `references/agent-instructions.md` between CONTEXT.md creation and Phase 3. PM presents summary of locked decisions via AskUserQuestion with 3 options: Approve, More discussion, Reject. Updated CHANGELOG.md. Status → Pending Test.
 
 ---
 

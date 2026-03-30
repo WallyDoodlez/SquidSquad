@@ -859,6 +859,17 @@ Continue until all questions are resolved. Capture decisions in `.squidsquad/[RO
 
 **Open in editor**: After CONTEXT.md is created, offer to open it (see "Open Artifacts in Editor" below).
 
+**Phase 2 Approval Gate**: After CONTEXT.md is written, present a summary of all locked decisions and use `AskUserQuestion` to confirm before proceeding:
+
+```
+question: "Phase 2 complete. Here are the locked decisions:\n\n[list each locked decision from CONTEXT.md]\n\nReady to proceed to test planning?"
+options: ["Approve — proceed to test plan", "More discussion needed", "Reject this feature"]
+```
+
+- **"Approve"**: Continue to Phase 3.
+- **"More discussion needed"**: Ask the human what they want to revisit. Re-open the relevant question(s), update CONTEXT.md with revised decisions, then re-present the gate.
+- **"Reject"**: Set feature status to `Rejected`. Append Discussion entry with reason. Stop the intake process.
+
 ### Phase 3 — Planning
 
 Write current state: `echo "planning|📋 Test plan for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
