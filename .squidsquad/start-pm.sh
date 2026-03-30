@@ -30,4 +30,4 @@ bash .squidsquad/heartbeat.sh "pm" "$HB_INTERVAL" &
 HB_PID=$!
 trap "kill $HB_PID 2>/dev/null" EXIT
 
-claude --permission-mode auto --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
+claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"

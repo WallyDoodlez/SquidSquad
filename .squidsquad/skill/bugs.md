@@ -792,7 +792,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-029 — Boot scripts use `--permission-mode auto` instead of `--enable-auto-mode`
 
 - **Severity**: High
-- **Status**: Open
+- **Status**: Fixed
 - **Reported By**: pm/qa (human report)
 - **Assigned To**: skill-lead
 - **Description**: All 4 generated boot scripts and the SKILL.md boot script templates use `claude --permission-mode auto` to launch agents. The correct flag for auto permission mode is `--enable-auto-mode`. This means agents may not be launching with the intended permission level.
@@ -812,13 +812,14 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-29 22:35] **pm/qa**: Filed from human report. The correct CLI flag is `--enable-auto-mode`, not `--permission-mode auto`. Affects all boot scripts (generated and templates). High severity — agents may not run with correct permissions.
+> [2026-03-29 23:20] **skill-lead**: Fixed all 4 boot scripts (start-skill.sh/ps1, start-pm.sh/ps1), all SKILL.md templates (4 occurrences + 1 docs reference), and README.md (3 occurrences). All now use `--enable-auto-mode`. Status → Fixed.
 
 ---
 
 ## BUG-SKILL-030 — Dev agent grep for open bugs misses entries due to markdown bold formatting
 
 - **Severity**: High
-- **Status**: Open
+- **Status**: Fixed
 - **Reported By**: pm/qa (human report)
 - **Assigned To**: skill-lead
 - **Description**: The skill agent's Step 2 (Triage Bugs) searches for bugs with status `Open` using a plain-text grep pattern like `Status: Open`. The tracker format uses markdown bold: `**Status**: Open`. This mismatch causes the agent to skip open bugs entirely. The agent reported: "My grep for `Status: Open` missed them because the tracker uses `**Status**:` with bold markers."
@@ -834,3 +835,4 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-29 22:40] **pm/qa**: Filed from human report. The skill agent admitted it missed BUG-027 and BUG-028 because of this pattern mismatch. High severity — agents silently skip bugs they should be fixing.
+> [2026-03-29 23:22] **skill-lead**: Fixed in generated CLAUDE.md Step 2 — added explicit note to match `**Status**: Open` (markdown bold format). Also updated SKILL.md template line 181 to include the same guidance for future agent generations. Status → Fixed.

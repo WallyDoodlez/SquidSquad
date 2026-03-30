@@ -32,7 +32,7 @@ SquidSquad always has a **PM/QA** agent. Dev agents are defined by you at setup 
 
 | Agent | Loop | Mode |
 |-------|------|------|
-| **[role] Lead** (one per dev role) | Fix bugs → implement features → run tests → push | Autonomous (`--permission-mode auto`) |
+| **[role] Lead** (one per dev role) | Fix bugs → implement features → run tests → push | Autonomous (`--enable-auto-mode`) |
 | **PM/QA** | Human check-in → QA pass → file bugs → verify work → push | Interactive (you talk to this one) |
 
 **Common team shapes:**
@@ -215,7 +215,7 @@ bash .squidsquad/start-pm.sh
 .\.squidsquad\start-pm.ps1
 ```
 
-All agents run interactively with `--permission-mode auto`. The boot script injects the role via `--append-system-prompt "SQUIDSQUAD_ROLE=<role>"` — agents read this from their system prompt, load their role-specific instructions from `.squidsquad/<role>/CLAUDE.md`, and start their Ralph Loop immediately.
+All agents run interactively with `--enable-auto-mode`. The boot script injects the role via `--append-system-prompt "SQUIDSQUAD_ROLE=<role>"` — agents read this from their system prompt, load their role-specific instructions from `.squidsquad/<role>/CLAUDE.md`, and start their Ralph Loop immediately.
 
 ### 4. Interact Via PM
 
@@ -244,7 +244,7 @@ The agent that discovers the problem files it with complete context. The receivi
 ## Requirements
 
 - [Claude Code CLI](https://claude.ai/code) — agents run as interactive Claude Code sessions
-- `--permission-mode auto` — agents need permission to read/write files and run tests without prompting
+- `--enable-auto-mode` — agents need permission to read/write files and run tests without prompting
 - A git repository with a remote (GitHub, GitLab, etc.)
 - Test commands that can be run from the repo root (optional per agent)
 - `gh` CLI (optional) — required for PR-based approval flow and GitHub Issues ingestion
