@@ -1098,14 +1098,15 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 - **Description**: Introduce a Delivery Manager (DM) as a hardcoded role in SquidSquad. The DM owns the "last mile" of shipping — when a feature reaches a new `Pending Ship` status, the DM takes over to create a delivery package of all user-facing materials before the feature is marked `Shipped`. This offloads documentation work from PM (reducing context pressure so PM can run longer) and from dev agents (who focus on code). The feature lifecycle becomes: `Approved → In Progress (dev) → Pending Test (PM verifies) → Pending Ship (DM packages) → Shipped`.
 - **Rationale**: PM currently handles too much — check-ins, QA, planning, version bumps, AND documentation review. The Feature Intake Process alone is a major context hog. By splitting out the shipping/docs role, PM stays lightweight and can run indefinitely. Dev agents stay focused on implementation. DM handles everything needed for external users to consume the change.
 - **DM Responsibilities**:
-  - README updates for new/changed features
-  - CHANGELOG entries
-  - User-facing documentation (how does this work, configuration, examples)
-  - Ensuring delivery package is complete before marking Shipped
+  - All client-facing / user-facing work that isn't implementation code
+  - README updates, CHANGELOG entries, user documentation
+  - Configuration changes (config files, settings, CMS entries)
+  - Migration/upgrade steps for existing installs
+  - Content work requested by the client (e.g. CMS entries, copy changes)
+  - Delivery packaging — ensuring everything a user needs is ready before marking Shipped
 - **NOT DM Responsibilities** (stays with dev):
-  - Upgrade/migration code paths
-  - Config schema changes
-  - Implementation details
+  - Implementation code
+  - Bug fixes
 - **Acceptance Criteria**:
   - [ ] New `Pending Ship` status added to feature lifecycle in tracker schema
   - [ ] DM role defined in `references/agent-instructions.md` as a new template
@@ -1121,6 +1122,9 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-29 13:25] **pm/qa**: Filed from human request. Human wants PM to stay lean and run forever. Key insight: shipping (docs, README, CHANGELOG) is a distinct concern from QA verification. DM is hardcoded (always present, like PM), not user-configured. Upgrade/migration stays with dev — DM only owns user-facing delivery materials. Status: Pending — awaiting human approval.
+> [2026-03-29 22:15] **pm/qa**: Human clarified: DM also owns configuration changes (config.md, settings.json, new config values) and migration/upgrade steps — not just docs. Updated responsibilities. Dev only owns implementation code and bug fixes. With FEAT-043 (QA split), the full role picture is: PM (talks), QA (tests), DM (ships + configures), Dev (builds).
+> [2026-03-29 22:20] **pm/qa**: Human further clarified: DM owns ALL client-facing work that isn't code. Not just shipping features — also direct client requests like CMS entries, content updates, configuration changes. DM is the "everything the client sees" agent. Updated responsibilities.
+> [2026-03-29 22:25] **pm/qa**: Human clarified filing permissions: ALL agents can file bugs. DM and PM can file features. Only PM approves features (with human confirmation). DM proactively files features when it spots client-facing gaps.
 
 ---
 
@@ -1241,7 +1245,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-040 — Explicit approval gate after Phase 2 discussion before proceeding to Phase 3
 
 - **Priority**: Medium
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Requested By**: human
 - **Description**: After all Phase 2 interactive questions are completed and CONTEXT.md is written, PM should present an explicit confirmation prompt via AskUserQuestion before moving to Phase 3 (test plan). Options: "Approve — proceed to test plan", "More discussion needed", or "Reject this feature". Currently PM moves directly from Phase 2 to Phase 3 without a final check, which means the human can't pause to reconsider or add more context after seeing the full picture of locked decisions.
 - **Rationale**: The Phase 2 discussion can cover many questions quickly. After all decisions are locked, the human should see a summary of what was decided and explicitly confirm they're ready to proceed. This prevents the PM from rushing into Phase 3 when the human might want to revisit a decision or add something they forgot.
@@ -1259,6 +1263,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 21:15] **pm/qa**: Human approved. Straightforward — add AskUserQuestion gate at end of Phase 2 in agent-instructions.md. Status → Approved.
 > [2026-03-29 21:45] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-29 21:45] **skill-lead**: Complete. Added "Phase 2 Approval Gate" to `references/agent-instructions.md` between CONTEXT.md creation and Phase 3. PM presents summary of locked decisions via AskUserQuestion with 3 options: Approve, More discussion, Reject. Updated CHANGELOG.md. Status → Pending Test.
+> [2026-03-29 22:40] **pm/qa**: Verified all 6 acceptance criteria. Approval gate added between Phase 2 and Phase 3 with AskUserQuestion, 3 options (Approve/More discussion/Reject), locked decision summary, re-open and reject flows. Status → Shipped.
 
 ---
 
@@ -1324,3 +1329,47 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 > [2026-03-29 21:50] **pm/qa**: Filed from human request. Original filing was about a "normal mode" boot script, but human clarified: the issue is that SquidSquad should NEVER activate on normal Claude sessions — only via boot scripts. Reframed as an auto-boot mechanism change. Recommended approach: boot scripts set env var `SQUIDSQUAD=1`, CLAUDE.md checks env var instead of `.active-role` file. No file = no leakage across terminals.
 > [2026-03-29 21:55] **pm/qa**: Human approved. Status → Approved.
+
+---
+
+## FEAT-SKILL-043 — Separate QA from PM into its own hardcoded agent role
+
+- **Priority**: High
+- **Status**: Pending
+- **Requested By**: human
+- **Description**: Split the current PM/QA agent into two distinct hardcoded roles:
+
+  **PM (Product Manager)** — the talker. Owns:
+  - Human check-ins and communication
+  - Feature intake process (Phases 1-3: research, discussion, test plan)
+  - Backlog management, priority changes
+  - Feature filing from human input
+  - Version bump decisions
+
+  **QA (Quality Assurance)** — the tester. Owns:
+  - QA coherence pass (reading skill files for issues)
+  - Bug verification (Fixed → Verified → Closed)
+  - Feature testing (Pending Test → Shipped)
+  - Agent health checks
+  - Filing bugs from QA findings
+
+  PM does NO testing. PM is primarily the interface between the human and the squad. QA runs its own Ralph Loop independently, testing and verifying work.
+
+- **Rationale**: PM's context gets consumed by QA work (reading lots of files for coherence checks, verifying features against acceptance criteria). Splitting them keeps PM lean and focused on human interaction. QA can run at its own pace with its own interval.
+- **Acceptance Criteria**:
+  - [ ] QA is a hardcoded role (always present, like PM), not user-configured
+  - [ ] QA has its own Ralph Loop template in `references/agent-instructions.md`
+  - [ ] QA has its own boot script (`start-qa.sh` / `start-qa.ps1`)
+  - [ ] QA owns: QA pass, bug verification, feature testing, agent health checks, filing bugs
+  - [ ] PM owns: human check-ins, feature intake, backlog management, priority changes, version bumps
+  - [ ] PM does NO testing or verification — hands off after Phase 3
+  - [ ] PM is primarily the human-facing conversational agent
+  - [ ] QA has its own tracker directory (`.squidsquad/qa/`) or shares PM's trackers (design decision)
+  - [ ] QA can have its own loop interval independent of PM
+  - [ ] Setup generates QA agent alongside PM automatically
+  - [ ] SKILL.md updated with QA role definition, templates, boot scripts
+  - [ ] Upgrade steps add QA to existing installs
+
+### Discussion
+
+> [2026-03-29 22:15] **pm/qa**: Filed from human request. Human wants PM to be "primarily the talker" — no testing. QA becomes its own hardcoded agent that runs independently. Key design decisions needed: does QA share PM's trackers or have its own? Does QA report findings to PM (who relays to human) or directly to dev agents? How does version bump work — PM decides but QA provides the ship count?
