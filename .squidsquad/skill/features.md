@@ -651,7 +651,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 - **Priority**: Medium
 - **Owner**: skill-lead
-- **Status**: Pending
+- **Status**: Approved
 - **Description**: When the Feature Intake Process is interrupted (e.g., context reset, PM restart) and planning resumes, the PM should intelligently handle already-completed phases:
 
   **Two scenarios:**
@@ -673,7 +673,9 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 - **Acceptance Criteria**:
   - [ ] PM checks for existing planning artifacts before starting each phase
   - [ ] Uncommitted artifacts → skip phase automatically
-  - [ ] Committed artifacts → AskUserQuestion prompt to re-run or reuse
+  - [ ] Committed artifacts with no code changes since → auto-reuse silently
+  - [ ] Committed artifacts with code changes since → AskUserQuestion prompt to re-run or reuse
+  - [ ] Code change detection: `git log --oneline <artifact_commit>..HEAD -- references/ SKILL.md CHANGELOG.md` — if commits found, code changed
   - [ ] Works for RESEARCH.md, PHASE2-PREP.md, CONTEXT.md, TEST-PLAN.md
   - [ ] PM template in `references/agent-instructions.md` updated
   - [ ] Generated PM CLAUDE.md reflects the resume logic
@@ -681,6 +683,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-28 12:00] **pm/qa**: Filed from human request. Smart resume for interrupted planning — detect existing artifacts and either skip or ask user. Two behaviors: uncommitted = auto-skip, committed = prompt user. Status: Pending — awaiting human approval.
+> [2026-03-29 21:10] **pm/qa**: Human approved. Refined staleness logic: auto-reuse if no code changes since artifact commit (check git log for commits touching references/, SKILL.md, CHANGELOG.md). Only ask user if code has changed since the artifact was created. Status → Approved.
 
 ---
 
@@ -1228,4 +1231,26 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-29 18:55] **pm/qa**: Light-mode intake complete. Decisions locked: (D1) all agents immediately via file-based signal, (D2) minimum 5 minutes. CONTEXT.md and TEST-PLAN.md (17 tests) created. Status → Approved.
 > [2026-03-29 19:00] **skill-lead**: Picking up. Status → In Progress.
 > [2026-03-29 19:05] **skill-lead**: Complete. Added `/squidsquad-interval` slash command section to SKILL.md
-> [2026-03-29 19:05] **pm/qa**: Verified all acceptance criteria. Slash command in SKILL.md with validation (>= 5, optional m suffix), config.md update, CronDelete+CronCreate. Step 1d (Interval Sync) in agent-instructions.md, skill/CLAUDE.md, and pm/CLAUDE.md. CHANGELOG updated. Status → Shipped. with input validation (integer >= 5, optional `m` suffix), config.md update, CronDelete+CronCreate flow, and confirmation output. Added Step 1d (Interval Sync) to agent-instructions.md dev template, skill/CLAUDE.md, and pm/CLAUDE.md — agents re-read config.md interval at cycle start and re-schedule if changed. Updated CHANGELOG.md. Status → Pending Test.
+> [2026-03-29 19:05] **pm/qa**: Verified all acceptance criteria. Slash command in SKILL.md with validation (>= 5, optional m suffix), config.md update, CronDelete+CronCreate. Step 1d (Interval Sync) in agent-instructions.md, skill/CLAUDE.md, and pm/CLAUDE.md. CHANGELOG updated. Status → Shipped.
+
+---
+
+## FEAT-SKILL-040 — Explicit approval gate after Phase 2 discussion before proceeding to Phase 3
+
+- **Priority**: Medium
+- **Status**: Approved
+- **Requested By**: human
+- **Description**: After all Phase 2 interactive questions are completed and CONTEXT.md is written, PM should present an explicit confirmation prompt via AskUserQuestion before moving to Phase 3 (test plan). Options: "Approve — proceed to test plan", "More discussion needed", or "Reject this feature". Currently PM moves directly from Phase 2 to Phase 3 without a final check, which means the human can't pause to reconsider or add more context after seeing the full picture of locked decisions.
+- **Rationale**: The Phase 2 discussion can cover many questions quickly. After all decisions are locked, the human should see a summary of what was decided and explicitly confirm they're ready to proceed. This prevents the PM from rushing into Phase 3 when the human might want to revisit a decision or add something they forgot.
+- **Acceptance Criteria**:
+  - [ ] After Phase 2 discussion completes and CONTEXT.md is written, PM uses AskUserQuestion to confirm
+  - [ ] Options: "Approve — proceed to test plan" / "More discussion needed" / "Reject feature"
+  - [ ] "More discussion" re-opens Phase 2 — PM asks what the human wants to revisit
+  - [ ] "Reject" sets feature status to Rejected with reason
+  - [ ] Confirmation includes a summary of locked decisions from CONTEXT.md
+  - [ ] `references/agent-instructions.md` Phase 2 updated with the gate
+
+### Discussion
+
+> [2026-03-29 21:15] **pm/qa**: Filed from human request. Human wants an explicit checkpoint between Phase 2 and Phase 3 to confirm all decisions before test planning begins. Status: Pending — awaiting human approval.
+> [2026-03-29 21:15] **pm/qa**: Human approved. Straightforward — add AskUserQuestion gate at end of Phase 2 in agent-instructions.md. Status → Approved.
