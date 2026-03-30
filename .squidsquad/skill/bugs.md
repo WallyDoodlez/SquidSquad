@@ -784,3 +784,29 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-29 22:30] **pm/qa**: Found during FEAT-042 QA verification. Low severity — user-facing docs only, no functional impact.
+
+---
+
+## BUG-SKILL-029 — Boot scripts use `--permission-mode auto` instead of `--enable-auto-mode`
+
+- **Severity**: High
+- **Status**: Open
+- **Reported By**: pm/qa (human report)
+- **Assigned To**: skill-lead
+- **Description**: All 4 generated boot scripts and the SKILL.md boot script templates use `claude --permission-mode auto` to launch agents. The correct flag for auto permission mode is `--enable-auto-mode`. This means agents may not be launching with the intended permission level.
+- **Steps to Reproduce**:
+  1. Read `.squidsquad/start-skill.sh` line 22
+  2. Read `.squidsquad/start-pm.ps1` line 23
+  3. All use `--permission-mode auto` instead of `--enable-auto-mode`
+- **Expected**: `claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=<role>" "start the loop"`
+- **Actual**: `claude --permission-mode auto --append-system-prompt "SQUIDSQUAD_ROLE=<role>" "start the loop"`
+- **Affected Files**:
+  - `.squidsquad/start-skill.sh`
+  - `.squidsquad/start-skill.ps1`
+  - `.squidsquad/start-pm.sh`
+  - `.squidsquad/start-pm.ps1`
+  - `SKILL.md` (all boot script templates)
+
+### Discussion
+
+> [2026-03-29 22:35] **pm/qa**: Filed from human report. The correct CLI flag is `--enable-auto-mode`, not `--permission-mode auto`. Affects all boot scripts (generated and templates). High severity — agents may not run with correct permissions.
