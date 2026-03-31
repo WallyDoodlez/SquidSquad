@@ -930,3 +930,27 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 
 > [2026-03-30 13:15] **pm/qa**: Filed from human report. Human sees 3 health icons but doesn't have DM enabled. statusline.sh needs to check DM presence before rendering its icon — same dm/ directory check as the PM Delivery Fallback.
 > [2026-03-30 13:30] **pm/qa**: Human clarified: dm/ directory IS the presence indicator. No config flag needed. If dm/ exists, DM is enabled. If not, DM doesn't exist. Setup creates dm/ when user opts in. Removed dm/ directory and config entry since human hasn't opted in. statusline.sh and all DM-aware code should use dm/ directory check. Config `DM: always present` line should only be added by setup when dm/ is created.
+
+---
+
+## BUG-SKILL-035 — Overdue timer shows +183m because quiet cycles don't update the timestamp
+
+- **Severity**: High
+- **Status**: Open
+- **Reported By**: pm/qa (human report)
+- **Assigned To**: skill-lead
+- **Description**: The statusline timer calculates elapsed time from the last iteration file's modified timestamp (`ls iter-*.md | tail -1`). Quiet cycles skip iteration logging (by design), so during long stretches of quiet cycles the timer drifts — the last iteration file gets older and older, and the overdue indicator shows increasingly large values (e.g. `⏰ +183m`). The timer should reflect when the last cycle *ran*, not when the last iteration file was *written*.
+- **Root Cause**: `statusline.sh` line 56 reads `LAST_MOD` from the latest `iter-*.md` file. Quiet cycles produce no iteration file, so `LAST_MOD` goes stale.
+- **Possible Fixes**:
+  1. Write a lightweight heartbeat/timestamp file (e.g. `.squidsquad/<role>/last-cycle`) at the end of every cycle including quiet ones — statusline reads this instead of iteration files
+  2. Touch the latest iteration file on quiet cycles (changes mtime without creating a new file)
+  3. Use the `current-state` file's mtime (already written every cycle, including `idle|` at cycle end)
+- **Steps to Reproduce**:
+  1. Run agent through several quiet cycles (no bugs to verify, no features to ship)
+  2. Observe statusline timer — overdue value grows with each quiet cycle
+- **Expected**: Timer resets after each cycle, including quiet ones
+- **Actual**: Timer only resets when an iteration file is created (productive cycles only)
+
+### Discussion
+
+> [2026-03-30 13:45] **pm/qa**: Filed from human report. Human saw ⏰ +183m on PM status bar. Root cause: quiet cycles don't log iterations, so the timer source (iter file mtime) goes stale. Option 3 (use current-state mtime) is simplest since idle| is already written every cycle.
