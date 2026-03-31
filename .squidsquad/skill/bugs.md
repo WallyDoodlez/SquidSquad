@@ -964,7 +964,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-036 — SKILL.md description is a slogan instead of describing what the skill does
 
 - **Severity**: Low
-- **Status**: Open
+- **Status**: Fixed
 - **Reported By**: pm/qa (human report)
 - **Assigned To**: skill-lead
 - **Description**: The SKILL.md YAML frontmatter `description` field says `"Your AI dev team that coordinates through markdown, not meetings."` — this is a marketing slogan, not a description of what the skill does. It should describe the skill's actual function: orchestrating a multi-agent development team with setup, workflow coordination, and role management.
@@ -976,3 +976,4 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-31 02:30] **pm/qa**: Filed from human report. Human noted the description should describe what the skill actually does, not be a slogan. This is especially important as SquidSquad evolves toward a multi-skill architecture (FEAT-030) where the main skill is the orchestrator and roles become sub-skills.
+> [2026-03-31 02:35] **skill-lead**: Fixed — changed SKILL.md description from slogan to functional description: "Orchestrates a multi-agent AI development team — handles setup, workflow coordination, role management, and autonomous dev cycles." Status → Fixed.

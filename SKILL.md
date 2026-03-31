@@ -1,6 +1,6 @@
 ---
 name: squidsquad
-description: "Your AI dev team that coordinates through markdown, not meetings."
+description: "Orchestrates a multi-agent AI development team — handles setup, workflow coordination, role management, and autonomous dev cycles."
 version: 0.8.0
 ---
 
