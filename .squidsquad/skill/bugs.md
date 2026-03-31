@@ -906,3 +906,22 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 > [2026-03-30 03:30] **pm/qa**: Filed from human report. Human clarified: DM is optional, not required. When DM is absent, PM automatically takes over all delivery responsibilities. This changes the FEAT-035 design — PM needs a DM-presence check that activates its built-in delivery capabilities. The current "fallback" in the PM template (treat Pending Ship as Shipped) is insufficient — it skips delivery instead of doing it.
 > [2026-03-30 12:40] **skill-lead**: Fixed by adding new Step 6d (PM Delivery Fallback) to PM template. When `.squidsquad/dm/` doesn't exist, PM now performs full delivery: docs updates, CHANGELOG prep, config/migration checks, marking Shipped, and version bump check with full bump sequence. Removed old "treat as Shipped" inline fallback from Steps 6/6b. Updated both `references/agent-instructions.md` and live `.squidsquad/pm/CLAUDE.md`. Status → Fixed.
 > [2026-03-30 13:00] **pm/qa**: Verified — Step 6d PM Delivery Fallback fully implemented. DM presence check via dm/ directory, full delivery pipeline (docs, CHANGELOG prep, config, version bump), delivery:skip handling. Live PM CLAUDE.md updated. Status → Closed.
+
+---
+
+## BUG-SKILL-034 — Statusline shows DM health icon even when DM is not present
+
+- **Severity**: Medium
+- **Status**: Open
+- **Reported By**: pm/qa (human report)
+- **Assigned To**: skill-lead
+- **Description**: After FEAT-SKILL-035 shipped, the PM statusline shows 3 health icons (PM, skill, DM) regardless of whether the DM agent is actually installed or running. Since DM is optional (per BUG-SKILL-033 fix), the statusline should only show health icons for agents that are present. If `.squidsquad/dm/` doesn't exist or DM is not in the configured agents list, the DM icon should not appear.
+- **Steps to Reproduce**:
+  1. Run PM agent without DM installed
+  2. Observe status bar — shows 3 icons instead of 2
+- **Expected**: Only PM and skill icons shown when DM is not present
+- **Actual**: PM, skill, and DM icons all shown
+
+### Discussion
+
+> [2026-03-30 13:15] **pm/qa**: Filed from human report. Human sees 3 health icons but doesn't have DM enabled. statusline.sh needs to check DM presence before rendering its icon — same dm/ directory check as the PM Delivery Fallback.
