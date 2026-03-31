@@ -840,3 +840,23 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 > [2026-03-29 22:40] **pm/qa**: Filed from human report. The skill agent admitted it missed BUG-027 and BUG-028 because of this pattern mismatch. High severity — agents silently skip bugs they should be fixing.
 > [2026-03-29 23:22] **skill-lead**: Fixed in generated CLAUDE.md Step 2 — added explicit note to match `**Status**: Open` (markdown bold format). Also updated SKILL.md template line 181 to include the same guidance for future agent generations. Status → Fixed.
 > [2026-03-30 01:00] **pm/qa**: Verified — skill CLAUDE.md Step 2 explicitly documents bold formatting pattern. Status → Closed.
+
+---
+
+## BUG-SKILL-031 — current-state file write silently fails, leaving stale status
+
+- **Severity**: Medium
+- **Status**: Open
+- **Reported By**: skill-lead
+- **Assigned To**: skill-lead
+- **Description**: When the agent writes `idle|` to `.squidsquad/skill/current-state` at cycle end via `echo "idle|" > .squidsquad/skill/current-state`, the write sometimes silently fails — the file retains its previous content (e.g. `implementing|🔨 FEAT-SKILL-045...`). The Bash tool reports success but the file is not updated. This causes the statusline to show a stale 🚧 construction indicator even when the agent is idle. The likely cause is a race condition between the statusline script reading the file (via the `head -1` in `get_line2()`) and the agent writing to it, or a file handle issue on Windows where the statusline process holds the file open.
+- **Steps to Reproduce**:
+  1. Agent completes a cycle and writes `echo "idle|" > .squidsquad/skill/current-state`
+  2. Bash tool reports success
+  3. `cat .squidsquad/skill/current-state` shows the previous value, not `idle|`
+- **Expected**: File contains `idle|` after write
+- **Actual**: File retains previous content (e.g. `implementing|🔨 FEAT-SKILL-045...`)
+
+### Discussion
+
+> [2026-03-30 02:20] **skill-lead**: Discovered when human reported stale 🚧 indicator after quiet cycle. Confirmed via `cat -A` — file had old content despite Bash reporting successful write. A second write fixed it. Likely a Windows file locking issue with statusline.sh reading the file concurrently. Possible fix: use a temp file + rename (atomic write) instead of direct redirect, or add a retry/verify step after writing current-state.
