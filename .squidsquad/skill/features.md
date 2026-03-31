@@ -1499,10 +1499,13 @@ _Features start as Pending (awaiting human approval) and move through Approved �
   - [ ] Boot scripts no longer launch heartbeat background process
   - [ ] Health detection works without any git fetch/pull
   - [ ] Config: repo owner/name available for API calls (or derived from `gh repo view`)
-  - [ ] Graceful fallback if `gh` CLI not available
+  - [ ] Graceful fallback if `gh` CLI not available — agent continues, health shows ❓
+  - [ ] Health icons updated: 🦑 healthy, 👻 stalled, ❓ unknown/no data (replaces 🥚)
+  - [ ] PM scans statuses on last 2-3 commits (not just HEAD) to handle SHA divergence between agents
   - [ ] SKILL.md, agent-instructions.md, README updated
   - [ ] Fixes BUG-SKILL-035 (stale timer on quiet cycles)
 
 ### Discussion
 
 > [2026-03-31 00:00] **pm/qa**: Filed from human request. Human wants faster, more reliable health detection using GitHub API instead of git operations. Chose commit statuses (Option 1) over GitHub Issues or Gists — purpose-built for status reporting, sub-second, visible in GitHub UI. Also fixes the stale timer bug (BUG-035) since status is posted every cycle including quiet ones.
+> [2026-03-31 00:20] **pm/qa**: Human chose Option 2 for SHA convergence — agents re-post to current HEAD each cycle. PM scans last 2-3 commits as belt-and-suspenders. Edge cases discussed: simultaneous pushes (scan handles it), fresh repo (skip if no HEAD), gh failure (graceful fallback, show ❓), rate limits (not a concern at ~12 req/hr). Health icon ❓ replaces 🥚 for unknown/no data state.
