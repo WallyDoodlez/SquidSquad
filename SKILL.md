@@ -496,6 +496,7 @@ Add runtime files to `.gitignore` (create the file if it doesn't exist):
 # SquidSquad runtime (not committed)
 .squidsquad/.active-role
 .squidsquad/*/current-state
+.squidsquad/.local-config
 ```
 
 ### Step 5 — Generate Boot Scripts
@@ -707,7 +708,7 @@ The script implements the **Emoji Rich** status bar design:
 - **✅ clear** — dev backlog empty, no active task
 - **🧠** — context always shown; 🧠🔥 at 50-74% (yellow text); 🧠💀 at 75%+ (red text); green text < 50%
 - **🔄 Nm** — next-cycle countdown; switches to **🔜 <1m** when under 1 minute; switches to **⏰ +Nm** when overdue (agent's cycle exceeded the iteration interval — triggers immediately at boundary, no grace period)
-- **Line 1 health icons** — (PM only, right-aligned) 🦑 healthy, 👻 stalled, 🥚 never started + rest nudge emoji
+- **Line 1 health icons** — (PM only, right-aligned) 🦑 healthy, 👻 stalled, ❓ unknown/no data + rest nudge emoji
 - **Line 2** — current step (emoji + description from `current-state` file, truncated at 60 chars) OR rotating contextual hints when idle (from hint pool files, rotates every 60s, phase-aware)
 
 Output examples:
@@ -721,6 +722,33 @@ Make the copied script executable (`chmod +x`).
 ### Step 5c — Copy Hint Pool Files
 
 Copy `references/hints-dev.txt` to `.squidsquad/hints-dev.txt` and `references/hints-pm.txt` to `.squidsquad/hints-pm.txt`. These files contain phase-aware hint pools that the status bar rotates through when agents are idle or between steps. The format is `phase|hint text` — one hint per line, comments start with `#`.
+
+### Step 5d — Guided Agent Clone Setup + .local-config
+
+Each agent runs in its own clone of the repository. This step guides the user through cloning and configuring paths so agents can detect each other's health via cross-clone file reads.
+
+Create `.squidsquad/.local-config` (gitignored, machine-specific) with the following format:
+
+```markdown
+# Agent clone paths (machine-specific, gitignored)
+# Each agent reads other agents' current-state files via these absolute paths.
+
+## Agent Paths
+- **pm**: [ABSOLUTE_PATH_TO_PM_CLONE]
+- **[role]**: [ABSOLUTE_PATH_TO_ROLE_CLONE]
+```
+
+For each agent (dev agents + PM/QA):
+
+1. **Ask for clone path**: Suggest a default sibling directory (e.g., `../SquidSquad-[role]` relative to the current repo). The user can accept the default or provide a custom absolute path.
+2. **Clone the repo**: `git clone <repo-url> <path>`. Skip if the directory already exists (user may have cloned manually).
+3. **Write the path to `.local-config`**: Append `- **[role]**: [absolute-path]` to the Agent Paths section.
+4. **Offer to open a terminal**: Ask if the user wants to launch the agent now. If yes:
+   - **Windows (PowerShell)**: `Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '[path]'; .\.squidsquad\start-[role].ps1"`
+   - **macOS/Linux (bash)**: `open -a Terminal '[path]'` or `gnome-terminal -- bash -c 'cd [path] && bash .squidsquad/start-[role].sh'`
+   - If the terminal command fails, print the path and boot command for the user to run manually.
+
+The user goes from "I want a skill agent" to "skill agent is running" in one flow. PM is typically the last agent launched (since the user interacts with PM directly).
 
 ### Step 6 — Seed Tracker Files
 
