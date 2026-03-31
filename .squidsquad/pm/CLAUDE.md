@@ -121,7 +121,12 @@ Print a brief, non-blocking status note — do NOT wait for a response before co
 Then immediately proceed to Step 3. The human will interrupt when they have input — you do not need to block the loop waiting for them.
 
 If the human has already provided input (earlier in the conversation or between cycles):
-- **A bug report**: File it to the appropriate agent's tracker. Use your judgment based on which domain the failure is in.
+- **A bug report**: Do NOT file immediately. Instead, use the **Bug Discussion Flow**:
+  1. **Investigate**: Read the relevant code, logs, or context to identify the root cause and possible fixes.
+  2. **Present**: Present the problem, root cause, and proposed fix to the human. Be specific — name the file, the line, the behavior.
+  3. **Discuss**: The human may approve, ask questions, or redirect the fix approach. Engage in back-and-forth until the human is satisfied.
+  4. **File**: Only after the human approves the approach, file the bug to the appropriate agent's tracker. Include the agreed-upon fix approach in the Description or Discussion entry.
+  5. **Non-blocking**: If the human doesn't respond during this cycle, note "awaiting human input on fix approach" in your working state. Continue the Ralph Loop — do not block. On the next cycle, check if the human has responded. If yes, process the approval. If no, mention the pending bug briefly in your check-in and continue.
 - **A feature request**: Do NOT file and immediately ask about approval. Instead:
   1. **Predict**: Based on the request and project context, present your understanding of what the human likely wants — scope, behavior, affected areas.
   2. **Surface questions**: Identify ambiguities, edge cases, or scope decisions that need clarification. Present these as open-ended questions.
@@ -153,16 +158,20 @@ Log results in `pm/qa-log.md`:
 - **Notes**: [anything notable]
 ```
 
-### Step 4 — File Bugs From Test Failures
+### Step 4 — Investigate and Present Bugs From Test Failures
 
-Print: `[🦑] Filing bugs from failures...` (or skip if no failures)
+Print: `[🦑] Investigating test failures...` (or skip if no failures)
 
-For each test failure, print: `[🦑] Filing BUG-[ROLE]-XXX...`
+For each test failure:
 
 1. Determine which agent's domain the failure is in.
 2. Check if a bug for this failure already exists (search by keywords). If yes, append a Discussion note — do not duplicate.
-3. If new: file a bug in the correct tracker using the full bug format. Increment the appropriate counter in `config.md`.
-4. If the failure spans multiple domains: file in each relevant tracker with cross-linking Discussion notes.
+3. If new: **use the Bug Discussion Flow** (same as Step 2):
+   - **Investigate** the root cause — read relevant code, understand why the test failed, identify possible fixes.
+   - **Present** the failure analysis, root cause, and proposed fix to the human.
+   - **Wait for approval** before filing. If the human approves, file the bug with the agreed-upon fix approach in Description or Discussion. Increment the appropriate counter in `config.md`.
+   - **Non-blocking**: If the human doesn't respond, note "awaiting human input on fix approach for [test failure description]" in your working state and continue the loop. Revisit next cycle.
+4. If the failure spans multiple domains: investigate once, present once, and after approval file in each relevant tracker with cross-linking Discussion notes.
 
 ### Step 5 — Verify Fixed Bugs
 

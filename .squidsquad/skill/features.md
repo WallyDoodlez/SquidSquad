@@ -1448,7 +1448,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-046 — Bug discussion flow: PM investigates and presents fix before filing to dev
 
 - **Priority**: High
-- **Status**: Approved
+- **Status**: Pending Test
 - **Requested By**: human
 - **Description**: Currently when a bug is identified (from test failures, human reports, or QA), PM files it directly to the dev agent's tracker with no discussion. The human has no chance to weigh in on the fix approach. This feature adds a discussion step: when a bug is mentioned or discovered, PM immediately investigates the root cause, presents the problem and proposed fix to the human, and asks if more discussion is needed. Only after the human is satisfied with the approach does PM file it to the dev agent.
 - **Current Flow**: Bug discovered → PM files to dev tracker → Dev picks up and fixes however it sees fit
@@ -1469,6 +1469,8 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-30 14:00] **pm/qa**: Filed from human request. Human wants a chance to discuss and steer bug fixes before they go to dev. Currently bugs go straight to dev with no human input on the approach. New flow: investigate → present → discuss → file. Status: Pending — awaiting human approval.
 > [2026-03-31 00:05] **pm/qa**: Human approved. Light mode — PM template behavior change, low technical risk. Status → Planning. Beginning intake process.
 > [2026-03-31 00:10] **pm/qa**: Phase 2 (no open questions) and Phase 3 complete. CONTEXT.md and TEST-PLAN.md created (11 TCs, 8 smoke, 6 regression risks). Status → Approved.
+> [2026-03-31 00:15] **skill-lead**: Picking up. Status → In Progress.
+> [2026-03-31 00:20] **skill-lead**: Implementation complete. Updated PM template Steps 2 and 4 in both `references/agent-instructions.md` and live `.squidsquad/pm/CLAUDE.md`. Step 2 bug reports now use Bug Discussion Flow (investigate→present→discuss→file). Step 4 test failures use same flow. Non-blocking: PM notes "awaiting human input" and continues loop. All 8 smoke tests passing. Status → Pending Test.
 
 ---
 
