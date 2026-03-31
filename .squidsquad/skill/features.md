@@ -865,6 +865,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-29 03:10] **pm/qa**: Filed from human request. Foundational platform initiative — plugin system, hardened non-interactive phase execution, external interaction surfaces, and Claude API considerations. Human specifically called out: (1) preventing conversational override of phase behavior, (2) exploring non-interactive mode + structured output, (3) interaction outside Claude CLI, (4) navigating Claude API agreements. Ties into FEAT-SKILL-020 (web UI), FEAT-SKILL-028 (VS Code extension). Large scope, parked for planning. Status: Pending — awaiting human approval.
+> [2026-03-31 02:30] **pm/qa**: Human clarified the core vision: SquidSquad should be a set of cooperating skills, not one monolith. The main skill (`squidsquad`) is the orchestrator — setup, general workflow, philosophy. Each role (PM, dev, DM) becomes its own sub-skill that depends on the main skill's concepts. Current state: everything crammed into one SKILL.md. **Planning note: this requires significantly more thought than a normal feature. Extended research, architectural discussion, and possibly multiple phases of implementation. Do not rush planning.**
 
 ---
 

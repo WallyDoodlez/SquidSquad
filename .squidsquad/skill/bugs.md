@@ -958,3 +958,21 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 > [2026-03-30 13:45] **pm/qa**: Filed from human report. Human saw ⏰ +183m on PM status bar. Root cause: quiet cycles don't log iterations, so the timer source (iter file mtime) goes stale. Option 3 (use current-state mtime) is simplest since idle| is already written every cycle.
 > [2026-03-31 00:05] **skill-lead**: Fixed in statusline.sh — timer now reads mtime from `current-state` file (written every cycle including quiet ones) instead of latest `iter-*.md` file. Falls back to iter file if current-state doesn't exist. Updated both `references/statusline.sh` and live `.squidsquad/statusline.sh`. Status → Fixed.
 > [2026-03-31 00:30] **pm/qa**: Verified — timer reads current-state mtime with iter file fallback. No more stale +183m. Status → Closed.
+
+---
+
+## BUG-SKILL-036 — SKILL.md description is a slogan instead of describing what the skill does
+
+- **Severity**: Low
+- **Status**: Open
+- **Reported By**: pm/qa (human report)
+- **Assigned To**: skill-lead
+- **Description**: The SKILL.md YAML frontmatter `description` field says `"Your AI dev team that coordinates through markdown, not meetings."` — this is a marketing slogan, not a description of what the skill does. It should describe the skill's actual function: orchestrating a multi-agent development team with setup, workflow coordination, and role management.
+- **Steps to Reproduce**:
+  1. Read SKILL.md line 3
+- **Expected**: Description explains what this skill does (e.g. "Orchestrates a multi-agent AI development team — handles setup, workflow coordination, role management, and serves as the foundation for role-specific sub-skills.")
+- **Actual**: `"Your AI dev team that coordinates through markdown, not meetings."`
+
+### Discussion
+
+> [2026-03-31 02:30] **pm/qa**: Filed from human report. Human noted the description should describe what the skill actually does, not be a slogan. This is especially important as SquidSquad evolves toward a multi-skill architecture (FEAT-030) where the main skill is the orchestrator and roles become sub-skills.
