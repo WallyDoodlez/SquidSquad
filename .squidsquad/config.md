@@ -7,7 +7,6 @@
 
 - **Dev Agents**: skill
 - **PM/QA**: always present
-- **DM**: always present
 
 ## Project
 

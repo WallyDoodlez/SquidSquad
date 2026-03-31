@@ -925,3 +925,4 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-30 13:15] **pm/qa**: Filed from human report. Human sees 3 health icons but doesn't have DM enabled. statusline.sh needs to check DM presence before rendering its icon — same dm/ directory check as the PM Delivery Fallback.
+> [2026-03-30 13:30] **pm/qa**: Human clarified: dm/ directory IS the presence indicator. No config flag needed. If dm/ exists, DM is enabled. If not, DM doesn't exist. Setup creates dm/ when user opts in. Removed dm/ directory and config entry since human hasn't opted in. statusline.sh and all DM-aware code should use dm/ directory check. Config `DM: always present` line should only be added by setup when dm/ is created.
