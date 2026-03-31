@@ -1475,7 +1475,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-047 — Replace heartbeat branches with GitHub commit statuses for agent health
 
 - **Priority**: High
-- **Status**: Pending
+- **Status**: Planning
 - **Requested By**: human
 - **Description**: Replace the current heartbeat branch system (FEAT-SKILL-033) with GitHub commit statuses via `gh api`. Heartbeat branches require `git fetch` which is slow and conflicts with active git work. Commit statuses are sub-second HTTP calls that bypass git entirely.
 - **How It Works**:
@@ -1509,3 +1509,4 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 > [2026-03-31 00:00] **pm/qa**: Filed from human request. Human wants faster, more reliable health detection using GitHub API instead of git operations. Chose commit statuses (Option 1) over GitHub Issues or Gists — purpose-built for status reporting, sub-second, visible in GitHub UI. Also fixes the stale timer bug (BUG-035) since status is posted every cycle including quiet ones.
 > [2026-03-31 00:20] **pm/qa**: Human chose Option 2 for SHA convergence — agents re-post to current HEAD each cycle. PM scans last 2-3 commits as belt-and-suspenders. Edge cases discussed: simultaneous pushes (scan handles it), fresh repo (skip if no HEAD), gh failure (graceful fallback, show ❓), rate limits (not a concern at ~12 req/hr). Health icon ❓ replaces 🥚 for unknown/no data state.
+> [2026-03-31 00:25] **pm/qa**: Human approved. Status → Planning. Beginning intake process.
