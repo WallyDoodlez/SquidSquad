@@ -1474,41 +1474,50 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 ---
 
-## FEAT-SKILL-047 — Replace heartbeat branches with GitHub commit statuses for agent health
+## FEAT-SKILL-047 — Cross-clone health detection via local file reads + guided agent setup
 
 - **Priority**: High
 - **Status**: Planning
 - **Requested By**: human
-- **Description**: Replace the current heartbeat branch system (FEAT-SKILL-033) with GitHub commit statuses via `gh api`. Heartbeat branches require `git fetch` which is slow and conflicts with active git work. Commit statuses are sub-second HTTP calls that bypass git entirely.
+- **Description**: Replace the heartbeat branch system (FEAT-SKILL-033) with direct cross-clone file reads for real-time agent health detection. Each agent's clone path is stored in a gitignored `.squidsquad/.local-config` file. Statusline and PM read other agents' `current-state` files directly via absolute path — instant, zero API calls, real-time. Setup flow is enhanced to guide the user through cloning repos and launching agents in new terminals.
+- **Philosophy**: GitHub (git) is the communication bus and audit trail for all content. This is the one exception — purely operational status reads that need to be real-time. No content, no decisions, no audit trail needed.
 - **How It Works**:
-  - Each agent posts a commit status to HEAD at the end of every cycle (including quiet cycles):
+  - `.squidsquad/.local-config` (gitignored, machine-specific) stores absolute paths to each agent's clone:
+    ```markdown
+    ## Agent Paths
+    - **pm**: D:\Dev\SquidSquad-PM
+    - **skill**: D:\Dev\SquidSquad-Skill
     ```
-    gh api repos/OWNER/REPO/statuses/$(git rev-parse HEAD) -f state=success -f context="squidsquad/<role>" -f description="cycle N — <phase> — <timestamp>"
-    ```
-  - PM reads all statuses on HEAD to check agent health:
-    ```
-    gh api repos/OWNER/REPO/commits/HEAD/statuses
-    ```
-  - statusline.sh reads commit statuses instead of heartbeat branches
-  - No background process needed — agents post status inline at cycle end
-  - **Also fixes BUG-SKILL-035** (stale timer): statusline reads the timestamp from the commit status instead of iteration file mtime
-- **Replaces**: heartbeat.sh background process, heartbeat branches, `git fetch origin heartbeat/<role>`
+  - Statusline reads other agents' `current-state` file mtime for health icons and timer
+  - PM Step 7 reads other agents' `current-state` for health check
+  - No background process, no git fetch, no GitHub API
+- **Guided Setup Flow**:
+  - When adding a new agent during setup, ask for a path (or suggest a default)
+  - Clone the repo to that path (`git clone <repo-url> <path>`)
+  - Write the path to `.local-config`
+  - Open a new terminal at that path
+  - Run the boot script in the new terminal
+  - User goes from "I want a skill agent" to "skill agent is running" in one flow
+- **Replaces**: heartbeat.sh, heartbeat branches, `git fetch origin heartbeat/<role>`, Heartbeat Interval Seconds config
+- **Health Icons**: 🦑 healthy, 👻 stalled (no update > 2x interval), ❓ unknown/no data (replaces 🥚)
 - **Acceptance Criteria**:
-  - [ ] Agents post commit status at end of every cycle (quiet and productive)
-  - [ ] PM reads commit statuses for health check (Step 7) instead of heartbeat branches
-  - [ ] statusline.sh reads commit status timestamps for timer instead of iteration file mtime
-  - [ ] heartbeat.sh removed or deprecated
-  - [ ] Boot scripts no longer launch heartbeat background process
-  - [ ] Health detection works without any git fetch/pull
-  - [ ] Config: repo owner/name available for API calls (or derived from `gh repo view`)
-  - [ ] Graceful fallback if `gh` CLI not available — agent continues, health shows ❓
-  - [ ] Health icons updated: 🦑 healthy, 👻 stalled, ❓ unknown/no data (replaces 🥚)
-  - [ ] PM scans statuses on last 2-3 commits (not just HEAD) to handle SHA divergence between agents
+  - [ ] `.squidsquad/.local-config` file format defined and gitignored
+  - [ ] Setup flow asks for agent clone paths and writes to `.local-config`
+  - [ ] Setup clones repo to specified path for new agents
+  - [ ] Setup opens new terminal and runs boot script for new agent
+  - [ ] Statusline reads cross-clone `current-state` files for health and timer
+  - [ ] PM Step 7 reads cross-clone `current-state` for health check (no git fetch)
+  - [ ] heartbeat.sh removed, boot scripts no longer launch heartbeat process
+  - [ ] Heartbeat Interval Seconds removed from config.md
+  - [ ] Health icons: 🦑 healthy, 👻 stalled, ❓ unknown (replaces 🥚)
+  - [ ] Stale threshold: 2x iteration interval
+  - [ ] Graceful fallback if `.local-config` missing or path unreachable — show ❓
+  - [ ] Works on Windows (PowerShell) and Unix (bash)
   - [ ] SKILL.md, agent-instructions.md, README updated
-  - [ ] Fixes BUG-SKILL-035 (stale timer on quiet cycles)
 
 ### Discussion
 
-> [2026-03-31 00:00] **pm/qa**: Filed from human request. Human wants faster, more reliable health detection using GitHub API instead of git operations. Chose commit statuses (Option 1) over GitHub Issues or Gists — purpose-built for status reporting, sub-second, visible in GitHub UI. Also fixes the stale timer bug (BUG-035) since status is posted every cycle including quiet ones.
-> [2026-03-31 00:20] **pm/qa**: Human chose Option 2 for SHA convergence — agents re-post to current HEAD each cycle. PM scans last 2-3 commits as belt-and-suspenders. Edge cases discussed: simultaneous pushes (scan handles it), fresh repo (skip if no HEAD), gh failure (graceful fallback, show ❓), rate limits (not a concern at ~12 req/hr). Health icon ❓ replaces 🥚 for unknown/no data state.
-> [2026-03-31 00:25] **pm/qa**: Human approved. Status → Planning. Beginning intake process.
+> [2026-03-31 00:00] **pm/qa**: Filed from human request. Originally proposed GitHub commit statuses, but human raised concerns about consuming API rate limits (user may use GH account for other things). Pivoted to cross-clone file reads via configured paths.
+> [2026-03-31 00:20] **pm/qa**: Human proposed: during setup, ask for agent path, clone repo there, open terminal, run boot script — full guided flow. Philosophy: GitHub is the bus for all content/audit trail. Local file reads are the one exception, purely for real-time operational health.
+> [2026-03-31 00:25] **pm/qa**: Human approved approach. Health icons: ❓ replaces 🥚 for unknown/no data.
+> [2026-03-31 00:45] **pm/qa**: Rewrote feature with updated scope. Research from original commit-status approach still partially relevant (file impact analysis, what to remove). Status → Planning.
