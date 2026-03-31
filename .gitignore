@@ -1,6 +1,7 @@
 # SquidSquad runtime (not committed)
 .squidsquad/.active-role
 .squidsquad/*/current-state
+.squidsquad/.local-config
 
 .claude/commands/squidsquad-*
 .claude/settings.local.json

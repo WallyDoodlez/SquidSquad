@@ -1478,7 +1478,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-047 — Cross-clone health detection via local file reads + guided agent setup
 
 - **Priority**: High
-- **Status**: Approved
+- **Status**: Pending Test
 - **Requested By**: human
 - **Description**: Replace the heartbeat branch system (FEAT-SKILL-033) with direct cross-clone file reads for real-time agent health detection. Each agent's clone path is stored in a gitignored `.squidsquad/.local-config` file. Statusline and PM read other agents' `current-state` files directly via absolute path — instant, zero API calls, real-time. Setup flow is enhanced to guide the user through cloning repos and launching agents in new terminals.
 - **Philosophy**: GitHub (git) is the communication bus and audit trail for all content. This is the one exception — purely operational status reads that need to be real-time. No content, no decisions, no audit trail needed.
@@ -1523,6 +1523,8 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-31 00:25] **pm/qa**: Human approved approach. Health icons: ❓ replaces 🥚 for unknown/no data.
 > [2026-03-31 00:45] **pm/qa**: Rewrote feature with updated scope. Research from original commit-status approach still partially relevant (file impact analysis, what to remove). Status → Planning.
 > [2026-03-31 01:00] **pm/qa**: CONTEXT.md and TEST-PLAN.md created (23 TCs, 15 smoke, 9 regression risks). Status → Approved.
+> [2026-03-31 00:30] **skill-lead**: Picking up. Status → In Progress.
+> [2026-03-31 00:45] **skill-lead**: Implementation complete. Replaced heartbeat branch system with cross-clone file reads via `.local-config`. Changes: (1) statusline.sh reads cross-clone current-state files for health icons (🦑/👻/❓), stale threshold 2x interval. (2) PM Step 7 uses cross-clone reads instead of git fetch. (3) Deleted heartbeat.sh from references/ and .squidsquad/. (4) Removed heartbeat launch blocks from all 6 boot scripts (4 live + templates). (5) Removed Heartbeat Interval Seconds from config. (6) Updated SKILL.md setup/upgrade flows. (7) Updated README. (8) .local-config added to .gitignore. All smoke tests passing. Status → Pending Test.
 
 ---
 

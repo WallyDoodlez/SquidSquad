@@ -24,11 +24,4 @@ if (Test-Path .squidsquad) {
 Remove-Item .squidsquad/pm/current-state -ErrorAction SilentlyContinue
 "idle|Initializing..." | Set-Content .squidsquad/pm/current-state -NoNewline
 
-# Launch heartbeat in background
-$hbInterval = if ($config -match 'Heartbeat Interval Seconds.*?(\d+)') { $Matches[1] } else { '10' }
-$hbProc = Start-Process -FilePath "bash" -ArgumentList ".squidsquad/heartbeat.sh", "pm", $hbInterval -PassThru -NoNewWindow
-try {
-    claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
-} finally {
-    Stop-Process -Id $hbProc.Id -ErrorAction SilentlyContinue
-}
+claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"

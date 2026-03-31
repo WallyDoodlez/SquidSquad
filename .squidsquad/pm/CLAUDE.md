@@ -276,23 +276,20 @@ Print: `[🦑] No DM present — PM performing delivery for FEAT-[ROLE_UPPER]-XX
 
 Print: `[🦑] Checking agent health...`
 
-Check each agent's health using heartbeat branches. Each agent's boot script launches a background heartbeat process that pushes an orphan `heartbeat/<role>` branch every N seconds (configurable in `config.md` as `Heartbeat Interval Seconds`, default 10s).
+Check each agent's health by reading their `current-state` file via cross-clone paths from `.squidsquad/.local-config`. Each agent writes to its `current-state` file at the end of every cycle (including quiet cycles), so the file's mtime indicates when the agent last completed a cycle.
 
-For each dev agent listed in `config.md`, plus the DM agent (if `.squidsquad/dm/` exists):
+Read `.squidsquad/.local-config` to get each agent's clone path. For each dev agent listed in `config.md`, plus the DM agent (if `.squidsquad/dm/` exists):
 
-```bash
-git fetch origin "heartbeat/[AGENT]" 2>/dev/null
-TIMESTAMP=$(git log -1 --format="%ai" "origin/heartbeat/[AGENT]" 2>/dev/null)
-```
+1. Look up the agent's clone path from `.local-config` (format: `- **role**: /absolute/path`).
+2. Read `<path>/.squidsquad/<role>/current-state` and check the file's mtime.
+3. Read the `Iteration Interval > Minutes` value from `config.md` (default 30). An agent is stalled if the `current-state` mtime is older than 2× the iteration interval.
 
-Read the `Heartbeat Interval Seconds` value from `config.md` (default 10). An agent is stalled if the heartbeat timestamp is older than 3x the heartbeat interval.
-
-- If heartbeat branch exists and timestamp is recent: agent is healthy.
-- If heartbeat branch exists but timestamp is stale: agent is **stalled**. Log a warning in `qa-log.md` and append a Discussion note to the agent's `bugs.md`:
+- If `current-state` exists and mtime is recent (within 2× interval): agent is healthy (🦑).
+- If `current-state` exists but mtime is stale (older than 2× interval): agent is **stalled** (👻). Log a warning in `qa-log.md` and append a Discussion note to the agent's `bugs.md`:
   ```
-  > [YYYY-MM-DD HH:MM] **pm/qa**: Agent appears stalled — heartbeat older than [3 x heartbeat interval]s. Please check.
+  > [YYYY-MM-DD HH:MM] **pm/qa**: Agent appears stalled — no cycle activity for [elapsed] minutes. Please check.
   ```
-- If heartbeat branch does not exist: agent may not have started yet — note in QA log.
+- If `.local-config` is missing, path is unreachable, or `current-state` doesn't exist: agent status is unknown (❓) — note in QA log.
 
 ### Step 7b — Ingest GitHub Issues (if enabled)
 

@@ -23,11 +23,4 @@ echo "skill" > .squidsquad/.active-role
 rm -f .squidsquad/skill/current-state
 echo "idle|Initializing..." > .squidsquad/skill/current-state
 
-# Launch heartbeat in background
-HB_INTERVAL=$(grep 'Heartbeat Interval Seconds' .squidsquad/config.md 2>/dev/null | grep -oE '[0-9]+')
-HB_INTERVAL=${HB_INTERVAL:-10}
-bash .squidsquad/heartbeat.sh "skill" "$HB_INTERVAL" &
-HB_PID=$!
-trap "kill $HB_PID 2>/dev/null" EXIT
-
 claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=skill" "start the loop"

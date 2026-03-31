@@ -142,8 +142,8 @@ Agents persist current task progress to `.squidsquad/[role]/working-state.md` �
 ### Context Pressure Detection
 At the start of each cycle, agents check `context_window.used_percentage`. If above the configurable threshold (default 80%), they save working state, commit pending work, and exit for a fresh context. The boot script restarts them automatically.
 
-### Heartbeat Branches
-Each agent's boot script launches a background heartbeat process that pushes a lightweight orphan `heartbeat/<role>` branch every N seconds (configurable, default 10s). PM reads these timestamps to detect agent liveness — even during quiet cycles when no code commits are pushed. Uses `git mktree` + `git commit-tree` + `git push -f` (no checkout, no working tree impact, no commits on main). Works across machines.
+### Cross-Clone Health Detection
+Agent health is detected by reading each agent's `current-state` file via cross-clone absolute paths stored in `.squidsquad/.local-config` (gitignored, machine-specific). No GitHub API calls, no `git fetch`, no background processes. The `current-state` file is written every cycle (including quiet ones), so its mtime indicates when the agent last completed a cycle. Health icons: 🦑 healthy (within 2× interval), 👻 stalled, ❓ unknown/no data.
 
 ### Quiet Cycle Skipping
 Agents skip the iteration log and commit when no work was done — and produce no text output at all on quiet cycles. Iteration counters only increment on productive cycles. Keeps git history, iteration logs, and terminal scrollback meaningful.

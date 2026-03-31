@@ -202,31 +202,50 @@ if [ "$ROLE" = "pm" ]; then
     fi
   done
 
-  # Agent health icons: 🦑 healthy, 👻 stalled, 🥚 never started
-  # Uses heartbeat branches (heartbeat/<role>) for accurate health detection
+  # Agent health icons: 🦑 healthy, 👻 stalled, ❓ unknown
+  # Reads cross-clone current-state files via .local-config paths
   # Include DM in health check if it exists
   DM_AGENT=""
   [ -d "$SQDIR/dm" ] && DM_AGENT="dm"
   ALL_AGENTS="pm $AGENTS $DM_AGENT"
   HEALTH=""
-  HB_INTERVAL=$(grep 'Heartbeat Interval Seconds' "$SQDIR/config.md" 2>/dev/null | grep -oE '[0-9]+')
-  HB_INTERVAL=${HB_INTERVAL:-10}
-  HB_STALE_THRESHOLD=$(( HB_INTERVAL * 3 ))
+  STALE_THRESHOLD=$(( INTERVAL * 2 ))  # 2x iteration interval in minutes
+  LOCAL_CONFIG="$SQDIR/.local-config"
   for AGENT in $ALL_AGENTS; do
     AGENT=$(echo "$AGENT" | tr -d '[:space:]')
     [ -z "$AGENT" ] && continue
-    # Fetch heartbeat branch silently
-    timeout 2 git fetch origin "heartbeat/${AGENT}" 2>/dev/null || true
-    HB_EPOCH=$(timeout 2 git log -1 --format="%ct" "origin/heartbeat/${AGENT}" 2>/dev/null) || true
-    if [ -n "$HB_EPOCH" ]; then
-      HB_AGE=$(( NOW - HB_EPOCH ))
-      if [ "$HB_AGE" -le "$HB_STALE_THRESHOLD" ]; then
-        HEALTH="${HEALTH}🦑"
+    # Read agent's clone path from .local-config
+    AGENT_PATH=""
+    if [ -f "$LOCAL_CONFIG" ]; then
+      AGENT_PATH=$(grep "\\*\\*${AGENT}\\*\\*:" "$LOCAL_CONFIG" 2>/dev/null | sed 's/.*\*\*: *//' | tr -d '[:space:]')
+    fi
+    # If this is our own role, use local path
+    if [ "$AGENT" = "$ROLE" ]; then
+      AGENT_STATE="$SQDIR/$AGENT/current-state"
+    elif [ -n "$AGENT_PATH" ] && [ -d "$AGENT_PATH" ]; then
+      AGENT_STATE="${AGENT_PATH}/.squidsquad/${AGENT}/current-state"
+    else
+      HEALTH="${HEALTH}❓"
+      continue
+    fi
+    if [ -f "$AGENT_STATE" ]; then
+      if stat --version >/dev/null 2>&1; then
+        AGENT_MOD=$(stat -c %Y "$AGENT_STATE" 2>/dev/null)
       else
-        HEALTH="${HEALTH}👻"
+        AGENT_MOD=$(stat -f %m "$AGENT_STATE" 2>/dev/null)
+      fi
+      if [ -n "$AGENT_MOD" ]; then
+        AGENT_AGE=$(( (NOW - AGENT_MOD) / 60 ))
+        if [ "$AGENT_AGE" -le "$STALE_THRESHOLD" ]; then
+          HEALTH="${HEALTH}🦑"
+        else
+          HEALTH="${HEALTH}👻"
+        fi
+      else
+        HEALTH="${HEALTH}❓"
       fi
     else
-      HEALTH="${HEALTH}🥚"
+      HEALTH="${HEALTH}❓"
     fi
   done
 

@@ -34,10 +34,6 @@
 
 - **Minutes**: 30
 
-## Heartbeat
-
-- **Heartbeat Interval Seconds**: 10
-
 ## Context Pressure
 
 - **Threshold**: 80

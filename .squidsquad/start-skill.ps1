@@ -19,11 +19,4 @@ Write-Host "  S Q U I D S Q U A D   v$v  -  skill"
 Remove-Item .squidsquad/skill/current-state -ErrorAction SilentlyContinue
 "idle|Initializing..." | Set-Content .squidsquad/skill/current-state -NoNewline
 
-# Launch heartbeat in background
-$hbInterval = if ($config -match 'Heartbeat Interval Seconds.*?(\d+)') { $Matches[1] } else { '10' }
-$hbProc = Start-Process -FilePath "bash" -ArgumentList ".squidsquad/heartbeat.sh", "skill", $hbInterval -PassThru -NoNewWindow
-try {
-    claude --enable-auto-mode  --permission-mode plan --append-system-prompt "SQUIDSQUAD_ROLE=skill" "start the loop"
-} finally {
-    Stop-Process -Id $hbProc.Id -ErrorAction SilentlyContinue
-}
+claude --enable-auto-mode  --permission-mode plan --append-system-prompt "SQUIDSQUAD_ROLE=skill" "start the loop"
