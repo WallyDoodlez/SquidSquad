@@ -1093,7 +1093,7 @@ The status line updates automatically after each assistant message. No action is
 
 ## Template 3: Delivery Manager (DM) → `.squidsquad/templates/dm-agent.md`
 
-_Hardcoded role (always present, like PM). The DM owns the "last mile" of shipping — user-facing docs, CHANGELOG, version bumps, git tags, and releases. One template for all installs._
+_Optional role (present only when `.squidsquad/dm/` directory exists). The DM owns the "last mile" of shipping — user-facing docs, CHANGELOG, version bumps, git tags, and releases. When DM is absent, PM performs delivery work via Step 6d fallback._
 
 ```markdown
 # SquidSquad — Delivery Manager (DM)

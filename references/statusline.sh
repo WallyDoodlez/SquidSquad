@@ -49,20 +49,24 @@ fi
 INTERVAL=$(grep 'Minutes' "$SQDIR/config.md" 2>/dev/null | grep -oE '[0-9]+')
 INTERVAL=${INTERVAL:-10}
 
-# Time since last iteration → countdown timer
-ITER_DIR="$SQDIR/$ROLE/iterations"
-LATEST=""
-if [ -d "$ITER_DIR" ]; then
-  LATEST=$(ls "$ITER_DIR"/iter-*.md 2>/dev/null | sort -t- -k2 -n | tail -1)
+# Time since last cycle → countdown timer
+# Uses current-state file mtime (written every cycle, including quiet ones)
+# Fallback to latest iter file if current-state doesn't exist
+CYCLE_TIMESTAMP_FILE="$SQDIR/$ROLE/current-state"
+if [ ! -f "$CYCLE_TIMESTAMP_FILE" ]; then
+  ITER_DIR="$SQDIR/$ROLE/iterations"
+  if [ -d "$ITER_DIR" ]; then
+    CYCLE_TIMESTAMP_FILE=$(ls "$ITER_DIR"/iter-*.md 2>/dev/null | sort -t- -k2 -n | tail -1)
+  fi
 fi
 
 TIMER_STR="🔄 ${INTERVAL}m"
 NOW=$(date +%s)
-if [ -n "$LATEST" ]; then
+if [ -n "$CYCLE_TIMESTAMP_FILE" ] && [ -f "$CYCLE_TIMESTAMP_FILE" ]; then
   if stat --version >/dev/null 2>&1; then
-    LAST_MOD=$(stat -c %Y "$LATEST" 2>/dev/null)
+    LAST_MOD=$(stat -c %Y "$CYCLE_TIMESTAMP_FILE" 2>/dev/null)
   else
-    LAST_MOD=$(stat -f %m "$LATEST" 2>/dev/null)
+    LAST_MOD=$(stat -f %m "$CYCLE_TIMESTAMP_FILE" 2>/dev/null)
   fi
   if [ -n "$LAST_MOD" ]; then
     ELAPSED=$(( (NOW - LAST_MOD) / 60 ))

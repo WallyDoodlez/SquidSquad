@@ -80,7 +80,7 @@ When you invoke SquidSquad, it creates the following inside your project root. O
 │   ├── bugs.md                 ← BUG-BE-XXX tracker with Discussion sections
 │   ├── features.md             ← FEAT-BE-XXX tracker with Discussion sections
 │   └── iterations/             ← iter-N.md logs per cycle
-├── dm/                         ← Delivery Manager (hardcoded, always present)
+├── dm/                         ← Delivery Manager (optional — created when user opts in)
 │   ├── CLAUDE.md               ← bootstrapper: role config + Read instruction to template
 │   ├── working-state.md        ← crash recovery state
 │   └── iterations/             ← iter-N.md logs per cycle
@@ -960,8 +960,8 @@ Spawn all applicable agents simultaneously. Each agent writes only its assigned 
 **One agent for PM/QA:**
 > Regenerate `.squidsquad/templates/pm-agent.md` from the PM/QA template in `references/agent-instructions.md`, substituting `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]` from `config.md`. Also regenerate `.squidsquad/start-pm.sh` and `.squidsquad/start-pm.ps1`. **Migration**: if `.squidsquad/pm/CLAUDE.md` contains `## The Ralph Loop` (inline format), replace it with the bootstrapper format (see Step 4b in Setup Instructions). If already a bootstrapper, leave it untouched. Do not touch `qa-log.md`, `enhancements.md`, `iterations/`, or `migrations/`.
 
-**One agent for DM (Delivery Manager):**
-> If `.squidsquad/dm/` does not exist, create it with `CLAUDE.md` bootstrapper, `working-state.md`, and `iterations/` directory. Generate `.squidsquad/templates/dm-agent.md` from Template 3 in `references/agent-instructions.md`, substituting `[ACTIVE_AGENTS]`, `[INTERVAL]`, and `[ROLE_UPPER]`. Generate `.squidsquad/start-dm.sh` and `.squidsquad/start-dm.ps1`. If DM directory already exists, regenerate the template and boot scripts only. Add `- **DM**: always present` to the Agents section in `config.md` if not already present.
+**One agent for DM (Delivery Manager) — optional:**
+> DM is optional. The `dm/` directory is the sole presence indicator — if it exists, DM is enabled; if not, PM handles delivery via Step 6d fallback. **Only create/update DM artifacts if `.squidsquad/dm/` already exists** (user previously opted in). If `dm/` exists: regenerate `.squidsquad/templates/dm-agent.md` from Template 3 in `references/agent-instructions.md`, substituting `[ACTIVE_AGENTS]`, `[INTERVAL]`, and `[ROLE_UPPER]`. Regenerate `.squidsquad/start-dm.sh` and `.squidsquad/start-dm.ps1`. If `dm/` does NOT exist: skip DM setup entirely. Do not create the directory, do not add DM to config.
 
 > **Note:** Create `.squidsquad/templates/` if it does not exist (first upgrade from pre-template architecture).
 
