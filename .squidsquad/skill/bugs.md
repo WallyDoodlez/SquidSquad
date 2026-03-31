@@ -912,7 +912,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-034 — Statusline shows DM health icon even when DM is not present
 
 - **Severity**: Medium
-- **Status**: Fixed
+- **Status**: Closed
 - **Reported By**: pm/qa (human report)
 - **Assigned To**: skill-lead
 - **Description**: After FEAT-SKILL-035, DM is treated as always present — statusline shows 3 health icons, config has `DM: always present`, and `dm/` directory is created unconditionally. But DM is optional (BUG-033). The `.squidsquad/dm/` directory is the sole presence indicator — no config flag needed. Fix requires multiple changes:
@@ -931,13 +931,14 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 > [2026-03-30 13:15] **pm/qa**: Filed from human report. Human sees 3 health icons but doesn't have DM enabled. statusline.sh needs to check DM presence before rendering its icon — same dm/ directory check as the PM Delivery Fallback.
 > [2026-03-30 13:30] **pm/qa**: Human clarified: dm/ directory IS the presence indicator. No config flag needed. If dm/ exists, DM is enabled. If not, DM doesn't exist. Setup creates dm/ when user opts in. Removed dm/ directory and config entry since human hasn't opted in. statusline.sh and all DM-aware code should use dm/ directory check. Config `DM: always present` line should only be added by setup when dm/ is created.
 > [2026-03-31 00:10] **skill-lead**: Fixed all 4 items: (1) statusline.sh already conditionally checks dm/ dir — confirmed correct. (2) SKILL.md upgrade flow now conditional — only creates/updates DM artifacts if dm/ already exists, no unconditional creation. (3) Config — PM already removed DM entry. (4) PM Step 7 and agent-instructions.md Template 3 description updated from "hardcoded, always present" to "optional, present when dm/ exists". Status → Fixed.
+> [2026-03-31 00:30] **pm/qa**: Verified — statusline checks `[ -d "$SQDIR/dm" ]` before including DM. Setup/upgrade conditional. Status → Closed.
 
 ---
 
 ## BUG-SKILL-035 — Overdue timer shows +183m because quiet cycles don't update the timestamp
 
 - **Severity**: High
-- **Status**: Fixed
+- **Status**: Closed
 - **Reported By**: pm/qa (human report)
 - **Assigned To**: skill-lead
 - **Description**: The statusline timer calculates elapsed time from the last iteration file's modified timestamp (`ls iter-*.md | tail -1`). Quiet cycles skip iteration logging (by design), so during long stretches of quiet cycles the timer drifts — the last iteration file gets older and older, and the overdue indicator shows increasingly large values (e.g. `⏰ +183m`). The timer should reflect when the last cycle *ran*, not when the last iteration file was *written*.
@@ -956,3 +957,4 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 
 > [2026-03-30 13:45] **pm/qa**: Filed from human report. Human saw ⏰ +183m on PM status bar. Root cause: quiet cycles don't log iterations, so the timer source (iter file mtime) goes stale. Option 3 (use current-state mtime) is simplest since idle| is already written every cycle.
 > [2026-03-31 00:05] **skill-lead**: Fixed in statusline.sh — timer now reads mtime from `current-state` file (written every cycle including quiet ones) instead of latest `iter-*.md` file. Falls back to iter file if current-state doesn't exist. Updated both `references/statusline.sh` and live `.squidsquad/statusline.sh`. Status → Fixed.
+> [2026-03-31 00:30] **pm/qa**: Verified — timer reads current-state mtime with iter file fallback. No more stale +183m. Status → Closed.
