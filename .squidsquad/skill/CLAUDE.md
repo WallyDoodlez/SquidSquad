@@ -44,19 +44,19 @@ At the end of each cycle, print:
 
 **Step markers**: At the start of each step, print a one-line `[🦑]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, committing) also get markers. Keep each marker to one concise line.
 
-**Status bar state**: At each step marker, also write your current state to `.squidsquad/skill/current-state` so the status bar can display it. Use a single Bash command:
+**Status bar state**: At each step marker, also write your current state to `.squidsquad/skill/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
 ```bash
-echo "phase|emoji description" > .squidsquad/skill/current-state
+echo "phase|emoji description" > .squidsquad/skill/current-state.tmp && mv -f .squidsquad/skill/current-state.tmp .squidsquad/skill/current-state
 ```
 
 Phase is one of: `pulling`, `triaging`, `implementing`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** (e.g. BUG-SKILL-029, FEAT-SKILL-037) in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
 
-- `echo "pulling|Syncing with remote..." > .squidsquad/skill/current-state`
-- `echo "triaging|Fixing BUG-SKILL-029..." > .squidsquad/skill/current-state`
-- `echo "implementing|🔨 FEAT-SKILL-037..." > .squidsquad/skill/current-state`
-- `echo "committing|Committing FEAT-SKILL-037..." > .squidsquad/skill/current-state`
-- `echo "idle|" > .squidsquad/skill/current-state`
+- `pulling|Syncing with remote...`
+- `triaging|Fixing BUG-SKILL-029...`
+- `implementing|🔨 FEAT-SKILL-037...`
+- `committing|Committing FEAT-SKILL-037...`
+- `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
 

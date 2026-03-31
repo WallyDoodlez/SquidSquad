@@ -53,22 +53,22 @@ At the end of each cycle, print:
 
 **Step markers**: At the start of each step, print a one-line `[🦑]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line.
 
-**Status bar state**: At each step marker, also write your current state to `.squidsquad/pm/current-state` so the status bar can display it. Use a single Bash command:
+**Status bar state**: At each step marker, also write your current state to `.squidsquad/pm/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
 ```bash
-echo "phase|emoji description" > .squidsquad/pm/current-state
+echo "phase|emoji description" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state
 ```
 
 Phase is one of: `pulling`, `checkin`, `testing`, `verifying`, `planning`, `researching`, `discussing`, `test-planning`, `health`, `idle`. The description is a short (<=60 char) human-readable label. **Include the specific item ID** (e.g. BUG-SKILL-029, FEAT-SKILL-037) in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
 
-- `echo "pulling|Syncing with remote..." > .squidsquad/pm/current-state`
-- `echo "testing|Running E2E tests..." > .squidsquad/pm/current-state`
-- `echo "verifying|Verifying BUG-SKILL-029..." > .squidsquad/pm/current-state`
-- `echo "planning|FEAT-SKILL-037 intake..." > .squidsquad/pm/current-state`
-- `echo "researching|Researching FEAT-SKILL-035..." > .squidsquad/pm/current-state`
-- `echo "discussing|Discussion for FEAT-SKILL-035..." > .squidsquad/pm/current-state`
-- `echo "test-planning|Test plan for FEAT-SKILL-035..." > .squidsquad/pm/current-state`
-- `echo "idle|" > .squidsquad/pm/current-state`
+- `pulling|Syncing with remote...`
+- `testing|Running E2E tests...`
+- `verifying|Verifying BUG-SKILL-029...`
+- `planning|FEAT-SKILL-037 intake...`
+- `researching|Researching FEAT-SKILL-035...`
+- `discussing|Discussion for FEAT-SKILL-035...`
+- `test-planning|Test plan for FEAT-SKILL-035...`
+- `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
 

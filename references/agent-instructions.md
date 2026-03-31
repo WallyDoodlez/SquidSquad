@@ -66,19 +66,19 @@ At the end of each cycle, print:
 
 **Step markers**: At the start of each step, print a one-line `[🦑]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, committing) also get markers. Keep each marker to one concise line.
 
-**Status bar state**: At each step marker, also write your current state to `.squidsquad/[ROLE]/current-state` so the status bar can display it. Use a single Bash command:
+**Status bar state**: At each step marker, also write your current state to `.squidsquad/[ROLE]/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
 ```bash
-echo "phase|emoji description" > .squidsquad/[ROLE]/current-state
+echo "phase|emoji description" > .squidsquad/[ROLE]/current-state.tmp && mv -f .squidsquad/[ROLE]/current-state.tmp .squidsquad/[ROLE]/current-state
 ```
 
 Phase is one of: `pulling`, `triaging`, `implementing`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** (e.g. BUG-[ROLE_UPPER]-029, FEAT-[ROLE_UPPER]-037) in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
 
-- `echo "pulling|Syncing with remote..." > .squidsquad/[ROLE]/current-state`
-- `echo "triaging|Fixing BUG-[ROLE_UPPER]-029..." > .squidsquad/[ROLE]/current-state`
-- `echo "implementing|🔨 FEAT-[ROLE_UPPER]-037..." > .squidsquad/[ROLE]/current-state`
-- `echo "committing|Committing FEAT-[ROLE_UPPER]-037..." > .squidsquad/[ROLE]/current-state`
-- `echo "idle|" > .squidsquad/[ROLE]/current-state`
+- `pulling|Syncing with remote...`
+- `triaging|Fixing BUG-[ROLE_UPPER]-029...`
+- `implementing|🔨 FEAT-[ROLE_UPPER]-037...`
+- `committing|Committing FEAT-[ROLE_UPPER]-037...`
+- `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
 
@@ -408,22 +408,22 @@ At the end of each cycle, print:
 
 **Step markers**: At the start of each step, print a one-line `[🦑]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line.
 
-**Status bar state**: At each step marker, also write your current state to `.squidsquad/pm/current-state` so the status bar can display it. Use a single Bash command:
+**Status bar state**: At each step marker, also write your current state to `.squidsquad/pm/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
 ```bash
-echo "phase|emoji description" > .squidsquad/pm/current-state
+echo "phase|emoji description" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state
 ```
 
 Phase is one of: `pulling`, `checkin`, `testing`, `verifying`, `planning`, `researching`, `discussing`, `test-planning`, `health`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** (e.g. BUG-SKILL-029, FEAT-SKILL-037) in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
 
-- `echo "pulling|Syncing with remote..." > .squidsquad/pm/current-state`
-- `echo "testing|Running E2E tests..." > .squidsquad/pm/current-state`
-- `echo "verifying|Verifying BUG-SKILL-029..." > .squidsquad/pm/current-state`
-- `echo "planning|FEAT-SKILL-037 intake..." > .squidsquad/pm/current-state`
-- `echo "researching|Researching FEAT-SKILL-035..." > .squidsquad/pm/current-state`
-- `echo "discussing|Discussion for FEAT-SKILL-035..." > .squidsquad/pm/current-state`
-- `echo "test-planning|Test plan for FEAT-SKILL-035..." > .squidsquad/pm/current-state`
-- `echo "idle|" > .squidsquad/pm/current-state`
+- `pulling|Syncing with remote...`
+- `testing|Running E2E tests...`
+- `verifying|Verifying BUG-SKILL-029...`
+- `planning|FEAT-SKILL-037 intake...`
+- `researching|Researching FEAT-SKILL-035...`
+- `discussing|Discussion for FEAT-SKILL-035...`
+- `test-planning|Test plan for FEAT-SKILL-035...`
+- `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
 
@@ -1097,19 +1097,19 @@ At the end of each cycle, print:
 
 **Step markers**: At the start of each step, print a one-line `[🦑]` prefixed status so the human can scan scrollback. Key sub-actions also get markers. Keep each marker to one concise line.
 
-**Status bar state**: At each step marker, also write your current state to `.squidsquad/dm/current-state` so the status bar can display it. Use a single Bash command:
+**Status bar state**: At each step marker, also write your current state to `.squidsquad/dm/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
 ```bash
-echo "phase|emoji description" > .squidsquad/dm/current-state
+echo "phase|emoji description" > .squidsquad/dm/current-state.tmp && mv -f .squidsquad/dm/current-state.tmp .squidsquad/dm/current-state
 ```
 
 Phase is one of: `pulling`, `delivering`, `shipping`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
 
-- `echo "pulling|Syncing with remote..." > .squidsquad/dm/current-state`
-- `echo "delivering|📦 FEAT-[ROLE_UPPER]-035 delivery..." > .squidsquad/dm/current-state`
-- `echo "shipping|🚀 Version bump v0.7.0..." > .squidsquad/dm/current-state`
-- `echo "committing|Committing delivery for FEAT-[ROLE_UPPER]-035..." > .squidsquad/dm/current-state`
-- `echo "idle|" > .squidsquad/dm/current-state`
+- `pulling|Syncing with remote...`
+- `delivering|📦 FEAT-[ROLE_UPPER]-035 delivery...`
+- `shipping|🚀 Version bump v0.7.0...`
+- `committing|Committing delivery for FEAT-[ROLE_UPPER]-035...`
+- `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
 

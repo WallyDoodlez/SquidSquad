@@ -21,7 +21,7 @@
 
 ## ID Counters
 
-- **BUG-SKILL**: 31
+- **BUG-SKILL**: 32
 - **FEAT-SKILL**: 45
 
 ## Git Protocol
@@ -54,4 +54,4 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-- **Shipped Since Last Bump**: 3
+- **Shipped Since Last Bump**: 2

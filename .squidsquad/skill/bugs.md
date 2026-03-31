@@ -846,7 +846,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-031 — current-state file write silently fails, leaving stale status
 
 - **Severity**: Medium
-- **Status**: Open
+- **Status**: Fixed
 - **Reported By**: skill-lead
 - **Assigned To**: skill-lead
 - **Description**: When the agent writes `idle|` to `.squidsquad/skill/current-state` at cycle end via `echo "idle|" > .squidsquad/skill/current-state`, the write sometimes silently fails — the file retains its previous content (e.g. `implementing|🔨 FEAT-SKILL-045...`). The Bash tool reports success but the file is not updated. This causes the statusline to show a stale 🚧 construction indicator even when the agent is idle. The likely cause is a race condition between the statusline script reading the file (via the `head -1` in `get_line2()`) and the agent writing to it, or a file handle issue on Windows where the statusline process holds the file open.
@@ -860,3 +860,24 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-30 02:20] **skill-lead**: Discovered when human reported stale 🚧 indicator after quiet cycle. Confirmed via `cat -A` — file had old content despite Bash reporting successful write. A second write fixed it. Likely a Windows file locking issue with statusline.sh reading the file concurrently. Possible fix: use a temp file + rename (atomic write) instead of direct redirect, or add a retry/verify step after writing current-state.
+> [2026-03-30 02:35] **skill-lead**: Fixed by switching all current-state writes to atomic pattern: `echo "..." > file.tmp && mv -f file.tmp file`. Updated all three agent templates (dev, PM, DM) in both references/agent-instructions.md and live CLAUDE.md files. The `mv` (rename) is atomic on most filesystems and avoids the file locking race. Status → Fixed.
+
+---
+
+## BUG-SKILL-032 — PM template lacks delivery:skip guidance for DM
+
+- **Severity**: Medium
+- **Status**: Open
+- **Reported By**: pm/qa
+- **Assigned To**: skill-lead
+- **Description**: The DM template (Step 2b) expects PM to tag features with `delivery: skip` when marking Pending Ship for internal-only features that don't need delivery packaging. However, the PM template has no instructions for when or how to apply this tag. The consumer side (DM) is implemented but the producer side (PM) is missing. This was a locked decision in FEAT-SKILL-035 CONTEXT.md.
+- **Steps to Reproduce**:
+  1. Read PM template in `references/agent-instructions.md` (Template 2)
+  2. Search for "delivery" or "skip" — no guidance found
+  3. Read DM template (Template 3) Step 2b — expects `delivery: skip` tag
+- **Expected**: PM template includes guidance on when/how to apply `delivery: skip` tag when marking features Pending Ship
+- **Actual**: PM template has no mention of `delivery: skip`
+
+### Discussion
+
+> [2026-03-30 03:00] **pm/qa**: Found during FEAT-035 QA verification. DM expects PM to set delivery:skip but PM has no instructions for it. Production description gap — PM template needs updating.

@@ -54,16 +54,16 @@ At the end of each cycle, print:
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/dm/current-state` so the status bar can display it. Use a single Bash command:
 
 ```bash
-echo "phase|emoji description" > .squidsquad/dm/current-state
+echo "phase|emoji description" > .squidsquad/dm/current-state.tmp && mv -f .squidsquad/dm/current-state.tmp .squidsquad/dm/current-state
 ```
 
-Phase is one of: `pulling`, `delivering`, `shipping`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
+Phase is one of: `pulling`, `delivering`, `shipping`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Use atomic writes** (tmp+mv as shown above) to avoid file locking races on Windows. **Include the specific item ID** in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
 
-- `echo "pulling|Syncing with remote..." > .squidsquad/dm/current-state`
-- `echo "delivering|📦 FEAT-SKILL-035 delivery..." > .squidsquad/dm/current-state`
-- `echo "shipping|🚀 Version bump v0.7.0..." > .squidsquad/dm/current-state`
-- `echo "committing|Committing delivery for FEAT-SKILL-035..." > .squidsquad/dm/current-state`
-- `echo "idle|" > .squidsquad/dm/current-state`
+- `pulling|Syncing with remote...`
+- `delivering|📦 FEAT-SKILL-035 delivery...`
+- `shipping|🚀 Version bump v0.7.0...`
+- `committing|Committing delivery for FEAT-SKILL-035...`
+- `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
 
