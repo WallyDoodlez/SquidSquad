@@ -1448,7 +1448,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-046 — Bug discussion flow: PM investigates and presents fix before filing to dev
 
 - **Priority**: High
-- **Status**: Pending
+- **Status**: Planning
 - **Requested By**: human
 - **Description**: Currently when a bug is identified (from test failures, human reports, or QA), PM files it directly to the dev agent's tracker with no discussion. The human has no chance to weigh in on the fix approach. This feature adds a discussion step: when a bug is mentioned or discovered, PM immediately investigates the root cause, presents the problem and proposed fix to the human, and asks if more discussion is needed. Only after the human is satisfied with the approach does PM file it to the dev agent.
 - **Current Flow**: Bug discovered → PM files to dev tracker → Dev picks up and fixes however it sees fit
@@ -1467,3 +1467,41 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-30 14:00] **pm/qa**: Filed from human request. Human wants a chance to discuss and steer bug fixes before they go to dev. Currently bugs go straight to dev with no human input on the approach. New flow: investigate → present → discuss → file. Status: Pending — awaiting human approval.
+> [2026-03-31 00:05] **pm/qa**: Human approved. Light mode — PM template behavior change, low technical risk. Status → Planning. Beginning intake process.
+
+---
+
+## FEAT-SKILL-047 — Replace heartbeat branches with GitHub commit statuses for agent health
+
+- **Priority**: High
+- **Status**: Pending
+- **Requested By**: human
+- **Description**: Replace the current heartbeat branch system (FEAT-SKILL-033) with GitHub commit statuses via `gh api`. Heartbeat branches require `git fetch` which is slow and conflicts with active git work. Commit statuses are sub-second HTTP calls that bypass git entirely.
+- **How It Works**:
+  - Each agent posts a commit status to HEAD at the end of every cycle (including quiet cycles):
+    ```
+    gh api repos/OWNER/REPO/statuses/$(git rev-parse HEAD) -f state=success -f context="squidsquad/<role>" -f description="cycle N — <phase> — <timestamp>"
+    ```
+  - PM reads all statuses on HEAD to check agent health:
+    ```
+    gh api repos/OWNER/REPO/commits/HEAD/statuses
+    ```
+  - statusline.sh reads commit statuses instead of heartbeat branches
+  - No background process needed — agents post status inline at cycle end
+  - **Also fixes BUG-SKILL-035** (stale timer): statusline reads the timestamp from the commit status instead of iteration file mtime
+- **Replaces**: heartbeat.sh background process, heartbeat branches, `git fetch origin heartbeat/<role>`
+- **Acceptance Criteria**:
+  - [ ] Agents post commit status at end of every cycle (quiet and productive)
+  - [ ] PM reads commit statuses for health check (Step 7) instead of heartbeat branches
+  - [ ] statusline.sh reads commit status timestamps for timer instead of iteration file mtime
+  - [ ] heartbeat.sh removed or deprecated
+  - [ ] Boot scripts no longer launch heartbeat background process
+  - [ ] Health detection works without any git fetch/pull
+  - [ ] Config: repo owner/name available for API calls (or derived from `gh repo view`)
+  - [ ] Graceful fallback if `gh` CLI not available
+  - [ ] SKILL.md, agent-instructions.md, README updated
+  - [ ] Fixes BUG-SKILL-035 (stale timer on quiet cycles)
+
+### Discussion
+
+> [2026-03-31 00:00] **pm/qa**: Filed from human request. Human wants faster, more reliable health detection using GitHub API instead of git operations. Chose commit statuses (Option 1) over GitHub Issues or Gists — purpose-built for status reporting, sub-second, visible in GitHub UI. Also fixes the stale timer bug (BUG-035) since status is posted every cycle including quiet ones.
