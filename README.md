@@ -131,7 +131,7 @@ All coordination is asynchronous through git — agents pull to read the latest 
 ## Features
 
 ### Status Line (Emoji Rich)
-A live status bar at the bottom of each agent's Claude Code session. **Line 1**: 🦑 + role/version, backlog (🐛 bugs, ⭐ features) or active task (🔨 FEAT-XXX), context pressure (🧠/🧠🔥/🧠💀 with colored percentage), cycle countdown (🔄/🔜), and for PM: health icons (🦑/👻/🥚) + rest nudge. **Line 2**: current Ralph Loop step (emoji + description, truncated at 60 chars) or rotating contextual hints when idle — human-facing prompts like "Msg me any time to file a bug", rotating every 60 seconds, phase-aware. Hint pools defined in `references/hints-dev.txt` and `references/hints-pm.txt`.
+A live status bar at the bottom of each agent's Claude Code session. **Line 1**: 🦑 + role/version, backlog (🐛 bugs, ⭐ features) or active task (🔨 FEAT-XXX), context pressure (🧠/🧠🔥/🧠💀 with colored percentage), cycle countdown (🔄/🔜), and for PM: health icons (🦑/👻/❓) + rest nudge. **Line 2**: current Ralph Loop step (emoji + description, truncated at 60 chars) or rotating contextual hints when idle — human-facing prompts like "Msg me any time to file a bug", rotating every 60 seconds, phase-aware. Hint pools defined in `references/hints-dev.txt` and `references/hints-pm.txt`.
 
 ### Step Markers
 Every Ralph Loop step prints a `[🦑]` prefixed line (e.g. `[🦑] Pulling latest...`, `[🦑] Triaging bugs...`, `[🦑] Committing and pushing...`). Makes SquidSquad activity easy to scan in terminal scrollback.
@@ -174,6 +174,26 @@ After each planning phase (Research, Discussion, Planning), PM offers to open th
 
 ### `/squidsquad-status` Command
 Type `/squidsquad-status` in any Claude session in the repo to get a quick dashboard: agent health, open bugs/features per agent, recently shipped items.
+
+---
+
+## Philosophy
+
+### Git Is the Bus
+
+All agent coordination flows through git. Agents read shared markdown files, append Discussion entries, update statuses, and push. There are no message queues, no orchestration servers, no databases. The `.squidsquad/` folder *is* the system — everything else is just Claude Code instances reading and writing to it.
+
+### Complete Audit Trail
+
+Every decision, bug discussion, feature negotiation, QA result, and status change lives in git history. Tracker Discussion sections are the project's discussion archive — not Slack, not email, not ephemeral chat. `git log` and `git blame` reconstruct the full story of any change: who filed it, who investigated, what the human said, what approach was agreed on, and when it shipped.
+
+### No External Dependencies
+
+Core workflow requires nothing beyond git and Claude Code. No API keys for coordination, no cloud services for state, no third-party integrations for agents to talk to each other. Optional features (PR flow, GitHub Issues ingestion) layer on top without changing the fundamental model.
+
+### One Exception: Real-Time Health
+
+Agent health detection reads `current-state` files across clones via local filesystem paths — the one place where SquidSquad steps outside git. This is purely operational (is the agent alive?) and doesn't carry content, decisions, or audit trail. Everything that matters is in git.
 
 ---
 
