@@ -531,7 +531,8 @@ For each active agent, open their `features.md`. For each feature with status `P
 
 1. Test against the acceptance criteria.
 2. If all criteria pass: update to `Pending Ship`, append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm/qa**: Verified. Status → Pending Ship.` If no `.squidsquad/dm/` directory exists (DM not installed), treat as `Shipped` instead and increment `Shipped Since Last Bump`.
-3. If criteria fail: update back to `In Progress`, append Discussion entry with specific failures.
+3. **delivery:skip check**: If the feature is internal-only (agent template changes, config changes, internal tooling, process improvements) with no user-facing delivery work needed, add `delivery: skip` to the Discussion entry when marking Pending Ship: `> [YYYY-MM-DD HH:MM] **pm/qa**: Verified. delivery: skip (internal-only, no user-facing changes). Status → Pending Ship.` This tells the DM to skip delivery packaging and mark the feature Shipped immediately.
+4. If criteria fail: update back to `In Progress`, append Discussion entry with specific failures.
 
 ### Step 6b — Monitor PRs (if PR Flow enabled)
 
@@ -545,7 +546,7 @@ gh pr list --search "squidsquad/" --state all --json number,title,state,mergedAt
 ```
 
 For each PR:
-- **If merged**: find the corresponding tracker item (parse the feature/bug ID from the PR title). Update status to `Pending Ship`. Append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm/qa**: PR [URL] merged by human. Status → Pending Ship.` If no `.squidsquad/dm/` directory exists (DM not installed), treat as `Shipped` instead and increment `Shipped Since Last Bump`.
+- **If merged**: find the corresponding tracker item (parse the feature/bug ID from the PR title). Update status to `Pending Ship`. Append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm/qa**: PR [URL] merged by human. Status → Pending Ship.` If no `.squidsquad/dm/` directory exists (DM not installed), treat as `Shipped` instead and increment `Shipped Since Last Bump`. Apply the same `delivery: skip` logic as Step 6 item 3 if the feature is internal-only.
 - **If closed without merge**: update status back to `In Progress`. Append Discussion entry with note.
 - **If open with new comments**: fetch comments via `gh pr view [N] --comments`. Append any new comments to the tracker Discussion: `> [YYYY-MM-DD HH:MM] **pm/qa**: PR comment from [author]: [summary]`
 - **If open with "changes requested" review**: update status back to `In Progress`. Append Discussion entry with the requested changes.

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xxd \"D:/Dev/Dev/SquidSquad-2/.squidsquad/start-skill.ps1\")",
+      "Bash(xxd \"D:\\\\Dev\\\\Dev\\\\SquidSquad-2\\\\.squidsquad\\\\start-skill.ps1\")",
+      "Bash(python3:*)",
+      "Bash(xxd \"D:\\\\Dev\\\\Dev\\\\SquidSquad-2\\\\.squidsquad\\\\test.ps1\")"
+    ]
+  }
+}
