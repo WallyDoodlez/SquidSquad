@@ -1477,7 +1477,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-047 — Cross-clone health detection via local file reads + guided agent setup
 
 - **Priority**: High
-- **Status**: Planning
+- **Status**: Approved
 - **Requested By**: human
 - **Description**: Replace the heartbeat branch system (FEAT-SKILL-033) with direct cross-clone file reads for real-time agent health detection. Each agent's clone path is stored in a gitignored `.squidsquad/.local-config` file. Statusline and PM read other agents' `current-state` files directly via absolute path — instant, zero API calls, real-time. Setup flow is enhanced to guide the user through cloning repos and launching agents in new terminals.
 - **Philosophy**: GitHub (git) is the communication bus and audit trail for all content. This is the one exception — purely operational status reads that need to be real-time. No content, no decisions, no audit trail needed.
@@ -1521,3 +1521,4 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > [2026-03-31 00:20] **pm/qa**: Human proposed: during setup, ask for agent path, clone repo there, open terminal, run boot script — full guided flow. Philosophy: GitHub is the bus for all content/audit trail. Local file reads are the one exception, purely for real-time operational health.
 > [2026-03-31 00:25] **pm/qa**: Human approved approach. Health icons: ❓ replaces 🥚 for unknown/no data.
 > [2026-03-31 00:45] **pm/qa**: Rewrote feature with updated scope. Research from original commit-status approach still partially relevant (file impact analysis, what to remove). Status → Planning.
+> [2026-03-31 01:00] **pm/qa**: CONTEXT.md and TEST-PLAN.md created (23 TCs, 15 smoke, 9 regression risks). Status → Approved.
