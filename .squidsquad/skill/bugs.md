@@ -915,12 +915,16 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 - **Status**: Open
 - **Reported By**: pm/qa (human report)
 - **Assigned To**: skill-lead
-- **Description**: After FEAT-SKILL-035 shipped, the PM statusline shows 3 health icons (PM, skill, DM) regardless of whether the DM agent is actually installed or running. Since DM is optional (per BUG-SKILL-033 fix), the statusline should only show health icons for agents that are present. If `.squidsquad/dm/` doesn't exist or DM is not in the configured agents list, the DM icon should not appear.
+- **Description**: After FEAT-SKILL-035, DM is treated as always present — statusline shows 3 health icons, config has `DM: always present`, and `dm/` directory is created unconditionally. But DM is optional (BUG-033). The `.squidsquad/dm/` directory is the sole presence indicator — no config flag needed. Fix requires multiple changes:
+  1. `statusline.sh`: check `dm/` directory exists before showing DM health icon
+  2. FEAT-035 setup/upgrade flow in `SKILL.md`: only create `dm/` directory when user opts in (not hardcoded/unconditional)
+  3. Config template: only add `DM` line to agents section when `dm/` is created during setup
+  4. `references/agent-instructions.md` PM template: health check Step 7 should only check DM heartbeat if `dm/` exists
 - **Steps to Reproduce**:
-  1. Run PM agent without DM installed
+  1. Run PM agent without opting into DM during setup
   2. Observe status bar — shows 3 icons instead of 2
-- **Expected**: Only PM and skill icons shown when DM is not present
-- **Actual**: PM, skill, and DM icons all shown
+- **Expected**: Only PM and dev agent icons shown when `dm/` directory doesn't exist
+- **Actual**: DM icon shown regardless of DM presence
 
 ### Discussion
 
