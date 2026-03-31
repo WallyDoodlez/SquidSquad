@@ -6,6 +6,12 @@ All notable changes to SquidSquad will be documented here.
 
 ## [0.7.0] — 2026-03-30
 
+### Added
+
+- **Granular status phases with item names** (FEAT-SKILL-044): All agents now write distinct, specific phases to their `current-state` file including the item ID being worked on. PM gets new phases: `researching`, `discussing`, `test-planning` for Feature Intake steps. Dev phases include item IDs (e.g. `triaging|Fixing BUG-SKILL-029...`, `implementing|🔨 FEAT-SKILL-037...`). Status bar telegraphs exactly what each agent is doing in real time. Per-item updates during batch operations.
+- **Overdue emoji on status bar** (FEAT-SKILL-045): When an agent's Ralph Loop cycle runs longer than the configured interval, the statusline shows `⏰ +Nm` (overdue by N minutes) instead of the normal countdown. Triggers immediately at the interval boundary with no grace period. Works for all agent roles (PM, dev, DM).
+- **Current-state atomic writes** (BUG-SKILL-031): Agent `current-state` file writes now use atomic `echo > tmp && mv tmp file` pattern to prevent stale statusline from file locking race conditions on Windows.
+
 ### Fixed
 
 - Boot scripts now include heartbeat launch and current-state initialization — previously stale after FEAT-033 and FEAT-037 shipped (BUG-SKILL-027).
