@@ -868,7 +868,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-032 — PM template lacks delivery:skip guidance for DM
 
 - **Severity**: Medium
-- **Status**: Fixed
+- **Status**: Closed
 - **Reported By**: pm/qa
 - **Assigned To**: skill-lead
 - **Description**: The DM template (Step 2b) expects PM to tag features with `delivery: skip` when marking Pending Ship for internal-only features that don't need delivery packaging. However, the PM template has no instructions for when or how to apply this tag. The consumer side (DM) is implemented but the producer side (PM) is missing. This was a locked decision in FEAT-SKILL-035 CONTEXT.md.
@@ -883,13 +883,14 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 
 > [2026-03-30 03:00] **pm/qa**: Found during FEAT-035 QA verification. DM expects PM to set delivery:skip but PM has no instructions for it. Production description gap — PM template needs updating.
 > [2026-03-30 12:05] **skill-lead**: Fixed by adding `delivery: skip` guidance to PM template Step 6 (item 3) and Step 6b in both `references/agent-instructions.md` and live `.squidsquad/pm/CLAUDE.md`. PM now knows to add `delivery: skip` to Discussion when marking internal-only features Pending Ship. Status → Fixed.
+> [2026-03-30 13:00] **pm/qa**: Verified — PM template Step 6 item 3 has delivery:skip guidance, Step 6b also covered. Status → Closed.
 
 ---
 
 ## BUG-SKILL-033 — DM role is treated as required but should be optional with PM fallback
 
 - **Severity**: High
-- **Status**: Fixed
+- **Status**: Closed
 - **Reported By**: pm/qa (human report)
 - **Assigned To**: skill-lead
 - **Description**: FEAT-SKILL-035 designed the DM role as "hardcoded, always present." However, the DM role should be optional. When no DM agent is present (no `dm/` directory, no DM in config, or DM not running), PM must automatically activate DM functionality and perform all delivery work itself — CHANGELOG entries, version bumps, git tags, releases, user-facing docs. This is not just "treat Pending Ship as Shipped" (skip delivery) — PM must actually DO the delivery work when DM is absent. The PM template needs a DM-presence check that enables/disables its delivery capabilities.
@@ -904,3 +905,4 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 
 > [2026-03-30 03:30] **pm/qa**: Filed from human report. Human clarified: DM is optional, not required. When DM is absent, PM automatically takes over all delivery responsibilities. This changes the FEAT-035 design — PM needs a DM-presence check that activates its built-in delivery capabilities. The current "fallback" in the PM template (treat Pending Ship as Shipped) is insufficient — it skips delivery instead of doing it.
 > [2026-03-30 12:40] **skill-lead**: Fixed by adding new Step 6d (PM Delivery Fallback) to PM template. When `.squidsquad/dm/` doesn't exist, PM now performs full delivery: docs updates, CHANGELOG prep, config/migration checks, marking Shipped, and version bump check with full bump sequence. Removed old "treat as Shipped" inline fallback from Steps 6/6b. Updated both `references/agent-instructions.md` and live `.squidsquad/pm/CLAUDE.md`. Status → Fixed.
+> [2026-03-30 13:00] **pm/qa**: Verified — Step 6d PM Delivery Fallback fully implemented. DM presence check via dm/ directory, full delivery pipeline (docs, CHANGELOG prep, config, version bump), delivery:skip handling. Live PM CLAUDE.md updated. Status → Closed.
