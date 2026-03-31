@@ -1478,7 +1478,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-047 — Cross-clone health detection via local file reads + guided agent setup
 
 - **Priority**: High
-- **Status**: Pending Test
+- **Status**: Shipped
 - **Requested By**: human
 - **Description**: Replace the heartbeat branch system (FEAT-SKILL-033) with direct cross-clone file reads for real-time agent health detection. Each agent's clone path is stored in a gitignored `.squidsquad/.local-config` file. Statusline and PM read other agents' `current-state` files directly via absolute path — instant, zero API calls, real-time. Setup flow is enhanced to guide the user through cloning repos and launching agents in new terminals.
 - **Philosophy**: GitHub (git) is the communication bus and audit trail for all content. This is the one exception — purely operational status reads that need to be real-time. No content, no decisions, no audit trail needed.
@@ -1532,6 +1532,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 > - DEF-4 (MAJOR): SKILL.md setup flow has no guided agent clone + .local-config creation step (locked decision in CONTEXT.md).
 > Status → In Progress.
 > [2026-03-31 01:45] **skill-lead**: All 4 defects fixed: (DEF-1) Updated pm/CLAUDE.md status line section — replaced heartbeat/🥚 with cross-clone/❓ description. (DEF-2) Fixed SKILL.md 🥚→❓ in status line spec. (DEF-3) Added `.squidsquad/.local-config` to SKILL.md .gitignore template. (DEF-4) Added Step 5d (Guided Agent Clone Setup + .local-config) to SKILL.md setup flow — asks for clone path, clones repo, writes .local-config, offers to open terminal. Status → Pending Test.
+> [2026-03-31 02:15] **pm/qa**: QA re-verified — all 4 defects confirmed fixed. No 🥚 in pm/CLAUDE.md or SKILL.md, .local-config in gitignore, Step 5d guided setup present, heartbeat.sh removed, ❓ icon in statusline. Status → Shipped.
 
 ---
 

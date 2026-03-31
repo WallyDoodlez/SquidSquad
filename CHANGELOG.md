@@ -4,6 +4,27 @@ All notable changes to SquidSquad will be documented here.
 
 ---
 
+## [0.8.0] — 2026-03-31
+
+### Added
+
+- **Delivery Manager (DM) role** (FEAT-SKILL-035): New optional agent role that owns the "last mile" of shipping — user-facing docs, CHANGELOG, version bumps, git tags, releases. Feature lifecycle gains `Pending Ship` status between `Pending Test` and `Shipped`. DM is optional: when absent, PM automatically activates delivery capabilities (Step 6d fallback). DM presence detected by `dm/` directory existence — no config flag needed. Includes `delivery:skip` tag for internal-only features.
+- **Granular status phases with item names** (FEAT-SKILL-044): All agents write distinct phases with specific item IDs to `current-state`. PM gets `researching`, `discussing`, `test-planning` phases for Feature Intake. Dev phases include item IDs (e.g. `triaging|Fixing BUG-SKILL-029...`). Per-item updates during batch operations.
+- **Overdue emoji on status bar** (FEAT-SKILL-045): Shows `⏰ +Nm` when an agent's cycle exceeds the iteration interval. Triggers immediately at boundary, no grace period. All agent roles.
+- **Bug discussion flow** (FEAT-SKILL-046): PM now investigates root cause and presents problem + proposed fix to human before filing bugs to dev tracker. Human can discuss and steer the fix approach. Non-blocking — PM continues loop if human hasn't responded.
+- **Cross-clone health detection + guided setup** (FEAT-SKILL-047): Replaces heartbeat branches with direct file reads across agent clones. Agent paths stored in gitignored `.local-config`. Setup guides user through cloning repos and launching agents. Health icons updated: 🦑 healthy, 👻 stalled, ❓ unknown (replaces 🥚). Heartbeat.sh removed.
+- **Philosophy section in README** (FEAT-SKILL-048): Documents core design principles — git as the communication bus, complete audit trail, Discussion sections as project archive, no external dependencies for coordination.
+
+### Fixed
+
+- PM template now includes `delivery:skip` guidance for internal-only features (BUG-SKILL-032).
+- DM role is optional with full PM delivery fallback when absent (BUG-SKILL-033).
+- Statusline only shows DM health icon when `dm/` directory exists (BUG-SKILL-034).
+- Overdue timer no longer shows stale +183m on quiet cycles — reads `current-state` mtime instead of iteration file (BUG-SKILL-035).
+- Current-state file writes use atomic pattern (`echo > tmp && mv`) to prevent stale statusline from file locking races (BUG-SKILL-031).
+
+---
+
 ## [0.7.0] — 2026-03-30
 
 ### Added
