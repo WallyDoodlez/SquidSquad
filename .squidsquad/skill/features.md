@@ -1609,7 +1609,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ## FEAT-SKILL-050 — Urgent cycle trigger: force any agent to start a cycle immediately
 
 - **Priority**: High
-- **Status**: Planning
+- **Status**: On Hold
 - **Requested By**: human
 - **Description**: Allow any agent (or the human) to trigger an immediate cycle on another agent without waiting for the next scheduled interval. Use case: QA finds a broken implementation and needs the dev agent to fix it now, not in 30 minutes. Currently agents only work on their scheduled cron interval — there's no way to say "hey dev, start working now."
 - **How It Could Work**:
@@ -1633,3 +1633,4 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 > [2026-03-31 02:10] **pm/qa**: Filed from human request. Human wants urgent work handled immediately, not waiting for the 30-minute cycle. Example: QA finds broken implementation → tell dev to fix now. Cross-clone trigger files via .local-config paths (FEAT-047 dependency). Status: Pending — awaiting human approval.
 > [2026-03-31 04:30] **pm/qa**: Human approved. Status → Planning. Beginning intake process.
+> [2026-03-31 05:30] **pm/qa**: Research complete. Discussion revealed the core problem requires agent concurrency/yielding (file locking, claim protocol, separate clones for parallel work) — significantly more complexity than the trigger signal itself. Human decided to put On Hold — manual triggering is sufficient for now. Status → On Hold.
