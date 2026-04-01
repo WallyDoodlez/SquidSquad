@@ -17,6 +17,9 @@ if (Test-Path .squidsquad) {
     Write-Host ""
 }
 
+# Inject permissions from template into settings.json
+& (Join-Path $repoRoot ".squidsquad/inject-permissions.ps1")
+
 # Write role for statusline (not used for auto-boot -- system prompt handles that)
 "dm" | Set-Content .squidsquad/.active-role -NoNewline
 

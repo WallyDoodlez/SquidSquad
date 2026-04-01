@@ -25,4 +25,4 @@ Write-Host ""
 Remove-Item .squidsquad/skill/current-state -ErrorAction SilentlyContinue
 "idle|Initializing..." | Set-Content .squidsquad/skill/current-state -NoNewline
 
-claude --dangerously-skip-permissions  --append-system-prompt "SQUIDSQUAD_ROLE=skill" "🦑 Skill dev - start the loop"
+claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=skill" "🦑 Skill dev - start the loop"

@@ -16,6 +16,9 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
+# Inject permissions from template into settings.json
+bash .squidsquad/inject-permissions.sh
+
 # Write role for statusline (not used for auto-boot — system prompt handles that)
 echo "dm" > .squidsquad/.active-role
 
