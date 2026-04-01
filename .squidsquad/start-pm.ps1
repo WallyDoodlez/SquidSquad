@@ -1,4 +1,4 @@
-﻿[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $repoRoot = git rev-parse --show-toplevel
 Set-Location $repoRoot
 
@@ -17,6 +17,9 @@ if (Test-Path .squidsquad) {
     Write-Host ""
 }
 
+# Inject permissions from template into settings.json
+& (Join-Path $repoRoot ".squidsquad/inject-permissions.ps1")
+
 # Write role for statusline (not used for auto-boot -- system prompt handles that)
 "pm" | Set-Content .squidsquad/.active-role -NoNewline
 
@@ -24,4 +27,4 @@ if (Test-Path .squidsquad) {
 Remove-Item .squidsquad/pm/current-state -ErrorAction SilentlyContinue
 "idle|Initializing..." | Set-Content .squidsquad/pm/current-state -NoNewline
 
-claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
+claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=pm" "🦑 PM - start the loop "

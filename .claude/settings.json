@@ -1,49 +1,87 @@
 {
-  "statusLine": {
-    "type": "command",
-    "command": "bash .squidsquad/statusline.sh"
-  },
-  "permissions": {
-    "allow": [
-      "Edit(.squidsquad/**)",
-      "Write(.squidsquad/**)",
-      "Bash(git pull*)",
-      "Bash(git add*)",
-      "Bash(git commit*)",
-      "Bash(git push*)",
-      "Bash(git stash*)",
-      "Bash(git checkout*)",
-      "Bash(git log*)",
-      "Bash(git rev-list*)",
-      "Bash(git tag*)",
-      "Bash(git fetch*)",
-      "Bash(git hash-object*)",
-      "Bash(git mktree*)",
-      "Bash(git commit-tree*)",
-      "Bash(grep *)",
-      "Bash(ls *)",
-      "Bash(cat *)",
-      "Bash(date *)",
-      "Bash(stat *)",
-      "Bash(rm -f .squidsquad/*)",
-      "Bash(echo * > .squidsquad/*)",
-      "Bash(echo * > .squidsquad/* && mv -f .squidsquad/* .squidsquad/*)",
-      "Bash(mv -f .squidsquad/* .squidsquad/*)",
-      "Bash(gh pr *)",
-      "Bash(gh issue *)"
-    ]
-  },
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash -c 'if [ -d .squidsquad ]; then V=$(grep -o [0-9][0-9.]*[0-9] .squidsquad/config.md 2>/dev/null | head -1); cat <<LOGO\n\n      ▗▄▖\n     ▟█ █▙\n    ▐█• •█▌\n   ███████\n   ▐█████▌\n    ▐▌▐▌▐▌\n  S Q U I D S Q U A D   v${V:-?}\n\nLOGO\nfi'"
-          }
-        ]
-      }
-    ]
-  }
+    "statusLine":  {
+                       "type":  "command",
+                       "command":  "bash .squidsquad/statusline.sh"
+                   },
+    "permissions":  {
+                        "allow":  [
+                                      "Bash(git rev-parse *)",
+                                      "Bash(git log *)",
+                                      "Bash(git rev-list *)",
+                                      "Bash(git tag -l *)",
+                                      "Bash(git diff *)",
+                                      "Bash(git status*)",
+                                      "Bash(git branch*)",
+                                      "Bash(git show *)",
+                                      "Bash(git blame *)",
+                                      "Bash(git pull*)",
+                                      "Bash(git add*)",
+                                      "Bash(git commit*)",
+                                      "Bash(git push*)",
+                                      "Bash(git stash*)",
+                                      "Bash(git checkout*)",
+                                      "Bash(git tag *)",
+                                      "Bash(git fetch*)",
+                                      "Bash(git merge*)",
+                                      "Bash(git hash-object*)",
+                                      "Bash(git mktree*)",
+                                      "Bash(git commit-tree*)",
+                                      "Bash(cat *)",
+                                      "Bash(head *)",
+                                      "Bash(tail *)",
+                                      "Bash(ls *)",
+                                      "Bash(wc *)",
+                                      "Edit(.squidsquad/**)",
+                                      "Write(.squidsquad/**)",
+                                      "Bash(echo * \u003e .squidsquad/*)",
+                                      "Bash(echo * \u003e .squidsquad/*/*)",
+                                      "Bash(echo * \u003e .squidsquad/*/*/*)",
+                                      "Bash(cp * .squidsquad/*)",
+                                      "Bash(cp * .squidsquad/*/*)",
+                                      "Bash(echo * \u003e .squidsquad/*.tmp \u0026\u0026 mv -f .squidsquad/*.tmp .squidsquad/*)",
+                                      "Bash(echo * \u003e .squidsquad/*/*.tmp \u0026\u0026 mv -f .squidsquad/*/*.tmp .squidsquad/*/*)",
+                                      "Bash(mv -f .squidsquad/*.tmp .squidsquad/*)",
+                                      "Bash(mv -f .squidsquad/*/*.tmp .squidsquad/*/*)",
+                                      "Bash(rm -f .squidsquad/*)",
+                                      "Bash(rm -f .squidsquad/*/*)",
+                                      "Bash(rm -f .squidsquad/*/*/*)",
+                                      "Bash(rm .squidsquad/*)",
+                                      "Bash(rm .squidsquad/*/*)",
+                                      "Edit(README.md)",
+                                      "Edit(SKILL.md)",
+                                      "Edit(CHANGELOG.md)",
+                                      "Write(CHANGELOG.md)",
+                                      "Bash(grep *)",
+                                      "Bash(sed *)",
+                                      "Bash(cut *)",
+                                      "Bash(sort *)",
+                                      "Bash(tr *)",
+                                      "Bash(date *)",
+                                      "Bash(stat *)",
+                                      "Bash(timeout *)",
+                                      "Bash(test *)",
+                                      "Bash([ *)",
+                                      "Bash(echo *)",
+                                      "Bash(printf *)",
+                                      "Bash(gh pr *)",
+                                      "Bash(gh issue *)",
+                                      "Bash(gh api *)",
+                                      "Bash(code *)",
+                                      "Bash(git add -A \u0026\u0026 git commit *)",
+                                      "Bash(git push \u0026\u0026 git push --tags)"
+                                  ]
+                    },
+    "hooks":  {
+                  "SessionStart":  [
+                                       {
+                                           "matcher":  "",
+                                           "hooks":  [
+                                                         {
+                                                             "type":  "command",
+                                                             "command":  "bash -c \u0027if [ -d .squidsquad ]; then V=$(grep -o [0-9][0-9.]*[0-9] .squidsquad/config.md 2\u003e/dev/null | head -1); cat \u003c\u003cLOGO\n\n      ▗▄▖\n     ▟█ █▙\n    ▐█• •█▌\n   ███████\n   ▐█████▌\n    ▐▌▐▌▐▌\n  S Q U I D S Q U A D   v${V:-?}\n\nLOGO\nfi\u0027"
+                                                         }
+                                                     ]
+                                       }
+                                   ]
+              }
 }
