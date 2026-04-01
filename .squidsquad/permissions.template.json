@@ -87,7 +87,12 @@
   "// ── Editor integration ──",
   "Bash(code *)",
 
+  "// ── Directory creation ──",
+  "Bash(mkdir *)",
+
   "// ── Compound git chains ──",
+  "Bash(git * && git *)",
+  "Bash(git * && git * && git *)",
   "Bash(git add -A && git commit *)",
   "Bash(git push && git push --tags)"
 ]
