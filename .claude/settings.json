@@ -33,13 +33,13 @@
                                       "Bash(wc *)",
                                       "Edit(.squidsquad/**)",
                                       "Write(.squidsquad/**)",
-                                      "Bash(echo * \u003e .squidsquad/*)",
-                                      "Bash(echo * \u003e .squidsquad/*/*)",
-                                      "Bash(echo * \u003e .squidsquad/*/*/*)",
+                                      "Bash(echo * > .squidsquad/*)",
+                                      "Bash(echo * > .squidsquad/*/*)",
+                                      "Bash(echo * > .squidsquad/*/*/*)",
                                       "Bash(cp * .squidsquad/*)",
                                       "Bash(cp * .squidsquad/*/*)",
-                                      "Bash(echo * \u003e .squidsquad/*.tmp \u0026\u0026 mv -f .squidsquad/*.tmp .squidsquad/*)",
-                                      "Bash(echo * \u003e .squidsquad/*/*.tmp \u0026\u0026 mv -f .squidsquad/*/*.tmp .squidsquad/*/*)",
+                                      "Bash(echo * > .squidsquad/*.tmp && mv -f .squidsquad/*.tmp .squidsquad/*)",
+                                      "Bash(echo * > .squidsquad/*/*.tmp && mv -f .squidsquad/*/*.tmp .squidsquad/*/*)",
                                       "Bash(mv -f .squidsquad/*.tmp .squidsquad/*)",
                                       "Bash(mv -f .squidsquad/*/*.tmp .squidsquad/*/*)",
                                       "Bash(rm -f .squidsquad/*)",
@@ -67,8 +67,9 @@
                                       "Bash(gh issue *)",
                                       "Bash(gh api *)",
                                       "Bash(code *)",
-                                      "Bash(git add -A \u0026\u0026 git commit *)",
-                                      "Bash(git push \u0026\u0026 git push --tags)"
+                                      "Bash(git add -A && git commit *)",
+                                      "Bash(git push && git push --tags)",
+                                      "Bash(mkdir -p *)"
                                   ]
                     },
     "hooks":  {
@@ -78,7 +79,7 @@
                                            "hooks":  [
                                                          {
                                                              "type":  "command",
-                                                             "command":  "bash -c \u0027if [ -d .squidsquad ]; then V=$(grep -o [0-9][0-9.]*[0-9] .squidsquad/config.md 2\u003e/dev/null | head -1); cat \u003c\u003cLOGO\n\n      ▗▄▖\n     ▟█ █▙\n    ▐█• •█▌\n   ███████\n   ▐█████▌\n    ▐▌▐▌▐▌\n  S Q U I D S Q U A D   v${V:-?}\n\nLOGO\nfi\u0027"
+                                                             "command":  "bash -c 'if [ -d .squidsquad ]; then V=$(grep -o [0-9][0-9.]*[0-9] .squidsquad/config.md 2>/dev/null | head -1); cat <<LOGO\n\n      ▗▄▖\n     ▟█ █▙\n    ▐█• •█▌\n   ███████\n   ▐█████▌\n    ▐▌▐▌▐▌\n  S Q U I D S Q U A D   v${V:-?}\n\nLOGO\nfi'"
                                                          }
                                                      ]
                                        }
