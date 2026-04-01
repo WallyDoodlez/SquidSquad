@@ -1641,7 +1641,7 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 
 - **Priority**: High
 - **Requested By**: human
-- **Status**: Planning
+- **Status**: Approved
 - **Description**: Replace monolithic `bugs.md` and `features.md` with individual files per item plus a lightweight auto-generated index. Currently tracker files are ~56k tokens combined and growing — agents read/grep large files every cycle to find the few entries they need. Splitting eliminates wasted token consumption while preserving git diff audit trails (non-negotiable project philosophy: "GitHub is the bus").
 - **New structure**:
   ```
@@ -1687,4 +1687,5 @@ _Features start as Pending (awaiting human approval) and move through Approved �
 ### Discussion
 
 > [2026-03-31 05:50] **pm/qa**: Human approved. Status → Planning. Beginning intake process.
+> [2026-03-31 07:00] **pm/qa**: Phase 1 (research), Phase 2 (discussion), Phase 3 (test plan) complete. Locked decisions: markdown table INDEX, inline regen, no gitignore on archived, delete old files, append migration note. 28 test cases, 16 smoke tests. Human approved. Status → Approved.
 > [2026-03-31 05:45] **pm/qa**: Filed from human discussion. Human's goal: reduce token consumption from tracker file reads. Explored SQLite (rejected — kills git diffs, violates "GitHub is the bus" philosophy) and status index shim (band-aid, files still grow). Human chose individual files + index as the right balance of token savings and git audit trail. This is a big structural change (tracker schema 3) touching all agent templates — needs proper planning via Feature Intake Process. Status: Pending — awaiting human approval.
