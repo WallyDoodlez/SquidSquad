@@ -2,7 +2,7 @@
 
 - **Priority**: High
 - **Owner**: TBD
-- **Status**: Planning
+- **Status**: Approved
 - **Description**: Foundational architectural redesign — break the monolithic SKILL.md into a main skill + layered sub-skills. **All phases must ship atomically** in a single dev cycle to avoid breaking running agents mid-migration.
 
   **Skill hierarchy (human-confirmed):**
@@ -68,3 +68,5 @@
 > [2026-04-01 01:15] **migration**: Migrated from monolithic features.md to individual file (Schema 2 -> 3).
 > [2026-04-02 00:25] **pm/qa**: Major scope refinement from human discussion.
 > [2026-04-02 00:30] **pm/qa**: Human approved. Status → Planning. Beginning intake process (Phase 1: Research). Split into layered sub-skill hierarchy: main skill → role sub-skills (hardcoded) → common sub-skills (auto-included) → role-specific sub-skills (shipped). Common sub-skills get auto-included by every role. Role-specific are shipped only (no user-configurable yet — future FEAT-SKILL-054 covers workflow editing). Human confirmed: all phases must ship atomically in one dev cycle to avoid breaking running agents. Phase D (API/SDK) can follow separately.
+> [2026-04-02 06:15] **pm/qa**: Phase 2 Discussion complete — all 8 open questions resolved. Locked decisions: build-time composition, concatenation with section markers, sources in references/sub-skills/, agent-instructions.md as generated artifact, separate Architecture Version field, keep Agent tool (no --print), diff-verified composition testing. Phase C (interaction layer) removed from scope — GitHub integration deferred to separate feature. CONTEXT.md written. Human approved Phase 2 gate.
+> [2026-04-02 06:20] **pm/qa**: Phase 3 complete — TEST-PLAN.md generated (40 TCs, 12 smoke tests, 8 regression risks). Planning phases complete. Status → Approved. Ready for skill-lead pickup.
