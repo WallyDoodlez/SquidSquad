@@ -81,8 +81,8 @@ graph TD
 
     subgraph repo["Git Repository"]
         CFG[".squidsquad/config.md"]
-        T1[".squidsquad/[role]/\nbugs.md + features.md\nworking-state.md"]
-        T2[".squidsquad/[role]/\nbugs.md + features.md\nworking-state.md"]
+        T1[".squidsquad/[role]/\nbugs/ + features/\nworking-state.md"]
+        T2[".squidsquad/[role]/\nbugs/ + features/\nworking-state.md"]
         PM_T[".squidsquad/pm/\nqa-log.md + working-state.md"]
         SL[".squidsquad/statusline.sh"]
     end
@@ -113,8 +113,8 @@ All coordination is asynchronous through git — agents pull to read the latest 
 ├── start-pm.sh/.ps1            <- PM/QA boot scripts
 ├── [role]/                     <- one folder per dev agent
 │   ├── CLAUDE.md               <- bootstrapper: role config + Read instruction to template
-│   ├── bugs.md                 <- BUG-[ROLE]-XXX tracker
-│   ├── features.md             <- FEAT-[ROLE]-XXX tracker
+│   ├── bugs/                   <- BUG-[ROLE]-XXX tracker (INDEX.md + individual files)
+│   ├── features/               <- FEAT-[ROLE]-XXX tracker (INDEX.md + individual files)
 │   ├── working-state.md        <- persists task progress across context resets
 │   └── iterations/             <- per-cycle logs (last 20 kept)
 └── pm/
@@ -253,9 +253,9 @@ Any agent can file a bug to any team directly — no routing bottleneck.
 
 | Who discovers the bug | Files to | Format |
 |-----------------------|----------|--------|
-| [role] Lead (own issue) | `[role]/bugs.md` | `BUG-[ROLE]-XXX` |
-| [role] Lead (other team's code) | `[other]/bugs.md` | `BUG-[OTHER]-XXX` |
-| PM/QA (from QA pass) | appropriate agent's `bugs.md` | `BUG-[ROLE]-XXX` |
+| [role] Lead (own issue) | `[role]/bugs/BUG-[ROLE]-XXX.md` | `BUG-[ROLE]-XXX` |
+| [role] Lead (other team's code) | `[other]/bugs/BUG-[OTHER]-XXX.md` | `BUG-[OTHER]-XXX` |
+| PM/QA (from QA pass) | appropriate agent's `bugs/BUG-[ROLE]-XXX.md` | `BUG-[ROLE]-XXX` |
 
 The agent that discovers the problem files it with complete context. The receiving agent picks it up on their next pull. No standup required.
 

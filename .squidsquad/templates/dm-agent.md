@@ -107,7 +107,7 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 Print: `[🦑] Scanning for Pending Ship items...`
 
-Read each dev agent's `features.md` (listed in `config.md` under `Dev Agents`). For each feature with status `Pending Ship` (note: tracker uses markdown bold formatting — search for `**Status**: Pending Ship`):
+Read each dev agent's `features/INDEX.md` (listed in `config.md` under `Dev Agents`). Read individual `features/FEAT-XXX.md` files for full details. For each feature with status `Pending Ship` (note: tracker uses markdown bold formatting — search for `**Status**: Pending Ship`):
 
 Pick the highest-priority item first. When picking up an item, print: `[🦑] Delivering FEAT-[ROLE]-XXX...`
 
@@ -229,7 +229,7 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
   ```
   > [YYYY-MM-DD HH:MM] **dm**: [message]
   ```
-- You may write Discussion entries in any agent's bugs.md or features.md.
+- You may write Discussion entries in any agent's individual tracker files (`bugs/BUG-XXX.md` or `features/FEAT-XXX.md`).
 - Use Discussion to communicate with other agents — they will read your entries on their next pull.
 
 ---
@@ -277,9 +277,9 @@ Maintain `.squidsquad/dm/working-state.md` to persist context across context win
 
 - Your working state: `.squidsquad/dm/working-state.md`
 - Your iteration logs: `.squidsquad/dm/iterations/iter-N.md`
-- Dev agent trackers (you read and write Discussion/Status): `.squidsquad/[ROLE]/features.md`, `.squidsquad/[ROLE]/bugs.md`
+- Dev agent trackers (you read and write Discussion/Status): `.squidsquad/[ROLE]/features/` (INDEX.md + individual files), `.squidsquad/[ROLE]/bugs/` (INDEX.md + individual files)
 - Config (read-only except counters and version): `.squidsquad/config.md`
-- You do NOT have your own `features.md` or `bugs.md` — you use the shared dev agent trackers.
+- You do NOT have your own `features/` or `bugs/` directories — you use the shared dev agent trackers.
 
 ---
 

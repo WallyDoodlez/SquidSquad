@@ -186,9 +186,9 @@ if [ "$ROLE" = "pm" ]; then
   for AGENT in $AGENTS; do
     AGENT=$(echo "$AGENT" | tr -d '[:space:]')
     [ -z "$AGENT" ] && continue
-    FEATS_FILE="$SQDIR/$AGENT/features.md"
+    FEATS_FILE="$SQDIR/$AGENT/features/INDEX.md"
     if [ -f "$FEATS_FILE" ]; then
-      PLANNING_FEAT=$(grep -B5 'Status\*\*: Planning' "$FEATS_FILE" 2>/dev/null | grep -oE 'FEAT-[A-Z]+-[0-9]+' | head -1)
+      PLANNING_FEAT=$(grep -E '\| Planning \|' "$FEATS_FILE" 2>/dev/null | grep -oE 'FEAT-[A-Z]+-[0-9]+' | head -1)
       if [ -n "$PLANNING_FEAT" ]; then
         # Detect which phase by checking for existing artifacts
         PLAN_DIR="$SQDIR/$AGENT/planning"
@@ -296,9 +296,9 @@ elif [ "$ROLE" = "dm" ]; then
     for AGENT in $AGENTS; do
       AGENT=$(echo "$AGENT" | tr -d '[:space:]')
       [ -z "$AGENT" ] && continue
-      FEATS_FILE="$SQDIR/$AGENT/features.md"
+      FEATS_FILE="$SQDIR/$AGENT/features/INDEX.md"
       if [ -f "$FEATS_FILE" ]; then
-        C=$(grep -cE '^\- \*\*Status\*\*: Pending Ship' "$FEATS_FILE" 2>/dev/null) || true
+        C=$(grep -cE '\| Pending Ship \|' "$FEATS_FILE" 2>/dev/null) || true
         PSHIP_COUNT=$(( PSHIP_COUNT + ${C:-0} ))
       fi
     done
@@ -336,12 +336,12 @@ else
     WORK_STR="🔨 ${ACTIVE_TASK}"
   else
     # Backlog counts
-    BUGS_FILE="$SQDIR/$ROLE/bugs.md"
-    FEATS_FILE="$SQDIR/$ROLE/features.md"
+    BUGS_FILE="$SQDIR/$ROLE/bugs/INDEX.md"
+    FEATS_FILE="$SQDIR/$ROLE/features/INDEX.md"
     BUG_COUNT=0
     FEAT_COUNT=0
-    [ -f "$BUGS_FILE" ] && BUG_COUNT=$(grep -cE '^\- \*\*Status\*\*: (Open|Investigating)' "$BUGS_FILE" 2>/dev/null) || true
-    [ -f "$FEATS_FILE" ] && FEAT_COUNT=$(grep -cE '^\- \*\*Status\*\*: (Approved|In Progress)' "$FEATS_FILE" 2>/dev/null) || true
+    [ -f "$BUGS_FILE" ] && BUG_COUNT=$(grep -cE '\| (Open|Investigating) \|' "$BUGS_FILE" 2>/dev/null) || true
+    [ -f "$FEATS_FILE" ] && FEAT_COUNT=$(grep -cE '\| (Approved|In Progress) \|' "$FEATS_FILE" 2>/dev/null) || true
     BUG_COUNT=${BUG_COUNT:-0}
     FEAT_COUNT=${FEAT_COUNT:-0}
 

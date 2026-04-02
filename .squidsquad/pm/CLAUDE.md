@@ -177,7 +177,7 @@ For each test failure:
 
 Print: `[🦑] Verifying fixed bugs...`
 
-For each active agent, open their `bugs.md`. For each bug with status `Fixed`:
+For each active agent, read their `bugs/INDEX.md`. For each bug with status `Fixed`, read its individual file `bugs/BUG-[ROLE]-XXX.md`:
 
 1. Run the relevant test or manually verify the fix.
 2. If verified:
@@ -191,7 +191,7 @@ For each active agent, open their `bugs.md`. For each bug with status `Fixed`:
 
 Print: `[🦑] Verifying pending test features...`
 
-For each active agent, open their `features.md`. For each feature with status `Pending Test`:
+For each active agent, read their `features/INDEX.md`. For each feature with status `Pending Test`, read its individual file `features/FEAT-[ROLE]-XXX.md`:
 
 1. Test against the acceptance criteria.
 2. If all criteria pass: update to `Pending Ship`, append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm/qa**: Verified. Status → Pending Ship.`
@@ -285,7 +285,7 @@ Read `.squidsquad/.local-config` to get each agent's clone path. For each dev ag
 3. Read the `Iteration Interval > Minutes` value from `config.md` (default 30). An agent is stalled if the `current-state` mtime is older than 2× the iteration interval.
 
 - If `current-state` exists and mtime is recent (within 2× interval): agent is healthy (🦑).
-- If `current-state` exists but mtime is stale (older than 2× interval): agent is **stalled** (👻). Log a warning in `qa-log.md` and append a Discussion note to the agent's `bugs.md`:
+- If `current-state` exists but mtime is stale (older than 2× interval): agent is **stalled** (👻). Log a warning in `qa-log.md` and file a new bug in the agent's `bugs/` directory (create `bugs/BUG-[ROLE]-XXX.md` and regenerate `bugs/INDEX.md`):
   ```
   > [YYYY-MM-DD HH:MM] **pm/qa**: Agent appears stalled — no cycle activity for [elapsed] minutes. Please check.
   ```
@@ -556,7 +556,7 @@ Write current state: `echo "test-planning|Test plan for FEAT-[ROLE_UPPER]-XXX...
 
 Create two artifacts:
 
-**A) Feature entry** in `features.md` — written by PM directly, with status `Pending`, referencing planning artifacts:
+**A) Feature entry** as individual file in `features/FEAT-[ROLE]-XXX.md` — written by PM directly, with status `Pending`, referencing planning artifacts. Regenerate `features/INDEX.md` after creating:
 - Description includes research-informed constraints
 - Acceptance criteria include edge case handling and side effect mitigations
 - References RESEARCH.md and CONTEXT.md
@@ -687,7 +687,7 @@ options: ["Yes, open in VS Code", "No thanks", "Never ask again"]
   ```
   > [YYYY-MM-DD HH:MM] **pm/qa**: [message]
   ```
-- You may write Discussion entries in any agent's bugs.md or features.md.
+- You may write Discussion entries in any agent's individual tracker files (`bugs/BUG-XXX.md` or `features/FEAT-XXX.md`).
 
 ---
 
@@ -721,7 +721,7 @@ Update when starting multi-step verification work. Clear when complete. Read on 
 - Your tracker files: `.squidsquad/pm/qa-log.md`, `.squidsquad/pm/enhancements.md`
 - Your iteration logs: `.squidsquad/pm/iterations/iter-N.md`
 - Your working state: `.squidsquad/pm/working-state.md`
-- All agent trackers (you can write to all): `.squidsquad/[ROLE]/bugs.md`, `.squidsquad/[ROLE]/features.md`
+- All agent trackers (you can write to all): `.squidsquad/[ROLE]/bugs/` (INDEX.md + individual files), `.squidsquad/[ROLE]/features/` (INDEX.md + individual files)
 - Config (read-only except counters): `.squidsquad/config.md`
 
 ---

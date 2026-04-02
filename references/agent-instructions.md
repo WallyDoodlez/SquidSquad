@@ -28,8 +28,8 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team. You work in a loo
 ## Your Responsibilities
 
 - Own all [ROLE] code in this repository.
-- Fix bugs filed in `.squidsquad/[ROLE]/bugs.md`.
-- Implement features listed in `.squidsquad/[ROLE]/features.md` with status `Approved`.
+- Fix bugs filed in `.squidsquad/[ROLE]/bugs/`.
+- Implement features listed in `.squidsquad/[ROLE]/features/` with status `Approved`.
 - If a bug's root cause belongs to another agent's domain, file it to their tracker directly.
 - Communicate cross-team through Discussion sections only — never edit another agent's entries.
 - Keep the PM/QA informed by updating bug and feature statuses promptly.
@@ -132,7 +132,7 @@ If the interval matches, continue silently.
 
 Print: `[🦑] Triaging bugs...`
 
-Open `.squidsquad/[ROLE]/bugs.md`. For each bug with status `Open` or `Investigating`:
+Read `.squidsquad/[ROLE]/bugs/INDEX.md`. For each bug with status `Open` or `Investigating`, read its individual file `.squidsquad/[ROLE]/bugs/BUG-[ROLE_UPPER]-XXX.md`:
 
 1. Write working state: update `.squidsquad/[ROLE]/working-state.md` with the bug ID, status `in-progress`, and planned approach.
 2. Read the bug description, steps to reproduce, and any Discussion entries.
@@ -148,7 +148,7 @@ Open `.squidsquad/[ROLE]/bugs.md`. For each bug with status `Open` or `Investiga
    - Clear working state: reset `working-state.md` to empty/header-only.
 7. If the root cause belongs to another agent's domain:
    - Do NOT mark this bug as Fixed.
-   - File a new bug in `.squidsquad/[OTHER_ROLE]/bugs.md` as `BUG-[OTHER_ROLE_UPPER]-XXX`.
+   - File a new bug as `.squidsquad/[OTHER_ROLE]/bugs/BUG-[OTHER_ROLE_UPPER]-XXX.md` and regenerate `.squidsquad/[OTHER_ROLE]/bugs/INDEX.md`.
    - Append a Discussion entry:
      ```
      > [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Root cause is in [OTHER_ROLE]. Filed BUG-[OTHER_ROLE_UPPER]-XXX. Blocking.
@@ -159,7 +159,7 @@ Open `.squidsquad/[ROLE]/bugs.md`. For each bug with status `Open` or `Investiga
 
 Print: `[🦑] Checking features...`
 
-Open `.squidsquad/[ROLE]/features.md`. Pick the next feature with status `Approved` (highest priority first). When picking up a feature, print: `[🦑] Implementing FEAT-[ROLE_UPPER]-XXX...`
+Read `.squidsquad/[ROLE]/features/INDEX.md`. Pick the next feature with status `Approved` (highest priority first), then read its individual file `.squidsquad/[ROLE]/features/FEAT-[ROLE_UPPER]-XXX.md`. When picking up a feature, print: `[🦑] Implementing FEAT-[ROLE_UPPER]-XXX...`
 
 1. Append a Discussion entry:
    ```
@@ -262,9 +262,9 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 You can file bugs to your own tracker or directly to any other agent's tracker. Do not wait for PM/QA to discover and route issues you find yourself.
 
-**Self-file to `[ROLE]/bugs.md`** when you discover a standalone issue during feature work — a pre-existing regression, a missing edge case, or anything worth tracking separately. Use `Reported By: [ROLE]-lead` and `Assigned To: [ROLE]-lead`.
+**Self-file to `[ROLE]/bugs/BUG-[ROLE_UPPER]-XXX.md`** when you discover a standalone issue during feature work — a pre-existing regression, a missing edge case, or anything worth tracking separately. Use `Reported By: [ROLE]-lead` and `Assigned To: [ROLE]-lead`. After filing, regenerate `.squidsquad/[ROLE]/bugs/INDEX.md`.
 
-**Cross-file to `[OTHER_ROLE]/bugs.md`** when the root cause is in another agent's domain.
+**Cross-file to `[OTHER_ROLE]/bugs/BUG-[OTHER_ROLE_UPPER]-XXX.md`** when the root cause is in another agent's domain. After filing, regenerate `.squidsquad/[OTHER_ROLE]/bugs/INDEX.md`.
 
 Cross-team bug format:
 
@@ -321,11 +321,11 @@ Maintain `.squidsquad/[ROLE]/working-state.md` to persist context across context
 
 ## File Conventions
 
-- Your tracker files: `.squidsquad/[ROLE]/bugs.md`, `.squidsquad/[ROLE]/features.md`
+- Your tracker files: `.squidsquad/[ROLE]/bugs/` (INDEX.md + individual files), `.squidsquad/[ROLE]/features/` (INDEX.md + individual files)
 - Your iteration logs: `.squidsquad/[ROLE]/iterations/iter-N.md`
 - Your working state: `.squidsquad/[ROLE]/working-state.md`
 - Config (read-only except counters): `.squidsquad/config.md`
-- Other agent trackers (write only when cross-filing): `.squidsquad/[OTHER_ROLE]/bugs.md`
+- Other agent trackers (write only when cross-filing): `.squidsquad/[OTHER_ROLE]/bugs/`
 - PM tracker (do not write): `.squidsquad/pm/`
 
 ---
@@ -350,6 +350,9 @@ The status line updates automatically after each assistant message. No action is
 - Never push without pulling first.
 - Never skip the test step before marking a bug Fixed or a feature Pending Test.
 - Never delete entries from tracker files.
+- After any status change to a tracker item, regenerate the relevant `INDEX.md` from the non-archived files in the directory.
+- After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
+- After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.
 ```
 
 ---
@@ -522,7 +525,7 @@ For each test failure:
 
 Print: `[🦑] Verifying fixed bugs...`
 
-For each active agent, open their `bugs.md`. For each bug with status `Fixed`:
+For each active agent, read their `bugs/INDEX.md`. For each bug with status `Fixed`, read its individual file:
 
 1. Run the relevant test or manually verify the fix.
 2. If verified:
@@ -536,7 +539,7 @@ For each active agent, open their `bugs.md`. For each bug with status `Fixed`:
 
 Print: `[🦑] Verifying pending test features...`
 
-For each active agent, open their `features.md`. For each feature with status `Pending Test`:
+For each active agent, read their `features/INDEX.md`. For each feature with status `Pending Test`, read its individual file:
 
 1. Test against the acceptance criteria.
 2. If all criteria pass: update to `Pending Ship`, append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm/qa**: Verified. Status → Pending Ship.`
@@ -630,7 +633,7 @@ Read `.squidsquad/.local-config` to get each agent's clone path. For each dev ag
 3. Read the `Iteration Interval > Minutes` value from `config.md` (default 30). An agent is stalled if the `current-state` mtime is older than 2× the iteration interval.
 
 - If `current-state` exists and mtime is recent (within 2× interval): agent is healthy (🦑).
-- If `current-state` exists but mtime is stale (older than 2× interval): agent is **stalled** (👻). Log a warning in `qa-log.md` and append a Discussion note to the agent's `bugs.md`:
+- If `current-state` exists but mtime is stale (older than 2× interval): agent is **stalled** (👻). Log a warning in `qa-log.md` and append a Discussion note to the agent's individual bug file:
   ```
   > [YYYY-MM-DD HH:MM] **pm/qa**: Agent appears stalled — no cycle activity for [elapsed] minutes. Please check.
   ```
@@ -901,7 +904,7 @@ Write current state: `echo "test-planning|Test plan for FEAT-[ROLE_UPPER]-XXX...
 
 Create two artifacts:
 
-**A) Feature entry** in `features.md` — written by PM directly, with status `Pending`, referencing planning artifacts:
+**A) Feature entry** as individual file in `features/` — written by PM directly, with status `Pending`, referencing planning artifacts. After creating, regenerate `INDEX.md`:
 - Description includes research-informed constraints
 - Acceptance criteria include edge case handling and side effect mitigations
 - References RESEARCH.md and CONTEXT.md
@@ -1032,7 +1035,7 @@ options: ["Yes, open in VS Code", "No thanks", "Never ask again"]
   ```
   > [YYYY-MM-DD HH:MM] **pm/qa**: [message]
   ```
-- You may write Discussion entries in any agent's bugs.md or features.md.
+- You may write Discussion entries in any agent's `bugs/BUG-XXX.md` or `features/FEAT-XXX.md`.
 
 ---
 
@@ -1066,7 +1069,7 @@ Update when starting multi-step verification work. Clear when complete. Read on 
 - Your tracker files: `.squidsquad/pm/qa-log.md`, `.squidsquad/pm/enhancements.md`
 - Your iteration logs: `.squidsquad/pm/iterations/iter-N.md`
 - Your working state: `.squidsquad/pm/working-state.md`
-- All agent trackers (you can write to all): `.squidsquad/[ROLE]/bugs.md`, `.squidsquad/[ROLE]/features.md`
+- All agent trackers (you can write to all): `.squidsquad/[ROLE]/bugs/` (INDEX.md + individual files), `.squidsquad/[ROLE]/features/` (INDEX.md + individual files)
 - Config (read-only except counters): `.squidsquad/config.md`
 
 ---
@@ -1093,6 +1096,9 @@ The status line updates automatically after each assistant message. No action is
 - Never implement fixes or features directly — always file to the appropriate agent's bug or feature tracker.
 - Never delete entries from tracker files.
 - Never mark a bug Verified without actually running a test or check.
+- After any status change to a tracker item, regenerate the relevant `INDEX.md` from the non-archived files in the directory.
+- After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
+- After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.
 ```
 
 ---
@@ -1211,7 +1217,7 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 Print: `[🦑] Scanning for Pending Ship items...`
 
-Read each dev agent's `features.md` (listed in `config.md` under `Dev Agents`). For each feature with status `Pending Ship` (note: tracker uses markdown bold formatting — search for `**Status**: Pending Ship`):
+Read each dev agent's `features/INDEX.md` (listed in `config.md` under `Dev Agents`). For each feature with status `Pending Ship`, read its individual file (note: tracker uses markdown bold formatting — search for `**Status**: Pending Ship`):
 
 Pick the highest-priority item first. When picking up an item, print: `[🦑] Delivering FEAT-[ROLE_UPPER]-XXX...`
 
@@ -1333,7 +1339,7 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
   ```
   > [YYYY-MM-DD HH:MM] **dm**: [message]
   ```
-- You may write Discussion entries in any agent's bugs.md or features.md.
+- You may write Discussion entries in any agent's `bugs/BUG-XXX.md` or `features/FEAT-XXX.md`.
 - Use Discussion to communicate with other agents — they will read your entries on their next pull.
 
 ---
@@ -1375,9 +1381,9 @@ Maintain `.squidsquad/dm/working-state.md` to persist context across context win
 
 - Your working state: `.squidsquad/dm/working-state.md`
 - Your iteration logs: `.squidsquad/dm/iterations/iter-N.md`
-- Dev agent trackers (you read and write Discussion/Status): `.squidsquad/[ROLE]/features.md`, `.squidsquad/[ROLE]/bugs.md`
+- Dev agent trackers (you read and write Discussion/Status): `.squidsquad/[ROLE]/features/` (INDEX.md + individual files), `.squidsquad/[ROLE]/bugs/` (INDEX.md + individual files)
 - Config (read-only except counters and version): `.squidsquad/config.md`
-- You do NOT have your own `features.md` or `bugs.md` — you use the shared dev agent trackers.
+- You do NOT have your own `features/` or `bugs/` directories — you use the shared dev agent trackers.
 
 ---
 
@@ -1403,4 +1409,7 @@ The status line updates automatically after each assistant message.
 - Never push without pulling first.
 - Never skip checking for `delivery:skip` before starting delivery work.
 - Never delete entries from tracker files.
+- After any status change to a tracker item, regenerate the relevant `INDEX.md` from the non-archived files in the directory.
+- After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
+- After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.
 ```

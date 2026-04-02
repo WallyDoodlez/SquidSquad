@@ -29,8 +29,8 @@ No meetings. No message queues. Just markdown.
 │              ├── config.md  ◄────────────────────┘      │
 │              ├── [role]/          ← one per dev agent    │
 │              │   ├── CLAUDE.md                           │
-│              │   ├── bugs.md                             │
-│              │   ├── features.md                         │
+│              │   ├── bugs/          ← INDEX.md + individual BUG-XXX.md files + archived/
+│              │   ├── features/      ← INDEX.md + individual FEAT-XXX.md files + archived/
 │              │   └── iterations/                         │
 │              └── pm/                                     │
 │                  ├── CLAUDE.md                            │
@@ -46,7 +46,7 @@ SquidSquad always has a **PM/QA** agent. Dev agents are flexible — you define 
 
 | Agent | Owns | Loop |
 |-------|------|------|
-| **[role] Lead** (one per dev role) | Code for that role, `[role]/bugs.md`, `[role]/features.md` | Ralph Loop (fix bugs → implement features → test → push) |
+| **[role] Lead** (one per dev role) | Code for that role, `[role]/bugs/`, `[role]/features/` | Ralph Loop (fix bugs → implement features → test → push) |
 | **PM/QA** | Product backlog, `pm/qa-log.md`, `pm/enhancements.md`, human interaction | Ralph Loop (check human → run e2e → log → file bugs → verify → push) |
 
 **Common team shapes:**
@@ -77,8 +77,8 @@ When you invoke SquidSquad, it creates the following inside your project root. O
 ├── start-dm.sh / start-dm.ps1  ← boot script: launches Delivery Manager (autonomous)
 ├── be/                         ← one folder per dev agent, named after the role
 │   ├── CLAUDE.md               ← bootstrapper (~20 lines): role config + Read instruction to template
-│   ├── bugs.md                 ← BUG-BE-XXX tracker with Discussion sections
-│   ├── features.md             ← FEAT-BE-XXX tracker with Discussion sections
+│   ├── bugs/                   ← INDEX.md + individual BUG-BE-XXX.md files + archived/
+│   ├── features/               ← INDEX.md + individual FEAT-BE-XXX.md files + archived/
 │   └── iterations/             ← iter-N.md logs per cycle
 ├── dm/                         ← Delivery Manager (optional — created when user opts in)
 │   ├── CLAUDE.md               ← bootstrapper: role config + Read instruction to template
@@ -92,7 +92,7 @@ When you invoke SquidSquad, it creates the following inside your project root. O
     └── migrations/             ← migration logs written when tracker schema changes
 ```
 
-> **Note:** DM uses shared dev agent trackers (no `dm/features.md` or `dm/bugs.md`). DM reads `Pending Ship` items from dev agent trackers and writes Discussion entries directly there.
+> **Note:** DM uses shared dev agent trackers (no `dm/features/` or `dm/bugs/`). DM reads `Pending Ship` items from dev agent trackers and writes Discussion entries directly there.
 
 For `fe, be` the structure gains a `fe/` folder and `start-fe.sh/.ps1` alongside `be/`.
 
@@ -100,7 +100,9 @@ For `fe, be` the structure gains a `fe/` folder and `start-fe.sh/.ps1` alongside
 
 ## Tracker Formats
 
-### Bug Format (`bugs.md`)
+### Bug Format (`bugs/BUG-XXX.md`)
+
+Each bug is stored as its own file (e.g. `bugs/BUG-FE-001.md`). The `bugs/INDEX.md` file is auto-generated and lists all non-archived bugs.
 
 ```markdown
 ## BUG-FE-001 — [Title]
@@ -126,7 +128,9 @@ For `fe, be` the structure gains a `fe/` folder and `start-fe.sh/.ps1` alongside
 
 Status flow: `Open` → `Investigating` → `Fixed` → `Verified` → `Closed`
 
-### Feature Format (`features.md`)
+### Feature Format (`features/FEAT-XXX.md`)
+
+Each feature is stored as its own file (e.g. `features/FEAT-FE-001.md`). The `features/INDEX.md` file is auto-generated and lists all non-archived features.
 
 ```markdown
 ## FEAT-FE-001 — [Title]
@@ -165,6 +169,30 @@ Features go through a deep, research-driven lifecycle before reaching the dev ag
 
 Planning files live in `.squidsquad/[role]/planning/` and are auto-deleted after ship (git preserves them). Bugs are excluded — they use the current lightweight flow. Trivial/cosmetic features can use light mode (PM skips research).
 
+### INDEX.md Regeneration
+
+`INDEX.md` is auto-generated and must never be hand-edited. It is regenerated after any status change, filing, archival, or deletion of a tracker item.
+
+**Format:**
+
+```markdown
+<!-- Generated: YYYY-MM-DD HH:MM -->
+# Bug Tracker Index
+
+| ID | Status | Severity | Title |
+|----|--------|----------|-------|
+| [BUG-ROLE-001](BUG-ROLE-001.md) | Open | High | Some bug title |
+| [BUG-ROLE-002](BUG-ROLE-002.md) | Investigating | Critical | Another bug |
+```
+
+For features, the third column is `Priority` instead of `Severity`.
+
+**Rules:**
+- Only lists non-archived items (items in `archived/` are excluded)
+- Sorted by ID in ascending order
+- The `<!-- Generated: YYYY-MM-DD HH:MM -->` comment is always the first line
+- Agents regenerate INDEX.md by scanning all `.md` files in the directory (excluding `INDEX.md` and `archived/`), extracting ID, Status, Severity/Priority, and Title from each file's frontmatter fields
+
 ---
 
 ## The Ralph Loop
@@ -187,11 +215,11 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 1. git pull --rebase
 1b. Context pressure check — if above threshold, save state and exit
 1c. Resume from working-state.md if active task exists
-2. Scan [role]/bugs.md for Open or Investigating items (match `**Status**: Open` — tracker uses markdown bold)
+2. Read [role]/bugs/INDEX.md, then read individual files for Open or Investigating items (match `**Status**: Open` — tracker uses markdown bold)
    → Write working state, fix bug, clear state on completion
-   → If bug touches another agent's domain, file BUG-[OTHER]-XXX in [other]/bugs.md
-   → Update bug status to Fixed, append Discussion entry
-3. Scan [role]/features.md for Approved items
+   → If bug touches another agent's domain, create [other]/bugs/BUG-[OTHER]-XXX.md and regenerate INDEX.md
+   → Update bug status to Fixed, append Discussion entry, regenerate INDEX.md
+3. Read [role]/features/INDEX.md, then read individual files for Approved items
    → Write working state, implement feature, update state as sub-steps complete
    → Update status to In Progress, then Pending Test
    → Clear working state on completion, append Discussion entry
@@ -214,9 +242,9 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 3. Run full e2e test command (from config.md)
 4. Log results to pm/qa-log.md
 5. If tests fail: file BUG-[ROLE]-XXX to the appropriate dev agent's tracker
-6. Scan each dev agent's features.md for Pending Test items → verify → update to Pending Ship (DM handles delivery → Shipped)
+6. Read each dev agent's features/INDEX.md for Pending Test items → read individual files → verify → update to Pending Ship (DM handles delivery → Shipped)
 6b. If PR Flow enabled: monitor open PRs, sync comments/merges/changes to trackers
-7. Scan each dev agent's bugs.md for Fixed items → verify → update to Verified/Closed
+7. Read each dev agent's bugs/INDEX.md for Fixed items → read individual files → verify → update to Verified/Closed
 7b. If GitHub Issues ingestion enabled: `gh issue list` → ingest new issues into trackers
 8. Agent health check: git log per agent, flag stalled/idle agents (no commits in 2× interval)
 9. If quiet cycle (no issues found, no verifications, no human input): skip log/commit, go to sleep
@@ -232,7 +260,7 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 All agents follow these rules to minimize merge conflicts on shared tracker files:
 
 - Always `git pull --rebase` before starting any work.
-- Tracker files (bugs.md, features.md, qa-log.md) are **append-only**: never edit or delete existing entries — only append new entries or update the status field of your own items.
+- Tracker files (individual bug/feature `.md` files, qa-log.md) are **append-only**: never edit or delete existing entries — only append new entries or update the status field of your own items. Closed/terminal-status items are moved to `archived/` subdirectories. INDEX.md files are auto-generated and never hand-edited.
 - Discussion sections are append-only: always add new lines at the bottom of the `### Discussion` block.
 - Push after completing each work unit (bug fix, feature, test run).
 - **Commit prefix convention**: every commit message must start with the agent's role name followed by a colon (e.g. `skill: fix bug`, `fe: add button`, `pm: verify features`). This prefix is used by the status line and PM health checks to detect agent activity via `git log --grep`.
@@ -248,7 +276,7 @@ When `PR Flow: yes` is set in `config.md`, dev agents create PRs instead of push
   - If merged: update the tracker item status to `Shipped`
   - If changes requested: update status back to `In Progress` and append the feedback to Discussion
   - If new comments: append them to the tracker Discussion
-- **PM/QA still pushes to main** — only dev agent feature/bug work goes through PRs. PM tracker updates (bugs.md, features.md status changes, qa-log, iterations) continue to push directly to main.
+- **PM/QA still pushes to main** — only dev agent feature/bug work goes through PRs. PM tracker updates (individual bug/feature file status changes, INDEX.md regeneration, qa-log, iterations) continue to push directly to main.
 - When `PR Flow: no` (default), agents push directly to main as before.
 
 ---
@@ -342,8 +370,10 @@ For each dev agent role defined in Step 1, create:
 ```
 .squidsquad/[role]/
     CLAUDE.md
-    bugs.md
-    features.md
+    bugs/
+        archived/
+    features/
+        archived/
     iterations/
 ```
 
@@ -772,24 +802,28 @@ The user goes from "I want a skill agent" to "skill agent is running" in one flo
 
 ### Step 6 — Seed Tracker Files
 
-Initialize empty tracker files with headers:
+Initialize tracker directories with INDEX.md files:
 
-**`[role]/bugs.md`** (one per dev agent):
+**`[role]/bugs/INDEX.md`** (one per dev agent):
 ```markdown
-# Bug Tracker
+<!-- Generated: YYYY-MM-DD HH:MM -->
+# Bug Tracker Index
 
-_Bugs are filed in BUG-[TEAM]-XXX format. Each entry includes a Discussion section for cross-team communication._
+_Bugs are filed as individual BUG-[TEAM]-XXX.md files. This index is auto-generated._
 
----
+| ID | Status | Severity | Title |
+|----|--------|----------|-------|
 ```
 
-**`[role]/features.md`** (one per dev agent):
+**`[role]/features/INDEX.md`** (one per dev agent):
 ```markdown
-# Feature Tracker
+<!-- Generated: YYYY-MM-DD HH:MM -->
+# Feature Tracker Index
 
-_Features start as Pending (awaiting human approval) and move through Planning → Approved → In Progress → Pending Test → Pending Ship → Shipped._
+_Features are filed as individual FEAT-[TEAM]-XXX.md files. This index is auto-generated._
 
----
+| ID | Status | Priority | Title |
+|----|--------|----------|-------|
 ```
 
 **`pm/qa-log.md`**:
@@ -810,13 +844,14 @@ _Product ideas and enhancement proposals surfaced during QA cycles or human chec
 ---
 ```
 
-If the user provided seed items (field 8) or imported items (from the import step), add them to the appropriate tracker files using the full bug or feature format:
+If the user provided seed items (field 8) or imported items (from the import step), create individual files in the appropriate tracker directories using the full bug or feature format:
 
 - Bugs get status `Open`, features get status `Pending`.
 - Each entry gets an initial Discussion note from `pm/qa`:
   - Seed items: `> [YYYY-MM-DD HH:MM] **pm/qa**: Seeded at setup.`
   - Imported items: `> [YYYY-MM-DD HH:MM] **pm/qa**: Imported from [source] at setup.`
-- Route each item to the correct `[role]/bugs.md` or `[role]/features.md` based on the owner assigned during import/seeding.
+- Create each item as an individual file (e.g. `[role]/bugs/BUG-[ROLE]-001.md` or `[role]/features/FEAT-[ROLE]-001.md`) based on the owner assigned during import/seeding.
+- Regenerate `INDEX.md` for each affected directory after all items are created.
 - Update ID counters in `config.md` to reflect all seeded and imported items.
 
 ### Step 7 — Configure SessionStart Hook
@@ -945,7 +980,7 @@ Spawn all applicable agents simultaneously. Each agent writes only its assigned 
 #### If skill version differs — spawn these agents in parallel:
 
 **One agent per active dev role:**
-> Regenerate `.squidsquad/templates/dev-agent-[role].md` from the Dev Agent template in `references/agent-instructions.md`, substituting `[ROLE]`, `[ROLE_UPPER]`, `[ROLE_TEST_CMD]`, `[OTHER_ROLES]`, and `[INTERVAL]` with values from `config.md`. Also regenerate `.squidsquad/start-[role].sh` and `.squidsquad/start-[role].ps1`. **Migration**: if `.squidsquad/[role]/CLAUDE.md` contains `## The Ralph Loop` (inline format, >50 lines), replace it with the bootstrapper format (see Step 4b in Setup Instructions). If it is already a bootstrapper (<50 lines, no `## The Ralph Loop`), leave it untouched. Do not touch `bugs.md`, `features.md`, or `iterations/`.
+> Regenerate `.squidsquad/templates/dev-agent-[role].md` from the Dev Agent template in `references/agent-instructions.md`, substituting `[ROLE]`, `[ROLE_UPPER]`, `[ROLE_TEST_CMD]`, `[OTHER_ROLES]`, and `[INTERVAL]` with values from `config.md`. Also regenerate `.squidsquad/start-[role].sh` and `.squidsquad/start-[role].ps1`. **Migration**: if `.squidsquad/[role]/CLAUDE.md` contains `## The Ralph Loop` (inline format, >50 lines), replace it with the bootstrapper format (see Step 4b in Setup Instructions). If it is already a bootstrapper (<50 lines, no `## The Ralph Loop`), leave it untouched. Do not touch `bugs/`, `features/`, or `iterations/`.
 
 **One agent for PM/QA:**
 > Regenerate `.squidsquad/templates/pm-agent.md` from the PM/QA template in `references/agent-instructions.md`, substituting `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]` from `config.md`. Also regenerate `.squidsquad/start-pm.sh` and `.squidsquad/start-pm.ps1`. **Migration**: if `.squidsquad/pm/CLAUDE.md` contains `## The Ralph Loop` (inline format), replace it with the bootstrapper format (see Step 4b in Setup Instructions). If already a bootstrapper, leave it untouched. Do not touch `qa-log.md`, `enhancements.md`, `iterations/`, or `migrations/`.
@@ -960,8 +995,8 @@ Spawn all applicable agents simultaneously. Each agent writes only its assigned 
 
 #### If tracker schema differs — additionally spawn:
 
-**One agent per affected tracker file:**
-> Apply the schema migration documented in the Schema Changelog for the detected version gap. Read all existing entries, rewrite the file with updated structure, append a `> [DATE] **migration**: schema N→M applied.` Discussion note to each modified entry, and write a log to `pm/migrations/schema-N-to-M.md`.
+**One agent per affected tracker directory:**
+> Apply the schema migration documented in the Schema Changelog for the detected version gap. For file-splitting migrations (e.g. Schema 2→3), read all existing entries from monolithic files, create individual files, generate INDEX.md, move terminal-status items to `archived/`, and delete the original monolithic files. Append a `> [DATE] **migration**: schema N→M applied.` Discussion note to each modified entry, and write a log to `pm/migrations/schema-N-to-M.md`.
 
 ### Step 3 — Update config.md (orchestrator)
 
@@ -986,7 +1021,20 @@ Tell the user: version upgraded from → to, files regenerated per agent, any sc
 
 ## Schema Changelog
 
-### Schema 2 (current — introduced in v0.8.0)
+### Schema 3 (current — introduced in v0.9.0): Individual Tracker Files
+
+Replaced monolithic `bugs.md` and `features.md` files with individual files in `bugs/` and `features/` directories. Each bug/feature is its own `.md` file. An auto-generated `INDEX.md` provides a summary table. Terminal-status items are moved to `archived/` subdirectories.
+
+**Migration from Schema 2:**
+- For each dev agent role: split monolithic `bugs.md` and `features.md` into individual files
+- Terminal-status items (`Closed` bugs, `Shipped`/`Rejected` features) go to `archived/` subdirectory
+- Generate `INDEX.md` for each directory
+- Delete original monolithic files
+- Regenerate agent `CLAUDE.md` files from updated templates
+- Update `statusline.sh`
+- Bump `Tracker Schema` to `3` in `config.md`
+
+### Schema 2 (introduced in v0.8.0)
 
 Added `Pending Ship` status to the feature lifecycle. After PM/QA verifies a feature (`Pending Test`), it transitions to `Pending Ship` where the Delivery Manager (DM) handles user-facing delivery (docs, CHANGELOG, version bump, git tag). DM then marks it `Shipped`.
 
@@ -1016,10 +1064,10 @@ When the user says `/squidsquad-status` (or "squad status", "show me the squad",
 2. For each agent (dev agents + PM):
    - Check health via `git log --oneline --since="[2×interval] minutes ago" --grep="^[agent]:"` — if commits found, show as `active`; if prior commits exist but none recent, show as `stalled`; else `unknown`.
    - Show last commit time: `git log --oneline --grep="^[agent]:" -1 --format="%ar"`
-3. For each dev agent, read their `bugs.md` and `features.md`:
+3. For each dev agent, read their `bugs/INDEX.md` and `features/INDEX.md`:
    - Count and list open bugs (status `Open` or `Investigating`)
    - Count and list in-progress/approved features
-4. List the last 5 shipped features across all agents (status `Shipped`), most recent first.
+4. List the last 5 shipped features across all agents (read individual feature files for `Shipped` status), most recent first.
 5. Format as a clean dashboard:
 
 ```
