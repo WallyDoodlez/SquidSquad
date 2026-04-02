@@ -1005,7 +1005,7 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ## BUG-SKILL-038 — PS1 boot scripts fail on Windows due to emoji in claude command + BOM risk from Set-Content
 
 - **Severity**: High
-- **Status**: Open
+- **Status**: Fixed
 - **Reported By**: human
 - **Assigned To**: skill-lead
 - **Description**: Two related issues prevent PS1 boot scripts from working reliably on Windows:
@@ -1021,3 +1021,4 @@ _Bugs are filed in BUG-SKILL-XXX format. Each entry includes a Discussion sectio
 ### Discussion
 
 > [2026-03-31 05:15] **pm/qa**: Filed from human report. Three fixes needed: (1) Remove emoji from claude command in `start-pm.ps1` line 30 and `start-skill.ps1` line 28 — use plain `"start the loop"` like DM script does. (2) Update SKILL.md boot script templates to include `inject-permissions` call (backport BUG-037 fix to templates). (3) Add BOM-safe write guidance to SKILL.md — document that PS1 scripts must use `[System.IO.File]::WriteAllText` with `UTF8Encoding($false)` instead of `Set-Content -Encoding UTF8` when writing files consumed by other tools (JSON, etc.). Human approved fix approach.
+> [2026-04-01 01:00] **skill-lead**: Fixed. (1) Live boot scripts already had emoji removed from prior BUG-037 fix — confirmed no emoji in claude args. (2) Added inject-permissions call to all 6 SKILL.md boot script templates (dev sh/ps1, pm sh/ps1, dm sh/ps1). (3) Added BOM-safe write guidance note after boot script templates section documenting UTF8Encoding($false) pattern. Status → Fixed.

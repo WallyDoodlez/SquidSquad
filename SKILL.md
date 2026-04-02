@@ -525,6 +525,9 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
+# Inject permissions from template into settings.json
+bash .squidsquad/inject-permissions.sh 2>/dev/null || true
+
 # Write role for statusline (not used for auto-boot — system prompt handles that)
 echo "[ROLE]" > .squidsquad/.active-role
 
@@ -553,6 +556,9 @@ Write-Host "   ▐█████▌"
 Write-Host "    ▐▌▐▌▐▌"
 Write-Host "  S Q U I D S Q U A D   v$v  -  [ROLE]"
 Write-Host ""
+
+# Inject permissions from template into settings.json
+& (Join-Path $repoRoot ".squidsquad/inject-permissions.ps1")
 
 # Write role for statusline (not used for auto-boot -- system prompt handles that)
 "[ROLE]" | Set-Content .squidsquad/.active-role -NoNewline
@@ -584,6 +590,9 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
+# Inject permissions from template into settings.json
+bash .squidsquad/inject-permissions.sh 2>/dev/null || true
+
 # Write role for statusline (not used for auto-boot — system prompt handles that)
 echo "pm" > .squidsquad/.active-role
 
@@ -614,6 +623,9 @@ if (Test-Path .squidsquad) {
     Write-Host "  S Q U I D S Q U A D   v$v  -  PM / QA"
     Write-Host ""
 }
+
+# Inject permissions from template into settings.json
+& (Join-Path $repoRoot ".squidsquad/inject-permissions.ps1")
 
 # Write role for statusline (not used for auto-boot -- system prompt handles that)
 "pm" | Set-Content .squidsquad/.active-role -NoNewline
@@ -647,6 +659,9 @@ if [ -d .squidsquad ]; then
 LOGO
 fi
 
+# Inject permissions from template into settings.json
+bash .squidsquad/inject-permissions.sh 2>/dev/null || true
+
 # Write role for statusline
 echo "dm" > .squidsquad/.active-role
 
@@ -678,6 +693,9 @@ if (Test-Path .squidsquad) {
     Write-Host ""
 }
 
+# Inject permissions from template into settings.json
+& (Join-Path $repoRoot ".squidsquad/inject-permissions.ps1")
+
 # Write role for statusline
 "dm" | Set-Content .squidsquad/.active-role -NoNewline
 
@@ -689,6 +707,8 @@ claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=dm" "start the
 ```
 
 Make the `.sh` scripts executable (`chmod +x`).
+
+> **BOM-safe writes on Windows**: PowerShell 5.x `Set-Content -Encoding UTF8` adds a UTF-8 BOM, which breaks JSON parsers (node, jq, Claude). When writing files consumed by other tools (JSON, config files), use `[System.IO.File]::WriteAllText($path, $content, [System.Text.UTF8Encoding]::new($false))` instead. The `inject-permissions.ps1` script already follows this pattern.
 
 ### Step 5b — Generate Status Line Script
 
