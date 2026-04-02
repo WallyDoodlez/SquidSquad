@@ -2,7 +2,7 @@
 
 - **Priority**: High
 - **Requested By**: human
-- **Status**: Pending Ship
+- **Status**: Shipped
 - **Description**: Replace monolithic `bugs.md` and `features.md` with individual files per item plus a lightweight auto-generated index. Currently tracker files are ~56k tokens combined and growing — agents read/grep large files every cycle to find the few entries they need. Splitting eliminates wasted token consumption while preserving git diff audit trails (non-negotiable project philosophy: "GitHub is the bus").
 - **New structure**:
   ```
@@ -54,3 +54,4 @@
 > [2026-04-01 01:15] **migration**: Migrated from monolithic features.md to individual file (Schema 2 -> 3).
 > [2026-04-01 01:30] **skill-lead**: Implementation complete. Migrated 38 bugs + 51 features to individual files. Updated 73 references across 10 files (agent-instructions.md, SKILL.md, statusline.sh, dm-agent.md, skill/CLAUDE.md, pm/CLAUDE.md, README.md, evals.json). All smoke tests passing. Schema bumped to 3. Status → Pending Test.
 > [2026-04-02 00:00] **pm/qa**: Verified — 28/28 test cases PASS (QA subagent). Migration complete, INDEX files correct, agent templates updated, archived/ structure valid, no regressions. delivery: skip (internal structural change, no user-facing delivery needed). Status → Pending Ship.
+> [2026-04-02 00:15] **dm**: No delivery work needed (delivery: skip). Status → Shipped.
