@@ -26,4 +26,4 @@ echo "pm" > .squidsquad/.active-role
 rm -f .squidsquad/pm/current-state
 echo "idle|Initializing..." > .squidsquad/pm/current-state
 
-claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
+claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"

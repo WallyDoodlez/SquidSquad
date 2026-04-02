@@ -565,7 +565,7 @@ echo "[ROLE]" > .squidsquad/.active-role
 rm -f .squidsquad/[ROLE]/current-state
 echo "idle|Initializing..." > .squidsquad/[ROLE]/current-state
 
-claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=[ROLE]" "start the loop"
+claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=[ROLE]" "start the loop"
 ```
 
 **`start-[role].ps1`**:
@@ -597,7 +597,7 @@ Write-Host ""
 Remove-Item .squidsquad/[ROLE]/current-state -ErrorAction SilentlyContinue
 "idle|Initializing..." | Set-Content .squidsquad/[ROLE]/current-state -NoNewline
 
-claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=[ROLE]" "start the loop"
+claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=[ROLE]" "start the loop"
 ```
 
 **`start-pm.sh`**:
@@ -630,7 +630,7 @@ echo "pm" > .squidsquad/.active-role
 rm -f .squidsquad/pm/current-state
 echo "idle|Initializing..." > .squidsquad/pm/current-state
 
-claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
+claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
 ```
 
 **`start-pm.ps1`**:
@@ -664,7 +664,7 @@ if (Test-Path .squidsquad) {
 Remove-Item .squidsquad/pm/current-state -ErrorAction SilentlyContinue
 "idle|Initializing..." | Set-Content .squidsquad/pm/current-state -NoNewline
 
-claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
+claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
 ```
 
 > **Note:** All agents use a positional arg to send the first message (kickstarting the Ralph Loop) in an interactive session. The user can observe progress and comment in any agent's terminal.
@@ -699,7 +699,7 @@ echo "dm" > .squidsquad/.active-role
 rm -f .squidsquad/dm/current-state
 echo "idle|Initializing..." > .squidsquad/dm/current-state
 
-claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=dm" "start the loop"
+claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=dm" "start the loop"
 ```
 
 **`start-dm.ps1`**:
@@ -733,7 +733,7 @@ if (Test-Path .squidsquad) {
 Remove-Item .squidsquad/dm/current-state -ErrorAction SilentlyContinue
 "idle|Initializing..." | Set-Content .squidsquad/dm/current-state -NoNewline
 
-claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=dm" "start the loop"
+claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=dm" "start the loop"
 ```
 
 Make the `.sh` scripts executable (`chmod +x`).

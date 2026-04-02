@@ -26,4 +26,4 @@ echo "skill" > .squidsquad/.active-role
 rm -f .squidsquad/skill/current-state
 echo "idle|Initializing..." > .squidsquad/skill/current-state
 
-claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=skill" "start the loop"
+claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=skill" "start the loop"

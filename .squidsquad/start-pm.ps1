@@ -27,4 +27,4 @@ if (Test-Path .squidsquad) {
 Remove-Item .squidsquad/pm/current-state -ErrorAction SilentlyContinue
 "idle|Initializing..." | Set-Content .squidsquad/pm/current-state -NoNewline
 
-claude --enable-auto-mode --append-system-prompt "SQUIDSQUAD_ROLE=pm" "PM - start the loop"
+claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=pm" "PM - start the loop"
