@@ -68,6 +68,8 @@
                                       "Bash(gh api *)",
                                       "Bash(code *)",
                                       "Bash(mkdir *)",
+                                      "Bash(echo * \u0026\u0026 mv *)",
+                                      "Bash(echo * \u0026\u0026 mv -f *)",
                                       "Bash(git * \u0026\u0026 git *)",
                                       "Bash(git * \u0026\u0026 git * \u0026\u0026 git *)",
                                       "Bash(git add -A \u0026\u0026 git commit *)",

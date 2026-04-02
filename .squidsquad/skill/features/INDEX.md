@@ -4,7 +4,7 @@
 
 | ID | Status | Priority | Title |
 |----|--------|----------|-------|
-| FEAT-SKILL-051 | Pending Test | High | Split tracker files into individual entries with index (Tracker Schema 3) |
+| FEAT-SKILL-051 | Pending Ship | High | Split tracker files into individual entries with index (Tracker Schema 3) |
 | FEAT-SKILL-050 | On Hold | High | Urgent cycle trigger: force any agent to start a cycle immediately |
 | FEAT-SKILL-036 | On Hold | Low | Boot script first message includes role for terminal title |
 | FEAT-SKILL-049 | Pending | High | User-driven versioning with semver suggestion |
