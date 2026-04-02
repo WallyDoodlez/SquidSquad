@@ -90,6 +90,10 @@
   "// ── Directory creation ──",
   "Bash(mkdir *)",
 
+  "// ── Compound echo+mv (atomic writes) ──",
+  "Bash(echo * && mv *)",
+  "Bash(echo * && mv -f *)",
+
   "// ── Compound git chains ──",
   "Bash(git * && git *)",
   "Bash(git * && git * && git *)",
