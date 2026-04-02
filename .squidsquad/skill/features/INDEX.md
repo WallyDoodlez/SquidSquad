@@ -1,9 +1,10 @@
 # Feature Index
 
-<!-- Generated: 2026-04-01 01:30 -->
+<!-- Generated: 2026-04-02 00:30 -->
 
 | ID | Status | Priority | Title |
 |----|--------|----------|-------|
+| FEAT-SKILL-057 | Pending | Medium | Templatize boot scripts (start-*.ps1 / start-*.sh) |
 | FEAT-SKILL-051 | Shipped | High | Split tracker files into individual entries with index (Tracker Schema 3) |
 | FEAT-SKILL-050 | On Hold | High | Urgent cycle trigger: force any agent to start a cycle immediately |
 | FEAT-SKILL-036 | On Hold | Low | Boot script first message includes role for terminal title |
