@@ -4,4 +4,4 @@
 
 | ID | Status | Severity | Title |
 |----|--------|----------|-------|
-| BUG-SKILL-039 | Fixed | High | PM attempted to ship feature with open QA gaps |
+| BUG-SKILL-039 | Closed | High | PM attempted to ship feature with open QA gaps |

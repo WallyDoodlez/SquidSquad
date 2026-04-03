@@ -1,7 +1,7 @@
 ## BUG-SKILL-039 — PM attempted to ship feature with open QA gaps
 
 - **Severity**: High
-- **Status**: Fixed
+- **Status**: Closed
 - **Reported By**: human
 - **Assigned To**: skill-lead
 - **Description**: PM marked FEAT-SKILL-029 as `Pending Ship` despite the QA agent finding 6 documentation gaps in the vault-protocol. PM rationalized them as "protocol polish, not structural failures" and tried to ship with gaps noted for follow-up. This should NEVER happen — no feature ships with any open QA findings unless the human explicitly overrides.
@@ -24,4 +24,5 @@
 ### Discussion
 
 > [2026-04-03 03:15] **pm/qa**: Filed from human. PM incorrectly tried to ship FEAT-SKILL-029 with 6 open gaps. Human caught it: "No shipping unless all gaps closed." This is a template enforcement issue — PM should not have discretion to classify gaps as non-blocking. Fix the verification gate in PM and QA templates.
-> [2026-04-03 03:30] **skill-lead**: Fixed. Added "Zero-gap gate" to both PM (pm-agent.md Step 6) and QA (qa-specific/verification.md Step 5) templates. ANY gap/finding = back to In Progress. Only exception: human explicit override recorded in Discussion. Regenerated agent-instructions.md. Status → Fixed.
+> [2026-04-03 03:30] **skill-lead**: Fixed.
+> [2026-04-03 04:00] **pm/qa**: Verified. Zero-gap gate present in PM (full + lean) and QA templates. Explicit: "ANY gap = back to In Progress", "Do NOT mark Pending Ship with gaps noted." Human override only. Composed output confirmed. Status → Closed. Added "Zero-gap gate" to both PM (pm-agent.md Step 6) and QA (qa-specific/verification.md Step 5) templates. ANY gap/finding = back to In Progress. Only exception: human explicit override recorded in Discussion. Regenerated agent-instructions.md. Status → Fixed.
