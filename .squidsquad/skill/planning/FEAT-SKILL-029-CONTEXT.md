@@ -37,6 +37,7 @@ Git-tracked Obsidian-compatible memory vault giving ALL agents shared R/W access
 - **No daily logs**: Existing iteration logs per agent + vault-remember captures are sufficient. No separate daily log pipeline.
 - **Vault and MEMORY.md intentionally separate**: Claude Code's `.claude/projects/*/MEMORY.md` = per-conversation quick notes. Vault = institutional knowledge. Different purposes, no sync.
 - **vault-remember as hooks in each agent**: Fires after work steps in every agent's Ralph Loop. Rate-limited to 3 captures per cycle. Distributed capture — each agent writes what it observes. No dedicated vault-agent.
+- **End-of-cycle reflection (deterministic)**: On every non-quiet cycle, vault-remember fires one final time at cycle end asking "what did I learn this cycle?" This is not reactive (triggered by an event) but deterministic (triggered by cycle completion). Captures meta-knowledge: process learnings, human preference signals, codebase patterns, pitfalls discovered, what worked/didn't. Goes to `galaxy/learning-*` notes. This is part of vault-remember Phase 3, not a separate feature.
 
 ## Dev Discretion (dev agent can choose)
 
