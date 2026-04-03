@@ -1,7 +1,7 @@
 ---
 name: squidsquad
 description: "Orchestrates a multi-agent AI development team — handles setup, workflow coordination, role management, and autonomous dev cycles."
-version: 0.8.0
+version: 0.9.0
 ---
 
 # SquidSquad
@@ -108,70 +108,43 @@ When you invoke SquidSquad, it creates the following inside your project root. O
     └── galaxy/                 ← atomic knowledge notes (decisions, patterns, learnings)
 ```
 
-> **Note:** DM and QA use shared dev agent trackers (no `dm/features/`, `dm/bugs/`, `qa/features/`, or `qa/bugs/`). QA reads `Pending Test` and `Fixed` items from dev agent trackers, verifies them, and writes Discussion entries directly there. DM reads `Pending Ship` items and handles delivery.
+> **Note:** All agents share a single GitHub Issues tracker on the repo. Issues are labeled by role, type, and status. QA queries for `Pending Test` and `Fixed` items, verifies them, and comments. DM queries for `Pending Ship` items and handles delivery.
 
 For `fe, be` the structure gains a `fe/` folder and `start-fe.sh/.ps1` alongside `be/`.
 
 ---
 
-## Tracker Formats
+## Tracker — GitHub Issues
 
-### Bug Format (`bugs/BUG-XXX.md`)
+SquidSquad uses GitHub Issues as its tracker. All bugs and features are GitHub Issues with structured labels. Agents use `gh` CLI to create, query, update, and comment.
 
-Each bug is stored as its own file (e.g. `bugs/BUG-FE-001.md`). The `bugs/INDEX.md` file is auto-generated and lists all non-archived bugs.
+### Label Taxonomy
 
-```markdown
-## BUG-FE-001 — [Title]
+| Category | Labels | Purpose |
+|----------|--------|---------|
+| Type | `bug`, `feature` | What kind of item |
+| Priority | `priority:critical`, `priority:high`, `priority:medium`, `priority:low` | Triage ordering |
+| Status | `status:pending`, `status:planning`, `status:approved`, `status:in-progress`, `status:pending-test`, `status:pending-ship` | Workflow state |
+| Role | `role:fe`, `role:be`, `role:skill`, etc. | Which agent owns it |
+| Severity (bugs) | `severity:critical`, `severity:high`, `severity:medium`, `severity:low` | Bug impact |
 
-- **Severity**: Critical | High | Medium | Low
-- **Status**: Open | Investigating | Fixed | Verified | Closed
-- **Reported By**: pm/qa | be-lead | human
-- **Assigned To**: fe-lead
-- **Description**: What is broken and where.
-- **Steps to Reproduce**:
-  1. Step one
-  2. Step two
-- **Expected**: What should happen
-- **Actual**: What actually happens
+### Bug Flow
 
-### Discussion
+Status labels: `status:open` → `status:investigating` → `status:fixed` → `status:verified` → (Issue closed)
 
-> [2026-01-15 09:00] **pm/qa**: Reproduced on Chrome 120 and Safari 17.
-> [2026-01-15 09:45] **fe-lead**: Looks like a race condition in the auth hook. Investigating.
-> [2026-01-15 10:30] **fe-lead**: Fixed in commit abc1234. Status → Fixed.
-> [2026-01-15 11:00] **pm/qa**: Verified. Status → Closed.
+### Feature Flow
+
+Status labels: `status:pending` → `status:planning` → `status:approved` → `status:in-progress` → `status:pending-test` → `status:pending-ship` → (Issue closed)
+
+> **Note:** `pending` = awaiting human approval. `planning` = PM running Feature Intake (Research → Discussion → Planning). `approved` = planning complete, dev can pick it up. `pending-ship` = QA verified, DM handles delivery. Closed = shipped.
+
+### Discussion Protocol
+
+Discussion entries are **Issue comments** using the same timestamped, role-signed format:
 ```
-
-Status flow: `Open` → `Investigating` → `Fixed` → `Verified` → `Closed`
-
-### Feature Format (`features/FEAT-XXX.md`)
-
-Each feature is stored as its own file (e.g. `features/FEAT-FE-001.md`). The `features/INDEX.md` file is auto-generated and lists all non-archived features.
-
-```markdown
-## FEAT-FE-001 — [Title]
-
-- **Priority**: Critical | High | Medium | Low
-- **Status**: Pending | Planning | Approved | In Progress | Pending Test | Pending Ship | Shipped
-- **Owner**: fe-lead
-- **Description**: What to build.
-- **Acceptance Criteria**:
-  - [ ] Criterion one
-  - [ ] Criterion two
-
-### Discussion
-
-> [2026-01-15 09:00] **pm/qa**: Proposed for this sprint.
-> [2026-01-15 09:30] **human**: Approved. Go ahead.
-> [2026-01-15 10:00] **fe-lead**: Picking this up. Status → In Progress.
-> [2026-01-15 12:00] **fe-lead**: Complete. Status → Pending Test.
-> [2026-01-15 13:00] **pm/qa**: Tested and passing. Status → Pending Ship.
-> [2026-01-15 14:00] **dm**: Delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped.
+> [2026-01-15 09:00] **pm**: Proposed for this sprint.
+> [2026-01-15 09:30] **fe-lead**: Picking this up. Status → In Progress.
 ```
-
-Status flow: `Pending` → `Planning` → `Approved` → `In Progress` → `Pending Test` → `Pending Ship` → `Shipped` (or `Rejected`)
-
-> **Note:** `Pending` means awaiting human approval. `Planning` means human approved and PM is running the Feature Intake Process (Research → Discussion → Planning). `Approved` means planning is complete and a dev agent can pick it up. `Pending Ship` means PM verified and DM will handle delivery (docs, CHANGELOG, version bump). `Rejected` means PM recommends against it — human can override.
 
 ### Feature Lifecycle (5-Phase)
 
@@ -181,33 +154,9 @@ Features go through a deep, research-driven lifecycle before reaching the dev ag
 2. **Discussion (PM + Human)** — Present findings, ask targeted questions with WHY, capture locked decisions vs dev discretion → `FEAT-XXX-CONTEXT.md`
 3. **Planning (PM)** — Write feature entry + test cases → `FEAT-XXX-TEST-PLAN.md`
 4. **Execution (Dev)** — Implement reading planning artifacts, run smoke tests before Pending Test
-5. **QA (PM)** — Execute test cases from TEST-PLAN.md, record pass/fail, only ship when all pass
+5. **QA (QA)** — Execute test cases from TEST-PLAN.md, record pass/fail, only ship when all pass
 
 Planning files live in `.squidsquad/[role]/planning/` and are auto-deleted after ship (git preserves them). Bugs are excluded — they use the current lightweight flow. Trivial/cosmetic features can use light mode (PM skips research).
-
-### INDEX.md Regeneration
-
-`INDEX.md` is auto-generated and must never be hand-edited. It is regenerated after any status change, filing, archival, or deletion of a tracker item.
-
-**Format:**
-
-```markdown
-<!-- Generated: YYYY-MM-DD HH:MM -->
-# Bug Tracker Index
-
-| ID | Status | Severity | Title |
-|----|--------|----------|-------|
-| [BUG-ROLE-001](BUG-ROLE-001.md) | Open | High | Some bug title |
-| [BUG-ROLE-002](BUG-ROLE-002.md) | Investigating | Critical | Another bug |
-```
-
-For features, the third column is `Priority` instead of `Severity`.
-
-**Rules:**
-- Only lists non-archived items (items in `archived/` are excluded)
-- Sorted by ID in ascending order
-- The `<!-- Generated: YYYY-MM-DD HH:MM -->` comment is always the first line
-- Agents regenerate INDEX.md by scanning all `.md` files in the directory (excluding `INDEX.md` and `archived/`), extracting ID, Status, Severity/Priority, and Title from each file's frontmatter fields
 
 ---
 
@@ -447,18 +396,14 @@ Seed the vault with an initial project note (`vault/projects/{project-name}.md`)
 - **[ROLE2] Tests**: [ROLE2_TEST_CMD]  ← one entry per dev agent; omit if none
 - **E2E Tests**: [E2E_TEST_CMD]  ← omit if none
 
-## ID Counters
+## Tracker
 
-- **BUG-[ROLE1]**: 0
-- **FEAT-[ROLE1]**: 0
-- **BUG-[ROLE2]**: 0  ← one pair per dev agent
-- **FEAT-[ROLE2]**: 0
+- **Backend**: github-issues  ← bugs and features tracked via GitHub Issues + labels
 
 ## Git Protocol
 
 - Always `git pull --rebase` before starting work.
-- Tracker files are append-only.
-- Discussion entries are append-only.
+- Discussion entries (Issue comments) are append-only.
 - Push after every completed work unit.
 
 ## Iteration Interval
@@ -472,10 +417,6 @@ Seed the vault with an initial project note (`vault/projects/{project-name}.md`)
 ## PR Flow
 
 - **Enabled**: [yes/no]  ← if yes, dev agents create PRs instead of pushing to main; requires `gh` CLI
-
-## GitHub Issues Ingestion
-
-- **Enabled**: [yes/no]  ← if yes, PM auto-ingests new GitHub Issues each cycle; requires `gh` CLI
 
 ## Improvement Scanning
 

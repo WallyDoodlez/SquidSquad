@@ -4,6 +4,26 @@ All notable changes to SquidSquad will be documented here.
 
 ---
 
+## [0.9.0] — 2026-04-04
+
+### Added
+
+- **Sub-skill architecture** (FEAT-SKILL-030): Decomposed monolithic agent templates into composable sub-skills — main skill as orchestrator, role sub-skills, common sub-skills (auto-included by all roles), and role-specific sub-skills. Build-time composition via manifest. Architecture Version 1.
+- **Suppress PM cycles during planning** (FEAT-SKILL-058): PM performs silent pull + health check during active planning phases instead of full noisy cycles. Auto-resumes when planning artifact is written.
+- **Designer agent template** (FEAT-SKILL-027): New agent type for design-to-code workflows. Interactive design sessions with human, feasibility assessment, structured design specs (component specs, tokens, layout specs). Supports external design tools (Figma, Google Stitch, etc.) via MCP. `Design` field routing in PM feature intake.
+- **Separate QA from PM** (FEAT-SKILL-043): Split PM/QA into distinct PM (human-facing coordinator, feature intake, backlog) and QA (E2E tests, bug verification, feature testing, health checks) agents. QA auto-added when dev/designer present. PM Lean template when QA exists.
+- **Self-improvement scanning** (FEAT-SKILL-063): Agents scan the target project for improvements during quiet cycles — dev finds code issues, QA finds test gaps, designer spots design inconsistencies, DM catches doc gaps, PM identifies process improvements. Rate-limited, PM-routed. Config toggle: `Improvement Scanning`.
+- **Vault memory layer Phase 1** (FEAT-SKILL-029): Git-tracked Obsidian-compatible shared memory vault (`.squidsquad/vault/`). PARAG structure (Projects, Areas, Resources, Archives, Galaxy). Vault-create protocol, BRIEFING.md, wikilinks, YAML frontmatter, changelogs per note. All agents have R/W access.
+- **Agent personalities (SOUL.md)** (FEAT-SKILL-059): Distinct personality per role — PM diplomat, QA skeptic, dev pragmatist, designer creative, DM closer. Defines tone, communication style, boundaries, decision-making. Composed as first include in every template.
+- **GitHub Issues as tracker** (FEAT-SKILL-068): Replaced internal markdown tracker files with GitHub Issues. Labels for type, priority, status, role. `gh` CLI for all CRUD. Discussion entries as Issue comments. Status transitions as label changes. Prerequisite for going public.
+
+### Fixed
+
+- PM no longer attempts to ship features with open QA gaps (BUG-SKILL-039).
+- Dev agent now picks up QA-rejected In Progress features (BUG-SKILL-040).
+
+---
+
 ## [0.8.0] — 2026-03-31
 
 ### Added

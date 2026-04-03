@@ -18,9 +18,9 @@ SquidSquad is a Claude Code skill that spins up autonomous AI agents — one per
 
 ## What It Is
 
-SquidSquad turns a single git repository into a multi-agent development environment. Each agent runs as a separate Claude Code CLI instance, loops autonomously, and communicates with the other agents by reading and appending to shared tracker files — bugs, features, QA logs — that live alongside your code.
+SquidSquad turns a single git repository into a multi-agent development environment. Each agent runs as a separate Claude Code CLI instance, loops autonomously, and coordinates through GitHub Issues — bugs, features, status transitions, and Discussion all live as Issues, labels, and comments on your repo.
 
-The result: bugs get filed, triaged, fixed, and verified. Features move from backlog to shipped. The PM checks in with you each cycle (non-blocking — it won't wait for your answer) to surface blockers and get approvals. Everything is traceable in git history.
+The result: bugs get filed, triaged, fixed, and verified. Features move from backlog to shipped. The PM checks in with you each cycle (non-blocking — it won't wait for your answer) to surface blockers and get approvals. Everything is traceable in GitHub and git history.
 
 ---
 
@@ -116,7 +116,7 @@ All coordination is asynchronous through git — agents pull to read the latest 
 
 ```
 .squidsquad/
-├── config.md                   <- versions, agents, test commands, counters, interval, thresholds
+├── config.md                   <- versions, agents, test commands, interval, thresholds
 ├── templates/                  <- shared agent instruction templates (build-time substituted)
 │   ├── dev-agent-[role].md     <- full Ralph Loop instructions per dev agent
 │   ├── pm-agent.md             <- full Ralph Loop instructions for PM
@@ -127,8 +127,6 @@ All coordination is asynchronous through git — agents pull to read the latest 
 ├── start-qa.sh/.ps1            <- QA boot scripts
 ├── [role]/                     <- one folder per dev agent
 │   ├── CLAUDE.md               <- bootstrapper: role config + Read instruction to template
-│   ├── bugs/                   <- BUG-[ROLE]-XXX tracker (INDEX.md + individual files)
-│   ├── features/               <- FEAT-[ROLE]-XXX tracker (INDEX.md + individual files)
 │   ├── working-state.md        <- persists task progress across context resets
 │   └── iterations/             <- per-cycle logs (last 20 kept)
 ├── pm/
@@ -182,8 +180,8 @@ Each agent keeps the last 20 iteration files. Older logs are deleted — git his
 ### PR-Based Approval Flow (optional)
 When enabled (`config.md` `PR Flow: yes`), dev agents create feature branches and PRs via `gh` CLI instead of pushing to main. Human reviews and merges on GitHub. PM monitors PR state and syncs comments, merge decisions, and change requests back to the tracker Discussion.
 
-### GitHub Issues Ingestion (optional)
-When enabled (`config.md` `GitHub Issues Ingestion: yes`), PM auto-ingests open GitHub Issues into agent trackers each cycle. Issues are classified as bugs/features, routed to the right agent, and tracked with `GitHub Issue #N` references. Shipped items auto-close the original issue.
+### GitHub Issues as Tracker
+All bugs and features are tracked as GitHub Issues with labels for type (`bug`/`feature`), priority, status, and role. Agents use `gh` CLI to create, read, update, and comment on Issues. Discussion entries become Issue comments (same timestamped, role-signed format). Status transitions are label changes. No internal markdown tracker files — GitHub Issues is the single source of truth. External contributors can file Issues directly and PM triages them into the SquidSquad workflow.
 
 ### Designer Agent
 A dedicated agent type for design-to-code workflows. The designer works interactively with you to produce structured design specs (component specs, design tokens, layout specs, visual states) that dev agents implement from. Supports external design tool integration (Figma, Google Stitch, or any MCP-connected tool) and assesses technical feasibility before committing to a design direction. Features with a `Design` field are routed through the designer before reaching dev. Works without an external tool connected (manual design spec mode).
@@ -292,15 +290,15 @@ The PM agent prints a non-blocking check-in note each cycle. You can chime in an
 
 ## Cross-Team Bug Filing
 
-Any agent can file a bug to any team directly — no routing bottleneck.
+Any agent can file a bug as a GitHub Issue with the appropriate role label — no routing bottleneck.
 
-| Who discovers the bug | Files to | Format |
+| Who discovers the bug | Files as | Labels |
 |-----------------------|----------|--------|
-| [role] Lead (own issue) | `[role]/bugs/BUG-[ROLE]-XXX.md` | `BUG-[ROLE]-XXX` |
-| [role] Lead (other team's code) | `[other]/bugs/BUG-[OTHER]-XXX.md` | `BUG-[OTHER]-XXX` |
-| QA (from test/verification) | appropriate agent's `bugs/BUG-[ROLE]-XXX.md` | `BUG-[ROLE]-XXX` |
+| [role] Lead (own issue) | `gh issue create` | `bug`, `role:[role]` |
+| [role] Lead (other team's code) | `gh issue create` | `bug`, `role:[other]` |
+| QA (from test/verification) | `gh issue create` | `bug`, `role:[role]` |
 
-The agent that discovers the problem files it with complete context. The receiving agent picks it up on their next pull. No standup required.
+The agent that discovers the problem files it with complete context. The receiving agent picks it up on their next cycle via `gh issue list`. No standup required.
 
 ---
 
@@ -308,9 +306,9 @@ The agent that discovers the problem files it with complete context. The receivi
 
 - [Claude Code CLI](https://claude.ai/code) — agents run as interactive Claude Code sessions
 - `--enable-auto-mode` — agents need permission to read/write files and run tests without prompting
-- A git repository with a remote (GitHub, GitLab, etc.)
+- A GitHub repository — SquidSquad uses GitHub Issues as its tracker
+- `gh` CLI — authenticated and with Issues permissions (`gh auth status`)
 - Test commands that can be run from the repo root (optional per agent)
-- `gh` CLI (optional) — required for PR-based approval flow and GitHub Issues ingestion
 
 ---
 
@@ -319,11 +317,11 @@ The agent that discovers the problem files it with complete context. The receivi
 SquidSquad agents follow strict conventions to minimize conflicts:
 
 - Always `git pull --rebase` before starting work
-- Tracker files are **append-only** — never edit or delete existing entries
-- Discussion sections are append-only — always add at the bottom
+- Tracker lives in GitHub Issues — agents use `gh` CLI for all bug/feature operations
+- Discussion entries are Issue comments — timestamped, role-signed, append-only
 - **Commit prefix convention**: every commit starts with `role:` (e.g. `skill: fix bug`, `pm: verify features`) — used by health detection and status line
 - Push after every completed work unit
-- Rebase conflicts in tracker files are resolved by keeping both versions
+- Rebase conflicts in config/state files are resolved by keeping both versions
 
 ---
 
