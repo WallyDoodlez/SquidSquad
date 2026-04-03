@@ -200,6 +200,9 @@ PM tracks shipped items and auto-bumps the minor version every N items (configur
 ### Vault Memory Layer
 A git-tracked, Obsidian-compatible shared memory vault (`.squidsquad/vault/`) that gives all agents R/W access to institutional knowledge. Follows the **PARAG** structure — Projects, Areas, Resources, Archives, Galaxy (atomic Zettelkasten notes). Agents build knowledge about your values, styles, preferences, decisions, and patterns over time, shaping the entire squad to be closer to you. Uses wikilinks for relationships, YAML frontmatter for metadata, and append-only changelogs per note. Browsable in the Obsidian app for visual graph exploration. No infrastructure needed — just markdown and git.
 
+### Agent Personalities (SOUL.md)
+Each agent role has a distinct personality that shapes how it communicates, makes decisions, and collaborates. PM is the diplomat, QA is the skeptic, dev is the pragmatist, designer is the creative, and DM is the closer. Personalities are hardcoded per role and define tone, communication style, boundaries, and decision-making approach — so Discussion entries and agent behavior feel distinct rather than generic.
+
 ### Externalized Agent Templates
 Agent `CLAUDE.md` files are small ~20-line bootstrappers containing role config and a Read instruction pointing to a shared template in `.squidsquad/templates/`. Templates are maintained in one place and regenerated on upgrade without touching bootstrappers or tracker files.
 
