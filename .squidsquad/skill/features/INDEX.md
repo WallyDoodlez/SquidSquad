@@ -13,7 +13,7 @@
 | FEAT-SKILL-051 | Shipped | High | Split tracker files into individual entries with index (Tracker Schema 3) |
 | FEAT-SKILL-050 | On Hold | High | Urgent cycle trigger: force any agent to start a cycle immediately |
 | FEAT-SKILL-049 | Pending | High | User-driven versioning with semver suggestion |
-| FEAT-SKILL-043 | Pending | High | Separate QA from PM into its own hardcoded agent role |
+| FEAT-SKILL-043 | Planning | High | Separate QA from PM into its own hardcoded agent role |
 | FEAT-SKILL-032 | Pending | High | Auto-configure permissions during setup and learn from prompt pressure |
 | FEAT-SKILL-030 | Pending Ship | High | Sub-skill architecture: roles as independent skills with layered plugin system |
 | FEAT-SKILL-027 | Approved | High | Designer agent template with external design tool integration |

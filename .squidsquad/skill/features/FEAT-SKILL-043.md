@@ -1,7 +1,7 @@
 ## FEAT-SKILL-043 — Separate QA from PM into its own hardcoded agent role
 
 - **Priority**: High
-- **Status**: Pending
+- **Status**: Planning
 - **Requested By**: human
 - **Description**: Split the current PM/QA agent into two distinct hardcoded roles:
 
@@ -40,3 +40,4 @@
 
 > [2026-03-29 22:15] **pm/qa**: Filed from human request. Human wants PM to be "primarily the talker" — no testing. QA becomes its own hardcoded agent that runs independently. Key design decisions needed: does QA share PM's trackers or have its own? Does QA report findings to PM (who relays to human) or directly to dev agents? How does version bump work — PM decides but QA provides the ship count?
 > [2026-04-01 01:15] **migration**: Migrated from monolithic features.md to individual file (Schema 2 -> 3).
+> [2026-04-02 09:30] **pm/qa**: Human approved with major scope revision. Status → Planning. Revised pipeline: Human → PM (intake, planning, discussions) → Dev/Designer (build) → QA (verify across all agents) → DM (docs, release) → Ship. Key changes from original spec: (1) QA is NOT hardcoded/always-present — it's a recommended role when dev/designer exists, (2) ONE QA agent verifies work across ALL dev and designer agents (not per-agent), (3) QA hands verified work to DM (if exists) for docs/release, NOT back to PM, (4) if DM absent, PM takes over DM delivery role (existing fallback pattern), (5) PM does zero verification — purely human interface + coordination. Beginning Phase 1 Research.
