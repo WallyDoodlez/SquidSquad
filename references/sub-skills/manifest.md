@@ -14,50 +14,68 @@ This manifest defines how sub-skill source files compose into agent templates. T
 ### Dev Agent (`roles/dev-agent.md`)
 
 Entry file with includes:
+0. `souls/dev` — Soul (first include — colors everything)
 1. `common/pull-latest` — Step 1
 2. `common/context-pressure` — Step 1b
 3. `common/resume-working-state` — Step 1c
 4. `common/interval-sync` — Step 1d
-5. `common/working-state` — Working State File format
+5. `common/improvement-scan` — Quiet-cycle improvement scanning
+6. `common/vault-protocol` — Vault operations
+7. `common/working-state` — Working State File format
 
 ### PM/QA Agent (`roles/pm-agent.md`) — used when QA agent is NOT present
 
 Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded `pm` paths to avoid `[ROLE]` ambiguity — PM uses `[ROLE]` to reference dev agents, not itself):
+0. `souls/pm` — Soul (first include)
 1. `common/pull-latest` — Step 1
 2. `pm-specific/pr-flow` — Step 6b
 3. `pm-specific/delivery-fallback` — Step 6d
 4. `pm-specific/github-issues` — Step 7b
-5. `pm-specific/feature-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
-6. `pm-specific/feature-approval` — Feature Approval Gate
+5. `common/improvement-scan` — Quiet-cycle improvement scanning
+6. `pm-specific/feature-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
+7. `pm-specific/feature-approval` — Feature Approval Gate
+8. `common/vault-protocol` — Vault operations
 
 ### PM Agent — Lean (`roles/pm-lean.md`) — used when QA agent IS present
 
 Reduced PM template without verification steps. Setup/upgrade selects this variant when `.squidsquad/qa/` directory exists.
+0. `souls/pm` — Soul (first include — same PM soul)
 1. `common/pull-latest` — Step 1
 2. `pm-specific/delivery-fallback` — Step 3 (delivery fallback when DM absent)
 3. `pm-specific/github-issues` — GitHub Issues ingestion
-4. `pm-specific/feature-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
-5. `pm-specific/feature-approval` — Feature Approval Gate
+4. `common/improvement-scan` — Quiet-cycle improvement scanning
+5. `pm-specific/feature-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
+6. `pm-specific/feature-approval` — Feature Approval Gate
+7. `common/vault-protocol` — Vault operations
 
 ### QA Agent (`roles/qa-agent.md`) — recommended when dev/designer agents exist
 
 Entry file with includes:
+0. `souls/qa` — Soul (first include)
 1. `common/pull-latest` — Step 1
 2. `qa-specific/verification` — Steps 2-6 (E2E tests, bug investigation, verification, health check)
+3. `common/improvement-scan` — Quiet-cycle improvement scanning
+4. `common/vault-protocol` — Vault operations
 
 ### Designer Agent (`roles/designer.md`)
 
 Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardcoded `designer` paths — Designer uses `[ROLE]` to reference dev agents, not itself):
+0. `souls/designer` — Soul (first include)
 1. `common/pull-latest` — Step 1
 2. `designer-specific/design-session` — Steps 2-2e (design request scanning, feasibility, interactive session, spec production, rejection handling)
-3. `designer-specific/design-tools` — Design tool integration and discovery
+3. `common/improvement-scan` — Quiet-cycle improvement scanning
+4. `designer-specific/design-tools` — Design tool integration and discovery
+5. `common/vault-protocol` — Vault operations
 
 ### DM Agent (`roles/dm-agent.md`)
 
 Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardcoded `dm` paths — DM uses `[ROLE]` to reference dev agents, not itself):
+0. `souls/dm` — Soul (first include)
 1. `common/pull-latest` — Step 1
 2. `dm-specific/delivery-packaging` — Steps 2-2c
 3. `dm-specific/version-bumps` — Step 3
+4. `common/improvement-scan` — Quiet-cycle improvement scanning
+5. `common/vault-protocol` — Vault operations
 
 ## Include Directive Format
 
