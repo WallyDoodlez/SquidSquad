@@ -53,6 +53,24 @@ Replace the internal markdown tracker with GitHub Issues. No fallback — SquidS
 - Setup creates label taxonomy on repo for new installs
 - `Tracker: github-issues` added to config.md
 
+## Deployment Procedure (required — atomic switchover)
+
+The switch from markdown tracker to GitHub Issues is a **coordinated deployment event**, not just a code change. All agents communicate through the tracker — if one agent is on GH Issues and another is still reading markdown, they can't see each other's work.
+
+**Switchover sequence:**
+1. **Stop all agents** — kill all running agent sessions (skill, PM, DM, QA, designer)
+2. **Run migration** — `/squidsquad-upgrade` creates GH Issues from all existing markdown items (bugs + features) with labels, Discussion history as comments, and correct status labels
+3. **Verify migration** — spot-check that key items exist as Issues with correct labels
+4. **Regenerate templates** — upgrade recomposes agent-instructions.md with GH Issues tracker protocol
+5. **Restart all agents** — boot all agents fresh. They read the new templates and use GH Issues from cycle 1
+6. **Verify coordination** — confirm agents can see each other's work (skill creates an item, PM can read it via `gh issue list`)
+
+**Critical constraints:**
+- All agents must be stopped BEFORE migration starts — no agent should be mid-cycle during the switch
+- Migration must be atomic — all items migrated in one commit/push, all Issues created before any agent restarts
+- Working state files cleared — agents start fresh (no stale references to old BUG-SKILL-NNN IDs)
+- Old markdown tracker directories preserved as read-only archive (not deleted, but agents don't read them)
+
 ## Out of Scope
 
 - GitHub Projects board integration (just Issues)
