@@ -24,34 +24,51 @@ Print: `[🦑] Investigating test failures...` (or skip if no failures)
 For each test failure:
 
 1. Determine which agent's domain the failure is in.
-2. Check if a bug for this failure already exists (search by keywords). If yes, append a Discussion note — do not duplicate.
+2. Check if a bug already exists: `gh issue list --label "bug,squidsquad" --search "[keywords]" --json number,title --limit 10`. If found, comment on the existing issue — do not duplicate.
 3. If new and the failure is **objective** (clear test pass/fail, crash, error):
-   - File the bug immediately to the appropriate agent's tracker. Include the test failure details in Description. Increment the appropriate counter in `config.md`.
+   - File immediately: `gh issue create --title "BUG: [title]" --body "[description with test evidence]" --label "bug,severity:[level],role:[target-role],squidsquad"`
 4. If the finding is **subjective** (coherence issue, style concern, design inconsistency):
-   - Flag it in Discussion for human review via PM: `> [YYYY-MM-DD HH:MM] **qa**: Subjective finding flagged for PM/human review: [description]`
+   - Flag for human review via PM — comment on a relevant issue or create a discussion: `> [YYYY-MM-DD HH:MM] **qa**: Subjective finding flagged for PM/human review: [description]`
    - Do NOT file a bug yet — PM and human decide.
-5. If the failure spans multiple domains: file in each relevant tracker with cross-linking Discussion notes.
+5. If the failure spans multiple domains: file in each relevant role with cross-linking comments.
 
 ### Step 4 — Verify Fixed Bugs
 
 Print: `[🦑] Verifying fixed bugs...`
 
-For each dev agent (listed in `config.md` under `Dev Agents`), read their `bugs/INDEX.md`. Also check `.squidsquad/designer/bugs/INDEX.md` if a designer directory exists. For each bug with status `Fixed`, read its individual file:
+Query all bugs pending test:
 
-1. Run the relevant test or manually verify the fix.
-2. If verified:
-   - Update status to `Verified`, then `Closed`.
-   - Append Discussion entries for each transition.
+```bash
+gh issue list --label "bug,status:pending-test,squidsquad" --json number,title,labels,body --limit 50
+```
+
+For each bug:
+
+1. Read details: `gh issue view [NUMBER] --json title,body,comments`
+2. Run the relevant test or manually verify the fix.
+3. If verified:
+   - Transition to shipped and close:
+     ```bash
+     gh issue edit [NUMBER] --remove-label "status:pending-test" --add-label "status:shipped"
+     gh issue close [NUMBER]
+     gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **qa**: Verified. Status → Shipped."
+     ```
    - Increment `Shipped Since Last Bump` in `config.md`.
-3. If not verified:
-   - Update status back to `Open`.
-   - Append a Discussion entry explaining what failed.
+4. If not verified:
+   - Reopen: `gh issue edit [NUMBER] --remove-label "status:pending-test" --add-label "status:in-progress"`
+   - Comment with specific failures.
 
 ### Step 5 — Verify Pending Test Features
 
 Print: `[🦑] Verifying pending test features...`
 
-For each dev agent, read their `features/INDEX.md`. Also check designer features if designer directory exists. For each feature with status `Pending Test`, read its individual file:
+Query all features pending test:
+
+```bash
+gh issue list --label "feature,status:pending-test,squidsquad" --json number,title,labels,body --limit 50
+```
+
+For each feature, read it: `gh issue view [NUMBER] --json title,body,labels,comments`
 
 1. **If a TEST-PLAN.md exists** in the agent's planning directory, spawn a QA subagent (via the Agent tool) to execute the test plan:
 
@@ -70,11 +87,20 @@ For each dev agent, read their `features/INDEX.md`. Also check designer features
 
 2. **If no TEST-PLAN.md exists**, test against the acceptance criteria manually.
 
-3. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, or unresolved finding is discovered — update back to `In Progress` and append a Discussion entry listing every specific finding. Do NOT mark Pending Ship with "gaps noted for follow-up." ALL findings must be resolved before shipping.
-4. **Only exception**: The human explicitly says "ship with these gaps" — record the override in Discussion: `> [YYYY-MM-DD HH:MM] **qa**: Human override — shipping with [N] noted gaps: [list]. Status → Pending Ship.`
-5. If all criteria pass with zero gaps: update to `Pending Ship`, append Discussion entry: `> [YYYY-MM-DD HH:MM] **qa**: Verified — zero gaps. Status → Pending Ship.`
-6. **delivery:skip check**: If the feature is internal-only (agent template changes, config changes, internal tooling, process improvements) with no user-facing delivery work needed, add `delivery: skip` to the Discussion entry when marking Pending Ship: `> [YYYY-MM-DD HH:MM] **qa**: Verified — zero gaps. delivery: skip (internal-only, no user-facing changes). Status → Pending Ship.`
-7. If criteria fail: update back to `In Progress`, append Discussion entry with specific failures.
+3. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, or unresolved finding is discovered:
+   ```bash
+   gh issue edit [NUMBER] --remove-label "status:pending-test" --add-label "status:in-progress"
+   gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **qa**: FAIL. [list every specific finding]. Back to In Progress."
+   ```
+   Do NOT mark Pending Ship with "gaps noted for follow-up." ALL findings must be resolved before shipping.
+4. **Only exception**: The human explicitly says "ship with these gaps" — record the override: `gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **qa**: Human override — shipping with [N] noted gaps: [list]. Status → Pending Ship."`
+5. If all criteria pass with zero gaps:
+   ```bash
+   gh issue edit [NUMBER] --remove-label "status:pending-test" --add-label "status:pending-ship"
+   gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **qa**: Verified — zero gaps. Status → Pending Ship."
+   ```
+6. **delivery:skip check**: If the feature is internal-only, add `delivery:skip` to the comment: `"> [YYYY-MM-DD HH:MM] **qa**: Verified — zero gaps. delivery: skip (internal-only). Status → Pending Ship."`
+7. If criteria fail: transition back to `In Progress` with specific failures in the comment.
 
 ### Step 5b — Monitor PRs (if PR Flow enabled)
 

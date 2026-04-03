@@ -96,9 +96,169 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team. You work in a loo
 
 ---
 
+<!-- sub-skill: tracker-protocol -->
+## Tracker Protocol — GitHub Issues
+
+All bugs and features are tracked as GitHub Issues with structured labels. Agents use the `gh` CLI to create, read, update, and comment on Issues. No internal markdown tracker files — GitHub Issues is the single source of truth.
+
+### Startup Permission Check
+
+At agent boot (before the first cycle), verify `gh` access:
+
+```bash
+gh issue list --limit 1 2>&1
+```
+
+If this fails (authentication error, missing scope, `gh` not found):
+1. Print: `[🦑] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.`
+2. Exit the conversation. SquidSquad requires GitHub Issues access.
+
+If `gh` works but GitHub is **temporarily unreachable** during a cycle (network blip), skip tracker operations for this cycle and retry next cycle. Print: `[🦑] GitHub unreachable — skipping tracker operations. Will retry next cycle.`
+
+### Label Taxonomy
+
+Issues use labels for structured metadata. The following labels must exist on the repo (created during setup):
+
+**Type:**
+- `bug` — defect, regression, broken behavior
+- `feature` — new capability or enhancement
+
+**Priority:**
+- `priority:high` — urgent, blocks other work
+- `priority:medium` — normal priority
+- `priority:low` — nice-to-have, improvement scan items
+
+**Status:**
+- `status:pending` — filed, awaiting human approval
+- `status:planning` — approved by human, PM running intake
+- `status:approved` — planning complete, ready for dev pickup
+- `status:in-progress` — agent actively working
+- `status:pending-test` — implementation complete, awaiting QA
+- `status:pending-ship` — QA verified, awaiting DM delivery
+- `status:shipped` — delivered, closed
+
+**Role (assignee domain):**
+- `role:skill` (or `role:fe`, `role:be`, etc.) — dev agent
+- `role:pm` — PM agent
+- `role:qa` — QA agent
+- `role:designer` — designer agent
+- `role:dm` — DM agent
+
+**Design (for features needing design):**
+- `design:needed` — designer must produce specs before dev
+- `design:in-progress` — designer working on specs
+- `design:complete` — design approved, dev can proceed
+
+**Severity (for bugs):**
+- `severity:high` — critical, blocks usage
+- `severity:medium` — degraded functionality
+- `severity:low` — cosmetic, minor annoyance
+
+**Special:**
+- `squidsquad` — all SquidSquad-managed items get this label
+- `improvement-scan` — filed by improvement scanning (quiet cycle)
+
+### Reading Issues (replaces INDEX.md scanning)
+
+To list issues by status and role:
+
+```bash
+# List approved features for your role
+gh issue list --label "feature,status:approved,role:[ROLE]" --json number,title,labels --limit 50
+
+# List open bugs for your role
+gh issue list --label "bug,role:[ROLE]" --label "status:pending-test" --json number,title,labels --limit 50
+
+# List all items pending test across all agents (for QA)
+gh issue list --label "status:pending-test" --json number,title,labels --limit 50
+
+# List pending ship items (for DM)
+gh issue list --label "status:pending-ship" --json number,title,labels --limit 50
+```
+
+To read a specific issue:
+
+```bash
+gh issue view [NUMBER] --json title,body,labels,comments
+```
+
+### Creating Issues (replaces filing bugs/features)
+
+```bash
+# File a bug
+gh issue create --title "BUG: [title]" \
+  --body "[description, steps to reproduce, expected vs actual]" \
+  --label "bug,severity:[level],role:[target-role],squidsquad,status:pending"
+
+# File a feature
+gh issue create --title "FEAT: [title]" \
+  --body "[description, acceptance criteria]" \
+  --label "feature,priority:[level],role:[target-role],squidsquad,status:pending"
+```
+
+After creating, note the returned Issue number for reference.
+
+### Status Transitions (replaces editing Status field)
+
+Use label removal + addition to transition status:
+
+```bash
+# Example: Approved → In Progress
+gh issue edit [NUMBER] --remove-label "status:approved" --add-label "status:in-progress"
+
+# Example: In Progress → Pending Test
+gh issue edit [NUMBER] --remove-label "status:in-progress" --add-label "status:pending-test"
+
+# Example: Pending Ship → Shipped (close the issue)
+gh issue edit [NUMBER] --remove-label "status:pending-ship" --add-label "status:shipped"
+gh issue close [NUMBER]
+```
+
+### Discussion Entries (replaces inline Discussion sections)
+
+Discussion entries become Issue comments. Same format — timestamped and role-signed:
+
+```bash
+gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[role]**: [message]"
+```
+
+Comments are append-only — never edit or delete previous comments.
+
+### Design Field (replaces **Design**: field in markdown)
+
+Design status is tracked via labels:
+
+```bash
+# PM sets design needed
+gh issue edit [NUMBER] --add-label "design:needed"
+
+# Designer picks up
+gh issue edit [NUMBER] --remove-label "design:needed" --add-label "design:in-progress"
+
+# Designer completes
+gh issue edit [NUMBER] --remove-label "design:in-progress" --add-label "design:complete"
+```
+
+Dev agents skip issues with `design:needed` or `design:in-progress` labels.
+
+### Working State References
+
+Reference issues by number in working-state.md: `- **Task**: #42`
+
+### Planning Artifacts
+
+Planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md) remain as local files in `.squidsquad/[role]/planning/`. Only the tracker (bugs/features) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
+
+### Caching
+
+Within a single cycle, cache `gh issue list` results to avoid repeated API calls. Read the list once at the start of the relevant step, then operate on the cached data.
+<!-- /sub-skill: tracker-protocol -->
+
+---
+
 ## On Startup
 
-When you first receive these instructions, invoke the `/loop` command to schedule repeating cycles:
+When you first receive these instructions, first verify GitHub Issues access (see Tracker Protocol above). Then invoke the `/loop` command to schedule repeating cycles:
 
 ```
 /loop [INTERVAL]m execute one Ralph Loop cycle
@@ -200,61 +360,66 @@ If the interval matches, continue silently.
 
 Print: `[🦑] Triaging bugs...`
 
-Read `.squidsquad/[ROLE]/bugs/INDEX.md`. For each bug with status `Open` or `Investigating`, read its individual file `.squidsquad/[ROLE]/bugs/BUG-[ROLE_UPPER]-XXX.md`:
+Query GitHub Issues for open bugs assigned to your role:
 
-1. Write working state: update `.squidsquad/[ROLE]/working-state.md` with the bug ID, status `in-progress`, and planned approach.
-2. Read the bug description, steps to reproduce, and any Discussion entries.
+```bash
+gh issue list --label "bug,role:[ROLE]" --json number,title,labels,body --limit 50
+```
+
+For each bug that does not have a `status:shipped` or closed state:
+
+1. Write working state: update `.squidsquad/[ROLE]/working-state.md` with `Task: #[NUMBER]`, status `in-progress`.
+2. Read the bug details: `gh issue view [NUMBER] --json title,body,comments`
 3. Locate the relevant code.
 4. Fix the bug.
 5. Run the test command: `[ROLE_TEST_CMD]`
 6. If tests pass:
-   - Update the bug's `Status` field to `Fixed`.
-   - Append a Discussion entry:
-     ```
-     > [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Fixed in commit [hash]. [Brief explanation]. Status → Fixed.
-     ```
-   - Clear working state: reset `working-state.md` to empty/header-only.
+   - Transition status: `gh issue edit [NUMBER] --add-label "status:pending-test"`
+   - Comment: `gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Fixed in commit [hash]. [Brief explanation]. Status → Pending Test."`
+   - Clear working state.
 7. If the root cause belongs to another agent's domain:
-   - Do NOT mark this bug as Fixed.
-   - File a new bug as `.squidsquad/[OTHER_ROLE]/bugs/BUG-[OTHER_ROLE_UPPER]-XXX.md` and regenerate `.squidsquad/[OTHER_ROLE]/bugs/INDEX.md`.
-   - Append a Discussion entry:
-     ```
-     > [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Root cause is in [OTHER_ROLE]. Filed BUG-[OTHER_ROLE_UPPER]-XXX. Blocking.
-     ```
+   - Do NOT mark this bug as fixed.
+   - File a new bug to the other agent's domain: `gh issue create --title "BUG: [title]" --body "[description]" --label "bug,role:[OTHER_ROLE],squidsquad,severity:[level]"`
+   - Comment on the original: `gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Root cause is in [OTHER_ROLE]. Filed #[NEW_NUMBER]. Blocking."`
    - Clear working state.
 
 ### Step 3 — Implement Features
 
 Print: `[🦑] Checking features...`
 
-Read `.squidsquad/[ROLE]/features/INDEX.md`. Pick the next feature with status `Approved` (highest priority first), then read its individual file `.squidsquad/[ROLE]/features/FEAT-[ROLE_UPPER]-XXX.md`.
+Query GitHub Issues for approved features assigned to your role:
 
-**Design field check**: If the feature has a `**Design**:` field with value `needed` or `in-progress`, **skip it** — the designer agent has not completed the design yet. Move to the next feature. Features with `Design: complete` or `Design: not-needed` (or no `Design` field at all) are picked up normally.
+```bash
+gh issue list --label "feature,status:approved,role:[ROLE]" --json number,title,labels --limit 50
+```
 
-When picking up a feature, print: `[🦑] Implementing FEAT-[ROLE_UPPER]-XXX...`
+Pick the highest-priority feature (check `priority:high` first, then `priority:medium`, then `priority:low`). Read it: `gh issue view [NUMBER] --json title,body,labels,comments`
 
-1. Append a Discussion entry:
+**Design label check**: If the issue has a `design:needed` or `design:in-progress` label, **skip it** — the designer agent has not completed the design yet. Move to the next feature. Issues with `design:complete` or no design label are picked up normally.
+
+When picking up a feature, print: `[🦑] Implementing #[NUMBER]...`
+
+1. Comment and transition status:
+   ```bash
+   gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Picking up. Status → In Progress."
+   gh issue edit [NUMBER] --remove-label "status:approved" --add-label "status:in-progress"
    ```
-   > [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Picking up. Status → In Progress.
-   ```
-2. Update the feature's `Status` field to `In Progress`.
-3. **Read planning artifacts** (if they exist in `.squidsquad/[ROLE]/planning/`):
-   - `FEAT-[ROLE_UPPER]-XXX-RESEARCH.md` — understand impact, side effects, constraints
-   - `FEAT-[ROLE_UPPER]-XXX-CONTEXT.md` — respect locked decisions, note dev discretion areas
-   - `FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md` — understand what will be tested during QA
-4. Write working state: update `.squidsquad/[ROLE]/working-state.md` with the feature ID, status `in-progress`, planned approach, and acceptance criteria checklist.
-5. Implement the feature according to the acceptance criteria. Respect locked decisions from CONTEXT.md. Implement required side effect mitigations. Update working state as you complete sub-steps.
-6. Run the test command: `[ROLE_TEST_CMD]`
-7. **Run smoke tests** from TEST-PLAN.md (if it exists) before marking as Pending Test.
-8. **Update docs**: Update only technical documentation (API docs, code comments, architecture notes). User-facing docs (README user guides, CHANGELOG, "what's new") are handled by the Delivery Manager (DM). If the change affects user-facing behavior, append delivery notes to the Discussion describing what changed and what users need to know — DM will consume these when creating the delivery package.
-9. **Copy changed references to live**: If any files in `references/` were modified (e.g. `statusline.sh`, `hints-*.txt`, `agent-instructions.md`), copy them to the live `.squidsquad/` location so changes take effect immediately. For example: `cp references/statusline.sh .squidsquad/statusline.sh`, `cp references/hints-*.txt .squidsquad/`.
-10. If tests and smoke tests pass:
-   - Update status to `Pending Test`.
-   - Append a Discussion entry:
+2. **Read planning artifacts** (if they exist in `.squidsquad/[ROLE]/planning/`):
+   - Look for files matching the issue number or title
+   - RESEARCH.md, CONTEXT.md, TEST-PLAN.md — respect locked decisions, note dev discretion areas
+3. Write working state: update `.squidsquad/[ROLE]/working-state.md` with `Task: #[NUMBER]`, status `in-progress`, planned approach, and acceptance criteria checklist.
+4. Implement the feature according to the acceptance criteria. Respect locked decisions from CONTEXT.md. Implement required side effect mitigations. Update working state as you complete sub-steps.
+5. Run the test command: `[ROLE_TEST_CMD]`
+6. **Run smoke tests** from TEST-PLAN.md (if it exists) before marking as Pending Test.
+7. **Update docs**: Update only technical documentation (API docs, code comments, architecture notes). User-facing docs are handled by DM. If the change affects user-facing behavior, comment delivery notes on the Issue.
+8. **Copy changed references to live**: If any files in `references/` were modified (e.g. `statusline.sh`, `hints-*.txt`, `agent-instructions.md`), copy them to the live `.squidsquad/` location so changes take effect immediately.
+9. If tests and smoke tests pass:
+   - Transition status:
+     ```bash
+     gh issue edit [NUMBER] --remove-label "status:in-progress" --add-label "status:pending-test"
+     gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Implementation complete. All tests passing. Status → Pending Test."
      ```
-     > [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Implementation complete. All tests passing. Status → Pending Test.
-     ```
-   - Clear working state: reset `working-state.md` to empty/header-only.
+   - Clear working state.
 10. If tests fail: fix the failure before changing status.
 
 <!-- sub-skill: improvement-scan -->
@@ -431,33 +596,25 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ## Filing Bugs (Self and Cross-Team)
 
-You can file bugs to your own tracker or directly to any other agent's tracker. Do not wait for PM/QA to discover and route issues you find yourself.
+You can file bugs to your own domain or directly to any other agent's domain via GitHub Issues. Do not wait for PM/QA to discover and route issues you find yourself.
 
-**Self-file to `[ROLE]/bugs/BUG-[ROLE_UPPER]-XXX.md`** when you discover a standalone issue during feature work — a pre-existing regression, a missing edge case, or anything worth tracking separately. Use `Reported By: [ROLE]-lead` and `Assigned To: [ROLE]-lead`. After filing, regenerate `.squidsquad/[ROLE]/bugs/INDEX.md`.
+**Self-file** when you discover a standalone issue during feature work:
 
-**Cross-file to `[OTHER_ROLE]/bugs/BUG-[OTHER_ROLE_UPPER]-XXX.md`** when the root cause is in another agent's domain. After filing, regenerate `.squidsquad/[OTHER_ROLE]/bugs/INDEX.md`.
-
-Cross-team bug format:
-
-```markdown
-## BUG-[OTHER_ROLE_UPPER]-XXX — [Title]
-
-- **Severity**: [High/Medium/Low]
-- **Status**: Open
-- **Reported By**: [ROLE]-lead
-- **Assigned To**: [OTHER_ROLE]-lead
-- **Description**: [What needs to be fixed and why — be specific]
-- **Steps to Reproduce**:
-  1. [Steps]
-- **Expected**: [Expected behavior]
-- **Actual**: [Actual behavior]
-
-### Discussion
-
-> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Filed from BUG-[ROLE_UPPER]-XXX. [Context].
+```bash
+gh issue create --title "BUG: [title]" \
+  --body "**Reported By**: [ROLE]-lead\n**Severity**: [High/Medium/Low]\n\n**Description**: [what and why]\n\n**Steps to Reproduce**:\n1. [steps]\n\n**Expected**: [expected]\n**Actual**: [actual]" \
+  --label "bug,severity:[level],role:[ROLE],squidsquad"
 ```
 
-Increment the `BUG-[OTHER_ROLE_UPPER]` counter in `config.md` after cross-filing. Increment `BUG-[ROLE_UPPER]` after self-filing.
+**Cross-file** when the root cause is in another agent's domain:
+
+```bash
+gh issue create --title "BUG: [title]" \
+  --body "**Reported By**: [ROLE]-lead\n**Assigned To**: [OTHER_ROLE]\n**Severity**: [High/Medium/Low]\n\n**Description**: [what and why]\n\n**Steps to Reproduce**:\n1. [steps]\n\n**Expected**: [expected]\n**Actual**: [actual]" \
+  --label "bug,severity:[level],role:[OTHER_ROLE],squidsquad"
+```
+
+After filing, note the returned Issue number and comment on the original issue if cross-filing.
 
 ---
 
@@ -716,9 +873,169 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 
 ---
 
+<!-- sub-skill: tracker-protocol -->
+## Tracker Protocol — GitHub Issues
+
+All bugs and features are tracked as GitHub Issues with structured labels. Agents use the `gh` CLI to create, read, update, and comment on Issues. No internal markdown tracker files — GitHub Issues is the single source of truth.
+
+### Startup Permission Check
+
+At agent boot (before the first cycle), verify `gh` access:
+
+```bash
+gh issue list --limit 1 2>&1
+```
+
+If this fails (authentication error, missing scope, `gh` not found):
+1. Print: `[🦑] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.`
+2. Exit the conversation. SquidSquad requires GitHub Issues access.
+
+If `gh` works but GitHub is **temporarily unreachable** during a cycle (network blip), skip tracker operations for this cycle and retry next cycle. Print: `[🦑] GitHub unreachable — skipping tracker operations. Will retry next cycle.`
+
+### Label Taxonomy
+
+Issues use labels for structured metadata. The following labels must exist on the repo (created during setup):
+
+**Type:**
+- `bug` — defect, regression, broken behavior
+- `feature` — new capability or enhancement
+
+**Priority:**
+- `priority:high` — urgent, blocks other work
+- `priority:medium` — normal priority
+- `priority:low` — nice-to-have, improvement scan items
+
+**Status:**
+- `status:pending` — filed, awaiting human approval
+- `status:planning` — approved by human, PM running intake
+- `status:approved` — planning complete, ready for dev pickup
+- `status:in-progress` — agent actively working
+- `status:pending-test` — implementation complete, awaiting QA
+- `status:pending-ship` — QA verified, awaiting DM delivery
+- `status:shipped` — delivered, closed
+
+**Role (assignee domain):**
+- `role:skill` (or `role:fe`, `role:be`, etc.) — dev agent
+- `role:pm` — PM agent
+- `role:qa` — QA agent
+- `role:designer` — designer agent
+- `role:dm` — DM agent
+
+**Design (for features needing design):**
+- `design:needed` — designer must produce specs before dev
+- `design:in-progress` — designer working on specs
+- `design:complete` — design approved, dev can proceed
+
+**Severity (for bugs):**
+- `severity:high` — critical, blocks usage
+- `severity:medium` — degraded functionality
+- `severity:low` — cosmetic, minor annoyance
+
+**Special:**
+- `squidsquad` — all SquidSquad-managed items get this label
+- `improvement-scan` — filed by improvement scanning (quiet cycle)
+
+### Reading Issues (replaces INDEX.md scanning)
+
+To list issues by status and role:
+
+```bash
+# List approved features for your role
+gh issue list --label "feature,status:approved,role:[ROLE]" --json number,title,labels --limit 50
+
+# List open bugs for your role
+gh issue list --label "bug,role:[ROLE]" --label "status:pending-test" --json number,title,labels --limit 50
+
+# List all items pending test across all agents (for QA)
+gh issue list --label "status:pending-test" --json number,title,labels --limit 50
+
+# List pending ship items (for DM)
+gh issue list --label "status:pending-ship" --json number,title,labels --limit 50
+```
+
+To read a specific issue:
+
+```bash
+gh issue view [NUMBER] --json title,body,labels,comments
+```
+
+### Creating Issues (replaces filing bugs/features)
+
+```bash
+# File a bug
+gh issue create --title "BUG: [title]" \
+  --body "[description, steps to reproduce, expected vs actual]" \
+  --label "bug,severity:[level],role:[target-role],squidsquad,status:pending"
+
+# File a feature
+gh issue create --title "FEAT: [title]" \
+  --body "[description, acceptance criteria]" \
+  --label "feature,priority:[level],role:[target-role],squidsquad,status:pending"
+```
+
+After creating, note the returned Issue number for reference.
+
+### Status Transitions (replaces editing Status field)
+
+Use label removal + addition to transition status:
+
+```bash
+# Example: Approved → In Progress
+gh issue edit [NUMBER] --remove-label "status:approved" --add-label "status:in-progress"
+
+# Example: In Progress → Pending Test
+gh issue edit [NUMBER] --remove-label "status:in-progress" --add-label "status:pending-test"
+
+# Example: Pending Ship → Shipped (close the issue)
+gh issue edit [NUMBER] --remove-label "status:pending-ship" --add-label "status:shipped"
+gh issue close [NUMBER]
+```
+
+### Discussion Entries (replaces inline Discussion sections)
+
+Discussion entries become Issue comments. Same format — timestamped and role-signed:
+
+```bash
+gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[role]**: [message]"
+```
+
+Comments are append-only — never edit or delete previous comments.
+
+### Design Field (replaces **Design**: field in markdown)
+
+Design status is tracked via labels:
+
+```bash
+# PM sets design needed
+gh issue edit [NUMBER] --add-label "design:needed"
+
+# Designer picks up
+gh issue edit [NUMBER] --remove-label "design:needed" --add-label "design:in-progress"
+
+# Designer completes
+gh issue edit [NUMBER] --remove-label "design:in-progress" --add-label "design:complete"
+```
+
+Dev agents skip issues with `design:needed` or `design:in-progress` labels.
+
+### Working State References
+
+Reference issues by number in working-state.md: `- **Task**: #42`
+
+### Planning Artifacts
+
+Planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md) remain as local files in `.squidsquad/[role]/planning/`. Only the tracker (bugs/features) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
+
+### Caching
+
+Within a single cycle, cache `gh issue list` results to avoid repeated API calls. Read the list once at the start of the relevant step, then operate on the cached data.
+<!-- /sub-skill: tracker-protocol -->
+
+---
+
 ## On Startup
 
-When you first receive these instructions, invoke the `/loop` command to schedule repeating cycles:
+When you first receive these instructions, first verify GitHub Issues access (see Tracker Protocol above). Then invoke the `/loop` command to schedule repeating cycles:
 
 ```
 /loop [INTERVAL]m execute one Ralph Loop cycle
@@ -1789,9 +2106,169 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 
 ---
 
+<!-- sub-skill: tracker-protocol -->
+## Tracker Protocol — GitHub Issues
+
+All bugs and features are tracked as GitHub Issues with structured labels. Agents use the `gh` CLI to create, read, update, and comment on Issues. No internal markdown tracker files — GitHub Issues is the single source of truth.
+
+### Startup Permission Check
+
+At agent boot (before the first cycle), verify `gh` access:
+
+```bash
+gh issue list --limit 1 2>&1
+```
+
+If this fails (authentication error, missing scope, `gh` not found):
+1. Print: `[🦑] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.`
+2. Exit the conversation. SquidSquad requires GitHub Issues access.
+
+If `gh` works but GitHub is **temporarily unreachable** during a cycle (network blip), skip tracker operations for this cycle and retry next cycle. Print: `[🦑] GitHub unreachable — skipping tracker operations. Will retry next cycle.`
+
+### Label Taxonomy
+
+Issues use labels for structured metadata. The following labels must exist on the repo (created during setup):
+
+**Type:**
+- `bug` — defect, regression, broken behavior
+- `feature` — new capability or enhancement
+
+**Priority:**
+- `priority:high` — urgent, blocks other work
+- `priority:medium` — normal priority
+- `priority:low` — nice-to-have, improvement scan items
+
+**Status:**
+- `status:pending` — filed, awaiting human approval
+- `status:planning` — approved by human, PM running intake
+- `status:approved` — planning complete, ready for dev pickup
+- `status:in-progress` — agent actively working
+- `status:pending-test` — implementation complete, awaiting QA
+- `status:pending-ship` — QA verified, awaiting DM delivery
+- `status:shipped` — delivered, closed
+
+**Role (assignee domain):**
+- `role:skill` (or `role:fe`, `role:be`, etc.) — dev agent
+- `role:pm` — PM agent
+- `role:qa` — QA agent
+- `role:designer` — designer agent
+- `role:dm` — DM agent
+
+**Design (for features needing design):**
+- `design:needed` — designer must produce specs before dev
+- `design:in-progress` — designer working on specs
+- `design:complete` — design approved, dev can proceed
+
+**Severity (for bugs):**
+- `severity:high` — critical, blocks usage
+- `severity:medium` — degraded functionality
+- `severity:low` — cosmetic, minor annoyance
+
+**Special:**
+- `squidsquad` — all SquidSquad-managed items get this label
+- `improvement-scan` — filed by improvement scanning (quiet cycle)
+
+### Reading Issues (replaces INDEX.md scanning)
+
+To list issues by status and role:
+
+```bash
+# List approved features for your role
+gh issue list --label "feature,status:approved,role:[ROLE]" --json number,title,labels --limit 50
+
+# List open bugs for your role
+gh issue list --label "bug,role:[ROLE]" --label "status:pending-test" --json number,title,labels --limit 50
+
+# List all items pending test across all agents (for QA)
+gh issue list --label "status:pending-test" --json number,title,labels --limit 50
+
+# List pending ship items (for DM)
+gh issue list --label "status:pending-ship" --json number,title,labels --limit 50
+```
+
+To read a specific issue:
+
+```bash
+gh issue view [NUMBER] --json title,body,labels,comments
+```
+
+### Creating Issues (replaces filing bugs/features)
+
+```bash
+# File a bug
+gh issue create --title "BUG: [title]" \
+  --body "[description, steps to reproduce, expected vs actual]" \
+  --label "bug,severity:[level],role:[target-role],squidsquad,status:pending"
+
+# File a feature
+gh issue create --title "FEAT: [title]" \
+  --body "[description, acceptance criteria]" \
+  --label "feature,priority:[level],role:[target-role],squidsquad,status:pending"
+```
+
+After creating, note the returned Issue number for reference.
+
+### Status Transitions (replaces editing Status field)
+
+Use label removal + addition to transition status:
+
+```bash
+# Example: Approved → In Progress
+gh issue edit [NUMBER] --remove-label "status:approved" --add-label "status:in-progress"
+
+# Example: In Progress → Pending Test
+gh issue edit [NUMBER] --remove-label "status:in-progress" --add-label "status:pending-test"
+
+# Example: Pending Ship → Shipped (close the issue)
+gh issue edit [NUMBER] --remove-label "status:pending-ship" --add-label "status:shipped"
+gh issue close [NUMBER]
+```
+
+### Discussion Entries (replaces inline Discussion sections)
+
+Discussion entries become Issue comments. Same format — timestamped and role-signed:
+
+```bash
+gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[role]**: [message]"
+```
+
+Comments are append-only — never edit or delete previous comments.
+
+### Design Field (replaces **Design**: field in markdown)
+
+Design status is tracked via labels:
+
+```bash
+# PM sets design needed
+gh issue edit [NUMBER] --add-label "design:needed"
+
+# Designer picks up
+gh issue edit [NUMBER] --remove-label "design:needed" --add-label "design:in-progress"
+
+# Designer completes
+gh issue edit [NUMBER] --remove-label "design:in-progress" --add-label "design:complete"
+```
+
+Dev agents skip issues with `design:needed` or `design:in-progress` labels.
+
+### Working State References
+
+Reference issues by number in working-state.md: `- **Task**: #42`
+
+### Planning Artifacts
+
+Planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md) remain as local files in `.squidsquad/[role]/planning/`. Only the tracker (bugs/features) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
+
+### Caching
+
+Within a single cycle, cache `gh issue list` results to avoid repeated API calls. Read the list once at the start of the relevant step, then operate on the cached data.
+<!-- /sub-skill: tracker-protocol -->
+
+---
+
 ## On Startup
 
-When you first receive these instructions, invoke the `/loop` command to schedule repeating cycles:
+When you first receive these instructions, first verify GitHub Issues access (see Tracker Protocol above). Then invoke the `/loop` command to schedule repeating cycles:
 
 ```
 /loop [INTERVAL]m execute one Ralph Loop cycle
@@ -2769,9 +3246,169 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 
 ---
 
+<!-- sub-skill: tracker-protocol -->
+## Tracker Protocol — GitHub Issues
+
+All bugs and features are tracked as GitHub Issues with structured labels. Agents use the `gh` CLI to create, read, update, and comment on Issues. No internal markdown tracker files — GitHub Issues is the single source of truth.
+
+### Startup Permission Check
+
+At agent boot (before the first cycle), verify `gh` access:
+
+```bash
+gh issue list --limit 1 2>&1
+```
+
+If this fails (authentication error, missing scope, `gh` not found):
+1. Print: `[🦑] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.`
+2. Exit the conversation. SquidSquad requires GitHub Issues access.
+
+If `gh` works but GitHub is **temporarily unreachable** during a cycle (network blip), skip tracker operations for this cycle and retry next cycle. Print: `[🦑] GitHub unreachable — skipping tracker operations. Will retry next cycle.`
+
+### Label Taxonomy
+
+Issues use labels for structured metadata. The following labels must exist on the repo (created during setup):
+
+**Type:**
+- `bug` — defect, regression, broken behavior
+- `feature` — new capability or enhancement
+
+**Priority:**
+- `priority:high` — urgent, blocks other work
+- `priority:medium` — normal priority
+- `priority:low` — nice-to-have, improvement scan items
+
+**Status:**
+- `status:pending` — filed, awaiting human approval
+- `status:planning` — approved by human, PM running intake
+- `status:approved` — planning complete, ready for dev pickup
+- `status:in-progress` — agent actively working
+- `status:pending-test` — implementation complete, awaiting QA
+- `status:pending-ship` — QA verified, awaiting DM delivery
+- `status:shipped` — delivered, closed
+
+**Role (assignee domain):**
+- `role:skill` (or `role:fe`, `role:be`, etc.) — dev agent
+- `role:pm` — PM agent
+- `role:qa` — QA agent
+- `role:designer` — designer agent
+- `role:dm` — DM agent
+
+**Design (for features needing design):**
+- `design:needed` — designer must produce specs before dev
+- `design:in-progress` — designer working on specs
+- `design:complete` — design approved, dev can proceed
+
+**Severity (for bugs):**
+- `severity:high` — critical, blocks usage
+- `severity:medium` — degraded functionality
+- `severity:low` — cosmetic, minor annoyance
+
+**Special:**
+- `squidsquad` — all SquidSquad-managed items get this label
+- `improvement-scan` — filed by improvement scanning (quiet cycle)
+
+### Reading Issues (replaces INDEX.md scanning)
+
+To list issues by status and role:
+
+```bash
+# List approved features for your role
+gh issue list --label "feature,status:approved,role:[ROLE]" --json number,title,labels --limit 50
+
+# List open bugs for your role
+gh issue list --label "bug,role:[ROLE]" --label "status:pending-test" --json number,title,labels --limit 50
+
+# List all items pending test across all agents (for QA)
+gh issue list --label "status:pending-test" --json number,title,labels --limit 50
+
+# List pending ship items (for DM)
+gh issue list --label "status:pending-ship" --json number,title,labels --limit 50
+```
+
+To read a specific issue:
+
+```bash
+gh issue view [NUMBER] --json title,body,labels,comments
+```
+
+### Creating Issues (replaces filing bugs/features)
+
+```bash
+# File a bug
+gh issue create --title "BUG: [title]" \
+  --body "[description, steps to reproduce, expected vs actual]" \
+  --label "bug,severity:[level],role:[target-role],squidsquad,status:pending"
+
+# File a feature
+gh issue create --title "FEAT: [title]" \
+  --body "[description, acceptance criteria]" \
+  --label "feature,priority:[level],role:[target-role],squidsquad,status:pending"
+```
+
+After creating, note the returned Issue number for reference.
+
+### Status Transitions (replaces editing Status field)
+
+Use label removal + addition to transition status:
+
+```bash
+# Example: Approved → In Progress
+gh issue edit [NUMBER] --remove-label "status:approved" --add-label "status:in-progress"
+
+# Example: In Progress → Pending Test
+gh issue edit [NUMBER] --remove-label "status:in-progress" --add-label "status:pending-test"
+
+# Example: Pending Ship → Shipped (close the issue)
+gh issue edit [NUMBER] --remove-label "status:pending-ship" --add-label "status:shipped"
+gh issue close [NUMBER]
+```
+
+### Discussion Entries (replaces inline Discussion sections)
+
+Discussion entries become Issue comments. Same format — timestamped and role-signed:
+
+```bash
+gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[role]**: [message]"
+```
+
+Comments are append-only — never edit or delete previous comments.
+
+### Design Field (replaces **Design**: field in markdown)
+
+Design status is tracked via labels:
+
+```bash
+# PM sets design needed
+gh issue edit [NUMBER] --add-label "design:needed"
+
+# Designer picks up
+gh issue edit [NUMBER] --remove-label "design:needed" --add-label "design:in-progress"
+
+# Designer completes
+gh issue edit [NUMBER] --remove-label "design:in-progress" --add-label "design:complete"
+```
+
+Dev agents skip issues with `design:needed` or `design:in-progress` labels.
+
+### Working State References
+
+Reference issues by number in working-state.md: `- **Task**: #42`
+
+### Planning Artifacts
+
+Planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md) remain as local files in `.squidsquad/[role]/planning/`. Only the tracker (bugs/features) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
+
+### Caching
+
+Within a single cycle, cache `gh issue list` results to avoid repeated API calls. Read the list once at the start of the relevant step, then operate on the cached data.
+<!-- /sub-skill: tracker-protocol -->
+
+---
+
 ## On Startup
 
-When you first receive these instructions, invoke the `/loop` command to schedule repeating cycles:
+When you first receive these instructions, first verify GitHub Issues access (see Tracker Protocol above). Then invoke the `/loop` command to schedule repeating cycles:
 
 Read the interval from `.squidsquad/config.md` (under `Iteration Interval > Minutes`), then invoke:
 
@@ -2883,34 +3520,51 @@ Print: `[🦑] Investigating test failures...` (or skip if no failures)
 For each test failure:
 
 1. Determine which agent's domain the failure is in.
-2. Check if a bug for this failure already exists (search by keywords). If yes, append a Discussion note — do not duplicate.
+2. Check if a bug already exists: `gh issue list --label "bug,squidsquad" --search "[keywords]" --json number,title --limit 10`. If found, comment on the existing issue — do not duplicate.
 3. If new and the failure is **objective** (clear test pass/fail, crash, error):
-   - File the bug immediately to the appropriate agent's tracker. Include the test failure details in Description. Increment the appropriate counter in `config.md`.
+   - File immediately: `gh issue create --title "BUG: [title]" --body "[description with test evidence]" --label "bug,severity:[level],role:[target-role],squidsquad"`
 4. If the finding is **subjective** (coherence issue, style concern, design inconsistency):
-   - Flag it in Discussion for human review via PM: `> [YYYY-MM-DD HH:MM] **qa**: Subjective finding flagged for PM/human review: [description]`
+   - Flag for human review via PM — comment on a relevant issue or create a discussion: `> [YYYY-MM-DD HH:MM] **qa**: Subjective finding flagged for PM/human review: [description]`
    - Do NOT file a bug yet — PM and human decide.
-5. If the failure spans multiple domains: file in each relevant tracker with cross-linking Discussion notes.
+5. If the failure spans multiple domains: file in each relevant role with cross-linking comments.
 
 ### Step 4 — Verify Fixed Bugs
 
 Print: `[🦑] Verifying fixed bugs...`
 
-For each dev agent (listed in `config.md` under `Dev Agents`), read their `bugs/INDEX.md`. Also check `.squidsquad/designer/bugs/INDEX.md` if a designer directory exists. For each bug with status `Fixed`, read its individual file:
+Query all bugs pending test:
 
-1. Run the relevant test or manually verify the fix.
-2. If verified:
-   - Update status to `Verified`, then `Closed`.
-   - Append Discussion entries for each transition.
+```bash
+gh issue list --label "bug,status:pending-test,squidsquad" --json number,title,labels,body --limit 50
+```
+
+For each bug:
+
+1. Read details: `gh issue view [NUMBER] --json title,body,comments`
+2. Run the relevant test or manually verify the fix.
+3. If verified:
+   - Transition to shipped and close:
+     ```bash
+     gh issue edit [NUMBER] --remove-label "status:pending-test" --add-label "status:shipped"
+     gh issue close [NUMBER]
+     gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **qa**: Verified. Status → Shipped."
+     ```
    - Increment `Shipped Since Last Bump` in `config.md`.
-3. If not verified:
-   - Update status back to `Open`.
-   - Append a Discussion entry explaining what failed.
+4. If not verified:
+   - Reopen: `gh issue edit [NUMBER] --remove-label "status:pending-test" --add-label "status:in-progress"`
+   - Comment with specific failures.
 
 ### Step 5 — Verify Pending Test Features
 
 Print: `[🦑] Verifying pending test features...`
 
-For each dev agent, read their `features/INDEX.md`. Also check designer features if designer directory exists. For each feature with status `Pending Test`, read its individual file:
+Query all features pending test:
+
+```bash
+gh issue list --label "feature,status:pending-test,squidsquad" --json number,title,labels,body --limit 50
+```
+
+For each feature, read it: `gh issue view [NUMBER] --json title,body,labels,comments`
 
 1. **If a TEST-PLAN.md exists** in the agent's planning directory, spawn a QA subagent (via the Agent tool) to execute the test plan:
 
@@ -2929,11 +3583,20 @@ For each dev agent, read their `features/INDEX.md`. Also check designer features
 
 2. **If no TEST-PLAN.md exists**, test against the acceptance criteria manually.
 
-3. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, or unresolved finding is discovered — update back to `In Progress` and append a Discussion entry listing every specific finding. Do NOT mark Pending Ship with "gaps noted for follow-up." ALL findings must be resolved before shipping.
-4. **Only exception**: The human explicitly says "ship with these gaps" — record the override in Discussion: `> [YYYY-MM-DD HH:MM] **qa**: Human override — shipping with [N] noted gaps: [list]. Status → Pending Ship.`
-5. If all criteria pass with zero gaps: update to `Pending Ship`, append Discussion entry: `> [YYYY-MM-DD HH:MM] **qa**: Verified — zero gaps. Status → Pending Ship.`
-6. **delivery:skip check**: If the feature is internal-only (agent template changes, config changes, internal tooling, process improvements) with no user-facing delivery work needed, add `delivery: skip` to the Discussion entry when marking Pending Ship: `> [YYYY-MM-DD HH:MM] **qa**: Verified — zero gaps. delivery: skip (internal-only, no user-facing changes). Status → Pending Ship.`
-7. If criteria fail: update back to `In Progress`, append Discussion entry with specific failures.
+3. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, or unresolved finding is discovered:
+   ```bash
+   gh issue edit [NUMBER] --remove-label "status:pending-test" --add-label "status:in-progress"
+   gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **qa**: FAIL. [list every specific finding]. Back to In Progress."
+   ```
+   Do NOT mark Pending Ship with "gaps noted for follow-up." ALL findings must be resolved before shipping.
+4. **Only exception**: The human explicitly says "ship with these gaps" — record the override: `gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **qa**: Human override — shipping with [N] noted gaps: [list]. Status → Pending Ship."`
+5. If all criteria pass with zero gaps:
+   ```bash
+   gh issue edit [NUMBER] --remove-label "status:pending-test" --add-label "status:pending-ship"
+   gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **qa**: Verified — zero gaps. Status → Pending Ship."
+   ```
+6. **delivery:skip check**: If the feature is internal-only, add `delivery:skip` to the comment: `"> [YYYY-MM-DD HH:MM] **qa**: Verified — zero gaps. delivery: skip (internal-only). Status → Pending Ship."`
+7. If criteria fail: transition back to `In Progress` with specific failures in the comment.
 
 ### Step 5b — Monitor PRs (if PR Flow enabled)
 
@@ -3400,11 +4063,169 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 
 ---
 
+<!-- sub-skill: tracker-protocol -->
+## Tracker Protocol — GitHub Issues
+
+All bugs and features are tracked as GitHub Issues with structured labels. Agents use the `gh` CLI to create, read, update, and comment on Issues. No internal markdown tracker files — GitHub Issues is the single source of truth.
+
+### Startup Permission Check
+
+At agent boot (before the first cycle), verify `gh` access:
+
+```bash
+gh issue list --limit 1 2>&1
+```
+
+If this fails (authentication error, missing scope, `gh` not found):
+1. Print: `[🦑] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.`
+2. Exit the conversation. SquidSquad requires GitHub Issues access.
+
+If `gh` works but GitHub is **temporarily unreachable** during a cycle (network blip), skip tracker operations for this cycle and retry next cycle. Print: `[🦑] GitHub unreachable — skipping tracker operations. Will retry next cycle.`
+
+### Label Taxonomy
+
+Issues use labels for structured metadata. The following labels must exist on the repo (created during setup):
+
+**Type:**
+- `bug` — defect, regression, broken behavior
+- `feature` — new capability or enhancement
+
+**Priority:**
+- `priority:high` — urgent, blocks other work
+- `priority:medium` — normal priority
+- `priority:low` — nice-to-have, improvement scan items
+
+**Status:**
+- `status:pending` — filed, awaiting human approval
+- `status:planning` — approved by human, PM running intake
+- `status:approved` — planning complete, ready for dev pickup
+- `status:in-progress` — agent actively working
+- `status:pending-test` — implementation complete, awaiting QA
+- `status:pending-ship` — QA verified, awaiting DM delivery
+- `status:shipped` — delivered, closed
+
+**Role (assignee domain):**
+- `role:skill` (or `role:fe`, `role:be`, etc.) — dev agent
+- `role:pm` — PM agent
+- `role:qa` — QA agent
+- `role:designer` — designer agent
+- `role:dm` — DM agent
+
+**Design (for features needing design):**
+- `design:needed` — designer must produce specs before dev
+- `design:in-progress` — designer working on specs
+- `design:complete` — design approved, dev can proceed
+
+**Severity (for bugs):**
+- `severity:high` — critical, blocks usage
+- `severity:medium` — degraded functionality
+- `severity:low` — cosmetic, minor annoyance
+
+**Special:**
+- `squidsquad` — all SquidSquad-managed items get this label
+- `improvement-scan` — filed by improvement scanning (quiet cycle)
+
+### Reading Issues (replaces INDEX.md scanning)
+
+To list issues by status and role:
+
+```bash
+# List approved features for your role
+gh issue list --label "feature,status:approved,role:[ROLE]" --json number,title,labels --limit 50
+
+# List open bugs for your role
+gh issue list --label "bug,role:[ROLE]" --label "status:pending-test" --json number,title,labels --limit 50
+
+# List all items pending test across all agents (for QA)
+gh issue list --label "status:pending-test" --json number,title,labels --limit 50
+
+# List pending ship items (for DM)
+gh issue list --label "status:pending-ship" --json number,title,labels --limit 50
+```
+
+To read a specific issue:
+
+```bash
+gh issue view [NUMBER] --json title,body,labels,comments
+```
+
+### Creating Issues (replaces filing bugs/features)
+
+```bash
+# File a bug
+gh issue create --title "BUG: [title]" \
+  --body "[description, steps to reproduce, expected vs actual]" \
+  --label "bug,severity:[level],role:[target-role],squidsquad,status:pending"
+
+# File a feature
+gh issue create --title "FEAT: [title]" \
+  --body "[description, acceptance criteria]" \
+  --label "feature,priority:[level],role:[target-role],squidsquad,status:pending"
+```
+
+After creating, note the returned Issue number for reference.
+
+### Status Transitions (replaces editing Status field)
+
+Use label removal + addition to transition status:
+
+```bash
+# Example: Approved → In Progress
+gh issue edit [NUMBER] --remove-label "status:approved" --add-label "status:in-progress"
+
+# Example: In Progress → Pending Test
+gh issue edit [NUMBER] --remove-label "status:in-progress" --add-label "status:pending-test"
+
+# Example: Pending Ship → Shipped (close the issue)
+gh issue edit [NUMBER] --remove-label "status:pending-ship" --add-label "status:shipped"
+gh issue close [NUMBER]
+```
+
+### Discussion Entries (replaces inline Discussion sections)
+
+Discussion entries become Issue comments. Same format — timestamped and role-signed:
+
+```bash
+gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[role]**: [message]"
+```
+
+Comments are append-only — never edit or delete previous comments.
+
+### Design Field (replaces **Design**: field in markdown)
+
+Design status is tracked via labels:
+
+```bash
+# PM sets design needed
+gh issue edit [NUMBER] --add-label "design:needed"
+
+# Designer picks up
+gh issue edit [NUMBER] --remove-label "design:needed" --add-label "design:in-progress"
+
+# Designer completes
+gh issue edit [NUMBER] --remove-label "design:in-progress" --add-label "design:complete"
+```
+
+Dev agents skip issues with `design:needed` or `design:in-progress` labels.
+
+### Working State References
+
+Reference issues by number in working-state.md: `- **Task**: #42`
+
+### Planning Artifacts
+
+Planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md) remain as local files in `.squidsquad/[role]/planning/`. Only the tracker (bugs/features) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
+
+### Caching
+
+Within a single cycle, cache `gh issue list` results to avoid repeated API calls. Read the list once at the start of the relevant step, then operate on the cached data.
+<!-- /sub-skill: tracker-protocol -->
+
+---
+
 ## On Startup
 
-When you first receive these instructions, invoke the `/loop` command to schedule repeating cycles:
-
-Read the interval from `.squidsquad/config.md` (under `Iteration Interval > Minutes`), then invoke:
+When you first receive these instructions, first verify GitHub Issues access (see Tracker Protocol above). Then read the interval from `.squidsquad/config.md` (under `Iteration Interval > Minutes`) and invoke:
 
 ```
 /loop [INTERVAL]m execute one Ralph Loop cycle
@@ -4104,11 +4925,169 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 
 ---
 
+<!-- sub-skill: tracker-protocol -->
+## Tracker Protocol — GitHub Issues
+
+All bugs and features are tracked as GitHub Issues with structured labels. Agents use the `gh` CLI to create, read, update, and comment on Issues. No internal markdown tracker files — GitHub Issues is the single source of truth.
+
+### Startup Permission Check
+
+At agent boot (before the first cycle), verify `gh` access:
+
+```bash
+gh issue list --limit 1 2>&1
+```
+
+If this fails (authentication error, missing scope, `gh` not found):
+1. Print: `[🦑] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.`
+2. Exit the conversation. SquidSquad requires GitHub Issues access.
+
+If `gh` works but GitHub is **temporarily unreachable** during a cycle (network blip), skip tracker operations for this cycle and retry next cycle. Print: `[🦑] GitHub unreachable — skipping tracker operations. Will retry next cycle.`
+
+### Label Taxonomy
+
+Issues use labels for structured metadata. The following labels must exist on the repo (created during setup):
+
+**Type:**
+- `bug` — defect, regression, broken behavior
+- `feature` — new capability or enhancement
+
+**Priority:**
+- `priority:high` — urgent, blocks other work
+- `priority:medium` — normal priority
+- `priority:low` — nice-to-have, improvement scan items
+
+**Status:**
+- `status:pending` — filed, awaiting human approval
+- `status:planning` — approved by human, PM running intake
+- `status:approved` — planning complete, ready for dev pickup
+- `status:in-progress` — agent actively working
+- `status:pending-test` — implementation complete, awaiting QA
+- `status:pending-ship` — QA verified, awaiting DM delivery
+- `status:shipped` — delivered, closed
+
+**Role (assignee domain):**
+- `role:skill` (or `role:fe`, `role:be`, etc.) — dev agent
+- `role:pm` — PM agent
+- `role:qa` — QA agent
+- `role:designer` — designer agent
+- `role:dm` — DM agent
+
+**Design (for features needing design):**
+- `design:needed` — designer must produce specs before dev
+- `design:in-progress` — designer working on specs
+- `design:complete` — design approved, dev can proceed
+
+**Severity (for bugs):**
+- `severity:high` — critical, blocks usage
+- `severity:medium` — degraded functionality
+- `severity:low` — cosmetic, minor annoyance
+
+**Special:**
+- `squidsquad` — all SquidSquad-managed items get this label
+- `improvement-scan` — filed by improvement scanning (quiet cycle)
+
+### Reading Issues (replaces INDEX.md scanning)
+
+To list issues by status and role:
+
+```bash
+# List approved features for your role
+gh issue list --label "feature,status:approved,role:[ROLE]" --json number,title,labels --limit 50
+
+# List open bugs for your role
+gh issue list --label "bug,role:[ROLE]" --label "status:pending-test" --json number,title,labels --limit 50
+
+# List all items pending test across all agents (for QA)
+gh issue list --label "status:pending-test" --json number,title,labels --limit 50
+
+# List pending ship items (for DM)
+gh issue list --label "status:pending-ship" --json number,title,labels --limit 50
+```
+
+To read a specific issue:
+
+```bash
+gh issue view [NUMBER] --json title,body,labels,comments
+```
+
+### Creating Issues (replaces filing bugs/features)
+
+```bash
+# File a bug
+gh issue create --title "BUG: [title]" \
+  --body "[description, steps to reproduce, expected vs actual]" \
+  --label "bug,severity:[level],role:[target-role],squidsquad,status:pending"
+
+# File a feature
+gh issue create --title "FEAT: [title]" \
+  --body "[description, acceptance criteria]" \
+  --label "feature,priority:[level],role:[target-role],squidsquad,status:pending"
+```
+
+After creating, note the returned Issue number for reference.
+
+### Status Transitions (replaces editing Status field)
+
+Use label removal + addition to transition status:
+
+```bash
+# Example: Approved → In Progress
+gh issue edit [NUMBER] --remove-label "status:approved" --add-label "status:in-progress"
+
+# Example: In Progress → Pending Test
+gh issue edit [NUMBER] --remove-label "status:in-progress" --add-label "status:pending-test"
+
+# Example: Pending Ship → Shipped (close the issue)
+gh issue edit [NUMBER] --remove-label "status:pending-ship" --add-label "status:shipped"
+gh issue close [NUMBER]
+```
+
+### Discussion Entries (replaces inline Discussion sections)
+
+Discussion entries become Issue comments. Same format — timestamped and role-signed:
+
+```bash
+gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[role]**: [message]"
+```
+
+Comments are append-only — never edit or delete previous comments.
+
+### Design Field (replaces **Design**: field in markdown)
+
+Design status is tracked via labels:
+
+```bash
+# PM sets design needed
+gh issue edit [NUMBER] --add-label "design:needed"
+
+# Designer picks up
+gh issue edit [NUMBER] --remove-label "design:needed" --add-label "design:in-progress"
+
+# Designer completes
+gh issue edit [NUMBER] --remove-label "design:in-progress" --add-label "design:complete"
+```
+
+Dev agents skip issues with `design:needed` or `design:in-progress` labels.
+
+### Working State References
+
+Reference issues by number in working-state.md: `- **Task**: #42`
+
+### Planning Artifacts
+
+Planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md) remain as local files in `.squidsquad/[role]/planning/`. Only the tracker (bugs/features) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
+
+### Caching
+
+Within a single cycle, cache `gh issue list` results to avoid repeated API calls. Read the list once at the start of the relevant step, then operate on the cached data.
+<!-- /sub-skill: tracker-protocol -->
+
+---
+
 ## On Startup
 
-When you first receive these instructions, invoke the `/loop` command to schedule repeating cycles:
-
-Read the interval from `.squidsquad/config.md` (under `Iteration Interval > Minutes`), then invoke:
+When you first receive these instructions, first verify GitHub Issues access (see Tracker Protocol above). Then read the interval from `.squidsquad/config.md` (under `Iteration Interval > Minutes`) and invoke:
 
 ```
 /loop [INTERVAL]m execute one Ralph Loop cycle

@@ -121,7 +121,8 @@ references/sub-skills/
 │   ├── interval-sync.md               (Step 1d — shared by dev only)
 │   ├── working-state.md               (Working State — shared by dev only)
 │   ├── vault-protocol.md             (Vault operations — shared by all roles)
-│   └── improvement-scan.md           (Quiet-cycle improvement scanning — shared by all roles)
+│   ├── improvement-scan.md           (Quiet-cycle improvement scanning — shared by all roles)
+│   └── tracker-protocol.md           (GitHub Issues tracker operations — shared by all roles)
 ├── souls/
 │   ├── dev.md                          (Dev agent soul — pragmatic engineer)
 │   ├── pm.md                           (PM soul — diplomat and strategist)

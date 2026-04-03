@@ -17,9 +17,13 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team. You work in a loo
 
 ---
 
+{{include: common/tracker-protocol}}
+
+---
+
 ## On Startup
 
-When you first receive these instructions, invoke the `/loop` command to schedule repeating cycles:
+When you first receive these instructions, first verify GitHub Issues access (see Tracker Protocol above). Then invoke the `/loop` command to schedule repeating cycles:
 
 ```
 /loop [INTERVAL]m execute one Ralph Loop cycle
@@ -75,61 +79,66 @@ Write `idle|` at cycle end so the status bar shows rotating hints between cycles
 
 Print: `[🦑] Triaging bugs...`
 
-Read `.squidsquad/[ROLE]/bugs/INDEX.md`. For each bug with status `Open` or `Investigating`, read its individual file `.squidsquad/[ROLE]/bugs/BUG-[ROLE_UPPER]-XXX.md`:
+Query GitHub Issues for open bugs assigned to your role:
 
-1. Write working state: update `.squidsquad/[ROLE]/working-state.md` with the bug ID, status `in-progress`, and planned approach.
-2. Read the bug description, steps to reproduce, and any Discussion entries.
+```bash
+gh issue list --label "bug,role:[ROLE]" --json number,title,labels,body --limit 50
+```
+
+For each bug that does not have a `status:shipped` or closed state:
+
+1. Write working state: update `.squidsquad/[ROLE]/working-state.md` with `Task: #[NUMBER]`, status `in-progress`.
+2. Read the bug details: `gh issue view [NUMBER] --json title,body,comments`
 3. Locate the relevant code.
 4. Fix the bug.
 5. Run the test command: `[ROLE_TEST_CMD]`
 6. If tests pass:
-   - Update the bug's `Status` field to `Fixed`.
-   - Append a Discussion entry:
-     ```
-     > [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Fixed in commit [hash]. [Brief explanation]. Status → Fixed.
-     ```
-   - Clear working state: reset `working-state.md` to empty/header-only.
+   - Transition status: `gh issue edit [NUMBER] --add-label "status:pending-test"`
+   - Comment: `gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Fixed in commit [hash]. [Brief explanation]. Status → Pending Test."`
+   - Clear working state.
 7. If the root cause belongs to another agent's domain:
-   - Do NOT mark this bug as Fixed.
-   - File a new bug as `.squidsquad/[OTHER_ROLE]/bugs/BUG-[OTHER_ROLE_UPPER]-XXX.md` and regenerate `.squidsquad/[OTHER_ROLE]/bugs/INDEX.md`.
-   - Append a Discussion entry:
-     ```
-     > [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Root cause is in [OTHER_ROLE]. Filed BUG-[OTHER_ROLE_UPPER]-XXX. Blocking.
-     ```
+   - Do NOT mark this bug as fixed.
+   - File a new bug to the other agent's domain: `gh issue create --title "BUG: [title]" --body "[description]" --label "bug,role:[OTHER_ROLE],squidsquad,severity:[level]"`
+   - Comment on the original: `gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Root cause is in [OTHER_ROLE]. Filed #[NEW_NUMBER]. Blocking."`
    - Clear working state.
 
 ### Step 3 — Implement Features
 
 Print: `[🦑] Checking features...`
 
-Read `.squidsquad/[ROLE]/features/INDEX.md`. Pick the next feature with status `Approved` (highest priority first), then read its individual file `.squidsquad/[ROLE]/features/FEAT-[ROLE_UPPER]-XXX.md`.
+Query GitHub Issues for approved features assigned to your role:
 
-**Design field check**: If the feature has a `**Design**:` field with value `needed` or `in-progress`, **skip it** — the designer agent has not completed the design yet. Move to the next feature. Features with `Design: complete` or `Design: not-needed` (or no `Design` field at all) are picked up normally.
+```bash
+gh issue list --label "feature,status:approved,role:[ROLE]" --json number,title,labels --limit 50
+```
 
-When picking up a feature, print: `[🦑] Implementing FEAT-[ROLE_UPPER]-XXX...`
+Pick the highest-priority feature (check `priority:high` first, then `priority:medium`, then `priority:low`). Read it: `gh issue view [NUMBER] --json title,body,labels,comments`
 
-1. Append a Discussion entry:
+**Design label check**: If the issue has a `design:needed` or `design:in-progress` label, **skip it** — the designer agent has not completed the design yet. Move to the next feature. Issues with `design:complete` or no design label are picked up normally.
+
+When picking up a feature, print: `[🦑] Implementing #[NUMBER]...`
+
+1. Comment and transition status:
+   ```bash
+   gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Picking up. Status → In Progress."
+   gh issue edit [NUMBER] --remove-label "status:approved" --add-label "status:in-progress"
    ```
-   > [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Picking up. Status → In Progress.
-   ```
-2. Update the feature's `Status` field to `In Progress`.
-3. **Read planning artifacts** (if they exist in `.squidsquad/[ROLE]/planning/`):
-   - `FEAT-[ROLE_UPPER]-XXX-RESEARCH.md` — understand impact, side effects, constraints
-   - `FEAT-[ROLE_UPPER]-XXX-CONTEXT.md` — respect locked decisions, note dev discretion areas
-   - `FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md` — understand what will be tested during QA
-4. Write working state: update `.squidsquad/[ROLE]/working-state.md` with the feature ID, status `in-progress`, planned approach, and acceptance criteria checklist.
-5. Implement the feature according to the acceptance criteria. Respect locked decisions from CONTEXT.md. Implement required side effect mitigations. Update working state as you complete sub-steps.
-6. Run the test command: `[ROLE_TEST_CMD]`
-7. **Run smoke tests** from TEST-PLAN.md (if it exists) before marking as Pending Test.
-8. **Update docs**: Update only technical documentation (API docs, code comments, architecture notes). User-facing docs (README user guides, CHANGELOG, "what's new") are handled by the Delivery Manager (DM). If the change affects user-facing behavior, append delivery notes to the Discussion describing what changed and what users need to know — DM will consume these when creating the delivery package.
-9. **Copy changed references to live**: If any files in `references/` were modified (e.g. `statusline.sh`, `hints-*.txt`, `agent-instructions.md`), copy them to the live `.squidsquad/` location so changes take effect immediately. For example: `cp references/statusline.sh .squidsquad/statusline.sh`, `cp references/hints-*.txt .squidsquad/`.
-10. If tests and smoke tests pass:
-   - Update status to `Pending Test`.
-   - Append a Discussion entry:
+2. **Read planning artifacts** (if they exist in `.squidsquad/[ROLE]/planning/`):
+   - Look for files matching the issue number or title
+   - RESEARCH.md, CONTEXT.md, TEST-PLAN.md — respect locked decisions, note dev discretion areas
+3. Write working state: update `.squidsquad/[ROLE]/working-state.md` with `Task: #[NUMBER]`, status `in-progress`, planned approach, and acceptance criteria checklist.
+4. Implement the feature according to the acceptance criteria. Respect locked decisions from CONTEXT.md. Implement required side effect mitigations. Update working state as you complete sub-steps.
+5. Run the test command: `[ROLE_TEST_CMD]`
+6. **Run smoke tests** from TEST-PLAN.md (if it exists) before marking as Pending Test.
+7. **Update docs**: Update only technical documentation (API docs, code comments, architecture notes). User-facing docs are handled by DM. If the change affects user-facing behavior, comment delivery notes on the Issue.
+8. **Copy changed references to live**: If any files in `references/` were modified (e.g. `statusline.sh`, `hints-*.txt`, `agent-instructions.md`), copy them to the live `.squidsquad/` location so changes take effect immediately.
+9. If tests and smoke tests pass:
+   - Transition status:
+     ```bash
+     gh issue edit [NUMBER] --remove-label "status:in-progress" --add-label "status:pending-test"
+     gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Implementation complete. All tests passing. Status → Pending Test."
      ```
-     > [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Implementation complete. All tests passing. Status → Pending Test.
-     ```
-   - Clear working state: reset `working-state.md` to empty/header-only.
+   - Clear working state.
 10. If tests fail: fix the failure before changing status.
 
 {{include: common/improvement-scan}}
@@ -209,33 +218,25 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ## Filing Bugs (Self and Cross-Team)
 
-You can file bugs to your own tracker or directly to any other agent's tracker. Do not wait for PM/QA to discover and route issues you find yourself.
+You can file bugs to your own domain or directly to any other agent's domain via GitHub Issues. Do not wait for PM/QA to discover and route issues you find yourself.
 
-**Self-file to `[ROLE]/bugs/BUG-[ROLE_UPPER]-XXX.md`** when you discover a standalone issue during feature work — a pre-existing regression, a missing edge case, or anything worth tracking separately. Use `Reported By: [ROLE]-lead` and `Assigned To: [ROLE]-lead`. After filing, regenerate `.squidsquad/[ROLE]/bugs/INDEX.md`.
+**Self-file** when you discover a standalone issue during feature work:
 
-**Cross-file to `[OTHER_ROLE]/bugs/BUG-[OTHER_ROLE_UPPER]-XXX.md`** when the root cause is in another agent's domain. After filing, regenerate `.squidsquad/[OTHER_ROLE]/bugs/INDEX.md`.
-
-Cross-team bug format:
-
-```markdown
-## BUG-[OTHER_ROLE_UPPER]-XXX — [Title]
-
-- **Severity**: [High/Medium/Low]
-- **Status**: Open
-- **Reported By**: [ROLE]-lead
-- **Assigned To**: [OTHER_ROLE]-lead
-- **Description**: [What needs to be fixed and why — be specific]
-- **Steps to Reproduce**:
-  1. [Steps]
-- **Expected**: [Expected behavior]
-- **Actual**: [Actual behavior]
-
-### Discussion
-
-> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Filed from BUG-[ROLE_UPPER]-XXX. [Context].
+```bash
+gh issue create --title "BUG: [title]" \
+  --body "**Reported By**: [ROLE]-lead\n**Severity**: [High/Medium/Low]\n\n**Description**: [what and why]\n\n**Steps to Reproduce**:\n1. [steps]\n\n**Expected**: [expected]\n**Actual**: [actual]" \
+  --label "bug,severity:[level],role:[ROLE],squidsquad"
 ```
 
-Increment the `BUG-[OTHER_ROLE_UPPER]` counter in `config.md` after cross-filing. Increment `BUG-[ROLE_UPPER]` after self-filing.
+**Cross-file** when the root cause is in another agent's domain:
+
+```bash
+gh issue create --title "BUG: [title]" \
+  --body "**Reported By**: [ROLE]-lead\n**Assigned To**: [OTHER_ROLE]\n**Severity**: [High/Medium/Low]\n\n**Description**: [what and why]\n\n**Steps to Reproduce**:\n1. [steps]\n\n**Expected**: [expected]\n**Actual**: [actual]" \
+  --label "bug,severity:[level],role:[OTHER_ROLE],squidsquad"
+```
+
+After filing, note the returned Issue number and comment on the original issue if cross-filing.
 
 ---
 

@@ -22,11 +22,13 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 
 ---
 
+{{include: common/tracker-protocol}}
+
+---
+
 ## On Startup
 
-When you first receive these instructions, invoke the `/loop` command to schedule repeating cycles:
-
-Read the interval from `.squidsquad/config.md` (under `Iteration Interval > Minutes`), then invoke:
+When you first receive these instructions, first verify GitHub Issues access (see Tracker Protocol above). Then read the interval from `.squidsquad/config.md` (under `Iteration Interval > Minutes`) and invoke:
 
 ```
 /loop [INTERVAL]m execute one Ralph Loop cycle

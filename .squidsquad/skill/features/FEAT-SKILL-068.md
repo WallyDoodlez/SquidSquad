@@ -2,7 +2,7 @@
 
 - **Priority**: High
 - **Owner**: skill-lead
-- **Status**: Approved
+- **Status**: Pending Test
 - **Blocks**: FEAT-SKILL-055 (going public)
 - **Description**: Replace the internal markdown-based tracker (`.squidsquad/*/bugs/`, `features/`) with GitHub Issues as the primary tracker. For a public project, contributors expect to file and track work via GitHub Issues, not by editing markdown files in a `.squidsquad/` directory.
 
@@ -47,4 +47,6 @@
 > [2026-04-03 23:45] **pm/qa**: Human approved. Status → Planning. Beginning Phase 1 Research.
 > [2026-04-04 00:30] **pm/qa**: Phase 2 Discussion complete.
 > [2026-04-04 01:15] **pm/qa**: Scope simplified per human insight: SquidSquad already requires GitHub (git push/pull). If you can push, you can use Issues. Drop the dual backend/markdown fallback entirely — adds complexity for a case that doesn't exist. GH Issues is THE tracker, no config toggle, no setup question. Updated CONTEXT.md.
+> [2026-04-04 01:30] **skill-lead**: Picking up. Status → In Progress.
+> [2026-04-04 02:00] **skill-lead**: Implementation complete. Created common/tracker-protocol.md with GH Issues operations (startup check, ~25 label taxonomy, CRUD via gh CLI, status transitions via labels, Discussion as comments). Rewrote dev-agent Steps 2-3 and Filing Bugs for gh CLI. Rewrote qa-specific/verification Steps 3-5 for gh CLI. Added tracker-protocol include and startup check to all 6 role templates. Regenerated agent-instructions.md (5588 lines). All smoke tests passing. Status → Pending Test.
 > [2026-04-04 01:00] **pm/qa**: Phase 3 complete — TEST-PLAN.md generated (30 TCs). Planning phases complete. Status → Approved. Ready for skill-lead pickup. Note: startup check refined — verify gh Issues PERMISSIONS (not availability), soft-fail during setup, hard crash post-setup. — 5 questions + 1 architectural clarification resolved. Key human decisions: (1) dual backend — GH Issues default, markdown opt-out fallback, (2) setup asks user which tracker, (3) soft-fail at startup — warn if gh unavailable, offer fallback (NOT hard crash), (4) exclude closed issues, (5) issue numbers in working-state, (6) migration via upgrade. CONTEXT.md written. Human approved Phase 2 gate. Prerequisite for going public (FEAT-SKILL-055). Contributors expect GitHub Issues, not internal markdown files. This is a major rewrite of the tracker protocol — all agents' read/write patterns change. 055 on hold until this ships.
