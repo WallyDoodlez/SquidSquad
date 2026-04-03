@@ -42,24 +42,25 @@ No meetings. No message queues. Just markdown.
 
 ### Roles
 
-SquidSquad always has a **PM/QA** agent. Dev agents are flexible — you define them at setup time. You can also add a **Designer** agent for projects that need design-to-code workflows.
+SquidSquad always has a **PM** agent. When dev or designer agents are present, a **QA** agent is automatically added to independently verify their work. Dev agents are flexible — you define them at setup time. You can also add a **Designer** agent for projects that need design-to-code workflows.
 
 | Agent | Owns | Loop |
 |-------|------|------|
 | **[role] Lead** (one per dev role) | Code for that role, `[role]/bugs/`, `[role]/features/` | Ralph Loop (fix bugs → implement features → test → push) |
 | **Designer** (optional) | Design specs, tokens, component specs, `designer/` | Ralph Loop (review design requests → interactive design sessions → produce specs → hand off to dev) |
-| **PM/QA** | Product backlog, `pm/qa-log.md`, `pm/enhancements.md`, human interaction | Ralph Loop (check human → run e2e → log → file bugs → verify → push) |
+| **QA** (auto-added with dev/designer) | Test results, `qa/qa-log.md`, bug verification, feature testing | Ralph Loop (E2E tests → verify bugs → test features → health checks → push) |
+| **PM** | Product backlog, `pm/enhancements.md`, human interaction, feature intake | Ralph Loop (check human → feature intake → backlog management → push) |
 
 **Common team shapes:**
 
 | Shape | Dev agents | Use when |
 |-------|-----------|----------|
-| `fe, be` | FE Lead + BE Lead | Full-stack app with separate frontend and backend |
-| `fe, be, designer` | FE Lead + BE Lead + Designer | Full-stack with design-to-code workflow |
-| `be` | BE Lead only | API-only, CLI tool, library, or skill repo |
-| `api, worker` | API Lead + Worker Lead | Backend split across services |
-| `web, ios, api` | Web + iOS + API | Multi-platform product |
-| _(any names)_ | Whatever you define | Custom team topology |
+| `fe, be` | FE Lead + BE Lead + QA + PM | Full-stack app with separate frontend and backend |
+| `fe, be, designer` | FE Lead + BE Lead + Designer + QA + PM | Full-stack with design-to-code workflow |
+| `be` | BE Lead + QA + PM | API-only, CLI tool, library, or skill repo |
+| `api, worker` | API Lead + Worker Lead + QA + PM | Backend split across services |
+| `web, ios, api` | Web + iOS + API + QA + PM | Multi-platform product |
+| _(any names)_ | Whatever you define + QA + PM | Custom team topology |
 
 ---
 
@@ -72,10 +73,12 @@ When you invoke SquidSquad, it creates the following inside your project root. O
 ├── config.md                   ← project config, test commands, counters, git protocol
 ├── templates/                  ← shared agent instruction templates (build-time substituted)
 │   ├── dev-agent-be.md         ← full Ralph Loop instructions for BE Lead
-│   ├── pm-agent.md             ← full Ralph Loop instructions for PM/QA
+│   ├── pm-agent.md             ← full Ralph Loop instructions for PM
+│   ├── qa-agent.md             ← full Ralph Loop instructions for QA
 │   └── dm-agent.md             ← full Ralph Loop instructions for Delivery Manager
 ├── start-be.sh / start-be.ps1  ← boot script: launches BE Lead (autonomous)
-├── start-pm.sh / start-pm.ps1  ← boot script: launches PM/QA (interactive)
+├── start-pm.sh / start-pm.ps1  ← boot script: launches PM (interactive)
+├── start-qa.sh / start-qa.ps1  ← boot script: launches QA (autonomous)
 ├── start-dm.sh / start-dm.ps1  ← boot script: launches Delivery Manager (autonomous)
 ├── be/                         ← one folder per dev agent, named after the role
 │   ├── CLAUDE.md               ← bootstrapper (~20 lines): role config + Read instruction to template
@@ -86,15 +89,19 @@ When you invoke SquidSquad, it creates the following inside your project root. O
 │   ├── CLAUDE.md               ← bootstrapper: role config + Read instruction to template
 │   ├── working-state.md        ← crash recovery state
 │   └── iterations/             ← iter-N.md logs per cycle
-└── pm/
-    ├── CLAUDE.md               ← bootstrapper (~20 lines): role config + Read instruction to template
+├── pm/                         ← Product Manager (human-facing coordinator)
+│   ├── CLAUDE.md               ← bootstrapper (~20 lines): role config + Read instruction to template
+│   ├── enhancements.md         ← product backlog / enhancement proposals
+│   ├── iterations/             ← iter-N.md logs per cycle
+│   └── migrations/             ← migration logs written when tracker schema changes
+└── qa/                         ← QA (auto-added when dev/designer present)
+    ├── CLAUDE.md               ← bootstrapper: role config + Read instruction to template
     ├── qa-log.md               ← QA test run results
-    ├── enhancements.md         ← product backlog / enhancement proposals
-    ├── iterations/             ← iter-N.md logs per cycle
-    └── migrations/             ← migration logs written when tracker schema changes
+    ├── working-state.md        ← crash recovery state
+    └── iterations/             ← iter-N.md logs per cycle
 ```
 
-> **Note:** DM uses shared dev agent trackers (no `dm/features/` or `dm/bugs/`). DM reads `Pending Ship` items from dev agent trackers and writes Discussion entries directly there.
+> **Note:** DM and QA use shared dev agent trackers (no `dm/features/`, `dm/bugs/`, `qa/features/`, or `qa/bugs/`). QA reads `Pending Test` and `Fixed` items from dev agent trackers, verifies them, and writes Discussion entries directly there. DM reads `Pending Ship` items and handles delivery.
 
 For `fe, be` the structure gains a `fe/` folder and `start-fe.sh/.ps1` alongside `be/`.
 
@@ -232,7 +239,7 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 8. Sleep [INTERVAL] minutes (from config.md) → repeat
 ```
 
-### PM/QA Ralph Loop
+### PM Ralph Loop
 
 ```
 1. git pull --rebase
@@ -241,18 +248,31 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 2. Non-blocking human check-in (print note, continue immediately)
    → If human has provided input: file bugs to tracker; for features, discuss first (predict intent, surface questions, invite refinement), then file and run Feature Intake Process
    → Await human approval before marking features Approved (approval only offered after planning completes)
-3. Run full e2e test command (from config.md)
-4. Log results to pm/qa-log.md
-5. If tests fail: file BUG-[ROLE]-XXX to the appropriate dev agent's tracker
-6. Read each dev agent's features/INDEX.md for Pending Test items → read individual files → verify → update to Pending Ship (DM handles delivery → Shipped)
-6b. If PR Flow enabled: monitor open PRs, sync comments/merges/changes to trackers
-7. Read each dev agent's bugs/INDEX.md for Fixed items → read individual files → verify → update to Verified/Closed
-7b. If GitHub Issues ingestion enabled: `gh issue list` → ingest new issues into trackers
-8. Agent health check: git log per agent, flag stalled/idle agents (no commits in 2× interval)
-9. If quiet cycle (no issues found, no verifications, no human input): skip log/commit, go to sleep
-10. Log iteration to pm/iterations/iter-N.md
-11. git add -A && git commit && git push
-12. Sleep [INTERVAL] minutes (from config.md) → repeat
+3. Backlog management — priority changes, feature status updates
+3b. If GitHub Issues ingestion enabled: `gh issue list` → ingest new issues into trackers
+4. If quiet cycle (no human input, no intake work): skip log/commit, go to sleep
+5. Log iteration to pm/iterations/iter-N.md
+6. git add -A && git commit && git push
+7. Sleep [INTERVAL] minutes (from config.md) → repeat
+```
+
+### QA Ralph Loop
+
+```
+1. git pull --rebase
+1b. Context pressure check — if above threshold, save state and exit
+1c. Resume from working-state.md if active task exists
+2. Run full e2e test command (from config.md)
+3. Log results to qa/qa-log.md
+4. If tests fail: file BUG-[ROLE]-XXX to the appropriate dev agent's tracker
+5. Read each dev agent's features/INDEX.md for Pending Test items → read individual files → verify → update to Pending Ship (DM handles delivery → Shipped)
+5b. If PR Flow enabled: monitor open PRs, sync comments/merges/changes to trackers
+6. Read each dev agent's bugs/INDEX.md for Fixed items → read individual files → verify → update to Verified/Closed
+7. Agent health check: git log per agent, flag stalled/idle agents (no commits in 2× interval)
+8. If quiet cycle (no issues found, no verifications): skip log/commit, go to sleep
+9. Log iteration to qa/iterations/iter-N.md
+10. git add -A && git commit && git push
+11. Sleep [INTERVAL] minutes (from config.md) → repeat
 ```
 
 ---
@@ -447,7 +467,7 @@ This step creates two things per agent: a **template** (full instructions with a
 
 #### Step 4a — Generate Template Files
 
-Read `references/agent-instructions.md`. For each dev agent role, copy Template 1 (Dev Agent) into `.squidsquad/templates/dev-agent-[role].md`, substituting all placeholders (`[ROLE]`, `[ROLE_UPPER]`, `[ROLE_TEST_CMD]`, `[OTHER_ROLES]`, `[INTERVAL]`) with values from config.md. For PM/QA, copy Template 2 into `.squidsquad/templates/pm-agent.md`, substituting `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]`. For DM, copy Template 3 into `.squidsquad/templates/dm-agent.md`, substituting `[ACTIVE_AGENTS]`, `[INTERVAL]`, and `[ROLE_UPPER]` placeholders. If a `designer` role is defined, copy Template 4 (Designer) into `.squidsquad/templates/designer-agent.md`, substituting `[ACTIVE_AGENTS]` and `[INTERVAL]` placeholders.
+Read `references/agent-instructions.md`. For each dev agent role, copy Template 1 (Dev Agent) into `.squidsquad/templates/dev-agent-[role].md`, substituting all placeholders (`[ROLE]`, `[ROLE_UPPER]`, `[ROLE_TEST_CMD]`, `[OTHER_ROLES]`, `[INTERVAL]`) with values from config.md. For PM, copy Template 2 (PM) or Template 2L (PM Lean) into `.squidsquad/templates/pm-agent.md` — use PM Lean when a QA agent is present, full PM otherwise. Substitute `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]`. When dev or designer agents are present, generate QA from Template 5 (QA) into `.squidsquad/templates/qa-agent.md`, substituting `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]`. For DM, copy Template 3 into `.squidsquad/templates/dm-agent.md`, substituting `[ACTIVE_AGENTS]`, `[INTERVAL]`, and `[ROLE_UPPER]` placeholders. If a `designer` role is defined, copy Template 4 (Designer) into `.squidsquad/templates/designer-agent.md`, substituting `[ACTIVE_AGENTS]` and `[INTERVAL]` placeholders.
 
 The resulting template files contain the complete Ralph Loop instructions with no remaining placeholders — agents never see `[ROLE]` syntax.
 

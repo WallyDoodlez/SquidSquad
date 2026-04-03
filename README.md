@@ -12,7 +12,7 @@
 
 **Your AI dev team that coordinates through markdown, not meetings.**
 
-SquidSquad is a Claude Code skill that spins up autonomous AI agents — one per dev role you define, plus a PM/QA — that work on your codebase in parallel and coordinate through a shared `.squidsquad/` folder. No message queues. No orchestration servers. Just markdown files and git.
+SquidSquad is a Claude Code skill that spins up autonomous AI agents — one per dev role you define, plus a PM and QA — that work on your codebase in parallel and coordinate through a shared `.squidsquad/` folder. No message queues. No orchestration servers. Just markdown files and git.
 
 ---
 
@@ -28,23 +28,24 @@ The result: bugs get filed, triaged, fixed, and verified. Features move from bac
 
 ### Agents
 
-SquidSquad always has a **PM/QA** agent. Dev agents are defined by you at setup time — one agent per role. You can also add a **Designer** agent for projects that need design-to-code workflows.
+SquidSquad always has a **PM** agent. When dev or designer agents are present, a **QA** agent is automatically added to independently verify their work. Dev agents are defined by you at setup time — one agent per role. You can also add a **Designer** agent for projects that need design-to-code workflows.
 
 | Agent | Loop | Mode |
 |-------|------|------|
 | **[role] Lead** (one per dev role) | Fix bugs → implement features → run tests → push | Autonomous (`--enable-auto-mode`) |
 | **Designer** (optional) | Review design requests → interactive design sessions with human → produce specs → hand off to dev | Autonomous with interactive design sessions |
-| **PM/QA** | Human check-in → QA pass → file bugs → verify work → push | Interactive (you talk to this one) |
+| **QA** (auto-added when dev/designer present) | E2E tests → verify bugs → test features → health checks → push | Autonomous |
+| **PM** | Human check-in → feature intake → backlog management → push | Interactive (you talk to this one) |
 
 **Common team shapes:**
 
 | You say at setup | Agents created |
 |-----------------|----------------|
-| `fe, be` | FE Lead + BE Lead + PM/QA |
-| `fe, be, designer` | FE Lead + BE Lead + Designer + PM/QA |
-| `be` | BE Lead + PM/QA |
-| `api, worker` | API Lead + Worker Lead + PM/QA |
-| `skill` | Skill Lead + PM/QA |
+| `fe, be` | FE Lead + BE Lead + QA + PM |
+| `fe, be, designer` | FE Lead + BE Lead + Designer + QA + PM |
+| `be` | BE Lead + QA + PM |
+| `api, worker` | API Lead + Worker Lead + QA + PM |
+| `skill` | Skill Lead + QA + PM |
 
 ### The Ralph Loop
 
@@ -65,7 +66,7 @@ flowchart LR
     G --> A
 ```
 
-Dev agents loop autonomously. PM/QA follows the same cadence but runs a QA pass, verifies completed work, monitors agent health, and checks in with you non-blockingly at the start of each cycle.
+Dev agents loop autonomously. PM follows the same cadence but focuses on human check-ins, feature intake, and backlog management — no testing. QA runs its own independent loop handling E2E tests, bug verification, feature testing, and agent health checks.
 
 Every step prints a `[🦑]` prefixed marker (e.g. `[🦑] Pulling latest...`, `[🦑] Triaging bugs...`) so SquidSquad activity is easy to spot in terminal scrollback.
 
@@ -76,7 +77,8 @@ graph TD
     H(["You"])
 
     subgraph squad["SquidSquad Agents"]
-        PM["PM / QA\n(interactive)"]
+        PM["PM\n(interactive)"]
+        QA["QA\n(autonomous)"]
         R1["[role] Lead\n(autonomous)"]
         R2["[role] Lead\n(autonomous)"]
         DS["Designer\n(autonomous + interactive)"]
@@ -86,15 +88,19 @@ graph TD
         CFG[".squidsquad/config.md"]
         T1[".squidsquad/[role]/\nbugs/ + features/\nworking-state.md"]
         T2[".squidsquad/[role]/\nbugs/ + features/\nworking-state.md"]
-        PM_T[".squidsquad/pm/\nqa-log.md + working-state.md"]
+        PM_T[".squidsquad/pm/\nworking-state.md"]
+        QA_T[".squidsquad/qa/\nqa-log.md + working-state.md"]
         SL[".squidsquad/statusline.sh"]
     end
 
     H -- "check-in each cycle" --> PM
     PM -- reads/writes --> CFG
-    PM -- files bugs, verifies --> T1
-    PM -- files bugs, verifies --> T2
+    PM -- "files features, intake" --> T1
+    PM -- "files features, intake" --> T2
     PM -- writes --> PM_T
+    QA -- "verifies, files bugs" --> T1
+    QA -- "verifies, files bugs" --> T2
+    QA -- writes --> QA_T
     R1 -- reads/writes --> T1
     R2 -- reads/writes --> T2
     R1 -- cross-files bugs --> T2
@@ -113,23 +119,29 @@ All coordination is asynchronous through git — agents pull to read the latest 
 ├── config.md                   <- versions, agents, test commands, counters, interval, thresholds
 ├── templates/                  <- shared agent instruction templates (build-time substituted)
 │   ├── dev-agent-[role].md     <- full Ralph Loop instructions per dev agent
-│   └── pm-agent.md             <- full Ralph Loop instructions for PM/QA
+│   ├── pm-agent.md             <- full Ralph Loop instructions for PM
+│   └── qa-agent.md             <- full Ralph Loop instructions for QA
 ├── statusline.sh               <- powers the Claude Code status bar for all agents
 ├── start-[role].sh/.ps1        <- one boot script pair per dev agent
-├── start-pm.sh/.ps1            <- PM/QA boot scripts
+├── start-pm.sh/.ps1            <- PM boot scripts
+├── start-qa.sh/.ps1            <- QA boot scripts
 ├── [role]/                     <- one folder per dev agent
 │   ├── CLAUDE.md               <- bootstrapper: role config + Read instruction to template
 │   ├── bugs/                   <- BUG-[ROLE]-XXX tracker (INDEX.md + individual files)
 │   ├── features/               <- FEAT-[ROLE]-XXX tracker (INDEX.md + individual files)
 │   ├── working-state.md        <- persists task progress across context resets
 │   └── iterations/             <- per-cycle logs (last 20 kept)
-└── pm/
+├── pm/
+│   ├── CLAUDE.md               <- bootstrapper: role config + Read instruction to template
+│   ├── enhancements.md         <- product backlog
+│   ├── working-state.md        <- persists PM task progress
+│   ├── iterations/             <- per-cycle logs (last 20 kept)
+│   └── migrations/             <- schema migration logs
+└── qa/
     ├── CLAUDE.md               <- bootstrapper: role config + Read instruction to template
     ├── qa-log.md               <- test run results
-    ├── enhancements.md         <- product backlog
-    ├── working-state.md        <- persists PM task progress
-    ├── iterations/             <- per-cycle logs (last 20 kept)
-    └── migrations/             <- schema migration logs
+    ├── working-state.md        <- persists QA task progress
+    └── iterations/             <- per-cycle logs (last 20 kept)
 ```
 
 ---
@@ -231,7 +243,10 @@ Open one terminal per agent:
 # Terminal 1 — [role] Lead (autonomous)
 bash .squidsquad/start-[role].sh
 
-# Terminal N — PM/QA (interactive — you talk to this one)
+# Terminal N — QA (autonomous)
+bash .squidsquad/start-qa.sh
+
+# Terminal N+1 — PM (interactive — you talk to this one)
 bash .squidsquad/start-pm.sh
 ```
 
@@ -240,7 +255,10 @@ bash .squidsquad/start-pm.sh
 # Terminal 1 — [role] Lead (autonomous)
 .\.squidsquad\start-[role].ps1
 
-# Terminal N — PM/QA (interactive)
+# Terminal N — QA (autonomous)
+.\.squidsquad\start-qa.ps1
+
+# Terminal N+1 — PM (interactive)
 .\.squidsquad\start-pm.ps1
 ```
 
@@ -248,7 +266,7 @@ All agents run interactively with `--enable-auto-mode`. The boot script injects 
 
 ### 4. Interact Via PM
 
-The PM/QA agent prints a non-blocking check-in note each cycle. You can chime in anytime to:
+The PM agent prints a non-blocking check-in note each cycle. You can chime in anytime to:
 - Report a new bug → it gets filed to the right team
 - Request a new feature → it enters the backlog as `Pending`
 - Approve a pending feature → it becomes `Approved` and the team picks it up
@@ -264,7 +282,7 @@ Any agent can file a bug to any team directly — no routing bottleneck.
 |-----------------------|----------|--------|
 | [role] Lead (own issue) | `[role]/bugs/BUG-[ROLE]-XXX.md` | `BUG-[ROLE]-XXX` |
 | [role] Lead (other team's code) | `[other]/bugs/BUG-[OTHER]-XXX.md` | `BUG-[OTHER]-XXX` |
-| PM/QA (from QA pass) | appropriate agent's `bugs/BUG-[ROLE]-XXX.md` | `BUG-[ROLE]-XXX` |
+| QA (from test/verification) | appropriate agent's `bugs/BUG-[ROLE]-XXX.md` | `BUG-[ROLE]-XXX` |
 
 The agent that discovers the problem files it with complete context. The receiving agent picks it up on their next pull. No standup required.
 
