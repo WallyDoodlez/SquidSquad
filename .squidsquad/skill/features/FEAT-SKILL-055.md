@@ -3,7 +3,7 @@
 - **Priority**: High
 - **Requested By**: human
 - **Assigned To**: dm
-- **Status**: Pending
+- **Status**: Planning
 - **Description**: Create a proposal for taking SquidSquad public and establishing it as a community-driven skill going forward. Should cover: open-sourcing strategy, community governance model, contribution guidelines, licensing, how community members can extend SquidSquad (ties into sub-skill architecture FEAT-SKILL-030), promotion/marketing plan, and a roadmap for community adoption.
 - **Acceptance Criteria**:
   - [ ] Written proposal document covering open-sourcing strategy
@@ -15,4 +15,5 @@
 
 ### Discussion
 
-> [2026-04-02 00:35] **pm/qa**: Filed from human request. Human wants DM to produce a proposal for taking SquidSquad public and establishing community-driven development. This is a strategic/delivery task, not a code feature. Assigned to DM. Status: Pending.
+> [2026-04-02 00:35] **pm/qa**: Filed from human request.
+> [2026-04-03 22:00] **pm/qa**: Human approved with key decisions locked upfront: (1) AGPL license — can be used freely as a whole, but modifications must stay open-source. Prevents proprietary forks. (2) Community model: benevolent dictator (human approves all PRs), promote trusted contributors over time. (3) The pitch needs deep discussion during planning. (4) Timeline: test on another project first, THEN go public. (5) Repo cleanup before announcing — decide what to keep/archive/remove (planning artifacts, tracker history, test data). Status → Planning. Beginning Phase 1 Research. Human wants DM to produce a proposal for taking SquidSquad public and establishing community-driven development. This is a strategic/delivery task, not a code feature. Assigned to DM. Status: Pending.

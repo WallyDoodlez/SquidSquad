@@ -8,7 +8,7 @@
 | FEAT-SKILL-063 | Shipped | High | Self-improvement loop: agents suggest improvements during quiet cycles |
 | FEAT-SKILL-057 | Pending | Medium | Templatize boot scripts (start-*.ps1 / start-*.sh) |
 | FEAT-SKILL-056 | Pending | High | Public-facing documentation overhaul and attention-drawing README |
-| FEAT-SKILL-055 | Pending | High | Proposal: take SquidSquad public as a community-driven skill |
+| FEAT-SKILL-055 | Planning | High | Proposal: take SquidSquad public as a community-driven skill |
 | FEAT-SKILL-053 | Pending | High | PM auto-boots entire team on startup |
 | FEAT-SKILL-052 | Pending | High | Add agent role command: clone, configure, and boot any role from PM |
 | FEAT-SKILL-051 | Shipped | High | Split tracker files into individual entries with index (Tracker Schema 3) |
