@@ -2,7 +2,7 @@
 
 - **Priority**: High
 - **Owner**: TBD
-- **Status**: Pending Test
+- **Status**: Pending Ship
 - **Description**: Foundational architectural redesign — break the monolithic SKILL.md into a main skill + layered sub-skills. **All phases must ship atomically** in a single dev cycle to avoid breaking running agents mid-migration.
 
   **Skill hierarchy (human-confirmed):**
@@ -71,4 +71,5 @@
 > [2026-04-02 06:15] **pm/qa**: Phase 2 Discussion complete — all 8 open questions resolved. Locked decisions: build-time composition, concatenation with section markers, sources in references/sub-skills/, agent-instructions.md as generated artifact, separate Architecture Version field, keep Agent tool (no --print), diff-verified composition testing. Phase C (interaction layer) removed from scope — GitHub integration deferred to separate feature. CONTEXT.md written. Human approved Phase 2 gate.
 > [2026-04-02 06:20] **pm/qa**: Phase 3 complete — TEST-PLAN.md generated (40 TCs, 12 smoke tests, 8 regression risks). Planning phases complete. Status → Approved. Ready for skill-lead pickup.
 > [2026-04-02 07:00] **skill-lead**: Picking up. Read all planning artifacts (RESEARCH, CONTEXT, TEST-PLAN, PHASE2-PREP). Beginning Phase A implementation — extracting sub-skills from monolithic templates. Status → In Progress.
-> [2026-04-02 07:30] **skill-lead**: Implementation complete. Created 16 sub-skill source files under references/sub-skills/ (5 common, 3 roles, 5 pm-specific, 2 dm-specific, 1 manifest). Generated agent-instructions.md as composed artifact with DO NOT EDIT header and section markers. Added Architecture Version: 1 to config.md. Diff-verified: only 3 intentional differences from monolithic original (PM/DM pull-latest normalization, Open Artifacts section reposition). All smoke tests passing. Status → Pending Test.
+> [2026-04-02 07:30] **skill-lead**: Implementation complete.
+> [2026-04-02 09:00] **pm/qa**: Verified. 12/12 smoke tests pass. Sub-skill directory structure correct (16 files, 1468 lines). DO NOT EDIT header present. 14 section markers across 12 unique sub-skills. Architecture Version: 1 in config. Manifest well-formed. Placeholders preserved (83). All 3 templates with Ralph Loop. Boot scripts, statusline, tracker data all unaffected. 3 intentional diffs documented by skill-lead (PM/DM pull-latest normalization, Open Artifacts reposition). delivery: skip (internal architecture change, no user-facing delivery work). Status → Pending Ship. Created 16 sub-skill source files under references/sub-skills/ (5 common, 3 roles, 5 pm-specific, 2 dm-specific, 1 manifest). Generated agent-instructions.md as composed artifact with DO NOT EDIT header and section markers. Added Architecture Version: 1 to config.md. Diff-verified: only 3 intentional differences from monolithic original (PM/DM pull-latest normalization, Open Artifacts section reposition). All smoke tests passing. Status → Pending Test.

@@ -15,7 +15,7 @@
 | FEAT-SKILL-049 | Pending | High | User-driven versioning with semver suggestion |
 | FEAT-SKILL-043 | Pending | High | Separate QA from PM into its own hardcoded agent role |
 | FEAT-SKILL-032 | Pending | High | Auto-configure permissions during setup and learn from prompt pressure |
-| FEAT-SKILL-030 | Pending Test | High | Sub-skill architecture: roles as independent skills with layered plugin system |
+| FEAT-SKILL-030 | Pending Ship | High | Sub-skill architecture: roles as independent skills with layered plugin system |
 | FEAT-SKILL-027 | Approved | High | Designer agent template with external design tool integration |
 | FEAT-SKILL-054 | Pending | Medium | Workflow editor: configure steps and routing between roles |
 | FEAT-SKILL-041 | Pending | Medium | Setup flow improvements: project context gathering + guided agent selection |
