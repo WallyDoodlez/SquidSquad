@@ -166,6 +166,9 @@ Agent health is detected by reading each agent's `current-state` file via cross-
 ### Quiet Cycle Skipping
 Agents skip the iteration log and commit when no work was done — and produce no text output at all on quiet cycles. Iteration counters only increment on productive cycles. Keeps git history, iteration logs, and terminal scrollback meaningful.
 
+### Self-Improvement Scanning
+When enabled (`config.md` `Improvement Scanning: yes`), agents use quiet cycles to scan the target project for improvements in their domain: dev finds code quality issues, QA finds test coverage gaps, designer spots design inconsistencies, DM catches documentation gaps, and PM identifies process improvements. Findings are rate-limited (max 2 per scan, after 3 consecutive quiet cycles) and routed through PM to be filed as normal features or bugs — you review and approve them like any other work item. Agents scan your project, not SquidSquad's own files.
+
 ### Iteration Log Retention
 Each agent keeps the last 20 iteration files. Older logs are deleted — git history preserves them if needed.
 

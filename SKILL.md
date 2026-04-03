@@ -233,7 +233,9 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
    → Update status to In Progress, then Pending Test
    → Clear working state on completion, append Discussion entry
 4. Run [role] test command (from config.md)
-5. If quiet cycle (no bugs fixed, no features progressed): skip log/commit, go to sleep
+5. If quiet cycle (no bugs fixed, no features progressed):
+   → If Improvement Scanning enabled and quiet cycle counter ≥ 3: scan target project for domain-specific improvements, file findings through PM (max 2 per scan)
+   → Otherwise: skip log/commit, go to sleep
 6. Log iteration to [role]/iterations/iter-N.md
 7. git add -A && git commit && git push
 8. Sleep [INTERVAL] minutes (from config.md) → repeat
@@ -454,6 +456,10 @@ Always create `.squidsquad/pm/` with its full structure regardless of team shape
 ## GitHub Issues Ingestion
 
 - **Enabled**: [yes/no]  ← if yes, PM auto-ingests new GitHub Issues each cycle; requires `gh` CLI
+
+## Improvement Scanning
+
+- **Enabled**: [yes/no]  ← if yes, agents scan the target project for improvements during quiet cycles (default yes)
 
 ## Auto Versioning
 

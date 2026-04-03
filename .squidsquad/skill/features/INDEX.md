@@ -5,7 +5,7 @@
 | ID | Status | Priority | Title |
 |----|--------|----------|-------|
 | FEAT-SKILL-058 | Shipped | High | Suppress PM cycles during active planning phases |
-| FEAT-SKILL-063 | Pending Ship | High | Self-improvement loop: agents suggest improvements during quiet cycles |
+| FEAT-SKILL-063 | Shipped | High | Self-improvement loop: agents suggest improvements during quiet cycles |
 | FEAT-SKILL-057 | Pending | Medium | Templatize boot scripts (start-*.ps1 / start-*.sh) |
 | FEAT-SKILL-056 | Pending | High | Public-facing documentation overhaul and attention-drawing README |
 | FEAT-SKILL-055 | Pending | High | Proposal: take SquidSquad public as a community-driven skill |
