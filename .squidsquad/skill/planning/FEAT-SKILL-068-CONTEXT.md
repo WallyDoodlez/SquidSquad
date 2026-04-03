@@ -19,7 +19,7 @@ Replace the internal markdown tracker with GitHub Issues as the default tracker,
 
 - **Dual backend**: GH Issues is default, markdown tracker is opt-out fallback. Both backends maintained in the tracker protocol sub-skill. Config toggle: `Tracker: github-issues | markdown`.
 - **Setup asks user**: During setup, ask which tracker. Default is GH Issues. User can choose markdown if no GitHub remote or preference.
-- **Startup check — two modes**: (1) During initial setup: soft-fail — if `gh` not available, warn and offer markdown fallback. (2) After setup with `Tracker: github-issues` in config: hard crash — `gh` must be available. If it's not, agent prints error and exits. You committed to GH Issues, fix `gh auth` or change config to markdown.
+- **Startup check — permission verification**: `gh` CLI is already available (required for git push/pull to GitHub). The check is whether `gh` has **Issues permissions** (authenticated + can create/edit/comment on Issues). During setup: verify with `gh issue list` — if it fails, warn and offer markdown fallback. Post-setup with `Tracker: github-issues`: hard crash if `gh issue list` fails — user must fix permissions (`gh auth refresh`) or switch to markdown in config.
 - **Exclude closed issues**: All agent queries filter to open issues only. Shipped/closed items not scanned.
 - **Issue numbers in working-state.md**: `Task: #42`. Short, stable, easy to look up.
 - **Migration via /squidsquad-upgrade**: Detects markdown tracker, migrates items to GH Issues atomically. Part of the upgrade flow.
