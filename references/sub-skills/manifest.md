@@ -20,7 +20,7 @@ Entry file with includes:
 4. `common/interval-sync` — Step 1d
 5. `common/working-state` — Working State File format
 
-### PM/QA Agent (`roles/pm-agent.md`)
+### PM/QA Agent (`roles/pm-agent.md`) — used when QA agent is NOT present
 
 Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded `pm` paths to avoid `[ROLE]` ambiguity — PM uses `[ROLE]` to reference dev agents, not itself):
 1. `common/pull-latest` — Step 1
@@ -29,6 +29,21 @@ Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded
 4. `pm-specific/github-issues` — Step 7b
 5. `pm-specific/feature-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
 6. `pm-specific/feature-approval` — Feature Approval Gate
+
+### PM Agent — Lean (`roles/pm-lean.md`) — used when QA agent IS present
+
+Reduced PM template without verification steps. Setup/upgrade selects this variant when `.squidsquad/qa/` directory exists.
+1. `common/pull-latest` — Step 1
+2. `pm-specific/delivery-fallback` — Step 3 (delivery fallback when DM absent)
+3. `pm-specific/github-issues` — GitHub Issues ingestion
+4. `pm-specific/feature-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
+5. `pm-specific/feature-approval` — Feature Approval Gate
+
+### QA Agent (`roles/qa-agent.md`) — recommended when dev/designer agents exist
+
+Entry file with includes:
+1. `common/pull-latest` — Step 1
+2. `qa-specific/verification` — Steps 2-6 (E2E tests, bug investigation, verification, health check)
 
 ### Designer Agent (`roles/designer.md`)
 
@@ -89,7 +104,9 @@ references/sub-skills/
 │   └── working-state.md               (Working State — shared by dev only)
 ├── roles/
 │   ├── dev-agent.md                    (entry file — dev template skeleton)
-│   ├── pm-agent.md                     (entry file — PM template skeleton)
+│   ├── pm-agent.md                     (entry file — PM/QA template, no QA agent)
+│   ├── pm-lean.md                      (entry file — lean PM template, QA present)
+│   ├── qa-agent.md                     (entry file — QA template skeleton)
 │   ├── dm-agent.md                     (entry file — DM template skeleton)
 │   └── designer.md                     (entry file — designer template skeleton)
 ├── pm-specific/
@@ -98,6 +115,8 @@ references/sub-skills/
 │   ├── delivery-fallback.md           (Step 6d — PM delivery when DM absent)
 │   ├── github-issues.md              (Step 7b — GitHub Issues ingestion)
 │   └── pr-flow.md                     (Step 6b — PR monitoring)
+├── qa-specific/
+│   └── verification.md               (Steps 2-6 — E2E, bugs, verify, health check)
 ├── designer-specific/
 │   ├── design-session.md             (Steps 2-2e — requests, feasibility, session, specs, rejection)
 │   └── design-tools.md              (Design tool integration and discovery)
