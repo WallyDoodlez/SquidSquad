@@ -30,6 +30,13 @@ Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded
 5. `pm-specific/feature-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
 6. `pm-specific/feature-approval` — Feature Approval Gate
 
+### Designer Agent (`roles/designer.md`)
+
+Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardcoded `designer` paths — Designer uses `[ROLE]` to reference dev agents, not itself):
+1. `common/pull-latest` — Step 1
+2. `designer-specific/design-session` — Steps 2-2e (design request scanning, feasibility, interactive session, spec production, rejection handling)
+3. `designer-specific/design-tools` — Design tool integration and discovery
+
 ### DM Agent (`roles/dm-agent.md`)
 
 Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardcoded `dm` paths — DM uses `[ROLE]` to reference dev agents, not itself):
@@ -83,13 +90,17 @@ references/sub-skills/
 ├── roles/
 │   ├── dev-agent.md                    (entry file — dev template skeleton)
 │   ├── pm-agent.md                     (entry file — PM template skeleton)
-│   └── dm-agent.md                     (entry file — DM template skeleton)
+│   ├── dm-agent.md                     (entry file — DM template skeleton)
+│   └── designer.md                     (entry file — designer template skeleton)
 ├── pm-specific/
 │   ├── feature-intake.md              (5-phase lifecycle + Open Artifacts)
 │   ├── feature-approval.md            (Feature Approval Gate)
 │   ├── delivery-fallback.md           (Step 6d — PM delivery when DM absent)
 │   ├── github-issues.md              (Step 7b — GitHub Issues ingestion)
 │   └── pr-flow.md                     (Step 6b — PR monitoring)
+├── designer-specific/
+│   ├── design-session.md             (Steps 2-2e — requests, feasibility, session, specs, rejection)
+│   └── design-tools.md              (Design tool integration and discovery)
 └── dm-specific/
     ├── delivery-packaging.md          (Steps 2-2c — scan, skip, deliver)
     └── version-bumps.md              (Step 3 — version bump check + sequence)

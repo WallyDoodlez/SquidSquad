@@ -168,6 +168,18 @@ Continue until all questions are resolved. Capture decisions in `.squidsquad/[RO
 
 **Open in editor**: After CONTEXT.md is created, offer to open it (see "Open Artifacts in Editor" below).
 
+**Design routing**: If a `designer` agent is configured (check `config.md` Dev Agents list for `designer`), ask the human if this feature needs design work using `AskUserQuestion`:
+
+```
+question: "Does this feature need design work before implementation?"
+options: ["Yes — route to designer", "No — dev can implement directly"]
+```
+
+- **"Yes"**: Add `- **Design**: needed` to the feature file. Add a `## Design Brief` section to CONTEXT.md with: user story, target platforms, existing patterns to follow, visual references, constraints, and priority. The designer agent will pick this up.
+- **"No"**: Add `- **Design**: not-needed` to the feature file. Dev agent will pick it up directly.
+
+If no `designer` agent is configured, skip this question — all features default to `not-needed`.
+
 **Phase 2 Approval Gate**: After CONTEXT.md is written, present a summary of all locked decisions and use `AskUserQuestion` to confirm before proceeding:
 
 ```

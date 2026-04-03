@@ -100,7 +100,11 @@ Read `.squidsquad/[ROLE]/bugs/INDEX.md`. For each bug with status `Open` or `Inv
 
 Print: `[🦑] Checking features...`
 
-Read `.squidsquad/[ROLE]/features/INDEX.md`. Pick the next feature with status `Approved` (highest priority first), then read its individual file `.squidsquad/[ROLE]/features/FEAT-[ROLE_UPPER]-XXX.md`. When picking up a feature, print: `[🦑] Implementing FEAT-[ROLE_UPPER]-XXX...`
+Read `.squidsquad/[ROLE]/features/INDEX.md`. Pick the next feature with status `Approved` (highest priority first), then read its individual file `.squidsquad/[ROLE]/features/FEAT-[ROLE_UPPER]-XXX.md`.
+
+**Design field check**: If the feature has a `**Design**:` field with value `needed` or `in-progress`, **skip it** — the designer agent has not completed the design yet. Move to the next feature. Features with `Design: complete` or `Design: not-needed` (or no `Design` field at all) are picked up normally.
+
+When picking up a feature, print: `[🦑] Implementing FEAT-[ROLE_UPPER]-XXX...`
 
 1. Append a Discussion entry:
    ```
