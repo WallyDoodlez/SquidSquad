@@ -6,8 +6,8 @@ updated: YYYY-MM-DD
 owner: # agent role that created this note
 status: active # active | superseded | archived
 confidence: # high (human-confirmed) | medium (agent-observed) | low (agent-inferred)
-source: # conversation | code | review | observation
-links: []
+source: # conversation (human discussion) | code (observed in codebase) | review (code/design review) | observation (inferred from patterns) | research (external sources)
+links: [] # bare note names: [note-name-a, note-name-b] — NOT wikilink syntax
 ---
 
 ## Context

@@ -26,7 +26,7 @@
 | FEAT-SKILL-026 | Pending | Medium | `/squidsquad-pending` slash command to list pending items from tracker |
 | FEAT-SKILL-025 | Pending | Medium | Track token usage per agent per cycle |
 | FEAT-SKILL-036 | Consolidated | Low | Boot script first message includes role for terminal title → merged into 061 |
-| FEAT-SKILL-029 | In Progress | High | Obsidian memory layer — PARAG vault with COG retrieval |
+| FEAT-SKILL-029 | Pending Test | High | Obsidian memory layer — PARAG vault with COG retrieval |
 | FEAT-SKILL-062 | Pending | Medium | Semantic search for vault memory layer (OpenSearch) |
 | FEAT-SKILL-028 | Pending | Low | VS Code extension for SquidSquad |
 | FEAT-SKILL-020 | Pending | Low | Web-based UI for SquidSquad interaction |

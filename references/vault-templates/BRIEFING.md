@@ -13,7 +13,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Human Preferences
 
 - [Summary of known preferences, values, communication style]
-- See [[human-profile]] for full details
+- See [[human-profile]] for full details (if it exists — create it when preferences are known)
 
 ## Constraints & Blockers
 
