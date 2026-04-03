@@ -44,4 +44,5 @@
 ### Discussion
 
 > [2026-04-03 23:30] **pm/qa**: Filed from human.
-> [2026-04-03 23:45] **pm/qa**: Human approved. Status → Planning. Beginning Phase 1 Research. Prerequisite for going public (FEAT-SKILL-055). Contributors expect GitHub Issues, not internal markdown files. This is a major rewrite of the tracker protocol — all agents' read/write patterns change. 055 on hold until this ships.
+> [2026-04-03 23:45] **pm/qa**: Human approved. Status → Planning. Beginning Phase 1 Research.
+> [2026-04-04 00:30] **pm/qa**: Phase 2 Discussion complete — 5 questions + 1 architectural clarification resolved. Key human decisions: (1) dual backend — GH Issues default, markdown opt-out fallback, (2) setup asks user which tracker, (3) soft-fail at startup — warn if gh unavailable, offer fallback (NOT hard crash), (4) exclude closed issues, (5) issue numbers in working-state, (6) migration via upgrade. CONTEXT.md written. Human approved Phase 2 gate. Prerequisite for going public (FEAT-SKILL-055). Contributors expect GitHub Issues, not internal markdown files. This is a major rewrite of the tracker protocol — all agents' read/write patterns change. 055 on hold until this ships.
