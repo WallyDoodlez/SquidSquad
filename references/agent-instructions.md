@@ -274,10 +274,13 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 
 2. **Read your SOUL.md self-improvement lens**: Your soul defines what to look for. Consult it before scanning.
 
-3. **Select files to scan**: Pick 3-5 files, prioritized by:
+3. **Select files to scan**: Pick 3-5 source files from the target project, prioritized by:
    - Recently changed (most likely to have issues)
    - Never scanned before (coverage gap)
    - Oldest since last scan (staleness)
+
+   **Exclude from scanning**: `.squidsquad/`, `node_modules/`, `vendor/`, `.git/`, build output directories (`dist/`, `build/`, `out/`), generated files, and binary files. Only scan source files belonging to the target project.
+
    Check `.squidsquad/[your-role]/scan-history.md` to avoid re-scanning recently reviewed files.
 
 4. **Scan with your domain lens**:
@@ -1023,10 +1026,13 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 
 2. **Read your SOUL.md self-improvement lens**: Your soul defines what to look for. Consult it before scanning.
 
-3. **Select files to scan**: Pick 3-5 files, prioritized by:
+3. **Select files to scan**: Pick 3-5 source files from the target project, prioritized by:
    - Recently changed (most likely to have issues)
    - Never scanned before (coverage gap)
    - Oldest since last scan (staleness)
+
+   **Exclude from scanning**: `.squidsquad/`, `node_modules/`, `vendor/`, `.git/`, build output directories (`dist/`, `build/`, `out/`), generated files, and binary files. Only scan source files belonging to the target project.
+
    Check `.squidsquad/[your-role]/scan-history.md` to avoid re-scanning recently reviewed files.
 
 4. **Scan with your domain lens**:
@@ -1948,10 +1954,13 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 
 2. **Read your SOUL.md self-improvement lens**: Your soul defines what to look for. Consult it before scanning.
 
-3. **Select files to scan**: Pick 3-5 files, prioritized by:
+3. **Select files to scan**: Pick 3-5 source files from the target project, prioritized by:
    - Recently changed (most likely to have issues)
    - Never scanned before (coverage gap)
    - Oldest since last scan (staleness)
+
+   **Exclude from scanning**: `.squidsquad/`, `node_modules/`, `vendor/`, `.git/`, build output directories (`dist/`, `build/`, `out/`), generated files, and binary files. Only scan source files belonging to the target project.
+
    Check `.squidsquad/[your-role]/scan-history.md` to avoid re-scanning recently reviewed files.
 
 4. **Scan with your domain lens**:
@@ -2862,10 +2871,13 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 
 2. **Read your SOUL.md self-improvement lens**: Your soul defines what to look for. Consult it before scanning.
 
-3. **Select files to scan**: Pick 3-5 files, prioritized by:
+3. **Select files to scan**: Pick 3-5 source files from the target project, prioritized by:
    - Recently changed (most likely to have issues)
    - Never scanned before (coverage gap)
    - Oldest since last scan (staleness)
+
+   **Exclude from scanning**: `.squidsquad/`, `node_modules/`, `vendor/`, `.git/`, build output directories (`dist/`, `build/`, `out/`), generated files, and binary files. Only scan source files belonging to the target project.
+
    Check `.squidsquad/[your-role]/scan-history.md` to avoid re-scanning recently reviewed files.
 
 4. **Scan with your domain lens**:
@@ -3486,10 +3498,13 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 
 2. **Read your SOUL.md self-improvement lens**: Your soul defines what to look for. Consult it before scanning.
 
-3. **Select files to scan**: Pick 3-5 files, prioritized by:
+3. **Select files to scan**: Pick 3-5 source files from the target project, prioritized by:
    - Recently changed (most likely to have issues)
    - Never scanned before (coverage gap)
    - Oldest since last scan (staleness)
+
+   **Exclude from scanning**: `.squidsquad/`, `node_modules/`, `vendor/`, `.git/`, build output directories (`dist/`, `build/`, `out/`), generated files, and binary files. Only scan source files belonging to the target project.
+
    Check `.squidsquad/[your-role]/scan-history.md` to avoid re-scanning recently reviewed files.
 
 4. **Scan with your domain lens**:
@@ -4080,10 +4095,13 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 
 2. **Read your SOUL.md self-improvement lens**: Your soul defines what to look for. Consult it before scanning.
 
-3. **Select files to scan**: Pick 3-5 files, prioritized by:
+3. **Select files to scan**: Pick 3-5 source files from the target project, prioritized by:
    - Recently changed (most likely to have issues)
    - Never scanned before (coverage gap)
    - Oldest since last scan (staleness)
+
+   **Exclude from scanning**: `.squidsquad/`, `node_modules/`, `vendor/`, `.git/`, build output directories (`dist/`, `build/`, `out/`), generated files, and binary files. Only scan source files belonging to the target project.
+
    Check `.squidsquad/[your-role]/scan-history.md` to avoid re-scanning recently reviewed files.
 
 4. **Scan with your domain lens**:
