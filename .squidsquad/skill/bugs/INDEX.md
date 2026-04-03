@@ -1,6 +1,7 @@
 # Bug Index
 
-<!-- Generated: 2026-04-01 01:15 -->
+<!-- Generated: 2026-04-03 03:15 -->
 
 | ID | Status | Severity | Title |
 |----|--------|----------|-------|
+| BUG-SKILL-039 | Open | High | PM attempted to ship feature with open QA gaps |
