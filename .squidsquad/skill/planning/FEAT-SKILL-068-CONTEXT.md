@@ -2,7 +2,7 @@
 
 ## Scope
 
-Replace the internal markdown tracker with GitHub Issues as the default tracker, while maintaining markdown as an opt-out fallback. The tracker protocol sub-skill supports both backends, selected by config during setup.
+Replace the internal markdown tracker with GitHub Issues. No fallback — SquidSquad already requires GitHub for git push/pull, so GitHub Issues is always available. One tracker, one protocol, simpler architecture.
 
 **In scope:**
 - Dual backend tracker protocol (GH Issues default, markdown fallback)
@@ -17,9 +17,9 @@ Replace the internal markdown tracker with GitHub Issues as the default tracker,
 
 ## Locked Decisions (human decided)
 
-- **Dual backend**: GH Issues is default, markdown tracker is opt-out fallback. Both backends maintained in the tracker protocol sub-skill. Config toggle: `Tracker: github-issues | markdown`.
-- **Setup asks user**: During setup, ask which tracker. Default is GH Issues. User can choose markdown if no GitHub remote or preference.
-- **Startup check — permission verification**: `gh` CLI is already available (required for git push/pull to GitHub). The check is whether `gh` has **Issues permissions** (authenticated + can create/edit/comment on Issues). During setup: verify with `gh issue list` — if it fails, warn and offer markdown fallback. Post-setup with `Tracker: github-issues`: hard crash if `gh issue list` fails — user must fix permissions (`gh auth refresh`) or switch to markdown in config.
+- **GitHub Issues only — no markdown fallback**: SquidSquad requires GitHub (git push/pull). If you can push to GitHub, you can use GitHub Issues. No dual backend, no config toggle. Simpler architecture, one tracker protocol.
+- **Startup permission check**: Verify `gh issue list` works at agent boot. If it fails, agent prints clear error ("gh Issues permission missing — run `gh auth refresh` with `repo` scope") and exits. Not a soft-fail — SquidSquad needs GitHub.
+- **No setup question**: GitHub Issues is THE tracker. No choice needed.
 - **Exclude closed issues**: All agent queries filter to open issues only. Shipped/closed items not scanned.
 - **Issue numbers in working-state.md**: `Task: #42`. Short, stable, easy to look up.
 - **Migration via /squidsquad-upgrade**: Detects markdown tracker, migrates items to GH Issues atomically. Part of the upgrade flow.
