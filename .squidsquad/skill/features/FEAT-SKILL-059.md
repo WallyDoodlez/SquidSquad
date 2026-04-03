@@ -2,7 +2,7 @@
 
 - **Priority**: High
 - **Owner**: skill-lead
-- **Status**: Pending
+- **Status**: Planning
 - **Description**: Introduce a `SOUL.md` file per role sub-skill that defines the agent's personality, communication style, behavioral rules, and boundaries. Each role gets a distinct, hardcoded personality that shapes how it communicates in Discussion entries, interacts with the human, and collaborates with other agents.
 
   **Dimensions per role:**
@@ -27,4 +27,5 @@
 
 ### Discussion
 
-> [2026-04-02 11:00] **pm/qa**: Filed from human request. Agent personality layer — each role gets a SOUL.md defining how it communicates and behaves. Hardcoded per role sub-skill. Status: Pending — awaiting human approval when ready to plan.
+> [2026-04-02 11:00] **pm/qa**: Filed from human request.
+> [2026-04-03 03:30] **pm/qa**: Human approved. Status → Planning. Key insight from discussion: SOUL.md is a dependency for FEAT-SKILL-063 (self-improvement) — the soul defines the LENS each agent uses when scanning for improvements. Without it, DM just finds missing doc sections; with the right soul, DM thinks about user adoption. Also addresses the DM being too narrow (just a README updater) — the soul expands what agents consider as their responsibility. Beginning Phase 1 Research. Agent personality layer — each role gets a SOUL.md defining how it communicates and behaves. Hardcoded per role sub-skill. Status: Pending — awaiting human approval when ready to plan.
