@@ -2,7 +2,7 @@
 
 - **Priority**: High
 - **Owner**: skill-lead
-- **Status**: Pending Ship
+- **Status**: Shipped
 - **Description**: When PM is actively running a Feature Intake planning phase (Phase 1 Research, Phase 2A Discussion Prep, Phase 2 Discussion, Phase 3 Test Planning), cron-triggered Ralph Loop cycles should be suppressed to avoid noisy interruptions. Instead of a full cycle, suppressed cycles perform only a silent `git pull --rebase` and agent health check with no output. Normal cycling auto-resumes when the planning phase completes (detected by the corresponding artifact being written: RESEARCH.md, PHASE2-PREP.md, CONTEXT.md, or TEST-PLAN.md).
 
   **Implementation approach:**
@@ -27,3 +27,4 @@
 > [2026-04-02 09:00] **skill-lead**: Picking up. Status → In Progress.
 > [2026-04-02 09:15] **skill-lead**: Implementation complete.
 > [2026-04-02 09:45] **pm/qa**: Verified. 6/6 acceptance criteria pass. Phase flag set/clear in all 4 planning phases. Suppressed cycles do silent pull + health check only. Single-line marker printed. Auto-resume on artifact write. delivery: skip (internal-only, no user-facing changes). Status → Pending Ship. Added planning phase suppression to PM template Step 1c (suppressed cycles do silent pull + health check, print single-line marker). Added phase flag set/clear to all 4 planning phases in feature-intake sub-skill. Regenerated agent-instructions.md. All tests passing. Status → Pending Test.
+> [2026-04-02 07:30] **dm**: No delivery work needed (delivery: skip). Status → Shipped.

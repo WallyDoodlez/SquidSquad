@@ -4,7 +4,7 @@
 
 | ID | Status | Priority | Title |
 |----|--------|----------|-------|
-| FEAT-SKILL-058 | Pending Ship | High | Suppress PM cycles during active planning phases |
+| FEAT-SKILL-058 | Shipped | High | Suppress PM cycles during active planning phases |
 | FEAT-SKILL-057 | Pending | High | Self-improvement loop: agents suggest improvements during quiet cycles |
 | FEAT-SKILL-056 | Pending | High | Public-facing documentation overhaul and attention-drawing README |
 | FEAT-SKILL-055 | Pending | High | Proposal: take SquidSquad public as a community-driven skill |
@@ -15,7 +15,7 @@
 | FEAT-SKILL-049 | Pending | High | User-driven versioning with semver suggestion |
 | FEAT-SKILL-043 | Planning | High | Separate QA from PM into its own hardcoded agent role |
 | FEAT-SKILL-032 | Pending | High | Auto-configure permissions during setup and learn from prompt pressure |
-| FEAT-SKILL-030 | Pending Ship | High | Sub-skill architecture: roles as independent skills with layered plugin system |
+| FEAT-SKILL-030 | Shipped | High | Sub-skill architecture: roles as independent skills with layered plugin system |
 | FEAT-SKILL-027 | Approved | High | Designer agent template with external design tool integration |
 | FEAT-SKILL-054 | Pending | Medium | Workflow editor: configure steps and routing between roles |
 | FEAT-SKILL-041 | Pending | Medium | Setup flow improvements: project context gathering + guided agent selection |
