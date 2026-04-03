@@ -103,6 +103,12 @@ references/sub-skills/
 │   ├── interval-sync.md               (Step 1d — shared by dev only)
 │   ├── working-state.md               (Working State — shared by dev only)
 │   └── vault-protocol.md             (Vault operations — shared by all roles)
+├── souls/
+│   ├── dev.md                          (Dev agent soul — pragmatic engineer)
+│   ├── pm.md                           (PM soul — diplomat and strategist)
+│   ├── qa.md                           (QA soul — evidence-first skeptic)
+│   ├── designer.md                     (Designer soul — creative collaborator)
+│   └── dm.md                           (DM soul — user-centric delivery)
 ├── roles/
 │   ├── dev-agent.md                    (entry file — dev template skeleton)
 │   ├── pm-agent.md                     (entry file — PM/QA template, no QA agent)
