@@ -4,31 +4,34 @@
 - **Depends On**: FEAT-SKILL-029 (Obsidian memory layer)
 - **Owner**: TBD
 - **Status**: Pending
-- **Description**: Extend the vault memory layer (FEAT-SKILL-029) with semantic search powered by OpenSearch, replacing or augmenting the grep-based COG retrieval approach. Enables natural language queries across the vault with vector similarity, fuzzy matching, and ranked results.
+- **Description**: Extend the vault memory layer (FEAT-SKILL-029) with hybrid RAG search and a **deep dreaming** memory optimization process. This is not just "faster search" — it's the prerequisite for memory self-maintenance.
 
-  **Why**: As the vault grows (hundreds/thousands of notes), grep-based search becomes noisy and slow for conceptual queries like "what does the human prefer for error handling?" — grep finds keywords but not meaning. Semantic search understands intent.
+  **Two capabilities:**
 
-  **Approach (inspired by human's external research):**
-  - OpenSearch as the search backend (self-hosted or managed)
-  - Index vault notes with embeddings for semantic similarity
-  - Agents query OpenSearch instead of (or in addition to) grep
-  - Results ranked by relevance, not just keyword match
-  - Hybrid: semantic search for conceptual queries, grep for exact lookups
+  1. **Hybrid RAG Search**: SQLite-based (sqlite-vec + FTS5), FastEmbed ONNX embeddings, 0.7 vector + 0.3 keyword hybrid scoring. Lighter than OpenSearch, no server needed. Incremental indexing (only modified files). Replaces grep for conceptual queries while keeping grep for exact lookups.
 
-  **Implementation considerations:**
-  - This adds infrastructure (OpenSearch instance) — breaks the "zero infrastructure" COG philosophy
-  - Should be optional — vault works fine with grep, OpenSearch is an enhancement
-  - Indexing pipeline: on vault-create/update, index the note
-  - Query interface: natural language → embedding → OpenSearch → ranked results
+  2. **Deep Dreaming** (memory optimization): Periodic process that uses semantic understanding to maintain vault quality:
+     - **Prune**: Find duplicate/near-duplicate notes via embedding similarity, merge or remove
+     - **Purge**: Find contradictions between notes, resolve using confidence field (high > medium > low), flag unresolvable conflicts for human review
+     - **Consolidate**: Cluster related galaxy notes into area-level summaries
+     - **Promote/Demote**: Move high-value inbox items to galaxy, archive stale notes
+     - **Confidence calibration**: Re-evaluate confidence levels based on subsequent evidence
+
+  **Why deep dreaming needs hybrid RAG**: Grep finds keywords, not meaning. Finding that "toast notifications for errors" and "inline error messages for validation" are contradictory requires semantic understanding, not string matching. At scale (hundreds of notes), grep-based optimization is too slow and token-intensive.
+
+  **Phasing**: vault-search gets hybrid RAG first (replaces grep). Deep dreaming comes after, using the same embedding infrastructure.
 
 - **Acceptance Criteria**:
-  - [ ] OpenSearch indexes all vault notes with embeddings
-  - [ ] `/vault-search` can use semantic search when OpenSearch is available
-  - [ ] Falls back to grep when OpenSearch is not configured
-  - [ ] Natural language queries return relevance-ranked results
-  - [ ] Indexing happens automatically on vault-create/update
-  - [ ] Optional — zero-config installs work without OpenSearch
+  - [ ] SQLite hybrid RAG indexes all vault notes with embeddings (sqlite-vec + FTS5)
+  - [ ] `/vault-search` uses hybrid scoring (0.7 vector + 0.3 keyword) when available
+  - [ ] Falls back to grep when SQLite index is not built
+  - [ ] Incremental indexing — only modified files re-indexed on vault-create/update
+  - [ ] Deep dreaming process: finds duplicates, resolves contradictions, consolidates
+  - [ ] Confidence field consumed during deep dreaming (high wins over low)
+  - [ ] Unresolvable contradictions flagged for human review
+  - [ ] Optional — vault works with grep-only if hybrid RAG not initialized
 
 ### Discussion
 
-> [2026-04-02 12:00] **pm/qa**: Filed as expansion of FEAT-SKILL-029. Human's external research identified grep-based COG approach as sufficient for initial vault, but recommended semantic search (OpenSearch) for scale. Separated from 029 to keep the core vault simple and infrastructure-free. This is the "speed up search" enhancement.
+> [2026-04-02 12:00] **pm/qa**: Filed as expansion of FEAT-SKILL-029. Separated to keep core vault infrastructure-free.
+> [2026-04-02 13:00] **pm/qa**: Major scope expansion. Human insight: confidence field implies garbage in memory. Deep dreaming (prune, purge, consolidate) is needed but only makes sense with semantic understanding — grep can't find duplicates or contradictions at meaning level. Hybrid RAG is the prerequisite for memory self-maintenance, not just faster search. Updated scope to include deep dreaming process. Changed from OpenSearch to SQLite hybrid RAG (lighter, embedded, no server).
