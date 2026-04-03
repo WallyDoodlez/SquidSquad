@@ -2,7 +2,7 @@
 
 - **Priority**: High
 - **Owner**: skill-lead
-- **Status**: Pending
+- **Status**: Planning
 - **Blocks**: FEAT-SKILL-055 (going public)
 - **Description**: Replace the internal markdown-based tracker (`.squidsquad/*/bugs/`, `features/`) with GitHub Issues as the primary tracker. For a public project, contributors expect to file and track work via GitHub Issues, not by editing markdown files in a `.squidsquad/` directory.
 
@@ -43,4 +43,5 @@
 
 ### Discussion
 
-> [2026-04-03 23:30] **pm/qa**: Filed from human. Prerequisite for going public (FEAT-SKILL-055). Contributors expect GitHub Issues, not internal markdown files. This is a major rewrite of the tracker protocol — all agents' read/write patterns change. 055 on hold until this ships.
+> [2026-04-03 23:30] **pm/qa**: Filed from human.
+> [2026-04-03 23:45] **pm/qa**: Human approved. Status → Planning. Beginning Phase 1 Research. Prerequisite for going public (FEAT-SKILL-055). Contributors expect GitHub Issues, not internal markdown files. This is a major rewrite of the tracker protocol — all agents' read/write patterns change. 055 on hold until this ships.
