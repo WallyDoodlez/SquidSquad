@@ -28,11 +28,12 @@ The result: bugs get filed, triaged, fixed, and verified. Features move from bac
 
 ### Agents
 
-SquidSquad always has a **PM/QA** agent. Dev agents are defined by you at setup time — one agent per role.
+SquidSquad always has a **PM/QA** agent. Dev agents are defined by you at setup time — one agent per role. You can also add a **Designer** agent for projects that need design-to-code workflows.
 
 | Agent | Loop | Mode |
 |-------|------|------|
 | **[role] Lead** (one per dev role) | Fix bugs → implement features → run tests → push | Autonomous (`--enable-auto-mode`) |
+| **Designer** (optional) | Review design requests → interactive design sessions with human → produce specs → hand off to dev | Autonomous with interactive design sessions |
 | **PM/QA** | Human check-in → QA pass → file bugs → verify work → push | Interactive (you talk to this one) |
 
 **Common team shapes:**
@@ -40,6 +41,7 @@ SquidSquad always has a **PM/QA** agent. Dev agents are defined by you at setup 
 | You say at setup | Agents created |
 |-----------------|----------------|
 | `fe, be` | FE Lead + BE Lead + PM/QA |
+| `fe, be, designer` | FE Lead + BE Lead + Designer + PM/QA |
 | `be` | BE Lead + PM/QA |
 | `api, worker` | API Lead + Worker Lead + PM/QA |
 | `skill` | Skill Lead + PM/QA |
@@ -77,6 +79,7 @@ graph TD
         PM["PM / QA\n(interactive)"]
         R1["[role] Lead\n(autonomous)"]
         R2["[role] Lead\n(autonomous)"]
+        DS["Designer\n(autonomous + interactive)"]
     end
 
     subgraph repo["Git Repository"]
@@ -96,6 +99,9 @@ graph TD
     R2 -- reads/writes --> T2
     R1 -- cross-files bugs --> T2
     R2 -- cross-files bugs --> T1
+    DS -- "design specs" --> T1
+    DS -- "design specs" --> T2
+    PM -- "routes design requests" --> DS
 ```
 
 All coordination is asynchronous through git — agents pull to read the latest state and push after each work unit. No direct agent-to-agent communication needed.
@@ -156,6 +162,9 @@ When enabled (`config.md` `PR Flow: yes`), dev agents create feature branches an
 
 ### GitHub Issues Ingestion (optional)
 When enabled (`config.md` `GitHub Issues Ingestion: yes`), PM auto-ingests open GitHub Issues into agent trackers each cycle. Issues are classified as bugs/features, routed to the right agent, and tracked with `GitHub Issue #N` references. Shipped items auto-close the original issue.
+
+### Designer Agent
+A dedicated agent type for design-to-code workflows. The designer works interactively with you to produce structured design specs (component specs, design tokens, layout specs, visual states) that dev agents implement from. Supports external design tool integration (Figma, Google Stitch, or any MCP-connected tool) and assesses technical feasibility before committing to a design direction. Features with a `Design` field are routed through the designer before reaching dev. Works without an external tool connected (manual design spec mode).
 
 ### Subagent Delegation (Planning Phases)
 PM spawns subagents for research-heavy planning phases — Research, Discussion, Planning — so the main PM context stays lean. Each phase produces an artifact (`RESEARCH.md`, `CONTEXT.md`, `TEST-PLAN.md`) that dev agents consume during implementation. Light mode skips subagents for trivial features.

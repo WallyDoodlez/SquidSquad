@@ -42,11 +42,12 @@ No meetings. No message queues. Just markdown.
 
 ### Roles
 
-SquidSquad always has a **PM/QA** agent. Dev agents are flexible — you define them at setup time.
+SquidSquad always has a **PM/QA** agent. Dev agents are flexible — you define them at setup time. You can also add a **Designer** agent for projects that need design-to-code workflows.
 
 | Agent | Owns | Loop |
 |-------|------|------|
 | **[role] Lead** (one per dev role) | Code for that role, `[role]/bugs/`, `[role]/features/` | Ralph Loop (fix bugs → implement features → test → push) |
+| **Designer** (optional) | Design specs, tokens, component specs, `designer/` | Ralph Loop (review design requests → interactive design sessions → produce specs → hand off to dev) |
 | **PM/QA** | Product backlog, `pm/qa-log.md`, `pm/enhancements.md`, human interaction | Ralph Loop (check human → run e2e → log → file bugs → verify → push) |
 
 **Common team shapes:**
@@ -54,6 +55,7 @@ SquidSquad always has a **PM/QA** agent. Dev agents are flexible — you define 
 | Shape | Dev agents | Use when |
 |-------|-----------|----------|
 | `fe, be` | FE Lead + BE Lead | Full-stack app with separate frontend and backend |
+| `fe, be, designer` | FE Lead + BE Lead + Designer | Full-stack with design-to-code workflow |
 | `be` | BE Lead only | API-only, CLI tool, library, or skill repo |
 | `api, worker` | API Lead + Worker Lead | Backend split across services |
 | `web, ios, api` | Web + iOS + API | Multi-platform product |
@@ -445,7 +447,7 @@ This step creates two things per agent: a **template** (full instructions with a
 
 #### Step 4a — Generate Template Files
 
-Read `references/agent-instructions.md`. For each dev agent role, copy Template 1 (Dev Agent) into `.squidsquad/templates/dev-agent-[role].md`, substituting all placeholders (`[ROLE]`, `[ROLE_UPPER]`, `[ROLE_TEST_CMD]`, `[OTHER_ROLES]`, `[INTERVAL]`) with values from config.md. For PM/QA, copy Template 2 into `.squidsquad/templates/pm-agent.md`, substituting `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]`. For DM, copy Template 3 into `.squidsquad/templates/dm-agent.md`, substituting `[ACTIVE_AGENTS]`, `[INTERVAL]`, and `[ROLE_UPPER]` placeholders.
+Read `references/agent-instructions.md`. For each dev agent role, copy Template 1 (Dev Agent) into `.squidsquad/templates/dev-agent-[role].md`, substituting all placeholders (`[ROLE]`, `[ROLE_UPPER]`, `[ROLE_TEST_CMD]`, `[OTHER_ROLES]`, `[INTERVAL]`) with values from config.md. For PM/QA, copy Template 2 into `.squidsquad/templates/pm-agent.md`, substituting `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]`. For DM, copy Template 3 into `.squidsquad/templates/dm-agent.md`, substituting `[ACTIVE_AGENTS]`, `[INTERVAL]`, and `[ROLE_UPPER]` placeholders. If a `designer` role is defined, copy Template 4 (Designer) into `.squidsquad/templates/designer-agent.md`, substituting `[ACTIVE_AGENTS]` and `[INTERVAL]` placeholders.
 
 The resulting template files contain the complete Ralph Loop instructions with no remaining placeholders — agents never see `[ROLE]` syntax.
 
