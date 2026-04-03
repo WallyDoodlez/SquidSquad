@@ -20,7 +20,7 @@
 | FEAT-SKILL-027 | Shipped | High | Designer agent template with external design tool integration |
 | FEAT-SKILL-061 | Pending | High | Named sessions for easier identification in Claude Code remote |
 | FEAT-SKILL-060 | Pending | High | OS-level notifications for human attention when required |
-| FEAT-SKILL-059 | Pending Test | High | SOUL.md: Agent personality, behavioral rules, communication style, boundaries |
+| FEAT-SKILL-059 | Pending Ship | High | SOUL.md: Agent personality, behavioral rules, communication style, boundaries |
 | FEAT-SKILL-054 | Pending | Medium | Workflow editor: configure steps and routing between roles |
 | FEAT-SKILL-041 | Pending | Medium | Setup flow improvements: project context gathering + guided agent selection |
 | FEAT-SKILL-026 | Pending | Medium | `/squidsquad-pending` slash command to list pending items from tracker |
