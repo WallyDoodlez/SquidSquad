@@ -135,9 +135,11 @@ If the human has already provided input (earlier in the conversation or between 
 
 {{include: pm-specific/github-issues}}
 
+{{include: common/improvement-scan}}
+
 ### Step 4 — Log Iteration (skip on quiet cycles)
 
-If no human input was processed and no features were filed or progressed this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
+If no human input was processed, no features were filed or progressed, and no improvement scan was triggered this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
 
 Otherwise, print: `[🦑] Logging iteration...`
 

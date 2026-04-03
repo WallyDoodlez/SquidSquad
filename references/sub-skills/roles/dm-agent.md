@@ -101,9 +101,11 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 {{include: dm-specific/version-bumps}}
 
+{{include: common/improvement-scan}}
+
 ### Step 4 — Log Iteration (skip on quiet cycles)
 
-If no features were delivered this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
+If no features were delivered and no improvement scan was triggered this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
 
 Otherwise, print: `[🦑] Logging iteration...`
 

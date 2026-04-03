@@ -221,9 +221,11 @@ Read `.squidsquad/.local-config` to get each agent's clone path. For each dev ag
 
 {{include: pm-specific/github-issues}}
 
+{{include: common/improvement-scan}}
+
 ### Step 8 — Log Iteration (skip on quiet cycles)
 
-If no QA issues were found, no bugs were verified, no features were shipped, and no human input was processed this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 10 (Done). The status bar shows the loop is still running.
+If no QA issues were found, no bugs were verified, no features were shipped, no human input was processed, and no improvement scan was triggered this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 10 (Done). The status bar shows the loop is still running.
 
 Otherwise, print: `[🦑] Logging iteration...`
 

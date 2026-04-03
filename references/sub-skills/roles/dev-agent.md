@@ -132,9 +132,11 @@ When picking up a feature, print: `[🦑] Implementing FEAT-[ROLE_UPPER]-XXX...`
    - Clear working state: reset `working-state.md` to empty/header-only.
 10. If tests fail: fix the failure before changing status.
 
+{{include: common/improvement-scan}}
+
 ### Step 4 — Log Iteration (skip on quiet cycles)
 
-If no bugs were fixed and no features were progressed this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
+If no bugs were fixed and no features were progressed this cycle (and no improvement scan was triggered), this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
 
 Otherwise, print: `[🦑] Logging iteration...`
 

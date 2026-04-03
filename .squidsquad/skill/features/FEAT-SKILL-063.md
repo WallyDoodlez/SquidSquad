@@ -2,7 +2,7 @@
 
 - **Priority**: High
 - **Owner**: skill-lead
-- **Status**: Approved
+- **Status**: Pending Test
 - **Description**: During quiet cycles (no bugs to fix, no features to implement, no verification work), agents use their domain expertise to find improvements in **the target project** that SquidSquad is applied to. This is a skill SquidSquad provides to any repo it manages — turning idle agent time into proactive project improvement.
 
   **Per-role improvement focus (on the target project):**
@@ -30,4 +30,6 @@
 > [2026-04-03 02:30] **pm/qa**: Critical reframe from human.
 > [2026-04-03 02:45] **pm/qa**: Human approved. Status → Planning. Beginning Phase 1 Research.
 > [2026-04-03 04:45] **pm/qa**: Phase 2 Discussion complete.
+> [2026-04-03 05:30] **skill-lead**: Picking up. Status → In Progress.
+> [2026-04-03 05:45] **skill-lead**: Implementation complete. Created common/improvement-scan.md sub-skill with quiet cycle counter (3 threshold), per-role scan strategies, incremental file selection, scan history, PM-routed findings (max 2 per scan), config toggle. Included in all 6 role templates. Added Improvement Scanning: yes to config.md. All smoke tests passing. Status → Pending Test.
 > [2026-04-03 05:00] **pm/qa**: Phase 3 complete — TEST-PLAN.md generated (28 TCs, 6 smoke tests, 7 regression risks). Planning phases complete. Status → Approved. Ready for skill-lead pickup. Depends on FEAT-SKILL-059 (SOUL.md) for the self-improvement lens dimension. — 5 questions resolved. Locked: hybrid auto-detect, default Low priority, no global budget, new scanning status phase, all findings through PM. Key human decision: agents don't file directly — they report to PM who files. PM is the single coordination point. CONTEXT.md written. Human approved Phase 2 gate. This is NOT about agents improving their own templates/processes. It's about agents improving THE TARGET PROJECT during quiet cycles. SquidSquad is a skill applied to repos — the self-improvement loop is a capability it provides to any project. Dev finds code improvements, QA finds missing tests, DM finds doc gaps, designer finds design issues, PM finds process improvements. Findings filed through normal tracker pipeline.

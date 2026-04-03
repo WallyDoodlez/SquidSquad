@@ -47,6 +47,10 @@
 
 - **Enabled**: no
 
+## Improvement Scanning
+
+- **Enabled**: yes
+
 ## Auto Versioning
 
 - **Ship Threshold**: 10
