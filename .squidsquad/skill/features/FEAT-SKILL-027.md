@@ -2,6 +2,7 @@
 
 - **Priority**: High
 - **Owner**: skill-lead
+- **Status**: Planning
 - **Description**: Add a new agent template type — **Designer** — alongside the existing Dev and PM/QA templates. The designer agent works with external design tools (Figma, Google Stitch, and others) and bridges design output into frontend implementation.
 
   **Key capabilities:**
@@ -30,3 +31,5 @@
 
 > [2026-03-29 01:30] **pm/qa**: Filed from human request. Major new capability — a designer agent type that integrates with external design tools (Figma, Google Stitch, etc.) and produces structured design specs for FE agents to implement. Generalized architecture, not locked to one tool. Status: Pending — awaiting human approval.
 > [2026-04-01 01:15] **migration**: Migrated from monolithic features.md to individual file (Schema 2 -> 3).
+> [2026-04-02 07:00] **pm/qa**: Human approved with expanded scope.
+> [2026-04-02 07:15] **pm/qa**: Critical workflow clarification from human. The designer's core purpose is to be the human's creative collaborator — taking the human's vision after PM planning and working WITH the human interactively to produce an approved design. Flow: PM planning completes → Designer takes planning artifacts + human vision → Interactive design session (human ↔ designer iterate) → Human approves design → Design handed to dev for implementation. The designer is NOT a fire-and-forget spec generator. There must be an interactive phase where the human talks to the designer and works with the generated design before approval. Dev cannot start until the human approves the design. This is analogous to PM's Phase 2 Discussion but for design. Status → Planning. Key additions: (1) designer must assess technical feasibility against engineering effort before committing to design direction, (2) quality gate for design inputs — no garbage in, (3) pipeline integration — where designer sits in product development flow (PM intake → Designer → Dev, not all features), (4) designer validates requests have sufficient context. Research phase must investigate: feasibility assessment mechanisms, pipeline positioning, input validation, and how designer communicates constraints back to PM/human. Beginning Phase 1 Research.
