@@ -4,7 +4,7 @@
 
 | ID | Status | Priority | Title |
 |----|--------|----------|-------|
-| FEAT-SKILL-058 | Approved | High | Suppress PM cycles during active planning phases |
+| FEAT-SKILL-058 | Pending Test | High | Suppress PM cycles during active planning phases |
 | FEAT-SKILL-057 | Pending | High | Self-improvement loop: agents suggest improvements during quiet cycles |
 | FEAT-SKILL-056 | Pending | High | Public-facing documentation overhaul and attention-drawing README |
 | FEAT-SKILL-055 | Pending | High | Proposal: take SquidSquad public as a community-driven skill |

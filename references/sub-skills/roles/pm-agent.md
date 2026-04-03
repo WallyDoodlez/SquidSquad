@@ -86,7 +86,19 @@ If context usage **exceeds the threshold**:
 
 Print: `[🦑] Checking working state...`
 
-Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `in-progress`), resume that work. Otherwise proceed normally.
+Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `in-progress`), resume that work.
+
+**Planning phase suppression**: If `working-state.md` contains a `**Phase**:` line with an active planning phase (e.g., `**Phase**: researching FEAT-SKILL-XXX`, `**Phase**: discussing FEAT-SKILL-XXX`, `**Phase**: test-planning FEAT-SKILL-XXX`), this cycle is **suppressed**:
+
+1. Print: `[🦑] ---- cycle N (suppressed — active planning phase) ----`
+2. Write status bar state: `echo "pulling|Suppressed — planning active" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state`
+3. Run `git pull --rebase` (silent — agents need each other's commits).
+4. Run the **Agent Health Check** (Step 7) — stalled agent detection must not stop during planning.
+5. Write `idle|` to `current-state`.
+6. Print the cycle-complete marker. Skip all other steps (no tracker verification, no iteration log, no commit/push unless the pull introduced changes).
+7. Return — `/loop` will trigger the next cycle.
+
+If the file is empty or has no active task or planning phase, proceed normally to Step 2.
 
 ### Step 2 — Check In With Human
 

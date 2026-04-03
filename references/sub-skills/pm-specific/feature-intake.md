@@ -24,6 +24,8 @@ Apply this logic to: `RESEARCH.md` (Phase 1), `PHASE2-PREP.md` (Phase 2A), `CONT
 
 Write current state: `echo "researching|Researching FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
 
+**Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: researching FEAT-[ROLE_UPPER]-XXX` so that cron-triggered cycles are suppressed during this phase.
+
 **Check artifact resume** (see above) for `FEAT-[ROLE_UPPER]-XXX-RESEARCH.md`. If skipping, proceed to Phase 2A.
 
 Spawn a research agent (via the Agent tool) that analyzes:
@@ -74,9 +76,13 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 
 **Open in editor**: After RESEARCH.md is created, offer to open it (see "Open Artifacts in Editor" below).
 
+**Clear planning phase flag**: Remove the `**Phase**:` line from `.squidsquad/pm/working-state.md` (the artifact has been written, so suppression is no longer needed for this phase).
+
 ### Phase 2A — Discussion Prep (Subagent)
 
 Write current state: `echo "discussing|Discussion prep for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
+
+**Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: discussing FEAT-[ROLE_UPPER]-XXX`.
 
 **Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-PHASE2-PREP.md`. If skipping, proceed to Phase 2.
 
@@ -97,9 +103,13 @@ The PM reads PHASE2-PREP.md to inform the discussion suggestions. Delete PHASE2-
 
 Light-mode features skip Phase 2A entirely.
 
+**Clear planning phase flag** after PHASE2-PREP.md is written.
+
 ### Phase 2 — Discussion (PM + Human)
 
 Write current state: `echo "discussing|Discussion for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
+
+**Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: discussing FEAT-[ROLE_UPPER]-XXX`.
 
 **Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-CONTEXT.md`. If skipping, proceed to Phase 3.
 
@@ -169,9 +179,13 @@ options: ["Approve — proceed to test plan", "More discussion needed", "Reject 
 - **"More discussion needed"**: Ask the human what they want to revisit. Re-open the relevant question(s), update CONTEXT.md with revised decisions, then re-present the gate.
 - **"Reject"**: Set feature status to `Rejected`. Append Discussion entry with reason. Stop the intake process.
 
+**Clear planning phase flag** after CONTEXT.md is written and Phase 2 approval gate is passed.
+
 ### Phase 3 — Planning
 
 Write current state: `echo "test-planning|Test plan for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
+
+**Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: test-planning FEAT-[ROLE_UPPER]-XXX`.
 
 **Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md`. If skipping, the feature is ready — update status to `Approved`.
 
@@ -228,6 +242,8 @@ PM reviews the subagent's draft, adjusts as needed, and saves the final version.
 ```
 
 **Open in editor**: After TEST-PLAN.md is created, offer to open it (see "Open Artifacts in Editor" below).
+
+**Clear planning phase flag** after TEST-PLAN.md is written. Normal PM cycling auto-resumes.
 
 Ask the human if they want to approve the feature now or leave as `Pending`. This is the **only** point in the lifecycle where approval should be offered — never at initial filing time.
 
