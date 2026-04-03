@@ -106,7 +106,31 @@ For each bug that does not have a `status:shipped` or closed state:
 
 Print: `[🦑] Checking features...`
 
-Query GitHub Issues for approved features assigned to your role:
+**First, check for QA-rejected features** (higher priority than new work — fix existing before starting new):
+
+```bash
+gh issue list --label "feature,status:in-progress,role:[ROLE]" --json number,title,labels --limit 50
+```
+
+For each `In Progress` feature, check for new QA/PM feedback since your last comment:
+
+```bash
+gh issue view [NUMBER] --json comments
+```
+
+If there are comments from `**qa**` or `**pm**` after your last `**[ROLE]-lead**` comment — QA rejected this feature with specific gaps. Pick it up:
+1. Read the QA feedback (specific gaps to fix).
+2. Write working state with `Task: #[NUMBER]`, status `in-progress`.
+3. Fix each gap identified by QA.
+4. Re-run tests and smoke tests.
+5. Transition back to Pending Test:
+   ```bash
+   gh issue edit [NUMBER] --remove-label "status:in-progress" --add-label "status:pending-test"
+   gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Fixed [N] QA gaps: [list]. Status → Pending Test."
+   ```
+6. Clear working state.
+
+**Then, check for new approved features**:
 
 ```bash
 gh issue list --label "feature,status:approved,role:[ROLE]" --json number,title,labels --limit 50

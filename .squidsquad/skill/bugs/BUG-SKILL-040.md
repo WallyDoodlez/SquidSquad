@@ -1,7 +1,7 @@
 ## BUG-SKILL-040 — Dev agent does not pick up QA-rejected In Progress features
 
 - **Severity**: High
-- **Status**: Open
+- **Status**: Fixed
 - **Reported By**: human
 - **Assigned To**: skill-lead
 - **Description**: When QA rejects a feature (sends it back from Pending Test to In Progress with specific gaps documented in Discussion), the dev agent does not pick it up on subsequent cycles. The agent cycles idle for 7+ consecutive cycles while In Progress items with QA feedback sit untouched.
@@ -25,4 +25,5 @@
 
 ### Discussion
 
-> [2026-04-03 08:00] **pm/qa**: Filed from human. FEAT-SKILL-059 and FEAT-SKILL-029 both stuck In Progress for 7+ cycles after QA rejection. Dev agent template has no QA rejection loop — only handles initial Approved pickup and working state resume. Needs a new step to scan for In Progress features with unaddressed QA feedback.
+> [2026-04-03 08:00] **pm/qa**: Filed from human.
+> [2026-04-04 04:00] **skill-lead**: Fixed. Added QA rejection loop to dev-agent Step 3: before checking for new Approved features, scan In Progress features for new QA/PM comments since last dev comment. If found, read feedback, fix gaps, re-mark Pending Test. Existing work before new work. Recomposed agent-instructions.md. Status → Fixed. FEAT-SKILL-059 and FEAT-SKILL-029 both stuck In Progress for 7+ cycles after QA rejection. Dev agent template has no QA rejection loop — only handles initial Approved pickup and working state resume. Needs a new step to scan for In Progress features with unaddressed QA feedback.

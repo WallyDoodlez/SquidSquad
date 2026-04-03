@@ -64,9 +64,9 @@ echo "phase|emoji description" > .squidsquad/dm/current-state.tmp && mv -f .squi
 Phase is one of: `pulling`, `delivering`, `shipping`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
 
 - `pulling|Syncing with remote...`
-- `delivering|📦 FEAT-[ROLE_UPPER]-035 delivery...`
+- `delivering|📦 #35 delivery...`
 - `shipping|🚀 Version bump v0.7.0...`
-- `committing|Committing delivery for FEAT-[ROLE_UPPER]-035...`
+- `committing|Committing delivery for #35...`
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.

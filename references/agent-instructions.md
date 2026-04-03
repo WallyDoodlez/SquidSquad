@@ -387,7 +387,31 @@ For each bug that does not have a `status:shipped` or closed state:
 
 Print: `[🦑] Checking features...`
 
-Query GitHub Issues for approved features assigned to your role:
+**First, check for QA-rejected features** (higher priority than new work — fix existing before starting new):
+
+```bash
+gh issue list --label "feature,status:in-progress,role:[ROLE]" --json number,title,labels --limit 50
+```
+
+For each `In Progress` feature, check for new QA/PM feedback since your last comment:
+
+```bash
+gh issue view [NUMBER] --json comments
+```
+
+If there are comments from `**qa**` or `**pm**` after your last `**[ROLE]-lead**` comment — QA rejected this feature with specific gaps. Pick it up:
+1. Read the QA feedback (specific gaps to fix).
+2. Write working state with `Task: #[NUMBER]`, status `in-progress`.
+3. Fix each gap identified by QA.
+4. Re-run tests and smoke tests.
+5. Transition back to Pending Test:
+   ```bash
+   gh issue edit [NUMBER] --remove-label "status:in-progress" --add-label "status:pending-test"
+   gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Fixed [N] QA gaps: [list]. Status → Pending Test."
+   ```
+6. Clear working state.
+
+**Then, check for new approved features**:
 
 ```bash
 gh issue list --label "feature,status:approved,role:[ROLE]" --json number,title,labels --limit 50
@@ -1085,15 +1109,15 @@ At the end of each cycle, print:
 echo "phase|emoji description" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state
 ```
 
-Phase is one of: `pulling`, `checkin`, `testing`, `verifying`, `planning`, `researching`, `discussing`, `test-planning`, `health`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** (e.g. BUG-SKILL-029, FEAT-SKILL-037) in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
+Phase is one of: `pulling`, `checkin`, `testing`, `verifying`, `planning`, `researching`, `discussing`, `test-planning`, `health`, `idle`. The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
 
 - `pulling|Syncing with remote...`
 - `testing|Running E2E tests...`
-- `verifying|Verifying BUG-SKILL-029...`
-- `planning|FEAT-SKILL-037 intake...`
-- `researching|Researching FEAT-SKILL-035...`
-- `discussing|Discussion for FEAT-SKILL-035...`
-- `test-planning|Test plan for FEAT-SKILL-035...`
+- `verifying|Verifying #29...`
+- `planning|#37 intake...`
+- `researching|Researching #35...`
+- `discussing|Discussion for #35...`
+- `test-planning|Test plan for #35...`
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
@@ -2309,14 +2333,14 @@ At the end of each cycle, print:
 echo "phase|emoji description" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state
 ```
 
-Phase is one of: `pulling`, `checkin`, `planning`, `researching`, `discussing`, `test-planning`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** (e.g. FEAT-SKILL-037) in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
+Phase is one of: `pulling`, `checkin`, `planning`, `researching`, `discussing`, `test-planning`, `idle`. The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
 
 - `pulling|Syncing with remote...`
 - `checkin|Human check-in...`
-- `planning|FEAT-SKILL-037 intake...`
-- `researching|Researching FEAT-SKILL-035...`
-- `discussing|Discussion for FEAT-SKILL-035...`
-- `test-planning|Test plan for FEAT-SKILL-035...`
+- `planning|#37 intake...`
+- `researching|Researching #35...`
+- `discussing|Discussion for #35...`
+- `test-planning|Test plan for #35...`
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
@@ -5105,9 +5129,9 @@ echo "phase|emoji description" > .squidsquad/dm/current-state.tmp && mv -f .squi
 Phase is one of: `pulling`, `delivering`, `shipping`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
 
 - `pulling|Syncing with remote...`
-- `delivering|📦 FEAT-[ROLE_UPPER]-035 delivery...`
+- `delivering|📦 #35 delivery...`
 - `shipping|🚀 Version bump v0.7.0...`
-- `committing|Committing delivery for FEAT-[ROLE_UPPER]-035...`
+- `committing|Committing delivery for #35...`
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.

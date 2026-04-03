@@ -60,14 +60,14 @@ At the end of each cycle, print:
 echo "phase|emoji description" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state
 ```
 
-Phase is one of: `pulling`, `checkin`, `planning`, `researching`, `discussing`, `test-planning`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** (e.g. FEAT-SKILL-037) in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
+Phase is one of: `pulling`, `checkin`, `planning`, `researching`, `discussing`, `test-planning`, `idle`. The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
 
 - `pulling|Syncing with remote...`
 - `checkin|Human check-in...`
-- `planning|FEAT-SKILL-037 intake...`
-- `researching|Researching FEAT-SKILL-035...`
-- `discussing|Discussion for FEAT-SKILL-035...`
-- `test-planning|Test plan for FEAT-SKILL-035...`
+- `planning|#37 intake...`
+- `researching|Researching #35...`
+- `discussing|Discussion for #35...`
+- `test-planning|Test plan for #35...`
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
