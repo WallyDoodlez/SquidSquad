@@ -94,11 +94,18 @@ When you invoke SquidSquad, it creates the following inside your project root. O
 │   ├── enhancements.md         ← product backlog / enhancement proposals
 │   ├── iterations/             ← iter-N.md logs per cycle
 │   └── migrations/             ← migration logs written when tracker schema changes
-└── qa/                         ← QA (auto-added when dev/designer present)
-    ├── CLAUDE.md               ← bootstrapper: role config + Read instruction to template
-    ├── qa-log.md               ← QA test run results
-    ├── working-state.md        ← crash recovery state
-    └── iterations/             ← iter-N.md logs per cycle
+├── qa/                         ← QA (auto-added when dev/designer present)
+│   ├── CLAUDE.md               ← bootstrapper: role config + Read instruction to template
+│   ├── qa-log.md               ← QA test run results
+│   ├── working-state.md        ← crash recovery state
+│   └── iterations/             ← iter-N.md logs per cycle
+└── vault/                      ← shared memory layer (all agents R/W)
+    ├── BRIEFING.md             ← daily context briefing read by all agents at boot
+    ├── projects/               ← active project context, goals, constraints
+    ├── areas/                  ← ongoing concerns: conventions, preferences, values
+    ├── resources/              ← reference material, external docs
+    ├── archives/               ← shipped features, closed decisions, historical context
+    └── galaxy/                 ← atomic knowledge notes (decisions, patterns, learnings)
 ```
 
 > **Note:** DM and QA use shared dev agent trackers (no `dm/features/`, `dm/bugs/`, `qa/features/`, or `qa/bugs/`). QA reads `Pending Test` and `Fixed` items from dev agent trackers, verifies them, and writes Discussion entries directly there. DM reads `Pending Ship` items and handles delivery.
@@ -402,6 +409,19 @@ For each dev agent role defined in Step 1, create:
 ```
 
 Always create `.squidsquad/pm/` with its full structure regardless of team shape.
+
+Create the shared vault structure:
+```
+.squidsquad/vault/
+    BRIEFING.md          ← copy from references/vault-templates/BRIEFING.md
+    projects/            ← copy references/vault-templates/projects-template.md as README
+    areas/               ← copy references/vault-templates/areas-template.md as README
+    resources/           ← copy references/vault-templates/resources-template.md as README
+    archives/            ← copy references/vault-templates/archives-template.md as README
+    galaxy/              ← copy references/vault-templates/galaxy-template.md as README
+```
+
+Seed the vault with an initial project note (`vault/projects/{project-name}.md`) and a code conventions note (`vault/areas/code-conventions.md`) using information from Step 1.
 
 ### Step 3 — Generate `config.md`
 

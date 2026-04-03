@@ -137,11 +137,18 @@ All coordination is asynchronous through git — agents pull to read the latest 
 │   ├── working-state.md        <- persists PM task progress
 │   ├── iterations/             <- per-cycle logs (last 20 kept)
 │   └── migrations/             <- schema migration logs
-└── qa/
-    ├── CLAUDE.md               <- bootstrapper: role config + Read instruction to template
-    ├── qa-log.md               <- test run results
-    ├── working-state.md        <- persists QA task progress
-    └── iterations/             <- per-cycle logs (last 20 kept)
+├── qa/
+│   ├── CLAUDE.md               <- bootstrapper: role config + Read instruction to template
+│   ├── qa-log.md               <- test run results
+│   ├── working-state.md        <- persists QA task progress
+│   └── iterations/             <- per-cycle logs (last 20 kept)
+└── vault/                      <- shared memory layer (all agents R/W)
+    ├── BRIEFING.md             <- daily context briefing for all agents
+    ├── projects/               <- active project context, goals, constraints
+    ├── areas/                  <- ongoing concerns: conventions, preferences, values
+    ├── resources/              <- reference material, external docs
+    ├── archives/               <- shipped features, closed decisions, historical context
+    └── galaxy/                 <- atomic knowledge notes (decisions, patterns, learnings)
 ```
 
 ---
@@ -189,6 +196,9 @@ SquidSquad no longer replaces the user's existing Claude Code status bar. Setup 
 
 ### Auto Versioning
 PM tracks shipped items and auto-bumps the minor version every N items (configurable in `config.md`, default 10) when zero open bugs exist. Creates a git tag, updates `config.md`, `SKILL.md`, and `CHANGELOG.md`. Bypasses PR flow to avoid blocking on review.
+
+### Vault Memory Layer
+A git-tracked, Obsidian-compatible shared memory vault (`.squidsquad/vault/`) that gives all agents R/W access to institutional knowledge. Follows the **PARAG** structure — Projects, Areas, Resources, Archives, Galaxy (atomic Zettelkasten notes). Agents build knowledge about your values, styles, preferences, decisions, and patterns over time, shaping the entire squad to be closer to you. Uses wikilinks for relationships, YAML frontmatter for metadata, and append-only changelogs per note. Browsable in the Obsidian app for visual graph exploration. No infrastructure needed — just markdown and git.
 
 ### Externalized Agent Templates
 Agent `CLAUDE.md` files are small ~20-line bootstrappers containing role config and a Read instruction pointing to a shared template in `.squidsquad/templates/`. Templates are maintained in one place and regenerated on upgrade without touching bootstrappers or tracker files.
