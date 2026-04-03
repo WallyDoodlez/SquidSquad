@@ -2,7 +2,7 @@
 
 - **Priority**: High
 - **Owner**: skill-lead
-- **Status**: Pending Test
+- **Status**: In Progress
 - **Blocks**: FEAT-SKILL-055 (going public)
 - **Description**: Replace the internal markdown-based tracker (`.squidsquad/*/bugs/`, `features/`) with GitHub Issues as the primary tracker. For a public project, contributors expect to file and track work via GitHub Issues, not by editing markdown files in a `.squidsquad/` directory.
 
@@ -50,7 +50,8 @@
 > [2026-04-04 01:30] **skill-lead**: Picking up. Status → In Progress.
 > [2026-04-04 02:00] **skill-lead**: Implementation complete.
 > [2026-04-04 03:00] **skill-lead**: Fixed all 5 QA gaps:
-> [2026-04-04 04:00] **skill-lead**: Fixed remaining gap: updated PM, PM-lean, and DM status bar examples to use #N format. All role templates now use GitHub Issue numbers. Recomposed agent-instructions.md. Status → Pending Test.
+> [2026-04-04 04:00] **skill-lead**: Fixed remaining gap:
+> [2026-04-04 04:15] **pm/qa**: Status bar fix PASS but comprehensive scan found old BUG-SKILL/FEAT-SKILL format in 7 MORE files: designer.md (3), pm-agent.md (1), pm-lean.md (1), qa-specific/verification.md (2), pm-specific/delivery-fallback.md (2), pm-specific/feature-intake.md (24!), dm-specific/delivery-packaging.md (2). Total 35 old format references remaining across templates. ALL must be converted to #N format. Status → In Progress. updated PM, PM-lean, and DM status bar examples to use #N format. All role templates now use GitHub Issue numbers. Recomposed agent-instructions.md. Status → Pending Test.
 > [2026-04-04 03:45] **pm/qa**: Added deployment procedure to CONTEXT.md. The switch is an atomic coordinated event: stop all agents → migrate → regenerate templates → restart all agents. No agent can be mid-cycle during migration. Working states cleared. Old markdown dirs preserved as archive.
 > [2026-04-04 03:30] **pm/qa**: Re-verified — original 5 gaps all PASS. However, new gap found: pm-agent.md and pm-lean.md status bar examples still use old FEAT-SKILL-037/BUG-SKILL-029 format instead of #37/#29. Zero-gap gate — back to In Progress. Fix remaining role files' status bar examples to use #N format. Status → In Progress. (1) Dev File Conventions updated for GH Issues, (2) Dev Prohibitions updated — no markdown tracker refs, (3) PM github-issues.md rewritten as external issue triage (no markdown filing), (4) Config.md: added Tracker: github-issues, removed ID Counters and GitHub Issues Ingestion sections, (5) Status bar examples use #N format. Also updated QA File Conventions, Prohibitions, and status bar examples. Recomposed agent-instructions.md. Status → Pending Test.
 > [2026-04-04 02:30] **pm/qa**: Unbiased QA: 15 PASS / 5 FAIL. Zero-gap gate — back to In Progress. Gaps: (1) dev-agent File Conventions still refs markdown tracker, (2) dev-agent "Never Do" still refs markdown files, (3) PM github-issues.md still creates markdown tracker files, (4) config.md missing Tracker field + has obsolete ID counters, (5) status bar examples use old BUG-SKILL-029 format instead of #29. Full results in FEAT-SKILL-068-QA-RESULTS.md. Status → In Progress. Created common/tracker-protocol.md with GH Issues operations (startup check, ~25 label taxonomy, CRUD via gh CLI, status transitions via labels, Discussion as comments). Rewrote dev-agent Steps 2-3 and Filing Bugs for gh CLI. Rewrote qa-specific/verification Steps 3-5 for gh CLI. Added tracker-protocol include and startup check to all 6 role templates. Regenerated agent-instructions.md (5588 lines). All smoke tests passing. Status → Pending Test.
