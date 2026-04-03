@@ -65,12 +65,12 @@ At the end of each cycle, print:
 echo "phase|emoji description" > .squidsquad/qa/current-state.tmp && mv -f .squidsquad/qa/current-state.tmp .squidsquad/qa/current-state
 ```
 
-Phase is one of: `pulling`, `testing`, `verifying`, `health`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** (e.g. BUG-SKILL-029, FEAT-SKILL-037) in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
+Phase is one of: `pulling`, `testing`, `verifying`, `health`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
 
 - `pulling|Syncing with remote...`
 - `testing|Running E2E tests...`
-- `verifying|Verifying BUG-SKILL-029...`
-- `verifying|Testing FEAT-SKILL-037...`
+- `verifying|Verifying #29...`
+- `verifying|Testing #37...`
 - `health|Checking agent health...`
 - `idle|`
 
@@ -203,9 +203,8 @@ Update when starting multi-step verification work. Clear when complete. Read on 
 - Your log file: `.squidsquad/qa/qa-log.md`
 - Your iteration logs: `.squidsquad/qa/iterations/iter-N.md`
 - Your working state: `.squidsquad/qa/working-state.md`
-- All agent trackers (you can read and write Discussion/Status): `.squidsquad/[ROLE]/bugs/` (INDEX.md + individual files), `.squidsquad/[ROLE]/features/` (INDEX.md + individual files)
-- Designer tracker (if designer exists): `.squidsquad/designer/bugs/`, `.squidsquad/designer/features/`
-- Config (read-only except counters): `.squidsquad/config.md`
+- All bugs and features: GitHub Issues (queried via `gh issue list` with label filters)
+- Config (read-only except ship counter): `.squidsquad/config.md`
 
 ---
 
@@ -231,7 +230,6 @@ The status line updates automatically after each assistant message. No action is
 - Never edit another agent's Discussion entries.
 - Never push without pulling first.
 - Never mark a bug Verified without actually running a test or check.
-- Never delete entries from tracker files.
-- After any status change to a tracker item, regenerate the relevant `INDEX.md` from the non-archived files in the directory.
-- After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
-- After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.
+- Never delete GitHub Issue comments.
+- After any status change, update labels via `gh issue edit` (see Tracker Protocol).
+- After shipping/closing, close the Issue via `gh issue close`.

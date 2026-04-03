@@ -1,38 +1,26 @@
-### Step 7b — Ingest GitHub Issues (if enabled)
+### Step 7b — Triage External Issues
 
-If `GitHub Issues Ingestion: yes` in `config.md`:
+Print: `[🦑] Checking for external issues...`
 
-Print: `[🦑] Checking GitHub Issues...`
+Since GitHub Issues is the tracker, external contributors may file issues directly. Scan for issues that lack SquidSquad labels (filed by humans or contributors, not by agents):
 
-Fetch open issues:
 ```bash
-gh issue list --state open --json number,title,labels,body,url --limit 50
+gh issue list --state open --json number,title,labels,body --limit 50
 ```
 
-If `gh` is not available or fails, print: `[🦑] gh CLI not available — skipping issue ingestion.` and continue.
+For each open issue that does NOT have the `squidsquad` label:
 
-For each open issue:
-1. Check if already ingested: search all agent tracker Discussions for `GitHub Issue #[N]`. If found, skip.
-2. Classify as bug or feature:
-   - Labels containing `bug`, `defect`, `error` → bug
-   - Labels containing `enhancement`, `feature`, `request` → feature
-   - If no matching labels, analyze the title and body — error reports, crash descriptions → bug; new functionality requests → feature
-   - Default to bug if ambiguous
-3. Route to the correct dev agent:
-   - Use label hints (e.g. `frontend` → `fe`, `backend` → `be`, `api` → `api`)
-   - If no routing hint, use content heuristics (same as setup import)
-   - If only one dev agent exists, route everything there
-4. File the item:
-   - Bug: `BUG-[ROLE]-XXX` with status `Open`. Increment counter in `config.md`.
-   - Feature: `FEAT-[ROLE]-XXX` with status `Pending`. Increment counter.
-5. Append Discussion entry:
+1. **Classify**: Read the title and body. Determine if it's a bug or feature request.
+2. **Route**: Determine which dev agent's domain it belongs to based on content.
+3. **Label**: Add appropriate labels:
+   ```bash
+   gh issue edit [NUMBER] --add-label "squidsquad,[type],[priority:low],[role:[target-role]]"
    ```
-   > [YYYY-MM-DD HH:MM] **pm/qa**: Ingested from GitHub Issue #[N]. [URL]
+4. **Comment**: Add a triage comment:
+   ```bash
+   gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **pm**: Triaged. Routed to [role]. Priority: Low (human can bump)."
    ```
 
-**Closing shipped issues**: When verifying a shipped feature or closed bug in Steps 5-6, check if it has a `GitHub Issue #[N]` reference in its Discussion. If so:
-```bash
-gh issue close [N] --comment "Resolved by SquidSquad. Tracked as [BUG/FEAT-ID]."
-```
+External issues start as `priority:low` by default. The human can bump priority through the normal check-in flow.
 
-If `GitHub Issues Ingestion: no`, skip this step entirely.
+If no external issues are found, skip silently.

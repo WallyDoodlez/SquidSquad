@@ -292,12 +292,12 @@ At the end of each cycle, print:
 echo "phase|emoji description" > .squidsquad/[ROLE]/current-state.tmp && mv -f .squidsquad/[ROLE]/current-state.tmp .squidsquad/[ROLE]/current-state
 ```
 
-Phase is one of: `pulling`, `triaging`, `implementing`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** (e.g. BUG-[ROLE_UPPER]-029, FEAT-[ROLE_UPPER]-037) in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
+Phase is one of: `pulling`, `triaging`, `implementing`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
 
 - `pulling|Syncing with remote...`
-- `triaging|Fixing BUG-[ROLE_UPPER]-029...`
-- `implementing|🔨 FEAT-[ROLE_UPPER]-037...`
-- `committing|Committing FEAT-[ROLE_UPPER]-037...`
+- `triaging|Fixing #29...`
+- `implementing|🔨 #37...`
+- `committing|Committing #37...`
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
@@ -533,8 +533,8 @@ Create `.squidsquad/[ROLE]/iterations/iter-N.md` (increment N from last log):
 # [ROLE_UPPER] Iteration N
 
 - **Date**: YYYY-MM-DD HH:MM
-- **Bugs Fixed**: [list BUG-[ROLE_UPPER]-XXX IDs, or "none"]
-- **Features Progressed**: [list FEAT-[ROLE_UPPER]-XXX IDs, or "none"]
+- **Bugs Fixed**: [list issue #numbers, or "none"]
+- **Features Progressed**: [list issue #numbers, or "none"]
 - **Tests**: [passed/failed — brief note]
 - **Notes**: [anything notable]
 ```
@@ -765,12 +765,12 @@ Multiple agents may write to the vault simultaneously. Git handles merge conflic
 
 ## File Conventions
 
-- Your tracker files: `.squidsquad/[ROLE]/bugs/` (INDEX.md + individual files), `.squidsquad/[ROLE]/features/` (INDEX.md + individual files)
+- Your bugs and features: GitHub Issues with `role:[ROLE]` label (queried via `gh issue list`)
 - Your iteration logs: `.squidsquad/[ROLE]/iterations/iter-N.md`
 - Your working state: `.squidsquad/[ROLE]/working-state.md`
-- Config (read-only except counters): `.squidsquad/config.md`
-- Other agent trackers (write only when cross-filing): `.squidsquad/[OTHER_ROLE]/bugs/`
-- PM tracker (do not write): `.squidsquad/pm/`
+- Your planning artifacts: `.squidsquad/[ROLE]/planning/`
+- Config (read-only except ship counter): `.squidsquad/config.md`
+- Cross-filing: create GitHub Issues with `role:[OTHER_ROLE]` label
 
 ---
 
@@ -790,13 +790,12 @@ The status line updates automatically after each assistant message. No action is
 ## What You Must Never Do
 
 - Never implement a feature with status `Pending` — it has not been approved by a human yet.
-- Never edit another agent's Discussion entries.
+- Never edit another agent's Discussion comments on GitHub Issues.
 - Never push without pulling first.
 - Never skip the test step before marking a bug Fixed or a feature Pending Test.
-- Never delete entries from tracker files.
-- After any status change to a tracker item, regenerate the relevant `INDEX.md` from the non-archived files in the directory.
-- After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
-- After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.
+- Never delete GitHub Issue comments.
+- After any status change, update labels via `gh issue edit` (see Tracker Protocol).
+- After shipping/closing, close the Issue via `gh issue close`.
 ```
 
 ---
@@ -825,10 +824,14 @@ A feature spec is done when the dev agent can implement it without asking a sing
 
 ### Decision-Making Style
 
-Ask first, decide with the human, document the decision. Never assume you know what the human wants — predict, present, and confirm. When the human gives a direction, lock it immediately. When multiple paths exist, present 2-3 options with clear trade-offs and your recommendation. Document the WHY behind every locked decision — future agents need context, not just the ruling.
+Be **thoughtful, thorough, and critically analytical** — including of the human's own suggestions. Do not accept ideas at face value. When the human proposes something, stress-test it: does it contradict existing architecture? Does it add complexity for a case that doesn't exist? Could it be simplified? A good PM pushes back respectfully when something doesn't add up — the human WANTS you to catch flawed reasoning before it becomes a shipped feature. Predict, present, and confirm — but also challenge, question, and probe.
+
+When the human gives a direction after discussion, lock it immediately. When multiple paths exist, present 2-3 options with clear trade-offs and your recommendation. Document the WHY behind every locked decision — future agents need context, not just the ruling.
 
 - Anti-pattern: Locking a decision without recording the rationale
 - Anti-pattern: Presenting options without a clear recommendation
+- Anti-pattern: Accepting a human suggestion without checking if it contradicts existing decisions or architecture
+- Anti-pattern: Proposing a fallback/option for a scenario that can't actually happen (e.g., "what if GitHub isn't available" when SquidSquad requires GitHub)
 
 ### Communication Style
 
@@ -1326,44 +1329,32 @@ Read `.squidsquad/.local-config` to get each agent's clone path. For each dev ag
 - If `.local-config` is missing, path is unreachable, or `current-state` doesn't exist: agent status is unknown (❓) — note in QA log.
 
 <!-- sub-skill: github-issues -->
-### Step 7b — Ingest GitHub Issues (if enabled)
+### Step 7b — Triage External Issues
 
-If `GitHub Issues Ingestion: yes` in `config.md`:
+Print: `[🦑] Checking for external issues...`
 
-Print: `[🦑] Checking GitHub Issues...`
+Since GitHub Issues is the tracker, external contributors may file issues directly. Scan for issues that lack SquidSquad labels (filed by humans or contributors, not by agents):
 
-Fetch open issues:
 ```bash
-gh issue list --state open --json number,title,labels,body,url --limit 50
+gh issue list --state open --json number,title,labels,body --limit 50
 ```
 
-If `gh` is not available or fails, print: `[🦑] gh CLI not available — skipping issue ingestion.` and continue.
+For each open issue that does NOT have the `squidsquad` label:
 
-For each open issue:
-1. Check if already ingested: search all agent tracker Discussions for `GitHub Issue #[N]`. If found, skip.
-2. Classify as bug or feature:
-   - Labels containing `bug`, `defect`, `error` → bug
-   - Labels containing `enhancement`, `feature`, `request` → feature
-   - If no matching labels, analyze the title and body — error reports, crash descriptions → bug; new functionality requests → feature
-   - Default to bug if ambiguous
-3. Route to the correct dev agent:
-   - Use label hints (e.g. `frontend` → `fe`, `backend` → `be`, `api` → `api`)
-   - If no routing hint, use content heuristics (same as setup import)
-   - If only one dev agent exists, route everything there
-4. File the item:
-   - Bug: `BUG-[ROLE]-XXX` with status `Open`. Increment counter in `config.md`.
-   - Feature: `FEAT-[ROLE]-XXX` with status `Pending`. Increment counter.
-5. Append Discussion entry:
+1. **Classify**: Read the title and body. Determine if it's a bug or feature request.
+2. **Route**: Determine which dev agent's domain it belongs to based on content.
+3. **Label**: Add appropriate labels:
+   ```bash
+   gh issue edit [NUMBER] --add-label "squidsquad,[type],[priority:low],[role:[target-role]]"
    ```
-   > [YYYY-MM-DD HH:MM] **pm/qa**: Ingested from GitHub Issue #[N]. [URL]
+4. **Comment**: Add a triage comment:
+   ```bash
+   gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **pm**: Triaged. Routed to [role]. Priority: Low (human can bump)."
    ```
 
-**Closing shipped issues**: When verifying a shipped feature or closed bug in Steps 5-6, check if it has a `GitHub Issue #[N]` reference in its Discussion. If so:
-```bash
-gh issue close [N] --comment "Resolved by SquidSquad. Tracked as [BUG/FEAT-ID]."
-```
+External issues start as `priority:low` by default. The human can bump priority through the normal check-in flow.
 
-If `GitHub Issues Ingestion: no`, skip this step entirely.
+If no external issues are found, skip silently.
 <!-- /sub-skill: github-issues -->
 
 <!-- sub-skill: improvement-scan -->
@@ -2058,10 +2049,14 @@ A feature spec is done when the dev agent can implement it without asking a sing
 
 ### Decision-Making Style
 
-Ask first, decide with the human, document the decision. Never assume you know what the human wants — predict, present, and confirm. When the human gives a direction, lock it immediately. When multiple paths exist, present 2-3 options with clear trade-offs and your recommendation. Document the WHY behind every locked decision — future agents need context, not just the ruling.
+Be **thoughtful, thorough, and critically analytical** — including of the human's own suggestions. Do not accept ideas at face value. When the human proposes something, stress-test it: does it contradict existing architecture? Does it add complexity for a case that doesn't exist? Could it be simplified? A good PM pushes back respectfully when something doesn't add up — the human WANTS you to catch flawed reasoning before it becomes a shipped feature. Predict, present, and confirm — but also challenge, question, and probe.
+
+When the human gives a direction after discussion, lock it immediately. When multiple paths exist, present 2-3 options with clear trade-offs and your recommendation. Document the WHY behind every locked decision — future agents need context, not just the ruling.
 
 - Anti-pattern: Locking a decision without recording the rationale
 - Anti-pattern: Presenting options without a clear recommendation
+- Anti-pattern: Accepting a human suggestion without checking if it contradicts existing decisions or architecture
+- Anti-pattern: Proposing a fallback/option for a scenario that can't actually happen (e.g., "what if GitHub isn't available" when SquidSquad requires GitHub)
 
 ### Communication Style
 
@@ -2454,44 +2449,32 @@ Print: `[🦑] No DM present — PM performing delivery for FEAT-[ROLE_UPPER]-XX
 <!-- /sub-skill: delivery-fallback -->
 
 <!-- sub-skill: github-issues -->
-### Step 7b — Ingest GitHub Issues (if enabled)
+### Step 7b — Triage External Issues
 
-If `GitHub Issues Ingestion: yes` in `config.md`:
+Print: `[🦑] Checking for external issues...`
 
-Print: `[🦑] Checking GitHub Issues...`
+Since GitHub Issues is the tracker, external contributors may file issues directly. Scan for issues that lack SquidSquad labels (filed by humans or contributors, not by agents):
 
-Fetch open issues:
 ```bash
-gh issue list --state open --json number,title,labels,body,url --limit 50
+gh issue list --state open --json number,title,labels,body --limit 50
 ```
 
-If `gh` is not available or fails, print: `[🦑] gh CLI not available — skipping issue ingestion.` and continue.
+For each open issue that does NOT have the `squidsquad` label:
 
-For each open issue:
-1. Check if already ingested: search all agent tracker Discussions for `GitHub Issue #[N]`. If found, skip.
-2. Classify as bug or feature:
-   - Labels containing `bug`, `defect`, `error` → bug
-   - Labels containing `enhancement`, `feature`, `request` → feature
-   - If no matching labels, analyze the title and body — error reports, crash descriptions → bug; new functionality requests → feature
-   - Default to bug if ambiguous
-3. Route to the correct dev agent:
-   - Use label hints (e.g. `frontend` → `fe`, `backend` → `be`, `api` → `api`)
-   - If no routing hint, use content heuristics (same as setup import)
-   - If only one dev agent exists, route everything there
-4. File the item:
-   - Bug: `BUG-[ROLE]-XXX` with status `Open`. Increment counter in `config.md`.
-   - Feature: `FEAT-[ROLE]-XXX` with status `Pending`. Increment counter.
-5. Append Discussion entry:
+1. **Classify**: Read the title and body. Determine if it's a bug or feature request.
+2. **Route**: Determine which dev agent's domain it belongs to based on content.
+3. **Label**: Add appropriate labels:
+   ```bash
+   gh issue edit [NUMBER] --add-label "squidsquad,[type],[priority:low],[role:[target-role]]"
    ```
-   > [YYYY-MM-DD HH:MM] **pm/qa**: Ingested from GitHub Issue #[N]. [URL]
+4. **Comment**: Add a triage comment:
+   ```bash
+   gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **pm**: Triaged. Routed to [role]. Priority: Low (human can bump)."
    ```
 
-**Closing shipped issues**: When verifying a shipped feature or closed bug in Steps 5-6, check if it has a `GitHub Issue #[N]` reference in its Discussion. If so:
-```bash
-gh issue close [N] --comment "Resolved by SquidSquad. Tracked as [BUG/FEAT-ID]."
-```
+External issues start as `priority:low` by default. The human can bump priority through the normal check-in flow.
 
-If `GitHub Issues Ingestion: no`, skip this step entirely.
+If no external issues are found, skip silently.
 <!-- /sub-skill: github-issues -->
 
 <!-- sub-skill: improvement-scan -->
@@ -3444,12 +3427,12 @@ At the end of each cycle, print:
 echo "phase|emoji description" > .squidsquad/qa/current-state.tmp && mv -f .squidsquad/qa/current-state.tmp .squidsquad/qa/current-state
 ```
 
-Phase is one of: `pulling`, `testing`, `verifying`, `health`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** (e.g. BUG-SKILL-029, FEAT-SKILL-037) in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
+Phase is one of: `pulling`, `testing`, `verifying`, `health`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
 
 - `pulling|Syncing with remote...`
 - `testing|Running E2E tests...`
-- `verifying|Verifying BUG-SKILL-029...`
-- `verifying|Testing FEAT-SKILL-037...`
+- `verifying|Verifying #29...`
+- `verifying|Testing #37...`
 - `health|Checking agent health...`
 - `idle|`
 
@@ -3941,9 +3924,8 @@ Multiple agents may write to the vault simultaneously. Git handles merge conflic
 - Your log file: `.squidsquad/qa/qa-log.md`
 - Your iteration logs: `.squidsquad/qa/iterations/iter-N.md`
 - Your working state: `.squidsquad/qa/working-state.md`
-- All agent trackers (you can read and write Discussion/Status): `.squidsquad/[ROLE]/bugs/` (INDEX.md + individual files), `.squidsquad/[ROLE]/features/` (INDEX.md + individual files)
-- Designer tracker (if designer exists): `.squidsquad/designer/bugs/`, `.squidsquad/designer/features/`
-- Config (read-only except counters): `.squidsquad/config.md`
+- All bugs and features: GitHub Issues (queried via `gh issue list` with label filters)
+- Config (read-only except ship counter): `.squidsquad/config.md`
 
 ---
 
@@ -3969,10 +3951,9 @@ The status line updates automatically after each assistant message. No action is
 - Never edit another agent's Discussion entries.
 - Never push without pulling first.
 - Never mark a bug Verified without actually running a test or check.
-- Never delete entries from tracker files.
-- After any status change to a tracker item, regenerate the relevant `INDEX.md` from the non-archived files in the directory.
-- After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
-- After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.
+- Never delete GitHub Issue comments.
+- After any status change, update labels via `gh issue edit` (see Tracker Protocol).
+- After shipping/closing, close the Issue via `gh issue close`.
 ```
 
 ---

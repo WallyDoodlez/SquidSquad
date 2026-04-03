@@ -57,12 +57,12 @@ At the end of each cycle, print:
 echo "phase|emoji description" > .squidsquad/[ROLE]/current-state.tmp && mv -f .squidsquad/[ROLE]/current-state.tmp .squidsquad/[ROLE]/current-state
 ```
 
-Phase is one of: `pulling`, `triaging`, `implementing`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** (e.g. BUG-[ROLE_UPPER]-029, FEAT-[ROLE_UPPER]-037) in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
+Phase is one of: `pulling`, `triaging`, `implementing`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
 
 - `pulling|Syncing with remote...`
-- `triaging|Fixing BUG-[ROLE_UPPER]-029...`
-- `implementing|🔨 FEAT-[ROLE_UPPER]-037...`
-- `committing|Committing FEAT-[ROLE_UPPER]-037...`
+- `triaging|Fixing #29...`
+- `implementing|🔨 #37...`
+- `committing|Committing #37...`
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
@@ -155,8 +155,8 @@ Create `.squidsquad/[ROLE]/iterations/iter-N.md` (increment N from last log):
 # [ROLE_UPPER] Iteration N
 
 - **Date**: YYYY-MM-DD HH:MM
-- **Bugs Fixed**: [list BUG-[ROLE_UPPER]-XXX IDs, or "none"]
-- **Features Progressed**: [list FEAT-[ROLE_UPPER]-XXX IDs, or "none"]
+- **Bugs Fixed**: [list issue #numbers, or "none"]
+- **Features Progressed**: [list issue #numbers, or "none"]
 - **Tests**: [passed/failed — brief note]
 - **Notes**: [anything notable]
 ```
@@ -250,12 +250,12 @@ After filing, note the returned Issue number and comment on the original issue i
 
 ## File Conventions
 
-- Your tracker files: `.squidsquad/[ROLE]/bugs/` (INDEX.md + individual files), `.squidsquad/[ROLE]/features/` (INDEX.md + individual files)
+- Your bugs and features: GitHub Issues with `role:[ROLE]` label (queried via `gh issue list`)
 - Your iteration logs: `.squidsquad/[ROLE]/iterations/iter-N.md`
 - Your working state: `.squidsquad/[ROLE]/working-state.md`
-- Config (read-only except counters): `.squidsquad/config.md`
-- Other agent trackers (write only when cross-filing): `.squidsquad/[OTHER_ROLE]/bugs/`
-- PM tracker (do not write): `.squidsquad/pm/`
+- Your planning artifacts: `.squidsquad/[ROLE]/planning/`
+- Config (read-only except ship counter): `.squidsquad/config.md`
+- Cross-filing: create GitHub Issues with `role:[OTHER_ROLE]` label
 
 ---
 
@@ -275,10 +275,9 @@ The status line updates automatically after each assistant message. No action is
 ## What You Must Never Do
 
 - Never implement a feature with status `Pending` — it has not been approved by a human yet.
-- Never edit another agent's Discussion entries.
+- Never edit another agent's Discussion comments on GitHub Issues.
 - Never push without pulling first.
 - Never skip the test step before marking a bug Fixed or a feature Pending Test.
-- Never delete entries from tracker files.
-- After any status change to a tracker item, regenerate the relevant `INDEX.md` from the non-archived files in the directory.
-- After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
-- After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.
+- Never delete GitHub Issue comments.
+- After any status change, update labels via `gh issue edit` (see Tracker Protocol).
+- After shipping/closing, close the Issue via `gh issue close`.

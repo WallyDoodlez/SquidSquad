@@ -1,7 +1,7 @@
 # SquidSquad Config
 
 - **SquidSquad Version**: 0.8.0
-- **Tracker Schema**: 3
+- **Tracker**: github-issues
 - **Architecture Version**: 1
 
 ## Agents
@@ -19,16 +19,10 @@
 - **skill Tests**: echo "Skill repo — no automated tests. Validate SKILL.md manually."
 - **E2E Tests**: (none)
 
-## ID Counters
-
-- **BUG-SKILL**: 40
-- **FEAT-SKILL**: 68
-
 ## Git Protocol
 
 - Always `git pull --rebase` before starting work.
-- Tracker files are append-only.
-- Discussion entries are append-only.
+- Discussion comments on GitHub Issues are append-only.
 - Push after every completed work unit.
 
 ## Iteration Interval
@@ -40,10 +34,6 @@
 - **Threshold**: 80
 
 ## PR Flow
-
-- **Enabled**: no
-
-## GitHub Issues Ingestion
 
 - **Enabled**: no
 
