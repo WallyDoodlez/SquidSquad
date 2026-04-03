@@ -17,6 +17,7 @@
 | FEAT-SKILL-032 | Pending | High | Auto-configure permissions during setup and learn from prompt pressure |
 | FEAT-SKILL-030 | Shipped | High | Sub-skill architecture: roles as independent skills with layered plugin system |
 | FEAT-SKILL-027 | Pending Ship | High | Designer agent template with external design tool integration |
+| FEAT-SKILL-061 | Pending | High | Named sessions for easier identification in Claude Code remote |
 | FEAT-SKILL-060 | Pending | High | OS-level notifications for human attention when required |
 | FEAT-SKILL-059 | Pending | High | SOUL.md: Agent personality, behavioral rules, communication style, boundaries |
 | FEAT-SKILL-054 | Pending | Medium | Workflow editor: configure steps and routing between roles |
