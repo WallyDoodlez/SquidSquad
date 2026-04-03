@@ -20,11 +20,11 @@ After marking any item `Shipped`, check if a version bump is due:
    ## [X.Y.Z] — YYYY-MM-DD
 
    ### Added
-   - FEAT-[ROLE]-XXX — Title
+   - #NUMBER — Title
    ...
 
    ### Fixed
-   - BUG-[ROLE]-XXX — Title
+   - #NUMBER — Title
    ...
    ```
    List all items shipped since the last bump (scan tracker Discussions for `Status → Shipped` entries since the previous version's date).

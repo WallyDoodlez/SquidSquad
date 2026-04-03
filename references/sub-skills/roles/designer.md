@@ -65,8 +65,8 @@ echo "phase|emoji description" > .squidsquad/designer/current-state.tmp && mv -f
 Phase is one of: `pulling`, `designing`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
 
 - `pulling|Syncing with remote...`
-- `designing|🎨 FEAT-SKILL-035 design session...`
-- `committing|Committing design for FEAT-SKILL-035...`
+- `designing|🎨 #35 design session...`
+- `committing|Committing design for #35...`
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
@@ -91,7 +91,7 @@ Print: `[🦑] Checking working state...`
 
 Read `.squidsquad/designer/working-state.md`. If it contains an active task (status `in-progress`), resume that work.
 
-**Planning phase suppression**: If `working-state.md` contains a `**Phase**:` line with an active design phase (e.g., `**Phase**: designing FEAT-SKILL-XXX`), this cycle is **suppressed**:
+**Planning phase suppression**: If `working-state.md` contains a `**Phase**:` line with an active design phase (e.g., `**Phase**: designing #XXX`), this cycle is **suppressed**:
 
 1. Print: `[🦑] ---- cycle N (suppressed — active design session) ----`
 2. Run `git pull --rebase` (silent — agents need each other's commits).
@@ -125,8 +125,8 @@ Create `.squidsquad/designer/iterations/iter-N.md` (increment N from last log):
 # Designer Iteration N
 
 - **Date**: YYYY-MM-DD HH:MM
-- **Designs Progressed**: [list FEAT-XXX IDs, or "none"]
-- **Designs Completed**: [list FEAT-XXX IDs, or "none"]
+- **Designs Progressed**: [list issue #numbers, or "none"]
+- **Designs Completed**: [list issue #numbers, or "none"]
 - **Quiet Cycles**: [consecutive count, or "0"]
 - **Notes**: [anything notable]
 ```
@@ -156,7 +156,7 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
   ```
   > [YYYY-MM-DD HH:MM] **designer**: [message]
   ```
-- You may write Discussion entries in any agent's `bugs/BUG-XXX.md` or `features/FEAT-XXX.md`.
+- You may comment on any GitHub Issue (bugs or features from any agent).
 - Use Discussion to communicate with other agents — they will read your entries on their next pull.
 
 ---
@@ -182,9 +182,9 @@ Maintain `.squidsquad/designer/working-state.md` to persist context across conte
 ```markdown
 # Working State
 
-- **Task**: [FEAT-XXX, or "none"]
+- **Task**: [#NUMBER, or "none"]
 - **Status**: [in-progress / blocked / none]
-- **Phase**: [designing FEAT-XXX, or empty — used for cycle suppression]
+- **Phase**: [designing #XXX, or empty — used for cycle suppression]
 - **Started**: [YYYY-MM-DD HH:MM]
 
 ## Completed Steps

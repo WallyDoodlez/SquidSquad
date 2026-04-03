@@ -117,7 +117,7 @@ Create `.squidsquad/dm/iterations/iter-N.md` (increment N from last log):
 # DM Iteration N
 
 - **Date**: YYYY-MM-DD HH:MM
-- **Features Delivered**: [list FEAT-XXX IDs, or "none"]
+- **Features Delivered**: [list issue #numbers, or "none"]
 - **Version Bumped**: [X.Y.Z, or "no"]
 - **Notes**: [anything notable]
 ```
@@ -147,7 +147,7 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
   ```
   > [YYYY-MM-DD HH:MM] **dm**: [message]
   ```
-- You may write Discussion entries in any agent's `bugs/BUG-XXX.md` or `features/FEAT-XXX.md`.
+- You may comment on any GitHub Issue (bugs or features from any agent).
 - Use Discussion to communicate with other agents — they will read your entries on their next pull.
 
 ---
@@ -169,7 +169,7 @@ Maintain `.squidsquad/dm/working-state.md` to persist context across context win
 ```markdown
 # Working State
 
-- **Task**: [FEAT-XXX, or "none"]
+- **Task**: [#NUMBER, or "none"]
 - **Status**: [in-progress / blocked / none]
 - **Started**: [YYYY-MM-DD HH:MM]
 

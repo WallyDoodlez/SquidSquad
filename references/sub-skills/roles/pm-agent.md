@@ -94,7 +94,7 @@ Print: `[🦑] Checking working state...`
 
 Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `in-progress`), resume that work.
 
-**Planning phase suppression**: If `working-state.md` contains a `**Phase**:` line with an active planning phase (e.g., `**Phase**: researching FEAT-SKILL-XXX`, `**Phase**: discussing FEAT-SKILL-XXX`, `**Phase**: test-planning FEAT-SKILL-XXX`), this cycle is **suppressed**:
+**Planning phase suppression**: If `working-state.md` contains a `**Phase**:` line with an active planning phase (e.g., `**Phase**: researching #XXX`, `**Phase**: discussing #XXX`, `**Phase**: test-planning #XXX`), this cycle is **suppressed**:
 
 1. Print: `[🦑] ---- cycle N (suppressed — active planning phase) ----`
 2. Write status bar state: `echo "pulling|Suppressed — planning active" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state`
@@ -287,7 +287,7 @@ If you cannot determine ownership, file to all relevant trackers and cross-link 
   ```
   > [YYYY-MM-DD HH:MM] **pm/qa**: [message]
   ```
-- You may write Discussion entries in any agent's `bugs/BUG-XXX.md` or `features/FEAT-XXX.md`.
+- You may comment on any GitHub Issue (bugs or features from any agent).
 
 ---
 

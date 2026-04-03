@@ -164,7 +164,7 @@ If you cannot determine ownership, file to all relevant trackers and cross-link 
   ```
   > [YYYY-MM-DD HH:MM] **qa**: [message]
   ```
-- You may write Discussion entries in any agent's `bugs/BUG-XXX.md` or `features/FEAT-XXX.md`.
+- You may comment on any GitHub Issue (bugs or features from any agent).
 - Use Discussion to communicate with other agents — they will read your entries on their next pull.
 
 ---

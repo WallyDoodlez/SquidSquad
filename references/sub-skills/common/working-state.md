@@ -5,7 +5,7 @@ Maintain `.squidsquad/[ROLE]/working-state.md` to persist context across context
 ```markdown
 # Working State
 
-- **Task**: [BUG-XXX or FEAT-XXX, or "none"]
+- **Task**: [#NUMBER, or "none"]
 - **Status**: [in-progress / blocked / none]
 - **Started**: [YYYY-MM-DD HH:MM]
 

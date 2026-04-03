@@ -650,7 +650,7 @@ Maintain `.squidsquad/[ROLE]/working-state.md` to persist context across context
 ```markdown
 # Working State
 
-- **Task**: [BUG-XXX or FEAT-XXX, or "none"]
+- **Task**: [#NUMBER, or "none"]
 - **Status**: [in-progress / blocked / none]
 - **Started**: [YYYY-MM-DD HH:MM]
 
@@ -1152,7 +1152,7 @@ Print: `[🦑] Checking working state...`
 
 Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `in-progress`), resume that work.
 
-**Planning phase suppression**: If `working-state.md` contains a `**Phase**:` line with an active planning phase (e.g., `**Phase**: researching FEAT-SKILL-XXX`, `**Phase**: discussing FEAT-SKILL-XXX`, `**Phase**: test-planning FEAT-SKILL-XXX`), this cycle is **suppressed**:
+**Planning phase suppression**: If `working-state.md` contains a `**Phase**:` line with an active planning phase (e.g., `**Phase**: researching #XXX`, `**Phase**: discussing #XXX`, `**Phase**: test-planning #XXX`), this cycle is **suppressed**:
 
 1. Print: `[🦑] ---- cycle N (suppressed — active planning phase) ----`
 2. Write status bar state: `echo "pulling|Suppressed — planning active" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state`
@@ -1286,13 +1286,13 @@ When marking any bug as `Closed` in Step 5, increment the `Shipped Since Last Bu
 
 If `.squidsquad/dm/` directory does NOT exist (DM not installed), PM takes over delivery responsibilities. For each feature just marked `Pending Ship` in Steps 6/6b:
 
-Print: `[🦑] No DM present — PM performing delivery for FEAT-[ROLE_UPPER]-XXX...`
+Print: `[🦑] No DM present — PM performing delivery for #[NUMBER]...`
 
 **1. Check for delivery:skip**: If the feature's Discussion contains `delivery: skip`, mark it `Shipped` immediately, increment `Shipped Since Last Bump` in `config.md`, and append: `> [YYYY-MM-DD HH:MM] **pm/qa**: No DM present. No delivery work needed (delivery: skip). Status → Shipped.` Skip to the version bump check below.
 
 **2. Create delivery package** (for features NOT marked delivery:skip):
    - **Update user-facing docs**: Update `README.md` with user-story descriptions of the new functionality. Update any relevant sections of `SKILL.md` that describe user-facing behavior. Write in terms users understand — what's new, how to use it, what changed.
-   - **Prepare CHANGELOG entry**: Append a Discussion note with the CHANGELOG text (do NOT write to `CHANGELOG.md` yet — it will be included in the next version bump): `> [YYYY-MM-DD HH:MM] **pm/qa**: CHANGELOG entry prepared: "FEAT-[ROLE_UPPER]-XXX — [Title]".`
+   - **Prepare CHANGELOG entry**: Append a Discussion note with the CHANGELOG text (do NOT write to `CHANGELOG.md` yet — it will be included in the next version bump): `> [YYYY-MM-DD HH:MM] **pm/qa**: CHANGELOG entry prepared: "#[NUMBER] — [Title]".`
    - **Check for config/migration changes**: If the feature introduces new config values, settings, or requires migration steps, document them in the Discussion.
 
 **3. Mark Shipped**: Update the feature's status to `Shipped`. Append: `> [YYYY-MM-DD HH:MM] **pm/qa**: No DM present — PM delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped.`
@@ -1318,10 +1318,10 @@ Print: `[🦑] No DM present — PM performing delivery for FEAT-[ROLE_UPPER]-XX
       ## [X.Y.Z] — YYYY-MM-DD
 
       ### Added
-      - FEAT-[ROLE]-XXX — Title
+      - #NUMBER — Title
 
       ### Fixed
-      - BUG-[ROLE]-XXX — Title
+      - #NUMBER — Title
       ```
       List all items shipped since the last bump (scan tracker Discussions for `Status → Shipped` entries since the previous version's date).
    6. Commit: `git add -A && git commit -m "chore: bump version to vX.Y.Z"`
@@ -1867,7 +1867,7 @@ Do not set status to `Approved` without completing the planning phases. Do not a
   ```
   > [YYYY-MM-DD HH:MM] **pm/qa**: [message]
   ```
-- You may write Discussion entries in any agent's `bugs/BUG-XXX.md` or `features/FEAT-XXX.md`.
+- You may comment on any GitHub Issue (bugs or features from any agent).
 
 ---
 
@@ -2375,7 +2375,7 @@ Print: `[🦑] Checking working state...`
 
 Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `in-progress`), resume that work.
 
-**Planning phase suppression**: If `working-state.md` contains a `**Phase**:` line with an active planning phase (e.g., `**Phase**: researching FEAT-SKILL-XXX`, `**Phase**: discussing FEAT-SKILL-XXX`, `**Phase**: test-planning FEAT-SKILL-XXX`), this cycle is **suppressed**:
+**Planning phase suppression**: If `working-state.md` contains a `**Phase**:` line with an active planning phase (e.g., `**Phase**: researching #XXX`, `**Phase**: discussing #XXX`, `**Phase**: test-planning #XXX`), this cycle is **suppressed**:
 
 1. Print: `[🦑] ---- cycle N (suppressed — active planning phase) ----`
 2. Write status bar state: `echo "pulling|Suppressed — planning active" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state`
@@ -2425,13 +2425,13 @@ If the human has already provided input (earlier in the conversation or between 
 
 If `.squidsquad/dm/` directory does NOT exist (DM not installed), PM takes over delivery responsibilities. For each feature just marked `Pending Ship` in Steps 6/6b:
 
-Print: `[🦑] No DM present — PM performing delivery for FEAT-[ROLE_UPPER]-XXX...`
+Print: `[🦑] No DM present — PM performing delivery for #[NUMBER]...`
 
 **1. Check for delivery:skip**: If the feature's Discussion contains `delivery: skip`, mark it `Shipped` immediately, increment `Shipped Since Last Bump` in `config.md`, and append: `> [YYYY-MM-DD HH:MM] **pm/qa**: No DM present. No delivery work needed (delivery: skip). Status → Shipped.` Skip to the version bump check below.
 
 **2. Create delivery package** (for features NOT marked delivery:skip):
    - **Update user-facing docs**: Update `README.md` with user-story descriptions of the new functionality. Update any relevant sections of `SKILL.md` that describe user-facing behavior. Write in terms users understand — what's new, how to use it, what changed.
-   - **Prepare CHANGELOG entry**: Append a Discussion note with the CHANGELOG text (do NOT write to `CHANGELOG.md` yet — it will be included in the next version bump): `> [YYYY-MM-DD HH:MM] **pm/qa**: CHANGELOG entry prepared: "FEAT-[ROLE_UPPER]-XXX — [Title]".`
+   - **Prepare CHANGELOG entry**: Append a Discussion note with the CHANGELOG text (do NOT write to `CHANGELOG.md` yet — it will be included in the next version bump): `> [YYYY-MM-DD HH:MM] **pm/qa**: CHANGELOG entry prepared: "#[NUMBER] — [Title]".`
    - **Check for config/migration changes**: If the feature introduces new config values, settings, or requires migration steps, document them in the Discussion.
 
 **3. Mark Shipped**: Update the feature's status to `Shipped`. Append: `> [YYYY-MM-DD HH:MM] **pm/qa**: No DM present — PM delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped.`
@@ -2457,10 +2457,10 @@ Print: `[🦑] No DM present — PM performing delivery for FEAT-[ROLE_UPPER]-XX
       ## [X.Y.Z] — YYYY-MM-DD
 
       ### Added
-      - FEAT-[ROLE]-XXX — Title
+      - #NUMBER — Title
 
       ### Fixed
-      - BUG-[ROLE]-XXX — Title
+      - #NUMBER — Title
       ```
       List all items shipped since the last bump (scan tracker Discussions for `Status → Shipped` entries since the previous version's date).
    6. Commit: `git add -A && git commit -m "chore: bump version to vX.Y.Z"`
@@ -2984,7 +2984,7 @@ Do not set status to `Approved` without completing the planning phases. Do not a
   ```
   > [YYYY-MM-DD HH:MM] **pm**: [message]
   ```
-- You may write Discussion entries in any agent's `bugs/BUG-XXX.md` or `features/FEAT-XXX.md`.
+- You may comment on any GitHub Issue (bugs or features from any agent).
 
 ---
 
@@ -3799,7 +3799,7 @@ If you cannot determine ownership, file to all relevant trackers and cross-link 
   ```
   > [YYYY-MM-DD HH:MM] **qa**: [message]
   ```
-- You may write Discussion entries in any agent's `bugs/BUG-XXX.md` or `features/FEAT-XXX.md`.
+- You may comment on any GitHub Issue (bugs or features from any agent).
 - Use Discussion to communicate with other agents — they will read your entries on their next pull.
 
 ---
@@ -4267,8 +4267,8 @@ echo "phase|emoji description" > .squidsquad/designer/current-state.tmp && mv -f
 Phase is one of: `pulling`, `designing`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
 
 - `pulling|Syncing with remote...`
-- `designing|🎨 FEAT-SKILL-035 design session...`
-- `committing|Committing design for FEAT-SKILL-035...`
+- `designing|🎨 #35 design session...`
+- `committing|Committing design for #35...`
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
@@ -4303,7 +4303,7 @@ Print: `[🦑] Checking working state...`
 
 Read `.squidsquad/designer/working-state.md`. If it contains an active task (status `in-progress`), resume that work.
 
-**Planning phase suppression**: If `working-state.md` contains a `**Phase**:` line with an active design phase (e.g., `**Phase**: designing FEAT-SKILL-XXX`), this cycle is **suppressed**:
+**Planning phase suppression**: If `working-state.md` contains a `**Phase**:` line with an active design phase (e.g., `**Phase**: designing #XXX`), this cycle is **suppressed**:
 
 1. Print: `[🦑] ---- cycle N (suppressed — active design session) ----`
 2. Run `git pull --rebase` (silent — agents need each other's commits).
@@ -4578,8 +4578,8 @@ Create `.squidsquad/designer/iterations/iter-N.md` (increment N from last log):
 # Designer Iteration N
 
 - **Date**: YYYY-MM-DD HH:MM
-- **Designs Progressed**: [list FEAT-XXX IDs, or "none"]
-- **Designs Completed**: [list FEAT-XXX IDs, or "none"]
+- **Designs Progressed**: [list issue #numbers, or "none"]
+- **Designs Completed**: [list issue #numbers, or "none"]
 - **Quiet Cycles**: [consecutive count, or "0"]
 - **Notes**: [anything notable]
 ```
@@ -4609,7 +4609,7 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
   ```
   > [YYYY-MM-DD HH:MM] **designer**: [message]
   ```
-- You may write Discussion entries in any agent's `bugs/BUG-XXX.md` or `features/FEAT-XXX.md`.
+- You may comment on any GitHub Issue (bugs or features from any agent).
 - Use Discussion to communicate with other agents — they will read your entries on their next pull.
 
 ---
@@ -4674,9 +4674,9 @@ Maintain `.squidsquad/designer/working-state.md` to persist context across conte
 ```markdown
 # Working State
 
-- **Task**: [FEAT-XXX, or "none"]
+- **Task**: [#NUMBER, or "none"]
 - **Status**: [in-progress / blocked / none]
-- **Phase**: [designing FEAT-XXX, or empty — used for cycle suppression]
+- **Phase**: [designing #XXX, or empty — used for cycle suppression]
 - **Started**: [YYYY-MM-DD HH:MM]
 
 ## Completed Steps
@@ -5181,7 +5181,7 @@ Print: `[🦑] Scanning for Pending Ship items...`
 
 Read each dev agent's `features/INDEX.md` (listed in `config.md` under `Dev Agents`). For each feature with status `Pending Ship`, read its individual file (note: tracker uses markdown bold formatting — search for `**Status**: Pending Ship`):
 
-Pick the highest-priority item first. When picking up an item, print: `[🦑] Delivering FEAT-[ROLE_UPPER]-XXX...`
+Pick the highest-priority item first. When picking up an item, print: `[🦑] Delivering #[NUMBER]...`
 
 1. Write working state: update `.squidsquad/dm/working-state.md` with the feature ID, status `in-progress`, and planned delivery steps.
 2. Read the feature description, acceptance criteria, and Discussion entries (especially dev's delivery notes).
@@ -5207,7 +5207,7 @@ For each Pending Ship feature that is NOT skipped:
 1. **Update user-facing docs**: Update `README.md` with user-story descriptions of the new functionality. Update any relevant sections of `SKILL.md` that describe user-facing behavior. Write in terms users understand — what's new, how to use it, what changed.
 2. **Write CHANGELOG entry**: Prepare a CHANGELOG entry for this feature. Do NOT write it to `CHANGELOG.md` yet — it will be included in the next version bump. Instead, append a Discussion note with the CHANGELOG text:
    ```
-   > [YYYY-MM-DD HH:MM] **dm**: CHANGELOG entry prepared: "FEAT-[ROLE_UPPER]-XXX — [Title]". Status → Shipped.
+   > [YYYY-MM-DD HH:MM] **dm**: CHANGELOG entry prepared: "#[NUMBER] — [Title]". Status → Shipped.
    ```
 3. **Check for config/migration changes**: If the feature introduces new config values, settings, or requires migration steps for existing installs, document them in the Discussion and ensure they are reflected in the upgrade flow.
 4. Mark the feature `Shipped`.
@@ -5242,11 +5242,11 @@ After marking any item `Shipped`, check if a version bump is due:
    ## [X.Y.Z] — YYYY-MM-DD
 
    ### Added
-   - FEAT-[ROLE]-XXX — Title
+   - #NUMBER — Title
    ...
 
    ### Fixed
-   - BUG-[ROLE]-XXX — Title
+   - #NUMBER — Title
    ...
    ```
    List all items shipped since the last bump (scan tracker Discussions for `Status → Shipped` entries since the previous version's date).
@@ -5373,7 +5373,7 @@ Create `.squidsquad/dm/iterations/iter-N.md` (increment N from last log):
 # DM Iteration N
 
 - **Date**: YYYY-MM-DD HH:MM
-- **Features Delivered**: [list FEAT-XXX IDs, or "none"]
+- **Features Delivered**: [list issue #numbers, or "none"]
 - **Version Bumped**: [X.Y.Z, or "no"]
 - **Notes**: [anything notable]
 ```
@@ -5403,7 +5403,7 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
   ```
   > [YYYY-MM-DD HH:MM] **dm**: [message]
   ```
-- You may write Discussion entries in any agent's `bugs/BUG-XXX.md` or `features/FEAT-XXX.md`.
+- You may comment on any GitHub Issue (bugs or features from any agent).
 - Use Discussion to communicate with other agents — they will read your entries on their next pull.
 
 ---
@@ -5425,7 +5425,7 @@ Maintain `.squidsquad/dm/working-state.md` to persist context across context win
 ```markdown
 # Working State
 
-- **Task**: [FEAT-XXX, or "none"]
+- **Task**: [#NUMBER, or "none"]
 - **Status**: [in-progress / blocked / none]
 - **Started**: [YYYY-MM-DD HH:MM]
 

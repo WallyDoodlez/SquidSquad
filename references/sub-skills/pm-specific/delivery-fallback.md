@@ -4,13 +4,13 @@
 
 If `.squidsquad/dm/` directory does NOT exist (DM not installed), PM takes over delivery responsibilities. For each feature just marked `Pending Ship` in Steps 6/6b:
 
-Print: `[🦑] No DM present — PM performing delivery for FEAT-[ROLE_UPPER]-XXX...`
+Print: `[🦑] No DM present — PM performing delivery for #[NUMBER]...`
 
 **1. Check for delivery:skip**: If the feature's Discussion contains `delivery: skip`, mark it `Shipped` immediately, increment `Shipped Since Last Bump` in `config.md`, and append: `> [YYYY-MM-DD HH:MM] **pm/qa**: No DM present. No delivery work needed (delivery: skip). Status → Shipped.` Skip to the version bump check below.
 
 **2. Create delivery package** (for features NOT marked delivery:skip):
    - **Update user-facing docs**: Update `README.md` with user-story descriptions of the new functionality. Update any relevant sections of `SKILL.md` that describe user-facing behavior. Write in terms users understand — what's new, how to use it, what changed.
-   - **Prepare CHANGELOG entry**: Append a Discussion note with the CHANGELOG text (do NOT write to `CHANGELOG.md` yet — it will be included in the next version bump): `> [YYYY-MM-DD HH:MM] **pm/qa**: CHANGELOG entry prepared: "FEAT-[ROLE_UPPER]-XXX — [Title]".`
+   - **Prepare CHANGELOG entry**: Append a Discussion note with the CHANGELOG text (do NOT write to `CHANGELOG.md` yet — it will be included in the next version bump): `> [YYYY-MM-DD HH:MM] **pm/qa**: CHANGELOG entry prepared: "#[NUMBER] — [Title]".`
    - **Check for config/migration changes**: If the feature introduces new config values, settings, or requires migration steps, document them in the Discussion.
 
 **3. Mark Shipped**: Update the feature's status to `Shipped`. Append: `> [YYYY-MM-DD HH:MM] **pm/qa**: No DM present — PM delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped.`
@@ -36,10 +36,10 @@ Print: `[🦑] No DM present — PM performing delivery for FEAT-[ROLE_UPPER]-XX
       ## [X.Y.Z] — YYYY-MM-DD
 
       ### Added
-      - FEAT-[ROLE]-XXX — Title
+      - #NUMBER — Title
 
       ### Fixed
-      - BUG-[ROLE]-XXX — Title
+      - #NUMBER — Title
       ```
       List all items shipped since the last bump (scan tracker Discussions for `Status → Shipped` entries since the previous version's date).
    6. Commit: `git add -A && git commit -m "chore: bump version to vX.Y.Z"`
