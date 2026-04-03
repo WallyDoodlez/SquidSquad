@@ -31,5 +31,6 @@
 | FEAT-SKILL-065 | Pending | High | Vault Phase 3: vault-remember + end-of-cycle reflection |
 | FEAT-SKILL-066 | Pending | Medium | Vault Phase 4: vault-optimize (full vault sweep) |
 | FEAT-SKILL-062 | Pending | Medium | Vault Phase 5: hybrid RAG search + deep dreaming |
+| FEAT-SKILL-067 | Pending | Low | Vault Phase 6: evaluation and tuning after real-world usage |
 | FEAT-SKILL-028 | Pending | Low | VS Code extension for SquidSquad |
 | FEAT-SKILL-020 | Pending | Low | Web-based UI for SquidSquad interaction |
