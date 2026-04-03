@@ -1,0 +1,96 @@
+# Sub-skill Composition Manifest
+
+This manifest defines how sub-skill source files compose into agent templates. The composition engine reads each role's entry file, resolves `{{include: path}}` directives by inlining the referenced sub-skill content, and wraps each inclusion with `<!-- sub-skill: name -->` section markers.
+
+## Architecture
+
+- **Source files**: `references/sub-skills/` (this directory)
+- **Composition**: Build-time (during setup and upgrade), not runtime
+- **Output**: `references/agent-instructions.md` (generated, DO NOT EDIT)
+- **Final templates**: `.squidsquad/templates/*.md` (generated from composed output with placeholder substitution)
+
+## Composition Order
+
+### Dev Agent (`roles/dev-agent.md`)
+
+Entry file with includes:
+1. `common/pull-latest` — Step 1
+2. `common/context-pressure` — Step 1b
+3. `common/resume-working-state` — Step 1c
+4. `common/interval-sync` — Step 1d
+5. `common/working-state` — Working State File format
+
+### PM/QA Agent (`roles/pm-agent.md`)
+
+Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded `pm` paths to avoid `[ROLE]` ambiguity — PM uses `[ROLE]` to reference dev agents, not itself):
+1. `common/pull-latest` — Step 1
+2. `pm-specific/pr-flow` — Step 6b
+3. `pm-specific/delivery-fallback` — Step 6d
+4. `pm-specific/github-issues` — Step 7b
+5. `pm-specific/feature-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
+6. `pm-specific/feature-approval` — Feature Approval Gate
+
+### DM Agent (`roles/dm-agent.md`)
+
+Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardcoded `dm` paths — DM uses `[ROLE]` to reference dev agents, not itself):
+1. `common/pull-latest` — Step 1
+2. `dm-specific/delivery-packaging` — Steps 2-2c
+3. `dm-specific/version-bumps` — Step 3
+
+## Include Directive Format
+
+```
+{{include: relative/path}}
+```
+
+- Path is relative to `references/sub-skills/`
+- `.md` extension is omitted in directives
+- Each resolved include is wrapped with: `<!-- sub-skill: [filename-without-ext] -->`
+- Directives must appear on their own line
+
+## Placeholder Substitution (after composition)
+
+After all includes are resolved, substitute placeholders for the target role:
+
+| Placeholder | Dev | PM | DM |
+|-------------|-----|-----|-----|
+| `[ROLE]` | role name (e.g. `skill`) | not substituted (used as dev agent variable) | not substituted (used as dev agent variable) |
+| `[ROLE_UPPER]` | uppercase (e.g. `SKILL`) | not substituted | not substituted |
+| `[ROLE_TEST_CMD]` | from config | N/A | N/A |
+| `[OTHER_ROLES]` | other dev roles | N/A | N/A |
+| `[INTERVAL]` | from config | from config | from config |
+| `[ACTIVE_AGENTS]` | N/A | from config | from config |
+| `[E2E_TEST_CMD]` | N/A | from config | N/A |
+
+**Note on `[ROLE]` ambiguity**: In dev templates, `[ROLE]` refers to this agent and is substituted. In PM/DM templates, `[ROLE]` is a template variable meaning "any dev agent's role" and is NOT substituted. Common sub-skills that reference paths (context-pressure, resume-working-state, working-state) use `[ROLE]` and are therefore only shared with dev agents. PM and DM inline these sections with hardcoded paths.
+
+## Intentional Differences from Monolithic Templates
+
+- **PM/DM Step 1 (Pull Latest)**: Now includes "append the conflicting section below the existing one" (previously only in dev template). Functional improvement.
+- **PM Open Artifacts in Editor**: Moved from standalone section to inside Feature Lifecycle (feature-intake sub-skill). Same content, more logical location.
+
+## Sub-skill File Inventory
+
+```
+references/sub-skills/
+├── manifest.md                         (this file)
+├── common/
+│   ├── pull-latest.md                  (Step 1 — shared by all roles)
+│   ├── context-pressure.md             (Step 1b — shared by dev only)
+│   ├── resume-working-state.md         (Step 1c — shared by dev only)
+│   ├── interval-sync.md               (Step 1d — shared by dev only)
+│   └── working-state.md               (Working State — shared by dev only)
+├── roles/
+│   ├── dev-agent.md                    (entry file — dev template skeleton)
+│   ├── pm-agent.md                     (entry file — PM template skeleton)
+│   └── dm-agent.md                     (entry file — DM template skeleton)
+├── pm-specific/
+│   ├── feature-intake.md              (5-phase lifecycle + Open Artifacts)
+│   ├── feature-approval.md            (Feature Approval Gate)
+│   ├── delivery-fallback.md           (Step 6d — PM delivery when DM absent)
+│   ├── github-issues.md              (Step 7b — GitHub Issues ingestion)
+│   └── pr-flow.md                     (Step 6b — PR monitoring)
+└── dm-specific/
+    ├── delivery-packaging.md          (Steps 2-2c — scan, skip, deliver)
+    └── version-bumps.md              (Step 3 — version bump check + sequence)
+```

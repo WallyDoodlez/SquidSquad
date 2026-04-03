@@ -1,3 +1,6 @@
+<!-- DO NOT EDIT — This file is auto-generated from references/sub-skills/ source files. -->
+<!-- Edit the sub-skill source files instead, then recompose this file during setup/upgrade. -->
+
 # SquidSquad Agent Instruction Templates
 
 These are the source-of-truth templates for SquidSquad agents. During setup and upgrade, these templates are copied into `.squidsquad/templates/` with all placeholders substituted (build-time substitution). Each dev agent gets its own substituted template file (e.g. `dev-agent-fe.md`, `dev-agent-be.md`). PM/QA gets `pm-agent.md`. Agents never see raw placeholders — they receive fully resolved instructions.
@@ -82,6 +85,7 @@ Phase is one of: `pulling`, `triaging`, `implementing`, `committing`, `idle`. Th
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
 
+<!-- sub-skill: pull-latest -->
 ### Step 1 — Pull Latest
 
 Print: `[🦑] Pulling latest...`
@@ -91,7 +95,9 @@ git pull --rebase
 ```
 
 If there is a rebase conflict in a tracker file, resolve it by keeping both versions — append the conflicting section below the existing one. Never discard entries.
+<!-- /sub-skill: pull-latest -->
 
+<!-- sub-skill: context-pressure -->
 ### Step 1b — Context Pressure Check
 
 Print: `[🦑] Checking context pressure...`
@@ -105,7 +111,9 @@ If context usage **exceeds the threshold**:
 4. Exit the conversation. The boot script will restart you with a fresh context window.
 
 If context usage is below threshold, continue normally.
+<!-- /sub-skill: context-pressure -->
 
+<!-- sub-skill: resume-working-state -->
 ### Step 1c — Resume From Working State
 
 Print: `[🦑] Checking working state...`
@@ -117,7 +125,9 @@ Read `.squidsquad/[ROLE]/working-state.md`. If it contains an active task (statu
 - Skip re-analyzing code you've already understood — trust the working state summary.
 
 If the file is empty or has no active task, proceed normally to Step 2.
+<!-- /sub-skill: resume-working-state -->
 
+<!-- sub-skill: interval-sync -->
 ### Step 1d — Interval Sync
 
 Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs from the interval used when the current cron was created, another agent (or the human) changed the interval. Re-schedule:
@@ -127,6 +137,7 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 3. Print: `[🦑] Interval changed to [N]m — cron re-scheduled.`
 
 If the interval matches, continue silently.
+<!-- /sub-skill: interval-sync -->
 
 ### Step 2 — Triage Bugs
 
@@ -290,6 +301,7 @@ Increment the `BUG-[OTHER_ROLE_UPPER]` counter in `config.md` after cross-filing
 
 ---
 
+<!-- sub-skill: working-state -->
 ## Working State File
 
 Maintain `.squidsquad/[ROLE]/working-state.md` to persist context across context window resets:
@@ -316,6 +328,7 @@ Maintain `.squidsquad/[ROLE]/working-state.md` to persist context across context
 - **Clear** (reset to `# Working State\n\n- **Task**: none\n- **Status**: none`) when a task is complete.
 - **Read on startup** (Step 1c) to resume mid-task after a context reset.
 - Before a **context pressure exit** (Step 1b), compact your current understanding into this file.
+<!-- /sub-skill: working-state -->
 
 ---
 
@@ -430,6 +443,7 @@ Phase is one of: `pulling`, `checkin`, `testing`, `verifying`, `planning`, `rese
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
 
+<!-- sub-skill: pull-latest -->
 ### Step 1 — Pull Latest
 
 Print: `[🦑] Pulling latest...`
@@ -438,7 +452,8 @@ Print: `[🦑] Pulling latest...`
 git pull --rebase
 ```
 
-If there is a rebase conflict in a tracker file, resolve it by keeping both versions. Never discard entries.
+If there is a rebase conflict in a tracker file, resolve it by keeping both versions — append the conflicting section below the existing one. Never discard entries.
+<!-- /sub-skill: pull-latest -->
 
 ### Step 1b — Context Pressure Check
 
@@ -546,6 +561,7 @@ For each active agent, read their `features/INDEX.md`. For each feature with sta
 3. **delivery:skip check**: If the feature is internal-only (agent template changes, config changes, internal tooling, process improvements) with no user-facing delivery work needed, add `delivery: skip` to the Discussion entry when marking Pending Ship: `> [YYYY-MM-DD HH:MM] **pm/qa**: Verified. delivery: skip (internal-only, no user-facing changes). Status → Pending Ship.` This tells the DM (or PM fallback) to skip delivery packaging and mark the feature Shipped immediately.
 4. If criteria fail: update back to `In Progress`, append Discussion entry with specific failures.
 
+<!-- sub-skill: pr-flow -->
 ### Step 6b — Monitor PRs (if PR Flow enabled)
 
 If `PR Flow: yes` in `config.md`:
@@ -564,11 +580,13 @@ For each PR:
 - **If open with "changes requested" review**: update status back to `In Progress`. Append Discussion entry with the requested changes.
 
 If `PR Flow: no`, skip this step.
+<!-- /sub-skill: pr-flow -->
 
 ### Step 6c — Increment Ship Counter for Closed Bugs
 
 When marking any bug as `Closed` in Step 5, increment the `Shipped Since Last Bump` counter in `config.md`. If DM is present, it handles version bumps. If DM is absent, PM handles version bumps in Step 6d.
 
+<!-- sub-skill: delivery-fallback -->
 ### Step 6d — PM Delivery Fallback (when DM absent)
 
 **DM presence check**: If `.squidsquad/dm/` directory exists, DM handles all delivery work — skip this step entirely.
@@ -597,6 +615,7 @@ Print: `[🦑] No DM present — PM performing delivery for FEAT-[ROLE_UPPER]-XX
      - If zero open bugs: **perform the bump**.
 
    **Bump sequence**:
+
    1. Read current version from `config.md` (e.g. `0.6.0`).
    2. Increment minor version, reset patch to 0 (e.g. `0.6.0` → `0.7.0`).
    3. Update `config.md`: set `SquidSquad Version` to new version.
@@ -619,6 +638,7 @@ Print: `[🦑] No DM present — PM performing delivery for FEAT-[ROLE_UPPER]-XX
    10. Reset `Shipped Since Last Bump` to `0` in `config.md`.
 
    Print: `[🦑] Version bumped to vX.Y.Z — tag created and pushed.`
+<!-- /sub-skill: delivery-fallback -->
 
 ### Step 7 — Agent Health Check
 
@@ -639,6 +659,7 @@ Read `.squidsquad/.local-config` to get each agent's clone path. For each dev ag
   ```
 - If `.local-config` is missing, path is unreachable, or `current-state` doesn't exist: agent status is unknown (❓) — note in QA log.
 
+<!-- sub-skill: github-issues -->
 ### Step 7b — Ingest GitHub Issues (if enabled)
 
 If `GitHub Issues Ingestion: yes` in `config.md`:
@@ -677,6 +698,7 @@ gh issue close [N] --comment "Resolved by SquidSquad. Tracked as [BUG/FEAT-ID]."
 ```
 
 If `GitHub Issues Ingestion: no`, skip this step entirely.
+<!-- /sub-skill: github-issues -->
 
 ### Step 8 — Log Iteration (skip on quiet cycles)
 
@@ -725,6 +747,7 @@ If you cannot determine ownership, file to all relevant trackers and cross-link 
 
 ---
 
+<!-- sub-skill: feature-intake -->
 ## Feature Lifecycle (5-Phase)
 
 When the human suggests a new feature, do NOT immediately file it. Run the full 5-phase lifecycle. Bugs are excluded — they use the current lightweight fix → verify → close flow.
@@ -989,6 +1012,22 @@ The PM decides — the subagent only reports results.
 
 ---
 
+## Open Artifacts in Editor
+
+After each planning phase creates an artifact (RESEARCH.md, CONTEXT.md, TEST-PLAN.md), check `config.md` for an `Open Artifacts in Editor` setting. If it is set to `no`, skip silently. Otherwise, use the `AskUserQuestion` tool:
+
+```
+question: "Would you like to review [ARTIFACT_NAME] in VS Code?"
+options: ["Yes, open in VS Code", "No thanks", "Never ask again"]
+```
+
+**Handling responses:**
+- **"Yes, open in VS Code"**: Run `code [artifact_path]`. If the `code` command fails (not on PATH), print the full file path instead so the user can open it manually.
+- **"No thanks"**: Continue to the next phase.
+- **"Never ask again"**: Add `- **Open Artifacts in Editor**: no` under a new `## Editor Integration` section in `config.md`, then continue.
+<!-- /sub-skill: feature-intake -->
+
+<!-- sub-skill: feature-approval -->
 ## Feature Approval Gate
 
 Features start as `Pending` — **a human must explicitly approve them** before any agent picks them up.
@@ -1009,22 +1048,7 @@ To approve a feature:
 Light mode (trivial features): PM can fast-track through planning with abbreviated research, but status still transitions through `Planning` → `Approved`.
 
 Do not set status to `Approved` without completing the planning phases. Do not approve features yourself without human confirmation.
-
----
-
-## Open Artifacts in Editor
-
-After each planning phase creates an artifact (RESEARCH.md, CONTEXT.md, TEST-PLAN.md), check `config.md` for an `Open Artifacts in Editor` setting. If it is set to `no`, skip silently. Otherwise, use the `AskUserQuestion` tool:
-
-```
-question: "Would you like to review [ARTIFACT_NAME] in VS Code?"
-options: ["Yes, open in VS Code", "No thanks", "Never ask again"]
-```
-
-**Handling responses:**
-- **"Yes, open in VS Code"**: Run `code [artifact_path]`. If the `code` command fails (not on PATH), print the full file path instead so the user can open it manually.
-- **"No thanks"**: Continue to the next phase.
-- **"Never ask again"**: Add `- **Open Artifacts in Editor**: no` under a new `## Editor Integration` section in `config.md`, then continue.
+<!-- /sub-skill: feature-approval -->
 
 ---
 
@@ -1177,6 +1201,7 @@ Phase is one of: `pulling`, `delivering`, `shipping`, `committing`, `idle`. The 
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
 
+<!-- sub-skill: pull-latest -->
 ### Step 1 — Pull Latest
 
 Print: `[🦑] Pulling latest...`
@@ -1185,7 +1210,8 @@ Print: `[🦑] Pulling latest...`
 git pull --rebase
 ```
 
-If there is a rebase conflict in a tracker file, resolve it by keeping both versions. Never discard entries.
+If there is a rebase conflict in a tracker file, resolve it by keeping both versions — append the conflicting section below the existing one. Never discard entries.
+<!-- /sub-skill: pull-latest -->
 
 ### Step 1b — Context Pressure Check
 
@@ -1213,6 +1239,7 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 2. Create a new cron with the updated interval.
 3. Print: `[🦑] Interval changed to [N]m — cron re-scheduled.`
 
+<!-- sub-skill: delivery-packaging -->
 ### Step 2 — Scan for Pending Ship Items
 
 Print: `[🦑] Scanning for Pending Ship items...`
@@ -1255,7 +1282,9 @@ For each Pending Ship feature that is NOT skipped:
    ```
 6. Increment `Shipped Since Last Bump` in `config.md`.
 7. Clear working state.
+<!-- /sub-skill: delivery-packaging -->
 
+<!-- sub-skill: version-bumps -->
 ### Step 3 — Version Bump Check
 
 After marking any item `Shipped`, check if a version bump is due:
@@ -1296,6 +1325,7 @@ After marking any item `Shipped`, check if a version bump is due:
 Print: `[🦑] Version bumped to vX.Y.Z — tag created and pushed.`
 
 **Version bumps always commit directly to main.**
+<!-- /sub-skill: version-bumps -->
 
 ### Step 4 — Log Iteration (skip on quiet cycles)
 
