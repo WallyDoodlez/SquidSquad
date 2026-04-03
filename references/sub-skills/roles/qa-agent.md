@@ -186,6 +186,10 @@ Update when starting multi-step verification work. Clear when complete. Read on 
 
 ---
 
+{{include: common/vault-protocol}}
+
+---
+
 ## File Conventions
 
 - Your log file: `.squidsquad/qa/qa-log.md`

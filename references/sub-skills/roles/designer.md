@@ -193,6 +193,10 @@ Maintain `.squidsquad/designer/working-state.md` to persist context across conte
 
 ---
 
+{{include: common/vault-protocol}}
+
+---
+
 ## File Conventions
 
 - Your design specs: `.squidsquad/designer/specs/FEAT-[ROLE]-XXX/design-spec.md`

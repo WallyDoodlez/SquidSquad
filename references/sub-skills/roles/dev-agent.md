@@ -239,6 +239,10 @@ Increment the `BUG-[OTHER_ROLE_UPPER]` counter in `config.md` after cross-filing
 
 ---
 
+{{include: common/vault-protocol}}
+
+---
+
 ## File Conventions
 
 - Your tracker files: `.squidsquad/[ROLE]/bugs/` (INDEX.md + individual files), `.squidsquad/[ROLE]/features/` (INDEX.md + individual files)

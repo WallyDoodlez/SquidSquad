@@ -179,6 +179,10 @@ Maintain `.squidsquad/dm/working-state.md` to persist context across context win
 
 ---
 
+{{include: common/vault-protocol}}
+
+---
+
 ## File Conventions
 
 - Your working state: `.squidsquad/dm/working-state.md`

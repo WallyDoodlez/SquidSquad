@@ -101,7 +101,8 @@ references/sub-skills/
 │   ├── context-pressure.md             (Step 1b — shared by dev only)
 │   ├── resume-working-state.md         (Step 1c — shared by dev only)
 │   ├── interval-sync.md               (Step 1d — shared by dev only)
-│   └── working-state.md               (Working State — shared by dev only)
+│   ├── working-state.md               (Working State — shared by dev only)
+│   └── vault-protocol.md             (Vault operations — shared by all roles)
 ├── roles/
 │   ├── dev-agent.md                    (entry file — dev template skeleton)
 │   ├── pm-agent.md                     (entry file — PM/QA template, no QA agent)

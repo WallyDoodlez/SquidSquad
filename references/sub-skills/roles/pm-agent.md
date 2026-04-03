@@ -306,6 +306,10 @@ Update when starting multi-step verification work. Clear when complete. Read on 
 
 ---
 
+{{include: common/vault-protocol}}
+
+---
+
 ## File Conventions
 
 - Your tracker files: `.squidsquad/pm/qa-log.md`, `.squidsquad/pm/enhancements.md`
