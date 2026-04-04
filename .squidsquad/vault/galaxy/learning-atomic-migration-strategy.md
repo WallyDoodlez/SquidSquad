@@ -7,9 +7,7 @@ owner: skill
 status: active
 confidence: medium
 source: observation
-links:
-  - "[[decision-sub-skill-architecture]]"
-  - "[[squidsquad]]"
+links: [decision-sub-skill-architecture, squidsquad]
 ---
 
 ## Context
