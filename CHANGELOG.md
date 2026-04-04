@@ -4,6 +4,38 @@ All notable changes to SquidSquad will be documented here.
 
 ---
 
+## [0.10.0] — 2026-04-04
+
+### Added
+
+- #16 — **Vault Phase 2**: You can now search the vault by tag, type, or keyword. Notes auto-validate on save (broken links, missing fields). Agents update existing notes surgically instead of rewriting them.
+- #30 — **Common sub-skills**: Shared behaviors (git commits, bug filing, discussion protocol, iteration logs) are now extracted into reusable sub-skills — cleaner templates, consistent behavior across all agents.
+- #31 — **Sub-skill names in status bar**: Line 2 of the status bar now shows which sub-skill is active (e.g. `git-commit — Pushing changes...`), making agent behavior transparent during operation.
+
+### Fixed
+
+- #23 — Agent CLAUDE.md bootstrappers now regenerate correctly after GitHub Issues migration.
+- #24 — Status bar reads bug/feature counts from GitHub Issues instead of stale local files.
+- #25 — Agent instructions no longer reference old local markdown tracker.
+- #26 — SKILL.md architecture diagram updated to show GitHub Issues as tracker.
+- #27 — README folder structure now includes all agent types (DM, Designer) with templates and boot scripts.
+- #28 — Dev agent correctly prioritizes bugs over features and blocks feature pickup when open bugs exist.
+- #32 — SKILL.md Bug Flow uses correct status labels matching the Label Taxonomy.
+- #33 — SKILL.md Ralph Loop descriptions reference `gh issue list` instead of old INDEX.md files.
+- #34 — Feature workflow now includes "Planned" state between Planning and Approved, giving you a clear approval gate.
+- #36 — Improvement scan now correctly classifies findings as bugs or features instead of filing everything as a feature.
+- #37 — SKILL.md no longer refers to PM/QA as a combined role — PM and QA are separate agents.
+- #38 — SKILL.md architecture diagram shows all five agent roles (Dev, Designer, QA, PM, DM).
+- #39 — SKILL.md Label Taxonomy corrected to show actual label names used on GitHub Issues.
+- #40 — SKILL.md Feature Flow includes the new "planned" status with corrected descriptions.
+- #41 — SKILL.md config template updated to current version and field structure.
+- #42 — SKILL.md setup no longer creates obsolete markdown tracker directories.
+- #43 — SKILL.md setup now generates QA and Designer directories, bootstrappers, and boot scripts.
+- #46 — Status bar correctly labels PM and QA as separate roles with QA-specific display logic.
+- #47 — Vault project note updated to reflect current version and GitHub Issues tracker.
+
+---
+
 ## [0.9.0] — 2026-04-04
 
 ### Added
