@@ -32,3 +32,11 @@
   - #49 — README Quick Start "Launch the Agents" section missing DM boot script example
   - #50 — README Cross-Team Bug Filing table uses bare `bug` label instead of `type:bug`
 - **Items rejected by human**: (none yet)
+
+## Scan — 2026-04-04 04:00
+
+- **Files scanned**: README.md (Agents table, Architecture mermaid diagram, How It Works), .squidsquad/vault/BRIEFING.md (full file)
+- **Findings**:
+  - #53 — BRIEFING.md extensively stale (v0.8.0, old tracker refs, outdated priorities, combined pm/qa)
+  - #54 — README Agents table and Architecture diagram missing DM role
+- **Items rejected by human**: (none yet)
