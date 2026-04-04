@@ -169,6 +169,55 @@ get_line2() {
   echo "  💡 $hint"
 }
 
+# --- Backlog counts via GitHub Issues (cached) ---
+# Cache refreshes at most every 5 minutes to avoid API latency in statusline
+BACKLOG_CACHE="$SQDIR/.backlog-cache"
+CACHE_MAX_AGE=300  # seconds
+CACHE_STALE=true
+if [ -f "$BACKLOG_CACHE" ]; then
+  if stat --version >/dev/null 2>&1; then
+    CACHE_MOD=$(stat -c %Y "$BACKLOG_CACHE" 2>/dev/null)
+  else
+    CACHE_MOD=$(stat -f %m "$BACKLOG_CACHE" 2>/dev/null)
+  fi
+  if [ -n "$CACHE_MOD" ]; then
+    CACHE_AGE=$(( NOW - CACHE_MOD ))
+    [ "$CACHE_AGE" -lt "$CACHE_MAX_AGE" ] && CACHE_STALE=false
+  fi
+fi
+
+if [ "$CACHE_STALE" = true ]; then
+  # Refresh cache in background (don't block statusline rendering)
+  (
+    AGENTS_LIST=$(grep 'Dev Agents' "$SQDIR/config.md" 2>/dev/null | sed 's/.*: //' | tr ',' ' ')
+    CACHE_TMP="$BACKLOG_CACHE.tmp"
+    : > "$CACHE_TMP"
+    for A in $AGENTS_LIST; do
+      A=$(echo "$A" | tr -d '[:space:]')
+      [ -z "$A" ] && continue
+      BUGS=$(timeout 5 gh issue list --label "type:bug,role:$A" --state open --json number --limit 100 2>/dev/null | grep -c '"number"') || true
+      FEATS=$(timeout 5 gh issue list --label "type:feature,role:$A,status:approved" --state open --json number --limit 100 2>/dev/null | grep -c '"number"') || true
+      FEATS_IP=$(timeout 5 gh issue list --label "type:feature,role:$A,status:in-progress" --state open --json number --limit 100 2>/dev/null | grep -c '"number"') || true
+      PSHIP=$(timeout 5 gh issue list --label "type:feature,role:$A,status:pending-ship" --state open --json number --limit 100 2>/dev/null | grep -c '"number"') || true
+      echo "${A}:bugs=${BUGS:-0}:feats=$(( ${FEATS:-0} + ${FEATS_IP:-0} )):pship=${PSHIP:-0}" >> "$CACHE_TMP"
+    done
+    # PM planning: check for features in planning status
+    PLANNING=$(timeout 5 gh issue list --label "type:feature,status:planning" --state open --json number,title --limit 1 2>/dev/null | grep -oE '"number":[0-9]+' | head -1 | grep -oE '[0-9]+') || true
+    echo "pm:planning=${PLANNING:-}" >> "$CACHE_TMP"
+    mv -f "$CACHE_TMP" "$BACKLOG_CACHE" 2>/dev/null
+  ) &
+fi
+
+# Read cache (may be from previous refresh)
+read_backlog_cache() {
+  local agent="$1" field="$2"
+  [ ! -f "$BACKLOG_CACHE" ] && echo "0" && return
+  local line=$(grep "^${agent}:" "$BACKLOG_CACHE" 2>/dev/null | head -1)
+  [ -z "$line" ] && echo "0" && return
+  local val=$(echo "$line" | grep -oE "${field}=[^:]*" | cut -d= -f2)
+  echo "${val:-0}"
+}
+
 # === PM-specific segments ===
 if [ "$ROLE" = "pm" ]; then
   # Ship counter: 📦 N/threshold, 🚀 if near bump
@@ -180,27 +229,12 @@ if [ "$ROLE" = "pm" ]; then
   NEAR_BUMP=$(( SHIP_THRESHOLD - 1 ))
   [ "$SHIPPED" -ge "$NEAR_BUMP" ] && SHIP_STR="${SHIP_STR} 🚀"
 
-  # Planning phase: 📋 FEAT-XXX PN — check all dev agent features for Planning status
+  # Planning phase: 📋 #NNN — check for features in Planning status via cached GH Issues
   PLANNING_STR=""
-  AGENTS=$(grep 'Dev Agents' "$SQDIR/config.md" 2>/dev/null | sed 's/.*: //' | tr ',' ' ')
-  for AGENT in $AGENTS; do
-    AGENT=$(echo "$AGENT" | tr -d '[:space:]')
-    [ -z "$AGENT" ] && continue
-    FEATS_FILE="$SQDIR/$AGENT/features/INDEX.md"
-    if [ -f "$FEATS_FILE" ]; then
-      PLANNING_FEAT=$(grep -E '\| Planning \|' "$FEATS_FILE" 2>/dev/null | grep -oE 'FEAT-[A-Z]+-[0-9]+' | head -1)
-      if [ -n "$PLANNING_FEAT" ]; then
-        # Detect which phase by checking for existing artifacts
-        PLAN_DIR="$SQDIR/$AGENT/planning"
-        PHASE="P1"
-        [ -f "$PLAN_DIR/${PLANNING_FEAT}-RESEARCH.md" ] && PHASE="P2"
-        [ -f "$PLAN_DIR/${PLANNING_FEAT}-CONTEXT.md" ] && PHASE="P3"
-        [ -f "$PLAN_DIR/${PLANNING_FEAT}-TEST-PLAN.md" ] && PHASE="P3✓"
-        PLANNING_STR="📋 ${PLANNING_FEAT} ${PHASE}"
-        break
-      fi
-    fi
-  done
+  PLANNING_NUM=$(read_backlog_cache "pm" "planning")
+  if [ -n "$PLANNING_NUM" ] && [ "$PLANNING_NUM" != "0" ] && [ "$PLANNING_NUM" != "" ]; then
+    PLANNING_STR="📋 #${PLANNING_NUM}"
+  fi
 
   # Agent health icons: 🦑 healthy, 👻 stalled, ❓ unknown
   # Reads cross-clone current-state files via .local-config paths
@@ -290,17 +324,14 @@ elif [ "$ROLE" = "dm" ]; then
   if [ -n "$ACTIVE_TASK" ] && [ "$ACTIVE_TASK" != "none" ]; then
     WORK_STR="📦 ${ACTIVE_TASK}"
   else
-    # Count Pending Ship items across all dev agent trackers
+    # Count Pending Ship items via cached GH Issues
     AGENTS=$(grep 'Dev Agents' "$SQDIR/config.md" 2>/dev/null | sed 's/.*: //' | tr ',' ' ')
     PSHIP_COUNT=0
     for AGENT in $AGENTS; do
       AGENT=$(echo "$AGENT" | tr -d '[:space:]')
       [ -z "$AGENT" ] && continue
-      FEATS_FILE="$SQDIR/$AGENT/features/INDEX.md"
-      if [ -f "$FEATS_FILE" ]; then
-        C=$(grep -cE '\| Pending Ship \|' "$FEATS_FILE" 2>/dev/null) || true
-        PSHIP_COUNT=$(( PSHIP_COUNT + ${C:-0} ))
-      fi
+      C=$(read_backlog_cache "$AGENT" "pship")
+      PSHIP_COUNT=$(( PSHIP_COUNT + ${C:-0} ))
     done
 
     if [ "$PSHIP_COUNT" -eq 0 ]; then
@@ -335,13 +366,9 @@ else
   if [ -n "$ACTIVE_TASK" ] && [ "$ACTIVE_TASK" != "none" ]; then
     WORK_STR="🔨 ${ACTIVE_TASK}"
   else
-    # Backlog counts
-    BUGS_FILE="$SQDIR/$ROLE/bugs/INDEX.md"
-    FEATS_FILE="$SQDIR/$ROLE/features/INDEX.md"
-    BUG_COUNT=0
-    FEAT_COUNT=0
-    [ -f "$BUGS_FILE" ] && BUG_COUNT=$(grep -cE '\| (Open|Investigating) \|' "$BUGS_FILE" 2>/dev/null) || true
-    [ -f "$FEATS_FILE" ] && FEAT_COUNT=$(grep -cE '\| (Approved|In Progress) \|' "$FEATS_FILE" 2>/dev/null) || true
+    # Backlog counts via cached GH Issues
+    BUG_COUNT=$(read_backlog_cache "$ROLE" "bugs")
+    FEAT_COUNT=$(read_backlog_cache "$ROLE" "feats")
     BUG_COUNT=${BUG_COUNT:-0}
     FEAT_COUNT=${FEAT_COUNT:-0}
 
