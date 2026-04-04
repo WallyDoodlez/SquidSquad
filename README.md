@@ -120,11 +120,15 @@ All coordination is asynchronous through git — agents pull to read the latest 
 ├── templates/                  <- shared agent instruction templates (build-time substituted)
 │   ├── dev-agent-[role].md     <- full Ralph Loop instructions per dev agent
 │   ├── pm-agent.md             <- full Ralph Loop instructions for PM
-│   └── qa-agent.md             <- full Ralph Loop instructions for QA
+│   ├── qa-agent.md             <- full Ralph Loop instructions for QA
+│   ├── dm-agent.md             <- full Ralph Loop instructions for Delivery Manager
+│   └── designer.md             <- full Ralph Loop instructions for Designer
 ├── statusline.sh               <- powers the Claude Code status bar for all agents
 ├── start-[role].sh/.ps1        <- one boot script pair per dev agent
 ├── start-pm.sh/.ps1            <- PM boot scripts
 ├── start-qa.sh/.ps1            <- QA boot scripts
+├── start-dm.sh/.ps1            <- DM boot scripts (when DM enabled)
+├── start-designer.sh/.ps1      <- Designer boot scripts (when designer role defined)
 ├── [role]/                     <- one folder per dev agent
 │   ├── CLAUDE.md               <- bootstrapper: role config + Read instruction to template
 │   ├── working-state.md        <- persists task progress across context resets
@@ -163,7 +167,7 @@ All coordination is asynchronous through git — agents pull to read the latest 
 ## Features
 
 ### Status Line (Emoji Rich)
-A live status bar at the bottom of each agent's Claude Code session. **Line 1**: 🦑 + role/version, backlog (🐛 bugs, ⭐ features) or active task (🔨 FEAT-XXX), context pressure (🧠/🧠🔥/🧠💀 with colored percentage), cycle countdown (🔄/🔜), and for PM: health icons (🦑/👻/❓) + rest nudge. **Line 2**: current Ralph Loop step (emoji + description, truncated at 60 chars) or rotating contextual hints when idle — human-facing prompts like "Msg me any time to file a bug", rotating every 60 seconds, phase-aware. Hint pools defined in `references/hints-dev.txt` and `references/hints-pm.txt`.
+A live status bar at the bottom of each agent's Claude Code session. **Line 1**: 🦑 + role/version, backlog (🐛 bugs, ⭐ features) or active task (🔨 FEAT-XXX), context pressure (🧠/🧠🔥/🧠💀 with colored percentage), cycle countdown (🔄/🔜), and for PM: health icons (🦑/👻/❓) + rest nudge. **Line 2**: current Ralph Loop step with active sub-skill name (e.g. `git-commit — Pushing changes...`, `tracker-protocol — Checking #28...`) or rotating contextual hints when idle — human-facing prompts like "Msg me any time to file a bug", rotating every 60 seconds, phase-aware. Hint pools defined in `references/hints-dev.txt` and `references/hints-pm.txt`.
 
 ### Step Markers
 Every Ralph Loop step prints a `[🦑]` prefixed line (e.g. `[🦑] Pulling latest...`, `[🦑] Triaging bugs...`, `[🦑] Committing and pushing...`). Makes SquidSquad activity easy to scan in terminal scrollback.
