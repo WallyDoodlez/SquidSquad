@@ -24,3 +24,11 @@
   - #45 — SKILL.md Git Protocol references old markdown tracker concepts (INDEX.md, archived/, individual .md files)
 - **Observations**: #26 (architecture diagram) and #33 (Ralph Loop descriptions) appear addressed in latest commits but issues still open
 - **Items rejected by human**: (none yet)
+
+## Scan — 2026-04-04 03:00
+
+- **Files scanned**: README.md (Quick Start, Cross-Team Bug Filing, Requirements, Git Protocol, Versioning, Philosophy)
+- **Findings**:
+  - #49 — README Quick Start "Launch the Agents" section missing DM boot script example
+  - #50 — README Cross-Team Bug Filing table uses bare `bug` label instead of `type:bug`
+- **Items rejected by human**: (none yet)
