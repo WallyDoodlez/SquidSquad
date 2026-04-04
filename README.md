@@ -35,6 +35,7 @@ SquidSquad always has a **PM** agent. When dev or designer agents are present, a
 | **[role] Lead** (one per dev role) | Fix bugs → implement features → run tests → push | Autonomous (`--enable-auto-mode`) |
 | **Designer** (optional) | Review design requests → interactive design sessions with human → produce specs → hand off to dev | Autonomous with interactive design sessions |
 | **QA** (auto-added when dev/designer present) | E2E tests → verify bugs → test features → health checks → push | Autonomous |
+| **DM** (Delivery Manager) | Delivery packaging → CHANGELOG → version bumps → docs | Autonomous |
 | **PM** | Human check-in → feature intake → backlog management → push | Interactive (you talk to this one) |
 
 **Common team shapes:**
@@ -82,6 +83,7 @@ graph TD
         R1["[role] Lead\n(autonomous)"]
         R2["[role] Lead\n(autonomous)"]
         DS["Designer\n(autonomous + interactive)"]
+        DM["DM\n(autonomous)"]
     end
 
     subgraph repo["Git Repository"]
@@ -108,6 +110,7 @@ graph TD
     DS -- "design specs" --> T1
     DS -- "design specs" --> T2
     PM -- "routes design requests" --> DS
+    DM -- "delivery packaging" --> CFG
 ```
 
 All coordination is asynchronous through git — agents pull to read the latest state and push after each work unit. No direct agent-to-agent communication needed.
