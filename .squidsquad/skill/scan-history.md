@@ -41,3 +41,9 @@
 - **Files scanned**: references/sub-skills/pm-specific/feature-approval.md, references/sub-skills/pm-specific/delivery-fallback.md, references/sub-skills/pm-specific/pr-flow.md
 - **Findings**: #58 (delivery-fallback.md and pr-flow.md still use pm/qa Discussion alias)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-05 04:30
+
+- **Files scanned**: references/sub-skills/qa-specific/verification.md, references/sub-skills/designer-specific/design-session.md, references/sub-skills/designer-specific/design-tools.md
+- **Findings**: #61 (design-session.md references features/INDEX.md instead of GitHub Issues)
+- **Items rejected by human**: none yet
