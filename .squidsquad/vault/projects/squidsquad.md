@@ -2,7 +2,7 @@
 type: project
 tags: [multi-agent, claude-code, skill, autonomous]
 created: 2026-04-02
-updated: 2026-04-02
+updated: 2026-04-04
 owner: pm
 status: active
 confidence: medium
@@ -11,7 +11,7 @@ links: [decision-sub-skill-architecture, code-conventions]
 
 ## Overview
 
-SquidSquad is a Claude Code skill that spins up autonomous AI agents -- one per dev role plus PM and QA -- that work on a codebase in parallel and coordinate through a shared `.squidsquad/` folder using markdown files and git. No message queues or orchestration servers. The project is at version 0.8.0 with Tracker Schema 3 and Architecture Version 1. Repository: github.com/WallyDoodlez/SquidSquad.
+SquidSquad is a Claude Code skill that spins up autonomous AI agents -- one per dev role plus PM and QA -- that work on a codebase in parallel and coordinate through a shared `.squidsquad/` folder using markdown files and git. No message queues or orchestration servers. The project is at version 0.9.0 with Architecture Version 1. Tracker is GitHub Issues with structured labels. Repository: github.com/WallyDoodlez/SquidSquad.
 
 Key goals:
 - Autonomous multi-agent development via the "Ralph Loop" (pull, triage bugs, implement features, commit, push)
@@ -23,7 +23,7 @@ Key goals:
 
 - **Tech stack**: Claude Code CLI instances, markdown-based coordination, git, bash/PowerShell boot scripts
 - **Agent types**: PM (interactive), QA (autonomous), role leads (autonomous), Designer (optional, autonomous + interactive)
-- **Coordination**: Shared `.squidsquad/` directory with per-role tracker files (bugs/, features/, working-state.md)
+- **Coordination**: Shared `.squidsquad/` directory with per-role working state + GitHub Issues as tracker (bugs/features as labeled Issues)
 - **Sub-skill system**: Main skill orchestrates; roles are independent sub-skills with common sub-skills auto-included (tracker protocol, Ralph Loop, context pressure, git protocol)
 - **Composition**: Build-time concatenation of sub-skill sources from `references/sub-skills/` into `agent-instructions.md`
 
@@ -45,3 +45,4 @@ Key goals:
 ### Changelog
 
 - 2026-04-02 -- Created by QA agent. Initial project note from codebase review during vault-create testing.
+- 2026-04-04 -- Updated by skill-lead. Fixed stale version (0.8.0→0.9.0), removed Tracker Schema reference, updated coordination to GitHub Issues (#47).

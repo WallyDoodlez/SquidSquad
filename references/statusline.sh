@@ -94,7 +94,11 @@ fi
 
 # Role label
 if [ "$ROLE" = "pm" ]; then
-  ROLE_LABEL="PM/QA"
+  ROLE_LABEL="PM"
+elif [ "$ROLE" = "qa" ]; then
+  ROLE_LABEL="QA"
+elif [ "$ROLE" = "dm" ]; then
+  ROLE_LABEL="DM"
 else
   ROLE_LABEL="$ROLE"
 fi
