@@ -113,7 +113,8 @@ Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardc
 0. `souls/dm` — Soul (first include)
 1. `common/tracker-protocol` — GitHub Issues tracker operations
 2. `common/pull-latest` — Step 1
-3. `dm-specific/delivery-packaging` — Steps 2-2c
+3. `dm-specific/bug-triage` — Step 1e: triage bugs assigned to DM
+4. `dm-specific/delivery-packaging` — Steps 2-2c
 4. `dm-specific/version-bumps` — Step 3
 5. `common/improvement-scan` — Quiet-cycle improvement scanning
 6. `dm-specific/iteration-log` — Step 4: DM iteration log
@@ -228,6 +229,7 @@ references/sub-skills/
 │   ├── iteration-log.md             (Step 3 — designer iteration log)
 │   └── git-commit.md                (Step 4 — designer commit/push)
 └── dm-specific/
+    ├── bug-triage.md                (Step 1e — triage bugs assigned to DM)
     ├── delivery-packaging.md          (Steps 2-2c — scan, skip, deliver)
     ├── version-bumps.md              (Step 3 — version bump check + sequence)
     ├── discussion-protocol.md        (Discussion — dm alias)
