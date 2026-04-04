@@ -145,10 +145,10 @@ Issues use labels for structured metadata. The following labels must exist on th
 To list issues by status and role:
 
 # List approved features for your role
-gh issue list --label "feature,status:approved,role:skill" --json number,title,labels --limit 50
+gh issue list --label "type:feature,status:approved,role:skill" --json number,title,labels --limit 50
 
 # List open bugs for your role
-gh issue list --label "bug,role:skill" --label "status:pending-test" --json number,title,labels --limit 50
+gh issue list --label "type:bug,role:skill" --label "status:pending-test" --json number,title,labels --limit 50
 
 # List all items pending test across all agents (for QA)
 gh issue list --label "status:pending-test" --json number,title,labels --limit 50
@@ -165,12 +165,12 @@ gh issue view [NUMBER] --json title,body,labels,comments
 # File a bug
 gh issue create --title "BUG: [title]" \
   --body "[description, steps to reproduce, expected vs actual]" \
-  --label "bug,severity:[level],role:[target-role],squidsquad,status:pending"
+  --label "type:bug,severity:[level],role:[target-role],squidsquad,status:pending"
 
 # File a feature
 gh issue create --title "FEAT: [title]" \
   --body "[description, acceptance criteria]" \
-  --label "feature,priority:[level],role:[target-role],squidsquad,status:pending"
+  --label "type:feature,priority:[level],role:[target-role],squidsquad,status:pending"
 
 After creating, note the returned Issue number for reference.
 
@@ -322,7 +322,7 @@ Print: `[🦑] Triaging bugs...`
 
 Query GitHub Issues for open bugs assigned to your role:
 
-gh issue list --label "bug,role:skill" --json number,title,labels,body --limit 50
+gh issue list --label "type:bug,role:skill" --json number,title,labels,body --limit 50
 
 For each bug that does not have a `status:shipped` or closed state:
 
@@ -337,7 +337,7 @@ For each bug that does not have a `status:shipped` or closed state:
    - Clear working state.
 7. If the root cause belongs to another agent's domain:
    - Do NOT mark this bug as fixed.
-   - File a new bug to the other agent's domain: `gh issue create --title "BUG: [title]" --body "[description]" --label "bug,role:[OTHER_ROLE],squidsquad,severity:[level]"`
+   - File a new bug to the other agent's domain: `gh issue create --title "BUG: [title]" --body "[description]" --label "type:bug,role:[OTHER_ROLE],squidsquad,severity:[level]"`
    - Comment on the original: `gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **skill-lead**: Root cause is in [OTHER_ROLE]. Filed #[NEW_NUMBER]. Blocking."`
    - Clear working state.
 
@@ -347,7 +347,7 @@ Print: `[🦑] Checking features...`
 
 **First, check for QA-rejected features** (higher priority than new work — fix existing before starting new):
 
-gh issue list --label "feature,status:in-progress,role:skill" --json number,title,labels --limit 50
+gh issue list --label "type:feature,status:in-progress,role:skill" --json number,title,labels --limit 50
 
 For each `In Progress` feature, check for new QA/PM feedback since your last comment:
 
@@ -367,7 +367,7 @@ If there are comments from `**qa**` or `**pm**` after your last `**skill-lead**`
 
 **Then, check for new approved features**:
 
-gh issue list --label "feature,status:approved,role:skill" --json number,title,labels --limit 50
+gh issue list --label "type:feature,status:approved,role:skill" --json number,title,labels --limit 50
 
 Pick the highest-priority feature (check `priority:high` first, then `priority:medium`, then `priority:low`). Read it: `gh issue view [NUMBER] --json title,body,labels,comments`
 
@@ -574,13 +574,13 @@ You can file bugs to your own domain or directly to any other agent's domain via
 
 gh issue create --title "BUG: [title]" \
   --body "**Reported By**: skill-lead\n**Severity**: [High/Medium/Low]\n\n**Description**: [what and why]\n\n**Steps to Reproduce**:\n1. [steps]\n\n**Expected**: [expected]\n**Actual**: [actual]" \
-  --label "bug,severity:[level],role:skill,squidsquad"
+  --label "type:bug,severity:[level],role:skill,squidsquad"
 
 **Cross-file** when the root cause is in another agent's domain:
 
 gh issue create --title "BUG: [title]" \
   --body "**Reported By**: skill-lead\n**Assigned To**: [OTHER_ROLE]\n**Severity**: [High/Medium/Low]\n\n**Description**: [what and why]\n\n**Steps to Reproduce**:\n1. [steps]\n\n**Expected**: [expected]\n**Actual**: [actual]" \
-  --label "bug,severity:[level],role:[OTHER_ROLE],squidsquad"
+  --label "type:bug,severity:[level],role:[OTHER_ROLE],squidsquad"
 
 After filing, note the returned Issue number and comment on the original issue if cross-filing.
 

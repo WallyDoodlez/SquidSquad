@@ -143,10 +143,10 @@ Issues use labels for structured metadata. The following labels must exist on th
 To list issues by status and role:
 
 # List approved features for your role
-gh issue list --label "feature,status:approved,role:skill" --json number,title,labels --limit 50
+gh issue list --label "type:feature,status:approved,role:skill" --json number,title,labels --limit 50
 
 # List open bugs for your role
-gh issue list --label "bug,role:skill" --label "status:pending-test" --json number,title,labels --limit 50
+gh issue list --label "type:bug,role:skill" --label "status:pending-test" --json number,title,labels --limit 50
 
 # List all items pending test across all agents (for QA)
 gh issue list --label "status:pending-test" --json number,title,labels --limit 50
@@ -163,12 +163,12 @@ gh issue view [NUMBER] --json title,body,labels,comments
 # File a bug
 gh issue create --title "BUG: [title]" \
   --body "[description, steps to reproduce, expected vs actual]" \
-  --label "bug,severity:[level],role:[target-role],squidsquad,status:pending"
+  --label "type:bug,severity:[level],role:[target-role],squidsquad,status:pending"
 
 # File a feature
 gh issue create --title "FEAT: [title]" \
   --body "[description, acceptance criteria]" \
-  --label "feature,priority:[level],role:[target-role],squidsquad,status:pending"
+  --label "type:feature,priority:[level],role:[target-role],squidsquad,status:pending"
 
 After creating, note the returned Issue number for reference.
 
