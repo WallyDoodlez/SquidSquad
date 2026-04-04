@@ -86,8 +86,8 @@ When you invoke SquidSquad, it creates the following inside your project root. O
 ├── start-dm.sh / start-dm.ps1  ← boot script: launches Delivery Manager (autonomous)
 ├── be/                         ← one folder per dev agent, named after the role
 │   ├── CLAUDE.md               ← bootstrapper (~20 lines): role config + Read instruction to template
-│   ├── bugs/                   ← INDEX.md + individual BUG-BE-XXX.md files + archived/
-│   ├── features/               ← INDEX.md + individual FEAT-BE-XXX.md files + archived/
+│   ├── working-state.md        ← crash recovery state
+│   ├── planning/               ← feature planning artifacts (research, context, test plans)
 │   └── iterations/             ← iter-N.md logs per cycle
 ├── dm/                         ← Delivery Manager (optional — created when user opts in)
 │   ├── CLAUDE.md               ← bootstrapper: role config + Read instruction to template
@@ -128,7 +128,7 @@ SquidSquad uses GitHub Issues as its tracker. All bugs and features are GitHub I
 |----------|--------|---------|
 | Type | `type:bug`, `type:feature` | What kind of item |
 | Priority | `priority:high`, `priority:medium`, `priority:low` | Triage ordering |
-| Status | `status:pending`, `status:planning`, `status:planned`, `status:approved`, `status:in-progress`, `status:pending-test`, `status:pending-ship`, `status:shipped` | Workflow state |
+| Status | `status:open`, `status:pending`, `status:planning`, `status:planned`, `status:approved`, `status:in-progress`, `status:pending-test`, `status:pending-ship`, `status:shipped` | Workflow state |
 | Role | `role:skill`, `role:fe`, `role:be`, `role:pm`, `role:qa`, `role:dm`, `role:designer` | Which agent owns it |
 | Severity (bugs) | `severity:high`, `severity:medium`, `severity:low` | Bug impact |
 | Special | `squidsquad`, `improvement-scan` | Metadata |
@@ -195,7 +195,7 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
    → Clear working state on completion, append Discussion as Issue comment
 4. Run [role] test command (from config.md)
 5. If quiet cycle (no bugs fixed, no features progressed):
-   → If Improvement Scanning enabled and quiet cycle counter ≥ 3: scan target project for domain-specific improvements, file findings through PM (max 2 per scan)
+   → If Improvement Scanning enabled and quiet cycle counter ≥ 3: scan target project for domain-specific improvements (max 2 per scan). Classify each finding as a **bug** (broken, wrong, or stale behavior — e.g. dead code, incorrect docs, failing edge cases) or **feature** (new or enhanced capability — e.g. missing test coverage, performance optimization, UX improvement). File bugs directly as GitHub Issues with `type:bug` + `status:open`; file features through PM with `type:feature` + `status:pending` for human approval
    → Otherwise: skip log/commit, go to sleep
 6. Log iteration to [role]/iterations/iter-N.md
 7. git add -A && git commit && git push
@@ -257,11 +257,11 @@ When `PR Flow: yes` is set in `config.md`, dev agents create PRs instead of push
 
 - **Branching convention**: `squidsquad/feat-[role]-NNN` or `squidsquad/bug-[role]-NNN` (e.g. `squidsquad/feat-skill-008`)
 - **Dev agent workflow**: when marking work as `Pending Test`, create a branch, push it, and open a PR via `gh pr create`. Record the PR link in the tracker Discussion.
-- **PM/QA workflow**: each cycle, check open SquidSquad PRs via `gh pr list`. For each PR:
+- **PM and QA workflow**: each cycle, check open SquidSquad PRs via `gh pr list`. For each PR:
   - If merged: update the tracker item status to `Shipped`
   - If changes requested: update status back to `In Progress` and append the feedback to Discussion
   - If new comments: append them to the tracker Discussion
-- **PM/QA still pushes to main** — only dev agent feature/bug work goes through PRs. PM tracker updates (individual bug/feature file status changes, INDEX.md regeneration, qa-log, iterations) continue to push directly to main.
+- **PM and QA still push to main** — only dev agent feature/bug work goes through PRs. PM tracker updates (individual bug/feature file status changes, INDEX.md regeneration, iterations) and QA updates (qa-log, iterations) continue to push directly to main.
 - When `PR Flow: no` (default), agents push directly to main as before.
 
 ---
@@ -308,7 +308,7 @@ Collect these fields:
 | 3 | **Dev agents** | Comma-separated role names, e.g. `fe, be` / `be` / `api, worker` | `fe, be` | At least one role required; each name must be a simple lowercase identifier |
 | 4 | **Framework / language** | One per dev agent, e.g. BE: FastAPI, FE: Next.js | _(none)_ | Optional per agent |
 | 5 | **Test command** | One per dev agent, e.g. `cd backend && pytest tests/` | _(none)_ | Optional per agent |
-| 6 | **E2E test command** | Full-stack test command run by PM/QA each cycle | _(none)_ | Optional — if none, PM skips the test step |
+| 6 | **E2E test command** | Full-stack test command run by QA each cycle | _(none)_ | Optional — if none, QA skips the test step |
 | 7 | **Loop interval** | Minutes between Ralph Loop cycles | `10` | Must be an integer >= 1; re-prompt if invalid |
 | 8 | **Seed items** | Bugs or features to pre-populate into trackers | _(none)_ | Optional |
 | 9 | **PR-based approval flow** | Create PRs instead of pushing to main? Requires `gh` CLI. | `N` (disabled) | `y`/`n` — if `y`, verify `gh auth status` succeeds |
@@ -409,7 +409,7 @@ Seed the vault with an initial project note (`vault/projects/{project-name}.md`)
 ## Agents
 
 - **Dev Agents**: [ROLE1], [ROLE2], ...  ← one entry per dev role defined at setup
-- **PM/QA**: always present
+- **PM**: always present  ← QA is auto-added when dev or designer agents are present
 
 ## Test Commands
 
@@ -482,10 +482,10 @@ You MUST read `.squidsquad/templates/dev-agent-[role].md` NOW for your complete 
 If the template file cannot be read, print: "ERROR: Template file `.squidsquad/templates/dev-agent-[role].md` not found. Run `/squidsquad-upgrade` to regenerate templates." and stop.
 ```
 
-For PM/QA, generate `.squidsquad/pm/CLAUDE.md`:
+For PM, generate `.squidsquad/pm/CLAUDE.md`:
 
 ```markdown
-# SquidSquad — PM/QA
+# SquidSquad — PM
 
 ## Role Config
 
@@ -513,6 +513,45 @@ Read `.squidsquad/templates/dm-agent.md` for your full instructions. Follow the 
 ```
 
 Also create `.squidsquad/dm/working-state.md` (empty working state) and `.squidsquad/dm/iterations/` directory.
+
+For QA (when dev or designer agents are present), generate `.squidsquad/qa/CLAUDE.md`:
+
+```markdown
+# SquidSquad — QA
+
+## Role Config
+
+- **Role**: qa
+- **Active Agents**: [ACTIVE_AGENTS]
+- **E2E Test Command**: [E2E_TEST_CMD]
+- **Interval**: [INTERVAL] minutes
+- **Template**: `.squidsquad/templates/qa-agent.md`
+
+## Instructions
+
+You MUST read `.squidsquad/templates/qa-agent.md` NOW for your complete Ralph Loop instructions. Follow them exactly — begin your first cycle immediately.
+
+If the template file cannot be read, print: "ERROR: Template file `.squidsquad/templates/qa-agent.md` not found. Run `/squidsquad-upgrade` to regenerate templates." and stop.
+```
+
+For Designer (when a designer role is defined), generate `.squidsquad/designer/CLAUDE.md`:
+
+```markdown
+# SquidSquad — Designer
+
+## Role Config
+
+- **Role**: designer
+- **Active Agents**: [ACTIVE_AGENTS]
+- **Interval**: [INTERVAL] minutes
+- **Template**: `.squidsquad/templates/designer-agent.md`
+
+## Instructions
+
+You MUST read `.squidsquad/templates/designer-agent.md` NOW for your complete Ralph Loop instructions. Follow them exactly — begin your first cycle immediately.
+
+If the template file cannot be read, print: "ERROR: Template file `.squidsquad/templates/designer-agent.md` not found. Run `/squidsquad-upgrade` to regenerate templates." and stop.
+```
 
 #### Step 4c — Root CLAUDE.md
 
@@ -625,7 +664,7 @@ if [ -d .squidsquad ]; then
    ███████
    ▐█████▌
     ▐▌▐▌▐▌
-  S Q U I D S Q U A D   v${V:-?}  —  PM / QA
+  S Q U I D S Q U A D   v${V:-?}  —  PM
 
 LOGO
 fi
@@ -660,7 +699,7 @@ if (Test-Path .squidsquad) {
     Write-Host "   ███████"
     Write-Host "   ▐█████▌"
     Write-Host "    ▐▌▐▌▐▌"
-    Write-Host "  S Q U I D S Q U A D   v$v  -  PM / QA"
+    Write-Host "  S Q U I D S Q U A D   v$v  -  PM"
     Write-Host ""
 }
 
@@ -746,6 +785,140 @@ Remove-Item .squidsquad/dm/current-state -ErrorAction SilentlyContinue
 claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=dm" "start the loop"
 ```
 
+**`start-qa.sh`** (QA uses the same pattern — autonomous):
+```bash
+#!/bin/bash
+cd "$(git rev-parse --show-toplevel)"
+
+if [ -d .squidsquad ]; then
+  V=$(grep -o '[0-9][0-9.]*[0-9]' .squidsquad/config.md 2>/dev/null | head -1)
+  cat << LOGO
+
+      ▗▄▖
+     ▟█ █▙
+    ▐█• •█▌
+   ███████
+   ▐█████▌
+    ▐▌▐▌▐▌
+  S Q U I D S Q U A D   v${V:-?}  —  QA
+
+LOGO
+fi
+
+# Inject permissions from template into settings.json
+bash .squidsquad/inject-permissions.sh 2>/dev/null || true
+
+# Write role for statusline
+echo "qa" > .squidsquad/.active-role
+
+# Clear and initialize status bar state
+rm -f .squidsquad/qa/current-state
+echo "idle|Initializing..." > .squidsquad/qa/current-state
+
+claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=qa" "start the loop"
+```
+
+**`start-qa.ps1`**:
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$repoRoot = git rev-parse --show-toplevel
+Set-Location $repoRoot
+
+if (Test-Path .squidsquad) {
+    $config = Get-Content .squidsquad/config.md -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
+    $v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
+
+    Write-Host ""
+    Write-Host "      ▗▄▖"
+    Write-Host "     ▟█ █▙"
+    Write-Host "    ▐█• •█▌"
+    Write-Host "   ███████"
+    Write-Host "   ▐█████▌"
+    Write-Host "    ▐▌▐▌▐▌"
+    Write-Host "  S Q U I D S Q U A D   v$v  -  QA"
+    Write-Host ""
+}
+
+# Inject permissions from template into settings.json
+& (Join-Path $repoRoot ".squidsquad/inject-permissions.ps1")
+
+# Write role for statusline
+"qa" | Set-Content .squidsquad/.active-role -NoNewline
+
+# Clear and initialize status bar state
+Remove-Item .squidsquad/qa/current-state -ErrorAction SilentlyContinue
+"idle|Initializing..." | Set-Content .squidsquad/qa/current-state -NoNewline
+
+claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=qa" "start the loop"
+```
+
+**`start-designer.sh`** (Designer — autonomous, only when designer role is defined):
+```bash
+#!/bin/bash
+cd "$(git rev-parse --show-toplevel)"
+
+if [ -d .squidsquad ]; then
+  V=$(grep -o '[0-9][0-9.]*[0-9]' .squidsquad/config.md 2>/dev/null | head -1)
+  cat << LOGO
+
+      ▗▄▖
+     ▟█ █▙
+    ▐█• •█▌
+   ███████
+   ▐█████▌
+    ▐▌▐▌▐▌
+  S Q U I D S Q U A D   v${V:-?}  —  Designer
+
+LOGO
+fi
+
+# Inject permissions from template into settings.json
+bash .squidsquad/inject-permissions.sh 2>/dev/null || true
+
+# Write role for statusline
+echo "designer" > .squidsquad/.active-role
+
+# Clear and initialize status bar state
+rm -f .squidsquad/designer/current-state
+echo "idle|Initializing..." > .squidsquad/designer/current-state
+
+claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=designer" "start the loop"
+```
+
+**`start-designer.ps1`**:
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$repoRoot = git rev-parse --show-toplevel
+Set-Location $repoRoot
+
+if (Test-Path .squidsquad) {
+    $config = Get-Content .squidsquad/config.md -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
+    $v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
+
+    Write-Host ""
+    Write-Host "      ▗▄▖"
+    Write-Host "     ▟█ █▙"
+    Write-Host "    ▐█• •█▌"
+    Write-Host "   ███████"
+    Write-Host "   ▐█████▌"
+    Write-Host "    ▐▌▐▌▐▌"
+    Write-Host "  S Q U I D S Q U A D   v$v  -  Designer"
+    Write-Host ""
+}
+
+# Inject permissions from template into settings.json
+& (Join-Path $repoRoot ".squidsquad/inject-permissions.ps1")
+
+# Write role for statusline
+"designer" | Set-Content .squidsquad/.active-role -NoNewline
+
+# Clear and initialize status bar state
+Remove-Item .squidsquad/designer/current-state -ErrorAction SilentlyContinue
+"idle|Initializing..." | Set-Content .squidsquad/designer/current-state -NoNewline
+
+claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=designer" "start the loop"
+```
+
 Make the `.sh` scripts executable (`chmod +x`).
 
 > **BOM-safe writes on Windows**: PowerShell 5.x `Set-Content -Encoding UTF8` adds a UTF-8 BOM, which breaks JSON parsers (node, jq, Claude). When writing files consumed by other tools (JSON, config files), use `[System.IO.File]::WriteAllText($path, $content, [System.Text.UTF8Encoding]::new($false))` instead. The `inject-permissions.ps1` script already follows this pattern.
@@ -759,7 +932,7 @@ Copy `references/statusline.sh` to `.squidsquad/statusline.sh`. This is the cano
 The script implements the **Emoji Rich** status bar design:
 
 - **🦑** — SquidSquad brand, always present
-- **Role + version** — e.g. `PM/QA v0.5.1`, `skill v0.5.1`
+- **Role + version** — e.g. `PM v0.9.0`, `skill v0.9.0`
 - **📦 N/threshold** — ship counter (PM only), 🚀 appears when counter >= threshold - 1
 - **📋 FEAT-XXX PN** — planning phase in progress (PM only, shown when a feature is in `Planning` status)
 - **↑N / ↓N** — git sync status, only shown when out of sync with remote
@@ -775,7 +948,7 @@ Output examples:
 - Dev idle: `🦑 skill v0.5.1 │ 🐛3 ⭐2 │ 🧠 42% │ 🔄 4m` + line 2: `  Msg me any time to file a bug or request a feature`
 - Dev working: `🦑 skill v0.5.1 │ 🔨 FEAT-017 │ 🧠 31% │ 🔄 3m` + line 2: `  🔨 FEAT-SKILL-017...`
 - Dev clear: `🦑 be v0.5.1 │ ✅ clear │ 🧠 12% │ 🔄 5m` + line 2: `  All clear — ready for the next task`
-- PM: `🦑 PM/QA v0.5.1 │ 📦 9/10 🚀 │ 📋 FEAT-017 P2 │ 🧠 42% │ 🔄 2m │ 🦑🦑🦑` + line 2: `  Running tests to check system health...`
+- PM: `🦑 PM v0.9.0 │ 📦 9/10 🚀 │ 📋 FEAT-017 P2 │ 🧠 42% │ 🔄 2m │ 🦑🦑🦑` + line 2: `  Running tests to check system health...`
 
 Make the copied script executable (`chmod +x`).
 
@@ -798,7 +971,7 @@ Create `.squidsquad/.local-config` (gitignored, machine-specific) with the follo
 - **[role]**: [ABSOLUTE_PATH_TO_ROLE_CLONE]
 ```
 
-For each agent (dev agents + PM/QA):
+For each agent (dev agents + PM + QA):
 
 1. **Ask for clone path**: Suggest a default sibling directory (e.g., `../SquidSquad-[role]` relative to the current repo). The user can accept the default or provide a custom absolute path.
 2. **Clone the repo**: `git clone <repo-url> <path>`. Skip if the directory already exists (user may have cloned manually).
@@ -810,37 +983,58 @@ For each agent (dev agents + PM/QA):
 
 The user goes from "I want a skill agent" to "skill agent is running" in one flow. PM is typically the last agent launched (since the user interacts with PM directly).
 
-### Step 6 — Seed Tracker Files
+### Step 6 — Seed GitHub Issues Labels and Initial Files
 
-Initialize tracker directories with INDEX.md files:
+#### Step 6a — Create GitHub Issues Labels
 
-**`[role]/bugs/INDEX.md`** (one per dev agent):
-```markdown
-<!-- Generated: YYYY-MM-DD HH:MM -->
-# Bug Tracker Index
+Ensure the following labels exist on the repository using `gh label create`. Use `--force` to skip errors if a label already exists:
 
-_Bugs are filed as individual BUG-[TEAM]-XXX.md files. This index is auto-generated._
+```bash
+# Type labels
+gh label create "type:bug" --color "d73a4a" --description "Bug report" --force
+gh label create "type:feature" --color "0075ca" --description "Feature request" --force
 
-| ID | Status | Severity | Title |
-|----|--------|----------|-------|
+# Priority labels
+gh label create "priority:high" --color "b60205" --description "High priority" --force
+gh label create "priority:medium" --color "fbca04" --description "Medium priority" --force
+gh label create "priority:low" --color "0e8a16" --description "Low priority" --force
+
+# Status labels
+gh label create "status:open" --color "d73a4a" --description "Open — initial bug status" --force
+gh label create "status:pending" --color "e4e669" --description "Pending — awaiting approval" --force
+gh label create "status:planning" --color "c5def5" --description "Planning — PM running intake" --force
+gh label create "status:planned" --color "bfd4f2" --description "Planned — awaiting approval for execution" --force
+gh label create "status:approved" --color "0075ca" --description "Approved — ready for dev" --force
+gh label create "status:in-progress" --color "1d76db" --description "In progress" --force
+gh label create "status:pending-test" --color "5319e7" --description "Pending test — awaiting QA" --force
+gh label create "status:pending-ship" --color "006b75" --description "Pending ship — awaiting delivery" --force
+gh label create "status:shipped" --color "0e8a16" --description "Shipped" --force
+
+# Role labels (one per dev agent + pm, qa, dm, designer)
+gh label create "role:[role]" --color "c2e0c6" --description "[Role] agent" --force
+gh label create "role:pm" --color "c2e0c6" --description "PM agent" --force
+gh label create "role:qa" --color "c2e0c6" --description "QA agent" --force
+gh label create "role:dm" --color "c2e0c6" --description "DM agent" --force
+
+# Severity labels (for bugs)
+gh label create "severity:high" --color "b60205" --description "High severity" --force
+gh label create "severity:medium" --color "fbca04" --description "Medium severity" --force
+gh label create "severity:low" --color "0e8a16" --description "Low severity" --force
+
+# Special labels
+gh label create "squidsquad" --color "6f42c1" --description "SquidSquad managed" --force
+gh label create "improvement-scan" --color "d4c5f9" --description "Filed by improvement scan" --force
 ```
 
-**`[role]/features/INDEX.md`** (one per dev agent):
-```markdown
-<!-- Generated: YYYY-MM-DD HH:MM -->
-# Feature Tracker Index
+Create role labels for each dev agent defined in Step 1 (e.g. `role:fe`, `role:be`). If a designer role is defined, also create `role:designer`.
 
-_Features are filed as individual FEAT-[TEAM]-XXX.md files. This index is auto-generated._
+#### Step 6b — Seed Initial Files
 
-| ID | Status | Priority | Title |
-|----|--------|----------|-------|
-```
-
-**`pm/qa-log.md`**:
+**`qa/qa-log.md`** (when QA is present):
 ```markdown
 # QA Log
 
-_Each PM/QA iteration logs a test run result here._
+_Each QA iteration logs a test run result here._
 
 ---
 ```
@@ -854,15 +1048,15 @@ _Product ideas and enhancement proposals surfaced during QA cycles or human chec
 ---
 ```
 
-If the user provided seed items (field 8) or imported items (from the import step), create individual files in the appropriate tracker directories using the full bug or feature format:
+#### Step 6c — Seed Items as GitHub Issues
 
-- Bugs get status `Open`, features get status `Pending`.
-- Each entry gets an initial Discussion note from `pm/qa`:
-  - Seed items: `> [YYYY-MM-DD HH:MM] **pm/qa**: Seeded at setup.`
-  - Imported items: `> [YYYY-MM-DD HH:MM] **pm/qa**: Imported from [source] at setup.`
-- Create each item as an individual file (e.g. `[role]/bugs/BUG-[ROLE]-001.md` or `[role]/features/FEAT-[ROLE]-001.md`) based on the owner assigned during import/seeding.
-- Regenerate `INDEX.md` for each affected directory after all items are created.
-- Update ID counters in `config.md` to reflect all seeded and imported items.
+If the user provided seed items (field 8) or imported items (from the import step), create them as GitHub Issues:
+
+- Bugs: `gh issue create --title "[title]" --label "type:bug,status:open,role:[role],severity:[severity],squidsquad" --body "[description]"`
+- Features: `gh issue create --title "[title]" --label "type:feature,status:pending,role:[role],priority:[priority],squidsquad" --body "[description]"`
+- Each issue gets an initial comment from PM:
+  - Seed items: `> [YYYY-MM-DD HH:MM] **pm**: Seeded at setup.`
+  - Imported items: `> [YYYY-MM-DD HH:MM] **pm**: Imported from [source] at setup.`
 
 ### Step 7 — Configure SessionStart Hook
 
@@ -958,7 +1152,8 @@ Print a summary:
 ║   Terminal N →  .\.squidsquad\start-dm.ps1   ← delivery    ║
 ║   Terminal N →  .\.squidsquad\start-pm.ps1   ← interactive ║
 ║                                                            ║
-║   PM/QA is interactive — it will check in with you.        ║
+║   PM is interactive — it will check in with you.            ║
+║   QA runs autonomously, verifying dev and designer work.    ║
 ║   DM handles delivery (docs, CHANGELOG, version bumps).    ║
 ║   Dev agents run autonomously in the background.           ║
 ║   Loop interval: [INTERVAL] minutes                        ║
@@ -992,8 +1187,11 @@ Spawn all applicable agents simultaneously. Each agent writes only its assigned 
 **One agent per active dev role:**
 > Regenerate `.squidsquad/templates/dev-agent-[role].md` from the Dev Agent template in `references/agent-instructions.md`, substituting `[ROLE]`, `[ROLE_UPPER]`, `[ROLE_TEST_CMD]`, `[OTHER_ROLES]`, and `[INTERVAL]` with values from `config.md`. Also regenerate `.squidsquad/start-[role].sh` and `.squidsquad/start-[role].ps1`. **Migration**: if `.squidsquad/[role]/CLAUDE.md` contains `## The Ralph Loop` (inline format, >50 lines), replace it with the bootstrapper format (see Step 4b in Setup Instructions). If it is already a bootstrapper (<50 lines, no `## The Ralph Loop`), leave it untouched. Do not touch `bugs/`, `features/`, or `iterations/`.
 
-**One agent for PM/QA:**
-> Regenerate `.squidsquad/templates/pm-agent.md` from the PM/QA template in `references/agent-instructions.md`, substituting `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]` from `config.md`. Also regenerate `.squidsquad/start-pm.sh` and `.squidsquad/start-pm.ps1`. **Migration**: if `.squidsquad/pm/CLAUDE.md` contains `## The Ralph Loop` (inline format), replace it with the bootstrapper format (see Step 4b in Setup Instructions). If already a bootstrapper, leave it untouched. Do not touch `qa-log.md`, `enhancements.md`, `iterations/`, or `migrations/`.
+**One agent for PM:**
+> Regenerate `.squidsquad/templates/pm-agent.md` from the PM template in `references/agent-instructions.md`, substituting `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]` from `config.md`. Also regenerate `.squidsquad/start-pm.sh` and `.squidsquad/start-pm.ps1`. **Migration**: if `.squidsquad/pm/CLAUDE.md` contains `## The Ralph Loop` (inline format), replace it with the bootstrapper format (see Step 4b in Setup Instructions). If already a bootstrapper, leave it untouched. Do not touch `enhancements.md`, `iterations/`, or `migrations/`.
+
+**One agent for QA (when dev or designer agents are present):**
+> Regenerate `.squidsquad/templates/qa-agent.md` from the QA template in `references/agent-instructions.md`, substituting `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]` from `config.md`. Also regenerate `.squidsquad/start-qa.sh` and `.squidsquad/start-qa.ps1`. **Migration**: if `.squidsquad/qa/CLAUDE.md` contains `## The Ralph Loop` (inline format), replace it with the bootstrapper format (see Step 4b in Setup Instructions). If already a bootstrapper, leave it untouched. Do not touch `qa-log.md` or `iterations/`.
 
 **One agent for DM (Delivery Manager) — optional:**
 > DM is optional. The `dm/` directory is the sole presence indicator — if it exists, DM is enabled; if not, PM handles delivery via Step 6d fallback. **Only create/update DM artifacts if `.squidsquad/dm/` already exists** (user previously opted in). If `dm/` exists: regenerate `.squidsquad/templates/dm-agent.md` from Template 3 in `references/agent-instructions.md`, substituting `[ACTIVE_AGENTS]`, `[INTERVAL]`, and `[ROLE_UPPER]`. Regenerate `.squidsquad/start-dm.sh` and `.squidsquad/start-dm.ps1`. If `dm/` does NOT exist: skip DM setup entirely. Do not create the directory, do not add DM to config.
@@ -1046,7 +1244,7 @@ Replaced monolithic `bugs.md` and `features.md` files with individual files in `
 
 ### Schema 2 (introduced in v0.8.0)
 
-Added `Pending Ship` status to the feature lifecycle. After PM/QA verifies a feature (`Pending Test`), it transitions to `Pending Ship` where the Delivery Manager (DM) handles user-facing delivery (docs, CHANGELOG, version bump, git tag). DM then marks it `Shipped`.
+Added `Pending Ship` status to the feature lifecycle. After QA verifies a feature (`Pending Test`), it transitions to `Pending Ship` where the Delivery Manager (DM) handles user-facing delivery (docs, CHANGELOG, version bump, git tag). DM then marks it `Shipped`.
 
 **Migration from Schema 1**: No data migration needed. Existing `Shipped` items remain `Shipped`. Existing `Pending Test` items flow through `Pending Ship` naturally. PM's version bump logic (Step 6c) moves to DM. PM fallback: if no `dm/` directory exists, PM treats `Pending Ship` as `Shipped` (old behavior).
 
