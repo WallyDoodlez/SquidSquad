@@ -290,15 +290,15 @@ At the end of each cycle, print:
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/[ROLE]/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
 ```bash
-echo "phase|emoji description" > .squidsquad/[ROLE]/current-state.tmp && mv -f .squidsquad/[ROLE]/current-state.tmp .squidsquad/[ROLE]/current-state
+echo "phase|sub-skill — description" > .squidsquad/[ROLE]/current-state.tmp && mv -f .squidsquad/[ROLE]/current-state.tmp .squidsquad/[ROLE]/current-state
 ```
 
-Phase is one of: `pulling`, `triaging`, `implementing`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
+Phase is one of: `pulling`, `triaging`, `implementing`, `committing`, `idle`. The sub-skill is the short name of the active sub-skill (e.g., `pull-latest`, `tracker-protocol`, `dev-agent`, `git-commit`). The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
 
-- `pulling|Syncing with remote...`
-- `triaging|Fixing #29...`
-- `implementing|🔨 #37...`
-- `committing|Committing #37...`
+- `pulling|pull-latest — Syncing with remote...`
+- `triaging|tracker-protocol — Fixing #29...`
+- `implementing|dev-agent — 🔨 #37...`
+- `committing|git-commit — Committing #37...`
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
@@ -1221,18 +1221,18 @@ At the end of each cycle, print:
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/pm/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
 ```bash
-echo "phase|emoji description" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state
+echo "phase|sub-skill — description" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state
 ```
 
-Phase is one of: `pulling`, `checkin`, `testing`, `verifying`, `planning`, `researching`, `discussing`, `test-planning`, `health`, `idle`. The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
+Phase is one of: `pulling`, `checkin`, `testing`, `verifying`, `planning`, `researching`, `discussing`, `test-planning`, `health`, `idle`. The sub-skill is the short name of the active sub-skill (e.g., `pull-latest`, `verification`, `feature-intake`). The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
 
-- `pulling|Syncing with remote...`
-- `testing|Running E2E tests...`
-- `verifying|Verifying #29...`
-- `planning|#37 intake...`
-- `researching|Researching #35...`
-- `discussing|Discussion for #35...`
-- `test-planning|Test plan for #35...`
+- `pulling|pull-latest — Syncing with remote...`
+- `testing|verification — Running E2E tests...`
+- `verifying|verification — Verifying #29...`
+- `planning|feature-intake — #37 intake...`
+- `researching|feature-intake — Researching #35...`
+- `discussing|feature-intake — Discussion for #35...`
+- `test-planning|feature-intake — Test plan for #35...`
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
@@ -2554,17 +2554,14 @@ At the end of each cycle, print:
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/pm/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
 ```bash
-echo "phase|emoji description" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state
+echo "phase|sub-skill — description" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state
 ```
 
-Phase is one of: `pulling`, `checkin`, `planning`, `researching`, `discussing`, `test-planning`, `idle`. The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
+Phase is one of: `pulling`, `checkin`, `planning`, `researching`, `discussing`, `test-planning`, `idle`. The sub-skill is the short name of the active sub-skill (e.g., `pull-latest`, `feature-intake`). The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
 
-- `pulling|Syncing with remote...`
-- `checkin|Human check-in...`
-- `planning|#37 intake...`
-- `researching|Researching #35...`
-- `discussing|Discussion for #35...`
-- `test-planning|Test plan for #35...`
+- `pulling|pull-latest — Syncing with remote...`
+- `planning|feature-intake — #37 intake...`
+- `researching|feature-intake — Researching #35...`
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
@@ -3781,16 +3778,16 @@ At the end of each cycle, print:
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/qa/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
 ```bash
-echo "phase|emoji description" > .squidsquad/qa/current-state.tmp && mv -f .squidsquad/qa/current-state.tmp .squidsquad/qa/current-state
+echo "phase|sub-skill — description" > .squidsquad/qa/current-state.tmp && mv -f .squidsquad/qa/current-state.tmp .squidsquad/qa/current-state
 ```
 
-Phase is one of: `pulling`, `testing`, `verifying`, `health`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
+Phase is one of: `pulling`, `testing`, `verifying`, `health`, `committing`, `idle`. The sub-skill is the short name of the active sub-skill (e.g., `pull-latest`, `verification`). The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
 
-- `pulling|Syncing with remote...`
-- `testing|Running E2E tests...`
-- `verifying|Verifying #29...`
-- `verifying|Testing #37...`
-- `health|Checking agent health...`
+- `pulling|pull-latest — Syncing with remote...`
+- `testing|verification — Running E2E tests...`
+- `verifying|verification — Verifying #29...`
+- `verifying|verification — Testing #37...`
+- `health|verification — Checking agent health...`
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
@@ -4700,14 +4697,14 @@ At the end of each cycle, print:
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/designer/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
 ```bash
-echo "phase|emoji description" > .squidsquad/designer/current-state.tmp && mv -f .squidsquad/designer/current-state.tmp .squidsquad/designer/current-state
+echo "phase|sub-skill — description" > .squidsquad/designer/current-state.tmp && mv -f .squidsquad/designer/current-state.tmp .squidsquad/designer/current-state
 ```
 
-Phase is one of: `pulling`, `designing`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
+Phase is one of: `pulling`, `designing`, `committing`, `idle`. The sub-skill is the short name of the active sub-skill (e.g., `pull-latest`, `design-session`, `git-commit`). The description is a short (≤60 char) human-readable label. **Include the specific item ID** in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
 
-- `pulling|Syncing with remote...`
-- `designing|🎨 #35 design session...`
-- `committing|Committing design for #35...`
+- `pulling|pull-latest — Syncing with remote...`
+- `designing|design-session — 🎨 #35 design session...`
+- `committing|git-commit — Committing design for #35...`
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
@@ -5668,15 +5665,15 @@ At the end of each cycle, print:
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/dm/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
 ```bash
-echo "phase|emoji description" > .squidsquad/dm/current-state.tmp && mv -f .squidsquad/dm/current-state.tmp .squidsquad/dm/current-state
+echo "phase|sub-skill — description" > .squidsquad/dm/current-state.tmp && mv -f .squidsquad/dm/current-state.tmp .squidsquad/dm/current-state
 ```
 
-Phase is one of: `pulling`, `delivering`, `shipping`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
+Phase is one of: `pulling`, `delivering`, `shipping`, `committing`, `idle`. The sub-skill is the short name of the active sub-skill (e.g., `pull-latest`, `delivery-packaging`, `version-bumps`, `git-commit`). The description is a short (≤60 char) human-readable label. **Include the specific item ID** in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
 
-- `pulling|Syncing with remote...`
-- `delivering|📦 #35 delivery...`
-- `shipping|🚀 Version bump v0.7.0...`
-- `committing|Committing delivery for #35...`
+- `pulling|pull-latest — Syncing with remote...`
+- `delivering|delivery-packaging — 📦 #35 delivery...`
+- `shipping|version-bumps — 🚀 Version bump v0.7.0...`
+- `committing|git-commit — Committing delivery for #35...`
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.

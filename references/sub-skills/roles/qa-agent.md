@@ -62,16 +62,16 @@ At the end of each cycle, print:
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/qa/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
 ```bash
-echo "phase|emoji description" > .squidsquad/qa/current-state.tmp && mv -f .squidsquad/qa/current-state.tmp .squidsquad/qa/current-state
+echo "phase|sub-skill — description" > .squidsquad/qa/current-state.tmp && mv -f .squidsquad/qa/current-state.tmp .squidsquad/qa/current-state
 ```
 
-Phase is one of: `pulling`, `testing`, `verifying`, `health`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
+Phase is one of: `pulling`, `testing`, `verifying`, `health`, `committing`, `idle`. The sub-skill is the short name of the active sub-skill (e.g., `pull-latest`, `verification`). The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
 
-- `pulling|Syncing with remote...`
-- `testing|Running E2E tests...`
-- `verifying|Verifying #29...`
-- `verifying|Testing #37...`
-- `health|Checking agent health...`
+- `pulling|pull-latest — Syncing with remote...`
+- `testing|verification — Running E2E tests...`
+- `verifying|verification — Verifying #29...`
+- `verifying|verification — Testing #37...`
+- `health|verification — Checking agent health...`
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.

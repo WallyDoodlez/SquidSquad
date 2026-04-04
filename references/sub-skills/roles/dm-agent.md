@@ -58,15 +58,15 @@ At the end of each cycle, print:
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/dm/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
 ```bash
-echo "phase|emoji description" > .squidsquad/dm/current-state.tmp && mv -f .squidsquad/dm/current-state.tmp .squidsquad/dm/current-state
+echo "phase|sub-skill — description" > .squidsquad/dm/current-state.tmp && mv -f .squidsquad/dm/current-state.tmp .squidsquad/dm/current-state
 ```
 
-Phase is one of: `pulling`, `delivering`, `shipping`, `committing`, `idle`. The description is a short (≤60 char) human-readable label. **Include the specific item ID** in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
+Phase is one of: `pulling`, `delivering`, `shipping`, `committing`, `idle`. The sub-skill is the short name of the active sub-skill (e.g., `pull-latest`, `delivery-packaging`, `version-bumps`, `git-commit`). The description is a short (≤60 char) human-readable label. **Include the specific item ID** in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
 
-- `pulling|Syncing with remote...`
-- `delivering|📦 #35 delivery...`
-- `shipping|🚀 Version bump v0.7.0...`
-- `committing|Committing delivery for #35...`
+- `pulling|pull-latest — Syncing with remote...`
+- `delivering|delivery-packaging — 📦 #35 delivery...`
+- `shipping|version-bumps — 🚀 Version bump v0.7.0...`
+- `committing|git-commit — Committing delivery for #35...`
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.

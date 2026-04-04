@@ -58,18 +58,18 @@ At the end of each cycle, print:
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/pm/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
 ```bash
-echo "phase|emoji description" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state
+echo "phase|sub-skill — description" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state
 ```
 
-Phase is one of: `pulling`, `checkin`, `testing`, `verifying`, `planning`, `researching`, `discussing`, `test-planning`, `health`, `idle`. The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
+Phase is one of: `pulling`, `checkin`, `testing`, `verifying`, `planning`, `researching`, `discussing`, `test-planning`, `health`, `idle`. The sub-skill is the short name of the active sub-skill (e.g., `pull-latest`, `verification`, `feature-intake`). The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
 
-- `pulling|Syncing with remote...`
-- `testing|Running E2E tests...`
-- `verifying|Verifying #29...`
-- `planning|#37 intake...`
-- `researching|Researching #35...`
-- `discussing|Discussion for #35...`
-- `test-planning|Test plan for #35...`
+- `pulling|pull-latest — Syncing with remote...`
+- `testing|verification — Running E2E tests...`
+- `verifying|verification — Verifying #29...`
+- `planning|feature-intake — #37 intake...`
+- `researching|feature-intake — Researching #35...`
+- `discussing|feature-intake — Discussion for #35...`
+- `test-planning|feature-intake — Test plan for #35...`
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
