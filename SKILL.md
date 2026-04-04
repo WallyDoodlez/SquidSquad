@@ -6,7 +6,7 @@ version: 0.9.0
 
 # SquidSquad
 
-You are activating the SquidSquad multi-agent development coordination system. SquidSquad spins up Claude Code CLI instances — one per dev role you define, plus a PM/QA — that work autonomously on a shared codebase by coordinating through markdown files in a `.squidsquad/` folder.
+You are activating the SquidSquad multi-agent development coordination system. SquidSquad spins up Claude Code CLI instances — one per dev role you define, plus a PM, and a QA when dev or designer agents are present — that work autonomously on a shared codebase by coordinating through markdown files in a `.squidsquad/` folder.
 
 No meetings. No message queues. Just markdown.
 
@@ -18,25 +18,29 @@ No meetings. No message queues. Just markdown.
 ┌──────────────────────────────────────────────────────────┐
 │                      Git Repository                       │
 │                                                          │
-│  ┌──────────────┐        ┌──────────────┐  ┌──────────┐ │
-│  │  [Role] Lead │  ...   │  [Role] Lead │  │  PM / QA │ │
-│  │ (Claude CLI) │        │ (Claude CLI) │  │(Claude CLI│ │
-│  └──────┬───────┘        └──────┬───────┘  └─────┬────┘ │
-│         │                       │                │      │
-│         └───────────┬───────────┘                │      │
-│                     ▼                            │      │
-│              .squidsquad/                        │      │
-│              ├── config.md  ◄────────────────────┘      │
+│  ┌──────────┐  ┌──────────┐  ┌────┐  ┌────┐  ┌────┐    │
+│  │[Role]Lead│  │ Designer │  │ QA │  │ PM │  │ DM │    │
+│  │(Claude)  │  │(Claude)  │  │    │  │    │  │    │    │
+│  └────┬─────┘  └────┬─────┘  └──┬─┘  └──┬─┘  └──┬─┘    │
+│       └──────┬───────┘           │       │       │      │
+│              ▼                   ▼       ▼       ▼      │
+│              .squidsquad/                               │
+│              ├── config.md                               │
 │              ├── [role]/          ← one per dev agent    │
 │              │   ├── CLAUDE.md                           │
-│              │   ├── bugs/          ← INDEX.md + individual BUG-XXX.md files + archived/
-│              │   ├── features/      ← INDEX.md + individual FEAT-XXX.md files + archived/
+│              │   ├── working-state.md                    │
+│              │   ├── planning/                           │
 │              │   └── iterations/                         │
-│              └── pm/                                     │
-│                  ├── CLAUDE.md                            │
-│                  ├── qa-log.md                            │
-│                  ├── enhancements.md                      │
-│                  └── iterations/                          │
+│              ├── pm/                                     │
+│              │   ├── CLAUDE.md                           │
+│              │   ├── working-state.md                    │
+│              │   └── iterations/                         │
+│              ├── qa/              ← when dev/designer present │
+│              ├── dm/              ← Delivery Manager     │
+│              ├── designer/        ← when designer role defined │
+│              ├── templates/       ← substituted agent instructions │
+│              └── vault/           ← shared knowledge layer │
+│              Bugs & features: GitHub Issues with labels   │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -46,10 +50,10 @@ SquidSquad always has a **PM** agent. When dev or designer agents are present, a
 
 | Agent | Owns | Loop |
 |-------|------|------|
-| **[role] Lead** (one per dev role) | Code for that role, `[role]/bugs/`, `[role]/features/` | Ralph Loop (fix bugs → implement features → test → push) |
+| **[role] Lead** (one per dev role) | Code for that role, bugs and features via GitHub Issues | Ralph Loop (fix bugs → implement features → test → push) |
 | **Designer** (optional) | Design specs, tokens, component specs, `designer/` | Ralph Loop (review design requests → interactive design sessions → produce specs → hand off to dev) |
 | **QA** (auto-added with dev/designer) | Test results, `qa/qa-log.md`, bug verification, feature testing | Ralph Loop (E2E tests → verify bugs → test features → health checks → push) |
-| **PM** | Product backlog, `pm/enhancements.md`, human interaction, feature intake | Ralph Loop (check human → feature intake → backlog management → push) |
+| **PM** | Product backlog, human interaction, feature intake, backlog management | Ralph Loop (check human → feature intake → backlog management → push) |
 
 **Common team shapes:**
 
@@ -122,21 +126,22 @@ SquidSquad uses GitHub Issues as its tracker. All bugs and features are GitHub I
 
 | Category | Labels | Purpose |
 |----------|--------|---------|
-| Type | `bug`, `feature` | What kind of item |
-| Priority | `priority:critical`, `priority:high`, `priority:medium`, `priority:low` | Triage ordering |
-| Status | `status:pending`, `status:planning`, `status:approved`, `status:in-progress`, `status:pending-test`, `status:pending-ship` | Workflow state |
-| Role | `role:fe`, `role:be`, `role:skill`, etc. | Which agent owns it |
-| Severity (bugs) | `severity:critical`, `severity:high`, `severity:medium`, `severity:low` | Bug impact |
+| Type | `type:bug`, `type:feature` | What kind of item |
+| Priority | `priority:high`, `priority:medium`, `priority:low` | Triage ordering |
+| Status | `status:pending`, `status:planning`, `status:planned`, `status:approved`, `status:in-progress`, `status:pending-test`, `status:pending-ship`, `status:shipped` | Workflow state |
+| Role | `role:skill`, `role:fe`, `role:be`, `role:pm`, `role:qa`, `role:dm`, `role:designer` | Which agent owns it |
+| Severity (bugs) | `severity:high`, `severity:medium`, `severity:low` | Bug impact |
+| Special | `squidsquad`, `improvement-scan` | Metadata |
 
 ### Bug Flow
 
-Status labels: `status:open` → `status:investigating` → `status:fixed` → `status:verified` → (Issue closed)
+Status labels: `status:open` → `status:in-progress` → `status:pending-test` → `status:pending-ship` → (Issue closed)
 
 ### Feature Flow
 
-Status labels: `status:pending` → `status:planning` → `status:approved` → `status:in-progress` → `status:pending-test` → `status:pending-ship` → (Issue closed)
+Status labels: `status:pending` → `status:planning` → `status:planned` → `status:approved` → `status:in-progress` → `status:pending-test` → `status:pending-ship` → (Issue closed)
 
-> **Note:** `pending` = awaiting human approval. `planning` = PM running Feature Intake (Research → Discussion → Planning). `approved` = planning complete, dev can pick it up. `pending-ship` = QA verified, DM handles delivery. Closed = shipped.
+> **Note:** `pending` = awaiting human approval to plan. `planning` = PM running Feature Intake (Research → Discussion → Planning). `planned` = planning complete, awaiting human approval for execution. `approved` = human greenlit, dev picks it up. `pending-ship` = QA verified, DM handles delivery. Closed = shipped.
 
 ### Discussion Protocol
 
@@ -180,14 +185,14 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 1. git pull --rebase
 1b. Context pressure check — if above threshold, save state and exit
 1c. Resume from working-state.md if active task exists
-2. Read [role]/bugs/INDEX.md, then read individual files for Open or Investigating items (match `**Status**: Open` — tracker uses markdown bold)
+2. Query GitHub Issues via `gh issue list` with label filters (`role:[role]`, `type:bug`, `status:open` or `status:in-progress`)
    → Write working state, fix bug, clear state on completion
-   → If bug touches another agent's domain, create [other]/bugs/BUG-[OTHER]-XXX.md and regenerate INDEX.md
-   → Update bug status to Fixed, append Discussion entry, regenerate INDEX.md
-3. Read [role]/features/INDEX.md, then read individual files for Approved items
+   → If bug touches another agent's domain, file a new Issue with the appropriate `role:` label
+   → Update bug status labels, append Discussion as Issue comment
+3. Query GitHub Issues via `gh issue list` with label filters (`role:[role]`, `type:feature`, `status:approved`)
    → Write working state, implement feature, update state as sub-steps complete
-   → Update status to In Progress, then Pending Test
-   → Clear working state on completion, append Discussion entry
+   → Update status labels to In Progress, then Pending Test
+   → Clear working state on completion, append Discussion as Issue comment
 4. Run [role] test command (from config.md)
 5. If quiet cycle (no bugs fixed, no features progressed):
    → If Improvement Scanning enabled and quiet cycle counter ≥ 3: scan target project for domain-specific improvements, file findings through PM (max 2 per scan)
@@ -222,10 +227,10 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 1c. Resume from working-state.md if active task exists
 2. Run full e2e test command (from config.md)
 3. Log results to qa/qa-log.md
-4. If tests fail: file BUG-[ROLE]-XXX to the appropriate dev agent's tracker
-5. Read each dev agent's features/INDEX.md for Pending Test items → read individual files → verify → update to Pending Ship (DM handles delivery → Shipped)
-5b. If PR Flow enabled: monitor open PRs, sync comments/merges/changes to trackers
-6. Read each dev agent's bugs/INDEX.md for Fixed items → read individual files → verify → update to Verified/Closed
+4. If tests fail: file bug as GitHub Issue with appropriate `role:` label via `gh issue create`
+5. Query GitHub Issues via `gh issue list` with label filters for `status:pending-test` items → verify → update to Pending Ship (DM handles delivery → Shipped)
+5b. If PR Flow enabled: monitor open PRs, sync comments/merges/changes to Issues
+6. Query GitHub Issues via `gh issue list` with label filters for `type:bug` + `status:in-progress` items marked as fixed → verify → close Issue
 7. Agent health check: git log per agent, flag stalled/idle agents (no commits in 2× interval)
 8. If quiet cycle (no issues found, no verifications): skip log/commit, go to sleep
 9. Log iteration to qa/iterations/iter-N.md
@@ -350,11 +355,27 @@ For each dev agent role defined in Step 1, create:
 ```
 .squidsquad/[role]/
     CLAUDE.md
-    bugs/
-        archived/
-    features/
-        archived/
     iterations/
+    working-state.md
+    planning/
+```
+
+If dev or designer agents are present, create:
+```
+.squidsquad/qa/
+    CLAUDE.md
+    qa-log.md
+    working-state.md
+    iterations/
+```
+
+If a designer role is defined, create:
+```
+.squidsquad/designer/
+    CLAUDE.md
+    working-state.md
+    iterations/
+    specs/
 ```
 
 Always create `.squidsquad/pm/` with its full structure regardless of team shape.
@@ -377,8 +398,8 @@ Seed the vault with an initial project note (`vault/projects/{project-name}.md`)
 ```markdown
 # SquidSquad Config
 
-- **SquidSquad Version**: 0.5.1
-- **Tracker Schema**: 1
+- **SquidSquad Version**: 0.9.0
+- **Architecture Version**: 1
 
 ## Project
 
@@ -398,7 +419,7 @@ Seed the vault with an initial project note (`vault/projects/{project-name}.md`)
 
 ## Tracker
 
-- **Backend**: github-issues  ← bugs and features tracked via GitHub Issues + labels
+- **Tracker**: github-issues  ← bugs and features tracked via GitHub Issues + labels
 
 ## Git Protocol
 
@@ -520,7 +541,7 @@ Add runtime files to `.gitignore` (create the file if it doesn't exist):
 
 ### Step 5 — Generate Boot Scripts
 
-Generate both a `.sh` (bash) and a `.ps1` (PowerShell) boot script for each dev agent, plus PM/QA. Script names use the role name, e.g. `start-be.sh`, `start-api.sh`, `start-worker.ps1`.
+Generate both a `.sh` (bash) and a `.ps1` (PowerShell) boot script for each dev agent, plus PM, QA (when dev/designer agents are present), Designer (when defined), and DM (when opted in). Script names use the role name, e.g. `start-be.sh`, `start-api.sh`, `start-qa.sh`, `start-designer.ps1`.
 
 All agents run interactively. The boot script passes the role via `--append-system-prompt "SQUIDSQUAD_ROLE=[ROLE]"` — a session-only signal that never leaks across terminals. The CLAUDE.md auto-boot section detects this in the system prompt and starts the Ralph Loop. The human can observe progress and comment in any agent's terminal.
 

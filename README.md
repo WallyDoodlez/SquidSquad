@@ -86,8 +86,8 @@ graph TD
 
     subgraph repo["Git Repository"]
         CFG[".squidsquad/config.md"]
-        T1[".squidsquad/[role]/\nbugs/ + features/\nworking-state.md"]
-        T2[".squidsquad/[role]/\nbugs/ + features/\nworking-state.md"]
+        T1[".squidsquad/[role]/\nworking-state.md\nplanning/"]
+        T2[".squidsquad/[role]/\nworking-state.md\nplanning/"]
         PM_T[".squidsquad/pm/\nworking-state.md"]
         QA_T[".squidsquad/qa/\nqa-log.md + working-state.md"]
         SL[".squidsquad/statusline.sh"]
@@ -140,6 +140,15 @@ All coordination is asynchronous through git — agents pull to read the latest 
 │   ├── qa-log.md               <- test run results
 │   ├── working-state.md        <- persists QA task progress
 │   └── iterations/             <- per-cycle logs (last 20 kept)
+├── dm/                         <- Delivery Manager (optional)
+│   ├── CLAUDE.md               <- bootstrapper: role config + Read instruction to template
+│   ├── working-state.md        <- crash recovery state
+│   └── iterations/             <- per-cycle logs (last 20 kept)
+├── designer/                   <- Designer (optional, when designer role defined)
+│   ├── CLAUDE.md               <- bootstrapper: role config + Read instruction to template
+│   ├── working-state.md        <- persists designer task progress
+│   ├── iterations/             <- per-cycle logs (last 20 kept)
+│   └── specs/                  <- design specs produced by designer
 └── vault/                      <- shared memory layer (all agents R/W)
     ├── BRIEFING.md             <- daily context briefing for all agents
     ├── projects/               <- active project context, goals, constraints

@@ -68,13 +68,22 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
    - Priority imbalances (too many High, neglected Low items)
    - Workflow bottlenecks visible from tracker patterns
 
-5. **Report findings to PM**: For each finding (max **2 items per scan**), append a Discussion entry to the relevant feature or bug file, or create a new Discussion-only note:
+5. **Report findings to PM**: For each finding (max **2 items per scan**), classify it and file a GitHub Issue via `gh issue create`:
+
+   **Classification:**
+   - **Bug** (`type:bug`): something broken, wrong, inconsistent, stale, or not working as specified
+   - **Feature** (`type:feature`): something new that doesn't exist yet, enhancement, optimization
+
+   File each finding as a GitHub Issue with labels: the appropriate `type:bug` or `type:feature`, `role:[target-role]`, `priority:low`, and `improvement-scan`. Include in the Issue body:
 
    ```
-   > [YYYY-MM-DD HH:MM] **[role]-lead (improvement-scan)**: Found: [specific finding]. File: [path]. Recommendation: [what to do]. Priority suggestion: Low.
+   **Found by**: [role]-lead (improvement-scan)
+   **File**: [path]
+   **Finding**: [specific finding]
+   **Recommendation**: [what to do]
    ```
 
-   Tag all findings with `(improvement-scan)` so PM and human can filter them.
+   Tag all findings with the `improvement-scan` label so PM and human can filter them.
 
 6. **Update scan history**: Record the scanned files and any filed items in `.squidsquad/[your-role]/scan-history.md`:
 
