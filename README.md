@@ -273,7 +273,10 @@ bash .squidsquad/start-[role].sh
 # Terminal N — QA (autonomous)
 bash .squidsquad/start-qa.sh
 
-# Terminal N+1 — PM (interactive — you talk to this one)
+# Terminal N+1 — DM (autonomous, optional — when DM enabled)
+bash .squidsquad/start-dm.sh
+
+# Terminal N+2 — PM (interactive — you talk to this one)
 bash .squidsquad/start-pm.sh
 ```
 
@@ -285,7 +288,10 @@ bash .squidsquad/start-pm.sh
 # Terminal N — QA (autonomous)
 .\.squidsquad\start-qa.ps1
 
-# Terminal N+1 — PM (interactive)
+# Terminal N+1 — DM (autonomous, optional — when DM enabled)
+.\.squidsquad\start-dm.ps1
+
+# Terminal N+2 — PM (interactive)
 .\.squidsquad\start-pm.ps1
 ```
 
@@ -307,9 +313,9 @@ Any agent can file a bug as a GitHub Issue with the appropriate role label — n
 
 | Who discovers the bug | Files as | Labels |
 |-----------------------|----------|--------|
-| [role] Lead (own issue) | `gh issue create` | `bug`, `role:[role]` |
-| [role] Lead (other team's code) | `gh issue create` | `bug`, `role:[other]` |
-| QA (from test/verification) | `gh issue create` | `bug`, `role:[role]` |
+| [role] Lead (own issue) | `gh issue create` | `type:bug`, `role:[role]` |
+| [role] Lead (other team's code) | `gh issue create` | `type:bug`, `role:[other]` |
+| QA (from test/verification) | `gh issue create` | `type:bug`, `role:[role]` |
 
 The agent that discovers the problem files it with complete context. The receiving agent picks it up on their next cycle via `gh issue list`. No standup required.
 
