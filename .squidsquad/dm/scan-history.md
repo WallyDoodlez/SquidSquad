@@ -40,3 +40,11 @@
   - #53 — BRIEFING.md extensively stale (v0.8.0, old tracker refs, outdated priorities, combined pm/qa)
   - #54 — README Agents table and Architecture diagram missing DM role
 - **Items rejected by human**: (none yet)
+
+## Scan — 2026-04-04 17:10
+
+- **Files scanned**: CHANGELOG.md (0.10.0 section completeness), GitHub Issues (label state audit of closed pending-ship items)
+- **Findings**:
+  - #56 — CHANGELOG 0.10.0 missing 6 shipped items (#48-#53)
+  - #57 — 11 closed issues still carry status:pending-ship label instead of status:shipped
+- **Items rejected by human**: (none yet)
