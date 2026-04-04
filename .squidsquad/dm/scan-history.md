@@ -48,3 +48,11 @@
   - #56 — CHANGELOG 0.10.0 missing 6 shipped items (#48-#53)
   - #57 — 11 closed issues still carry status:pending-ship label instead of status:shipped
 - **Items rejected by human**: (none yet)
+
+## Scan — 2026-04-04 19:10
+
+- **Files scanned**: .squidsquad/vault/projects/squidsquad.md (version, current focus), README.md (Features > Status Line description)
+- **Findings**:
+  - #59 — Vault project note still shows 0.9.0 and stale FEAT-SKILL-XXX focus items
+  - #60 — README status line description references old FEAT-XXX format instead of #XX
+- **Items rejected by human**: (none yet)
