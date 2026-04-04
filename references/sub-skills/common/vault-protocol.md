@@ -98,6 +98,95 @@ Multiple agents may write to the vault simultaneously. Git handles merge conflic
 - **Project notes**: Keep focused on active context. Archive historical sections to `archives/` when no longer current.
 - **Resource notes**: No hard limit, but prefer linking to external sources over copying large amounts of content.
 
+### Updating Notes (vault-update)
+
+To update an existing vault note:
+
+1. **Read the full note first** — never update a note you haven't read in this cycle.
+2. **Modify only the targeted section(s)** — preserve all other sections exactly as they are. vault-update is a surgical edit, not a rewrite.
+3. **Never delete existing content** — add to sections, don't remove from them. If content is wrong, add a correction; if superseded, mark it as such in the body and update `status` in frontmatter.
+4. **Update the `updated` frontmatter field** to today's date.
+5. **Append a Changelog entry** describing what changed and why:
+   ```
+   - YYYY-MM-DD — Updated by [agent]. [What changed and why].
+   ```
+6. **Run vault-check Level 1** on the note after updating (see vault-check below).
+
+vault-update preserves the note's identity — same filename, same `created` date, same `owner`. Only `updated`, the targeted body section(s), and the Changelog grow.
+
+### Searching the Vault (vault-search)
+
+vault-search finds notes by tag, type, keyword, or wikilink traversal. It uses grep internally but presents a generic interface — agents call vault-search without knowing the implementation. A future SQLite/RAG backend (FEAT-SKILL-062) can replace the internals without changing how agents invoke search.
+
+**Search modes:**
+
+1. **By tag**: Find notes whose `tags` frontmatter contains a specific tag.
+   ```bash
+   grep -rl "tags:.*\b<TAG>\b" .squidsquad/vault/ --include="*.md"
+   ```
+
+2. **By type**: Find notes with a specific `type` frontmatter value.
+   ```bash
+   grep -rl "^type: <TYPE>" .squidsquad/vault/ --include="*.md"
+   ```
+
+3. **By keyword** (full-text): Find notes containing a phrase.
+   ```bash
+   grep -rl "<KEYWORD>" .squidsquad/vault/ --include="*.md"
+   ```
+
+4. **By wikilink traversal**: Starting from a note, find connected notes.
+   - **1-hop**: Outbound links (wikilinks in the note's body) + inbound links (other notes linking to this one).
+     ```bash
+     # Outbound: extract wikilinks from the note
+     grep -o '\[\[[^]]*\]\]' .squidsquad/vault/<path> | sed 's/\[\[//g;s/\]\]//g'
+     # Inbound: find notes linking TO this note
+     grep -rl '\[\[<note-name>\]\]' .squidsquad/vault/ --include="*.md"
+     ```
+   - **2-hop**: For each 1-hop result, repeat the outbound+inbound search. Do NOT traverse beyond 2 hops.
+
+**Result format**: Return a list of matching note paths with a brief excerpt (first non-frontmatter content line). **Max 10 results** — if more match, return the 10 most recently updated (sort by `updated` frontmatter). The agent can narrow and re-search.
+
+**Caching**: Within a single cycle, cache search results to avoid repeated grep calls for the same query.
+
+### Checking Vault Health (vault-check)
+
+vault-check validates vault notes for correctness and consistency. Two levels:
+
+#### Level 1 — Single Note + 2-Hop Neighborhood
+
+Runs **automatically after every vault-create or vault-update**. Checks the written note and all notes within 2 wikilink hops.
+
+For each note checked:
+
+1. **Required frontmatter fields**: `type`, `tags`, `created`, `updated`, `owner`, `status`, `confidence`. Warn if any are missing or empty.
+2. **Type-folder match**: Galaxy notes (`galaxy/`) must have type `decision`, `pattern`, `learning`, or `style`. Area notes (`areas/`) must have type `area`. Project notes (`projects/`) must have type `project`. Warn on mismatch.
+3. **Wikilink resolution**: Parse all `[[note-name]]` in the body. For each, verify a file named `note-name.md` exists somewhere in `.squidsquad/vault/`. Warn for each unresolved wikilink.
+4. **Auto-maintain `links` frontmatter**: Parse all `[[note-name]]` from the note's body. Update the `links` field in frontmatter to match (bare names, YAML list). This is automatic — agents do not manually curate the `links` field.
+5. **Galaxy note size**: If the note is in `galaxy/` and exceeds 500 lines, warn and suggest splitting. Do NOT warn for notes in `areas/`, `projects/`, or `resources/`.
+
+Print warnings with `[vault-check]` prefix. If no issues found, print nothing (silent pass).
+
+#### Level 2 — Full Vault Sweep
+
+Runs on-demand (invoked explicitly, not automatic). Checks every `.md` file in `.squidsquad/vault/`:
+
+1. Run all Level 1 checks on every note.
+2. **Orphan detection**: Find notes with zero inbound wikilinks that are not area notes. Area notes and BRIEFING.md are exempt — they serve as entry points.
+3. **Staleness detection**: Find notes with `status: active` and `updated` date older than 30 days. Flag as potentially stale.
+4. **Broken link census**: Aggregate all unresolved wikilinks across the vault.
+5. **Health summary**: Print totals — note count, orphan count, stale count, broken link count.
+
+```bash
+# Quick orphan check: find notes never linked TO
+for f in .squidsquad/vault/galaxy/*.md; do
+  name=$(basename "$f" .md)
+  if ! grep -rl "\[\[$name\]\]" .squidsquad/vault/ --include="*.md" -q 2>/dev/null; then
+    echo "[vault-check] Orphan: $f"
+  fi
+done
+```
+
 ### Rules
 
 - All vault notes are **git-tracked** — full version history
@@ -107,3 +196,5 @@ Multiple agents may write to the vault simultaneously. Git handles merge conflic
 - Always append to the **Changelog** section when modifying a note
 - The vault is browsable in the **Obsidian app** — maintain clean structure
 - Empty directories use `.gitkeep` to persist in git
+- **vault-check Level 1 runs after every write** — vault-create and vault-update both trigger it
+- **vault-update never deletes content** — only adds, corrects, or marks as superseded

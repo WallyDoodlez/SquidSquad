@@ -2,7 +2,7 @@
 type: area
 tags: [conventions, style, architecture]
 created: 2026-04-02
-updated: 2026-04-02
+updated: 2026-04-03
 owner: skill
 status: active
 confidence: medium
@@ -28,6 +28,7 @@ Code conventions and structural patterns used throughout the SquidSquad project.
 - **Atomic writes**: Write to `.tmp` then `mv` to avoid file locking races on Windows
 - **Status bar integration**: Agents write phase and description to `current-state` files
 - **PR flow**: Configurable (currently disabled); when enabled, creates branches per item
+- **Vault operations**: vault-check Level 1 runs after every vault-create and vault-update; vault-update never deletes content
 
 ## History
 
@@ -45,3 +46,4 @@ Code conventions and structural patterns used throughout the SquidSquad project.
 ### Changelog
 
 - 2026-04-02 -- Created by QA agent. Inferred conventions from codebase review during vault-create testing.
+- 2026-04-03 -- Updated by skill-lead. Added vault operations convention (vault-check Level 1 after every write).
