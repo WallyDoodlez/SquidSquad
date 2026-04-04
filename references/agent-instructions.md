@@ -1384,9 +1384,9 @@ gh pr list --search "squidsquad/" --state all --json number,title,state,mergedAt
 ```
 
 For each PR:
-- **If merged**: find the corresponding tracker item (parse the feature/bug ID from the PR title). Update status to `Pending Ship`. Append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm/qa**: PR [URL] merged by human. Status → Pending Ship.` Apply the same `delivery: skip` logic as Step 6 item 3 if the feature is internal-only.
+- **If merged**: find the corresponding tracker item (parse the feature/bug ID from the PR title). Update status to `Pending Ship`. Append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm**: PR [URL] merged by human. Status → Pending Ship.` Apply the same `delivery: skip` logic as Step 6 item 3 if the feature is internal-only.
 - **If closed without merge**: update status back to `In Progress`. Append Discussion entry with note.
-- **If open with new comments**: fetch comments via `gh pr view [N] --comments`. Append any new comments to the tracker Discussion: `> [YYYY-MM-DD HH:MM] **pm/qa**: PR comment from [author]: [summary]`
+- **If open with new comments**: fetch comments via `gh pr view [N] --comments`. Append any new comments to the tracker Discussion: `> [YYYY-MM-DD HH:MM] **pm**: PR comment from [author]: [summary]`
 - **If open with "changes requested" review**: update status back to `In Progress`. Append Discussion entry with the requested changes.
 
 If `PR Flow: no`, skip this step.
@@ -1405,14 +1405,14 @@ If `.squidsquad/dm/` directory does NOT exist (DM not installed), PM takes over 
 
 Print: `[🦑 HH:MM:SS] No DM present — PM performing delivery for #[NUMBER]...`
 
-**1. Check for delivery:skip**: If the feature's Discussion contains `delivery: skip`, mark it `Shipped` immediately, increment `Shipped Since Last Bump` in `config.md`, and append: `> [YYYY-MM-DD HH:MM] **pm/qa**: No DM present. No delivery work needed (delivery: skip). Status → Shipped.` Skip to the version bump check below.
+**1. Check for delivery:skip**: If the feature's Discussion contains `delivery: skip`, mark it `Shipped` immediately, increment `Shipped Since Last Bump` in `config.md`, and append: `> [YYYY-MM-DD HH:MM] **pm**: No DM present. No delivery work needed (delivery: skip). Status → Shipped.` Skip to the version bump check below.
 
 **2. Create delivery package** (for features NOT marked delivery:skip):
    - **Update user-facing docs**: Update `README.md` with user-story descriptions of the new functionality. Update any relevant sections of `SKILL.md` that describe user-facing behavior. Write in terms users understand — what's new, how to use it, what changed.
-   - **Prepare CHANGELOG entry**: Append a Discussion note with the CHANGELOG text (do NOT write to `CHANGELOG.md` yet — it will be included in the next version bump): `> [YYYY-MM-DD HH:MM] **pm/qa**: CHANGELOG entry prepared: "#[NUMBER] — [Title]".`
+   - **Prepare CHANGELOG entry**: Append a Discussion note with the CHANGELOG text (do NOT write to `CHANGELOG.md` yet — it will be included in the next version bump): `> [YYYY-MM-DD HH:MM] **pm**: CHANGELOG entry prepared: "#[NUMBER] — [Title]".`
    - **Check for config/migration changes**: If the feature introduces new config values, settings, or requires migration steps, document them in the Discussion.
 
-**3. Mark Shipped**: Update the feature's status to `Shipped`. Append: `> [YYYY-MM-DD HH:MM] **pm/qa**: No DM present — PM delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped.`
+**3. Mark Shipped**: Update the feature's status to `Shipped`. Append: `> [YYYY-MM-DD HH:MM] **pm**: No DM present — PM delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped.`
 
 **4. Increment counter**: Increment `Shipped Since Last Bump` in `config.md`.
 
@@ -2651,14 +2651,14 @@ If `.squidsquad/dm/` directory does NOT exist (DM not installed), PM takes over 
 
 Print: `[🦑 HH:MM:SS] No DM present — PM performing delivery for #[NUMBER]...`
 
-**1. Check for delivery:skip**: If the feature's Discussion contains `delivery: skip`, mark it `Shipped` immediately, increment `Shipped Since Last Bump` in `config.md`, and append: `> [YYYY-MM-DD HH:MM] **pm/qa**: No DM present. No delivery work needed (delivery: skip). Status → Shipped.` Skip to the version bump check below.
+**1. Check for delivery:skip**: If the feature's Discussion contains `delivery: skip`, mark it `Shipped` immediately, increment `Shipped Since Last Bump` in `config.md`, and append: `> [YYYY-MM-DD HH:MM] **pm**: No DM present. No delivery work needed (delivery: skip). Status → Shipped.` Skip to the version bump check below.
 
 **2. Create delivery package** (for features NOT marked delivery:skip):
    - **Update user-facing docs**: Update `README.md` with user-story descriptions of the new functionality. Update any relevant sections of `SKILL.md` that describe user-facing behavior. Write in terms users understand — what's new, how to use it, what changed.
-   - **Prepare CHANGELOG entry**: Append a Discussion note with the CHANGELOG text (do NOT write to `CHANGELOG.md` yet — it will be included in the next version bump): `> [YYYY-MM-DD HH:MM] **pm/qa**: CHANGELOG entry prepared: "#[NUMBER] — [Title]".`
+   - **Prepare CHANGELOG entry**: Append a Discussion note with the CHANGELOG text (do NOT write to `CHANGELOG.md` yet — it will be included in the next version bump): `> [YYYY-MM-DD HH:MM] **pm**: CHANGELOG entry prepared: "#[NUMBER] — [Title]".`
    - **Check for config/migration changes**: If the feature introduces new config values, settings, or requires migration steps, document them in the Discussion.
 
-**3. Mark Shipped**: Update the feature's status to `Shipped`. Append: `> [YYYY-MM-DD HH:MM] **pm/qa**: No DM present — PM delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped.`
+**3. Mark Shipped**: Update the feature's status to `Shipped`. Append: `> [YYYY-MM-DD HH:MM] **pm**: No DM present — PM delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped.`
 
 **4. Increment counter**: Increment `Shipped Since Last Bump` in `config.md`.
 

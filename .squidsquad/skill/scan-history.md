@@ -23,3 +23,21 @@
 - **Files scanned**: references/sub-skills/common/tracker-protocol.md, references/sub-skills/common/improvement-scan.md, references/sub-skills/pm-specific/feature-intake.md
 - **Findings**: status:open missing from tracker-protocol Label Taxonomy (fixed inline — same gap as #39)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-04 23:30
+
+- **Files scanned**: references/sub-skills/common/context-pressure.md, references/sub-skills/common/pull-latest.md, references/sub-skills/common/working-state.md
+- **Findings**: none
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-05 01:00
+
+- **Files scanned**: references/sub-skills/common/interval-sync.md, references/sub-skills/common/resume-working-state.md, references/sub-skills/souls/dev.md
+- **Findings**: none (dev soul examples use old tracker format but are illustrative only — not operational)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-05 02:30
+
+- **Files scanned**: references/sub-skills/pm-specific/feature-approval.md, references/sub-skills/pm-specific/delivery-fallback.md, references/sub-skills/pm-specific/pr-flow.md
+- **Findings**: #58 (delivery-fallback.md and pr-flow.md still use pm/qa Discussion alias)
+- **Items rejected by human**: none yet
