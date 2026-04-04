@@ -17,3 +17,9 @@
 - **Files scanned**: CHANGELOG.md, .squidsquad/pm/CLAUDE.md, .squidsquad/skill/CLAUDE.md
 - **Findings**: #48 (live PM and skill CLAUDE.md still reference PM/QA after separation — stale templates)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-04 19:00
+
+- **Files scanned**: references/sub-skills/common/tracker-protocol.md, references/sub-skills/common/improvement-scan.md, references/sub-skills/pm-specific/feature-intake.md
+- **Findings**: status:open missing from tracker-protocol Label Taxonomy (fixed inline — same gap as #39)
+- **Items rejected by human**: none yet

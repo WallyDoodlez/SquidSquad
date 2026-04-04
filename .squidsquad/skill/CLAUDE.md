@@ -111,6 +111,7 @@ Issues use labels for structured metadata. The following labels must exist on th
 - `priority:low` — nice-to-have, improvement scan items
 
 **Status:**
+- `status:open` — bug filed, awaiting triage
 - `status:pending` — filed, awaiting human approval
 - `status:planning` — approved by human, PM running intake
 - `status:planned` — planning complete, awaiting human approval for execution
