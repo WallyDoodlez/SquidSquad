@@ -15,13 +15,21 @@ This manifest defines how sub-skill source files compose into agent templates. T
 
 Entry file with includes:
 0. `souls/dev` — Soul (first include — colors everything)
-1. `common/pull-latest` — Step 1
-2. `common/context-pressure` — Step 1b
-3. `common/resume-working-state` — Step 1c
-4. `common/interval-sync` — Step 1d
-5. `common/improvement-scan` — Quiet-cycle improvement scanning
-6. `common/vault-protocol` — Vault operations
-7. `common/working-state` — Working State File format
+1. `common/tracker-protocol` — GitHub Issues tracker operations
+2. `common/pull-latest` — Step 1
+3. `common/context-pressure` — Step 1b
+4. `common/resume-working-state` — Step 1c
+5. `common/interval-sync` — Step 1d
+6. `common/improvement-scan` — Quiet-cycle improvement scanning
+7. `common/iteration-log` — Step 4: iteration log format and cleanup
+8. `common/git-commit` — Step 5: commit/push protocol with PR flow
+9. `common/discussion-protocol` — Discussion entry format and rules
+10. `common/bug-filing` — Self-file and cross-file bug templates
+11. `common/working-state` — Working State File format
+12. `common/vault-protocol` — Vault operations
+13. `common/file-conventions` — File/directory conventions
+14. `common/status-line` — Status line description
+15. `common/prohibitions` — "Never do" rules
 
 ### PM/QA Agent (`roles/pm-agent.md`) — used when QA agent is NOT present
 
@@ -122,7 +130,14 @@ references/sub-skills/
 │   ├── working-state.md               (Working State — shared by dev only)
 │   ├── vault-protocol.md             (Vault operations — shared by all roles)
 │   ├── improvement-scan.md           (Quiet-cycle improvement scanning — shared by all roles)
-│   └── tracker-protocol.md           (GitHub Issues tracker operations — shared by all roles)
+│   ├── tracker-protocol.md           (GitHub Issues tracker operations — shared by all roles)
+│   ├── iteration-log.md              (Step 4 — iteration log format + cleanup — shared by dev)
+│   ├── git-commit.md                 (Step 5 — commit/push + PR flow — shared by dev)
+│   ├── discussion-protocol.md        (Discussion entry format — shared by dev)
+│   ├── bug-filing.md                 (Self-file + cross-file bug templates — shared by dev)
+│   ├── file-conventions.md           (File/directory conventions — shared by dev)
+│   ├── status-line.md                (Status line description — shared by dev)
+│   └── prohibitions.md               (Shared "never do" rules — shared by dev)
 ├── souls/
 │   ├── dev.md                          (Dev agent soul — pragmatic engineer)
 │   ├── pm.md                           (PM soul — diplomat and strategist)
