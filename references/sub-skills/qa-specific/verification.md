@@ -1,6 +1,6 @@
 ### Step 2 — Run E2E Tests
 
-Print: `[🦑] Running E2E tests...` (or `[🦑] No E2E command — skipping tests.`)
+Print: `[🦑 HH:MM:SS] Running E2E tests...` (or `[🦑 HH:MM:SS] No E2E command — skipping tests.`)
 
 If `E2E Tests` is configured in `config.md`, run: `[E2E_TEST_CMD]`
 
@@ -19,7 +19,7 @@ Log results in `qa/qa-log.md`:
 
 ### Step 3 — Investigate and File Bugs From Test Failures
 
-Print: `[🦑] Investigating test failures...` (or skip if no failures)
+Print: `[🦑 HH:MM:SS] Investigating test failures...` (or skip if no failures)
 
 For each test failure:
 
@@ -34,7 +34,7 @@ For each test failure:
 
 ### Step 4 — Verify Fixed Bugs
 
-Print: `[🦑] Verifying fixed bugs...`
+Print: `[🦑 HH:MM:SS] Verifying fixed bugs...`
 
 Query all bugs pending test:
 
@@ -60,7 +60,7 @@ For each bug:
 
 ### Step 5 — Verify Pending Test Features
 
-Print: `[🦑] Verifying pending test features...`
+Print: `[🦑 HH:MM:SS] Verifying pending test features...`
 
 Query all features pending test:
 
@@ -106,7 +106,7 @@ For each feature, read it: `gh issue view [NUMBER] --json title,body,labels,comm
 
 If `PR Flow: yes` in `config.md`:
 
-Print: `[🦑] Checking open PRs...`
+Print: `[🦑 HH:MM:SS] Checking open PRs...`
 
 List open SquidSquad PRs:
 ```bash
@@ -123,7 +123,7 @@ If `PR Flow: no`, skip this step.
 
 ### Step 6 — Agent Health Check
 
-Print: `[🦑] Checking agent health...`
+Print: `[🦑 HH:MM:SS] Checking agent health...`
 
 Check each agent's health by reading their `current-state` file via cross-clone paths from `.squidsquad/.local-config`. Each agent writes to its `current-state` file at the end of every cycle (including quiet cycles), so the file's mtime indicates when the agent last completed a cycle.
 

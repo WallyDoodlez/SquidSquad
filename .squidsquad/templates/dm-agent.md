@@ -90,10 +90,10 @@ At agent boot (before the first cycle), verify `gh` access:
 gh issue list --limit 1 2>&1
 
 If this fails (authentication error, missing scope, `gh` not found):
-1. Print: `[🦑] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.`
+1. Print: `[🦑 HH:MM:SS] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.`
 2. Exit the conversation. SquidSquad requires GitHub Issues access.
 
-If `gh` works but GitHub is **temporarily unreachable** during a cycle (network blip), skip tracker operations for this cycle and retry next cycle. Print: `[🦑] GitHub unreachable — skipping tracker operations. Will retry next cycle.`
+If `gh` works but GitHub is **temporarily unreachable** during a cycle (network blip), skip tracker operations for this cycle and retry next cycle. Print: `[🦑 HH:MM:SS] GitHub unreachable — skipping tracker operations. Will retry next cycle.`
 
 ### Label Taxonomy
 
@@ -246,7 +246,7 @@ At the end of each cycle, print:
 
 [🦑] ---- cycle N complete at HH:MM:SS ----
 
-**Step markers**: At the start of each step, print a one-line `[🦑]` prefixed status so the human can scan scrollback. Key sub-actions also get markers. Keep each marker to one concise line.
+**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions also get markers. Keep each marker to one concise line.
 
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/dm/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
@@ -265,7 +265,7 @@ Write `idle|` at cycle end so the status bar shows rotating hints between cycles
 <!-- sub-skill: pull-latest -->
 ### Step 1 — Pull Latest
 
-Print: `[🦑] Pulling latest...`
+Print: `[🦑 HH:MM:SS] Pulling latest...`
 
 git pull --rebase
 
@@ -274,19 +274,19 @@ If there is a rebase conflict in a tracker file, resolve it by keeping both vers
 
 ### Step 1b — Context Pressure Check
 
-Print: `[🦑] Checking context pressure...`
+Print: `[🦑 HH:MM:SS] Checking context pressure...`
 
 Check `context_window.used_percentage`. Compare against the threshold in `config.md` (default 80%).
 
 If context usage **exceeds the threshold**:
 1. Compact your current working state into `.squidsquad/dm/working-state.md`.
 2. Commit and push all pending work.
-3. Print: `[🦑] Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
+3. Print: `[🦑 HH:MM:SS] Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
 4. Exit the conversation.
 
 ### Step 1c — Resume From Working State
 
-Print: `[🦑] Checking working state...`
+Print: `[🦑 HH:MM:SS] Checking working state...`
 
 Read `.squidsquad/dm/working-state.md`. If it contains an active task (status `in-progress`), resume that work. Otherwise proceed normally.
 
@@ -296,12 +296,12 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 1. Cancel the existing cron job (`CronDelete`).
 2. Create a new cron with the updated interval.
-3. Print: `[🦑] Interval changed to [N]m — cron re-scheduled.`
+3. Print: `[🦑 HH:MM:SS] Interval changed to [N]m — cron re-scheduled.`
 
 <!-- sub-skill: bug-triage -->
 ### Step 1e — Triage Bugs
 
-Print: `[🦑] Triaging bugs...`
+Print: `[🦑 HH:MM:SS] Triaging bugs...`
 
 Query GitHub Issues for open bugs assigned to your role:
 
@@ -338,11 +338,11 @@ For each bug that has `status:open`:
 <!-- sub-skill: delivery-packaging -->
 ### Step 2 — Scan for Pending Ship Items
 
-Print: `[🦑] Scanning for Pending Ship items...`
+Print: `[🦑 HH:MM:SS] Scanning for Pending Ship items...`
 
 Read each dev agent's `features/INDEX.md` (listed in `config.md` under `Dev Agents`). For each feature with status `Pending Ship`, read its individual file (note: tracker uses markdown bold formatting — search for `**Status**: Pending Ship`):
 
-Pick the highest-priority item first. When picking up an item, print: `[🦑] Delivering #[NUMBER]...`
+Pick the highest-priority item first. When picking up an item, print: `[🦑 HH:MM:SS] Delivering #[NUMBER]...`
 
 1. Write working state: update `.squidsquad/dm/working-state.md` with the feature ID, status `in-progress`, and planned delivery steps.
 2. Read the feature description, acceptance criteria, and Discussion entries (especially dev's delivery notes).
@@ -389,7 +389,7 @@ After marking any item `Shipped`, check if a version bump is due:
 2. Read `Shipped Since Last Bump` from `config.md`.
 3. If counter < threshold: no bump needed, continue.
 4. If counter >= threshold: check all agent bug trackers for open bugs (`**Status**: Open` or `**Status**: Investigating`).
-   - If open bugs exist: defer the bump. Print: `[🦑] Version bump deferred — [N] open bugs remain.` Counter stays at current value.
+   - If open bugs exist: defer the bump. Print: `[🦑 HH:MM:SS] Version bump deferred — [N] open bugs remain.` Counter stays at current value.
    - If zero open bugs: **perform the bump**.
 
 **Bump sequence** (use working-state.md to track progress for crash recovery):
@@ -418,7 +418,7 @@ After marking any item `Shipped`, check if a version bump is due:
 10. Reset `Shipped Since Last Bump` to `0` in `config.md`.
 11. Log in iteration log: add `Version Bumped: X.Y.Z` field.
 
-Print: `[🦑] Version bumped to vX.Y.Z — tag created and pushed.`
+Print: `[🦑 HH:MM:SS] Version bumped to vX.Y.Z — tag created and pushed.`
 
 **Version bumps always commit directly to main.**
 <!-- /sub-skill: version-bumps -->
@@ -440,7 +440,7 @@ Maintain a **quiet cycle counter** in your working state. Increment it each quie
 
 When triggered, add a new step to your cycle:
 
-Print: `[🦑] Scanning for improvements...`
+Print: `[🦑 HH:MM:SS] Scanning for improvements...`
 
 Write status bar state: `scanning|🔍 Scanning [target description]...`
 
@@ -526,7 +526,7 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 
 If no features were delivered and no improvement scan was triggered this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
 
-Otherwise, print: `[🦑] Logging iteration...`
+Otherwise, print: `[🦑 HH:MM:SS] Logging iteration...`
 
 Create `.squidsquad/dm/iterations/iter-N.md` (increment N from last log):
 
@@ -541,7 +541,7 @@ After creating the log, clean up old iteration files: if more than 20 `iter-*.md
 
 ### Step 5 — Commit and Push (skip on quiet cycles)
 
-Print: `[🦑] Committing and pushing...`
+Print: `[🦑 HH:MM:SS] Committing and pushing...`
 
 git add -A
 git commit -m "dm: [brief description of delivery work done this cycle]"

@@ -11,10 +11,10 @@ gh issue list --limit 1 2>&1
 ```
 
 If this fails (authentication error, missing scope, `gh` not found):
-1. Print: `[🦑] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.`
+1. Print: `[🦑 HH:MM:SS] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.`
 2. Exit the conversation. SquidSquad requires GitHub Issues access.
 
-If `gh` works but GitHub is **temporarily unreachable** during a cycle (network blip), skip tracker operations for this cycle and retry next cycle. Print: `[🦑] GitHub unreachable — skipping tracker operations. Will retry next cycle.`
+If `gh` works but GitHub is **temporarily unreachable** during a cycle (network blip), skip tracker operations for this cycle and retry next cycle. Print: `[🦑 HH:MM:SS] GitHub unreachable — skipping tracker operations. Will retry next cycle.`
 
 ### Label Taxonomy
 

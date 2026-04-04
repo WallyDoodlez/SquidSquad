@@ -4,7 +4,7 @@
 
 If `.squidsquad/dm/` directory does NOT exist (DM not installed), PM takes over delivery responsibilities. For each feature just marked `Pending Ship` in Steps 6/6b:
 
-Print: `[🦑] No DM present — PM performing delivery for #[NUMBER]...`
+Print: `[🦑 HH:MM:SS] No DM present — PM performing delivery for #[NUMBER]...`
 
 **1. Check for delivery:skip**: If the feature's Discussion contains `delivery: skip`, mark it `Shipped` immediately, increment `Shipped Since Last Bump` in `config.md`, and append: `> [YYYY-MM-DD HH:MM] **pm/qa**: No DM present. No delivery work needed (delivery: skip). Status → Shipped.` Skip to the version bump check below.
 
@@ -22,7 +22,7 @@ Print: `[🦑] No DM present — PM performing delivery for #[NUMBER]...`
    - Read `Shipped Since Last Bump` from `config.md`.
    - If counter < threshold: no bump needed, continue.
    - If counter >= threshold: check all agent bug trackers for open bugs (`**Status**: Open` or `**Status**: Investigating`).
-     - If open bugs exist: defer the bump. Print: `[🦑] Version bump deferred — [N] open bugs remain.`
+     - If open bugs exist: defer the bump. Print: `[🦑 HH:MM:SS] Version bump deferred — [N] open bugs remain.`
      - If zero open bugs: **perform the bump**.
 
    **Bump sequence**:
@@ -48,4 +48,4 @@ Print: `[🦑] No DM present — PM performing delivery for #[NUMBER]...`
    9. Push: `git push && git push --tags`
    10. Reset `Shipped Since Last Bump` to `0` in `config.md`.
 
-   Print: `[🦑] Version bumped to vX.Y.Z — tag created and pushed.`
+   Print: `[🦑 HH:MM:SS] Version bumped to vX.Y.Z — tag created and pushed.`

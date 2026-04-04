@@ -1,6 +1,6 @@
 ### Step 1 — Pull Latest
 
-Print: `[🦑] Pulling latest...`
+Print: `[🦑 HH:MM:SS] Pulling latest...`
 
 ```bash
 git pull --rebase

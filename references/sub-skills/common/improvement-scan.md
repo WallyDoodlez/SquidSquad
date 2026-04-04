@@ -14,7 +14,7 @@ Maintain a **quiet cycle counter** in your working state. Increment it each quie
 
 When triggered, add a new step to your cycle:
 
-Print: `[🦑] Scanning for improvements...`
+Print: `[🦑 HH:MM:SS] Scanning for improvements...`
 
 Write status bar state: `scanning|🔍 Scanning [target description]...`
 

@@ -1,6 +1,6 @@
 ### Step 1e — Triage Bugs
 
-Print: `[🦑] Triaging bugs...`
+Print: `[🦑 HH:MM:SS] Triaging bugs...`
 
 Query GitHub Issues for open bugs assigned to your role:
 

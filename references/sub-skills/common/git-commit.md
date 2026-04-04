@@ -1,6 +1,6 @@
 ### Step 5 — Commit and Push (skip on quiet cycles)
 
-Print: `[🦑] Committing and pushing...`
+Print: `[🦑 HH:MM:SS] Committing and pushing...`
 
 **If `PR Flow: yes` in config.md** and this cycle completed a feature or bug fix (status changed to `Pending Test`):
 

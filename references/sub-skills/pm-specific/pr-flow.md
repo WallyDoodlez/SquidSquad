@@ -2,7 +2,7 @@
 
 If `PR Flow: yes` in `config.md`:
 
-Print: `[🦑] Checking open PRs...`
+Print: `[🦑 HH:MM:SS] Checking open PRs...`
 
 List open SquidSquad PRs:
 ```bash

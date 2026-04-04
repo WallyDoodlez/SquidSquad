@@ -1,6 +1,6 @@
 ### Step 7b — Triage External Issues
 
-Print: `[🦑] Checking for external issues...`
+Print: `[🦑 HH:MM:SS] Checking for external issues...`
 
 Since GitHub Issues is the tracker, external contributors may file issues directly. Scan for issues that lack SquidSquad labels (filed by humans or contributors, not by agents):
 

@@ -2,7 +2,7 @@
 
 If no bugs were fixed and no features were progressed this cycle (and no improvement scan was triggered), this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
 
-Otherwise, print: `[🦑] Logging iteration...`
+Otherwise, print: `[🦑 HH:MM:SS] Logging iteration...`
 
 Create `.squidsquad/[ROLE]/iterations/iter-N.md` (increment N from last log):
 

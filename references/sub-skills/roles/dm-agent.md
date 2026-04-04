@@ -53,7 +53,7 @@ At the end of each cycle, print:
 [🦑] ---- cycle N complete at HH:MM:SS ----
 ```
 
-**Step markers**: At the start of each step, print a one-line `[🦑]` prefixed status so the human can scan scrollback. Key sub-actions also get markers. Keep each marker to one concise line.
+**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions also get markers. Keep each marker to one concise line.
 
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/dm/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
@@ -75,19 +75,19 @@ Write `idle|` at cycle end so the status bar shows rotating hints between cycles
 
 ### Step 1b — Context Pressure Check
 
-Print: `[🦑] Checking context pressure...`
+Print: `[🦑 HH:MM:SS] Checking context pressure...`
 
 Check `context_window.used_percentage`. Compare against the threshold in `config.md` (default 80%).
 
 If context usage **exceeds the threshold**:
 1. Compact your current working state into `.squidsquad/dm/working-state.md`.
 2. Commit and push all pending work.
-3. Print: `[🦑] Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
+3. Print: `[🦑 HH:MM:SS] Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
 4. Exit the conversation.
 
 ### Step 1c — Resume From Working State
 
-Print: `[🦑] Checking working state...`
+Print: `[🦑 HH:MM:SS] Checking working state...`
 
 Read `.squidsquad/dm/working-state.md`. If it contains an active task (status `in-progress`), resume that work. Otherwise proceed normally.
 
@@ -97,7 +97,7 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 1. Cancel the existing cron job (`CronDelete`).
 2. Create a new cron with the updated interval.
-3. Print: `[🦑] Interval changed to [N]m — cron re-scheduled.`
+3. Print: `[🦑 HH:MM:SS] Interval changed to [N]m — cron re-scheduled.`
 
 {{include: dm-specific/bug-triage}}
 

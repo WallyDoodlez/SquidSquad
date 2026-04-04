@@ -1,10 +1,10 @@
 ### Step 2 — Scan for Pending Ship Items
 
-Print: `[🦑] Scanning for Pending Ship items...`
+Print: `[🦑 HH:MM:SS] Scanning for Pending Ship items...`
 
 Read each dev agent's `features/INDEX.md` (listed in `config.md` under `Dev Agents`). For each feature with status `Pending Ship`, read its individual file (note: tracker uses markdown bold formatting — search for `**Status**: Pending Ship`):
 
-Pick the highest-priority item first. When picking up an item, print: `[🦑] Delivering #[NUMBER]...`
+Pick the highest-priority item first. When picking up an item, print: `[🦑 HH:MM:SS] Delivering #[NUMBER]...`
 
 1. Write working state: update `.squidsquad/dm/working-state.md` with the feature ID, status `in-progress`, and planned delivery steps.
 2. Read the feature description, acceptance criteria, and Discussion entries (especially dev's delivery notes).

@@ -68,7 +68,7 @@ flowchart LR
 
 Dev agents loop autonomously. PM follows the same cadence but focuses on human check-ins, feature intake, and backlog management — no testing. QA runs its own independent loop handling E2E tests, bug verification, feature testing, and agent health checks.
 
-Every step prints a `[🦑]` prefixed marker (e.g. `[🦑] Pulling latest...`, `[🦑] Triaging bugs...`) so SquidSquad activity is easy to spot in terminal scrollback.
+Every step prints a `[🦑 HH:MM:SS]` timestamped marker (e.g. `[🦑 HH:MM:SS] Pulling latest...`, `[🦑 HH:MM:SS] Triaging bugs...`) so SquidSquad activity is easy to spot in terminal scrollback.
 
 ### Architecture
 
@@ -170,7 +170,7 @@ All coordination is asynchronous through git — agents pull to read the latest 
 A live status bar at the bottom of each agent's Claude Code session. **Line 1**: 🦑 + role/version, backlog (🐛 bugs, ⭐ features) or active task (🔨 FEAT-XXX), context pressure (🧠/🧠🔥/🧠💀 with colored percentage), cycle countdown (🔄/🔜), and for PM: health icons (🦑/👻/❓) + rest nudge. **Line 2**: current Ralph Loop step with active sub-skill name (e.g. `git-commit — Pushing changes...`, `tracker-protocol — Checking #28...`) or rotating contextual hints when idle — human-facing prompts like "Msg me any time to file a bug", rotating every 60 seconds, phase-aware. Hint pools defined in `references/hints-dev.txt` and `references/hints-pm.txt`.
 
 ### Step Markers
-Every Ralph Loop step prints a `[🦑]` prefixed line (e.g. `[🦑] Pulling latest...`, `[🦑] Triaging bugs...`, `[🦑] Committing and pushing...`). Makes SquidSquad activity easy to scan in terminal scrollback.
+Every Ralph Loop step prints a `[🦑 HH:MM:SS]` timestamped line (e.g. `[🦑 HH:MM:SS] Pulling latest...`, `[🦑 HH:MM:SS] Triaging bugs...`, `[🦑 HH:MM:SS] Committing and pushing...`). Makes SquidSquad activity easy to scan in terminal scrollback.
 
 ### Working State File
 Agents persist current task progress to `.squidsquad/[role]/working-state.md` — what they're working on, completed steps, remaining steps, key decisions. If a context window fills up, the agent saves state and exits cleanly. On restart, it resumes from the saved state instead of starting over.

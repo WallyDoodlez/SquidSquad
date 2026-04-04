@@ -92,10 +92,10 @@ At agent boot (before the first cycle), verify `gh` access:
 gh issue list --limit 1 2>&1
 
 If this fails (authentication error, missing scope, `gh` not found):
-1. Print: `[🦑] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.`
+1. Print: `[🦑 HH:MM:SS] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.`
 2. Exit the conversation. SquidSquad requires GitHub Issues access.
 
-If `gh` works but GitHub is **temporarily unreachable** during a cycle (network blip), skip tracker operations for this cycle and retry next cycle. Print: `[🦑] GitHub unreachable — skipping tracker operations. Will retry next cycle.`
+If `gh` works but GitHub is **temporarily unreachable** during a cycle (network blip), skip tracker operations for this cycle and retry next cycle. Print: `[🦑 HH:MM:SS] GitHub unreachable — skipping tracker operations. Will retry next cycle.`
 
 ### Label Taxonomy
 
@@ -250,7 +250,7 @@ At the end of each cycle, print:
 
 [🦑] ---- cycle N complete at HH:MM:SS ----
 
-**Step markers**: At the start of each step, print a one-line `[🦑]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, committing) also get markers. Keep each marker to one concise line.
+**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions (filing bugs, committing) also get markers. Keep each marker to one concise line.
 
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/skill/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
@@ -269,7 +269,7 @@ Write `idle|` at cycle end so the status bar shows rotating hints between cycles
 <!-- sub-skill: pull-latest -->
 ### Step 1 — Pull Latest
 
-Print: `[🦑] Pulling latest...`
+Print: `[🦑 HH:MM:SS] Pulling latest...`
 
 git pull --rebase
 
@@ -279,14 +279,14 @@ If there is a rebase conflict in a tracker file, resolve it by keeping both vers
 <!-- sub-skill: context-pressure -->
 ### Step 1b — Context Pressure Check
 
-Print: `[🦑] Checking context pressure...`
+Print: `[🦑 HH:MM:SS] Checking context pressure...`
 
 Check `context_window.used_percentage` from the status line JSON (available as the `$CONTEXT_USED` environment hint, or by reading the last status line output). Compare against the threshold in `config.md` (default 80%).
 
 If context usage **exceeds the threshold**:
 1. Compact your current working state into `.squidsquad/skill/working-state.md` (see Working State File below).
 2. Commit and push all pending work.
-3. Print: `[🦑] Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
+3. Print: `[🦑 HH:MM:SS] Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
 4. Exit the conversation. The boot script will restart you with a fresh context window.
 
 If context usage is below threshold, continue normally.
@@ -295,10 +295,10 @@ If context usage is below threshold, continue normally.
 <!-- sub-skill: resume-working-state -->
 ### Step 1c — Resume From Working State
 
-Print: `[🦑] Checking working state...`
+Print: `[🦑 HH:MM:SS] Checking working state...`
 
 Read `.squidsquad/skill/working-state.md`. If it contains an active task (status `in-progress`):
-- Print: `[🦑] Resuming [TASK_ID]...`
+- Print: `[🦑 HH:MM:SS] Resuming [TASK_ID]...`
 - Read the task ID, completed steps, remaining steps, and key decisions.
 - Resume work on that task instead of starting fresh from the tracker.
 - Skip re-analyzing code you've already understood — trust the working state summary.
@@ -313,14 +313,14 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 1. Cancel the existing cron job (`CronDelete`).
 2. Create a new cron with the updated interval (`CronCreate` with `*/N * * * *` and `execute one Ralph Loop cycle`).
-3. Print: `[🦑] Interval changed to [N]m — cron re-scheduled.`
+3. Print: `[🦑 HH:MM:SS] Interval changed to [N]m — cron re-scheduled.`
 
 If the interval matches, continue silently.
 <!-- /sub-skill: interval-sync -->
 
 ### Step 2 — Triage Bugs
 
-Print: `[🦑] Triaging bugs...`
+Print: `[🦑 HH:MM:SS] Triaging bugs...`
 
 Query GitHub Issues for open bugs assigned to your role:
 
@@ -345,7 +345,7 @@ For each bug that does not have a `status:shipped` or closed state:
 
 ### Step 3 — Implement Features
 
-Print: `[🦑] Checking features...`
+Print: `[🦑 HH:MM:SS] Checking features...`
 
 **Bug gate**: Before picking up any feature work, check for open bugs assigned to your role:
 
@@ -353,7 +353,7 @@ Print: `[🦑] Checking features...`
 gh issue list --label "type:bug,role:skill" --state open --json number --limit 1
 ```
 
-If any open bugs exist (non-empty result), **skip all feature work this cycle** — bugs always take priority. Print: `[🦑] Open bugs exist — skipping feature pickup.` and proceed to Step 4.
+If any open bugs exist (non-empty result), **skip all feature work this cycle** — bugs always take priority. Print: `[🦑 HH:MM:SS] Open bugs exist — skipping feature pickup.` and proceed to Step 4.
 
 **First, check for QA-rejected features** (higher priority than new work — fix existing before starting new):
 
@@ -383,7 +383,7 @@ Pick the highest-priority feature (check `priority:high` first, then `priority:m
 
 **Design label check**: If the issue has a `design:needed` or `design:in-progress` label, **skip it** — the designer agent has not completed the design yet. Move to the next feature. Issues with `design:complete` or no design label are picked up normally.
 
-When picking up a feature, print: `[🦑] Implementing #[NUMBER]...`
+When picking up a feature, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 
 1. Comment and transition status:
    ```bash
@@ -425,7 +425,7 @@ Maintain a **quiet cycle counter** in your working state. Increment it each quie
 
 When triggered, add a new step to your cycle:
 
-Print: `[🦑] Scanning for improvements...`
+Print: `[🦑 HH:MM:SS] Scanning for improvements...`
 
 Write status bar state: `scanning|🔍 Scanning [target description]...`
 
@@ -512,7 +512,7 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 
 If no bugs were fixed and no features were progressed this cycle (and no improvement scan was triggered), this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
 
-Otherwise, print: `[🦑] Logging iteration...`
+Otherwise, print: `[🦑 HH:MM:SS] Logging iteration...`
 
 Create `.squidsquad/skill/iterations/iter-N.md` (increment N from last log):
 
@@ -530,7 +530,7 @@ After creating the log, clean up old iteration files: if more than 20 `iter-*.md
 <!-- sub-skill: git-commit -->
 ### Step 5 — Commit and Push (skip on quiet cycles)
 
-Print: `[🦑] Committing and pushing...`
+Print: `[🦑 HH:MM:SS] Committing and pushing...`
 
 **If `PR Flow: yes` in config.md** and this cycle completed a feature or bug fix (status changed to `Pending Test`):
 

@@ -8,13 +8,13 @@ When the human suggests a new feature, do NOT immediately file it. Run the full 
 
 Before starting each planning phase, check if its output artifact already exists in `.squidsquad/[ROLE]/planning/`:
 
-1. **File exists but uncommitted** (in working tree or staged but not pushed): Skip the phase automatically. Print: `[🦑] RESEARCH.md already exists (uncommitted) — skipping Phase 1.`
+1. **File exists but uncommitted** (in working tree or staged but not pushed): Skip the phase automatically. Print: `[🦑 HH:MM:SS] RESEARCH.md already exists (uncommitted) — skipping Phase 1.`
 2. **File exists and committed**: Check for code changes since the artifact was created:
    ```bash
    ARTIFACT_COMMIT=$(git log -1 --format="%H" -- .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-RESEARCH.md)
    CHANGES=$(git log --oneline "$ARTIFACT_COMMIT"..HEAD -- references/ SKILL.md CHANGELOG.md)
    ```
-   - If no changes: auto-reuse silently. Print: `[🦑] RESEARCH.md exists and code unchanged — reusing.`
+   - If no changes: auto-reuse silently. Print: `[🦑 HH:MM:SS] RESEARCH.md exists and code unchanged — reusing.`
    - If changes found: ask the user via `AskUserQuestion`: "RESEARCH.md exists from a previous session but code has changed since. Re-research or reuse?" Options: `["Re-research (recommended)", "Reuse existing"]`.
 3. **File doesn't exist**: Run the phase normally.
 

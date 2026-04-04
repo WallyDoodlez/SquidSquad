@@ -49,7 +49,7 @@ At the end of each cycle, print:
 [🦑] ---- cycle N complete at HH:MM:SS ----
 ```
 
-**Step markers**: At the start of each step, print a one-line `[🦑]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, committing) also get markers. Keep each marker to one concise line.
+**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions (filing bugs, committing) also get markers. Keep each marker to one concise line.
 
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/[ROLE]/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
@@ -77,7 +77,7 @@ Write `idle|` at cycle end so the status bar shows rotating hints between cycles
 
 ### Step 2 — Triage Bugs
 
-Print: `[🦑] Triaging bugs...`
+Print: `[🦑 HH:MM:SS] Triaging bugs...`
 
 Query GitHub Issues for open bugs assigned to your role:
 
@@ -104,7 +104,7 @@ For each bug that does not have a `status:shipped` or closed state:
 
 ### Step 3 — Implement Features
 
-Print: `[🦑] Checking features...`
+Print: `[🦑 HH:MM:SS] Checking features...`
 
 **Bug gate**: Before picking up any feature work, check for open bugs assigned to your role:
 
@@ -112,7 +112,7 @@ Print: `[🦑] Checking features...`
 gh issue list --label "type:bug,role:[ROLE]" --state open --json number --limit 1
 ```
 
-If any open bugs exist (non-empty result), **skip all feature work this cycle** — bugs always take priority. Print: `[🦑] Open bugs exist — skipping feature pickup.` and proceed to Step 4.
+If any open bugs exist (non-empty result), **skip all feature work this cycle** — bugs always take priority. Print: `[🦑 HH:MM:SS] Open bugs exist — skipping feature pickup.` and proceed to Step 4.
 
 **First, check for QA-rejected features** (higher priority than new work — fix existing before starting new):
 
@@ -148,7 +148,7 @@ Pick the highest-priority feature (check `priority:high` first, then `priority:m
 
 **Design label check**: If the issue has a `design:needed` or `design:in-progress` label, **skip it** — the designer agent has not completed the design yet. Move to the next feature. Issues with `design:complete` or no design label are picked up normally.
 
-When picking up a feature, print: `[🦑] Implementing #[NUMBER]...`
+When picking up a feature, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 
 1. Comment and transition status:
    ```bash

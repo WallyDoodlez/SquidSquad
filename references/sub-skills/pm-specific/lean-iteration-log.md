@@ -2,7 +2,7 @@
 
 If no human input was processed, no features were filed or progressed, and no improvement scan was triggered this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
 
-Otherwise, print: `[🦑] Logging iteration...`
+Otherwise, print: `[🦑 HH:MM:SS] Logging iteration...`
 
 Create `.squidsquad/pm/iterations/iter-N.md`:
 

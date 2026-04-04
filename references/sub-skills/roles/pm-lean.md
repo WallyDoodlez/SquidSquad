@@ -20,7 +20,7 @@ When you first receive these instructions, first verify GitHub Issues access (se
 /loop [INTERVAL]m execute one Ralph Loop cycle
 ```
 
-This externalizes the cycle timing — `/loop` handles the interval and re-invocation. Each cycle is a single pass through the steps below. Do NOT manually sleep or try to self-loop. Print a brief one-line status as you go (e.g. `[🦑] Pulling latest...`, `[🦑] Running QA pass...`).
+This externalizes the cycle timing — `/loop` handles the interval and re-invocation. Each cycle is a single pass through the steps below. Do NOT manually sleep or try to self-loop. Print a brief one-line status as you go (e.g. `[🦑 HH:MM:SS] Pulling latest...`, `[🦑 HH:MM:SS] Running QA pass...`).
 
 ---
 
@@ -52,7 +52,7 @@ At the end of each cycle, print:
 [🦑] ---- cycle N complete at HH:MM:SS ----
 ```
 
-**Step markers**: At the start of each step, print a one-line `[🦑]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line.
+**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line.
 
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/pm/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
@@ -73,19 +73,19 @@ Write `idle|` at cycle end so the status bar shows rotating hints between cycles
 
 ### Step 1b — Context Pressure Check
 
-Print: `[🦑] Checking context pressure...`
+Print: `[🦑 HH:MM:SS] Checking context pressure...`
 
 Check `context_window.used_percentage`. Compare against the threshold in `config.md` (default 80%).
 
 If context usage **exceeds the threshold**:
 1. Compact your current working state into `.squidsquad/pm/working-state.md`.
 2. Commit and push all pending work.
-3. Print: `[🦑] Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
+3. Print: `[🦑 HH:MM:SS] Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
 4. Exit the conversation.
 
 ### Step 1c — Resume From Working State
 
-Print: `[🦑] Checking working state...`
+Print: `[🦑 HH:MM:SS] Checking working state...`
 
 Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `in-progress`), resume that work.
 
@@ -106,7 +106,7 @@ If the file is empty or has no active task or planning phase, proceed normally t
 Print a brief, non-blocking status note — do NOT wait for a response before continuing:
 
 ```
-[🦑] PM check-in: drop a message anytime to file bugs, features, or priority changes. Continuing to Step 3.
+[🦑 HH:MM:SS] PM check-in: drop a message anytime to file bugs, features, or priority changes. Continuing to Step 3.
 ```
 
 Then immediately proceed to Step 3. The human will interrupt when they have input — you do not need to block the loop waiting for them.

@@ -6,7 +6,7 @@ After marking any item `Shipped`, check if a version bump is due:
 2. Read `Shipped Since Last Bump` from `config.md`.
 3. If counter < threshold: no bump needed, continue.
 4. If counter >= threshold: check all agent bug trackers for open bugs (`**Status**: Open` or `**Status**: Investigating`).
-   - If open bugs exist: defer the bump. Print: `[🦑] Version bump deferred — [N] open bugs remain.` Counter stays at current value.
+   - If open bugs exist: defer the bump. Print: `[🦑 HH:MM:SS] Version bump deferred — [N] open bugs remain.` Counter stays at current value.
    - If zero open bugs: **perform the bump**.
 
 **Bump sequence** (use working-state.md to track progress for crash recovery):
@@ -35,6 +35,6 @@ After marking any item `Shipped`, check if a version bump is due:
 10. Reset `Shipped Since Last Bump` to `0` in `config.md`.
 11. Log in iteration log: add `Version Bumped: X.Y.Z` field.
 
-Print: `[🦑] Version bumped to vX.Y.Z — tag created and pushed.`
+Print: `[🦑 HH:MM:SS] Version bumped to vX.Y.Z — tag created and pushed.`
 
 **Version bumps always commit directly to main.**

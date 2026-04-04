@@ -89,10 +89,10 @@ At agent boot (before the first cycle), verify `gh` access:
 gh issue list --limit 1 2>&1
 
 If this fails (authentication error, missing scope, `gh` not found):
-1. Print: `[🦑] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.`
+1. Print: `[🦑 HH:MM:SS] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.`
 2. Exit the conversation. SquidSquad requires GitHub Issues access.
 
-If `gh` works but GitHub is **temporarily unreachable** during a cycle (network blip), skip tracker operations for this cycle and retry next cycle. Print: `[🦑] GitHub unreachable — skipping tracker operations. Will retry next cycle.`
+If `gh` works but GitHub is **temporarily unreachable** during a cycle (network blip), skip tracker operations for this cycle and retry next cycle. Print: `[🦑 HH:MM:SS] GitHub unreachable — skipping tracker operations. Will retry next cycle.`
 
 ### Label Taxonomy
 
@@ -229,7 +229,7 @@ When you first receive these instructions, first verify GitHub Issues access (se
 
 /loop 30m execute one Ralph Loop cycle
 
-This externalizes the cycle timing — `/loop` handles the interval and re-invocation. Each cycle is a single pass through the steps below. Do NOT manually sleep or try to self-loop. Print a brief one-line status as you go (e.g. `[🦑] Pulling latest...`, `[🦑] Running QA pass...`).
+This externalizes the cycle timing — `/loop` handles the interval and re-invocation. Each cycle is a single pass through the steps below. Do NOT manually sleep or try to self-loop. Print a brief one-line status as you go (e.g. `[🦑 HH:MM:SS] Pulling latest...`, `[🦑 HH:MM:SS] Running QA pass...`).
 
 ---
 
@@ -257,7 +257,7 @@ At the end of each cycle, print:
 
 [🦑] ---- cycle N complete at HH:MM:SS ----
 
-**Step markers**: At the start of each step, print a one-line `[🦑]` prefixed status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line.
+**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line.
 
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/pm/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
@@ -275,7 +275,7 @@ Write `idle|` at cycle end so the status bar shows rotating hints between cycles
 <!-- sub-skill: pull-latest -->
 ### Step 1 — Pull Latest
 
-Print: `[🦑] Pulling latest...`
+Print: `[🦑 HH:MM:SS] Pulling latest...`
 
 git pull --rebase
 
@@ -284,19 +284,19 @@ If there is a rebase conflict in a tracker file, resolve it by keeping both vers
 
 ### Step 1b — Context Pressure Check
 
-Print: `[🦑] Checking context pressure...`
+Print: `[🦑 HH:MM:SS] Checking context pressure...`
 
 Check `context_window.used_percentage`. Compare against the threshold in `config.md` (default 80%).
 
 If context usage **exceeds the threshold**:
 1. Compact your current working state into `.squidsquad/pm/working-state.md`.
 2. Commit and push all pending work.
-3. Print: `[🦑] Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
+3. Print: `[🦑 HH:MM:SS] Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
 4. Exit the conversation.
 
 ### Step 1c — Resume From Working State
 
-Print: `[🦑] Checking working state...`
+Print: `[🦑 HH:MM:SS] Checking working state...`
 
 Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `in-progress`), resume that work.
 
@@ -316,7 +316,7 @@ If the file is empty or has no active task or planning phase, proceed normally t
 
 Print a brief, non-blocking status note — do NOT wait for a response before continuing:
 
-[🦑] PM check-in: drop a message anytime to file bugs, features, or priority changes. Continuing to Step 3.
+[🦑 HH:MM:SS] PM check-in: drop a message anytime to file bugs, features, or priority changes. Continuing to Step 3.
 
 Then immediately proceed to Step 3. The human will interrupt when they have input — you do not need to block the loop waiting for them.
 
@@ -348,7 +348,7 @@ If the human has already provided input (earlier in the conversation or between 
 
 If `.squidsquad/dm/` directory does NOT exist (DM not installed), PM takes over delivery responsibilities. For each feature just marked `Pending Ship` in Steps 6/6b:
 
-Print: `[🦑] No DM present — PM performing delivery for #[NUMBER]...`
+Print: `[🦑 HH:MM:SS] No DM present — PM performing delivery for #[NUMBER]...`
 
 **1. Check for delivery:skip**: If the feature's Discussion contains `delivery: skip`, mark it `Shipped` immediately, increment `Shipped Since Last Bump` in `config.md`, and append: `> [YYYY-MM-DD HH:MM] **pm/qa**: No DM present. No delivery work needed (delivery: skip). Status → Shipped.` Skip to the version bump check below.
 
@@ -366,7 +366,7 @@ Print: `[🦑] No DM present — PM performing delivery for #[NUMBER]...`
    - Read `Shipped Since Last Bump` from `config.md`.
    - If counter < threshold: no bump needed, continue.
    - If counter >= threshold: check all agent bug trackers for open bugs (`**Status**: Open` or `**Status**: Investigating`).
-     - If open bugs exist: defer the bump. Print: `[🦑] Version bump deferred — [N] open bugs remain.`
+     - If open bugs exist: defer the bump. Print: `[🦑 HH:MM:SS] Version bump deferred — [N] open bugs remain.`
      - If zero open bugs: **perform the bump**.
 
    **Bump sequence**:
@@ -392,13 +392,13 @@ Print: `[🦑] No DM present — PM performing delivery for #[NUMBER]...`
    9. Push: `git push && git push --tags`
    10. Reset `Shipped Since Last Bump` to `0` in `config.md`.
 
-   Print: `[🦑] Version bumped to vX.Y.Z — tag created and pushed.`
+   Print: `[🦑 HH:MM:SS] Version bumped to vX.Y.Z — tag created and pushed.`
 <!-- /sub-skill: delivery-fallback -->
 
 <!-- sub-skill: github-issues -->
 ### Step 7b — Triage External Issues
 
-Print: `[🦑] Checking for external issues...`
+Print: `[🦑 HH:MM:SS] Checking for external issues...`
 
 Since GitHub Issues is the tracker, external contributors may file issues directly. Scan for issues that lack SquidSquad labels (filed by humans or contributors, not by agents):
 
@@ -439,7 +439,7 @@ Maintain a **quiet cycle counter** in your working state. Increment it each quie
 
 When triggered, add a new step to your cycle:
 
-Print: `[🦑] Scanning for improvements...`
+Print: `[🦑 HH:MM:SS] Scanning for improvements...`
 
 Write status bar state: `scanning|🔍 Scanning [target description]...`
 
@@ -525,7 +525,7 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 
 If no human input was processed, no features were filed or progressed, and no improvement scan was triggered this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
 
-Otherwise, print: `[🦑] Logging iteration...`
+Otherwise, print: `[🦑 HH:MM:SS] Logging iteration...`
 
 Create `.squidsquad/pm/iterations/iter-N.md`:
 
@@ -541,7 +541,7 @@ After creating the log, clean up old iteration files: if more than 20 `iter-*.md
 
 ### Step 5 — Commit and Push (skip on quiet cycles)
 
-Print: `[🦑] Committing and pushing...`
+Print: `[🦑 HH:MM:SS] Committing and pushing...`
 
 git add -A
 git commit -m "pm: [brief summary — intake, planning, human decisions]"
@@ -572,13 +572,13 @@ When the human suggests a new feature, do NOT immediately file it. Run the full 
 
 Before starting each planning phase, check if its output artifact already exists in `.squidsquad/skill/planning/`:
 
-1. **File exists but uncommitted** (in working tree or staged but not pushed): Skip the phase automatically. Print: `[🦑] RESEARCH.md already exists (uncommitted) — skipping Phase 1.`
+1. **File exists but uncommitted** (in working tree or staged but not pushed): Skip the phase automatically. Print: `[🦑 HH:MM:SS] RESEARCH.md already exists (uncommitted) — skipping Phase 1.`
 2. **File exists and committed**: Check for code changes since the artifact was created:
    ```bash
    ARTIFACT_COMMIT=$(git log -1 --format="%H" -- .squidsquad/skill/planning/FEAT-SKILL-XXX-RESEARCH.md)
    CHANGES=$(git log --oneline "$ARTIFACT_COMMIT"..HEAD -- references/ SKILL.md CHANGELOG.md)
    ```
-   - If no changes: auto-reuse silently. Print: `[🦑] RESEARCH.md exists and code unchanged — reusing.`
+   - If no changes: auto-reuse silently. Print: `[🦑 HH:MM:SS] RESEARCH.md exists and code unchanged — reusing.`
    - If changes found: ask the user via `AskUserQuestion`: "RESEARCH.md exists from a previous session but code has changed since. Re-research or reuse?" Options: `["Re-research (recommended)", "Reuse existing"]`.
 3. **File doesn't exist**: Run the phase normally.
 

@@ -1,12 +1,12 @@
 ### Step 2 — Check Design Requests
 
-Print: `[🦑] Checking design requests...`
+Print: `[🦑 HH:MM:SS] Checking design requests...`
 
 Read each dev agent's `features/INDEX.md` (listed in `config.md` under `Dev Agents`). For each feature with status `Approved` or `In Progress`, read its individual file and check for `**Design**: needed`.
 
 If no features need design, this is a **quiet cycle** — increment the quiet cycle counter. After **5 consecutive quiet cycles**, log a suggestion in the iteration log: `"No design requests for 5 cycles — consider stopping the designer agent."` Do NOT auto-stop. Reset the counter when design work is found.
 
-When a design-needed feature is found, pick the highest-priority one. Print: `[🦑] Designing FEAT-[ROLE_UPPER]-XXX...`
+When a design-needed feature is found, pick the highest-priority one. Print: `[🦑 HH:MM:SS] Designing FEAT-[ROLE_UPPER]-XXX...`
 
 1. Write working state with the feature ID, status `in-progress`, and planned design approach.
 2. Read the feature's planning artifacts:
@@ -24,7 +24,7 @@ When a design-needed feature is found, pick the highest-priority one. Print: `[�
 
 ### Step 2b — Feasibility Assessment
 
-Print: `[🦑] Assessing feasibility for FEAT-[ROLE_UPPER]-XXX...`
+Print: `[🦑 HH:MM:SS] Assessing feasibility for FEAT-[ROLE_UPPER]-XXX...`
 
 Before starting the interactive design session, assess technical feasibility:
 
@@ -39,7 +39,7 @@ Before starting the interactive design session, assess technical feasibility:
 
 ### Step 2c — Interactive Design Session
 
-Print: `[🦑] Starting design session for FEAT-[ROLE_UPPER]-XXX...`
+Print: `[🦑 HH:MM:SS] Starting design session for FEAT-[ROLE_UPPER]-XXX...`
 
 Write current state: `echo "designing|🎨 FEAT-[ROLE_UPPER]-XXX design session..." > .squidsquad/designer/current-state.tmp && mv -f .squidsquad/designer/current-state.tmp .squidsquad/designer/current-state`
 
@@ -66,7 +66,7 @@ Enter an interactive design session with the human. This blocks the loop — int
 
 ### Step 2d — Produce Design Spec
 
-Print: `[🦑] Writing design spec for FEAT-[ROLE_UPPER]-XXX...`
+Print: `[🦑 HH:MM:SS] Writing design spec for FEAT-[ROLE_UPPER]-XXX...`
 
 After human approval, write the design spec to `.squidsquad/designer/specs/FEAT-[ROLE_UPPER]-XXX/design-spec.md`:
 
