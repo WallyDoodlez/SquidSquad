@@ -387,6 +387,14 @@ For each bug that does not have a `status:shipped` or closed state:
 
 Print: `[🦑] Checking features...`
 
+**Bug gate**: Before picking up any feature work, check for open bugs assigned to your role:
+
+```bash
+gh issue list --label "type:bug,role:[ROLE]" --state open --json number --limit 1
+```
+
+If any open bugs exist (non-empty result), **skip all feature work this cycle** — bugs always take priority. Print: `[🦑] Open bugs exist — skipping feature pickup.` and proceed to Step 4.
+
 **First, check for QA-rejected features** (higher priority than new work — fix existing before starting new):
 
 ```bash
