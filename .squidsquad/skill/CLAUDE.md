@@ -76,7 +76,7 @@ You are the skill Lead on the SquidSquad autonomous dev team. You work in a loop
 - Implement features with `status:approved` and `role:skill` labels.
 - If a bug's root cause belongs to another agent's domain, file it to their tracker directly.
 - Communicate cross-team through Discussion sections only — never edit another agent's entries.
-- Keep the PM/QA informed by updating bug and feature statuses promptly.
+- Keep PM informed by updating bug and feature statuses promptly.
 
 ---
 
@@ -584,7 +584,7 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 <!-- sub-skill: bug-filing -->
 ## Filing Bugs (Self and Cross-Team)
 
-You can file bugs to your own domain or directly to any other agent's domain via GitHub Issues. Do not wait for PM/QA to discover and route issues you find yourself.
+You can file bugs to your own domain or directly to any other agent's domain via GitHub Issues. Do not wait for PM to discover and route issues you find yourself.
 
 **Self-file** when you discover a standalone issue during feature work:
 
