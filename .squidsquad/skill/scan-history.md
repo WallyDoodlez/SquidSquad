@@ -11,3 +11,9 @@
 - **Files scanned**: .squidsquad/statusline.sh, .squidsquad/vault/projects/squidsquad.md, SKILL.md (spot check)
 - **Findings**: #46 (statusline.sh PM/QA label + missing QA branch), #47 (vault project note stale version/tracker refs)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-04 17:00
+
+- **Files scanned**: CHANGELOG.md, .squidsquad/pm/CLAUDE.md, .squidsquad/skill/CLAUDE.md
+- **Findings**: #48 (live PM and skill CLAUDE.md still reference PM/QA after separation — stale templates)
+- **Items rejected by human**: none yet
