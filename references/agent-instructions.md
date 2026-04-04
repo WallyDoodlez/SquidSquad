@@ -131,7 +131,8 @@ Issues use labels for structured metadata. The following labels must exist on th
 **Status:**
 - `status:pending` — filed, awaiting human approval
 - `status:planning` — approved by human, PM running intake
-- `status:approved` — planning complete, ready for dev pickup
+- `status:planned` — planning complete, awaiting human approval for execution
+- `status:approved` — human approved, ready for dev pickup
 - `status:in-progress` — agent actively working
 - `status:pending-test` — implementation complete, awaiting QA
 - `status:pending-ship` — QA verified, awaiting DM delivery
@@ -1048,7 +1049,8 @@ Issues use labels for structured metadata. The following labels must exist on th
 **Status:**
 - `status:pending` — filed, awaiting human approval
 - `status:planning` — approved by human, PM running intake
-- `status:approved` — planning complete, ready for dev pickup
+- `status:planned` — planning complete, awaiting human approval for execution
+- `status:approved` — human approved, ready for dev pickup
 - `status:in-progress` — agent actively working
 - `status:pending-test` — implementation complete, awaiting QA
 - `status:pending-ship` — QA verified, awaiting DM delivery
@@ -1842,7 +1844,7 @@ Write current state: `echo "test-planning|Test plan for FEAT-[ROLE_UPPER]-XXX...
 
 **Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: test-planning FEAT-[ROLE_UPPER]-XXX`.
 
-**Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md`. If skipping, the feature is ready — update status to `Approved`.
+**Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md`. If skipping, the feature is ready — update status to `Planned` (NOT `Approved` — human must explicitly approve execution).
 
 Create two artifacts:
 
@@ -1953,22 +1955,25 @@ options: ["Yes, open in VS Code", "No thanks", "Never ask again"]
 
 Features start as `Pending` — **a human must explicitly approve them** before any agent picks them up.
 
-Status values: `Pending` → `Planning` → `Approved` → `In Progress` → `Pending Test` → `Pending Ship` → `Shipped`
+Status values: `Pending` → `Planning` → `Planned` → `Approved` → `In Progress` → `Pending Test` → `Pending Ship` → `Shipped`
 
 - `Pending`: Filed, awaiting human approval to begin planning.
-- `Planning`: Human approved. PM is running the Feature Intake Process (Phases 1-3: Research → Discussion → Planning).
-- `Approved`: Planning complete. Dev agent can pick this up.
+- `Planning`: Human approved planning. PM is running the Feature Intake Process (Phases 1-3: Research → Discussion → Planning).
+- `Planned`: Planning complete (all artifacts done). Awaiting human approval for execution.
+- `Approved`: Human explicitly said "go" — dev/designer agent picks this up.
 - `Rejected`: PM recommends against the feature based on research. Human can override.
 
-To approve a feature:
+To approve a feature for planning:
 1. Present it to the human during the check-in step.
-2. Get explicit confirmation ("yes", "approved", "go ahead", etc.).
+2. Get explicit confirmation to begin planning ("yes", "plan this", "go ahead", etc.).
 3. Update status to `Planning` (NOT `Approved`) and begin the Feature Intake Process.
-4. After all planning phases complete (RESEARCH.md, CONTEXT.md, TEST-PLAN.md created), update status to `Approved`.
+4. After all planning phases complete (RESEARCH.md, CONTEXT.md, TEST-PLAN.md created), update status to `Planned` (NOT `Approved`).
+5. Present the completed plan to the human. Wait for explicit execution approval ("approved", "go", "build it", etc.).
+6. Only after human explicitly approves execution, update status to `Approved`.
 
-Light mode (trivial features): PM can fast-track through planning with abbreviated research, but status still transitions through `Planning` → `Approved`.
+Light mode (trivial features): PM can fast-track through planning with abbreviated research, but status still transitions through `Planning` → `Planned` → `Approved`.
 
-Do not set status to `Approved` without completing the planning phases. Do not approve features yourself without human confirmation.
+Do not set status to `Approved` without human explicitly approving execution. Do not skip the `Planned` state — it is the human's review gate between planning and execution.
 <!-- /sub-skill: feature-approval -->
 
 ---
@@ -2364,7 +2369,8 @@ Issues use labels for structured metadata. The following labels must exist on th
 **Status:**
 - `status:pending` — filed, awaiting human approval
 - `status:planning` — approved by human, PM running intake
-- `status:approved` — planning complete, ready for dev pickup
+- `status:planned` — planning complete, awaiting human approval for execution
+- `status:approved` — human approved, ready for dev pickup
 - `status:in-progress` — agent actively working
 - `status:pending-test` — implementation complete, awaiting QA
 - `status:pending-ship` — QA verified, awaiting DM delivery
@@ -3050,7 +3056,7 @@ Write current state: `echo "test-planning|Test plan for FEAT-[ROLE_UPPER]-XXX...
 
 **Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: test-planning FEAT-[ROLE_UPPER]-XXX`.
 
-**Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md`. If skipping, the feature is ready — update status to `Approved`.
+**Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md`. If skipping, the feature is ready — update status to `Planned` (NOT `Approved` — human must explicitly approve execution).
 
 Create two artifacts:
 
@@ -3161,22 +3167,25 @@ options: ["Yes, open in VS Code", "No thanks", "Never ask again"]
 
 Features start as `Pending` — **a human must explicitly approve them** before any agent picks them up.
 
-Status values: `Pending` → `Planning` → `Approved` → `In Progress` → `Pending Test` → `Pending Ship` → `Shipped`
+Status values: `Pending` → `Planning` → `Planned` → `Approved` → `In Progress` → `Pending Test` → `Pending Ship` → `Shipped`
 
 - `Pending`: Filed, awaiting human approval to begin planning.
-- `Planning`: Human approved. PM is running the Feature Intake Process (Phases 1-3: Research → Discussion → Planning).
-- `Approved`: Planning complete. Dev agent can pick this up.
+- `Planning`: Human approved planning. PM is running the Feature Intake Process (Phases 1-3: Research → Discussion → Planning).
+- `Planned`: Planning complete (all artifacts done). Awaiting human approval for execution.
+- `Approved`: Human explicitly said "go" — dev/designer agent picks this up.
 - `Rejected`: PM recommends against the feature based on research. Human can override.
 
-To approve a feature:
+To approve a feature for planning:
 1. Present it to the human during the check-in step.
-2. Get explicit confirmation ("yes", "approved", "go ahead", etc.).
+2. Get explicit confirmation to begin planning ("yes", "plan this", "go ahead", etc.).
 3. Update status to `Planning` (NOT `Approved`) and begin the Feature Intake Process.
-4. After all planning phases complete (RESEARCH.md, CONTEXT.md, TEST-PLAN.md created), update status to `Approved`.
+4. After all planning phases complete (RESEARCH.md, CONTEXT.md, TEST-PLAN.md created), update status to `Planned` (NOT `Approved`).
+5. Present the completed plan to the human. Wait for explicit execution approval ("approved", "go", "build it", etc.).
+6. Only after human explicitly approves execution, update status to `Approved`.
 
-Light mode (trivial features): PM can fast-track through planning with abbreviated research, but status still transitions through `Planning` → `Approved`.
+Light mode (trivial features): PM can fast-track through planning with abbreviated research, but status still transitions through `Planning` → `Planned` → `Approved`.
 
-Do not set status to `Approved` without completing the planning phases. Do not approve features yourself without human confirmation.
+Do not set status to `Approved` without human explicitly approving execution. Do not skip the `Planned` state — it is the human's review gate between planning and execution.
 <!-- /sub-skill: feature-approval -->
 
 ---
@@ -3583,7 +3592,8 @@ Issues use labels for structured metadata. The following labels must exist on th
 **Status:**
 - `status:pending` — filed, awaiting human approval
 - `status:planning` — approved by human, PM running intake
-- `status:approved` — planning complete, ready for dev pickup
+- `status:planned` — planning complete, awaiting human approval for execution
+- `status:approved` — human approved, ready for dev pickup
 - `status:in-progress` — agent actively working
 - `status:pending-test` — implementation complete, awaiting QA
 - `status:pending-ship` — QA verified, awaiting DM delivery
@@ -4489,7 +4499,8 @@ Issues use labels for structured metadata. The following labels must exist on th
 **Status:**
 - `status:pending` — filed, awaiting human approval
 - `status:planning` — approved by human, PM running intake
-- `status:approved` — planning complete, ready for dev pickup
+- `status:planned` — planning complete, awaiting human approval for execution
+- `status:approved` — human approved, ready for dev pickup
 - `status:in-progress` — agent actively working
 - `status:pending-test` — implementation complete, awaiting QA
 - `status:pending-ship` — QA verified, awaiting DM delivery
@@ -5442,7 +5453,8 @@ Issues use labels for structured metadata. The following labels must exist on th
 **Status:**
 - `status:pending` — filed, awaiting human approval
 - `status:planning` — approved by human, PM running intake
-- `status:approved` — planning complete, ready for dev pickup
+- `status:planned` — planning complete, awaiting human approval for execution
+- `status:approved` — human approved, ready for dev pickup
 - `status:in-progress` — agent actively working
 - `status:pending-test` — implementation complete, awaiting QA
 - `status:pending-ship` — QA verified, awaiting DM delivery

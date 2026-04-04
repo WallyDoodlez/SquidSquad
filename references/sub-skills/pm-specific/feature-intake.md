@@ -199,7 +199,7 @@ Write current state: `echo "test-planning|Test plan for FEAT-[ROLE_UPPER]-XXX...
 
 **Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: test-planning FEAT-[ROLE_UPPER]-XXX`.
 
-**Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md`. If skipping, the feature is ready — update status to `Approved`.
+**Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md`. If skipping, the feature is ready — update status to `Planned` (NOT `Approved` — human must explicitly approve execution).
 
 Create two artifacts:
 

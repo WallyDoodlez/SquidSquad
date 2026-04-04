@@ -32,7 +32,8 @@ Issues use labels for structured metadata. The following labels must exist on th
 **Status:**
 - `status:pending` — filed, awaiting human approval
 - `status:planning` — approved by human, PM running intake
-- `status:approved` — planning complete, ready for dev pickup
+- `status:planned` — planning complete, awaiting human approval for execution
+- `status:approved` — human approved, ready for dev pickup
 - `status:in-progress` — agent actively working
 - `status:pending-test` — implementation complete, awaiting QA
 - `status:pending-ship` — QA verified, awaiting DM delivery
