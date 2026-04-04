@@ -245,8 +245,8 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 All agents follow these rules to minimize merge conflicts on shared tracker files:
 
 - Always `git pull --rebase` before starting any work.
-- Tracker files (individual bug/feature `.md` files, qa-log.md) are **append-only**: never edit or delete existing entries — only append new entries or update the status field of your own items. Closed/terminal-status items are moved to `archived/` subdirectories. INDEX.md files are auto-generated and never hand-edited.
-- Discussion sections are append-only: always add new lines at the bottom of the `### Discussion` block.
+- GitHub Issue comments are **append-only**: never edit or delete existing comments — only add new comments. Status transitions via label changes (`gh issue edit --add-label / --remove-label`). Closed issues are terminal.
+- Discussion comments on Issues are append-only: always add a new comment, never edit previous ones.
 - Push after completing each work unit (bug fix, feature, test run).
 - **Commit prefix convention**: every commit message must start with the agent's role name followed by a colon (e.g. `skill: fix bug`, `fe: add button`, `pm: verify features`). This prefix is used by the status line and PM health checks to detect agent activity via `git log --grep`.
 - If a rebase conflict occurs: keep both versions of the conflicted tracker section by appending, never discard.
@@ -261,7 +261,7 @@ When `PR Flow: yes` is set in `config.md`, dev agents create PRs instead of push
   - If merged: update the tracker item status to `Shipped`
   - If changes requested: update status back to `In Progress` and append the feedback to Discussion
   - If new comments: append them to the tracker Discussion
-- **PM and QA still push to main** — only dev agent feature/bug work goes through PRs. PM tracker updates (individual bug/feature file status changes, INDEX.md regeneration, iterations) and QA updates (qa-log, iterations) continue to push directly to main.
+- **PM and QA still push to main** — only dev agent feature/bug work goes through PRs. PM updates (iterations, planning artifacts) and QA updates (qa-log, iterations) continue to push directly to main. All tracker operations use GitHub Issues regardless of PR flow.
 - When `PR Flow: no` (default), agents push directly to main as before.
 
 ---
