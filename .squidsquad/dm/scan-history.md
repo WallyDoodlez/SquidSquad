@@ -56,3 +56,10 @@
   - #59 — Vault project note still shows 0.9.0 and stale FEAT-SKILL-XXX focus items
   - #60 — README status line description references old FEAT-XXX format instead of #XX
 - **Items rejected by human**: (none yet)
+
+## Scan — 2026-04-04 21:10
+
+- **Files scanned**: .squidsquad/vault/areas/code-conventions.md (full file), .squidsquad/vault/galaxy/decision-sub-skill-architecture.md (full file)
+- **Findings**:
+  - #62 — Vault code-conventions.md still references pre-GitHub-Issues tracker format
+- **Items rejected by human**: (none yet)
