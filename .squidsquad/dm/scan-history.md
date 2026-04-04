@@ -15,3 +15,12 @@
   - #32 — SKILL.md Bug Flow uses non-existent status labels (open/investigating/fixed/verified vs actual taxonomy)
   - #33 — SKILL.md Ralph Loop descriptions reference old INDEX.md file reads instead of gh issue list
 - **Items rejected by human**: (none yet)
+
+## Scan — 2026-04-04 01:00
+
+- **Files scanned**: SKILL.md (File Structure section, Git Protocol, PR Flow, updated architecture diagram, updated Ralph Loop), CHANGELOG.md (0.9.0)
+- **Findings**:
+  - #44 — SKILL.md File Structure still shows old bugs/features directories under be/
+  - #45 — SKILL.md Git Protocol references old markdown tracker concepts (INDEX.md, archived/, individual .md files)
+- **Observations**: #26 (architecture diagram) and #33 (Ralph Loop descriptions) appear addressed in latest commits but issues still open
+- **Items rejected by human**: (none yet)
