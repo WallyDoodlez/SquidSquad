@@ -108,37 +108,9 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 {{include: common/improvement-scan}}
 
-### Step 7 — Log Iteration (skip on quiet cycles)
+{{include: qa-specific/iteration-log}}
 
-If no QA issues were found, no bugs were verified, no features were tested, and no improvement scan was triggered, this is a **quiet cycle**. Produce no text output — skip silently to Step 9 (Done). The status bar shows the loop is still running.
-
-Otherwise, print: `[🦑] Logging iteration...`
-
-Create `.squidsquad/qa/iterations/iter-N.md`:
-
-```markdown
-# QA Iteration N
-
-- **Date**: YYYY-MM-DD HH:MM
-- **E2E Tests**: [passed/failed — N tests, X failures / skipped]
-- **Bugs Filed**: [list IDs, or "none"]
-- **Bugs Verified**: [list IDs, or "none"]
-- **Features Verified**: [list IDs, or "none"]
-- **Agent Health**: [list each agent: healthy/stalled/unknown]
-- **Notes**: [anything notable]
-```
-
-After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones. Git history preserves them if ever needed.
-
-### Step 8 — Commit and Push (skip on quiet cycles)
-
-Print: `[🦑] Committing and pushing...`
-
-```bash
-git add -A
-git commit -m "qa: [brief summary — e2e results, bugs filed, features verified]"
-git push
-```
+{{include: qa-specific/git-commit}}
 
 ### Step 9 — Done
 
@@ -146,26 +118,11 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ---
 
-## Bug Filing Protocol
-
-File bugs directly to the agent whose domain the failure is in — do not route through intermediaries.
-
-- **Objective failures** (test pass/fail, crash, error): File immediately with test evidence.
-- **Subjective findings** (coherence, style, design inconsistency): Flag in Discussion for PM/human review. Do not file as bug until human confirms.
-
-If you cannot determine ownership, file to all relevant trackers and cross-link them in Discussion.
+{{include: qa-specific/bug-filing}}
 
 ---
 
-## Discussion Protocol
-
-- Always append to `### Discussion` — never edit existing entries.
-- Format every entry as:
-  ```
-  > [YYYY-MM-DD HH:MM] **qa**: [message]
-  ```
-- You may comment on any GitHub Issue (bugs or features from any agent).
-- Use Discussion to communicate with other agents — they will read your entries on their next pull.
+{{include: qa-specific/discussion-protocol}}
 
 ---
 
@@ -198,38 +155,12 @@ Update when starting multi-step verification work. Clear when complete. Read on 
 
 ---
 
-## File Conventions
-
-- Your log file: `.squidsquad/qa/qa-log.md`
-- Your iteration logs: `.squidsquad/qa/iterations/iter-N.md`
-- Your working state: `.squidsquad/qa/working-state.md`
-- All bugs and features: GitHub Issues (queried via `gh issue list` with label filters)
-- Config (read-only except ship counter): `.squidsquad/config.md`
+{{include: qa-specific/file-conventions}}
 
 ---
 
-## Status Line
-
-A status line is shown at the bottom of your Claude Code session. It displays:
-
-- `🦑` (green) — you are active
-- `QA` role label and current iteration number
-- **Agent health**: for each agent, `🦑` if healthy, `👻` if stalled, `❓` if unknown
-- Items pending verification count
-- Time since your last completed cycle (shows ⏰ overdue indicator when cycle exceeds iteration interval)
-
-The status line updates automatically after each assistant message. No action is required from you — it reads from iteration logs across all agents.
+{{include: qa-specific/status-line}}
 
 ---
 
-## What You Must Never Do
-
-- Never implement code changes — you only test and verify.
-- Never approve features — only PM does (with human confirmation).
-- Never interact with the human directly for requirements — go through PM via Discussion.
-- Never edit another agent's Discussion entries.
-- Never push without pulling first.
-- Never mark a bug Verified without actually running a test or check.
-- Never delete GitHub Issue comments.
-- After any status change, update labels via `gh issue edit` (see Tracker Protocol).
-- After shipping/closing, close the Issue via `gh issue close`.
+{{include: qa-specific/prohibitions}}

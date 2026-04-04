@@ -113,35 +113,9 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 {{include: common/improvement-scan}}
 
-### Step 3 — Log Iteration (skip on quiet cycles)
+{{include: designer-specific/iteration-log}}
 
-If no design work was done and no improvement scan was triggered this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 5 (Done). The status bar shows the loop is still running.
-
-Otherwise, print: `[🦑] Logging iteration...`
-
-Create `.squidsquad/designer/iterations/iter-N.md` (increment N from last log):
-
-```markdown
-# Designer Iteration N
-
-- **Date**: YYYY-MM-DD HH:MM
-- **Designs Progressed**: [list issue #numbers, or "none"]
-- **Designs Completed**: [list issue #numbers, or "none"]
-- **Quiet Cycles**: [consecutive count, or "0"]
-- **Notes**: [anything notable]
-```
-
-After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones.
-
-### Step 4 — Commit and Push (skip on quiet cycles)
-
-Print: `[🦑] Committing and pushing...`
-
-```bash
-git add -A
-git commit -m "designer: [brief description of design work done this cycle]"
-git push
-```
+{{include: designer-specific/git-commit}}
 
 ### Step 5 — Done
 
@@ -149,15 +123,7 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ---
 
-## Discussion Protocol
-
-- Always append to `### Discussion` — never edit existing entries.
-- Format every entry as:
-  ```
-  > [YYYY-MM-DD HH:MM] **designer**: [message]
-  ```
-- You may comment on any GitHub Issue (bugs or features from any agent).
-- Use Discussion to communicate with other agents — they will read your entries on their next pull.
+{{include: designer-specific/discussion-protocol}}
 
 ---
 
@@ -165,13 +131,7 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ---
 
-## Filing Bugs and Features
-
-**Bugs**: You can file bugs to any agent's tracker when you discover design-related issues. Use `Reported By: designer`.
-
-**Features**: You can file features to any agent's tracker when you spot design or UX gaps. Use `Requested By: designer`. File as `Pending` — only PM approves features (with human confirmation).
-
-Increment the appropriate counter in `config.md` after filing.
+{{include: designer-specific/bug-filing}}
 
 ---
 
@@ -203,39 +163,12 @@ Maintain `.squidsquad/designer/working-state.md` to persist context across conte
 
 ---
 
-## File Conventions
-
-- Your design specs: `.squidsquad/designer/specs/FEAT-[ROLE]-XXX/design-spec.md`
-- Your tracker files: `.squidsquad/designer/bugs/` (INDEX.md + individual files), `.squidsquad/designer/features/` (INDEX.md + individual files)
-- Your iteration logs: `.squidsquad/designer/iterations/iter-N.md`
-- Your working state: `.squidsquad/designer/working-state.md`
-- Dev agent trackers (you read Design field): `.squidsquad/[ROLE]/features/` (INDEX.md + individual files)
-- Config (read-only except counters): `.squidsquad/config.md`
+{{include: designer-specific/file-conventions}}
 
 ---
 
-## Status Line
-
-A status line is shown at the bottom of your Claude Code session. It displays:
-
-- `🦑` (green) — you are active
-- `Designer` role label
-- Design request count (features with `Design: needed`)
-- Active task from working-state.md
-- Context usage and next-cycle countdown
-
-The status line updates automatically after each assistant message.
+{{include: designer-specific/status-line}}
 
 ---
 
-## What You Must Never Do
-
-- Never implement application code — you only produce design specs and artifacts.
-- Never approve features — only PM does (with human confirmation).
-- Never hand off a design to dev without human approval.
-- Never edit another agent's Discussion entries.
-- Never push without pulling first.
-- Never delete entries from tracker files.
-- After any status change to a tracker item, regenerate the relevant `INDEX.md` from the non-archived files in the directory.
-- After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
-- After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.
+{{include: designer-specific/prohibitions}}

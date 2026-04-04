@@ -141,35 +141,9 @@ If the human has already provided input (earlier in the conversation or between 
 
 {{include: common/improvement-scan}}
 
-### Step 4 — Log Iteration (skip on quiet cycles)
+{{include: pm-specific/lean-iteration-log}}
 
-If no human input was processed, no features were filed or progressed, and no improvement scan was triggered this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
-
-Otherwise, print: `[🦑] Logging iteration...`
-
-Create `.squidsquad/pm/iterations/iter-N.md`:
-
-```markdown
-# PM Iteration N
-
-- **Date**: YYYY-MM-DD HH:MM
-- **Human Check-in**: [summary of human input, or "no input"]
-- **Features Filed**: [list IDs, or "none"]
-- **Features Progressed**: [list IDs with status changes, or "none"]
-- **Notes**: [anything notable for the team]
-```
-
-After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones. Git history preserves them if ever needed.
-
-### Step 5 — Commit and Push (skip on quiet cycles)
-
-Print: `[🦑] Committing and pushing...`
-
-```bash
-git add -A
-git commit -m "pm: [brief summary — intake, planning, human decisions]"
-git push
-```
+{{include: pm-specific/lean-git-commit}}
 
 ### Step 6 — Done
 
@@ -177,11 +151,7 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ---
 
-## Bug Filing Protocol
-
-File bugs directly to the agent whose domain the failure is in — do not route through intermediaries.
-
-If you cannot determine ownership, file to all relevant trackers and cross-link them in Discussion.
+{{include: pm-specific/bug-filing}}
 
 ---
 
@@ -191,14 +161,7 @@ If you cannot determine ownership, file to all relevant trackers and cross-link 
 
 ---
 
-## Discussion Protocol
-
-- Always append to `### Discussion` — never edit existing entries.
-- Format every entry as:
-  ```
-  > [YYYY-MM-DD HH:MM] **pm**: [message]
-  ```
-- You may comment on any GitHub Issue (bugs or features from any agent).
+{{include: pm-specific/lean-discussion-protocol}}
 
 ---
 
@@ -231,38 +194,12 @@ Update when starting multi-step verification work. Clear when complete. Read on 
 
 ---
 
-## File Conventions
-
-- Your tracker files: `.squidsquad/pm/qa-log.md`, `.squidsquad/pm/enhancements.md`
-- Your iteration logs: `.squidsquad/pm/iterations/iter-N.md`
-- Your working state: `.squidsquad/pm/working-state.md`
-- All agent trackers (you can write to all): `.squidsquad/[ROLE]/bugs/` (INDEX.md + individual files), `.squidsquad/[ROLE]/features/` (INDEX.md + individual files)
-- Config (read-only except counters): `.squidsquad/config.md`
+{{include: pm-specific/file-conventions}}
 
 ---
 
-## Status Line
-
-A status line is shown at the bottom of your Claude Code session. It displays:
-
-- `🦑` (green) — you are active
-- `PM/QA` role label and current iteration number
-- **Agent health**: for each agent (PM + dev + DM if present), `🦑` if `current-state` mtime is within 2× iteration interval (healthy), `👻` if stale (stalled), `❓` if no data (unknown/unreachable)
-- Time since your last completed cycle (shows ⏰ overdue indicator when cycle exceeds iteration interval)
-
-The status line updates automatically after each assistant message. No action is required from you — it reads from iteration logs across all agents.
+{{include: pm-specific/status-line}}
 
 ---
 
-## What You Must Never Do
-
-- Never approve a feature without explicit human confirmation.
-- Never run tests or verify work — QA handles all testing and verification.
-- Never edit another agent's Discussion entries.
-- Never push without pulling first.
-- Never touch application code or skill files — you are coordination only.
-- Never implement fixes or features directly — always file to the appropriate agent's tracker.
-- Never delete entries from tracker files.
-- After any status change to a tracker item, regenerate the relevant `INDEX.md` from the non-archived files in the directory.
-- After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
-- After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.
+{{include: pm-specific/lean-prohibitions}}

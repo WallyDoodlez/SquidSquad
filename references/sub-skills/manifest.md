@@ -35,55 +35,95 @@ Entry file with includes:
 
 Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded `pm` paths to avoid `[ROLE]` ambiguity — PM uses `[ROLE]` to reference dev agents, not itself):
 0. `souls/pm` — Soul (first include)
-1. `common/pull-latest` — Step 1
-2. `pm-specific/pr-flow` — Step 6b
-3. `pm-specific/delivery-fallback` — Step 6d
-4. `pm-specific/github-issues` — Step 7b
-5. `common/improvement-scan` — Quiet-cycle improvement scanning
-6. `pm-specific/feature-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
-7. `pm-specific/feature-approval` — Feature Approval Gate
-8. `common/vault-protocol` — Vault operations
+1. `common/tracker-protocol` — GitHub Issues tracker operations
+2. `common/pull-latest` — Step 1
+3. `pm-specific/pr-flow` — Step 6b
+4. `pm-specific/delivery-fallback` — Step 6d
+5. `pm-specific/github-issues` — Step 7b
+6. `common/improvement-scan` — Quiet-cycle improvement scanning
+7. `pm-specific/iteration-log` — Step 8: PM/QA iteration log
+8. `pm-specific/git-commit` — Step 9: commit/push
+9. `pm-specific/bug-filing` — Bug Filing Protocol
+10. `pm-specific/feature-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
+11. `pm-specific/feature-approval` — Feature Approval Gate
+12. `pm-specific/discussion-protocol` — Discussion entry format (pm/qa alias)
+13. `common/vault-protocol` — Vault operations
+14. `pm-specific/file-conventions` — PM file/directory conventions
+15. `pm-specific/status-line` — PM status line description
+16. `pm-specific/prohibitions` — PM "never do" rules
 
 ### PM Agent — Lean (`roles/pm-lean.md`) — used when QA agent IS present
 
 Reduced PM template without verification steps. Setup/upgrade selects this variant when `.squidsquad/qa/` directory exists.
 0. `souls/pm` — Soul (first include — same PM soul)
-1. `common/pull-latest` — Step 1
-2. `pm-specific/delivery-fallback` — Step 3 (delivery fallback when DM absent)
-3. `pm-specific/github-issues` — GitHub Issues ingestion
-4. `common/improvement-scan` — Quiet-cycle improvement scanning
-5. `pm-specific/feature-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
-6. `pm-specific/feature-approval` — Feature Approval Gate
-7. `common/vault-protocol` — Vault operations
+1. `common/tracker-protocol` — GitHub Issues tracker operations
+2. `common/pull-latest` — Step 1
+3. `pm-specific/delivery-fallback` — Step 3 (delivery fallback when DM absent)
+4. `pm-specific/github-issues` — GitHub Issues ingestion
+5. `common/improvement-scan` — Quiet-cycle improvement scanning
+6. `pm-specific/lean-iteration-log` — Step 4: lean PM iteration log
+7. `pm-specific/lean-git-commit` — Step 5: commit/push
+8. `pm-specific/bug-filing` — Bug Filing Protocol (shared with PM)
+9. `pm-specific/feature-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
+10. `pm-specific/feature-approval` — Feature Approval Gate
+11. `pm-specific/lean-discussion-protocol` — Discussion entry format (pm alias)
+12. `common/vault-protocol` — Vault operations
+13. `pm-specific/file-conventions` — PM file/directory conventions (shared with PM)
+14. `pm-specific/status-line` — PM status line description (shared with PM)
+15. `pm-specific/lean-prohibitions` — Lean PM "never do" rules
 
 ### QA Agent (`roles/qa-agent.md`) — recommended when dev/designer agents exist
 
 Entry file with includes:
 0. `souls/qa` — Soul (first include)
-1. `common/pull-latest` — Step 1
-2. `qa-specific/verification` — Steps 2-6 (E2E tests, bug investigation, verification, health check)
-3. `common/improvement-scan` — Quiet-cycle improvement scanning
-4. `common/vault-protocol` — Vault operations
+1. `common/tracker-protocol` — GitHub Issues tracker operations
+2. `common/pull-latest` — Step 1
+3. `qa-specific/verification` — Steps 2-6 (E2E tests, bug investigation, verification, health check)
+4. `common/improvement-scan` — Quiet-cycle improvement scanning
+5. `qa-specific/iteration-log` — Step 7: QA iteration log
+6. `qa-specific/git-commit` — Step 8: commit/push
+7. `qa-specific/bug-filing` — QA Bug Filing Protocol
+8. `qa-specific/discussion-protocol` — Discussion entry format (qa alias)
+9. `common/vault-protocol` — Vault operations
+10. `qa-specific/file-conventions` — QA file/directory conventions
+11. `qa-specific/status-line` — QA status line description
+12. `qa-specific/prohibitions` — QA "never do" rules
 
 ### Designer Agent (`roles/designer.md`)
 
 Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardcoded `designer` paths — Designer uses `[ROLE]` to reference dev agents, not itself):
 0. `souls/designer` — Soul (first include)
-1. `common/pull-latest` — Step 1
-2. `designer-specific/design-session` — Steps 2-2e (design request scanning, feasibility, interactive session, spec production, rejection handling)
-3. `common/improvement-scan` — Quiet-cycle improvement scanning
-4. `designer-specific/design-tools` — Design tool integration and discovery
-5. `common/vault-protocol` — Vault operations
+1. `common/tracker-protocol` — GitHub Issues tracker operations
+2. `common/pull-latest` — Step 1
+3. `designer-specific/design-session` — Steps 2-2e (design request scanning, feasibility, interactive session, spec production, rejection handling)
+4. `common/improvement-scan` — Quiet-cycle improvement scanning
+5. `designer-specific/iteration-log` — Step 3: designer iteration log
+6. `designer-specific/git-commit` — Step 4: commit/push
+7. `designer-specific/discussion-protocol` — Discussion entry format (designer alias)
+8. `designer-specific/design-tools` — Design tool integration and discovery
+9. `designer-specific/bug-filing` — Designer bug/feature filing
+10. `common/vault-protocol` — Vault operations
+11. `designer-specific/file-conventions` — Designer file/directory conventions
+12. `designer-specific/status-line` — Designer status line description
+13. `designer-specific/prohibitions` — Designer "never do" rules
 
 ### DM Agent (`roles/dm-agent.md`)
 
 Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardcoded `dm` paths — DM uses `[ROLE]` to reference dev agents, not itself):
 0. `souls/dm` — Soul (first include)
-1. `common/pull-latest` — Step 1
-2. `dm-specific/delivery-packaging` — Steps 2-2c
-3. `dm-specific/version-bumps` — Step 3
-4. `common/improvement-scan` — Quiet-cycle improvement scanning
-5. `common/vault-protocol` — Vault operations
+1. `common/tracker-protocol` — GitHub Issues tracker operations
+2. `common/pull-latest` — Step 1
+3. `dm-specific/delivery-packaging` — Steps 2-2c
+4. `dm-specific/version-bumps` — Step 3
+5. `common/improvement-scan` — Quiet-cycle improvement scanning
+6. `dm-specific/iteration-log` — Step 4: DM iteration log
+7. `dm-specific/git-commit` — Step 5: commit/push
+8. `dm-specific/discussion-protocol` — Discussion entry format (dm alias)
+9. `dm-specific/bug-filing` — DM bug/feature filing
+10. `common/vault-protocol` — Vault operations
+11. `dm-specific/file-conventions` — DM file/directory conventions
+12. `dm-specific/status-line` — DM status line description
+13. `dm-specific/prohibitions` — DM "never do" rules
 
 ## Include Directive Format
 
@@ -155,14 +195,46 @@ references/sub-skills/
 │   ├── feature-intake.md              (5-phase lifecycle + Open Artifacts)
 │   ├── feature-approval.md            (Feature Approval Gate)
 │   ├── delivery-fallback.md           (Step 6d — PM delivery when DM absent)
+│   ├── discussion-protocol.md        (Discussion — pm/qa alias)
+│   ├── bug-filing.md                 (Bug Filing Protocol)
+│   ├── file-conventions.md           (PM file conventions)
+│   ├── status-line.md                (PM status line)
+│   ├── prohibitions.md               (PM "never do" rules)
+│   ├── iteration-log.md             (Step 8 — PM/QA iteration log)
+│   ├── git-commit.md                (Step 9 — PM commit/push)
+│   ├── lean-discussion-protocol.md   (Discussion — pm alias, lean variant)
+│   ├── lean-prohibitions.md          (Lean PM "never do" rules)
+│   ├── lean-iteration-log.md        (Step 4 — lean PM iteration log)
+│   ├── lean-git-commit.md           (Step 5 — lean PM commit/push)
 │   ├── github-issues.md              (Step 7b — GitHub Issues ingestion)
 │   └── pr-flow.md                     (Step 6b — PR monitoring)
 ├── qa-specific/
-│   └── verification.md               (Steps 2-6 — E2E, bugs, verify, health check)
+│   ├── verification.md               (Steps 2-6 — E2E, bugs, verify, health check)
+│   ├── discussion-protocol.md        (Discussion — qa alias)
+│   ├── bug-filing.md                 (QA Bug Filing Protocol)
+│   ├── file-conventions.md           (QA file conventions)
+│   ├── status-line.md                (QA status line)
+│   ├── prohibitions.md               (QA "never do" rules)
+│   ├── iteration-log.md             (Step 7 — QA iteration log)
+│   └── git-commit.md                (Step 8 — QA commit/push)
 ├── designer-specific/
 │   ├── design-session.md             (Steps 2-2e — requests, feasibility, session, specs, rejection)
-│   └── design-tools.md              (Design tool integration and discovery)
+│   ├── design-tools.md              (Design tool integration and discovery)
+│   ├── discussion-protocol.md        (Discussion — designer alias)
+│   ├── bug-filing.md                 (Designer bug/feature filing)
+│   ├── file-conventions.md           (Designer file conventions)
+│   ├── status-line.md                (Designer status line)
+│   ├── prohibitions.md               (Designer "never do" rules)
+│   ├── iteration-log.md             (Step 3 — designer iteration log)
+│   └── git-commit.md                (Step 4 — designer commit/push)
 └── dm-specific/
     ├── delivery-packaging.md          (Steps 2-2c — scan, skip, deliver)
-    └── version-bumps.md              (Step 3 — version bump check + sequence)
+    ├── version-bumps.md              (Step 3 — version bump check + sequence)
+    ├── discussion-protocol.md        (Discussion — dm alias)
+    ├── bug-filing.md                 (DM bug/feature filing)
+    ├── file-conventions.md           (DM file conventions)
+    ├── status-line.md                (DM status line)
+    ├── prohibitions.md               (DM "never do" rules)
+    ├── iteration-log.md             (Step 4 — DM iteration log)
+    └── git-commit.md                (Step 5 — DM commit/push)
 ```

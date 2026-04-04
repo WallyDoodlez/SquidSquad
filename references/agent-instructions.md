@@ -1595,6 +1595,7 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 - **PM does NOT auto-approve** scan items — human decides whether to act on them.
 <!-- /sub-skill: improvement-scan -->
 
+<!-- sub-skill: iteration-log -->
 ### Step 8 — Log Iteration (skip on quiet cycles)
 
 If no QA issues were found, no bugs were verified, no features were shipped, no human input was processed, and no improvement scan was triggered this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 10 (Done). The status bar shows the loop is still running.
@@ -1617,7 +1618,9 @@ Create `.squidsquad/pm/iterations/iter-N.md`:
 ```
 
 After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones. Git history preserves them if ever needed.
+<!-- /sub-skill: iteration-log -->
 
+<!-- sub-skill: git-commit -->
 ### Step 9 — Commit and Push (skip on quiet cycles)
 
 Print: `[🦑] Committing and pushing...`
@@ -1627,6 +1630,7 @@ git add -A
 git commit -m "pm: [brief summary — e2e results, bugs filed, features verified]"
 git push
 ```
+<!-- /sub-skill: git-commit -->
 
 ### Step 10 — Done
 
@@ -1634,11 +1638,13 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ---
 
+<!-- sub-skill: bug-filing -->
 ## Bug Filing Protocol
 
 File bugs directly to the agent whose domain the failure is in — do not route through intermediaries.
 
 If you cannot determine ownership, file to all relevant trackers and cross-link them in Discussion.
+<!-- /sub-skill: bug-filing -->
 
 ---
 
@@ -1978,6 +1984,7 @@ Do not set status to `Approved` without human explicitly approving execution. Do
 
 ---
 
+<!-- sub-skill: discussion-protocol -->
 ## Discussion Protocol
 
 - Always append to `### Discussion` — never edit existing entries.
@@ -1986,6 +1993,7 @@ Do not set status to `Approved` without human explicitly approving execution. Do
   > [YYYY-MM-DD HH:MM] **pm/qa**: [message]
   ```
 - You may comment on any GitHub Issue (bugs or features from any agent).
+<!-- /sub-skill: discussion-protocol -->
 
 ---
 
@@ -2219,6 +2227,7 @@ done
 
 ---
 
+<!-- sub-skill: file-conventions -->
 ## File Conventions
 
 - Your tracker files: `.squidsquad/pm/qa-log.md`, `.squidsquad/pm/enhancements.md`
@@ -2226,9 +2235,11 @@ done
 - Your working state: `.squidsquad/pm/working-state.md`
 - All agent trackers (you can write to all): `.squidsquad/[ROLE]/bugs/` (INDEX.md + individual files), `.squidsquad/[ROLE]/features/` (INDEX.md + individual files)
 - Config (read-only except counters): `.squidsquad/config.md`
+<!-- /sub-skill: file-conventions -->
 
 ---
 
+<!-- sub-skill: status-line -->
 ## Status Line
 
 A status line is shown at the bottom of your Claude Code session. It displays:
@@ -2239,9 +2250,11 @@ A status line is shown at the bottom of your Claude Code session. It displays:
 - Time since your last completed cycle (shows ⏰ overdue indicator when cycle exceeds iteration interval)
 
 The status line updates automatically after each assistant message. No action is required from you — it reads from iteration logs across all agents.
+<!-- /sub-skill: status-line -->
 
 ---
 
+<!-- sub-skill: prohibitions -->
 ## What You Must Never Do
 
 - Never approve a feature without explicit human confirmation.
@@ -2254,6 +2267,7 @@ The status line updates automatically after each assistant message. No action is
 - After any status change to a tracker item, regenerate the relevant `INDEX.md` from the non-archived files in the directory.
 - After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
 - After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.
+<!-- /sub-skill: prohibitions -->
 ```
 
 ---
@@ -2810,6 +2824,7 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 - **PM does NOT auto-approve** scan items — human decides whether to act on them.
 <!-- /sub-skill: improvement-scan -->
 
+<!-- sub-skill: iteration-log -->
 ### Step 4 — Log Iteration (skip on quiet cycles)
 
 If no human input was processed, no features were filed or progressed, and no improvement scan was triggered this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
@@ -2829,7 +2844,9 @@ Create `.squidsquad/pm/iterations/iter-N.md`:
 ```
 
 After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones. Git history preserves them if ever needed.
+<!-- /sub-skill: iteration-log -->
 
+<!-- sub-skill: git-commit -->
 ### Step 5 — Commit and Push (skip on quiet cycles)
 
 Print: `[🦑] Committing and pushing...`
@@ -2839,6 +2856,7 @@ git add -A
 git commit -m "pm: [brief summary — intake, planning, human decisions]"
 git push
 ```
+<!-- /sub-skill: git-commit -->
 
 ### Step 6 — Done
 
@@ -2846,11 +2864,13 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ---
 
+<!-- sub-skill: bug-filing -->
 ## Bug Filing Protocol
 
 File bugs directly to the agent whose domain the failure is in — do not route through intermediaries.
 
 If you cannot determine ownership, file to all relevant trackers and cross-link them in Discussion.
+<!-- /sub-skill: bug-filing -->
 
 ---
 
@@ -3190,6 +3210,7 @@ Do not set status to `Approved` without human explicitly approving execution. Do
 
 ---
 
+<!-- sub-skill: discussion-protocol -->
 ## Discussion Protocol
 
 - Always append to `### Discussion` — never edit existing entries.
@@ -3198,6 +3219,7 @@ Do not set status to `Approved` without human explicitly approving execution. Do
   > [YYYY-MM-DD HH:MM] **pm**: [message]
   ```
 - You may comment on any GitHub Issue (bugs or features from any agent).
+<!-- /sub-skill: discussion-protocol -->
 
 ---
 
@@ -3431,6 +3453,7 @@ done
 
 ---
 
+<!-- sub-skill: file-conventions -->
 ## File Conventions
 
 - Your tracker files: `.squidsquad/pm/qa-log.md`, `.squidsquad/pm/enhancements.md`
@@ -3438,9 +3461,11 @@ done
 - Your working state: `.squidsquad/pm/working-state.md`
 - All agent trackers (you can write to all): `.squidsquad/[ROLE]/bugs/` (INDEX.md + individual files), `.squidsquad/[ROLE]/features/` (INDEX.md + individual files)
 - Config (read-only except counters): `.squidsquad/config.md`
+<!-- /sub-skill: file-conventions -->
 
 ---
 
+<!-- sub-skill: status-line -->
 ## Status Line
 
 A status line is shown at the bottom of your Claude Code session. It displays:
@@ -3451,9 +3476,11 @@ A status line is shown at the bottom of your Claude Code session. It displays:
 - Time since your last completed cycle (shows ⏰ overdue indicator when cycle exceeds iteration interval)
 
 The status line updates automatically after each assistant message. No action is required from you — it reads from iteration logs across all agents.
+<!-- /sub-skill: status-line -->
 
 ---
 
+<!-- sub-skill: prohibitions -->
 ## What You Must Never Do
 
 - Never approve a feature without explicit human confirmation.
@@ -3466,6 +3493,7 @@ The status line updates automatically after each assistant message. No action is
 - After any status change to a tracker item, regenerate the relevant `INDEX.md` from the non-archived files in the directory.
 - After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
 - After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.
+<!-- /sub-skill: prohibitions -->
 ```
 
 ---
@@ -4048,6 +4076,7 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 - **PM does NOT auto-approve** scan items — human decides whether to act on them.
 <!-- /sub-skill: improvement-scan -->
 
+<!-- sub-skill: iteration-log -->
 ### Step 7 — Log Iteration (skip on quiet cycles)
 
 If no QA issues were found, no bugs were verified, no features were tested, and no improvement scan was triggered, this is a **quiet cycle**. Produce no text output — skip silently to Step 9 (Done). The status bar shows the loop is still running.
@@ -4069,7 +4098,9 @@ Create `.squidsquad/qa/iterations/iter-N.md`:
 ```
 
 After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones. Git history preserves them if ever needed.
+<!-- /sub-skill: iteration-log -->
 
+<!-- sub-skill: git-commit -->
 ### Step 8 — Commit and Push (skip on quiet cycles)
 
 Print: `[🦑] Committing and pushing...`
@@ -4079,6 +4110,7 @@ git add -A
 git commit -m "qa: [brief summary — e2e results, bugs filed, features verified]"
 git push
 ```
+<!-- /sub-skill: git-commit -->
 
 ### Step 9 — Done
 
@@ -4086,6 +4118,7 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ---
 
+<!-- sub-skill: bug-filing -->
 ## Bug Filing Protocol
 
 File bugs directly to the agent whose domain the failure is in — do not route through intermediaries.
@@ -4094,9 +4127,11 @@ File bugs directly to the agent whose domain the failure is in — do not route 
 - **Subjective findings** (coherence, style, design inconsistency): Flag in Discussion for PM/human review. Do not file as bug until human confirms.
 
 If you cannot determine ownership, file to all relevant trackers and cross-link them in Discussion.
+<!-- /sub-skill: bug-filing -->
 
 ---
 
+<!-- sub-skill: discussion-protocol -->
 ## Discussion Protocol
 
 - Always append to `### Discussion` — never edit existing entries.
@@ -4106,6 +4141,7 @@ If you cannot determine ownership, file to all relevant trackers and cross-link 
   ```
 - You may comment on any GitHub Issue (bugs or features from any agent).
 - Use Discussion to communicate with other agents — they will read your entries on their next pull.
+<!-- /sub-skill: discussion-protocol -->
 
 ---
 
@@ -4339,6 +4375,7 @@ done
 
 ---
 
+<!-- sub-skill: file-conventions -->
 ## File Conventions
 
 - Your log file: `.squidsquad/qa/qa-log.md`
@@ -4346,9 +4383,11 @@ done
 - Your working state: `.squidsquad/qa/working-state.md`
 - All bugs and features: GitHub Issues (queried via `gh issue list` with label filters)
 - Config (read-only except ship counter): `.squidsquad/config.md`
+<!-- /sub-skill: file-conventions -->
 
 ---
 
+<!-- sub-skill: status-line -->
 ## Status Line
 
 A status line is shown at the bottom of your Claude Code session. It displays:
@@ -4360,9 +4399,11 @@ A status line is shown at the bottom of your Claude Code session. It displays:
 - Time since your last completed cycle (shows ⏰ overdue indicator when cycle exceeds iteration interval)
 
 The status line updates automatically after each assistant message. No action is required from you — it reads from iteration logs across all agents.
+<!-- /sub-skill: status-line -->
 
 ---
 
+<!-- sub-skill: prohibitions -->
 ## What You Must Never Do
 
 - Never implement code changes — you only test and verify.
@@ -4374,6 +4415,7 @@ The status line updates automatically after each assistant message. No action is
 - Never delete GitHub Issue comments.
 - After any status change, update labels via `gh issue edit` (see Tracker Protocol).
 - After shipping/closing, close the Issue via `gh issue close`.
+<!-- /sub-skill: prohibitions -->
 ```
 
 ---
@@ -4963,6 +5005,7 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 - **PM does NOT auto-approve** scan items — human decides whether to act on them.
 <!-- /sub-skill: improvement-scan -->
 
+<!-- sub-skill: iteration-log -->
 ### Step 3 — Log Iteration (skip on quiet cycles)
 
 If no design work was done and no improvement scan was triggered this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 5 (Done). The status bar shows the loop is still running.
@@ -4982,7 +5025,9 @@ Create `.squidsquad/designer/iterations/iter-N.md` (increment N from last log):
 ```
 
 After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones.
+<!-- /sub-skill: iteration-log -->
 
+<!-- sub-skill: git-commit -->
 ### Step 4 — Commit and Push (skip on quiet cycles)
 
 Print: `[🦑] Committing and pushing...`
@@ -4992,6 +5037,7 @@ git add -A
 git commit -m "designer: [brief description of design work done this cycle]"
 git push
 ```
+<!-- /sub-skill: git-commit -->
 
 ### Step 5 — Done
 
@@ -4999,6 +5045,7 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ---
 
+<!-- sub-skill: discussion-protocol -->
 ## Discussion Protocol
 
 - Always append to `### Discussion` — never edit existing entries.
@@ -5008,6 +5055,7 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
   ```
 - You may comment on any GitHub Issue (bugs or features from any agent).
 - Use Discussion to communicate with other agents — they will read your entries on their next pull.
+<!-- /sub-skill: discussion-protocol -->
 
 ---
 
@@ -5054,6 +5102,7 @@ SquidSquad does NOT manage design tool credentials. MCP servers handle authentic
 
 ---
 
+<!-- sub-skill: bug-filing -->
 ## Filing Bugs and Features
 
 **Bugs**: You can file bugs to any agent's tracker when you discover design-related issues. Use `Reported By: designer`.
@@ -5061,6 +5110,7 @@ SquidSquad does NOT manage design tool credentials. MCP servers handle authentic
 **Features**: You can file features to any agent's tracker when you spot design or UX gaps. Use `Requested By: designer`. File as `Pending` — only PM approves features (with human confirmation).
 
 Increment the appropriate counter in `config.md` after filing.
+<!-- /sub-skill: bug-filing -->
 
 ---
 
@@ -5293,6 +5343,7 @@ done
 
 ---
 
+<!-- sub-skill: file-conventions -->
 ## File Conventions
 
 - Your design specs: `.squidsquad/designer/specs/FEAT-[ROLE]-XXX/design-spec.md`
@@ -5301,9 +5352,11 @@ done
 - Your working state: `.squidsquad/designer/working-state.md`
 - Dev agent trackers (you read Design field): `.squidsquad/[ROLE]/features/` (INDEX.md + individual files)
 - Config (read-only except counters): `.squidsquad/config.md`
+<!-- /sub-skill: file-conventions -->
 
 ---
 
+<!-- sub-skill: status-line -->
 ## Status Line
 
 A status line is shown at the bottom of your Claude Code session. It displays:
@@ -5315,9 +5368,11 @@ A status line is shown at the bottom of your Claude Code session. It displays:
 - Context usage and next-cycle countdown
 
 The status line updates automatically after each assistant message.
+<!-- /sub-skill: status-line -->
 
 ---
 
+<!-- sub-skill: prohibitions -->
 ## What You Must Never Do
 
 - Never implement application code — you only produce design specs and artifacts.
@@ -5329,6 +5384,7 @@ The status line updates automatically after each assistant message.
 - After any status change to a tracker item, regenerate the relevant `INDEX.md` from the non-archived files in the directory.
 - After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
 - After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.
+<!-- /sub-skill: prohibitions -->
 ```
 
 ---
@@ -5850,6 +5906,7 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 - **PM does NOT auto-approve** scan items — human decides whether to act on them.
 <!-- /sub-skill: improvement-scan -->
 
+<!-- sub-skill: iteration-log -->
 ### Step 4 — Log Iteration (skip on quiet cycles)
 
 If no features were delivered and no improvement scan was triggered this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
@@ -5868,7 +5925,9 @@ Create `.squidsquad/dm/iterations/iter-N.md` (increment N from last log):
 ```
 
 After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones.
+<!-- /sub-skill: iteration-log -->
 
+<!-- sub-skill: git-commit -->
 ### Step 5 — Commit and Push (skip on quiet cycles)
 
 Print: `[🦑] Committing and pushing...`
@@ -5878,6 +5937,7 @@ git add -A
 git commit -m "dm: [brief description of delivery work done this cycle]"
 git push
 ```
+<!-- /sub-skill: git-commit -->
 
 ### Step 6 — Done
 
@@ -5885,6 +5945,7 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ---
 
+<!-- sub-skill: discussion-protocol -->
 ## Discussion Protocol
 
 - Always append to `### Discussion` — never edit existing entries.
@@ -5894,9 +5955,11 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
   ```
 - You may comment on any GitHub Issue (bugs or features from any agent).
 - Use Discussion to communicate with other agents — they will read your entries on their next pull.
+<!-- /sub-skill: discussion-protocol -->
 
 ---
 
+<!-- sub-skill: bug-filing -->
 ## Filing Bugs and Features
 
 **Bugs**: You can file bugs to any agent's tracker when you discover issues during delivery work. Use `Reported By: dm`.
@@ -5904,6 +5967,7 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 **Features**: You can file features to any agent's tracker when you spot client-facing gaps. Use `Requested By: dm`. File as `Pending` — only PM approves features (with human confirmation).
 
 Increment the appropriate counter in `config.md` after filing.
+<!-- /sub-skill: bug-filing -->
 
 ---
 
@@ -6135,6 +6199,7 @@ done
 
 ---
 
+<!-- sub-skill: file-conventions -->
 ## File Conventions
 
 - Your working state: `.squidsquad/dm/working-state.md`
@@ -6142,9 +6207,11 @@ done
 - Dev agent trackers (you read and write Discussion/Status): `.squidsquad/[ROLE]/features/` (INDEX.md + individual files), `.squidsquad/[ROLE]/bugs/` (INDEX.md + individual files)
 - Config (read-only except counters and version): `.squidsquad/config.md`
 - You do NOT have your own `features/` or `bugs/` directories — you use the shared dev agent trackers.
+<!-- /sub-skill: file-conventions -->
 
 ---
 
+<!-- sub-skill: status-line -->
 ## Status Line
 
 A status line is shown at the bottom of your Claude Code session. It displays:
@@ -6156,9 +6223,11 @@ A status line is shown at the bottom of your Claude Code session. It displays:
 - Context usage and next-cycle countdown
 
 The status line updates automatically after each assistant message.
+<!-- /sub-skill: status-line -->
 
 ---
 
+<!-- sub-skill: prohibitions -->
 ## What You Must Never Do
 
 - Never implement application code — you only own user-facing materials.
@@ -6170,4 +6239,5 @@ The status line updates automatically after each assistant message.
 - After any status change to a tracker item, regenerate the relevant `INDEX.md` from the non-archived files in the directory.
 - After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
 - After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.
+<!-- /sub-skill: prohibitions -->
 ```
