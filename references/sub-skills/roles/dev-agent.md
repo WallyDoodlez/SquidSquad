@@ -82,7 +82,7 @@ Print: `[🦑 HH:MM:SS] Triaging bugs...`
 Query GitHub Issues for open bugs assigned to your role:
 
 ```bash
-gh issue list --label "bug,role:[ROLE]" --json number,title,labels,body --limit 50
+gh issue list --label "type:bug,role:[ROLE]" --json number,title,labels,body --limit 50
 ```
 
 For each bug that does not have a `status:shipped` or closed state:
@@ -98,7 +98,7 @@ For each bug that does not have a `status:shipped` or closed state:
    - Clear working state.
 7. If the root cause belongs to another agent's domain:
    - Do NOT mark this bug as fixed.
-   - File a new bug to the other agent's domain: `gh issue create --title "BUG: [title]" --body "[description]" --label "bug,role:[OTHER_ROLE],squidsquad,severity:[level]"`
+   - File a new bug to the other agent's domain: `gh issue create --title "BUG: [title]" --body "[description]" --label "type:bug,role:[OTHER_ROLE],squidsquad,severity:[level]"`
    - Comment on the original: `gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Root cause is in [OTHER_ROLE]. Filed #[NEW_NUMBER]. Blocking."`
    - Clear working state.
 
@@ -117,7 +117,7 @@ If any open bugs exist (non-empty result), **skip all feature work this cycle** 
 **First, check for QA-rejected features** (higher priority than new work — fix existing before starting new):
 
 ```bash
-gh issue list --label "feature,status:in-progress,role:[ROLE]" --json number,title,labels --limit 50
+gh issue list --label "type:feature,status:in-progress,role:[ROLE]" --json number,title,labels --limit 50
 ```
 
 For each `In Progress` feature, check for new QA/PM feedback since your last comment:
@@ -141,7 +141,7 @@ If there are comments from `**qa**` or `**pm**` after your last `**[ROLE]-lead**
 **Then, check for new approved features**:
 
 ```bash
-gh issue list --label "feature,status:approved,role:[ROLE]" --json number,title,labels --limit 50
+gh issue list --label "type:feature,status:approved,role:[ROLE]" --json number,title,labels --limit 50
 ```
 
 Pick the highest-priority feature (check `priority:high` first, then `priority:medium`, then `priority:low`). Read it: `gh issue view [NUMBER] --json title,body,labels,comments`

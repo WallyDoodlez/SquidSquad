@@ -24,9 +24,9 @@ Print: `[🦑 HH:MM:SS] Investigating test failures...` (or skip if no failures)
 For each test failure:
 
 1. Determine which agent's domain the failure is in.
-2. Check if a bug already exists: `gh issue list --label "bug,squidsquad" --search "[keywords]" --json number,title --limit 10`. If found, comment on the existing issue — do not duplicate.
+2. Check if a bug already exists: `gh issue list --label "type:bug,squidsquad" --search "[keywords]" --json number,title --limit 10`. If found, comment on the existing issue — do not duplicate.
 3. If new and the failure is **objective** (clear test pass/fail, crash, error):
-   - File immediately: `gh issue create --title "BUG: [title]" --body "[description with test evidence]" --label "bug,severity:[level],role:[target-role],squidsquad"`
+   - File immediately: `gh issue create --title "BUG: [title]" --body "[description with test evidence]" --label "type:bug,severity:[level],role:[target-role],squidsquad"`
 4. If the finding is **subjective** (coherence issue, style concern, design inconsistency):
    - Flag for human review via PM — comment on a relevant issue or create a discussion: `> [YYYY-MM-DD HH:MM] **qa**: Subjective finding flagged for PM/human review: [description]`
    - Do NOT file a bug yet — PM and human decide.
@@ -39,7 +39,7 @@ Print: `[🦑 HH:MM:SS] Verifying fixed bugs...`
 Query all bugs pending test:
 
 ```bash
-gh issue list --label "bug,status:pending-test,squidsquad" --json number,title,labels,body --limit 50
+gh issue list --label "type:bug,status:pending-test,squidsquad" --json number,title,labels,body --limit 50
 ```
 
 For each bug:
@@ -65,7 +65,7 @@ Print: `[🦑 HH:MM:SS] Verifying pending test features...`
 Query all features pending test:
 
 ```bash
-gh issue list --label "feature,status:pending-test,squidsquad" --json number,title,labels,body --limit 50
+gh issue list --label "type:feature,status:pending-test,squidsquad" --json number,title,labels,body --limit 50
 ```
 
 For each feature, read it: `gh issue view [NUMBER] --json title,body,labels,comments`
