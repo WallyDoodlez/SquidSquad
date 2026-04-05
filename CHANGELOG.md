@@ -33,6 +33,26 @@ All notable changes to SquidSquad will be documented here.
 - #43 — SKILL.md setup now generates QA and Designer directories, bootstrappers, and boot scripts.
 - #46 — Status bar correctly labels PM and QA as separate roles with QA-specific display logic.
 - #47 — Vault project note updated to reflect current version and GitHub Issues tracker.
+- #48 — PM and skill CLAUDE.md no longer reference the old combined PM/QA role.
+- #49 — README Quick Start now includes DM agent in the Launch the Agents section.
+- #50 — README Cross-Team Bug Filing table uses correctly prefixed label names.
+- #51 — DM template now includes a bug triage step for fixing bugs in its own domain.
+- #53 — BRIEFING.md rewritten with current version, GitHub Issues tracker, and up-to-date priorities.
+- #54 — README Agents table and Architecture diagram now include the DM role.
+- #55 — Delivery packaging sub-skill updated to use GitHub Issues labels instead of old markdown tracker.
+- #64 — Dev agent triage query uses correct `type:bug`/`type:feature` label prefixes.
+- #65 — Timestamp instructions standardized with consistent date command usage across all agents.
+- #68 — Dev agent template references PM (not PM/QA) after role separation.
+- #69 — Common bug-filing sub-skill references PM (not PM/QA).
+- #70 — PM agent template no longer references old features/INDEX.md file.
+- #71 — Dev agent status transitions include `--remove-label` and `gh issue close`.
+- #94 — DM improvement scanning now correctly gates behind approved bug check.
+- #95 — PM discussion protocol no longer uses stale PM/QA alias.
+- #96 — Prohibitions sub-skills no longer reference old archived/ subdirectory.
+
+### Added (post-release)
+
+- #52 — All `[🦑]` step markers now include timestamps for easier scrollback scanning.
 
 ---
 

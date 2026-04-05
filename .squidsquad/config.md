@@ -16,7 +16,7 @@
 
 ## Test Commands
 
-- **skill Tests**: echo "Skill repo — no automated tests. Validate SKILL.md manually."
+- **skill Tests**: python tests/run_tests.py
 - **E2E Tests**: (none)
 
 ## Git Protocol

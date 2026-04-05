@@ -170,7 +170,7 @@ All coordination is asynchronous through git — agents pull to read the latest 
 ## Features
 
 ### Status Line (Emoji Rich)
-A live status bar at the bottom of each agent's Claude Code session. **Line 1**: 🦑 + role/version, backlog (🐛 bugs, ⭐ features) or active task (🔨 FEAT-XXX), context pressure (🧠/🧠🔥/🧠💀 with colored percentage), cycle countdown (🔄/🔜), and for PM: health icons (🦑/👻/❓) + rest nudge. **Line 2**: current Ralph Loop step with active sub-skill name (e.g. `git-commit — Pushing changes...`, `tracker-protocol — Checking #28...`) or rotating contextual hints when idle — human-facing prompts like "Msg me any time to file a bug", rotating every 60 seconds, phase-aware. Hint pools defined in `references/hints-dev.txt` and `references/hints-pm.txt`.
+A live status bar at the bottom of each agent's Claude Code session. **Line 1**: 🦑 + role/version, backlog (🐛 bugs, ⭐ features) or active task (🔨 #XX), context pressure (🧠/🧠🔥/🧠💀 with colored percentage), cycle countdown (🔄/🔜), and for PM: health icons (🦑/👻/❓) + rest nudge. **Line 2**: current Ralph Loop step with active sub-skill name (e.g. `git-commit — Pushing changes...`, `tracker-protocol — Checking #28...`) or rotating contextual hints when idle — human-facing prompts like "Msg me any time to file a bug", rotating every 60 seconds, phase-aware. Hint pools defined in `references/hints-dev.txt` and `references/hints-pm.txt`.
 
 ### Step Markers
 Every Ralph Loop step prints a `[🦑 HH:MM:SS]` timestamped line (e.g. `[🦑 HH:MM:SS] Pulling latest...`, `[🦑 HH:MM:SS] Triaging bugs...`, `[🦑 HH:MM:SS] Committing and pushing...`). Makes SquidSquad activity easy to scan in terminal scrollback.

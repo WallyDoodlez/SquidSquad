@@ -88,3 +88,9 @@
 - **Findings**:
   - #93 — config.md test commands still say 'no automated tests' but tests/ directory now exists
 - **Items rejected by human**: (none yet)
+
+## Scan — 2026-04-05 07:10
+
+- **Files scanned**: git log (recent commits #94, #67, #71, #68-#70 — internal sub-skill fixes, no user-facing doc impact)
+- **Findings**: none
+- **Items rejected by human**: (none yet)

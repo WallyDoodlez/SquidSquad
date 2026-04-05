@@ -2,7 +2,7 @@
 type: area
 tags: [conventions, style, architecture]
 created: 2026-04-02
-updated: 2026-04-03
+updated: 2026-04-05
 owner: skill
 status: active
 confidence: medium
@@ -16,8 +16,8 @@ Code conventions and structural patterns used throughout the SquidSquad project.
 ## Current State
 
 - **File naming**: kebab-case for all markdown files, UPPER-CASE for index/status files (INDEX.md, CLAUDE.md, SKILL.md)
-- **Feature/bug IDs**: `FEAT-SKILL-NNN` and `BUG-SKILL-NNN` with auto-incrementing counters in config.md
-- **Tracker format**: Individual files per item with a shared INDEX.md (Tracker Schema 3, migrated from monolithic features.md)
+- **Feature/bug IDs**: `#XX` (GitHub Issue numbers, e.g. `#67`, `#93`)
+- **Tracker format**: GitHub Issues with structured labels (type, priority, status, role) — migrated from markdown files in v0.9.0
 - **Discussion protocol**: Append-only, timestamped, role-prefixed entries (`> [YYYY-MM-DD HH:MM] **role**: message`)
 - **Git protocol**: Always `git pull --rebase` before work; tracker files are append-only; push after every completed work unit
 - **Commit messages**: Role-prefixed (`skill: ...`, `pm: ...`, `dm: ...`)
@@ -33,6 +33,7 @@ Code conventions and structural patterns used throughout the SquidSquad project.
 - Tracker Schema 1-2: Monolithic features.md and bugs.md files
 - Tracker Schema 3 (FEAT-SKILL-051): Split into individual files with INDEX.md
 - Architecture Version 1 (FEAT-SKILL-030): Sub-skill architecture shipped, breaking monolithic SKILL.md into layered sub-skills
+- GitHub Issues migration (#68, v0.9.0): Replaced all markdown tracker files with GitHub Issues; labels encode type/priority/status/role; `gh` CLI for all CRUD
 
 ## Related
 
@@ -45,3 +46,4 @@ Code conventions and structural patterns used throughout the SquidSquad project.
 
 - 2026-04-02 -- Created by QA agent. Inferred conventions from codebase review during vault-create testing.
 - 2026-04-03 -- Updated by skill-lead. Added vault operations convention (vault-check Level 1 after every write).
+- 2026-04-05 -- Updated by dm. Fixed stale tracker references: FEAT-SKILL-NNN→#XX, markdown tracker→GitHub Issues, added GH Issues migration to History (#62).
