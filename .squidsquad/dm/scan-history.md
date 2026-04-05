@@ -94,3 +94,11 @@
 - **Files scanned**: git log (recent commits #94, #67, #71, #68-#70 — internal sub-skill fixes, no user-facing doc impact)
 - **Findings**: none
 - **Items rejected by human**: (none yet)
+
+## Scan — 2026-04-05 08:50
+
+- **Files scanned**: SKILL.md (setup ingestion section lines 335-343, status bar examples line 949, PM planning examples lines 1290-1297)
+- **Findings**:
+  - #107 — SKILL.md setup ingestion still uses old BUG-[ROLE]-XXX IDs and pm/qa alias
+  - #108 — SKILL.md examples still show old FEAT-SKILL-XXX format instead of #XX
+- **Items rejected by human**: (none yet)
