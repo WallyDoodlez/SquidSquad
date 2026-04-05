@@ -4,6 +4,26 @@ All notable changes to SquidSquad will be documented here.
 
 ---
 
+## [0.11.0] — 2026-04-05
+
+### Added
+
+- #118 — **Start script test coverage**: 51 static tests validating CLI flags, role injection, and PS1 argument handling across all boot scripts.
+
+### Fixed
+
+- #107 — SKILL.md setup ingestion no longer uses old BUG-[ROLE]-XXX IDs.
+- #108 — SKILL.md examples updated from old FEAT-SKILL-XXX format to #XX.
+- #114 — SKILL.md PR branching convention uses GitHub Issue numbers.
+- #115 — BRIEFING.md constraint updated to reflect existing test suite.
+- #116 — SKILL.md config template no longer hardcodes 0.9.0, Aliases section added.
+- #117 — DM template regenerated with tracker.py — no more bare gh commands.
+- #130 — README updated from --enable-auto-mode to --dangerously-skip-permissions.
+- #131 — SKILL.md permissions note updated from --enable-auto-mode to --dangerously-skip-permissions.
+- Start scripts fixed: --session-name → --name, PS1 argument handling via variables.
+
+---
+
 ## [0.10.0] — 2026-04-04
 
 ### Added
