@@ -1370,7 +1370,13 @@ For each test failure:
 
 Print: `[🦑 HH:MM:SS] Verifying fixed bugs...`
 
-For each active agent, read their `bugs/INDEX.md`. For each bug with status `Fixed`, read its individual file:
+Query GitHub Issues for bugs pending verification:
+
+```bash
+gh issue list --label "type:bug,status:pending-test" --state open --json number,title,labels --limit 20
+```
+
+For each result:
 
 1. Run the relevant test or manually verify the fix.
 2. If verified:
@@ -3510,7 +3516,7 @@ done
 A status line is shown at the bottom of your Claude Code session. It displays:
 
 - `🦑` (green) — you are active
-- `PM/QA` role label and current iteration number
+- `PM` role label and current iteration number
 - **Agent health**: for each agent (PM + dev + DM if present), `🦑` if `current-state` mtime is within 2× iteration interval (healthy), `👻` if stale (stalled), `❓` if no data (unknown/unreachable)
 - Time since your last completed cycle (shows ⏰ overdue indicator when cycle exceeds iteration interval)
 

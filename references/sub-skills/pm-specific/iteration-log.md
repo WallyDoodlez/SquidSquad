@@ -7,7 +7,7 @@ Otherwise, print: `[🦑 HH:MM:SS] Logging iteration...`
 Create `.squidsquad/pm/iterations/iter-N.md`:
 
 ```markdown
-# PM/QA Iteration N
+# PM Iteration N
 
 - **Date**: YYYY-MM-DD HH:MM
 - **Human Check-in**: [summary of human input, or "no input"]

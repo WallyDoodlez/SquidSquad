@@ -173,7 +173,13 @@ For each test failure:
 
 Print: `[🦑 HH:MM:SS] Verifying fixed bugs...`
 
-For each active agent, read their `bugs/INDEX.md`. For each bug with status `Fixed`, read its individual file:
+Query GitHub Issues for bugs pending verification:
+
+```bash
+gh issue list --label "type:bug,status:pending-test" --state open --json number,title,labels --limit 20
+```
+
+For each result:
 
 1. Run the relevant test or manually verify the fix.
 2. If verified:
