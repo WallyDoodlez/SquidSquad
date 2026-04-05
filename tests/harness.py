@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -66,11 +67,15 @@ def edit_test_issue(number: int, remove_label: str = "", add_label: str = "") ->
     _run(" ".join(parts))
 
 
-def get_issue_labels(number: int) -> list[str]:
-    """Get label names for an issue."""
-    result = _run(f'gh issue view {number} --json labels')
-    data = json.loads(result.stdout)
-    return [l["name"] for l in data.get("labels", [])]
+def get_issue_labels(number: int, retries: int = 3, delay: float = 2.0) -> list[str]:
+    """Get label names for an issue. Retries to handle GH API race conditions."""
+    for attempt in range(retries):
+        result = _run(f'gh issue view {number} --json labels')
+        data = json.loads(result.stdout)
+        labels = [l["name"] for l in data.get("labels", [])]
+        if labels or attempt == retries - 1:
+            return labels
+        time.sleep(delay)
 
 
 def get_issue_state(number: int) -> str:

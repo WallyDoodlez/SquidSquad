@@ -83,3 +83,9 @@
 - **Files scanned**: references/sub-skills/pm-specific/lean-prohibitions.md, github-issues.md, discussion-protocol.md, git-commit.md
 - **Findings**: #95 (discussion-protocol.md pm/qa alias), #96 (4 prohibitions files still reference archived/ subdirectory)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-05 08:35
+
+- **Files scanned**: references/sub-skills/common/discussion-protocol.md, bug-filing.md, prohibitions.md, status-line.md
+- **Findings**: none (all common sub-skills clean)
+- **Items rejected by human**: none yet
