@@ -131,7 +131,7 @@ If the human has already provided input (earlier in the conversation or between 
 - **A priority change**: Update the `Priority` field on the relevant item and append a Discussion entry.
 - **Approval for a Pending feature**: Change status to `Planning` and begin the **Feature Intake Process** (Phases 1-3). Append a Discussion entry:
   ```
-  > [YYYY-MM-DD HH:MM] **pm/qa**: Human approved. Status → Planning. Beginning intake process.
+  > [YYYY-MM-DD HH:MM] **pm**: Human approved. Status → Planning. Beginning intake process.
   ```
   Only after all planning phases (Research → Discussion → Planning) are complete, change status to `Approved`.
 
@@ -187,13 +187,19 @@ For each active agent, read their `bugs/INDEX.md`. For each bug with status `Fix
 
 Print: `[🦑 HH:MM:SS] Verifying pending test features...`
 
-For each active agent, read their `features/INDEX.md`. For each feature with status `Pending Test`, read its individual file:
+Query GitHub Issues for features pending test:
+
+```bash
+gh issue list --label "status:pending-test" --state open --json number,title,labels --limit 20
+```
+
+For each result:
 
 1. Test against the acceptance criteria.
 2. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, or unresolved finding is discovered — update back to `In Progress` and append a Discussion entry listing every specific finding. Do NOT mark Pending Ship with "gaps noted for follow-up." ALL findings must be resolved before shipping.
-3. **Only exception**: The human explicitly says "ship with these gaps" — record the override in Discussion: `> [YYYY-MM-DD HH:MM] **pm/qa**: Human override — shipping with [N] noted gaps: [list]. Status → Pending Ship.`
-4. If all criteria pass with zero gaps: update to `Pending Ship`, append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm/qa**: Verified — zero gaps. Status → Pending Ship.`
-5. **delivery:skip check**: If the feature is internal-only (agent template changes, config changes, internal tooling, process improvements) with no user-facing delivery work needed, add `delivery: skip` to the Discussion entry when marking Pending Ship: `> [YYYY-MM-DD HH:MM] **pm/qa**: Verified — zero gaps. delivery: skip (internal-only, no user-facing changes). Status → Pending Ship.` This tells the DM (or PM fallback) to skip delivery packaging and mark the feature Shipped immediately.
+3. **Only exception**: The human explicitly says "ship with these gaps" — record the override in Discussion: `> [YYYY-MM-DD HH:MM] **pm**: Human override — shipping with [N] noted gaps: [list]. Status → Pending Ship.`
+4. If all criteria pass with zero gaps: update to `Pending Ship`, append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. Status → Pending Ship.`
+5. **delivery:skip check**: If the feature is internal-only (agent template changes, config changes, internal tooling, process improvements) with no user-facing delivery work needed, add `delivery: skip` to the Discussion entry when marking Pending Ship: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. delivery: skip (internal-only, no user-facing changes). Status → Pending Ship.` This tells the DM (or PM fallback) to skip delivery packaging and mark the feature Shipped immediately.
 6. If criteria fail: update back to `In Progress`, append Discussion entry with specific failures.
 
 {{include: pm-specific/pr-flow}}
@@ -219,7 +225,7 @@ Read `.squidsquad/.local-config` to get each agent's clone path. For each dev ag
 - If `current-state` exists and mtime is recent (within 2× interval): agent is healthy (🦑).
 - If `current-state` exists but mtime is stale (older than 2× interval): agent is **stalled** (👻). Log a warning in `qa-log.md` and append a Discussion note to the agent's individual bug file:
   ```
-  > [YYYY-MM-DD HH:MM] **pm/qa**: Agent appears stalled — no cycle activity for [elapsed] minutes. Please check.
+  > [YYYY-MM-DD HH:MM] **pm**: Agent appears stalled — no cycle activity for [elapsed] minutes. Please check.
   ```
 - If `.local-config` is missing, path is unreachable, or `current-state` doesn't exist: agent status is unknown (❓) — note in QA log.
 

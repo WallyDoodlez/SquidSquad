@@ -1,6 +1,6 @@
 ## Filing Bugs (Self and Cross-Team)
 
-You can file bugs to your own domain or directly to any other agent's domain via GitHub Issues. Do not wait for PM/QA to discover and route issues you find yourself.
+You can file bugs to your own domain or directly to any other agent's domain via GitHub Issues. Do not wait for PM to discover and route issues you find yourself.
 
 **Self-file** when you discover a standalone issue during feature work:
 
