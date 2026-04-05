@@ -3,7 +3,7 @@
 
 # SquidSquad Agent Instruction Templates
 
-These are the source-of-truth templates for SquidSquad agents. During setup and upgrade, these templates are copied into `.squidsquad/templates/` with all placeholders substituted (build-time substitution). Each dev agent gets its own substituted template file (e.g. `dev-agent-fe.md`, `dev-agent-be.md`). PM/QA gets `pm-agent.md`. Agents never see raw placeholders — they receive fully resolved instructions.
+These are the source-of-truth templates for SquidSquad agents. During setup and upgrade, these templates are copied into `.squidsquad/templates/` with all placeholders substituted (build-time substitution). Each dev agent gets its own substituted template file (e.g. `dev-agent-fe.md`, `dev-agent-be.md`). PM gets `pm-agent.md`. Agents never see raw placeholders — they receive fully resolved instructions.
 
 Each agent's `.squidsquad/[role]/CLAUDE.md` is a small bootstrapper (~20 lines) containing role config and a Read instruction pointing to the template. The bootstrapper does NOT contain the Ralph Loop — the template does.
 
@@ -1890,7 +1890,7 @@ Write current state: `echo "test-planning|Test plan for FEAT-[ROLE_UPPER]-XXX...
 
 Create two artifacts:
 
-**A) Feature entry** as individual file in `features/` — written by PM directly, with status `Pending`, referencing planning artifacts. After creating, regenerate `INDEX.md`:
+**A) GitHub Issue** — create via `gh issue create` with status `Pending`, referencing planning artifacts:
 - Description includes research-informed constraints
 - Acceptance criteria include edge case handling and side effect mitigations
 - References RESEARCH.md and CONTEXT.md
@@ -2269,7 +2269,7 @@ done
 - Your tracker files: `.squidsquad/pm/qa-log.md`, `.squidsquad/pm/enhancements.md`
 - Your iteration logs: `.squidsquad/pm/iterations/iter-N.md`
 - Your working state: `.squidsquad/pm/working-state.md`
-- All agent trackers (you can write to all): `.squidsquad/[ROLE]/bugs/` (INDEX.md + individual files), `.squidsquad/[ROLE]/features/` (INDEX.md + individual files)
+- All agent work tracked via GitHub Issues (labels: `role:[ROLE]`, `type:bug`/`type:feature`, `status:*`)
 - Config (read-only except counters): `.squidsquad/config.md`
 <!-- /sub-skill: file-conventions -->
 
@@ -2300,7 +2300,7 @@ The status line updates automatically after each assistant message. No action is
 - Never implement fixes or features directly — always file to the appropriate agent's bug or feature tracker.
 - Never delete entries from tracker files.
 - Never mark a bug Verified without actually running a test or check.
-- After any status change to a tracker item, regenerate the relevant `INDEX.md` from the non-archived files in the directory.
+- After any status change, update the GitHub Issue labels accordingly (`gh issue edit [NUMBER] --remove-label "status:old" --add-label "status:new"`).
 - After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
 - After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.
 <!-- /sub-skill: prohibitions -->
@@ -3125,7 +3125,7 @@ Write current state: `echo "test-planning|Test plan for FEAT-[ROLE_UPPER]-XXX...
 
 Create two artifacts:
 
-**A) Feature entry** as individual file in `features/` — written by PM directly, with status `Pending`, referencing planning artifacts. After creating, regenerate `INDEX.md`:
+**A) GitHub Issue** — create via `gh issue create` with status `Pending`, referencing planning artifacts:
 - Description includes research-informed constraints
 - Acceptance criteria include edge case handling and side effect mitigations
 - References RESEARCH.md and CONTEXT.md
@@ -3504,7 +3504,7 @@ done
 - Your tracker files: `.squidsquad/pm/qa-log.md`, `.squidsquad/pm/enhancements.md`
 - Your iteration logs: `.squidsquad/pm/iterations/iter-N.md`
 - Your working state: `.squidsquad/pm/working-state.md`
-- All agent trackers (you can write to all): `.squidsquad/[ROLE]/bugs/` (INDEX.md + individual files), `.squidsquad/[ROLE]/features/` (INDEX.md + individual files)
+- All agent work tracked via GitHub Issues (labels: `role:[ROLE]`, `type:bug`/`type:feature`, `status:*`)
 - Config (read-only except counters): `.squidsquad/config.md`
 <!-- /sub-skill: file-conventions -->
 
@@ -3535,7 +3535,7 @@ The status line updates automatically after each assistant message. No action is
 - Never touch application code or skill files — you are coordination only.
 - Never implement fixes or features directly — always file to the appropriate agent's tracker.
 - Never delete entries from tracker files.
-- After any status change to a tracker item, regenerate the relevant `INDEX.md` from the non-archived files in the directory.
+- After any status change, update the GitHub Issue labels accordingly (`gh issue edit [NUMBER] --remove-label "status:old" --add-label "status:new"`).
 - After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
 - After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.
 <!-- /sub-skill: prohibitions -->
@@ -5420,10 +5420,10 @@ done
 ## File Conventions
 
 - Your design specs: `.squidsquad/designer/specs/FEAT-[ROLE]-XXX/design-spec.md`
-- Your tracker files: `.squidsquad/designer/bugs/` (INDEX.md + individual files), `.squidsquad/designer/features/` (INDEX.md + individual files)
 - Your iteration logs: `.squidsquad/designer/iterations/iter-N.md`
 - Your working state: `.squidsquad/designer/working-state.md`
-- Dev agent trackers (you read Design field): `.squidsquad/[ROLE]/features/` (INDEX.md + individual files)
+- All work tracked via GitHub Issues (labels: `role:designer`, `type:bug`/`type:feature`, `status:*`)
+- Dev agent features (you read Design field): query via `gh issue list --label "role:[ROLE],type:feature"`
 - Config (read-only except counters): `.squidsquad/config.md`
 <!-- /sub-skill: file-conventions -->
 
@@ -5454,7 +5454,7 @@ The status line updates automatically after each assistant message.
 - Never edit another agent's Discussion entries.
 - Never push without pulling first.
 - Never delete entries from tracker files.
-- After any status change to a tracker item, regenerate the relevant `INDEX.md` from the non-archived files in the directory.
+- After any status change, update the GitHub Issue labels accordingly (`gh issue edit [NUMBER] --remove-label "status:old" --add-label "status:new"`).
 - After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
 - After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.
 <!-- /sub-skill: prohibitions -->
@@ -6338,9 +6338,8 @@ done
 
 - Your working state: `.squidsquad/dm/working-state.md`
 - Your iteration logs: `.squidsquad/dm/iterations/iter-N.md`
-- Dev agent trackers (you read and write Discussion/Status): `.squidsquad/[ROLE]/features/` (INDEX.md + individual files), `.squidsquad/[ROLE]/bugs/` (INDEX.md + individual files)
+- All work tracked via GitHub Issues (labels: `role:[ROLE]`, `type:bug`/`type:feature`, `status:*`)
 - Config (read-only except counters and version): `.squidsquad/config.md`
-- You do NOT have your own `features/` or `bugs/` directories — you use the shared dev agent trackers.
 <!-- /sub-skill: file-conventions -->
 
 ---
@@ -6370,7 +6369,7 @@ The status line updates automatically after each assistant message.
 - Never push without pulling first.
 - Never skip checking for `delivery:skip` before starting delivery work.
 - Never delete entries from tracker files.
-- After any status change to a tracker item, regenerate the relevant `INDEX.md` from the non-archived files in the directory.
+- After any status change, update the GitHub Issue labels accordingly (`gh issue edit [NUMBER] --remove-label "status:old" --add-label "status:new"`).
 - After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
 - After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.
 <!-- /sub-skill: prohibitions -->

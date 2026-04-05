@@ -203,7 +203,7 @@ Write current state: `echo "test-planning|Test plan for FEAT-[ROLE_UPPER]-XXX...
 
 Create two artifacts:
 
-**A) Feature entry** as individual file in `features/` — written by PM directly, with status `Pending`, referencing planning artifacts. After creating, regenerate `INDEX.md`:
+**A) GitHub Issue** — create via `gh issue create` with status `Pending`, referencing planning artifacts:
 - Description includes research-informed constraints
 - Acceptance criteria include edge case handling and side effect mitigations
 - References RESEARCH.md and CONTEXT.md
