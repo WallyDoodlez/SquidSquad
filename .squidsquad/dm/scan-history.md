@@ -1,5 +1,13 @@
 # DM Scan History
 
+## Scan — 2026-04-05 18:57
+
+- **Files scanned**: README.md (Agents table, boot explanation, Requirements — flag references), start scripts (start-skill.sh, start-dm.sh, start-pm.sh — actual CLI flags), SKILL.md (permissions note line 1107)
+- **Findings**:
+  - #130 — README references --enable-auto-mode in 3 places but boot scripts use --dangerously-skip-permissions
+  - #131 — SKILL.md permissions note references --enable-auto-mode instead of --dangerously-skip-permissions
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-03 18:30
 
 - **Files scanned**: SKILL.md (architecture diagram), README.md (folder structure, features section), CHANGELOG.md (recent entries)
