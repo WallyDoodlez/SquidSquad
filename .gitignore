@@ -9,3 +9,4 @@
 
 # OS/shell artifacts
 *.stackdump
+tests/__pycache__/
