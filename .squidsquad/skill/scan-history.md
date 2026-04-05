@@ -53,3 +53,15 @@
 - **Files scanned**: references/sub-skills/dm-specific/delivery-packaging.md, references/sub-skills/dm-specific/version-bumps.md, references/sub-skills/pm-specific/github-issues.md
 - **Findings**: #63 (delivery-packaging.md references features/INDEX.md instead of GitHub Issues)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-05 08:30
+
+- **Files scanned**: references/sub-skills/souls/designer.md, references/sub-skills/souls/dm.md, references/sub-skills/souls/pm.md, references/sub-skills/souls/qa.md
+- **Findings**: none
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-05 01:42
+
+- **Files scanned**: references/sub-skills/qa-specific/file-conventions.md, bug-filing.md, prohibitions.md, discussion-protocol.md, iteration-log.md
+- **Findings**: none (all QA sub-skills clean — using GH Issues correctly, no stale refs)
+- **Items rejected by human**: none yet

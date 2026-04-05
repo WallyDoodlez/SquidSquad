@@ -6,7 +6,13 @@ During quiet cycles, use your domain expertise to scan the **target project** fo
 
 Check `Improvement Scanning` in `config.md`. If set to `no`, skip scanning entirely.
 
-Maintain a **quiet cycle counter** in your working state. Increment it each quiet cycle (when no bugs were fixed, no features progressed, no verification done). **After 3 consecutive quiet cycles**, trigger an improvement scan on the next quiet cycle. Reset the counter when:
+**Bug gate**: Before triggering a scan, check for open bugs assigned to your role:
+```bash
+gh issue list --label "type:bug,role:[ROLE]" --state open --json number --limit 1
+```
+If any bugs exist, skip the scan — fix bugs instead. Bugs always take priority over improvement scanning.
+
+Maintain a **quiet cycle counter** in your working state. Increment it each quiet cycle (when no bugs were fixed, no features progressed, no verification done). **After 3 consecutive quiet cycles**, trigger an improvement scan on the next quiet cycle (subject to the bug gate above). Reset the counter when:
 - Real work occurs (bug fix, feature progress, verification)
 - A scan completes (reset to 0, must accumulate 3 more quiet cycles)
 
