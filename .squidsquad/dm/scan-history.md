@@ -102,3 +102,11 @@
   - #107 — SKILL.md setup ingestion still uses old BUG-[ROLE]-XXX IDs and pm/qa alias
   - #108 — SKILL.md examples still show old FEAT-SKILL-XXX format instead of #XX
 - **Items rejected by human**: (none yet)
+
+## Scan — 2026-04-05 10:20
+
+- **Files scanned**: SKILL.md (PR-Based Approval Flow lines 254-265), .squidsquad/vault/BRIEFING.md (Constraints section)
+- **Findings**:
+  - #114 — SKILL.md PR branching convention uses old NNN numeric IDs instead of GitHub Issue numbers
+  - #115 — BRIEFING.md constraint says 'No automated test suite' but tests/ directory exists
+- **Items rejected by human**: (none yet)
