@@ -22,7 +22,7 @@ Apply this logic to: `RESEARCH.md` (Phase 1), `PHASE2-PREP.md` (Phase 2A), `CONT
 
 ### Phase 1 — Research
 
-Write current state: `echo "researching|Researching FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
+Write current state: `python references/scripts/cycle.py status-bar [ROLE] researching "Researching FEAT-[ROLE_UPPER]-XXX..."`
 
 **Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: researching FEAT-[ROLE_UPPER]-XXX` so that cron-triggered cycles are suppressed during this phase.
 
@@ -80,7 +80,7 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 
 ### Phase 2A — Discussion Prep (Subagent)
 
-Write current state: `echo "discussing|Discussion prep for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
+Write current state: `python references/scripts/cycle.py status-bar [ROLE] discussing "Discussion prep for FEAT-[ROLE_UPPER]-XXX..."`
 
 **Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: discussing FEAT-[ROLE_UPPER]-XXX`.
 
@@ -107,7 +107,7 @@ Light-mode features skip Phase 2A entirely.
 
 ### Phase 2 — Discussion (PM + Human)
 
-Write current state: `echo "discussing|Discussion for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
+Write current state: `python references/scripts/cycle.py status-bar [ROLE] discussing "Discussion for FEAT-[ROLE_UPPER]-XXX..."`
 
 **Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: discussing FEAT-[ROLE_UPPER]-XXX`.
 
@@ -195,7 +195,7 @@ options: ["Approve — proceed to test plan", "More discussion needed", "Reject 
 
 ### Phase 3 — Planning
 
-Write current state: `echo "test-planning|Test plan for FEAT-[ROLE_UPPER]-XXX..." > .squidsquad/[ROLE]/current-state`
+Write current state: `python references/scripts/cycle.py status-bar [ROLE] test-planning "Test plan for FEAT-[ROLE_UPPER]-XXX..."`
 
 **Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: test-planning FEAT-[ROLE_UPPER]-XXX`.
 
@@ -203,7 +203,7 @@ Write current state: `echo "test-planning|Test plan for FEAT-[ROLE_UPPER]-XXX...
 
 Create two artifacts:
 
-**A) GitHub Issue** — create via `gh issue create` with status `Pending`, referencing planning artifacts:
+**A) GitHub Issue** — create via `python references/scripts/tracker.py create-feature` with status `Pending`, referencing planning artifacts:
 - Description includes research-informed constraints
 - Acceptance criteria include edge case handling and side effect mitigations
 - References RESEARCH.md and CONTEXT.md

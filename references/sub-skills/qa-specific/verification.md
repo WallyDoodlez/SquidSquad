@@ -26,9 +26,9 @@ For each test failure:
 1. Determine which agent's domain the failure is in.
 2. Check if a bug already exists: `gh issue list --label "type:bug,squidsquad" --search "[keywords]" --json number,title --limit 10`. If found, comment on the existing issue — do not duplicate.
 3. If new and the failure is **objective** (clear test pass/fail, crash, error):
-   - File immediately: `gh issue create --title "BUG: [title]" --body "[description with test evidence]" --label "type:bug,severity:[level],role:[target-role],squidsquad"`
+   - File immediately: `python references/scripts/tracker.py create-bug --title "[title]" --body "[description with test evidence]" --role [target-role] --severity [high|medium|low] --reporter qa`
 4. If the finding is **subjective** (coherence issue, style concern, design inconsistency):
-   - Flag for human review via PM — comment on a relevant issue or create a discussion: `> [YYYY-MM-DD HH:MM] **qa**: Subjective finding flagged for PM/human review: [description]`
+   - Flag for human review via PM: `python references/scripts/tracker.py comment [NUMBER] --role qa --message "Subjective finding flagged for PM/human review: [description]"`
    - Do NOT file a bug yet — PM and human decide.
 5. If the failure spans multiple domains: file in each relevant role with cross-linking comments.
 
@@ -47,15 +47,14 @@ For each bug:
 1. Read details: `gh issue view [NUMBER] --json title,body,comments`
 2. Run the relevant test or manually verify the fix.
 3. If verified:
-   - Transition to shipped and close:
+   - Transition to shipped (auto-closes):
      ```bash
-     gh issue edit [NUMBER] --remove-label "status:pending-test" --add-label "status:shipped"
-     gh issue close [NUMBER]
-     gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **qa**: Verified. Status → Shipped."
+     python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship
+     python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified. Status → Pending Ship."
      ```
-   - Increment `Shipped Since Last Bump` in `config.md`.
+   - Increment `Shipped Since Last Bump`: `python references/scripts/config.py set shipped-since-bump [N+1]`
 4. If not verified:
-   - Reopen: `gh issue edit [NUMBER] --remove-label "status:pending-test" --add-label "status:in-progress"`
+   - Reopen: `python references/scripts/tracker.py transition [NUMBER] pending-test in-progress`
    - Comment with specific failures.
 
 ### Step 5 — Verify Pending Test Features
@@ -65,8 +64,10 @@ Print: `[🦑 HH:MM:SS] Verifying pending test features...`
 Query all features pending test:
 
 ```bash
-gh issue list --label "type:feature,status:pending-test,squidsquad" --json number,title,labels,body --limit 50
+python references/scripts/tracker.py list-features skill --status pending-test
 ```
+
+(Adjust role as needed for other agents.)
 
 For each feature, read it: `gh issue view [NUMBER] --json title,body,labels,comments`
 
@@ -89,17 +90,20 @@ For each feature, read it: `gh issue view [NUMBER] --json title,body,labels,comm
 
 3. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, or unresolved finding is discovered:
    ```bash
-   gh issue edit [NUMBER] --remove-label "status:pending-test" --add-label "status:in-progress"
-   gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **qa**: FAIL. [list every specific finding]. Back to In Progress."
+   python references/scripts/tracker.py transition [NUMBER] pending-test in-progress
+   python references/scripts/tracker.py comment [NUMBER] --role qa --message "FAIL. [list every specific finding]. Back to In Progress."
    ```
    Do NOT mark Pending Ship with "gaps noted for follow-up." ALL findings must be resolved before shipping.
-4. **Only exception**: The human explicitly says "ship with these gaps" — record the override: `gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **qa**: Human override — shipping with [N] noted gaps: [list]. Status → Pending Ship."`
+4. **Only exception**: The human explicitly says "ship with these gaps" — record the override:
+   ```bash
+   python references/scripts/tracker.py comment [NUMBER] --role qa --message "Human override — shipping with [N] noted gaps: [list]. Status → Pending Ship."
+   ```
 5. If all criteria pass with zero gaps:
    ```bash
-   gh issue edit [NUMBER] --remove-label "status:pending-test" --add-label "status:pending-ship"
-   gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **qa**: Verified — zero gaps. Status → Pending Ship."
+   python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship
+   python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. Status → Pending Ship."
    ```
-6. **delivery:skip check**: If the feature is internal-only, add `delivery:skip` to the comment: `"> [YYYY-MM-DD HH:MM] **qa**: Verified — zero gaps. delivery: skip (internal-only). Status → Pending Ship."`
+6. **delivery:skip check**: If the feature is internal-only, add `delivery:skip` to the comment message.
 7. If criteria fail: transition back to `In Progress` with specific failures in the comment.
 
 ### Step 5b — Monitor PRs (if PR Flow enabled)

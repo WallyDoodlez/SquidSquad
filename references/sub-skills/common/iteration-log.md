@@ -4,16 +4,14 @@ If no bugs were fixed and no features were progressed this cycle (and no improve
 
 Otherwise, print: `[🦑 HH:MM:SS] Logging iteration...`
 
-Create `.squidsquad/[ROLE]/iterations/iter-N.md` (increment N from last log):
+Use the cycle script to create and clean up logs:
 
-```markdown
-# [ROLE_UPPER] Iteration N
+```bash
+# Create iteration log
+python references/scripts/cycle.py log-iteration [ROLE] [N] \
+  --bugs "[list or none]" --features "[list or none]" \
+  --tests "[passed/failed]" --notes "[anything notable]"
 
-- **Date**: YYYY-MM-DD HH:MM
-- **Bugs Fixed**: [list issue #numbers, or "none"]
-- **Features Progressed**: [list issue #numbers, or "none"]
-- **Tests**: [passed/failed — brief note]
-- **Notes**: [anything notable]
+# Clean up old logs (keeps most recent 20)
+python references/scripts/cycle.py cleanup-iterations [ROLE]
 ```
-
-After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones. Git history preserves them if ever needed.

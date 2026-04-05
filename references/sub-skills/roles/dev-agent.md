@@ -54,7 +54,7 @@ At the end of each cycle, print:
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/[ROLE]/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
 ```bash
-echo "phase|sub-skill — description" > .squidsquad/[ROLE]/current-state.tmp && mv -f .squidsquad/[ROLE]/current-state.tmp .squidsquad/[ROLE]/current-state
+python references/scripts/cycle.py status-bar [ROLE] "phase" "sub-skill — description"
 ```
 
 Phase is one of: `pulling`, `triaging`, `implementing`, `committing`, `idle`. The sub-skill is the short name of the active sub-skill (e.g., `pull-latest`, `tracker-protocol`, `dev-agent`, `git-commit`). The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
@@ -82,7 +82,7 @@ Print: `[🦑 HH:MM:SS] Triaging bugs...`
 Query GitHub Issues for open bugs assigned to your role:
 
 ```bash
-gh issue list --label "type:bug,role:[ROLE]" --json number,title,labels,body --limit 50
+python references/scripts/tracker.py list-bugs [ROLE]
 ```
 
 For each bug that does not have a `status:shipped` or closed state:
@@ -93,13 +93,13 @@ For each bug that does not have a `status:shipped` or closed state:
 4. Fix the bug.
 5. Run the test command: `[ROLE_TEST_CMD]`
 6. If tests pass:
-   - Transition status: `gh issue edit [NUMBER] --remove-label "status:open" --add-label "status:pending-test"`
-   - Comment: `gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Fixed in commit [hash]. [Brief explanation]. Status → Pending Test."`
+   - Transition status: `python references/scripts/tracker.py transition [NUMBER] open pending-test`
+   - Comment: `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Fixed in commit [hash]. [Brief explanation]. Status → Pending Test."`
    - Clear working state.
 7. If the root cause belongs to another agent's domain:
    - Do NOT mark this bug as fixed.
-   - File a new bug to the other agent's domain: `gh issue create --title "BUG: [title]" --body "[description]" --label "type:bug,role:[OTHER_ROLE],squidsquad,severity:[level]"`
-   - Comment on the original: `gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Root cause is in [OTHER_ROLE]. Filed #[NEW_NUMBER]. Blocking."`
+   - File a new bug: `python references/scripts/tracker.py create-bug --title "[title]" --body "[description]" --role [OTHER_ROLE] --severity [level] --reporter [ROLE]-lead`
+   - Comment on the original: `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Root cause is in [OTHER_ROLE]. Filed #[NEW_NUMBER]. Blocking."`
    - Clear working state.
 
 ### Step 3 — Implement Features
@@ -109,7 +109,7 @@ Print: `[🦑 HH:MM:SS] Checking features...`
 **Bug gate**: Before picking up any feature work, check for open bugs assigned to your role:
 
 ```bash
-gh issue list --label "type:bug,role:[ROLE]" --state open --json number --limit 1
+python references/scripts/tracker.py list-bugs [ROLE]
 ```
 
 If any open bugs exist (non-empty result), **skip all feature work this cycle** — bugs always take priority. Print: `[🦑 HH:MM:SS] Open bugs exist — skipping feature pickup.` and proceed to Step 4.
@@ -117,7 +117,7 @@ If any open bugs exist (non-empty result), **skip all feature work this cycle** 
 **First, check for QA-rejected features** (higher priority than new work — fix existing before starting new):
 
 ```bash
-gh issue list --label "type:feature,status:in-progress,role:[ROLE]" --json number,title,labels --limit 50
+python references/scripts/tracker.py list-features [ROLE] --status in-progress
 ```
 
 For each `In Progress` feature, check for new QA/PM feedback since your last comment:
@@ -133,15 +133,15 @@ If there are comments from `**qa**` or `**pm**` after your last `**[ROLE]-lead**
 4. Re-run tests and smoke tests.
 5. Transition back to Pending Test:
    ```bash
-   gh issue edit [NUMBER] --remove-label "status:in-progress" --add-label "status:pending-test"
-   gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Fixed [N] QA gaps: [list]. Status → Pending Test."
+   python references/scripts/tracker.py transition [NUMBER] in-progress pending-test
+   python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Fixed [N] QA gaps: [list]. Status → Pending Test."
    ```
 6. Clear working state.
 
 **Then, check for new approved features**:
 
 ```bash
-gh issue list --label "type:feature,status:approved,role:[ROLE]" --json number,title,labels --limit 50
+python references/scripts/tracker.py list-features [ROLE] --status approved
 ```
 
 Pick the highest-priority feature (check `priority:high` first, then `priority:medium`, then `priority:low`). Read it: `gh issue view [NUMBER] --json title,body,labels,comments`
@@ -152,8 +152,8 @@ When picking up a feature, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 
 1. Comment and transition status:
    ```bash
-   gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Picking up. Status → In Progress."
-   gh issue edit [NUMBER] --remove-label "status:approved" --add-label "status:in-progress"
+   python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Picking up. Status → In Progress."
+   python references/scripts/tracker.py transition [NUMBER] approved in-progress
    ```
 2. **Read planning artifacts** (if they exist in `.squidsquad/[ROLE]/planning/`):
    - Look for files matching the issue number or title
@@ -167,8 +167,8 @@ When picking up a feature, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 9. If tests and smoke tests pass:
    - Transition status:
      ```bash
-     gh issue edit [NUMBER] --remove-label "status:in-progress" --add-label "status:pending-test"
-     gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Implementation complete. All tests passing. Status → Pending Test."
+     python references/scripts/tracker.py transition [NUMBER] in-progress pending-test
+     python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Implementation complete. All tests passing. Status → Pending Test."
      ```
    - Clear working state.
 10. If tests fail: fix the failure before changing status.

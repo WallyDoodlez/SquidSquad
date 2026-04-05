@@ -8,6 +8,8 @@ Query GitHub Issues for items pending delivery:
 gh issue list --label "status:pending-ship" --state open --json number,title,labels --limit 20
 ```
 
+_(Note: DM scans across all roles, so raw gh query is appropriate here.)_
+
 Pick the highest-priority item first. When picking up an item, print: `[🦑 HH:MM:SS] Delivering #[NUMBER]...`
 
 1. Write working state: update `.squidsquad/dm/working-state.md` with the feature ID, status `in-progress`, and planned delivery steps.
@@ -18,16 +20,12 @@ Pick the highest-priority item first. When picking up an item, print: `[🦑 HH:
 Check the feature's Discussion entries for a `delivery: skip` tag (set by PM when marking Pending Ship).
 
 If found:
-- Transition the issue to Shipped:
+- Transition the issue to Shipped (auto-closes):
   ```bash
-  gh issue edit [NUMBER] --remove-label "status:pending-ship" --add-label "status:shipped"
-  gh issue close [NUMBER]
+  python references/scripts/tracker.py transition [NUMBER] pending-ship shipped
+  python references/scripts/tracker.py comment [NUMBER] --role dm --message "No delivery work needed (delivery: skip). Status → Shipped."
   ```
-- Append a Discussion entry:
-  ```
-  > [YYYY-MM-DD HH:MM] **dm**: No delivery work needed (delivery: skip). Status → Shipped.
-  ```
-- Increment `Shipped Since Last Bump` in `config.md`.
+- Increment shipped count: `python references/scripts/config.py set shipped-since-bump [N+1]`
 - Clear working state.
 - Skip to Step 3 (Version Bump Check).
 
@@ -41,14 +39,10 @@ For each Pending Ship feature that is NOT skipped:
    > [YYYY-MM-DD HH:MM] **dm**: CHANGELOG entry prepared: "#[NUMBER] — [Title]". Status → Shipped.
    ```
 3. **Check for config/migration changes**: If the feature introduces new config values, settings, or requires migration steps for existing installs, document them in the Discussion and ensure they are reflected in the upgrade flow.
-4. Transition the issue to Shipped:
+4. Transition the issue to Shipped (auto-closes):
    ```bash
-   gh issue edit [NUMBER] --remove-label "status:pending-ship" --add-label "status:shipped"
-   gh issue close [NUMBER]
+   python references/scripts/tracker.py transition [NUMBER] pending-ship shipped
+   python references/scripts/tracker.py comment [NUMBER] --role dm --message "Delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped."
    ```
-5. Append a Discussion entry:
-   ```
-   > [YYYY-MM-DD HH:MM] **dm**: Delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped.
-   ```
-6. Increment `Shipped Since Last Bump` in `config.md`.
+5. Increment shipped count: `python references/scripts/config.py set shipped-since-bump [N+1]`
 7. Clear working state.

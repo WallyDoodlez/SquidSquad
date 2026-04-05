@@ -2,33 +2,33 @@
 
 Print: `[🦑 HH:MM:SS] Committing and pushing...`
 
-**If `PR Flow: yes` in config.md** and this cycle completed a feature or bug fix (status changed to `Pending Test`):
+Check PR Flow setting:
+```bash
+python references/scripts/config.py get pr-flow
+```
 
-1. Create a branch: `squidsquad/feat-[ROLE]-NNN` or `squidsquad/bug-[ROLE]-NNN`
-2. Commit all changes to the branch:
+**If `yes`** and this cycle completed a feature or bug fix (status changed to `Pending Test`):
+
+1. Create a branch and commit:
    ```bash
-   git checkout -b squidsquad/[type]-[ROLE]-[NNN]
-   git add -A
-   git commit -m "[ROLE]: [brief description]"
-   git push -u origin squidsquad/[type]-[ROLE]-[NNN]
+   python references/scripts/git_ops.py branch-create squidsquad/[type]-[ROLE]-[NNN]
+   python references/scripts/git_ops.py commit-push [ROLE] "[brief description]"
    ```
-3. Open a PR:
+2. Open a PR:
    ```bash
-   gh pr create --title "[ROLE]: [FEAT/BUG-ID] — [title]" --body "## [FEAT/BUG-ID]\n\n[acceptance criteria]\n\nStatus: Pending Test"
+   python references/scripts/git_ops.py pr-create "[ROLE]: [FEAT/BUG-ID] — [title]" "## [FEAT/BUG-ID]\n\n[acceptance criteria]\n\nStatus: Pending Test"
    ```
-4. Record the PR URL in the tracker Discussion:
-   ```
-   > [YYYY-MM-DD HH:MM] **[ROLE]-lead**: PR opened: [URL]. Status → Pending Test.
-   ```
-5. Switch back to main:
+3. Record the PR URL in the tracker Discussion:
    ```bash
-   git checkout main
+   python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "PR opened: [URL]. Status → Pending Test."
+   ```
+4. Switch back to main:
+   ```bash
+   python references/scripts/git_ops.py branch-switch main
    ```
 
-**If `PR Flow: no`** (default) or this cycle only updated tracker files (no feature/bug completion):
+**If `no`** (default) or this cycle only updated tracker files (no feature/bug completion):
 
 ```bash
-git add -A
-git commit -m "[ROLE]: [brief description of work done this cycle]"
-git push
+python references/scripts/git_ops.py commit-push [ROLE] "[brief description of work done this cycle]"
 ```

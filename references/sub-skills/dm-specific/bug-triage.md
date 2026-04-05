@@ -5,7 +5,7 @@ Print: `[🦑 HH:MM:SS] Triaging bugs...`
 Query GitHub Issues for open bugs assigned to your role:
 
 ```bash
-gh issue list --label "type:bug,role:dm" --state open --json number,title,labels,body --limit 50
+python references/scripts/tracker.py list-bugs dm
 ```
 
 For each bug that has `status:open`:
@@ -17,18 +17,18 @@ For each bug that has `status:open`:
 5. If fix is complete:
    - Transition status:
      ```bash
-     gh issue edit [NUMBER] --remove-label "status:open" --add-label "status:pending-test"
-     gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **dm**: Fixed in commit [hash]. [Brief explanation]. Status → Pending Test."
+     python references/scripts/tracker.py transition [NUMBER] open pending-test
+     python references/scripts/tracker.py comment [NUMBER] --role dm --message "Fixed in commit [hash]. [Brief explanation]. Status → Pending Test."
      ```
    - Clear working state.
 6. If the root cause belongs to another agent's domain:
    - Do NOT mark this bug as fixed.
    - File a new bug to the other agent's domain:
      ```bash
-     gh issue create --title "BUG: [title]" --body "[description]" --label "type:bug,role:[OTHER_ROLE],squidsquad,status:open"
+     python references/scripts/tracker.py create-bug --title "[title]" --body "[description]" --role [OTHER_ROLE] --severity [level] --reporter dm
      ```
    - Comment on the original:
      ```bash
-     gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **dm**: Root cause is in [OTHER_ROLE]. Filed #[NEW_NUMBER]. Blocking."
+     python references/scripts/tracker.py comment [NUMBER] --role dm --message "Root cause is in [OTHER_ROLE]. Filed #[NEW_NUMBER]. Blocking."
      ```
    - Clear working state.

@@ -4,14 +4,17 @@ All bugs and features are tracked as GitHub Issues with structured labels. Agent
 
 ### Timestamps
 
-All timestamps in step markers (`[🦑 HH:MM:SS]`), Discussion comments (`YYYY-MM-DD HH:MM`), iteration logs, and vault entries must use the **system local time** from the `date` command — never guess, estimate, or increment manually.
+All timestamps must use the **system local time** — never guess, estimate, or increment manually. Use the cycle script:
 
 ```bash
 # For step markers (HH:MM:SS):
-date +"%H:%M:%S"
+python references/scripts/cycle.py timestamp-short
 
 # For Discussion comments and logs (YYYY-MM-DD HH:MM):
-date +"%Y-%m-%d %H:%M"
+python references/scripts/cycle.py timestamp
+
+# Print a formatted step marker:
+python references/scripts/cycle.py step-marker "Pulling latest..."
 ```
 
 ### Startup Permission Check
@@ -19,10 +22,10 @@ date +"%Y-%m-%d %H:%M"
 At agent boot (before the first cycle), verify `gh` access:
 
 ```bash
-gh issue list --limit 1 2>&1
+python references/scripts/tracker.py check-gh
 ```
 
-If this fails (authentication error, missing scope, `gh` not found):
+If this fails (exit code 1):
 1. Print: `[🦑 HH:MM:SS] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.`
 2. Exit the conversation. SquidSquad requires GitHub Issues access.
 
@@ -75,23 +78,21 @@ Issues use labels for structured metadata. The following labels must exist on th
 
 ### Reading Issues (replaces INDEX.md scanning)
 
-To list issues by status and role:
+Use the tracker script for all queries — it encodes correct label formats:
 
 ```bash
 # List approved features for your role
-gh issue list --label "type:feature,status:approved,role:[ROLE]" --json number,title,labels --limit 50
+python references/scripts/tracker.py list-features [ROLE] --status approved
 
 # List open bugs for your role
-gh issue list --label "type:bug,role:[ROLE]" --json number,title,labels --limit 50
+python references/scripts/tracker.py list-bugs [ROLE]
 
-# List all items pending test across all agents (for QA)
-gh issue list --label "status:pending-test" --json number,title,labels --limit 50
-
-# List pending ship items (for DM)
-gh issue list --label "status:pending-ship" --json number,title,labels --limit 50
+# Get labels or state for a specific issue
+python references/scripts/tracker.py get-labels [NUMBER]
+python references/scripts/tracker.py get-state [NUMBER]
 ```
 
-To read a specific issue:
+To read a specific issue's full details (body, comments):
 
 ```bash
 gh issue view [NUMBER] --json title,body,labels,comments
@@ -99,42 +100,49 @@ gh issue view [NUMBER] --json title,body,labels,comments
 
 ### Creating Issues (replaces filing bugs/features)
 
+Use the tracker script to ensure correct label format:
+
 ```bash
 # File a bug
-gh issue create --title "BUG: [title]" \
-  --body "[description, steps to reproduce, expected vs actual]" \
-  --label "type:bug,severity:[level],role:[target-role],squidsquad,status:pending"
+python references/scripts/tracker.py create-bug \
+  --title "[title]" --body "[description]" \
+  --role [target-role] --severity [high|medium|low] --reporter [ROLE]-lead
 
 # File a feature
-gh issue create --title "FEAT: [title]" \
-  --body "[description, acceptance criteria]" \
-  --label "type:feature,priority:[level],role:[target-role],squidsquad,status:pending"
+python references/scripts/tracker.py create-feature \
+  --title "[title]" --body "[description]" \
+  --role [target-role] --priority [high|medium|low] --reporter [ROLE]-lead
 ```
 
-After creating, note the returned Issue number for reference.
+The script automatically adds `BUG:`/`FEAT:` prefix, correct labels, and `squidsquad` tag. Returns JSON with `number` and `url`.
 
 ### Status Transitions (replaces editing Status field)
 
-Use label removal + addition to transition status:
+Use the tracker script — it **enforces legal transitions** and auto-closes on shipped:
 
 ```bash
-# Example: Approved → In Progress
-gh issue edit [NUMBER] --remove-label "status:approved" --add-label "status:in-progress"
-
-# Example: In Progress → Pending Test
-gh issue edit [NUMBER] --remove-label "status:in-progress" --add-label "status:pending-test"
-
-# Example: Pending Ship → Shipped (close the issue)
-gh issue edit [NUMBER] --remove-label "status:pending-ship" --add-label "status:shipped"
-gh issue close [NUMBER]
+# Transition syntax: tracker.py transition <number> <from> <to>
+python references/scripts/tracker.py transition [NUMBER] approved in-progress
+python references/scripts/tracker.py transition [NUMBER] in-progress pending-test
+python references/scripts/tracker.py transition [NUMBER] pending-ship shipped
 ```
+
+The script will reject illegal transitions (e.g. `pending → shipped`) with an error. Legal flows:
+- `open` → `pending-test` | `in-progress`
+- `pending` → `planning` | `approved`
+- `planning` → `planned`
+- `planned` → `approved`
+- `approved` → `in-progress`
+- `in-progress` → `pending-test` | `approved`
+- `pending-test` → `in-progress` | `pending-ship`
+- `pending-ship` → `shipped` (auto-closes)
 
 ### Discussion Entries (replaces inline Discussion sections)
 
-Discussion entries become Issue comments. Same format — timestamped and role-signed:
+Discussion entries become Issue comments. Use the tracker script:
 
 ```bash
-gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[role]**: [message]"
+python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "[message]"
 ```
 
 Comments are append-only — never edit or delete previous comments.

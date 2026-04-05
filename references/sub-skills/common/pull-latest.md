@@ -3,7 +3,7 @@
 Print: `[🦑 HH:MM:SS] Pulling latest...`
 
 ```bash
-git pull --rebase
+python references/scripts/git_ops.py pull
 ```
 
-If there is a rebase conflict in a tracker file, resolve it by keeping both versions — append the conflicting section below the existing one. Never discard entries.
+The script handles stash/pop automatically if there are unstaged changes. If there is a rebase conflict in a tracker file, resolve it by keeping both versions — append the conflicting section below the existing one. Never discard entries.

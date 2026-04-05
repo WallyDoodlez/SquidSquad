@@ -3,7 +3,5 @@
 Print: `[🦑 HH:MM:SS] Committing and pushing...`
 
 ```bash
-git add -A
-git commit -m "designer: [brief description of design work done this cycle]"
-git push
+python references/scripts/git_ops.py commit-push designer "[brief description of design work done this cycle]"
 ```

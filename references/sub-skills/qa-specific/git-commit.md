@@ -3,7 +3,5 @@
 Print: `[🦑 HH:MM:SS] Committing and pushing...`
 
 ```bash
-git add -A
-git commit -m "qa: [brief summary — e2e results, bugs filed, features verified]"
-git push
+python references/scripts/git_ops.py commit-push qa "[brief summary — e2e results, bugs filed, features verified]"
 ```
