@@ -30,7 +30,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Constraints & Blockers
 
-- No automated test suite — validation is manual SKILL.md review
+- Test suite exists (`python tests/run_tests.py`) — static analysis + integration tests; #67 still in progress for full QA pass
 - PR flow currently disabled
 - Ship counter reset after v0.10.0 bump
 
