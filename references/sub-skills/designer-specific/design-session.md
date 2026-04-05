@@ -5,10 +5,8 @@ Print: `[🦑 HH:MM:SS] Checking design requests...`
 Query GitHub Issues for features needing design:
 
 ```bash
-gh issue list --label "type:feature,design:needed" --state open --json number,title,labels --limit 50
+python references/scripts/tracker.py list-by-labels "type:feature,design:needed"
 ```
-
-_(Design queries use raw `gh` since tracker.py handles status labels, not design labels.)_
 
 If no features need design, this is a **quiet cycle** — increment the quiet cycle counter. After **5 consecutive quiet cycles**, log a suggestion in the iteration log: `"No design requests for 5 cycles — consider stopping the designer agent."` Do NOT auto-stop. Reset the counter when design work is found.
 

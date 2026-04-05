@@ -127,6 +127,41 @@ def list_issues(role, issue_type="bug", status=None):
     return issues
 
 
+def list_by_labels(labels_str):
+    """List issues by arbitrary label string (for cross-role queries)."""
+    result = _run(
+        f'gh issue list --label "{labels_str}" --state open '
+        f'--json number,title,labels --limit 50',
+        check=False,
+    )
+    if result.returncode != 0:
+        print(f"ERROR: gh failed: {result.stderr}", file=sys.stderr)
+        return []
+    issues = json.loads(result.stdout) if result.stdout.strip() else []
+    print(json.dumps(issues, indent=2))
+    return issues
+
+
+def list_all_open():
+    """List all open issues (for ingestion/triage of external issues)."""
+    result = _run(
+        'gh issue list --state open --json number,title,labels,body --limit 50',
+        check=False,
+    )
+    if result.returncode != 0:
+        print(f"ERROR: gh failed: {result.stderr}", file=sys.stderr)
+        return []
+    issues = json.loads(result.stdout) if result.stdout.strip() else []
+    print(json.dumps(issues, indent=2))
+    return issues
+
+
+def add_labels(number, labels_str):
+    """Add labels to an issue (for metadata labels like design:, squidsquad)."""
+    _run(f'gh issue edit {number} --add-label "{labels_str}"')
+    print(f"#{number}: added labels {labels_str}")
+
+
 def create_bug(title, body, role, severity, reporter=None):
     """Create a bug issue with correct label format."""
     sev_label = SEVERITY_LABELS.get(severity, f"severity:{severity}")
@@ -309,6 +344,21 @@ def main():
             print("Usage: tracker.py close <number>", file=sys.stderr)
             sys.exit(1)
         close_issue(int(pos[0]))
+
+    elif cmd == "list-by-labels":
+        if not pos:
+            print("Usage: tracker.py list-by-labels <labels>", file=sys.stderr)
+            sys.exit(1)
+        list_by_labels(pos[0])
+
+    elif cmd == "list-all-open":
+        list_all_open()
+
+    elif cmd == "add-labels":
+        if len(pos) < 2:
+            print("Usage: tracker.py add-labels <number> <labels>", file=sys.stderr)
+            sys.exit(1)
+        add_labels(int(pos[0]), pos[1])
 
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)

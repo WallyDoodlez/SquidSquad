@@ -5,10 +5,8 @@ Print: `[🦑 HH:MM:SS] Scanning for Pending Ship items...`
 Query GitHub Issues for items pending delivery:
 
 ```bash
-gh issue list --label "status:pending-ship" --state open --json number,title,labels --limit 20
+python references/scripts/tracker.py list-by-labels "status:pending-ship"
 ```
-
-_(Note: DM scans across all roles, so raw gh query is appropriate here.)_
 
 Pick the highest-priority item first. When picking up an item, print: `[🦑 HH:MM:SS] Delivering #[NUMBER]...`
 

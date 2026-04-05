@@ -5,7 +5,7 @@ Print: `[🦑 HH:MM:SS] Checking for external issues...`
 Since GitHub Issues is the tracker, external contributors may file issues directly. Scan for issues that lack SquidSquad labels (filed by humans or contributors, not by agents):
 
 ```bash
-gh issue list --state open --json number,title,labels,body --limit 50
+python references/scripts/tracker.py list-all-open
 ```
 
 For each open issue that does NOT have the `squidsquad` label:
@@ -14,7 +14,7 @@ For each open issue that does NOT have the `squidsquad` label:
 2. **Route**: Determine which dev agent's domain it belongs to based on content.
 3. **Label**: Add appropriate labels:
    ```bash
-   gh issue edit [NUMBER] --add-label "squidsquad,type:[bug|feature],priority:low,role:[target-role]"
+   python references/scripts/tracker.py add-labels [NUMBER] "squidsquad,type:[bug|feature],priority:low,role:[target-role]"
    ```
 4. **Comment**: Add a triage comment:
    ```bash

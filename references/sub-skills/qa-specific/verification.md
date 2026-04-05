@@ -24,7 +24,7 @@ Print: `[🦑 HH:MM:SS] Investigating test failures...` (or skip if no failures)
 For each test failure:
 
 1. Determine which agent's domain the failure is in.
-2. Check if a bug already exists: `gh issue list --label "type:bug,squidsquad" --search "[keywords]" --json number,title --limit 10`. If found, comment on the existing issue — do not duplicate.
+2. Check if a bug already exists: `python references/scripts/tracker.py list-by-labels "type:bug,squidsquad"` and search output for keywords. If found, comment on the existing issue — do not duplicate.
 3. If new and the failure is **objective** (clear test pass/fail, crash, error):
    - File immediately: `python references/scripts/tracker.py create-bug --title "[title]" --body "[description with test evidence]" --role [target-role] --severity [high|medium|low] --reporter qa`
 4. If the finding is **subjective** (coherence issue, style concern, design inconsistency):
