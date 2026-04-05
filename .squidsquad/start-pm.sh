@@ -40,4 +40,4 @@ echo "pm" > .squidsquad/.active-role
 rm -f .squidsquad/pm/current-state
 echo "idle|Initializing..." > .squidsquad/pm/current-state
 
-claude --dangerously-skip-permissions --session-name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
+claude --dangerously-skip-permissions --name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"

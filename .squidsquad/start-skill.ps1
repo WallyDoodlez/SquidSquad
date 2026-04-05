@@ -1,4 +1,4 @@
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+﻿[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $repoRoot = git rev-parse --show-toplevel
 Set-Location $repoRoot
 
@@ -44,4 +44,6 @@ Write-Host ""
 Remove-Item .squidsquad/skill/current-state -ErrorAction SilentlyContinue
 "idle|Initializing..." | Set-Content .squidsquad/skill/current-state -NoNewline
 
-claude --dangerously-skip-permissions --session-name "$AgentName" --append-system-prompt "SQUIDSQUAD_ROLE=skill" "Skill dev - start the loop"
+$sysPrompt = "SQUIDSQUAD_ROLE=skill"
+$initMsg = "Skill dev - start the loop"
+claude --dangerously-skip-permissions --name "$AgentName" --append-system-prompt $sysPrompt $initMsg

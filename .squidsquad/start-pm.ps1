@@ -1,4 +1,4 @@
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+﻿[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $repoRoot = git rev-parse --show-toplevel
 Set-Location $repoRoot
 
@@ -46,4 +46,6 @@ if (Test-Path .squidsquad) {
 Remove-Item .squidsquad/pm/current-state -ErrorAction SilentlyContinue
 "idle|Initializing..." | Set-Content .squidsquad/pm/current-state -NoNewline
 
-claude --dangerously-skip-permissions --session-name "$AgentName" --append-system-prompt "SQUIDSQUAD_ROLE=pm" "PM - start the loop"
+$sysPrompt = "SQUIDSQUAD_ROLE=pm"
+$initMsg = "PM - start the loop"
+claude --dangerously-skip-permissions --name "$AgentName" --append-system-prompt $sysPrompt $initMsg

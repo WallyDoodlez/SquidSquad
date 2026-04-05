@@ -46,4 +46,6 @@ if (Test-Path .squidsquad) {
 Remove-Item .squidsquad/dm/current-state -ErrorAction SilentlyContinue
 "idle|Initializing..." | Set-Content .squidsquad/dm/current-state -NoNewline
 
-claude --dangerously-skip-permissions --session-name "$AgentName" --append-system-prompt "SQUIDSQUAD_ROLE=dm" "start the loop"
+$sysPrompt = "SQUIDSQUAD_ROLE=dm"
+$initMsg = "start the loop"
+claude --dangerously-skip-permissions --name "$AgentName" --append-system-prompt $sysPrompt $initMsg

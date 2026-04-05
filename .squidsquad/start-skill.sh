@@ -40,4 +40,4 @@ echo "skill" > .squidsquad/.active-role
 rm -f .squidsquad/skill/current-state
 echo "idle|Initializing..." > .squidsquad/skill/current-state
 
-claude --dangerously-skip-permissions --session-name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE=skill" "Skill dev - start the loop"
+claude --dangerously-skip-permissions --name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE=skill" "Skill dev - start the loop"
