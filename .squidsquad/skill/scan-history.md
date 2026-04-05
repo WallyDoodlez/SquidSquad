@@ -47,3 +47,9 @@
 - **Files scanned**: references/sub-skills/qa-specific/verification.md, references/sub-skills/designer-specific/design-session.md, references/sub-skills/designer-specific/design-tools.md
 - **Findings**: #61 (design-session.md references features/INDEX.md instead of GitHub Issues)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-05 06:30
+
+- **Files scanned**: references/sub-skills/dm-specific/delivery-packaging.md, references/sub-skills/dm-specific/version-bumps.md, references/sub-skills/pm-specific/github-issues.md
+- **Findings**: #63 (delivery-packaging.md references features/INDEX.md instead of GitHub Issues)
+- **Items rejected by human**: none yet
