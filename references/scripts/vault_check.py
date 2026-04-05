@@ -1,0 +1,224 @@
+#!/usr/bin/env python3
+"""SquidSquad vault validation — field checks, wikilinks, structure.
+
+Single source of truth for vault integrity checks.
+
+Usage:
+    python scripts/vault_check.py validate           # Full vault validation
+    python scripts/vault_check.py check-frontmatter   # Validate frontmatter in galaxy notes
+    python scripts/vault_check.py check-wikilinks     # Find broken wikilinks
+    python scripts/vault_check.py check-structure      # Validate PARAG directory structure
+    python scripts/vault_check.py list-orphans         # Notes not linked from anywhere
+    python scripts/vault_check.py --help
+"""
+
+import re
+import sys
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent.parent
+VAULT_DIR = REPO_ROOT / ".squidsquad" / "vault"
+
+PARAG_DIRS = ["projects", "areas", "resources", "archives", "galaxy"]
+VALID_GALAXY_PREFIXES = ("decision-", "pattern-", "learning-", "style-")
+REQUIRED_FM_FIELDS = {"type", "tags", "created", "updated", "owner", "status"}
+VALID_CONFIDENCE = {"high", "medium", "low"}
+VALID_SOURCES = {"conversation", "code", "review", "observation", "research"}
+
+
+def _parse_frontmatter(text):
+    """Parse YAML frontmatter from markdown text. Returns dict or None."""
+    if not text.startswith("---"):
+        return None
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return None
+    # Simple YAML-like parser (no pyyaml dependency)
+    fm = {}
+    for line in parts[1].strip().splitlines():
+        if ":" in line:
+            key, _, val = line.partition(":")
+            fm[key.strip()] = val.strip()
+    return fm
+
+
+def _get_all_notes():
+    """Get all .md files in the vault (excluding .gitkeep)."""
+    notes = {}
+    for md in VAULT_DIR.rglob("*.md"):
+        if md.name == ".gitkeep":
+            continue
+        rel = md.relative_to(VAULT_DIR).as_posix()
+        notes[rel] = md
+    return notes
+
+
+def _extract_wikilinks(text):
+    """Extract all [[wikilink]] references from text body."""
+    return re.findall(r'\[\[([^\]]+)\]\]', text)
+
+
+def check_structure():
+    """Validate PARAG directory structure."""
+    issues = []
+    if not VAULT_DIR.exists():
+        issues.append("Vault directory missing: .squidsquad/vault/")
+        print(f"FAIL: {issues[0]}")
+        return issues
+
+    for dirname in PARAG_DIRS:
+        path = VAULT_DIR / dirname
+        if not path.exists():
+            issues.append(f"Missing PARAG directory: vault/{dirname}/")
+
+    briefing = VAULT_DIR / "BRIEFING.md"
+    if not briefing.exists():
+        issues.append("Missing BRIEFING.md")
+
+    if issues:
+        for i in issues:
+            print(f"FAIL: {i}")
+    else:
+        print("OK: Vault structure valid")
+    return issues
+
+
+def check_frontmatter():
+    """Validate frontmatter in galaxy notes."""
+    issues = []
+    galaxy_dir = VAULT_DIR / "galaxy"
+    if not galaxy_dir.exists():
+        print("SKIP: No galaxy directory")
+        return issues
+
+    for note in galaxy_dir.glob("*.md"):
+        if note.name == ".gitkeep":
+            continue
+
+        # Check prefix
+        if not any(note.name.startswith(p) for p in VALID_GALAXY_PREFIXES):
+            issues.append(f"{note.name}: invalid prefix (expected: {VALID_GALAXY_PREFIXES})")
+
+        text = note.read_text(encoding="utf-8")
+        fm = _parse_frontmatter(text)
+        if fm is None:
+            issues.append(f"{note.name}: missing frontmatter")
+            continue
+
+        # Check required fields
+        missing = REQUIRED_FM_FIELDS - set(fm.keys())
+        if missing:
+            issues.append(f"{note.name}: missing fields: {missing}")
+
+        # Check confidence
+        if "confidence" in fm and fm["confidence"] not in VALID_CONFIDENCE:
+            issues.append(f"{note.name}: invalid confidence '{fm['confidence']}'")
+
+        # Check source
+        if "source" in fm and fm["source"] not in VALID_SOURCES:
+            issues.append(f"{note.name}: invalid source '{fm['source']}'")
+
+    if issues:
+        for i in issues:
+            print(f"FAIL: {i}")
+    else:
+        print("OK: All galaxy note frontmatter valid")
+    return issues
+
+
+def check_wikilinks():
+    """Find broken wikilinks (references to non-existent notes)."""
+    issues = []
+    all_notes = _get_all_notes()
+    # Build a set of note names (without path or extension)
+    note_names = set()
+    for rel_path in all_notes:
+        name = Path(rel_path).stem
+        note_names.add(name)
+
+    for rel_path, note_path in all_notes.items():
+        text = note_path.read_text(encoding="utf-8")
+        links = _extract_wikilinks(text)
+        for link in links:
+            if link not in note_names:
+                issues.append(f"{rel_path}: broken link [[{link}]]")
+
+    if issues:
+        for i in issues:
+            print(f"WARN: {i}")
+    else:
+        print("OK: All wikilinks resolve")
+    return issues
+
+
+def list_orphans():
+    """Find notes that no other note links to."""
+    all_notes = _get_all_notes()
+    all_links = set()
+
+    for note_path in all_notes.values():
+        text = note_path.read_text(encoding="utf-8")
+        for link in _extract_wikilinks(text):
+            all_links.add(link)
+
+    orphans = []
+    for rel_path in all_notes:
+        name = Path(rel_path).stem
+        # Skip BRIEFING.md and top-level files
+        if "/" not in rel_path:
+            continue
+        if name not in all_links:
+            orphans.append(rel_path)
+
+    if orphans:
+        for o in orphans:
+            print(f"ORPHAN: {o}")
+    else:
+        print("OK: No orphan notes")
+    return orphans
+
+
+def validate():
+    """Run all vault checks."""
+    all_issues = []
+    all_issues.extend(check_structure())
+    all_issues.extend(check_frontmatter())
+    all_issues.extend(check_wikilinks())
+    orphans = list_orphans()
+
+    total = len(all_issues)
+    if total:
+        print(f"\n{total} issue(s) found")
+        return False
+    print("\nVault validation passed")
+    return True
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] == "--help":
+        print(__doc__)
+        sys.exit(0)
+
+    cmd = args[0]
+    if cmd == "validate":
+        sys.exit(0 if validate() else 1)
+    elif cmd == "check-structure":
+        issues = check_structure()
+        sys.exit(1 if issues else 0)
+    elif cmd == "check-frontmatter":
+        issues = check_frontmatter()
+        sys.exit(1 if issues else 0)
+    elif cmd == "check-wikilinks":
+        issues = check_wikilinks()
+        sys.exit(1 if issues else 0)
+    elif cmd == "list-orphans":
+        list_orphans()
+    else:
+        print(f"Unknown command: {cmd}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
