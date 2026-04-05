@@ -207,7 +207,7 @@ def transition(number, from_status, to_status):
     legal = LEGAL_TRANSITIONS.get(from_label, set())
     if to_label not in legal:
         print(
-            f"ERROR: Illegal transition {from_label} → {to_label}. "
+            f"ERROR: Illegal transition {from_label} -> {to_label}. "
             f"Legal from {from_label}: {sorted(legal)}",
             file=sys.stderr,
         )
@@ -219,7 +219,7 @@ def transition(number, from_status, to_status):
     if to_label == "status:shipped":
         _run(f"gh issue close {number}")
 
-    print(f"#{number}: {from_label} → {to_label}")
+    print(f"#{number}: {from_label} -> {to_label}")
     return True
 
 
