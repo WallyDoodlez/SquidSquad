@@ -306,6 +306,7 @@ Collect these fields:
 | 1 | **Project name** | Used in config.md and commit messages | Name of the current git repo directory | Must be non-empty |
 | 2 | **Repository URL** | e.g. `github.com/alice/myapp` | Infer from `git remote get-url origin` if available | Must be non-empty |
 | 3 | **Dev agents** | Comma-separated role names, e.g. `fe, be` / `be` / `api, worker` | `fe, be` | At least one role required; each name must be a simple lowercase identifier |
+| 3b | **Agent aliases** | Custom name per agent for session naming and identification | Bare role name (e.g. `skill`, `pm`) | Optional; stored in `## Aliases` section of config.md |
 | 4 | **Framework / language** | One per dev agent, e.g. BE: FastAPI, FE: Next.js | _(none)_ | Optional per agent |
 | 5 | **Test command** | One per dev agent, e.g. `cd backend && pytest tests/` | _(none)_ | Optional per agent |
 | 6 | **E2E test command** | Full-stack test command run by QA each cycle | _(none)_ | Optional — if none, QA skips the test step |

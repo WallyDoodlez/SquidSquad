@@ -38,11 +38,11 @@ FIELD_MAP = {
     "improvement-scanning": ("Improvement Scanning", "Enabled"),
     "ship-threshold": ("Auto Versioning", "Ship Threshold"),
     "shipped-since-bump": ("Auto Versioning", "Shipped Since Last Bump"),
-    "alias-skill": ("Agent Aliases", "skill"),
-    "alias-pm": ("Agent Aliases", "pm"),
-    "alias-dm": ("Agent Aliases", "dm"),
-    "alias-designer": ("Agent Aliases", "designer"),
-    "alias-qa": ("Agent Aliases", "qa"),
+    "alias-skill": ("Aliases", "skill"),
+    "alias-pm": ("Aliases", "pm"),
+    "alias-dm": ("Aliases", "dm"),
+    "alias-designer": ("Aliases", "designer"),
+    "alias-qa": ("Aliases", "qa"),
 }
 
 
@@ -140,7 +140,7 @@ def set_field(field, value):
 
 
 def get_alias(role):
-    """Get the alias for a role. Falls back to {project-name}-{role} if not set."""
+    """Get the alias for a role. Falls back to bare role name if not set."""
     text = _read_config()
     alias_key = f"alias-{role}"
     entry = FIELD_MAP.get(alias_key)
@@ -149,9 +149,8 @@ def get_alias(role):
         val = _parse_field(text, section, field_name)
         if val:
             return val
-    # Fallback: project-name + role
-    project = _parse_field(text, "Project", "Name") or "project"
-    return f"{project.lower()}-{role}"
+    # Fallback: bare role name
+    return role
 
 
 def dump_all():

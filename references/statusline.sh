@@ -92,8 +92,11 @@ if [ -n "$BEHIND" ] && [ "$BEHIND" -gt 0 ]; then
   GIT_SYNC="${GIT_SYNC}↓${BEHIND}"
 fi
 
-# Role label
-if [ "$ROLE" = "pm" ]; then
+# Role label — use alias from config if available
+ALIAS=$(python references/scripts/config.py alias "$ROLE" 2>/dev/null) || true
+if [ -n "$ALIAS" ] && [ "$ALIAS" != "$ROLE" ]; then
+  ROLE_LABEL="$ALIAS"
+elif [ "$ROLE" = "pm" ]; then
   ROLE_LABEL="PM"
 elif [ "$ROLE" = "qa" ]; then
   ROLE_LABEL="QA"

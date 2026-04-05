@@ -53,10 +53,23 @@ def add_all():
     print("Staged all changes")
 
 
+def _get_alias(role):
+    """Get agent alias for Co-Authored-By trailer."""
+    try:
+        from config import get_alias
+        return get_alias(role)
+    except Exception:
+        return role
+
+
 def commit(role, message):
-    """Commit with role prefix."""
-    full_msg = f"{role}: {message}"
-    result = _run(f'git commit -m "{full_msg}"', check=False)
+    """Commit with role prefix and Co-Authored-By trailer."""
+    alias = _get_alias(role)
+    full_msg = f"{role}: {message}\n\nCo-Authored-By: {alias} <noreply@squidsquad>"
+    result = subprocess.run(
+        ["git", "commit", "-m", full_msg],
+        capture_output=True, text=True, check=False, cwd=str(REPO_ROOT),
+    )
     if result.returncode != 0:
         if "nothing to commit" in result.stdout + result.stderr:
             print("Nothing to commit")
