@@ -32,7 +32,7 @@ SquidSquad always has a **PM** agent. When dev or designer agents are present, a
 
 | Agent | Loop | Mode |
 |-------|------|------|
-| **[role] Lead** (one per dev role) | Fix bugs → implement features → run tests → push | Autonomous (`--enable-auto-mode`) |
+| **[role] Lead** (one per dev role) | Fix bugs → implement features → run tests → push | Autonomous (`--dangerously-skip-permissions`) |
 | **Designer** (optional) | Review design requests → interactive design sessions with human → produce specs → hand off to dev | Autonomous with interactive design sessions |
 | **QA** (auto-added when dev/designer present) | E2E tests → verify bugs → test features → health checks → push | Autonomous |
 | **DM** (Delivery Manager) | Delivery packaging → CHANGELOG → version bumps → docs | Autonomous |
@@ -298,7 +298,7 @@ bash .squidsquad/start-pm.sh
 .\.squidsquad\start-pm.ps1
 ```
 
-All agents run interactively with `--enable-auto-mode`. The boot script injects the role via `--append-system-prompt "SQUIDSQUAD_ROLE=<role>"` — agents read this from their system prompt, load their role-specific instructions from `.squidsquad/<role>/CLAUDE.md`, and start their Ralph Loop immediately.
+All agents run with `--dangerously-skip-permissions`. The boot script injects the role via `--append-system-prompt "SQUIDSQUAD_ROLE=<role>"` — agents read this from their system prompt, load their role-specific instructions from `.squidsquad/<role>/CLAUDE.md`, and start their Ralph Loop immediately.
 
 ### 4. Interact Via PM
 
@@ -327,7 +327,7 @@ The agent that discovers the problem files it with complete context. The receivi
 ## Requirements
 
 - [Claude Code CLI](https://claude.ai/code) — agents run as interactive Claude Code sessions
-- `--enable-auto-mode` — agents need permission to read/write files and run tests without prompting
+- `--dangerously-skip-permissions` — agents need to read/write files and run tests without prompting
 - A GitHub repository — SquidSquad uses GitHub Issues as its tracker
 - `gh` CLI — authenticated and with Issues permissions (`gh auth status`)
 - Test commands that can be run from the repo root (optional per agent)

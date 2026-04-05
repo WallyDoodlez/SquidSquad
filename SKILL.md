@@ -1104,7 +1104,7 @@ Create or update `.claude/settings.json` in the project root to add a `SessionSt
 }
 ```
 
-> **Why these permissions?** Dev agents run with `--enable-auto-mode` but still need explicit allow rules for writing tracker files and running git commands without being prompted mid-cycle. Without these, the agent will pause and ask for permission on every file write.
+> **Why these permissions?** Dev agents run with `--dangerously-skip-permissions` but still need explicit allow rules for writing tracker files and running git commands without being prompted mid-cycle. Without these, the agent will pause and ask for permission on every file write.
 
 **If `.claude/settings.json` already exists**, merge carefully:
 
