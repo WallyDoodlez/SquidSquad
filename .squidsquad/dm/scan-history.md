@@ -63,3 +63,28 @@
 - **Findings**:
   - #62 — Vault code-conventions.md still references pre-GitHub-Issues tracker format
 - **Items rejected by human**: (none yet)
+
+## Scan — 2026-04-04 23:10
+
+- **Files scanned**: .squidsquad/vault/galaxy/learning-atomic-migration-strategy.md (full file), .squidsquad/vault/BRIEFING.md (freshness check after #53 fix)
+- **Findings**: none
+- **Items rejected by human**: (none yet)
+
+## Scan — 2026-04-05 01:10
+
+- **Files scanned**: README.md (Cross-Team Bug Filing table — verify #50 fix held), recent git commits (label fix scope check)
+- **Findings**: none
+- **Items rejected by human**: (none yet)
+
+## Scan — 2026-04-05 03:10
+
+- **Files scanned**: GitHub Issues (open issue audit — status vs role alignment), #2 feature status check
+- **Findings**: none (observed process gap: 5 approved DM bugs from improvement scans won't auto-triage because DM queries status:open not status:approved — but this is a template issue, not a doc issue)
+- **Items rejected by human**: (none yet)
+
+## Scan — 2026-04-05 05:10
+
+- **Files scanned**: .squidsquad/config.md (Test Commands section), tests/ directory (new Python test framework)
+- **Findings**:
+  - #93 — config.md test commands still say 'no automated tests' but tests/ directory now exists
+- **Items rejected by human**: (none yet)
