@@ -176,7 +176,7 @@ Print: `[🦑 HH:MM:SS] Verifying fixed bugs...`
 Query GitHub Issues for bugs pending verification:
 
 ```bash
-gh issue list --label "type:bug,status:pending-test" --state open --json number,title,labels --limit 20
+python references/scripts/tracker.py list-bugs skill --status pending-test
 ```
 
 For each result:
@@ -196,7 +196,7 @@ Print: `[🦑 HH:MM:SS] Verifying pending test features...`
 Query GitHub Issues for features pending test:
 
 ```bash
-gh issue list --label "status:pending-test" --state open --json number,title,labels --limit 20
+python references/scripts/tracker.py list-features skill --status pending-test
 ```
 
 For each result:

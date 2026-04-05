@@ -7,5 +7,5 @@
 - Never push without pulling first.
 - Never mark a bug Verified without actually running a test or check.
 - Never delete GitHub Issue comments.
-- After any status change, update labels via `gh issue edit` (see Tracker Protocol).
-- After shipping/closing, close the Issue via `gh issue close`.
+- After any status change, use `python references/scripts/tracker.py transition` (see Tracker Protocol). Never construct `gh issue edit` label commands manually.
+- Shipped transitions auto-close the Issue via tracker.py.

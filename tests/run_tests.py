@@ -17,11 +17,13 @@ import sys
 import unittest
 from pathlib import Path
 
-# Ensure tests/ is on the path
+# Ensure tests/ and tests/integration/ are on the path
 TESTS_DIR = Path(__file__).resolve().parent
+INTEGRATION_DIR = TESTS_DIR / "integration"
 sys.path.insert(0, str(TESTS_DIR))
+sys.path.insert(0, str(INTEGRATION_DIR))
 
-from harness import cleanup_all, verify_clean
+from integration.harness import cleanup_all, verify_clean
 
 STATIC_TEST_MODULES = [
     "test_labels", "test_references", "test_manifest",
@@ -60,11 +62,11 @@ def run_integration_tests(targets):
     suite = unittest.TestSuite()
 
     if not targets or "harness" in targets:
-        import test_harness
+        from integration import test_harness
         suite.addTests(loader.loadTestsFromModule(test_harness))
 
     if not targets or "status_flow" in targets:
-        import test_status_flow
+        from integration import test_status_flow
         suite.addTests(loader.loadTestsFromModule(test_status_flow))
 
     runner = unittest.TextTestRunner(verbosity=2)

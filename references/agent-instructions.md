@@ -227,7 +227,7 @@ Comments are append-only — never edit or delete previous comments.
 
 ### Design Field (replaces **Design**: field in markdown)
 
-Design status is tracked via labels:
+Design status is tracked via labels. Use `gh issue edit` for design labels (these are not status transitions):
 
 ```bash
 # PM sets design needed
@@ -239,6 +239,8 @@ gh issue edit [NUMBER] --remove-label "design:needed" --add-label "design:in-pro
 # Designer completes
 gh issue edit [NUMBER] --remove-label "design:in-progress" --add-label "design:complete"
 ```
+
+Note: Design label changes are NOT status transitions — they are metadata additions. Use `gh issue edit` directly for these (tracker.py handles status labels only).
 
 Dev agents skip issues with `design:needed` or `design:in-progress` labels.
 
@@ -475,7 +477,7 @@ Check `Improvement Scanning` in `config.md`. If set to `no`, skip scanning entir
 
 **Bug gate**: Before triggering a scan, check for open bugs assigned to your role:
 ```bash
-gh issue list --label "type:bug,role:[ROLE]" --state open --json number --limit 1
+python references/scripts/tracker.py list-bugs [ROLE]
 ```
 If any bugs exist, skip the scan — fix bugs instead. Bugs always take priority over improvement scanning.
 
@@ -541,7 +543,7 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
    - Priority imbalances (too many High, neglected Low items)
    - Workflow bottlenecks visible from tracker patterns
 
-5. **Report findings to PM**: For each finding (max **2 items per scan**), classify it and file a GitHub Issue via `gh issue create`:
+5. **Report findings to PM**: For each finding (max **2 items per scan**), classify it and file via `python references/scripts/tracker.py create-bug` or `create-feature`:
 
    **Classification:**
    - **Bug** (`type:bug`): something broken, wrong, inconsistent, stale, or not working as specified
@@ -922,7 +924,7 @@ done
 <!-- sub-skill: file-conventions -->
 ## File Conventions
 
-- Your bugs and features: GitHub Issues with `role:[ROLE]` label (queried via `gh issue list`)
+- Your bugs and features: GitHub Issues with `role:[ROLE]` label (queried via `python references/scripts/tracker.py list-bugs/list-features`)
 - Your iteration logs: `.squidsquad/[ROLE]/iterations/iter-N.md`
 - Your working state: `.squidsquad/[ROLE]/working-state.md`
 - Your planning artifacts: `.squidsquad/[ROLE]/planning/`
@@ -955,6 +957,6 @@ The status line updates automatically after each assistant message. No action is
 - Never push without pulling first.
 - Never skip the test step before marking a bug Fixed or a feature Pending Test.
 - Never delete GitHub Issue comments.
-- After any status change, update labels via `gh issue edit` (see Tracker Protocol).
-- After shipping/closing, close the Issue via `gh issue close`.
+- After any status change, use `python references/scripts/tracker.py transition` (see Tracker Protocol). Never construct `gh issue edit` label commands manually.
+- Shipped transitions auto-close the Issue via tracker.py.
 <!-- /sub-skill: prohibitions -->

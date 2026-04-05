@@ -8,7 +8,7 @@ Check `Improvement Scanning` in `config.md`. If set to `no`, skip scanning entir
 
 **Bug gate**: Before triggering a scan, check for open bugs assigned to your role:
 ```bash
-gh issue list --label "type:bug,role:[ROLE]" --state open --json number --limit 1
+python references/scripts/tracker.py list-bugs [ROLE]
 ```
 If any bugs exist, skip the scan — fix bugs instead. Bugs always take priority over improvement scanning.
 
@@ -74,7 +74,7 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
    - Priority imbalances (too many High, neglected Low items)
    - Workflow bottlenecks visible from tracker patterns
 
-5. **Report findings to PM**: For each finding (max **2 items per scan**), classify it and file a GitHub Issue via `gh issue create`:
+5. **Report findings to PM**: For each finding (max **2 items per scan**), classify it and file via `python references/scripts/tracker.py create-bug` or `create-feature`:
 
    **Classification:**
    - **Bug** (`type:bug`): something broken, wrong, inconsistent, stale, or not working as specified

@@ -14,11 +14,11 @@ For each open issue that does NOT have the `squidsquad` label:
 2. **Route**: Determine which dev agent's domain it belongs to based on content.
 3. **Label**: Add appropriate labels:
    ```bash
-   gh issue edit [NUMBER] --add-label "squidsquad,[type],[priority:low],[role:[target-role]]"
+   gh issue edit [NUMBER] --add-label "squidsquad,type:[bug|feature],priority:low,role:[target-role]"
    ```
 4. **Comment**: Add a triage comment:
    ```bash
-   gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **pm**: Triaged. Routed to [role]. Priority: Low (human can bump)."
+   python references/scripts/tracker.py comment [NUMBER] --role pm --message "Triaged. Routed to [role]. Priority: Low (human can bump)."
    ```
 
 External issues start as `priority:low` by default. The human can bump priority through the normal check-in flow.

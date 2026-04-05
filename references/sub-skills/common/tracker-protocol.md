@@ -149,7 +149,7 @@ Comments are append-only — never edit or delete previous comments.
 
 ### Design Field (replaces **Design**: field in markdown)
 
-Design status is tracked via labels:
+Design status is tracked via labels. Use `gh issue edit` for design labels (these are not status transitions):
 
 ```bash
 # PM sets design needed
@@ -161,6 +161,8 @@ gh issue edit [NUMBER] --remove-label "design:needed" --add-label "design:in-pro
 # Designer completes
 gh issue edit [NUMBER] --remove-label "design:in-progress" --add-label "design:complete"
 ```
+
+Note: Design label changes are NOT status transitions — they are metadata additions. Use `gh issue edit` directly for these (tracker.py handles status labels only).
 
 Dev agents skip issues with `design:needed` or `design:in-progress` labels.
 

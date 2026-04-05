@@ -39,8 +39,10 @@ Print: `[🦑 HH:MM:SS] Verifying fixed bugs...`
 Query all bugs pending test:
 
 ```bash
-gh issue list --label "type:bug,status:pending-test,squidsquad" --json number,title,labels,body --limit 50
+python references/scripts/tracker.py list-bugs skill --status pending-test
 ```
+
+(Repeat for each dev role.)
 
 For each bug:
 

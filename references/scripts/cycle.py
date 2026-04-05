@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""SquidSquad cycle operations — timestamps, quiet detection, counters, iteration logs.
+"""SquidSquad cycle operations -- timestamps, quiet detection, counters, iteration logs.
 
 Single source of truth for cycle management operations.
 
 Usage:
     python scripts/cycle.py timestamp              # YYYY-MM-DD HH:MM
     python scripts/cycle.py timestamp-short        # HH:MM:SS
-    python scripts/cycle.py step-marker <message>   # [🦑 HH:MM:SS] message
+    python scripts/cycle.py step-marker <message>   # Print step marker
     python scripts/cycle.py status-bar <role> <phase> <desc>  # Write current-state
     python scripts/cycle.py get-counter <role>      # Read quiet cycle counter
     python scripts/cycle.py inc-counter <role>      # Increment quiet cycle counter
@@ -17,6 +17,7 @@ Usage:
     python scripts/cycle.py --help
 """
 
+import io
 import json
 import re
 import subprocess
@@ -178,6 +179,9 @@ def _parse_args():
 
 
 def main():
+    # Ensure UTF-8 output on Windows (cp1252 can't handle emoji)
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
     cmd, pos, opts = _parse_args()
 
     if cmd == "timestamp":
