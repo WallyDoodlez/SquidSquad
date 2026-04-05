@@ -17,7 +17,7 @@ ISSUE_PREFIX = "[TEST] "
 BRANCH_PREFIX = "test/"
 TEST_LABEL = "squidsquad-test"
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def _run(cmd: str, check: bool = True) -> subprocess.CompletedProcess:
