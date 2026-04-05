@@ -53,7 +53,7 @@ At the end of each cycle, print:
 [🦑] ---- cycle N complete at HH:MM:SS ----
 ```
 
-**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line.
+**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line. **All timestamps** (`HH:MM:SS`, `YYYY-MM-DD HH:MM`) must come from the `date` command — see Timestamps in Tracker Protocol. Never guess or fabricate times.
 
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/pm/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
@@ -96,7 +96,7 @@ Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `i
 
 **Planning phase suppression**: If `working-state.md` contains a `**Phase**:` line with an active planning phase (e.g., `**Phase**: researching #XXX`, `**Phase**: discussing #XXX`, `**Phase**: test-planning #XXX`), this cycle is **suppressed**:
 
-1. Print: `[🦑] ---- cycle N (suppressed — active planning phase) ----`
+1. Print: `[🦑 HH:MM:SS] ---- cycle N (suppressed — active planning phase) ----`
 2. Write status bar state: `echo "pulling|Suppressed — planning active" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state`
 3. Run `git pull --rebase` (silent — agents need each other's commits).
 4. Run the **Agent Health Check** (Step 7) — stalled agent detection must not stop during planning.

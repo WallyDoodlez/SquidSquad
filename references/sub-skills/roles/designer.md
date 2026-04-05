@@ -54,7 +54,7 @@ At the end of each cycle, print:
 [🦑] ---- cycle N complete at HH:MM:SS ----
 ```
 
-**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions also get markers. Keep each marker to one concise line.
+**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions also get markers. Keep each marker to one concise line. **All timestamps** (`HH:MM:SS`, `YYYY-MM-DD HH:MM`) must come from the `date` command — see Timestamps in Tracker Protocol. Never guess or fabricate times.
 
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/designer/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
@@ -93,7 +93,7 @@ Read `.squidsquad/designer/working-state.md`. If it contains an active task (sta
 
 **Planning phase suppression**: If `working-state.md` contains a `**Phase**:` line with an active design phase (e.g., `**Phase**: designing #XXX`), this cycle is **suppressed**:
 
-1. Print: `[🦑] ---- cycle N (suppressed — active design session) ----`
+1. Print: `[🦑 HH:MM:SS] ---- cycle N (suppressed — active design session) ----`
 2. Run `git pull --rebase` (silent — agents need each other's commits).
 3. Write `idle|` to `current-state`.
 4. Print the cycle-complete marker. Skip all other steps.

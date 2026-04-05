@@ -297,7 +297,7 @@ At the end of each cycle, print:
 [🦑] ---- cycle N complete at HH:MM:SS ----
 ```
 
-**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions (filing bugs, committing) also get markers. Keep each marker to one concise line.
+**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions (filing bugs, committing) also get markers. Keep each marker to one concise line. **All timestamps** (`HH:MM:SS`, `YYYY-MM-DD HH:MM`) must come from the `date` command — see Timestamps in Tracker Protocol. Never guess or fabricate times.
 
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/[ROLE]/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
@@ -1240,7 +1240,7 @@ At the end of each cycle, print:
 [🦑] ---- cycle N complete at HH:MM:SS ----
 ```
 
-**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line.
+**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line. **All timestamps** (`HH:MM:SS`, `YYYY-MM-DD HH:MM`) must come from the `date` command — see Timestamps in Tracker Protocol. Never guess or fabricate times.
 
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/pm/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
@@ -1293,7 +1293,7 @@ Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `i
 
 **Planning phase suppression**: If `working-state.md` contains a `**Phase**:` line with an active planning phase (e.g., `**Phase**: researching #XXX`, `**Phase**: discussing #XXX`, `**Phase**: test-planning #XXX`), this cycle is **suppressed**:
 
-1. Print: `[🦑] ---- cycle N (suppressed — active planning phase) ----`
+1. Print: `[🦑 HH:MM:SS] ---- cycle N (suppressed — active planning phase) ----`
 2. Write status bar state: `echo "pulling|Suppressed — planning active" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state`
 3. Run `git pull --rebase` (silent — agents need each other's commits).
 4. Run the **Agent Health Check** (Step 7) — stalled agent detection must not stop during planning.
@@ -2585,7 +2585,7 @@ At the end of each cycle, print:
 [🦑] ---- cycle N complete at HH:MM:SS ----
 ```
 
-**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line.
+**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions (filing bugs, verifying fixes) also get markers. Keep each marker to one concise line. **All timestamps** (`HH:MM:SS`, `YYYY-MM-DD HH:MM`) must come from the `date` command — see Timestamps in Tracker Protocol. Never guess or fabricate times.
 
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/pm/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
@@ -2634,7 +2634,7 @@ Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `i
 
 **Planning phase suppression**: If `working-state.md` contains a `**Phase**:` line with an active planning phase (e.g., `**Phase**: researching #XXX`, `**Phase**: discussing #XXX`, `**Phase**: test-planning #XXX`), this cycle is **suppressed**:
 
-1. Print: `[🦑] ---- cycle N (suppressed — active planning phase) ----`
+1. Print: `[🦑 HH:MM:SS] ---- cycle N (suppressed — active planning phase) ----`
 2. Write status bar state: `echo "pulling|Suppressed — planning active" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state`
 3. Run `git pull --rebase` (silent — agents need each other's commits).
 4. Run the **Agent Health Check** (Step 7) — stalled agent detection must not stop during planning.
@@ -3821,7 +3821,7 @@ At the end of each cycle, print:
 [🦑] ---- cycle N complete at HH:MM:SS ----
 ```
 
-**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions (verifying fixes, filing bugs) also get markers. Keep each marker to one concise line.
+**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions (verifying fixes, filing bugs) also get markers. Keep each marker to one concise line. **All timestamps** (`HH:MM:SS`, `YYYY-MM-DD HH:MM`) must come from the `date` command — see Timestamps in Tracker Protocol. Never guess or fabricate times.
 
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/qa/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
@@ -4752,7 +4752,7 @@ At the end of each cycle, print:
 [🦑] ---- cycle N complete at HH:MM:SS ----
 ```
 
-**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions also get markers. Keep each marker to one concise line.
+**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions also get markers. Keep each marker to one concise line. **All timestamps** (`HH:MM:SS`, `YYYY-MM-DD HH:MM`) must come from the `date` command — see Timestamps in Tracker Protocol. Never guess or fabricate times.
 
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/designer/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
@@ -4801,7 +4801,7 @@ Read `.squidsquad/designer/working-state.md`. If it contains an active task (sta
 
 **Planning phase suppression**: If `working-state.md` contains a `**Phase**:` line with an active design phase (e.g., `**Phase**: designing #XXX`), this cycle is **suppressed**:
 
-1. Print: `[🦑] ---- cycle N (suppressed — active design session) ----`
+1. Print: `[🦑 HH:MM:SS] ---- cycle N (suppressed — active design session) ----`
 2. Run `git pull --rebase` (silent — agents need each other's commits).
 3. Write `idle|` to `current-state`.
 4. Print the cycle-complete marker. Skip all other steps.
@@ -5736,7 +5736,7 @@ At the end of each cycle, print:
 [🦑] ---- cycle N complete at HH:MM:SS ----
 ```
 
-**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions also get markers. Keep each marker to one concise line.
+**Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions also get markers. Keep each marker to one concise line. **All timestamps** (`HH:MM:SS`, `YYYY-MM-DD HH:MM`) must come from the `date` command — see Timestamps in Tracker Protocol. Never guess or fabricate times.
 
 **Status bar state**: At each step marker, also write your current state to `.squidsquad/dm/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
@@ -5834,7 +5834,11 @@ For each bug that has `status:open`:
 
 Print: `[🦑 HH:MM:SS] Scanning for Pending Ship items...`
 
-Read each dev agent's `features/INDEX.md` (listed in `config.md` under `Dev Agents`). For each feature with status `Pending Ship`, read its individual file (note: tracker uses markdown bold formatting — search for `**Status**: Pending Ship`):
+Query GitHub Issues for items pending delivery:
+
+```bash
+gh issue list --label "status:pending-ship" --state open --json number,title,labels --limit 20
+```
 
 Pick the highest-priority item first. When picking up an item, print: `[🦑 HH:MM:SS] Delivering #[NUMBER]...`
 
@@ -5846,7 +5850,11 @@ Pick the highest-priority item first. When picking up an item, print: `[🦑 HH:
 Check the feature's Discussion entries for a `delivery: skip` tag (set by PM when marking Pending Ship).
 
 If found:
-- Mark the feature `Shipped` immediately.
+- Transition the issue to Shipped:
+  ```bash
+  gh issue edit [NUMBER] --remove-label "status:pending-ship" --add-label "status:shipped"
+  gh issue close [NUMBER]
+  ```
 - Append a Discussion entry:
   ```
   > [YYYY-MM-DD HH:MM] **dm**: No delivery work needed (delivery: skip). Status → Shipped.
@@ -5865,7 +5873,11 @@ For each Pending Ship feature that is NOT skipped:
    > [YYYY-MM-DD HH:MM] **dm**: CHANGELOG entry prepared: "#[NUMBER] — [Title]". Status → Shipped.
    ```
 3. **Check for config/migration changes**: If the feature introduces new config values, settings, or requires migration steps for existing installs, document them in the Discussion and ensure they are reflected in the upgrade flow.
-4. Mark the feature `Shipped`.
+4. Transition the issue to Shipped:
+   ```bash
+   gh issue edit [NUMBER] --remove-label "status:pending-ship" --add-label "status:shipped"
+   gh issue close [NUMBER]
+   ```
 5. Append a Discussion entry:
    ```
    > [YYYY-MM-DD HH:MM] **dm**: Delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped.

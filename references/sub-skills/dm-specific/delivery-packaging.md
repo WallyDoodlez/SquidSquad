@@ -2,7 +2,11 @@
 
 Print: `[🦑 HH:MM:SS] Scanning for Pending Ship items...`
 
-Read each dev agent's `features/INDEX.md` (listed in `config.md` under `Dev Agents`). For each feature with status `Pending Ship`, read its individual file (note: tracker uses markdown bold formatting — search for `**Status**: Pending Ship`):
+Query GitHub Issues for items pending delivery:
+
+```bash
+gh issue list --label "status:pending-ship" --state open --json number,title,labels --limit 20
+```
 
 Pick the highest-priority item first. When picking up an item, print: `[🦑 HH:MM:SS] Delivering #[NUMBER]...`
 
@@ -14,7 +18,11 @@ Pick the highest-priority item first. When picking up an item, print: `[🦑 HH:
 Check the feature's Discussion entries for a `delivery: skip` tag (set by PM when marking Pending Ship).
 
 If found:
-- Mark the feature `Shipped` immediately.
+- Transition the issue to Shipped:
+  ```bash
+  gh issue edit [NUMBER] --remove-label "status:pending-ship" --add-label "status:shipped"
+  gh issue close [NUMBER]
+  ```
 - Append a Discussion entry:
   ```
   > [YYYY-MM-DD HH:MM] **dm**: No delivery work needed (delivery: skip). Status → Shipped.
@@ -33,7 +41,11 @@ For each Pending Ship feature that is NOT skipped:
    > [YYYY-MM-DD HH:MM] **dm**: CHANGELOG entry prepared: "#[NUMBER] — [Title]". Status → Shipped.
    ```
 3. **Check for config/migration changes**: If the feature introduces new config values, settings, or requires migration steps for existing installs, document them in the Discussion and ensure they are reflected in the upgrade flow.
-4. Mark the feature `Shipped`.
+4. Transition the issue to Shipped:
+   ```bash
+   gh issue edit [NUMBER] --remove-label "status:pending-ship" --add-label "status:shipped"
+   gh issue close [NUMBER]
+   ```
 5. Append a Discussion entry:
    ```
    > [YYYY-MM-DD HH:MM] **dm**: Delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped.
