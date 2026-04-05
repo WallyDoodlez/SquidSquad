@@ -110,3 +110,10 @@
   - #114 — SKILL.md PR branching convention uses old NNN numeric IDs instead of GitHub Issue numbers
   - #115 — BRIEFING.md constraint says 'No automated test suite' but tests/ directory exists
 - **Items rejected by human**: (none yet)
+
+## Scan — 2026-04-05 11:50
+
+- **Files scanned**: SKILL.md (Step 3 config.md template lines 397-451), README.md (Features section lines 185-228)
+- **Findings**:
+  - #116 — SKILL.md config template hardcodes version 0.9.0 and missing Aliases section
+- **Items rejected by human**: (none yet)
