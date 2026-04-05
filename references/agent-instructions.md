@@ -387,7 +387,7 @@ For each bug that does not have a `status:shipped` or closed state:
 4. Fix the bug.
 5. Run the test command: `[ROLE_TEST_CMD]`
 6. If tests pass:
-   - Transition status: `gh issue edit [NUMBER] --add-label "status:pending-test"`
+   - Transition status: `gh issue edit [NUMBER] --remove-label "status:open" --add-label "status:pending-test"`
    - Comment: `gh issue comment [NUMBER] --body "> [YYYY-MM-DD HH:MM] **[ROLE]-lead**: Fixed in commit [hash]. [Brief explanation]. Status → Pending Test."`
    - Clear working state.
 7. If the root cause belongs to another agent's domain:
