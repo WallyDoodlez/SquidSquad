@@ -255,7 +255,7 @@ All agents follow these rules to minimize merge conflicts on shared tracker file
 
 When `PR Flow: yes` is set in `config.md`, dev agents create PRs instead of pushing directly to main:
 
-- **Branching convention**: `squidsquad/feat-[role]-NNN` or `squidsquad/bug-[role]-NNN` (e.g. `squidsquad/feat-skill-008`)
+- **Branching convention**: `squidsquad/feat-[role]-[issue#]` or `squidsquad/bug-[role]-[issue#]` (e.g. `squidsquad/feat-skill-67`)
 - **Dev agent workflow**: when marking work as `Pending Test`, create a branch, push it, and open a PR via `gh pr create`. Record the PR link in the tracker Discussion.
 - **PM and QA workflow**: each cycle, check open SquidSquad PRs via `gh pr list`. For each PR:
   - If merged: update the tracker item status to `Shipped`
@@ -334,13 +334,12 @@ Do you have existing bugs or features to import?
 
 **Normalization rules:**
 
-- Each imported item is assigned the next available `BUG-[ROLE]-XXX` or `FEAT-[ROLE]-XXX` ID based on the counters that will be set in `config.md`.
+- Each imported item is filed as a GitHub Issue via `python references/scripts/tracker.py create-bug` or `create-feature`.
 - Bugs get status `Open`, features get status `Pending`.
-- Each imported entry gets an initial Discussion note:
+- Each imported entry gets an initial Discussion comment:
+  ```bash
+  python references/scripts/tracker.py comment [NUMBER] --role pm --message "Imported from [source] at setup."
   ```
-  > [YYYY-MM-DD HH:MM] **pm/qa**: Imported from [source] at setup.
-  ```
-- Increment the corresponding ID counters in `config.md` for each imported item.
 - Imported items are merged with any manually provided seed items from field 8.
 
 **Validation:** After collecting all fields (including any imported items), display a summary table and ask the user to confirm or correct any values before proceeding. If any required field is empty or any value fails validation (e.g. interval < 1), highlight the issue and re-prompt for that specific field. If items were imported, include a count (e.g. "Imported: 3 bugs, 2 features → be/").
@@ -399,18 +398,26 @@ Seed the vault with an initial project note (`vault/projects/{project-name}.md`)
 ```markdown
 # SquidSquad Config
 
-- **SquidSquad Version**: 0.9.0
+- **SquidSquad Version**: [VERSION]  ← from SKILL.md frontmatter version field
 - **Architecture Version**: 1
-
-## Project
-
-- **Name**: [PROJECT_NAME]
-- **Repo**: [REPO_URL]
 
 ## Agents
 
 - **Dev Agents**: [ROLE1], [ROLE2], ...  ← one entry per dev role defined at setup
 - **PM**: always present  ← QA is auto-added when dev or designer agents are present
+
+## Aliases
+
+- **[ROLE1]**: [ALIAS1]  ← from setup field 3b, defaults to bare role name
+- **[ROLE2]**: [ALIAS2]
+- **pm**: [PM_ALIAS]
+- **qa**: [QA_ALIAS]
+- **dm**: [DM_ALIAS]
+
+## Project
+
+- **Name**: [PROJECT_NAME]
+- **Repo**: [REPO_URL]
 
 ## Test Commands
 
@@ -947,9 +954,9 @@ The script implements the **Emoji Rich** status bar design:
 
 Output examples:
 - Dev idle: `🦑 skill v0.5.1 │ 🐛3 ⭐2 │ 🧠 42% │ 🔄 4m` + line 2: `  Msg me any time to file a bug or request a feature`
-- Dev working: `🦑 skill v0.5.1 │ 🔨 FEAT-017 │ 🧠 31% │ 🔄 3m` + line 2: `  🔨 FEAT-SKILL-017...`
-- Dev clear: `🦑 be v0.5.1 │ ✅ clear │ 🧠 12% │ 🔄 5m` + line 2: `  All clear — ready for the next task`
-- PM: `🦑 PM v0.9.0 │ 📦 9/10 🚀 │ 📋 FEAT-017 P2 │ 🧠 42% │ 🔄 2m │ 🦑🦑🦑` + line 2: `  Running tests to check system health...`
+- Dev working: `🦑 skill v0.10.0 │ 🔨 #67 │ 🧠 31% │ 🔄 3m` + line 2: `  🔨 #67...`
+- Dev clear: `🦑 be v0.10.0 │ ✅ clear │ 🧠 12% │ 🔄 5m` + line 2: `  All clear — ready for the next task`
+- PM: `🦑 PM v0.10.0 │ 📦 9/10 🚀 │ 📋 #67 P2 │ 🧠 42% │ 🔄 2m │ 🦑🦑🦑` + line 2: `  Running tests to check system health...`
 
 Make the copied script executable (`chmod +x`).
 
@@ -1290,12 +1297,12 @@ pm           active     3 minutes ago
 
 Backlog
 ───────
-skill: 2 open bugs (BUG-SKILL-005, BUG-SKILL-006), 1 approved feat (FEAT-SKILL-007)
+skill: 2 open bugs (#93, #95), 1 approved feat (#67)
 
 Recently Shipped
 ────────────────
-1. FEAT-SKILL-006 — Git-log based agent health detection
-2. FEAT-SKILL-005 — Show timestamp at iteration start and stop
+1. #66 — Deterministic script layer
+2. #29 — Agent name aliases
 3. ...
 ```
 
