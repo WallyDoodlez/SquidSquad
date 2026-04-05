@@ -38,6 +38,11 @@ FIELD_MAP = {
     "improvement-scanning": ("Improvement Scanning", "Enabled"),
     "ship-threshold": ("Auto Versioning", "Ship Threshold"),
     "shipped-since-bump": ("Auto Versioning", "Shipped Since Last Bump"),
+    "alias-skill": ("Agent Aliases", "skill"),
+    "alias-pm": ("Agent Aliases", "pm"),
+    "alias-dm": ("Agent Aliases", "dm"),
+    "alias-designer": ("Agent Aliases", "designer"),
+    "alias-qa": ("Agent Aliases", "qa"),
 }
 
 
@@ -134,6 +139,21 @@ def set_field(field, value):
     return value
 
 
+def get_alias(role):
+    """Get the alias for a role. Falls back to {project-name}-{role} if not set."""
+    text = _read_config()
+    alias_key = f"alias-{role}"
+    entry = FIELD_MAP.get(alias_key)
+    if entry:
+        section, field_name = entry
+        val = _parse_field(text, section, field_name)
+        if val:
+            return val
+    # Fallback: project-name + role
+    project = _parse_field(text, "Project", "Name") or "project"
+    return f"{project.lower()}-{role}"
+
+
 def dump_all():
     """Dump all config fields as JSON."""
     text = _read_config()
@@ -160,6 +180,12 @@ def main():
             sys.exit(1)
         set_field(sys.argv[2], sys.argv[3])
         print(f"Set {sys.argv[2]} = {sys.argv[3]}")
+
+    elif cmd == "alias":
+        if len(sys.argv) < 3:
+            print("Usage: config.py alias <role>", file=sys.stderr)
+            sys.exit(1)
+        print(get_alias(sys.argv[2]))
 
     elif cmd == "dump":
         print(json.dumps(dump_all(), indent=2))

@@ -1,6 +1,20 @@
 #!/bin/bash
 cd "$(git rev-parse --show-toplevel)"
 
+# Parse --name flag (optional override for agent alias)
+AGENT_NAME=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --name) AGENT_NAME="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+
+# Read alias from config if no --name override
+if [ -z "$AGENT_NAME" ]; then
+  AGENT_NAME=$(python references/scripts/config.py alias pm 2>/dev/null || echo "squidsquad-pm")
+fi
+
 if [ -d .squidsquad ]; then
   V=$(grep -o '[0-9][0-9.]*[0-9]' .squidsquad/config.md 2>/dev/null | head -1)
   cat << LOGO
@@ -11,7 +25,7 @@ if [ -d .squidsquad ]; then
    ███████
    ▐█████▌
     ▐▌▐▌▐▌
-  S Q U I D S Q U A D   v${V:-?}  —  PM / QA
+  S Q U I D S Q U A D   v${V:-?}  —  ${AGENT_NAME}
 
 LOGO
 fi
@@ -26,4 +40,4 @@ echo "pm" > .squidsquad/.active-role
 rm -f .squidsquad/pm/current-state
 echo "idle|Initializing..." > .squidsquad/pm/current-state
 
-claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
+claude --dangerously-skip-permissions --session-name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"

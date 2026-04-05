@@ -1,6 +1,25 @@
-﻿[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $repoRoot = git rev-parse --show-toplevel
 Set-Location $repoRoot
+
+# Parse --name flag (optional override for agent alias)
+$AgentName = ""
+for ($i = 0; $i -lt $args.Count; $i++) {
+    if ($args[$i] -eq "--name" -and ($i + 1) -lt $args.Count) {
+        $AgentName = $args[$i + 1]
+        break
+    }
+}
+
+# Read alias from config if no --name override
+if (-not $AgentName) {
+    try {
+        $AgentName = (python references/scripts/config.py alias dm 2>$null).Trim()
+    } catch {
+        $AgentName = "squidsquad-dm"
+    }
+    if (-not $AgentName) { $AgentName = "squidsquad-dm" }
+}
 
 if (Test-Path .squidsquad) {
     $config = Get-Content .squidsquad/config.md -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
@@ -13,7 +32,7 @@ if (Test-Path .squidsquad) {
     Write-Host "   ███████"
     Write-Host "   ▐█████▌"
     Write-Host "    ▐▌▐▌▐▌"
-    Write-Host "  S Q U I D S Q U A D   v$v  -  DM"
+    Write-Host "  S Q U I D S Q U A D   v$v  -  $AgentName"
     Write-Host ""
 }
 
@@ -27,4 +46,4 @@ if (Test-Path .squidsquad) {
 Remove-Item .squidsquad/dm/current-state -ErrorAction SilentlyContinue
 "idle|Initializing..." | Set-Content .squidsquad/dm/current-state -NoNewline
 
-claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=dm" "start the loop"
+claude --dangerously-skip-permissions --session-name "$AgentName" --append-system-prompt "SQUIDSQUAD_ROLE=dm" "start the loop"

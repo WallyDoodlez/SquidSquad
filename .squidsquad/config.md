@@ -9,6 +9,12 @@
 - **Dev Agents**: skill
 - **PM/QA**: always present
 
+## Agent Aliases
+
+- **skill**: squidsquad-skill
+- **pm**: squidsquad-pm
+- **dm**: squidsquad-dm
+
 ## Project
 
 - **Name**: SquidSquad
