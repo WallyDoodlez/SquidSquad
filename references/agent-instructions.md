@@ -100,6 +100,17 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team. You work in a loo
 ## Tracker Protocol — GitHub Issues
 
 All bugs and features are tracked as GitHub Issues with structured labels. Agents use the `gh` CLI to create, read, update, and comment on Issues. No internal markdown tracker files — GitHub Issues is the single source of truth.
+### Timestamps
+
+All timestamps in step markers (`[🦑 HH:MM:SS]`), Discussion comments (`YYYY-MM-DD HH:MM`), iteration logs, and vault entries must use the **system local time** from the `date` command — never guess, estimate, or increment manually.
+
+```bash
+# For step markers (HH:MM:SS):
+date +"%H:%M:%S"
+
+# For Discussion comments and logs (YYYY-MM-DD HH:MM):
+date +"%Y-%m-%d %H:%M"
+```
 
 ### Startup Permission Check
 
@@ -1019,6 +1030,17 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 ## Tracker Protocol — GitHub Issues
 
 All bugs and features are tracked as GitHub Issues with structured labels. Agents use the `gh` CLI to create, read, update, and comment on Issues. No internal markdown tracker files — GitHub Issues is the single source of truth.
+### Timestamps
+
+All timestamps in step markers (`[🦑 HH:MM:SS]`), Discussion comments (`YYYY-MM-DD HH:MM`), iteration logs, and vault entries must use the **system local time** from the `date` command — never guess, estimate, or increment manually.
+
+```bash
+# For step markers (HH:MM:SS):
+date +"%H:%M:%S"
+
+# For Discussion comments and logs (YYYY-MM-DD HH:MM):
+date +"%Y-%m-%d %H:%M"
+```
 
 ### Startup Permission Check
 
@@ -2354,6 +2376,17 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 ## Tracker Protocol — GitHub Issues
 
 All bugs and features are tracked as GitHub Issues with structured labels. Agents use the `gh` CLI to create, read, update, and comment on Issues. No internal markdown tracker files — GitHub Issues is the single source of truth.
+### Timestamps
+
+All timestamps in step markers (`[🦑 HH:MM:SS]`), Discussion comments (`YYYY-MM-DD HH:MM`), iteration logs, and vault entries must use the **system local time** from the `date` command — never guess, estimate, or increment manually.
+
+```bash
+# For step markers (HH:MM:SS):
+date +"%H:%M:%S"
+
+# For Discussion comments and logs (YYYY-MM-DD HH:MM):
+date +"%Y-%m-%d %H:%M"
+```
 
 ### Startup Permission Check
 
@@ -3589,6 +3622,17 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 ## Tracker Protocol — GitHub Issues
 
 All bugs and features are tracked as GitHub Issues with structured labels. Agents use the `gh` CLI to create, read, update, and comment on Issues. No internal markdown tracker files — GitHub Issues is the single source of truth.
+### Timestamps
+
+All timestamps in step markers (`[🦑 HH:MM:SS]`), Discussion comments (`YYYY-MM-DD HH:MM`), iteration logs, and vault entries must use the **system local time** from the `date` command — never guess, estimate, or increment manually.
+
+```bash
+# For step markers (HH:MM:SS):
+date +"%H:%M:%S"
+
+# For Discussion comments and logs (YYYY-MM-DD HH:MM):
+date +"%Y-%m-%d %H:%M"
+```
 
 ### Startup Permission Check
 
@@ -4511,6 +4555,17 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 ## Tracker Protocol — GitHub Issues
 
 All bugs and features are tracked as GitHub Issues with structured labels. Agents use the `gh` CLI to create, read, update, and comment on Issues. No internal markdown tracker files — GitHub Issues is the single source of truth.
+### Timestamps
+
+All timestamps in step markers (`[🦑 HH:MM:SS]`), Discussion comments (`YYYY-MM-DD HH:MM`), iteration logs, and vault entries must use the **system local time** from the `date` command — never guess, estimate, or increment manually.
+
+```bash
+# For step markers (HH:MM:SS):
+date +"%H:%M:%S"
+
+# For Discussion comments and logs (YYYY-MM-DD HH:MM):
+date +"%Y-%m-%d %H:%M"
+```
 
 ### Startup Permission Check
 
@@ -5484,6 +5539,17 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 ## Tracker Protocol — GitHub Issues
 
 All bugs and features are tracked as GitHub Issues with structured labels. Agents use the `gh` CLI to create, read, update, and comment on Issues. No internal markdown tracker files — GitHub Issues is the single source of truth.
+### Timestamps
+
+All timestamps in step markers (`[🦑 HH:MM:SS]`), Discussion comments (`YYYY-MM-DD HH:MM`), iteration logs, and vault entries must use the **system local time** from the `date` command — never guess, estimate, or increment manually.
+
+```bash
+# For step markers (HH:MM:SS):
+date +"%H:%M:%S"
+
+# For Discussion comments and logs (YYYY-MM-DD HH:MM):
+date +"%Y-%m-%d %H:%M"
+```
 
 ### Startup Permission Check
 
