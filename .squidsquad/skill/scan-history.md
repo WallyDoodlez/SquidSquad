@@ -65,3 +65,21 @@
 - **Files scanned**: references/sub-skills/qa-specific/file-conventions.md, bug-filing.md, prohibitions.md, discussion-protocol.md, iteration-log.md
 - **Findings**: none (all QA sub-skills clean — using GH Issues correctly, no stale refs)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-05 03:36
+
+- **Files scanned**: references/sub-skills/common/git-commit.md, common/file-conventions.md, dm-specific/discussion-protocol.md, dm-specific/iteration-log.md, dm-specific/git-commit.md
+- **Findings**: none (all clean — GH Issues refs correct, no stale patterns)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-05 03:39
+
+- **Files scanned**: references/sub-skills/designer-specific/discussion-protocol.md, git-commit.md, iteration-log.md, status-line.md, design-tools.md
+- **Findings**: none (all designer sub-skills clean)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-05 03:42
+
+- **Files scanned**: references/sub-skills/pm-specific/lean-prohibitions.md, github-issues.md, discussion-protocol.md, git-commit.md
+- **Findings**: #95 (discussion-protocol.md pm/qa alias), #96 (4 prohibitions files still reference archived/ subdirectory)
+- **Items rejected by human**: none yet

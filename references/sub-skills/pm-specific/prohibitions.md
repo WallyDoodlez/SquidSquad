@@ -8,5 +8,5 @@
 - Never delete entries from tracker files.
 - Never mark a bug Verified without actually running a test or check.
 - After any status change, update the GitHub Issue labels accordingly (`gh issue edit [NUMBER] --remove-label "status:old" --add-label "status:new"`).
-- After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
-- After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.
+- After marking a bug with a terminal status (`Closed`/`Verified`), close the GitHub Issue via `gh issue close`.
+- After marking a feature with a terminal status (`Shipped`/`Rejected`), close the GitHub Issue via `gh issue close`.
