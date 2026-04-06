@@ -168,7 +168,9 @@ def boot_role(role_name: str) -> list:
         content = content.replace("{{ROLE}}", role_name)
 
         output_path = REPO_ROOT / ".squidsquad" / f"start-{role_name}.{ext}"
-        output_path.write_text(content, encoding="utf-8")
+        # .sh files must use LF line endings (not CRLF on Windows)
+        newline = "\n" if ext == "sh" else None
+        output_path.write_text(content, encoding="utf-8", newline=newline)
         outputs.append(output_path)
 
     return outputs
