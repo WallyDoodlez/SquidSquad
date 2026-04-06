@@ -4,6 +4,24 @@ All notable changes to SquidSquad will be documented here.
 
 ---
 
+## [0.13.0] — 2026-04-06
+
+### Fixed
+
+- #198 — tracker.py list functions converted from shell=True to subprocess list form.
+- #199 — .backlog-cache added to .gitignore, removed from git tracking.
+- #200 — test_config.py PR Flow test now parses section-specific Enabled fields.
+- #201 — Test harness converted from shell=True to subprocess list form.
+- #202 — statusline.sh DM section uses config alias instead of hardcoded ROLE_LABEL.
+- #203 — Added hints-qa.txt for QA role statusline hints.
+- #204 — /squidsquad-status command now includes DM in agent health dashboard.
+- #205 — /squidsquad-status queries use tracker.py instead of bare gh issue list.
+- #206 — inject-permissions.sh counts all permission rules, not just Bash/Edit/Write.
+- #208 — test_vault.py frontmatter test uses regex parser instead of pyyaml dependency.
+- #209 — SKILL.md permissions explanation clarified re: --dangerously-skip-permissions.
+
+---
+
 ## [0.12.0] — 2026-04-06
 
 ### Added

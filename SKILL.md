@@ -1,7 +1,7 @@
 ---
 name: squidsquad
 description: "Orchestrates a multi-agent AI development team — handles setup, workflow coordination, role management, and autonomous dev cycles."
-version: 0.12.0
+version: 0.13.0
 ---
 
 # SquidSquad
