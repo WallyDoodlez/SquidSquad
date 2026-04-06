@@ -4,6 +4,29 @@ All notable changes to SquidSquad will be documented here.
 
 ---
 
+## [0.12.0] — 2026-04-06
+
+### Added
+
+- #17 — **Vault Phase 3: vault-remember** — end-of-cycle reflection with structured 5-category prompt, deterministic Python gates (dedup, write budget, BRIEFING token cap, confidence decay), human-profile.md seeded.
+- #1 — **Templatize boot scripts** — single template per platform (`.ps1` / `.sh`), `compose.py boot` command, DO NOT EDIT headers, LF line endings for .sh. Eliminates 6-file drift.
+
+### Fixed
+
+- #182 — tracker.py create-bug/create-feature silently dropped labels when body had special chars. Converted to subprocess list args.
+- #192 — Pre-launch .gitignore gaps: added `.obsidian/`, `__pycache__/`, removed 5 tracked .pyc files.
+- #144 — Shell injection risk in git_ops.py pr_create eliminated (subprocess list form).
+- #145 — pull() now warns on stash pop failure instead of silently succeeding.
+- #146 — SKILL.md upgrade instructions no longer reference stale markdown tracker.
+- #147 — SKILL.md schema changelog correctly labeled as historical.
+- #142 — BRIEFING.md updated to v0.11.0.
+- #143 — Vault project note updated to v0.11.0.
+- #130 — README updated from --enable-auto-mode to --dangerously-skip-permissions.
+- #131 — SKILL.md permissions note updated from --enable-auto-mode.
+- #180 — cycle.py stale docstring (is-quiet).
+
+---
+
 ## [0.11.0] — 2026-04-05
 
 ### Added
