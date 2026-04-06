@@ -26,9 +26,17 @@ REPO_ROOT = SCRIPT_DIR.parent.parent
 
 
 def _run(cmd, check=True):
-    """Run a command from repo root."""
+    """Run a shell command from repo root (only for static commands)."""
     return subprocess.run(
         cmd, shell=True, capture_output=True, text=True,
+        check=check, cwd=str(REPO_ROOT),
+    )
+
+
+def _run_list(cmd_list, check=True):
+    """Run a command from repo root using list form (safe for variable args)."""
+    return subprocess.run(
+        cmd_list, capture_output=True, text=True,
         check=check, cwd=str(REPO_ROOT),
     )
 
@@ -40,8 +48,12 @@ def pull():
         # Try stash + pull + pop
         _run("git stash")
         _run("git pull --rebase")
-        _run("git stash pop", check=False)
-        print("Pulled (stashed and popped)")
+        pop_result = _run("git stash pop", check=False)
+        if pop_result.returncode != 0:
+            print("WARNING: stash pop failed (possible conflict). Changes remain in stash.", file=sys.stderr)
+            print("Pulled (stash pop conflict — run 'git stash show' to inspect)")
+        else:
+            print("Pulled (stashed and popped)")
     else:
         print("Pulled")
     return True
@@ -100,20 +112,20 @@ def commit_push(role, message):
 
 def branch_create(name):
     """Create and checkout a new branch."""
-    _run(f"git checkout -b {name}")
+    _run_list(["git", "checkout", "-b", name])
     print(f"Created branch: {name}")
 
 
 def branch_switch(name):
     """Switch to an existing branch."""
-    _run(f"git checkout {name}")
+    _run_list(["git", "checkout", name])
     print(f"Switched to: {name}")
 
 
 def pr_create(title, body):
     """Create a PR via gh CLI."""
-    result = _run(
-        f'gh pr create --title "{title}" --body "{body}"',
+    result = _run_list(
+        ["gh", "pr", "create", "--title", title, "--body", body],
         check=False,
     )
     if result.returncode != 0:
