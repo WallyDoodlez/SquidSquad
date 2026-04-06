@@ -35,6 +35,9 @@ fi
 # Inject permissions from template into settings.json
 [ -x .squidsquad/inject-permissions.sh ] && bash .squidsquad/inject-permissions.sh
 
+# Register this agent in config.md
+python references/scripts/config.py sync-agents 2>/dev/null || true
+
 # Write role for statusline (not used for auto-boot — system prompt handles that)
 echo "dm" > .squidsquad/.active-role
 

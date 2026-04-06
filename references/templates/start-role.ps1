@@ -42,6 +42,9 @@ if (Test-Path .squidsquad) {
 $injectScript = Join-Path $repoRoot ".squidsquad/inject-permissions.ps1"
 if (Test-Path $injectScript) { & $injectScript }
 
+# Register this agent in config.md
+try { python references/scripts/config.py sync-agents 2>$null } catch {}
+
 # Write role for statusline (not used for auto-boot -- system prompt handles that)
 "{{ROLE}}" | Set-Content .squidsquad/.active-role -NoNewline
 

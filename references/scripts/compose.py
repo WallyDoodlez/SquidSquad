@@ -29,23 +29,32 @@ def _resolve_includes(entry_file: Path) -> str:
     result = []
 
     for line in lines:
-        match = re.match(r'\s*\{\{include:\s*(.+?)\}\}\s*$', line)
-        if match:
-            include_path = match.group(1).strip()
-            # Resolve relative to sub-skills directory
+        # {{include: path}} — inline the content
+        inc_match = re.match(r'\s*\{\{include:\s*(.+?)\}\}\s*$', line)
+        # {{runtime: path}} — emit a "read at boot" instruction
+        rt_match = re.match(r'\s*\{\{runtime:\s*(.+?)\}\}\s*$', line)
+
+        if inc_match:
+            include_path = inc_match.group(1).strip()
             full_path = SUB_SKILLS_DIR / f"{include_path}.md"
             if not full_path.exists():
                 result.append(f"<!-- ERROR: Missing include: {include_path} -->")
                 continue
-
-            # Extract sub-skill name from path (last component without .md)
             sub_skill_name = full_path.stem
-
-            # Read and wrap with markers
             content = full_path.read_text(encoding="utf-8").rstrip()
             result.append(f"<!-- sub-skill: {sub_skill_name} -->")
             result.append(content)
             result.append(f"<!-- /sub-skill: {sub_skill_name} -->")
+
+        elif rt_match:
+            runtime_path = rt_match.group(1).strip()
+            sub_skill_name = Path(runtime_path).stem
+            result.append(f"<!-- sub-skill: {sub_skill_name} -->")
+            result.append(f"## Soul")
+            result.append(f"")
+            result.append(f"Read `.squidsquad/[ROLE]/SOUL.md` at session start and follow its instructions as your professional identity. If SOUL.md is missing, proceed with default behavior — you are a pragmatic engineer focused on correctness and simplicity.")
+            result.append(f"<!-- /sub-skill: {sub_skill_name} -->")
+
         else:
             result.append(line)
 
@@ -149,6 +158,17 @@ def deploy_role(role_name: str) -> Path:
     output_path = REPO_ROOT / ".squidsquad" / role_name / "CLAUDE.md"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(header + final, encoding="utf-8")
+
+    # Create SOUL.md from default template if missing (never overwrite)
+    soul_path = REPO_ROOT / ".squidsquad" / role_name / "SOUL.md"
+    if not soul_path.exists():
+        # Map role to soul template
+        soul_map = {"pm": "pm", "dm": "dm", "qa": "qa", "designer": "designer"}
+        soul_name = soul_map.get(role_name, "dev")
+        soul_template = SUB_SKILLS_DIR / "souls" / f"{soul_name}.md"
+        if soul_template.exists():
+            soul_path.write_text(soul_template.read_text(encoding="utf-8"), encoding="utf-8")
+
     return output_path
 
 
