@@ -5,18 +5,17 @@
 - **Started**: 2026-04-05
 
 ## Open Bugs
-- #142 (BRIEFING.md stale after v0.11.0) — open, low, role:dm
-- #143 (Vault project note stale v0.10.0 ref) — open, low, role:dm
+- #144 (shell injection in git_ops.py pr_create) — open, low, role:skill
+- #145 (stash pop silent failure in pull()) — open, low, role:skill
 
 ## Active Features
 - #2 (README overhaul) — approved, DM pickup
 - #3 (going public) — on hold
 
 ## Pending Human Input
-- Role names in issue titles (e.g. FEAT-SKILL: instead of FEAT:) — human asked, awaiting decision on scope
+- Role GitHub accounts feature — human wants roles to appear as issue/comment authors via separate GH accounts. Discussing feasibility.
 
 ## Key Context
-- v0.11.0 shipped, counter reset
-- DM still on stale session — filing without squidsquad labels
-- Vault audit complete — 4 notes, Phases 1-2 shipped, human considering Phase 3 (#17)
-- Quiet cycle counter: 0 (triaged issues this cycle)
+- v0.11.0, shipped counter at 2/10
+- Vault audit done — Phases 1-2 shipped, human considering Phase 3 (#17)
+- Quiet cycle counter: 0
