@@ -316,7 +316,6 @@ if [ "$ROLE" = "pm" ]; then
 
 # === DM segments ===
 elif [ "$ROLE" = "dm" ]; then
-  ROLE_LABEL="DM"
 
   # Check working state for active task
   WS_FILE="$SQDIR/$ROLE/working-state.md"
@@ -395,8 +394,12 @@ else
   [ -n "$GIT_SYNC" ] && LINE1="${LINE1} │ ${GIT_SYNC}"
   LINE1="${LINE1} │ ${CTX_STR} │ ${TIMER_STR}"
 
-  # Line 2: current step or rotating hint
-  LINE2=$(get_line2 "dev")
+  # Line 2: current step or rotating hint (QA gets its own hints if available)
+  if [ "$ROLE" = "qa" ] && [ -f "$SQDIR/hints-qa.txt" ]; then
+    LINE2=$(get_line2 "qa")
+  else
+    LINE2=$(get_line2 "dev")
+  fi
 
   echo -e "${LINE1}"
   [ -n "$LINE2" ] && echo -e "${LINE2}"

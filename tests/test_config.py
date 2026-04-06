@@ -54,8 +54,14 @@ class TestConfigRequired:
         assert val, "Missing 'skill Tests' field in config.md"
 
     def test_has_pr_flow(self):
-        val = _extract_field(self.config, "Enabled")
-        assert val is not None, "Missing PR Flow 'Enabled' field"
+        assert "## PR Flow" in self.config, "Missing '## PR Flow' section"
+        # Extract Enabled within the PR Flow section
+        pr_section = self.config.split("## PR Flow")[1].split("##")[0]
+        val = _extract_field(pr_section, "Enabled")
+        assert val is not None, "Missing 'Enabled' field in PR Flow section"
 
     def test_has_improvement_scanning(self):
-        assert "Improvement Scanning" in self.config, "Missing 'Improvement Scanning' section"
+        assert "## Improvement Scanning" in self.config, "Missing '## Improvement Scanning' section"
+        scan_section = self.config.split("## Improvement Scanning")[1].split("##")[0]
+        val = _extract_field(scan_section, "Enabled")
+        assert val is not None, "Missing 'Enabled' field in Improvement Scanning section"

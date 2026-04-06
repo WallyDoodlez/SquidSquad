@@ -20,10 +20,10 @@ TEST_LABEL = "squidsquad-test"
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
-def _run(cmd: str, check: bool = True) -> subprocess.CompletedProcess:
-    """Run a shell command and return the result."""
+def _run(cmd_list: list, check: bool = True) -> subprocess.CompletedProcess:
+    """Run a command from repo root using list form (safe for variable args)."""
     return subprocess.run(
-        cmd, shell=True, capture_output=True, text=True,
+        cmd_list, capture_output=True, text=True,
         check=check, cwd=str(REPO_ROOT),
     )
 
@@ -36,10 +36,12 @@ def create_test_issue(title: str, labels: str = "", body: str = "Auto-created by
     all_labels = TEST_LABEL
     if labels:
         all_labels += f",{labels}"
-    result = _run(
-        f'gh issue create --title "{full_title}" '
-        f'--body "{body}" --label "{all_labels}"'
-    )
+    result = _run([
+        "gh", "issue", "create",
+        "--title", full_title,
+        "--body", body,
+        "--label", all_labels,
+    ])
     # gh issue create returns a URL like https://github.com/owner/repo/issues/72
     url = result.stdout.strip()
     return int(url.rstrip("/").split("/")[-1])
@@ -47,30 +49,30 @@ def create_test_issue(title: str, labels: str = "", body: str = "Auto-created by
 
 def close_test_issue(number: int) -> None:
     """Close and label a test issue for cleanup."""
-    _run(f"gh issue close {number}", check=False)
+    _run(["gh", "issue", "close", str(number)], check=False)
 
 
 def delete_test_issue(number: int) -> None:
     """Delete a test issue (requires admin). Falls back to closing."""
-    result = _run(f"gh issue delete {number} --yes", check=False)
+    result = _run(["gh", "issue", "delete", str(number), "--yes"], check=False)
     if result.returncode != 0:
         close_test_issue(number)
 
 
 def edit_test_issue(number: int, remove_label: str = "", add_label: str = "") -> None:
     """Edit labels on a test issue."""
-    parts = [f"gh issue edit {number}"]
+    cmd = ["gh", "issue", "edit", str(number)]
     if remove_label:
-        parts.append(f'--remove-label "{remove_label}"')
+        cmd.extend(["--remove-label", remove_label])
     if add_label:
-        parts.append(f'--add-label "{add_label}"')
-    _run(" ".join(parts))
+        cmd.extend(["--add-label", add_label])
+    _run(cmd)
 
 
 def get_issue_labels(number: int, retries: int = 3, delay: float = 2.0) -> list[str]:
     """Get label names for an issue. Retries to handle GH API race conditions."""
     for attempt in range(retries):
-        result = _run(f'gh issue view {number} --json labels')
+        result = _run(["gh", "issue", "view", str(number), "--json", "labels"])
         data = json.loads(result.stdout)
         labels = [l["name"] for l in data.get("labels", [])]
         if labels or attempt == retries - 1:
@@ -80,7 +82,7 @@ def get_issue_labels(number: int, retries: int = 3, delay: float = 2.0) -> list[
 
 def get_issue_state(number: int) -> str:
     """Get issue state (OPEN/CLOSED)."""
-    result = _run(f'gh issue view {number} --json state')
+    result = _run(["gh", "issue", "view", str(number), "--json", "state"])
     data = json.loads(result.stdout)
     return data["state"]
 
@@ -88,8 +90,8 @@ def get_issue_state(number: int) -> str:
 def cleanup_test_issues() -> int:
     """Find and close/delete all [TEST] prefixed issues. Returns count cleaned."""
     result = _run(
-        f'gh issue list --label "{TEST_LABEL}" --state all '
-        f'--json number --limit 100',
+        ["gh", "issue", "list", "--label", TEST_LABEL, "--state", "all",
+         "--json", "number", "--limit", "100"],
         check=False,
     )
     if result.returncode != 0 or not result.stdout.strip():
@@ -105,24 +107,24 @@ def cleanup_test_issues() -> int:
 def create_test_branch(name: str) -> str:
     """Create a test branch prefixed with test/. Returns full branch name."""
     full_name = f"{BRANCH_PREFIX}{name}"
-    _run(f"git branch {full_name}", check=False)
+    _run(["git", "branch", full_name], check=False)
     return full_name
 
 
 def delete_test_branch(name: str) -> None:
     """Delete a local test branch."""
     full_name = name if name.startswith(BRANCH_PREFIX) else f"{BRANCH_PREFIX}{name}"
-    _run(f"git branch -D {full_name}", check=False)
+    _run(["git", "branch", "-D", full_name], check=False)
 
 
 def cleanup_test_branches() -> int:
     """Delete all test/ prefixed local branches. Returns count cleaned."""
-    result = _run('git branch --list "test/*"', check=False)
+    result = _run(["git", "branch", "--list", "test/*"], check=False)
     if not result.stdout.strip():
         return 0
     branches = [b.strip() for b in result.stdout.strip().split("\n") if b.strip()]
     for branch in branches:
-        _run(f"git branch -D {branch}", check=False)
+        _run(["git", "branch", "-D", branch], check=False)
     return len(branches)
 
 
@@ -169,7 +171,8 @@ def verify_clean() -> list[str]:
 
     # Check issues
     result = _run(
-        f'gh issue list --label "{TEST_LABEL}" --state all --json number --limit 10',
+        ["gh", "issue", "list", "--label", TEST_LABEL, "--state", "all",
+         "--json", "number", "--limit", "10"],
         check=False,
     )
     if result.returncode == 0 and result.stdout.strip():
@@ -179,7 +182,7 @@ def verify_clean() -> list[str]:
             problems.append(f"{len(open_issues)} test issues still exist")
 
     # Check branches
-    result = _run('git branch --list "test/*"', check=False)
+    result = _run(["git", "branch", "--list", "test/*"], check=False)
     if result.stdout.strip():
         problems.append(f"Test branches remain: {result.stdout.strip()}")
 
