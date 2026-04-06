@@ -1,5 +1,13 @@
 # DM Scan History
 
+## Scan — 2026-04-05 20:34
+
+- **Files scanned**: .squidsquad/vault/BRIEFING.md (full file — version, priorities, constraints), .squidsquad/vault/projects/squidsquad.md (version reference), CHANGELOG.md (0.11.0 section completeness)
+- **Findings**:
+  - #142 — BRIEFING.md stale after v0.11.0 bump (version, #29 pending, #67 in-progress, ship counter)
+  - #143 — Vault project note still references v0.10.0
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-05 18:57
 
 - **Files scanned**: README.md (Agents table, boot explanation, Requirements — flag references), start scripts (start-skill.sh, start-dm.sh, start-pm.sh — actual CLI flags), SKILL.md (permissions note line 1107)
