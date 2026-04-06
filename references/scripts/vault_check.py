@@ -179,6 +179,75 @@ def list_orphans():
     return orphans
 
 
+def dedup_check(title, tags=""):
+    """Check for near-duplicate vault notes by keyword overlap.
+
+    Returns up to 3 candidate matches with overlap scores.
+    Exit code 0 if no matches, 1 if matches found.
+    """
+    # Extract keywords from candidate title (lowercase, strip common prefixes)
+    title_lower = title.lower().replace("-", " ")
+    for prefix in ("decision ", "pattern ", "learning ", "style "):
+        if title_lower.startswith(prefix):
+            title_lower = title_lower[len(prefix):]
+    candidate_words = set(title_lower.split())
+
+    # Extract tag keywords
+    tag_words = set()
+    if tags:
+        for t in tags.split(","):
+            tag_words.add(t.strip().lower())
+
+    all_candidate = candidate_words | tag_words
+    if not all_candidate:
+        print("No keywords to match")
+        return []
+
+    matches = []
+    all_notes = _get_all_notes()
+
+    for rel_path, note_path in all_notes.items():
+        # Skip non-galaxy notes for title matching
+        note_name = Path(rel_path).stem.lower().replace("-", " ")
+        for prefix in ("decision ", "pattern ", "learning ", "style "):
+            if note_name.startswith(prefix):
+                note_name = note_name[len(prefix):]
+        note_words = set(note_name.split())
+
+        # Also check tags from frontmatter
+        text = note_path.read_text(encoding="utf-8")
+        fm = _parse_frontmatter(text)
+        note_tags = set()
+        if fm and "tags" in fm:
+            for t in fm["tags"].replace("[", "").replace("]", "").split(","):
+                note_tags.add(t.strip().lower())
+
+        all_note = note_words | note_tags
+        if not all_note:
+            continue
+
+        # Calculate overlap
+        overlap = all_candidate & all_note
+        if not overlap:
+            continue
+
+        score = len(overlap) / max(len(all_candidate), 1) * 100
+        if score >= 30:  # Minimum 30% overlap to report
+            matches.append((score, rel_path, overlap))
+
+    # Sort by score descending, return top 3
+    matches.sort(key=lambda x: x[0], reverse=True)
+    top = matches[:3]
+
+    if top:
+        for score, path, overlap in top:
+            print(f"MATCH ({score:.0f}%): {path} — shared: {', '.join(sorted(overlap))}")
+    else:
+        print("No near-duplicates found")
+
+    return top
+
+
 def validate():
     """Run all vault checks."""
     all_issues = []
@@ -215,6 +284,24 @@ def main():
         sys.exit(1 if issues else 0)
     elif cmd == "list-orphans":
         list_orphans()
+    elif cmd == "dedup-check":
+        title = None
+        tags = ""
+        i = 1
+        while i < len(args):
+            if args[i] == "--title" and i + 1 < len(args):
+                title = args[i + 1]
+                i += 2
+            elif args[i] == "--tags" and i + 1 < len(args):
+                tags = args[i + 1]
+                i += 2
+            else:
+                i += 1
+        if not title:
+            print("Usage: vault_check.py dedup-check --title <title> [--tags <tags>]", file=sys.stderr)
+            sys.exit(2)
+        matches = dedup_check(title, tags)
+        sys.exit(1 if matches else 0)
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)
         sys.exit(1)

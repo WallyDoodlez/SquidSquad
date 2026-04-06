@@ -49,6 +49,13 @@
 
 - **Enabled**: yes
 
+## Vault Remember
+
+- **Enabled**: yes
+- **Writes Per Cycle**: 2
+- **BRIEFING Token Budget**: 2000
+- **Confidence Decay Days**: 60
+
 ## Auto Versioning
 
 - **Ship Threshold**: 10

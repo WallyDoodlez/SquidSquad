@@ -43,6 +43,10 @@ FIELD_MAP = {
     "alias-dm": ("Aliases", "dm"),
     "alias-designer": ("Aliases", "designer"),
     "alias-qa": ("Aliases", "qa"),
+    "vault-remember": ("Vault Remember", "Enabled"),
+    "vault-writes-per-cycle": ("Vault Remember", "Writes Per Cycle"),
+    "briefing-token-budget": ("Vault Remember", "BRIEFING Token Budget"),
+    "confidence-decay-days": ("Vault Remember", "Confidence Decay Days"),
 }
 
 
