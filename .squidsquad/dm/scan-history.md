@@ -1,5 +1,13 @@
 # DM Scan History
 
+## Scan — 2026-04-06 09:04
+
+- **Files scanned**: inject-permissions.sh (full), inject-permissions.ps1 (full), permissions.template.json (full), SKILL.md (permissions section lines 780-812), README.md (Requirements lines 329-333)
+- **Findings**:
+  - #209 — SKILL.md permissions explanation contradicts --dangerously-skip-permissions usage
+  - #210 — README Requirements missing Python dependency
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-06 07:04
 
 - **Files scanned**: SKILL.md (/squidsquad-status command lines 952-987, /squidsquad-interval lines 989-1006)
