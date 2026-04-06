@@ -5,20 +5,18 @@
 - **Started**: 2026-04-05
 
 ## Open Bugs
-- (none)
+- #142 (BRIEFING.md stale after v0.11.0) — open, low, role:dm
+- #143 (Vault project note stale v0.10.0 ref) — open, low, role:dm
 
 ## Active Features
 - #2 (README overhaul) — approved, DM pickup
 - #3 (going public) — on hold
 
-## Recently Shipped
-- v0.11.0 released this cycle
-- #118, #130, #131 — verified & shipped
-- #117, #107, #108, #114, #115, #116 — shipped earlier today
+## Pending Human Input
+- Role names in issue titles (e.g. FEAT-SKILL: instead of FEAT:) — human asked, awaiting decision on scope
 
 ## Key Context
-- All bugs cleared — zero open
-- Version bumped to 0.11.0, tag pushed
-- Both agents healthy
-- Shipped counter reset to 0
-- Quiet cycle counter: 0
+- v0.11.0 shipped, counter reset
+- DM still on stale session — filing without squidsquad labels
+- Vault audit complete — 4 notes, Phases 1-2 shipped, human considering Phase 3 (#17)
+- Quiet cycle counter: 0 (triaged issues this cycle)
