@@ -1,5 +1,13 @@
 # DM Scan History
 
+## Scan — 2026-04-05 23:05
+
+- **Files scanned**: SKILL.md (Upgrade Instructions lines 1176-1234, Schema Changelog lines 1238-1269), config.md (field audit)
+- **Findings**:
+  - #146 — SKILL.md Upgrade Instructions reference stale Tracker Schema field and markdown tracker migrations
+  - #147 — SKILL.md Schema Changelog describes old markdown tracker as current
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-05 20:34
 
 - **Files scanned**: .squidsquad/vault/BRIEFING.md (full file — version, priorities, constraints), .squidsquad/vault/projects/squidsquad.md (version reference), CHANGELOG.md (0.11.0 section completeness)
