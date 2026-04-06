@@ -113,3 +113,9 @@
 - **Files scanned**: CHANGELOG.md, .squidsquad/inject-permissions.sh, references/vault-templates/*.md, tests/test_config.py (coverage check)
 - **Findings**: #206 (inject-permissions.sh permission count underreports — cosmetic), #207 (test_config.py missing vault-remember field validation)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-06 09:02
+
+- **Files scanned**: tests/test_vault.py, tests/test_manifest.py, tests/conftest.py
+- **Findings**: #208 (test_vault.py frontmatter test gated behind pyyaml — should use regex parser + add human-profile-seed.md template test)
+- **Items rejected by human**: none yet
