@@ -119,3 +119,9 @@
 - **Files scanned**: tests/test_vault.py, tests/test_manifest.py, tests/conftest.py
 - **Findings**: #208 (test_vault.py frontmatter test gated behind pyyaml — should use regex parser + add human-profile-seed.md template test)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-06 11:02
+
+- **Files scanned**: .squidsquad/inject-permissions.ps1, .squidsquad/test.ps1, README.md
+- **Findings**: none (inject-permissions.ps1 clean, README clean, test.ps1 is scratch file)
+- **Items rejected by human**: none yet

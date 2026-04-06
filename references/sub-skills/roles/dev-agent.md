@@ -92,11 +92,12 @@ For each bug that does not have a `status:shipped` or closed state:
 3. Locate the relevant code.
 4. Fix the bug.
 5. Run the test command: `[ROLE_TEST_CMD]`
-6. If tests pass:
+6. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false` (no modifications), do NOT transition — re-read the bug and apply the fix. Never mark a bug as fixed without actual code changes.
+7. If tests pass and changes exist:
    - Transition status: `python references/scripts/tracker.py transition [NUMBER] open pending-test`
    - Comment: `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Fixed in commit [hash]. [Brief explanation]. Status → Pending Test."`
    - Clear working state.
-7. If the root cause belongs to another agent's domain:
+8. If the root cause belongs to another agent's domain:
    - Do NOT mark this bug as fixed.
    - File a new bug: `python references/scripts/tracker.py create-bug --title "[title]" --body "[description]" --role [OTHER_ROLE] --severity [level] --reporter [ROLE]-lead`
    - Comment on the original: `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Root cause is in [OTHER_ROLE]. Filed #[NEW_NUMBER]. Blocking."`
@@ -164,14 +165,15 @@ When picking up a feature, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 6. **Run smoke tests** from TEST-PLAN.md (if it exists) before marking as Pending Test.
 7. **Update docs**: Update only technical documentation (API docs, code comments, architecture notes). User-facing docs are handled by DM. If the change affects user-facing behavior, comment delivery notes on the Issue.
 8. **Copy changed references to live**: If any files in `references/` were modified (e.g. `statusline.sh`, `hints-*.txt`, `agent-instructions.md`), copy them to the live `.squidsquad/` location so changes take effect immediately.
-9. If tests and smoke tests pass:
+9. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false`, do NOT transition — re-read the acceptance criteria and apply the implementation.
+10. If tests and smoke tests pass and changes exist:
    - Transition status:
      ```bash
      python references/scripts/tracker.py transition [NUMBER] in-progress pending-test
      python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Implementation complete. All tests passing. Status → Pending Test."
      ```
    - Clear working state.
-10. If tests fail: fix the failure before changing status.
+11. If tests fail: fix the failure before changing status.
 
 {{include: common/improvement-scan}}
 
