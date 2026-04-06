@@ -107,3 +107,9 @@
 - **Files scanned**: tests/test_config.py, tests/integration/harness.py, tests/test_start_scripts.py
 - **Findings**: #200 (test_config.py test_has_pr_flow matches wrong Enabled field — fragile), #201 (test harness shell=True with f-string — same class as #182)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-06 07:02
+
+- **Files scanned**: CHANGELOG.md, .squidsquad/inject-permissions.sh, references/vault-templates/*.md, tests/test_config.py (coverage check)
+- **Findings**: #206 (inject-permissions.sh permission count underreports — cosmetic), #207 (test_config.py missing vault-remember field validation)
+- **Items rejected by human**: none yet
