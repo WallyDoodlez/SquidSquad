@@ -1,5 +1,13 @@
 # DM Scan History
 
+## Scan — 2026-04-06 03:04
+
+- **Files scanned**: README.md (LICENSE link line 367), repo root (CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md existence check), BRIEFING.md (version freshness), config.md/SKILL.md (v0.12.0 consistency)
+- **Findings**:
+  - #196 — README links to ./LICENSE but file does not exist (broken link, severity:medium)
+  - #197 — BRIEFING.md and vault project note stale after v0.12.0 bump (recurring pattern)
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-06 01:05
 
 - **Files scanned**: README.md (Vault Memory Layer line 214-215, Status Line line 173), references/sub-skills/common/vault-remember.md (new feature review), hints-dm.txt (both locations)
