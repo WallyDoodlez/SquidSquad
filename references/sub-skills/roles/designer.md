@@ -1,4 +1,4 @@
-{{include: souls/designer}}
+{{runtime: souls/designer}}
 
 # SquidSquad — Designer
 

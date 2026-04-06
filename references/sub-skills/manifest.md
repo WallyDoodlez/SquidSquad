@@ -14,7 +14,7 @@ This manifest defines how sub-skill source files compose into agent templates. T
 ### Dev Agent (`roles/dev-agent.md`)
 
 Entry file with includes:
-0. `souls/dev` — Soul (first include — colors everything)
+0. `souls/dev` — Soul (runtime-injected — agent reads `.squidsquad/[role]/SOUL.md` at boot)
 1. `common/tracker-protocol` — GitHub Issues tracker operations
 2. `common/pull-latest` — Step 1
 3. `common/context-pressure` — Step 1b
@@ -35,7 +35,7 @@ Entry file with includes:
 ### PM/QA Agent (`roles/pm-agent.md`) — used when QA agent is NOT present
 
 Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded `pm` paths to avoid `[ROLE]` ambiguity — PM uses `[ROLE]` to reference dev agents, not itself):
-0. `souls/pm` — Soul (first include)
+0. `souls/pm` — Soul (runtime-injected — agent reads `.squidsquad/pm/SOUL.md` at boot)
 1. `common/tracker-protocol` — GitHub Issues tracker operations
 2. `common/pull-latest` — Step 1
 3. `pm-specific/pr-flow` — Step 6b
@@ -57,7 +57,7 @@ Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded
 ### PM Agent — Lean (`roles/pm-lean.md`) — used when QA agent IS present
 
 Reduced PM template without verification steps. Setup/upgrade selects this variant when `.squidsquad/qa/` directory exists.
-0. `souls/pm` — Soul (first include — same PM soul)
+0. `souls/pm` — Soul (runtime-injected — same PM soul)
 1. `common/tracker-protocol` — GitHub Issues tracker operations
 2. `common/pull-latest` — Step 1
 3. `pm-specific/delivery-fallback` — Step 3 (delivery fallback when DM absent)
@@ -78,7 +78,7 @@ Reduced PM template without verification steps. Setup/upgrade selects this varia
 ### QA Agent (`roles/qa-agent.md`) — recommended when dev/designer agents exist
 
 Entry file with includes:
-0. `souls/qa` — Soul (first include)
+0. `souls/qa` — Soul (runtime-injected)
 1. `common/tracker-protocol` — GitHub Issues tracker operations
 2. `common/pull-latest` — Step 1
 3. `qa-specific/verification` — Steps 2-6 (E2E tests, bug investigation, verification, health check)
@@ -96,7 +96,7 @@ Entry file with includes:
 ### Designer Agent (`roles/designer.md`)
 
 Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardcoded `designer` paths — Designer uses `[ROLE]` to reference dev agents, not itself):
-0. `souls/designer` — Soul (first include)
+0. `souls/designer` — Soul (runtime-injected)
 1. `common/tracker-protocol` — GitHub Issues tracker operations
 2. `common/pull-latest` — Step 1
 3. `designer-specific/design-session` — Steps 2-2e (design request scanning, feasibility, interactive session, spec production, rejection handling)
@@ -115,7 +115,7 @@ Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardc
 ### DM Agent (`roles/dm-agent.md`)
 
 Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardcoded `dm` paths — DM uses `[ROLE]` to reference dev agents, not itself):
-0. `souls/dm` — Soul (first include)
+0. `souls/dm` — Soul (runtime-injected)
 1. `common/tracker-protocol` — GitHub Issues tracker operations
 2. `common/pull-latest` — Step 1
 3. `dm-specific/bug-triage` — Step 1e: triage bugs assigned to DM

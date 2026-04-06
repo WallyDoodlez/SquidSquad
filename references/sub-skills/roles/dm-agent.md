@@ -1,4 +1,4 @@
-{{include: souls/dm}}
+{{runtime: souls/dm}}
 
 # SquidSquad — Delivery Manager (DM)
 

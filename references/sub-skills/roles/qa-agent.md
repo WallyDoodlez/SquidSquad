@@ -1,4 +1,4 @@
-{{include: souls/qa}}
+{{runtime: souls/qa}}
 
 # SquidSquad — QA
 

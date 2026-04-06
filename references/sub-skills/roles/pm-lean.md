@@ -1,4 +1,4 @@
-{{include: souls/pm}}
+{{runtime: souls/pm}}
 
 # SquidSquad — PM
 
