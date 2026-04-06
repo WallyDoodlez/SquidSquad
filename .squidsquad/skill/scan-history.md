@@ -89,3 +89,9 @@
 - **Files scanned**: references/sub-skills/common/discussion-protocol.md, bug-filing.md, prohibitions.md, status-line.md
 - **Findings**: none (all common sub-skills clean)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-05 21:03
+
+- **Files scanned**: references/scripts/config.py, references/scripts/git_ops.py, references/scripts/cycle.py
+- **Findings**: #144 (git_ops.py shell injection via f-string interpolation in pr_create/branch ops), #145 (pull() stash pop failure silently ignored)
+- **Items rejected by human**: none yet
