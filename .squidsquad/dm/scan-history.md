@@ -1,5 +1,13 @@
 # DM Scan History
 
+## Scan — 2026-04-06 05:04
+
+- **Files scanned**: .squidsquad/statusline.sh (full file — DM section, QA fallback, alias handling, hint loading)
+- **Findings**:
+  - #202 — statusline.sh DM section hardcodes ROLE_LABEL, ignoring alias config
+  - #203 — statusline.sh QA role uses dev hints, no hints-qa.txt exists
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-06 03:04
 
 - **Files scanned**: README.md (LICENSE link line 367), repo root (CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md existence check), BRIEFING.md (version freshness), config.md/SKILL.md (v0.12.0 consistency)
