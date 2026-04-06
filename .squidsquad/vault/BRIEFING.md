@@ -4,11 +4,9 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- Sub-skill extraction complete (#30) — all 6 role templates now use includes, 15 common + 32 role-specific sub-skills
-- Status bar shows active sub-skill name (#31) — format: `phase|sub-skill — description`
-- Step markers now timestamped (#52) — `[🦑 HH:MM:SS] description`
-- DM bug triage step added (#51) — DM can now fix bugs in its own domain
-- Agent name aliases (#29) — pending approval, will enable universal placeholders for sub-skills
+- #2 — Public-facing documentation overhaul and attention-drawing README (approved, awaiting pickup)
+- Improvement scanning active — DM filing doc drift bugs as they surface after version bumps
+- All shipped through v0.11.0: sub-skill extraction (#30), status bar sub-skill names (#31), timestamped step markers (#52), DM bug triage (#51), agent name aliases (#29)
 
 ## Recent Decisions
 
@@ -30,13 +28,13 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Constraints & Blockers
 
-- Test suite exists (`python tests/run_tests.py`) — static analysis + integration tests; #67 still in progress for full QA pass
+- Test suite exists (`python tests/run_tests.py`) — static analysis + integration tests (#67 shipped)
 - PR flow currently disabled
-- Ship counter reset after v0.10.0 bump
+- Ship counter reset after v0.11.0 bump — threshold 10, counter at 0
 
 ## Team State
 
 - Active agents: skill-lead, PM (separate), DM
 - QA not currently active (PM handles verification in combined mode)
-- Current version: 0.10.0 (Architecture Version 1)
+- Current version: 0.11.0 (Architecture Version 1)
 - Tracker: GitHub Issues with structured labels (`type:`, `status:`, `role:`, `priority:`)
