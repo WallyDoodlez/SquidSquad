@@ -157,6 +157,49 @@ def get_alias(role):
     return role
 
 
+def sync_agents():
+    """Scan .squidsquad/*/CLAUDE.md and update config.md Agents section."""
+    sqdir = REPO_ROOT / ".squidsquad"
+    # Find all roles with CLAUDE.md
+    dev_roles = []
+    has_dm = False
+    for subdir in sorted(sqdir.iterdir()):
+        if not subdir.is_dir():
+            continue
+        if (subdir / "CLAUDE.md").exists():
+            name = subdir.name
+            if name == "pm":
+                continue  # PM is always listed separately
+            if name == "dm":
+                has_dm = True
+                continue
+            dev_roles.append(name)
+
+    # Update config
+    if dev_roles:
+        set_field("dev-agents", ", ".join(dev_roles))
+
+    # Update DM presence
+    text = _read_config()
+    if has_dm and "**DM**:" not in text:
+        # Add DM line after PM/QA
+        text = text.replace(
+            "- **PM/QA**: always present",
+            "- **PM/QA**: always present\n- **DM**: present",
+        )
+        CONFIG_PATH.write_text(text, encoding="utf-8")
+    elif not has_dm and "**DM**: present" in text:
+        text = text.replace("\n- **DM**: present", "")
+        CONFIG_PATH.write_text(text, encoding="utf-8")
+
+    # Report
+    roles = dev_roles + ["pm"]
+    if has_dm:
+        roles.append("dm")
+    print(f"Synced agents: {', '.join(roles)}")
+    return roles
+
+
 def dump_all():
     """Dump all config fields as JSON."""
     text = _read_config()
@@ -192,6 +235,9 @@ def main():
 
     elif cmd == "dump":
         print(json.dumps(dump_all(), indent=2))
+
+    elif cmd == "sync-agents":
+        sync_agents()
 
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)
