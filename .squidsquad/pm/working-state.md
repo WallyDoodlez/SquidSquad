@@ -13,8 +13,11 @@
 - #3 (going public) — on hold
 - #17 (Vault Phase 3) — pending, human discussing direction
 
+## Planning Phase Active
+- **Phase**: discussing #17
+
 ## Pending Human Input
-- #17 Vault Phase 3 — PM presented scope summary and open questions, awaiting human confirmation to begin planning
+- (none)
 
 ## Key Context
 - v0.11.0, shipped counter at 2/10
