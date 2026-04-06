@@ -1,5 +1,13 @@
 # DM Scan History
 
+## Scan — 2026-04-06 07:04
+
+- **Files scanned**: SKILL.md (/squidsquad-status command lines 952-987, /squidsquad-interval lines 989-1006)
+- **Findings**:
+  - #204 — /squidsquad-status excludes DM from agent health dashboard
+  - #205 — /squidsquad-status uses bare gh issue list instead of tracker.py for shipped items
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-06 05:04
 
 - **Files scanned**: .squidsquad/statusline.sh (full file — DM section, QA fallback, alias handling, hint loading)
