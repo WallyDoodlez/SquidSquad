@@ -78,9 +78,17 @@ LEGAL_TRANSITIONS = {
 
 
 def _run(cmd, check=True):
-    """Run a shell command from repo root."""
+    """Run a shell command from repo root (only for static commands)."""
     return subprocess.run(
         cmd, shell=True, capture_output=True, text=True,
+        check=check, cwd=str(REPO_ROOT),
+    )
+
+
+def _run_list(cmd_list, check=True):
+    """Run a command from repo root using list form (safe for variable args)."""
+    return subprocess.run(
+        cmd_list, capture_output=True, text=True,
         check=check, cwd=str(REPO_ROOT),
     )
 
@@ -158,7 +166,7 @@ def list_all_open():
 
 def add_labels(number, labels_str):
     """Add labels to an issue (for metadata labels like design:, squidsquad)."""
-    _run(f'gh issue edit {number} --add-label "{labels_str}"')
+    _run_list(["gh", "issue", "edit", str(number), "--add-label", labels_str])
     print(f"#{number}: added labels {labels_str}")
 
 
@@ -172,10 +180,12 @@ def create_bug(title, body, role, severity, reporter=None):
     if reporter:
         full_body = f"**Reported By**: {reporter}\n**Severity**: {severity.title()}\n\n{body}"
 
-    result = _run(
-        f'gh issue create --title "BUG: {title}" '
-        f'--body "{full_body}" --label "{labels}"'
-    )
+    result = _run_list([
+        "gh", "issue", "create",
+        "--title", f"BUG: {title}",
+        "--body", full_body,
+        "--label", labels,
+    ])
     url = result.stdout.strip()
     number = int(url.rstrip("/").split("/")[-1])
     print(json.dumps({"number": number, "url": url}))
@@ -188,10 +198,12 @@ def create_feature(title, body, role, priority, reporter=None):
     role_label = f"role:{role}"
     labels = f"type:feature,{pri_label},{role_label},squidsquad,status:pending"
 
-    result = _run(
-        f'gh issue create --title "FEAT: {title}" '
-        f'--body "{body}" --label "{labels}"'
-    )
+    result = _run_list([
+        "gh", "issue", "create",
+        "--title", f"FEAT: {title}",
+        "--body", body,
+        "--label", labels,
+    ])
     url = result.stdout.strip()
     number = int(url.rstrip("/").split("/")[-1])
     print(json.dumps({"number": number, "url": url}))
@@ -213,11 +225,11 @@ def transition(number, from_status, to_status):
         )
         sys.exit(1)
 
-    _run(f'gh issue edit {number} --remove-label "{from_label}" --add-label "{to_label}"')
+    _run_list(["gh", "issue", "edit", str(number), "--remove-label", from_label, "--add-label", to_label])
 
     # Auto-close on shipped
     if to_label == "status:shipped":
-        _run(f"gh issue close {number}")
+        _run_list(["gh", "issue", "close", str(number)])
 
     print(f"#{number}: {from_label} -> {to_label}")
     return True
@@ -227,13 +239,13 @@ def comment(number, role, message):
     """Add a discussion comment to an issue."""
     # No manual timestamps — GitHub provides them
     body = f"**{role}**: {message}"
-    _run(f'gh issue comment {number} --body "{body}"')
+    _run_list(["gh", "issue", "comment", str(number), "--body", body])
     print(f"Commented on #{number}")
 
 
 def get_labels(number):
     """Get label names for an issue."""
-    result = _run(f'gh issue view {number} --json labels')
+    result = _run_list(["gh", "issue", "view", str(number), "--json", "labels"])
     data = json.loads(result.stdout)
     labels = [l["name"] for l in data.get("labels", [])]
     print(json.dumps(labels))
@@ -242,7 +254,7 @@ def get_labels(number):
 
 def get_state(number):
     """Get issue state (OPEN/CLOSED)."""
-    result = _run(f'gh issue view {number} --json state')
+    result = _run_list(["gh", "issue", "view", str(number), "--json", "state"])
     data = json.loads(result.stdout)
     state = data["state"]
     print(state)
@@ -251,7 +263,7 @@ def get_state(number):
 
 def close_issue(number):
     """Close an issue."""
-    _run(f"gh issue close {number}")
+    _run_list(["gh", "issue", "close", str(number)])
     print(f"Closed #{number}")
 
 
