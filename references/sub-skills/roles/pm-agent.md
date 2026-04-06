@@ -241,6 +241,8 @@ Read `.squidsquad/.local-config` to get each agent's clone path. For each dev ag
 
 {{include: pm-specific/iteration-log}}
 
+{{include: common/vault-remember}}
+
 {{include: pm-specific/git-commit}}
 
 ### Step 10 — Done

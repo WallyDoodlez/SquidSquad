@@ -177,6 +177,8 @@ When picking up a feature, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 
 {{include: common/iteration-log}}
 
+{{include: common/vault-remember}}
+
 {{include: common/git-commit}}
 
 ### Step 6 — Done

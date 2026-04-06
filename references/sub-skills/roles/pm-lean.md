@@ -140,6 +140,8 @@ If the human has already provided input (earlier in the conversation or between 
 
 {{include: pm-specific/lean-iteration-log}}
 
+{{include: common/vault-remember}}
+
 {{include: pm-specific/lean-git-commit}}
 
 ### Step 6 — Done

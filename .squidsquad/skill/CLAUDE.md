@@ -602,6 +602,89 @@ python references/scripts/cycle.py cleanup-iterations skill
 ```
 <!-- /sub-skill: iteration-log -->
 
+<!-- sub-skill: vault-remember -->
+### Step 4b — Vault Remember (End-of-Cycle Reflection)
+
+Print: `[🦑 HH:MM:SS] Reflecting on cycle...`
+
+**Config gate**: Check vault-remember setting:
+```bash
+python references/scripts/config.py get vault-remember
+```
+If `no`, skip this step entirely.
+
+**Quiet-cycle gate**: Check if this cycle did real work:
+```bash
+python references/scripts/vault_remember.py is-quiet skill
+```
+If exit code 0 (quiet), skip — nothing to reflect on.
+
+**Reset write counter** at the start of each reflection:
+```bash
+python references/scripts/vault_remember.py reset-writes skill
+```
+
+**Reflection prompt**: Review this cycle's iteration log and evaluate each category:
+
+1. **DECISIONS**: Any architecture, pattern, or trade-off decisions made this cycle?
+   → If yes: vault-create `galaxy/decision-*.md`
+2. **PATTERNS**: Any reusable patterns discovered or confirmed?
+   → If yes: vault-create `galaxy/pattern-*.md`
+3. **LEARNINGS**: Anything fail or succeed unexpectedly?
+   → If yes: vault-create `galaxy/learning-*.md`
+4. **HUMAN PREFERENCES**: Did the human express any preference, style, or value?
+   → If yes: vault-update `areas/human-profile.md`
+5. **PROJECT CONTEXT**: Did project goals, constraints, or architecture change?
+   → If yes: vault-update `projects/<name>.md` or `BRIEFING.md`
+
+For each candidate, apply these **deterministic gates IN ORDER**:
+
+**Gate 1 — Write budget**:
+```bash
+python references/scripts/vault_remember.py write-budget skill
+```
+If output is `0`, STOP — no budget remaining this cycle.
+
+**Gate 2 — Dedup check**:
+```bash
+python references/scripts/vault_check.py dedup-check --title "<candidate-name>" --tags "<tags>"
+```
+- If exact match found → SKIP (already in vault)
+- If near-match found → decide: UPDATE existing note or CREATE new
+- If no match → proceed to Gate 3
+
+**Gate 3 — Reusability**: Is this specific to only this cycle with no future value? → SKIP
+
+**Gate 4 — Fresh context test**: Would a fresh agent in a new context benefit from this? → WRITE
+
+**Output format** (in iteration log notes):
+- `WRITE: <type> — <one-line description>` (gates 3+4 passed)
+- `UPDATE: <existing-note> — <what to add>` (dedup found near-match)
+- `SKIP: <reason>`
+
+**After each write**, increment the counter and run vault-check:
+```bash
+python references/scripts/vault_remember.py inc-writes skill
+# vault-check Level 1 runs automatically per vault-protocol
+```
+
+**Priority when >2 candidates pass gates** (write the top 2 only):
+1. Human preferences (always highest — they shape all future work)
+2. Decisions (architectural choices compound)
+3. Learnings (failure lessons prevent repeat mistakes)
+4. Patterns (useful but can wait a cycle)
+
+Remaining candidates beyond the write budget are noted in the iteration log's Notes field: `Vault-worthy but deferred (budget): [description]`.
+
+**BRIEFING.md updates**: Before updating BRIEFING.md, check the token budget:
+```bash
+python references/scripts/vault_remember.py briefing-budget
+```
+If remaining is 0, do not add to BRIEFING.md without trimming. Trimmed content moves to a galaxy note — never deleted.
+
+**human-profile.md**: If a human preference is detected and `areas/human-profile.md` exists, update it following vault-update protocol. If it does not exist, create it from the seed template at `references/vault-templates/human-profile-seed.md`.
+<!-- /sub-skill: vault-remember -->
+
 <!-- sub-skill: git-commit -->
 ### Step 5 — Commit and Push (skip on quiet cycles)
 

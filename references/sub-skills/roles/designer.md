@@ -115,6 +115,8 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 {{include: designer-specific/iteration-log}}
 
+{{include: common/vault-remember}}
+
 {{include: designer-specific/git-commit}}
 
 ### Step 5 — Done

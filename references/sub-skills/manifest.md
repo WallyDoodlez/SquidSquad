@@ -22,6 +22,7 @@ Entry file with includes:
 5. `common/interval-sync` — Step 1d
 6. `common/improvement-scan` — Quiet-cycle improvement scanning
 7. `common/iteration-log` — Step 4: iteration log format and cleanup
+7b. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
 8. `common/git-commit` — Step 5: commit/push protocol with PR flow
 9. `common/discussion-protocol` — Discussion entry format and rules
 10. `common/bug-filing` — Self-file and cross-file bug templates
@@ -42,6 +43,7 @@ Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded
 5. `pm-specific/github-issues` — Step 7b
 6. `common/improvement-scan` — Quiet-cycle improvement scanning
 7. `pm-specific/iteration-log` — Step 8: PM/QA iteration log
+7b. `common/vault-remember` — Step 8b: end-of-cycle vault reflection
 8. `pm-specific/git-commit` — Step 9: commit/push
 9. `pm-specific/bug-filing` — Bug Filing Protocol
 10. `pm-specific/feature-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
@@ -62,7 +64,8 @@ Reduced PM template without verification steps. Setup/upgrade selects this varia
 4. `pm-specific/github-issues` — GitHub Issues ingestion
 5. `common/improvement-scan` — Quiet-cycle improvement scanning
 6. `pm-specific/lean-iteration-log` — Step 4: lean PM iteration log
-7. `pm-specific/lean-git-commit` — Step 5: commit/push
+6b. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
+7. `pm-specific/lean-git-commit` — Step 5: lean PM commit/push
 8. `pm-specific/bug-filing` — Bug Filing Protocol (shared with PM)
 9. `pm-specific/feature-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
 10. `pm-specific/feature-approval` — Feature Approval Gate
@@ -81,6 +84,7 @@ Entry file with includes:
 3. `qa-specific/verification` — Steps 2-6 (E2E tests, bug investigation, verification, health check)
 4. `common/improvement-scan` — Quiet-cycle improvement scanning
 5. `qa-specific/iteration-log` — Step 7: QA iteration log
+5b. `common/vault-remember` — Step 7b: end-of-cycle vault reflection
 6. `qa-specific/git-commit` — Step 8: commit/push
 7. `qa-specific/bug-filing` — QA Bug Filing Protocol
 8. `qa-specific/discussion-protocol` — Discussion entry format (qa alias)
@@ -98,6 +102,7 @@ Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardc
 3. `designer-specific/design-session` — Steps 2-2e (design request scanning, feasibility, interactive session, spec production, rejection handling)
 4. `common/improvement-scan` — Quiet-cycle improvement scanning
 5. `designer-specific/iteration-log` — Step 3: designer iteration log
+5b. `common/vault-remember` — Step 3b: end-of-cycle vault reflection
 6. `designer-specific/git-commit` — Step 4: commit/push
 7. `designer-specific/discussion-protocol` — Discussion entry format (designer alias)
 8. `designer-specific/design-tools` — Design tool integration and discovery
@@ -118,6 +123,7 @@ Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardc
 4. `dm-specific/version-bumps` — Step 3
 5. `common/improvement-scan` — Quiet-cycle improvement scanning
 6. `dm-specific/iteration-log` — Step 4: DM iteration log
+6b. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
 7. `dm-specific/git-commit` — Step 5: commit/push
 8. `dm-specific/discussion-protocol` — Discussion entry format (dm alias)
 9. `dm-specific/bug-filing` — DM bug/feature filing
@@ -177,6 +183,7 @@ references/sub-skills/
 │   ├── discussion-protocol.md        (Discussion entry format — shared by dev)
 │   ├── bug-filing.md                 (Self-file + cross-file bug templates — shared by dev)
 │   ├── file-conventions.md           (File/directory conventions — shared by dev)
+│   ├── vault-remember.md             (Step 4b — end-of-cycle vault reflection — shared by all roles)
 │   ├── status-line.md                (Status line description — shared by dev)
 │   └── prohibitions.md               (Shared "never do" rules — shared by dev)
 ├── souls/
