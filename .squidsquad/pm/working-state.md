@@ -1,25 +1,19 @@
 # Working State
 
-- **Task**: Monitoring — cycle ops
+- **Task**: Monitoring — #17 awaiting approval
 - **Status**: in-progress
 - **Started**: 2026-04-05
 
 ## Open Bugs
-- #144 (shell injection in git_ops.py pr_create) — in-progress, bounced back, role:skill
-- #145 (stash pop silent failure in pull()) — in-progress, bounced back, role:skill
-
-## Active Features
-- #2 (README overhaul) — approved, DM pickup
-- #3 (going public) — on hold
-- #17 (Vault Phase 3) — pending, human discussing direction
-
-## Planning Phase Active
-- **Phase**: (complete — awaiting approval)
-
-## Pending Human Input
 - (none)
 
+## Active Features
+- #17 (Vault Phase 3: vault-remember) — planned, awaiting human approval for execution
+- #2 (README overhaul) — approved, DM pickup
+- #3 (going public) — on hold
+
 ## Key Context
-- v0.11.0, shipped counter at 2/10
-- #144/#145 failed QA — skill-lead transitioned without fixing code
+- v0.11.0, shipped counter at 4/10
+- #17 has RESEARCH.md, CONTEXT.md, TEST-PLAN.md (59 TCs) ready
+- Zero open bugs
 - Quiet cycle counter: 0
