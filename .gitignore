@@ -2,6 +2,7 @@
 .squidsquad/.active-role
 .squidsquad/*/current-state
 .squidsquad/.local-config
+.squidsquad/.backlog-cache
 
 .claude/commands/squidsquad-*
 .claude/settings.local.json

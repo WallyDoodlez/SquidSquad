@@ -77,14 +77,6 @@ LEGAL_TRANSITIONS = {
 }
 
 
-def _run(cmd, check=True):
-    """Run a shell command from repo root (only for static commands)."""
-    return subprocess.run(
-        cmd, shell=True, capture_output=True, text=True,
-        check=check, cwd=str(REPO_ROOT),
-    )
-
-
 def _run_list(cmd_list, check=True):
     """Run a command from repo root using list form (safe for variable args)."""
     return subprocess.run(
@@ -105,7 +97,7 @@ def _resolve_status(name):
 
 def check_gh():
     """Verify gh CLI access."""
-    result = _run("gh issue list --limit 1", check=False)
+    result = _run_list(["gh", "issue", "list", "--limit", "1"], check=False)
     if result.returncode != 0:
         print("ERROR: GitHub Issues permission check failed.", file=sys.stderr)
         print("Run 'gh auth refresh' with 'repo' scope.", file=sys.stderr)
@@ -122,9 +114,9 @@ def list_issues(role, issue_type="bug", status=None):
     if status:
         status_label = _resolve_status(status)
         labels += f",{status_label}"
-    result = _run(
-        f'gh issue list --label "{labels}" --state open '
-        f'--json number,title,labels --limit 50',
+    result = _run_list(
+        ["gh", "issue", "list", "--label", labels, "--state", "open",
+         "--json", "number,title,labels", "--limit", "50"],
         check=False,
     )
     if result.returncode != 0:
@@ -137,9 +129,9 @@ def list_issues(role, issue_type="bug", status=None):
 
 def list_by_labels(labels_str):
     """List issues by arbitrary label string (for cross-role queries)."""
-    result = _run(
-        f'gh issue list --label "{labels_str}" --state open '
-        f'--json number,title,labels --limit 50',
+    result = _run_list(
+        ["gh", "issue", "list", "--label", labels_str, "--state", "open",
+         "--json", "number,title,labels", "--limit", "50"],
         check=False,
     )
     if result.returncode != 0:
@@ -152,8 +144,9 @@ def list_by_labels(labels_str):
 
 def list_all_open():
     """List all open issues (for ingestion/triage of external issues)."""
-    result = _run(
-        'gh issue list --state open --json number,title,labels,body --limit 50',
+    result = _run_list(
+        ["gh", "issue", "list", "--state", "open",
+         "--json", "number,title,labels,body", "--limit", "50"],
         check=False,
     )
     if result.returncode != 0:
