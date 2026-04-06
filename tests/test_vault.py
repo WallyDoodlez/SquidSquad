@@ -10,13 +10,6 @@ from pathlib import Path
 
 from conftest import VAULT_DIR, REFERENCES_DIR
 
-# Try to import yaml for frontmatter parsing
-try:
-    import yaml
-    HAS_YAML = True
-except ImportError:
-    HAS_YAML = False
-
 PARAG_DIRS = ["projects", "areas", "resources", "archives", "galaxy"]
 VALID_GALAXY_PREFIXES = {"decision-", "pattern-", "learning-", "style-"}
 
@@ -54,6 +47,7 @@ class TestVaultTemplates:
         "areas-template.md",
         "galaxy-template.md",
         "projects-template.md",
+        "human-profile-seed.md",
         "BRIEFING.md",
     ])
     def test_template_exists(self, template):
@@ -78,16 +72,20 @@ class TestGalaxyNotes:
                 f"Expected one of: {VALID_GALAXY_PREFIXES}"
             )
 
-    @pytest.mark.skipif(not HAS_YAML, reason="pyyaml not installed")
     def test_galaxy_notes_have_frontmatter(self):
         for note in self._get_galaxy_notes():
             content = note.read_text(encoding="utf-8")
             assert content.startswith("---"), (
                 f"Galaxy note '{note.name}' missing YAML frontmatter"
             )
-            # Extract frontmatter
             parts = content.split("---", 2)
-            if len(parts) >= 3:
-                fm = yaml.safe_load(parts[1])
-                assert fm, f"Empty frontmatter in '{note.name}'"
-                assert "type" in fm, f"Missing 'type' in frontmatter: {note.name}"
+            assert len(parts) >= 3, f"Malformed frontmatter in '{note.name}'"
+            # Simple key extraction (matches vault_check.py pattern)
+            fm_lines = parts[1].strip().splitlines()
+            fm_keys = set()
+            for line in fm_lines:
+                if ":" in line:
+                    key = line.split(":", 1)[0].strip()
+                    fm_keys.add(key)
+            assert fm_keys, f"Empty frontmatter in '{note.name}'"
+            assert "type" in fm_keys, f"Missing 'type' in frontmatter: {note.name}"

@@ -802,7 +802,7 @@ Create or update `.claude/settings.json` in the project root to add a `SessionSt
 }
 ```
 
-> **Why these permissions?** Dev agents run with `--dangerously-skip-permissions` but still need explicit allow rules for writing tracker files and running git commands without being prompted mid-cycle. Without these, the agent will pause and ask for permission on every file write.
+> **Why these permissions?** SquidSquad boot scripts use `--dangerously-skip-permissions` which bypasses all permission prompts. The `permissions.allow` rules above serve as a reference for users who prefer granular permissions instead, and as a fallback if the flag is removed. The boot scripts also run `inject-permissions.sh` (or `.ps1`) which merges a comprehensive `permissions.template.json` into settings.json — this provides a complete allowlist for users who want to audit exactly what agents can do.
 
 **If `.claude/settings.json` already exists**, merge carefully:
 
