@@ -152,6 +152,44 @@ def deploy_role(role_name: str) -> Path:
     return output_path
 
 
+TEMPLATES_DIR = REPO_ROOT / "references" / "templates"
+
+
+def boot_role(role_name: str) -> list:
+    """Generate boot scripts (start-[role].sh and start-[role].ps1) from templates."""
+    outputs = []
+    for ext in ("sh", "ps1"):
+        template_path = TEMPLATES_DIR / f"start-role.{ext}"
+        if not template_path.exists():
+            print(f"ERROR: Template not found: {template_path}", file=sys.stderr)
+            sys.exit(1)
+
+        content = template_path.read_text(encoding="utf-8")
+        content = content.replace("{{ROLE}}", role_name)
+
+        output_path = REPO_ROOT / ".squidsquad" / f"start-{role_name}.{ext}"
+        output_path.write_text(content, encoding="utf-8")
+        outputs.append(output_path)
+
+    return outputs
+
+
+def boot_all() -> list:
+    """Generate boot scripts for all configured roles."""
+    agents = _read_config_value("dev-agents") or ""
+    roles = [r.strip() for r in agents.split(",") if r.strip()]
+    roles.append("pm")  # PM always present
+    # Add DM if directory exists
+    dm_dir = REPO_ROOT / ".squidsquad" / "dm"
+    if dm_dir.exists():
+        roles.append("dm")
+    all_outputs = []
+    for role in roles:
+        outputs = boot_role(role)
+        all_outputs.extend(outputs)
+    return all_outputs
+
+
 def main():
     args = sys.argv[1:]
     if not args or args[0] == "--help":
@@ -189,6 +227,21 @@ def main():
             output = deploy_role(role)
             lines = output.read_text(encoding="utf-8").count("\n")
             print(f"  {role}: {lines} lines -> {output.relative_to(REPO_ROOT)}")
+
+    elif cmd == "boot":
+        if len(args) < 2:
+            print("Usage: compose.py boot <role>", file=sys.stderr)
+            print("  e.g.: compose.py boot skill", file=sys.stderr)
+            sys.exit(1)
+        role_name = args[1]
+        outputs = boot_role(role_name)
+        for out in outputs:
+            print(f"Generated {out.relative_to(REPO_ROOT)}")
+
+    elif cmd == "boot-all":
+        outputs = boot_all()
+        for out in outputs:
+            print(f"  {out.relative_to(REPO_ROOT)}")
 
     else:
         # Treat as role entry file name

@@ -588,346 +588,44 @@ Add runtime files to `.gitignore` (create the file if it doesn't exist):
 
 ### Step 5 — Generate Boot Scripts
 
-Generate both a `.sh` (bash) and a `.ps1` (PowerShell) boot script for each dev agent, plus PM, QA (when dev/designer agents are present), Designer (when defined), and DM (when opted in). Script names use the role name, e.g. `start-be.sh`, `start-api.sh`, `start-qa.sh`, `start-designer.ps1`.
+Boot scripts are generated from templates in `references/templates/`. Each role gets a `.sh` and `.ps1` script parameterized by role name only. All agents use the same template — no per-role customization needed.
 
-All agents run interactively. The boot script passes the role via `--append-system-prompt "SQUIDSQUAD_ROLE=[ROLE]"` — a session-only signal that never leaks across terminals. The CLAUDE.md auto-boot section detects this in the system prompt and starts the Ralph Loop. The human can observe progress and comment in any agent's terminal.
+Generate boot scripts for each active role:
 
-**`start-[role].sh`**:
 ```bash
-#!/bin/bash
-cd "$(git rev-parse --show-toplevel)"
+# For each dev agent role:
+python references/scripts/compose.py boot [role]
 
-if [ -d .squidsquad ]; then
-  V=$(grep -o '[0-9][0-9.]*[0-9]' .squidsquad/config.md 2>/dev/null | head -1)
-  cat << LOGO
+# For PM (always):
+python references/scripts/compose.py boot pm
 
-      ▗▄▖
-     ▟█ █▙
-    ▐█• •█▌
-   ███████
-   ▐█████▌
-    ▐▌▐▌▐▌
-  S Q U I D S Q U A D   v${V:-?}  —  [ROLE]
+# For QA (when dev/designer agents are present):
+python references/scripts/compose.py boot qa
 
-LOGO
-fi
+# For DM (when opted in — .squidsquad/dm/ exists):
+python references/scripts/compose.py boot dm
 
-# Inject permissions from template into settings.json
-bash .squidsquad/inject-permissions.sh 2>/dev/null || true
+# For Designer (when defined):
+python references/scripts/compose.py boot designer
 
-# Write role for statusline (not used for auto-boot — system prompt handles that)
-echo "[ROLE]" > .squidsquad/.active-role
-
-# Clear and initialize status bar state
-rm -f .squidsquad/[ROLE]/current-state
-echo "idle|Initializing..." > .squidsquad/[ROLE]/current-state
-
-claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=[ROLE]" "start the loop"
+# Or generate all configured roles at once:
+python references/scripts/compose.py boot-all
 ```
 
-**`start-[role].ps1`**:
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$repoRoot = git rev-parse --show-toplevel
-Set-Location $repoRoot
+Generated scripts include a `DO NOT EDIT` header (same convention as CLAUDE.md). Templates are at `references/templates/start-role.sh` and `references/templates/start-role.ps1`.
 
-$config = Get-Content .squidsquad/config.md -Raw -Encoding UTF8
-$v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
-
-Write-Host ""
-Write-Host "      ▗▄▖"
-Write-Host "     ▟█ █▙"
-Write-Host "    ▐█• •█▌"
-Write-Host "   ███████"
-Write-Host "   ▐█████▌"
-Write-Host "    ▐▌▐▌▐▌"
-Write-Host "  S Q U I D S Q U A D   v$v  -  [ROLE]"
-Write-Host ""
-
-# Inject permissions from template into settings.json
-& (Join-Path $repoRoot ".squidsquad/inject-permissions.ps1")
-
-# Write role for statusline (not used for auto-boot -- system prompt handles that)
-"[ROLE]" | Set-Content .squidsquad/.active-role -NoNewline
-
-# Clear and initialize status bar state
-Remove-Item .squidsquad/[ROLE]/current-state -ErrorAction SilentlyContinue
-"idle|Initializing..." | Set-Content .squidsquad/[ROLE]/current-state -NoNewline
-
-claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=[ROLE]" "start the loop"
-```
-
-**`start-pm.sh`**:
-```bash
-#!/bin/bash
-cd "$(git rev-parse --show-toplevel)"
-
-if [ -d .squidsquad ]; then
-  V=$(grep -o '[0-9][0-9.]*[0-9]' .squidsquad/config.md 2>/dev/null | head -1)
-  cat << LOGO
-
-      ▗▄▖
-     ▟█ █▙
-    ▐█• •█▌
-   ███████
-   ▐█████▌
-    ▐▌▐▌▐▌
-  S Q U I D S Q U A D   v${V:-?}  —  PM
-
-LOGO
-fi
-
-# Inject permissions from template into settings.json
-bash .squidsquad/inject-permissions.sh 2>/dev/null || true
-
-# Write role for statusline (not used for auto-boot — system prompt handles that)
-echo "pm" > .squidsquad/.active-role
-
-# Clear and initialize status bar state
-rm -f .squidsquad/pm/current-state
-echo "idle|Initializing..." > .squidsquad/pm/current-state
-
-claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
-```
-
-**`start-pm.ps1`**:
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$repoRoot = git rev-parse --show-toplevel
-Set-Location $repoRoot
-
-if (Test-Path .squidsquad) {
-    $config = Get-Content .squidsquad/config.md -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
-    $v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
-
-    Write-Host ""
-    Write-Host "      ▗▄▖"
-    Write-Host "     ▟█ █▙"
-    Write-Host "    ▐█• •█▌"
-    Write-Host "   ███████"
-    Write-Host "   ▐█████▌"
-    Write-Host "    ▐▌▐▌▐▌"
-    Write-Host "  S Q U I D S Q U A D   v$v  -  PM"
-    Write-Host ""
-}
-
-# Inject permissions from template into settings.json
-& (Join-Path $repoRoot ".squidsquad/inject-permissions.ps1")
-
-# Write role for statusline (not used for auto-boot -- system prompt handles that)
-"pm" | Set-Content .squidsquad/.active-role -NoNewline
-
-# Clear and initialize status bar state
-Remove-Item .squidsquad/pm/current-state -ErrorAction SilentlyContinue
-"idle|Initializing..." | Set-Content .squidsquad/pm/current-state -NoNewline
-
-claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop"
-```
-
-> **Note:** All agents use a positional arg to send the first message (kickstarting the Ralph Loop) in an interactive session. The user can observe progress and comment in any agent's terminal.
-
-**`start-dm.sh`** (DM uses the same pattern as dev agents — it's autonomous):
-```bash
-#!/bin/bash
-cd "$(git rev-parse --show-toplevel)"
-
-if [ -d .squidsquad ]; then
-  V=$(grep -o '[0-9][0-9.]*[0-9]' .squidsquad/config.md 2>/dev/null | head -1)
-  cat << LOGO
-
-      ▗▄▖
-     ▟█ █▙
-    ▐█• •█▌
-   ███████
-   ▐█████▌
-    ▐▌▐▌▐▌
-  S Q U I D S Q U A D   v${V:-?}  —  DM
-
-LOGO
-fi
-
-# Inject permissions from template into settings.json
-bash .squidsquad/inject-permissions.sh 2>/dev/null || true
-
-# Write role for statusline
-echo "dm" > .squidsquad/.active-role
-
-# Clear and initialize status bar state
-rm -f .squidsquad/dm/current-state
-echo "idle|Initializing..." > .squidsquad/dm/current-state
-
-claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=dm" "start the loop"
-```
-
-**`start-dm.ps1`**:
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$repoRoot = git rev-parse --show-toplevel
-Set-Location $repoRoot
-
-if (Test-Path .squidsquad) {
-    $config = Get-Content .squidsquad/config.md -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
-    $v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
-
-    Write-Host ""
-    Write-Host "      ▗▄▖"
-    Write-Host "     ▟█ █▙"
-    Write-Host "    ▐█• •█▌"
-    Write-Host "   ███████"
-    Write-Host "   ▐█████▌"
-    Write-Host "    ▐▌▐▌▐▌"
-    Write-Host "  S Q U I D S Q U A D   v$v  -  DM"
-    Write-Host ""
-}
-
-# Inject permissions from template into settings.json
-& (Join-Path $repoRoot ".squidsquad/inject-permissions.ps1")
-
-# Write role for statusline
-"dm" | Set-Content .squidsquad/.active-role -NoNewline
-
-# Clear and initialize status bar state
-Remove-Item .squidsquad/dm/current-state -ErrorAction SilentlyContinue
-"idle|Initializing..." | Set-Content .squidsquad/dm/current-state -NoNewline
-
-claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=dm" "start the loop"
-```
-
-**`start-qa.sh`** (QA uses the same pattern — autonomous):
-```bash
-#!/bin/bash
-cd "$(git rev-parse --show-toplevel)"
-
-if [ -d .squidsquad ]; then
-  V=$(grep -o '[0-9][0-9.]*[0-9]' .squidsquad/config.md 2>/dev/null | head -1)
-  cat << LOGO
-
-      ▗▄▖
-     ▟█ █▙
-    ▐█• •█▌
-   ███████
-   ▐█████▌
-    ▐▌▐▌▐▌
-  S Q U I D S Q U A D   v${V:-?}  —  QA
-
-LOGO
-fi
-
-# Inject permissions from template into settings.json
-bash .squidsquad/inject-permissions.sh 2>/dev/null || true
-
-# Write role for statusline
-echo "qa" > .squidsquad/.active-role
-
-# Clear and initialize status bar state
-rm -f .squidsquad/qa/current-state
-echo "idle|Initializing..." > .squidsquad/qa/current-state
-
-claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=qa" "start the loop"
-```
-
-**`start-qa.ps1`**:
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$repoRoot = git rev-parse --show-toplevel
-Set-Location $repoRoot
-
-if (Test-Path .squidsquad) {
-    $config = Get-Content .squidsquad/config.md -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
-    $v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
-
-    Write-Host ""
-    Write-Host "      ▗▄▖"
-    Write-Host "     ▟█ █▙"
-    Write-Host "    ▐█• •█▌"
-    Write-Host "   ███████"
-    Write-Host "   ▐█████▌"
-    Write-Host "    ▐▌▐▌▐▌"
-    Write-Host "  S Q U I D S Q U A D   v$v  -  QA"
-    Write-Host ""
-}
-
-# Inject permissions from template into settings.json
-& (Join-Path $repoRoot ".squidsquad/inject-permissions.ps1")
-
-# Write role for statusline
-"qa" | Set-Content .squidsquad/.active-role -NoNewline
-
-# Clear and initialize status bar state
-Remove-Item .squidsquad/qa/current-state -ErrorAction SilentlyContinue
-"idle|Initializing..." | Set-Content .squidsquad/qa/current-state -NoNewline
-
-claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=qa" "start the loop"
-```
-
-**`start-designer.sh`** (Designer — autonomous, only when designer role is defined):
-```bash
-#!/bin/bash
-cd "$(git rev-parse --show-toplevel)"
-
-if [ -d .squidsquad ]; then
-  V=$(grep -o '[0-9][0-9.]*[0-9]' .squidsquad/config.md 2>/dev/null | head -1)
-  cat << LOGO
-
-      ▗▄▖
-     ▟█ █▙
-    ▐█• •█▌
-   ███████
-   ▐█████▌
-    ▐▌▐▌▐▌
-  S Q U I D S Q U A D   v${V:-?}  —  Designer
-
-LOGO
-fi
-
-# Inject permissions from template into settings.json
-bash .squidsquad/inject-permissions.sh 2>/dev/null || true
-
-# Write role for statusline
-echo "designer" > .squidsquad/.active-role
-
-# Clear and initialize status bar state
-rm -f .squidsquad/designer/current-state
-echo "idle|Initializing..." > .squidsquad/designer/current-state
-
-claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=designer" "start the loop"
-```
-
-**`start-designer.ps1`**:
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$repoRoot = git rev-parse --show-toplevel
-Set-Location $repoRoot
-
-if (Test-Path .squidsquad) {
-    $config = Get-Content .squidsquad/config.md -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
-    $v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
-
-    Write-Host ""
-    Write-Host "      ▗▄▖"
-    Write-Host "     ▟█ █▙"
-    Write-Host "    ▐█• •█▌"
-    Write-Host "   ███████"
-    Write-Host "   ▐█████▌"
-    Write-Host "    ▐▌▐▌▐▌"
-    Write-Host "  S Q U I D S Q U A D   v$v  -  Designer"
-    Write-Host ""
-}
-
-# Inject permissions from template into settings.json
-& (Join-Path $repoRoot ".squidsquad/inject-permissions.ps1")
-
-# Write role for statusline
-"designer" | Set-Content .squidsquad/.active-role -NoNewline
-
-# Clear and initialize status bar state
-Remove-Item .squidsquad/designer/current-state -ErrorAction SilentlyContinue
-"idle|Initializing..." | Set-Content .squidsquad/designer/current-state -NoNewline
-
-claude --dangerously-skip-permissions --append-system-prompt "SQUIDSQUAD_ROLE=designer" "start the loop"
-```
+All agents run interactively. The boot script passes the role via `--append-system-prompt "SQUIDSQUAD_ROLE=[ROLE]"` — a session-only signal that never leaks across terminals. The CLAUDE.md auto-boot section detects this in the system prompt and starts the Ralph Loop.
 
 Make the `.sh` scripts executable (`chmod +x`).
+
+
+
+
+
+
+
+
+
 
 > **BOM-safe writes on Windows**: PowerShell 5.x `Set-Content -Encoding UTF8` adds a UTF-8 BOM, which breaks JSON parsers (node, jq, Claude). When writing files consumed by other tools (JSON, config files), use `[System.IO.File]::WriteAllText($path, $content, [System.Text.UTF8Encoding]::new($false))` instead. The `inject-permissions.ps1` script already follows this pattern.
 
