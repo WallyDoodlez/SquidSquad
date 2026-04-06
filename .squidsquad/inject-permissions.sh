@@ -47,5 +47,5 @@ else
   exit 1
 fi
 
-COUNT=$(grep -v '"// ' "$TEMPLATE" | grep -c '"Bash\|"Edit\|"Write')
+COUNT=$(grep -v '"// ' "$TEMPLATE" | grep -c '"')
 echo "[inject-permissions] Injected $COUNT permission rules from template."

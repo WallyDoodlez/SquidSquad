@@ -956,14 +956,14 @@ When the user says `/squidsquad-status` (or "squad status", "show me the squad",
 **Instructions:**
 
 1. Read `.squidsquad/config.md` to get the list of dev agents and the loop interval.
-2. For each agent (dev agents + PM):
+2. For each agent (dev agents + PM + DM if `.squidsquad/dm/` exists):
    - Check health via `git log --oneline --since="[2×interval] minutes ago" --grep="^[agent]:"` — if commits found, show as `active`; if prior commits exist but none recent, show as `stalled`; else `unknown`.
    - Show last commit time: `git log --oneline --grep="^[agent]:" -1 --format="%ar"`
 3. For each dev agent, query GitHub Issues via `python references/scripts/tracker.py`:
    - `python references/scripts/tracker.py list-bugs [role]` — count and list open bugs
    - `python references/scripts/tracker.py list-features [role] --status approved` — count and list approved features
    - `python references/scripts/tracker.py list-features [role] --status in-progress` — count and list in-progress features
-4. List recent shipped items: `gh issue list --label "squidsquad,status:shipped" --state closed --limit 5`
+4. List recent shipped items: `gh issue list --label "squidsquad" --state closed --limit 5 --json number,title`
 5. Format as a clean dashboard:
 
 ```
@@ -974,6 +974,7 @@ Agent        Health     Last Commit
 ─────        ──────     ───────────
 skill        active     2 minutes ago
 pm           active     3 minutes ago
+dm           active     5 minutes ago
 
 Backlog
 ───────
