@@ -95,3 +95,9 @@
 - **Files scanned**: references/scripts/config.py, references/scripts/git_ops.py, references/scripts/cycle.py
 - **Findings**: #144 (git_ops.py shell injection via f-string interpolation in pr_create/branch ops), #145 (pull() stash pop failure silently ignored)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-06 03:03
+
+- **Files scanned**: references/scripts/tracker.py, references/scripts/compose.py, references/scripts/vault_remember.py
+- **Findings**: #198 (tracker.py list functions still use _run() with shell=True — incomplete #182 fix), #199 (.backlog-cache causes merge conflicts — should be gitignored)
+- **Items rejected by human**: none yet
