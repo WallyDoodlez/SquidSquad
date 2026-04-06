@@ -101,3 +101,9 @@
 - **Files scanned**: references/scripts/tracker.py, references/scripts/compose.py, references/scripts/vault_remember.py
 - **Findings**: #198 (tracker.py list functions still use _run() with shell=True — incomplete #182 fix), #199 (.backlog-cache causes merge conflicts — should be gitignored)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-06 05:02
+
+- **Files scanned**: tests/test_config.py, tests/integration/harness.py, tests/test_start_scripts.py
+- **Findings**: #200 (test_config.py test_has_pr_flow matches wrong Enabled field — fragile), #201 (test harness shell=True with f-string — same class as #182)
+- **Items rejected by human**: none yet
