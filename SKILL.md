@@ -97,7 +97,7 @@ When you invoke SquidSquad, it creates the following inside your project root. O
 │   ├── CLAUDE.md               ← bootstrapper (~20 lines): role config + Read instruction to template
 │   ├── enhancements.md         ← product backlog / enhancement proposals
 │   ├── iterations/             ← iter-N.md logs per cycle
-│   └── migrations/             ← migration logs written when tracker schema changes
+│   └── migrations/             ← historical migration logs (markdown tracker era)
 ├── qa/                         ← QA (auto-added when dev/designer present)
 │   ├── CLAUDE.md               ← bootstrapper: role config + Read instruction to template
 │   ├── qa-log.md               ← QA test run results
@@ -1179,8 +1179,8 @@ When the user invokes upgrade (via `/squidsquad-upgrade` or "upgrade squidsquad"
 
 ### Step 1 — Detect Version Gap (orchestrator)
 
-Read `.squidsquad/config.md` to get installed `SquidSquad Version` and `Tracker Schema`.
-Read `SKILL.md` frontmatter and Schema Changelog for current versions.
+Read `.squidsquad/config.md` to get installed `SquidSquad Version`.
+Read `SKILL.md` frontmatter for current version.
 
 If both match: tell the user they're up to date and stop.
 
@@ -1209,16 +1209,10 @@ Spawn all applicable agents simultaneously. Each agent writes only its assigned 
 **One agent for settings:**
 > Update `.claude/settings.json`: ensure `permissions.allow` contains `Edit(.squidsquad/**)`, `Write(.squidsquad/**)`, and the four git commands. Ensure the `SessionStart` hook is present and matches the current template. Ensure the `statusLine` key is present and points to `bash .squidsquad/statusline.sh`. Regenerate `.squidsquad/statusline.sh` by copying `references/statusline.sh`. Remove `.squidsquad/heartbeat.sh` if it exists (heartbeat system replaced by cross-clone file reads). Copy `references/hints-dev.txt` to `.squidsquad/hints-dev.txt`, `references/hints-pm.txt` to `.squidsquad/hints-pm.txt`, and `references/hints-dm.txt` to `.squidsquad/hints-dm.txt`. Merge into existing content — never remove unrelated keys.
 
-#### If tracker schema differs — additionally spawn:
-
-**One agent per affected tracker directory:**
-> Apply the schema migration documented in the Schema Changelog for the detected version gap. For file-splitting migrations (e.g. Schema 2→3), read all existing entries from monolithic files, create individual files, generate INDEX.md, move terminal-status items to `archived/`, and delete the original monolithic files. Append a `> [DATE] **migration**: schema N→M applied.` Discussion note to each modified entry, and write a log to `pm/migrations/schema-N-to-M.md`.
-
 ### Step 3 — Update config.md (orchestrator)
 
 After all agents complete, update `.squidsquad/config.md`:
 - Set `SquidSquad Version` to current skill version
-- Set `Tracker Schema` to current schema version
 - If `## Heartbeat` section exists, remove it (heartbeat system replaced by cross-clone file reads in v0.8.0+).
 
 ### Step 4 — Commit and Push
@@ -1235,38 +1229,25 @@ Tell the user: version upgraded from → to, files regenerated per agent, any sc
 
 ---
 
-## Schema Changelog
+## Schema Changelog (Historical)
 
-### Schema 3 (current — introduced in v0.9.0): Individual Tracker Files
+> **Note**: SquidSquad now uses GitHub Issues as its tracker (since v0.10.0). The markdown tracker schemas below are historical — no new schema migrations are needed. Existing markdown tracker files in `bugs/`, `features/`, and `archived/` are legacy artifacts.
 
-Replaced monolithic `bugs.md` and `features.md` files with individual files in `bugs/` and `features/` directories. Each bug/feature is its own `.md` file. An auto-generated `INDEX.md` provides a summary table. Terminal-status items are moved to `archived/` subdirectories.
+### v0.10.0+: GitHub Issues Tracker
 
-**Migration from Schema 2:**
-- For each dev agent role: split monolithic `bugs.md` and `features.md` into individual files
-- Terminal-status items (`Closed` bugs, `Shipped`/`Rejected` features) go to `archived/` subdirectory
-- Generate `INDEX.md` for each directory
-- Delete original monolithic files
-- Regenerate agent `CLAUDE.md` files from updated templates
-- Update `statusline.sh`
-- Bump `Tracker Schema` to `3` in `config.md`
+All bugs and features are tracked as GitHub Issues with structured labels. Agents use `python references/scripts/tracker.py` for all tracker operations. Status transitions are enforced by the script. See the Tracker Protocol sub-skill for details.
 
-### Schema 2 (introduced in v0.8.0)
+### Schema 3 (v0.9.0, superseded): Individual Markdown Files
 
-Added `Pending Ship` status to the feature lifecycle. After QA verifies a feature (`Pending Test`), it transitions to `Pending Ship` where the Delivery Manager (DM) handles user-facing delivery (docs, CHANGELOG, version bump, git tag). DM then marks it `Shipped`.
+Replaced monolithic `bugs.md` and `features.md` with individual files in `bugs/` and `features/` directories.
 
-**Migration from Schema 1**: No data migration needed. Existing `Shipped` items remain `Shipped`. Existing `Pending Test` items flow through `Pending Ship` naturally. PM's version bump logic (Step 6c) moves to DM. PM fallback: if no `dm/` directory exists, PM treats `Pending Ship` as `Shipped` (old behavior).
+### Schema 2 (v0.8.0, superseded): Pending Ship Status
 
-**Feature status values**: `Pending` → `Planning` → `Approved` → `In Progress` → `Pending Test` → `Pending Ship` → `Shipped`
+Added `Pending Ship` status to the feature lifecycle for DM delivery.
 
-### Schema 1 (introduced in v0.5.0)
+### Schema 1 (v0.5.0, superseded): Original Markdown Tracker
 
-**Bug fields**: ID, Title, Severity, Status, Reported By, Assigned To, Description, Steps to Reproduce, Expected, Actual, Discussion
-
-**Feature fields**: ID, Title, Priority, Status, Owner, Description, Acceptance Criteria, Discussion
-
-**Bug status values**: `Open` → `Investigating` → `Fixed` → `Verified` → `Closed`
-
-**Feature status values**: `Pending` → `Planning` → `Approved` → `In Progress` → `Pending Test` → `Shipped`
+Original monolithic `bugs.md` and `features.md` files with inline fields.
 
 ---
 
@@ -1280,10 +1261,11 @@ When the user says `/squidsquad-status` (or "squad status", "show me the squad",
 2. For each agent (dev agents + PM):
    - Check health via `git log --oneline --since="[2×interval] minutes ago" --grep="^[agent]:"` — if commits found, show as `active`; if prior commits exist but none recent, show as `stalled`; else `unknown`.
    - Show last commit time: `git log --oneline --grep="^[agent]:" -1 --format="%ar"`
-3. For each dev agent, read their `bugs/INDEX.md` and `features/INDEX.md`:
-   - Count and list open bugs (status `Open` or `Investigating`)
-   - Count and list in-progress/approved features
-4. List the last 5 shipped features across all agents (read individual feature files for `Shipped` status), most recent first.
+3. For each dev agent, query GitHub Issues via `python references/scripts/tracker.py`:
+   - `python references/scripts/tracker.py list-bugs [role]` — count and list open bugs
+   - `python references/scripts/tracker.py list-features [role] --status approved` — count and list approved features
+   - `python references/scripts/tracker.py list-features [role] --status in-progress` — count and list in-progress features
+4. List recent shipped items: `gh issue list --label "squidsquad,status:shipped" --state closed --limit 5`
 5. Format as a clean dashboard:
 
 ```
