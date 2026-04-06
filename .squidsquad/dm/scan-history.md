@@ -1,5 +1,13 @@
 # DM Scan History
 
+## Scan — 2026-04-06 01:05
+
+- **Files scanned**: README.md (Vault Memory Layer line 214-215, Status Line line 173), references/sub-skills/common/vault-remember.md (new feature review), hints-dm.txt (both locations)
+- **Findings**:
+  - #193 — README Vault Memory Layer description missing Phase 2 (#16) and Phase 3 (#17) features
+  - #194 — README Status Line feature missing hints-dm.txt reference
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-05 23:05
 
 - **Files scanned**: SKILL.md (Upgrade Instructions lines 1176-1234, Schema Changelog lines 1238-1269), config.md (field audit)
