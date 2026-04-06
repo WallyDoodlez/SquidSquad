@@ -7,6 +7,12 @@
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
 
+# Python
+__pycache__/
+*.pyc
+
+# Obsidian (user-specific config, not shared)
+.obsidian/
+
 # OS/shell artifacts
 *.stackdump
-tests/__pycache__/
