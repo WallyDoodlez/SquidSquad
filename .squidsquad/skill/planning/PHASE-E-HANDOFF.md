@@ -17,6 +17,8 @@ Eventually this becomes the monetization layer too — featured listings, verifi
 3. Run through the setup flow. Here's what I want:
    - Project name: squidsquad-market
    - One dev agent: `skill` (full-stack)
+   - One DM agent
+   - One designer agent
    - Default aliases
    - 30 minute cycles
    - No E2E tests yet
