@@ -4,6 +4,23 @@ All notable changes to SquidSquad will be documented in this file. This changelo
 
 ---
 
+## [0.14.0] — 2026-04-06
+
+### Added
+
+- #251 — **Self-diagnostic bug reporting** — `/squidsquad-bug` slash command lets users report bugs to the upstream SquidSquad repo with sanitized config + diagnostic context. Automated anomaly detection logs errors from tracker, git, and composition operations locally (JSON Lines, 1MB rotation). Public repos default ON, private repos opt-in.
+- #149 — **Runtime SOUL.md** — agent personalities are now separate files (`.squidsquad/[role]/SOUL.md`) read at session start, not compiled into CLAUDE.md. Edit personality directly without redeploying templates.
+- #239 — **CONTRIBUTING.md and CODE_OF_CONDUCT.md** — community governance docs for going public. Contributor Covenant v2.1.
+- #232 — **Community infrastructure** — AGPL-3.0 LICENSE, GitHub Issue templates (bug report, feature request), SKILL.md license field.
+- #189 — **Sub-skill developer guide** — comprehensive guide at `docs/sub-skill-guide.md` covering anatomy, composition, testing, and contribution model.
+- #190 — **Architecture overview** — `docs/ARCHITECTURE.md` with Mermaid diagrams covering Ralph Loop, feature lifecycle, sub-skill composition, vault, coordination.
+- #233 — **CHANGELOG polish** — rewritten for public readability, no internal jargon.
+- #2 — **README overhaul** — 151-line lean landing page with developer-to-developer tone.
+- #240 — **Boot-time agent registration** — agents auto-register in config.md Agents section on boot via `config.py sync-agents`.
+- #211 — **Phantom fix prevention** — `git_ops.py has-changes` gate in dev agent template prevents marking pending-test without actual code changes.
+
+---
+
 ## [0.13.0] — 2026-04-06
 
 ### Fixed
