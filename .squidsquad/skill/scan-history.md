@@ -161,3 +161,9 @@
 - **Files scanned**: .squidsquad/vault/galaxy/decision-sub-skill-architecture.md, learning-atomic-migration-strategy.md + vault-check validate
 - **Findings**: #263 (vault missing resources/ and archives/ PARAG directories — vault-check reports 2 structural failures)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-07 18:03
+
+- **Files scanned**: CHANGELOG.md, full test suite run (108 static + 17 integration)
+- **Findings**: none (CHANGELOG clean, 108/108 static pass, integration flake in test_01_initial_state is transient GH API timing — not a code defect)
+- **Items rejected by human**: none yet
