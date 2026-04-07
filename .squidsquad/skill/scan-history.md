@@ -149,3 +149,9 @@
 - **Files scanned**: .squidsquad/vault/BRIEFING.md, .squidsquad/vault/projects/squidsquad.md, .squidsquad/vault/areas/human-profile.md
 - **Findings**: #262 (BRIEFING.md and squidsquad.md stale — reference v0.11.0 vs current v0.14.0, filed to DM)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-07 15:02
+
+- **Files scanned**: references/vault-templates/resources-template.md, archives-template.md, .github/ISSUE_TEMPLATE/bug-report.yml, feature-request.yml
+- **Findings**: none (templates clean, issue templates correctly use community labels separate from internal taxonomy)
+- **Items rejected by human**: none yet
