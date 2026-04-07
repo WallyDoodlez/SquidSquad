@@ -1,5 +1,13 @@
 # DM Scan History
 
+## Scan — 2026-04-07 10:04
+
+- **Files scanned**: CONTRIBUTING.md (full), docs/ARCHITECTURE.md (full), README.md (Key Features section), .github/ISSUE_TEMPLATE/bug-report.yml (full)
+- **Findings**:
+  - #257 — CONTRIBUTING.md Reporting Bugs section missing /squidsquad-bug command reference
+  - #258 — ARCHITECTURE.md missing v0.14.0 systems: Runtime SOUL.md and self-diagnostics
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-06 09:04
 
 - **Files scanned**: inject-permissions.sh (full), inject-permissions.ps1 (full), permissions.template.json (full), SKILL.md (permissions section lines 780-812), README.md (Requirements lines 329-333)
