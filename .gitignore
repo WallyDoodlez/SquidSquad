@@ -3,6 +3,7 @@
 .squidsquad/*/current-state
 .squidsquad/.local-config
 .squidsquad/.backlog-cache
+.squidsquad/diagnostics/*.jsonl
 
 .claude/commands/squidsquad-*
 .claude/settings.local.json

@@ -950,6 +950,29 @@ Original monolithic `bugs.md` and `features.md` files with inline fields.
 
 ---
 
+## `/squidsquad-bug` — Report a SquidSquad Bug
+
+When the user says `/squidsquad-bug` (or "report a bug", "squidsquad bug"), collect a bug report and file it to the upstream SquidSquad repo. Works from any agent session.
+
+**Instructions:**
+
+1. Generate the report template: `python references/scripts/diagnostics.py report`
+2. Show the full report to the user via AskUserQuestion. Let them edit the description, steps to reproduce, and redact any sensitive info from the config/diagnostics sections.
+3. After user confirms, attempt to file upstream:
+   ```bash
+   gh issue create -R WallyDoodlez/SquidSquad --title "[Bug]: <user's title>" --body "<report content>"
+   ```
+4. If `gh` auth fails for the upstream repo, generate a pre-filled URL:
+   ```
+   https://github.com/WallyDoodlez/SquidSquad/issues/new?title=[Bug]:+<title>&body=<url-encoded-body>
+   ```
+   Print the URL for the user to open in their browser.
+5. Confirm: print the issue URL or the browser fallback URL.
+
+**Privacy**: No code, secrets, or project file paths in the report. Config snapshot is auto-sanitized. User previews everything before filing.
+
+---
+
 ## `/squidsquad-status` — Squad Overview Command
 
 When the user says `/squidsquad-status` (or "squad status", "show me the squad", etc.), generate a quick dashboard of the entire SquidSquad team. This works from any Claude session in the repo — not just the PM agent.

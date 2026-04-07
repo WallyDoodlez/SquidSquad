@@ -57,6 +57,11 @@
 - **BRIEFING Token Budget**: 2000
 - **Confidence Decay Days**: 60
 
+## Diagnostics
+
+- **Enabled**: yes
+- **Upstream Reporting**: ask
+
 ## Auto Versioning
 
 - **Ship Threshold**: 10

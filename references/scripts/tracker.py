@@ -77,6 +77,17 @@ LEGAL_TRANSITIONS = {
 }
 
 
+def _log_diagnostic(severity, message, context=None):
+    """Log a diagnostic entry (silently fails if diagnostics.py unavailable)."""
+    try:
+        cmd = [sys.executable, str(SCRIPT_DIR / "diagnostics.py"), "log", severity, "tracker", message]
+        if context:
+            cmd.extend(["--context", json.dumps(context) if not isinstance(context, str) else context])
+        subprocess.run(cmd, capture_output=True, check=False, cwd=str(REPO_ROOT))
+    except Exception:
+        pass
+
+
 def _run_list(cmd_list, check=True):
     """Run a command from repo root using list form (safe for variable args)."""
     return subprocess.run(
@@ -211,6 +222,7 @@ def transition(number, from_status, to_status):
     # Enforce legal transitions
     legal = LEGAL_TRANSITIONS.get(from_label, set())
     if to_label not in legal:
+        _log_diagnostic("error", f"Illegal transition {from_label} -> {to_label} on #{number}")
         print(
             f"ERROR: Illegal transition {from_label} -> {to_label}. "
             f"Legal from {from_label}: {sorted(legal)}",

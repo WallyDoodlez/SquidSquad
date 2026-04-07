@@ -41,6 +41,17 @@ def _run_list(cmd_list, check=True):
     )
 
 
+def _log_diagnostic(severity, message):
+    """Log a diagnostic entry (silently fails if diagnostics.py unavailable)."""
+    try:
+        subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "diagnostics.py"), "log", severity, "git_ops", message],
+            capture_output=True, check=False, cwd=str(REPO_ROOT),
+        )
+    except Exception:
+        pass
+
+
 def pull():
     """Pull with rebase."""
     result = _run("git pull --rebase", check=False)
@@ -50,6 +61,7 @@ def pull():
         _run("git pull --rebase")
         pop_result = _run("git stash pop", check=False)
         if pop_result.returncode != 0:
+            _log_diagnostic("warning", "stash pop failed during pull — possible merge conflict")
             print("WARNING: stash pop failed (possible conflict). Changes remain in stash.", file=sys.stderr)
             print("Pulled (stash pop conflict — run 'git stash show' to inspect)")
         else:
@@ -96,6 +108,7 @@ def push():
     """Push to remote."""
     result = _run("git push", check=False)
     if result.returncode != 0:
+        _log_diagnostic("error", f"push failed: {result.stderr.strip()[:200]}")
         print(f"ERROR: push failed: {result.stderr}", file=sys.stderr)
         return False
     print("Pushed")

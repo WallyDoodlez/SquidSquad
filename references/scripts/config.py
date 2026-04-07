@@ -47,6 +47,8 @@ FIELD_MAP = {
     "vault-writes-per-cycle": ("Vault Remember", "Writes Per Cycle"),
     "briefing-token-budget": ("Vault Remember", "BRIEFING Token Budget"),
     "confidence-decay-days": ("Vault Remember", "Confidence Decay Days"),
+    "diagnostics": ("Diagnostics", "Enabled"),
+    "upstream-reporting": ("Diagnostics", "Upstream Reporting"),
 }
 
 
