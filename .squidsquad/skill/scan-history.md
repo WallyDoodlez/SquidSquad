@@ -131,3 +131,9 @@
 - **Files scanned**: dev-agent.md (post-#211 verification), skill/CLAUDE.md (deployed gate check), CHANGELOG.md (recent edits)
 - **Findings**: none (verify-changes gates deployed correctly, no regressions)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-07 10:33
+
+- **Files scanned**: references/scripts/vault_check.py, references/scripts/diagnostics.py, references/scripts/cycle.py
+- **Findings**: #259 (vault_check.py REQUIRED_FM_FIELDS missing confidence — vault protocol says required but only checked optionally)
+- **Items rejected by human**: none yet
