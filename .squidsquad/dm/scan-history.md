@@ -1,5 +1,13 @@
 # DM Scan History
 
+## Scan — 2026-04-07 12:03
+
+- **Files scanned**: docs/sub-skill-guide.md (full), CODE_OF_CONDUCT.md (full), .github/ISSUE_TEMPLATE/feature-request.yml (full), .github/ISSUE_TEMPLATE/bug-report.yml (labels review)
+- **Findings**:
+  - #260 — Sub-skill guide missing documentation for {{runtime:}} directive
+  - #261 — GitHub Issue templates use wrong labels for SquidSquad taxonomy
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-07 10:04
 
 - **Files scanned**: CONTRIBUTING.md (full), docs/ARCHITECTURE.md (full), README.md (Key Features section), .github/ISSUE_TEMPLATE/bug-report.yml (full)
