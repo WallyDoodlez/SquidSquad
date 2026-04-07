@@ -155,3 +155,9 @@
 - **Files scanned**: references/vault-templates/resources-template.md, archives-template.md, .github/ISSUE_TEMPLATE/bug-report.yml, feature-request.yml
 - **Findings**: none (templates clean, issue templates correctly use community labels separate from internal taxonomy)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-07 16:33
+
+- **Files scanned**: .squidsquad/vault/galaxy/decision-sub-skill-architecture.md, learning-atomic-migration-strategy.md + vault-check validate
+- **Findings**: #263 (vault missing resources/ and archives/ PARAG directories — vault-check reports 2 structural failures)
+- **Items rejected by human**: none yet
