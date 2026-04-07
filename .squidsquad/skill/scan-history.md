@@ -137,3 +137,9 @@
 - **Files scanned**: references/scripts/vault_check.py, references/scripts/diagnostics.py, references/scripts/cycle.py
 - **Findings**: #259 (vault_check.py REQUIRED_FM_FIELDS missing confidence — vault protocol says required but only checked optionally)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-07 12:03
+
+- **Files scanned**: references/vault-templates/galaxy-template.md, projects-template.md, areas-template.md, BRIEFING.md, human-profile-seed.md
+- **Findings**: none (all vault templates clean and consistent)
+- **Items rejected by human**: none yet
