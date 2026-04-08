@@ -214,42 +214,85 @@ def create_feature(title, body, role, priority, reporter=None):
     return number
 
 
-def _check_unread_feedback(number, caller_role):
-    """Check if there are unread comments from other roles after the caller's last comment.
+# Roles whose comments trigger the unread feedback guard.
+# Dev agents and designer comments do NOT trigger — only oversight roles and humans.
+FEEDBACK_ROLES = {"pm", "qa", "human"}
 
-    Returns (has_unread, role, timestamp) or (False, None, None).
-    Used as a guard before transitioning to pending-test.
+
+def _is_feedback_comment(body, caller_role):
+    """Check if a comment is feedback from an oversight role or a human.
+
+    Returns (is_feedback, role_name) or (False, None).
+    Handles: **pm**: ..., **pm (alias)**: ..., **qa**: ..., and human comments
+    (no **role**: prefix — plain text from GitHub UI).
+    """
+    if not body.startswith("**"):
+        # No role prefix — likely a human comment from GitHub UI
+        return True, "human"
+
+    # Extract role from **role**: or **role (alias)**:
+    role_end = body.find("**", 2)
+    if role_end <= 2:
+        return False, None
+    raw_role = body[2:role_end]
+    # Strip alias: "pm (pm)" → "pm", "qa (tester)" → "qa"
+    base_role = raw_role.split("(")[0].strip().split("-")[0].strip()
+
+    # Skip caller's own comments
+    caller_base = caller_role.split("-")[0].strip()
+    if base_role == caller_base:
+        return False, None
+
+    # Only trigger on oversight roles
+    if base_role in FEEDBACK_ROLES:
+        return True, raw_role
+
+    return False, None
+
+
+def _check_unread_feedback(number, caller_role):
+    """Check for unread oversight/human comments after the caller's last comment.
+
+    Returns a list of (role, timestamp) tuples. Empty list means no unread feedback.
+    API failures return a sentinel that causes the guard to block (fail closed).
     """
     result = _run_list(
         ["gh", "issue", "view", str(number), "--json", "comments"],
         check=False,
     )
     if result.returncode != 0 or not result.stdout.strip():
-        return False, None, None
+        # Fail closed — if we can't read comments, block the transition
+        return [("unknown (API error)", "unknown")]
 
     data = json.loads(result.stdout)
     comments = data.get("comments", [])
     if not comments:
-        return False, None, None
+        return []
 
-    # Find the last comment by the caller role (match **role-name**: prefix)
+    # Find the last comment by the caller role
     caller_last_idx = -1
     for i, c in enumerate(comments):
         body = c.get("body", "")
         if body.startswith(f"**{caller_role}**:") or body.startswith(f"**{caller_role} "):
             caller_last_idx = i
 
-    # Check for comments from other roles after the caller's last comment
+    # Collect all unread feedback after caller's last comment
+    unread = []
     for c in comments[caller_last_idx + 1:]:
         body = c.get("body", "")
-        if body.startswith("**") and not body.startswith(f"**{caller_role}**:") and not body.startswith(f"**{caller_role} "):
-            # Extract the role name from **role**:
-            role_end = body.find("**", 2)
-            feedback_role = body[2:role_end] if role_end > 2 else "unknown"
+        is_feedback, role_name = _is_feedback_comment(body, caller_role)
+        if is_feedback:
             timestamp = c.get("createdAt", "unknown")
-            return True, feedback_role, timestamp
+            unread.append((role_name, timestamp))
 
-    return False, None, None
+    return unread
+
+
+# Guarded transitions: these transitions check for unread feedback before proceeding
+_GUARDED_TRANSITIONS = {
+    ("status:in-progress", "status:pending-test"),
+    ("status:pending-test", "status:pending-ship"),
+}
 
 
 def transition(number, from_status, to_status, force=False):
@@ -268,14 +311,15 @@ def transition(number, from_status, to_status, force=False):
         )
         sys.exit(1)
 
-    # Guard: block in-progress → pending-test if unread feedback exists
-    if to_label == "status:pending-test" and from_label == "status:in-progress" and not force:
-        has_unread, feedback_role, timestamp = _check_unread_feedback(number, "skill-lead")
-        if has_unread:
-            _log_diagnostic("warning", f"Blocked transition #{number} to pending-test: unread feedback from {feedback_role}")
+    # Guard: block guarded transitions if unread feedback exists
+    if (from_label, to_label) in _GUARDED_TRANSITIONS and not force:
+        unread = _check_unread_feedback(number, "skill-lead")
+        if unread:
+            roles_summary = ", ".join(f"{role} ({ts})" for role, ts in unread)
+            _log_diagnostic("warning", f"Blocked transition #{number} {from_label} -> {to_label}: unread feedback from {roles_summary}")
             print(
-                f"BLOCKED: #{number} has unread feedback from {feedback_role} ({timestamp}). "
-                f"Read and address before transitioning to pending-test. "
+                f"BLOCKED: #{number} has unread feedback from: {roles_summary}. "
+                f"Read and address before transitioning. "
                 f"Use --force to override.",
                 file=sys.stderr,
             )
