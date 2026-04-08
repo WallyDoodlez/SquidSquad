@@ -1,5 +1,13 @@
 # DM Scan History
 
+## Scan — 2026-04-08 05:02
+
+- **Files scanned**: SKILL.md (Schema Changelog lines 924-943, /squidsquad-bug lines 946-966, /squidsquad-status lines 969-1005, /squidsquad-interval lines 1007-1024, upgrade instructions lines 880-894), references/hints-dm.txt (full), references/hints-dev.txt (full), CHANGELOG.md (v0.15.0 section)
+- **Findings**:
+  - #302 — hints-dm.txt missing scanning phase hints
+  - #303 — SKILL.md upgrade instructions reference manual template regeneration instead of compose.py
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-08 00:03
 
 - **Files scanned**: start-dm.sh (full), start-dm.ps1 (full), .github/ISSUE_TEMPLATE/bug-report.yml (full), .github/ISSUE_TEMPLATE/feature-request.yml (full), SKILL.md (file structure lines 77-104, upgrade instructions lines 880-910)
