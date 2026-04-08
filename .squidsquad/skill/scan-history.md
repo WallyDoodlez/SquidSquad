@@ -1,5 +1,17 @@
 # Scan History
 
+## Scan — 2026-04-08 01:33
+
+- **Files scanned**: references/scripts/vault_check.py, CONTRIBUTING.md
+- **Findings**: vault_check.py REQUIRED_FM_FIELDS missing confidence — already tracked as #259. CONTRIBUTING.md clean.
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-08 00:02
+
+- **Files scanned**: references/scripts/diagnostics.py, tests/test_start_scripts.py, packages/cli/index.js (post-fix review)
+- **Findings**: none
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-07 22:33
 
 - **Files scanned**: packages/cli/index.js, references/templates/start-role.sh, references/templates/start-role.ps1

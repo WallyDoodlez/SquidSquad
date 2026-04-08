@@ -245,6 +245,8 @@ if [ "$ROLE" = "pm" ]; then
 
   # Agent health icons: 🦑 healthy, 👻 stalled, ❓ unknown
   # Reads cross-clone current-state files via .local-config paths
+  # Parse dev agents from config (same approach as DM section)
+  AGENTS=$(grep 'Dev Agents' "$SQDIR/config.md" 2>/dev/null | sed 's/.*: //' | tr ',' ' ')
   # Include DM in health check if it exists
   DM_AGENT=""
   [ -d "$SQDIR/dm" ] && DM_AGENT="dm"

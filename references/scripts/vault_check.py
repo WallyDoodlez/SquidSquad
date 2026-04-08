@@ -22,7 +22,7 @@ VAULT_DIR = REPO_ROOT / ".squidsquad" / "vault"
 
 PARAG_DIRS = ["projects", "areas", "resources", "archives", "galaxy"]
 VALID_GALAXY_PREFIXES = ("decision-", "pattern-", "learning-", "style-")
-REQUIRED_FM_FIELDS = {"type", "tags", "created", "updated", "owner", "status"}
+REQUIRED_FM_FIELDS = {"type", "tags", "created", "updated", "owner", "status", "confidence"}
 VALID_CONFIDENCE = {"high", "medium", "low"}
 VALID_SOURCES = {"conversation", "code", "review", "observation", "research"}
 
