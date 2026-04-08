@@ -1,5 +1,13 @@
 # DM Scan History
 
+## Scan — 2026-04-07 22:02
+
+- **Files scanned**: README.md (full — Team Shapes, Quick Start, Key Features), CONTRIBUTING.md (full), CODE_OF_CONDUCT.md (full), CHANGELOG.md (v0.14.0 section)
+- **Findings**:
+  - #277 — README Team Shapes table omits DM from all rows — Quick Start assumes DM is present
+  - #278 — CONTRIBUTING.md Reporting Bugs section bypasses GitHub Issue templates
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-07 12:03
 
 - **Files scanned**: docs/sub-skill-guide.md (full), CODE_OF_CONDUCT.md (full), .github/ISSUE_TEMPLATE/feature-request.yml (full), .github/ISSUE_TEMPLATE/bug-report.yml (labels review)
