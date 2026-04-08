@@ -95,6 +95,19 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team...
 - Each resolved include is wrapped with section markers: `<!-- sub-skill: name -->`
 - Directives must appear on their own line
 
+### The Runtime Directive
+
+```
+{{runtime: relative/path}}
+```
+
+Unlike `{{include:}}` which compiles content into the template at build time, `{{runtime:}}` copies the file to `.squidsquad/[role]/` for loading at session start. This is used for content that should be editable without redeploying templates — most notably SOUL.md personality files.
+
+- Path is relative to `references/sub-skills/`
+- The file is copied to `.squidsquad/[role]/SOUL.md` during `compose.py deploy`
+- Changes to the runtime file take effect on next agent boot without recomposing
+- Typically used at the top of an entry file: `{{runtime: souls/dev}}`
+
 ### Build Pipeline
 
 ```

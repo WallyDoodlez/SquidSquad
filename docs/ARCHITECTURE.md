@@ -58,6 +58,12 @@ graph LR
 | **DM** | Delivery packaging, docs, CHANGELOG, version bumps | Autonomous |
 | **Designer** (optional) | Design specs, design tokens, interactive design sessions | Autonomous + interactive |
 
+### Agent Personality (SOUL.md)
+
+Each agent has a `SOUL.md` file at `.squidsquad/[role]/SOUL.md` that defines its professional identity, quality bar, decision-making style, communication style, and boundaries. SOUL.md is loaded at session start via the `{{runtime:}}` directive in sub-skill composition — it's copied to the agent's directory during `compose.py deploy`, not compiled into the template.
+
+This means you can edit an agent's personality directly without redeploying templates. Changes take effect on the next agent boot.
+
 ---
 
 ## The Ralph Loop
@@ -236,3 +242,13 @@ start-[role].sh / .ps1
 ```
 
 The `SQUIDSQUAD_ROLE` in the system prompt triggers auto-boot: the agent reads `.squidsquad/<role>/CLAUDE.md`, which points to the full template, and begins the Ralph Loop immediately.
+
+---
+
+## Self-Diagnostics
+
+Agents include an anomaly detection system that logs errors from tracker operations, git operations, and composition:
+
+- **Local logging**: Errors are written to `.squidsquad/diagnostics.jsonl` (JSON Lines format, 1MB rotation)
+- **`/squidsquad-bug` command**: Users can report bugs to the upstream SquidSquad repo with sanitized config and diagnostic context attached automatically
+- **Public repos** have diagnostics enabled by default; private repos are opt-in via `config.md`

@@ -2,7 +2,7 @@
 type: project
 tags: [multi-agent, claude-code, skill, autonomous]
 created: 2026-04-02
-updated: 2026-04-05
+updated: 2026-04-08
 owner: pm
 status: active
 confidence: medium
@@ -11,7 +11,7 @@ links: [decision-sub-skill-architecture, code-conventions]
 
 ## Overview
 
-SquidSquad is a Claude Code skill that spins up autonomous AI agents -- one per dev role plus PM and QA -- that work on a codebase in parallel and coordinate through a shared `.squidsquad/` folder using markdown files and git. No message queues or orchestration servers. The project is at version 0.11.0 with Architecture Version 1. Tracker is GitHub Issues with structured labels. Repository: github.com/WallyDoodlez/SquidSquad.
+SquidSquad is a Claude Code skill that spins up autonomous AI agents -- one per dev role plus PM and QA -- that work on a codebase in parallel and coordinate through a shared `.squidsquad/` folder using markdown files and git. No message queues or orchestration servers. The project is at version 0.14.0 with Architecture Version 1. Tracker is GitHub Issues with structured labels. Repository: github.com/WallyDoodlez/SquidSquad.
 
 Key goals:
 - Autonomous multi-agent development via the "Ralph Loop" (pull, triage bugs, implement features, commit, push)
@@ -29,9 +29,8 @@ Key goals:
 
 ## Current Focus
 
-- #2 — Public-facing documentation overhaul (approved, awaiting pickup)
-- #3 — Taking SquidSquad public as community-driven skill (pending)
-- Shipped in v0.11.0: #67 integration tests, #66 deterministic script layer, #29 agent aliases, #107-#131 doc fixes
+- Shipped through v0.14.0: #2 README overhaul, #251 self-diagnostics, #149 runtime SOUL.md, #239 community docs, #232 community infra, #189 sub-skill guide, #190 ARCHITECTURE.md
+- DM improvement scanning active — filing doc drift bugs after rapid version bumps (v0.11→v0.14)
 - Multiple pending features: UX improvements (#7, #8, #10), vault phases (#17-#20)
 
 ## Related
@@ -47,3 +46,4 @@ Key goals:
 - 2026-04-04 -- Updated by skill-lead. Fixed stale version (0.8.0→0.9.0), removed Tracker Schema reference, updated coordination to GitHub Issues (#47).
 - 2026-04-05 -- Updated by dm. Fixed version 0.9.0→0.10.0, replaced stale FEAT-SKILL-XXX focus items with current GitHub Issue numbers (#59).
 - 2026-04-05 -- Updated by dm. Fixed version 0.10.0→0.11.0, updated Current Focus (#67/#66 shipped, #29 shipped, #2 approved) (#143).
+- 2026-04-08 -- Updated by dm. Fixed version 0.11.0→0.14.0, updated Current Focus with v0.12-v0.14 shipped items (#262).

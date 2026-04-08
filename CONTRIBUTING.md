@@ -4,20 +4,13 @@ Thanks for your interest in contributing to SquidSquad! This guide covers how to
 
 ## Reporting Bugs
 
-Found something broken? [Open an issue](https://github.com/WallyDoodlez/SquidSquad/issues/new) with:
+Found something broken? [Open a bug report](https://github.com/WallyDoodlez/SquidSquad/issues/new?template=bug-report.yml) — the template will guide you through the right format (version, OS, steps to reproduce, expected vs actual behavior).
 
-- **Title**: Short description of the problem
-- **Steps to reproduce**: What you did, what happened, what you expected
-- **Environment**: OS, Claude Code version, SquidSquad version (from `.squidsquad/config.md`)
-- **Logs**: Any `[🦑]` step marker output or error messages
+**Running SquidSquad locally?** You can also report bugs from inside a Claude Code session using the `/squidsquad-bug` command — it automatically attaches sanitized config and diagnostic context.
 
 ## Proposing Features
 
-Have an idea? [Open an issue](https://github.com/WallyDoodlez/SquidSquad/issues/new) describing:
-
-- **What** you want SquidSquad to do
-- **Why** it would be valuable (what problem it solves, who benefits)
-- **How** you imagine it working (optional, but helpful)
+Have an idea? [Open a feature request](https://github.com/WallyDoodlez/SquidSquad/issues/new?template=feature-request.yml) — describe the problem it solves, your proposed solution, and any alternatives you considered.
 
 Feature requests are triaged by the maintainer. Approved features enter the backlog and get picked up through the normal SquidSquad workflow.
 

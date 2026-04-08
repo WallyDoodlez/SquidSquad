@@ -57,16 +57,17 @@ SquidSquad asks for your project name, dev roles (e.g. `fe, be` or just `skill`)
 
 ### 2. Launch
 
-Open one terminal per agent:
+Open one terminal per agent. Available boot scripts depend on your setup — check `.squidsquad/start-*.sh` for your list:
 
 ```bash
 bash .squidsquad/start-skill.sh    # Dev agent (autonomous)
-bash .squidsquad/start-qa.sh       # QA (autonomous)
-bash .squidsquad/start-dm.sh       # Delivery Manager (autonomous)
 bash .squidsquad/start-pm.sh       # PM (interactive — you talk to this one)
+bash .squidsquad/start-dm.sh       # Delivery Manager (optional, autonomous)
 ```
 
-PowerShell: `.\.squidsquad\start-skill.ps1` etc.
+QA, Designer, and additional dev agents get their own `start-[role].sh` scripts when configured during setup.
+
+PowerShell: `.\.squidsquad\start-[role].ps1`
 
 ### 3. Work
 
@@ -78,12 +79,11 @@ Talk to PM to file bugs, request features, and approve plans. Everything else ha
 
 | You say at setup | Agents created |
 |-----------------|----------------|
-| `fe, be` | FE Lead + BE Lead + QA + PM |
-| `be` | BE Lead + QA + PM |
-| `fe, be, designer` | FE Lead + BE Lead + Designer + QA + PM |
-| `skill` | Skill Lead + QA + PM |
+| `fe, be` | FE Lead + BE Lead + PM |
+| `skill` | Skill Lead + PM |
+| `fe, be, designer` | FE Lead + BE Lead + Designer + PM |
 
-DM is optional — when absent, PM handles delivery.
+QA and DM are optional — add them during setup. When QA is absent, dev agents self-verify. When DM is absent, PM handles delivery.
 
 ---
 
