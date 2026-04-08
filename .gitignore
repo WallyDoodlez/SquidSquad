@@ -9,6 +9,9 @@
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
 
+# Node
+node_modules/
+
 # Python
 __pycache__/
 *.pyc

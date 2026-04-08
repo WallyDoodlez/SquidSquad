@@ -1,7 +1,7 @@
 # SKILL Iteration 1
 
-- **Date**: 2026-04-05 18:51
-- **Bugs Fixed**: #117 fixed (DM template regen + tracker.py Unicode fix)
-- **Features Progressed**: none
-- **Tests**: 56 passed, 2 skipped; 16/17 integration passed (1 pre-existing)
-- **Notes**: Also fixed Unicode arrow encoding error in tracker.py for Windows cp1252
+- **Date**: 2026-04-07 21:14
+- **Bugs Fixed**: none
+- **Features Progressed**: #269 npx installer — implemented, Pending Test
+- **Tests**: 17/17 passed
+- **Notes**: Created packages/cli/ (package.json, index.js, README.md). Updated .gitignore with node_modules/.
