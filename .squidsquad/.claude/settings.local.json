@@ -4,7 +4,10 @@
       "Bash(xxd \"D:/Dev/Dev/SquidSquad-2/.squidsquad/start-skill.ps1\")",
       "Bash(xxd \"D:\\\\Dev\\\\Dev\\\\SquidSquad-2\\\\.squidsquad\\\\start-skill.ps1\")",
       "Bash(python3:*)",
-      "Bash(xxd \"D:\\\\Dev\\\\Dev\\\\SquidSquad-2\\\\.squidsquad\\\\test.ps1\")"
+      "Bash(xxd \"D:\\\\Dev\\\\Dev\\\\SquidSquad-2\\\\.squidsquad\\\\test.ps1\")",
+      "Bash(powershell -NoProfile -Command \"[System.Management.Automation.Language.Parser]::ParseFile\\(''''D:\\\\Dev\\\\Dev\\\\SquidSquad-2\\\\.squidsquad\\\\start-skill.ps1'''', [ref]$null, [ref]$null\\)\")",
+      "Bash(pwsh -NoProfile -Command \"[System.Management.Automation.Language.Parser]::ParseFile\\(''''D:\\\\Dev\\\\Dev\\\\SquidSquad-2\\\\.squidsquad\\\\start-skill.ps1'''', [ref]$null, [ref]$null\\)\")",
+      "Bash(git:*)"
     ]
   }
 }
