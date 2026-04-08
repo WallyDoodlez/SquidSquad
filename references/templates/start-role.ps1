@@ -54,4 +54,4 @@ Remove-Item .squidsquad/{{ROLE}}/current-state -ErrorAction SilentlyContinue
 
 $sysPrompt = "SQUIDSQUAD_ROLE={{ROLE}}"
 $initMsg = "start the loop"
-claude --dangerously-skip-permissions --name "$AgentName" --append-system-prompt $sysPrompt $initMsg
+claude --dangerously-skip-permissions --name "$AgentName" --append-system-prompt "$sysPrompt" "$initMsg"
