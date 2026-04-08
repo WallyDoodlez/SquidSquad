@@ -214,7 +214,45 @@ def create_feature(title, body, role, priority, reporter=None):
     return number
 
 
-def transition(number, from_status, to_status):
+def _check_unread_feedback(number, caller_role):
+    """Check if there are unread comments from other roles after the caller's last comment.
+
+    Returns (has_unread, role, timestamp) or (False, None, None).
+    Used as a guard before transitioning to pending-test.
+    """
+    result = _run_list(
+        ["gh", "issue", "view", str(number), "--json", "comments"],
+        check=False,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return False, None, None
+
+    data = json.loads(result.stdout)
+    comments = data.get("comments", [])
+    if not comments:
+        return False, None, None
+
+    # Find the last comment by the caller role (match **role-name**: prefix)
+    caller_last_idx = -1
+    for i, c in enumerate(comments):
+        body = c.get("body", "")
+        if body.startswith(f"**{caller_role}**:") or body.startswith(f"**{caller_role} "):
+            caller_last_idx = i
+
+    # Check for comments from other roles after the caller's last comment
+    for c in comments[caller_last_idx + 1:]:
+        body = c.get("body", "")
+        if body.startswith("**") and not body.startswith(f"**{caller_role}**:") and not body.startswith(f"**{caller_role} "):
+            # Extract the role name from **role**:
+            role_end = body.find("**", 2)
+            feedback_role = body[2:role_end] if role_end > 2 else "unknown"
+            timestamp = c.get("createdAt", "unknown")
+            return True, feedback_role, timestamp
+
+    return False, None, None
+
+
+def transition(number, from_status, to_status, force=False):
     """Transition an issue status with enforcement."""
     from_label = _resolve_status(from_status)
     to_label = _resolve_status(to_status)
@@ -229,6 +267,19 @@ def transition(number, from_status, to_status):
             file=sys.stderr,
         )
         sys.exit(1)
+
+    # Guard: block in-progress → pending-test if unread feedback exists
+    if to_label == "status:pending-test" and from_label == "status:in-progress" and not force:
+        has_unread, feedback_role, timestamp = _check_unread_feedback(number, "skill-lead")
+        if has_unread:
+            _log_diagnostic("warning", f"Blocked transition #{number} to pending-test: unread feedback from {feedback_role}")
+            print(
+                f"BLOCKED: #{number} has unread feedback from {feedback_role} ({timestamp}). "
+                f"Read and address before transitioning to pending-test. "
+                f"Use --force to override.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
     _run_list(["gh", "issue", "edit", str(number), "--remove-label", from_label, "--add-label", to_label])
 
@@ -334,9 +385,9 @@ def main():
 
     elif cmd == "transition":
         if len(pos) < 3:
-            print("Usage: tracker.py transition <number> <from> <to>", file=sys.stderr)
+            print("Usage: tracker.py transition <number> <from> <to> [--force]", file=sys.stderr)
             sys.exit(1)
-        transition(int(pos[0]), pos[1], pos[2])
+        transition(int(pos[0]), pos[1], pos[2], force=opts.get("force", False))
 
     elif cmd == "comment":
         if not pos or "role" not in opts or "message" not in opts:
