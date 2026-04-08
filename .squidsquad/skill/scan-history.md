@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-07 22:33
+
+- **Files scanned**: packages/cli/index.js, references/templates/start-role.sh, references/templates/start-role.ps1
+- **Findings**: Fixed 2 bugs in packages/cli/index.js inline (banner double-escaped Unicode, gh auth status stdout-is-empty false negative). Boot script templates clean — no issues found.
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-03 00:05
 
 - **Files scanned**: references/statusline.sh, references/agent-instructions.md, .squidsquad/skill/CLAUDE.md

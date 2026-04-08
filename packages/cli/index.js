@@ -26,12 +26,12 @@ function fail(msg) {
 
 function banner() {
   console.log();
-  console.log("      \\u2597\\u2584\\u2596");
-  console.log("     \\u259F\\u2588 \\u2588\\u2599");
-  console.log("    \\u2590\\u2588\\u2022 \\u2022\\u2588\\u258C");
-  console.log("   \\u2588\\u2588\\u2588\\u2588\\u2588\\u2588\\u2588");
-  console.log("   \\u2590\\u2588\\u2588\\u2588\\u2588\\u2588\\u258C");
-  console.log("    \\u2590\\u258C\\u2590\\u258C\\u2590\\u258C");
+  console.log("      \u2597\u2584\u2596");
+  console.log("     \u259F\u2588 \u2588\u2599");
+  console.log("    \u2590\u2588\u2022 \u2022\u2588\u258C");
+  console.log("   \u2588\u2588\u2588\u2588\u2588\u2588\u2588");
+  console.log("   \u2590\u2588\u2588\u2588\u2588\u2588\u258C");
+  console.log("    \u2590\u258C\u2590\u258C\u2590\u258C");
   console.log("  S Q U I D S Q U A D");
   console.log();
 }
@@ -101,14 +101,15 @@ function checkGhCli() {
   }
   success("GitHub CLI installed");
 
-  // Check authentication
-  const authResult = tryExec("gh auth status");
-  if (!authResult) {
+  // Check authentication — gh auth status exits 0 on success (output goes to stderr)
+  try {
+    execSync("gh auth status", { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+    success("GitHub CLI authenticated");
+  } catch {
     fail("GitHub CLI is not authenticated.");
     info("Run `gh auth login` first.");
     process.exit(1);
   }
-  success("GitHub CLI authenticated");
 }
 
 function checkClaudeCli() {
