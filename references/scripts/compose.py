@@ -189,8 +189,10 @@ def boot_role(role_name: str) -> list:
 
         output_path = REPO_ROOT / ".squidsquad" / f"start-{role_name}.{ext}"
         # .sh files must use LF line endings (not CRLF on Windows)
+        # .ps1 files need UTF-8 BOM so PowerShell parses Unicode correctly
         newline = "\n" if ext == "sh" else None
-        output_path.write_text(content, encoding="utf-8", newline=newline)
+        enc = "utf-8-sig" if ext == "ps1" else "utf-8"
+        output_path.write_text(content, encoding=enc, newline=newline)
         outputs.append(output_path)
 
     return outputs
