@@ -6,6 +6,10 @@ All notable changes to SquidSquad will be documented in this file. This changelo
 
 ## [0.15.0] — 2026-04-08
 
+### Added
+
+- #269 — **`npx squidsquad` installer** — bootstrap SquidSquad onto any project with a single command. Checks prerequisites, seeds the skill and setup wizard, and offers to launch immediately. Zero dependencies.
+
 ### Fixed
 
 - #280 — README and SKILL.md no longer reference non-existent QA boot scripts — launch instructions now show available scripts depend on your setup

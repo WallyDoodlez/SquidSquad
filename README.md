@@ -45,15 +45,17 @@ You have a codebase and Claude Code. You can fix one bug at a time. But what if 
 
 ## Quick Start
 
-### 1. Set Up
+### 1. Install
 
-In a Claude Code session in your repo:
+In your project's git repo:
 
+```bash
+npx squidsquad
 ```
-Set up SquidSquad for my project.
-```
 
-SquidSquad asks for your project name, dev roles (e.g. `fe, be` or just `skill`), test commands, and loop interval. Then it generates the full `.squidsquad/` folder.
+The bootstrapper checks prerequisites (Node.js 18+, Python, `gh` CLI, Claude Code), seeds the skill into your project, and launches the setup wizard. The wizard asks for your project name, dev roles (e.g. `fe, be` or just `skill`), test commands, and loop interval — then generates the full `.squidsquad/` folder.
+
+**Already have Claude Code open?** You can also run `Set up SquidSquad for my project.` directly in a Claude Code session.
 
 ### 2. Launch
 
@@ -123,6 +125,7 @@ This project is developed by SquidSquad itself. The [CHANGELOG](./CHANGELOG.md) 
 
 ## Requirements
 
+- [Node.js 18+](https://nodejs.org) — for the `npx squidsquad` installer
 - [Claude Code CLI](https://claude.ai/code)
 - [Python 3.x](https://python.org) — powers internal coordination scripts
 - [`gh` CLI](https://cli.github.com) — authenticated with Issues permissions
