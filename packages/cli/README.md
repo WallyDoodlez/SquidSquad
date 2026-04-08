@@ -13,10 +13,8 @@ npx squidsquad
 Run this from inside a git repository. The bootstrapper will:
 
 1. Verify prerequisites (Node.js 18+, Python 3.8+, GitHub CLI, Claude Code CLI)
-2. Install the SquidSquad skill for Claude Code
-3. Print next-step instructions
-
-After running, start a new Claude Code session and invoke `/squidsquad-setup` to configure your project.
+2. Fetch `SKILL.md` and the `/squidsquad-setup` command into your project
+3. Prompt to launch the setup wizard immediately
 
 ## Prerequisites
 
@@ -28,7 +26,7 @@ After running, start a new Claude Code session and invoke `/squidsquad-setup` to
 
 ## What It Does
 
-The bootstrapper is intentionally thin. It checks your environment, installs the SquidSquad skill, and hands off to the skill's interactive setup wizard. The wizard handles everything else: project config, agent roles, boot scripts, GitHub Issues labels, and more.
+The bootstrapper is intentionally thin. It checks your environment, seeds two files into your project (`SKILL.md` at the root and a `/squidsquad-setup` slash command), then offers to launch Claude Code to run the interactive setup wizard. The wizard handles everything else: project config, agent roles, boot scripts, GitHub Issues labels, and more.
 
 ## License
 

@@ -2,13 +2,15 @@
 
 "use strict";
 
-const { execSync } = require("child_process");
+const { execSync, spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
-const os = require("os");
+const readline = require("readline");
 
-const REPO_URL = "https://github.com/WallyDoodlez/SquidSquad.git";
-const SKILL_DIR_NAME = "squidsquad";
+const REPO_OWNER = "WallyDoodlez";
+const REPO_NAME = "SquidSquad";
+const BRANCH = "main";
+const RAW_BASE = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}`;
 
 // --- Output helpers ---
 
@@ -17,11 +19,11 @@ function info(msg) {
 }
 
 function success(msg) {
-  console.log(`  \x1b[32m✓\x1b[0m ${msg}`);
+  console.log(`  \x1b[32m\u2713\x1b[0m ${msg}`);
 }
 
 function fail(msg) {
-  console.error(`  \x1b[31m✗\x1b[0m ${msg}`);
+  console.error(`  \x1b[31m\u2717\x1b[0m ${msg}`);
 }
 
 function banner() {
@@ -68,7 +70,6 @@ function checkGitRepo() {
 }
 
 function checkPython() {
-  // Try python3 first, then python (Windows often only has python)
   for (const bin of ["python3", "python"]) {
     const out = tryExec(`${bin} --version`);
     if (out) {
@@ -76,11 +77,7 @@ function checkPython() {
       if (match) {
         const major = parseInt(match[1], 10);
         const minor = parseInt(match[2], 10);
-        if (major === 3 && minor >= 8) {
-          success(`${out}`);
-          return;
-        }
-        if (major > 3) {
+        if ((major === 3 && minor >= 8) || major > 3) {
           success(`${out}`);
           return;
         }
@@ -101,7 +98,6 @@ function checkGhCli() {
   }
   success("GitHub CLI installed");
 
-  // Check authentication — gh auth status exits 0 on success (output goes to stderr)
   try {
     execSync("gh auth status", { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
     success("GitHub CLI authenticated");
@@ -122,53 +118,96 @@ function checkClaudeCli() {
   success(`Claude Code CLI v${ver}`);
 }
 
-// --- Skill installation ---
+// --- File fetching ---
 
-function getSkillsDir() {
-  const home = os.homedir();
-  return path.join(home, ".claude", "skills", SKILL_DIR_NAME);
+function fetchRawFile(repoPath) {
+  const url = `${RAW_BASE}/${repoPath}`;
+  try {
+    const content = execSync(
+      `gh api -H "Accept: application/vnd.github.raw+json" "/repos/${REPO_OWNER}/${REPO_NAME}/contents/${repoPath}?ref=${BRANCH}"`,
+      { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"], maxBuffer: 1024 * 1024 }
+    );
+    return content;
+  } catch {
+    // Fallback: try curl/wget for raw URL
+    const fallback = tryExec(`curl -fsSL "${url}"`);
+    if (fallback) return fallback;
+    return null;
+  }
 }
 
-function installSkill() {
-  const skillsDir = getSkillsDir();
-  const parentDir = path.dirname(skillsDir);
-
-  // Create parent directories if needed
-  fs.mkdirSync(parentDir, { recursive: true });
-
-  if (fs.existsSync(skillsDir)) {
-    // Update existing installation
-    info("Updating existing SquidSquad skill...");
-    try {
-      execSync("git pull --ff-only", {
-        cwd: skillsDir,
-        encoding: "utf-8",
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-      success("SquidSquad skill updated");
-    } catch {
-      // If pull fails, re-clone
-      info("Pull failed — re-cloning...");
-      fs.rmSync(skillsDir, { recursive: true, force: true });
-      execSync(`git clone --depth 1 ${REPO_URL} "${skillsDir}"`, {
-        encoding: "utf-8",
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-      success("SquidSquad skill installed (fresh clone)");
-    }
-  } else {
-    info("Cloning SquidSquad skill...");
-    execSync(`git clone --depth 1 ${REPO_URL} "${skillsDir}"`, {
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    success("SquidSquad skill installed");
+function installFiles(gitRoot) {
+  // 1. Fetch SKILL.md → project root
+  info("Fetching SKILL.md...");
+  const skillContent = fetchRawFile("SKILL.md");
+  if (!skillContent) {
+    fail("Failed to fetch SKILL.md from GitHub.");
+    process.exit(1);
   }
+  fs.writeFileSync(path.join(gitRoot, "SKILL.md"), skillContent, "utf-8");
+  success("SKILL.md placed in project root");
+
+  // 2. Create .claude/commands/ and fetch squidsquad-setup.md
+  const commandsDir = path.join(gitRoot, ".claude", "commands");
+  fs.mkdirSync(commandsDir, { recursive: true });
+
+  // The setup command tells Claude to read SKILL.md and run setup
+  const setupCommand = [
+    "---",
+    "description: Run the SquidSquad setup wizard to configure your project",
+    "---",
+    "",
+    'Read the SKILL.md file in the project root and follow its "Setup Instructions" section exactly.',
+    "",
+    "The setup wizard will ask for project details, generate the .squidsquad/ folder, create agent configs, boot scripts, and GitHub Issues labels.",
+    "",
+    "Important: The setup flow will need to fetch files from the SquidSquad repo. Use `gh api` or `curl` to download from https://raw.githubusercontent.com/WallyDoodlez/SquidSquad/main/ as needed.",
+    "",
+  ].join("\n");
+
+  fs.writeFileSync(path.join(commandsDir, "squidsquad-setup.md"), setupCommand, "utf-8");
+  success("Created /squidsquad-setup command");
+}
+
+// --- Launch prompt ---
+
+function askLaunch() {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+    rl.question("  Launch SquidSquad setup now? (Y/n) ", (answer) => {
+      rl.close();
+      const trimmed = answer.trim().toLowerCase();
+      resolve(trimmed === "" || trimmed === "y" || trimmed === "yes");
+    });
+  });
+}
+
+function launchClaude() {
+  info("Launching Claude Code with /squidsquad-setup...");
+  console.log();
+
+  const child = spawn("claude", ["/squidsquad-setup"], {
+    stdio: "inherit",
+    shell: true,
+  });
+
+  child.on("error", (err) => {
+    fail(`Failed to launch Claude: ${err.message}`);
+    info("Run manually: claude /squidsquad-setup");
+    process.exit(1);
+  });
+
+  child.on("exit", (code) => {
+    process.exit(code || 0);
+  });
 }
 
 // --- Main ---
 
-function main() {
+async function main() {
   banner();
 
   // Check if already set up in this project
@@ -192,14 +231,14 @@ function main() {
   checkClaudeCli();
 
   console.log();
-  info("All prerequisites met. Installing skill...");
+  info("All prerequisites met. Fetching SquidSquad files...");
   console.log();
 
   try {
-    installSkill();
+    installFiles(gitRoot);
   } catch (err) {
     console.log();
-    fail("Skill installation failed.");
+    fail("Installation failed.");
     info(err.message || String(err));
     process.exit(1);
   }
@@ -207,14 +246,18 @@ function main() {
   console.log();
   console.log("  \x1b[32m\x1b[1mSquidSquad is ready!\x1b[0m");
   console.log();
-  info("Next steps:");
-  console.log();
-  info("  1. Start a new Claude Code session (or run /clear)");
-  info("  2. Run /squidsquad-setup to configure your project");
-  console.log();
-  info("The setup wizard will ask for your project name, dev roles,");
-  info("test commands, and loop interval — then generate everything.");
-  console.log();
+
+  const shouldLaunch = await askLaunch();
+
+  if (shouldLaunch) {
+    launchClaude();
+  } else {
+    console.log();
+    info("To set up later, run:");
+    console.log();
+    info("  claude /squidsquad-setup");
+    console.log();
+  }
 }
 
 main();

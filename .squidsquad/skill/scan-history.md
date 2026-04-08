@@ -1,5 +1,41 @@
 # Scan History
 
+## Scan — 2026-04-08 11:02
+
+- **Files scanned**: (coverage check — all source files scanned in prior 42 scans)
+- **Findings**: none (codebase scan coverage exhaustive, no new targets)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-08 09:33
+
+- **Files scanned**: .squidsquad/skill/CLAUDE.md (drift check via compose.py deploy skill)
+- **Findings**: none (deployed CLAUDE.md identical to recomposed output — no drift)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-08 08:02
+
+- **Files scanned**: references/sub-skills/manifest.md
+- **Findings**: none (clean, comprehensive, matches directory structure)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-08 06:32
+
+- **Files scanned**: docs/sub-skill-guide.md
+- **Findings**: none (accurate, well-structured)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-08 05:03
+
+- **Files scanned**: docs/ARCHITECTURE.md
+- **Findings**: none (accurate, no stale references)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-08 03:33
+
+- **Files scanned**: tests/integration/test_status_flow.py, tests/integration/harness.py
+- **Findings**: _run() called with string instead of list in test_status_flow.py lines 101, 161 — same class as #201 (already filed)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-08 01:33
 
 - **Files scanned**: references/scripts/vault_check.py, CONTRIBUTING.md
