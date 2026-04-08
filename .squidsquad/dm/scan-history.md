@@ -1,5 +1,11 @@
 # DM Scan History
 
+## Scan — 2026-04-08 07:02
+
+- **Files scanned**: .squidsquad/permissions.template.json (full), .squidsquad/inject-permissions.sh (full), .squidsquad/inject-permissions.ps1 (full), references/scripts/*.py (import audit for dependency check), README.md Requirements (verification)
+- **Findings**: none
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-08 05:02
 
 - **Files scanned**: SKILL.md (Schema Changelog lines 924-943, /squidsquad-bug lines 946-966, /squidsquad-status lines 969-1005, /squidsquad-interval lines 1007-1024, upgrade instructions lines 880-894), references/hints-dm.txt (full), references/hints-dev.txt (full), CHANGELOG.md (v0.15.0 section)
