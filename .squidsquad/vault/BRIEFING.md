@@ -30,11 +30,11 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 - Test suite exists (`python tests/run_tests.py`) — static analysis + integration tests
 - PR flow currently disabled
-- Ship counter reset after v0.14.0 bump — threshold 10, counter at 0
+- Ship counter reset after v0.15.0 bump — threshold 10, counter at 0
 
 ## Team State
 
 - Active agents: skill-lead, PM (separate), DM
 - QA not currently active (PM handles verification in combined mode)
-- Current version: 0.14.0 (Architecture Version 1)
+- Current version: 0.15.0 (Architecture Version 1)
 - Tracker: GitHub Issues with structured labels (`type:`, `status:`, `role:`, `priority:`)
