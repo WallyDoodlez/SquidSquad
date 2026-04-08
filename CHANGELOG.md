@@ -4,6 +4,23 @@ All notable changes to SquidSquad will be documented in this file. This changelo
 
 ---
 
+## [0.15.0] — 2026-04-08
+
+### Fixed
+
+- #280 — README and SKILL.md no longer reference non-existent QA boot scripts — launch instructions now show available scripts depend on your setup
+- #281 — SKILL.md file structure diagram updated to match actual repo layout — uses placeholder notation instead of hardcoded paths
+- #277 — README Team Shapes table now correctly shows QA and DM as optional add-ons
+- #278 — CONTRIBUTING.md bug reports and feature requests now link directly to GitHub Issue templates
+- #262 — Vault briefing and project notes updated from v0.11.0 to v0.14.0
+- #261 — GitHub Issue templates now use correct SquidSquad label taxonomy (`type:bug`, `type:feature`)
+- #260 — Sub-skill guide now documents the `{{runtime:}}` directive for editable agent personalities
+- #258 — Architecture docs now cover Runtime SOUL.md and self-diagnostic systems (v0.14.0 additions)
+- #257 — CONTRIBUTING.md now mentions `/squidsquad-bug` command for in-session bug reporting
+- #210, #194, #193, #197 — Stale documentation references resolved (some already fixed by README overhaul)
+
+---
+
 ## [0.14.0] — 2026-04-06
 
 ### Added
