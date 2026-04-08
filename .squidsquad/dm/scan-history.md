@@ -1,5 +1,13 @@
 # DM Scan History
 
+## Scan — 2026-04-08 00:03
+
+- **Files scanned**: start-dm.sh (full), start-dm.ps1 (full), .github/ISSUE_TEMPLATE/bug-report.yml (full), .github/ISSUE_TEMPLATE/feature-request.yml (full), SKILL.md (file structure lines 77-104, upgrade instructions lines 880-910)
+- **Findings**:
+  - #280 — README and SKILL.md reference start-qa.sh/ps1 but QA boot scripts do not exist (severity:medium)
+  - #281 — SKILL.md file structure diagram shows directories and files that do not exist
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-07 22:02
 
 - **Files scanned**: README.md (full — Team Shapes, Quick Start, Key Features), CONTRIBUTING.md (full), CODE_OF_CONDUCT.md (full), CHANGELOG.md (v0.14.0 section)
