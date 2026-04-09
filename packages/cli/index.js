@@ -167,6 +167,22 @@ function installFiles(gitRoot) {
 
   fs.writeFileSync(path.join(commandsDir, "squidsquad-setup.md"), setupCommand, "utf-8");
   success("Created /squidsquad-setup command");
+
+  // 3. Commit seed files so /squidsquad-setup doesn't abort on dirty worktree
+  info("Committing seed files...");
+  try {
+    execSync("git add SKILL.md .claude/commands/squidsquad-setup.md", {
+      cwd: gitRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"],
+    });
+    execSync('git commit -m "chore: add SquidSquad skill (via npx squidsquad)"', {
+      cwd: gitRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"],
+    });
+    success("Seed files committed");
+  } catch (err) {
+    fail("Failed to commit seed files. Commit them manually before running /squidsquad-setup.");
+    info("  git add SKILL.md .claude/commands/squidsquad-setup.md");
+    info('  git commit -m "chore: add SquidSquad skill"');
+  }
 }
 
 // --- Launch prompt ---
