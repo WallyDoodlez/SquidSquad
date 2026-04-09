@@ -1,6 +1,6 @@
 {
   "name": "squidsquad",
-  "version": "0.15.1",
+  "version": "0.15.2",
   "description": "Bootstrap SquidSquad onto your project — autonomous AI dev team coordination via Claude Code",
   "bin": {
     "squidsquad": "./index.js"
