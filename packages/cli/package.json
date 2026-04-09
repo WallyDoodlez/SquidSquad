@@ -1,5 +1,5 @@
 {
-  "name": "squidsquad",
+  "name": "@wallydoodlez/squidsquad",
   "version": "0.15.0",
   "description": "Bootstrap SquidSquad onto your project — autonomous AI dev team coordination via Claude Code",
   "bin": {
@@ -11,6 +11,9 @@
   "files": [
     "index.js"
   ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "keywords": [
     "claude",
     "claude-code",
