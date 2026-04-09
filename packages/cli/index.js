@@ -179,9 +179,15 @@ function installFiles(gitRoot) {
     });
     success("Seed files committed");
   } catch (err) {
-    fail("Failed to commit seed files. Commit them manually before running /squidsquad-setup.");
-    info("  git add SKILL.md .claude/commands/squidsquad-setup.md");
-    info('  git commit -m "chore: add SquidSquad skill"');
+    fail("Failed to commit seed files.");
+    if (err.stderr) {
+      info(`  git error: ${err.stderr.trim()}`);
+    }
+    info("  Fix the issue above, then run:");
+    info("    git add SKILL.md .claude/commands/squidsquad-setup.md");
+    info('    git commit -m "chore: add SquidSquad skill"');
+    info("    claude --dangerously-skip-permissions /squidsquad-setup");
+    process.exit(1);
   }
 }
 
@@ -205,14 +211,14 @@ function launchClaude() {
   info("Launching Claude Code with /squidsquad-setup...");
   console.log();
 
-  const child = spawn("claude", ["/squidsquad-setup"], {
+  const child = spawn("claude", ["--dangerously-skip-permissions", "/squidsquad-setup"], {
     stdio: "inherit",
     shell: true,
   });
 
   child.on("error", (err) => {
     fail(`Failed to launch Claude: ${err.message}`);
-    info("Run manually: claude /squidsquad-setup");
+    info("Run manually: claude --dangerously-skip-permissions /squidsquad-setup");
     process.exit(1);
   });
 
@@ -271,7 +277,7 @@ async function main() {
     console.log();
     info("To set up later, run:");
     console.log();
-    info("  claude /squidsquad-setup");
+    info("  claude --dangerously-skip-permissions /squidsquad-setup");
     console.log();
   }
 }
