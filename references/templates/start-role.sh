@@ -41,8 +41,107 @@ python references/scripts/config.py sync-agents 2>/dev/null || true
 # Write role for statusline (not used for auto-boot — system prompt handles that)
 echo "{{ROLE}}" > .squidsquad/.active-role
 
-# Clear and initialize status bar state
-rm -f .squidsquad/{{ROLE}}/current-state
-echo "idle|Initializing..." > .squidsquad/{{ROLE}}/current-state
+# --- PID lock: prevent double-start ---
+ROLE_DIR=".squidsquad/{{ROLE}}"
+PID_FILE="$ROLE_DIR/.pid"
+STOP_FILE="$ROLE_DIR/.stop"
+RESTART_LOG="$ROLE_DIR/restart-log.txt"
+STATE_FILE="$ROLE_DIR/current-state"
 
-claude --dangerously-skip-permissions --name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE={{ROLE}}" "start the loop"
+mkdir -p "$ROLE_DIR"
+
+if [ -f "$PID_FILE" ]; then
+  OLD_PID=$(cat "$PID_FILE" 2>/dev/null)
+  if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
+    echo "[SquidSquad] Agent {{ROLE}} already running (PID $OLD_PID). Aborting."
+    echo "[SquidSquad] If this is stale, remove $PID_FILE manually."
+    exit 1
+  fi
+  # Stale PID — clean up
+  rm -f "$PID_FILE"
+fi
+echo $$ > "$PID_FILE"
+
+# --- Cleanup trap: remove PID file on any exit, kill child on signal ---
+CHILD_PID=""
+cleanup() {
+  [ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null || true
+  rm -f "$PID_FILE"
+}
+trap cleanup EXIT
+
+# --- Double Ctrl+C handling: first breaks child, second breaks wrapper ---
+LAST_SIGINT=0
+on_sigint() {
+  NOW=$(date +%s)
+  if [ $((NOW - LAST_SIGINT)) -lt 5 ]; then
+    echo ""
+    echo "[SquidSquad] Double Ctrl+C — stopping wrapper."
+    echo "stopped|Agent stopped by user" > "$STATE_FILE"
+    exit 0
+  fi
+  LAST_SIGINT=$NOW
+  echo ""
+  echo "[SquidSquad] Ctrl+C received. Press again within 5s to stop wrapper, or wait for claude to exit."
+  [ -n "$CHILD_PID" ] && kill -INT "$CHILD_PID" 2>/dev/null || true
+}
+trap on_sigint INT
+trap 'echo "[SquidSquad] SIGTERM — stopping."; exit 0' TERM
+
+# --- Auto-restart wrapper ---
+MAX_RESTARTS=50
+RESTART_COUNT=0
+COOLDOWN_BASE=2
+COOLDOWN_MAX=300
+MIN_RUNTIME_SECONDS=120
+
+while true; do
+  # Reset status bar for a fresh session
+  rm -f "$STATE_FILE"
+  echo "idle|Initializing..." > "$STATE_FILE"
+
+  START_TIME=$(date +%s)
+
+  claude --dangerously-skip-permissions --name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE={{ROLE}}" "start the loop" &
+  CHILD_PID=$!
+  wait "$CHILD_PID"
+  EXIT_CODE=$?
+  CHILD_PID=""
+
+  END_TIME=$(date +%s)
+  RUNTIME=$((END_TIME - START_TIME))
+
+  # Check for stop sentinel file
+  if [ -f "$STOP_FILE" ]; then
+    echo "[SquidSquad] Stop file detected. Not restarting."
+    rm -f "$STOP_FILE"
+    echo "stopped|Agent stopped by user" > "$STATE_FILE"
+    break
+  fi
+
+  # Append restart log entry: timestamp | exit_code | restart_count | runtime
+  TS=$(date '+%Y-%m-%d %H:%M:%S')
+  echo "$TS | exit=$EXIT_CODE | restart=$((RESTART_COUNT + 1)) | runtime=${RUNTIME}s" >> "$RESTART_LOG"
+
+  RESTART_COUNT=$((RESTART_COUNT + 1))
+  if [ "$RESTART_COUNT" -ge "$MAX_RESTARTS" ]; then
+    echo "[SquidSquad] Max restarts ($MAX_RESTARTS) reached. Stopping."
+    echo "error|Max restarts reached" > "$STATE_FILE"
+    break
+  fi
+
+  if [ "$RUNTIME" -lt "$MIN_RUNTIME_SECONDS" ]; then
+    # Fast crash — exponential backoff
+    COOLDOWN=$((COOLDOWN_BASE * (1 << (RESTART_COUNT - 1))))
+    [ "$COOLDOWN" -gt "$COOLDOWN_MAX" ] && COOLDOWN=$COOLDOWN_MAX
+    echo "[SquidSquad] Fast exit (${RUNTIME}s, exit $EXIT_CODE). Backoff ${COOLDOWN}s..."
+    echo "waiting|Restart backoff (${COOLDOWN}s)" > "$STATE_FILE"
+    sleep "$COOLDOWN"
+  else
+    # Healthy run — reset counter, standard 10s cooldown
+    RESTART_COUNT=0
+    echo "[SquidSquad] Agent exited after ${RUNTIME}s (exit $EXIT_CODE). Restarting in 10s..."
+    echo "restarting|Restarting in 10s..." > "$STATE_FILE"
+    sleep 10
+  fi
+done

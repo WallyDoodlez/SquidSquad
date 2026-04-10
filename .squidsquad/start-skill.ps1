@@ -48,10 +48,88 @@ try { python references/scripts/config.py sync-agents 2>$null } catch {}
 # Write role for statusline (not used for auto-boot -- system prompt handles that)
 "skill" | Set-Content .squidsquad/.active-role -NoNewline
 
-# Clear and initialize status bar state
-Remove-Item .squidsquad/skill/current-state -ErrorAction SilentlyContinue
-"idle|Initializing..." | Set-Content .squidsquad/skill/current-state -NoNewline
+# --- PID lock: prevent double-start ---
+$RoleDir = ".squidsquad/skill"
+$PidFile = "$RoleDir/.pid"
+$StopFile = "$RoleDir/.stop"
+$RestartLog = "$RoleDir/restart-log.txt"
+$StateFile = "$RoleDir/current-state"
 
-$sysPrompt = "SQUIDSQUAD_ROLE=skill"
-$initMsg = "start the loop"
-claude --dangerously-skip-permissions --name "$AgentName" --append-system-prompt "$sysPrompt" "$initMsg"
+if (-not (Test-Path $RoleDir)) { New-Item -ItemType Directory -Path $RoleDir -Force | Out-Null }
+
+if (Test-Path $PidFile) {
+    $oldPid = (Get-Content $PidFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+    if ($oldPid) {
+        $running = $null
+        try { $running = Get-Process -Id $oldPid -ErrorAction SilentlyContinue } catch {}
+        if ($running) {
+            Write-Host "[SquidSquad] Agent skill already running (PID $oldPid). Aborting."
+            Write-Host "[SquidSquad] If this is stale, remove $PidFile manually."
+            exit 1
+        }
+    }
+    # Stale — clean up
+    Remove-Item $PidFile -ErrorAction SilentlyContinue
+}
+$PID | Set-Content $PidFile -NoNewline
+
+# --- Cleanup on exit: remove PID file ---
+try {
+    # --- Auto-restart wrapper ---
+    $MaxRestarts = 50
+    $RestartCount = 0
+    $CooldownBase = 2
+    $CooldownMax = 300
+    $MinRuntimeSeconds = 120
+
+    while ($true) {
+        # Reset status bar for a fresh session
+        Remove-Item $StateFile -ErrorAction SilentlyContinue
+        "idle|Initializing..." | Set-Content $StateFile -NoNewline
+
+        $startTime = Get-Date
+
+        $sysPrompt = "SQUIDSQUAD_ROLE=skill"
+        $initMsg = "start the loop"
+        claude --dangerously-skip-permissions --name "$AgentName" --append-system-prompt "$sysPrompt" "$initMsg"
+        $exitCode = $LASTEXITCODE
+
+        $runtime = [int]((Get-Date) - $startTime).TotalSeconds
+
+        # Check for stop sentinel file
+        if (Test-Path $StopFile) {
+            Write-Host "[SquidSquad] Stop file detected. Not restarting."
+            Remove-Item $StopFile -ErrorAction SilentlyContinue
+            "stopped|Agent stopped by user" | Set-Content $StateFile -NoNewline
+            break
+        }
+
+        # Append restart log entry
+        $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        "$ts | exit=$exitCode | restart=$($RestartCount + 1) | runtime=${runtime}s" | Add-Content $RestartLog
+
+        $RestartCount++
+        if ($RestartCount -ge $MaxRestarts) {
+            Write-Host "[SquidSquad] Max restarts ($MaxRestarts) reached. Stopping."
+            "error|Max restarts reached" | Set-Content $StateFile -NoNewline
+            break
+        }
+
+        if ($runtime -lt $MinRuntimeSeconds) {
+            # Fast crash — exponential backoff
+            $cooldown = [Math]::Min($CooldownBase * [Math]::Pow(2, $RestartCount - 1), $CooldownMax)
+            $cooldown = [int]$cooldown
+            Write-Host "[SquidSquad] Fast exit (${runtime}s, exit $exitCode). Backoff ${cooldown}s..."
+            "waiting|Restart backoff (${cooldown}s)" | Set-Content $StateFile -NoNewline
+            Start-Sleep -Seconds $cooldown
+        } else {
+            # Healthy run — reset counter, standard 10s cooldown
+            $RestartCount = 0
+            Write-Host "[SquidSquad] Agent exited after ${runtime}s (exit $exitCode). Restarting in 10s..."
+            "restarting|Restarting in 10s..." | Set-Content $StateFile -NoNewline
+            Start-Sleep -Seconds 10
+        }
+    }
+} finally {
+    Remove-Item $PidFile -ErrorAction SilentlyContinue
+}

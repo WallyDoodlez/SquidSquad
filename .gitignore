@@ -1,6 +1,9 @@
 # SquidSquad runtime (not committed)
 .squidsquad/.active-role
 .squidsquad/*/current-state
+.squidsquad/*/.pid
+.squidsquad/*/.stop
+.squidsquad/*/restart-log.txt
 .squidsquad/.local-config
 .squidsquad/.backlog-cache
 .squidsquad/diagnostics/*.jsonl
