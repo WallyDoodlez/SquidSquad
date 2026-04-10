@@ -38,7 +38,7 @@ You have a codebase and Claude Code. You can fix one bug at a time. But what if 
 - **Shared memory vault** — agents learn your preferences, decisions, and patterns over time via an Obsidian-compatible knowledge base
 - **Self-improvement scanning** — agents proactively find code quality issues, test gaps, and doc drift during quiet cycles
 - **Live status bar** — emoji-rich status line showing what each agent is doing, backlog counts, context pressure, and cycle countdown
-- **Context pressure detection** — agents save state and exit cleanly when the context window fills up, resuming on restart
+- **Auto-restart wrapper** — agents automatically restart with a fresh context when loops expire or context pressure forces an exit, resuming from saved state with no manual reboot needed
 - **Auto versioning** — ships are counted and minor versions auto-bump when thresholds are met
 
 ---
