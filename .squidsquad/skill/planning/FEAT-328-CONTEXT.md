@@ -219,6 +219,155 @@ The validator must ensure all role-referenced tool IDs exist in the registry.
 
 **Q-new6 — Tool setup walkthrough is MANDATORY in the wizard**: Every tool in the registry must ship with a `setup.md` describing infrastructure requirements (MCP installation, API keys, OAuth, etc.). When a chosen tool is not available at install time, the wizard MUST run the setup.md walkthrough — it's not optional, not deferred, not "skip and warn". Walkthrough is interactive and Claude-assisted because the wizard runs inside a Claude session. The user can skip an individual tool (wizard tries the next in `any_of`) but cannot skip walkthrough for a tool they've selected. If all tools in `any_of` are skipped, the role install fails with a clear message and instructions to acquire missing infrastructure.
 
+**Q-new11 — Lazy tool setup via PM orchestration (REVISED — scoped to environment only)**: Tool selection and setup.md walkthroughs are REMOVED from the install wizard. Tools are deferred until a role actually needs them. PM orchestrates **environment/tool configuration** on workers' behalf. Workers can still interact with humans directly on work content (HITL, clarifications, feedback) — see Q-new12 for the full interaction model.
+
+**Two paths for tool setup**:
+
+**Path A — Pre-emptive (PM proactively)**:
+1. During each PM cycle, the triage step scans the approved feature queue
+2. For each queued feature, PM determines which roles will work it and cross-references each role's `requires_tools` with `config.md → ## Agents → <role>.tool_configs`
+3. If a role has unconfigured tools for work about to land on its desk, PM flags them
+4. At the check-in step, PM surfaces: "Feature #42 needs designer + a design tool. Currently unconfigured. Want to set it up now?"
+5. If human confirms, PM walks through `references/tools/<id>/setup.md` interactively (Claude-assisted since PM runs inside Claude)
+6. On success, PM composes the chosen tool's `sub-skill.md` into the worker's CLAUDE.md template, commits the change
+7. Worker role's next cycle reads the updated CLAUDE.md naturally
+
+**Path B — Reactive (worker agent discovers mid-work)**:
+1. Worker agent (e.g., designer) is in `in-progress` on a feature
+2. Worker discovers a tool requirement it didn't anticipate (e.g., designer realizes the feature needs a Figma-specific capability not covered by the currently-configured tool)
+3. Worker PAUSES the task:
+   - Transitions `in-progress → pending-human-setup`
+   - Comments on the issue with exactly what's needed and why
+4. Worker moves on to next work in its backlog — does NOT block its cycle
+5. PM's next cycle's triage step detects `pending-human-setup` items across all roles
+6. At check-in, PM surfaces the blocked item: "Issue #42 is blocked on tool setup — designer needs Figma MCP configured."
+7. Human talks to PM (not directly to designer), PM walks the setup.md interactively
+8. On success, PM composes the sub-skill into the worker's CLAUDE.md, commits
+9. PM transitions `pending-human-setup → in-progress` so worker picks up next cycle
+
+**New status label**: `pending-human-setup` — follows the `pending-human-<verb>` convention (same as `pending-human-approval` and `pending-human-review`). Legal transitions:
+- `in-progress → pending-human-setup` (worker self-pauses)
+- `pending-human-setup → in-progress` (PM completes setup, hands back)
+
+**Worker agents never write to their own CLAUDE.md**. Only PM composes tool sub-skills. This maintains the boundary: workers execute their work content (including direct human interaction for HITL, clarifications, feedback), PM owns configuration and environment setup.
+
+**Q-new13 — Setup requirements are declarative, not prescriptive (manifest-driven LLM prompting)**: Role manifests declare WHAT information the wizard needs to collect, not HOW to ask for it. The wizard (running inside Claude) reads each role's `setup_requirements` and uses Claude to craft natural prompts on the fly. This replaces hardcoded Step 4/5/6 logic with a generic walker.
+
+**Manifest schema extension**:
+
+```yaml
+setup_requirements:
+  - id: variant
+    needs: "which dev team shape the user wants — backend only, frontend only, both (two separate agents), or fullstack (one combined agent)"
+    used_for: "deciding how to structure the engineering team for this project"
+  - id: stack
+    needs: "the tech stack the project uses — language, framework, package manager, test runner"
+    used_for: "knowing how the dev agent runs builds and tests for the project"
+    repo_hints: ["package.json", "requirements.txt", "go.mod", "pyproject.toml", "Cargo.toml"]
+    per_installed_agent: true
+    only_in_presets: [software-dev]  # optional filter
+```
+
+**Field semantics**:
+- `id` — unique within the role, used as the key for storing the answer
+- `needs` — one-sentence description of what information is needed, written in **domain terms only** (see Q-new14). Claude uses this to understand and prompt the user naturally.
+- `used_for` — why this info is needed, written in **domain terms only**. Helps Claude frame the question and handle edge cases.
+- `repo_hints` — optional file path patterns the wizard can inspect before asking (lets Claude pre-read project artifacts like `package.json` and make the prompt smarter)
+- `per_installed_agent` — if true, the requirement is asked once per installed agent of the role (e.g., stack asked for both backend and frontend agents if variant = both)
+- `only_in_presets` — optional filter; if present, the requirement only fires when the install preset is in this list
+
+**Q-new14 — Manifests must be domain-only, no SquidSquad internals**: Role and tool manifests describe their domain in terms any software professional would recognize. They never reference:
+- Internal file paths (`config.md`, `CLAUDE.md`, `.squidsquad/...`)
+- Internal terms (status labels, tracker schemas, composition anchors, sub-skill composition points)
+- Internal scripts, conventions, or storage mechanisms
+- Anything that requires a reader to know SquidSquad's source code to understand
+
+**Why**:
+1. Manifests are the public contract for what each role does — browsing `references/roles/` should be self-explanatory
+2. Internal restructures (renaming files, moving data) stay cheap — no manifest edits required
+3. Future user-authored manifests (custom roles, v2 feature) don't require users to learn SquidSquad internals
+4. Claude handles the internal mapping — the wizard knows where answers go, the manifest just declares domain facts
+
+**Applies to**:
+- Role manifests (`references/roles/<role>/manifest.yaml`)
+- Tool manifests (`references/tools/<tool>/manifest.yaml`)
+- Tool setup.md files (those describe tool infrastructure, not SquidSquad internals)
+- Tool sub-skill.md files (those describe how an agent uses the tool, not how SquidSquad stores the choice)
+
+**Does NOT apply to**:
+- SKILL.md, CLAUDE.md templates — these are SquidSquad's own internals and naturally reference its internals
+- Scripts in `references/scripts/` — implementation code can reference anything
+- Sub-skill files that are explicitly SquidSquad-specific (e.g., tracker protocol instructions)
+
+**Wizard walker**:
+1. Determine which roles are being installed (from the preset)
+2. For each role in preset install order, read its `setup_requirements`
+3. For each requirement, skip if `only_in_presets` doesn't include the active preset
+4. Prompt Claude: "Ask the user for [needs]. Context: this is used for [used_for]. Here are the repo hints: [repo_hints contents]. Prompt naturally and interpret the answer."
+5. Record the interpreted answer under `config.md → ## Agents → <role>.setup → <id>`
+6. Continue to the next requirement
+7. After all role requirements are walked, continue to Step 5 (loop interval) in the install flow
+
+**What this replaces**:
+- Hardcoded Step 4 (designer optional) → becomes designer's `install_optional` requirement
+- Hardcoded Step 5 (dev variant) → becomes dev's `variant` requirement
+- Hardcoded Step 6 (frameworks/tests) → becomes dev's `stack` requirement with `repo_hints`
+
+**Install flow after Q-new13** (generic, fewer hardcoded steps):
+
+```
+Step 0   — gh prerequisite check
+Step 0b  — re-run detection
+Step 1   — project name + repo
+Step 2   — intent question (uses the same LLM-prompting mechanism at wizard level)
+Step 3   — preset confirmation
+Step 4   — INJECTED: walk each installed role's setup_requirements in preset install order
+Step 5   — loop interval (core wizard field, not role-specific)
+Step 6   — review screen (P/V/E/A)
+Step 7   — commit and write files
+```
+
+Adding a new role to v2 (e.g., copywriter) just means writing `references/roles/copywriter/manifest.yaml` with whatever setup_requirements it needs. The wizard picks them up automatically.
+
+**Previously locked decisions that fold into this**:
+- Q4 (default be+fe) — expressed as a hint in dev.variant's `needs` text or in wizard system prompt
+- Q-new7 (LLM stack detection) — subsumed: dev.stack uses the generic LLM-prompting pattern with `repo_hints`
+- Q-new10 (designer before dev order) — expressed by preset's role install order (software-dev: `[designer, dev, qa]`)
+
+---
+
+**Q-new12 — Human-to-agent interaction model**: Humans can engage ANY agent directly about work content. PM is not a required middle-layer for work discussions. What PM owns exclusively is the environment — tool setup, role manifest/config changes, cross-agent coordination, and ingesting new feature/bug requests into the tracker.
+
+**Direct human ↔ worker interactions (allowed, no PM involvement)**:
+- HITL design review — human comments directly on designer's issues to approve or redirect (already locked in Q7)
+- Clarifying an assigned feature/bug — human can comment on any issue assigned to any worker
+- Mid-iteration feedback — human can interject on a designer's pending-human-review item without routing through PM
+- Filing bugs or features against a specific worker's domain — human can drop a new issue assigned to `role:skill` or `role:designer` without PM having to triage first
+- Status updates or "how's it going" questions on any in-progress item
+
+**PM-exclusive interactions (workers route THROUGH PM)**:
+- Tool setup walkthroughs (`references/tools/<id>/setup.md`)
+- Role manifest changes
+- Config.md edits
+- Composition of tool sub-skills into any CLAUDE.md
+- Cross-agent reassignments (rerouting work between roles)
+
+**Worker self-pause for environment issues**: When a worker discovers an environment/infrastructure gap it cannot resolve itself (missing tool, unauthenticated MCP, malformed config), it transitions `in-progress → pending-human-setup`, comments on the issue, and moves on. PM picks up the gap at its next cycle. This is the one place workers CANNOT resolve things directly with humans — everything environment-related routes through PM.
+
+**Why the split**: Environment changes affect cross-agent state (multiple roles may share a tool, config.md is shared, composition changes commit to CLAUDE.md templates). Work content is local to the issue thread. Keeping these separate prevents config thrash and keeps the environment coherent while still letting humans get work done without going through a middle-layer.
+
+**Composition is committed**: When PM completes a tool setup, the worker's CLAUDE.md template is modified with the tool's sub-skill content composed at the composition anchor. PM commits the change as part of the tool-setup operation. Traceable via git history ("PM configured designer with figma tool for #42").
+
+**First-time composition vs re-composition**: If a role already has a tool configured and PM is asked to configure a DIFFERENT tool of the same category (e.g., switching designer from figma to stitch), PM replaces the existing sub-skill at the same anchor. Previous tool config is removed from `config.md` and the old sub-skill is excised from the worker's CLAUDE.md. Git history preserves the previous state.
+
+**PM cycle impact**: PM's triage step gains two new sub-checks:
+1. **Pre-emptive**: scan approved features' role requirements against `config.md` tool configs
+2. **Reactive**: scan for `pending-human-setup` items
+
+Both bubble up to check-in.
+
+---
+
 **Q-new10 — Setup step order: Designer before Dev**: In the `software-dev` preset, the designer-optional question MUST come before the dev variant question. Reasoning: designer produces the design that feeds dev work, so the install order should mirror the work order. This also means designer's tool selection (Step 6) precedes dev's stack/framework questions (Step 7), giving the user a clean "design first, build second" flow.
 
 **Revised step order in software-dev preset**:
@@ -342,7 +491,9 @@ Future "agent-on-agent" review statuses follow the same naming convention: `pend
 
    **Tool identifier convention**: Lowercase, snake_case, matches the MCP server name as registered in Claude (e.g., `figma_mcp`, `gmail_mcp`, `slack_mcp`). Validator does a fuzzy match against the registered MCP servers.
 
-22. **Q-new2 — Missing tool behavior**: If a role's `requires_tools` cannot be satisfied at install time, the wizard **refuses to install the role** and prints a clear message:
+22. **Q-new2 — SUPERSEDED BY Q-new11**: Original lock was "refuse to install the role if required tool missing". This is REMOVED. Tools no longer gate install — they're configured lazily by PM per Q-new11. Keeping this entry for historical traceability, but the active lock is Q-new11.
+
+**Q-new2 (superseded) — original text below**: If a role's `requires_tools` cannot be satisfied at install time, the wizard **refuses to install the role** and prints a clear message:
    ```
    Designer requires one of: figma_mcp, google_stitch
    None are available in this Claude session.
