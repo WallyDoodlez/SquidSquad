@@ -28,32 +28,35 @@ Sub-skills are plain markdown with optional section markers. No special syntax b
 
 ## Where Sub-Skills Live
 
+Sub-skill fragments live under `references/sub-skills/` and role entry files live under `references/roles/<role>/` (self-contained role directories):
+
 ```
-references/sub-skills/
-├── manifest.md          ← composition rules (which sub-skills each role gets)
-├── common/              ← shared by multiple roles
-│   ├── pull-latest.md
-│   ├── tracker-protocol.md
-│   ├── vault-protocol.md
-│   ├── vault-remember.md
-│   └── ...
-├── roles/               ← entry files (one per agent type)
-│   ├── dev-agent.md
-│   ├── pm-agent.md
-│   ├── qa-agent.md
-│   ├── dm-agent.md
-│   └── designer.md
-├── souls/               ← agent personalities
-│   ├── dev.md
-│   ├── pm.md
-│   └── ...
-├── pm-specific/         ← PM-only behaviors
-├── qa-specific/         ← QA-only behaviors
-├── dm-specific/         ← DM-only behaviors
-└── designer-specific/   ← Designer-only behaviors
+references/
+├── sub-skills/
+│   ├── manifest.md          ← composition rules (which sub-skills each role gets)
+│   ├── common/              ← shared by multiple roles
+│   │   ├── pull-latest.md
+│   │   ├── tracker-protocol.md
+│   │   ├── vault-protocol.md
+│   │   ├── vault-remember.md
+│   │   └── ...
+│   ├── pm-specific/         ← PM-only behaviors
+│   ├── qa-specific/         ← QA-only behaviors
+│   ├── dm-specific/         ← DM-only behaviors
+│   └── designer-specific/   ← Designer-only behaviors
+│
+└── roles/                   ← one self-contained directory per role
+    ├── dev/
+    │   ├── CLAUDE.md        ← entry file with {{include}} directives
+    │   ├── SOUL.md          ← personality template (deployed to .squidsquad/<role>/SOUL.md)
+    │   └── manifest.yaml
+    ├── pm/
+    ├── qa/
+    ├── dm/
+    └── designer/
 ```
 
-**Common** sub-skills are shared across multiple agent roles. **Role-specific** sub-skills belong to one role. **Souls** define each role's personality.
+**Common** sub-skills are shared across multiple agent roles. **Role-specific** sub-skills belong to one role. **SOUL.md** files (one per role, alongside the role's CLAUDE.md) define each role's personality.
 
 ---
 
@@ -61,7 +64,7 @@ references/sub-skills/
 
 ### Entry Files
 
-Each agent role has an **entry file** in `roles/` that defines the template skeleton using `{{include}}` directives:
+Each agent role has an **entry file** at `references/roles/<role>/CLAUDE.md` that defines the template skeleton using `{{include}}` directives:
 
 ```markdown
 {{runtime: souls/dev}}
@@ -98,35 +101,40 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team...
 ### The Runtime Directive
 
 ```
-{{runtime: relative/path}}
+{{runtime: souls/<role>}}
 ```
 
-Unlike `{{include:}}` which compiles content into the template at build time, `{{runtime:}}` copies the file to `.squidsquad/[role]/` for loading at session start. This is used for content that should be editable without redeploying templates — most notably SOUL.md personality files.
+Unlike `{{include:}}` which compiles content into the template at build time, `{{runtime:}}` emits a "read at session start" instruction that tells the agent to load its personality from `.squidsquad/<role>/SOUL.md` at boot. This is used for content that should be editable without redeploying templates — most notably SOUL.md personality files.
 
-- Path is relative to `references/sub-skills/`
-- The file is copied to `.squidsquad/[role]/SOUL.md` during `compose.py deploy`
-- Changes to the runtime file take effect on next agent boot without recomposing
-- Typically used at the top of an entry file: `{{runtime: souls/dev}}`
+- The `souls/<role>` argument is a symbolic marker name (used for section-marker generation); it is not resolved to a file during composition.
+- The actual SOUL.md template lives alongside the role's entry file at `references/roles/<role>/SOUL.md` and is copied to `.squidsquad/<role>/SOUL.md` during `compose.py deploy` (only if no local SOUL.md already exists — agent customisations are preserved).
+- Changes to `.squidsquad/<role>/SOUL.md` take effect on next agent boot without recomposing.
+- Typically used at the top of an entry file: `{{runtime: souls/dev}}`.
 
 ### Build Pipeline
 
 ```
-references/sub-skills/roles/dev-agent.md     (entry file with {{include}} directives)
+references/roles/<role>/CLAUDE.md        (entry file with {{include}} directives)
         │
-        ▼  compose.py compose
-references/agent-instructions.md             (all includes resolved, section markers added)
+        ▼  compose.py all
+references/agent-instructions.md         (all includes resolved, section markers added)
         │
         ▼  compose.py deploy <role>
-.squidsquad/<role>/CLAUDE.md                 (placeholders substituted with config values)
+.squidsquad/<role>/CLAUDE.md             (placeholders substituted with config values)
+                                          + .squidsquad/<role>/SOUL.md (copied from
+                                            references/roles/<role>/SOUL.md if missing)
 ```
 
 Run composition:
 ```bash
-# Compose all entry files into agent-instructions.md
-python references/scripts/compose.py compose
+# Compose the dev entry file into agent-instructions.md
+python references/scripts/compose.py all
 
 # Deploy a specific role (compose + substitute placeholders + write CLAUDE.md)
 python references/scripts/compose.py deploy <role>
+
+# Deploy every configured role at once
+python references/scripts/compose.py deploy-all
 ```
 
 ### Section Markers
@@ -187,9 +195,9 @@ Bad examples:
 
 ### Step 2 — Choose the location
 
-- **Common** (`common/`): If 2+ roles need this behavior
-- **Role-specific** (`[role]-specific/`): If only one role uses it
-- **Soul** (`souls/`): If it defines personality/communication style
+- **Common** (`references/sub-skills/common/`): If 2+ roles need this behavior
+- **Role-specific** (`references/sub-skills/[role]-specific/`): If only one role uses it
+- **Soul** (`references/roles/<role>/SOUL.md`): Personality/communication style — edit the role's SOUL.md template directly (not a sub-skill fragment)
 
 ### Step 3 — Write the sub-skill
 
@@ -214,7 +222,7 @@ Rules:
 
 ### Step 4 — Add the include directive
 
-Edit the entry file(s) in `roles/` to include your sub-skill at the right position:
+Edit the entry file(s) at `references/roles/<role>/CLAUDE.md` to include your sub-skill at the right position:
 
 ```markdown
 {{include: common/your-new-skill}}
@@ -228,7 +236,7 @@ Add your sub-skill to the composition order in `manifest.md` for each role that 
 
 ```bash
 # Compose and check for errors
-python references/scripts/compose.py compose
+python references/scripts/compose.py all
 
 # Verify section markers appear correctly
 grep "sub-skill: your-new-skill" references/agent-instructions.md
@@ -285,7 +293,7 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full contribution process.
 
 - **Keep sub-skills atomic** — one behavior per file. If it's doing two things, split it.
 - **Use Python scripts for gates** — don't rely on the agent to remember thresholds or limits. Scripts are deterministic.
-- **Test with `compose.py compose`** — catch include errors before deploying.
+- **Test with `compose.py all`** — catch include errors before deploying.
 - **Check the manifest** — if your sub-skill isn't in the manifest, it won't be composed.
 - **Use section markers** — they power the status bar and make debugging easier.
 - **Mind the `[ROLE]` ambiguity** — common sub-skills that reference `[ROLE]` paths only work in dev templates. PM and DM must inline those sections.
