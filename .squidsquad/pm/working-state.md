@@ -2,7 +2,7 @@
 
 - **Task**: #328 — intent-driven setup wizard with role manifest registry
 - **Status**: planning
-- **Phase**: discussing FEAT-328 (paused — awaiting human revision input)
+- **Phase**:
 - **Started**: 2026-04-11
 
 ## Going Public Pipeline Status
