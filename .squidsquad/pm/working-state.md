@@ -1,9 +1,9 @@
 # Working State
 
-- **Task**: #327 — installer commit abort + skip-permissions
-- **Status**: in-progress (with skill agent)
+- **Task**: idle — tracker drained
+- **Status**: idle
 - **Phase**:
-- **Started**: 2026-04-09
+- **Started**: 2026-04-11
 
 ## Going Public Pipeline Status
 
