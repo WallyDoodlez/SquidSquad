@@ -1,7 +1,7 @@
 # Working State
 
-- **Task**: idle — tracker drained
-- **Status**: idle
+- **Task**: #328 — intent-driven setup wizard with role manifest registry
+- **Status**: pending (awaiting human approval to begin planning)
 - **Phase**:
 - **Started**: 2026-04-11
 
