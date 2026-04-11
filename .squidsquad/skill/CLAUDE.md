@@ -159,7 +159,7 @@ python references/scripts/tracker.py transition [NUMBER] pending-ship shipped --
 Pass your own role — PM uses `--role pm-lead`, QA uses `--role qa-lead`, DM uses `--role dm-lead`, designer uses `--role designer-lead`, dev agents use `--role skill-lead` (e.g. `skill-lead`). The script rejects:
 
 - **Illegal transitions** (e.g. `pending → shipped`) — never bypassable.
-- **Unauthorized transitions** — e.g. a dev agent trying to run `pending-ship → shipped` (DM-only), or `pending-test → pending-ship` (QA-only). Use `--force` only as a human override.
+- **Unauthorized transitions** — e.g. a dev agent trying to run `pending-ship → shipped` (DM-only) or `pending-test → pending-ship` (PM/QA-only). Use `--force` only as a human override.
 - **Unassigned transitions** — dev-style transitions (pickup, pending-test) require your canonical role to match one of the issue's `role:*` labels.
 
 Legal flows and owning roles:
@@ -169,7 +169,7 @@ Legal flows and owning roles:
 - `planned` → `approved` — **PM**
 - `approved` → `in-progress` — **assigned role**
 - `in-progress` → `pending-test` | `approved` — **assigned role**
-- `pending-test` → `in-progress` | `pending-ship` — **QA**
+- `pending-test` → `in-progress` | `pending-ship` — **PM or QA** (PM always; QA when a separate QA agent is installed. PM holds combined PM/QA identity by default.)
 - `pending-ship` → `shipped` — **DM** (auto-closes)
 
 ### Discussion Entries (replaces inline Discussion sections)

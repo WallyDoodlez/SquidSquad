@@ -18,12 +18,15 @@ Usage:
     python scripts/tracker.py --help
 
 Role authority (who may call `transition`):
-  - PM (--role pm or pm-lead)      : pending -> planning/approved, planning -> planned, planned -> approved
-  - Assigned dev role (--role <r>) : open -> in-progress, approved -> in-progress, in-progress <-> pending-test,
-                                     open -> pending-test, in-progress -> approved
-                                     (must match the issue's `role:*` label)
-  - QA (--role qa or qa-lead)      : pending-test -> in-progress, pending-test -> pending-ship
-  - DM (--role dm or dm-lead)      : pending-ship -> shipped
+  - PM  (--role pm  or pm-lead)    : pending -> planning/approved, planning -> planned,
+                                     planned -> approved; AND pending-test -> in-progress,
+                                     pending-test -> pending-ship (PM/QA combined identity)
+  - QA  (--role qa  or qa-lead)    : pending-test -> in-progress, pending-test -> pending-ship
+                                     (when deployed as a separate agent alongside PM)
+  - Assigned dev role (--role <r>) : open -> in-progress, approved -> in-progress,
+                                     in-progress <-> pending-test, open -> pending-test,
+                                     in-progress -> approved (must match issue's `role:*` label)
+  - DM  (--role dm  or dm-lead)    : pending-ship -> shipped
   - Human override                 : --force bypasses authority + unread-feedback guards
 """
 
@@ -113,9 +116,12 @@ ROLE_AUTHORITY = {
     ("status:in-progress", "status:pending-test"): {"_assignee"},
     ("status:in-progress", "status:approved"): {"_assignee"},
 
-    # QA owns verification
-    ("status:pending-test", "status:in-progress"): {"qa"},
-    ("status:pending-test", "status:pending-ship"): {"qa"},
+    # QA/PM owns verification. PM is always authorized because the PM agent
+    # holds the combined PM/QA identity in deployments without a dedicated QA
+    # agent (see pm/CLAUDE.md "SquidSquad — PM/QA"). QA is also authorized
+    # when installed. Dev and DM roles remain locked out.
+    ("status:pending-test", "status:in-progress"): {"qa", "pm"},
+    ("status:pending-test", "status:pending-ship"): {"qa", "pm"},
 
     # DM owns delivery / shipping
     ("status:pending-ship", "status:shipped"): {"dm"},

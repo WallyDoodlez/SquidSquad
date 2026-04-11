@@ -149,7 +149,11 @@ class TestCheckAuthority:
         )
         assert ok
 
-    # ---- QA verification flow ----
+    # ---- QA/PM verification flow ----
+    # Both QA and PM are authorized. PM is always authorized because the PM
+    # agent carries the combined "PM/QA" identity in deployments without a
+    # dedicated QA agent. Regression test for the #320 re-open where the
+    # original fix locked PM out of its own documented verification workflow.
     def test_qa_can_approve_pending_test(self, stub_role_labels):
         ok, _ = tracker._check_authority(
             1, "status:pending-test", "status:pending-ship", "qa-lead"
@@ -162,14 +166,30 @@ class TestCheckAuthority:
         )
         assert ok
 
+    def test_pm_can_approve_pending_test(self, stub_role_labels):
+        """PM/QA combined identity — regression for #320 re-open."""
+        ok, _ = tracker._check_authority(
+            1, "status:pending-test", "status:pending-ship", "pm-lead"
+        )
+        assert ok
+
+    def test_pm_can_reject_pending_test(self, stub_role_labels):
+        """PM must be able to bounce back to in-progress when it finds gaps."""
+        ok, _ = tracker._check_authority(
+            1, "status:pending-test", "status:in-progress", "pm"
+        )
+        assert ok
+
     def test_skill_cannot_approve_pending_test(self, stub_role_labels):
         ok, reason = tracker._check_authority(
             1, "status:pending-test", "status:pending-ship", "skill-lead"
         )
         assert not ok
-        assert "qa" in reason
+        # Error should mention the allowed roles (pm and qa)
+        assert "pm" in reason and "qa" in reason
 
     def test_dm_cannot_approve_pending_test(self, stub_role_labels):
+        """DM ships, never verifies."""
         ok, _ = tracker._check_authority(
             1, "status:pending-test", "status:pending-ship", "dm-lead"
         )
