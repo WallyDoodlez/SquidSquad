@@ -1,8 +1,8 @@
 # Working State
 
-- **Task**: idle — #328 approved, awaiting skill pickup
-- **Status**: idle
-- **Phase**:
+- **Task**: #4 — boot remote agents sub-skill
+- **Status**: planning
+- **Phase**: researching FEAT-4
 - **Started**: 2026-04-11
 
 ## Going Public Pipeline Status
