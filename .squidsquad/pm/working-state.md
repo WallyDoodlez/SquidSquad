@@ -1,7 +1,7 @@
 # Working State
 
-- **Task**: #4 — boot remote agents sub-skill
-- **Status**: planning
+- **Task**: idle — #4 approved, queued behind #335
+- **Status**: idle
 - **Phase**:
 - **Started**: 2026-04-11
 
