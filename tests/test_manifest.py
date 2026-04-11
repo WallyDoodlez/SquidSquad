@@ -45,15 +45,35 @@ class TestManifestIntegrity:
         assert (self.sub_skills_dir / "manifest.md").exists()
 
     def test_role_entries_exist(self):
-        """Each role entry file referenced in manifest exists."""
-        role_files = re.findall(r'`roles/([^`]+)`', self.manifest_text)
-        for role_file in role_files:
-            path = self.sub_skills_dir / "roles" / role_file
+        """Each role entry file referenced in manifest exists.
+
+        After #328 Q-new22, role CLAUDE.md templates live in
+        `references/roles/<role>/CLAUDE.md`, not under sub-skills/.
+        """
+        from conftest import REFERENCES_DIR
+        role_refs = re.findall(
+            r'`references/roles/([a-z][a-z0-9_-]*)/CLAUDE\.md`',
+            self.manifest_text,
+        )
+        assert role_refs, (
+            "Expected manifest to reference at least one concrete role "
+            "CLAUDE.md (e.g. `references/roles/pm/CLAUDE.md`)."
+        )
+        for role in role_refs:
+            path = REFERENCES_DIR / "roles" / role / "CLAUDE.md"
             assert path.exists(), f"Role entry file missing: {path}"
 
     def test_include_targets_exist(self):
-        """All include paths referenced in composition order exist as .md files."""
-        includes = re.findall(r'`((?:common|souls|pm-specific|qa-specific|designer-specific|dm-specific)/[^`]+)`', self.manifest_text)
+        """All include paths referenced in composition order exist as .md files.
+
+        `souls/` and `roles/` are no longer valid include namespaces after
+        Q-new22 — they were removed from the sub-skills directory and moved
+        to `references/roles/<role>/`.
+        """
+        includes = re.findall(
+            r'`((?:common|pm-specific|qa-specific|designer-specific|dm-specific)/[^`]+)`',
+            self.manifest_text,
+        )
         for inc in includes:
             path = self.sub_skills_dir / f"{inc}.md"
             assert path.exists(), f"Sub-skill file missing: {path}"
@@ -67,10 +87,11 @@ class TestManifestIntegrity:
                 continue
             all_md.add(rel)
 
-        # Extract all referenced paths from manifest
         referenced = set()
-        # Include paths (without .md)
-        for inc in re.findall(r'`((?:common|souls|pm-specific|qa-specific|designer-specific|dm-specific|roles)/[^`]+)`', self.manifest_text):
+        for inc in re.findall(
+            r'`((?:common|pm-specific|qa-specific|designer-specific|dm-specific)/[^`]+)`',
+            self.manifest_text,
+        ):
             if not inc.endswith('.md'):
                 referenced.add(f"{inc}.md")
             else:
@@ -78,3 +99,16 @@ class TestManifestIntegrity:
 
         orphans = all_md - referenced
         assert not orphans, f"Sub-skill files not referenced in manifest: {orphans}"
+
+    def test_legacy_souls_namespace_gone(self):
+        """Manifest must no longer reference a `souls/` include namespace."""
+        assert "souls/" not in self.manifest_text, (
+            "Manifest still references the legacy souls/ namespace — it "
+            "was retired by Q-new22."
+        )
+
+    def test_legacy_roles_include_namespace_gone(self):
+        """Manifest must no longer reference a `roles/` include namespace."""
+        # The new pattern is `references/roles/<role>/CLAUDE.md`, not `roles/x`
+        legacy = re.findall(r'`roles/[^`]+`', self.manifest_text)
+        assert not legacy, f"Manifest still references legacy roles/: {legacy}"

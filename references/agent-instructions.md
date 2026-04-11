@@ -1,4 +1,5 @@
-<!-- GENERATED FILE — DO NOT EDIT. Source: references/sub-skills/ -->
+<!-- GENERATED FILE — DO NOT EDIT. -->
+<!-- Source: references/roles/dev/CLAUDE.md + sub-skills/ -->
 <!-- Regenerate with: python references/scripts/compose.py all -->
 
 <!-- sub-skill: dev -->

@@ -49,19 +49,47 @@ class TestRoleDirectories:
 
 
 class TestRoleEntryFiles:
-    """Verify role entry files exist in sub-skills."""
+    """Verify role entry files exist in the role directory registry.
+
+    Q-new22 moved every role's SOUL.md + CLAUDE.md into its self-contained
+    directory at `references/roles/<role>/`. The legacy
+    `references/sub-skills/{souls,roles}/` layout has been retired.
+    """
 
     def test_dev_entry_exists(self):
-        path = REFERENCES_DIR / "sub-skills" / "roles" / "dev-agent.md"
-        assert path.exists(), "Missing dev-agent.md entry file"
+        path = REFERENCES_DIR / "roles" / "dev" / "CLAUDE.md"
+        assert path.exists(), "Missing references/roles/dev/CLAUDE.md"
 
     def test_pm_entry_exists(self):
-        path = REFERENCES_DIR / "sub-skills" / "roles" / "pm-agent.md"
-        assert path.exists(), "Missing pm-agent.md entry file"
+        path = REFERENCES_DIR / "roles" / "pm" / "CLAUDE.md"
+        assert path.exists(), "Missing references/roles/pm/CLAUDE.md"
+
+    def test_all_role_claude_md_files_exist(self):
+        expected = {"pm", "dm", "designer", "dev", "qa"}
+        missing = {
+            role for role in expected
+            if not (REFERENCES_DIR / "roles" / role / "CLAUDE.md").exists()
+        }
+        assert not missing, f"Missing CLAUDE.md for roles: {missing}"
 
     def test_soul_files_exist(self):
-        souls_dir = REFERENCES_DIR / "sub-skills" / "souls"
-        expected = {"dev.md", "pm.md", "qa.md", "designer.md", "dm.md"}
-        actual = {f.name for f in souls_dir.glob("*.md")} if souls_dir.exists() else set()
-        missing = expected - actual
-        assert not missing, f"Missing soul files: {missing}"
+        expected = {"pm", "dm", "designer", "dev", "qa"}
+        missing = {
+            role for role in expected
+            if not (REFERENCES_DIR / "roles" / role / "SOUL.md").exists()
+        }
+        assert not missing, f"Missing SOUL.md for roles: {missing}"
+
+    def test_legacy_souls_dir_is_gone(self):
+        """Defensive — the legacy sub-skills/souls/ must not reappear."""
+        legacy = REFERENCES_DIR / "sub-skills" / "souls"
+        assert not legacy.exists(), (
+            f"Legacy souls directory should not exist after Q-new22: {legacy}"
+        )
+
+    def test_legacy_roles_dir_is_gone(self):
+        """Defensive — the legacy sub-skills/roles/ must not reappear."""
+        legacy = REFERENCES_DIR / "sub-skills" / "roles"
+        assert not legacy.exists(), (
+            f"Legacy roles directory should not exist after Q-new22: {legacy}"
+        )

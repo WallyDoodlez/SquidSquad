@@ -19,6 +19,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 SUB_SKILLS_DIR = REPO_ROOT / "references" / "sub-skills"
+ROLES_DIR = REPO_ROOT / "references" / "roles"
 OUTPUT_FILE = REPO_ROOT / "references" / "agent-instructions.md"
 
 
@@ -62,8 +63,14 @@ def _resolve_includes(entry_file: Path) -> str:
 
 
 def compose_role(role_name: str) -> str:
-    """Compose a role's full template from its entry file."""
-    entry_file = SUB_SKILLS_DIR / "roles" / f"{role_name}.md"
+    """Compose a role's full template from its entry file.
+
+    After #328 Q-new22, the entry file lives at
+    `references/roles/<role>/CLAUDE.md` (self-contained role directory).
+    The legacy `references/sub-skills/roles/<variant>.md` layout has been
+    retired.
+    """
+    entry_file = ROLES_DIR / role_name / "CLAUDE.md"
     if not entry_file.exists():
         print(f"ERROR: Entry file not found: {entry_file}", file=sys.stderr)
         sys.exit(1)
@@ -74,10 +81,11 @@ def compose_role(role_name: str) -> str:
 
 def compose_all() -> str:
     """Compose the dev-agent template as the default agent-instructions.md."""
-    # agent-instructions.md is the dev-agent template (primary output)
-    header = "<!-- GENERATED FILE — DO NOT EDIT. Source: references/sub-skills/ -->\n"
+    # agent-instructions.md is the dev template (primary output)
+    header = "<!-- GENERATED FILE — DO NOT EDIT. -->\n"
+    header += "<!-- Source: references/roles/dev/CLAUDE.md + sub-skills/ -->\n"
     header += "<!-- Regenerate with: python references/scripts/compose.py all -->\n\n"
-    composed = compose_role("dev-agent")
+    composed = compose_role("dev")
     return header + composed
 
 
@@ -91,19 +99,16 @@ def _read_config_value(field: str) -> str:
 
 
 def _get_entry_file_for_role(role_name: str) -> str:
-    """Map an agent role name to its entry file name."""
-    # Dev agents use dev-agent.md
-    # PM uses pm-agent.md (or pm-lean.md if QA exists)
-    # QA uses qa-agent.md
-    # DM uses dm-agent.md
-    # Designer uses designer.md
-    role_map = {
-        "pm": "pm-agent",
-        "qa": "qa-agent",
-        "dm": "dm-agent",
-        "designer": "designer",
-    }
-    return role_map.get(role_name, "dev-agent")
+    """Map an agent instance to its role identity for composition.
+
+    After Q-new22 each role has its own self-contained directory at
+    `references/roles/<role>/` — so for the known infrastructure /
+    specialist roles the identity equals the role name. Anything else
+    is treated as a dev variant (e.g. `fe`, `be`, `skill`) and uses the
+    `dev` role template.
+    """
+    known_roles = {"pm", "dm", "qa", "designer", "dev"}
+    return role_name if role_name in known_roles else "dev"
 
 
 def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> str:
@@ -112,7 +117,7 @@ def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> s
     Dev agents: [ROLE], [ROLE_UPPER], [ROLE_TEST_CMD], [INTERVAL] are substituted.
     PM/DM/QA/Designer: [ROLE] is NOT substituted (used as dev agent variable).
     """
-    is_dev = entry_file == "dev-agent"
+    is_dev = entry_file == "dev"
 
     if is_dev:
         content = content.replace("[ROLE]", role_name)
@@ -159,15 +164,19 @@ def deploy_role(role_name: str) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(header + final, encoding="utf-8")
 
-    # Create SOUL.md from default template if missing (never overwrite)
+    # Create SOUL.md from the role directory's template if missing
+    # (never overwrite an existing local SOUL.md — the installed agent may
+    # have customised it). After Q-new22 the SOUL template lives alongside
+    # the role's CLAUDE.md template at references/roles/<role>/SOUL.md.
     soul_path = REPO_ROOT / ".squidsquad" / role_name / "SOUL.md"
     if not soul_path.exists():
-        # Map role to soul template
-        soul_map = {"pm": "pm", "dm": "dm", "qa": "qa", "designer": "designer"}
-        soul_name = soul_map.get(role_name, "dev")
-        soul_template = SUB_SKILLS_DIR / "souls" / f"{soul_name}.md"
+        role_identity = _get_entry_file_for_role(role_name)  # 'dev' for variants
+        soul_template = ROLES_DIR / role_identity / "SOUL.md"
         if soul_template.exists():
-            soul_path.write_text(soul_template.read_text(encoding="utf-8"), encoding="utf-8")
+            soul_path.write_text(
+                soul_template.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
 
     return output_path
 
@@ -218,10 +227,12 @@ def main():
     args = sys.argv[1:]
     if not args or args[0] == "--help":
         print(__doc__)
-        # List available roles
-        roles_dir = SUB_SKILLS_DIR / "roles"
-        if roles_dir.exists():
-            roles = [f.stem for f in roles_dir.glob("*.md")]
+        # List available role identities
+        if ROLES_DIR.exists():
+            roles = [
+                d.name for d in ROLES_DIR.iterdir()
+                if d.is_dir() and (d / "CLAUDE.md").exists()
+            ]
             print(f"Available roles: {', '.join(sorted(roles))}")
         sys.exit(0)
 

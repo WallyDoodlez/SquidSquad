@@ -68,14 +68,36 @@ discrete phases, each landing as its own atomic commit.
       additions; STATUS_LABELS map includes new short names; old `pending`
       label remains legal (additive phase guarantee)
   - `pending` NOT yet removed — migration happens in Phase I
-- [ ] **Phase F — Wizard implementation**
+- [x] **Phase F — Role template migration (Q-new22)** (this cycle)
+  - Migrated 10 files via `git mv` to preserve history:
+    - 5 souls from `references/sub-skills/souls/*.md` → `references/roles/<role>/SOUL.md`
+    - 5 role templates from `references/sub-skills/roles/*.md` → `references/roles/<role>/CLAUDE.md`
+  - Retired `pm-lean.md` and its 4 supporting lean-* sub-skills (option B —
+    no longer needed; setup_requirements will drive variant selection)
+  - Removed empty `references/sub-skills/souls/` and `.../roles/` directories
+  - Added `soul_template` + `claude_template` fields to all 5 role manifests
+    (relative to the role's own directory)
+  - Validator now requires both fields and checks the files exist on disk
+  - `compose.py`: entry files come from `references/roles/<role>/CLAUDE.md`;
+    SOUL.md copied verbatim from `references/roles/<role>/SOUL.md`;
+    dispatch table replaced with simple "known roles" set; dev variants
+    (skill/fe/be) resolve to the `dev` role identity
+  - `sub-skills/manifest.md` updated: inventory tree drops `souls/` and
+    `roles/` branches; composition-order sections point at the new
+    `references/roles/<role>/CLAUDE.md` entry-file paths
+  - Added defensive tests: legacy dirs must not reappear, legacy include
+    namespaces must not be referenced in manifest.md
+  - Full static suite: 218/218 pass (was 208, +10)
+- [ ] **Phase G — Wizard implementation** (was Phase F before Q-new22 arrived)
   - LLM intent classifier (inside-Claude prompt)
   - Generic setup_requirements walker
   - Review screen (P/V/E/A)
   - Step 0 gh prerequisite check, Step 0b re-run detection
   - Installer agent lifecycle (ephemeral, exits on completion)
-- [ ] **Phase G — compose.py + config.py manifest-aware refactor**
-  - Replace hardcoded role maps with manifest lookups
+- [ ] **Phase H — compose.py + config.py deeper manifest refactor**
+  - Phase F did the template migration. Remaining: drive the compose
+    pipeline entirely from manifests (currently compose.py still has a
+    hardcoded `known_roles` set)
   - Preserve backward compatibility for existing config.md files
 - [ ] **Phase H — statusline.sh manifest-aware**
   - Read installed roles from manifest, not hardcoded list

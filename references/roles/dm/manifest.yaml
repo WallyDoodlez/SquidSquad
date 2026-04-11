@@ -22,6 +22,10 @@ show_in_roster: false
 always_installed: true
 iteration_mode: normal
 
+# Files that define this role's identity and cycle behaviour.
+soul_template: SOUL.md
+claude_template: CLAUDE.md
+
 # Terminal node — DM is where every path ends.
 routes_to: []
 

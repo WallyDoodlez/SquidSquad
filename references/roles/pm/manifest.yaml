@@ -23,6 +23,12 @@ show_in_roster: false
 always_installed: true
 iteration_mode: normal
 
+# Files that define this role's identity and cycle behaviour. Paths are
+# relative to this manifest's directory so the role directory stays
+# self-contained and moveable.
+soul_template: SOUL.md
+claude_template: CLAUDE.md
+
 # PM prefers handing to a specialist when one exists, and falls through to
 # delivery when no specialist can take the work. Every terminal chain reaches
 # DM so work always lands with someone who can ship it.

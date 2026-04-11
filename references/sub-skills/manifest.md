@@ -1,20 +1,23 @@
 # Sub-skill Composition Manifest
 
-This manifest defines how sub-skill source files compose into agent templates. The composition engine reads each role's entry file, resolves `{{include: path}}` directives by inlining the referenced sub-skill content, and wraps each inclusion with `<!-- sub-skill: name -->` section markers.
+This manifest defines how shared sub-skill source files compose into agent templates. The composition engine reads each role's entry file, resolves `{{include: path}}` directives by inlining the referenced sub-skill content, and wraps each inclusion with `<!-- sub-skill: name -->` section markers.
 
 ## Architecture
 
-- **Source files**: `references/sub-skills/` (this directory)
+- **Role templates** (entry files): `references/roles/<role>/CLAUDE.md` — one self-contained role directory per role, added in #328 Q-new22.
+- **Role souls** (identity): `references/roles/<role>/SOUL.md` — copied verbatim (not composed) to `.squidsquad/<role>/SOUL.md` at install time.
+- **Shared sub-skills** (source files): `references/sub-skills/` (this directory) — cross-cutting behaviour (tracker, vault, improvement scan, git commit, etc.) composed into each role's CLAUDE.md.
 - **Composition**: Build-time (during setup and upgrade), not runtime
 - **Output**: `references/agent-instructions.md` (generated, DO NOT EDIT)
-- **Final templates**: `.squidsquad/templates/*.md` (generated from composed output with placeholder substitution)
+- **Final templates**: `.squidsquad/<role>/CLAUDE.md` (generated from composed output with placeholder substitution)
+
+> **Legacy location retired (Q-new22, 2026-04-11)**: Role CLAUDE.md and SOUL.md templates used to live under `references/sub-skills/{roles,souls}/`. They are now inside each role's own directory at `references/roles/<role>/`. `pm-lean.md` was retired in the same change — the feature-approval and verification behaviours remain in the main PM CLAUDE.md and are driven by which other roles are installed at runtime.
 
 ## Composition Order
 
-### Dev Agent (`roles/dev-agent.md`)
+### Dev Agent (`references/roles/dev/CLAUDE.md`)
 
-Entry file with includes:
-0. `souls/dev` — Soul (runtime-injected — agent reads `.squidsquad/[role]/SOUL.md` at boot)
+Entry file with includes (the role's own `SOUL.md` sits alongside `CLAUDE.md` in the role directory and is copied verbatim to `.squidsquad/<role>/SOUL.md` at install time — it is NOT listed in the include order because it is not composed):
 1. `common/tracker-protocol` — GitHub Issues tracker operations
 2. `common/pull-latest` — Step 1
 3. `common/context-pressure` — Step 1b
@@ -32,10 +35,9 @@ Entry file with includes:
 14. `common/status-line` — Status line description
 15. `common/prohibitions` — "Never do" rules
 
-### PM/QA Agent (`roles/pm-agent.md`) — used when QA agent is NOT present
+### PM/QA Agent (`references/roles/pm/CLAUDE.md`)
 
-Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded `pm` paths to avoid `[ROLE]` ambiguity — PM uses `[ROLE]` to reference dev agents, not itself):
-0. `souls/pm` — Soul (runtime-injected — agent reads `.squidsquad/pm/SOUL.md` at boot)
+Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded `pm` paths to avoid `[ROLE]` ambiguity — PM uses `[ROLE]` to reference dev agents, not itself). PM's `SOUL.md` sits alongside its `CLAUDE.md` and is copied verbatim at install time.
 1. `common/tracker-protocol` — GitHub Issues tracker operations
 2. `common/pull-latest` — Step 1
 3. `pm-specific/pr-flow` — Step 6b
@@ -54,31 +56,10 @@ Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded
 15. `pm-specific/status-line` — PM status line description
 16. `pm-specific/prohibitions` — PM "never do" rules
 
-### PM Agent — Lean (`roles/pm-lean.md`) — used when QA agent IS present
-
-Reduced PM template without verification steps. Setup/upgrade selects this variant when `.squidsquad/qa/` directory exists.
-0. `souls/pm` — Soul (runtime-injected — same PM soul)
-1. `common/tracker-protocol` — GitHub Issues tracker operations
-2. `common/pull-latest` — Step 1
-3. `pm-specific/delivery-fallback` — Step 3 (delivery fallback when DM absent)
-4. `pm-specific/github-issues` — GitHub Issues ingestion
-5. `common/improvement-scan` — Quiet-cycle improvement scanning
-6. `pm-specific/lean-iteration-log` — Step 4: lean PM iteration log
-6b. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
-7. `pm-specific/lean-git-commit` — Step 5: lean PM commit/push
-8. `pm-specific/bug-filing` — Bug Filing Protocol (shared with PM)
-9. `pm-specific/feature-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
-10. `pm-specific/feature-approval` — Feature Approval Gate
-11. `pm-specific/lean-discussion-protocol` — Discussion entry format (pm alias)
-12. `common/vault-protocol` — Vault operations
-13. `pm-specific/file-conventions` — PM file/directory conventions (shared with PM)
-14. `pm-specific/status-line` — PM status line description (shared with PM)
-15. `pm-specific/lean-prohibitions` — Lean PM "never do" rules
-
-### QA Agent (`roles/qa-agent.md`) — recommended when dev/designer agents exist
+### QA Agent (`references/roles/qa/CLAUDE.md`) — recommended when dev/designer agents exist
 
 Entry file with includes:
-0. `souls/qa` — Soul (runtime-injected)
+   (QA's `SOUL.md` lives at `references/roles/qa/SOUL.md` and is copied verbatim at install time.)
 1. `common/tracker-protocol` — GitHub Issues tracker operations
 2. `common/pull-latest` — Step 1
 3. `qa-specific/verification` — Steps 2-6 (E2E tests, bug investigation, verification, health check)
@@ -93,10 +74,10 @@ Entry file with includes:
 11. `qa-specific/status-line` — QA status line description
 12. `qa-specific/prohibitions` — QA "never do" rules
 
-### Designer Agent (`roles/designer.md`)
+### Designer Agent (`references/roles/designer/CLAUDE.md`)
 
 Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardcoded `designer` paths — Designer uses `[ROLE]` to reference dev agents, not itself):
-0. `souls/designer` — Soul (runtime-injected)
+   (Designer's `SOUL.md` lives at `references/roles/designer/SOUL.md` and is copied verbatim at install time.)
 1. `common/tracker-protocol` — GitHub Issues tracker operations
 2. `common/pull-latest` — Step 1
 3. `designer-specific/design-session` — Steps 2-2e (design request scanning, feasibility, interactive session, spec production, rejection handling)
@@ -112,10 +93,10 @@ Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardc
 12. `designer-specific/status-line` — Designer status line description
 13. `designer-specific/prohibitions` — Designer "never do" rules
 
-### DM Agent (`roles/dm-agent.md`)
+### DM Agent (`references/roles/dm/CLAUDE.md`)
 
 Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardcoded `dm` paths — DM uses `[ROLE]` to reference dev agents, not itself):
-0. `souls/dm` — Soul (runtime-injected)
+   (DM's `SOUL.md` lives at `references/roles/dm/SOUL.md` and is copied verbatim at install time.)
 1. `common/tracker-protocol` — GitHub Issues tracker operations
 2. `common/pull-latest` — Step 1
 3. `dm-specific/bug-triage` — Step 1e: triage bugs assigned to DM
@@ -186,19 +167,6 @@ references/sub-skills/
 │   ├── vault-remember.md             (Step 4b — end-of-cycle vault reflection — shared by all roles)
 │   ├── status-line.md                (Status line description — shared by dev)
 │   └── prohibitions.md               (Shared "never do" rules — shared by dev)
-├── souls/
-│   ├── dev.md                          (Dev agent soul — pragmatic engineer)
-│   ├── pm.md                           (PM soul — diplomat and strategist)
-│   ├── qa.md                           (QA soul — evidence-first skeptic)
-│   ├── designer.md                     (Designer soul — creative collaborator)
-│   └── dm.md                           (DM soul — user-centric delivery)
-├── roles/
-│   ├── dev-agent.md                    (entry file — dev template skeleton)
-│   ├── pm-agent.md                     (entry file — PM/QA template, no QA agent)
-│   ├── pm-lean.md                      (entry file — lean PM template, QA present)
-│   ├── qa-agent.md                     (entry file — QA template skeleton)
-│   ├── dm-agent.md                     (entry file — DM template skeleton)
-│   └── designer.md                     (entry file — designer template skeleton)
 ├── pm-specific/
 │   ├── feature-intake.md              (5-phase lifecycle + Open Artifacts)
 │   ├── feature-approval.md            (Feature Approval Gate)
@@ -210,10 +178,6 @@ references/sub-skills/
 │   ├── prohibitions.md               (PM "never do" rules)
 │   ├── iteration-log.md             (Step 8 — PM/QA iteration log)
 │   ├── git-commit.md                (Step 9 — PM commit/push)
-│   ├── lean-discussion-protocol.md   (Discussion — pm alias, lean variant)
-│   ├── lean-prohibitions.md          (Lean PM "never do" rules)
-│   ├── lean-iteration-log.md        (Step 4 — lean PM iteration log)
-│   ├── lean-git-commit.md           (Step 5 — lean PM commit/push)
 │   ├── github-issues.md              (Step 7b — GitHub Issues ingestion)
 │   └── pr-flow.md                     (Step 6b — PR monitoring)
 ├── qa-specific/

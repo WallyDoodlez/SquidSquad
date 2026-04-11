@@ -174,6 +174,8 @@ def validate_role_manifest(path, data):
         "schema_version", "id", "display_name", "tagline",
         "show_in_roster", "always_installed", "iteration_mode",
         "routes_to", "setup_requirements",
+        # Q-new22: every role declares where its identity + template live
+        "soul_template", "claude_template",
     ]
     _check_required(issues, path, data, required)
     if issues:
@@ -231,6 +233,23 @@ def validate_role_manifest(path, data):
         issues.append(Issue(
             path, "requires_tools", "must be a mapping (possibly empty)",
         ))
+
+    # Q-new22: soul_template + claude_template files must exist on disk,
+    # relative to the manifest's own directory.
+    role_dir = Path(path).parent
+    for field in ("soul_template", "claude_template"):
+        value = data.get(field)
+        if not isinstance(value, str) or not value:
+            issues.append(Issue(
+                path, field, "must be a non-empty string path",
+            ))
+            continue
+        target = role_dir / value
+        if not target.exists():
+            issues.append(Issue(
+                path, field,
+                f"file not found: {value} (expected at {target.relative_to(role_dir.parent.parent)})",
+            ))
 
     _check_domain_only(issues, path, data, [
         "display_name", "tagline", "description",

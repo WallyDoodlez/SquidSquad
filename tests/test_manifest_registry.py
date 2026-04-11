@@ -50,6 +50,8 @@ iteration_mode: normal
 routes_to: [dev, dm]
 requires_tools: {}
 setup_requirements: []
+soul_template: SOUL.md
+claude_template: CLAUDE.md
 """
 
 VALID_DM = """\
@@ -65,6 +67,8 @@ routes_to: []
 requires_tools:
   any_of: [local_delivery]
 setup_requirements: []
+soul_template: SOUL.md
+claude_template: CLAUDE.md
 """
 
 VALID_DEV = """\
@@ -79,6 +83,8 @@ iteration_mode: normal
 routes_to: [dm]
 requires_tools: {}
 setup_requirements: []
+soul_template: SOUL.md
+claude_template: CLAUDE.md
 """
 
 VALID_TOOL_LOCAL_DELIVERY = """\
@@ -102,8 +108,16 @@ role_install_order: [dev]
 
 
 def _make_valid_registry(base: Path) -> Path:
-    """Build a minimal valid registry under `base / references`."""
+    """Build a minimal valid registry under `base / references`.
+
+    Post-Q-new22, each role directory must contain its own SOUL.md and
+    CLAUDE.md files at the paths declared by the manifest's
+    soul_template / claude_template fields.
+    """
     ref = base / "references"
+    for role in ("pm", "dm", "dev"):
+        _write(ref / "roles" / role / "SOUL.md", f"# {role} soul\n")
+        _write(ref / "roles" / role / "CLAUDE.md", f"# {role} template\n")
     _write(ref / "roles" / "pm" / "manifest.yaml", VALID_PM)
     _write(ref / "roles" / "dm" / "manifest.yaml", VALID_DM)
     _write(ref / "roles" / "dev" / "manifest.yaml", VALID_DEV)
@@ -237,6 +251,52 @@ class TestRoleSchemaErrors:
                VALID_DEV.replace("routes_to: [dm]", "routes_to: dm"))
         issues, *_ = manifest.validate_registry(ref)
         assert any("routes_to" in (i.field or "") for i in _errors(issues))
+
+    def test_missing_soul_template_field(self, tmp_path):
+        ref = _make_valid_registry(tmp_path)
+        _write(ref / "roles" / "dev" / "manifest.yaml",
+               VALID_DEV.replace("soul_template: SOUL.md\n", ""))
+        issues, *_ = manifest.validate_registry(ref)
+        assert any(i.field == "soul_template" and "missing" in i.message
+                   for i in _errors(issues))
+
+    def test_missing_claude_template_field(self, tmp_path):
+        ref = _make_valid_registry(tmp_path)
+        _write(ref / "roles" / "dev" / "manifest.yaml",
+               VALID_DEV.replace("claude_template: CLAUDE.md\n", ""))
+        issues, *_ = manifest.validate_registry(ref)
+        assert any(i.field == "claude_template" and "missing" in i.message
+                   for i in _errors(issues))
+
+    def test_soul_template_file_not_found(self, tmp_path):
+        ref = _make_valid_registry(tmp_path)
+        (ref / "roles" / "dev" / "SOUL.md").unlink()
+        issues, *_ = manifest.validate_registry(ref)
+        errs = _errors(issues)
+        assert any(i.field == "soul_template"
+                   and "not found" in i.message for i in errs), errs
+
+    def test_claude_template_file_not_found(self, tmp_path):
+        ref = _make_valid_registry(tmp_path)
+        (ref / "roles" / "dev" / "CLAUDE.md").unlink()
+        issues, *_ = manifest.validate_registry(ref)
+        errs = _errors(issues)
+        assert any(i.field == "claude_template"
+                   and "not found" in i.message for i in errs), errs
+
+    def test_template_path_relative_to_role_dir(self, tmp_path):
+        """soul_template/claude_template are relative to the manifest's directory."""
+        ref = _make_valid_registry(tmp_path)
+        # Point soul_template at a subfolder that DOES exist
+        _write(ref / "roles" / "dev" / "nested" / "SOUL.md", "# nested\n")
+        _write(ref / "roles" / "dev" / "manifest.yaml",
+               VALID_DEV.replace("soul_template: SOUL.md",
+                                 "soul_template: nested/SOUL.md"))
+        issues, *_ = manifest.validate_registry(ref)
+        # Only the original SOUL.md concern — the nested path resolves fine
+        soul_errs = [i for i in _errors(issues)
+                     if i.field == "soul_template"]
+        assert not soul_errs, soul_errs
 
     def test_setup_requirements_missing_subfields(self, tmp_path):
         ref = _make_valid_registry(tmp_path)
