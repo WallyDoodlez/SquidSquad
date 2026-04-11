@@ -195,9 +195,38 @@ discrete phases, each landing as its own atomic commit.
       - No --force flag in installer body
       - All 6 critical Q-new locks cited with their context word
     - Full static suite: 399/399 pass (was 376, +23)
-  - [ ] **Phase G.4 — SKILL.md rewrite + /squidsquad-setup slash command**
-    - Replace legacy Setup Instructions section with pointer to WIZARD.md
-    - Update packages/cli/index.js to seed the new command
+  - [x] **Phase G.4 — SKILL.md rewrite + /squidsquad-setup slash command** (this cycle)
+    - SKILL.md: replaced 605-line inline Setup Instructions (Steps 0-9
+      + config.md template) with a 42-line pointer at
+      references/wizard/WIZARD.md, describing the helper scripts and
+      registry layout. Architecture section left intact.
+    - Fixed 3 dangling "Step 4b in Setup Instructions" refs in the
+      Upgrade Instructions section — now point at
+      `compose.py deploy <role>` which is the actual canonical path.
+    - packages/cli/index.js: npx squidsquad now fetches BOTH SKILL.md
+      and references/wizard/WIZARD.md from the main branch, places
+      them at their canonical paths in the target repo, and commits
+      both as seed files.
+    - .claude/commands/squidsquad-setup.md (seeded by CLI) rewritten
+      to instruct Claude to read WIZARD.md (not SKILL.md's Setup
+      Instructions section), cites the installer-agent lifecycle
+      (ephemeral, no writes before Step 7, exits at 7.6), and
+      authorises on-demand gh api / curl fetches for scripts and
+      manifests.
+    - 17 new tests in tests/test_installer_wiring.py enforcing
+      three-way consistency:
+      - SKILL.md Setup is present, points at runbook, is concise
+        (<150 lines), has no legacy step headings, every
+        references/... path it cites actually exists, no Step 4b
+        refs remain
+      - packages/cli/index.js fetches both files, writes runbook to
+        canonical path, commits both, slash command points at
+        runbook not SKILL.md Setup, mentions ephemeral installer,
+        mentions "no writes before Step 7", prereq checks intact
+      - references/wizard/WIZARD.md exists and is non-trivial
+    - Full static suite: 416/416 pass (was 399, +17)
+- [x] **Phase G — Wizard implementation** COMPLETE
+      (G.1 helpers + G.2 writers/scaffolder/labels + G.3 runbook + G.4 wiring)
 - [ ] **Phase H — compose.py + config.py deeper manifest refactor**
   - Phase F did the template migration. Remaining: drive the compose
     pipeline entirely from manifests (currently compose.py still has a

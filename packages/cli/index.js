@@ -137,7 +137,7 @@ function fetchRawFile(repoPath) {
 }
 
 function installFiles(gitRoot) {
-  // 1. Fetch SKILL.md → project root
+  // 1. Fetch SKILL.md → project root (architecture reference + setup pointer)
   info("Fetching SKILL.md...");
   const skillContent = fetchRawFile("SKILL.md");
   if (!skillContent) {
@@ -147,33 +147,65 @@ function installFiles(gitRoot) {
   fs.writeFileSync(path.join(gitRoot, "SKILL.md"), skillContent, "utf-8");
   success("SKILL.md placed in project root");
 
-  // 2. Create .claude/commands/ and fetch squidsquad-setup.md
+  // 2. Fetch the install wizard runbook to its canonical path.
+  //    The runbook is the single source of truth for the setup flow
+  //    (introduced in #328 Phase G.3). The slash command points at it
+  //    directly — SKILL.md's Setup Instructions section is just a thin
+  //    pointer back to this file.
+  info("Fetching install wizard runbook...");
+  const wizardContent = fetchRawFile("references/wizard/WIZARD.md");
+  if (!wizardContent) {
+    fail("Failed to fetch references/wizard/WIZARD.md from GitHub.");
+    process.exit(1);
+  }
+  const wizardDir = path.join(gitRoot, "references", "wizard");
+  fs.mkdirSync(wizardDir, { recursive: true });
+  fs.writeFileSync(path.join(wizardDir, "WIZARD.md"), wizardContent, "utf-8");
+  success("references/wizard/WIZARD.md placed in project");
+
+  // 3. Create .claude/commands/ and write squidsquad-setup.md
   const commandsDir = path.join(gitRoot, ".claude", "commands");
   fs.mkdirSync(commandsDir, { recursive: true });
 
-  // The setup command tells Claude to read SKILL.md and run setup
+  // The setup command tells Claude to read the wizard runbook and
+  // follow it exactly — not SKILL.md's Setup Instructions section,
+  // which is now just a pointer at the runbook.
   const setupCommand = [
     "---",
-    "description: Run the SquidSquad setup wizard to configure your project",
+    "description: Run the SquidSquad install wizard (intent-driven team setup)",
     "---",
     "",
-    'Read the SKILL.md file in the project root and follow its "Setup Instructions" section exactly.',
+    "Read `references/wizard/WIZARD.md` in this repo and follow it exactly.",
+    "You are the **installer agent** (Q-new21) — ephemeral, single-session,",
+    "disposes after the install commits and pushes.",
     "",
-    "The setup wizard will ask for project details, generate the .squidsquad/ folder, create agent configs, boot scripts, and GitHub Issues labels.",
+    "The runbook is the single source of truth for the setup flow. Do not",
+    "reimplement any step from memory — call the helpers it points at",
+    "(`references/scripts/wizard.py`, `references/scripts/manifest.py`,",
+    "`references/scripts/compose.py`) and act on their JSON output.",
     "",
-    "Important: The setup flow will need to fetch files from the SquidSquad repo. Use `gh api` or `curl` to download from https://raw.githubusercontent.com/WallyDoodlez/SquidSquad/main/ as needed.",
+    "The wizard needs additional source files from the SquidSquad repo",
+    "(scripts, role/tool/preset manifests, sub-skill composition sources).",
+    "Fetch them on demand using `gh api` or `curl` against",
+    "`https://raw.githubusercontent.com/WallyDoodlez/SquidSquad/main/` when",
+    "the runbook instructs you to call a helper that is not yet in the",
+    "target repo.",
+    "",
+    "Before Step 7 nothing touches disk — the user can abort at any review",
+    "step with zero trace. After Step 7.6 you must exit the conversation.",
     "",
   ].join("\n");
 
   fs.writeFileSync(path.join(commandsDir, "squidsquad-setup.md"), setupCommand, "utf-8");
   success("Created /squidsquad-setup command");
 
-  // 3. Commit seed files so /squidsquad-setup doesn't abort on dirty worktree
+  // 4. Commit seed files so /squidsquad-setup doesn't abort on dirty worktree
   info("Committing seed files...");
   try {
-    execSync("git add SKILL.md .claude/commands/squidsquad-setup.md", {
-      cwd: gitRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"],
-    });
+    execSync(
+      "git add SKILL.md references/wizard/WIZARD.md .claude/commands/squidsquad-setup.md",
+      { cwd: gitRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
+    );
     execSync('git commit -m "chore: add SquidSquad skill (via npx squidsquad)"', {
       cwd: gitRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"],
     });
@@ -184,7 +216,9 @@ function installFiles(gitRoot) {
       info(`  git error: ${err.stderr.trim()}`);
     }
     info("  Fix the issue above, then run:");
-    info("    git add SKILL.md .claude/commands/squidsquad-setup.md");
+    info(
+      "    git add SKILL.md references/wizard/WIZARD.md .claude/commands/squidsquad-setup.md"
+    );
     info('    git commit -m "chore: add SquidSquad skill"');
     info("    claude --dangerously-skip-permissions /squidsquad-setup");
     process.exit(1);
