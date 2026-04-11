@@ -371,18 +371,9 @@ If the user's reply is ambiguous or only covers one agent, Claude follows up nat
 4. Installer agent prints: "SquidSquad ready. To start your team, run: `./start-pm.sh`" (or equivalent on Windows)
 5. Installer agent exits the conversation (disposed)
 
-**Future: Auto-boot (NOT v1, REUSES EXISTING FEATURE #4)**: The auto-boot capability should NOT be reinvented for the installer. WallyDoodlez/SquidSquad#4 "PM auto-boots entire team on startup" is already filed (status:pending, role:pm). The design note on #4 (added during #328 planning) specifies that #4 should be implemented as a **boot-remote-agents sub-skill**, not as PM-private logic. This makes the boot capability composable by any agent that needs it:
+**Future: Auto-boot (NOT v1, handled by #4)**: Installer auto-boot is not implemented in #328. When WallyDoodlez/SquidSquad#4 ("PM auto-boots entire team on startup") enters planning, the design note on that issue already specifies it should ship as a sub-skill composable by both PM and the installer. See #4's comment thread for details — no duplicate planning needed here.
 
-- **PM** composes the sub-skill to auto-boot missing teammates during its cycle (the original #4 use case)
-- **Installer agent** composes the same sub-skill to auto-boot the full team as the final action of `/squidsquad-setup` before disposing (the Q-new21 use case)
-- Future orchestrators or debug utilities can reuse it without duplicating boot logic
-
-**Order of operations**:
-1. #328 ships (this feature) with installer still printing "run `./start-pm.sh`" manually
-2. #4 is picked up and implemented as a boot-remote-agents sub-skill
-3. A follow-up feature (to be filed after #4 ships) composes the sub-skill into the installer's Step 7 so the installer auto-boots the team before disposing
-
-**No duplicate feature needed**: Do NOT file a separate installer-auto-boot issue. When #4 ships, file a small follow-up to wire the existing sub-skill into the installer's Step 7. Keep the logic in one place.
+**v1 #328 behavior**: Installer prints "To start your team, run: `./start-pm.sh`" and disposes. Auto-boot wiring comes later via #4.
 
 ---
 
