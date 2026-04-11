@@ -1,0 +1,31 @@
+# SquidSquad role manifest — DM
+#
+# DM is the team's delivery endpoint. Always installed. Never appears in the
+# specialist roster (show_in_roster: false). Terminal node — nothing routes
+# out of DM.
+#
+# Rules for editing this file (Q-new14): describe delivery in domain terms.
+# Do not reference internal paths, scripts, or storage mechanisms.
+
+schema_version: 1
+id: dm
+display_name: DM
+tagline: Packages and delivers completed work
+description: >
+  The delivery manager. Takes work the team has verified and packages it for
+  the outside world — writing user-facing docs, preparing change notes,
+  and sending the final artifact through whichever delivery channel the
+  project uses.
+show_in_roster: false
+iteration_mode: normal
+
+# Terminal node — DM is where every path ends.
+routes_to: []
+
+# DM needs exactly one delivery tool. `local_delivery` is the always-available
+# fallback; richer delivery channels (email, Slack, Drive, etc.) are added to
+# this list as tools ship in future registries.
+requires_tools:
+  any_of: [local_delivery]
+
+setup_requirements: []

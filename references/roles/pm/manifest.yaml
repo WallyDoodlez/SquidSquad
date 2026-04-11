@@ -1,0 +1,33 @@
+# SquidSquad role manifest — PM
+#
+# PM is the team coordinator and the human's conversational entry point.
+# Always installed. Never appears in the specialist roster (show_in_roster: false).
+# Routes to every other role and falls through to DM when nothing else is present.
+#
+# Rules for editing this file (Q-new14):
+#   - Describe the role in domain terms (team coordination, planning, delivery).
+#   - Do NOT reference internal file paths, status labels, scripts, or storage
+#     mechanisms. This manifest is the role's public contract.
+
+schema_version: 1
+id: pm
+display_name: PM
+tagline: Coordinates the team and talks to you
+description: >
+  The project manager. Talks with the human, shapes incoming work into concrete
+  plans, assigns it to the right specialist, keeps progress visible, and
+  orchestrates the team's environment (tools, configuration, hand-offs).
+show_in_roster: false
+iteration_mode: normal
+
+# PM prefers handing to a specialist when one exists, and falls through to
+# delivery when no specialist can take the work. Every terminal chain reaches
+# DM so work always lands with someone who can ship it.
+routes_to: [designer, dev, qa, dm]
+
+# PM owns tool configuration on everyone else's behalf, but does not require
+# any tool of its own in v1.
+requires_tools: {}
+
+# PM has no per-install questions in v1 — alias and presence are implicit.
+setup_requirements: []

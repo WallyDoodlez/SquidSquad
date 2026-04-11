@@ -1,0 +1,26 @@
+# SquidSquad role manifest — QA
+#
+# QA verifies completed engineering work against its acceptance criteria and
+# either hands it on to delivery or bounces it back for rework. Only installed
+# alongside dev in the software-development preset.
+#
+# Rules for editing this file (Q-new14): describe verification work in
+# domain terms. Do not reference internal status labels or scripts.
+
+schema_version: 1
+id: qa
+display_name: QA
+tagline: Verifies dev work against acceptance criteria
+description: >
+  The verification specialist. Takes completed engineering work, exercises
+  it against the feature's acceptance criteria and smoke tests, and either
+  hands it forward for delivery or sends it back with specific gaps.
+show_in_roster: true
+iteration_mode: normal
+
+# Verified work goes to delivery.
+routes_to: [dm]
+
+requires_tools: {}
+
+setup_requirements: []
