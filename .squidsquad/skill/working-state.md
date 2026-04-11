@@ -24,21 +24,33 @@ discrete phases, each landing as its own atomic commit.
   - pm/dm: `always_installed: true`; designer/dev/qa: `false`
   - v1 invariant: `always_installed == !show_in_roster` (but both fields
     kept because they mean different things conceptually)
-- [x] **Phase B — Tool registry** (this cycle)
+- [x] **Phase B — Tool registry** (commit 5f315c8)
   - `references/tools/{figma,google_stitch,local_html,local_delivery}/`
   - Each with `manifest.yaml`, `setup.md`, `sub-skill.md`
   - 3 designer tools + 1 DM tool
   - Cross-references validated: every role's `requires_tools` ID resolves
-- [ ] **Phase C — Preset manifests**
+- [x] **Phase C — Preset manifests** (this cycle)
   - `references/presets/{software-dev,design}/manifest.yaml`
   - Declares `role_install_order` (PM/DM implicit)
-- [ ] **Phase D — Validator (`references/scripts/manifest.py`)**
-  - Schema validation (fields, types, schema_version)
-  - Cross-reference (routes_to targets exist; requires_tools IDs exist)
-  - Cycle detection in routes_to graph
+- [x] **Phase D — Validator (`references/scripts/manifest.py`)** (this cycle)
+  - Schema validation (fields, types, schema_version, iteration_mode,
+    provider, category, etc.)
+  - Cross-reference (routes_to targets exist; requires_tools IDs exist;
+    preset role_install_order entries exist and are not always_installed;
+    tool applicable_roles entries exist)
+  - Tool sub_skill + setup.md file-existence checks
   - Domain-only linter for Q-new14 (rejects mentions of `config.md`,
-    `.squidsquad/`, `CLAUDE.md`, `SOUL.md`, internal script paths)
-  - `validate` CLI that exits non-zero with field-level errors
+    `.squidsquad`, `CLAUDE.md`, `SOUL.md`, `sub-skill`, internal script paths)
+  - **Cycle detection INTENTIONALLY OMITTED** — v1 topology locks bidirectional
+    PM ↔ Designer routing (Q1 + Q7), which the spec's side-effect mitigation
+    didn't anticipate. `routes_to` is a per-item hand-off preference, not a
+    flow DAG, so graph cycles are legitimate. Documented in manifest.py
+    module docstring.
+  - CLI: `validate`, `list <kind>`, `load <kind> <id>`, `resolve <preset>`
+  - tests/test_manifest_registry.py — 35 tests covering happy path, shipped
+    smoke, schema errors per kind, cross-references, domain-only linter,
+    YAML errors, Issue formatting. Uses tmp_path fixtures for negative tests,
+    real registry for smoke test.
 - [ ] **Phase E — Status label additions (additive only)**
   - Add `pending-human-approval`, `pending-human-review`, `pending-human-setup`
   - Update tracker.py LEGAL_TRANSITIONS + ROLE_AUTHORITY (both new)
