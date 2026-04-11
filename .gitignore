@@ -6,6 +6,7 @@
 .squidsquad/*/restart-log.txt
 .squidsquad/.local-config
 .squidsquad/.backlog-cache
+.squidsquad/.backlog-cache.tmp
 .squidsquad/diagnostics/*.jsonl
 
 .claude/commands/squidsquad-*
