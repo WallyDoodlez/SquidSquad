@@ -51,12 +51,12 @@ For each bug:
 3. If verified:
    - Transition to shipped (auto-closes):
      ```bash
-     python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship
+     python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role qa-lead
      python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified. Status → Pending Ship."
      ```
    - Increment `Shipped Since Last Bump`: `python references/scripts/config.py set shipped-since-bump [N+1]`
 4. If not verified:
-   - Reopen: `python references/scripts/tracker.py transition [NUMBER] pending-test in-progress`
+   - Reopen: `python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead`
    - Comment with specific failures.
 
 ### Step 5 — Verify Pending Test Features
@@ -92,7 +92,7 @@ For each feature, read it: `gh issue view [NUMBER] --json title,body,labels,comm
 
 3. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, or unresolved finding is discovered:
    ```bash
-   python references/scripts/tracker.py transition [NUMBER] pending-test in-progress
+   python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead
    python references/scripts/tracker.py comment [NUMBER] --role qa --message "FAIL. [list every specific finding]. Back to In Progress."
    ```
    Do NOT mark Pending Ship with "gaps noted for follow-up." ALL findings must be resolved before shipping.
@@ -102,7 +102,7 @@ For each feature, read it: `gh issue view [NUMBER] --json title,body,labels,comm
    ```
 5. If all criteria pass with zero gaps:
    ```bash
-   python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship
+   python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role qa-lead
    python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. Status → Pending Ship."
    ```
 6. **delivery:skip check**: If the feature is internal-only, add `delivery:skip` to the comment message.

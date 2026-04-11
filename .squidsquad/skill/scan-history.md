@@ -1,5 +1,35 @@
 # Scan History
 
+## Scan — 2026-04-09 09:32
+
+- **Files scanned**: (coverage check — no new changes since last scan, all source files covered)
+- **Findings**: none
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-09 08:02
+
+- **Files scanned**: tests/integration/harness.py (full review), tests/integration/test_status_flow.py
+- **Findings**: none (harness uses list-form _run() throughout — no shell injection; test_status_flow properly uses harness; verify_clean has trivial `if True` no-op filter but intentional)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-09 06:32
+
+- **Files scanned**: references/scripts/vault_remember.py, tests/integration/test_harness.py
+- **Findings**: none (vault_remember.py clean — good defensive coding; test_harness.py f-string shell calls use controlled inputs — same class as #201, already filed)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-09 05:02
+
+- **Files scanned**: tests/test_labels.py, tests/test_composition.py, tests/test_references.py, tests/test_roles.py, tests/run_tests.py
+- **Findings**: none (all test files clean — proper assertions, no shell injection with user input, no stale references)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-09 03:33
+
+- **Files scanned**: references/scripts/tracker.py (post-#309 guard review), packages/cli/index.js (post-#327 review), SKILL.md
+- **Findings**: none (tracker.py guard hardcodes caller_role="skill-lead" but that's covered by #320; cli clean post-fix; SKILL.md informational only)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-08 11:02
 
 - **Files scanned**: (coverage check — all source files scanned in prior 42 scans)

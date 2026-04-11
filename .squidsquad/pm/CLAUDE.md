@@ -138,24 +138,30 @@ The script automatically adds `BUG:`/`FEAT:` prefix, correct labels, and `squids
 
 ### Status Transitions (replaces editing Status field)
 
-Use the tracker script — it **enforces legal transitions** and auto-closes on shipped:
+Use the tracker script — it **enforces legal transitions, role authority, and auto-closes on shipped**. `--role` is REQUIRED and must identify the calling agent:
 
 ```bash
-# Transition syntax: tracker.py transition <number> <from> <to>
-python references/scripts/tracker.py transition [NUMBER] approved in-progress
-python references/scripts/tracker.py transition [NUMBER] in-progress pending-test
-python references/scripts/tracker.py transition [NUMBER] pending-ship shipped
+# Transition syntax: tracker.py transition <number> <from> <to> --role <r> [--force]
+python references/scripts/tracker.py transition [NUMBER] approved in-progress --role [ROLE]-lead
+python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role [ROLE]-lead
+python references/scripts/tracker.py transition [NUMBER] pending-ship shipped --role dm-lead
 ```
 
-The script will reject illegal transitions (e.g. `pending → shipped`) with an error. Legal flows:
-- `open` → `pending-test` | `in-progress`
-- `pending` → `planning` | `approved`
-- `planning` → `planned`
-- `planned` → `approved`
-- `approved` → `in-progress`
-- `in-progress` → `pending-test` | `approved`
-- `pending-test` → `in-progress` | `pending-ship`
-- `pending-ship` → `shipped` (auto-closes)
+Pass your own role — PM uses `--role pm-lead`, QA uses `--role qa-lead`, DM uses `--role dm-lead`, designer uses `--role designer-lead`, dev agents use `--role [ROLE]-lead` (e.g. `skill-lead`). The script rejects:
+
+- **Illegal transitions** (e.g. `pending → shipped`) — never bypassable.
+- **Unauthorized transitions** — e.g. a dev agent trying to run `pending-ship → shipped` (DM-only), or `pending-test → pending-ship` (QA-only). Use `--force` only as a human override.
+- **Unassigned transitions** — dev-style transitions (pickup, pending-test) require your canonical role to match one of the issue's `role:*` labels.
+
+Legal flows and owning roles:
+- `open` → `pending-test` | `in-progress` — **assigned role** (matches `role:*` label)
+- `pending` → `planning` | `approved` — **PM**
+- `planning` → `planned` — **PM**
+- `planned` → `approved` — **PM**
+- `approved` → `in-progress` — **assigned role**
+- `in-progress` → `pending-test` | `approved` — **assigned role**
+- `pending-test` → `in-progress` | `pending-ship` — **QA**
+- `pending-ship` → `shipped` — **DM** (auto-closes)
 
 ### Discussion Entries (replaces inline Discussion sections)
 

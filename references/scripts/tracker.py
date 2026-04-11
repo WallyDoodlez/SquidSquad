@@ -9,13 +9,22 @@ Usage:
     python scripts/tracker.py list-features <role> [--status approved|in-progress|pending-test]
     python scripts/tracker.py create-bug --title <t> --body <b> --role <r> --severity <s> [--reporter <name>]
     python scripts/tracker.py create-feature --title <t> --body <b> --role <r> --priority <p> [--reporter <name>]
-    python scripts/tracker.py transition <number> <from-status> <to-status>
+    python scripts/tracker.py transition <number> <from-status> <to-status> --role <r> [--force]
     python scripts/tracker.py comment <number> --role <r> --message <m>
     python scripts/tracker.py get-labels <number>
     python scripts/tracker.py get-state <number>
     python scripts/tracker.py close <number>
     python scripts/tracker.py check-gh                   # Verify gh access
     python scripts/tracker.py --help
+
+Role authority (who may call `transition`):
+  - PM (--role pm or pm-lead)      : pending -> planning/approved, planning -> planned, planned -> approved
+  - Assigned dev role (--role <r>) : open -> in-progress, approved -> in-progress, in-progress <-> pending-test,
+                                     open -> pending-test, in-progress -> approved
+                                     (must match the issue's `role:*` label)
+  - QA (--role qa or qa-lead)      : pending-test -> in-progress, pending-test -> pending-ship
+  - DM (--role dm or dm-lead)      : pending-ship -> shipped
+  - Human override                 : --force bypasses authority + unread-feedback guards
 """
 
 import json
@@ -75,6 +84,128 @@ LEGAL_TRANSITIONS = {
     "status:pending-ship": {"status:shipped"},
     "status:shipped": set(),  # terminal
 }
+
+# === ROLE AUTHORITY (who may perform each legal transition) ===
+#
+# Keys are (from_label, to_label). Values are sets of canonical role prefixes
+# (e.g. "pm" matches both "pm" and "pm-lead"). The special marker "_assignee"
+# means "must match one of the issue's role:* labels" — used for work handled
+# by the role the issue is assigned to (any dev role, or DM/QA bug fixes).
+#
+# Every legal transition MUST appear here. A legal transition missing from
+# this table will be rejected with "no authority mapping" unless --force is
+# passed. This fails closed by design.
+#
+# Bypass: --force overrides authority (and the unread-feedback guard) but
+# NOT legality. Humans use --force when intervening manually.
+
+ROLE_AUTHORITY = {
+    # PM owns the intake lifecycle
+    ("status:pending", "status:planning"): {"pm"},
+    ("status:pending", "status:approved"): {"pm"},
+    ("status:planning", "status:planned"): {"pm"},
+    ("status:planned", "status:approved"): {"pm"},
+
+    # Assigned role owns implementation work on their own issues
+    ("status:open", "status:in-progress"): {"_assignee"},
+    ("status:open", "status:pending-test"): {"_assignee"},
+    ("status:approved", "status:in-progress"): {"_assignee"},
+    ("status:in-progress", "status:pending-test"): {"_assignee"},
+    ("status:in-progress", "status:approved"): {"_assignee"},
+
+    # QA owns verification
+    ("status:pending-test", "status:in-progress"): {"qa"},
+    ("status:pending-test", "status:pending-ship"): {"qa"},
+
+    # DM owns delivery / shipping
+    ("status:pending-ship", "status:shipped"): {"dm"},
+}
+
+
+def _canonicalize_role(role):
+    """Normalize a role string for authority comparison.
+
+    Strips optional trailing '-lead' suffix and any parenthetical alias:
+        "skill-lead"         -> "skill"
+        "pm (pm)"            -> "pm"
+        "qa-lead (tester)"   -> "qa"
+        "dm"                 -> "dm"
+
+    Returns None if role is None.
+    """
+    if role is None:
+        return None
+    paren = role.find(" (")
+    if paren >= 0:
+        role = role[:paren]
+    role = role.strip()
+    if role.endswith("-lead"):
+        role = role[: -len("-lead")]
+    return role
+
+
+def _get_issue_role_labels(number):
+    """Return the set of role prefixes from an issue's `role:*` labels.
+
+    e.g. labels `role:skill`, `role:dm` -> {"skill", "dm"}. Returns an empty
+    set on API failure (caller decides how to treat missing data).
+    """
+    result = _run_list(
+        ["gh", "issue", "view", str(number), "--json", "labels"],
+        check=False,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return set()
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return set()
+    roles = set()
+    for lbl in data.get("labels", []):
+        name = lbl.get("name", "")
+        if name.startswith("role:"):
+            roles.add(name[len("role:"):])
+    return roles
+
+
+def _check_authority(number, from_label, to_label, caller_role):
+    """Decide whether `caller_role` may perform (from_label -> to_label) on #number.
+
+    Returns (authorized: bool, reason: str | None). `reason` is None on success,
+    a human-readable explanation on failure.
+    """
+    auth = ROLE_AUTHORITY.get((from_label, to_label))
+    if auth is None:
+        # Legal transition with no authority entry -- fail closed.
+        return False, (
+            f"transition {from_label} -> {to_label} has no authority mapping "
+            f"(legal but unassigned)"
+        )
+
+    canon = _canonicalize_role(caller_role)
+    if not canon:
+        return False, f"--role is required for transition {from_label} -> {to_label}"
+
+    if "_assignee" in auth:
+        issue_roles = _get_issue_role_labels(number)
+        if not issue_roles:
+            return False, (
+                f"#{number} has no role:* label — cannot verify assignee authority"
+            )
+        if canon not in issue_roles:
+            return False, (
+                f"role '{canon}' is not assigned to #{number} "
+                f"(issue role labels: {sorted(issue_roles)}); only the assigned "
+                f"role may perform {from_label} -> {to_label}"
+            )
+        return True, None
+
+    if canon in auth:
+        return True, None
+    return False, (
+        f"role '{canon}' is not authorized for {from_label} -> {to_label} "
+        f"(allowed: {sorted(auth)})"
+    )
 
 
 def _log_diagnostic(severity, message, context=None):
@@ -295,12 +426,22 @@ _GUARDED_TRANSITIONS = {
 }
 
 
-def transition(number, from_status, to_status, force=False):
-    """Transition an issue status with enforcement."""
+def transition(number, from_status, to_status, role=None, force=False):
+    """Transition an issue status with legality + role authority enforcement.
+
+    Args:
+        number: issue number
+        from_status: current status (short or full label)
+        to_status: target status (short or full label)
+        role: caller's role (e.g. "skill-lead", "pm", "qa-lead"). Required
+              unless `force` is set. Checked against ROLE_AUTHORITY.
+        force: human override — bypasses role authority AND the unread-feedback
+              guard. Does NOT bypass legality.
+    """
     from_label = _resolve_status(from_status)
     to_label = _resolve_status(to_status)
 
-    # Enforce legal transitions
+    # 1. Enforce legal transitions (never bypassed)
     legal = LEGAL_TRANSITIONS.get(from_label, set())
     if to_label not in legal:
         _log_diagnostic("error", f"Illegal transition {from_label} -> {to_label} on #{number}")
@@ -311,9 +452,28 @@ def transition(number, from_status, to_status, force=False):
         )
         sys.exit(1)
 
-    # Guard: block guarded transitions if unread feedback exists
+    # 2. Enforce role authority (bypassable with --force)
+    if not force:
+        authorized, reason = _check_authority(number, from_label, to_label, role)
+        if not authorized:
+            _log_diagnostic(
+                "error",
+                f"Unauthorized transition on #{number}: {reason}",
+                {"from": from_label, "to": to_label, "role": role},
+            )
+            print(
+                f"ERROR: Unauthorized transition on #{number}: {reason}. "
+                f"Use --force to override (humans only).",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    # 3. Guard: block guarded transitions if unread feedback exists
     if (from_label, to_label) in _GUARDED_TRANSITIONS and not force:
-        unread = _check_unread_feedback(number, "skill-lead")
+        # Match the caller's actual comment format (role is non-None here
+        # because authority check required it; fall back to skill-lead
+        # for back-compat if somehow unset).
+        unread = _check_unread_feedback(number, role or "skill-lead")
         if unread:
             roles_summary = ", ".join(f"{role} ({ts})" for role, ts in unread)
             _log_diagnostic("warning", f"Blocked transition #{number} {from_label} -> {to_label}: unread feedback from {roles_summary}")
@@ -429,9 +589,16 @@ def main():
 
     elif cmd == "transition":
         if len(pos) < 3:
-            print("Usage: tracker.py transition <number> <from> <to> [--force]", file=sys.stderr)
+            print(
+                "Usage: tracker.py transition <number> <from> <to> --role <r> [--force]",
+                file=sys.stderr,
+            )
             sys.exit(1)
-        transition(int(pos[0]), pos[1], pos[2], force=opts.get("force", False))
+        transition(
+            int(pos[0]), pos[1], pos[2],
+            role=opts.get("role"),
+            force=opts.get("force", False),
+        )
 
     elif cmd == "comment":
         if not pos or "role" not in opts or "message" not in opts:

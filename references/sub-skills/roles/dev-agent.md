@@ -94,7 +94,7 @@ For each bug that does not have a `status:shipped` or closed state:
 5. Run the test command: `[ROLE_TEST_CMD]`
 6. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false` (no modifications), do NOT transition — re-read the bug and apply the fix. Never mark a bug as fixed without actual code changes.
 7. If tests pass and changes exist:
-   - Transition status: `python references/scripts/tracker.py transition [NUMBER] open pending-test`
+   - Transition status: `python references/scripts/tracker.py transition [NUMBER] open pending-test --role [ROLE]-lead`
    - Comment: `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Fixed in commit [hash]. [Brief explanation]. Status → Pending Test."`
    - Clear working state.
 8. If the root cause belongs to another agent's domain:
@@ -134,7 +134,7 @@ If there are comments from `**qa**` or `**pm**` after your last `**[ROLE]-lead**
 4. Re-run tests and smoke tests.
 5. Transition back to Pending Test:
    ```bash
-   python references/scripts/tracker.py transition [NUMBER] in-progress pending-test
+   python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role [ROLE]-lead
    python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Fixed [N] QA gaps: [list]. Status → Pending Test."
    ```
 6. Clear working state.
@@ -154,7 +154,7 @@ When picking up a feature, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 1. Comment and transition status:
    ```bash
    python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Picking up. Status → In Progress."
-   python references/scripts/tracker.py transition [NUMBER] approved in-progress
+   python references/scripts/tracker.py transition [NUMBER] approved in-progress --role [ROLE]-lead
    ```
 2. **Read planning artifacts** (if they exist in `.squidsquad/[ROLE]/planning/`):
    - Look for files matching the issue number or title
@@ -169,7 +169,7 @@ When picking up a feature, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 10. If tests and smoke tests pass and changes exist:
    - Transition status:
      ```bash
-     python references/scripts/tracker.py transition [NUMBER] in-progress pending-test
+     python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role [ROLE]-lead
      python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Implementation complete. All tests passing. Status → Pending Test."
      ```
    - Clear working state.
