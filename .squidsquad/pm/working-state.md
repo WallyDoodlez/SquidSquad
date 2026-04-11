@@ -1,7 +1,7 @@
 # Working State
 
-- **Task**: #328 — intent-driven setup wizard with role manifest registry
-- **Status**: planning
+- **Task**: idle — #328 approved, awaiting skill pickup
+- **Status**: idle
 - **Phase**:
 - **Started**: 2026-04-11
 
