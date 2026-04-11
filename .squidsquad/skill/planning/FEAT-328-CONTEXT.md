@@ -276,6 +276,59 @@ setup_requirements:
 - `per_installed_agent` — if true, the requirement is asked once per installed agent of the role (e.g., stack asked for both backend and frontend agents if variant = both)
 - `only_in_presets` — optional filter; if present, the requirement only fires when the install preset is in this list
 
+**Q-new22 — Role templates (SOUL.md + CLAUDE.md) migrate into `references/roles/<role>/`**: Every role directory becomes self-contained with its identity, manifest, and base template in one place. Decided 2026-04-11 after PM flagged the gap that no SOUL.md existed in the new role manifest directories.
+
+**Migration mapping (in-scope for #328 composition phase)**:
+
+| From (legacy) | To (new) |
+|---|---|
+| `references/sub-skills/souls/pm.md` | `references/roles/pm/SOUL.md` |
+| `references/sub-skills/souls/designer.md` | `references/roles/designer/SOUL.md` |
+| `references/sub-skills/souls/dev.md` | `references/roles/dev/SOUL.md` |
+| `references/sub-skills/souls/dm.md` | `references/roles/dm/SOUL.md` |
+| `references/sub-skills/souls/qa.md` | `references/roles/qa/SOUL.md` |
+| `references/sub-skills/roles/pm-agent.md` | `references/roles/pm/CLAUDE.md` |
+| `references/sub-skills/roles/designer.md` | `references/roles/designer/CLAUDE.md` |
+| `references/sub-skills/roles/dev-agent.md` | `references/roles/dev/CLAUDE.md` |
+| `references/sub-skills/roles/dm-agent.md` | `references/roles/dm/CLAUDE.md` |
+| `references/sub-skills/roles/qa-agent.md` | `references/roles/qa/CLAUDE.md` |
+
+**Post-migration state**:
+- `references/sub-skills/souls/` directory is emptied and removed (or kept as a stub with a `.gitkeep` and a README pointing to the new location)
+- `references/sub-skills/roles/` directory is emptied and removed (same treatment)
+- **`references/sub-skills/common/` and `references/sub-skills/<role>-specific/` stay** — those are cross-cutting sub-skills (tracker-protocol, vault, improvement-scan, etc.) that compose into CLAUDE.md at install time. They're not role identity, they're shared behaviors.
+- The wizard's composition pipeline at setup time becomes:
+  1. Read `references/roles/<role>/CLAUDE.md` (base template)
+  2. Compose in `references/sub-skills/common/*.md` (shared across all roles)
+  3. Compose in `references/sub-skills/<role>-specific/*.md` (role-owned cross-cutting content)
+  4. Compose in the chosen tool's `sub-skill.md` (from `references/tools/<id>/sub-skill.md` per Q-new11 runtime)
+  5. Write the composed result to `.squidsquad/<role>/CLAUDE.md`
+- `references/roles/<role>/SOUL.md` is copied verbatim (not composed) to `.squidsquad/<role>/SOUL.md` at install time
+
+**Manifest schema additions**:
+```yaml
+# references/roles/<role>/manifest.yaml
+soul_template: SOUL.md          # relative to the role directory
+claude_template: CLAUDE.md      # relative to the role directory
+```
+
+Both paths are **relative to the role directory**, not absolute. This keeps role manifests self-contained and moveable. Validator enforces that both files exist at the declared paths when the manifest loads.
+
+**Dev discretion — `pm-lean.md`**: The legacy `references/sub-skills/roles/pm-lean.md` is a lean variant of PM. Skill decides during the composition phase whether to:
+- (a) Keep as `references/roles/pm/CLAUDE-lean.md` alongside the main CLAUDE.md
+- (b) Retire it since #328's setup_requirements can now drive PM variant selection declaratively
+- (c) Merge its lean directives into the main PM CLAUDE.md as an optional compose-time flag
+
+No lock on this — skill picks whichever is cleanest when it gets there.
+
+**Rationale for Option A over Option B** (keep templates in legacy location with path fields):
+- Self-contained role directories are easier to audit — one directory = one role = everything that defines that role's identity
+- Future user-customization (v2 feature) can duplicate a role directory and tweak it without touching shared sub-skill infrastructure
+- Breaks an already-stale pattern (`references/sub-skills/souls/` + `references/sub-skills/roles/` split was always a bit arbitrary)
+- Cost: one migration step during #328's composition phase. Mechanical, not architectural.
+
+---
+
 **Q-new16 — Preset manifests with declarative install order**: Presets live at `references/presets/<id>/manifest.yaml` mirroring the role manifest philosophy. Each preset declares its id, display name, description, and the role install order. PM and DM are implicit and not listed.
 
 **v1 preset manifests**:
