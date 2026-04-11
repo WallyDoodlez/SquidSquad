@@ -21,7 +21,7 @@ This feature ships:
 5. **Two presets v1**: `software-dev` and `design`
 6. **YAML sidecar manifests** at `references/roles/<role>/manifest.yaml` (not frontmatter)
 7. **Per-role decentralized `routes_to`** — no central graph file
-8. **GitHub Issues ingestion default flipped to `Y`** in setup
+8. **GitHub CLI is MANDATORY (CORRECTED 2026-04-11)** — earlier "GH Issues ingestion default flipped to Y" was too soft. SquidSquad requires `gh` authenticated for the target repo. There is NO question in the wizard. Install fails fast with clear instructions if `gh auth status` does not succeed. Rationale: gh is the substrate for SquidSquad's tracker, comments, and audit trail (philosophy: "GitHub as the bus"). Non-technical users get instructions to install and authenticate gh as part of the prerequisite check.
 9. **Conditional dev question** — only ask BE/FE/Fullstack if intent involves software
 10. **Install base = this repo only (CORRECTED 2026-04-11)** — earlier "no install base" was wrong. SquidSquad's own repo IS the install base. Bounded migration: relabel this repo's existing GH Issues, update template references, but no external user installs to worry about.
 
@@ -81,7 +81,226 @@ This feature ships:
 
 20. **Q10 — Pipeline display**: ASCII arrow with bracket notation: `PM → Designer → [BE, FE] → QA → DM`. One-line, screenshot-friendly, matches the research doc's notation. Brackets handle parallel groupings. HITL roles are marked with `↻` (e.g. `PM → Designer ↻ → DM`).
 
-### From Phase 2 follow-up discussion (4 new decisions: tool requirements + status taxonomy)
+### From Phase 2 follow-up discussion (5 new decisions: tool requirements + tool registry + status taxonomy)
+
+**Q-new5 — Tool registry as first-class citizen**: Tools become first-class entities in their own registry directory. Roles reference tools by ID rather than defining them inline. The registry decouples "what tools exist" from "who uses them" and enables tool reuse across roles.
+
+**Directory structure**:
+```
+references/
+├── roles/
+│   ├── pm/manifest.yaml
+│   ├── designer/manifest.yaml
+│   ├── dev/manifest.yaml
+│   ├── qa/manifest.yaml
+│   └── dm/manifest.yaml
+└── tools/
+    ├── figma/
+    │   ├── manifest.yaml      # tool definition (IDs, category, mcp_name)
+    │   ├── setup.md           # infrastructure setup steps (Claude-assisted)
+    │   └── sub-skill.md       # how an agent uses the tool (composed into role CLAUDE.md)
+    ├── google_stitch/
+    │   ├── manifest.yaml
+    │   ├── setup.md
+    │   └── sub-skill.md
+    └── local_html/
+        ├── manifest.yaml
+        ├── setup.md           # "no setup needed — built-in" (for consistency)
+        └── sub-skill.md
+```
+
+**Tool manifest schema**:
+```yaml
+schema_version: 1
+id: figma
+display_name: Figma
+category: design                # design | delivery | tracker | observability | comms | other
+description: Cloud-based UI design and prototyping tool
+provider: mcp                   # mcp | builtin | http
+mcp_name: figma_mcp             # only if provider=mcp
+docs_url: https://figma.com/...
+applicable_roles:               # advisory hint, not enforced
+  - designer
+sub_skill: sub-skill.md         # path within the tool's directory
+```
+
+**Role manifests reference tools by ID**:
+```yaml
+# references/roles/designer/manifest.yaml
+requires_tools:
+  any_of: [figma, google_stitch, local_html]   # IDs from references/tools/
+```
+
+**Resolution at install time** (REVISED — two-level config + mandatory setup walkthrough):
+
+**Phase A — gather tool requirements across ALL roles being installed**:
+- Walk every role manifest's `requires_tools.any_of`
+- Build the union set of unique tool IDs needed
+- This is the "infrastructure surface" of this install
+
+**Phase B — per-tool infrastructure setup (Level 1, runs ONCE per tool)**:
+1. For each unique tool in the surface, look up `references/tools/<id>/manifest.yaml` and check availability via `provider`:
+   - `builtin` → always available
+   - `mcp` → check if `mcp_name` is registered in host Claude session
+2. If multiple tools satisfy a single role's `any_of`, ask user to pick one as the primary for that role (this happens before infrastructure setup so we know which tool to set up)
+3. **If a chosen tool is NOT available, the wizard runs its setup.md walkthrough (MANDATORY):**
+   - Wizard reads `references/tools/<id>/setup.md` and presents the steps to the user
+   - User executes the steps. The wizard runs inside Claude, so the user can ask Claude questions about any step at any time ("how do I install the Stitch MCP?", "where do I put my API key?") — Claude answers in-session
+   - Wizard prompts: "Done with setup? [yes/retry/skip-this-tool]"
+   - On "yes": wizard re-checks availability. If now satisfied, proceed. If not, prompt again with the same options.
+   - On "retry": re-display setup.md and re-prompt
+   - On "skip-this-tool": move to the next tool in `any_of`. If all tools have been skipped, refuse to install the role per Q-new2.
+4. After the user picks a tool that succeeds, the tool is "infrastructure-ready" and won't be walked through again in this install session
+
+**Phase C — per-(role, tool) agent configuration (Level 2, runs ONCE per role-tool pair)**:
+1. For each role being installed, walk its chosen tools
+2. For each chosen tool, check if its manifest has `agent_config.questions`
+3. If yes, ask each question and store the answers under `config.md` → `## Agents` → `<role>` → `tool_configs.<tool>`
+4. If no, skip — no per-agent config needed
+5. v1 tools have no `agent_config.questions`, so this phase is silent in v1
+
+**Phase D — composition**:
+- Compose the chosen tool's `sub-skill.md` into the consuming role's CLAUDE.md at the composition anchor
+- Sub-skill content can reference `tool_configs.<tool>` values via template variables (e.g., `{{config.slack.channel}}`)
+
+**Tool setup is non-skippable for the role**: The user can skip an individual tool (and the wizard tries the next one), but if every tool in `any_of` is skipped, the role install fails — there's no "install the role with a broken tool" path. The user can always re-run setup later after acquiring the missing infrastructure.
+
+**For builtin tools**: setup.md still exists (for consistency) but typically says "no setup needed — built-in capability, ready to use." The wizard recognizes builtin tools and skips the walkthrough automatically.
+
+**Tool reuse — two levels (Q-new8)**: Tools have two distinct configuration layers:
+
+1. **Tool-level infrastructure** (the setup.md walkthrough): Shared globally. MCP installation, OAuth, API tokens, SMTP credentials, etc. Walkthrough runs ONCE per tool, no matter how many roles consume it. The wizard tracks which tools have been walked through during a setup session and reuses the result.
+
+2. **Agent-level configuration** (per-role, per-tool): Each agent that uses the same tool can have its own configuration. Example: if both PM and DM use the slack tool, the slack MCP is installed once (Level 1), but PM might post to `#pm-updates` while DM posts to `#deliveries` — those channel choices are Level 2 config, asked separately for each agent.
+
+**Tool manifest declares its own agent-config questions** (optional schema field):
+
+```yaml
+# references/tools/slack/manifest.yaml
+schema_version: 1
+id: slack
+display_name: Slack
+provider: mcp
+mcp_name: slack_mcp
+agent_config:
+  questions:
+    - id: channel
+      label: Which Slack channel should this agent post to?
+      type: text
+      default: "#general"
+    - id: notify_on
+      label: Which events should trigger a Slack post?
+      type: multi-select
+      options: [feature-shipped, bug-filed, design-ready, error]
+      default: [feature-shipped]
+```
+
+When the wizard installs slack for both PM and DM, it asks the `channel` and `notify_on` questions TWICE — once per agent — and stores each agent's answers separately.
+
+**Storage format in config.md** (proposed):
+
+```
+## Agents
+
+- **pm**:
+  - alias: peggy
+  - tool_configs:
+    - slack: { channel: "#pm-updates", notify_on: [bug-filed] }
+- **dm**:
+  - alias: dee
+  - tool_configs:
+    - slack: { channel: "#deliveries", notify_on: [feature-shipped] }
+    - gmail: { from: "deliveries@example.com" }
+```
+
+**For v1**: None of the 5 v1 tools (figma, google_stitch, local_html, gmail, local_delivery) need agent-level config questions, so the `agent_config` field is optional and absent from the v1 tool manifests. The schema is in place for future tools (slack, jira, etc.) that need per-agent settings.
+
+The validator must ensure all role-referenced tool IDs exist in the registry.
+
+**Q-new6 — Tool setup walkthrough is MANDATORY in the wizard**: Every tool in the registry must ship with a `setup.md` describing infrastructure requirements (MCP installation, API keys, OAuth, etc.). When a chosen tool is not available at install time, the wizard MUST run the setup.md walkthrough — it's not optional, not deferred, not "skip and warn". Walkthrough is interactive and Claude-assisted because the wizard runs inside a Claude session. The user can skip an individual tool (wizard tries the next in `any_of`) but cannot skip walkthrough for a tool they've selected. If all tools in `any_of` are skipped, the role install fails with a clear message and instructions to acquire missing infrastructure.
+
+**Q-new9 — Step 9 is an interactive review screen with preview + edit + proceed/abort**: Today's flow gates the install on a single `[Y/n]` confirmation. The new wizard makes Step 9 a full review screen so the user can inspect what's about to be written before any file touches disk.
+
+**Step 9 menu** (presented after the summary table):
+
+```
+SquidSquad Setup Summary
+========================
+
+Project:       my-app
+Repo:          github.com/wallydoodlez/my-app
+Preset:        software-dev
+Pipeline:      PM → Designer ↻ → [BE, FE] → QA → DM
+
+Roles installed:
+  - pm  (always)
+  - designer (HITL, tool: figma)
+  - be   (FastAPI, pytest tests/be)
+  - fe   (Next.js, npm test)
+  - qa
+  - dm   (tool: gmail)
+
+Loop interval: 10 min
+
+What would you like to do?
+  [P] Proceed with setup
+  [V] View what will be written (preview files)
+  [E] Edit a specific step
+  [A] Abort
+```
+
+**Action semantics**:
+
+- **[P] Proceed**: Move to Step 10 (commit and write files). This is the only path forward.
+- **[V] View / preview** — Show the actual content of what would be written, in-place, without committing anything to disk:
+  - `config.md` content
+  - Each role's composed `CLAUDE.md` (base template + chosen tool sub-skills + agent config rendered)
+  - The list of GitHub labels that will be created or migrated
+  - The list of files that will be added to git (paths only)
+  - Boot script names
+  - Any one-time migration scripts that will run (status label rewrites etc.)
+  - Preview is read-only and re-displays the menu after the user finishes scrolling
+- **[E] Edit** — Re-open a specific step. Asks "Which step?" and lists the editable steps (1: project, 2: intent, 3: preset, 4: dev variant, 5: designer optional, 6: tool selection, 7: stack/tests, 8: interval). Selecting one returns to that step in re-edit mode (the wizard remembers all OTHER answers and only re-prompts the chosen step). After the edit, returns to Step 9.
+- **[A] Abort** — Exits the wizard immediately. Nothing is written to disk. Wizard prints a one-line "no changes made" message and exits with code 0.
+
+**No file system writes happen before [P]**: All wizard state is in-memory until Step 10. This is the strong invariant — the user can preview, edit, and abort freely without leaving any trace. Step 10 is the only step that touches the disk (besides the tool setup walkthrough in Step 6, which is necessary because MCP install / OAuth must happen at the user's system level).
+
+**Edge case — re-running setup with existing `.squidsquad/` (Step 0b)**: If the user chose "Full rebuild" at Step 0b, the actual nuke-and-replace happens in Step 10, not Step 0b. Step 0b just records the intent. Step 9 review can show "WARNING: Existing `.squidsquad/` will be DELETED on proceed" so the user can still abort.
+
+---
+
+**Q-new7 — Step 7 (frameworks/test commands) is LLM-assisted with stack auto-detection**: Today's setup blank-prompts the user for framework and test command per dev variant. The new wizard uses repo inspection + LLM inference to suggest both, then asks the user to confirm or override. Process per dev variant:
+
+1. **Detect candidate files** in the repo for the variant (BE looks for `requirements.txt`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `pom.xml`, `Gemfile`, etc.; FE looks for `package.json`, `pnpm-lock.yaml`, `vite.config.*`, `next.config.*`, etc.)
+2. **Ask Claude (host LLM)** to classify the detected files into a probable tech stack (e.g., "FastAPI + Python 3.11 + pytest", "Next.js + TypeScript + jest")
+3. **Suggest the stack** to the user as the default: "Detected: Next.js (TypeScript). Use this? [Y/n]"
+4. On `n`, prompt for free-text override (still LLM-classified to a structured form for config.md)
+5. **Suggest the test command** based on the chosen stack using common conventions (Next.js → `npm test`, pytest → `pytest tests/`, go test → `go test ./...`, etc.)
+6. User confirms or overrides the test command
+7. Both values written to `config.md` per dev variant
+
+The Claude session is already loaded; the LLM classification is essentially free. Same philosophy as Q9 (intent parser is LLM-only) — use Claude for inference inside the wizard.
+
+**Edge cases**:
+- No detectable files → wizard asks "What tech stack does [variant] use?" as a free-text prompt, LLM classifies, then suggests test command
+- Multiple plausible stacks (e.g., monorepo with Next.js + Express) → wizard presents top 2-3 candidates and asks user to pick
+- User picks "skip framework / no tests" → both fields are recorded as empty in config.md, agent skips test step in its cycle
+
+**Future SOUL/customization extension**: v1 hardcodes tools at the manifest level. Future feature: a role's SOUL.md or a customization YAML can grant additional tool IDs (e.g., a "PM-marketing" SOUL grants `[mailchimp, hubspot]` on top of PM's base tools). The dev agent does NOT need to build this in v1 — they just need to NOT hardcode tool IDs in compose.py / sub-skill composition logic. Make tool grants data-driven from the manifest so future grants are possible without code changes.
+
+**v1 registry inventory (REVISED — gmail removed, 4 tools)**: 4 tools ship in v1.
+
+**Designer tools** (3):
+- `references/tools/figma/` — provider: mcp, mcp_name: figma_mcp, applicable_roles: [designer]
+- `references/tools/google_stitch/` — provider: mcp, mcp_name: google_stitch, applicable_roles: [designer]
+- `references/tools/local_html/` — provider: builtin, applicable_roles: [designer]
+
+**DM tools** (1):
+- `references/tools/local_delivery/` — provider: builtin, category: delivery, applicable_roles: [dm]. DM writes delivery payloads to `.squidsquad/dm/deliveries/<issue>/` as the always-available fallback. Includes a manifest of what was "delivered" with timestamps. **In v1, this is DM's only tool** — gmail and other delivery integrations (slack, google_drive, smtp, outlook) are deferred to follow-up features.
+
+PM/dev/qa tool definitions are deferred to follow-up features but the registry STRUCTURE is in place so adding them later is just dropping in new directories. Future delivery tools (gmail, slack, google_drive, etc.) follow the same pattern as local_delivery but with `provider: mcp` and a real `setup.md` walkthrough.
+
+
 
 **Q-new4 — Status taxonomy clarity**: Any status that requires a HUMAN to act must have `human` explicitly in the name. Two human-required statuses:
 
@@ -143,24 +362,30 @@ Future "agent-on-agent" review statuses follow the same naming convention: `pend
 
 ### Implications for the v1 work
 
-- Manifest schema gets a new top-level field `requires_tools` (Q-new1)
+- Manifest schema gets a new top-level field `requires_tools` (Q-new1) referencing tool IDs from the registry (Q-new5)
 - Manifest schema gets a new top-level field `iteration_mode: hitl | normal` (Q7)
-- Validator (`references/scripts/manifest.py`) gains MCP-availability detection — needs to enumerate the host Claude session's MCP servers (mechanism TBD, dev discretion). Built-in capabilities like `local_html` always pass.
+- **NEW: Tool registry at `references/tools/<id>/{manifest.yaml,sub-skill.md}`** with 3 tools shipping in v1: figma, google_stitch, local_html (Q-new5)
+- Validator (`references/scripts/manifest.py`) gains:
+  - Tool registry loader (parse all `references/tools/*/manifest.yaml`)
+  - Cross-reference check (every role's `requires_tools` IDs must exist in registry)
+  - MCP-availability detection at install time (enumerate host Claude session's MCP servers, mechanism TBD, dev discretion)
+  - Built-in capabilities (provider=builtin) always pass availability check
 - Wizard gets a tool-selection sub-step for roles with multiple satisfying tools (Q-new3)
-- New sub-skill files: `references/sub-skills/designer-tools/figma.md`, `references/sub-skills/designer-tools/stitch.md`, `references/sub-skills/designer-tools/html.md`
-- Designer's `references/roles/designer/` template directory needs new structure to support tool-conditional composition
-- `config.md` schema gains a `## Tools` section
+- Wizard composes the selected tool's `sub-skill.md` into the consuming role's CLAUDE.md at install time. Requires a composition anchor in the role's CLAUDE.md template (e.g., `<!-- TOOL_SUBSKILL -->` placeholder).
+- Designer's `references/roles/designer/` template directory does NOT need its own tool sub-skill files anymore — they live in the tool registry under `references/tools/<id>/sub-skill.md`
+- `config.md` schema gains a `## Tools` section recording the chosen tool ID per role
+- Hard prerequisite: gh CLI must be installed and authenticated (no longer a wizard question, checked at Step 0)
 - New status labels: `status:pending-human-approval` and `status:pending-human-review`
 - Existing `status:pending` is renamed → `status:pending-human-approval` (migration in this repo only)
 - tracker.py legal-transitions table updated to include both new transitions and remove old `pending` references
-- Test plan must cover: tool present (install succeeds), tool missing (install refused with clear message), both tools present (selection prompt), tool removed after install (re-run wizard prompt), HITL designer iterating on a real issue with figma/stitch/html tools, status migration script idempotency
+- Test plan must cover: tool present (install succeeds), tool missing (install refused with clear message), multiple tools present (selection prompt), tool registry validation (role references unknown tool ID → fail loudly), HITL designer iterating on a real issue with figma/stitch/html tools, status migration script idempotency, gh missing → setup aborts at Step 0
 
 ## v1 Role Inventory (final, REVISED)
 
 | Role | Always installed | Presets | iteration_mode | routes_to | requires_tools |
 |------|------------------|---------|----------------|-----------|----------------|
-| pm | yes | both | normal | [designer, dev, qa, dm] | none |
-| dm | yes | both | normal | [] (terminal) | none in v1 (TBD: delivery tools come later) |
+| pm | yes | both | normal | [designer, dev, qa, dm] | none in v1 |
+| dm | yes | both | normal | [] (terminal) | `any_of: [local_delivery]` |
 | designer | optional in software-dev, required in design | both | **hitl** | [pm, dm] | `any_of: [figma_mcp, google_stitch, local_html]` |
 | dev (be/fe/fullstack variants) | required in software-dev only | software-dev | normal | [qa, dm] | none |
 | qa | auto-installed when dev is installed | software-dev | normal | [dm] | none |
