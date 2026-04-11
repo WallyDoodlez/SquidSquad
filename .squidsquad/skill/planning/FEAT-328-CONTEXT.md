@@ -219,6 +219,22 @@ The validator must ensure all role-referenced tool IDs exist in the registry.
 
 **Q-new6 — Tool setup walkthrough is MANDATORY in the wizard**: Every tool in the registry must ship with a `setup.md` describing infrastructure requirements (MCP installation, API keys, OAuth, etc.). When a chosen tool is not available at install time, the wizard MUST run the setup.md walkthrough — it's not optional, not deferred, not "skip and warn". Walkthrough is interactive and Claude-assisted because the wizard runs inside a Claude session. The user can skip an individual tool (wizard tries the next in `any_of`) but cannot skip walkthrough for a tool they've selected. If all tools in `any_of` are skipped, the role install fails with a clear message and instructions to acquire missing infrastructure.
 
+**Q-new10 — Setup step order: Designer before Dev**: In the `software-dev` preset, the designer-optional question MUST come before the dev variant question. Reasoning: designer produces the design that feeds dev work, so the install order should mirror the work order. This also means designer's tool selection (Step 6) precedes dev's stack/framework questions (Step 7), giving the user a clean "design first, build second" flow.
+
+**Revised step order in software-dev preset**:
+1. Step 0 — gh prerequisite check
+2. Step 0b — re-run handling
+3. Step 1 — project name + repo
+4. Step 2 — intent question (LLM-classified)
+5. Step 3 — preset confirmation (software-dev | design)
+6. **Step 4 — Designer optional** (Y/N, only in software-dev preset; design preset always installs designer)
+7. **Step 5 — Dev variant** (be+fe / fullstack / be only / fe only, only in software-dev preset)
+8. Step 6 — Tool selection + setup walkthrough (per role, designer's tool first since designer is installed first)
+9. Step 7 — Frameworks/test commands (per dev variant, with LLM stack detection)
+10. Step 8 — Loop interval
+11. Step 9 — Review screen ([P]roceed / [V]iew / [E]dit / [A]bort)
+12. Step 10 — Commit and write files
+
 **Q-new9 — Step 9 is an interactive review screen with preview + edit + proceed/abort**: Today's flow gates the install on a single `[Y/n]` confirmation. The new wizard makes Step 9 a full review screen so the user can inspect what's about to be written before any file touches disk.
 
 **Step 9 menu** (presented after the summary table):
