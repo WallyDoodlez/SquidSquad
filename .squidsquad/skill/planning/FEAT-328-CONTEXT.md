@@ -276,6 +276,166 @@ setup_requirements:
 - `per_installed_agent` — if true, the requirement is asked once per installed agent of the role (e.g., stack asked for both backend and frontend agents if variant = both)
 - `only_in_presets` — optional filter; if present, the requirement only fires when the install preset is in this list
 
+**Q-new16 — Preset manifests with declarative install order**: Presets live at `references/presets/<id>/manifest.yaml` mirroring the role manifest philosophy. Each preset declares its id, display name, description, and the role install order. PM and DM are implicit and not listed.
+
+**v1 preset manifests**:
+
+```yaml
+# references/presets/software-dev/manifest.yaml
+schema_version: 1
+id: software-dev
+display_name: "Software Development"
+description: "A team for designing, building, verifying, and shipping software."
+role_install_order: [designer, dev, qa]
+```
+
+```yaml
+# references/presets/design/manifest.yaml
+schema_version: 1
+id: design
+display_name: "Design"
+description: "A team focused on design work with delivery handoff."
+role_install_order: [designer]
+```
+
+**Semantics**:
+- `role_install_order` determines the order in which Step 4 walks each role's `setup_requirements`
+- PM and DM are always installed, not listed in the order (implicit and untouchable by preset manifests)
+- If a role's manifest has `only_in_presets` on a requirement, that requirement is skipped when the active preset isn't in the list (e.g., designer's `install_optional` requirement only fires in software-dev)
+
+**Tone with Q-new14**: Preset descriptions are domain-only. No SquidSquad internals. A reader understands what the preset delivers without any source knowledge.
+
+**Q-new17 — config.md schema for agents and tools**: When Step 7 writes config.md, it uses this structure under `## Agents`:
+
+```
+## Agents
+
+- **pm**: peggy
+  - role: pm
+- **designer**: designer
+  - role: designer
+  - iteration_mode: hitl
+  - setup:
+    - install_optional: yes
+- **be**: be
+  - role: dev
+  - variant: be
+  - stack: "FastAPI + Python 3.11 + pytest"
+  - test_command: "pytest tests/be"
+- **fe**: fe
+  - role: dev
+  - variant: fe
+  - stack: "Next.js + TypeScript + jest"
+  - test_command: "npm test"
+- **qa**: qa
+  - role: qa
+- **dm**: dm
+  - role: dm
+```
+
+And `## Tools`:
+
+```
+## Tools
+
+- **designer.tool**: (unset — PM will configure on first use)
+- **dm.tool**: local_delivery
+```
+
+**Rules**:
+- Each top-level `**<agent_id>**: <alias>` entry identifies one running agent by its id (e.g., `be`, `fe`, `designer`). Multiple agents can share a role (be and fe both have `role: dev`).
+- Every requirement answer collected in Step 4 is stored under `setup:` nested under the agent entry, keyed by requirement `id`
+- Tool selection is deferred; the `## Tools` section records `(unset — PM will configure on first use)` for any agent-tool pair that hasn't been configured yet
+- `## Tools` gets overwritten each time PM completes a tool setup, appending the newly-configured agent-tool pair
+
+**Q-new18 — Intent classification prompt is hardcoded in the wizard for v1**: The LLM prompt used to classify the user's free-text intent into `software-dev | design | unclear` lives in wizard code (likely `references/scripts/manifest.py` or a sibling). It does NOT come from a preset manifest. Rationale: the prompt is SquidSquad-internal logic and is expected to change as we add presets, so keeping it in code is simpler than a manifest file that drifts. Future v2 feature: externalize the classification prompt when the preset registry grows beyond 2-3 options.
+
+**Q-new19 — Per-agent requirements are collected in a single conversation, stored per-agent**: When a requirement has `per_installed_agent: true` (e.g., dev.stack), the wizard asks Claude to collect all agents' answers in one natural conversation exchange, not N separate questions. Example: if the user picked `be+fe`, Claude asks once — "What's your stack?" — and the user replies "Python/FastAPI with pytest for backend, Next.js with Jest for frontend." Claude parses that into two distinct answers and stores `be.stack: "FastAPI + Python 3.11 + pytest"` and `fe.stack: "Next.js + TypeScript + jest"` separately in config.md.
+
+If the user's reply is ambiguous or only covers one agent, Claude follows up naturally ("Got the backend. What about the frontend?"). No rigid form, still per-agent storage.
+
+**Q-new20 — Pre-emptive tool scan is feature-triggered, not cycle-triggered**: PM's pre-emptive tool check (from Q-new11 Path A) does NOT run on PM's first cycle after install, nor on every cycle. It runs ONLY when PM's triage step encounters an **approved** feature that has at least one role in its required pipeline with unconfigured tools. In other words: PM is lazy about tool configuration — it waits until a real feature actually needs a tool before bothering the human. Empty backlog → no tool setup prompt. First approved feature → PM flags all tool gaps for the roles that will work it.
+
+**Q-new21 — Installer agent is ephemeral; disposed after setup completes**: The Claude session running `/squidsquad-setup` is an installer agent, NOT the future PM. After Step 7 commits and pushes, the installer agent exits. The operational team (PM + specialists + DM) boots separately as fresh Claude sessions in their own terminals.
+
+**Rationale**:
+- Keeps roles clean — no "installer becomes PM" identity confusion
+- No leftover installer state contaminating PM's working state or iteration logs
+- Supports auto-boot (future feature) via terminal spawning, which is the only viable approach anyway
+- Matches the boot-script model already used by today's SquidSquad
+
+**Installer agent lifecycle**:
+1. User runs `/squidsquad-setup` in a Claude session
+2. Installer agent executes Steps 0-7
+3. Installer agent commits and pushes
+4. Installer agent prints: "SquidSquad ready. To start your team, run: `./start-pm.sh`" (or equivalent on Windows)
+5. Installer agent exits the conversation (disposed)
+
+**Future: Auto-boot (NOT v1, REUSES EXISTING FEATURE #4)**: The auto-boot capability should NOT be reinvented for the installer. WallyDoodlez/SquidSquad#4 "PM auto-boots entire team on startup" is already filed (status:pending, role:pm). The design note on #4 (added during #328 planning) specifies that #4 should be implemented as a **boot-remote-agents sub-skill**, not as PM-private logic. This makes the boot capability composable by any agent that needs it:
+
+- **PM** composes the sub-skill to auto-boot missing teammates during its cycle (the original #4 use case)
+- **Installer agent** composes the same sub-skill to auto-boot the full team as the final action of `/squidsquad-setup` before disposing (the Q-new21 use case)
+- Future orchestrators or debug utilities can reuse it without duplicating boot logic
+
+**Order of operations**:
+1. #328 ships (this feature) with installer still printing "run `./start-pm.sh`" manually
+2. #4 is picked up and implemented as a boot-remote-agents sub-skill
+3. A follow-up feature (to be filed after #4 ships) composes the sub-skill into the installer's Step 7 so the installer auto-boots the team before disposing
+
+**No duplicate feature needed**: Do NOT file a separate installer-auto-boot issue. When #4 ships, file a small follow-up to wire the existing sub-skill into the installer's Step 7. Keep the logic in one place.
+
+---
+
+**Q-new15 — Step 2 presents a specialist roster before asking intent (REVISED — PM/DM filtered out)**: The intent question is preceded by a dynamically-built roster of **user-selectable specialist roles** so the user knows what domain experts are available. PM and DM are explicitly NOT shown in the roster because they are always-installed infrastructure and not user choices. Instead, a one-liner above the roster acknowledges their presence.
+
+**Example Step 2 rendering** (v1 with 3 specialist roles) — agent-first conversational tone:
+
+```
+Under our roster, we have these agents available:
+
+  Designer  — Produces visual designs (iterates with you directly)
+  Dev       — Writes code (backend, frontend, or fullstack)
+  QA        — Verifies dev work against acceptance criteria
+
+Tell me what you're trying to create and I'll select the right agents for you.
+```
+
+(PM and DM are not shown in the roster — they're always present and this is implied by the agent-first framing. No explicit "always part of the team" disclaimer is needed; the conversational tone handles it.)
+
+**Tone principle**: Step 2 frames the setup as a conversation with a teammate, not a form. The wizard does NOT list options with checkboxes or radio buttons. The user describes intent, Claude classifies and proposes a team, Step 3 confirms. If confirmation is rejected, the wizard asks follow-up clarifying questions rather than falling back to a rigid menu.
+
+**Manifest schema additions**: Every role manifest gains three fields:
+- `display_name` — short label shown in the roster (e.g. "Designer", "Dev", "QA")
+- `tagline` — one-line domain-only description (e.g. "Produces visual designs (iterates with you directly)")
+- `show_in_roster` — boolean; `true` means the role appears in the Step 2 specialist list, `false` means it's an always-installed infrastructure role mentioned only in the intro line
+
+All three fields are subject to Q-new14 (domain-only, no internal references).
+
+**v1 manifest values**:
+
+| Role | display_name | show_in_roster | tagline |
+|------|--------------|----------------|---------|
+| pm | PM | false | "Coordinates the team and talks to you" |
+| dm | DM | false | "Packages and delivers completed work" |
+| designer | Designer | true | "Produces visual designs (iterates with you directly)" |
+| dev | Dev | true | "Writes code (backend, frontend, or fullstack)" |
+| qa | QA | true | "Verifies dev work against acceptance criteria" |
+
+**Wizard behavior**:
+1. Read all role manifests in `references/roles/`
+2. Partition into infrastructure roles (`show_in_roster: false`) and specialist roles (`show_in_roster: true`)
+3. Render the specialist list with consistent column alignment
+4. Append the conversational prompt: "Tell me what you're trying to create and I'll select the right agents for you."
+5. Collect free text from the user
+6. LLM classifies into a preset and proposes the team
+7. Step 3 confirms the proposed team conversationally. If rejected, wizard asks clarifying follow-ups (also LLM-driven), never falls back to a rigid menu.
+
+**Adding a role in the future**: its manifest determines whether it shows up as a specialist or folds into infrastructure. Zero wizard code changes.
+
+**Edge case — an install with zero specialists installed**: If the resolved preset installs only infrastructure (e.g., a future "planning-only" preset with just PM + DM), Step 2's specialist list would be empty. The intro line still appears. This is fine in v1 because both presets include at least one specialist.
+
+---
+
 **Q-new14 — Manifests must be domain-only, no SquidSquad internals**: Role and tool manifests describe their domain in terms any software professional would recognize. They never reference:
 - Internal file paths (`config.md`, `CLAUDE.md`, `.squidsquad/...`)
 - Internal terms (status labels, tracker schemas, composition anchors, sub-skill composition points)
