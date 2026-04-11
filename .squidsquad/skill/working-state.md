@@ -88,12 +88,36 @@ discrete phases, each landing as its own atomic commit.
   - Added defensive tests: legacy dirs must not reappear, legacy include
     namespaces must not be referenced in manifest.md
   - Full static suite: 218/218 pass (was 208, +10)
-- [ ] **Phase G — Wizard implementation** (was Phase F before Q-new22 arrived)
-  - LLM intent classifier (inside-Claude prompt)
-  - Generic setup_requirements walker
-  - Review screen (P/V/E/A)
-  - Step 0 gh prerequisite check, Step 0b re-run detection
-  - Installer agent lifecycle (ephemeral, exits on completion)
+- [~] **Phase G — Wizard implementation** (was Phase F before Q-new22 arrived)
+  - [x] **Phase G.1 — Wizard helpers: Step 0 / 0b / 1** (this cycle)
+    - references/scripts/wizard.py: check-gh, check-existing,
+      validate-rerun-action, repo-info, project-name-default,
+      validate-name — all JSON-output CLI commands
+    - Architecture: Python helpers own mechanical pieces; prose runbook
+      (future cycle) owns LLM-driven pieces (intent classification,
+      setup_requirements walker, natural conversation)
+    - Q8 re-run action parser: "", "1"/"2"/"3", "a"/"r"/"f", full names,
+      case-insensitive, None → default "abort"
+    - Git slug parser: HTTPS / SSH / ssh:// forms; rejects non-GitHub
+    - get_repo_info: gh primary → git fallback → none (structured result
+      with `source` field so the prose runbook can explain its data source)
+    - project_name_default: gh name → cwd basename; invalid gh names
+      (contain spaces, slashes, etc.) fall through to dirname
+    - tests/test_wizard.py: 68 unit tests, ALL subprocess calls stubbed
+      via monkeypatched wizard._run — zero real gh/git invocations
+  - [ ] **Phase G.2 — Wizard helpers: Step 4 walker primitives**
+    - Deterministic parts of the setup_requirements walker
+    - config.md writer (new Q-new17 schema)
+    - .squidsquad/ folder scaffolder
+    - Label migration + label creation on gh
+  - [ ] **Phase G.3 — Prose runbook**
+    - references/wizard/WIZARD.md — the step-by-step runbook Claude follows
+    - Intent classifier prompt (Q-new18, hardcoded in runbook)
+    - Review screen (P/V/E/A) interaction pattern
+    - Installer agent lifecycle (ephemeral, exits on completion — Q-new21)
+  - [ ] **Phase G.4 — SKILL.md rewrite + /squidsquad-setup slash command**
+    - Replace legacy Setup Instructions section with pointer to WIZARD.md
+    - Update packages/cli/index.js to seed the new command
 - [ ] **Phase H — compose.py + config.py deeper manifest refactor**
   - Phase F did the template migration. Remaining: drive the compose
     pipeline entirely from manifests (currently compose.py still has a

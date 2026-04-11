@@ -29,7 +29,7 @@ STATIC_TEST_MODULES = [
     "test_labels", "test_references", "test_manifest",
     "test_composition", "test_config", "test_roles", "test_vault",
     "test_start_scripts", "test_tracker_authority",
-    "test_manifest_registry",
+    "test_manifest_registry", "test_wizard",
 ]
 
 
