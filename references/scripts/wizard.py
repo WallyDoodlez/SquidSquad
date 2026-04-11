@@ -13,6 +13,9 @@ Commands:
     python scripts/wizard.py check-existing        # Step 0b
     python scripts/wizard.py repo-info [--git-dir] # Step 1
     python scripts/wizard.py project-name-default  # Step 1
+    python scripts/wizard.py build-config-md FILE  # Step 7 — print new
+                                                   # config.md from a JSON
+                                                   # install spec on disk
     python scripts/wizard.py --help
 
 Every command prints JSON on stdout and non-JSON errors on stderr. The
@@ -339,6 +342,233 @@ def _parse_github_slug(url):
 
 
 # ---------------------------------------------------------------------------
+# Step 7 — config.md writer (Q-new17 schema)
+# ---------------------------------------------------------------------------
+
+# Q-new17 locks the new config.md schema under these top-level sections
+# in this exact order. The writer always emits them in this order, even
+# when a section is empty, so that downstream readers can rely on the
+# layout.
+_SECTION_ORDER = [
+    "## Project",
+    "## Preset",
+    "## Agents",
+    "## Tools",
+    "## Loop",
+    "## Flags",
+]
+
+
+# Fields that are part of the Agent line's inline alias, not the nested
+# block. Ordered — the writer emits nested fields in this order.
+_AGENT_NESTED_FIELD_ORDER = [
+    "role",
+    "variant",
+    "iteration_mode",
+    "stack",
+    "test_command",
+]
+
+
+def build_config_md(spec):
+    """Render a new-schema config.md as a string from an install spec dict.
+
+    The spec is the wizard's in-memory state at Step 7 review time. Shape:
+
+        {
+            "squidsquad_version": "0.15.0",
+            "project": {
+                "name": "my-app",
+                "repo": "github.com/alice/my-app",
+            },
+            "preset": "software-dev",
+            "agents": [
+                {
+                    "id": "pm",
+                    "alias": "peggy",
+                    "role": "pm",
+                },
+                {
+                    "id": "designer",
+                    "alias": "designer",
+                    "role": "designer",
+                    "iteration_mode": "hitl",
+                    "setup": {"install_optional": "yes"},
+                },
+                {
+                    "id": "be",
+                    "alias": "be",
+                    "role": "dev",
+                    "variant": "be",
+                    "stack": "FastAPI + Python 3.11 + pytest",
+                    "test_command": "pytest tests/be",
+                },
+            ],
+            "tools": {
+                "designer.tool": None,          # deferred -> "(unset ...)"
+                "dm.tool": "local_delivery",
+            },
+            "loop": {
+                "interval_minutes": 10,
+                "context_threshold": 80,
+            },
+            "flags": {
+                "pr_flow": False,
+                "improvement_scan": True,
+                "vault_remember": True,
+                "diagnostics": True,
+            },
+        }
+
+    Returns the config.md text. Does NOT write to disk — callers persist
+    the output themselves. Deterministic: same spec -> same bytes.
+
+    Raises ValueError if required top-level fields are missing.
+    """
+    if not isinstance(spec, dict):
+        raise ValueError("spec must be a mapping")
+
+    for required in ("project", "preset", "agents", "tools", "loop", "flags"):
+        if required not in spec:
+            raise ValueError(f"spec missing required section: {required!r}")
+
+    lines = []
+
+    # --- Header ---
+    version = spec.get("squidsquad_version", "0.0.0")
+    lines.append("# SquidSquad Config")
+    lines.append("")
+    lines.append(f"- **SquidSquad Version**: {version}")
+    lines.append("- **Tracker**: github-issues")
+    lines.append("- **Architecture Version**: 2")  # v2 = #328 schema
+    lines.append("")
+
+    # --- ## Project ---
+    lines.append("## Project")
+    lines.append("")
+    project = spec["project"] or {}
+    project_name = project.get("name", "")
+    project_repo = project.get("repo", "")
+    lines.append(f"- **Name**: {project_name}")
+    lines.append(f"- **Repo**: {project_repo}")
+    if project.get("description"):
+        lines.append(f"- **Description**: {project['description']}")
+    lines.append("")
+
+    # --- ## Preset ---
+    lines.append("## Preset")
+    lines.append("")
+    lines.append(f"- **Id**: {spec['preset']}")
+    lines.append("")
+
+    # --- ## Agents ---
+    lines.append("## Agents")
+    lines.append("")
+    for agent in spec["agents"]:
+        lines.extend(_render_agent(agent))
+    lines.append("")
+
+    # --- ## Tools ---
+    lines.append("## Tools")
+    lines.append("")
+    for key, value in spec["tools"].items():
+        if value is None or value == "":
+            lines.append(
+                f"- **{key}**: (unset — PM will configure on first use)"
+            )
+        else:
+            lines.append(f"- **{key}**: {value}")
+    if not spec["tools"]:
+        lines.append("- (none)")
+    lines.append("")
+
+    # --- ## Loop ---
+    lines.append("## Loop")
+    lines.append("")
+    loop = spec["loop"] or {}
+    lines.append(f"- **Interval Minutes**: {loop.get('interval_minutes', 10)}")
+    lines.append(
+        f"- **Context Threshold**: {loop.get('context_threshold', 80)}"
+    )
+    lines.append("")
+
+    # --- ## Flags ---
+    lines.append("## Flags")
+    lines.append("")
+    flags = spec["flags"] or {}
+    # Emit in deterministic order regardless of dict insertion
+    for key in sorted(flags):
+        lines.append(f"- **{_flag_label(key)}**: {_render_bool(flags[key])}")
+    if not flags:
+        lines.append("- (none)")
+    lines.append("")
+
+    # Ensure exactly one trailing newline
+    text = "\n".join(lines).rstrip("\n") + "\n"
+    return text
+
+
+def _render_agent(agent):
+    """Emit the lines for a single agent entry (Q-new17)."""
+    if not isinstance(agent, dict):
+        raise ValueError(f"agent must be a mapping, got {type(agent).__name__}")
+    if "id" not in agent:
+        raise ValueError(f"agent missing required 'id': {agent!r}")
+    if "role" not in agent:
+        raise ValueError(
+            f"agent {agent['id']!r} missing required 'role' field"
+        )
+
+    lines = []
+    alias = agent.get("alias", agent["id"])
+    lines.append(f"- **{agent['id']}**: {alias}")
+
+    for field in _AGENT_NESTED_FIELD_ORDER:
+        if field not in agent:
+            continue
+        value = agent[field]
+        if value is None or value == "":
+            continue
+        lines.append(f"  - {field}: {_quote_if_needed(value)}")
+
+    # `setup:` block — only emitted if non-empty
+    setup = agent.get("setup") or {}
+    if setup:
+        lines.append("  - setup:")
+        for key in sorted(setup):
+            lines.append(f"    - {key}: {_quote_if_needed(setup[key])}")
+
+    return lines
+
+
+def _quote_if_needed(value):
+    """Wrap string values with whitespace or punctuation in double quotes.
+
+    Matches Q-new17 examples (`stack: "FastAPI + Python 3.11 + pytest"`).
+    """
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if not isinstance(value, str):
+        return str(value)
+    # Quote if the value contains a space, quote, colon, or comma
+    if any(ch in value for ch in (" ", '"', ":", ",", "#")):
+        return f'"{value}"'
+    return value
+
+
+def _render_bool(value):
+    """Render a boolean flag the way existing config.md uses — yes/no."""
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    return str(value)
+
+
+def _flag_label(key):
+    """Turn a snake_case flag key into a Title Case display label."""
+    return " ".join(part.capitalize() for part in key.replace("-", "_").split("_"))
+
+
+# ---------------------------------------------------------------------------
 # CLI dispatch
 # ---------------------------------------------------------------------------
 
@@ -391,6 +621,37 @@ def cmd_validate_name(args):
     return 0 if valid else 1
 
 
+def cmd_build_config_md(args):
+    """Read a JSON install spec from disk (or `-`) and print config.md text.
+
+    Usage: wizard.py build-config-md <spec.json>
+           wizard.py build-config-md -         # read from stdin
+    """
+    if not args:
+        print(
+            "Usage: wizard.py build-config-md <spec.json|->",
+            file=sys.stderr,
+        )
+        return 2
+    src = args[0]
+    try:
+        if src == "-":
+            raw = sys.stdin.read()
+        else:
+            raw = Path(src).read_text(encoding="utf-8")
+        spec = json.loads(raw)
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"ERROR: cannot read spec: {e}", file=sys.stderr)
+        return 1
+    try:
+        text = build_config_md(spec)
+    except ValueError as e:
+        print(f"ERROR: invalid spec: {e}", file=sys.stderr)
+        return 1
+    sys.stdout.write(text)
+    return 0
+
+
 def cmd_validate_rerun_action(args):
     if not args:
         print(
@@ -422,6 +683,7 @@ def main():
         "project-name-default": cmd_project_name_default,
         "validate-name": cmd_validate_name,
         "validate-rerun-action": cmd_validate_rerun_action,
+        "build-config-md": cmd_build_config_md,
     }
     if cmd not in dispatch:
         print(f"Unknown command: {cmd}", file=sys.stderr)

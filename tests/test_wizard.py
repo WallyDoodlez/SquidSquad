@@ -375,3 +375,392 @@ class TestProjectNameDefault:
             ("gh", "repo", "view"): _fake_proc(returncode=1),
         })
         assert wizard.project_name_default(tmp_path) == tmp_path.resolve().name
+
+
+# ===========================================================================
+# Step 7 — build_config_md (Q-new17 schema)
+# ===========================================================================
+
+
+def _minimal_spec(**overrides):
+    """Return a small valid install spec, optionally merged with overrides."""
+    spec = {
+        "squidsquad_version": "0.16.0",
+        "project": {"name": "my-app", "repo": "github.com/alice/my-app"},
+        "preset": "software-dev",
+        "agents": [
+            {"id": "pm", "alias": "peggy", "role": "pm"},
+            {"id": "dm", "alias": "dm", "role": "dm"},
+        ],
+        "tools": {"dm.tool": "local_delivery"},
+        "loop": {"interval_minutes": 10, "context_threshold": 80},
+        "flags": {"improvement_scan": True, "pr_flow": False},
+    }
+    spec.update(overrides)
+    return spec
+
+
+class TestBuildConfigMdStructure:
+    """Top-level section shape (TC-06)."""
+
+    def test_section_order_matches_spec(self):
+        text = wizard.build_config_md(_minimal_spec())
+        sections = [
+            line for line in text.splitlines()
+            if line.startswith("## ")
+        ]
+        assert sections == [
+            "## Project",
+            "## Preset",
+            "## Agents",
+            "## Tools",
+            "## Loop",
+            "## Flags",
+        ]
+
+    def test_header_includes_version_and_architecture(self):
+        text = wizard.build_config_md(_minimal_spec())
+        assert "# SquidSquad Config" in text
+        assert "**SquidSquad Version**: 0.16.0" in text
+        assert "**Architecture Version**: 2" in text
+        assert "**Tracker**: github-issues" in text
+
+    def test_output_ends_with_single_newline(self):
+        text = wizard.build_config_md(_minimal_spec())
+        assert text.endswith("\n")
+        assert not text.endswith("\n\n\n")
+
+    def test_deterministic_output(self):
+        """Same spec -> same bytes, run after run."""
+        spec = _minimal_spec()
+        a = wizard.build_config_md(spec)
+        b = wizard.build_config_md(spec)
+        assert a == b
+
+    def test_project_section(self):
+        text = wizard.build_config_md(_minimal_spec())
+        assert "- **Name**: my-app" in text
+        assert "- **Repo**: github.com/alice/my-app" in text
+
+    def test_preset_section(self):
+        text = wizard.build_config_md(_minimal_spec())
+        assert "- **Id**: software-dev" in text
+
+    def test_description_optional_and_included_when_present(self):
+        spec = _minimal_spec()
+        spec["project"]["description"] = "A thing"
+        text = wizard.build_config_md(spec)
+        assert "**Description**: A thing" in text
+
+    def test_description_omitted_when_absent(self):
+        text = wizard.build_config_md(_minimal_spec())
+        assert "Description" not in text
+
+
+class TestBuildConfigMdAgentBlock:
+    """Agent entries must match Q-new17 shape exactly."""
+
+    def test_simple_pm_agent(self):
+        spec = _minimal_spec()
+        text = wizard.build_config_md(spec)
+        assert "- **pm**: peggy" in text
+        assert "  - role: pm" in text
+
+    def test_alias_defaults_to_id_when_absent(self):
+        spec = _minimal_spec()
+        spec["agents"] = [{"id": "pm", "role": "pm"}]
+        text = wizard.build_config_md(spec)
+        assert "- **pm**: pm" in text
+
+    def test_designer_with_iteration_mode_and_setup(self):
+        spec = _minimal_spec()
+        spec["agents"] = [
+            {
+                "id": "designer",
+                "alias": "designer",
+                "role": "designer",
+                "iteration_mode": "hitl",
+                "setup": {"install_optional": "yes"},
+            },
+        ]
+        text = wizard.build_config_md(spec)
+        assert "- **designer**: designer" in text
+        assert "  - role: designer" in text
+        assert "  - iteration_mode: hitl" in text
+        assert "  - setup:" in text
+        assert "    - install_optional: yes" in text
+
+    def test_dev_agent_with_variant_stack_and_test_command(self):
+        spec = _minimal_spec()
+        spec["agents"] = [
+            {
+                "id": "be",
+                "alias": "be",
+                "role": "dev",
+                "variant": "be",
+                "stack": "FastAPI + Python 3.11 + pytest",
+                "test_command": "pytest tests/be",
+            },
+        ]
+        text = wizard.build_config_md(spec)
+        assert "- **be**: be" in text
+        assert "  - role: dev" in text
+        assert "  - variant: be" in text
+        # Values with spaces must be double-quoted
+        assert '  - stack: "FastAPI + Python 3.11 + pytest"' in text
+        assert '  - test_command: "pytest tests/be"' in text
+
+    def test_multiple_dev_agents_share_role_but_different_ids(self):
+        spec = _minimal_spec()
+        spec["agents"] = [
+            {"id": "be", "alias": "be", "role": "dev", "variant": "be"},
+            {"id": "fe", "alias": "fe", "role": "dev", "variant": "fe"},
+        ]
+        text = wizard.build_config_md(spec)
+        assert "- **be**: be" in text
+        assert "- **fe**: fe" in text
+
+    def test_nested_field_order_is_deterministic(self):
+        """role -> variant -> iteration_mode -> stack -> test_command"""
+        spec = _minimal_spec()
+        spec["agents"] = [
+            {
+                "id": "be",
+                "role": "dev",
+                "test_command": "x",  # out of order in dict
+                "variant": "be",
+                "stack": "s",
+                "iteration_mode": "normal",
+            },
+        ]
+        text = wizard.build_config_md(spec)
+        role_idx = text.index("role:")
+        variant_idx = text.index("variant:")
+        mode_idx = text.index("iteration_mode:")
+        stack_idx = text.index("stack:")
+        cmd_idx = text.index("test_command:")
+        assert role_idx < variant_idx < mode_idx < stack_idx < cmd_idx
+
+    def test_empty_or_none_nested_fields_are_omitted(self):
+        spec = _minimal_spec()
+        spec["agents"] = [
+            {"id": "pm", "role": "pm", "variant": None, "stack": ""},
+        ]
+        text = wizard.build_config_md(spec)
+        assert "variant" not in text
+        assert "stack:" not in text
+
+    def test_setup_block_omitted_when_empty(self):
+        spec = _minimal_spec()
+        spec["agents"] = [{"id": "pm", "role": "pm", "setup": {}}]
+        text = wizard.build_config_md(spec)
+        assert "  - setup:" not in text
+
+    def test_missing_id_raises(self):
+        spec = _minimal_spec()
+        spec["agents"] = [{"role": "pm"}]  # no id
+        with pytest.raises(ValueError, match="id"):
+            wizard.build_config_md(spec)
+
+    def test_missing_role_raises(self):
+        spec = _minimal_spec()
+        spec["agents"] = [{"id": "pm"}]  # no role
+        with pytest.raises(ValueError, match="role"):
+            wizard.build_config_md(spec)
+
+    def test_non_dict_agent_raises(self):
+        spec = _minimal_spec()
+        spec["agents"] = ["not a dict"]
+        with pytest.raises(ValueError):
+            wizard.build_config_md(spec)
+
+
+class TestBuildConfigMdToolsSection:
+    def test_deferred_tool_unset_placeholder(self):
+        spec = _minimal_spec()
+        spec["tools"] = {"designer.tool": None}
+        text = wizard.build_config_md(spec)
+        assert "**designer.tool**: (unset" in text
+
+    def test_empty_string_also_unset(self):
+        spec = _minimal_spec()
+        spec["tools"] = {"designer.tool": ""}
+        text = wizard.build_config_md(spec)
+        assert "**designer.tool**: (unset" in text
+
+    def test_configured_tool_prints_id(self):
+        spec = _minimal_spec()
+        spec["tools"] = {"dm.tool": "local_delivery"}
+        text = wizard.build_config_md(spec)
+        assert "- **dm.tool**: local_delivery" in text
+        assert "unset" not in text.split("## Tools")[1].split("##")[0]
+
+    def test_no_tools_emits_none_marker(self):
+        spec = _minimal_spec()
+        spec["tools"] = {}
+        text = wizard.build_config_md(spec)
+        tools_block = text.split("## Tools")[1].split("##")[0]
+        assert "(none)" in tools_block
+
+
+class TestBuildConfigMdLoopAndFlags:
+    def test_loop_interval_and_threshold(self):
+        spec = _minimal_spec()
+        spec["loop"] = {"interval_minutes": 5, "context_threshold": 75}
+        text = wizard.build_config_md(spec)
+        assert "- **Interval Minutes**: 5" in text
+        assert "- **Context Threshold**: 75" in text
+
+    def test_flags_sorted_alphabetically(self):
+        spec = _minimal_spec()
+        spec["flags"] = {
+            "zebra": True,
+            "alpha": False,
+            "mango": True,
+        }
+        text = wizard.build_config_md(spec)
+        alpha_idx = text.index("Alpha")
+        mango_idx = text.index("Mango")
+        zebra_idx = text.index("Zebra")
+        assert alpha_idx < mango_idx < zebra_idx
+
+    def test_bool_flags_rendered_as_yes_no(self):
+        spec = _minimal_spec()
+        spec["flags"] = {"pr_flow": True, "diagnostics": False}
+        text = wizard.build_config_md(spec)
+        assert "**Pr Flow**: yes" in text
+        assert "**Diagnostics**: no" in text
+
+    def test_no_flags_emits_none_marker(self):
+        spec = _minimal_spec()
+        spec["flags"] = {}
+        text = wizard.build_config_md(spec)
+        flags_block = text.split("## Flags")[1]
+        assert "(none)" in flags_block
+
+    def test_loop_defaults_when_fields_missing(self):
+        spec = _minimal_spec()
+        spec["loop"] = {}
+        text = wizard.build_config_md(spec)
+        assert "- **Interval Minutes**: 10" in text
+        assert "- **Context Threshold**: 80" in text
+
+
+class TestBuildConfigMdValidation:
+    @pytest.mark.parametrize("missing", [
+        "project", "preset", "agents", "tools", "loop", "flags",
+    ])
+    def test_missing_top_level_section_raises(self, missing):
+        spec = _minimal_spec()
+        del spec[missing]
+        with pytest.raises(ValueError, match=missing):
+            wizard.build_config_md(spec)
+
+    def test_non_mapping_spec_raises(self):
+        with pytest.raises(ValueError, match="mapping"):
+            wizard.build_config_md(["not a dict"])
+
+    def test_none_spec_raises(self):
+        with pytest.raises(ValueError):
+            wizard.build_config_md(None)
+
+
+class TestBuildConfigMdTC01:
+    """Regression test for TC-01 (full software-dev + be+fe + designer=yes)."""
+
+    def test_tc01_full_software_dev_install(self):
+        spec = {
+            "squidsquad_version": "0.16.0",
+            "project": {
+                "name": "my-app",
+                "repo": "github.com/alice/my-app",
+            },
+            "preset": "software-dev",
+            "agents": [
+                {"id": "pm", "alias": "peggy", "role": "pm"},
+                {
+                    "id": "designer",
+                    "alias": "designer",
+                    "role": "designer",
+                    "iteration_mode": "hitl",
+                    "setup": {"install_optional": "yes"},
+                },
+                {
+                    "id": "be",
+                    "alias": "be",
+                    "role": "dev",
+                    "variant": "be",
+                    "stack": "FastAPI + Python 3.11 + pytest",
+                    "test_command": "pytest tests/be",
+                },
+                {
+                    "id": "fe",
+                    "alias": "fe",
+                    "role": "dev",
+                    "variant": "fe",
+                    "stack": "Next.js + TypeScript + jest",
+                    "test_command": "npm test",
+                },
+                {"id": "qa", "alias": "qa", "role": "qa"},
+                {"id": "dm", "alias": "dm", "role": "dm"},
+            ],
+            "tools": {
+                "designer.tool": None,
+                "dm.tool": "local_delivery",
+            },
+            "loop": {"interval_minutes": 10, "context_threshold": 80},
+            "flags": {
+                "pr_flow": False,
+                "improvement_scan": True,
+                "vault_remember": True,
+                "diagnostics": True,
+            },
+        }
+        text = wizard.build_config_md(spec)
+
+        # All 6 agents present with correct shape
+        assert "- **pm**: peggy" in text
+        assert "- **designer**: designer" in text
+        assert "  - iteration_mode: hitl" in text
+        assert "- **be**: be" in text
+        assert "- **fe**: fe" in text
+        assert "- **qa**: qa" in text
+        assert "- **dm**: dm" in text
+
+        # Both tool entries match Q-new17 rules
+        assert "**designer.tool**: (unset" in text
+        assert "- **dm.tool**: local_delivery" in text
+
+        # Quoted stack values
+        assert '"FastAPI + Python 3.11 + pytest"' in text
+        assert '"Next.js + TypeScript + jest"' in text
+
+
+class TestQuoteIfNeeded:
+    @pytest.mark.parametrize("raw,expected", [
+        ("simple", "simple"),
+        ("with space", '"with space"'),
+        ("a:b", '"a:b"'),
+        ("x,y", '"x,y"'),
+        ("has#hash", '"has#hash"'),
+        ("plain-dash", "plain-dash"),
+        ("with.dot", "with.dot"),
+        ("be", "be"),
+        (True, "yes"),
+        (False, "no"),
+        (42, "42"),
+    ])
+    def test_quote_rules(self, raw, expected):
+        assert wizard._quote_if_needed(raw) == expected
+
+
+class TestFlagLabel:
+    @pytest.mark.parametrize("key,expected", [
+        ("improvement_scan", "Improvement Scan"),
+        ("pr_flow", "Pr Flow"),
+        ("diagnostics", "Diagnostics"),
+        ("vault_remember", "Vault Remember"),
+        ("with-dashes", "With Dashes"),
+    ])
+    def test_title_case(self, key, expected):
+        assert wizard._flag_label(key) == expected

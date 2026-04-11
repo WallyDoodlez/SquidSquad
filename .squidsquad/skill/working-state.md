@@ -105,11 +105,33 @@ discrete phases, each landing as its own atomic commit.
       (contain spaces, slashes, etc.) fall through to dirname
     - tests/test_wizard.py: 68 unit tests, ALL subprocess calls stubbed
       via monkeypatched wizard._run — zero real gh/git invocations
-  - [ ] **Phase G.2 — Wizard helpers: Step 4 walker primitives**
-    - Deterministic parts of the setup_requirements walker
-    - config.md writer (new Q-new17 schema)
-    - .squidsquad/ folder scaffolder
-    - Label migration + label creation on gh
+  - [~] **Phase G.2 — Wizard helpers: writers + scaffolder + labels**
+    - [x] **Phase G.2a — config.md writer (Q-new17 schema)** (this cycle)
+      - wizard.py: build_config_md(spec) → deterministic text
+      - CLI: `wizard.py build-config-md <spec.json|->` for integration use
+      - Architecture Version bumped to 2 in the new-schema header
+      - Section order: Project → Preset → Agents → Tools → Loop → Flags
+        (matches TC-06 exactly)
+      - Agent nested-field order is deterministic regardless of dict
+        insertion: role → variant → iteration_mode → stack → test_command
+      - Values with spaces/commas/colons/hashes auto-quoted
+      - Deferred tool placeholder: `(unset — PM will configure on first use)`
+      - Flags sorted alphabetically, rendered yes/no for booleans
+      - 53 new tests covering: section order, determinism, header version,
+        project description optional, alias defaults to id, designer with
+        iteration_mode + setup block, dev variant + stack + test_command,
+        multiple dev agents share role, nested field ordering, empty
+        field omission, setup block omitted when empty, missing id/role
+        errors, non-dict agent errors, 6 missing top-level sections,
+        tools placeholder variants, loop defaults, flags sort order,
+        TC-01 full regression, 11 parametrized quote rules, 5 flag labels
+    - [ ] **Phase G.2b — `.squidsquad/` folder scaffolder**
+      - Thin wrapper around compose.py's deploy_role per installed role
+      - Creates working-state.md, iterations/, planning/ per role dir
+      - Writes the composed config.md to disk (calls G.2a + writes file)
+    - [ ] **Phase G.2c — Label migration + creation**
+      - ensure_labels(): idempotently create every required gh label
+      - Migration step for #328 Phase I: `pending` → `pending-human-approval`
   - [ ] **Phase G.3 — Prose runbook**
     - references/wizard/WIZARD.md — the step-by-step runbook Claude follows
     - Intent classifier prompt (Q-new18, hardcoded in runbook)
