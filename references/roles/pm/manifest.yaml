@@ -18,6 +18,9 @@ description: >
   plans, assigns it to the right specialist, keeps progress visible, and
   orchestrates the team's environment (tools, configuration, hand-offs).
 show_in_roster: false
+# PM is always part of the team — installed regardless of preset, not listed
+# in preset `role_install_order`. See #347 for the matching flip for QA.
+always_installed: true
 iteration_mode: normal
 
 # PM prefers handing to a specialist when one exists, and falls through to

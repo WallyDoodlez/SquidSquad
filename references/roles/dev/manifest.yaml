@@ -17,6 +17,8 @@ description: >
   to the verifier when ready. Can be installed as a backend-focused agent,
   a frontend-focused agent, both in parallel, or a single fullstack agent.
 show_in_roster: true
+# Dev is a specialist — only installed in software-development projects.
+always_installed: false
 iteration_mode: normal
 
 # Dev hands completed work to the verifier, or directly to delivery when no

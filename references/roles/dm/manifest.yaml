@@ -17,6 +17,9 @@ description: >
   and sending the final artifact through whichever delivery channel the
   project uses.
 show_in_roster: false
+# DM is always part of the team — installed regardless of preset, not listed
+# in preset `role_install_order`.
+always_installed: true
 iteration_mode: normal
 
 # Terminal node — DM is where every path ends.

@@ -14,15 +14,21 @@ discrete phases, each landing as its own atomic commit.
 
 ## Phase Plan
 
-- [x] **Phase A — Role manifest files** (this cycle, 4821576-like atomic commit)
+- [x] **Phase A — Role manifest files** (commit 1620094)
   - 5 YAML files under `references/roles/<role>/manifest.yaml`
   - Pure data, no code changes, no risk to existing flow
   - Domain-only language per Q-new14
   - Topology matches CONTEXT.md final inventory table (line 702)
-- [ ] **Phase B — Tool registry**
+- [x] **Phase A.1 — `always_installed` schema addition** (this cycle)
+  - Anticipates #347 (Separate PM from QA) per PM's comment hint on #328
+  - pm/dm: `always_installed: true`; designer/dev/qa: `false`
+  - v1 invariant: `always_installed == !show_in_roster` (but both fields
+    kept because they mean different things conceptually)
+- [x] **Phase B — Tool registry** (this cycle)
   - `references/tools/{figma,google_stitch,local_html,local_delivery}/`
   - Each with `manifest.yaml`, `setup.md`, `sub-skill.md`
   - 3 designer tools + 1 DM tool
+  - Cross-references validated: every role's `requires_tools` ID resolves
 - [ ] **Phase C — Preset manifests**
   - `references/presets/{software-dev,design}/manifest.yaml`
   - Declares `role_install_order` (PM/DM implicit)

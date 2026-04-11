@@ -18,6 +18,8 @@ description: >
   and keeps refining until the human approves. Hands approved designs
   forward so the rest of the team can build or ship them.
 show_in_roster: true
+# Designer is a specialist — installed only when a preset lists it.
+always_installed: false
 
 # HITL — designer presents each iteration to the human for review and
 # redirects before moving on. Designer never blocks: in-flight review items
