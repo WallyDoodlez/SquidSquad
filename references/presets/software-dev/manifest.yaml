@@ -1,0 +1,27 @@
+# Preset manifest — software-dev
+#
+# A team for building software end-to-end: optional design, engineering,
+# verification, and delivery. PM and DM are implicit and are not listed
+# in `role_install_order` because they are declared `always_installed: true`
+# in their role manifests.
+#
+# Rules for editing this file (Q-new14): describe what the team delivers
+# in domain terms. Do not reference internal paths, scripts, or storage
+# mechanisms.
+
+schema_version: 1
+id: software-dev
+display_name: Software Development
+description: >
+  A team for designing, building, verifying, and shipping software.
+  Includes an optional designer, an engineering specialist in one or
+  more variants (backend, frontend, fullstack), and a verifier.
+
+# Order in which each specialist role's install-time questions are asked.
+# The wizard walks this list in order; designer comes before dev so the
+# "design first, build second" flow feels natural. Infrastructure roles
+# (pm, dm) are not listed — they are always installed.
+role_install_order:
+  - designer
+  - dev
+  - qa

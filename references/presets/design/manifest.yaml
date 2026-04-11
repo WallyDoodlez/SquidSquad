@@ -1,0 +1,23 @@
+# Preset manifest — design
+#
+# A team focused on design work with a delivery hand-off. PM and DM are
+# implicit and are not listed in `role_install_order` because they are
+# declared `always_installed: true` in their role manifests.
+#
+# Rules for editing this file (Q-new14): describe what the team delivers
+# in domain terms. Do not reference internal paths, scripts, or storage
+# mechanisms.
+
+schema_version: 1
+id: design
+display_name: Design
+description: >
+  A team focused on design work with a delivery hand-off. The designer
+  iterates with the human on visuals until they are approved, and the
+  finished designs are packaged and delivered.
+
+# Only one specialist in this preset. The designer is mandatory here —
+# its `install_optional` setup requirement is scoped to the software-dev
+# preset only, so the design preset installs the designer without asking.
+role_install_order:
+  - designer
