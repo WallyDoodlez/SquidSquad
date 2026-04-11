@@ -51,10 +51,23 @@ discrete phases, each landing as its own atomic commit.
     smoke, schema errors per kind, cross-references, domain-only linter,
     YAML errors, Issue formatting. Uses tmp_path fixtures for negative tests,
     real registry for smoke test.
-- [ ] **Phase E — Status label additions (additive only)**
-  - Add `pending-human-approval`, `pending-human-review`, `pending-human-setup`
-  - Update tracker.py LEGAL_TRANSITIONS + ROLE_AUTHORITY (both new)
-  - Do NOT remove `pending` yet — additive phase first, migration later
+- [x] **Phase E — Status label additions (additive only)** (this cycle)
+  - Added `pending-human-approval`, `pending-human-review`, `pending-human-setup`
+    to STATUS_LABELS, LEGAL_TRANSITIONS, and ROLE_AUTHORITY
+  - Created the three labels on GitHub via `gh label create` (with
+    domain-appropriate colours and descriptions)
+  - Updated test_labels.py EXPECTED_STATUS_LABELS to include the three new
+    labels so future drift is caught by the live GitHub check
+  - 16 new unit tests in test_tracker_authority.py:
+    - `TestPendingHumanApproval` — PM owns intake edges, others rejected
+    - `TestPendingHumanReview` — assignee drives self-pause + redirect +
+      approve; PM cannot bypass assignee on HITL approval
+    - `TestPendingHumanSetup` — assignee self-pauses, PM resumes; worker
+      cannot resume own setup (forces actual infra change before continuing)
+    - `TestPhaseECoverage` — legal/authority invariant still holds after
+      additions; STATUS_LABELS map includes new short names; old `pending`
+      label remains legal (additive phase guarantee)
+  - `pending` NOT yet removed — migration happens in Phase I
 - [ ] **Phase F — Wizard implementation**
   - LLM intent classifier (inside-Claude prompt)
   - Generic setup_requirements walker

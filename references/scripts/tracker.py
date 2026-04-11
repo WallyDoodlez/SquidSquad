@@ -58,6 +58,14 @@ STATUS_LABELS = {
     "pending-test": "status:pending-test",
     "pending-ship": "status:pending-ship",
     "shipped": "status:shipped",
+    # --- #328 Phase E: new pending-human-* taxonomy (Q-new4) ---
+    # These are ADDITIVE in this phase. The existing `pending` label stays
+    # legal until Phase I performs the `pending` -> `pending-human-approval`
+    # migration on GitHub. Until then, both taxonomies coexist so agents
+    # written against either can operate.
+    "pending-human-approval": "status:pending-human-approval",
+    "pending-human-review": "status:pending-human-review",
+    "pending-human-setup": "status:pending-human-setup",
 }
 
 SEVERITY_LABELS = {
@@ -82,10 +90,35 @@ LEGAL_TRANSITIONS = {
     "status:planning": {"status:planned"},
     "status:planned": {"status:approved"},
     "status:approved": {"status:in-progress"},
-    "status:in-progress": {"status:pending-test", "status:approved"},
+    "status:in-progress": {
+        "status:pending-test",
+        "status:approved",
+        # #328 Phase E: worker self-pause edges (Q7 HITL + Q-new11 tool setup).
+        # The assigned worker moves its own in-progress issue into a
+        # human-waiting state when it needs human input or environment work.
+        "status:pending-human-review",
+        "status:pending-human-setup",
+    },
     "status:pending-test": {"status:in-progress", "status:pending-ship"},
     "status:pending-ship": {"status:shipped"},
     "status:shipped": set(),  # terminal
+
+    # --- #328 Phase E: new pending-human-* transitions (Q-new4, Q7, Q-new11) ---
+    # `pending-human-approval` is the future replacement for `pending`. It is
+    # added alongside `pending` during Phase E and will supersede it in the
+    # Phase I migration. Its legal targets mirror `pending`'s — PM either
+    # schedules planning or fast-tracks to approved.
+    "status:pending-human-approval": {"status:planning", "status:approved"},
+    # HITL review (designer loop): human redirects (back to in-progress) or
+    # approves (straight to pending-ship, skipping pending-test because the
+    # human already validated the work).
+    "status:pending-human-review": {
+        "status:in-progress",
+        "status:pending-ship",
+    },
+    # Worker-pause-for-environment-setup: PM completes the tool/config setup
+    # and hands the issue back to the worker to resume.
+    "status:pending-human-setup": {"status:in-progress"},
 }
 
 # === ROLE AUTHORITY (who may perform each legal transition) ===
@@ -125,6 +158,24 @@ ROLE_AUTHORITY = {
 
     # DM owns delivery / shipping
     ("status:pending-ship", "status:shipped"): {"dm"},
+
+    # --- #328 Phase E: authority for new pending-human-* transitions ---
+
+    # PM owns the new pending-human-approval intake edges (mirrors the
+    # existing `pending` entries above).
+    ("status:pending-human-approval", "status:planning"): {"pm"},
+    ("status:pending-human-approval", "status:approved"): {"pm"},
+
+    # The worker self-pauses into human-review (HITL designer loop) and
+    # resumes (redirect or approve) itself — assignee-bound on both sides.
+    ("status:in-progress", "status:pending-human-review"): {"_assignee"},
+    ("status:pending-human-review", "status:in-progress"): {"_assignee"},
+    ("status:pending-human-review", "status:pending-ship"): {"_assignee"},
+
+    # Worker self-pauses for environment/tool setup; PM completes the setup
+    # and hands the issue back to the worker.
+    ("status:in-progress", "status:pending-human-setup"): {"_assignee"},
+    ("status:pending-human-setup", "status:in-progress"): {"pm"},
 }
 
 

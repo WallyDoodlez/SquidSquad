@@ -280,6 +280,154 @@ class TestCheckAuthority:
 
 
 # ---------------------------------------------------------------------------
+# #328 Phase E — new pending-human-* transitions (Q-new4 / Q7 / Q-new11)
+# ---------------------------------------------------------------------------
+
+
+class TestPendingHumanApproval:
+    """PM owns the new pending-human-approval intake edges."""
+
+    def test_pm_can_move_to_planning(self, stub_role_labels):
+        ok, _ = tracker._check_authority(
+            1, "status:pending-human-approval", "status:planning", "pm-lead"
+        )
+        assert ok
+
+    def test_pm_can_fast_track_to_approved(self, stub_role_labels):
+        ok, _ = tracker._check_authority(
+            1, "status:pending-human-approval", "status:approved", "pm"
+        )
+        assert ok
+
+    def test_skill_cannot_approve_pending_human_approval(self, stub_role_labels):
+        ok, reason = tracker._check_authority(
+            1, "status:pending-human-approval", "status:approved", "skill-lead"
+        )
+        assert not ok
+        assert "pm" in reason
+
+    def test_dm_cannot_touch_intake(self, stub_role_labels):
+        ok, _ = tracker._check_authority(
+            1, "status:pending-human-approval", "status:planning", "dm-lead"
+        )
+        assert not ok
+
+
+class TestPendingHumanReview:
+    """HITL loop — the assigned worker drives pause + redirect + approve."""
+
+    def test_assigned_worker_can_self_pause(self, stub_role_labels):
+        stub_role_labels["labels"] = {"designer"}
+        ok, _ = tracker._check_authority(
+            1, "status:in-progress", "status:pending-human-review", "designer-lead"
+        )
+        assert ok
+
+    def test_unassigned_worker_cannot_self_pause(self, stub_role_labels):
+        stub_role_labels["labels"] = {"designer"}
+        ok, reason = tracker._check_authority(
+            1, "status:in-progress", "status:pending-human-review", "skill-lead"
+        )
+        assert not ok
+        assert "not assigned" in reason
+
+    def test_assigned_worker_can_handle_redirect(self, stub_role_labels):
+        """Designer detects a 'redirect' human comment and resumes iteration."""
+        stub_role_labels["labels"] = {"designer"}
+        ok, _ = tracker._check_authority(
+            1, "status:pending-human-review", "status:in-progress", "designer-lead"
+        )
+        assert ok
+
+    def test_assigned_worker_can_handle_approval(self, stub_role_labels):
+        """Designer detects a 'ship it' human comment and moves to pending-ship."""
+        stub_role_labels["labels"] = {"designer"}
+        ok, _ = tracker._check_authority(
+            1, "status:pending-human-review", "status:pending-ship", "designer-lead"
+        )
+        assert ok
+
+    def test_pm_cannot_bypass_assignee_on_hitl_approval(self, stub_role_labels):
+        """PM cannot unilaterally ship a HITL-in-review item on the designer's behalf."""
+        stub_role_labels["labels"] = {"designer"}
+        ok, _ = tracker._check_authority(
+            1, "status:pending-human-review", "status:pending-ship", "pm-lead"
+        )
+        assert not ok
+
+
+class TestPendingHumanSetup:
+    """Worker self-pauses for tool/env setup; PM completes setup and hands back."""
+
+    def test_assigned_worker_can_self_pause_for_setup(self, stub_role_labels):
+        stub_role_labels["labels"] = {"designer"}
+        ok, _ = tracker._check_authority(
+            1, "status:in-progress", "status:pending-human-setup", "designer-lead"
+        )
+        assert ok
+
+    def test_other_worker_cannot_self_pause_for_setup(self, stub_role_labels):
+        stub_role_labels["labels"] = {"designer"}
+        ok, reason = tracker._check_authority(
+            1, "status:in-progress", "status:pending-human-setup", "skill-lead"
+        )
+        assert not ok
+        assert "not assigned" in reason
+
+    def test_pm_completes_setup_and_hands_back(self, stub_role_labels):
+        """PM owns the resume edge because tool config + composition is PM's job."""
+        stub_role_labels["labels"] = {"designer"}
+        ok, _ = tracker._check_authority(
+            1, "status:pending-human-setup", "status:in-progress", "pm-lead"
+        )
+        assert ok
+
+    def test_assigned_worker_cannot_resume_own_setup(self, stub_role_labels):
+        """The worker that self-paused cannot resume itself — PM must do it.
+
+        Rationale: if the worker could resume, it could shortcut the setup
+        checklist. Requiring PM guarantees the infrastructure actually
+        changed before the worker is allowed to continue.
+        """
+        stub_role_labels["labels"] = {"designer"}
+        ok, reason = tracker._check_authority(
+            1, "status:pending-human-setup", "status:in-progress", "designer-lead"
+        )
+        assert not ok
+        assert "pm" in reason
+
+
+class TestPhaseECoverage:
+    """The coverage invariant must still hold after Phase E additions."""
+
+    def test_every_legal_transition_has_authority_including_new_rows(self):
+        legal_edges = {
+            (frm, to)
+            for frm, tos in tracker.LEGAL_TRANSITIONS.items()
+            for to in tos
+        }
+        auth_edges = set(tracker.ROLE_AUTHORITY.keys())
+        missing = legal_edges - auth_edges
+        assert not missing, f"Legal transitions without authority: {missing}"
+
+    def test_new_labels_are_in_status_labels_map(self):
+        """Sanity — the short names are registered in STATUS_LABELS."""
+        for short in (
+            "pending-human-approval",
+            "pending-human-review",
+            "pending-human-setup",
+        ):
+            assert short in tracker.STATUS_LABELS
+            assert tracker.STATUS_LABELS[short] == f"status:{short}"
+
+    def test_old_pending_label_still_legal(self):
+        """Additive phase — existing `pending` label must remain legal."""
+        assert "status:pending" in tracker.LEGAL_TRANSITIONS
+        assert "status:planning" in tracker.LEGAL_TRANSITIONS["status:pending"]
+        assert ("status:pending", "status:planning") in tracker.ROLE_AUTHORITY
+
+
+# ---------------------------------------------------------------------------
 # end-to-end transition() behavior (without gh) — exit codes
 # ---------------------------------------------------------------------------
 

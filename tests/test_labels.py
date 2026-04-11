@@ -20,6 +20,12 @@ EXPECTED_STATUS_LABELS = {
     "status:open", "status:pending", "status:planning", "status:planned",
     "status:approved", "status:in-progress", "status:pending-test",
     "status:pending-ship", "status:shipped",
+    # #328 Phase E additive labels (Q-new4/Q7/Q-new11). `status:pending`
+    # is NOT yet removed — Phase I will rename it to `pending-human-approval`
+    # in a bounded migration on this repo.
+    "status:pending-human-approval",
+    "status:pending-human-review",
+    "status:pending-human-setup",
 }
 EXPECTED_ROLE_LABELS = {
     "role:skill", "role:fe", "role:be", "role:pm", "role:qa",
