@@ -764,3 +764,251 @@ class TestFlagLabel:
     ])
     def test_title_case(self, key, expected):
         assert wizard._flag_label(key) == expected
+
+
+# ===========================================================================
+# Step 7 — scaffold_install (filesystem scaffolder)
+# ===========================================================================
+#
+# Every test uses tmp_path so nothing touches the real .squidsquad/ tree.
+# compose.py reads role templates from the real `references/roles/` — that
+# is the source of truth for templates and we want tests to exercise it —
+# but everything WRITTEN stays inside tmp_path.
+
+
+def _design_preset_spec():
+    """Valid install spec for the design preset (pm + designer + dm)."""
+    return {
+        "squidsquad_version": "0.16.0",
+        "project": {"name": "scratch", "repo": "github.com/x/y"},
+        "preset": "design",
+        "agents": [
+            {"id": "pm", "alias": "peggy", "role": "pm"},
+            {
+                "id": "designer",
+                "alias": "designer",
+                "role": "designer",
+                "iteration_mode": "hitl",
+                "setup": {"install_optional": "yes"},
+            },
+            {"id": "dm", "alias": "dm", "role": "dm"},
+        ],
+        "tools": {"designer.tool": None, "dm.tool": "local_delivery"},
+        "loop": {"interval_minutes": 10, "context_threshold": 80},
+        "flags": {"improvement_scan": True, "pr_flow": False},
+    }
+
+
+def _software_dev_spec():
+    """Valid install spec for software-dev preset (pm + designer + be + fe + qa + dm)."""
+    return {
+        "squidsquad_version": "0.16.0",
+        "project": {"name": "scratch", "repo": "github.com/x/y"},
+        "preset": "software-dev",
+        "agents": [
+            {"id": "pm", "alias": "peggy", "role": "pm"},
+            {
+                "id": "designer",
+                "alias": "designer",
+                "role": "designer",
+                "iteration_mode": "hitl",
+                "setup": {"install_optional": "yes"},
+            },
+            {
+                "id": "be",
+                "alias": "be",
+                "role": "dev",
+                "variant": "be",
+                "stack": "FastAPI + Python 3.11 + pytest",
+                "test_command": "pytest tests/be",
+            },
+            {
+                "id": "fe",
+                "alias": "fe",
+                "role": "dev",
+                "variant": "fe",
+                "stack": "Next.js + TypeScript + jest",
+                "test_command": "npm test",
+            },
+            {"id": "qa", "alias": "qa", "role": "qa"},
+            {"id": "dm", "alias": "dm", "role": "dm"},
+        ],
+        "tools": {"designer.tool": None, "dm.tool": "local_delivery"},
+        "loop": {"interval_minutes": 10, "context_threshold": 80},
+        "flags": {"improvement_scan": True, "pr_flow": False},
+    }
+
+
+class TestScaffoldInstallDesignPreset:
+    def test_writes_full_tree(self, tmp_path):
+        spec = _design_preset_spec()
+        summary = wizard.scaffold_install(spec, tmp_path)
+        squid = tmp_path / ".squidsquad"
+        assert squid.is_dir()
+        assert (squid / "config.md").is_file()
+        for role in ("pm", "designer", "dm"):
+            assert (squid / role / "CLAUDE.md").is_file()
+            assert (squid / role / "SOUL.md").is_file()
+            assert (squid / role / "working-state.md").is_file()
+            assert (squid / role / "iterations").is_dir()
+            assert (squid / role / "planning").is_dir()
+
+    def test_config_md_matches_builder_output(self, tmp_path):
+        spec = _design_preset_spec()
+        wizard.scaffold_install(spec, tmp_path)
+        written = (tmp_path / ".squidsquad" / "config.md").read_text(encoding="utf-8")
+        expected = wizard.build_config_md(spec)
+        assert written == expected
+
+    def test_working_state_has_default_content(self, tmp_path):
+        spec = _design_preset_spec()
+        wizard.scaffold_install(spec, tmp_path)
+        for role in ("pm", "designer", "dm"):
+            ws = (tmp_path / ".squidsquad" / role / "working-state.md").read_text(
+                encoding="utf-8"
+            )
+            assert "# Working State" in ws
+            assert "**Task**: none" in ws
+            assert "**Status**: none" in ws
+            assert "**Quiet Cycle Counter**: 0" in ws
+
+    def test_summary_has_correct_shape(self, tmp_path):
+        spec = _design_preset_spec()
+        summary = wizard.scaffold_install(spec, tmp_path)
+        assert summary["target"] == str(tmp_path.resolve())
+        assert summary["squidsquad_dir"].endswith(".squidsquad")
+        assert len(summary["agents"]) == 3
+        ids = sorted(a["id"] for a in summary["agents"])
+        assert ids == ["designer", "dm", "pm"]
+        roles = sorted(a["role"] for a in summary["agents"])
+        assert roles == ["designer", "dm", "pm"]
+
+
+class TestScaffoldInstallDevVariants:
+    def test_software_dev_preset_lays_down_all_six_agents(self, tmp_path):
+        spec = _software_dev_spec()
+        summary = wizard.scaffold_install(spec, tmp_path)
+        assert len(summary["agents"]) == 6
+        squid = tmp_path / ".squidsquad"
+        for role_id in ("pm", "designer", "be", "fe", "qa", "dm"):
+            assert (squid / role_id / "CLAUDE.md").is_file()
+            assert (squid / role_id / "SOUL.md").is_file()
+
+    def test_dev_variants_share_dev_identity(self, tmp_path):
+        """`be` and `fe` both compose from references/roles/dev/CLAUDE.md."""
+        spec = _software_dev_spec()
+        summary = wizard.scaffold_install(spec, tmp_path)
+        be = next(a for a in summary["agents"] if a["id"] == "be")
+        fe = next(a for a in summary["agents"] if a["id"] == "fe")
+        assert be["role"] == "dev"
+        assert fe["role"] == "dev"
+
+    def test_dev_variant_claude_md_has_variant_substituted(self, tmp_path):
+        """The [ROLE] placeholder is substituted with the agent id (be/fe)."""
+        spec = _software_dev_spec()
+        wizard.scaffold_install(spec, tmp_path)
+        be_md = (tmp_path / ".squidsquad" / "be" / "CLAUDE.md").read_text(
+            encoding="utf-8"
+        )
+        fe_md = (tmp_path / ".squidsquad" / "fe" / "CLAUDE.md").read_text(
+            encoding="utf-8"
+        )
+        # The dev template references [ROLE] in many places — after
+        # substitution neither file should still contain the bracket form.
+        assert "[ROLE]" not in be_md
+        assert "[ROLE]" not in fe_md
+        # And the agent's own id should appear somewhere in its composed
+        # file (in status bar examples, working-state path references, etc.)
+        assert "be" in be_md.lower() or "BE" in be_md
+        assert "fe" in fe_md.lower() or "FE" in fe_md
+
+
+class TestScaffoldInstallSafetyAndIdempotency:
+    def test_refuses_existing_install_without_overwrite(self, tmp_path):
+        spec = _design_preset_spec()
+        wizard.scaffold_install(spec, tmp_path)
+        with pytest.raises(FileExistsError):
+            wizard.scaffold_install(spec, tmp_path)
+
+    def test_overwrite_flag_allows_rerun(self, tmp_path):
+        spec = _design_preset_spec()
+        wizard.scaffold_install(spec, tmp_path)
+        # Second run with overwrite=True must succeed
+        summary = wizard.scaffold_install(
+            spec, tmp_path, overwrite_existing=True,
+        )
+        assert (tmp_path / ".squidsquad" / "pm" / "CLAUDE.md").is_file()
+        assert len(summary["agents"]) == 3
+
+    def test_overwrite_preserves_soul_md(self, tmp_path):
+        """User customisations to SOUL.md must never be clobbered."""
+        spec = _design_preset_spec()
+        wizard.scaffold_install(spec, tmp_path)
+        pm_soul = tmp_path / ".squidsquad" / "pm" / "SOUL.md"
+        custom = "# My Custom PM Soul\n\nI am unique.\n"
+        pm_soul.write_text(custom, encoding="utf-8")
+        # Re-run with overwrite
+        wizard.scaffold_install(spec, tmp_path, overwrite_existing=True)
+        assert pm_soul.read_text(encoding="utf-8") == custom
+
+    def test_overwrite_preserves_working_state(self, tmp_path):
+        """In-progress working state must never be clobbered."""
+        spec = _design_preset_spec()
+        wizard.scaffold_install(spec, tmp_path)
+        ws = tmp_path / ".squidsquad" / "pm" / "working-state.md"
+        custom_ws = "# Working State\n- **Task**: #42\n- **Status**: in-progress\n"
+        ws.write_text(custom_ws, encoding="utf-8")
+        wizard.scaffold_install(spec, tmp_path, overwrite_existing=True)
+        assert ws.read_text(encoding="utf-8") == custom_ws
+
+    def test_overwrite_does_refresh_claude_md(self, tmp_path):
+        """CLAUDE.md IS overwritten so bug fixes to the template land."""
+        spec = _design_preset_spec()
+        wizard.scaffold_install(spec, tmp_path)
+        pm_claude = tmp_path / ".squidsquad" / "pm" / "CLAUDE.md"
+        # Tamper with CLAUDE.md to simulate stale template
+        pm_claude.write_text("stale content\n", encoding="utf-8")
+        wizard.scaffold_install(spec, tmp_path, overwrite_existing=True)
+        assert pm_claude.read_text(encoding="utf-8") != "stale content\n"
+        assert len(pm_claude.read_text(encoding="utf-8")) > 1000  # real template
+
+    def test_preserved_list_includes_untouched_files(self, tmp_path):
+        spec = _design_preset_spec()
+        wizard.scaffold_install(spec, tmp_path)
+        summary = wizard.scaffold_install(
+            spec, tmp_path, overwrite_existing=True,
+        )
+        preserved = summary["preserved"]
+        # All 3 working-state.md files should be in preserved on re-run
+        assert any("pm" in p and "working-state" in p for p in preserved)
+        assert any("designer" in p and "working-state" in p for p in preserved)
+        assert any("dm" in p and "working-state" in p for p in preserved)
+
+
+class TestScaffoldInstallValidation:
+    def test_invalid_spec_missing_section(self, tmp_path):
+        spec = _design_preset_spec()
+        del spec["project"]
+        with pytest.raises(ValueError, match="project"):
+            wizard.scaffold_install(spec, tmp_path)
+
+    def test_unknown_role_identity_raises(self, tmp_path):
+        spec = _design_preset_spec()
+        spec["agents"].append({
+            "id": "ghost",
+            "alias": "ghost",
+            "role": "nonexistent_role",
+        })
+        with pytest.raises(ValueError, match="nonexistent_role"):
+            wizard.scaffold_install(spec, tmp_path)
+        # Nothing should have been written at all
+        assert not (tmp_path / ".squidsquad").exists() or \
+            not (tmp_path / ".squidsquad" / "ghost").exists()
+
+    def test_empty_agents_list(self, tmp_path):
+        """Zero agents is unusual but not illegal — should produce config.md only."""
+        spec = _design_preset_spec()
+        spec["agents"] = []
+        summary = wizard.scaffold_install(spec, tmp_path)
+        assert (tmp_path / ".squidsquad" / "config.md").is_file()
+        assert summary["agents"] == []

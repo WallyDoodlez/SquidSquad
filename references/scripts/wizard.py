@@ -16,6 +16,9 @@ Commands:
     python scripts/wizard.py build-config-md FILE  # Step 7 — print new
                                                    # config.md from a JSON
                                                    # install spec on disk
+    python scripts/wizard.py scaffold FILE [DIR]   # Step 7 — write the
+                                                   # full .squidsquad/ tree
+                                                   # from a JSON install spec
     python scripts/wizard.py --help
 
 Every command prints JSON on stdout and non-JSON errors on stderr. The
@@ -569,6 +572,150 @@ def _flag_label(key):
 
 
 # ---------------------------------------------------------------------------
+# Step 7 — .squidsquad/ scaffolder
+# ---------------------------------------------------------------------------
+
+# Default working-state.md content written at install time. Agents update
+# this themselves during their Ralph Loop — the scaffolder just seeds it.
+_DEFAULT_WORKING_STATE = """\
+# Working State
+
+- **Task**: none
+- **Status**: none
+- **Quiet Cycle Counter**: 0
+"""
+
+
+def scaffold_install(spec, target_root, overwrite_existing=False):
+    """Write a full `.squidsquad/` tree from an install spec.
+
+    This is the mechanical realisation of Step 7: everything the wizard
+    actually puts on disk at the moment the user hits [P]roceed. It is
+    deterministic, side-effects-only, and safe to re-run: existing SOUL.md
+    and working-state.md files are never clobbered (they may contain the
+    agent's customisations or in-progress state).
+
+    Args:
+        spec: the same install-spec dict `build_config_md` accepts.
+        target_root: base directory that will contain `.squidsquad/`.
+        overwrite_existing: if True, refuse-on-exist is skipped and
+            CLAUDE.md templates are overwritten on every run. Working
+            state and SOUL.md remain protected regardless — those are
+            never overwritten even with the flag.
+
+    Returns a dict summarising what was written:
+        {
+            "target": str,
+            "squidsquad_dir": str,
+            "config_md": str,
+            "agents": [{id, role, claude_md, soul_md, working_state}, ...],
+            "preserved": [...paths that already existed and were not overwritten],
+            "created_dirs": [...paths of newly-created per-role directories],
+        }
+
+    Raises:
+        ValueError — if `spec` is missing required fields (see
+            build_config_md) or if an agent references a role identity
+            that does not exist under `references/roles/`.
+        FileExistsError — if `.squidsquad/` exists and `overwrite_existing`
+            is False. The caller (the prose runbook) is responsible for
+            the re-run detection + 3-way prompt, so this should only fire
+            as a safety net.
+    """
+    # Delegate validation of spec shape to build_config_md so we have
+    # a single source of truth for required sections.
+    config_md_text = build_config_md(spec)
+
+    target_root = Path(target_root).resolve()
+    squid = target_root / ".squidsquad"
+
+    if squid.exists() and not overwrite_existing:
+        raise FileExistsError(
+            f"{squid} already exists — pass overwrite_existing=True "
+            f"or delete the directory first"
+        )
+
+    # Import compose.py lazily so tests that don't need the scaffolder
+    # don't import it either.
+    try:
+        from compose import deploy_role  # same dir as wizard.py
+    except ImportError:
+        import sys as _sys
+        _sys.path.insert(0, str(SCRIPT_DIR))
+        from compose import deploy_role  # type: ignore
+
+    squid.mkdir(parents=True, exist_ok=True)
+
+    summary = {
+        "target": str(target_root),
+        "squidsquad_dir": str(squid),
+        "config_md": None,
+        "agents": [],
+        "preserved": [],
+        "created_dirs": [],
+    }
+
+    # 1. config.md
+    config_path = squid / "config.md"
+    if config_path.exists() and not overwrite_existing:
+        summary["preserved"].append(str(config_path))
+    else:
+        config_path.write_text(config_md_text, encoding="utf-8")
+    summary["config_md"] = str(config_path)
+
+    # 2. Per-agent directories
+    for agent in spec["agents"]:
+        agent_id = agent["id"]
+        role_identity = agent["role"]
+
+        # Verify the role identity template exists before composing — a
+        # friendlier error than whatever deploy_role would produce if the
+        # entry file is missing.
+        role_dir = REPO_ROOT / "references" / "roles" / role_identity
+        if not (role_dir / "CLAUDE.md").exists():
+            raise ValueError(
+                f"agent {agent_id!r} references unknown role identity "
+                f"{role_identity!r}: no CLAUDE.md at {role_dir}"
+            )
+
+        agent_dir = squid / agent_id
+        was_new = not agent_dir.exists()
+        agent_dir.mkdir(parents=True, exist_ok=True)
+        if was_new:
+            summary["created_dirs"].append(str(agent_dir))
+
+        # CLAUDE.md — composed from role identity template + sub-skills.
+        # deploy_role already handles the compose/substitute/write pipeline;
+        # it takes the agent id (not the role identity) because [ROLE]
+        # placeholder substitution uses the agent name.
+        claude_path = deploy_role(agent_id, target_root=target_root)
+
+        # SOUL.md — deploy_role wrote it if missing; honour existing files
+        soul_path = agent_dir / "SOUL.md"
+
+        # working-state.md — never overwrite
+        ws_path = agent_dir / "working-state.md"
+        if ws_path.exists():
+            summary["preserved"].append(str(ws_path))
+        else:
+            ws_path.write_text(_DEFAULT_WORKING_STATE, encoding="utf-8")
+
+        # Working directories that agents use to organise their own files
+        for sub in ("iterations", "planning"):
+            (agent_dir / sub).mkdir(parents=True, exist_ok=True)
+
+        summary["agents"].append({
+            "id": agent_id,
+            "role": role_identity,
+            "claude_md": str(claude_path),
+            "soul_md": str(soul_path),
+            "working_state": str(ws_path),
+        })
+
+    return summary
+
+
+# ---------------------------------------------------------------------------
 # CLI dispatch
 # ---------------------------------------------------------------------------
 
@@ -652,6 +799,37 @@ def cmd_build_config_md(args):
     return 0
 
 
+def cmd_scaffold(args):
+    """Read a JSON install spec and write the full `.squidsquad/` tree.
+
+    Usage: wizard.py scaffold <spec.json> [target_dir]
+    """
+    if not args:
+        print(
+            "Usage: wizard.py scaffold <spec.json|-> [target_dir]",
+            file=sys.stderr,
+        )
+        return 2
+    src = args[0]
+    target_dir = args[1] if len(args) > 1 else "."
+    try:
+        if src == "-":
+            raw = sys.stdin.read()
+        else:
+            raw = Path(src).read_text(encoding="utf-8")
+        spec = json.loads(raw)
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"ERROR: cannot read spec: {e}", file=sys.stderr)
+        return 1
+    try:
+        summary = scaffold_install(spec, target_dir)
+    except (ValueError, FileExistsError) as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+    _print_json(summary)
+    return 0
+
+
 def cmd_validate_rerun_action(args):
     if not args:
         print(
@@ -684,6 +862,7 @@ def main():
         "validate-name": cmd_validate_name,
         "validate-rerun-action": cmd_validate_rerun_action,
         "build-config-md": cmd_build_config_md,
+        "scaffold": cmd_scaffold,
     }
     if cmd not in dispatch:
         print(f"Unknown command: {cmd}", file=sys.stderr)

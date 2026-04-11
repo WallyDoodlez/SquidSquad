@@ -125,10 +125,25 @@ discrete phases, each landing as its own atomic commit.
         errors, non-dict agent errors, 6 missing top-level sections,
         tools placeholder variants, loop defaults, flags sort order,
         TC-01 full regression, 11 parametrized quote rules, 5 flag labels
-    - [ ] **Phase G.2b — `.squidsquad/` folder scaffolder**
-      - Thin wrapper around compose.py's deploy_role per installed role
-      - Creates working-state.md, iterations/, planning/ per role dir
-      - Writes the composed config.md to disk (calls G.2a + writes file)
+    - [x] **Phase G.2b — `.squidsquad/` folder scaffolder** (this cycle)
+      - wizard.scaffold_install(spec, target_root, overwrite_existing=False)
+      - Calls compose.deploy_role per installed agent for CLAUDE.md + SOUL.md
+      - Creates working-state.md (default template), iterations/, planning/
+      - Writes composed config.md (calls G.2a)
+      - Refuses to clobber existing install unless overwrite_existing=True
+      - Even with overwrite, SOUL.md and working-state.md are preserved —
+        user customisations and in-progress state are never lost
+      - CLAUDE.md IS refreshed on overwrite so template bug fixes land
+      - Refactored compose.deploy_role to accept optional target_root
+        (defaults to REPO_ROOT — existing callers unchanged)
+      - **Side-effect fix**: compose._read_config_value now catches
+        SystemExit too. Previously it caught Exception but config.py
+        calls sys.exit(1) on missing fields, which SystemExit inherits
+        from BaseException, bypassing the guard. Dev variant scaffolds
+        were hard-exiting the whole process. Now degrades to "" correctly.
+      - 16 new unit tests in tests/test_wizard.py, all against tmp_path —
+        nothing touches the real .squidsquad/ install
+      - Full static suite: 355/355 pass (was 339, +16)
     - [ ] **Phase G.2c — Label migration + creation**
       - ensure_labels(): idempotently create every required gh label
       - Migration step for #328 Phase I: `pending` → `pending-human-approval`
