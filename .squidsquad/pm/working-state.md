@@ -2,7 +2,7 @@
 
 - **Task**: #4 — boot remote agents sub-skill
 - **Status**: planning
-- **Phase**: test-planning FEAT-4
+- **Phase**:
 - **Started**: 2026-04-11
 
 ## Going Public Pipeline Status
