@@ -1,5 +1,12 @@
 # DM Scan History
 
+## Scan — 2026-04-11 15:31
+
+- **Files scanned**: README.md, SKILL.md frontmatter, CHANGELOG.md v0.15.0 entry, docs/ARCHITECTURE.md, docs/sub-skill-guide.md, tracker.py transition --role usage across user-facing docs
+- **Findings**: none (33rd consecutive clean scan) — verified #320's `--role` parameter addition is not referenced in user-facing docs (consistent with delivery:skip); #328/#4 still in-flight so no shipped work to document
+- **Items rejected by human**: (none yet)
+- **Note**: Resumed scanning after 30 quiet cycles — bug gate was incorrectly blocking on `status:pending` (non-actionable) bugs. Now filtering to actionable bugs only.
+
 ## Scan — 2026-04-11 00:01
 
 - **Files scanned**: git log audit (no external changes since last scan)
