@@ -1,5 +1,11 @@
 # DM Scan History
 
+## Scan — 2026-04-11 17:31
+
+- **Files scanned**: git log audit (commits since last scan), docs/sub-skill-guide.md, docs/ARCHITECTURE.md, references/roles/ and references/sub-skills/ directory state
+- **Findings**: 1 filed — #360 (docs/sub-skill-guide.md:114 references removed path `references/sub-skills/roles/dev-agent.md`; #328 phase F migrated to `references/roles/<role>/`)
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-11 15:31
 
 - **Files scanned**: README.md, SKILL.md frontmatter, CHANGELOG.md v0.15.0 entry, docs/ARCHITECTURE.md, docs/sub-skill-guide.md, tracker.py transition --role usage across user-facing docs
