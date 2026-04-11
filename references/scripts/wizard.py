@@ -19,6 +19,14 @@ Commands:
     python scripts/wizard.py scaffold FILE [DIR]   # Step 7 — write the
                                                    # full .squidsquad/ tree
                                                    # from a JSON install spec
+    python scripts/wizard.py ensure-labels         # Step 7 — seed every
+                                                   # required GH label if
+                                                   # absent (idempotent)
+    python scripts/wizard.py list-issues-by-label  # list issue numbers
+                                                   # with a given label
+    python scripts/wizard.py migrate-label         # rewrite one label to
+                                                   # another on every
+                                                   # issue that carries it
     python scripts/wizard.py --help
 
 Every command prints JSON on stdout and non-JSON errors on stderr. The
@@ -716,6 +724,319 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
 
 
 # ---------------------------------------------------------------------------
+# Step 7 — GitHub label helpers (ensure + migrate)
+# ---------------------------------------------------------------------------
+
+
+def _tracker():
+    """Import tracker.py lazily and return it.
+
+    Tracker is the single source of truth for the label taxonomy. Importing
+    lazily avoids a hard dependency when tests exercise unrelated helpers.
+    """
+    try:
+        import tracker  # same dir as wizard.py
+        return tracker
+    except ImportError:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        import tracker  # type: ignore
+        return tracker
+
+
+# Reasonable defaults per label category. Chosen to match GitHub's standard
+# palette — labels that already exist on the repo keep their stored colour
+# because `gh label create --force` only updates description/colour when
+# the values explicitly differ.
+_CATEGORY_DESCRIPTIONS = {
+    "type": "Work type classification",
+    "status": "Workflow state",
+    "priority": "Priority level",
+    "severity": "Bug severity",
+    "role": "Owning role",
+    "design": "Design workflow state",
+    "special": "Special tag",
+}
+
+_CATEGORY_COLORS = {
+    "type:bug": "d73a4a",
+    "type:feature": "0075ca",
+    "priority:high": "b60205",
+    "priority:medium": "fbca04",
+    "priority:low": "c2e0c6",
+    "severity:high": "d93f0b",
+    "severity:medium": "e4e669",
+    "severity:low": "fef2c0",
+    "status:open": "ededed",
+    "status:pending": "ededed",
+    "status:pending-human-approval": "fef2c0",
+    "status:pending-human-review": "d4c5f9",
+    "status:pending-human-setup": "c5def5",
+    "status:planning": "bfe5bf",
+    "status:planned": "bfe5bf",
+    "status:approved": "0075ca",
+    "status:in-progress": "fbca04",
+    "status:pending-test": "fef2c0",
+    "status:pending-ship": "c2e0c6",
+    "status:shipped": "1d76db",
+    "design:needed": "fef2c0",
+    "design:in-progress": "fbca04",
+    "design:complete": "c2e0c6",
+    "squidsquad": "1d1d1d",
+    "improvement-scan": "1d1d1d",
+    "squidsquad-test": "1d1d1d",
+}
+
+# Default colour for any label that is not in _CATEGORY_COLORS. gh picks a
+# random colour if we omit --color, which is fine for cross-team or
+# per-role labels (role:skill etc.) whose colour is cosmetic.
+_DEFAULT_LABEL_COLOR = "1d76db"
+
+
+def _label_description(name):
+    """Return a reasonable description for `name` based on its category prefix."""
+    descriptions = {
+        "type:bug": "Bug report",
+        "type:feature": "Feature request",
+        "priority:high": "High priority",
+        "priority:medium": "Medium priority",
+        "priority:low": "Low priority",
+        "severity:high": "High severity",
+        "severity:medium": "Medium severity",
+        "severity:low": "Low severity",
+        "status:open": "Filed, awaiting triage",
+        "status:pending": "Awaiting approval (legacy — see pending-human-approval)",
+        "status:pending-human-approval": "Awaiting initial human approval (intake gate)",
+        "status:pending-human-review": "In-progress iteration awaiting HITL review",
+        "status:pending-human-setup": "Worker paused — needs human to complete tool/environment setup",
+        "status:planning": "PM running intake",
+        "status:planned": "Planning complete, awaiting approval for execution",
+        "status:approved": "Approved for development",
+        "status:in-progress": "Being worked on",
+        "status:pending-test": "Implementation complete, awaiting QA",
+        "status:pending-ship": "QA verified, awaiting DM delivery",
+        "status:shipped": "Delivered, closed",
+        "design:needed": "Designer must produce specs before dev",
+        "design:in-progress": "Designer working on specs",
+        "design:complete": "Design approved, dev can proceed",
+        "squidsquad": "Managed by SquidSquad",
+        "improvement-scan": "Filed by improvement scanning",
+        "squidsquad-test": "Created by integration test harness",
+    }
+    if name in descriptions:
+        return descriptions[name]
+    # Category prefix -> generic description
+    for prefix, desc in _CATEGORY_DESCRIPTIONS.items():
+        if name.startswith(prefix + ":"):
+            return desc
+    return _CATEGORY_DESCRIPTIONS.get("special", "SquidSquad label")
+
+
+def build_label_inventory():
+    """Return the full list of labels SquidSquad expects on a repo.
+
+    Returns a list of dicts with keys:
+        name: str — full label name
+        description: str — human-readable description
+        color: str — 6-char hex without leading '#'
+
+    The canonical source is `tracker.py` — this function adapts that to
+    the shape wizard.ensure_labels wants. Importing at call time rather
+    than at module load keeps tracker.py lazy.
+    """
+    t = _tracker()
+    names = set()
+    names.update(t.TYPE_LABELS.values())
+    names.update(t.PRIORITY_LABELS.values())
+    names.update(t.STATUS_LABELS.values())
+    names.update(t.SEVERITY_LABELS.values())
+    names.update(t.DESIGN_LABELS.values())
+    names.update(t.SPECIAL_LABELS)
+
+    inventory = []
+    for name in sorted(names):
+        inventory.append({
+            "name": name,
+            "description": _label_description(name),
+            "color": _CATEGORY_COLORS.get(name, _DEFAULT_LABEL_COLOR),
+        })
+    return inventory
+
+
+def list_gh_labels():
+    """Return the set of label names currently on the repo via `gh label list`.
+
+    Empty set on any error — caller decides whether to treat that as an
+    API failure or an uninitialised repo.
+    """
+    result = _run([
+        "gh", "label", "list", "--limit", "200", "--json", "name",
+    ])
+    if result.returncode != 0 or not result.stdout.strip():
+        return set()
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return set()
+    return {item["name"] for item in data if isinstance(item, dict) and "name" in item}
+
+
+def ensure_labels(dry_run=False):
+    """Seed every required label. Idempotent — only creates what is missing.
+
+    Args:
+        dry_run: if True, reports what WOULD be created without calling gh.
+
+    Returns a summary dict:
+        {
+            "total": int,
+            "existing": [...label names that were already on the repo],
+            "created": [...label names that were newly created],
+            "failed": [{name, error}, ...],
+            "dry_run": bool,
+        }
+
+    The wizard calls this in Step 7 after writing files, as the last
+    repo-side step. Safe to re-run at any time.
+    """
+    inventory = build_label_inventory()
+    existing = list_gh_labels()
+
+    summary = {
+        "total": len(inventory),
+        "existing": [],
+        "created": [],
+        "failed": [],
+        "dry_run": bool(dry_run),
+    }
+
+    for spec in inventory:
+        name = spec["name"]
+        if name in existing:
+            summary["existing"].append(name)
+            continue
+        if dry_run:
+            summary["created"].append(name)
+            continue
+        result = _run([
+            "gh", "label", "create", name,
+            "--description", spec["description"],
+            "--color", spec["color"],
+        ])
+        if result.returncode == 0:
+            summary["created"].append(name)
+        else:
+            # gh label create returns non-zero if the label already exists,
+            # which can happen if the list_gh_labels cache is stale. Treat
+            # "already exists" as success.
+            err = (result.stderr or "").strip()
+            if "already exists" in err.lower():
+                summary["existing"].append(name)
+            else:
+                summary["failed"].append({
+                    "name": name,
+                    "error": err or f"gh exit {result.returncode}",
+                })
+
+    return summary
+
+
+def list_issues_with_label(label, state="all"):
+    """Return the list of issue numbers that currently carry `label`.
+
+    Args:
+        label: the full label name to search for (e.g. "status:pending")
+        state: "open" | "closed" | "all" — passed to `gh issue list --state`
+
+    Returns a list of ints (issue numbers). Empty list on error.
+    """
+    result = _run([
+        "gh", "issue", "list",
+        "--label", label,
+        "--state", state,
+        "--limit", "500",
+        "--json", "number",
+    ])
+    if result.returncode != 0 or not result.stdout.strip():
+        return []
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return []
+    return [
+        int(item["number"])
+        for item in data
+        if isinstance(item, dict) and "number" in item
+    ]
+
+
+def migrate_label(old, new, dry_run=False, state="all"):
+    """Rewrite every issue carrying `old` to carry `new` instead.
+
+    This is the core of Phase I (the `pending` -> `pending-human-approval`
+    rename). The new label must already exist on the repo (call
+    `ensure_labels` first if in doubt). The old label is NOT deleted —
+    that is a separate, intentional step.
+
+    Args:
+        old: the label to remove from each issue
+        new: the label to add to each issue
+        dry_run: if True, returns what WOULD be migrated without touching gh
+        state: "open" | "closed" | "all"
+
+    Returns a summary dict:
+        {
+            "old_label": str,
+            "new_label": str,
+            "dry_run": bool,
+            "candidates": [...issue numbers scanned],
+            "migrated": [...issue numbers successfully relabelled],
+            "skipped": [...issue numbers that already had `new` for some reason],
+            "failed": [{number, error}, ...],
+        }
+    """
+    summary = {
+        "old_label": old,
+        "new_label": new,
+        "dry_run": bool(dry_run),
+        "candidates": [],
+        "migrated": [],
+        "skipped": [],
+        "failed": [],
+    }
+
+    candidates = list_issues_with_label(old, state=state)
+    summary["candidates"] = list(candidates)
+
+    if not candidates:
+        return summary
+
+    for number in candidates:
+        if dry_run:
+            summary["migrated"].append(number)
+            continue
+        result = _run([
+            "gh", "issue", "edit", str(number),
+            "--remove-label", old,
+            "--add-label", new,
+        ])
+        if result.returncode == 0:
+            summary["migrated"].append(number)
+        else:
+            err = (result.stderr or "").strip()
+            # gh reports "label already on the issue" on an add-label no-op
+            # — treat as already migrated, not an error.
+            if "already" in err.lower() and "label" in err.lower():
+                summary["skipped"].append(number)
+            else:
+                summary["failed"].append({
+                    "number": number,
+                    "error": err or f"gh exit {result.returncode}",
+                })
+
+    return summary
+
+
+# ---------------------------------------------------------------------------
 # CLI dispatch
 # ---------------------------------------------------------------------------
 
@@ -830,6 +1151,53 @@ def cmd_scaffold(args):
     return 0
 
 
+def cmd_ensure_labels(args):
+    """Usage: wizard.py ensure-labels [--dry-run]"""
+    dry = "--dry-run" in args
+    summary = ensure_labels(dry_run=dry)
+    _print_json(summary, ok=not summary["failed"])
+    return 0 if not summary["failed"] else 1
+
+
+def cmd_list_issues_by_label(args):
+    """Usage: wizard.py list-issues-by-label <label> [--state open|closed|all]"""
+    if not args:
+        print(
+            "Usage: wizard.py list-issues-by-label <label> [--state all]",
+            file=sys.stderr,
+        )
+        return 2
+    label = args[0]
+    state = "all"
+    if "--state" in args:
+        idx = args.index("--state")
+        if idx + 1 < len(args):
+            state = args[idx + 1]
+    numbers = list_issues_with_label(label, state=state)
+    _print_json({"label": label, "state": state, "issues": numbers})
+    return 0
+
+
+def cmd_migrate_label(args):
+    """Usage: wizard.py migrate-label <old> <new> [--dry-run] [--state all]"""
+    if len(args) < 2:
+        print(
+            "Usage: wizard.py migrate-label <old> <new> [--dry-run] [--state all|open|closed]",
+            file=sys.stderr,
+        )
+        return 2
+    old, new = args[0], args[1]
+    dry = "--dry-run" in args
+    state = "all"
+    if "--state" in args:
+        idx = args.index("--state")
+        if idx + 1 < len(args):
+            state = args[idx + 1]
+    summary = migrate_label(old, new, dry_run=dry, state=state)
+    _print_json(summary, ok=not summary["failed"])
+    return 0 if not summary["failed"] else 1
+
+
 def cmd_validate_rerun_action(args):
     if not args:
         print(
@@ -863,6 +1231,9 @@ def main():
         "validate-rerun-action": cmd_validate_rerun_action,
         "build-config-md": cmd_build_config_md,
         "scaffold": cmd_scaffold,
+        "ensure-labels": cmd_ensure_labels,
+        "list-issues-by-label": cmd_list_issues_by_label,
+        "migrate-label": cmd_migrate_label,
     }
     if cmd not in dispatch:
         print(f"Unknown command: {cmd}", file=sys.stderr)

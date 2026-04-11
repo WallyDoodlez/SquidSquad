@@ -144,9 +144,30 @@ discrete phases, each landing as its own atomic commit.
       - 16 new unit tests in tests/test_wizard.py, all against tmp_path —
         nothing touches the real .squidsquad/ install
       - Full static suite: 355/355 pass (was 339, +16)
-    - [ ] **Phase G.2c — Label migration + creation**
-      - ensure_labels(): idempotently create every required gh label
-      - Migration step for #328 Phase I: `pending` → `pending-human-approval`
+    - [x] **Phase G.2c — Label migration + creation** (this cycle)
+      - `build_label_inventory()` — derives canonical label list from
+        tracker.py STATUS_LABELS + TYPE_LABELS + PRIORITY_LABELS +
+        SEVERITY_LABELS + DESIGN_LABELS + SPECIAL_LABELS (drift-proof)
+      - `list_gh_labels()` — parse `gh label list --json name`
+      - `ensure_labels(dry_run=False)` — idempotently create any missing
+        labels with deterministic descriptions and colors; treats race
+        "already exists" errors as existing; reports failures per label
+      - `list_issues_with_label(label, state)` — parse `gh issue list --label`
+      - `migrate_label(old, new, dry_run=False)` — walks every issue
+        carrying `old` and rewrites the label via single `gh issue edit`
+        command with both --remove-label and --add-label; counts
+        skipped (already had the label) separately from failed
+      - 3 new CLI commands: `ensure-labels [--dry-run]`,
+        `list-issues-by-label <label>`, `migrate-label <old> <new>`
+      - 21 new unit tests — all gh calls mocked via wizard._run monkey-
+        patch; zero real gh invocations. Coverage includes: inventory
+        drift-proofing, missing-label creation, dry-run non-calling,
+        race-condition handling, API failure fallback, migration happy
+        path, per-issue partial-failure reporting, already-labelled
+        skip path
+      - Full static suite: 376/376 pass (was 355, +21)
+- [x] **Phase G.2 — Wizard helpers: writers + scaffolder + labels** — all three
+  subphases shipped.
   - [ ] **Phase G.3 — Prose runbook**
     - references/wizard/WIZARD.md — the step-by-step runbook Claude follows
     - Intent classifier prompt (Q-new18, hardcoded in runbook)

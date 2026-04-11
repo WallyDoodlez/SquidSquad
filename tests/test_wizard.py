@@ -11,6 +11,7 @@ they live in the runbook Claude follows and are exercised via the
 integration-level wizard tests in TEST-PLAN.md once Phase G lands.
 """
 
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -1012,3 +1013,303 @@ class TestScaffoldInstallValidation:
         summary = wizard.scaffold_install(spec, tmp_path)
         assert (tmp_path / ".squidsquad" / "config.md").is_file()
         assert summary["agents"] == []
+
+
+# ===========================================================================
+# Step 7 — label inventory + ensure_labels + migrate_label
+# ===========================================================================
+
+
+class TestBuildLabelInventory:
+    """The inventory must be derived from tracker.py (single source of truth)."""
+
+    def test_inventory_includes_all_tracker_maps(self):
+        inventory = wizard.build_label_inventory()
+        names = {entry["name"] for entry in inventory}
+        import tracker
+        assert set(tracker.STATUS_LABELS.values()) <= names
+        assert set(tracker.TYPE_LABELS.values()) <= names
+        assert set(tracker.PRIORITY_LABELS.values()) <= names
+        assert set(tracker.SEVERITY_LABELS.values()) <= names
+        assert set(tracker.DESIGN_LABELS.values()) <= names
+        assert set(tracker.SPECIAL_LABELS) <= names
+
+    def test_every_entry_has_required_fields(self):
+        inventory = wizard.build_label_inventory()
+        for entry in inventory:
+            assert "name" in entry and isinstance(entry["name"], str)
+            assert "description" in entry and entry["description"]
+            assert "color" in entry and len(entry["color"]) == 6
+
+    def test_inventory_includes_new_phase_e_labels(self):
+        """Phase E additive labels must be part of ensure_labels output."""
+        inventory = wizard.build_label_inventory()
+        names = {entry["name"] for entry in inventory}
+        assert "status:pending-human-approval" in names
+        assert "status:pending-human-review" in names
+        assert "status:pending-human-setup" in names
+
+    def test_inventory_is_sorted_for_determinism(self):
+        inventory = wizard.build_label_inventory()
+        names = [entry["name"] for entry in inventory]
+        assert names == sorted(names)
+
+
+def _labels_list_proc(names):
+    """Canned `gh label list --json name` response for the given names."""
+    return _fake_proc(
+        returncode=0,
+        stdout=json.dumps([{"name": n} for n in names]),
+    )
+
+
+def _issue_list_proc(numbers):
+    """Canned `gh issue list --json number` response for the given numbers."""
+    return _fake_proc(
+        returncode=0,
+        stdout=json.dumps([{"number": n} for n in numbers]),
+    )
+
+
+class TestEnsureLabels:
+    """ensure_labels — all gh calls stubbed via monkeypatched wizard._run."""
+
+    def test_all_labels_present_creates_nothing(self, monkeypatch):
+        required = {entry["name"] for entry in wizard.build_label_inventory()}
+        _install_fake_run(monkeypatch, {
+            ("gh", "label", "list"): _labels_list_proc(list(required)),
+        })
+        summary = wizard.ensure_labels()
+        assert summary["total"] == len(required)
+        assert len(summary["existing"]) == len(required)
+        assert summary["created"] == []
+        assert summary["failed"] == []
+
+    def test_missing_labels_get_created(self, monkeypatch):
+        required = {entry["name"] for entry in wizard.build_label_inventory()}
+        present = {"type:bug", "type:feature", "squidsquad"}
+        create_calls = []
+
+        def _fake(cmd, **kwargs):
+            if cmd[:3] == ["gh", "label", "list"]:
+                return _labels_list_proc(list(present))
+            if cmd[:3] == ["gh", "label", "create"]:
+                create_calls.append(cmd[3])
+                return _fake_proc(returncode=0)
+            return _fake_proc(returncode=127)
+
+        monkeypatch.setattr(wizard, "_run", _fake)
+        summary = wizard.ensure_labels()
+        assert set(summary["existing"]) == present
+        assert set(summary["created"]) == required - present
+        assert summary["failed"] == []
+        assert set(create_calls) == required - present
+
+    def test_dry_run_does_not_call_create(self, monkeypatch):
+        create_calls = []
+
+        def _fake(cmd, **kwargs):
+            if cmd[:3] == ["gh", "label", "list"]:
+                return _labels_list_proc([])
+            if cmd[:3] == ["gh", "label", "create"]:
+                create_calls.append(cmd[3])
+                return _fake_proc(returncode=0)
+            return _fake_proc(returncode=127)
+
+        monkeypatch.setattr(wizard, "_run", _fake)
+        summary = wizard.ensure_labels(dry_run=True)
+        assert summary["dry_run"] is True
+        assert create_calls == []
+        assert len(summary["created"]) == summary["total"]
+
+    def test_race_already_exists_treated_as_existing(self, monkeypatch):
+        """If gh label create fails with 'already exists', count as existing."""
+        def _fake(cmd, **kwargs):
+            if cmd[:3] == ["gh", "label", "list"]:
+                return _labels_list_proc([])  # appears empty
+            if cmd[:3] == ["gh", "label", "create"]:
+                return _fake_proc(
+                    returncode=1,
+                    stderr="label with name already exists",
+                )
+            return _fake_proc(returncode=127)
+
+        monkeypatch.setattr(wizard, "_run", _fake)
+        summary = wizard.ensure_labels()
+        # Every attempted create races to 'already exists' -> counted as existing
+        assert len(summary["existing"]) == summary["total"]
+        assert summary["created"] == []
+        assert summary["failed"] == []
+
+    def test_real_failure_reported(self, monkeypatch):
+        def _fake(cmd, **kwargs):
+            if cmd[:3] == ["gh", "label", "list"]:
+                return _labels_list_proc([])
+            if cmd[:3] == ["gh", "label", "create"]:
+                return _fake_proc(returncode=1, stderr="HTTP 403: Forbidden")
+            return _fake_proc(returncode=127)
+
+        monkeypatch.setattr(wizard, "_run", _fake)
+        summary = wizard.ensure_labels()
+        assert summary["created"] == []
+        assert summary["failed"]
+        for failure in summary["failed"]:
+            assert "Forbidden" in failure["error"]
+
+    def test_api_failure_on_list(self, monkeypatch):
+        """If `gh label list` fails, treat every required label as missing."""
+        def _fake(cmd, **kwargs):
+            if cmd[:3] == ["gh", "label", "list"]:
+                return _fake_proc(returncode=1, stderr="network error")
+            if cmd[:3] == ["gh", "label", "create"]:
+                return _fake_proc(returncode=0)
+            return _fake_proc(returncode=127)
+
+        monkeypatch.setattr(wizard, "_run", _fake)
+        summary = wizard.ensure_labels()
+        assert summary["existing"] == []
+        assert len(summary["created"]) == summary["total"]
+
+
+class TestListIssuesWithLabel:
+    def test_parses_numbers_from_gh_output(self, monkeypatch):
+        payload = json.dumps([{"number": 1}, {"number": 42}, {"number": 7}])
+        _install_fake_run(monkeypatch, {
+            ("gh", "issue", "list"): _fake_proc(returncode=0, stdout=payload),
+        })
+        assert wizard.list_issues_with_label("status:pending") == [1, 42, 7]
+
+    def test_empty_result(self, monkeypatch):
+        _install_fake_run(monkeypatch, {
+            ("gh", "issue", "list"): _fake_proc(returncode=0, stdout="[]"),
+        })
+        assert wizard.list_issues_with_label("status:pending") == []
+
+    def test_gh_failure_returns_empty(self, monkeypatch):
+        _install_fake_run(monkeypatch, {
+            ("gh", "issue", "list"): _fake_proc(returncode=1, stderr="nope"),
+        })
+        assert wizard.list_issues_with_label("status:pending") == []
+
+    def test_malformed_json_returns_empty(self, monkeypatch):
+        _install_fake_run(monkeypatch, {
+            ("gh", "issue", "list"): _fake_proc(returncode=0, stdout="not json"),
+        })
+        assert wizard.list_issues_with_label("status:pending") == []
+
+    def test_state_flag_passed_through(self, monkeypatch):
+        captured = []
+
+        def _fake(cmd, **kwargs):
+            captured.append(cmd)
+            return _fake_proc(returncode=0, stdout="[]")
+
+        monkeypatch.setattr(wizard, "_run", _fake)
+        wizard.list_issues_with_label("status:pending", state="open")
+        assert any("--state" in c and "open" in c for c in captured)
+
+
+class TestMigrateLabel:
+    def test_no_candidates_returns_empty_summary(self, monkeypatch):
+        _install_fake_run(monkeypatch, {
+            ("gh", "issue", "list"): _issue_list_proc([]),
+        })
+        summary = wizard.migrate_label(
+            "status:pending", "status:pending-human-approval",
+        )
+        assert summary["candidates"] == []
+        assert summary["migrated"] == []
+        assert summary["failed"] == []
+
+    def test_happy_path_migrates_all(self, monkeypatch):
+        edit_calls = []
+
+        def _fake(cmd, **kwargs):
+            if cmd[:3] == ["gh", "issue", "list"]:
+                return _issue_list_proc([101, 202, 303])
+            if cmd[:3] == ["gh", "issue", "edit"]:
+                edit_calls.append(cmd)
+                return _fake_proc(returncode=0)
+            return _fake_proc(returncode=127)
+
+        monkeypatch.setattr(wizard, "_run", _fake)
+        summary = wizard.migrate_label(
+            "status:pending", "status:pending-human-approval",
+        )
+        assert summary["candidates"] == [101, 202, 303]
+        assert summary["migrated"] == [101, 202, 303]
+        assert summary["failed"] == []
+        assert len(edit_calls) == 3
+        for cmd in edit_calls:
+            assert "--remove-label" in cmd
+            assert "status:pending" in cmd
+            assert "--add-label" in cmd
+            assert "status:pending-human-approval" in cmd
+
+    def test_dry_run_never_calls_edit(self, monkeypatch):
+        edit_calls = []
+
+        def _fake(cmd, **kwargs):
+            if cmd[:3] == ["gh", "issue", "list"]:
+                return _issue_list_proc([1, 2])
+            if cmd[:3] == ["gh", "issue", "edit"]:
+                edit_calls.append(cmd)
+                return _fake_proc(returncode=0)
+            return _fake_proc(returncode=127)
+
+        monkeypatch.setattr(wizard, "_run", _fake)
+        summary = wizard.migrate_label(
+            "status:pending", "status:pending-human-approval",
+            dry_run=True,
+        )
+        assert summary["dry_run"] is True
+        assert summary["migrated"] == [1, 2]
+        assert edit_calls == []
+
+    def test_partial_failure_reports_each_issue(self, monkeypatch):
+        def _fake(cmd, **kwargs):
+            if cmd[:3] == ["gh", "issue", "list"]:
+                return _issue_list_proc([10, 20, 30])
+            if cmd[:3] == ["gh", "issue", "edit"]:
+                number = cmd[3]
+                if number == "20":
+                    return _fake_proc(
+                        returncode=1,
+                        stderr="HTTP 500: Internal Server Error",
+                    )
+                return _fake_proc(returncode=0)
+            return _fake_proc(returncode=127)
+
+        monkeypatch.setattr(wizard, "_run", _fake)
+        summary = wizard.migrate_label("a", "b")
+        assert summary["migrated"] == [10, 30]
+        assert len(summary["failed"]) == 1
+        assert summary["failed"][0]["number"] == 20
+        assert "500" in summary["failed"][0]["error"]
+
+    def test_already_labelled_counted_as_skipped(self, monkeypatch):
+        def _fake(cmd, **kwargs):
+            if cmd[:3] == ["gh", "issue", "list"]:
+                return _issue_list_proc([7])
+            if cmd[:3] == ["gh", "issue", "edit"]:
+                return _fake_proc(
+                    returncode=1,
+                    stderr="label already exists on the issue",
+                )
+            return _fake_proc(returncode=127)
+
+        monkeypatch.setattr(wizard, "_run", _fake)
+        summary = wizard.migrate_label("a", "b")
+        assert summary["migrated"] == []
+        assert summary["skipped"] == [7]
+        assert summary["failed"] == []
+
+    def test_summary_shape(self, monkeypatch):
+        _install_fake_run(monkeypatch, {
+            ("gh", "issue", "list"): _issue_list_proc([]),
+        })
+        summary = wizard.migrate_label("a", "b")
+        assert set(summary.keys()) == {
+            "old_label", "new_label", "dry_run",
+            "candidates", "migrated", "skipped", "failed",
+        }
