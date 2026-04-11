@@ -23,7 +23,7 @@ This feature ships:
 7. **Per-role decentralized `routes_to`** — no central graph file
 8. **GitHub Issues ingestion default flipped to `Y`** in setup
 9. **Conditional dev question** — only ask BE/FE/Fullstack if intent involves software
-10. **No install base** — clean rebuild OK, no migration burden
+10. **Install base = this repo only (CORRECTED 2026-04-11)** — earlier "no install base" was wrong. SquidSquad's own repo IS the install base. Bounded migration: relabel this repo's existing GH Issues, update template references, but no external user installs to worry about.
 
 ### From Phase 2 discussion (10 decisions)
 
@@ -81,7 +81,18 @@ This feature ships:
 
 20. **Q10 — Pipeline display**: ASCII arrow with bracket notation: `PM → Designer → [BE, FE] → QA → DM`. One-line, screenshot-friendly, matches the research doc's notation. Brackets handle parallel groupings. HITL roles are marked with `↻` (e.g. `PM → Designer ↻ → DM`).
 
-### From Phase 2 follow-up discussion (3 new decisions on tool requirements)
+### From Phase 2 follow-up discussion (4 new decisions: tool requirements + status taxonomy)
+
+**Q-new4 — Status taxonomy clarity**: Any status that requires a HUMAN to act must have `human` explicitly in the name. Two human-required statuses:
+
+- **`pending-human-approval`** (rename of today's `pending`) — first approval gate. Human decides: plan this feature (→ `planning`) or execute it directly (→ `approved`).
+- **`pending-human-review`** (new, for HITL roles like designer) — human reviews an in-progress iteration. Human decides: approve and ship (→ `pending-ship`) or redirect (→ `in-progress`).
+
+Existing `pending-test` and `pending-ship` stay unchanged — they are agent-driven (QA verifies, DM delivers), no human required.
+
+Future "agent-on-agent" review statuses follow the same naming convention: `pending-agent-review`, `pending-agent-approval`, etc. The `human` / `agent` infix makes the actor explicit at a glance.
+
+
 
 21. **Q-new1 — Universal `requires_tools` manifest field**: Every role manifest can declare `requires_tools` with `any_of` / `all_of` lists. Wizard validates tool availability at install time by inspecting the host Claude session's available MCP servers. This is a first-class manifest field, not a designer-only special case. Future roles (DM with delivery tools, marketers with analytics, etc.) use the same mechanism.
 
@@ -133,12 +144,16 @@ This feature ships:
 ### Implications for the v1 work
 
 - Manifest schema gets a new top-level field `requires_tools` (Q-new1)
-- Validator (`references/scripts/manifest.py`) gains MCP-availability detection — needs to enumerate the host Claude session's MCP servers (mechanism TBD, dev discretion)
+- Manifest schema gets a new top-level field `iteration_mode: hitl | normal` (Q7)
+- Validator (`references/scripts/manifest.py`) gains MCP-availability detection — needs to enumerate the host Claude session's MCP servers (mechanism TBD, dev discretion). Built-in capabilities like `local_html` always pass.
 - Wizard gets a tool-selection sub-step for roles with multiple satisfying tools (Q-new3)
-- New sub-skill files: `references/sub-skills/designer-tools/figma.md`, `references/sub-skills/designer-tools/stitch.md` — describe how the designer agent should call the respective MCP
+- New sub-skill files: `references/sub-skills/designer-tools/figma.md`, `references/sub-skills/designer-tools/stitch.md`, `references/sub-skills/designer-tools/html.md`
 - Designer's `references/roles/designer/` template directory needs new structure to support tool-conditional composition
 - `config.md` schema gains a `## Tools` section
-- Test plan must cover: tool present (install succeeds), tool missing (install refused with clear message), both tools present (selection prompt), tool removed after install (re-run wizard prompt)
+- New status labels: `status:pending-human-approval` and `status:pending-human-review`
+- Existing `status:pending` is renamed → `status:pending-human-approval` (migration in this repo only)
+- tracker.py legal-transitions table updated to include both new transitions and remove old `pending` references
+- Test plan must cover: tool present (install succeeds), tool missing (install refused with clear message), both tools present (selection prompt), tool removed after install (re-run wizard prompt), HITL designer iterating on a real issue with figma/stitch/html tools, status migration script idempotency
 
 ## v1 Role Inventory (final, REVISED)
 
@@ -185,9 +200,28 @@ From RESEARCH.md §5:
 
 ## Upgrade Path
 
-**N/A — no install base.** Clean rebuild. Document the new structure in README and the `/squidsquad-upgrade` slash command. The `/squidsquad-upgrade` flow itself does NOT need to learn about manifests in v1 (manifests are only consumed at setup time, then frozen into config.md).
+**Bounded migration: this repo only.** SquidSquad's own repo is the single install base for v1. Migration tasks:
 
-Future-upgrade consideration: when manifest schema_version bumps to 2, `/squidsquad-upgrade` will need to migrate. Out of v1 scope.
+1. **GH Issue label migration**: Rewrite all open + closed issues currently labeled `status:pending` to `status:pending-human-approval`. Use a one-shot script in `references/scripts/migrate_status_labels.py` (or inline gh CLI commands). Check the count before and after to verify completeness.
+2. **Label table update**: Add `status:pending-human-approval` and `status:pending-human-review` to the GH labels list. Remove `status:pending` after migration is complete and verified.
+3. **tracker.py legal transitions**: Update the transitions table:
+   - Old: `pending → planning | approved`
+   - New: `pending-human-approval → planning | approved`
+   - New: `in-progress → pending-human-review` (for HITL roles)
+   - New: `pending-human-review → in-progress | pending-ship`
+4. **Template/text references**: Find and replace `pending` (status context) with `pending-human-approval` across all CLAUDE.md files, sub-skills, SKILL.md, README, and references/scripts/. Be careful not to clobber `pending-test`/`pending-ship` references.
+5. **Working-state and iteration log references**: Update format docs but do NOT rewrite existing iter-N.md files (history is preserved as-is).
+6. **`/squidsquad-upgrade` flow**: v1 of upgrade does NOT need to learn manifests (manifests are setup-time only, frozen into config.md). But upgrade DOES need to handle the new label namespace if any external install ever exists (none today).
+
+**Migration ordering** (important to avoid breakage):
+1. First add the new labels (`pending-human-approval`, `pending-human-review`) — additive, no breakage
+2. Update tracker.py to accept both old and new transitions during a transition window
+3. Run the issue migration script (rewrites labels)
+4. Update templates and CLAUDE.md files
+5. Remove `pending` label and the transition-window code in tracker.py
+6. Verify with a full PM cycle that nothing references the old label
+
+Future-upgrade consideration: when manifest `schema_version` bumps to 2 (post-v1), `/squidsquad-upgrade` will need to migrate manifests. Out of v1 scope.
 
 ## Out of Scope
 
