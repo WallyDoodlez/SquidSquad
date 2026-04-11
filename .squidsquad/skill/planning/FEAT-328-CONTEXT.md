@@ -39,12 +39,38 @@ This feature ships:
 
 16. **Q6 — Custom-builder mode**: **Defer entirely to v2.** Honors the "two presets v1" lock. Document the workaround in README: users wanting a custom shape run the closest preset and hand-edit `config.md` + delete unwanted directories. v2 candidate.
 
-17. **Q7 — QA in design preset (HUMAN OVERRIDE)**: Create a **new dedicated `design-review` role**. The `design` preset uses `design-review` instead of QA. The `software-dev` preset still uses QA. This brings the v1 role count to **6**: pm, dm, designer, dev (with variants), qa, design-review.
-   - `design-review/manifest.yaml` ships with v1
-   - `routes_to: [dm]`
-   - Owns visual review against acceptance criteria, design system consistency, accessibility, traceability to design briefs
-   - SOUL.md focuses on "is this design what the human asked for"
-   - Has its own template directory at `references/roles/design-review/`
+17. **Q7 — Designer HITL loop (HUMAN OVERRIDE, REVISED 2x)**: Drop the `design-review` role idea entirely. Designer iterates with the human directly via a **HITL self-loop**. v1 role count stays at **5**: pm, dm, designer, dev (with variants), qa.
+
+   **HITL mechanic** (corrected — designer NEVER pauses):
+   - Each designer cycle, in the triage step, designer checks `pending-human` items assigned to itself **first** (priority over new approved features).
+   - For each `pending-human` item, designer reads the issue's comments. If a new human comment exists since the designer's last comment on that issue, designer picks it up:
+     - Transition `pending-human → in-progress`
+     - Iterate on the design based on the human's feedback
+     - Re-present (new tool output + new comment with link)
+     - Transition `in-progress → pending-human` again
+   - Designer moves on to the next pending-human item, or to the next approved feature, or ends the cycle. **Never blocks.**
+   - Multiple `pending-human` items can be in flight simultaneously. Designer walks them in priority order each cycle.
+
+   **Manifest representation**:
+   - New manifest field: `iteration_mode: hitl`
+   - Designer's `routes_to: [pm, dm]` (PM picks up after human approval, DM is the Q1 terminal fallback)
+   - Wizard renders the design pipeline as `PM → Designer ↻ → DM` (the `↻` symbolizes HITL)
+
+   **New status label**: `pending-human`
+   - Added to the legal-transitions table in `tracker.py`
+   - Legal transitions:
+     - `in-progress → pending-human`
+     - `pending-human → in-progress` (redirect from human)
+     - `pending-human → pending-ship` (approval from human)
+   - Updated in PM/skill/designer CLAUDE.md transition references
+
+   **Designer produces designs, NOT specs (HUMAN OVERRIDE 3)**: Designer creates designs via an **external connected design tool** (Figma MCP, Google Stitch, etc.), not by writing markdown specs. Output lives in the external tool. Designer only posts a **link/reference** to the design in the issue comment thread. The `.squidsquad/designer/specs/` directory may exist as a thin index mapping `issue_number → tool URL` but the actual design artifact is always in the external tool.
+
+   **HITL approval/redirect detection**:
+   - Approval keywords (case-insensitive): `approved`, `approve`, `lgtm`, `ship it`, `looks good`
+   - Anything else that's not an approval keyword counts as a redirect
+   - Bot-author comments (PM, designer itself) are ignored when scanning for human input
+   - First-cycle dev discretion: skill agent picks the exact approval-detection algorithm (regex, comment author check, label-based, etc.)
 
 18. **Q8 — Re-running setup with existing `.squidsquad/`**: Three-way prompt:
    - **(1) Abort** (default, Enter key) — safe no-op
@@ -53,25 +79,87 @@ This feature ships:
 
 19. **Q9 — Intent parser (HUMAN OVERRIDE)**: **LLM sub-prompt only**. The wizard runs inside Claude, so the LLM call is free. Wizard asks Claude to classify the free-text answer into `software-dev | design | unclear` with a short prompt. No local matcher. If `unclear`, fall through to manual preset picker.
 
-20. **Q10 — Pipeline display**: ASCII arrow with bracket notation: `PM → Designer → [BE, FE] → QA → DM`. One-line, screenshot-friendly, matches the research doc's notation. Brackets handle parallel groupings.
+20. **Q10 — Pipeline display**: ASCII arrow with bracket notation: `PM → Designer → [BE, FE] → QA → DM`. One-line, screenshot-friendly, matches the research doc's notation. Brackets handle parallel groupings. HITL roles are marked with `↻` (e.g. `PM → Designer ↻ → DM`).
 
-## v1 Role Inventory (final)
+### From Phase 2 follow-up discussion (3 new decisions on tool requirements)
 
-| Role | Always installed | Presets | routes_to |
-|------|------------------|---------|-----------|
-| pm | yes | both | [designer, dev, qa, design-review, dm] |
-| dm | yes | both | [] (terminal) |
-| designer | optional in software-dev, required in design | both | [dev, qa, dm] |
-| dev (be/fe/fullstack variants) | required in software-dev only | software-dev | [qa, dm] |
-| qa | auto-installed when dev is installed | software-dev | [dm] |
-| design-review | required in design preset | design | [dm] |
+21. **Q-new1 — Universal `requires_tools` manifest field**: Every role manifest can declare `requires_tools` with `any_of` / `all_of` lists. Wizard validates tool availability at install time by inspecting the host Claude session's available MCP servers. This is a first-class manifest field, not a designer-only special case. Future roles (DM with delivery tools, marketers with analytics, etc.) use the same mechanism.
+
+   **Schema**:
+   ```yaml
+   requires_tools:
+     any_of:
+       - figma_mcp
+       - google_stitch
+     all_of: []  # roles can require multiple tools simultaneously
+   ```
+
+   **Tool identifier convention**: Lowercase, snake_case, matches the MCP server name as registered in Claude (e.g., `figma_mcp`, `gmail_mcp`, `slack_mcp`). Validator does a fuzzy match against the registered MCP servers.
+
+22. **Q-new2 — Missing tool behavior**: If a role's `requires_tools` cannot be satisfied at install time, the wizard **refuses to install the role** and prints a clear message:
+   ```
+   Designer requires one of: figma_mcp, google_stitch
+   None are available in this Claude session.
+   To install Designer, add one of these MCPs to Claude (see Claude docs)
+   then re-run /squidsquad-setup.
+   Skipping Designer for this install.
+   ```
+   - Strong invariant: a role only installs if it can actually function
+   - The wizard continues with the rest of the preset (other roles still install)
+   - If the missing tool is for a **required** role of the preset (not optional), the wizard prompts the user: abort install entirely, or fall back to a degraded preset
+   - **Re-run handling**: when user re-runs setup with a tool that wasn't available before, the three-way prompt (Q8) gains an implicit fourth path: "regenerate to add newly-available roles"
+
+23. **Q-new3 — v1 designer tool support (REVISED — added HTML fallback)**: Designer's `requires_tools.any_of` lists **figma_mcp**, **google_stitch**, and **local_html** for v1. Other tools (Penpot, Sketch, web-fetch, etc.) deferred to v2.
+   - If the user has multiple of these installed/available, wizard asks which to use as the designer's primary tool (single-select)
+   - The chosen tool ID is written to `config.md` under a new section: `## Tools` → `- **designer**: figma_mcp`
+   - Designer's CLAUDE.md template is composed with tool-specific sub-skills: `references/sub-skills/designer-tools/figma.md`, `references/sub-skills/designer-tools/stitch.md`, `references/sub-skills/designer-tools/html.md`. Only the chosen tool's sub-skill gets composed in.
+
+   **`local_html` is a built-in capability, not an MCP**: It requires no external server. The designer agent uses Read/Write/Edit to produce HTML/CSS/JS files at `.squidsquad/designer/designs/<issue-number>/index.html` (and supporting assets). The HITL link posted in the issue comment is a relative path or `file://` URL pointing to the local HTML file. Human opens it in a browser to review.
+
+   **Tool identifier convention update**: A tool ID can refer to either:
+   - An external MCP server (e.g. `figma_mcp`, `google_stitch`) — the validator inspects the host Claude session's MCP servers
+   - A built-in capability (e.g. `local_html`) — always considered "available" by the validator, requires no external setup
+
+   **Practical consequence**: Because `local_html` is always available, **designer can always install in v1**. The Q-new2 "refuse install" path never fires for designer. The path is reserved for future roles whose tool requirements have no built-in fallback (e.g. DM with delivery tools, where there's no "local fallback" for sending email).
+
+   **HTML sub-skill scope** (`references/sub-skills/designer-tools/html.md`):
+   - Folder structure: `.squidsquad/designer/designs/<issue>/index.html` + sibling assets
+   - Use semantic HTML, inline CSS or one stylesheet per design
+   - No build step, no framework, no JS bundler — plain HTML is the deliverable
+   - Designer can include reference screenshots, mood boards, etc. as sibling files
+   - Comment in issue references the local path: `Iteration 1: see designs/42/index.html`
+   - Human opens the file directly in their browser; redirects via issue comment
+
+### Implications for the v1 work
+
+- Manifest schema gets a new top-level field `requires_tools` (Q-new1)
+- Validator (`references/scripts/manifest.py`) gains MCP-availability detection — needs to enumerate the host Claude session's MCP servers (mechanism TBD, dev discretion)
+- Wizard gets a tool-selection sub-step for roles with multiple satisfying tools (Q-new3)
+- New sub-skill files: `references/sub-skills/designer-tools/figma.md`, `references/sub-skills/designer-tools/stitch.md` — describe how the designer agent should call the respective MCP
+- Designer's `references/roles/designer/` template directory needs new structure to support tool-conditional composition
+- `config.md` schema gains a `## Tools` section
+- Test plan must cover: tool present (install succeeds), tool missing (install refused with clear message), both tools present (selection prompt), tool removed after install (re-run wizard prompt)
+
+## v1 Role Inventory (final, REVISED)
+
+| Role | Always installed | Presets | iteration_mode | routes_to | requires_tools |
+|------|------------------|---------|----------------|-----------|----------------|
+| pm | yes | both | normal | [designer, dev, qa, dm] | none |
+| dm | yes | both | normal | [] (terminal) | none in v1 (TBD: delivery tools come later) |
+| designer | optional in software-dev, required in design | both | **hitl** | [pm, dm] | `any_of: [figma_mcp, google_stitch, local_html]` |
+| dev (be/fe/fullstack variants) | required in software-dev only | software-dev | normal | [qa, dm] | none |
+| qa | auto-installed when dev is installed | software-dev | normal | [dm] | none |
+
+**Total v1 roles: 5** (no design-review)
 
 **Resolved pipelines:**
-- `software-dev` default (with designer): `PM → Designer → [BE, FE] → QA → DM`
+- `software-dev` default (with designer): `PM → Designer ↻ → [BE, FE] → QA → DM`
 - `software-dev` no designer: `PM → [BE, FE] → QA → DM`
-- `software-dev` fullstack: `PM → Designer? → Dev → QA → DM`
-- `design`: `PM → Designer → design-review → DM`
+- `software-dev` fullstack: `PM → Designer? ↻ → Dev → QA → DM`
+- `design`: `PM → Designer ↻ → DM`
 - minimal (any preset, decline all optionals): `PM → DM`
+
+**Note on `↻`**: The `↻` glyph in the pipeline display indicates a HITL role — that role iterates with the human via issue comments before handing off. Hovers / tooltips not in scope for v1; the glyph is documented in README.
 
 ## Dev Discretion (skill-lead can choose)
 
