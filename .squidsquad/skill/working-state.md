@@ -168,11 +168,33 @@ discrete phases, each landing as its own atomic commit.
       - Full static suite: 376/376 pass (was 355, +21)
 - [x] **Phase G.2 — Wizard helpers: writers + scaffolder + labels** — all three
   subphases shipped.
-  - [ ] **Phase G.3 — Prose runbook**
-    - references/wizard/WIZARD.md — the step-by-step runbook Claude follows
-    - Intent classifier prompt (Q-new18, hardcoded in runbook)
-    - Review screen (P/V/E/A) interaction pattern
-    - Installer agent lifecycle (ephemeral, exits on completion — Q-new21)
+  - [x] **Phase G.3 — Prose runbook** (this cycle)
+    - references/wizard/WIZARD.md — step-by-step runbook Claude follows
+    - Covers 8 wizard steps: 0 (gh prereq) → 0b (re-run) → 1..7
+    - Q-new18 intent classifier prompt embedded verbatim
+    - Q-new15 specialist roster (conversational, no menus)
+    - Q-new13 manifest-driven setup_requirements walker
+    - Q-new19 per-agent answer parsing from single user exchange
+    - Q-new17 config.md schema (via build_config_md)
+    - Review screen (P/V/E/A) with preview via wizard.py helpers only —
+      never touches real .squidsquad/ during preview
+    - Installer agent lifecycle (Q-new21): ephemeral, exits at 7.6,
+      no self-loop, no --force (human-only escape hatch)
+    - Domain-only language rules (Q-new14) with tone guidance
+    - Error recovery path with retry-or-abort per step
+    - 23 new static tests in tests/test_wizard_runbook.py that enforce:
+      - all 8 steps present in order
+      - every wizard.py/manifest.py/compose.py command mentioned exists
+        as a real subcommand (drift-proof)
+      - critical helpers are explicitly called (check-gh, scaffold, etc.)
+      - referenced presets and roles exist in the registry
+      - no disk writes before Step 7 (explicit prohibition)
+      - Step 7.6 has ephemeral exit instruction
+      - Review screen has all 4 actions [P/V/E/A]
+      - Preview uses dry-run helpers, not real writes
+      - No --force flag in installer body
+      - All 6 critical Q-new locks cited with their context word
+    - Full static suite: 399/399 pass (was 376, +23)
   - [ ] **Phase G.4 — SKILL.md rewrite + /squidsquad-setup slash command**
     - Replace legacy Setup Instructions section with pointer to WIZARD.md
     - Update packages/cli/index.js to seed the new command
