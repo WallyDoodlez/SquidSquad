@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-12 13:03
+
+- **Files scanned**: references/scripts/tracker.py, references/scripts/boot_remote.py, references/scripts/wizard.py
+- **Findings**: #463 (boot_remote.py unquoted paths in osascript/tmux — high), #464 (tracker.py unguarded int() parsing — medium). wizard.py has similar path issues but deferred (same root cause as #463).
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-12 08:33
 
 - **Files scanned**: references/scripts/config.py, references/scripts/cycle.py, references/scripts/vault_check.py
