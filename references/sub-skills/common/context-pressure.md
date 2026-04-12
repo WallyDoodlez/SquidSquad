@@ -9,9 +9,9 @@ python references/scripts/config.py get context-threshold
 ```
 
 If context usage **exceeds the threshold**:
-1. Compact your current working state into `.squidsquad/[ROLE]/working-state.md` (see Working State File below).
+1. Compact your current working state into `.squidsquad/[ROLE]/working-state.md` (see Working State File below). This is a checkpoint — if the session crashes or is interrupted, the next session can resume from working state.
 2. Commit and push all pending work.
-3. Print: `[🦑 HH:MM:SS] Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
-4. Exit the conversation. The boot script will restart you with a fresh context window.
+3. Print: `[🦑 HH:MM:SS] Context pressure at [X]% — working state checkpointed. Continuing normally.`
+4. **Continue the cycle normally.** Claude Code automatically compresses prior messages as context approaches limits, so the conversation can keep going indefinitely. Do NOT exit the conversation — exiting kills the cron loop and there is no auto-restart mechanism.
 
 If context usage is below threshold, continue normally.

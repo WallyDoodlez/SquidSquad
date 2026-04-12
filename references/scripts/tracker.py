@@ -366,7 +366,12 @@ def create_bug(title, body, role, severity, reporter=None):
     """Create a bug issue with correct label format."""
     sev_label = SEVERITY_LABELS.get(severity, f"severity:{severity}")
     role_label = f"role:{role}"
-    labels = f"type:bug,{sev_label},{role_label},squidsquad,status:pending"
+    # Bugs start at `open` (immediately actionable by the assigned dev agent).
+    # Features start at `pending` (awaiting human approval via PM intake).
+    # This distinction matters: dev-agent Step 2 picks up all non-shipped
+    # bugs — if bugs started at `pending`, they'd sit in limbo because
+    # agents interpret `pending` as "awaiting human approval".
+    labels = f"type:bug,{sev_label},{role_label},squidsquad,status:open"
 
     full_body = body
     if reporter:
