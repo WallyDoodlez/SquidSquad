@@ -37,42 +37,12 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 
    Check `.squidsquad/[your-role]/scan-history.md` to avoid re-scanning recently reviewed files.
 
-4. **Scan with your domain lens**:
+4. **Scan with your domain lens**: Read your SOUL.md `### Improvement Scan` section for:
+   - **Scan criteria**: what to look for, in priority order
+   - **File patterns**: which file types to target
+   - **Noise filter**: what does NOT constitute a finding
 
-   **Dev agent** — code quality:
-   - Dead code, unused imports, unreachable branches
-   - Missing error handling, unchecked edge cases
-   - Code duplication, candidates for extraction
-   - Outdated patterns, deprecated API usage
-   - Performance bottlenecks, unnecessary allocations
-   - Security concerns (hardcoded secrets, injection risks)
-
-   **QA agent** — test coverage:
-   - Source files without corresponding test files
-   - Public functions/APIs without test cases
-   - Missing edge case tests (null, empty, boundary values)
-   - Flaky test indicators (timing dependencies, order-dependent)
-   - Missing integration or E2E test scenarios
-
-   **Designer agent** — design consistency:
-   - Hardcoded colors/spacing vs design tokens
-   - Missing component states (hover, disabled, error, loading, empty)
-   - Accessibility gaps (contrast, labels, keyboard navigation)
-   - Inconsistent patterns across similar components
-   - UX friction (confusing flows, missing feedback)
-
-   **DM agent** — documentation:
-   - Outdated README sections that don't match current behavior
-   - Missing API documentation for public endpoints
-   - Changelog entries that could be clearer
-   - Missing getting-started guides or setup instructions
-   - Public-facing features without user documentation
-
-   **PM agent** — process:
-   - Stale Pending features that need attention
-   - Backlog items that could be consolidated
-   - Priority imbalances (too many High, neglected Low items)
-   - Workflow bottlenecks visible from tracker patterns
+   Apply these criteria to the selected files. If your SOUL.md lacks an Improvement Scan section, fall back to general code quality checks (dead code, error handling, security).
 
 5. **Report findings to PM**: For each finding (max **2 items per scan**), classify it and file via `python references/scripts/tracker.py create-bug` or `create-feature`:
 

@@ -51,6 +51,17 @@ Read dev Discussion entries for delivery notes — they describe what changed an
 - Anti-pattern: Copying dev's technical Discussion entry verbatim into user docs
 - Anti-pattern: Updating docs without verifying the feature actually works as described
 
-### Self-Improvement Lens
+### Improvement Scan
 
-During quiet cycles, scan for: outdated README sections, missing getting-started guides, CHANGELOG entries that could be clearer, user-facing features without documentation, adoption barriers (complex setup, unclear benefits), accessibility of documentation. Consult `[[human-profile]]` and BRIEFING.md for communication style and audience context.
+During quiet cycles, scan the target project for improvements using the criteria below. Consult `[[human-profile]]` and BRIEFING.md for communication style and audience context.
+
+**Scan criteria** (ordered by priority):
+- Outdated README sections that don't match current behavior
+- Missing API documentation for public endpoints
+- Changelog entries that could be clearer
+- Missing getting-started guides or setup instructions
+- Public-facing features without user documentation
+- Adoption barriers (complex setup, unclear benefits)
+
+**File patterns**: `*.md`, `README*`, `CHANGELOG*`, `docs/**` — documentation files
+**Noise filter**: Internal-only docs (agent instructions, planning artifacts) are not findings.

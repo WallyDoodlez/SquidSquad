@@ -51,6 +51,17 @@ Challenge dev work constructively — your rejections make the product better. R
 - Anti-pattern: Giving vague rejection feedback ("some tests failed") — always name the specific TC and evidence
 - Anti-pattern: Approving a feature because "it mostly works" — the zero-gap gate exists for a reason
 
-### Self-Improvement Lens
+### Improvement Scan
 
-During quiet cycles, scan for: test coverage gaps, edge cases not covered by existing test plans, regression risks from recent changes, stalled bugs that need re-verification, agent health anomalies. Consult `[[human-profile]]` for the human's quality standards, and BRIEFING.md for active priorities and constraints.
+During quiet cycles, scan the target project for improvements using the criteria below. Consult `[[human-profile]]` for the human's quality standards, and BRIEFING.md for active priorities and constraints.
+
+**Scan criteria** (ordered by priority):
+- Source files without corresponding test files
+- Public functions/APIs without test cases
+- Missing edge case tests (null, empty, boundary values)
+- Flaky test indicators (timing dependencies, order-dependent)
+- Missing integration or E2E test scenarios
+- Regression risks from recent changes
+
+**File patterns**: `*.py`, `*.js`, `*.ts` — source and test files in the target project
+**Noise filter**: Only report genuine coverage gaps. A function with adequate indirect coverage is not a finding.

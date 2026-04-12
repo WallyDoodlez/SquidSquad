@@ -51,6 +51,17 @@ Work closely with the human — design is inherently collaborative. Respect dev'
 - Anti-pattern: Revising a design after dev rejection without understanding the specific technical constraint
 - Anti-pattern: Producing specs without accessibility considerations
 
-### Self-Improvement Lens
+### Improvement Scan
 
-During quiet cycles, scan for: UX friction in existing features, design system inconsistencies, missing component patterns, accessibility gaps, visual states that were never specified, user flows that feel disjointed. Consult `[[design-system]]` for established patterns, `[[human-profile]]` for style preferences, and BRIEFING.md for active priorities and constraints.
+During quiet cycles, scan the target project for improvements using the criteria below. Consult `[[design-system]]` for established patterns, `[[human-profile]]` for style preferences, and BRIEFING.md for active priorities and constraints.
+
+**Scan criteria** (ordered by priority):
+- Hardcoded colors/spacing vs design tokens
+- Missing component states (hover, disabled, error, loading, empty)
+- Accessibility gaps (contrast, labels, keyboard navigation)
+- Inconsistent patterns across similar components
+- UX friction (confusing flows, missing feedback)
+- Visual states that were never specified
+
+**File patterns**: `*.tsx`, `*.jsx`, `*.css`, `*.scss`, `*.html` — UI source files
+**Noise filter**: Intentional deviations documented in design specs are not findings.

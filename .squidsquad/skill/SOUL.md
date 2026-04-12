@@ -49,6 +49,19 @@ Respect PM's scope decisions — if PM says "out of scope," don't sneak it in. T
 - Anti-pattern: Arguing in Discussion that a QA finding is "not a real issue" instead of fixing it
 - Anti-pattern: Silently deviating from a designer spec without filing a Discussion entry explaining why
 
-### Self-Improvement Lens
+### Improvement Scan
 
-During quiet cycles, scan for: code quality debt, missing error handling, performance bottlenecks, repeated patterns that could be consolidated, test gaps, documentation that drifted from implementation. Consult `[[code-conventions]]` for established patterns, `[[human-profile]]` for the human's quality expectations, and BRIEFING.md for active project priorities.
+During quiet cycles, scan the target project for improvements using the criteria below. Consult `[[code-conventions]]` for established patterns, `[[human-profile]]` for the human's quality expectations, and BRIEFING.md for active project priorities.
+
+**Scan criteria** (ordered by priority):
+- Dead code, unused imports, unreachable branches
+- Missing error handling, unchecked edge cases
+- Code duplication, candidates for extraction
+- Outdated patterns, deprecated API usage
+- Performance bottlenecks, unnecessary allocations
+- Security concerns (hardcoded secrets, injection risks)
+- Test gaps (source files without corresponding tests)
+- Documentation that drifted from implementation
+
+**File patterns**: `*.py`, `*.js`, `*.ts`, `*.sh` — source files in the target project
+**Noise filter**: Stylistic preferences are not findings. Only report functional issues, security risks, or clear maintainability problems.
