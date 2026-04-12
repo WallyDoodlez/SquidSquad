@@ -1,0 +1,251 @@
+"""Tests for references/scripts/git_ops.py — mocked subprocess, no real git."""
+
+import subprocess
+import sys
+from pathlib import Path
+from unittest.mock import MagicMock, patch, call
+
+import pytest
+
+# Allow import from references/scripts/
+SCRIPTS = Path(__file__).resolve().parent.parent / "references" / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+import git_ops
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _mock_result(stdout="", stderr="", returncode=0):
+    r = MagicMock()
+    r.stdout = stdout
+    r.stderr = stderr
+    r.returncode = returncode
+    return r
+
+
+# ---------------------------------------------------------------------------
+# pull()
+# ---------------------------------------------------------------------------
+
+class TestPull:
+    @patch("git_ops._run")
+    def test_clean_pull(self, mock_run):
+        mock_run.return_value = _mock_result()
+        assert git_ops.pull() is True
+        mock_run.assert_called_once()
+
+    @patch("git_ops._run")
+    def test_pull_stash_pop(self, mock_run):
+        """Dirty tree → stash, pull, pop succeeds."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),  # pull fails
+            _mock_result(),              # stash
+            _mock_result(),              # pull --rebase
+            _mock_result(),              # stash pop
+        ]
+        assert git_ops.pull() is True
+        assert mock_run.call_count == 4
+
+    @patch("git_ops._run")
+    def test_pull_stash_pop_conflict(self, mock_run):
+        """Stash pop fails → warning printed, still returns True."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),  # pull fails
+            _mock_result(),              # stash
+            _mock_result(),              # pull --rebase
+            _mock_result(returncode=1),  # stash pop fails
+        ]
+        assert git_ops.pull() is True
+
+
+# ---------------------------------------------------------------------------
+# add_all()
+# ---------------------------------------------------------------------------
+
+class TestAddAll:
+    @patch("git_ops._run")
+    def test_stages_all(self, mock_run):
+        mock_run.return_value = _mock_result()
+        git_ops.add_all()
+        mock_run.assert_called_once_with("git add -A")
+
+
+# ---------------------------------------------------------------------------
+# commit()
+# ---------------------------------------------------------------------------
+
+class TestCommit:
+    @patch("subprocess.run")
+    def test_successful_commit(self, mock_run):
+        mock_run.return_value = _mock_result(stdout="[main abc1234] skill: msg")
+        assert git_ops.commit("skill", "test message") is True
+        args = mock_run.call_args
+        assert args[0][0][0] == "git"
+        assert args[0][0][1] == "commit"
+        # Check message contains role prefix
+        msg = args[0][0][3]
+        assert msg.startswith("skill: test message")
+        assert "Co-Authored-By:" in msg
+
+    @patch("subprocess.run")
+    def test_nothing_to_commit(self, mock_run):
+        mock_run.return_value = _mock_result(
+            stdout="nothing to commit, working tree clean",
+            returncode=1,
+        )
+        assert git_ops.commit("skill", "msg") is False
+
+    @patch("subprocess.run")
+    def test_commit_error(self, mock_run):
+        mock_run.return_value = _mock_result(
+            stderr="fatal: some error", returncode=1,
+        )
+        assert git_ops.commit("skill", "msg") is False
+
+
+# ---------------------------------------------------------------------------
+# push()
+# ---------------------------------------------------------------------------
+
+class TestPush:
+    @patch("git_ops._run")
+    def test_successful_push(self, mock_run):
+        mock_run.return_value = _mock_result()
+        assert git_ops.push() is True
+
+    @patch("git_ops._run")
+    def test_push_failure(self, mock_run):
+        mock_run.return_value = _mock_result(stderr="rejected", returncode=1)
+        assert git_ops.push() is False
+
+
+# ---------------------------------------------------------------------------
+# commit_push()
+# ---------------------------------------------------------------------------
+
+class TestCommitPush:
+    @patch("git_ops.push", return_value=True)
+    @patch("git_ops.commit", return_value=True)
+    @patch("git_ops.add_all")
+    def test_full_workflow(self, mock_add, mock_commit, mock_push):
+        assert git_ops.commit_push("skill", "msg") is True
+        mock_add.assert_called_once()
+        mock_commit.assert_called_once_with("skill", "msg")
+        mock_push.assert_called_once()
+
+    @patch("git_ops.push")
+    @patch("git_ops.commit", return_value=False)
+    @patch("git_ops.add_all")
+    def test_nothing_to_commit_skips_push(self, mock_add, mock_commit, mock_push):
+        assert git_ops.commit_push("skill", "msg") is False
+        mock_push.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# has_changes()
+# ---------------------------------------------------------------------------
+
+class TestHasChanges:
+    @patch("git_ops._run")
+    def test_dirty_tree(self, mock_run):
+        mock_run.return_value = _mock_result(stdout=" M some/file.py\n")
+        assert git_ops.has_changes() is True
+
+    @patch("git_ops._run")
+    def test_clean_tree(self, mock_run):
+        mock_run.return_value = _mock_result(stdout="")
+        assert git_ops.has_changes() is False
+
+
+# ---------------------------------------------------------------------------
+# last_hash()
+# ---------------------------------------------------------------------------
+
+class TestLastHash:
+    @patch("git_ops._run")
+    def test_returns_hash(self, mock_run):
+        mock_run.return_value = _mock_result(stdout="abc1234\n")
+        assert git_ops.last_hash() == "abc1234"
+
+
+# ---------------------------------------------------------------------------
+# branch_create() / branch_switch()
+# ---------------------------------------------------------------------------
+
+class TestBranching:
+    @patch("git_ops._run_list")
+    def test_branch_create(self, mock_run):
+        mock_run.return_value = _mock_result()
+        git_ops.branch_create("feature/test")
+        mock_run.assert_called_once_with(["git", "checkout", "-b", "feature/test"])
+
+    @patch("git_ops._run_list")
+    def test_branch_switch(self, mock_run):
+        mock_run.return_value = _mock_result()
+        git_ops.branch_switch("main")
+        mock_run.assert_called_once_with(["git", "checkout", "main"])
+
+
+# ---------------------------------------------------------------------------
+# pr_create()
+# ---------------------------------------------------------------------------
+
+class TestPrCreate:
+    @patch("git_ops._run_list")
+    def test_successful_pr(self, mock_run):
+        mock_run.return_value = _mock_result(
+            stdout="https://github.com/org/repo/pull/42\n"
+        )
+        url = git_ops.pr_create("title", "body")
+        assert url == "https://github.com/org/repo/pull/42"
+
+    @patch("git_ops._run_list")
+    def test_pr_failure(self, mock_run):
+        mock_run.return_value = _mock_result(
+            stderr="error", returncode=1,
+        )
+        assert git_ops.pr_create("title", "body") is None
+
+
+# ---------------------------------------------------------------------------
+# _get_alias()
+# ---------------------------------------------------------------------------
+
+class TestGetAlias:
+    def test_fallback_to_role(self):
+        """When config module unavailable, returns role name."""
+        # _get_alias catches all exceptions and falls back to role
+        with patch.dict("sys.modules", {"config": None}):
+            result = git_ops._get_alias("skill")
+            assert result == "skill"
+
+
+# ---------------------------------------------------------------------------
+# _parse_args()
+# ---------------------------------------------------------------------------
+
+class TestParseArgs:
+    def test_help_exits(self):
+        with patch.object(sys, "argv", ["git_ops.py", "--help"]):
+            with pytest.raises(SystemExit):
+                git_ops._parse_args()
+
+    def test_no_args_exits(self):
+        with patch.object(sys, "argv", ["git_ops.py"]):
+            with pytest.raises(SystemExit):
+                git_ops._parse_args()
+
+    def test_parses_command(self):
+        with patch.object(sys, "argv", ["git_ops.py", "pull"]):
+            cmd, rest = git_ops._parse_args()
+            assert cmd == "pull"
+            assert rest == []
+
+    def test_parses_command_with_args(self):
+        with patch.object(sys, "argv", ["git_ops.py", "commit", "skill", "msg"]):
+            cmd, rest = git_ops._parse_args()
+            assert cmd == "commit"
+            assert rest == ["skill", "msg"]
