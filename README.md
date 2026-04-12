@@ -12,7 +12,7 @@
 
 **Your AI dev team that coordinates through markdown, not meetings.**
 
-SquidSquad is a [Claude Code](https://claude.ai/code) skill that spins up autonomous AI agents — one per dev role you define, plus PM and QA — that work on your codebase in parallel. No message queues. No orchestration servers. Just a shared `.squidsquad/` folder and git.
+SquidSquad is a [Claude Code](https://claude.ai/code) skill that spins up autonomous AI agents — PM and DM are always present, plus dev, designer, and QA agents matched to your project — that work on your codebase in parallel. No message queues. No orchestration servers. Just a shared `.squidsquad/` folder and git.
 
 ---
 
@@ -53,7 +53,7 @@ In your project's git repo:
 npx squidsquad
 ```
 
-The bootstrapper checks prerequisites (Node.js 18+, Python, `gh` CLI, Claude Code), seeds the skill into your project, and launches the setup wizard. The wizard asks for your project name, dev roles (e.g. `fe, be` or just `skill`), test commands, and loop interval — then generates the full `.squidsquad/` folder.
+The bootstrapper checks prerequisites (Node.js 18+, Python, `gh` CLI, Claude Code), seeds the skill into your project, and launches an intent-driven setup wizard. Tell the wizard what you're building — it classifies your intent, proposes a team from curated presets, and walks you through setup one question at a time. PM and DM are always installed; dev, designer, and QA agents are added based on your project type.
 
 **Already have Claude Code open?** You can also run `Set up SquidSquad for my project.` directly in a Claude Code session.
 
@@ -62,12 +62,12 @@ The bootstrapper checks prerequisites (Node.js 18+, Python, `gh` CLI, Claude Cod
 Open one terminal per agent. Available boot scripts depend on your setup — check `.squidsquad/start-*.sh` for your list:
 
 ```bash
-bash .squidsquad/start-skill.sh    # Dev agent (autonomous)
 bash .squidsquad/start-pm.sh       # PM (interactive — you talk to this one)
-bash .squidsquad/start-dm.sh       # Delivery Manager (optional, autonomous)
+bash .squidsquad/start-skill.sh    # Dev agent (autonomous)
+bash .squidsquad/start-dm.sh       # Delivery Manager (autonomous)
 ```
 
-QA, Designer, and additional dev agents get their own `start-[role].sh` scripts when configured during setup.
+QA, Designer, and additional dev agents get their own `start-[role].sh` scripts based on your team setup.
 
 PowerShell: `.\.squidsquad\start-[role].ps1`
 
@@ -79,13 +79,14 @@ Talk to PM to file bugs, request features, and approve plans. Everything else ha
 
 ## Team Shapes
 
-| You say at setup | Agents created |
-|-----------------|----------------|
-| `fe, be` | FE Lead + BE Lead + PM |
-| `skill` | Skill Lead + PM |
-| `fe, be, designer` | FE Lead + BE Lead + Designer + PM |
+The wizard proposes a team based on what you're building:
 
-QA and DM are optional — add them during setup. When QA is absent, dev agents self-verify. When DM is absent, PM handles delivery.
+| You describe | Preset | Team created |
+|-------------|--------|--------------|
+| "I'm building a web app" | `software-dev` | PM → Designer ↻ → Dev → QA → DM |
+| "I need UI mockups" | `design` | PM → Designer ↻ → DM |
+
+PM and DM are always installed. QA is auto-added when dev or designer agents are present. Dev agents can be split (`fe` + `be`) or combined (`fullstack`) — the wizard asks based on your project.
 
 ---
 
