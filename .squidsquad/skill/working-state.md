@@ -227,11 +227,38 @@ discrete phases, each landing as its own atomic commit.
     - Full static suite: 416/416 pass (was 399, +17)
 - [x] **Phase G — Wizard implementation** COMPLETE
       (G.1 helpers + G.2 writers/scaffolder/labels + G.3 runbook + G.4 wiring)
-- [ ] **Phase H — compose.py + config.py deeper manifest refactor**
-  - Phase F did the template migration. Remaining: drive the compose
-    pipeline entirely from manifests (currently compose.py still has a
-    hardcoded `known_roles` set)
-  - Preserve backward compatibility for existing config.md files
+- [x] **Phase H — compose.py + config.py deeper manifest refactor** (this cycle)
+  - **compose.py**: added `_list_known_role_identities()` that scans
+    `references/roles/` for directories containing a CLAUDE.md entry file.
+    `_get_entry_file_for_role` now drives off that list instead of the
+    hardcoded `known_roles = {"pm", "dm", "qa", "designer", "dev"}` set.
+    Adding a new role directory is automatically picked up — no code edit.
+    Defensive: if `dev` identity is missing, falls back to the literal
+    role name so errors point at the right missing file.
+  - **config.py**: added schema-aware agent parsing
+    - `detect_schema_version(text)` — reads `Architecture Version` field;
+      defaults to v1 on missing/malformed; v2+ clamps to v2 parser
+    - `_parse_agents_v1(text)` — legacy flat format: `Dev Agents: fe, be` +
+      Aliases + Test Commands sections. Canonical output shape
+      `[{id, alias, role, test_command?}]`. Implicit PM, implicit QA if
+      any dev roles, explicit DM from `**DM**: present`.
+    - `_parse_agents_v2(text)` — Q-new17 nested format: per-agent
+      top-level entries + nested fields (role, variant, iteration_mode,
+      stack, test_command) + optional setup block. Correctly closes
+      setup blocks on next top-level entry. Strips YAML quotes from
+      values with spaces (stack, test_command).
+    - `get_agents(text)` — schema-picking entry point; abstracts the
+      v1/v2 distinction for callers
+    - CLI: `config.py agents` (list) and `config.py schema-version`
+  - Existing `.squidsquad/config.md` (v1) parses cleanly via the new
+    `get_agents` path — live smoke test returned pm/skill/qa/dm correctly
+  - Wizard round-trip: `wizard.build_config_md(spec)` → v2 text →
+    `config.get_agents(text)` → spec-equivalent agent list. Losslessly
+    recovers iteration_mode, setup blocks, variants, quoted stacks.
+  - 32 new unit tests in tests/test_config_schema.py: schema detection
+    (7), v1 parser (5), v2 parser (10), get_agents (4), wizard round-trip
+    (2), compose known-roles refactor (4). All pure — no disk writes.
+  - Full static suite: 448/448 pass (was 416, +32)
 - [ ] **Phase H — statusline.sh manifest-aware**
   - Read installed roles from manifest, not hardcoded list
 - [ ] **Phase I — Migration script** (`migrate_status_labels.py`)

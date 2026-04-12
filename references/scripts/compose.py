@@ -113,17 +113,47 @@ def _read_config_value(field: str) -> str:
         return ""
 
 
+def _list_known_role_identities():
+    """Return the set of role identities shipped in `references/roles/`.
+
+    A role identity is any directory under `references/roles/` that
+    contains a `CLAUDE.md` entry-file template (the Q-new22 layout).
+    We read the filesystem every time rather than caching so that
+    tests which build a fresh role directory at runtime see the new
+    role immediately — the hot path here is tiny (a single readdir).
+    """
+    if not ROLES_DIR.exists():
+        return set()
+    return {
+        d.name for d in ROLES_DIR.iterdir()
+        if d.is_dir() and (d / "CLAUDE.md").exists()
+    }
+
+
 def _get_entry_file_for_role(role_name: str) -> str:
     """Map an agent instance to its role identity for composition.
 
     After Q-new22 each role has its own self-contained directory at
-    `references/roles/<role>/` — so for the known infrastructure /
-    specialist roles the identity equals the role name. Anything else
-    is treated as a dev variant (e.g. `fe`, `be`, `skill`) and uses the
-    `dev` role template.
+    `references/roles/<role>/`. For any role that exists in the registry
+    the identity equals the role name. Anything else is treated as a
+    dev variant (e.g. `fe`, `be`, `skill`) and uses the `dev` role
+    template.
+
+    After #328 Phase H the identity list is read from the manifest
+    registry, not hardcoded — adding a new role directory under
+    `references/roles/` automatically makes it a first-class identity
+    without any compose.py edit.
     """
-    known_roles = {"pm", "dm", "qa", "designer", "dev"}
-    return role_name if role_name in known_roles else "dev"
+    identities = _list_known_role_identities()
+    if role_name in identities:
+        return role_name
+    # Dev variants (skill, be, fe, bespoke names) compose from the
+    # `dev` role template as long as one exists in the registry.
+    if "dev" in identities:
+        return "dev"
+    # No registry, or no `dev` identity — fall back to the literal
+    # role name so at least the error message points at the right file.
+    return role_name
 
 
 def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> str:

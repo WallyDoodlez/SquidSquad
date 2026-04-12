@@ -6,9 +6,23 @@ All agents use this instead of parsing config.md themselves.
 
 Usage:
     python scripts/config.py get <field>           # Get a field value
-    python scripts/config.py set <field> <value>    # Set a field value
-    python scripts/config.py dump                   # Dump all fields as JSON
-    python scripts/config.py --help                 # Show usage
+    python scripts/config.py set <field> <value>   # Set a field value
+    python scripts/config.py dump                  # Dump all fields as JSON
+    python scripts/config.py agents                # List agents as JSON
+    python scripts/config.py schema-version        # Print 1 or 2
+    python scripts/config.py --help                # Show usage
+
+Schema versions:
+    v1 (legacy) — Flat `## Agents` with a `- **Dev Agents**: fe, be` line.
+        Per-role details live in `## Aliases`, `## Test Commands`, etc.
+        Used by everything that shipped before #328.
+    v2 (Q-new17) — `## Agents` with one entry per agent, nested fields
+        (role / variant / iteration_mode / stack / test_command / setup).
+        Written by the install wizard (Phase G) and resolved by Phase H.
+
+Schema detection uses the top-level `- **Architecture Version**: N`
+field. v1 files have `1`, v2 files have `2`. Readers that don't care
+about agents (e.g. `get interval`) work unchanged against either schema.
 """
 
 import json
@@ -159,6 +173,169 @@ def get_alias(role):
     return role
 
 
+# ---------------------------------------------------------------------------
+# Schema-aware agent parsing (#328 Phase H)
+# ---------------------------------------------------------------------------
+
+
+def detect_schema_version(text=None):
+    """Return 1 or 2 based on the top-level `Architecture Version` field.
+
+    Missing field -> assume v1 (legacy). Malformed/non-integer -> v1.
+    """
+    if text is None:
+        text = _read_config()
+    raw = _parse_field_in_text(text, "Architecture Version")
+    if not raw:
+        return 1
+    try:
+        n = int(raw.strip())
+    except (TypeError, ValueError):
+        return 1
+    return 2 if n >= 2 else 1
+
+
+def _parse_agents_v1(text):
+    """Parse the legacy `- **Dev Agents**: fe, be` format.
+
+    Returns a list of dicts shaped like the v2 output:
+        [{"id": "fe", "alias": "fe", "role": "dev"}, ...]
+
+    Infrastructure roles (pm, dm, qa) are added based on the
+    `## Agents` section presence indicators (`**PM/QA**: always present`,
+    `**DM**: present`) and the `## Aliases` section.
+    """
+    sections = _parse_sections(text)
+    agents_text = sections.get("Agents", "")
+    aliases_text = sections.get("Aliases", "")
+    test_cmd_text = sections.get("Test Commands", "")
+
+    dev_roles_raw = _parse_field_in_text(agents_text, "Dev Agents") or ""
+    dev_roles = [r.strip() for r in dev_roles_raw.split(",") if r.strip()]
+
+    def _alias(role):
+        val = _parse_field_in_text(aliases_text, role)
+        return val if val else role
+
+    def _test_cmd(role):
+        # "skill Tests" is the legacy naming — keyed by role name
+        return _parse_field_in_text(test_cmd_text, f"{role} Tests")
+
+    result = []
+
+    # PM is always present
+    result.append({"id": "pm", "alias": _alias("pm"), "role": "pm"})
+
+    # Dev roles
+    for role in dev_roles:
+        entry = {"id": role, "alias": _alias(role), "role": "dev"}
+        cmd = _test_cmd(role)
+        if cmd:
+            entry["test_command"] = cmd
+        result.append(entry)
+
+    # QA presence: any dev role or designer present -> QA is implied.
+    # In the legacy schema the explicit indicator is `**PM/QA**: always present`.
+    if "PM/QA" in agents_text:
+        # QA is conceptually present alongside PM in the PM/QA combined identity.
+        # Add it as a separate entry for forward compatibility with v2 readers.
+        if dev_roles:
+            result.append({"id": "qa", "alias": _alias("qa"), "role": "qa"})
+
+    # DM presence
+    if "DM**: present" in agents_text:
+        result.append({"id": "dm", "alias": _alias("dm"), "role": "dm"})
+
+    return result
+
+
+_AGENT_ENTRY_RE = re.compile(r"^-\s*\*\*([^*]+)\*\*:\s*(.*?)\s*$")
+_NESTED_FIELD_RE = re.compile(r"^  -\s*([a-z_][a-z0-9_]*):\s*(.*?)\s*$")
+_SETUP_FIELD_RE = re.compile(r"^    -\s*([a-z_][a-z0-9_]*):\s*(.*?)\s*$")
+
+
+def _strip_yaml_quotes(value):
+    """Remove surrounding double quotes if present — matches _quote_if_needed."""
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        return value[1:-1]
+    return value
+
+
+def _parse_agents_v2(text):
+    """Parse the Q-new17 nested agent block.
+
+    Returns a list of dicts with the same shape the wizard writes:
+        {id, alias, role, variant, iteration_mode, stack, test_command, setup}
+    """
+    sections = _parse_sections(text)
+    agents_text = sections.get("Agents", "")
+
+    result = []
+    current = None
+    in_setup = False
+
+    for raw_line in agents_text.splitlines():
+        line = raw_line.rstrip()
+
+        # Top-level agent entry line
+        m = _AGENT_ENTRY_RE.match(line)
+        if m:
+            if current is not None:
+                result.append(current)
+            agent_id = m.group(1).strip()
+            alias = _strip_yaml_quotes(m.group(2).strip())
+            current = {"id": agent_id, "alias": alias or agent_id}
+            in_setup = False
+            continue
+
+        if current is None:
+            continue
+
+        # `  - setup:` sentinel opens the nested setup block
+        if re.match(r"^\s\s-\s*setup:\s*$", line):
+            current["setup"] = {}
+            in_setup = True
+            continue
+
+        # `    - key: value` inside the setup block
+        if in_setup:
+            sm = _SETUP_FIELD_RE.match(line)
+            if sm:
+                key = sm.group(1)
+                value = _strip_yaml_quotes(sm.group(2))
+                current["setup"][key] = value
+                continue
+            # Anything else closes the setup block
+            in_setup = False
+
+        # Nested field directly under the agent (role/variant/.../test_command)
+        nm = _NESTED_FIELD_RE.match(line)
+        if nm:
+            key = nm.group(1)
+            value = _strip_yaml_quotes(nm.group(2))
+            current[key] = value
+            continue
+
+    if current is not None:
+        result.append(current)
+
+    return result
+
+
+def get_agents(text=None):
+    """Return the agent list for the active schema.
+
+    Schema is detected via `detect_schema_version`. Callers that just want
+    "the agents on this install" should use this — it abstracts the
+    legacy vs wizard-shape distinction.
+    """
+    if text is None:
+        text = _read_config()
+    if detect_schema_version(text) == 2:
+        return _parse_agents_v2(text)
+    return _parse_agents_v1(text)
+
+
 def sync_agents():
     """Scan .squidsquad/*/CLAUDE.md and update config.md Agents section."""
     sqdir = REPO_ROOT / ".squidsquad"
@@ -240,6 +417,12 @@ def main():
 
     elif cmd == "sync-agents":
         sync_agents()
+
+    elif cmd == "agents":
+        print(json.dumps(get_agents(), indent=2))
+
+    elif cmd == "schema-version":
+        print(detect_schema_version())
 
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)
