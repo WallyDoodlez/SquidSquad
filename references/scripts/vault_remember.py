@@ -185,6 +185,10 @@ def effective_confidence(note_path):
     path = Path(note_path)
     if not path.is_absolute():
         path = VAULT_DIR / note_path
+    path = path.resolve()
+    if not str(path).startswith(str(VAULT_DIR.resolve())):
+        print("error: note path outside vault directory", file=sys.stderr)
+        sys.exit(2)
     if not path.exists():
         print("error: note not found", file=sys.stderr)
         sys.exit(2)

@@ -256,6 +256,11 @@ def reindex():
 
         if current_links != links_str:
             new_text = re.sub(r"links: .*", f"links: {links_str}", text, count=1)
+            if new_text == text and "links:" not in text:
+                # No existing links field — insert before closing ---
+                end = text.find("---", 3)
+                if end != -1:
+                    new_text = text[:end] + f"links: {links_str}\n" + text[end:]
             if new_text != text:
                 path.write_text(new_text, encoding="utf-8")
                 updated.append(f"{rel}: links -> {links_str}")
