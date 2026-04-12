@@ -378,9 +378,11 @@ def create_bug(title, body, role, severity, reporter=None):
     if reporter:
         full_body = f"**Reported By**: {reporter}\n**Severity**: {severity.title()}\n\n{body}"
 
+    # Strip existing prefix to avoid double BUG: BUG:
+    clean_title = title.removeprefix("BUG:").removeprefix("BUG :").strip()
     result = _run_list([
         "gh", "issue", "create",
-        "--title", f"BUG: {title}",
+        "--title", f"BUG: {clean_title}",
         "--body", full_body,
         "--label", labels,
     ])
@@ -396,9 +398,11 @@ def create_feature(title, body, role, priority, reporter=None):
     role_label = f"role:{role}"
     labels = f"type:feature,{pri_label},{role_label},squidsquad,status:pending"
 
+    # Strip existing prefix to avoid double FEAT: FEAT:
+    clean_title = title.removeprefix("FEAT:").removeprefix("FEAT :").strip()
     result = _run_list([
         "gh", "issue", "create",
-        "--title", f"FEAT: {title}",
+        "--title", f"FEAT: {clean_title}",
         "--body", body,
         "--label", labels,
     ])
