@@ -424,6 +424,17 @@ def main():
     elif cmd == "schema-version":
         print(detect_schema_version())
 
+    elif cmd == "list-agents":
+        # Tab-separated columns: id<TAB>role<TAB>alias — one agent per line.
+        # Designed for shell consumers (statusline.sh) that can't or
+        # shouldn't depend on JSON parsing. Works against both v1 and v2
+        # schemas via get_agents().
+        for a in get_agents():
+            agent_id = a.get("id", "")
+            role = a.get("role", "")
+            alias = a.get("alias", agent_id)
+            print(f"{agent_id}\t{role}\t{alias}")
+
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)
         sys.exit(1)

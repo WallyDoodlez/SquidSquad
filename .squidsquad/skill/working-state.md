@@ -259,8 +259,18 @@ discrete phases, each landing as its own atomic commit.
     (7), v1 parser (5), v2 parser (10), get_agents (4), wizard round-trip
     (2), compose known-roles refactor (4). All pure — no disk writes.
   - Full static suite: 448/448 pass (was 416, +32)
-- [ ] **Phase H — statusline.sh manifest-aware**
-  - Read installed roles from manifest, not hardcoded list
+- [x] **Phase I — statusline.sh manifest-aware** (this cycle)
+  - Added `config.py list-agents` — tab-separated id/role/alias,
+    works against both v1 and v2 schemas via get_agents()
+  - Resolved agent list ONCE at top of statusline.sh and stashed in
+    DEV_AGENTS_LIST + ALL_AGENT_IDS shell variables
+  - Replaced all 3 legacy `grep 'Dev Agents'` sites (backlog cache,
+    PM health check, DM work counter)
+  - Copied updated script to live location
+  - 12 new static tests: no-legacy-grep guard, schema-aware block
+    present, references/ vs .squidsquad/ byte-identity check,
+    list-agents tab format, JSON/tab output parity, help text
+  - Full static suite: 460/460 pass (was 448, +12)
 - [ ] **Phase I — Migration script** (`migrate_status_labels.py`)
   - Rewrite `pending` → `pending-human-approval` on all issues
   - Transition window: both old and new accepted

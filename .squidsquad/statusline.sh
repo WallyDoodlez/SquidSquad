@@ -31,6 +31,34 @@ RESET='\033[0m'
 VERSION=$(grep 'SquidSquad Version' "$SQDIR/config.md" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+[.0-9]*')
 VERSION=${VERSION:-'?'}
 
+# --- Resolve agent list once, schema-aware (#328 Phase I) ---
+#
+# The legacy `grep 'Dev Agents'` worked only for the v1 config.md schema.
+# After #328 the wizard writes v2 configs with per-agent entries. We
+# call `config.py list-agents` once at the top and stash the results in
+# shell variables — that way every segment downstream (backlog cache,
+# PM health check, DM work counter) sees the same canonical list
+# regardless of which schema the config.md was written in.
+#
+# DEV_AGENTS_LIST — space-separated ids of every dev-role agent
+# ALL_AGENT_IDS   — space-separated ids of EVERY installed agent (pm, dm, dev, qa, designer)
+DEV_AGENTS_LIST=""
+ALL_AGENT_IDS=""
+if [ -f "$SQDIR/config.md" ]; then
+  _AGENTS_RAW=$(python references/scripts/config.py list-agents 2>/dev/null) || _AGENTS_RAW=""
+  if [ -n "$_AGENTS_RAW" ]; then
+    while IFS=$'\t' read -r _AID _AROLE _AALIAS; do
+      [ -z "$_AID" ] && continue
+      ALL_AGENT_IDS="${ALL_AGENT_IDS}${_AID} "
+      if [ "$_AROLE" = "dev" ]; then
+        DEV_AGENTS_LIST="${DEV_AGENTS_LIST}${_AID} "
+      fi
+    done <<EOF
+$_AGENTS_RAW
+EOF
+  fi
+fi
+
 # Parse context window usage from JSON stdin
 CTX_PCT=$(echo "$INPUT" | grep -oE '"used_percentage"[[:space:]]*:[[:space:]]*[0-9.]+' | head -1 | grep -oE '[0-9.]+$')
 CTX_PCT=${CTX_PCT%%.*}
@@ -196,7 +224,7 @@ fi
 if [ "$CACHE_STALE" = true ]; then
   # Refresh cache in background (don't block statusline rendering)
   (
-    AGENTS_LIST=$(grep 'Dev Agents' "$SQDIR/config.md" 2>/dev/null | sed 's/.*: //' | tr ',' ' ')
+    AGENTS_LIST="$DEV_AGENTS_LIST"
     CACHE_TMP="$BACKLOG_CACHE.tmp"
     : > "$CACHE_TMP"
     for A in $AGENTS_LIST; do
@@ -244,13 +272,11 @@ if [ "$ROLE" = "pm" ]; then
   fi
 
   # Agent health icons: 🦑 healthy, 👻 stalled, ❓ unknown
-  # Reads cross-clone current-state files via .local-config paths
-  # Parse dev agents from config (same approach as DM section)
-  AGENTS=$(grep 'Dev Agents' "$SQDIR/config.md" 2>/dev/null | sed 's/.*: //' | tr ',' ' ')
-  # Include DM in health check if it exists
-  DM_AGENT=""
-  [ -d "$SQDIR/dm" ] && DM_AGENT="dm"
-  ALL_AGENTS="pm $AGENTS $DM_AGENT"
+  # Reads cross-clone current-state files via .local-config paths.
+  # `ALL_AGENT_IDS` already contains every installed agent (pm + all
+  # specialists + dm when present) — resolved once at the top of the
+  # script, schema-aware.
+  ALL_AGENTS="$ALL_AGENT_IDS"
   HEALTH=""
   STALE_THRESHOLD=$(( INTERVAL * 2 ))  # 2x iteration interval in minutes
   LOCAL_CONFIG="$SQDIR/.local-config"
@@ -332,8 +358,8 @@ elif [ "$ROLE" = "dm" ]; then
   if [ -n "$ACTIVE_TASK" ] && [ "$ACTIVE_TASK" != "none" ]; then
     WORK_STR="📦 ${ACTIVE_TASK}"
   else
-    # Count Pending Ship items via cached GH Issues
-    AGENTS=$(grep 'Dev Agents' "$SQDIR/config.md" 2>/dev/null | sed 's/.*: //' | tr ',' ' ')
+    # Count Pending Ship items via cached GH Issues (schema-aware agent list)
+    AGENTS="$DEV_AGENTS_LIST"
     PSHIP_COUNT=0
     for AGENT in $AGENTS; do
       AGENT=$(echo "$AGENT" | tr -d '[:space:]')

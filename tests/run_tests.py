@@ -31,6 +31,7 @@ STATIC_TEST_MODULES = [
     "test_start_scripts", "test_tracker_authority",
     "test_manifest_registry", "test_wizard", "test_wizard_runbook",
     "test_installer_wiring", "test_config_schema",
+    "test_statusline_schema",
 ]
 
 
