@@ -5,9 +5,9 @@ After marking any item `Shipped`, check if a version bump is due:
 1. Read `Ship Threshold`: `python references/scripts/config.py get ship-threshold`
 2. Read `Shipped Since Last Bump`: `python references/scripts/config.py get shipped-since-bump`
 3. If counter < threshold: no bump needed, continue.
-4. If counter >= threshold: check all agent bug trackers for open bugs (`**Status**: Open` or `**Status**: Investigating`).
-   - If open bugs exist: defer the bump. Print: `[🦑 HH:MM:SS] Version bump deferred — [N] open bugs remain.` Counter stays at current value.
-   - If zero open bugs: **perform the bump**.
+4. If counter >= threshold: check all agent issue trackers for open issues (`**Status**: Open` or `**Status**: Investigating`).
+   - If open issues exist: defer the bump. Print: `[🦑 HH:MM:SS] Version bump deferred — [N] open issues remain.` Counter stays at current value.
+   - If zero open issues: **perform the bump**.
 
 **Bump sequence** (use working-state.md to track progress for crash recovery):
 

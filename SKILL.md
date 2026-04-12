@@ -120,7 +120,7 @@ SquidSquad uses GitHub Issues as its tracker. All bugs and features are GitHub I
 
 | Category | Labels | Purpose |
 |----------|--------|---------|
-| Type | `type:bug`, `type:feature` | What kind of item |
+| Type | `type:issue`, `type:task` | What kind of item |
 | Priority | `priority:high`, `priority:medium`, `priority:low` | Triage ordering |
 | Status | `status:open`, `status:pending`, `status:planning`, `status:planned`, `status:approved`, `status:in-progress`, `status:pending-test`, `status:pending-ship`, `status:shipped` | Workflow state |
 | Role | `role:skill`, `role:fe`, `role:be`, `role:pm`, `role:qa`, `role:dm`, `role:designer` | Which agent owns it |
@@ -179,17 +179,17 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 1. git pull --rebase
 1b. Context pressure check — if above threshold, save state and exit
 1c. Resume from working-state.md if active task exists
-2. Query GitHub Issues via `gh issue list` with label filters (`role:[role]`, `type:bug`, `status:open` or `status:in-progress`)
-   → Write working state, fix bug, clear state on completion
-   → If bug touches another agent's domain, file a new Issue with the appropriate `role:` label
-   → Update bug status labels, append Discussion as Issue comment
-3. Query GitHub Issues via `gh issue list` with label filters (`role:[role]`, `type:feature`, `status:approved`)
-   → Write working state, implement feature, update state as sub-steps complete
+2. Query GitHub Issues via `gh issue list` with label filters (`role:[role]`, `type:issue`, `status:open` or `status:in-progress`)
+   → Write working state, fix issue, clear state on completion
+   → If issue touches another agent's domain, file a new Issue with the appropriate `role:` label
+   → Update issue status labels, append Discussion as Issue comment
+3. Query GitHub Issues via `gh issue list` with label filters (`role:[role]`, `type:task`, `status:approved`)
+   → Write working state, implement task, update state as sub-steps complete
    → Update status labels to In Progress, then Pending Test
    → Clear working state on completion, append Discussion as Issue comment
 4. Run [role] test command (from config.md)
-5. If quiet cycle (no bugs fixed, no features progressed):
-   → If Improvement Scanning enabled and quiet cycle counter ≥ 3: scan target project for domain-specific improvements (max 2 per scan). Classify each finding as a **bug** (broken, wrong, or stale behavior — e.g. dead code, incorrect docs, failing edge cases) or **feature** (new or enhanced capability — e.g. missing test coverage, performance optimization, UX improvement). File bugs directly as GitHub Issues with `type:bug` + `status:open`; file features through PM with `type:feature` + `status:pending` for human approval
+5. If quiet cycle (no issues fixed, no tasks progressed):
+   → If Improvement Scanning enabled and quiet cycle counter ≥ 3: scan target project for domain-specific improvements (max 2 per scan). Classify each finding as an **issue** (broken, wrong, or stale behavior — e.g. dead code, incorrect docs, failing edge cases) or **task** (new or enhanced capability — e.g. missing test coverage, performance optimization, UX improvement). File issues directly as GitHub Issues with `type:issue` + `status:open`; file tasks through PM with `type:task` + `status:pending` for human approval
    → Otherwise: skip log/commit, go to sleep
 6. Log iteration to [role]/iterations/iter-N.md
 7. git add -A && git commit && git push
@@ -224,7 +224,7 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 4. If tests fail: file bug as GitHub Issue with appropriate `role:` label via `gh issue create`
 5. Query GitHub Issues via `gh issue list` with label filters for `status:pending-test` items → verify → update to Pending Ship (DM handles delivery → Shipped)
 5b. If PR Flow enabled: monitor open PRs, sync comments/merges/changes to Issues
-6. Query GitHub Issues via `gh issue list` with label filters for `type:bug` + `status:in-progress` items marked as fixed → verify → close Issue
+6. Query GitHub Issues via `gh issue list` with label filters for `type:issue` + `status:in-progress` items marked as fixed → verify → close Issue
 7. Agent health check: git log per agent, flag stalled/idle agents (no commits in 2× interval)
 8. If quiet cycle (no issues found, no verifications): skip log/commit, go to sleep
 9. Log iteration to qa/iterations/iter-N.md
@@ -414,9 +414,9 @@ When the user says `/squidsquad-status` (or "squad status", "show me the squad",
    - Check health via `git log --oneline --since="[2×interval] minutes ago" --grep="^[agent]:"` — if commits found, show as `active`; if prior commits exist but none recent, show as `stalled`; else `unknown`.
    - Show last commit time: `git log --oneline --grep="^[agent]:" -1 --format="%ar"`
 3. For each dev agent, query GitHub Issues via `python references/scripts/tracker.py`:
-   - `python references/scripts/tracker.py list-bugs [role]` — count and list open bugs
-   - `python references/scripts/tracker.py list-features [role] --status approved` — count and list approved features
-   - `python references/scripts/tracker.py list-features [role] --status in-progress` — count and list in-progress features
+   - `python references/scripts/tracker.py list-issues [role]` — count and list open issues
+   - `python references/scripts/tracker.py list-tasks [role] --status approved` — count and list approved tasks
+   - `python references/scripts/tracker.py list-tasks [role] --status in-progress` — count and list in-progress tasks
 4. List recent shipped items: `gh issue list --label "squidsquad" --state closed --limit 5 --json number,title`
 5. Format as a clean dashboard:
 

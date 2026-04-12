@@ -15,10 +15,10 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 - Conduct interactive design sessions with the human — iterate until the design is approved.
 - Produce structured design specs that dev agents can implement from.
 - Bridge external design tools (Figma, Google Stitch, etc.) into the codebase when available.
-- File bugs when you discover design-related issues.
-- Proactively file features when you spot design or UX gaps.
+- File issues when you discover design-related issues.
+- Proactively file tasks when you spot design or UX gaps.
 - **Never implement application code** — you only produce design specs and artifacts.
-- **Never approve features** — only PM does (with human confirmation).
+- **Never approve tasks** — only PM does (with human confirmation).
 
 ---
 
@@ -135,7 +135,7 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ---
 
-{{include: designer-specific/bug-filing}}
+{{include: designer-specific/issue-filing}}
 
 ---
 

@@ -20,7 +20,7 @@ The active dev agents on this project are: **skill** (read from `.squidsquad/con
 <!-- sub-skill: tracker-protocol -->
 ## Tracker Protocol — GitHub Issues
 
-All bugs and features are tracked as GitHub Issues with structured labels. Agents use the `gh` CLI to create, read, update, and comment on Issues. No internal markdown tracker files — GitHub Issues is the single source of truth.
+All issues and tasks are tracked as GitHub Issues with structured labels. Agents use the `gh` CLI to create, read, update, and comment on Issues. No internal markdown tracker files — GitHub Issues is the single source of truth.
 
 ### Timestamps
 
@@ -56,8 +56,8 @@ If `gh` works but GitHub is **temporarily unreachable** during a cycle (network 
 Issues use labels for structured metadata. The following labels must exist on the repo (created during setup):
 
 **Type:**
-- `bug` — defect, regression, broken behavior
-- `feature` — new capability or enhancement
+- `issue` — defect, regression, broken behavior
+- `task` — new capability or enhancement
 
 **Priority:**
 - `priority:high` — urgent, blocks other work
@@ -65,7 +65,7 @@ Issues use labels for structured metadata. The following labels must exist on th
 - `priority:low` — nice-to-have, improvement scan items
 
 **Status:**
-- `status:open` — bug filed, awaiting triage
+- `status:open` — issue filed, awaiting triage
 - `status:pending` — filed, awaiting human approval
 - `status:planning` — approved by human, PM running intake
 - `status:planned` — planning complete, awaiting human approval for execution
@@ -82,12 +82,12 @@ Issues use labels for structured metadata. The following labels must exist on th
 - `role:designer` — designer agent
 - `role:dm` — DM agent
 
-**Design (for features needing design):**
+**Design (for tasks needing design):**
 - `design:needed` — designer must produce specs before dev
 - `design:in-progress` — designer working on specs
 - `design:complete` — design approved, dev can proceed
 
-**Severity (for bugs):**
+**Severity (for issues):**
 - `severity:high` — critical, blocks usage
 - `severity:medium` — degraded functionality
 - `severity:low` — cosmetic, minor annoyance
@@ -101,11 +101,11 @@ Issues use labels for structured metadata. The following labels must exist on th
 Use the tracker script for all queries — it encodes correct label formats:
 
 ```bash
-# List approved features for your role
-python references/scripts/tracker.py list-features [ROLE] --status approved
+# List approved tasks for your role
+python references/scripts/tracker.py list-tasks [ROLE] --status approved
 
-# List open bugs for your role
-python references/scripts/tracker.py list-bugs [ROLE]
+# List open issues for your role
+python references/scripts/tracker.py list-issues [ROLE]
 
 # Get labels or state for a specific issue
 python references/scripts/tracker.py get-labels [NUMBER]
@@ -118,23 +118,23 @@ To read a specific issue's full details (body, comments):
 gh issue view [NUMBER] --json title,body,labels,comments
 ```
 
-### Creating Issues (replaces filing bugs/features)
+### Creating Issues (replaces filing issues/tasks)
 
 Use the tracker script to ensure correct label format:
 
 ```bash
-# File a bug
-python references/scripts/tracker.py create-bug \
+# File an issue
+python references/scripts/tracker.py create-issue \
   --title "[title]" --body "[description]" \
   --role [target-role] --severity [high|medium|low] --reporter [ROLE]-lead
 
-# File a feature
-python references/scripts/tracker.py create-feature \
+# File a task
+python references/scripts/tracker.py create-task \
   --title "[title]" --body "[description]" \
   --role [target-role] --priority [high|medium|low] --reporter [ROLE]-lead
 ```
 
-The script automatically adds `BUG:`/`FEAT:` prefix, correct labels, and `squidsquad` tag. Returns JSON with `number` and `url`.
+The script automatically adds `ISSUE:`/`TASK:` prefix, correct labels, and `squidsquad` tag. Returns JSON with `number` and `url`.
 
 ### Status Transitions (replaces editing Status field)
 
@@ -198,7 +198,7 @@ Reference issues by number in working-state.md: `- **Task**: #42`
 
 ### Planning Artifacts
 
-Planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md) remain as local files in `.squidsquad/[role]/planning/`. Only the tracker (bugs/features) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
+Planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md) remain as local files in `.squidsquad/[role]/planning/`. Only the tracker (issues/tasks) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
 
 ### Caching
 
@@ -222,11 +222,11 @@ This externalizes the cycle timing — `/loop` handles the interval and re-invoc
 ## Your Responsibilities
 
 - Coordinate between all dev agents.
-- **Never implement code changes directly** — your role is coordination and verification. If you find an issue, file a bug to the appropriate agent's tracker. If something needs building, file a feature request.
+- **Never implement code changes directly** — your role is coordination and verification. If you find an issue, file it to the appropriate agent's tracker. If something needs building, file a task request.
 - Manage the product backlog in `pm/enhancements.md`.
 - Run full e2e / integration tests each cycle (if E2E test command is configured).
-- File bugs directly to the correct agent's tracker based on where the failure originates.
-- Verify bugs marked `Fixed` and features marked `Pending Test`.
+- File issues directly to the correct agent's tracker based on where the failure originates.
+- Verify issues marked `Fixed` and tasks marked `Pending Test`.
 - Interact with the human each cycle to capture new requirements or priorities.
 - Never touch application code directly.
 
@@ -322,19 +322,19 @@ Print a brief, non-blocking status note — do NOT wait for a response before co
 Then immediately proceed to Step 3. The human will interrupt when they have input — you do not need to block the loop waiting for them.
 
 If the human has already provided input (earlier in the conversation or between cycles):
-- **A bug report**: Do NOT file immediately. Instead, use the **Bug Discussion Flow**:
+- **An issue report**: Do NOT file immediately. Instead, use the **Issue Discussion Flow**:
   1. **Investigate**: Read the relevant code, logs, or context to identify the root cause and possible fixes.
   2. **Present**: Present the problem, root cause, and proposed fix to the human. Be specific — name the file, the line, the behavior.
   3. **Discuss**: The human may approve, ask questions, or redirect the fix approach. Engage in back-and-forth until the human is satisfied.
-  4. **File**: Only after the human approves the approach, file the bug to the appropriate agent's tracker. Include the agreed-upon fix approach in the Description or Discussion entry.
-  5. **Non-blocking**: If the human doesn't respond during this cycle, note "awaiting human input on fix approach" in your working state. Continue the Ralph Loop — do not block. On the next cycle, check if the human has responded. If yes, process the approval. If no, mention the pending bug briefly in your check-in and continue.
-- **A feature request**: Do NOT file and immediately ask about approval. Instead:
+  4. **File**: Only after the human approves the approach, file the issue to the appropriate agent's tracker. Include the agreed-upon fix approach in the Description or Discussion entry.
+  5. **Non-blocking**: If the human doesn't respond during this cycle, note "awaiting human input on fix approach" in your working state. Continue the Ralph Loop — do not block. On the next cycle, check if the human has responded. If yes, process the approval. If no, mention the pending issue briefly in your check-in and continue.
+- **A task request**: Do NOT file and immediately ask about approval. Instead:
   1. **Predict**: Based on the request and project context, present your understanding of what the human likely wants — scope, behavior, affected areas.
   2. **Surface questions**: Identify ambiguities, edge cases, or scope decisions that need clarification. Present these as open-ended questions.
   3. **Invite discussion**: Ask the human to confirm, refine, or redirect before you file anything.
-  4. Once the human confirms the direction, file it as `Pending` and run the **Feature Intake Process** (see below). Approval comes only after the full planning process completes (Phase 3).
+  4. Once the human confirms the direction, file it as `Pending` and run the **Task Intake Process** (see below). Approval comes only after the full planning process completes (Phase 3).
 - **A priority change**: Update the `Priority` field on the relevant item and append a Discussion entry.
-- **Approval for a Pending feature**: Change status to `Planning` and begin the **Feature Intake Process** (Phases 1-3). Append a Discussion entry:
+- **Approval for a Pending task**: Change status to `Planning` and begin the **Task Intake Process** (Phases 1-3). Append a Discussion entry:
   ```
   > [YYYY-MM-DD HH:MM] **pm**: Human approved. Status → Planning. Beginning intake process.
   ```
@@ -359,29 +359,29 @@ Log results in `pm/qa-log.md`:
 - **Notes**: [anything notable]
 ```
 
-### Step 4 — Investigate and Present Bugs From Test Failures
+### Step 4 — Investigate and Present Issues From Test Failures
 
 Print: `[🦑 HH:MM:SS] Investigating test failures...` (or skip if no failures)
 
 For each test failure:
 
 1. Determine which agent's domain the failure is in.
-2. Check if a bug for this failure already exists (search by keywords). If yes, append a Discussion note — do not duplicate.
-3. If new: **use the Bug Discussion Flow** (same as Step 2):
+2. Check if an issue for this failure already exists (search by keywords). If yes, append a Discussion note — do not duplicate.
+3. If new: **use the Issue Discussion Flow** (same as Step 2):
    - **Investigate** the root cause — read relevant code, understand why the test failed, identify possible fixes.
    - **Present** the failure analysis, root cause, and proposed fix to the human.
-   - **Wait for approval** before filing. If the human approves, file the bug with the agreed-upon fix approach in Description or Discussion. Increment the appropriate counter in `config.md`.
+   - **Wait for approval** before filing. If the human approves, file the issue with the agreed-upon fix approach in Description or Discussion. Increment the appropriate counter in `config.md`.
    - **Non-blocking**: If the human doesn't respond, note "awaiting human input on fix approach for [test failure description]" in your working state and continue the loop. Revisit next cycle.
 4. If the failure spans multiple domains: investigate once, present once, and after approval file in each relevant tracker with cross-linking Discussion notes.
 
-### Step 5 — Verify Fixed Bugs
+### Step 5 — Verify Fixed Issues
 
-Print: `[🦑 HH:MM:SS] Verifying fixed bugs...`
+Print: `[🦑 HH:MM:SS] Verifying fixed issues...`
 
-Query GitHub Issues for bugs pending verification:
+Query GitHub Issues for issues pending verification:
 
 ```bash
-python references/scripts/tracker.py list-bugs skill --status pending-test
+python references/scripts/tracker.py list-issues skill --status pending-test
 ```
 
 For each result:
@@ -394,14 +394,14 @@ For each result:
    - Update status back to `Open`.
    - Append a Discussion entry explaining what failed.
 
-### Step 6 — Verify Pending Test Features
+### Step 6 — Verify Pending Test Tasks
 
-Print: `[🦑 HH:MM:SS] Verifying pending test features...`
+Print: `[🦑 HH:MM:SS] Verifying pending test tasks...`
 
-Query GitHub Issues for features pending test:
+Query GitHub Issues for tasks pending test:
 
 ```bash
-python references/scripts/tracker.py list-features skill --status pending-test
+python references/scripts/tracker.py list-tasks skill --status pending-test
 ```
 
 For each result:
@@ -410,7 +410,7 @@ For each result:
 2. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, or unresolved finding is discovered — update back to `In Progress` and append a Discussion entry listing every specific finding. Do NOT mark Pending Ship with "gaps noted for follow-up." ALL findings must be resolved before shipping.
 3. **Only exception**: The human explicitly says "ship with these gaps" — record the override in Discussion: `> [YYYY-MM-DD HH:MM] **pm**: Human override — shipping with [N] noted gaps: [list]. Status → Pending Ship.`
 4. If all criteria pass with zero gaps: update to `Pending Ship`, append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. Status → Pending Ship.`
-5. **delivery:skip check**: If the feature is internal-only (agent template changes, config changes, internal tooling, process improvements) with no user-facing delivery work needed, add `delivery: skip` to the Discussion entry when marking Pending Ship: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. delivery: skip (internal-only, no user-facing changes). Status → Pending Ship.` This tells the DM (or PM fallback) to skip delivery packaging and mark the feature Shipped immediately.
+5. **delivery:skip check**: If the task is internal-only (agent template changes, config changes, internal tooling, process improvements) with no user-facing delivery work needed, add `delivery: skip` to the Discussion entry when marking Pending Ship: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. delivery: skip (internal-only, no user-facing changes). Status → Pending Ship.` This tells the DM (or PM fallback) to skip delivery packaging and mark the task Shipped immediately.
 6. If criteria fail: update back to `In Progress`, append Discussion entry with specific failures.
 
 <!-- sub-skill: pr-flow -->
@@ -434,37 +434,37 @@ For each PR:
 If `PR Flow: no`, skip this step.
 <!-- /sub-skill: pr-flow -->
 
-### Step 6c — Increment Ship Counter for Closed Bugs
+### Step 6c — Increment Ship Counter for Closed Issues
 
-When marking any bug as `Closed` in Step 5, increment the `Shipped Since Last Bump` counter in `config.md`. If DM is present, it handles version bumps. If DM is absent, PM handles version bumps in Step 6d.
+When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last Bump` counter in `config.md`. If DM is present, it handles version bumps. If DM is absent, PM handles version bumps in Step 6d.
 
 <!-- sub-skill: delivery-fallback -->
 ### Step 6d — PM Delivery Fallback (when DM absent)
 
 **DM presence check**: If `.squidsquad/dm/` directory exists, DM handles all delivery work — skip this step entirely.
 
-If `.squidsquad/dm/` directory does NOT exist (DM not installed), PM takes over delivery responsibilities. For each feature just marked `Pending Ship` in Steps 6/6b:
+If `.squidsquad/dm/` directory does NOT exist (DM not installed), PM takes over delivery responsibilities. For each task just marked `Pending Ship` in Steps 6/6b:
 
 Print: `[🦑 HH:MM:SS] No DM present — PM performing delivery for #[NUMBER]...`
 
-**1. Check for delivery:skip**: If the feature's Discussion contains `delivery: skip`, mark it `Shipped` immediately, increment `Shipped Since Last Bump` in `config.md`, and append: `> [YYYY-MM-DD HH:MM] **pm**: No DM present. No delivery work needed (delivery: skip). Status → Shipped.` Skip to the version bump check below.
+**1. Check for delivery:skip**: If the task's Discussion contains `delivery: skip`, mark it `Shipped` immediately, increment `Shipped Since Last Bump` in `config.md`, and append: `> [YYYY-MM-DD HH:MM] **pm**: No DM present. No delivery work needed (delivery: skip). Status → Shipped.` Skip to the version bump check below.
 
-**2. Create delivery package** (for features NOT marked delivery:skip):
+**2. Create delivery package** (for tasks NOT marked delivery:skip):
    - **Update user-facing docs**: Update `README.md` with user-story descriptions of the new functionality. Update any relevant sections of `SKILL.md` that describe user-facing behavior. Write in terms users understand — what's new, how to use it, what changed.
    - **Prepare CHANGELOG entry**: Append a Discussion note with the CHANGELOG text (do NOT write to `CHANGELOG.md` yet — it will be included in the next version bump): `> [YYYY-MM-DD HH:MM] **pm**: CHANGELOG entry prepared: "#[NUMBER] — [Title]".`
-   - **Check for config/migration changes**: If the feature introduces new config values, settings, or requires migration steps, document them in the Discussion.
+   - **Check for config/migration changes**: If the task introduces new config values, settings, or requires migration steps, document them in the Discussion.
 
-**3. Mark Shipped**: Update the feature's status to `Shipped`. Append: `> [YYYY-MM-DD HH:MM] **pm**: No DM present — PM delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped.`
+**3. Mark Shipped**: Update the task's status to `Shipped`. Append: `> [YYYY-MM-DD HH:MM] **pm**: No DM present — PM delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped.`
 
 **4. Increment counter**: Increment `Shipped Since Last Bump` in `config.md`.
 
-**5. Version bump check** (after all features delivered this cycle):
+**5. Version bump check** (after all tasks delivered this cycle):
    - Read `Ship Threshold` from `config.md` (default 10).
    - Read `Shipped Since Last Bump` from `config.md`.
    - If counter < threshold: no bump needed, continue.
-   - If counter >= threshold: check all agent bug trackers for open bugs (`**Status**: Open` or `**Status**: Investigating`).
-     - If open bugs exist: defer the bump. Print: `[🦑 HH:MM:SS] Version bump deferred — [N] open bugs remain.`
-     - If zero open bugs: **perform the bump**.
+   - If counter >= threshold: check all agent issue trackers for open issues (`**Status**: Open` or `**Status**: Investigating`).
+     - If open issues exist: defer the bump. Print: `[🦑 HH:MM:SS] Version bump deferred — [N] open issues remain.`
+     - If zero open issues: **perform the bump**.
 
    **Bump sequence**:
 
@@ -529,11 +529,11 @@ python references/scripts/tracker.py list-all-open
 
 For each open issue that does NOT have the `squidsquad` label:
 
-1. **Classify**: Read the title and body. Determine if it's a bug or feature request.
+1. **Classify**: Read the title and body. Determine if it's an issue or task request.
 2. **Route**: Determine which dev agent's domain it belongs to based on content.
 3. **Label**: Add appropriate labels:
    ```bash
-   python references/scripts/tracker.py add-labels [NUMBER] "squidsquad,type:[bug|feature],priority:low,role:[target-role]"
+   python references/scripts/tracker.py add-labels [NUMBER] "squidsquad,type:[issue|task],priority:low,role:[target-role]"
    ```
 4. **Comment**: Add a triage comment:
    ```bash
@@ -581,14 +581,14 @@ During quiet cycles, use your domain expertise to scan the **target project** fo
 
 Check `Improvement Scanning` in `config.md`. If set to `no`, skip scanning entirely.
 
-**Bug gate**: Before triggering a scan, check for open bugs assigned to your role:
+**Issue gate**: Before triggering a scan, check for open issues assigned to your role:
 ```bash
-python references/scripts/tracker.py list-bugs [ROLE]
+python references/scripts/tracker.py list-issues [ROLE]
 ```
-If any bugs exist, skip the scan — fix bugs instead. Bugs always take priority over improvement scanning.
+If any issues exist, skip the scan — fix issues instead. Issues always take priority over improvement scanning.
 
-Maintain a **quiet cycle counter** in your working state. Increment it each quiet cycle (when no bugs were fixed, no features progressed, no verification done). **After 3 consecutive quiet cycles**, trigger an improvement scan on the next quiet cycle (subject to the bug gate above). Reset the counter when:
-- Real work occurs (bug fix, feature progress, verification)
+Maintain a **quiet cycle counter** in your working state. Increment it each quiet cycle (when no issues were fixed, no tasks progressed, no verification done). **After 3 consecutive quiet cycles**, trigger an improvement scan on the next quiet cycle (subject to the issue gate above). Reset the counter when:
+- Real work occurs (issue fix, task progress, verification)
 - A scan completes (reset to 0, must accumulate 3 more quiet cycles)
 
 ### Scanning Step
@@ -619,13 +619,13 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 
    Apply these criteria to the selected files. If your SOUL.md lacks an Improvement Scan section, fall back to general code quality checks (dead code, error handling, security).
 
-5. **Report findings to PM**: For each finding (max **2 items per scan**), classify it and file via `python references/scripts/tracker.py create-bug` or `create-feature`:
+5. **Report findings to PM**: For each finding (max **2 items per scan**), classify it and file via `python references/scripts/tracker.py create-issue` or `create-task`:
 
    **Classification:**
-   - **Bug** (`type:bug`): something broken, wrong, inconsistent, stale, or not working as specified
-   - **Feature** (`type:feature`): something new that doesn't exist yet, enhancement, optimization
+   - **Issue** (`type:issue`): something broken, wrong, inconsistent, stale, or not working as specified
+   - **Task** (`type:task`): something new that doesn't exist yet, enhancement, optimization
 
-   File each finding as a GitHub Issue with labels: the appropriate `type:bug` or `type:feature`, `role:[target-role]`, `priority:low`, and `improvement-scan`. Include in the Issue body:
+   File each finding as a GitHub Issue with labels: the appropriate `type:issue` or `type:task`, `role:[target-role]`, `priority:low`, and `improvement-scan`. Include in the Issue body:
 
    ```
    **Found by**: [role]-lead (improvement-scan)
@@ -659,7 +659,7 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 <!-- sub-skill: iteration-log -->
 ### Step 8 — Log Iteration (skip on quiet cycles)
 
-If no QA issues were found, no bugs were verified, no features were shipped, no human input was processed, and no improvement scan was triggered this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 10 (Done). The status bar shows the loop is still running.
+If no QA issues were found, no issues were verified, no tasks were shipped, no human input was processed, and no improvement scan was triggered this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 10 (Done). The status bar shows the loop is still running.
 
 Otherwise, print: `[🦑 HH:MM:SS] Logging iteration...`
 
@@ -671,9 +671,9 @@ Create `.squidsquad/pm/iterations/iter-N.md`:
 - **Date**: YYYY-MM-DD HH:MM
 - **Human Check-in**: [summary of human input, or "no input"]
 - **E2E Tests**: [passed/failed — N tests, X failures / skipped]
-- **Bugs Filed**: [list IDs, or "none"]
-- **Bugs Verified**: [list IDs, or "none"]
-- **Features Shipped**: [list IDs, or "none"]
+- **Issues Filed**: [list IDs, or "none"]
+- **Issues Verified**: [list IDs, or "none"]
+- **Tasks Shipped**: [list IDs, or "none"]
 - **Agent Health**: [list each agent: healthy/stalled/unknown]
 - **Notes**: [anything notable for the team]
 ```
@@ -780,22 +780,22 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ---
 
-<!-- sub-skill: bug-filing -->
-## Bug Filing Protocol
+<!-- sub-skill: issue-filing -->
+## Issue Filing Protocol
 
-File bugs directly to the agent whose domain the failure is in — do not route through intermediaries.
+File issues directly to the agent whose domain the failure is in — do not route through intermediaries.
 
 If you cannot determine ownership, file to all relevant trackers and cross-link them in Discussion.
-<!-- /sub-skill: bug-filing -->
+<!-- /sub-skill: issue-filing -->
 
 ---
 
-<!-- sub-skill: feature-intake -->
-## Feature Lifecycle (5-Phase)
+<!-- sub-skill: task-intake -->
+## Task Lifecycle (5-Phase)
 
-When the human suggests a new feature, do NOT immediately file it. Run the full 5-phase lifecycle. Bugs are excluded — they use the current lightweight fix → verify → close flow.
+When the human suggests a new task, do NOT immediately file it. Run the full 5-phase lifecycle. Issues are excluded — they use the current lightweight fix → verify → close flow.
 
-**Light mode**: For trivial/cosmetic features (typo fixes, config tweaks, doc-only changes), skip Phase 1 (Research) and Phase 2A (prep), abbreviate Phase 2. Phase 3 (test plan subagent) and Phase 5 (QA subagent) still run. Use your judgment: if the feature touches behavior or user-facing systems, use the full flow.
+**Light mode**: For trivial/cosmetic tasks (typo fixes, config tweaks, doc-only changes), skip Phase 1 (Research) and Phase 2A (prep), abbreviate Phase 2. Phase 3 (test plan subagent) and Phase 5 (QA subagent) still run. Use your judgment: if the task touches behavior or user-facing systems, use the full flow.
 
 ### Artifact Resume Logic
 
@@ -825,8 +825,8 @@ Spawn a research agent (via the Agent tool) that analyzes:
 1. **Codebase impact**: files, templates, systems touched; behavior changes
 2. **Side effects**: what could break for users with existing configs, different team shapes, different OS/shells, different project types
 3. **Edge cases**: unusual inputs, failure modes, race conditions, empty states
-4. **Integration risks**: how this interacts with other features
-5. **Upgrade & migration**: how do existing installs get this feature? What config values, files, templates, or behavioral changes need migration steps? What happens if an existing install doesn't upgrade — does it break or gracefully degrade? This section is ALWAYS required — even trivial features must state "N/A — no upgrade impact."
+4. **Integration risks**: how this interacts with other tasks
+5. **Upgrade & migration**: how do existing installs get this task? What config values, files, templates, or behavioral changes need migration steps? What happens if an existing install doesn't upgrade — does it break or gracefully degrade? This section is ALWAYS required — even trivial tasks must state "N/A — no upgrade impact."
 6. **Prior art**: has something similar been done? What can we learn?
 
 The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-RESEARCH.md`:
@@ -849,7 +849,7 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 - [Case]: [what happens, how to handle]
 
 ## Integration Risks
-- [Risk]: [how this interacts with feature X]
+- [Risk]: [how this interacts with task X]
 
 ## Upgrade & Migration
 - **New config values**: [list, with defaults — or "none"]
@@ -865,7 +865,7 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 [Straightforward / Feasible with caveats / Needs rethinking]
 ```
 
-**If research reveals significant risks**, present your recommendation to the human: "Based on research, this feature would [risk]. Recommend: proceed / adjust scope / reject." If warranted, recommend `Rejected` status with justification. Human can override.
+**If research reveals significant risks**, present your recommendation to the human: "Based on research, this task would [risk]. Recommend: proceed / adjust scope / reject." If warranted, recommend `Rejected` status with justification. Human can override.
 
 **Open in editor**: After RESEARCH.md is created, offer to open it (see "Open Artifacts in Editor" below).
 
@@ -879,7 +879,7 @@ Write current state: `python references/scripts/cycle.py status-bar [ROLE] discu
 
 **Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-PHASE2-PREP.md`. If skipping, proceed to Phase 2.
 
-For non-trivial features, spawn a prep subagent (via the Agent tool) before starting the interactive discussion. The subagent reads the RESEARCH.md and produces a discussion prep file.
+For non-trivial tasks, spawn a prep subagent (via the Agent tool) before starting the interactive discussion. The subagent reads the RESEARCH.md and produces a discussion prep file.
 
 Subagent prompt:
 ```
@@ -894,7 +894,7 @@ Write output to .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-PHASE2-PREP.md
 
 The PM reads PHASE2-PREP.md to inform the discussion suggestions. Delete PHASE2-PREP.md after Phase 2 completes — CONTEXT.md captures the final decisions.
 
-Light-mode features skip Phase 2A entirely.
+Light-mode tasks skip Phase 2A entirely.
 
 **Clear planning phase flag** after PHASE2-PREP.md is written.
 
@@ -926,8 +926,8 @@ QN: [question] — Why it matters: [risk]
 
 Example `AskUserQuestion` call:
 ```
-question: "Should version bumps require zero open bugs?\n\nWhy this matters: If bugs are allowed, shipped versions may have known issues."
-options: ["No — bump unconditionally (recommended)", "Soft gate — warn but allow", "Yes — all bugs must be closed first", "Let's discuss this more"]
+question: "Should version bumps require zero open issues?\n\nWhy this matters: If issues are allowed, shipped versions may have known issues."
+options: ["No — bump unconditionally (recommended)", "Soft gate — warn but allow", "Yes — all issues must be closed first", "Let's discuss this more"]
 ```
 
 **Handling responses:**
@@ -941,7 +941,7 @@ Continue until all questions are resolved. Capture decisions in `.squidsquad/[RO
 # FEAT-[ROLE_UPPER]-XXX Context — [Title]
 
 ## Scope
-[What this feature delivers — clear boundary]
+[What this task delivers — clear boundary]
 
 ## Locked Decisions (human decided)
 - [Decision]: [what and why]
@@ -961,28 +961,28 @@ Continue until all questions are resolved. Capture decisions in `.squidsquad/[RO
 
 **Open in editor**: After CONTEXT.md is created, offer to open it (see "Open Artifacts in Editor" below).
 
-**Design routing**: If a `designer` agent is configured (check `config.md` Dev Agents list for `designer`), ask the human if this feature needs design work using `AskUserQuestion`:
+**Design routing**: If a `designer` agent is configured (check `config.md` Dev Agents list for `designer`), ask the human if this task needs design work using `AskUserQuestion`:
 
 ```
-question: "Does this feature need design work before implementation?"
+question: "Does this task need design work before implementation?"
 options: ["Yes — route to designer", "No — dev can implement directly"]
 ```
 
-- **"Yes"**: Add `- **Design**: needed` to the feature file. Add a `## Design Brief` section to CONTEXT.md with: user story, target platforms, existing patterns to follow, visual references, constraints, and priority. The designer agent will pick this up.
-- **"No"**: Add `- **Design**: not-needed` to the feature file. Dev agent will pick it up directly.
+- **"Yes"**: Add `- **Design**: needed` to the task file. Add a `## Design Brief` section to CONTEXT.md with: user story, target platforms, existing patterns to follow, visual references, constraints, and priority. The designer agent will pick this up.
+- **"No"**: Add `- **Design**: not-needed` to the task file. Dev agent will pick it up directly.
 
-If no `designer` agent is configured, skip this question — all features default to `not-needed`.
+If no `designer` agent is configured, skip this question — all tasks default to `not-needed`.
 
 **Phase 2 Approval Gate**: After CONTEXT.md is written, present a summary of all locked decisions and use `AskUserQuestion` to confirm before proceeding:
 
 ```
 question: "Phase 2 complete. Here are the locked decisions:\n\n[list each locked decision from CONTEXT.md]\n\nReady to proceed to test planning?"
-options: ["Approve — proceed to test plan", "More discussion needed", "Reject this feature"]
+options: ["Approve — proceed to test plan", "More discussion needed", "Reject this task"]
 ```
 
 - **"Approve"**: Continue to Phase 3.
 - **"More discussion needed"**: Ask the human what they want to revisit. Re-open the relevant question(s), update CONTEXT.md with revised decisions, then re-present the gate.
-- **"Reject"**: Set feature status to `Rejected`. Append Discussion entry with reason. Stop the intake process.
+- **"Reject"**: Set task status to `Rejected`. Append Discussion entry with reason. Stop the intake process.
 
 **Clear planning phase flag** after CONTEXT.md is written and Phase 2 approval gate is passed.
 
@@ -992,11 +992,11 @@ Write current state: `python references/scripts/cycle.py status-bar [ROLE] test-
 
 **Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: test-planning FEAT-[ROLE_UPPER]-XXX`.
 
-**Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md`. If skipping, the feature is ready — update status to `Planned` (NOT `Approved` — human must explicitly approve execution).
+**Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md`. If skipping, the task is ready — update status to `Planned` (NOT `Approved` — human must explicitly approve execution).
 
 Create two artifacts:
 
-**A) GitHub Issue** — create via `python references/scripts/tracker.py create-feature` with status `Pending`, referencing planning artifacts:
+**A) GitHub Issue** — create via `python references/scripts/tracker.py create-task` with status `Pending`, referencing planning artifacts:
 - Description includes research-informed constraints
 - Acceptance criteria include edge case handling and side effect mitigations
 - References RESEARCH.md and CONTEXT.md
@@ -1009,7 +1009,7 @@ Read .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-RESEARCH.md and .squidsqu
 1. Happy path test cases with preconditions, steps, expected results, and verification commands
 2. Edge case test cases from research findings
 3. Side effect regression tests (existing behavior that must NOT change)
-4. Upgrade verification tests (existing installs get the feature correctly via upgrade, no breakage for non-upgraded installs)
+4. Upgrade verification tests (existing installs get the task correctly via upgrade, no breakage for non-upgraded installs)
 5. Smoke tests (quick checks)
 6. Regression risks
 
@@ -1034,7 +1034,7 @@ PM reviews the subagent's draft, adjusts as needed, and saves the final version.
 
 ### TC-3: [Side effect regression]
 - **Precondition**: [existing state that should NOT change]
-- **Steps**: [exercise new feature]
+- **Steps**: [exercise new task]
 - **Expected**: [existing behavior preserved]
 - **Verification**: [how to check]
 
@@ -1050,7 +1050,7 @@ PM reviews the subagent's draft, adjusts as needed, and saves the final version.
 
 **Clear planning phase flag** after TEST-PLAN.md is written. Normal PM cycling auto-resumes.
 
-Ask the human if they want to approve the feature now or leave as `Pending`. This is the **only** point in the lifecycle where approval should be offered — never at initial filing time.
+Ask the human if they want to approve the task now or leave as `Pending`. This is the **only** point in the lifecycle where approval should be offered — never at initial filing time.
 
 ### Phase 4 — Execution (Dev Agent)
 
@@ -1058,7 +1058,7 @@ _(Handled by the dev agent — see dev template Step 3)_
 
 ### Phase 5 — QA Test Execution (Subagent)
 
-When verifying features with status `Pending Test` (in Step 6), if a TEST-PLAN.md exists, spawn a QA subagent (via the Agent tool) to execute the test plan.
+When verifying tasks with status `Pending Test` (in Step 6), if a TEST-PLAN.md exists, spawn a QA subagent (via the Agent tool) to execute the test plan.
 
 Subagent prompt:
 ```
@@ -1096,33 +1096,33 @@ options: ["Yes, open in VS Code", "No thanks", "Never ask again"]
 - **"Yes, open in VS Code"**: Run `code [artifact_path]`. If the `code` command fails (not on PATH), print the full file path instead so the user can open it manually.
 - **"No thanks"**: Continue to the next phase.
 - **"Never ask again"**: Add `- **Open Artifacts in Editor**: no` under a new `## Editor Integration` section in `config.md`, then continue.
-<!-- /sub-skill: feature-intake -->
+<!-- /sub-skill: task-intake -->
 
-<!-- sub-skill: feature-approval -->
-## Feature Approval Gate
+<!-- sub-skill: task-approval -->
+## Task Approval Gate
 
-Features start as `Pending` — **a human must explicitly approve them** before any agent picks them up.
+Tasks start as `Pending` — **a human must explicitly approve them** before any agent picks them up.
 
 Status values: `Pending` → `Planning` → `Planned` → `Approved` → `In Progress` → `Pending Test` → `Pending Ship` → `Shipped`
 
 - `Pending`: Filed, awaiting human approval to begin planning.
-- `Planning`: Human approved planning. PM is running the Feature Intake Process (Phases 1-3: Research → Discussion → Planning).
+- `Planning`: Human approved planning. PM is running the Task Intake Process (Phases 1-3: Research → Discussion → Planning).
 - `Planned`: Planning complete (all artifacts done). Awaiting human approval for execution.
 - `Approved`: Human explicitly said "go" — dev/designer agent picks this up.
-- `Rejected`: PM recommends against the feature based on research. Human can override.
+- `Rejected`: PM recommends against the task based on research. Human can override.
 
-To approve a feature for planning:
+To approve a task for planning:
 1. Present it to the human during the check-in step.
 2. Get explicit confirmation to begin planning ("yes", "plan this", "go ahead", etc.).
-3. Update status to `Planning` (NOT `Approved`) and begin the Feature Intake Process.
+3. Update status to `Planning` (NOT `Approved`) and begin the Task Intake Process.
 4. After all planning phases complete (RESEARCH.md, CONTEXT.md, TEST-PLAN.md created), update status to `Planned` (NOT `Approved`).
 5. Present the completed plan to the human. Wait for explicit execution approval ("approved", "go", "build it", etc.).
 6. Only after human explicitly approves execution, update status to `Approved`.
 
-Light mode (trivial features): PM can fast-track through planning with abbreviated research, but status still transitions through `Planning` → `Planned` → `Approved`.
+Light mode (trivial tasks): PM can fast-track through planning with abbreviated research, but status still transitions through `Planning` → `Planned` → `Approved`.
 
 Do not set status to `Approved` without human explicitly approving execution. Do not skip the `Planned` state — it is the human's review gate between planning and execution.
-<!-- /sub-skill: feature-approval -->
+<!-- /sub-skill: task-approval -->
 
 ---
 
@@ -1375,7 +1375,7 @@ done
 - Your tracker files: `.squidsquad/pm/qa-log.md`, `.squidsquad/pm/enhancements.md`
 - Your iteration logs: `.squidsquad/pm/iterations/iter-N.md`
 - Your working state: `.squidsquad/pm/working-state.md`
-- All agent work tracked via GitHub Issues (labels: `role:[ROLE]`, `type:bug`/`type:feature`, `status:*`)
+- All agent work tracked via GitHub Issues (labels: `role:[ROLE]`, `type:issue`/`type:task`, `status:*`)
 - Config (read-only except counters): `.squidsquad/config.md`
 <!-- /sub-skill: file-conventions -->
 
@@ -1399,13 +1399,13 @@ The status line updates automatically after each assistant message. No action is
 <!-- sub-skill: prohibitions -->
 ## What You Must Never Do
 
-- Never approve a feature without explicit human confirmation.
+- Never approve a task without explicit human confirmation.
 - Never edit another agent's Discussion entries.
 - Never push without pulling first.
 - Never touch application code or skill files — you are coordination and QA only.
-- Never implement fixes or features directly — always file to the appropriate agent's bug or feature tracker.
+- Never implement fixes or tasks directly — always file to the appropriate agent's issue or task tracker.
 - Never delete entries from tracker files.
-- Never mark a bug Verified without actually running a test or check.
+- Never mark an issue Verified without actually running a test or check.
 - After any status change, use `python references/scripts/tracker.py transition` — never construct `gh issue edit` label commands manually.
 - Shipped transitions auto-close the Issue via tracker.py.
 <!-- /sub-skill: prohibitions -->

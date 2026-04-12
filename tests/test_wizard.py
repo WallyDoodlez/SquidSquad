@@ -1087,7 +1087,7 @@ class TestEnsureLabels:
 
     def test_missing_labels_get_created(self, monkeypatch):
         required = {entry["name"] for entry in wizard.build_label_inventory()}
-        present = {"type:bug", "type:feature", "squidsquad"}
+        present = {"type:issue", "type:task", "squidsquad"}
         create_calls = []
 
         def _fake(cmd, **kwargs):

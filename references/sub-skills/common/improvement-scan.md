@@ -6,14 +6,14 @@ During quiet cycles, use your domain expertise to scan the **target project** fo
 
 Check `Improvement Scanning` in `config.md`. If set to `no`, skip scanning entirely.
 
-**Bug gate**: Before triggering a scan, check for open bugs assigned to your role:
+**Issue gate**: Before triggering a scan, check for open issues assigned to your role:
 ```bash
-python references/scripts/tracker.py list-bugs [ROLE]
+python references/scripts/tracker.py list-issues [ROLE]
 ```
-If any bugs exist, skip the scan — fix bugs instead. Bugs always take priority over improvement scanning.
+If any issues exist, skip the scan — fix issues instead. Issues always take priority over improvement scanning.
 
-Maintain a **quiet cycle counter** in your working state. Increment it each quiet cycle (when no bugs were fixed, no features progressed, no verification done). **After 3 consecutive quiet cycles**, trigger an improvement scan on the next quiet cycle (subject to the bug gate above). Reset the counter when:
-- Real work occurs (bug fix, feature progress, verification)
+Maintain a **quiet cycle counter** in your working state. Increment it each quiet cycle (when no issues were fixed, no tasks progressed, no verification done). **After 3 consecutive quiet cycles**, trigger an improvement scan on the next quiet cycle (subject to the issue gate above). Reset the counter when:
+- Real work occurs (issue fix, task progress, verification)
 - A scan completes (reset to 0, must accumulate 3 more quiet cycles)
 
 ### Scanning Step
@@ -44,13 +44,13 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 
    Apply these criteria to the selected files. If your SOUL.md lacks an Improvement Scan section, fall back to general code quality checks (dead code, error handling, security).
 
-5. **Report findings to PM**: For each finding (max **2 items per scan**), classify it and file via `python references/scripts/tracker.py create-bug` or `create-feature`:
+5. **Report findings to PM**: For each finding (max **2 items per scan**), classify it and file via `python references/scripts/tracker.py create-issue` or `create-task`:
 
    **Classification:**
-   - **Bug** (`type:bug`): something broken, wrong, inconsistent, stale, or not working as specified
-   - **Feature** (`type:feature`): something new that doesn't exist yet, enhancement, optimization
+   - **Issue** (`type:issue`): something broken, wrong, inconsistent, stale, or not working as specified
+   - **Task** (`type:task`): something new that doesn't exist yet, enhancement, optimization
 
-   File each finding as a GitHub Issue with labels: the appropriate `type:bug` or `type:feature`, `role:[target-role]`, `priority:low`, and `improvement-scan`. Include in the Issue body:
+   File each finding as a GitHub Issue with labels: the appropriate `type:issue` or `type:task`, `role:[target-role]`, `priority:low`, and `improvement-scan`. Include in the Issue body:
 
    ```
    **Found by**: [role]-lead (improvement-scan)

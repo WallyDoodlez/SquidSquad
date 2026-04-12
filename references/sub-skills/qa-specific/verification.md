@@ -17,34 +17,34 @@ Log results in `qa/qa-log.md`:
 - **Notes**: [anything notable]
 ```
 
-### Step 3 — Investigate and File Bugs From Test Failures
+### Step 3 — Investigate and File Issues From Test Failures
 
 Print: `[🦑 HH:MM:SS] Investigating test failures...` (or skip if no failures)
 
 For each test failure:
 
 1. Determine which agent's domain the failure is in.
-2. Check if a bug already exists: `python references/scripts/tracker.py list-by-labels "type:bug,squidsquad"` and search output for keywords. If found, comment on the existing issue — do not duplicate.
+2. Check if an issue already exists: `python references/scripts/tracker.py list-by-labels "type:issue,squidsquad"` and search output for keywords. If found, comment on the existing issue — do not duplicate.
 3. If new and the failure is **objective** (clear test pass/fail, crash, error):
-   - File immediately: `python references/scripts/tracker.py create-bug --title "[title]" --body "[description with test evidence]" --role [target-role] --severity [high|medium|low] --reporter qa`
+   - File immediately: `python references/scripts/tracker.py create-issue --title "[title]" --body "[description with test evidence]" --role [target-role] --severity [high|medium|low] --reporter qa`
 4. If the finding is **subjective** (coherence issue, style concern, design inconsistency):
    - Flag for human review via PM: `python references/scripts/tracker.py comment [NUMBER] --role qa --message "Subjective finding flagged for PM/human review: [description]"`
-   - Do NOT file a bug yet — PM and human decide.
+   - Do NOT file an issue yet — PM and human decide.
 5. If the failure spans multiple domains: file in each relevant role with cross-linking comments.
 
-### Step 4 — Verify Fixed Bugs
+### Step 4 — Verify Fixed Issues
 
-Print: `[🦑 HH:MM:SS] Verifying fixed bugs...`
+Print: `[🦑 HH:MM:SS] Verifying fixed issues...`
 
-Query all bugs pending test:
+Query all issues pending test:
 
 ```bash
-python references/scripts/tracker.py list-bugs skill --status pending-test
+python references/scripts/tracker.py list-issues skill --status pending-test
 ```
 
 (Repeat for each dev role.)
 
-For each bug:
+For each issue:
 
 1. Read details: `gh issue view [NUMBER] --json title,body,comments`
 2. Run the relevant test or manually verify the fix.
@@ -59,19 +59,19 @@ For each bug:
    - Reopen: `python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead`
    - Comment with specific failures.
 
-### Step 5 — Verify Pending Test Features
+### Step 5 — Verify Pending Test Tasks
 
-Print: `[🦑 HH:MM:SS] Verifying pending test features...`
+Print: `[🦑 HH:MM:SS] Verifying pending test tasks...`
 
-Query all features pending test:
+Query all tasks pending test:
 
 ```bash
-python references/scripts/tracker.py list-features skill --status pending-test
+python references/scripts/tracker.py list-tasks skill --status pending-test
 ```
 
 (Adjust role as needed for other agents.)
 
-For each feature, read it: `gh issue view [NUMBER] --json title,body,labels,comments`
+For each task, read it: `gh issue view [NUMBER] --json title,body,labels,comments`
 
 1. **If a TEST-PLAN.md exists** in the agent's planning directory, spawn a QA subagent (via the Agent tool) to execute the test plan:
 
@@ -105,7 +105,7 @@ For each feature, read it: `gh issue view [NUMBER] --json title,body,labels,comm
    python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role qa-lead
    python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. Status → Pending Ship."
    ```
-6. **delivery:skip check**: If the feature is internal-only, add `delivery:skip` to the comment message.
+6. **delivery:skip check**: If the task is internal-only, add `delivery:skip` to the comment message.
 7. If criteria fail: transition back to `In Progress` with specific failures in the comment.
 
 ### Step 5b — Monitor PRs (if PR Flow enabled)
@@ -120,7 +120,7 @@ gh pr list --search "squidsquad/" --state all --json number,title,state,mergedAt
 ```
 
 For each PR:
-- **If merged**: find the corresponding tracker item (parse the feature/bug ID from the PR title). Update status to `Pending Ship`. Append Discussion entry: `> [YYYY-MM-DD HH:MM] **qa**: PR [URL] merged by human. Status → Pending Ship.` Apply the same `delivery: skip` logic as Step 5 item 4 if the feature is internal-only.
+- **If merged**: find the corresponding tracker item (parse the task/issue ID from the PR title). Update status to `Pending Ship`. Append Discussion entry: `> [YYYY-MM-DD HH:MM] **qa**: PR [URL] merged by human. Status → Pending Ship.` Apply the same `delivery: skip` logic as Step 5 item 4 if the task is internal-only.
 - **If closed without merge**: update status back to `In Progress`. Append Discussion entry with note.
 - **If open with new comments**: fetch comments via `gh pr view [N] --comments`. Append any new comments to the tracker Discussion: `> [YYYY-MM-DD HH:MM] **qa**: PR comment from [author]: [summary]`
 - **If open with "changes requested" review**: update status back to `In Progress`. Append Discussion entry with the requested changes.

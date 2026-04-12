@@ -13,6 +13,7 @@ references/scripts/config.py
 references/scripts/cycle.py
 references/scripts/diagnostics.py
 references/scripts/git_ops.py
+references/scripts/boot_remote.py
 references/scripts/health_check.py
 references/scripts/manifest.py
 references/scripts/tracker.py
@@ -48,7 +49,8 @@ references/tools/local_html/setup.md
 references/tools/local_html/sub-skill.md
 references/presets/design/manifest.yaml
 references/presets/software-dev/manifest.yaml
-references/sub-skills/common/bug-filing.md
+references/sub-skills/common/boot-remote-agents.md
+references/sub-skills/common/issue-filing.md
 references/sub-skills/common/context-pressure.md
 references/sub-skills/common/discussion-protocol.md
 references/sub-skills/common/file-conventions.md
@@ -64,7 +66,7 @@ references/sub-skills/common/tracker-protocol.md
 references/sub-skills/common/vault-protocol.md
 references/sub-skills/common/vault-remember.md
 references/sub-skills/common/working-state.md
-references/sub-skills/designer-specific/bug-filing.md
+references/sub-skills/designer-specific/issue-filing.md
 references/sub-skills/designer-specific/design-session.md
 references/sub-skills/designer-specific/design-tools.md
 references/sub-skills/designer-specific/discussion-protocol.md
@@ -73,7 +75,7 @@ references/sub-skills/designer-specific/git-commit.md
 references/sub-skills/designer-specific/iteration-log.md
 references/sub-skills/designer-specific/prohibitions.md
 references/sub-skills/designer-specific/status-line.md
-references/sub-skills/dm-specific/bug-filing.md
+references/sub-skills/dm-specific/issue-filing.md
 references/sub-skills/dm-specific/bug-triage.md
 references/sub-skills/dm-specific/delivery-packaging.md
 references/sub-skills/dm-specific/discussion-protocol.md
@@ -84,11 +86,11 @@ references/sub-skills/dm-specific/prohibitions.md
 references/sub-skills/dm-specific/status-line.md
 references/sub-skills/dm-specific/version-bumps.md
 references/sub-skills/manifest.md
-references/sub-skills/pm-specific/bug-filing.md
+references/sub-skills/pm-specific/issue-filing.md
 references/sub-skills/pm-specific/delivery-fallback.md
 references/sub-skills/pm-specific/discussion-protocol.md
-references/sub-skills/pm-specific/feature-approval.md
-references/sub-skills/pm-specific/feature-intake.md
+references/sub-skills/pm-specific/task-approval.md
+references/sub-skills/pm-specific/task-intake.md
 references/sub-skills/pm-specific/file-conventions.md
 references/sub-skills/pm-specific/git-commit.md
 references/sub-skills/pm-specific/github-issues.md
@@ -96,7 +98,7 @@ references/sub-skills/pm-specific/iteration-log.md
 references/sub-skills/pm-specific/pr-flow.md
 references/sub-skills/pm-specific/prohibitions.md
 references/sub-skills/pm-specific/status-line.md
-references/sub-skills/qa-specific/bug-filing.md
+references/sub-skills/qa-specific/issue-filing.md
 references/sub-skills/qa-specific/discussion-protocol.md
 references/sub-skills/qa-specific/file-conventions.md
 references/sub-skills/qa-specific/git-commit.md

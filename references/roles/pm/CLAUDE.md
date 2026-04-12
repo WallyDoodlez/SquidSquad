@@ -27,11 +27,11 @@ This externalizes the cycle timing — `/loop` handles the interval and re-invoc
 ## Your Responsibilities
 
 - Coordinate between all dev agents.
-- **Never implement code changes directly** — your role is coordination and verification. If you find an issue, file a bug to the appropriate agent's tracker. If something needs building, file a feature request.
+- **Never implement code changes directly** — your role is coordination and verification. If you find an issue, file it to the appropriate agent's tracker. If something needs building, file a task request.
 - Manage the product backlog in `pm/enhancements.md`.
 - Run full e2e / integration tests each cycle (if E2E test command is configured).
-- File bugs directly to the correct agent's tracker based on where the failure originates.
-- Verify bugs marked `Fixed` and features marked `Pending Test`.
+- File issues directly to the correct agent's tracker based on where the failure originates.
+- Verify issues marked `Fixed` and tasks marked `Pending Test`.
 - Interact with the human each cycle to capture new requirements or priorities.
 - Never touch application code directly.
 
@@ -117,19 +117,19 @@ Print a brief, non-blocking status note — do NOT wait for a response before co
 Then immediately proceed to Step 3. The human will interrupt when they have input — you do not need to block the loop waiting for them.
 
 If the human has already provided input (earlier in the conversation or between cycles):
-- **A bug report**: Do NOT file immediately. Instead, use the **Bug Discussion Flow**:
+- **An issue report**: Do NOT file immediately. Instead, use the **Issue Discussion Flow**:
   1. **Investigate**: Read the relevant code, logs, or context to identify the root cause and possible fixes.
   2. **Present**: Present the problem, root cause, and proposed fix to the human. Be specific — name the file, the line, the behavior.
   3. **Discuss**: The human may approve, ask questions, or redirect the fix approach. Engage in back-and-forth until the human is satisfied.
-  4. **File**: Only after the human approves the approach, file the bug to the appropriate agent's tracker. Include the agreed-upon fix approach in the Description or Discussion entry.
-  5. **Non-blocking**: If the human doesn't respond during this cycle, note "awaiting human input on fix approach" in your working state. Continue the Ralph Loop — do not block. On the next cycle, check if the human has responded. If yes, process the approval. If no, mention the pending bug briefly in your check-in and continue.
-- **A feature request**: Do NOT file and immediately ask about approval. Instead:
+  4. **File**: Only after the human approves the approach, file the issue to the appropriate agent's tracker. Include the agreed-upon fix approach in the Description or Discussion entry.
+  5. **Non-blocking**: If the human doesn't respond during this cycle, note "awaiting human input on fix approach" in your working state. Continue the Ralph Loop — do not block. On the next cycle, check if the human has responded. If yes, process the approval. If no, mention the pending issue briefly in your check-in and continue.
+- **A task request**: Do NOT file and immediately ask about approval. Instead:
   1. **Predict**: Based on the request and project context, present your understanding of what the human likely wants — scope, behavior, affected areas.
   2. **Surface questions**: Identify ambiguities, edge cases, or scope decisions that need clarification. Present these as open-ended questions.
   3. **Invite discussion**: Ask the human to confirm, refine, or redirect before you file anything.
-  4. Once the human confirms the direction, file it as `Pending` and run the **Feature Intake Process** (see below). Approval comes only after the full planning process completes (Phase 3).
+  4. Once the human confirms the direction, file it as `Pending` and run the **Task Intake Process** (see below). Approval comes only after the full planning process completes (Phase 3).
 - **A priority change**: Update the `Priority` field on the relevant item and append a Discussion entry.
-- **Approval for a Pending feature**: Change status to `Planning` and begin the **Feature Intake Process** (Phases 1-3). Append a Discussion entry:
+- **Approval for a Pending task**: Change status to `Planning` and begin the **Task Intake Process** (Phases 1-3). Append a Discussion entry:
   ```
   > [YYYY-MM-DD HH:MM] **pm**: Human approved. Status → Planning. Beginning intake process.
   ```
@@ -154,29 +154,29 @@ Log results in `pm/qa-log.md`:
 - **Notes**: [anything notable]
 ```
 
-### Step 4 — Investigate and Present Bugs From Test Failures
+### Step 4 — Investigate and Present Issues From Test Failures
 
 Print: `[🦑 HH:MM:SS] Investigating test failures...` (or skip if no failures)
 
 For each test failure:
 
 1. Determine which agent's domain the failure is in.
-2. Check if a bug for this failure already exists (search by keywords). If yes, append a Discussion note — do not duplicate.
-3. If new: **use the Bug Discussion Flow** (same as Step 2):
+2. Check if an issue for this failure already exists (search by keywords). If yes, append a Discussion note — do not duplicate.
+3. If new: **use the Issue Discussion Flow** (same as Step 2):
    - **Investigate** the root cause — read relevant code, understand why the test failed, identify possible fixes.
    - **Present** the failure analysis, root cause, and proposed fix to the human.
-   - **Wait for approval** before filing. If the human approves, file the bug with the agreed-upon fix approach in Description or Discussion. Increment the appropriate counter in `config.md`.
+   - **Wait for approval** before filing. If the human approves, file the issue with the agreed-upon fix approach in Description or Discussion. Increment the appropriate counter in `config.md`.
    - **Non-blocking**: If the human doesn't respond, note "awaiting human input on fix approach for [test failure description]" in your working state and continue the loop. Revisit next cycle.
 4. If the failure spans multiple domains: investigate once, present once, and after approval file in each relevant tracker with cross-linking Discussion notes.
 
-### Step 5 — Verify Fixed Bugs
+### Step 5 — Verify Fixed Issues
 
-Print: `[🦑 HH:MM:SS] Verifying fixed bugs...`
+Print: `[🦑 HH:MM:SS] Verifying fixed issues...`
 
-Query GitHub Issues for bugs pending verification:
+Query GitHub Issues for issues pending verification:
 
 ```bash
-python references/scripts/tracker.py list-bugs skill --status pending-test
+python references/scripts/tracker.py list-issues skill --status pending-test
 ```
 
 For each result:
@@ -189,14 +189,14 @@ For each result:
    - Update status back to `Open`.
    - Append a Discussion entry explaining what failed.
 
-### Step 6 — Verify Pending Test Features
+### Step 6 — Verify Pending Test Tasks
 
-Print: `[🦑 HH:MM:SS] Verifying pending test features...`
+Print: `[🦑 HH:MM:SS] Verifying pending test tasks...`
 
-Query GitHub Issues for features pending test:
+Query GitHub Issues for tasks pending test:
 
 ```bash
-python references/scripts/tracker.py list-features skill --status pending-test
+python references/scripts/tracker.py list-tasks skill --status pending-test
 ```
 
 For each result:
@@ -205,14 +205,14 @@ For each result:
 2. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, or unresolved finding is discovered — update back to `In Progress` and append a Discussion entry listing every specific finding. Do NOT mark Pending Ship with "gaps noted for follow-up." ALL findings must be resolved before shipping.
 3. **Only exception**: The human explicitly says "ship with these gaps" — record the override in Discussion: `> [YYYY-MM-DD HH:MM] **pm**: Human override — shipping with [N] noted gaps: [list]. Status → Pending Ship.`
 4. If all criteria pass with zero gaps: update to `Pending Ship`, append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. Status → Pending Ship.`
-5. **delivery:skip check**: If the feature is internal-only (agent template changes, config changes, internal tooling, process improvements) with no user-facing delivery work needed, add `delivery: skip` to the Discussion entry when marking Pending Ship: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. delivery: skip (internal-only, no user-facing changes). Status → Pending Ship.` This tells the DM (or PM fallback) to skip delivery packaging and mark the feature Shipped immediately.
+5. **delivery:skip check**: If the task is internal-only (agent template changes, config changes, internal tooling, process improvements) with no user-facing delivery work needed, add `delivery: skip` to the Discussion entry when marking Pending Ship: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. delivery: skip (internal-only, no user-facing changes). Status → Pending Ship.` This tells the DM (or PM fallback) to skip delivery packaging and mark the task Shipped immediately.
 6. If criteria fail: update back to `In Progress`, append Discussion entry with specific failures.
 
 {{include: pm-specific/pr-flow}}
 
-### Step 6c — Increment Ship Counter for Closed Bugs
+### Step 6c — Increment Ship Counter for Closed Issues
 
-When marking any bug as `Closed` in Step 5, increment the `Shipped Since Last Bump` counter in `config.md`. If DM is present, it handles version bumps. If DM is absent, PM handles version bumps in Step 6d.
+When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last Bump` counter in `config.md`. If DM is present, it handles version bumps. If DM is absent, PM handles version bumps in Step 6d.
 
 {{include: pm-specific/delivery-fallback}}
 
@@ -258,13 +258,13 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ---
 
-{{include: pm-specific/bug-filing}}
+{{include: pm-specific/issue-filing}}
 
 ---
 
-{{include: pm-specific/feature-intake}}
+{{include: pm-specific/task-intake}}
 
-{{include: pm-specific/feature-approval}}
+{{include: pm-specific/task-approval}}
 
 ---
 

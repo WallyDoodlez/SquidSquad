@@ -11,7 +11,7 @@ This manifest defines how shared sub-skill source files compose into agent templ
 - **Output**: `references/agent-instructions.md` (generated, DO NOT EDIT)
 - **Final templates**: `.squidsquad/<role>/CLAUDE.md` (generated from composed output with placeholder substitution)
 
-> **Legacy location retired (Q-new22, 2026-04-11)**: Role CLAUDE.md and SOUL.md templates used to live under `references/sub-skills/{roles,souls}/`. They are now inside each role's own directory at `references/roles/<role>/`. `pm-lean.md` was retired in the same change — the feature-approval and verification behaviours remain in the main PM CLAUDE.md and are driven by which other roles are installed at runtime.
+> **Legacy location retired (Q-new22, 2026-04-11)**: Role CLAUDE.md and SOUL.md templates used to live under `references/sub-skills/{roles,souls}/`. They are now inside each role's own directory at `references/roles/<role>/`. `pm-lean.md` was retired in the same change — the task-approval and verification behaviours remain in the main PM CLAUDE.md and are driven by which other roles are installed at runtime.
 
 ## Composition Order
 
@@ -29,7 +29,7 @@ Entry file with includes (the role's own `SOUL.md` sits alongside `CLAUDE.md` in
 8b. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
 9. `common/git-commit` — Step 5: commit/push protocol with PR flow
 9. `common/discussion-protocol` — Discussion entry format and rules
-10. `common/bug-filing` — Self-file and cross-file bug templates
+10. `common/issue-filing` — Self-file and cross-file bug templates
 11. `common/working-state` — Working State File format
 12. `common/vault-protocol` — Vault operations
 13. `common/file-conventions` — File/directory conventions
@@ -48,9 +48,9 @@ Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded
 7. `pm-specific/iteration-log` — Step 8: PM/QA iteration log
 7b. `common/vault-remember` — Step 8b: end-of-cycle vault reflection
 8. `pm-specific/git-commit` — Step 9: commit/push
-9. `pm-specific/bug-filing` — Bug Filing Protocol
-10. `pm-specific/feature-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
-11. `pm-specific/feature-approval` — Feature Approval Gate
+9. `pm-specific/issue-filing` — Bug Filing Protocol
+10. `pm-specific/task-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
+11. `pm-specific/task-approval` — Feature Approval Gate
 12. `pm-specific/discussion-protocol` — Discussion entry format (pm/qa alias)
 13. `common/vault-protocol` — Vault operations
 14. `pm-specific/file-conventions` — PM file/directory conventions
@@ -68,7 +68,7 @@ Entry file with includes:
 5. `qa-specific/iteration-log` — Step 7: QA iteration log
 5b. `common/vault-remember` — Step 7b: end-of-cycle vault reflection
 6. `qa-specific/git-commit` — Step 8: commit/push
-7. `qa-specific/bug-filing` — QA Bug Filing Protocol
+7. `qa-specific/issue-filing` — QA Bug Filing Protocol
 8. `qa-specific/discussion-protocol` — Discussion entry format (qa alias)
 9. `common/vault-protocol` — Vault operations
 10. `qa-specific/file-conventions` — QA file/directory conventions
@@ -88,7 +88,7 @@ Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardc
 6. `designer-specific/git-commit` — Step 4: commit/push
 7. `designer-specific/discussion-protocol` — Discussion entry format (designer alias)
 8. `designer-specific/design-tools` — Design tool integration and discovery
-9. `designer-specific/bug-filing` — Designer bug/feature filing
+9. `designer-specific/issue-filing` — Designer bug/feature filing
 10. `common/vault-protocol` — Vault operations
 11. `designer-specific/file-conventions` — Designer file/directory conventions
 12. `designer-specific/status-line` — Designer status line description
@@ -108,7 +108,7 @@ Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardc
 6b. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
 7. `dm-specific/git-commit` — Step 5: commit/push
 8. `dm-specific/discussion-protocol` — Discussion entry format (dm alias)
-9. `dm-specific/bug-filing` — DM bug/feature filing
+9. `dm-specific/issue-filing` — DM bug/feature filing
 10. `common/vault-protocol` — Vault operations
 11. `dm-specific/file-conventions` — DM file/directory conventions
 12. `dm-specific/status-line` — DM status line description
@@ -144,7 +144,7 @@ After all includes are resolved, substitute placeholders for the target role:
 ## Intentional Differences from Monolithic Templates
 
 - **PM/DM Step 1 (Pull Latest)**: Now includes "append the conflicting section below the existing one" (previously only in dev template). Functional improvement.
-- **PM Open Artifacts in Editor**: Moved from standalone section to inside Feature Lifecycle (feature-intake sub-skill). Same content, more logical location.
+- **PM Open Artifacts in Editor**: Moved from standalone section to inside Feature Lifecycle (task-intake sub-skill). Same content, more logical location.
 
 ## Sub-skill File Inventory
 
@@ -163,17 +163,17 @@ references/sub-skills/
 │   ├── iteration-log.md              (Step 4 — iteration log format + cleanup — shared by dev)
 │   ├── git-commit.md                 (Step 5 — commit/push + PR flow — shared by dev)
 │   ├── discussion-protocol.md        (Discussion entry format — shared by dev)
-│   ├── bug-filing.md                 (Self-file + cross-file bug templates — shared by dev)
+│   ├── issue-filing.md                 (Self-file + cross-file bug templates — shared by dev)
 │   ├── file-conventions.md           (File/directory conventions — shared by dev)
 │   ├── vault-remember.md             (Step 4b — end-of-cycle vault reflection — shared by all roles)
 │   ├── status-line.md                (Status line description — shared by dev)
 │   └── prohibitions.md               (Shared "never do" rules — shared by dev)
 ├── pm-specific/
-│   ├── feature-intake.md              (5-phase lifecycle + Open Artifacts)
-│   ├── feature-approval.md            (Feature Approval Gate)
+│   ├── task-intake.md              (5-phase lifecycle + Open Artifacts)
+│   ├── task-approval.md            (Feature Approval Gate)
 │   ├── delivery-fallback.md           (Step 6d — PM delivery when DM absent)
 │   ├── discussion-protocol.md        (Discussion — pm/qa alias)
-│   ├── bug-filing.md                 (Bug Filing Protocol)
+│   ├── issue-filing.md                 (Bug Filing Protocol)
 │   ├── file-conventions.md           (PM file conventions)
 │   ├── status-line.md                (PM status line)
 │   ├── prohibitions.md               (PM "never do" rules)
@@ -184,7 +184,7 @@ references/sub-skills/
 ├── qa-specific/
 │   ├── verification.md               (Steps 2-6 — E2E, bugs, verify, health check)
 │   ├── discussion-protocol.md        (Discussion — qa alias)
-│   ├── bug-filing.md                 (QA Bug Filing Protocol)
+│   ├── issue-filing.md                 (QA Bug Filing Protocol)
 │   ├── file-conventions.md           (QA file conventions)
 │   ├── status-line.md                (QA status line)
 │   ├── prohibitions.md               (QA "never do" rules)
@@ -194,7 +194,7 @@ references/sub-skills/
 │   ├── design-session.md             (Steps 2-2e — requests, feasibility, session, specs, rejection)
 │   ├── design-tools.md              (Design tool integration and discovery)
 │   ├── discussion-protocol.md        (Discussion — designer alias)
-│   ├── bug-filing.md                 (Designer bug/feature filing)
+│   ├── issue-filing.md                 (Designer bug/feature filing)
 │   ├── file-conventions.md           (Designer file conventions)
 │   ├── status-line.md                (Designer status line)
 │   ├── prohibitions.md               (Designer "never do" rules)
@@ -205,7 +205,7 @@ references/sub-skills/
     ├── delivery-packaging.md          (Steps 2-2c — scan, skip, deliver)
     ├── version-bumps.md              (Step 3 — version bump check + sequence)
     ├── discussion-protocol.md        (Discussion — dm alias)
-    ├── bug-filing.md                 (DM bug/feature filing)
+    ├── issue-filing.md                 (DM bug/feature filing)
     ├── file-conventions.md           (DM file conventions)
     ├── status-line.md                (DM status line)
     ├── prohibitions.md               (DM "never do" rules)

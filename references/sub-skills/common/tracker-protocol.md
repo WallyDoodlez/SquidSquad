@@ -1,6 +1,6 @@
 ## Tracker Protocol — GitHub Issues
 
-All bugs and features are tracked as GitHub Issues with structured labels. Agents use the `gh` CLI to create, read, update, and comment on Issues. No internal markdown tracker files — GitHub Issues is the single source of truth.
+All issues and tasks are tracked as GitHub Issues with structured labels. Agents use the `gh` CLI to create, read, update, and comment on Issues. No internal markdown tracker files — GitHub Issues is the single source of truth.
 
 ### Timestamps
 
@@ -36,8 +36,8 @@ If `gh` works but GitHub is **temporarily unreachable** during a cycle (network 
 Issues use labels for structured metadata. The following labels must exist on the repo (created during setup):
 
 **Type:**
-- `bug` — defect, regression, broken behavior
-- `feature` — new capability or enhancement
+- `issue` — defect, regression, broken behavior
+- `task` — new capability or enhancement
 
 **Priority:**
 - `priority:high` — urgent, blocks other work
@@ -45,7 +45,7 @@ Issues use labels for structured metadata. The following labels must exist on th
 - `priority:low` — nice-to-have, improvement scan items
 
 **Status:**
-- `status:open` — bug filed, awaiting triage
+- `status:open` — issue filed, awaiting triage
 - `status:pending` — filed, awaiting human approval
 - `status:planning` — approved by human, PM running intake
 - `status:planned` — planning complete, awaiting human approval for execution
@@ -62,12 +62,12 @@ Issues use labels for structured metadata. The following labels must exist on th
 - `role:designer` — designer agent
 - `role:dm` — DM agent
 
-**Design (for features needing design):**
+**Design (for tasks needing design):**
 - `design:needed` — designer must produce specs before dev
 - `design:in-progress` — designer working on specs
 - `design:complete` — design approved, dev can proceed
 
-**Severity (for bugs):**
+**Severity (for issues):**
 - `severity:high` — critical, blocks usage
 - `severity:medium` — degraded functionality
 - `severity:low` — cosmetic, minor annoyance
@@ -81,11 +81,11 @@ Issues use labels for structured metadata. The following labels must exist on th
 Use the tracker script for all queries — it encodes correct label formats:
 
 ```bash
-# List approved features for your role
-python references/scripts/tracker.py list-features [ROLE] --status approved
+# List approved tasks for your role
+python references/scripts/tracker.py list-tasks [ROLE] --status approved
 
-# List open bugs for your role
-python references/scripts/tracker.py list-bugs [ROLE]
+# List open issues for your role
+python references/scripts/tracker.py list-issues [ROLE]
 
 # Get labels or state for a specific issue
 python references/scripts/tracker.py get-labels [NUMBER]
@@ -98,23 +98,23 @@ To read a specific issue's full details (body, comments):
 gh issue view [NUMBER] --json title,body,labels,comments
 ```
 
-### Creating Issues (replaces filing bugs/features)
+### Creating Issues (replaces filing issues/tasks)
 
 Use the tracker script to ensure correct label format:
 
 ```bash
-# File a bug
-python references/scripts/tracker.py create-bug \
+# File an issue
+python references/scripts/tracker.py create-issue \
   --title "[title]" --body "[description]" \
   --role [target-role] --severity [high|medium|low] --reporter [ROLE]-lead
 
-# File a feature
-python references/scripts/tracker.py create-feature \
+# File a task
+python references/scripts/tracker.py create-task \
   --title "[title]" --body "[description]" \
   --role [target-role] --priority [high|medium|low] --reporter [ROLE]-lead
 ```
 
-The script automatically adds `BUG:`/`FEAT:` prefix, correct labels, and `squidsquad` tag. Returns JSON with `number` and `url`.
+The script automatically adds `ISSUE:`/`TASK:` prefix, correct labels, and `squidsquad` tag. Returns JSON with `number` and `url`.
 
 ### Status Transitions (replaces editing Status field)
 
@@ -178,7 +178,7 @@ Reference issues by number in working-state.md: `- **Task**: #42`
 
 ### Planning Artifacts
 
-Planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md) remain as local files in `.squidsquad/[role]/planning/`. Only the tracker (bugs/features) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
+Planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md) remain as local files in `.squidsquad/[role]/planning/`. Only the tracker (issues/tasks) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
 
 ### Caching
 

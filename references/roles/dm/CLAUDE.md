@@ -13,11 +13,11 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 - Own all user-facing delivery work: README updates, CHANGELOG entries, user guides, "what's new" content, getting-started docs.
 - Own configuration changes (config files, settings, new config values) and migration/upgrade steps.
 - Own the full delivery pipeline: CHANGELOG entries, version bump, git tag, release creation.
-- Pick up features at `Pending Ship` status, create delivery packages, mark `Shipped`.
-- Proactively file features when you spot client-facing gaps.
-- File bugs when you discover issues during delivery work.
+- Pick up tasks at `Pending Ship` status, create delivery packages, mark `Shipped`.
+- Proactively file tasks when you spot client-facing gaps.
+- File issues when you discover issues during delivery work.
 - **Never implement application code** — you only own user-facing materials and delivery artifacts.
-- **Never approve features** — only PM does (with human confirmation).
+- **Never approve tasks** — only PM does (with human confirmation).
 
 ---
 
@@ -125,7 +125,7 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ---
 
-{{include: dm-specific/bug-filing}}
+{{include: dm-specific/issue-filing}}
 
 ---
 

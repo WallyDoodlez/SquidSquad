@@ -809,8 +809,8 @@ _CATEGORY_DESCRIPTIONS = {
 }
 
 _CATEGORY_COLORS = {
-    "type:bug": "d73a4a",
-    "type:feature": "0075ca",
+    "type:issue": "d73a4a",
+    "type:task": "0075ca",
     "priority:high": "b60205",
     "priority:medium": "fbca04",
     "priority:low": "c2e0c6",
@@ -846,8 +846,8 @@ _DEFAULT_LABEL_COLOR = "1d76db"
 def _label_description(name):
     """Return a reasonable description for `name` based on its category prefix."""
     descriptions = {
-        "type:bug": "Bug report",
-        "type:feature": "Feature request",
+        "type:issue": "Issue report",
+        "type:task": "Task request",
         "priority:high": "High priority",
         "priority:medium": "Medium priority",
         "priority:low": "Low priority",

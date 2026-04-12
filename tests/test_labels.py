@@ -14,7 +14,7 @@ import pytest
 from conftest import REPO_ROOT, SQUIDSQUAD_DIR
 
 # Labels defined in the tracker-protocol label taxonomy
-EXPECTED_TYPE_LABELS = {"type:bug", "type:feature"}
+EXPECTED_TYPE_LABELS = {"type:issue", "type:task"}
 EXPECTED_PRIORITY_LABELS = {"priority:high", "priority:medium", "priority:low"}
 EXPECTED_STATUS_LABELS = {
     "status:open", "status:pending", "status:planning", "status:planned",

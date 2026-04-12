@@ -1,8 +1,8 @@
-## Feature Lifecycle (5-Phase)
+## Task Lifecycle (5-Phase)
 
-When the human suggests a new feature, do NOT immediately file it. Run the full 5-phase lifecycle. Bugs are excluded — they use the current lightweight fix → verify → close flow.
+When the human suggests a new task, do NOT immediately file it. Run the full 5-phase lifecycle. Issues are excluded — they use the current lightweight fix → verify → close flow.
 
-**Light mode**: For trivial/cosmetic features (typo fixes, config tweaks, doc-only changes), skip Phase 1 (Research) and Phase 2A (prep), abbreviate Phase 2. Phase 3 (test plan subagent) and Phase 5 (QA subagent) still run. Use your judgment: if the feature touches behavior or user-facing systems, use the full flow.
+**Light mode**: For trivial/cosmetic tasks (typo fixes, config tweaks, doc-only changes), skip Phase 1 (Research) and Phase 2A (prep), abbreviate Phase 2. Phase 3 (test plan subagent) and Phase 5 (QA subagent) still run. Use your judgment: if the task touches behavior or user-facing systems, use the full flow.
 
 ### Artifact Resume Logic
 
@@ -32,8 +32,8 @@ Spawn a research agent (via the Agent tool) that analyzes:
 1. **Codebase impact**: files, templates, systems touched; behavior changes
 2. **Side effects**: what could break for users with existing configs, different team shapes, different OS/shells, different project types
 3. **Edge cases**: unusual inputs, failure modes, race conditions, empty states
-4. **Integration risks**: how this interacts with other features
-5. **Upgrade & migration**: how do existing installs get this feature? What config values, files, templates, or behavioral changes need migration steps? What happens if an existing install doesn't upgrade — does it break or gracefully degrade? This section is ALWAYS required — even trivial features must state "N/A — no upgrade impact."
+4. **Integration risks**: how this interacts with other tasks
+5. **Upgrade & migration**: how do existing installs get this task? What config values, files, templates, or behavioral changes need migration steps? What happens if an existing install doesn't upgrade — does it break or gracefully degrade? This section is ALWAYS required — even trivial tasks must state "N/A — no upgrade impact."
 6. **Prior art**: has something similar been done? What can we learn?
 
 The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-RESEARCH.md`:
@@ -56,7 +56,7 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 - [Case]: [what happens, how to handle]
 
 ## Integration Risks
-- [Risk]: [how this interacts with feature X]
+- [Risk]: [how this interacts with task X]
 
 ## Upgrade & Migration
 - **New config values**: [list, with defaults — or "none"]
@@ -72,7 +72,7 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 [Straightforward / Feasible with caveats / Needs rethinking]
 ```
 
-**If research reveals significant risks**, present your recommendation to the human: "Based on research, this feature would [risk]. Recommend: proceed / adjust scope / reject." If warranted, recommend `Rejected` status with justification. Human can override.
+**If research reveals significant risks**, present your recommendation to the human: "Based on research, this task would [risk]. Recommend: proceed / adjust scope / reject." If warranted, recommend `Rejected` status with justification. Human can override.
 
 **Open in editor**: After RESEARCH.md is created, offer to open it (see "Open Artifacts in Editor" below).
 
@@ -86,7 +86,7 @@ Write current state: `python references/scripts/cycle.py status-bar [ROLE] discu
 
 **Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-PHASE2-PREP.md`. If skipping, proceed to Phase 2.
 
-For non-trivial features, spawn a prep subagent (via the Agent tool) before starting the interactive discussion. The subagent reads the RESEARCH.md and produces a discussion prep file.
+For non-trivial tasks, spawn a prep subagent (via the Agent tool) before starting the interactive discussion. The subagent reads the RESEARCH.md and produces a discussion prep file.
 
 Subagent prompt:
 ```
@@ -101,7 +101,7 @@ Write output to .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-PHASE2-PREP.md
 
 The PM reads PHASE2-PREP.md to inform the discussion suggestions. Delete PHASE2-PREP.md after Phase 2 completes — CONTEXT.md captures the final decisions.
 
-Light-mode features skip Phase 2A entirely.
+Light-mode tasks skip Phase 2A entirely.
 
 **Clear planning phase flag** after PHASE2-PREP.md is written.
 
@@ -133,8 +133,8 @@ QN: [question] — Why it matters: [risk]
 
 Example `AskUserQuestion` call:
 ```
-question: "Should version bumps require zero open bugs?\n\nWhy this matters: If bugs are allowed, shipped versions may have known issues."
-options: ["No — bump unconditionally (recommended)", "Soft gate — warn but allow", "Yes — all bugs must be closed first", "Let's discuss this more"]
+question: "Should version bumps require zero open issues?\n\nWhy this matters: If issues are allowed, shipped versions may have known issues."
+options: ["No — bump unconditionally (recommended)", "Soft gate — warn but allow", "Yes — all issues must be closed first", "Let's discuss this more"]
 ```
 
 **Handling responses:**
@@ -148,7 +148,7 @@ Continue until all questions are resolved. Capture decisions in `.squidsquad/[RO
 # FEAT-[ROLE_UPPER]-XXX Context — [Title]
 
 ## Scope
-[What this feature delivers — clear boundary]
+[What this task delivers — clear boundary]
 
 ## Locked Decisions (human decided)
 - [Decision]: [what and why]
@@ -168,28 +168,28 @@ Continue until all questions are resolved. Capture decisions in `.squidsquad/[RO
 
 **Open in editor**: After CONTEXT.md is created, offer to open it (see "Open Artifacts in Editor" below).
 
-**Design routing**: If a `designer` agent is configured (check `config.md` Dev Agents list for `designer`), ask the human if this feature needs design work using `AskUserQuestion`:
+**Design routing**: If a `designer` agent is configured (check `config.md` Dev Agents list for `designer`), ask the human if this task needs design work using `AskUserQuestion`:
 
 ```
-question: "Does this feature need design work before implementation?"
+question: "Does this task need design work before implementation?"
 options: ["Yes — route to designer", "No — dev can implement directly"]
 ```
 
-- **"Yes"**: Add `- **Design**: needed` to the feature file. Add a `## Design Brief` section to CONTEXT.md with: user story, target platforms, existing patterns to follow, visual references, constraints, and priority. The designer agent will pick this up.
-- **"No"**: Add `- **Design**: not-needed` to the feature file. Dev agent will pick it up directly.
+- **"Yes"**: Add `- **Design**: needed` to the task file. Add a `## Design Brief` section to CONTEXT.md with: user story, target platforms, existing patterns to follow, visual references, constraints, and priority. The designer agent will pick this up.
+- **"No"**: Add `- **Design**: not-needed` to the task file. Dev agent will pick it up directly.
 
-If no `designer` agent is configured, skip this question — all features default to `not-needed`.
+If no `designer` agent is configured, skip this question — all tasks default to `not-needed`.
 
 **Phase 2 Approval Gate**: After CONTEXT.md is written, present a summary of all locked decisions and use `AskUserQuestion` to confirm before proceeding:
 
 ```
 question: "Phase 2 complete. Here are the locked decisions:\n\n[list each locked decision from CONTEXT.md]\n\nReady to proceed to test planning?"
-options: ["Approve — proceed to test plan", "More discussion needed", "Reject this feature"]
+options: ["Approve — proceed to test plan", "More discussion needed", "Reject this task"]
 ```
 
 - **"Approve"**: Continue to Phase 3.
 - **"More discussion needed"**: Ask the human what they want to revisit. Re-open the relevant question(s), update CONTEXT.md with revised decisions, then re-present the gate.
-- **"Reject"**: Set feature status to `Rejected`. Append Discussion entry with reason. Stop the intake process.
+- **"Reject"**: Set task status to `Rejected`. Append Discussion entry with reason. Stop the intake process.
 
 **Clear planning phase flag** after CONTEXT.md is written and Phase 2 approval gate is passed.
 
@@ -199,11 +199,11 @@ Write current state: `python references/scripts/cycle.py status-bar [ROLE] test-
 
 **Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: test-planning FEAT-[ROLE_UPPER]-XXX`.
 
-**Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md`. If skipping, the feature is ready — update status to `Planned` (NOT `Approved` — human must explicitly approve execution).
+**Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md`. If skipping, the task is ready — update status to `Planned` (NOT `Approved` — human must explicitly approve execution).
 
 Create two artifacts:
 
-**A) GitHub Issue** — create via `python references/scripts/tracker.py create-feature` with status `Pending`, referencing planning artifacts:
+**A) GitHub Issue** — create via `python references/scripts/tracker.py create-task` with status `Pending`, referencing planning artifacts:
 - Description includes research-informed constraints
 - Acceptance criteria include edge case handling and side effect mitigations
 - References RESEARCH.md and CONTEXT.md
@@ -216,7 +216,7 @@ Read .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-RESEARCH.md and .squidsqu
 1. Happy path test cases with preconditions, steps, expected results, and verification commands
 2. Edge case test cases from research findings
 3. Side effect regression tests (existing behavior that must NOT change)
-4. Upgrade verification tests (existing installs get the feature correctly via upgrade, no breakage for non-upgraded installs)
+4. Upgrade verification tests (existing installs get the task correctly via upgrade, no breakage for non-upgraded installs)
 5. Smoke tests (quick checks)
 6. Regression risks
 
@@ -241,7 +241,7 @@ PM reviews the subagent's draft, adjusts as needed, and saves the final version.
 
 ### TC-3: [Side effect regression]
 - **Precondition**: [existing state that should NOT change]
-- **Steps**: [exercise new feature]
+- **Steps**: [exercise new task]
 - **Expected**: [existing behavior preserved]
 - **Verification**: [how to check]
 
@@ -257,7 +257,7 @@ PM reviews the subagent's draft, adjusts as needed, and saves the final version.
 
 **Clear planning phase flag** after TEST-PLAN.md is written. Normal PM cycling auto-resumes.
 
-Ask the human if they want to approve the feature now or leave as `Pending`. This is the **only** point in the lifecycle where approval should be offered — never at initial filing time.
+Ask the human if they want to approve the task now or leave as `Pending`. This is the **only** point in the lifecycle where approval should be offered — never at initial filing time.
 
 ### Phase 4 — Execution (Dev Agent)
 
@@ -265,7 +265,7 @@ _(Handled by the dev agent — see dev template Step 3)_
 
 ### Phase 5 — QA Test Execution (Subagent)
 
-When verifying features with status `Pending Test` (in Step 6), if a TEST-PLAN.md exists, spawn a QA subagent (via the Agent tool) to execute the test plan.
+When verifying tasks with status `Pending Test` (in Step 6), if a TEST-PLAN.md exists, spawn a QA subagent (via the Agent tool) to execute the test plan.
 
 Subagent prompt:
 ```

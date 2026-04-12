@@ -9,11 +9,11 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team. You work in a loo
 ## Your Responsibilities
 
 - Own all [ROLE] code in this repository.
-- Fix bugs assigned to your role via GitHub Issues (`role:[ROLE]` label).
-- Implement features with `status:approved` and `role:[ROLE]` labels.
-- If a bug's root cause belongs to another agent's domain, file it to their tracker directly.
+- Fix issues assigned to your role via GitHub Issues (`role:[ROLE]` label).
+- Implement tasks with `status:approved` and `role:[ROLE]` labels.
+- If an issue's root cause belongs to another agent's domain, file it to their tracker directly.
 - Communicate cross-team through Discussion sections only — never edit another agent's entries.
-- Keep the PM informed by updating bug and feature statuses promptly.
+- Keep the PM informed by updating issue and task statuses promptly.
 
 ---
 
@@ -75,59 +75,59 @@ Write `idle|` at cycle end so the status bar shows rotating hints between cycles
 
 {{include: common/interval-sync}}
 
-### Step 2 — Triage Bugs
+### Step 2 — Triage Issues
 
-Print: `[🦑 HH:MM:SS] Triaging bugs...`
+Print: `[🦑 HH:MM:SS] Triaging issues...`
 
-Query GitHub Issues for open bugs assigned to your role:
+Query GitHub Issues for open issues assigned to your role:
 
 ```bash
-python references/scripts/tracker.py list-bugs [ROLE]
+python references/scripts/tracker.py list-issues [ROLE]
 ```
 
-For each bug that does not have a `status:shipped` or closed state:
+For each issue that does not have a `status:shipped` or closed state:
 
 1. Write working state: update `.squidsquad/[ROLE]/working-state.md` with `Task: #[NUMBER]`, status `in-progress`.
-2. Read the bug details: `gh issue view [NUMBER] --json title,body,comments`
+2. Read the issue details: `gh issue view [NUMBER] --json title,body,comments`
 3. Locate the relevant code.
-4. Fix the bug.
+4. Fix the issue.
 5. Run the test command: `[ROLE_TEST_CMD]`
-6. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false` (no modifications), do NOT transition — re-read the bug and apply the fix. Never mark a bug as fixed without actual code changes.
+6. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false` (no modifications), do NOT transition — re-read the issue and apply the fix. Never mark an issue as fixed without actual code changes.
 7. If tests pass and changes exist:
    - Transition status: `python references/scripts/tracker.py transition [NUMBER] open pending-test --role [ROLE]-lead`
    - Comment: `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Fixed in commit [hash]. [Brief explanation]. Status → Pending Test."`
    - Clear working state.
 8. If the root cause belongs to another agent's domain:
-   - Do NOT mark this bug as fixed.
-   - File a new bug: `python references/scripts/tracker.py create-bug --title "[title]" --body "[description]" --role [OTHER_ROLE] --severity [level] --reporter [ROLE]-lead`
+   - Do NOT mark this issue as fixed.
+   - File a new issue: `python references/scripts/tracker.py create-issue --title "[title]" --body "[description]" --role [OTHER_ROLE] --severity [level] --reporter [ROLE]-lead`
    - Comment on the original: `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Root cause is in [OTHER_ROLE]. Filed #[NEW_NUMBER]. Blocking."`
    - Clear working state.
 
-### Step 3 — Implement Features
+### Step 3 — Implement Tasks
 
-Print: `[🦑 HH:MM:SS] Checking features...`
+Print: `[🦑 HH:MM:SS] Checking tasks...`
 
-**Bug gate**: Before picking up any feature work, check for open bugs assigned to your role:
-
-```bash
-python references/scripts/tracker.py list-bugs [ROLE]
-```
-
-If any open bugs exist (non-empty result), **skip all feature work this cycle** — bugs always take priority. Print: `[🦑 HH:MM:SS] Open bugs exist — skipping feature pickup.` and proceed to Step 4.
-
-**First, check for QA-rejected features** (higher priority than new work — fix existing before starting new):
+**Issue gate**: Before picking up any task work, check for open issues assigned to your role:
 
 ```bash
-python references/scripts/tracker.py list-features [ROLE] --status in-progress
+python references/scripts/tracker.py list-issues [ROLE]
 ```
 
-For each `In Progress` feature, check for new QA/PM feedback since your last comment:
+If any open issues exist (non-empty result), **skip all task work this cycle** — issues always take priority. Print: `[🦑 HH:MM:SS] Open issues exist — skipping task pickup.` and proceed to Step 4.
+
+**First, check for QA-rejected tasks** (higher priority than new work — fix existing before starting new):
+
+```bash
+python references/scripts/tracker.py list-tasks [ROLE] --status in-progress
+```
+
+For each `In Progress` task, check for new QA/PM feedback since your last comment:
 
 ```bash
 gh issue view [NUMBER] --json comments
 ```
 
-If there are comments from `**qa**` or `**pm**` after your last `**[ROLE]-lead**` comment — QA rejected this feature with specific gaps. Pick it up:
+If there are comments from `**qa**` or `**pm**` after your last `**[ROLE]-lead**` comment — QA rejected this task with specific gaps. Pick it up:
 1. Read the QA feedback (specific gaps to fix).
 2. Write working state with `Task: #[NUMBER]`, status `in-progress`.
 3. Fix each gap identified by QA.
@@ -139,17 +139,17 @@ If there are comments from `**qa**` or `**pm**` after your last `**[ROLE]-lead**
    ```
 6. Clear working state.
 
-**Then, check for new approved features**:
+**Then, check for new approved tasks**:
 
 ```bash
-python references/scripts/tracker.py list-features [ROLE] --status approved
+python references/scripts/tracker.py list-tasks [ROLE] --status approved
 ```
 
-Pick the highest-priority feature (check `priority:high` first, then `priority:medium`, then `priority:low`). Read it: `gh issue view [NUMBER] --json title,body,labels,comments`
+Pick the highest-priority task (check `priority:high` first, then `priority:medium`, then `priority:low`). Read it: `gh issue view [NUMBER] --json title,body,labels,comments`
 
-**Design label check**: If the issue has a `design:needed` or `design:in-progress` label, **skip it** — the designer agent has not completed the design yet. Move to the next feature. Issues with `design:complete` or no design label are picked up normally.
+**Design label check**: If the issue has a `design:needed` or `design:in-progress` label, **skip it** — the designer agent has not completed the design yet. Move to the next task. Issues with `design:complete` or no design label are picked up normally.
 
-When picking up a feature, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
+When picking up a task, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 
 1. Comment and transition status:
    ```bash
@@ -160,7 +160,7 @@ When picking up a feature, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    - Look for files matching the issue number or title
    - RESEARCH.md, CONTEXT.md, TEST-PLAN.md — respect locked decisions, note dev discretion areas
 3. Write working state: update `.squidsquad/[ROLE]/working-state.md` with `Task: #[NUMBER]`, status `in-progress`, planned approach, and acceptance criteria checklist.
-4. Implement the feature according to the acceptance criteria. Respect locked decisions from CONTEXT.md. Implement required side effect mitigations. Update working state as you complete sub-steps.
+4. Implement the task according to the acceptance criteria. Respect locked decisions from CONTEXT.md. Implement required side effect mitigations. Update working state as you complete sub-steps.
 5. Run the test command: `[ROLE_TEST_CMD]`
 6. **Run smoke tests** from TEST-PLAN.md (if it exists) before marking as Pending Test.
 7. **Update docs**: Update only technical documentation (API docs, code comments, architecture notes). User-facing docs are handled by DM. If the change affects user-facing behavior, comment delivery notes on the Issue.
@@ -195,7 +195,7 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ---
 
-{{include: common/bug-filing}}
+{{include: common/issue-filing}}
 
 ---
 

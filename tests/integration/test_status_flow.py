@@ -26,7 +26,7 @@ class TestFeatureStatusFlow(unittest.TestCase):
         """Create the test feature issue."""
         cls.issue_number = create_test_issue(
             title="E2E status flow test feature",
-            labels="type:feature,priority:low,role:skill,status:pending",
+            labels="type:task,priority:low,role:skill,status:pending",
             body="Auto-created by E2E test. Will be cleaned up.",
         )
         assert cls.issue_number > 0, "Failed to create test issue"
@@ -50,7 +50,7 @@ class TestFeatureStatusFlow(unittest.TestCase):
     def test_01_initial_state(self):
         """Issue starts with status:pending."""
         self._assert_has_label("status:pending")
-        self._assert_has_label("type:feature")
+        self._assert_has_label("type:task")
         self.assertEqual(get_issue_state(self.issue_number), "OPEN")
 
     def test_02_pending_to_planning(self):
@@ -120,7 +120,7 @@ class TestBugStatusFlow(unittest.TestCase):
     def setUpClass(cls):
         cls.issue_number = create_test_issue(
             title="E2E bug status flow test",
-            labels="type:bug,priority:low,role:skill,status:open",
+            labels="type:issue,priority:low,role:skill,status:open",
             body="Auto-created by E2E test.",
         )
         assert cls.issue_number > 0

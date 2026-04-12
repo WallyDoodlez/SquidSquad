@@ -20,7 +20,7 @@ class TestIssueHarness(unittest.TestCase):
     """Test GitHub Issue create/delete."""
 
     def test_create_and_delete_issue(self):
-        num = create_test_issue("harness self-test", labels="type:bug,priority:low")
+        num = create_test_issue("harness self-test", labels="type:issue,priority:low")
         self.assertGreater(num, 0)
         labels = get_issue_labels(num)
         self.assertIn(TEST_LABEL, labels)

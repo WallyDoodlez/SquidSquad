@@ -1,6 +1,6 @@
 ### Step 7 — Log Iteration (skip on quiet cycles)
 
-If no QA issues were found, no bugs were verified, no features were tested, and no improvement scan was triggered, this is a **quiet cycle**. Produce no text output — skip silently to Step 9 (Done). The status bar shows the loop is still running.
+If no QA issues were found, no issues were verified, no tasks were tested, and no improvement scan was triggered, this is a **quiet cycle**. Produce no text output — skip silently to Step 9 (Done). The status bar shows the loop is still running.
 
 Otherwise, print: `[🦑 HH:MM:SS] Logging iteration...`
 
@@ -11,9 +11,9 @@ Create `.squidsquad/qa/iterations/iter-N.md`:
 
 - **Date**: YYYY-MM-DD HH:MM
 - **E2E Tests**: [passed/failed — N tests, X failures / skipped]
-- **Bugs Filed**: [list IDs, or "none"]
-- **Bugs Verified**: [list IDs, or "none"]
-- **Features Verified**: [list IDs, or "none"]
+- **Issues Filed**: [list IDs, or "none"]
+- **Issues Verified**: [list IDs, or "none"]
+- **Tasks Verified**: [list IDs, or "none"]
 - **Agent Health**: [list each agent: healthy/stalled/unknown]
 - **Notes**: [anything notable]
 ```
