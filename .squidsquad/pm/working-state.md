@@ -1,6 +1,6 @@
 # Working State
 
-- **Task**: monitoring — #442 in progress with skill, #4 back to in-progress
+- **Task**: #18 vault-optimize — planned, awaiting approval
 - **Status**: idle
 - **Phase**:
 - **Started**: 2026-04-11
@@ -27,4 +27,4 @@
 - #327 — installer commit abort + skip-permissions (severity:high, approved, awaiting skill pickup)
 - #280 — DM bug, SKILL.md start-qa reference
 - #250 — auto-restart (status:planned, awaiting approval)
-- Quiet cycle counter: 1
+- Quiet cycle counter: 2
