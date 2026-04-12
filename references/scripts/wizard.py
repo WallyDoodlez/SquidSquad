@@ -228,6 +228,51 @@ def is_valid_project_name(name):
     return bool(_PROJECT_NAME_ALLOWED.match(name))
 
 
+def validate_interval(value, default=10):
+    """Parse and validate the Ralph Loop interval (Step 5, TC-49..TC-52).
+
+    Accepts any string-ish value the user might type. Returns a dict:
+
+        {"ok": bool, "minutes": int | None, "reason": str | None}
+
+    Rules:
+      - Empty string or None -> ok with minutes=default
+      - Whole integer >= 1 -> ok
+      - Zero, negative, float-ish, or non-numeric -> not ok, with a
+        user-facing reason the runbook can surface as a re-prompt
+    """
+    if value is None or (isinstance(value, str) and value.strip() == ""):
+        return {
+            "ok": True,
+            "minutes": int(default),
+            "reason": f"empty input — defaulting to {default} minutes",
+        }
+
+    raw = str(value).strip()
+    # Reject float-looking input explicitly so "10.5" doesn't silently truncate
+    if "." in raw or "," in raw:
+        return {
+            "ok": False,
+            "minutes": None,
+            "reason": f"{raw!r} must be a whole number of minutes",
+        }
+    try:
+        minutes = int(raw)
+    except ValueError:
+        return {
+            "ok": False,
+            "minutes": None,
+            "reason": f"{raw!r} is not a number — enter an integer minute count",
+        }
+    if minutes < 1:
+        return {
+            "ok": False,
+            "minutes": None,
+            "reason": f"interval must be at least 1 minute (got {minutes})",
+        }
+    return {"ok": True, "minutes": minutes, "reason": None}
+
+
 def project_name_default(base_dir=None):
     """Best guess at the project name for the current install target.
 
@@ -1294,6 +1339,29 @@ def cmd_validate_name(args):
     return 0 if valid else 1
 
 
+def cmd_validate_interval(args):
+    """Usage: wizard.py validate-interval <value> [--default N]"""
+    if not args:
+        print(
+            "Usage: wizard.py validate-interval <value> [--default N]",
+            file=sys.stderr,
+        )
+        return 2
+    value = args[0]
+    default = 10
+    if "--default" in args:
+        idx = args.index("--default")
+        if idx + 1 < len(args):
+            try:
+                default = int(args[idx + 1])
+            except ValueError:
+                print(f"ERROR: --default must be an integer", file=sys.stderr)
+                return 2
+    result = validate_interval(value, default=default)
+    _print_json(result, ok=result["ok"])
+    return 0 if result["ok"] else 1
+
+
 def cmd_build_config_md(args):
     """Read a JSON install spec from disk (or `-`) and print config.md text.
 
@@ -1463,6 +1531,7 @@ def main():
         "repo-info": cmd_repo_info,
         "project-name-default": cmd_project_name_default,
         "validate-name": cmd_validate_name,
+        "validate-interval": cmd_validate_interval,
         "validate-rerun-action": cmd_validate_rerun_action,
         "build-config-md": cmd_build_config_md,
         "scaffold": cmd_scaffold,
