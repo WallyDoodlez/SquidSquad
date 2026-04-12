@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-12 15:33
+
+- **Files scanned**: tests/test_git_ops.py, tests/test_tracker_authority.py, tests/test_config_schema.py
+- **Findings**: #465 (test_config_schema.py missing coverage for config.py functions), #466 (test_git_ops.py unused import + missing failure tests). test_tracker_authority.py has minor maintainability issues but no functional problems.
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-12 13:03
 
 - **Files scanned**: references/scripts/tracker.py, references/scripts/boot_remote.py, references/scripts/wizard.py
