@@ -496,20 +496,25 @@ Print: `[🦑 HH:MM:SS] No DM present — PM performing delivery for #[NUMBER]..
 
 Print: `[🦑 HH:MM:SS] Checking agent health...`
 
-Check each agent's health by reading their `current-state` file via cross-clone paths from `.squidsquad/.local-config`. Each agent writes to its `current-state` file at the end of every cycle (including quiet cycles), so the file's mtime indicates when the agent last completed a cycle.
+Run the deterministic health check script — do NOT assemble health checks from prose or shell one-liners:
 
-Read `.squidsquad/.local-config` to get each agent's clone path. For each dev agent listed in `config.md`, plus the DM agent (if `.squidsquad/dm/` exists):
+```bash
+python references/scripts/health_check.py
+```
 
-1. Look up the agent's clone path from `.local-config` (format: `- **role**: /absolute/path`).
-2. Read `<path>/.squidsquad/<role>/current-state` and check the file's mtime.
-3. Read the `Iteration Interval > Minutes` value from `config.md` (default 30). An agent is stalled if the `current-state` mtime is older than 2× the iteration interval.
+The script reads `.squidsquad/.local-config` to find each agent's actual clone path, walks the cross-clone `current-state` files, and reports per-agent health (🦑 healthy / 👻 stalled / ❓ unknown / ⏹️ stopped). It uses the `Iteration Interval` from `config.md` with a 2× stale threshold.
 
-- If `current-state` exists and mtime is recent (within 2× interval): agent is healthy (🦑).
-- If `current-state` exists but mtime is stale (older than 2× interval): agent is **stalled** (👻). Log a warning in `qa-log.md` and append a Discussion note to the agent's individual bug file:
-  ```
-  > [YYYY-MM-DD HH:MM] **pm**: Agent appears stalled — no cycle activity for [elapsed] minutes. Please check.
-  ```
-- If `.local-config` is missing, path is unreachable, or `current-state` doesn't exist: agent status is unknown (❓) — note in QA log.
+Log the script's output in `pm/qa-log.md`. For any agent reporting stalled (👻) or unknown (❓):
+
+1. Append a Discussion note to that agent's latest open tracker item:
+   ```bash
+   python references/scripts/tracker.py comment [NUMBER] --role pm --message "Agent [role] appears stalled — no cycle activity for [N] minutes. Please check."
+   ```
+2. If no open item exists for the agent, log the finding in `qa-log.md` only.
+
+If `.local-config` is missing (no cross-clone paths configured), the script warns and exits cleanly — this is normal for single-clone setups and is not an error.
+
+For programmatic use (e.g. by `boot_remote.py` from #4), the script also accepts `--json` for structured output.
 
 <!-- sub-skill: github-issues -->
 ### Step 7b — Triage External Issues
