@@ -1,5 +1,11 @@
 # DM Scan History
 
+## Scan — 2026-04-11 20:31
+
+- **Files scanned**: SKILL.md (post phase G.4 rewrite, 461 lines), sub-skill-guide.md (post #360 fix — verified against phase H compose.py dispatch changes), README.md, CHANGELOG.md; git log audit of phases G.2c/G.3/G.4/H
+- **Findings**: none — #328 not yet shipped so additive status labels (pending-human-approval, pending-review, pending-setup) will be documented as part of #328's delivery package
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-11 17:31
 
 - **Files scanned**: git log audit (commits since last scan), docs/sub-skill-guide.md, docs/ARCHITECTURE.md, references/roles/ and references/sub-skills/ directory state
