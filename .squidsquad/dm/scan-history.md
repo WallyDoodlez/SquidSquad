@@ -1,5 +1,11 @@
 # DM Scan History
 
+## Scan — 2026-04-12 00:31
+
+- **Files scanned**: SKILL.md (context threshold already updated to 70% by skill), README.md (no percentage references), git log audit (#378 threshold change, #373 installer pre-fetch, #376 context-pressure fix, #335 health_check, #4 scope expansion)
+- **Findings**: none — all recent changes are internal; SKILL.md was already updated by skill-lead
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-11 20:31
 
 - **Files scanned**: SKILL.md (post phase G.4 rewrite, 461 lines), sub-skill-guide.md (post #360 fix — verified against phase H compose.py dispatch changes), README.md, CHANGELOG.md; git log audit of phases G.2c/G.3/G.4/H
