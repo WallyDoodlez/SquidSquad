@@ -1,7 +1,7 @@
 # SKILL Iteration 1
 
-- **Date**: 2026-04-07 21:14
-- **Bugs Fixed**: none
-- **Features Progressed**: #269 npx installer — implemented, Pending Test
-- **Tests**: 17/17 passed
-- **Notes**: Created packages/cli/ (package.json, index.js, README.md). Updated .gitignore with node_modules/.
+- **Date**: 2026-04-11 23:59
+- **Bugs Fixed**: #378 fixed (80%→70% threshold)
+- **Features Progressed**: #4 blocked by #335 (pending-test)
+- **Tests**: passed (1 pre-existing integration flake)
+- **Notes**: First cycle. #377 pending approval.

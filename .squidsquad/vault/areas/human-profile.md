@@ -2,7 +2,7 @@
 type: area
 tags: [human, preferences, profile]
 created: 2026-04-05
-updated: 2026-04-05
+updated: 2026-04-12
 owner: pm
 status: active
 confidence: medium
@@ -29,6 +29,7 @@ Profile of the human collaborator. Captures preferences, values, communication s
 - Primary platform: Windows 11
 - Uses Python for scripting, bash for shell operations
 - Repository: SquidSquad autonomous agent framework
+- Context pressure threshold: 70% (human considers 80% too high — agents degrade before hitting 80%)
 
 ## Decision-Making Style
 
@@ -48,3 +49,4 @@ _Wikilinks to related notes: [[code-conventions]]_
 ### Changelog
 
 - 2026-04-05 — Seeded by skill-lead (vault-remember). Pre-populated from observed interactions. Confidence: medium (awaiting human review).
+- 2026-04-12 — Updated by skill-lead. Added context pressure threshold preference (70%, human directive via #378).
