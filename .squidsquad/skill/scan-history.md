@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-12 08:33
+
+- **Files scanned**: references/scripts/config.py, references/scripts/cycle.py, references/scripts/vault_check.py
+- **Findings**: #429 (cycle.py missing int() error handling), #430 (vault_check.py duplicated logic + fragile tag parsing). config.py clean.
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-12 02:33
 
 - **Files scanned**: references/scripts/health_check.py, references/scripts/manifest.py, references/scripts/compose.py
