@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-12 19:03
+
+- **Files scanned**: references/scripts/vault_optimize.py, references/scripts/vault_remember.py, references/scripts/vault_check.py
+- **Findings**: #468 (vault_remember.py path traversal in effective_confidence — high), #469 (vault_optimize.py reindex skips notes without links field — medium). vault_check.py has minor dedup asymmetry but no critical issues.
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-12 15:33
 
 - **Files scanned**: tests/test_git_ops.py, tests/test_tracker_authority.py, tests/test_config_schema.py
