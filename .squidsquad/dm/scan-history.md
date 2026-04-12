@@ -1,5 +1,11 @@
 # DM Scan History
 
+## Scan — 2026-04-12 12:31
+
+- **Files scanned**: git log audit (#442 vocabulary rename in-progress, #4 QA partial, #335 verified)
+- **Findings**: none — #442 (feature/bug → task/issue vocabulary rename) is the biggest upcoming delivery risk. Will need comprehensive README/SKILL/CHANGELOG/docs sweep when it ships. Currently in-progress (QA found gaps).
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-12 10:31
 
 - **Files scanned**: git log audit (#4 boot-remote-agents pending-test, #436 scan criteria to SOUL, #429/#430 script fixes, PM tracker activity)
