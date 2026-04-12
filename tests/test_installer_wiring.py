@@ -119,33 +119,33 @@ class TestCliIndexJs:
     def test_cli_file_exists(self, cli_js):
         assert cli_js
 
-    def test_fetches_skill_md(self, cli_js):
-        assert 'fetchRawFile("SKILL.md")' in cli_js
-
-    def test_fetches_wizard_runbook(self, cli_js):
-        """#328 G.4 — npx squidsquad must also fetch the wizard runbook."""
-        assert 'fetchRawFile("references/wizard/WIZARD.md")' in cli_js, (
-            "packages/cli/index.js must fetch references/wizard/WIZARD.md "
-            "so the installer agent can read the canonical setup runbook"
+    def test_fetches_file_manifest(self, cli_js):
+        """#373 — npx squidsquad must fetch the file manifest first."""
+        assert 'fetchRawFile("references/installer-files.txt")' in cli_js, (
+            "packages/cli/index.js must fetch the installer file manifest "
+            "as the first step, then fetch every file listed in it"
         )
 
-    def test_writes_wizard_runbook_to_canonical_path(self, cli_js):
-        """The runbook must be written to references/wizard/WIZARD.md in target."""
-        # We don't care about exact syntax — just that the canonical path
-        # appears in a writeFileSync call or equivalent.
-        assert (
-            'path.join(wizardDir, "WIZARD.md")' in cli_js
-            or 'writeFileSync(path.join(gitRoot, "references", "wizard", "WIZARD.md")' in cli_js
-        ), (
-            "CLI must write the fetched runbook to "
-            "references/wizard/WIZARD.md in the target repo"
+    def test_manifest_driven_fetch_loop(self, cli_js):
+        """Files are fetched from the manifest, not hardcoded one-by-one."""
+        assert "filePaths" in cli_js or "filePath" in cli_js
+        assert "fetchRawFile(filePath)" in cli_js, (
+            "CLI must loop over manifest entries and fetchRawFile each one"
         )
 
-    def test_commits_wizard_runbook(self, cli_js):
-        """Seed commit must include the runbook path."""
+    def test_writes_files_to_canonical_paths(self, cli_js):
+        """Each fetched file must be written to its canonical path in the target."""
+        assert "path.join(gitRoot, filePath)" in cli_js, (
+            "CLI must write each fetched file to its canonical path "
+            "relative to the target git root"
+        )
+
+    def test_commits_references_directory(self, cli_js):
+        """Seed commit must stage the entire references/ directory."""
         commit_block = _extract_commit_block(cli_js)
-        assert "references/wizard/WIZARD.md" in commit_block, (
-            "Seed commit must stage references/wizard/WIZARD.md"
+        assert "references/" in commit_block, (
+            "Seed commit must stage references/ (contains all wizard "
+            "infrastructure fetched from the manifest)"
         )
 
     def test_slash_command_points_at_runbook_not_skill_md(self, cli_js):
@@ -198,6 +198,66 @@ class TestWizardRunbookExists:
         assert len(content) > 2000, (
             f"WIZARD.md is suspiciously short ({len(content)} bytes)"
         )
+
+
+# ---------------------------------------------------------------------------
+# installer-files.txt — the deterministic pre-fetch manifest (#373)
+# ---------------------------------------------------------------------------
+
+
+INSTALLER_MANIFEST = REPO_ROOT / "references" / "installer-files.txt"
+
+
+class TestInstallerFileManifest:
+    @pytest.fixture(scope="class")
+    def manifest_entries(self):
+        assert INSTALLER_MANIFEST.is_file(), (
+            f"Missing installer file manifest at {INSTALLER_MANIFEST}"
+        )
+        text = INSTALLER_MANIFEST.read_text(encoding="utf-8")
+        return [
+            line.strip()
+            for line in text.splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+
+    def test_manifest_exists(self):
+        assert INSTALLER_MANIFEST.is_file()
+
+    def test_manifest_lists_critical_files(self, manifest_entries):
+        """Key files the wizard cannot function without."""
+        for critical in (
+            "SKILL.md",
+            "references/wizard/WIZARD.md",
+            "references/scripts/wizard.py",
+            "references/scripts/manifest.py",
+            "references/scripts/compose.py",
+            "references/scripts/config.py",
+            "references/scripts/tracker.py",
+            "references/roles/pm/manifest.yaml",
+            "references/roles/pm/CLAUDE.md",
+            "references/roles/pm/SOUL.md",
+            "references/roles/dev/CLAUDE.md",
+            "references/presets/software-dev/manifest.yaml",
+            "references/presets/design/manifest.yaml",
+        ):
+            assert critical in manifest_entries, (
+                f"installer-files.txt missing critical file: {critical}"
+            )
+
+    def test_every_listed_file_exists_on_disk(self, manifest_entries):
+        """Every path in the manifest must exist — no stale entries."""
+        missing = [
+            f for f in manifest_entries
+            if not (REPO_ROOT / f).exists()
+        ]
+        assert not missing, (
+            f"installer-files.txt lists files that don't exist: {missing}"
+        )
+
+    def test_no_duplicate_entries(self, manifest_entries):
+        dupes = [f for f in manifest_entries if manifest_entries.count(f) > 1]
+        assert not dupes, f"Duplicate entries in installer-files.txt: {set(dupes)}"
 
 
 # ---------------------------------------------------------------------------

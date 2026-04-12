@@ -137,31 +137,41 @@ function fetchRawFile(repoPath) {
 }
 
 function installFiles(gitRoot) {
-  // 1. Fetch SKILL.md → project root (architecture reference + setup pointer)
-  info("Fetching SKILL.md...");
-  const skillContent = fetchRawFile("SKILL.md");
-  if (!skillContent) {
-    fail("Failed to fetch SKILL.md from GitHub.");
+  // 1. Fetch the file manifest — the single source of truth for what the
+  //    wizard needs. Every script, manifest, sub-skill, template, and
+  //    config file is listed in `references/installer-files.txt`.
+  //    (#373 fix: deterministic pre-fetch replaces probabilistic
+  //    "Claude figures it out" approach.)
+  info("Fetching file manifest...");
+  const manifestContent = fetchRawFile("references/installer-files.txt");
+  if (!manifestContent) {
+    fail("Failed to fetch references/installer-files.txt from GitHub.");
     process.exit(1);
   }
-  fs.writeFileSync(path.join(gitRoot, "SKILL.md"), skillContent, "utf-8");
-  success("SKILL.md placed in project root");
 
-  // 2. Fetch the install wizard runbook to its canonical path.
-  //    The runbook is the single source of truth for the setup flow
-  //    (introduced in #328 Phase G.3). The slash command points at it
-  //    directly — SKILL.md's Setup Instructions section is just a thin
-  //    pointer back to this file.
-  info("Fetching install wizard runbook...");
-  const wizardContent = fetchRawFile("references/wizard/WIZARD.md");
-  if (!wizardContent) {
-    fail("Failed to fetch references/wizard/WIZARD.md from GitHub.");
-    process.exit(1);
+  const filePaths = manifestContent
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#"));
+
+  info(`Fetching ${filePaths.length} files from SquidSquad...`);
+  let fetched = 0;
+  for (const filePath of filePaths) {
+    const content = fetchRawFile(filePath);
+    if (!content) {
+      fail(`Failed to fetch ${filePath}`);
+      process.exit(1);
+    }
+    const dest = path.join(gitRoot, filePath);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, content, "utf-8");
+    fetched++;
+    // Progress every 20 files to avoid silent-looking hangs
+    if (fetched % 20 === 0) {
+      info(`  ${fetched}/${filePaths.length} files...`);
+    }
   }
-  const wizardDir = path.join(gitRoot, "references", "wizard");
-  fs.mkdirSync(wizardDir, { recursive: true });
-  fs.writeFileSync(path.join(wizardDir, "WIZARD.md"), wizardContent, "utf-8");
-  success("references/wizard/WIZARD.md placed in project");
+  success(`${fetched} files fetched and placed`);
 
   // 3. Create .claude/commands/ and write squidsquad-setup.md
   const commandsDir = path.join(gitRoot, ".claude", "commands");
@@ -199,26 +209,27 @@ function installFiles(gitRoot) {
   fs.writeFileSync(path.join(commandsDir, "squidsquad-setup.md"), setupCommand, "utf-8");
   success("Created /squidsquad-setup command");
 
-  // 4. Commit seed files so /squidsquad-setup doesn't abort on dirty worktree
-  info("Committing seed files...");
+  // 4. Commit ALL fetched files + the slash command so /squidsquad-setup
+  //    doesn't abort on a dirty worktree. This stages references/, SKILL.md,
+  //    and .claude/commands/ in a single commit.
+  info("Committing SquidSquad files...");
   try {
     execSync(
-      "git add SKILL.md references/wizard/WIZARD.md .claude/commands/squidsquad-setup.md",
+      "git add SKILL.md references/ .claude/commands/squidsquad-setup.md",
       { cwd: gitRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
     );
-    execSync('git commit -m "chore: add SquidSquad skill (via npx squidsquad)"', {
-      cwd: gitRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"],
-    });
-    success("Seed files committed");
+    execSync(
+      'git commit -m "chore: add SquidSquad skill + wizard infrastructure (via npx squidsquad)"',
+      { cwd: gitRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+    );
+    success("All SquidSquad files committed");
   } catch (err) {
-    fail("Failed to commit seed files.");
+    fail("Failed to commit files.");
     if (err.stderr) {
       info(`  git error: ${err.stderr.trim()}`);
     }
     info("  Fix the issue above, then run:");
-    info(
-      "    git add SKILL.md references/wizard/WIZARD.md .claude/commands/squidsquad-setup.md"
-    );
+    info("    git add SKILL.md references/ .claude/commands/squidsquad-setup.md");
     info('    git commit -m "chore: add SquidSquad skill"');
     info("    claude --dangerously-skip-permissions /squidsquad-setup");
     process.exit(1);
