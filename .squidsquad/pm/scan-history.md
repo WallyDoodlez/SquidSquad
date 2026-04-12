@@ -1,3 +1,9 @@
+## Scan — 2026-04-12 18:33
+
+- **Files scanned**: .squidsquad/pm/working-state.md (staleness check against live tracker)
+- **Findings**: working-state referenced 3 closed items (#327, #280, #250) as pending. Cleaned up. No bug filed — PM housekeeping.
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-04-12 15:33
 
 - **Files scanned**: GitHub Issues tracker (in-progress items, agent activity patterns)
