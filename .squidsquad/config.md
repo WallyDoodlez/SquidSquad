@@ -54,6 +54,11 @@
 
 - **Enabled**: yes
 
+## Vault Optimize
+
+- **Enabled**: yes
+- **Threshold**: 20
+
 ## Vault Remember
 
 - **Enabled**: yes

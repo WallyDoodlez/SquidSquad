@@ -183,6 +183,8 @@ When picking up a task, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 
 {{include: common/vault-remember}}
 
+{{include: common/vault-optimize}}
+
 {{include: common/git-commit}}
 
 ### Step 6 — Done

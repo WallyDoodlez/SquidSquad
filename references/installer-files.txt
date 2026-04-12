@@ -18,6 +18,7 @@ references/scripts/health_check.py
 references/scripts/manifest.py
 references/scripts/tracker.py
 references/scripts/vault_check.py
+references/scripts/vault_optimize.py
 references/scripts/vault_remember.py
 references/scripts/wizard.py
 references/roles/designer/CLAUDE.md
@@ -64,6 +65,7 @@ references/sub-skills/common/resume-working-state.md
 references/sub-skills/common/status-line.md
 references/sub-skills/common/tracker-protocol.md
 references/sub-skills/common/vault-protocol.md
+references/sub-skills/common/vault-optimize.md
 references/sub-skills/common/vault-remember.md
 references/sub-skills/common/working-state.md
 references/sub-skills/designer-specific/issue-filing.md

@@ -27,6 +27,7 @@ Entry file with includes (the role's own `SOUL.md` sits alongside `CLAUDE.md` in
 7. `common/improvement-scan` — Quiet-cycle improvement scanning
 8. `common/iteration-log` — Step 4: iteration log format and cleanup
 8b. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
+8c. `common/vault-optimize` — Vault optimization on quiet cycles
 9. `common/git-commit` — Step 5: commit/push protocol with PR flow
 9. `common/discussion-protocol` — Discussion entry format and rules
 10. `common/issue-filing` — Self-file and cross-file bug templates

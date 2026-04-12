@@ -250,6 +250,8 @@ For programmatic use (e.g. by `boot_remote.py` from #4), the script also accepts
 
 {{include: common/vault-remember}}
 
+{{include: common/vault-optimize}}
+
 {{include: pm-specific/git-commit}}
 
 ### Step 10 — Done
