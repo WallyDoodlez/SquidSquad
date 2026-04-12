@@ -3,7 +3,7 @@
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -187,6 +187,22 @@ class TestBranching:
         mock_run.return_value = _mock_result()
         git_ops.branch_switch("main")
         mock_run.assert_called_once_with(["git", "checkout", "main"])
+
+    @patch("git_ops._run_list")
+    def test_branch_create_failure(self, mock_run):
+        """branch_create raises on git failure (check=True default)."""
+        from subprocess import CalledProcessError
+        mock_run.side_effect = CalledProcessError(1, "git")
+        with pytest.raises(CalledProcessError):
+            git_ops.branch_create("bad/branch")
+
+    @patch("git_ops._run_list")
+    def test_branch_switch_failure(self, mock_run):
+        """branch_switch raises on git failure (check=True default)."""
+        from subprocess import CalledProcessError
+        mock_run.side_effect = CalledProcessError(1, "git")
+        with pytest.raises(CalledProcessError):
+            git_ops.branch_switch("nonexistent")
 
 
 # ---------------------------------------------------------------------------

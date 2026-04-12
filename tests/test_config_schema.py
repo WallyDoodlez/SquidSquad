@@ -485,3 +485,71 @@ class TestComposeKnownRoles:
         )
         # The old literal set-of-role-names must not reappear
         assert 'known_roles = {"pm", "dm", "qa", "designer", "dev"}' not in text
+
+
+# ---------------------------------------------------------------------------
+# config.py field get/set/alias (#465)
+# ---------------------------------------------------------------------------
+
+FULL_CONFIG = """\
+# SquidSquad Config
+
+- **SquidSquad Version**: 0.15.0
+- **Tracker**: github-issues
+- **Architecture Version**: 1
+
+## Context Pressure
+
+- **Threshold**: 70
+
+## Aliases
+
+- **skill**: squid
+"""
+
+
+class TestGetField:
+    """Tests for config.get_field() using canned config text."""
+
+    def test_get_existing_field(self, monkeypatch):
+        monkeypatch.setattr(config, "_read_config", lambda: FULL_CONFIG)
+        assert config.get_field("version") == "0.15.0"
+
+    def test_get_context_threshold(self, monkeypatch):
+        monkeypatch.setattr(config, "_read_config", lambda: FULL_CONFIG)
+        assert config.get_field("context-threshold") == "70"
+
+    def test_get_missing_field_exits(self, monkeypatch):
+        monkeypatch.setattr(config, "_read_config", lambda: FULL_CONFIG)
+        with pytest.raises(SystemExit):
+            config.get_field("nonexistent-field-xyz")
+
+
+class TestGetAlias:
+    """Tests for config.get_alias() fallback behavior."""
+
+    def test_alias_found(self, monkeypatch):
+        monkeypatch.setattr(config, "_read_config", lambda: FULL_CONFIG)
+        assert config.get_alias("skill") == "squid"
+
+    def test_alias_fallback_to_role_name(self, monkeypatch):
+        monkeypatch.setattr(config, "_read_config", lambda: "## Aliases\n\n")
+        assert config.get_alias("skill") == "skill"
+
+
+class TestSetField:
+    """Tests for config.set_field() — verifies in-memory edit."""
+
+    def test_set_updates_value(self, monkeypatch, tmp_path):
+        cfg = tmp_path / "config.md"
+        cfg.write_text(
+            "# SquidSquad Config\n\n"
+            "- **SquidSquad Version**: 0.15.0\n\n"
+            "## Context Pressure\n\n"
+            "- **Threshold**: 70\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(config, "CONFIG_PATH", cfg)
+        config.set_field("context-threshold", "65")
+        updated = cfg.read_text(encoding="utf-8")
+        assert "- **Threshold**: 65" in updated
