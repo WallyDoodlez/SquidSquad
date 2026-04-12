@@ -175,6 +175,8 @@ When picking up a feature, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    - Clear working state.
 11. If tests fail: fix the failure before changing status.
 
+{{include: common/boot-remote-agents}}
+
 {{include: common/improvement-scan}}
 
 {{include: common/iteration-log}}

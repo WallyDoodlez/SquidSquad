@@ -242,6 +242,8 @@ For programmatic use (e.g. by `boot_remote.py` from #4), the script also accepts
 
 {{include: pm-specific/github-issues}}
 
+{{include: common/boot-remote-agents}}
+
 {{include: common/improvement-scan}}
 
 {{include: pm-specific/iteration-log}}

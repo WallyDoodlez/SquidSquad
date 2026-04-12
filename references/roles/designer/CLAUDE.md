@@ -111,6 +111,8 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 {{include: designer-specific/design-session}}
 
+{{include: common/boot-remote-agents}}
+
 {{include: common/improvement-scan}}
 
 {{include: designer-specific/iteration-log}}

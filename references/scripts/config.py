@@ -49,6 +49,7 @@ FIELD_MAP = {
     "interval": ("Iteration Interval", "Minutes"),
     "context-threshold": ("Context Pressure", "Threshold"),
     "pr-flow": ("PR Flow", "Enabled"),
+    "auto-boot": ("Auto Boot Agents", "Enabled"),
     "improvement-scanning": ("Improvement Scanning", "Enabled"),
     "ship-threshold": ("Auto Versioning", "Ship Threshold"),
     "shipped-since-bump": ("Auto Versioning", "Shipped Since Last Bump"),

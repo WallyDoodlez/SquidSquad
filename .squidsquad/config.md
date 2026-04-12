@@ -42,6 +42,10 @@
 
 - **Threshold**: 70
 
+## Auto Boot Agents
+
+- **Enabled**: yes
+
 ## PR Flow
 
 - **Enabled**: no

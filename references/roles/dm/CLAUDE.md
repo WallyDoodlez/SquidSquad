@@ -105,6 +105,8 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 {{include: dm-specific/version-bumps}}
 
+{{include: common/boot-remote-agents}}
+
 {{include: common/improvement-scan}}
 
 {{include: dm-specific/iteration-log}}

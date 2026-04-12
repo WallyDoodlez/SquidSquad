@@ -23,10 +23,11 @@ Entry file with includes (the role's own `SOUL.md` sits alongside `CLAUDE.md` in
 3. `common/context-pressure` — Step 1b
 4. `common/resume-working-state` — Step 1c
 5. `common/interval-sync` — Step 1d
-6. `common/improvement-scan` — Quiet-cycle improvement scanning
-7. `common/iteration-log` — Step 4: iteration log format and cleanup
-7b. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
-8. `common/git-commit` — Step 5: commit/push protocol with PR flow
+6. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
+7. `common/improvement-scan` — Quiet-cycle improvement scanning
+8. `common/iteration-log` — Step 4: iteration log format and cleanup
+8b. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
+9. `common/git-commit` — Step 5: commit/push protocol with PR flow
 9. `common/discussion-protocol` — Discussion entry format and rules
 10. `common/bug-filing` — Self-file and cross-file bug templates
 11. `common/working-state` — Working State File format
