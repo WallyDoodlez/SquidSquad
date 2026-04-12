@@ -118,8 +118,8 @@ def is_public_repo():
     try:
         result = subprocess.run(
             ["gh", "repo", "view", "--json", "isPrivate"],
-            capture_output=True, text=True, check=True,
-            cwd=str(REPO_ROOT),
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            check=True, cwd=str(REPO_ROOT),
         )
         data = json.loads(result.stdout)
         is_private = data.get("isPrivate", True)

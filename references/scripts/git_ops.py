@@ -29,6 +29,7 @@ def _run(cmd, check=True):
     """Run a shell command from repo root (only for static commands)."""
     return subprocess.run(
         cmd, shell=True, capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
         check=check, cwd=str(REPO_ROOT),
     )
 
@@ -37,6 +38,7 @@ def _run_list(cmd_list, check=True):
     """Run a command from repo root using list form (safe for variable args)."""
     return subprocess.run(
         cmd_list, capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
         check=check, cwd=str(REPO_ROOT),
     )
 
@@ -46,7 +48,7 @@ def _log_diagnostic(severity, message):
     try:
         subprocess.run(
             [sys.executable, str(SCRIPT_DIR / "diagnostics.py"), "log", severity, "git_ops", message],
-            capture_output=True, check=False, cwd=str(REPO_ROOT),
+            capture_output=True, check=False, encoding="utf-8", errors="replace", cwd=str(REPO_ROOT),
         )
     except Exception:
         pass
@@ -92,7 +94,8 @@ def commit(role, message):
     full_msg = f"{role}: {message}\n\nCo-Authored-By: {alias} <noreply@squidsquad>"
     result = subprocess.run(
         ["git", "commit", "-m", full_msg],
-        capture_output=True, text=True, check=False, cwd=str(REPO_ROOT),
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        check=False, cwd=str(REPO_ROOT),
     )
     if result.returncode != 0:
         if "nothing to commit" in result.stdout + result.stderr:

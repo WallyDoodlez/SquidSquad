@@ -294,8 +294,9 @@ if [ "$ROLE" = "pm" ]; then
     elif [ -n "$AGENT_PATH" ] && [ -d "$AGENT_PATH" ]; then
       AGENT_STATE="${AGENT_PATH}/.squidsquad/${AGENT}/current-state"
     else
-      HEALTH="${HEALTH}❓"
-      continue
+      # Skip agents in registry but not installed (no directory anywhere)
+      [ ! -d "$SQDIR/$AGENT" ] && continue
+      AGENT_STATE="$SQDIR/$AGENT/current-state"
     fi
     if [ -f "$AGENT_STATE" ]; then
       if stat --version >/dev/null 2>&1; then

@@ -271,7 +271,7 @@ def _log_diagnostic(severity, message, context=None):
         cmd = [sys.executable, str(SCRIPT_DIR / "diagnostics.py"), "log", severity, "tracker", message]
         if context:
             cmd.extend(["--context", json.dumps(context) if not isinstance(context, str) else context])
-        subprocess.run(cmd, capture_output=True, check=False, cwd=str(REPO_ROOT))
+        subprocess.run(cmd, capture_output=True, check=False, encoding="utf-8", errors="replace", cwd=str(REPO_ROOT))
     except Exception:
         pass
 
@@ -280,6 +280,7 @@ def _run_list(cmd_list, check=True):
     """Run a command from repo root using list form (safe for variable args)."""
     return subprocess.run(
         cmd_list, capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
         check=check, cwd=str(REPO_ROOT),
     )
 
