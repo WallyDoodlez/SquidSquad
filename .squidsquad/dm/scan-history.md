@@ -1,5 +1,11 @@
 # DM Scan History
 
+## Scan — 2026-04-12 02:31
+
+- **Files scanned**: git log audit (#389 statusline ghost agents, #390 UTF-8 encoding fixes)
+- **Findings**: none — both are internal bug fixes, no user-facing doc impact
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-12 00:31
 
 - **Files scanned**: SKILL.md (context threshold already updated to 70% by skill), README.md (no percentage references), git log audit (#378 threshold change, #373 installer pre-fetch, #376 context-pressure fix, #335 health_check, #4 scope expansion)
