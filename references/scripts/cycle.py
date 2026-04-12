@@ -20,7 +20,6 @@ Usage:
 import io
 import json
 import re
-import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -214,7 +213,12 @@ def main():
         if len(pos) < 2:
             print("Usage: cycle.py log-iteration <role> <n> --bugs ... --features ...", file=sys.stderr)
             sys.exit(1)
-        log_iteration(pos[0], int(pos[1]),
+        try:
+            iter_n = int(pos[1])
+        except ValueError:
+            print(f"ERROR: iteration number must be numeric, got '{pos[1]}'", file=sys.stderr)
+            sys.exit(1)
+        log_iteration(pos[0], iter_n,
                        bugs=opts.get("bugs", "none"),
                        features=opts.get("features", "none"),
                        tests=opts.get("tests", "n/a"),
@@ -223,7 +227,12 @@ def main():
         if not pos:
             print("Usage: cycle.py cleanup-iterations <role> [--keep N]", file=sys.stderr)
             sys.exit(1)
-        cleanup_iterations(pos[0], int(opts.get("keep", 20)))
+        try:
+            keep_n = int(opts.get("keep", 20))
+        except ValueError:
+            print(f"ERROR: --keep must be numeric, got '{opts.get('keep')}'", file=sys.stderr)
+            sys.exit(1)
+        cleanup_iterations(pos[0], keep_n)
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)
         sys.exit(1)

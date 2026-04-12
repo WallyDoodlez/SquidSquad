@@ -179,6 +179,23 @@ def list_orphans():
     return orphans
 
 
+def _strip_galaxy_prefix(name):
+    """Strip common galaxy note type prefixes from a lowercased name."""
+    for prefix in ("decision ", "pattern ", "learning ", "style "):
+        if name.startswith(prefix):
+            return name[len(prefix):]
+    return name
+
+
+def _parse_tag_string(raw):
+    """Parse a tags field value into a set of lowercase tag strings."""
+    if not raw:
+        return set()
+    # Handle YAML list format [tag1, tag2] or plain comma-separated
+    cleaned = str(raw).replace("[", "").replace("]", "")
+    return {t.strip().lower() for t in cleaned.split(",") if t.strip()}
+
+
 def dedup_check(title, tags=""):
     """Check for near-duplicate vault notes by keyword overlap.
 
@@ -186,17 +203,11 @@ def dedup_check(title, tags=""):
     Exit code 0 if no matches, 1 if matches found.
     """
     # Extract keywords from candidate title (lowercase, strip common prefixes)
-    title_lower = title.lower().replace("-", " ")
-    for prefix in ("decision ", "pattern ", "learning ", "style "):
-        if title_lower.startswith(prefix):
-            title_lower = title_lower[len(prefix):]
+    title_lower = _strip_galaxy_prefix(title.lower().replace("-", " "))
     candidate_words = set(title_lower.split())
 
     # Extract tag keywords
-    tag_words = set()
-    if tags:
-        for t in tags.split(","):
-            tag_words.add(t.strip().lower())
+    tag_words = _parse_tag_string(tags)
 
     all_candidate = candidate_words | tag_words
     if not all_candidate:
@@ -208,19 +219,13 @@ def dedup_check(title, tags=""):
 
     for rel_path, note_path in all_notes.items():
         # Skip non-galaxy notes for title matching
-        note_name = Path(rel_path).stem.lower().replace("-", " ")
-        for prefix in ("decision ", "pattern ", "learning ", "style "):
-            if note_name.startswith(prefix):
-                note_name = note_name[len(prefix):]
+        note_name = _strip_galaxy_prefix(Path(rel_path).stem.lower().replace("-", " "))
         note_words = set(note_name.split())
 
         # Also check tags from frontmatter
         text = note_path.read_text(encoding="utf-8")
         fm = _parse_frontmatter(text)
-        note_tags = set()
-        if fm and "tags" in fm:
-            for t in fm["tags"].replace("[", "").replace("]", "").split(","):
-                note_tags.add(t.strip().lower())
+        note_tags = _parse_tag_string(fm.get("tags", "")) if fm else set()
 
         all_note = note_words | note_tags
         if not all_note:
