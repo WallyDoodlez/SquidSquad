@@ -148,7 +148,7 @@ V2_FULL = """\
 ## Loop
 
 - **Interval Minutes**: 10
-- **Context Threshold**: 80
+- **Context Threshold**: 70
 
 ## Flags
 
@@ -403,7 +403,7 @@ class TestWizardRoundTrip:
                 {"id": "dm", "alias": "dm", "role": "dm"},
             ],
             "tools": {"dm.tool": "local_delivery"},
-            "loop": {"interval_minutes": 10, "context_threshold": 80},
+            "loop": {"interval_minutes": 10, "context_threshold": 70},
             "flags": {},
         }
         text = wizard.build_config_md(spec)
@@ -442,7 +442,7 @@ class TestWizardRoundTrip:
                 {"id": "dm", "alias": "dm", "role": "dm"},
             ],
             "tools": {},
-            "loop": {"interval_minutes": 10, "context_threshold": 80},
+            "loop": {"interval_minutes": 10, "context_threshold": 70},
             "flags": {"pr_flow": False},
         }
         text = wizard.build_config_md(spec)

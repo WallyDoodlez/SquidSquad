@@ -394,7 +394,7 @@ def _minimal_spec(**overrides):
             {"id": "dm", "alias": "dm", "role": "dm"},
         ],
         "tools": {"dm.tool": "local_delivery"},
-        "loop": {"interval_minutes": 10, "context_threshold": 80},
+        "loop": {"interval_minutes": 10, "context_threshold": 70},
         "flags": {"improvement_scan": True, "pr_flow": False},
     }
     spec.update(overrides)
@@ -644,7 +644,7 @@ class TestBuildConfigMdLoopAndFlags:
         spec["loop"] = {}
         text = wizard.build_config_md(spec)
         assert "- **Interval Minutes**: 10" in text
-        assert "- **Context Threshold**: 80" in text
+        assert "- **Context Threshold**: 70" in text
 
 
 class TestBuildConfigMdValidation:
@@ -709,7 +709,7 @@ class TestBuildConfigMdTC01:
                 "designer.tool": None,
                 "dm.tool": "local_delivery",
             },
-            "loop": {"interval_minutes": 10, "context_threshold": 80},
+            "loop": {"interval_minutes": 10, "context_threshold": 70},
             "flags": {
                 "pr_flow": False,
                 "improvement_scan": True,
@@ -795,7 +795,7 @@ def _design_preset_spec():
             {"id": "dm", "alias": "dm", "role": "dm"},
         ],
         "tools": {"designer.tool": None, "dm.tool": "local_delivery"},
-        "loop": {"interval_minutes": 10, "context_threshold": 80},
+        "loop": {"interval_minutes": 10, "context_threshold": 70},
         "flags": {"improvement_scan": True, "pr_flow": False},
     }
 
@@ -835,7 +835,7 @@ def _software_dev_spec():
             {"id": "dm", "alias": "dm", "role": "dm"},
         ],
         "tools": {"designer.tool": None, "dm.tool": "local_delivery"},
-        "loop": {"interval_minutes": 10, "context_threshold": 80},
+        "loop": {"interval_minutes": 10, "context_threshold": 70},
         "flags": {"improvement_scan": True, "pr_flow": False},
     }
 

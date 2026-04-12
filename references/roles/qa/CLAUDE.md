@@ -82,7 +82,7 @@ Write `idle|` at cycle end so the status bar shows rotating hints between cycles
 
 Print: `[🦑 HH:MM:SS] Checking context pressure...`
 
-Check `context_window.used_percentage`. Compare against the threshold in `config.md` (default 80%).
+Check `context_window.used_percentage`. Compare against the threshold in `config.md` (default 70%).
 
 If context usage **exceeds the threshold**:
 1. Compact your current working state into `.squidsquad/qa/working-state.md`.

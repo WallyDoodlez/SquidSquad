@@ -40,7 +40,7 @@
 
 ## Context Pressure
 
-- **Threshold**: 80
+- **Threshold**: 70
 
 ## PR Flow
 

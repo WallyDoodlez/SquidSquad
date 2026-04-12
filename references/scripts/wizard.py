@@ -470,7 +470,7 @@ def build_config_md(spec):
             },
             "loop": {
                 "interval_minutes": 10,
-                "context_threshold": 80,
+                "context_threshold": 70,
             },
             "flags": {
                 "pr_flow": False,
@@ -548,7 +548,7 @@ def build_config_md(spec):
     loop = spec["loop"] or {}
     lines.append(f"- **Interval Minutes**: {loop.get('interval_minutes', 10)}")
     lines.append(
-        f"- **Context Threshold**: {loop.get('context_threshold', 80)}"
+        f"- **Context Threshold**: {loop.get('context_threshold', 70)}"
     )
     lines.append("")
 

@@ -167,7 +167,7 @@ Every step within the loop also prints a `[🦑 HH:MM:SS]` timestamped marker (e
 
 **Iteration log retention**: each agent keeps the last 20 iteration files in its `iterations/` directory. After logging a new iteration, older files beyond this limit are deleted. Git history preserves them if ever needed.
 
-All agents maintain a **working state file** (`.squidsquad/[role]/working-state.md`) that tracks the current task, completed steps, and remaining work. This file is read on startup to resume mid-task after a context window reset. Agents also check **context pressure** at the start of each cycle — if `context_window.used_percentage` exceeds the threshold in `config.md` (default 80%), they save state, commit, and exit so the boot script can restart them with a fresh context.
+All agents maintain a **working state file** (`.squidsquad/[role]/working-state.md`) that tracks the current task, completed steps, and remaining work. This file is read on startup to resume mid-task after a context window reset. Agents also check **context pressure** at the start of each cycle — if `context_window.used_percentage` exceeds the threshold in `config.md` (default 70%), they save state, commit, and exit so the boot script can restart them with a fresh context.
 
 **Auto versioning**: PM tracks a `Shipped Since Last Bump` counter in `config.md`. Each time an item is marked `Shipped` (features) or `Closed` (bugs), the counter increments. When the counter reaches `Ship Threshold` (default 10) AND zero open bugs exist across all trackers, PM automatically bumps the minor version (e.g. `0.5.1` → `0.6.0`), updates `config.md` and `SKILL.md` frontmatter, adds a CHANGELOG section, creates a git tag, and pushes. Version bumps bypass PR flow.
 

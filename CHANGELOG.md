@@ -179,7 +179,7 @@ All notable changes to SquidSquad will be documented in this file. This changelo
 
 - **Status line** for all agents via Claude Code's `statusLine` setting. Shows role, version, backlog counts, context pressure, and cycle countdown. PM additionally shows team health icons and rest nudge.
 - **Step markers** — every Ralph Loop step prints a `[🦑]` prefixed status line for easy scanning in terminal scrollback.
-- **Context pressure detection** — agents check context window usage at cycle start. If above threshold (default 80%), they save state, commit, and exit for a fresh context. Boot scripts restart them automatically.
+- **Context pressure detection** — agents check context window usage at cycle start. If above threshold (default 70%), they save state, commit, and exit for a fresh context. Boot scripts restart them automatically.
 - **Working state file** — agents persist current task progress. On restart, they resume from saved state instead of starting over.
 - **Quiet cycle skipping** — agents skip logging and committing when no work was done. Keeps git history meaningful.
 - **Iteration log retention** — agents keep the last 20 iteration files. Git history preserves older ones.
