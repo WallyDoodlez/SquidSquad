@@ -1,5 +1,11 @@
 # DM Scan History
 
+## Scan — 2026-04-12 14:31
+
+- **Files scanned**: git log audit (#463 path injection fix, #464 int parsing fix)
+- **Findings**: none — internal script hardening
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-12 12:31
 
 - **Files scanned**: git log audit (#442 vocabulary rename in-progress, #4 QA partial, #335 verified)
