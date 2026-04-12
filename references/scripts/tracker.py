@@ -5,10 +5,10 @@ Encodes the complete label taxonomy and legal status transitions.
 Agents call this instead of constructing gh commands from prose.
 
 Usage:
-    python scripts/tracker.py list-bugs <role>
-    python scripts/tracker.py list-features <role> [--status approved|in-progress|pending-test]
-    python scripts/tracker.py create-bug --title <t> --body <b> --role <r> --severity <s> [--reporter <name>]
-    python scripts/tracker.py create-feature --title <t> --body <b> --role <r> --priority <p> [--reporter <name>]
+    python scripts/tracker.py list-issues <role>           (alias: list-bugs)
+    python scripts/tracker.py list-tasks <role> [--status] (alias: list-features)
+    python scripts/tracker.py create-issue --title <t> --body <b> --role <r> --severity <s> [--reporter <name>]  (alias: create-bug)
+    python scripts/tracker.py create-task --title <t> --body <b> --role <r> --priority <p> [--reporter <name>]   (alias: create-feature)
     python scripts/tracker.py transition <number> <from-status> <to-status> --role <r> [--force]
     python scripts/tracker.py comment <number> --role <r> --message <m>
     python scripts/tracker.py get-labels <number>
@@ -40,7 +40,9 @@ REPO_ROOT = SCRIPT_DIR.parent.parent
 
 # === LABEL TAXONOMY (single source of truth) ===
 
-TYPE_LABELS = {"bug": "type:bug", "feature": "type:feature"}
+TYPE_LABELS = {"issue": "type:issue", "task": "type:task",
+               # Backward-compat aliases
+               "bug": "type:issue", "feature": "type:task"}
 
 PRIORITY_LABELS = {
     "high": "priority:high",
@@ -363,26 +365,26 @@ def add_labels(number, labels_str):
     print(f"#{number}: added labels {labels_str}")
 
 
-def create_bug(title, body, role, severity, reporter=None):
-    """Create a bug issue with correct label format."""
+def create_issue(title, body, role, severity, reporter=None):
+    """Create an issue with correct label format."""
     sev_label = SEVERITY_LABELS.get(severity, f"severity:{severity}")
     role_label = f"role:{role}"
-    # Bugs start at `open` (immediately actionable by the assigned dev agent).
-    # Features start at `pending` (awaiting human approval via PM intake).
+    # Issues start at `open` (immediately actionable by the assigned dev agent).
+    # Tasks start at `pending` (awaiting human approval via PM intake).
     # This distinction matters: dev-agent Step 2 picks up all non-shipped
-    # bugs — if bugs started at `pending`, they'd sit in limbo because
+    # issues — if issues started at `pending`, they'd sit in limbo because
     # agents interpret `pending` as "awaiting human approval".
-    labels = f"type:bug,{sev_label},{role_label},squidsquad,status:open"
+    labels = f"type:issue,{sev_label},{role_label},squidsquad,status:open"
 
     full_body = body
     if reporter:
         full_body = f"**Reported By**: {reporter}\n**Severity**: {severity.title()}\n\n{body}"
 
-    # Strip existing prefix to avoid double BUG: BUG:
-    clean_title = title.removeprefix("BUG:").removeprefix("BUG :").strip()
+    # Strip existing prefix to avoid double ISSUE: ISSUE: or legacy BUG: BUG:
+    clean_title = title.removeprefix("ISSUE:").removeprefix("ISSUE :").removeprefix("BUG:").removeprefix("BUG :").strip()
     result = _run_list([
         "gh", "issue", "create",
-        "--title", f"BUG: {clean_title}",
+        "--title", f"ISSUE: {clean_title}",
         "--body", full_body,
         "--label", labels,
     ])
@@ -392,17 +394,21 @@ def create_bug(title, body, role, severity, reporter=None):
     return number
 
 
-def create_feature(title, body, role, priority, reporter=None):
-    """Create a feature issue with correct label format."""
+# Backward-compat alias
+create_bug = create_issue
+
+
+def create_task(title, body, role, priority, reporter=None):
+    """Create a task with correct label format."""
     pri_label = PRIORITY_LABELS.get(priority, f"priority:{priority}")
     role_label = f"role:{role}"
-    labels = f"type:feature,{pri_label},{role_label},squidsquad,status:pending"
+    labels = f"type:task,{pri_label},{role_label},squidsquad,status:pending"
 
-    # Strip existing prefix to avoid double FEAT: FEAT:
-    clean_title = title.removeprefix("FEAT:").removeprefix("FEAT :").strip()
+    # Strip existing prefix to avoid double TASK: TASK: or legacy FEAT: FEAT:
+    clean_title = title.removeprefix("TASK:").removeprefix("TASK :").removeprefix("FEAT:").removeprefix("FEAT :").strip()
     result = _run_list([
         "gh", "issue", "create",
-        "--title", f"FEAT: {clean_title}",
+        "--title", f"TASK: {clean_title}",
         "--body", body,
         "--label", labels,
     ])
@@ -410,6 +416,10 @@ def create_feature(title, body, role, priority, reporter=None):
     number = int(url.rstrip("/").split("/")[-1])
     print(json.dumps({"number": number, "url": url}))
     return number
+
+
+# Backward-compat alias
+create_feature = create_task
 
 
 # Roles whose comments trigger the unread feedback guard.
@@ -626,33 +636,33 @@ def main():
     if cmd == "check-gh":
         sys.exit(0 if check_gh() else 1)
 
-    elif cmd == "list-bugs":
+    elif cmd in ("list-issues", "list-bugs"):
         if not pos:
-            print("Usage: tracker.py list-bugs <role>", file=sys.stderr)
+            print(f"Usage: tracker.py {cmd} <role>", file=sys.stderr)
             sys.exit(1)
-        list_issues(pos[0], "bug")
+        list_issues(pos[0], "issue")
 
-    elif cmd == "list-features":
+    elif cmd in ("list-tasks", "list-features"):
         if not pos:
-            print("Usage: tracker.py list-features <role> [--status <s>]", file=sys.stderr)
+            print(f"Usage: tracker.py {cmd} <role> [--status <s>]", file=sys.stderr)
             sys.exit(1)
-        list_issues(pos[0], "feature", opts.get("status"))
+        list_issues(pos[0], "task", opts.get("status"))
 
-    elif cmd == "create-bug":
+    elif cmd in ("create-issue", "create-bug"):
         for req in ("title", "body", "role", "severity"):
             if req not in opts:
                 print(f"Missing --{req}", file=sys.stderr)
                 sys.exit(1)
-        create_bug(opts["title"], opts["body"], opts["role"],
-                    opts["severity"], opts.get("reporter"))
+        create_issue(opts["title"], opts["body"], opts["role"],
+                     opts["severity"], opts.get("reporter"))
 
-    elif cmd == "create-feature":
+    elif cmd in ("create-task", "create-feature"):
         for req in ("title", "body", "role", "priority"):
             if req not in opts:
                 print(f"Missing --{req}", file=sys.stderr)
                 sys.exit(1)
-        create_feature(opts["title"], opts["body"], opts["role"],
-                       opts["priority"], opts.get("reporter"))
+        create_task(opts["title"], opts["body"], opts["role"],
+                    opts["priority"], opts.get("reporter"))
 
     elif cmd == "transition":
         if len(pos) < 3:

@@ -6,12 +6,11 @@
 - **Quiet Cycle Counter**: 0
 
 ## Completed Steps
-- Read CONTEXT.md (locked decisions, scope)
-- Picked up and transitioned to in-progress
+- Read CONTEXT.md
+- Phase 1: Renamed GitHub labels (type:feature->type:task, type:bug->type:issue)
+- Phase 2: Updated tracker.py (TYPE_LABELS, create_issue/create_task, CLI commands with backward-compat aliases)
 
 ## Remaining Steps
-- Phase 1: Rename GitHub labels (type:feature->type:task, type:bug->type:issue)
-- Phase 2: Rename tracker.py commands and internal references
 - Phase 3: Rename sub-skill files (feature-intake->task-intake, bug-filing->issue-filing)
 - Phase 4: Update all CLAUDE.md templates and sub-skills prose
 - Phase 5: Update SKILL.md, README.md
@@ -23,7 +22,6 @@
 - Transition to pending-test
 
 ## Key Decisions
+- Backward-compat aliases kept (list-bugs->list-issues, create-bug->create-issue, etc.)
 - Historical CHANGELOG entries left as-is
-- Closed issue titles left as-is
-- severity: labels unchanged
 - Planning artifact filenames (FEAT-SKILL-XXX) left as-is
