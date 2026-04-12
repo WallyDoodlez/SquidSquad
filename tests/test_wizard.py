@@ -1313,3 +1313,302 @@ class TestMigrateLabel:
             "old_label", "new_label", "dry_run",
             "candidates", "migrated", "skipped", "failed",
         }
+
+
+# ===========================================================================
+# Step 7 — stage_label_migration (#328 Phase J staged runner)
+# ===========================================================================
+#
+# These tests stub every gh call. The staged runner wires together
+# list_gh_labels, list_issues_with_label, migrate_label, and
+# _delete_gh_label; each stage must succeed or fail cleanly and report
+# its result in a nested summary dict.
+
+
+def _build_stage_faker(*, old_exists=True, new_exists=True,
+                       candidates=(), post_candidates=None,
+                       edit_fails=False, delete_fails=False):
+    """Build a monkeypatchable `_run` that speaks every stage's gh call.
+
+    The staged runner makes THREE `gh issue list` calls against the old
+    label in the worst case:
+      1. dry-run stage (counts candidates itself)
+      2. migrate_label internal re-query (when execute=True)
+      3. postflight stage (verifies remainder)
+
+    This fixture returns `candidates` for calls 1 and 2, then
+    `post_candidates` for call 3 and onward. That matches the real gh
+    API: list-candidates and migrate-internal-list both see the initial
+    state, postflight sees the state AFTER migration.
+    """
+    if post_candidates is None:
+        post_candidates = []
+
+    list_call_count = [0]
+
+    label_payload = []
+    if old_exists:
+        label_payload.append({"name": "status:pending"})
+    if new_exists:
+        label_payload.append({"name": "status:pending-human-approval"})
+
+    def _fake(cmd, **kwargs):
+        if cmd[:3] == ["gh", "label", "list"]:
+            return _fake_proc(returncode=0, stdout=json.dumps(label_payload))
+        if cmd[:3] == ["gh", "issue", "list"]:
+            list_call_count[0] += 1
+            # Calls 1 and 2 see the initial state; call 3+ sees post
+            nums = (
+                candidates if list_call_count[0] <= 2
+                else post_candidates
+            )
+            return _issue_list_proc(nums)
+        if cmd[:3] == ["gh", "issue", "edit"]:
+            if edit_fails:
+                return _fake_proc(returncode=1, stderr="HTTP 500")
+            return _fake_proc(returncode=0)
+        if cmd[:3] == ["gh", "label", "delete"]:
+            if delete_fails:
+                return _fake_proc(returncode=1, stderr="HTTP 403 Forbidden")
+            return _fake_proc(returncode=0)
+        return _fake_proc(returncode=127)
+
+    return _fake
+
+
+class TestStageLabelMigrationPreflight:
+    def test_old_label_missing_aborts(self, monkeypatch):
+        fake = _build_stage_faker(old_exists=False, new_exists=True)
+        monkeypatch.setattr(wizard, "_run", fake)
+        summary = wizard.stage_label_migration(
+            "status:pending", "status:pending-human-approval",
+        )
+        pre = summary["stages"]["preflight"]
+        assert pre["ok"] is False
+        assert pre["old_exists"] is False
+        assert pre["new_exists"] is True
+        assert any("status:pending" in e and "does not exist" in e
+                   for e in pre["errors"])
+        # No other stage should have run
+        assert summary["stages"]["dry_run"] is None
+        assert summary["stages"]["execute"] is None
+        assert summary["ok"] is False
+
+    def test_new_label_missing_aborts(self, monkeypatch):
+        fake = _build_stage_faker(old_exists=True, new_exists=False)
+        monkeypatch.setattr(wizard, "_run", fake)
+        summary = wizard.stage_label_migration(
+            "status:pending", "status:pending-human-approval",
+        )
+        pre = summary["stages"]["preflight"]
+        assert pre["ok"] is False
+        assert pre["new_exists"] is False
+        assert any("ensure-labels" in e for e in pre["errors"])
+        assert summary["ok"] is False
+
+    def test_both_missing_reports_both(self, monkeypatch):
+        fake = _build_stage_faker(old_exists=False, new_exists=False)
+        monkeypatch.setattr(wizard, "_run", fake)
+        summary = wizard.stage_label_migration(
+            "status:pending", "status:pending-human-approval",
+        )
+        pre = summary["stages"]["preflight"]
+        assert len(pre["errors"]) == 2
+
+
+class TestStageLabelMigrationDryRun:
+    def test_no_candidates_short_circuits_cleanly(self, monkeypatch):
+        fake = _build_stage_faker(candidates=[])
+        monkeypatch.setattr(wizard, "_run", fake)
+        summary = wizard.stage_label_migration(
+            "status:pending", "status:pending-human-approval",
+        )
+        assert summary["ok"] is True
+        assert summary["stages"]["dry_run"]["candidate_count"] == 0
+        assert summary["stages"]["execute"]["skipped"] is True
+        assert summary["stages"]["execute"]["reason"] == "no candidates"
+        assert summary["stages"]["postflight"]["remaining_count"] == 0
+
+    def test_dry_run_counts_candidates_without_executing(self, monkeypatch):
+        fake = _build_stage_faker(
+            candidates=[10, 20, 30], post_candidates=[10, 20, 30],
+        )
+        monkeypatch.setattr(wizard, "_run", fake)
+        summary = wizard.stage_label_migration(
+            "status:pending", "status:pending-human-approval",
+            execute=False,
+        )
+        assert summary["stages"]["dry_run"]["candidate_count"] == 3
+        assert summary["stages"]["dry_run"]["candidates"] == [10, 20, 30]
+        assert summary["stages"]["execute"]["skipped"] is True
+        assert "dry-run" in summary["stages"]["execute"]["reason"]
+        # Postflight still finds all 3 because we never executed
+        assert summary["stages"]["postflight"]["remaining_count"] == 3
+        # Top-level ok is False because postflight is dirty
+        assert summary["ok"] is False
+
+
+class TestStageLabelMigrationExecute:
+    def test_happy_path_full_migration(self, monkeypatch):
+        fake = _build_stage_faker(
+            candidates=[1, 2, 3], post_candidates=[],
+        )
+        monkeypatch.setattr(wizard, "_run", fake)
+        summary = wizard.stage_label_migration(
+            "status:pending", "status:pending-human-approval",
+            execute=True,
+        )
+        assert summary["ok"] is True
+        assert summary["stages"]["execute"]["ok"] is True
+        assert summary["stages"]["execute"]["migrated"] == [1, 2, 3]
+        assert summary["stages"]["postflight"]["remaining_count"] == 0
+        # No delete_old -> cleanup skipped
+        assert summary["stages"]["cleanup"]["skipped"] is True
+        assert "delete_old" in summary["stages"]["cleanup"]["reason"]
+
+    def test_execute_failure_reported_and_blocks_cleanup(self, monkeypatch):
+        fake = _build_stage_faker(
+            candidates=[1, 2],
+            post_candidates=[1, 2],  # still there because edits failed
+            edit_fails=True,
+        )
+        monkeypatch.setattr(wizard, "_run", fake)
+        summary = wizard.stage_label_migration(
+            "status:pending", "status:pending-human-approval",
+            execute=True, delete_old=True,
+        )
+        exec_stage = summary["stages"]["execute"]
+        assert exec_stage["ok"] is False
+        assert len(exec_stage["failed"]) == 2
+        # Postflight runs even when execute failed
+        assert summary["stages"]["postflight"]["remaining_count"] == 2
+        assert summary["stages"]["postflight"]["ok"] is False
+        # Cleanup MUST be skipped
+        assert summary["stages"]["cleanup"]["skipped"] is True
+        assert "execute" in summary["stages"]["cleanup"]["reason"]
+        assert summary["ok"] is False
+
+    def test_partial_migration_postflight_catches_remainder(self, monkeypatch):
+        """If one issue somehow still has the old label, postflight fails."""
+        fake = _build_stage_faker(
+            candidates=[1, 2, 3], post_candidates=[3],
+        )
+        monkeypatch.setattr(wizard, "_run", fake)
+        summary = wizard.stage_label_migration(
+            "status:pending", "status:pending-human-approval",
+            execute=True, delete_old=True,
+        )
+        assert summary["stages"]["postflight"]["remaining_count"] == 1
+        assert summary["stages"]["postflight"]["ok"] is False
+        assert summary["stages"]["cleanup"]["skipped"] is True
+        assert "postflight" in summary["stages"]["cleanup"]["reason"]
+        assert summary["ok"] is False
+
+
+class TestStageLabelMigrationCleanup:
+    def test_cleanup_runs_when_all_preconditions_met(self, monkeypatch):
+        fake = _build_stage_faker(
+            candidates=[1, 2], post_candidates=[],
+        )
+        monkeypatch.setattr(wizard, "_run", fake)
+        summary = wizard.stage_label_migration(
+            "status:pending", "status:pending-human-approval",
+            execute=True, delete_old=True,
+        )
+        cleanup = summary["stages"]["cleanup"]
+        assert cleanup["ok"] is True
+        assert cleanup["deleted"] is True
+        assert summary["ok"] is True
+
+    def test_cleanup_skipped_without_execute_flag(self, monkeypatch):
+        fake = _build_stage_faker(
+            candidates=[1, 2], post_candidates=[1, 2],
+        )
+        monkeypatch.setattr(wizard, "_run", fake)
+        summary = wizard.stage_label_migration(
+            "status:pending", "status:pending-human-approval",
+            execute=False, delete_old=True,
+        )
+        assert summary["stages"]["cleanup"]["skipped"] is True
+        assert "execute" in summary["stages"]["cleanup"]["reason"]
+
+    def test_cleanup_failure_reported(self, monkeypatch):
+        fake = _build_stage_faker(
+            candidates=[1], post_candidates=[], delete_fails=True,
+        )
+        monkeypatch.setattr(wizard, "_run", fake)
+        summary = wizard.stage_label_migration(
+            "status:pending", "status:pending-human-approval",
+            execute=True, delete_old=True,
+        )
+        cleanup = summary["stages"]["cleanup"]
+        assert cleanup["ok"] is False
+        assert cleanup["deleted"] is False
+        assert "403" in cleanup["error"]
+        assert summary["ok"] is False
+
+    def test_cleanup_treats_not_found_as_success(self, monkeypatch):
+        """If the label was already deleted, `gh label delete` reports not-found."""
+        list_count = [0]
+
+        def _fake(cmd, **kwargs):
+            if cmd[:3] == ["gh", "label", "list"]:
+                return _fake_proc(
+                    returncode=0,
+                    stdout=json.dumps([
+                        {"name": "status:pending"},
+                        {"name": "status:pending-human-approval"},
+                    ]),
+                )
+            if cmd[:3] == ["gh", "issue", "list"]:
+                list_count[0] += 1
+                # Calls 1 + 2 = dry-run and migrate-internal (see [1]);
+                # call 3 = postflight (clean)
+                nums = [1] if list_count[0] <= 2 else []
+                return _issue_list_proc(nums)
+            if cmd[:3] == ["gh", "issue", "edit"]:
+                return _fake_proc(returncode=0)
+            if cmd[:3] == ["gh", "label", "delete"]:
+                return _fake_proc(returncode=1, stderr="label not found")
+            return _fake_proc(returncode=127)
+
+        monkeypatch.setattr(wizard, "_run", _fake)
+        summary = wizard.stage_label_migration(
+            "status:pending", "status:pending-human-approval",
+            execute=True, delete_old=True,
+        )
+        assert summary["stages"]["cleanup"]["ok"] is True
+        assert summary["ok"] is True
+
+
+class TestStageLabelMigrationContract:
+    def test_stages_constant_matches_summary_keys(self, monkeypatch):
+        fake = _build_stage_faker(candidates=[])
+        monkeypatch.setattr(wizard, "_run", fake)
+        summary = wizard.stage_label_migration("a", "b")
+        assert set(summary["stages"].keys()) == set(wizard.LABEL_MIGRATION_STAGES)
+
+    def test_stages_constant_order_is_stable(self):
+        assert wizard.LABEL_MIGRATION_STAGES == [
+            "preflight", "dry_run", "execute", "postflight", "cleanup",
+        ]
+
+    def test_summary_has_top_level_ok_flag(self, monkeypatch):
+        fake = _build_stage_faker(candidates=[])
+        monkeypatch.setattr(wizard, "_run", fake)
+        summary = wizard.stage_label_migration("a", "b")
+        assert "ok" in summary
+        assert isinstance(summary["ok"], bool)
+
+    def test_summary_records_all_parameters(self, monkeypatch):
+        fake = _build_stage_faker(candidates=[])
+        monkeypatch.setattr(wizard, "_run", fake)
+        summary = wizard.stage_label_migration(
+            "status:pending", "status:pending-human-approval",
+            execute=True, delete_old=True, state="open",
+        )
+        assert summary["old_label"] == "status:pending"
+        assert summary["new_label"] == "status:pending-human-approval"
+        assert summary["execute"] is True
+        assert summary["delete_old"] is True
+        assert summary["state"] == "open"

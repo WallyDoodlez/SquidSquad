@@ -27,6 +27,10 @@ Commands:
     python scripts/wizard.py migrate-label         # rewrite one label to
                                                    # another on every
                                                    # issue that carries it
+    python scripts/wizard.py migrate-labels-staged # staged migration with
+                                                   # preflight + dry-run +
+                                                   # execute + postflight +
+                                                   # optional cleanup
     python scripts/wizard.py --help
 
 Every command prints JSON on stdout and non-JSON errors on stderr. The
@@ -1036,6 +1040,207 @@ def migrate_label(old, new, dry_run=False, state="all"):
     return summary
 
 
+def _delete_gh_label(name):
+    """Delete a GitHub label by name via `gh label delete`.
+
+    Returns (ok: bool, error: str|None). Treats "not found" as success
+    so deletes are idempotent.
+    """
+    result = _run([
+        "gh", "label", "delete", name, "--yes",
+    ])
+    if result.returncode == 0:
+        return True, None
+    err = (result.stderr or "").strip()
+    if "not found" in err.lower():
+        return True, None
+    return False, err or f"gh exit {result.returncode}"
+
+
+# Stage names in the exact order they run. Tests and callers can use
+# this list to assert the pipeline shape without tying themselves to
+# implementation details.
+LABEL_MIGRATION_STAGES = [
+    "preflight",
+    "dry_run",
+    "execute",
+    "postflight",
+    "cleanup",
+]
+
+
+def stage_label_migration(old, new, execute=False, delete_old=False, state="all"):
+    """Run a label migration in stages with preflight and postflight guards.
+
+    This is the production runner for renaming a legacy label across
+    every issue in a repo (e.g. Phase I: `status:pending` ->
+    `status:pending-human-approval`). Safe to call with any combination
+    of flags — stages that are not enabled simply report their findings
+    without touching gh.
+
+    Stages (all run unconditionally, in order):
+
+        1. `preflight`   — Verify both labels exist on the repo. If
+                           either is missing, abort before touching
+                           anything.
+        2. `dry_run`     — Count candidates (issues with the old label)
+                           without calling `gh issue edit`.
+        3. `execute`     — Only runs when `execute=True`. Calls
+                           `migrate_label(old, new)` for real.
+        4. `postflight`  — Re-list issues with the old label. Clean state
+                           is zero candidates. Runs unconditionally so
+                           callers see how close they are even in dry-run.
+        5. `cleanup`     — Only runs when `delete_old=True` AND postflight
+                           is clean AND execute ran. Deletes the old
+                           label from the repo via `gh label delete`.
+
+    Args:
+        old:         legacy label name (e.g. "status:pending")
+        new:         target label name (e.g. "status:pending-human-approval")
+        execute:     if True, actually rewrite labels on gh issues
+        delete_old:  if True, delete the old label from the repo after
+                     postflight verifies zero candidates remain
+        state:       "open" | "closed" | "all" — passed through to the
+                     candidate queries
+
+    Returns a nested summary dict with per-stage results and a top-level
+    `ok` flag that is True only when every run stage succeeded without
+    errors. Callers should check `ok` before claiming the migration
+    landed.
+    """
+    summary = {
+        "old_label": old,
+        "new_label": new,
+        "execute": bool(execute),
+        "delete_old": bool(delete_old),
+        "state": state,
+        "stages": {name: None for name in LABEL_MIGRATION_STAGES},
+        "ok": False,
+    }
+
+    # --- Stage 1: preflight -------------------------------------------------
+    repo_labels = list_gh_labels()
+    preflight = {
+        "old_exists": old in repo_labels,
+        "new_exists": new in repo_labels,
+        "ok": True,
+        "errors": [],
+    }
+    if not preflight["old_exists"]:
+        preflight["ok"] = False
+        preflight["errors"].append(
+            f"legacy label {old!r} does not exist on the repo "
+            f"(nothing to migrate)"
+        )
+    if not preflight["new_exists"]:
+        preflight["ok"] = False
+        preflight["errors"].append(
+            f"target label {new!r} does not exist on the repo — "
+            f"call `ensure-labels` first, or create it manually"
+        )
+    summary["stages"]["preflight"] = preflight
+
+    if not preflight["ok"]:
+        return summary
+
+    # --- Stage 2: dry-run ---------------------------------------------------
+    candidates = list_issues_with_label(old, state=state)
+    summary["stages"]["dry_run"] = {
+        "candidate_count": len(candidates),
+        "candidates": list(candidates),
+        "ok": True,
+    }
+
+    # Nothing to migrate -> short-circuit postflight is also clean
+    if not candidates:
+        summary["stages"]["execute"] = {
+            "ok": True,
+            "skipped": True,
+            "reason": "no candidates",
+        }
+        summary["stages"]["postflight"] = {
+            "remaining_count": 0,
+            "ok": True,
+        }
+        summary["stages"]["cleanup"] = _maybe_cleanup(old, delete_old, True, True)
+        summary["ok"] = True
+        return summary
+
+    # --- Stage 3: execute ---------------------------------------------------
+    if execute:
+        migration = migrate_label(old, new, dry_run=False, state=state)
+        summary["stages"]["execute"] = {
+            "ok": not migration["failed"],
+            "migrated": migration["migrated"],
+            "skipped": migration["skipped"],
+            "failed": migration["failed"],
+        }
+        if migration["failed"]:
+            # Still run postflight so the caller sees how much progress
+            # was made; cleanup will refuse to run.
+            pass
+    else:
+        summary["stages"]["execute"] = {
+            "ok": True,
+            "skipped": True,
+            "reason": "execute flag not set (dry-run mode)",
+        }
+
+    # --- Stage 4: postflight ------------------------------------------------
+    remaining = list_issues_with_label(old, state=state)
+    postflight_ok = len(remaining) == 0
+    summary["stages"]["postflight"] = {
+        "remaining_count": len(remaining),
+        "remaining": list(remaining),
+        "ok": postflight_ok,
+    }
+
+    # --- Stage 5: cleanup ---------------------------------------------------
+    execute_ok = summary["stages"]["execute"]["ok"]
+    summary["stages"]["cleanup"] = _maybe_cleanup(
+        old, delete_old, postflight_ok, execute_ok and execute,
+    )
+
+    # Top-level `ok` is True only when every stage that RAN succeeded.
+    summary["ok"] = (
+        preflight["ok"]
+        and summary["stages"]["execute"]["ok"]
+        and summary["stages"]["postflight"]["ok"]
+        and summary["stages"]["cleanup"]["ok"]
+    )
+    return summary
+
+
+def _maybe_cleanup(old, delete_old, postflight_ok, execute_ran_ok):
+    """Delete the old label if all cleanup preconditions hold."""
+    if not delete_old:
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "delete_old flag not set",
+        }
+    if not execute_ran_ok:
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "execute stage did not run successfully — "
+                      "refusing to delete label",
+        }
+    if not postflight_ok:
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "postflight found remaining candidates — "
+                      "refusing to delete label",
+        }
+    ok, err = _delete_gh_label(old)
+    return {
+        "ok": ok,
+        "deleted": ok,
+        "error": err,
+    }
+
+
 # ---------------------------------------------------------------------------
 # CLI dispatch
 # ---------------------------------------------------------------------------
@@ -1198,6 +1403,36 @@ def cmd_migrate_label(args):
     return 0 if not summary["failed"] else 1
 
 
+def cmd_migrate_labels_staged(args):
+    """Usage: wizard.py migrate-labels-staged <old> <new> [--execute] [--delete-old] [--state all|open|closed]
+
+    Runs the staged label migration runner. Without --execute it only
+    reports what WOULD happen (preflight + dry-run + postflight). With
+    --execute it actually rewrites labels on gh issues. --delete-old
+    removes the legacy label after a clean postflight.
+    """
+    if len(args) < 2:
+        print(
+            "Usage: wizard.py migrate-labels-staged <old> <new> "
+            "[--execute] [--delete-old] [--state all|open|closed]",
+            file=sys.stderr,
+        )
+        return 2
+    old, new = args[0], args[1]
+    execute = "--execute" in args
+    delete_old = "--delete-old" in args
+    state = "all"
+    if "--state" in args:
+        idx = args.index("--state")
+        if idx + 1 < len(args):
+            state = args[idx + 1]
+    summary = stage_label_migration(
+        old, new, execute=execute, delete_old=delete_old, state=state,
+    )
+    _print_json(summary, ok=summary["ok"])
+    return 0 if summary["ok"] else 1
+
+
 def cmd_validate_rerun_action(args):
     if not args:
         print(
@@ -1234,6 +1469,7 @@ def main():
         "ensure-labels": cmd_ensure_labels,
         "list-issues-by-label": cmd_list_issues_by_label,
         "migrate-label": cmd_migrate_label,
+        "migrate-labels-staged": cmd_migrate_labels_staged,
     }
     if cmd not in dispatch:
         print(f"Unknown command: {cmd}", file=sys.stderr)

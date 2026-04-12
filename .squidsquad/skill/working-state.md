@@ -271,10 +271,48 @@ discrete phases, each landing as its own atomic commit.
     present, references/ vs .squidsquad/ byte-identity check,
     list-agents tab format, JSON/tab output parity, help text
   - Full static suite: 460/460 pass (was 448, +12)
-- [ ] **Phase I — Migration script** (`migrate_status_labels.py`)
-  - Rewrite `pending` → `pending-human-approval` on all issues
-  - Transition window: both old and new accepted
-  - After verification, drop `pending` from LEGAL_TRANSITIONS
+- [x] **Phase J — Migration orchestrator (staged label runner)** (this cycle)
+  - `wizard.stage_label_migration(old, new, execute, delete_old, state)`
+    — wraps Phase G.2c's `migrate_label` in a 5-stage pipeline:
+    - **Stage 1: preflight** — verify BOTH labels exist on the repo;
+      abort cleanly without touching anything if either is missing
+    - **Stage 2: dry_run** — count candidates without calling
+      `gh issue edit`; reports per-issue list back to caller
+    - **Stage 3: execute** — only runs when `execute=True`; calls
+      `migrate_label` for real; collects per-issue failures
+    - **Stage 4: postflight** — re-lists candidates with the old label;
+      clean state is zero; runs unconditionally so the caller sees
+      scope even in dry-run mode
+    - **Stage 5: cleanup** — only runs when `delete_old=True` AND
+      postflight is clean AND execute ran successfully; calls
+      `gh label delete` idempotently (not-found = success)
+  - Top-level `ok` flag reflects only the stages that ran; dry-run
+    mode returns `ok: False` when candidates remain (correct — the
+    migration hasn't actually run yet)
+  - Never deletes the label on a partial migration — cleanup refuses
+    to run if any issue still carries the old label
+  - New CLI: `wizard.py migrate-labels-staged <old> <new> [--execute]
+    [--delete-old] [--state all|open|closed]`
+  - Live dry-run smoke test against this repo:
+    - Preflight OK (both labels exist)
+    - 38 candidates (issues 347, 335, 329, ...)
+    - Execute skipped (no --execute flag)
+    - Postflight dirty (candidates remain)
+    - Cleanup skipped (execute didn't run)
+    - ok: false (correct — dry-run only)
+  - 16 new tests in test_wizard.py (all gh calls mocked):
+    - Preflight (3): old missing, new missing, both missing
+    - Dry-run (2): no candidates short-circuit, dry-run without execute
+    - Execute (3): happy path, execute failure blocks cleanup,
+      partial migration caught by postflight
+    - Cleanup (4): runs with all preconditions, skipped without
+      execute flag, failure reported, not-found treated as success
+    - Contract (4): stages constant matches summary keys, stage order
+      is stable, top-level ok flag, parameter echo
+  - Did NOT run the actual migration on this repo — that's a repo-
+    visible action the human/PM should trigger when ready. Dry-run
+    confirmed 38 issues would be rewritten.
+  - Full static suite: 476/476 pass (was 460, +16)
 - [ ] **Phase J — Tests**
   - Per TEST-PLAN.md — schema validation, resolver, wizard state, migration idempotency
 
