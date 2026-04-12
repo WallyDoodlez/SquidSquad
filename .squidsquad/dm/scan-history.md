@@ -1,5 +1,11 @@
 # DM Scan History
 
+## Scan — 2026-04-12 04:31
+
+- **Files scanned**: git log audit (PM filed #402/#403 tracker hygiene bugs, #401 in planning, skill clean scan)
+- **Findings**: none — all internal tracker/process items, no user-facing doc impact
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-12 02:31
 
 - **Files scanned**: git log audit (#389 statusline ghost agents, #390 UTF-8 encoding fixes)
