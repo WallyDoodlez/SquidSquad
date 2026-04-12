@@ -35,11 +35,13 @@ Ship a `boot-remote-agents` sub-skill that any SquidSquad agent can compose into
 - This prevents false-positive stalled detection from cascading into false re-boots
 - When #4 lands, PM's Step 7 (Agent Health Check) will already be using `health_check.py`, and `boot_remote.py` reuses it for detection
 
-### Q5 — Sub-skill location: `references/sub-skills/common/boot-remote-agents.md`
+### Q5 — Sub-skill location: `references/sub-skills/common/boot-remote-agents.md` (REVISED — all agents compose it in v1)
 - Lives in `common/` from day one — signals "shared capability composable by any agent"
-- v1 consumer: PM only (composed into PM's CLAUDE.md)
+- **v1 consumers: ALL agents** (PM, skill, dm, designer, qa — whoever is installed). Revised from "PM only" per human directive 2026-04-11: "allow other agents to reboot PM as well."
+- **Rationale — "who watches the watchmen"**: If only PM can restart agents, PM itself becomes a single point of failure. When PM's context pressure spikes or PM crashes, no one can restart it. With all agents composing the sub-skill, ANY agent that detects a stalled teammate (including PM) can restart it.
+- **Decentralized health monitoring**: Each agent's cycle includes a health check of ALL teammates (via `health_check.py` from #335). If any agent detects any other agent stalled, it can invoke `boot_remote.py` to restart it. No designated "backup monitor" — the monitoring is fully decentralized.
 - Future v2+ consumers: installer (end-of-setup auto-boot, follow-up to #328 Q-new21), orchestrators, debug utilities
-- No graduation step needed later
+- No graduation step needed — common/ from day one, all agents from day one
 
 ## Dev Discretion (skill-lead can choose)
 
