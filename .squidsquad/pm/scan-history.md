@@ -1,3 +1,11 @@
+## Scan — 2026-04-12 04:03
+
+- **Files scanned**: GitHub Issues tracker (all 28 open issues — label integrity + title quality)
+- **Findings**:
+  - #402 — #148 missing required labels (type:bug, role:skill, severity) — invisible to tracker queries
+  - #403 — #377 double "BUG: BUG:" prefix in title — create-bug may need prefix dedup
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-07 01:00
 
 - **Files scanned**: GitHub Issues tracker (planned/on-hold review)

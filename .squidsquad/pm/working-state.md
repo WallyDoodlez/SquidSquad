@@ -27,4 +27,4 @@
 - #327 — installer commit abort + skip-permissions (severity:high, approved, awaiting skill pickup)
 - #280 — DM bug, SKILL.md start-qa reference
 - #250 — auto-restart (status:planned, awaiting approval)
-- Quiet cycle counter: 3
+- Quiet cycle counter: 0
