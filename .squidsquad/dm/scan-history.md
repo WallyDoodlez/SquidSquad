@@ -1,5 +1,11 @@
 # DM Scan History
 
+## Scan — 2026-04-12 10:31
+
+- **Files scanned**: git log audit (#4 boot-remote-agents pending-test, #436 scan criteria to SOUL, #429/#430 script fixes, PM tracker activity)
+- **Findings**: none — #4 not yet shipped (pending-test), rest are internal. Will document #4 (boot-remote-agents) when it reaches pending-ship.
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-12 08:31
 
 - **Files scanned**: git log audit (#148 git_ops tests, #403 tracker prefix fix, #402 shipped)
