@@ -389,7 +389,11 @@ def create_issue(title, body, role, severity, reporter=None):
         "--label", labels,
     ])
     url = result.stdout.strip()
-    number = int(url.rstrip("/").split("/")[-1])
+    try:
+        number = int(url.rstrip("/").split("/")[-1])
+    except (ValueError, IndexError):
+        print(f"ERROR: could not parse issue number from gh output: {url}", file=sys.stderr)
+        return -1
     print(json.dumps({"number": number, "url": url}))
     return number
 
@@ -413,7 +417,11 @@ def create_task(title, body, role, priority, reporter=None):
         "--label", labels,
     ])
     url = result.stdout.strip()
-    number = int(url.rstrip("/").split("/")[-1])
+    try:
+        number = int(url.rstrip("/").split("/")[-1])
+    except (ValueError, IndexError):
+        print(f"ERROR: could not parse issue number from gh output: {url}", file=sys.stderr)
+        return -1
     print(json.dumps({"number": number, "url": url}))
     return number
 

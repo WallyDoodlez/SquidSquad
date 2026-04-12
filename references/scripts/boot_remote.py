@@ -21,6 +21,7 @@ Exit codes:
 import json
 import os
 import platform
+import shlex
 import shutil
 import subprocess
 import sys
@@ -248,9 +249,11 @@ def _spawn_windows(clone_root, role, script_path, script_type):
 def _spawn_macos(clone_root, role, script_path, script_type):
     """Spawn on macOS using Terminal.app via osascript."""
     try:
+        quoted_root = shlex.quote(str(clone_root))
+        quoted_script = shlex.quote(str(script_path))
         apple_script = (
             f'tell application "Terminal" to do script '
-            f'"cd {clone_root} && bash {script_path}"'
+            f'"cd {quoted_root} && bash {quoted_script}"'
         )
         subprocess.Popen(
             ["osascript", "-e", apple_script],
@@ -272,9 +275,11 @@ def _spawn_linux(clone_root, role, script_path, script_type):
                 [tmux, "kill-session", "-t", session_name],
                 capture_output=True, check=False,
             )
+            quoted_root = shlex.quote(str(clone_root))
+            quoted_script = shlex.quote(str(script_path))
             subprocess.Popen(
                 [tmux, "new-session", "-d", "-s", session_name,
-                 f"cd {clone_root} && bash {script_path}"],
+                 f"cd {quoted_root} && bash {quoted_script}"],
                 cwd=str(clone_root),
             )
             return True, f"spawned via tmux session '{session_name}'"
