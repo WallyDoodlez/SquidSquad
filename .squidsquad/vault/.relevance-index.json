@@ -1,0 +1,44 @@
+{
+  "BRIEFING.md": {
+    "confidence": 0,
+    "links": 0,
+    "recency": 0,
+    "score": 0.0
+  },
+  "areas/code-conventions.md": {
+    "confidence": 6,
+    "links": 3,
+    "recency": 10,
+    "score": 6.0
+  },
+  "areas/human-profile.md": {
+    "confidence": 6,
+    "links": 1,
+    "recency": 10,
+    "score": 5.2
+  },
+  "galaxy/decision-sub-skill-architecture.md": {
+    "confidence": 10,
+    "links": 3,
+    "recency": 10,
+    "score": 7.2
+  },
+  "galaxy/learning-atomic-migration-strategy.md": {
+    "confidence": 6,
+    "links": 1,
+    "recency": 10,
+    "score": 5.2
+  },
+  "galaxy/pattern-windows-utf8-subprocess.md": {
+    "confidence": 10,
+    "links": 0,
+    "recency": 10,
+    "score": 6.0
+  },
+  "projects/squidsquad.md": {
+    "confidence": 6,
+    "links": 3,
+    "recency": 10,
+    "score": 6.0
+  }
+}
