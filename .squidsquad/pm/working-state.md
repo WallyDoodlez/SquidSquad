@@ -1,6 +1,6 @@
 # Working State
 
-- **Task**: #442 rename feature/bug to task/issue — planned, awaiting approval
+- **Task**: monitoring — #442 in progress with skill, #4 back to in-progress
 - **Status**: idle
 - **Phase**:
 - **Started**: 2026-04-11
