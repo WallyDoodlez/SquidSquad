@@ -771,6 +771,15 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
             "working_state": str(ws_path),
         })
 
+    # 3. Generate .local-config for health check and auto-boot
+    try:
+        from compose import generate_local_config
+    except ImportError:
+        pass
+    else:
+        all_roles = [a["id"] for a in spec["agents"]]
+        generate_local_config(all_roles, target_root=target_root)
+
     return summary
 
 
