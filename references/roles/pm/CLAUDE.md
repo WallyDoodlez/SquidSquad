@@ -118,6 +118,8 @@ When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last 
 
 {{include: pm-specific/delivery-fallback}}
 
+{{include: pm-specific/post-merge-recompose}}
+
 {{include: pm-specific/health-check}}
 
 {{include: pm-specific/github-issues}}

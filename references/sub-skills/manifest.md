@@ -48,6 +48,7 @@ Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded
 2c. `pm-specific/testing-and-verification` — Steps 3-6c: E2E, investigate, verify issues/tasks, ship counter
 3. `pm-specific/pr-flow` — Step 6b
 4. `pm-specific/delivery-fallback` — Step 6d
+4c. `pm-specific/post-merge-recompose` — Step 6e: recompose after branch merge
 4b. `pm-specific/health-check` — Step 7: agent health check
 5. `pm-specific/github-issues` — Step 7b
 5b. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
@@ -189,6 +190,7 @@ references/sub-skills/
 │   ├── checkin.md                  (Step 2 — human check-in and input handling)
 │   ├── testing-and-verification.md (Steps 3-6c — E2E, investigate, verify, ship counter)
 │   ├── health-check.md            (Step 7 — agent health check)
+│   ├── post-merge-recompose.md    (Step 6e — recompose after branch merge)
 │   ├── task-intake.md              (5-phase lifecycle + Open Artifacts)
 │   ├── task-approval.md            (Feature Approval Gate)
 │   ├── delivery-fallback.md           (Step 6d — PM delivery when DM absent)

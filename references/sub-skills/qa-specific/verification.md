@@ -47,15 +47,24 @@ python references/scripts/tracker.py list-issues skill --status pending-test
 For each issue:
 
 1. Read details: `gh issue view [NUMBER] --json title,body,comments`
-2. Run the relevant test or manually verify the fix.
-3. If verified:
+2. **Branch checkout**: Check if the issue comments reference a feature branch (look for `squidsquad/` branch name). If found:
+   ```bash
+   python references/scripts/git_ops.py branch-switch squidsquad/[role]/[number]
+   ```
+   Run verification on the branch. When done, switch back:
+   ```bash
+   python references/scripts/git_ops.py branch-switch main
+   ```
+   If no branch referenced, verify on main as usual.
+3. Run the relevant test or manually verify the fix.
+5. If verified:
    - Transition to shipped (auto-closes):
      ```bash
      python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role qa-lead
      python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified. Status → Pending Ship."
      ```
    - Increment `Shipped Since Last Bump`: `python references/scripts/config.py set shipped-since-bump [N+1]`
-4. If not verified:
+6. If not verified:
    - Reopen: `python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead`
    - Comment with specific failures.
 
@@ -73,7 +82,16 @@ python references/scripts/tracker.py list-tasks skill --status pending-test
 
 For each task, read it: `gh issue view [NUMBER] --json title,body,labels,comments`
 
-1. **If a TEST-PLAN.md exists** in the agent's planning directory, spawn a QA subagent (via the Agent tool) to execute the test plan:
+**Branch checkout**: Check if the issue comments reference a feature branch (look for `squidsquad/` branch name or PR URL). If found, checkout the branch before testing:
+```bash
+python references/scripts/git_ops.py branch-switch squidsquad/[role]/[number]
+```
+When verification is complete (pass or fail), switch back to main:
+```bash
+python references/scripts/git_ops.py branch-switch main
+```
+
+1. **If a TEST-PLAN.md exists** in the PM's planning directory (`.squidsquad/pm/planning/`), spawn a QA subagent (via the Agent tool) to execute the test plan:
 
    Subagent prompt:
    ```

@@ -7,6 +7,7 @@ includes:
   - pm-specific/testing-and-verification
   - pm-specific/pr-flow
   - pm-specific/delivery-fallback
+  - pm-specific/post-merge-recompose
   - pm-specific/health-check
   - pm-specific/github-issues
   - common/boot-remote-agents
