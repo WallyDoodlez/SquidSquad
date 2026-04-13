@@ -110,6 +110,31 @@ if [ -n "$CYCLE_TIMESTAMP_FILE" ] && [ -f "$CYCLE_TIMESTAMP_FILE" ]; then
   fi
 fi
 
+# Vault pending questions: 🗄️ N (escalating 🔥 at 3+)
+VAULT_Q=""
+VAULT_Q_COUNT=$(python references/scripts/vault_optimize.py pending-count 2>/dev/null) || true
+VAULT_Q_COUNT=${VAULT_Q_COUNT:-0}
+if [ "$VAULT_Q_COUNT" -gt 0 ]; then
+  FIRES=""
+  if [ "$VAULT_Q_COUNT" -ge 3 ]; then
+    # 2^(count-3) fires, capped at 8
+    FIRE_COUNT=1
+    EXP=$(( VAULT_Q_COUNT - 3 ))
+    i=0
+    while [ "$i" -lt "$EXP" ]; do
+      FIRE_COUNT=$(( FIRE_COUNT * 2 ))
+      i=$(( i + 1 ))
+    done
+    [ "$FIRE_COUNT" -gt 8 ] && FIRE_COUNT=8
+    j=0
+    while [ "$j" -lt "$FIRE_COUNT" ]; do
+      FIRES="${FIRES}🔥"
+      j=$(( j + 1 ))
+    done
+  fi
+  VAULT_Q="🗄️${VAULT_Q_COUNT}${FIRES}"
+fi
+
 # Git sync: ↑N unpushed / ↓N behind remote
 GIT_SYNC=""
 AHEAD=$(timeout 2 git rev-list --count @{u}..HEAD 2>/dev/null) || true
@@ -334,6 +359,7 @@ if [ "$ROLE" = "pm" ]; then
   LINE1="🦑 ${ROLE_LABEL} v${VERSION} │ ${SHIP_STR}"
   [ -n "$PLANNING_STR" ] && LINE1="${LINE1} │ ${PLANNING_STR}"
   [ -n "$GIT_SYNC" ] && LINE1="${LINE1} │ ${GIT_SYNC}"
+  [ -n "$VAULT_Q" ] && LINE1="${LINE1} │ ${VAULT_Q}"
   LINE1="${LINE1} │ ${CTX_STR} │ ${TIMER_STR} │ ${HEALTH}"
   [ -n "$REST" ] && LINE1="${LINE1} ${REST}"
 
@@ -378,6 +404,7 @@ elif [ "$ROLE" = "dm" ]; then
 
   LINE1="🦑 ${ROLE_LABEL} v${VERSION} │ ${WORK_STR}"
   [ -n "$GIT_SYNC" ] && LINE1="${LINE1} │ ${GIT_SYNC}"
+  [ -n "$VAULT_Q" ] && LINE1="${LINE1} │ ${VAULT_Q}"
   LINE1="${LINE1} │ ${CTX_STR} │ ${TIMER_STR}"
 
   # Line 2: current step or rotating hint
@@ -421,6 +448,7 @@ else
 
   LINE1="🦑 ${ROLE_LABEL} v${VERSION} │ ${WORK_STR}"
   [ -n "$GIT_SYNC" ] && LINE1="${LINE1} │ ${GIT_SYNC}"
+  [ -n "$VAULT_Q" ] && LINE1="${LINE1} │ ${VAULT_Q}"
   LINE1="${LINE1} │ ${CTX_STR} │ ${TIMER_STR}"
 
   # Line 2: current step or rotating hint (QA gets its own hints if available)

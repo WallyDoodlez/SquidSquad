@@ -172,3 +172,72 @@ class TestListAgentsCommand:
         assert result.returncode == 0
         assert "agents" in result.stdout
         assert "schema-version" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Vault pending questions integration in statusline (#18)
+# ---------------------------------------------------------------------------
+
+
+class TestVaultPendingQuestionsStatusline:
+    """Verify statusline.sh is wired to render vault pending-question count."""
+
+    def test_references_script_calls_pending_count(self, refs_script):
+        assert "vault_optimize.py pending-count" in refs_script, (
+            "statusline.sh must call vault_optimize.py pending-count "
+            "to read pending vault questions"
+        )
+
+    def test_references_script_defines_vault_q(self, refs_script):
+        assert "VAULT_Q=" in refs_script, (
+            "statusline.sh must define VAULT_Q variable for vault question display"
+        )
+
+    def test_references_script_has_fire_escalation(self, refs_script):
+        """Escalating fire emojis at 3+ pending questions per spec."""
+        assert "FIRE_COUNT" in refs_script, (
+            "statusline.sh must compute FIRE_COUNT for escalating urgency"
+        )
+        # Cap at 8 fires
+        assert "FIRE_COUNT" in refs_script and "-gt 8" in refs_script, (
+            "fire emoji count must be capped at 8"
+        )
+
+    def test_pm_line1_includes_vault_q(self, refs_script):
+        """PM status line must include VAULT_Q segment."""
+        # Find the PM block and check VAULT_Q is referenced before CTX_STR
+        pm_block = refs_script[refs_script.index("# === PM-specific"):]
+        dm_block_start = pm_block.index("# === DM segments")
+        pm_block = pm_block[:dm_block_start]
+        assert "VAULT_Q" in pm_block, (
+            "PM status line must render vault pending questions"
+        )
+
+    def test_dm_line1_includes_vault_q(self, refs_script):
+        """DM status line must include VAULT_Q segment."""
+        dm_block = refs_script[refs_script.index("# === DM segments"):]
+        dev_block_start = dm_block.index("# === Dev agent")
+        dm_block = dm_block[:dev_block_start]
+        assert "VAULT_Q" in dm_block, (
+            "DM status line must render vault pending questions"
+        )
+
+    def test_dev_line1_includes_vault_q(self, refs_script):
+        """Dev agent status line must include VAULT_Q segment."""
+        dev_block = refs_script[refs_script.index("# === Dev agent"):]
+        assert "VAULT_Q" in dev_block, (
+            "Dev agent status line must render vault pending questions"
+        )
+
+    def test_vault_q_empty_when_zero_questions(self, refs_script):
+        """VAULT_Q stays empty when count is 0 — no icon shown."""
+        assert 'VAULT_Q=""' in refs_script, (
+            "VAULT_Q must default to empty string"
+        )
+        assert 'VAULT_Q_COUNT" -gt 0' in refs_script, (
+            "VAULT_Q must only be set when count > 0"
+        )
+
+    def test_live_script_matches_references(self, refs_script, live_script):
+        """Already tested above but re-check after vault pending changes."""
+        assert refs_script == live_script
