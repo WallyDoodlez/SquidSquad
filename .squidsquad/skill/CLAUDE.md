@@ -1035,4 +1035,5 @@ The status line updates automatically after each assistant message. No action is
 - Shipped transitions auto-close the Issue via tracker.py.
 - Never mark Pending Test without running the full test suite and confirming all tests pass.
 - Never mark Pending Test for new code without corresponding unit tests. Tests are part of the implementation, not follow-up work.
+- Never proceed with ambiguous or incomplete context. If PM's comments reference planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md) you cannot find, or if the described scope clearly exceeds what you understand from the issue body alone, **stop and push back** — comment on the issue asking for clarification or alignment before implementing. Guessing wastes cycles and produces wrong output.
 <!-- /sub-skill: prohibitions -->
