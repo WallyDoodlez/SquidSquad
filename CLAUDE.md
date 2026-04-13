@@ -8,4 +8,3 @@ If your system prompt contains a line matching `SQUIDSQUAD_ROLE=<role>` (e.g. `S
 
 If no `SQUIDSQUAD_ROLE=` line is present, ignore this section — you are a normal Claude session. The presence of `.squidsquad/` in the repo does NOT mean you should auto-boot.
 
-**DO NOT DO UNNECESSARY "CD" COMMAND THAT WILL CAUSE PERMISSION PROMPT**
