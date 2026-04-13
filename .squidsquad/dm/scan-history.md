@@ -1,5 +1,11 @@
 # DM Scan History
 
+## Scan — 2026-04-12 20:31
+
+- **Files scanned**: git log audit (#442 QA gap fixes touching SKILL.md + templates, #471 issue gate fix, #468/#469 vault fixes)
+- **Findings**: none — #442 and #471 both at pending-test. #442's SKILL.md changes will need review during delivery.
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-12 18:31
 
 - **Files scanned**: git log audit (#18 vault-optimize in-progress, QA gaps found)
