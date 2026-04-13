@@ -20,7 +20,7 @@
 
 - **What**: Check for closed issues with non-shipped status labels (status:pending-test, status:in-progress, status:pending-ship on closed issues)
 - **Duration**: 20 cycles (started cycle 350)
-- **Cycles remaining**: 13
-- **Findings so far**: cycle 351 — 32 stale labels batch fixed. Cycle 352 — #270 relapsed, fixed. Cycles 353-357 — clean.
+- **Cycles remaining**: 11
+- **Findings so far**: cycle 351 — 32 stale labels. Cycle 352 — #270 relapsed. Cycle 358 — #589 stale. Rest clean.
 
 ## Quiet cycle counter: 0
