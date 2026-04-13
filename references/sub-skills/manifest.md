@@ -23,6 +23,8 @@ Entry file with includes (the role's own `SOUL.md` sits alongside `CLAUDE.md` in
 3. `common/context-pressure` — Step 1b
 4. `common/resume-working-state` — Step 1c
 5. `common/interval-sync` — Step 1d
+5b. `dev-specific/triage-issues` — Step 2: triage open issues
+5c. `dev-specific/implement-tasks` — Step 3: implement approved tasks
 6. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
 7. `common/improvement-scan` — Quiet-cycle improvement scanning
 8. `common/iteration-log` — Step 4: iteration log format and cleanup

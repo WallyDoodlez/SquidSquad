@@ -325,6 +325,7 @@ If it differs from the interval used when the current cron was created, another 
 If the interval matches, continue silently.
 <!-- /sub-skill: interval-sync -->
 
+<!-- sub-skill: triage-issues -->
 ### Step 2 — Triage Issues
 
 Print: `[🦑 HH:MM:SS] Triaging issues...`
@@ -352,7 +353,9 @@ For each issue that does not have a `status:shipped` or closed state:
    - File a new issue: `python references/scripts/tracker.py create-issue --title "[title]" --body "[description]" --role [OTHER_ROLE] --severity [level] --reporter skill-lead`
    - Comment on the original: `python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Root cause is in [OTHER_ROLE]. Filed #[NEW_NUMBER]. Blocking."`
    - Clear working state.
+<!-- /sub-skill: triage-issues -->
 
+<!-- sub-skill: implement-tasks -->
 ### Step 3 — Implement Tasks
 
 Print: `[🦑 HH:MM:SS] Checking tasks...`
@@ -420,6 +423,7 @@ When picking up a task, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
      ```
    - Clear working state.
 11. If tests fail: fix the failure before changing status.
+<!-- /sub-skill: implement-tasks -->
 
 <!-- sub-skill: boot-remote-agents -->
 ### Step — Boot Remote Agents

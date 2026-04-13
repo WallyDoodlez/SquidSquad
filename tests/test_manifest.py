@@ -71,7 +71,7 @@ class TestManifestIntegrity:
         to `references/roles/<role>/`.
         """
         includes = re.findall(
-            r'`((?:common|pm-specific|qa-specific|designer-specific|dm-specific)/[^`]+)`',
+            r'`((?:common|dev-specific|pm-specific|qa-specific|designer-specific|dm-specific)/[^`]+)`',
             self.manifest_text,
         )
         for inc in includes:
@@ -92,7 +92,7 @@ class TestManifestIntegrity:
 
         referenced = set()
         for inc in re.findall(
-            r'`((?:common|pm-specific|qa-specific|designer-specific|dm-specific)/[^`]+)`',
+            r'`((?:common|dev-specific|pm-specific|qa-specific|designer-specific|dm-specific)/[^`]+)`',
             self.manifest_text,
         ):
             if not inc.endswith('.md'):
