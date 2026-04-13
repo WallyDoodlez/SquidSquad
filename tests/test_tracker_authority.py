@@ -494,3 +494,67 @@ class TestTransitionEnforcement:
         assert excinfo.value.code == 1
         err = capsys.readouterr().err
         assert "--role is required" in err
+
+
+# ---------------------------------------------------------------------------
+# list_issues — label construction and status filtering (#471)
+# ---------------------------------------------------------------------------
+
+
+class TestListIssuesLabelConstruction:
+    """Verify list_issues builds correct label queries, especially --status."""
+
+    def _capture_labels(self, monkeypatch):
+        """Mock _run_list to capture the labels argument passed to gh."""
+        captured = {}
+
+        class FakeResult:
+            returncode = 0
+            stdout = "[]"
+            stderr = ""
+
+        def fake_run(cmd, check=True):
+            # Find --label arg
+            for i, a in enumerate(cmd):
+                if a == "--label" and i + 1 < len(cmd):
+                    captured["labels"] = cmd[i + 1]
+            return FakeResult()
+
+        monkeypatch.setattr(tracker, "_run_list", fake_run)
+        return captured
+
+    def test_no_status_filter(self, monkeypatch):
+        captured = self._capture_labels(monkeypatch)
+        tracker.list_issues("skill", "issue")
+        assert "status:" not in captured["labels"]
+        assert "type:issue" in captured["labels"]
+        assert "role:skill" in captured["labels"]
+
+    def test_status_open_filter(self, monkeypatch):
+        captured = self._capture_labels(monkeypatch)
+        tracker.list_issues("skill", "issue", status="open")
+        assert "status:open" in captured["labels"]
+        assert "type:issue" in captured["labels"]
+
+    def test_status_pending_filter(self, monkeypatch):
+        captured = self._capture_labels(monkeypatch)
+        tracker.list_issues("skill", "issue", status="pending")
+        assert "status:pending" in captured["labels"]
+
+    def test_task_type(self, monkeypatch):
+        captured = self._capture_labels(monkeypatch)
+        tracker.list_issues("skill", "task", status="approved")
+        assert "type:task" in captured["labels"]
+        assert "status:approved" in captured["labels"]
+
+    def test_backward_compat_bug_alias(self, monkeypatch):
+        """'bug' type maps to type:issue via backward-compat alias."""
+        captured = self._capture_labels(monkeypatch)
+        tracker.list_issues("skill", "bug")
+        assert "type:issue" in captured["labels"]
+
+    def test_backward_compat_feature_alias(self, monkeypatch):
+        """'feature' type maps to type:task via backward-compat alias."""
+        captured = self._capture_labels(monkeypatch)
+        tracker.list_issues("skill", "feature", status="approved")
+        assert "type:task" in captured["labels"]
