@@ -45,6 +45,7 @@ Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded
 3. `pm-specific/pr-flow` — Step 6b
 4. `pm-specific/delivery-fallback` — Step 6d
 5. `pm-specific/github-issues` — Step 7b
+5b. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
 6. `common/improvement-scan` — Quiet-cycle improvement scanning
 7. `pm-specific/iteration-log` — Step 8: PM/QA iteration log
 7b. `common/vault-remember` — Step 8b: end-of-cycle vault reflection
@@ -65,6 +66,7 @@ Entry file with includes:
 1. `common/tracker-protocol` — GitHub Issues tracker operations
 2. `common/pull-latest` — Step 1
 3. `qa-specific/verification` — Steps 2-6 (E2E tests, bug investigation, verification, health check)
+3b. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
 4. `common/improvement-scan` — Quiet-cycle improvement scanning
 5. `qa-specific/iteration-log` — Step 7: QA iteration log
 5b. `common/vault-remember` — Step 7b: end-of-cycle vault reflection
@@ -83,6 +85,7 @@ Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardc
 1. `common/tracker-protocol` — GitHub Issues tracker operations
 2. `common/pull-latest` — Step 1
 3. `designer-specific/design-session` — Steps 2-2e (design request scanning, feasibility, interactive session, spec production, rejection handling)
+3b. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
 4. `common/improvement-scan` — Quiet-cycle improvement scanning
 5. `designer-specific/iteration-log` — Step 3: designer iteration log
 5b. `common/vault-remember` — Step 3b: end-of-cycle vault reflection
@@ -104,6 +107,7 @@ Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardc
 3. `dm-specific/issue-triage` — Step 1e: triage bugs assigned to DM
 4. `dm-specific/delivery-packaging` — Steps 2-2c
 4. `dm-specific/version-bumps` — Step 3
+4b. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
 5. `common/improvement-scan` — Quiet-cycle improvement scanning
 6. `dm-specific/iteration-log` — Step 4: DM iteration log
 6b. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
@@ -159,6 +163,7 @@ references/sub-skills/
 │   ├── interval-sync.md               (Step 1d — shared by dev only)
 │   ├── working-state.md               (Working State — shared by dev only)
 │   ├── vault-protocol.md             (Vault operations — shared by all roles)
+│   ├── boot-remote-agents.md         (Boot stalled/missing agents — shared by all roles)
 │   ├── improvement-scan.md           (Quiet-cycle improvement scanning — shared by all roles)
 │   ├── tracker-protocol.md           (GitHub Issues tracker operations — shared by all roles)
 │   ├── iteration-log.md              (Step 4 — iteration log format + cleanup — shared by dev)
