@@ -1,6 +1,6 @@
 # Working State
 
-- **Task**: monitoring pipeline + manual track
+- **Task**: #195 modular sub-skills — planned, awaiting approval
 - **Status**: idle
 - **Phase**:
 - **Started**: 2026-04-12
@@ -20,7 +20,7 @@
 
 - **What**: Check for closed issues with non-shipped status labels (status:pending-test, status:in-progress, status:pending-ship on closed issues)
 - **Duration**: 20 cycles (started cycle 350)
-- **Cycles remaining**: 16
-- **Findings so far**: cycle 351 — 32 stale labels batch fixed. Cycle 352 — #270 relapsed, fixed. Cycles 353-354 — clean.
+- **Cycles remaining**: 15
+- **Findings so far**: cycle 351 — 32 stale labels batch fixed. Cycle 352 — #270 relapsed, fixed. Cycles 353-355 — clean.
 
 ## Quiet cycle counter: 0
