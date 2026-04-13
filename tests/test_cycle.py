@@ -1,0 +1,158 @@
+"""Tests for references/scripts/cycle.py — timestamps, counters, iteration logs, cleanup."""
+
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
+SCRIPTS = Path(__file__).resolve().parent.parent / "references" / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+import cycle
+
+
+FIXED_NOW = datetime(2026, 4, 13, 14, 30, 45)
+
+
+class TestTimestamp:
+    @patch.object(cycle, "_now", return_value=FIXED_NOW)
+    def test_timestamp_format(self, mock_now, capsys):
+        result = cycle.timestamp()
+        assert result == "2026-04-13 14:30"
+        assert capsys.readouterr().out.strip() == "2026-04-13 14:30"
+
+    @patch.object(cycle, "_now", return_value=FIXED_NOW)
+    def test_timestamp_short_format(self, mock_now, capsys):
+        result = cycle.timestamp_short()
+        assert result == "14:30:45"
+        assert capsys.readouterr().out.strip() == "14:30:45"
+
+
+class TestStepMarker:
+    @patch.object(cycle, "_now", return_value=FIXED_NOW)
+    def test_step_marker_format(self, mock_now, capsys):
+        result = cycle.step_marker("Pulling latest...")
+        assert "[🦑 14:30:45]" in result
+        assert "Pulling latest..." in result
+
+
+class TestStatusBar:
+    def test_writes_state_file(self, tmp_path):
+        role_dir = tmp_path / "skill"
+        role_dir.mkdir()
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            result = cycle.status_bar("skill", "implementing", "#5 working...")
+        assert result == "implementing|#5 working..."
+        state = (role_dir / "current-state").read_text(encoding="utf-8")
+        assert state == "implementing|#5 working..."
+
+    def test_empty_description(self, tmp_path):
+        role_dir = tmp_path / "skill"
+        role_dir.mkdir()
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            result = cycle.status_bar("skill", "idle")
+        assert result == "idle|"
+
+
+class TestCounters:
+    def _setup_working_state(self, tmp_path, role, counter=0):
+        role_dir = tmp_path / role
+        role_dir.mkdir(parents=True, exist_ok=True)
+        ws = role_dir / "working-state.md"
+        ws.write_text(
+            f"# Working State\n\n- **Task**: none\n- **Status**: none\n"
+            f"- **Quiet Cycle Counter**: {counter}\n"
+        )
+        return ws
+
+    def test_get_counter(self, tmp_path, capsys):
+        self._setup_working_state(tmp_path, "skill", counter=3)
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            result = cycle.get_counter("skill")
+        assert result == 3
+
+    def test_get_counter_missing_file(self, tmp_path, capsys):
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            result = cycle.get_counter("skill")
+        assert result == 0
+
+    def test_set_counter(self, tmp_path):
+        ws = self._setup_working_state(tmp_path, "skill", counter=2)
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            cycle.set_counter("skill", 5)
+        text = ws.read_text()
+        assert "Quiet Cycle Counter**: 5" in text
+
+    def test_inc_counter(self, tmp_path, capsys):
+        self._setup_working_state(tmp_path, "skill", counter=2)
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            result = cycle.inc_counter("skill")
+        assert result == 3
+
+    def test_reset_counter(self, tmp_path, capsys):
+        self._setup_working_state(tmp_path, "skill", counter=5)
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            result = cycle.reset_counter("skill")
+        assert result == 0
+
+
+class TestLogIteration:
+    @patch.object(cycle, "_now", return_value=FIXED_NOW)
+    def test_creates_log_file(self, mock_now, tmp_path, capsys):
+        role_dir = tmp_path / "skill" / "iterations"
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path), \
+             patch.object(cycle, "REPO_ROOT", tmp_path.parent):
+            path = cycle.log_iteration("skill", 5, bugs="#42", features="none",
+                                       tests="all pass", notes="test note")
+        log = Path(path)
+        assert log.exists()
+        content = log.read_text()
+        assert "Iteration 5" in content
+        assert "#42" in content
+        assert "test note" in content
+        assert "2026-04-13 14:30" in content
+
+    @patch.object(cycle, "_now", return_value=FIXED_NOW)
+    def test_new_param_names(self, mock_now, tmp_path, capsys):
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path), \
+             patch.object(cycle, "REPO_ROOT", tmp_path.parent):
+            path = cycle.log_iteration("skill", 1, issues="#100", tasks="#200")
+        content = Path(path).read_text()
+        assert "#100" in content
+        assert "#200" in content
+
+
+class TestCleanupIterations:
+    def test_keeps_recent_files(self, tmp_path):
+        iter_dir = tmp_path / "skill" / "iterations"
+        iter_dir.mkdir(parents=True)
+        # Create 25 files with staggered mtimes
+        for i in range(25):
+            f = iter_dir / f"iter-{i}.md"
+            f.write_text(f"iter {i}")
+            import os
+            os.utime(f, (time.time() - (25 - i), time.time() - (25 - i)))
+
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            removed = cycle.cleanup_iterations("skill", keep=20)
+        assert removed == 5
+        remaining = list(iter_dir.glob("iter-*.md"))
+        assert len(remaining) == 20
+
+    def test_no_removal_under_limit(self, tmp_path):
+        iter_dir = tmp_path / "skill" / "iterations"
+        iter_dir.mkdir(parents=True)
+        for i in range(5):
+            (iter_dir / f"iter-{i}.md").write_text(f"iter {i}")
+
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            removed = cycle.cleanup_iterations("skill", keep=20)
+        assert removed == 0
+
+    def test_missing_dir_returns_zero(self, tmp_path):
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            removed = cycle.cleanup_iterations("skill")
+        assert removed == 0
