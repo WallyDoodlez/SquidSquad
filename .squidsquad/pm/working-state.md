@@ -25,3 +25,5 @@
 - **Findings so far**: cycle 351 — 32 stale labels. Cycle 352 — #270 relapsed. Cycle 358 — #589 stale. Rest clean.
 
 ## Quiet cycle counter: 0
+
+- **Vault Writes This Cycle**: 1
