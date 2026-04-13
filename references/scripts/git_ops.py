@@ -140,6 +140,42 @@ def branch_switch(name):
     print(f"Switched to: {name}")
 
 
+def branch_exists(name):
+    """Check if a branch exists (local or remote). Prints 'true' or 'false'."""
+    result = _run_list(["git", "rev-parse", "--verify", name], check=False)
+    exists = result.returncode == 0
+    if not exists:
+        # Check remote
+        result = _run_list(["git", "rev-parse", "--verify", f"origin/{name}"], check=False)
+        exists = result.returncode == 0
+    print("true" if exists else "false")
+    return exists
+
+
+def branch_delete(name):
+    """Delete a local branch (and its remote tracking branch)."""
+    # Delete local
+    result = _run_list(["git", "branch", "-d", name], check=False)
+    if result.returncode != 0:
+        # Force delete if not fully merged
+        result = _run_list(["git", "branch", "-D", name], check=False)
+        if result.returncode != 0:
+            print(f"ERROR: could not delete local branch {name}: {result.stderr}", file=sys.stderr)
+            return False
+    # Delete remote tracking
+    _run_list(["git", "push", "origin", "--delete", name], check=False)
+    print(f"Deleted branch: {name}")
+    return True
+
+
+def current_branch():
+    """Print the name of the current branch."""
+    result = _run("git branch --show-current")
+    name = result.stdout.strip()
+    print(name)
+    return name
+
+
 def pr_create(title, body):
     """Create a PR via gh CLI."""
     result = _run_list(
@@ -251,10 +287,11 @@ def commit_state(role, message):
         print("No state changes to commit")
         return False
 
-    # Ensure we're on main
+    # Must be on main — state changes always go to main
     current = _run("git branch --show-current").stdout.strip()
     if current != "main":
-        _run_list(["git", "checkout", "main"])
+        print(f"ERROR: commit-state requires main branch (currently on {current})", file=sys.stderr)
+        return False
 
     # Stage only .squidsquad/ files
     for f in state_files:
@@ -353,6 +390,18 @@ def main():
             print("Usage: git_ops.py commit-state <role> <message>", file=sys.stderr)
             sys.exit(1)
         commit_state(rest[0], " ".join(rest[1:]))
+    elif cmd == "branch-exists":
+        if not rest:
+            print("Usage: git_ops.py branch-exists <name>", file=sys.stderr)
+            sys.exit(1)
+        branch_exists(rest[0])
+    elif cmd == "branch-delete":
+        if not rest:
+            print("Usage: git_ops.py branch-delete <name>", file=sys.stderr)
+            sys.exit(1)
+        branch_delete(rest[0])
+    elif cmd == "current-branch":
+        current_branch()
     elif cmd == "has-changes":
         has_changes()
     elif cmd == "last-hash":
