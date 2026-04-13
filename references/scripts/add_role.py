@@ -5,7 +5,7 @@ Creates a new clone for an agent role, configures it, syncs .local-config
 across all clones, and optionally boots the agent.
 
 Usage:
-    python scripts/add_role.py <role> [--target <path>] [--boot] [--force]
+    python scripts/add_role.py <role> [--target <path>] [--boot] [--force] [--dry-run]
     python scripts/add_role.py --register-existing <role> <path>
     python scripts/add_role.py --list
     python scripts/add_role.py --help
@@ -13,11 +13,13 @@ Usage:
 Examples:
     python scripts/add_role.py qa                    # Clone to ../SquidSquad-qa
     python scripts/add_role.py skill --boot          # Clone and start agent
+    python scripts/add_role.py qa --dry-run          # Preview without changes
     python scripts/add_role.py --register-existing skill /path/to/clone
     python scripts/add_role.py --list                # Show all configured clones
 """
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -27,6 +29,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 SQUIDSQUAD_DIR = REPO_ROOT / ".squidsquad"
 LOCAL_CONFIG = SQUIDSQUAD_DIR / ".local-config"
+LOCK_FILE = SQUIDSQUAD_DIR / ".add-role.lock"
 
 
 def _run(cmd_list, cwd=None, check=True):
@@ -56,12 +59,24 @@ def _get_configured_agents():
         agents_str = get_field("dev-agents")
         agents = [a.strip() for a in agents_str.split(",") if a.strip()]
         agents.append("pm")
-        # Check for DM
         if (SQUIDSQUAD_DIR / "dm").exists():
             agents.append("dm")
         return agents
     except (ImportError, SystemExit):
         return ["pm"]
+
+
+def _validate_role(role):
+    """Check that the role exists in config.md or has a role template."""
+    configured = _get_configured_agents()
+    roles_dir = REPO_ROOT / "references" / "roles"
+    has_template = (roles_dir / role / "CLAUDE.md").exists() or (roles_dir / "dev" / "CLAUDE.md").exists()
+
+    if role in configured:
+        return True
+    if has_template:
+        return True
+    return False
 
 
 def _parse_local_config(config_path=None):
@@ -70,7 +85,6 @@ def _parse_local_config(config_path=None):
     if not path.exists():
         return {}
     result = {}
-    import re
     for line in path.read_text(encoding="utf-8").splitlines():
         m = re.match(r"-\s*\*\*(\w+)\*\*:\s*(.+)", line)
         if m:
@@ -108,8 +122,34 @@ def _sync_local_config(agents_map):
             print(f"  Synced .local-config in {root}")
 
 
-def add_role(role, target=None, boot=False, force=False):
+def _acquire_lock():
+    """Acquire a lock file for concurrency protection. Returns True on success."""
+    try:
+        LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+        # Use exclusive create — fails if file exists
+        fd = LOCK_FILE.open("x")
+        fd.write(str(subprocess.os.getpid()))
+        fd.close()
+        return True
+    except FileExistsError:
+        return False
+
+
+def _release_lock():
+    """Release the lock file."""
+    try:
+        LOCK_FILE.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def add_role(role, target=None, boot=False, force=False, dry_run=False):
     """Clone repo, configure role, sync .local-config, optionally boot."""
+    # Validate role exists
+    if not _validate_role(role):
+        print(f"ERROR: Role '{role}' not found in config.md or references/roles/", file=sys.stderr)
+        return 1
+
     project_name = _get_project_name()
 
     # Default target: sibling directory ProjectName-<role>
@@ -117,6 +157,15 @@ def add_role(role, target=None, boot=False, force=False):
         target = REPO_ROOT.parent / f"{project_name}-{role}"
     else:
         target = Path(target).resolve()
+
+    if dry_run:
+        print(f"[dry-run] Would clone '{role}' to {target}")
+        print(f"[dry-run] Would deploy {role} CLAUDE.md + SOUL.md")
+        print(f"[dry-run] Would generate boot scripts")
+        print(f"[dry-run] Would sync .local-config across all clones")
+        if boot:
+            print(f"[dry-run] Would boot agent via start-{role}.[sh|ps1]")
+        return 0
 
     print(f"Adding role '{role}' at {target}")
 
@@ -126,76 +175,90 @@ def add_role(role, target=None, boot=False, force=False):
         print("Use --force to overwrite or --register-existing to add an existing clone.", file=sys.stderr)
         return 1
 
-    # Check for uncommitted changes
-    status = _run(["git", "status", "--porcelain"], check=False)
-    if status.stdout.strip():
-        print("WARNING: Source repo has uncommitted changes. They will NOT be in the clone.", file=sys.stderr)
+    # Concurrency lock
+    if not _acquire_lock():
+        print("ERROR: Another add_role operation is in progress (lock file exists).", file=sys.stderr)
+        print(f"If this is stale, delete {LOCK_FILE}", file=sys.stderr)
+        return 1
 
-    # Clone with --local for speed (hardlinks)
-    print(f"  Cloning to {target}...")
-    if target.exists() and force:
-        shutil.rmtree(target)
-    _run(["git", "clone", "--local", str(REPO_ROOT), str(target)])
+    try:
+        # Check for uncommitted changes
+        status = _run(["git", "status", "--porcelain"], check=False)
+        if status.stdout.strip():
+            print("WARNING: Source repo has uncommitted changes. They will NOT be in the clone.", file=sys.stderr)
 
-    # Configure the clone: deploy role CLAUDE.md + SOUL.md
-    print(f"  Deploying {role} in clone...")
-    _run(
-        [sys.executable, str(SCRIPT_DIR / "compose.py"), "deploy", role],
-        cwd=target,
-    )
+        # Write .active-role BEFORE cloning (so the clone picks it up)
+        active_role_path = SQUIDSQUAD_DIR / role / ".active-role-pending"
+        # We'll write it in the clone after cloning instead
 
-    # Generate boot scripts
-    print(f"  Generating boot scripts...")
-    _run(
-        [sys.executable, str(SCRIPT_DIR / "compose.py"), "boot", role],
-        cwd=target,
-    )
+        # Clone with --local for speed (hardlinks)
+        print(f"  Cloning to {target}...")
+        if target.exists() and force:
+            shutil.rmtree(target)
+        _run(["git", "clone", "--local", str(REPO_ROOT), str(target)])
 
-    # Write .active-role
-    active_role_path = target / ".squidsquad" / ".active-role"
-    active_role_path.write_text(f"{role}\n", encoding="utf-8")
+        # Write .active-role in the clone FIRST (before deploy/boot)
+        clone_squid = target / ".squidsquad"
+        clone_squid.mkdir(parents=True, exist_ok=True)
+        (clone_squid / ".active-role").write_text(f"{role}\n", encoding="utf-8")
 
-    # Build updated agents map
-    agents_map = _parse_local_config()
-    agents_map[role] = str(target)
-    # Ensure source is in the map too
-    current_roles = _get_configured_agents()
-    for r in current_roles:
-        if r not in agents_map:
-            agents_map[r] = str(REPO_ROOT)
+        # Configure the clone: deploy role CLAUDE.md + SOUL.md
+        print(f"  Deploying {role} in clone...")
+        _run(
+            [sys.executable, str(SCRIPT_DIR / "compose.py"), "deploy", role],
+            cwd=target,
+        )
 
-    # Sync .local-config to ALL clones (including the new one)
-    print(f"  Syncing .local-config across all clones...")
-    _sync_local_config(agents_map)
+        # Generate boot scripts
+        print(f"  Generating boot scripts...")
+        _run(
+            [sys.executable, str(SCRIPT_DIR / "compose.py"), "boot", role],
+            cwd=target,
+        )
 
-    print(f"  Role '{role}' configured at {target}")
+        # Build updated agents map
+        agents_map = _parse_local_config()
+        agents_map[role] = str(target)
+        # Ensure source is in the map too
+        current_roles = _get_configured_agents()
+        for r in current_roles:
+            if r not in agents_map:
+                agents_map[r] = str(REPO_ROOT)
 
-    # Optionally boot
-    if boot:
-        print(f"  Booting {role}...")
-        boot_script = target / ".squidsquad" / f"start-{role}"
-        # Try .ps1 on Windows, .sh elsewhere
+        # Sync .local-config to ALL clones (including the new one)
+        print(f"  Syncing .local-config across all clones...")
+        _sync_local_config(agents_map)
+
+        print(f"  Role '{role}' configured at {target}")
+
+        # Optionally boot
+        if boot:
+            print(f"  Booting {role}...")
+            boot_script = target / ".squidsquad" / f"start-{role}"
+            if sys.platform == "win32":
+                ps1 = Path(f"{boot_script}.ps1")
+                if ps1.exists():
+                    _run(["powershell", "-File", str(ps1)], cwd=target, check=False)
+                else:
+                    print(f"  WARNING: No boot script at {ps1}", file=sys.stderr)
+            else:
+                sh = Path(f"{boot_script}.sh")
+                if sh.exists():
+                    _run(["bash", str(sh)], cwd=target, check=False)
+                else:
+                    print(f"  WARNING: No boot script at {sh}", file=sys.stderr)
+
+        print(f"\nDone. To start the agent manually:")
+        print(f"  cd {target}")
         if sys.platform == "win32":
-            ps1 = Path(f"{boot_script}.ps1")
-            if ps1.exists():
-                _run(["powershell", "-File", str(ps1)], cwd=target, check=False)
-            else:
-                print(f"  WARNING: No boot script at {ps1}", file=sys.stderr)
+            print(f"  .squidsquad\\start-{role}.ps1")
         else:
-            sh = Path(f"{boot_script}.sh")
-            if sh.exists():
-                _run(["bash", str(sh)], cwd=target, check=False)
-            else:
-                print(f"  WARNING: No boot script at {sh}", file=sys.stderr)
+            print(f"  bash .squidsquad/start-{role}.sh")
 
-    print(f"\nDone. To start the agent manually:")
-    print(f"  cd {target}")
-    if sys.platform == "win32":
-        print(f"  .squidsquad\\start-{role}.ps1")
-    else:
-        print(f"  bash .squidsquad/start-{role}.sh")
+        return 0
 
-    return 0
+    finally:
+        _release_lock()
 
 
 def register_existing(role, clone_path):
@@ -211,7 +274,6 @@ def register_existing(role, clone_path):
     agents_map = _parse_local_config()
     agents_map[role] = str(clone_path)
 
-    # Ensure source is in the map
     current_roles = _get_configured_agents()
     for r in current_roles:
         if r not in agents_map:
@@ -251,11 +313,12 @@ def main():
             return 1
         return register_existing(args[1], args[2])
 
-    # Main flow: add_role <role> [--target <path>] [--boot] [--force]
+    # Main flow: add_role <role> [--target <path>] [--boot] [--force] [--dry-run]
     role = args[0]
     target = None
     boot = False
     force = False
+    dry_run = False
 
     i = 1
     while i < len(args):
@@ -268,11 +331,14 @@ def main():
         elif args[i] == "--force":
             force = True
             i += 1
+        elif args[i] == "--dry-run":
+            dry_run = True
+            i += 1
         else:
             print(f"Unknown argument: {args[i]}", file=sys.stderr)
             return 1
 
-    return add_role(role, target=target, boot=boot, force=force)
+    return add_role(role, target=target, boot=boot, force=force, dry_run=dry_run)
 
 
 if __name__ == "__main__":
