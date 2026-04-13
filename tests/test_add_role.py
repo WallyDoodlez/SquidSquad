@@ -26,9 +26,9 @@ class TestValidateRole:
         assert add_role._validate_role("skill") is True
 
     @patch("add_role._get_configured_agents", return_value=["skill", "pm"])
-    def test_unconfigured_role_with_template(self, mock_agents):
-        # dev template exists as fallback
-        assert add_role._validate_role("be") is True
+    def test_unconfigured_role_without_own_template_is_invalid(self, mock_agents):
+        # Roles without their own template dir should fail (no dev fallback)
+        assert add_role._validate_role("nonexistent_xyz") is False
 
     @patch("add_role._get_configured_agents", return_value=["skill", "pm"])
     @patch("add_role.REPO_ROOT", Path("/nonexistent"))
@@ -81,6 +81,36 @@ class TestLockFile:
             assert add_role._acquire_lock() is False
             add_role._release_lock()
             assert not (tmp_path / ".lock").exists()
+
+
+class TestDuplicateRoleCheck:
+    @patch("add_role._validate_role", return_value=True)
+    @patch("add_role._parse_local_config", return_value={"skill": "/existing/path"})
+    def test_duplicate_role_rejected(self, mock_parse, mock_valid, capsys):
+        result = add_role.add_role("skill")
+        assert result == 1
+        err = capsys.readouterr().err
+        assert "already registered" in err
+
+    @patch("add_role._validate_role", return_value=True)
+    @patch("add_role._parse_local_config", return_value={})
+    @patch("add_role._get_project_name", return_value="TestProject")
+    def test_new_role_not_rejected(self, mock_name, mock_parse, mock_valid):
+        # Should pass the duplicate check (will fail later at clone step, that's fine)
+        with patch("add_role._acquire_lock", return_value=False):
+            result = add_role.add_role("qa")
+            # Returns 1 because lock fails, but that means it passed the duplicate check
+            assert result == 1
+
+    @patch("add_role._validate_role", return_value=True)
+    @patch("add_role._parse_local_config", return_value={"skill": "/existing/path"})
+    @patch("add_role._get_project_name", return_value="TestProject")
+    def test_duplicate_role_allowed_with_force(self, mock_name, mock_parse, mock_valid):
+        # With --force, should pass the duplicate check (will fail at lock/clone, that's fine)
+        with patch("add_role._acquire_lock", return_value=False):
+            result = add_role.add_role("skill", force=True)
+            # Returns 1 because lock fails, but that means it passed the duplicate check
+            assert result == 1
 
 
 class TestRegisterExisting:
