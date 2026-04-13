@@ -7,7 +7,7 @@
 # Rules for editing this file (Q-new14): describe engineering work in
 # domain terms. Do not reference internal paths, tracker labels, or scripts.
 
-schema_version: 1
+schema_version: 2
 id: dev
 display_name: Dev
 tagline: Writes code (backend, frontend, or fullstack)
@@ -30,7 +30,7 @@ claude_template: CLAUDE.md
 routes_to: [qa, dm]
 
 # No tool requirements — dev uses whatever the project's stack already has.
-requires_tools: {}
+requires_sub_skills: {}
 
 setup_requirements:
   # Which team shape to install. Default in the software-development preset

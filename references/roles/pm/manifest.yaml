@@ -9,7 +9,7 @@
 #   - Do NOT reference internal file paths, status labels, scripts, or storage
 #     mechanisms. This manifest is the role's public contract.
 
-schema_version: 1
+schema_version: 2
 id: pm
 display_name: PM
 tagline: Coordinates the team and talks to you
@@ -36,7 +36,7 @@ routes_to: [designer, dev, qa, dm]
 
 # PM owns tool configuration on everyone else's behalf, but does not require
 # any tool of its own in v1.
-requires_tools: {}
+requires_sub_skills: {}
 
 # PM has no per-install questions in v1 — alias and presence are implicit.
 setup_requirements: []

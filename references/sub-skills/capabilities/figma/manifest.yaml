@@ -5,7 +5,7 @@
 # frames via a Figma MCP server and shares frame URLs with the human for
 # review.
 
-schema_version: 1
+schema_version: 2
 id: figma
 display_name: Figma
 category: design

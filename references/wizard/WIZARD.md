@@ -490,7 +490,7 @@ install is committed locally and they can push manually.
   deploy` or `wizard.py scaffold`.
 - Do not invent labels, statuses, presets, or roles. Every taxonomy
   choice is in `references/roles/`, `references/presets/`,
-  `references/tools/`, or `references/scripts/tracker.py`. Read them.
+  `references/sub-skills/capabilities/`, or `references/scripts/tracker.py`. Read them.
 - Do not keep the session alive after Step 7.6. You are ephemeral.
 - Do not reference internal file paths, scripts, or status labels when
   talking to the user unless you're inside a troubleshooting block

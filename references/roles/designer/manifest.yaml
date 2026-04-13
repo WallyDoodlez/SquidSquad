@@ -8,7 +8,7 @@
 # Rules for editing this file (Q-new14): describe design work in domain
 # terms only. Do not reference internal paths, status labels, or scripts.
 
-schema_version: 1
+schema_version: 2
 id: designer
 display_name: Designer
 tagline: Produces visual designs (iterates with you directly)
@@ -38,7 +38,7 @@ routes_to: [pm, dm]
 # always-available fallback so the role can install even when no external
 # MCP is configured; richer tools (Figma, Google Stitch) are preferred when
 # available.
-requires_tools:
+requires_sub_skills:
   any_of: [figma, google_stitch, local_html]
 
 setup_requirements:

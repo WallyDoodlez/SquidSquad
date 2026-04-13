@@ -19,6 +19,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 SUB_SKILLS_DIR = REPO_ROOT / "references" / "sub-skills"
+CAPABILITIES_DIR = REPO_ROOT / "references" / "sub-skills" / "capabilities"
 ROLES_DIR = REPO_ROOT / "references" / "roles"
 OUTPUT_FILE = REPO_ROOT / "references" / "agent-instructions.md"
 
@@ -34,6 +35,8 @@ def _resolve_includes(entry_file: Path) -> str:
         inc_match = re.match(r'\s*\{\{include:\s*(.+?)\}\}\s*$', line)
         # {{runtime: path}} — emit a "read at boot" instruction
         rt_match = re.match(r'\s*\{\{runtime:\s*(.+?)\}\}\s*$', line)
+        # {{capability: id}} — inline a capability sub-skill
+        cap_match = re.match(r'\s*\{\{capability:\s*(.+?)\}\}\s*$', line)
 
         if inc_match:
             include_path = inc_match.group(1).strip()
@@ -46,6 +49,17 @@ def _resolve_includes(entry_file: Path) -> str:
             result.append(f"<!-- sub-skill: {sub_skill_name} -->")
             result.append(content)
             result.append(f"<!-- /sub-skill: {sub_skill_name} -->")
+
+        elif cap_match:
+            cap_id = cap_match.group(1).strip()
+            full_path = CAPABILITIES_DIR / cap_id / "sub-skill.md"
+            if not full_path.exists():
+                result.append(f"<!-- ERROR: Missing capability: {cap_id} -->")
+                continue
+            content = full_path.read_text(encoding="utf-8").rstrip()
+            result.append(f"<!-- sub-skill: capability-{cap_id} -->")
+            result.append(content)
+            result.append(f"<!-- /sub-skill: capability-{cap_id} -->")
 
         elif rt_match:
             runtime_path = rt_match.group(1).strip()

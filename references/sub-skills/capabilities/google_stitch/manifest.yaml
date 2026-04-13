@@ -4,7 +4,7 @@
 # and iterate on interface mockups via natural-language prompts and share
 # the resulting artifacts with the human for review.
 
-schema_version: 1
+schema_version: 2
 id: google_stitch
 display_name: Google Stitch
 category: design

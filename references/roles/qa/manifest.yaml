@@ -7,7 +7,7 @@
 # Rules for editing this file (Q-new14): describe verification work in
 # domain terms. Do not reference internal status labels or scripts.
 
-schema_version: 1
+schema_version: 2
 id: qa
 display_name: QA
 tagline: Verifies dev work against acceptance criteria
@@ -31,6 +31,6 @@ claude_template: CLAUDE.md
 # Verified work goes to delivery.
 routes_to: [dm]
 
-requires_tools: {}
+requires_sub_skills: {}
 
 setup_requirements: []

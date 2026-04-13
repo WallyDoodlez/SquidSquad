@@ -7,7 +7,7 @@
 # Rules for editing this file (Q-new14): describe delivery in domain terms.
 # Do not reference internal paths, scripts, or storage mechanisms.
 
-schema_version: 1
+schema_version: 2
 id: dm
 display_name: DM
 tagline: Packages and delivers completed work
@@ -32,7 +32,7 @@ routes_to: []
 # DM needs exactly one delivery tool. `local_delivery` is the always-available
 # fallback; richer delivery channels (email, Slack, Drive, etc.) are added to
 # this list as tools ship in future registries.
-requires_tools:
+requires_sub_skills:
   any_of: [local_delivery]
 
 setup_requirements: []

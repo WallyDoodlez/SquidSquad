@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SquidSquad manifest registry — load, validate, resolve role/tool/preset manifests.
+"""SquidSquad manifest registry — load, validate, resolve role/capability/preset manifests.
 
 Single source of truth for the manifest schema. The wizard, compose.py, and
 statusline all read through this module rather than parsing YAML inline.
@@ -11,18 +11,18 @@ Commands:
     python scripts/manifest.py resolve <preset>   # print the installed role set
     python scripts/manifest.py --help
 
-`<kind>` is one of: roles, tools, presets.
+`<kind>` is one of: roles, capabilities (alias: tools), presets.
 
 Enforced invariants (Q-new14/15/16 + side-effect mitigations from CONTEXT):
-  * schema_version == 1
+  * schema_version in {1, 2}
   * manifest id matches directory name
   * role.iteration_mode in {normal, hitl}
-  * tool.provider in {mcp, builtin, http}; mcp requires mcp_name
-  * role.requires_tools.any_of/all_of ids exist in the tool registry
+  * capability.provider in {mcp, builtin, http}; mcp requires mcp_name
+  * role.requires_sub_skills.any_of/all_of ids exist in the capability registry
   * role.routes_to ids exist in the role registry
-  * tool.applicable_roles ids exist in the role registry
+  * capability.applicable_roles ids exist in the role registry
   * preset.role_install_order ids exist and are NOT always_installed
-  * tool sub_skill + setup.md files exist on disk
+  * capability sub_skill + setup.md files exist on disk
   * manifest free-text fields (tagline, description) are domain-only
     (no references to internal files, statuses, or scripts)
 
@@ -59,7 +59,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 DEFAULT_REFERENCES = REPO_ROOT / "references"
 
-SUPPORTED_SCHEMA_VERSIONS = {1}
+SUPPORTED_SCHEMA_VERSIONS = {1, 2}
 VALID_ITERATION_MODES = {"normal", "hitl"}
 VALID_PROVIDERS = {"mcp", "builtin", "http"}
 VALID_TOOL_CATEGORIES = {
@@ -227,11 +227,13 @@ def validate_role_manifest(path, data):
                         path, f"setup_requirements[{i}].{f}", "missing",
                     ))
 
-    # requires_tools shape (values checked at cross-reference time)
-    rt = data.get("requires_tools")
+    # requires_sub_skills / requires_tools shape (values checked at cross-reference time)
+    # v2 uses requires_sub_skills; v1 uses requires_tools. Accept both for backward compat.
+    rt = data.get("requires_sub_skills") or data.get("requires_tools")
+    rt_field = "requires_sub_skills" if "requires_sub_skills" in data else "requires_tools"
     if rt is not None and not isinstance(rt, dict):
         issues.append(Issue(
-            path, "requires_tools", "must be a mapping (possibly empty)",
+            path, rt_field, "must be a mapping (possibly empty)",
         ))
 
     # Q-new22: soul_template + claude_template files must exist on disk,
@@ -417,7 +419,9 @@ def validate_registry(base_dir=None):
     roles, role_issues = _load_kind(base_dir, "roles", validate_role_manifest)
     issues.extend(role_issues)
 
-    tools, tool_issues = _load_kind(base_dir, "tools", validate_tool_manifest)
+    # v2: capabilities live under sub-skills/capabilities/; fall back to tools/ for v1 compat
+    cap_dir = "sub-skills/capabilities" if (base_dir / "sub-skills" / "capabilities").exists() else "tools"
+    tools, tool_issues = _load_kind(base_dir, cap_dir, validate_tool_manifest)
     issues.extend(tool_issues)
 
     presets, preset_issues = _load_kind(base_dir, "presets", validate_preset_manifest)
@@ -425,9 +429,10 @@ def validate_registry(base_dir=None):
 
     # ----- Cross-reference checks -----
 
-    # Role requires_tools must point at known tools
+    # Role requires_sub_skills (or legacy requires_tools) must point at known capabilities
     for name, data in roles.items():
-        rt = data.get("requires_tools") or {}
+        rt = data.get("requires_sub_skills") or data.get("requires_tools") or {}
+        rt_field = "requires_sub_skills" if "requires_sub_skills" in data else "requires_tools"
         if not isinstance(rt, dict):
             continue
         for kind in ("any_of", "all_of"):
@@ -435,9 +440,9 @@ def validate_registry(base_dir=None):
                 if tool_id not in tools:
                     issues.append(Issue(
                         f"references/roles/{name}/manifest.yaml",
-                        f"requires_tools.{kind}",
-                        f"unknown tool id {tool_id!r}; "
-                        f"known tools: {sorted(tools.keys())}",
+                        f"{rt_field}.{kind}",
+                        f"unknown capability id {tool_id!r}; "
+                        f"known capabilities: {sorted(tools.keys())}",
                     ))
 
     # Role routes_to must point at known roles
@@ -453,12 +458,12 @@ def validate_registry(base_dir=None):
 
     # (routes_to cycle detection intentionally omitted — see module docstring)
 
-    # Tool applicable_roles must point at known roles
+    # Capability applicable_roles must point at known roles
     for name, data in tools.items():
         for role_id in data.get("applicable_roles") or []:
             if role_id not in roles:
                 issues.append(Issue(
-                    f"references/tools/{name}/manifest.yaml",
+                    f"references/sub-skills/capabilities/{name}/manifest.yaml",
                     "applicable_roles",
                     f"unknown role id {role_id!r}",
                 ))
@@ -509,7 +514,8 @@ def resolve_pipeline(preset_id, roles, presets):
 
 _KIND_DIRS = {
     "roles": "roles",
-    "tools": "tools",
+    "capabilities": "sub-skills/capabilities",
+    "tools": "sub-skills/capabilities",  # backward compat alias
     "presets": "presets",
 }
 
@@ -528,7 +534,7 @@ def cmd_validate(_args):
         )
         return 1
     print(
-        f"OK -- {len(roles)} role(s), {len(tools)} tool(s), "
+        f"OK -- {len(roles)} role(s), {len(tools)} capability(ies), "
         f"{len(presets)} preset(s)"
     )
     return 0
@@ -536,7 +542,7 @@ def cmd_validate(_args):
 
 def cmd_list(args):
     if not args:
-        print("Usage: manifest.py list <roles|tools|presets>", file=sys.stderr)
+        print("Usage: manifest.py list <roles|capabilities|presets>", file=sys.stderr)
         return 1
     kind = args[0]
     if kind not in _KIND_DIRS:
@@ -557,7 +563,7 @@ def cmd_list(args):
 def cmd_load(args):
     if len(args) < 2:
         print(
-            "Usage: manifest.py load <roles|tools|presets> <id>",
+            "Usage: manifest.py load <roles|capabilities|presets> <id>",
             file=sys.stderr,
         )
         return 1

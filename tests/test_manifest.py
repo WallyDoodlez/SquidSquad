@@ -79,11 +79,14 @@ class TestManifestIntegrity:
             assert path.exists(), f"Sub-skill file missing: {path}"
 
     def test_no_orphan_sub_skills(self):
-        """Every .md file under sub-skills/ (except manifest.md) is referenced in manifest."""
+        """Every .md file under sub-skills/ (except manifest.md and capabilities/) is referenced in manifest."""
         all_md = set()
         for md in self.sub_skills_dir.rglob("*.md"):
             rel = md.relative_to(self.sub_skills_dir).as_posix()
             if rel == "manifest.md":
+                continue
+            # capabilities/ sub-dir contains tool manifests, not composable sub-skills
+            if rel.startswith("capabilities/"):
                 continue
             all_md.add(rel)
 

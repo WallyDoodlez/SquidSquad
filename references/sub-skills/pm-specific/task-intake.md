@@ -35,6 +35,7 @@ Spawn a research agent (via the Agent tool) that analyzes:
 4. **Integration risks**: how this interacts with other tasks
 5. **Upgrade & migration**: how do existing installs get this task? What config values, files, templates, or behavioral changes need migration steps? What happens if an existing install doesn't upgrade — does it break or gracefully degrade? This section is ALWAYS required — even trivial tasks must state "N/A — no upgrade impact."
 6. **Prior art**: has something similar been done? What can we learn?
+7. **Capability gap analysis**: check the target agent's role manifest for `requires_sub_skills`. For each declared capability, run `python references/scripts/capability_check.py [TARGET_ROLE]` and report any missing capabilities. If a required capability is unavailable, note it as a risk and check for fallback capabilities in the manifest's `any_of` list.
 
 The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-RESEARCH.md`:
 
@@ -64,6 +65,9 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 - **Template changes**: [what changed in agent templates — or "none"]
 - **Upgrade steps**: [what `/squidsquad-upgrade` must do — or "N/A — no upgrade impact"]
 - **Graceful degradation**: [what happens if user doesn't upgrade — or "N/A"]
+
+## Capability Gaps
+- **[capability_id]**: [available / missing] — Provider: [type] — Fallback: [yes/no]
 
 ## Open Questions
 - **Q1**: [question] — **Why**: [consequence of getting wrong]

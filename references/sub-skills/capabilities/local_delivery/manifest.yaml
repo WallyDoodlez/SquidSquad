@@ -5,7 +5,7 @@
 # supporting files) to a local directory alongside a manifest of what
 # was delivered and when. Always available, no account required.
 
-schema_version: 1
+schema_version: 2
 id: local_delivery
 display_name: Local delivery folder
 category: delivery

@@ -4,7 +4,7 @@
 # files on the local filesystem, openable in any browser. No external
 # service, no account, no MCP — always available.
 
-schema_version: 1
+schema_version: 2
 id: local_html
 display_name: Local HTML
 category: design

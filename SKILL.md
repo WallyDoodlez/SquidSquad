@@ -279,7 +279,7 @@ The install wizard uses these mechanical helpers:
 - `references/scripts/wizard.py` — gh prerequisite check, re-run detection,
   repo metadata, project-name validation, config.md writer, filesystem
   scaffolder, label management and migration
-- `references/scripts/manifest.py` — role / tool / preset manifest registry:
+- `references/scripts/manifest.py` — role / capability / preset manifest registry:
   loading, validation, pipeline resolution
 - `references/scripts/compose.py deploy <role>` — per-role CLAUDE.md
   composition (role template + shared sub-skills + placeholder substitution)
@@ -291,13 +291,14 @@ The taxonomy the installer uses is **not** a hardcoded table. It lives in:
 
 - `references/roles/<role>/` — per-role directory containing `manifest.yaml`,
   `SOUL.md`, and `CLAUDE.md` (the entry file for composition)
-- `references/tools/<tool>/` — per-tool registry with `manifest.yaml`,
-  `setup.md` (infrastructure walkthrough), and `sub-skill.md` (agent-facing
-  usage composed into consuming role CLAUDE.md at runtime)
+- `references/sub-skills/capabilities/<capability>/` — per-capability registry
+  with `manifest.yaml`, `setup.md` (infrastructure walkthrough), and
+  `sub-skill.md` (agent-facing usage composed into consuming role CLAUDE.md
+  at runtime)
 - `references/presets/<preset>/` — preset manifests declaring
   `role_install_order` (PM and DM are implicit and always installed)
 
-Adding a new role, tool, or preset is a pure data change: drop in a new
+Adding a new role, capability, or preset is a pure data change: drop in a new
 directory, run the validator, re-deploy. No wizard code change required.
 
 ---

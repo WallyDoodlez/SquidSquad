@@ -84,6 +84,7 @@ Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardc
    (Designer's `SOUL.md` lives at `references/roles/designer/SOUL.md` and is copied verbatim at install time.)
 1. `common/tracker-protocol` — GitHub Issues tracker operations
 2. `common/pull-latest` — Step 1
+2b. `common/capability-check` — Startup capability verification
 3. `designer-specific/design-session` — Steps 2-2e (design request scanning, feasibility, interactive session, spec production, rejection handling)
 3b. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
 4. `common/improvement-scan` — Quiet-cycle improvement scanning
@@ -91,7 +92,7 @@ Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardc
 5b. `common/vault-remember` — Step 3b: end-of-cycle vault reflection
 6. `designer-specific/git-commit` — Step 4: commit/push
 7. `designer-specific/discussion-protocol` — Discussion entry format (designer alias)
-8. `designer-specific/design-tools` — Design tool integration and discovery
+8. `designer-specific/design-capabilities` — Design capability integration and discovery
 9. `designer-specific/issue-filing` — Designer bug/feature filing
 10. `common/vault-protocol` — Vault operations
 11. `designer-specific/file-conventions` — Designer file/directory conventions
@@ -173,7 +174,8 @@ references/sub-skills/
 │   ├── file-conventions.md           (File/directory conventions — shared by dev)
 │   ├── vault-remember.md             (Step 4b — end-of-cycle vault reflection — shared by all roles)
 │   ├── status-line.md                (Status line description — shared by dev)
-│   └── prohibitions.md               (Shared "never do" rules — shared by dev)
+│   ├── prohibitions.md               (Shared "never do" rules — shared by dev)
+│   └── capability-check.md          (Startup capability verification — shared by roles with requires_sub_skills)
 ├── pm-specific/
 │   ├── task-intake.md              (5-phase lifecycle + Open Artifacts)
 │   ├── task-approval.md            (Feature Approval Gate)
@@ -198,7 +200,7 @@ references/sub-skills/
 │   └── git-commit.md                (Step 8 — QA commit/push)
 ├── designer-specific/
 │   ├── design-session.md             (Steps 2-2e — requests, feasibility, session, specs, rejection)
-│   ├── design-tools.md              (Design tool integration and discovery)
+│   ├── design-capabilities.md        (Design capability integration and discovery)
 │   ├── discussion-protocol.md        (Discussion — designer alias)
 │   ├── issue-filing.md                 (Designer bug/feature filing)
 │   ├── file-conventions.md           (Designer file conventions)

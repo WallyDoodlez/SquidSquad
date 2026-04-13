@@ -1,10 +1,10 @@
-"""Unit tests for the manifest registry validator (#328 Phase D).
+"""Unit tests for the manifest registry validator (#328 Phase D, #401 Phase H).
 
 Tests use `tmp_path` fixtures to build synthetic registry layouts and run
 the validator against them — no real files are touched. A single
 "shipped registry" smoke test runs against the actual files in
-references/{roles,tools,presets} to guarantee the v1 manifests stay
-clean as they evolve.
+references/{roles,sub-skills/capabilities,presets} to guarantee the v2
+manifests stay clean as they evolve. v1 backward compatibility is preserved.
 """
 
 import sys
@@ -39,7 +39,7 @@ def _write(path: Path, content: str) -> Path:
 # Tests derive negative variants from this baseline.
 
 VALID_PM = """\
-schema_version: 1
+schema_version: 2
 id: pm
 display_name: PM
 tagline: Coordinates the team and talks to you
@@ -48,14 +48,14 @@ show_in_roster: false
 always_installed: true
 iteration_mode: normal
 routes_to: [dev, dm]
-requires_tools: {}
+requires_sub_skills: {}
 setup_requirements: []
 soul_template: SOUL.md
 claude_template: CLAUDE.md
 """
 
 VALID_DM = """\
-schema_version: 1
+schema_version: 2
 id: dm
 display_name: DM
 tagline: Packages and delivers completed work
@@ -64,7 +64,7 @@ show_in_roster: false
 always_installed: true
 iteration_mode: normal
 routes_to: []
-requires_tools:
+requires_sub_skills:
   any_of: [local_delivery]
 setup_requirements: []
 soul_template: SOUL.md
@@ -72,7 +72,7 @@ claude_template: CLAUDE.md
 """
 
 VALID_DEV = """\
-schema_version: 1
+schema_version: 2
 id: dev
 display_name: Dev
 tagline: Writes code
@@ -81,14 +81,14 @@ show_in_roster: true
 always_installed: false
 iteration_mode: normal
 routes_to: [dm]
-requires_tools: {}
+requires_sub_skills: {}
 setup_requirements: []
 soul_template: SOUL.md
 claude_template: CLAUDE.md
 """
 
 VALID_TOOL_LOCAL_DELIVERY = """\
-schema_version: 1
+schema_version: 2
 id: local_delivery
 display_name: Local delivery
 category: delivery
@@ -99,7 +99,7 @@ sub_skill: sub-skill.md
 """
 
 VALID_PRESET_SOFTWARE_DEV = """\
-schema_version: 1
+schema_version: 2
 id: software-dev
 display_name: Software Development
 description: A software team.
@@ -113,6 +113,8 @@ def _make_valid_registry(base: Path) -> Path:
     Post-Q-new22, each role directory must contain its own SOUL.md and
     CLAUDE.md files at the paths declared by the manifest's
     soul_template / claude_template fields.
+
+    Post-#401, capabilities live under sub-skills/capabilities/ (not tools/).
     """
     ref = base / "references"
     for role in ("pm", "dm", "dev"):
@@ -121,9 +123,9 @@ def _make_valid_registry(base: Path) -> Path:
     _write(ref / "roles" / "pm" / "manifest.yaml", VALID_PM)
     _write(ref / "roles" / "dm" / "manifest.yaml", VALID_DM)
     _write(ref / "roles" / "dev" / "manifest.yaml", VALID_DEV)
-    _write(ref / "tools" / "local_delivery" / "manifest.yaml", VALID_TOOL_LOCAL_DELIVERY)
-    _write(ref / "tools" / "local_delivery" / "sub-skill.md", "# sub-skill\n")
-    _write(ref / "tools" / "local_delivery" / "setup.md", "# setup\n")
+    _write(ref / "sub-skills" / "capabilities" / "local_delivery" / "manifest.yaml", VALID_TOOL_LOCAL_DELIVERY)
+    _write(ref / "sub-skills" / "capabilities" / "local_delivery" / "sub-skill.md", "# sub-skill\n")
+    _write(ref / "sub-skills" / "capabilities" / "local_delivery" / "setup.md", "# setup\n")
     _write(ref / "presets" / "software-dev" / "manifest.yaml", VALID_PRESET_SOFTWARE_DEV)
     return ref
 
@@ -162,7 +164,7 @@ class TestValidRegistry:
         """No manifests at all is a valid (if useless) state."""
         ref = tmp_path / "references"
         (ref / "roles").mkdir(parents=True)
-        (ref / "tools").mkdir(parents=True)
+        (ref / "sub-skills" / "capabilities").mkdir(parents=True)
         (ref / "presets").mkdir(parents=True)
         issues, roles, tools, presets = manifest.validate_registry(ref)
         assert not _errors(issues)
@@ -175,7 +177,7 @@ class TestValidRegistry:
 
 
 class TestShippedRegistry:
-    def test_shipped_v1_registry_is_clean(self):
+    def test_shipped_v2_registry_is_clean(self):
         """The actual references/ registry must pass validation.
 
         This is the critical meta-test — it fails loudly if anyone edits
@@ -187,7 +189,7 @@ class TestShippedRegistry:
             f"Shipped registry has {len(errors)} error(s):\n"
             + "\n".join(str(i) for i in errors)
         )
-        # v1 shape guarantee
+        # v2 shape guarantee
         assert set(roles) >= {"pm", "dm", "designer", "dev", "qa"}
         assert set(tools) >= {"figma", "google_stitch", "local_html", "local_delivery"}
         assert set(presets) >= {"software-dev", "design"}
@@ -210,7 +212,7 @@ class TestRoleSchemaErrors:
     def test_missing_schema_version(self, tmp_path):
         ref = _make_valid_registry(tmp_path)
         _write(ref / "roles" / "dev" / "manifest.yaml",
-               VALID_DEV.replace("schema_version: 1\n", ""))
+               VALID_DEV.replace("schema_version: 2\n", ""))
         issues, *_ = manifest.validate_registry(ref)
         errs = _errors(issues)
         assert any(i.field == "schema_version" and "missing" in i.message
@@ -219,7 +221,7 @@ class TestRoleSchemaErrors:
     def test_unknown_schema_version(self, tmp_path):
         ref = _make_valid_registry(tmp_path)
         _write(ref / "roles" / "dev" / "manifest.yaml",
-               VALID_DEV.replace("schema_version: 1", "schema_version: 99"))
+               VALID_DEV.replace("schema_version: 2", "schema_version: 99"))
         issues, *_ = manifest.validate_registry(ref)
         assert any("unknown schema_version" in i.message for i in _errors(issues))
 
@@ -321,8 +323,8 @@ class TestCrossReferenceErrors:
     def test_role_requires_unknown_tool(self, tmp_path):
         ref = _make_valid_registry(tmp_path)
         bad = VALID_DEV.replace(
-            "requires_tools: {}",
-            "requires_tools:\n  any_of: [ghost_tool]",
+            "requires_sub_skills: {}",
+            "requires_sub_skills:\n  any_of: [ghost_tool]",
         )
         _write(ref / "roles" / "dev" / "manifest.yaml", bad)
         issues, *_ = manifest.validate_registry(ref)
@@ -354,7 +356,7 @@ class TestCrossReferenceErrors:
 
     def test_tool_applicable_role_unknown(self, tmp_path):
         ref = _make_valid_registry(tmp_path)
-        _write(ref / "tools" / "local_delivery" / "manifest.yaml",
+        _write(ref / "sub-skills" / "capabilities" / "local_delivery" / "manifest.yaml",
                VALID_TOOL_LOCAL_DELIVERY.replace("[dm]", "[ghost]"))
         issues, *_ = manifest.validate_registry(ref)
         assert any("ghost" in i.message for i in _errors(issues))
@@ -368,7 +370,7 @@ class TestCrossReferenceErrors:
 class TestToolSchemaErrors:
     def test_mcp_provider_without_mcp_name(self, tmp_path):
         ref = _make_valid_registry(tmp_path)
-        _write(ref / "tools" / "local_delivery" / "manifest.yaml",
+        _write(ref / "sub-skills" / "capabilities" / "local_delivery" / "manifest.yaml",
                VALID_TOOL_LOCAL_DELIVERY.replace("provider: builtin",
                                                   "provider: mcp"))
         issues, *_ = manifest.validate_registry(ref)
@@ -376,7 +378,7 @@ class TestToolSchemaErrors:
 
     def test_invalid_category(self, tmp_path):
         ref = _make_valid_registry(tmp_path)
-        _write(ref / "tools" / "local_delivery" / "manifest.yaml",
+        _write(ref / "sub-skills" / "capabilities" / "local_delivery" / "manifest.yaml",
                VALID_TOOL_LOCAL_DELIVERY.replace("category: delivery",
                                                   "category: quantum"))
         issues, *_ = manifest.validate_registry(ref)
@@ -384,13 +386,13 @@ class TestToolSchemaErrors:
 
     def test_missing_sub_skill_file(self, tmp_path):
         ref = _make_valid_registry(tmp_path)
-        (ref / "tools" / "local_delivery" / "sub-skill.md").unlink()
+        (ref / "sub-skills" / "capabilities" / "local_delivery" / "sub-skill.md").unlink()
         issues, *_ = manifest.validate_registry(ref)
         assert any("sub-skill" in i.message.lower() for i in _errors(issues))
 
     def test_missing_setup_md(self, tmp_path):
         ref = _make_valid_registry(tmp_path)
-        (ref / "tools" / "local_delivery" / "setup.md").unlink()
+        (ref / "sub-skills" / "capabilities" / "local_delivery" / "setup.md").unlink()
         issues, *_ = manifest.validate_registry(ref)
         assert any("setup.md" in i.message for i in _errors(issues))
 
@@ -446,7 +448,7 @@ class TestYamlErrors:
     def test_malformed_yaml_reported(self, tmp_path):
         ref = _make_valid_registry(tmp_path)
         _write(ref / "roles" / "dev" / "manifest.yaml",
-               "schema_version: 1\nid: dev\nbroken: [unclosed")
+               "schema_version: 2\nid: dev\nbroken: [unclosed")
         issues, *_ = manifest.validate_registry(ref)
         errs = _errors(issues)
         assert any("YAML parse error" in i.message for i in errs), errs

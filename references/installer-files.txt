@@ -1,10 +1,10 @@
 # SquidSquad installer file manifest
 # Every file the wizard needs, fetched by npx squidsquad before
 # launching Claude. One path per line, relative to repo root.
-# Total: 113 files
+# Total: 119 files
 #
 # Maintained alongside the wizard — when you add a new role,
-# tool, preset, or sub-skill, add its files here too.
+# capability, preset, or sub-skill, add its files here too.
 
 SKILL.md
 references/wizard/WIZARD.md
@@ -21,6 +21,7 @@ references/scripts/vault_check.py
 references/scripts/vault_optimize.py
 references/scripts/vault_remember.py
 references/scripts/wizard.py
+references/scripts/capability_check.py
 references/roles/designer/CLAUDE.md
 references/roles/designer/manifest.yaml
 references/roles/designer/SOUL.md
@@ -36,18 +37,18 @@ references/roles/pm/SOUL.md
 references/roles/qa/CLAUDE.md
 references/roles/qa/manifest.yaml
 references/roles/qa/SOUL.md
-references/tools/figma/manifest.yaml
-references/tools/figma/setup.md
-references/tools/figma/sub-skill.md
-references/tools/google_stitch/manifest.yaml
-references/tools/google_stitch/setup.md
-references/tools/google_stitch/sub-skill.md
-references/tools/local_delivery/manifest.yaml
-references/tools/local_delivery/setup.md
-references/tools/local_delivery/sub-skill.md
-references/tools/local_html/manifest.yaml
-references/tools/local_html/setup.md
-references/tools/local_html/sub-skill.md
+references/sub-skills/capabilities/figma/manifest.yaml
+references/sub-skills/capabilities/figma/setup.md
+references/sub-skills/capabilities/figma/sub-skill.md
+references/sub-skills/capabilities/google_stitch/manifest.yaml
+references/sub-skills/capabilities/google_stitch/setup.md
+references/sub-skills/capabilities/google_stitch/sub-skill.md
+references/sub-skills/capabilities/local_delivery/manifest.yaml
+references/sub-skills/capabilities/local_delivery/setup.md
+references/sub-skills/capabilities/local_delivery/sub-skill.md
+references/sub-skills/capabilities/local_html/manifest.yaml
+references/sub-skills/capabilities/local_html/setup.md
+references/sub-skills/capabilities/local_html/sub-skill.md
 references/presets/design/manifest.yaml
 references/presets/software-dev/manifest.yaml
 references/sub-skills/common/boot-remote-agents.md
@@ -68,9 +69,10 @@ references/sub-skills/common/vault-protocol.md
 references/sub-skills/common/vault-optimize.md
 references/sub-skills/common/vault-remember.md
 references/sub-skills/common/working-state.md
+references/sub-skills/common/capability-check.md
 references/sub-skills/designer-specific/issue-filing.md
 references/sub-skills/designer-specific/design-session.md
-references/sub-skills/designer-specific/design-tools.md
+references/sub-skills/designer-specific/design-capabilities.md
 references/sub-skills/designer-specific/discussion-protocol.md
 references/sub-skills/designer-specific/file-conventions.md
 references/sub-skills/designer-specific/git-commit.md
