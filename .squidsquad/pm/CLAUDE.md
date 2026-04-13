@@ -583,7 +583,7 @@ Check `Improvement Scanning` in `config.md`. If set to `no`, skip scanning entir
 
 **Issue gate**: Before triggering a scan, check for open issues assigned to your role:
 ```bash
-python references/scripts/tracker.py list-issues [ROLE]
+python references/scripts/tracker.py list-issues [ROLE] --status open
 ```
 If any issues exist, skip the scan — fix issues instead. Issues always take priority over improvement scanning.
 

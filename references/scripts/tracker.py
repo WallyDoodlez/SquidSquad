@@ -646,9 +646,9 @@ def main():
 
     elif cmd in ("list-issues", "list-bugs"):
         if not pos:
-            print(f"Usage: tracker.py {cmd} <role>", file=sys.stderr)
+            print(f"Usage: tracker.py {cmd} <role> [--status <s>]", file=sys.stderr)
             sys.exit(1)
-        list_issues(pos[0], "issue")
+        list_issues(pos[0], "issue", opts.get("status"))
 
     elif cmd in ("list-tasks", "list-features"):
         if not pos:

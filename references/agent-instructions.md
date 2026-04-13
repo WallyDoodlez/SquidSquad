@@ -331,7 +331,7 @@ Print: `[🦑 HH:MM:SS] Triaging issues...`
 Query GitHub Issues for open issues assigned to your role:
 
 ```bash
-python references/scripts/tracker.py list-issues [ROLE]
+python references/scripts/tracker.py list-issues [ROLE] --status open
 ```
 
 For each issue that does not have a `status:shipped` or closed state:
@@ -359,7 +359,7 @@ Print: `[🦑 HH:MM:SS] Checking tasks...`
 **Issue gate**: Before picking up any task work, check for open issues assigned to your role:
 
 ```bash
-python references/scripts/tracker.py list-issues [ROLE]
+python references/scripts/tracker.py list-issues [ROLE] --status open
 ```
 
 If any open issues exist (non-empty result), **skip all task work this cycle** — issues always take priority. Print: `[🦑 HH:MM:SS] Open issues exist — skipping task pickup.` and proceed to Step 4.
@@ -462,7 +462,7 @@ Check `Improvement Scanning` in `config.md`. If set to `no`, skip scanning entir
 
 **Issue gate**: Before triggering a scan, check for open issues assigned to your role:
 ```bash
-python references/scripts/tracker.py list-issues [ROLE]
+python references/scripts/tracker.py list-issues [ROLE] --status open
 ```
 If any issues exist, skip the scan — fix issues instead. Issues always take priority over improvement scanning.
 
