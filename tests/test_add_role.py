@@ -63,8 +63,9 @@ class TestWriteLocalConfig:
 
 class TestDryRun:
     @patch("add_role._validate_role", return_value=True)
+    @patch("add_role._parse_local_config", return_value={})
     @patch("add_role._get_project_name", return_value="TestProject")
-    def test_dry_run_makes_no_changes(self, mock_name, mock_valid, capsys):
+    def test_dry_run_makes_no_changes(self, mock_name, mock_parse, mock_valid, capsys):
         result = add_role.add_role("qa", dry_run=True)
         assert result == 0
         out = capsys.readouterr().out
