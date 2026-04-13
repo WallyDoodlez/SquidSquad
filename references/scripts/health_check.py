@@ -297,7 +297,7 @@ def main():
         if use_json:
             print(json.dumps({
                 "agents": [],
-                "all_healthy": True,
+                "all_healthy": False,
                 "warning": ".local-config not found — no cross-clone paths configured",
             }, indent=2))
         else:
@@ -307,7 +307,7 @@ def main():
                 "Health check requires .local-config with agent clone paths.\n"
                 "Format: - **role**: /absolute/path/to/clone"
             )
-        return 0  # Not an error — just nothing to check
+        return 1  # No agents checked — surface as non-healthy
 
     report = check_all_agents()
 
