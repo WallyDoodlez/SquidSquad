@@ -1,5 +1,11 @@
 # DM Scan History
 
+## Scan — 2026-04-13 11:01
+
+- **Files scanned**: git log audit (#5 add_role.py in progress, #246 shipped, #347/#462 planned)
+- **Findings**: none — #5 not shipped yet, rest already handled
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-13 09:01
 
 - **Files scanned**: git log audit (#246 PR workflow planned, PM stale label monitor, skill scan clean)
