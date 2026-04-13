@@ -24,4 +24,4 @@
 - #462 — Adaptive setup questions
 - #467 — Pluggable tracker backend (post-v1, low)
 
-## Quiet cycle counter: 1
+## Quiet cycle counter: 2
