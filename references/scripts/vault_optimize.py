@@ -5,12 +5,13 @@ Covers 5 areas: prune (auto-archive stale+orphan), consolidate candidates,
 reindex (links), confidence decay, relevance scoring.
 
 Usage:
-    python scripts/vault_optimize.py run [--dry-run]     # Full optimize pass
-    python scripts/vault_optimize.py prune [--dry-run]   # Archive stale+orphan notes
-    python scripts/vault_optimize.py decay [--dry-run]    # Confidence decay
-    python scripts/vault_optimize.py reindex              # Rebuild links index
-    python scripts/vault_optimize.py relevance            # Update relevance scores
-    python scripts/vault_optimize.py pending-count        # Count pending questions
+    python scripts/vault_optimize.py full-sweep [--dry-run]       # Full optimize pass
+    python scripts/vault_optimize.py prune-scan [--dry-run]       # Archive stale+orphan notes
+    python scripts/vault_optimize.py consolidate-scan [--dry-run]  # Detect merge candidates
+    python scripts/vault_optimize.py decay-apply [--dry-run]       # Confidence decay
+    python scripts/vault_optimize.py reindex                       # Rebuild links index
+    python scripts/vault_optimize.py relevance-report              # Update relevance scores
+    python scripts/vault_optimize.py pending-count                 # Count pending questions
     python scripts/vault_optimize.py add-question --agent <r> --note <path> --question <q>
     python scripts/vault_optimize.py --help
 
@@ -23,9 +24,10 @@ Exit codes:
 import json
 import os
 import re
-import shutil
+import subprocess
 import sys
 import time
+from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -127,12 +129,64 @@ def _release_lock():
         pass
 
 
+def _check_guards():
+    """Check lock file and vault threshold. Returns (ok, reason) tuple."""
+    if not _is_config_enabled():
+        return False, "Vault optimize disabled in config.md"
+    note_count = _count_notes()
+    if note_count < MIN_VAULT_SIZE:
+        return False, f"Vault too small ({note_count} notes, minimum {MIN_VAULT_SIZE})"
+    if not _acquire_lock():
+        return False, "Optimize lock held"
+    return True, None
+
+
+def _git_mv(src, dest):
+    """Move a file using git mv to preserve history. Ensures dest parent exists."""
+    dest_dir = Path(dest).parent
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        ["git", "mv", str(src), str(dest)],
+        capture_output=True, encoding="utf-8",
+        cwd=str(REPO_ROOT),
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"git mv failed: {result.stderr.strip()}")
+
+
+def _rewrite_wikilinks_after_archive(note_name, notes):
+    """Find all notes linking to note_name and append an archived comment."""
+    for rel, path in notes.items():
+        text = path.read_text(encoding="utf-8")
+        if f"[[{note_name}]]" in text:
+            comment = f"\n<!-- archived: [[{note_name}]] moved to archives/ -->"
+            if comment.strip() not in text:
+                path.write_text(text + comment, encoding="utf-8")
+
+
+def _extract_keywords(text):
+    """Extract simple keyword set from note body for consolidation analysis."""
+    body = text
+    if text.startswith("---"):
+        end = text.find("---", 3)
+        if end != -1:
+            body = text[end + 3:]
+    # Extract words 4+ chars, lowercased, skip common stopwords
+    stopwords = {"that", "this", "with", "from", "have", "been", "were", "will",
+                 "they", "their", "them", "than", "into", "also", "when", "what",
+                 "which", "about", "would", "could", "should", "there", "these",
+                 "those", "each", "other", "some", "more", "very", "just", "only"}
+    words = re.findall(r"[a-zA-Z]{4,}", body.lower())
+    return {w for w in words if w not in stopwords}
+
+
 # ---------------------------------------------------------------------------
 # Prune — auto-archive stale+orphan galaxy notes
 # ---------------------------------------------------------------------------
 
 def prune(dry_run=False):
-    """Archive galaxy notes that are both stale (>60 days) and orphaned (no inbound links)."""
+    """Archive galaxy notes that are both stale (>60 days) and orphaned (no inbound links).
+    Also archives notes with status: superseded regardless of staleness/orphan status."""
     notes = _get_all_notes()
     cutoff = datetime.now() - timedelta(days=STALE_DAYS)
     archived = []
@@ -149,48 +203,131 @@ def prune(dry_run=False):
         if not rel.startswith("galaxy/"):
             continue
 
-        # Grace period: never prune notes created today
-        try:
-            mtime = datetime.fromtimestamp(path.stat().st_mtime)
-            if mtime.date() == datetime.now().date():
-                continue
-        except Exception:
-            continue
-
         text = path.read_text(encoding="utf-8")
         fm = _parse_frontmatter(text)
 
-        # Check staleness
-        updated = fm.get("updated", "")
-        if not updated:
-            continue
-        try:
-            updated_date = datetime.strptime(updated, "%Y-%m-%d")
-        except ValueError:
-            continue
-        if updated_date >= cutoff:
+        # Grace period: use created frontmatter date instead of filesystem mtime
+        created = fm.get("created", "")
+        if created:
+            try:
+                created_date = datetime.strptime(created, "%Y-%m-%d")
+                if created_date.date() == datetime.now().date():
+                    continue
+            except ValueError:
+                pass
+        else:
+            # Fallback: skip if no created date available
             continue
 
-        # Check orphan status
         note_name = path.stem
-        if note_name in inbound:
-            continue  # Has inbound links — not orphan
+        should_archive = False
 
-        # Check status — only archive active notes
-        if fm.get("status", "").strip() != "active":
+        # Superseded notes are archived regardless of staleness/orphan
+        if fm.get("status", "").strip() == "superseded":
+            should_archive = True
+        else:
+            # Check staleness
+            updated = fm.get("updated", "")
+            if not updated:
+                continue
+            try:
+                updated_date = datetime.strptime(updated, "%Y-%m-%d")
+            except ValueError:
+                continue
+            if updated_date >= cutoff:
+                continue
+
+            # Check orphan status
+            if note_name in inbound:
+                continue  # Has inbound links — not orphan
+
+            # Check status — only archive active notes
+            if fm.get("status", "").strip() != "active":
+                continue
+
+            should_archive = True
+
+        if not should_archive:
             continue
 
-        # This note is stale + orphan + active → archive
+        # This note should be archived
         if dry_run:
             archived.append(f"[dry-run] would archive: {rel}")
         else:
-            dest = VAULT_DIR / "archives" / path.name
+            archives_dir = VAULT_DIR / "archives"
+            archives_dir.mkdir(parents=True, exist_ok=True)
+            dest = archives_dir / path.name
             if dest.exists():
-                dest = VAULT_DIR / "archives" / f"{path.stem}-{int(time.time())}{path.suffix}"
-            shutil.move(str(path), str(dest))
+                dest = archives_dir / f"{path.stem}-{int(time.time())}{path.suffix}"
+            _git_mv(str(path), str(dest))
+            _rewrite_wikilinks_after_archive(note_name, notes)
             archived.append(f"archived: {rel} -> archives/{dest.name}")
 
     return archived
+
+
+# ---------------------------------------------------------------------------
+# Consolidate scan — detect merge candidates among same-type galaxy notes
+# ---------------------------------------------------------------------------
+
+def consolidate_scan(dry_run=False):
+    """Detect merge candidates among same-type galaxy notes via keyword overlap.
+    Outputs candidates as pending questions — does NOT auto-merge."""
+    notes = _get_all_notes()
+    candidates = []
+
+    # Group galaxy notes by type (from frontmatter)
+    type_groups = {}
+    note_keywords = {}
+    for rel, path in notes.items():
+        if not rel.startswith("galaxy/"):
+            continue
+        text = path.read_text(encoding="utf-8")
+        fm = _parse_frontmatter(text)
+        note_type = fm.get("type", "").strip()
+        if not note_type:
+            continue
+        type_groups.setdefault(note_type, []).append((rel, path))
+        note_keywords[rel] = _extract_keywords(text)
+
+    # For each type group, compare keyword overlap between pairs
+    for note_type, group in type_groups.items():
+        if len(group) < 2:
+            continue
+        for i in range(len(group)):
+            for j in range(i + 1, len(group)):
+                rel_a, path_a = group[i]
+                rel_b, path_b = group[j]
+                kw_a = note_keywords.get(rel_a, set())
+                kw_b = note_keywords.get(rel_b, set())
+                if not kw_a or not kw_b:
+                    continue
+                overlap = kw_a & kw_b
+                union = kw_a | kw_b
+                if not union:
+                    continue
+                jaccard = len(overlap) / len(union)
+                # Threshold: 40% keyword overlap suggests merge candidate
+                if jaccard >= 0.4:
+                    candidate = {
+                        "type": note_type,
+                        "note_a": rel_a,
+                        "note_b": rel_b,
+                        "overlap_ratio": round(jaccard, 2),
+                        "shared_keywords": sorted(list(overlap))[:10],
+                    }
+                    candidates.append(candidate)
+                    if not dry_run:
+                        # Add as pending question
+                        question = (
+                            f"Consolidation candidate: {rel_a} and {rel_b} "
+                            f"(type={note_type}, overlap={jaccard:.0%}). "
+                            f"Shared keywords: {', '.join(sorted(list(overlap))[:5])}. "
+                            f"Should these notes be merged?"
+                        )
+                        add_question("vault-optimize", rel_a, question)
+
+    return candidates
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +335,8 @@ def prune(dry_run=False):
 # ---------------------------------------------------------------------------
 
 def decay(dry_run=False):
-    """Decay confidence from high→medium→low based on staleness."""
+    """Decay confidence from high->medium->low based on staleness.
+    Skips notes tagged 'evergreen'. Appends changelog entry on decay."""
     notes = _get_all_notes()
     cutoff_medium = datetime.now() - timedelta(days=STALE_DAYS)
     cutoff_low = datetime.now() - timedelta(days=STALE_DAYS * 2)
@@ -207,6 +345,11 @@ def decay(dry_run=False):
     for rel, path in notes.items():
         text = path.read_text(encoding="utf-8")
         fm = _parse_frontmatter(text)
+
+        # Skip evergreen notes
+        tags = fm.get("tags", "")
+        if "evergreen" in tags:
+            continue
 
         updated = fm.get("updated", "")
         confidence = fm.get("confidence", "").strip()
@@ -228,9 +371,22 @@ def decay(dry_run=False):
             if dry_run:
                 decayed.append(f"[dry-run] {rel}: {confidence} -> {new_confidence}")
             else:
-                new_text = text.replace(f"confidence: {confidence}", f"confidence: {new_confidence}", 1)
                 today = datetime.now().strftime("%Y-%m-%d")
+                new_text = text.replace(f"confidence: {confidence}", f"confidence: {new_confidence}", 1)
                 new_text = re.sub(r"updated: \S+", f"updated: {today}", new_text, count=1)
+
+                # Append changelog entry
+                changelog_entry = f"- {today} — Confidence decayed by vault-optimize (staleness)."
+                if "## Changelog" in new_text:
+                    new_text = new_text.replace(
+                        "## Changelog",
+                        f"## Changelog\n{changelog_entry}",
+                        1,
+                    )
+                else:
+                    # Add a Changelog section at the end
+                    new_text = new_text.rstrip() + f"\n\n## Changelog\n{changelog_entry}\n"
+
                 path.write_text(new_text, encoding="utf-8")
                 decayed.append(f"{rel}: {confidence} -> {new_confidence}")
 
@@ -353,7 +509,8 @@ def add_question(agent, note_path, question):
 # ---------------------------------------------------------------------------
 
 def run_optimize(dry_run=False):
-    """Run all optimization steps in order."""
+    """Run all optimization steps in order:
+    relevance -> prune-scan -> consolidate-scan -> decay-apply -> reindex (last)."""
     if not _is_config_enabled():
         print("Vault optimize disabled in config.md")
         return {"skipped": True, "reason": "disabled"}
@@ -369,10 +526,12 @@ def run_optimize(dry_run=False):
 
     try:
         results = {}
+        # Execution order: relevance -> prune -> consolidate -> decay -> reindex
+        results["relevance"] = len(relevance()) if not dry_run else 0
         results["pruned"] = prune(dry_run=dry_run)
+        results["consolidate_candidates"] = consolidate_scan(dry_run=dry_run)
         results["decayed"] = decay(dry_run=dry_run)
         results["reindexed"] = reindex() if not dry_run else []
-        results["relevance"] = len(relevance()) if not dry_run else 0
         results["pending_questions"] = pending_count()
         return results
     finally:
@@ -392,31 +551,72 @@ def main():
     cmd = args[0]
     dry_run = "--dry-run" in args
 
-    if cmd == "run":
+    if cmd == "full-sweep":
         results = run_optimize(dry_run=dry_run)
         print(json.dumps(results, indent=2, default=str))
 
-    elif cmd == "prune":
-        archived = prune(dry_run=dry_run)
-        for a in archived:
-            print(a)
-        print(f"Pruned: {len(archived)} notes")
+    elif cmd == "prune-scan":
+        ok, reason = _check_guards()
+        if not ok:
+            print(reason)
+            return 0
+        try:
+            archived = prune(dry_run=dry_run)
+            for a in archived:
+                print(a)
+            print(f"Pruned: {len(archived)} notes")
+        finally:
+            _release_lock()
 
-    elif cmd == "decay":
-        decayed = decay(dry_run=dry_run)
-        for d in decayed:
-            print(d)
-        print(f"Decayed: {len(decayed)} notes")
+    elif cmd == "consolidate-scan":
+        ok, reason = _check_guards()
+        if not ok:
+            print(reason)
+            return 0
+        try:
+            candidates = consolidate_scan(dry_run=dry_run)
+            for c in candidates:
+                print(json.dumps(c))
+            print(f"Consolidation candidates: {len(candidates)}")
+        finally:
+            _release_lock()
+
+    elif cmd == "decay-apply":
+        ok, reason = _check_guards()
+        if not ok:
+            print(reason)
+            return 0
+        try:
+            decayed = decay(dry_run=dry_run)
+            for d in decayed:
+                print(d)
+            print(f"Decayed: {len(decayed)} notes")
+        finally:
+            _release_lock()
 
     elif cmd == "reindex":
-        updated = reindex()
-        for u in updated:
-            print(u)
-        print(f"Reindexed: {len(updated)} notes")
+        ok, reason = _check_guards()
+        if not ok:
+            print(reason)
+            return 0
+        try:
+            updated = reindex()
+            for u in updated:
+                print(u)
+            print(f"Reindexed: {len(updated)} notes")
+        finally:
+            _release_lock()
 
-    elif cmd == "relevance":
-        scores = relevance()
-        print(json.dumps(scores, indent=2))
+    elif cmd == "relevance-report":
+        ok, reason = _check_guards()
+        if not ok:
+            print(reason)
+            return 0
+        try:
+            scores = relevance()
+            print(json.dumps(scores, indent=2))
+        finally:
+            _release_lock()
 
     elif cmd == "pending-count":
         print(pending_count())
