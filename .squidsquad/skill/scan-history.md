@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-13 17:31
+
+- **Files scanned**: references/scripts/manifest.py, references/scripts/diagnostics.py, references/scripts/config.py
+- **Findings**: none (all 3 clean — proper validation, error handling, YAML safe_load, config redaction)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-13 14:32
 
 - **Files scanned**: references/scripts/triage.py, references/scripts/health_check.py, references/scripts/capability_check.py
