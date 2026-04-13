@@ -230,14 +230,14 @@ if [ "$CACHE_STALE" = true ]; then
     for A in $AGENTS_LIST; do
       A=$(echo "$A" | tr -d '[:space:]')
       [ -z "$A" ] && continue
-      BUGS=$(timeout 5 gh issue list --label "type:bug,role:$A" --state open --json number --limit 100 2>/dev/null | grep -c '"number"') || true
-      FEATS=$(timeout 5 gh issue list --label "type:feature,role:$A,status:approved" --state open --json number --limit 100 2>/dev/null | grep -c '"number"') || true
-      FEATS_IP=$(timeout 5 gh issue list --label "type:feature,role:$A,status:in-progress" --state open --json number --limit 100 2>/dev/null | grep -c '"number"') || true
-      PSHIP=$(timeout 5 gh issue list --label "type:feature,role:$A,status:pending-ship" --state open --json number --limit 100 2>/dev/null | grep -c '"number"') || true
+      BUGS=$(timeout 5 gh issue list --label "type:issue,role:$A" --state open --json number --limit 100 2>/dev/null | grep -c '"number"') || true
+      FEATS=$(timeout 5 gh issue list --label "type:task,role:$A,status:approved" --state open --json number --limit 100 2>/dev/null | grep -c '"number"') || true
+      FEATS_IP=$(timeout 5 gh issue list --label "type:task,role:$A,status:in-progress" --state open --json number --limit 100 2>/dev/null | grep -c '"number"') || true
+      PSHIP=$(timeout 5 gh issue list --label "type:task,role:$A,status:pending-ship" --state open --json number --limit 100 2>/dev/null | grep -c '"number"') || true
       echo "${A}:bugs=${BUGS:-0}:feats=$(( ${FEATS:-0} + ${FEATS_IP:-0} )):pship=${PSHIP:-0}" >> "$CACHE_TMP"
     done
     # PM planning: check for features in planning status
-    PLANNING=$(timeout 5 gh issue list --label "type:feature,status:planning" --state open --json number,title --limit 1 2>/dev/null | grep -oE '"number":[0-9]+' | head -1 | grep -oE '[0-9]+') || true
+    PLANNING=$(timeout 5 gh issue list --label "type:task,status:planning" --state open --json number,title --limit 1 2>/dev/null | grep -oE '"number":[0-9]+' | head -1 | grep -oE '[0-9]+') || true
     echo "pm:planning=${PLANNING:-}" >> "$CACHE_TMP"
     mv -f "$CACHE_TMP" "$BACKLOG_CACHE" 2>/dev/null
   ) &

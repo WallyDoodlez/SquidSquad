@@ -117,17 +117,25 @@ def reset_counter(role):
     return 0
 
 
-def log_iteration(role, n, bugs="none", features="none", tests="n/a", notes=""):
-    """Create an iteration log file."""
+def log_iteration(role, n, bugs="none", features="none", tests="n/a", notes="",
+                   issues=None, tasks=None):
+    """Create an iteration log file.
+
+    Accepts both old (bugs/features) and new (issues/tasks) parameter names.
+    """
     ts = _now().strftime("%Y-%m-%d %H:%M")
     iter_dir = SQUIDSQUAD_DIR / role / "iterations"
     iter_dir.mkdir(parents=True, exist_ok=True)
 
+    # Support both old and new parameter names
+    issues_val = issues if issues is not None else bugs
+    tasks_val = tasks if tasks is not None else features
+
     content = f"""# {role.upper()} Iteration {n}
 
 - **Date**: {ts}
-- **Bugs Fixed**: {bugs}
-- **Features Progressed**: {features}
+- **Issues Fixed**: {issues_val}
+- **Tasks Progressed**: {tasks_val}
 - **Tests**: {tests}
 - **Notes**: {notes or 'none'}
 """

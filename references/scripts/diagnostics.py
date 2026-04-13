@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""SquidSquad self-diagnostic logging and bug report generation.
+"""SquidSquad self-diagnostic logging and issue report generation.
 
-Local anomaly detection log + upstream bug report helper.
+Local anomaly detection log + upstream issue report helper.
 
 Usage:
     python scripts/diagnostics.py log <severity> <source> <message> [--context <json>]
@@ -132,7 +132,7 @@ def is_public_repo():
 
 
 def generate_report():
-    """Generate a bug report template with diagnostic context."""
+    """Generate an issue report template with diagnostic context."""
     try:
         version = get_field("version")
     except SystemExit:
@@ -157,7 +157,7 @@ def generate_report():
             diag_text += json.dumps(e) + "\n"
         diag_text += "```\n"
 
-    report = f"""## Bug Report — SquidSquad
+    report = f"""## Issue Report — SquidSquad
 
 ### Environment
 - **SquidSquad Version**: {version}
@@ -165,7 +165,7 @@ def generate_report():
 - **Claude Code Version**: (fill in)
 
 ### Description
-(Describe the bug — what happened, what you expected)
+(Describe the issue — what happened, what you expected)
 
 ### Steps to Reproduce
 1. (step 1)
@@ -178,7 +178,7 @@ def generate_report():
 ```
 {diag_text}
 ---
-*Filed via /squidsquad-bug*
+*Filed via /squidsquad-issue*
 """
     print(report)
     return report

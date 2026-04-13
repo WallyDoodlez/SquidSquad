@@ -78,7 +78,7 @@ references/sub-skills/designer-specific/iteration-log.md
 references/sub-skills/designer-specific/prohibitions.md
 references/sub-skills/designer-specific/status-line.md
 references/sub-skills/dm-specific/issue-filing.md
-references/sub-skills/dm-specific/bug-triage.md
+references/sub-skills/dm-specific/issue-triage.md
 references/sub-skills/dm-specific/delivery-packaging.md
 references/sub-skills/dm-specific/discussion-protocol.md
 references/sub-skills/dm-specific/file-conventions.md

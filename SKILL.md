@@ -380,9 +380,9 @@ Original monolithic `bugs.md` and `features.md` files with inline fields.
 
 ---
 
-## `/squidsquad-bug` — Report a SquidSquad Bug
+## `/squidsquad-issue` — Report a SquidSquad Issue
 
-When the user says `/squidsquad-bug` (or "report a bug", "squidsquad bug"), collect a bug report and file it to the upstream SquidSquad repo. Works from any agent session.
+When the user says `/squidsquad-issue` (or "report an issue", "squidsquad issue"), collect an issue report and file it to the upstream SquidSquad repo. Works from any agent session.
 
 **Instructions:**
 

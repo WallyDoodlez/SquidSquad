@@ -802,7 +802,7 @@ _CATEGORY_DESCRIPTIONS = {
     "type": "Work type classification",
     "status": "Workflow state",
     "priority": "Priority level",
-    "severity": "Bug severity",
+    "severity": "Issue severity",
     "role": "Owning role",
     "design": "Design workflow state",
     "special": "Special tag",

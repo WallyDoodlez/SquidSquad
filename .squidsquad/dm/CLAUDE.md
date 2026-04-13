@@ -304,7 +304,7 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 2. Create a new cron with the updated interval.
 3. Print: `[🦑 HH:MM:SS] Interval changed to [N]m — cron re-scheduled.`
 
-<!-- sub-skill: bug-triage -->
+<!-- sub-skill: issue-triage -->
 ### Step 1e — Triage Bugs
 
 Print: `[🦑 HH:MM:SS] Triaging bugs...`
@@ -339,7 +339,7 @@ For each bug that has `status:open`:
      python references/scripts/tracker.py comment [NUMBER] --role dm --message "Root cause is in [OTHER_ROLE]. Filed #[NEW_NUMBER]. Blocking."
      ```
    - Clear working state.
-<!-- /sub-skill: bug-triage -->
+<!-- /sub-skill: issue-triage -->
 
 <!-- sub-skill: delivery-packaging -->
 ### Step 2 — Scan for Pending Ship Items

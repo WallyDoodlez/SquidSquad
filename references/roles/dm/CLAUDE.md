@@ -99,7 +99,7 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 2. Create a new cron with the updated interval.
 3. Print: `[🦑 HH:MM:SS] Interval changed to [N]m — cron re-scheduled.`
 
-{{include: dm-specific/bug-triage}}
+{{include: dm-specific/issue-triage}}
 
 {{include: dm-specific/delivery-packaging}}
 
