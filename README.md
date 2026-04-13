@@ -1,12 +1,7 @@
-```
-      ▗▄▖
-     ▟█ █▙
-    ▐█• •█▌
-   ███████
-   ▐█████▌
-    ▐▌▐▌▐▌
-  S Q U I D S Q U A D
-```
+<img width="1115" height="490" alt="SquidSquadlogo" src="https://github.com/user-attachments/assets/82cccde8-3608-4e58-a265-7a118ca92dae" />
+
+
+
 
 # SquidSquad
 
