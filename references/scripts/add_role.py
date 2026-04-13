@@ -150,17 +150,6 @@ def add_role(role, target=None, boot=False, force=False, dry_run=False):
         print(f"ERROR: Role '{role}' not found in config.md or references/roles/", file=sys.stderr)
         return 1
 
-    # Check for duplicate role registration (TC-9)
-    if not force:
-        existing = _parse_local_config()
-        if role in existing:
-            print(
-                f"ERROR: Role '{role}' is already registered at {existing[role]}",
-                file=sys.stderr,
-            )
-            print("Use --force to overwrite the existing registration.", file=sys.stderr)
-            return 1
-
     project_name = _get_project_name()
 
     # Default target: sibling directory ProjectName-<role>
@@ -177,6 +166,17 @@ def add_role(role, target=None, boot=False, force=False, dry_run=False):
         if boot:
             print(f"[dry-run] Would boot agent via start-{role}.[sh|ps1]")
         return 0
+
+    # Check for duplicate role registration (TC-9)
+    if not force:
+        existing = _parse_local_config()
+        if role in existing:
+            print(
+                f"ERROR: Role '{role}' is already registered at {existing[role]}",
+                file=sys.stderr,
+            )
+            print("Use --force to overwrite the existing registration.", file=sys.stderr)
+            return 1
 
     print(f"Adding role '{role}' at {target}")
 
