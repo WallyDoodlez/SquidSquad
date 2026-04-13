@@ -1,5 +1,11 @@
 # DM Scan History
 
+## Scan — 2026-04-13 07:31
+
+- **Files scanned**: git log audit (40+ commits: #375 branch-per-feature, #195 modular sub-skills, #401 capability sub-skills, #442 vocab rename, v0.16.0 bump, many fixes)
+- **Findings**: none — all shipped items were delivery:skip; v0.16.0 CHANGELOG and README updates already applied by DM
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-12 20:31
 
 - **Files scanned**: git log audit (#442 QA gap fixes touching SKILL.md + templates, #471 issue gate fix, #468/#469 vault fixes)
