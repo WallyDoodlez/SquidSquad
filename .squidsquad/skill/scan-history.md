@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-13 08:02
+
+- **Files scanned**: references/scripts/capability_check.py, references/scripts/diagnostics.py
+- **Findings**: none (both clean — proper error handling, encoding, structure)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-13 04:32
 
 - **Files scanned**: references/scripts/triage.py, references/scripts/git_ops.py
