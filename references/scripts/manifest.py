@@ -14,7 +14,7 @@ Commands:
 `<kind>` is one of: roles, capabilities (alias: tools), presets.
 
 Enforced invariants (Q-new14/15/16 + side-effect mitigations from CONTEXT):
-  * schema_version in {1, 2}
+  * schema_version in {2}
   * manifest id matches directory name
   * role.iteration_mode in {normal, hitl}
   * capability.provider in {mcp, builtin, http}; mcp requires mcp_name
@@ -59,7 +59,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 DEFAULT_REFERENCES = REPO_ROOT / "references"
 
-SUPPORTED_SCHEMA_VERSIONS = {1, 2}
+SUPPORTED_SCHEMA_VERSIONS = {2}
 VALID_ITERATION_MODES = {"normal", "hitl"}
 VALID_PROVIDERS = {"mcp", "builtin", "http"}
 VALID_TOOL_CATEGORIES = {

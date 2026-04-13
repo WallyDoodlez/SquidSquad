@@ -2,7 +2,7 @@
 type: decision
 tags: [architecture, sub-skills, composition, foundational]
 created: 2026-04-02
-updated: 2026-04-02
+updated: 2026-04-12
 owner: skill
 status: active
 confidence: high
@@ -22,6 +22,7 @@ SquidSquad uses a layered sub-skill architecture where the main skill is the orc
 2. **Role sub-skills** (hardcoded, one per role) -- pm/qa, skill-lead, dm
 3. **Common sub-skills** (auto-included by every role) -- tracker protocol, discussion protocol, Ralph Loop core, context pressure, working state, health checks, git protocol
 4. **Role-specific sub-skills** (shipped with each role) -- pm: feature intake, QA test execution, delivery fallback; skill: bug triage, implementation workflow; dm: delivery packaging, version bumps
+5. **Capability sub-skills** (external integrations) -- packaged as `references/sub-skills/capabilities/<id>/` with manifest.yaml + sub-skill.md + setup.md. Composed at build time via `{{capability: <id>}}` directive. Runtime self-check via `capability_check.py`. PM Phase 1 Research includes capability gap analysis. Examples: figma, google_stitch, local_html, local_delivery.
 
 Composition is build-time concatenation: sub-skill sources live in `references/sub-skills/` and are composed into `agent-instructions.md` with section markers. The composed artifact has a DO NOT EDIT header.
 
@@ -45,3 +46,4 @@ Composition is build-time concatenation: sub-skill sources live in `references/s
 ### Changelog
 
 - 2026-04-02 -- Created by QA agent. Captured from FEAT-SKILL-030 feature file and discussion history during vault-create testing.
+- 2026-04-12 -- Updated by skill agent. Added Layer 5 (capability sub-skills) from #401: tools→capabilities rename, schema v2, {{capability:}} compose directive, capability_check.py runtime self-check, PM gap analysis.
