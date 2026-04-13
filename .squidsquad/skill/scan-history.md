@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-13 14:32
+
+- **Files scanned**: references/scripts/triage.py, references/scripts/health_check.py, references/scripts/capability_check.py
+- **Findings**: none (all 3 clean — proper encoding, error handling, correct logic. triage.py has dead code branch in line 109 comparison but no functional impact)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-13 08:02
 
 - **Files scanned**: references/scripts/capability_check.py, references/scripts/diagnostics.py
