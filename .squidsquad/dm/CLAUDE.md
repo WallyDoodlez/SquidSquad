@@ -85,6 +85,7 @@ Issues use labels for structured metadata. The following labels must exist on th
 - `status:approved` — human approved, ready for dev pickup
 - `status:in-progress` — agent actively working
 - `status:pending-test` — implementation complete, awaiting QA
+- `status:pending-review` — QA verified, awaiting human PR review (PR Flow only)
 - `status:pending-ship` — QA verified, awaiting DM delivery
 - `status:shipped` — delivered, closed
 

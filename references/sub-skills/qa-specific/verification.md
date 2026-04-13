@@ -119,12 +119,46 @@ python references/scripts/git_ops.py branch-switch main
    python references/scripts/tracker.py comment [NUMBER] --role qa --message "Human override — shipping with [N] noted gaps: [list]. Status → Pending Ship."
    ```
 5. If all criteria pass with zero gaps:
+
+   Check PR Flow: `python references/scripts/config.py get pr-flow`
+
+   **If PR Flow `yes`** and a PR exists for this issue:
+   - Post QA results on the PR:
+     ```bash
+     gh pr comment [PR_NUMBER] --body "## QA Results\n\n**Status**: PASS\n**Test Plan**: FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md\n**Results**: [N/N tests passed]\n\nAll acceptance criteria verified."
+     ```
+   - Formally approve the PR:
+     ```bash
+     gh pr review [PR_NUMBER] --approve --body "QA verified — zero gaps."
+     ```
+   - Transition to `pending-review` (not `pending-ship`):
+     ```bash
+     python references/scripts/tracker.py transition [NUMBER] pending-test pending-review --role qa-lead
+     python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. PR approved. Awaiting human review. Status → Pending Review."
+     ```
+
+   **If PR Flow `no`** (or no PR exists):
    ```bash
    python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role qa-lead
    python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. Status → Pending Ship."
    ```
+
 6. **delivery:skip check**: If the task is internal-only, add `delivery:skip` to the comment message.
-7. If criteria fail: transition back to `In Progress` with specific failures in the comment.
+
+7. If criteria fail:
+   **If PR Flow `yes`** and a PR exists:
+   - Post failure on the PR and request changes:
+     ```bash
+     gh pr comment [PR_NUMBER] --body "## QA Results\n\n**Status**: FAIL\n\n[list findings]"
+     gh pr review [PR_NUMBER] --request-changes --body "QA FAIL: [findings summary]"
+     ```
+   - Transition back to `In Progress`:
+     ```bash
+     python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead
+     python references/scripts/tracker.py comment [NUMBER] --role qa --message "FAIL. [findings]. PR changes requested. Back to In Progress."
+     ```
+
+   **If PR Flow `no`**: transition back to `In Progress` with specific failures in the comment.
 
 ### Step 5b — Monitor PRs (if PR Flow enabled)
 

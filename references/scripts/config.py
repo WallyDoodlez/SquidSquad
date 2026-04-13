@@ -64,6 +64,7 @@ FIELD_MAP = {
     "confidence-decay-days": ("Vault Remember", "Confidence Decay Days"),
     "vault-optimize": ("Vault Optimize", "Enabled"),
     "branch-workflow": ("Branch Workflow", "Enabled"),
+    "mandatory-human-approval": ("Mandatory Human Approval", "Enabled"),
     "diagnostics": ("Diagnostics", "Enabled"),
     "upstream-reporting": ("Diagnostics", "Upstream Reporting"),
 }
