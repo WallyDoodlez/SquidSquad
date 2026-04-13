@@ -12,7 +12,7 @@ Usage:
     python scripts/cycle.py inc-counter <role>      # Increment quiet cycle counter
     python scripts/cycle.py reset-counter <role>    # Reset counter to 0
     python scripts/cycle.py is-quiet <role>         # Check if cycle was quiet (no work done)
-    python scripts/cycle.py log-iteration <role> <n> --bugs <b> --features <f> --tests <t> [--notes <n>]
+    python scripts/cycle.py log-iteration <role> <n> --issues <i> --tasks <t> --tests <t> [--notes <n>]
     python scripts/cycle.py cleanup-iterations <role> [--keep 20]
     python scripts/cycle.py --help
 """
@@ -219,7 +219,7 @@ def main():
         reset_counter(pos[0])
     elif cmd == "log-iteration":
         if len(pos) < 2:
-            print("Usage: cycle.py log-iteration <role> <n> --bugs ... --features ...", file=sys.stderr)
+            print("Usage: cycle.py log-iteration <role> <n> --issues ... --tasks ...", file=sys.stderr)
             sys.exit(1)
         try:
             iter_n = int(pos[1])
@@ -227,8 +227,8 @@ def main():
             print(f"ERROR: iteration number must be numeric, got '{pos[1]}'", file=sys.stderr)
             sys.exit(1)
         log_iteration(pos[0], iter_n,
-                       bugs=opts.get("bugs", "none"),
-                       features=opts.get("features", "none"),
+                       issues=opts.get("issues", opts.get("bugs", "none")),
+                       tasks=opts.get("tasks", opts.get("features", "none")),
                        tests=opts.get("tests", "n/a"),
                        notes=opts.get("notes", ""))
     elif cmd == "cleanup-iterations":
