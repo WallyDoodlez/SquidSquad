@@ -13,6 +13,9 @@ Usage:
     python scripts/git_ops.py commit-state <role> <msg>  # .squidsquad/ files → main
     python scripts/git_ops.py branch-create <name>       # create + checkout branch
     python scripts/git_ops.py branch-switch <name>       # checkout existing branch
+    python scripts/git_ops.py branch-exists <name>       # check if branch exists
+    python scripts/git_ops.py branch-delete <name>       # delete local + remote branch
+    python scripts/git_ops.py current-branch             # print current branch name
     python scripts/git_ops.py pr-create <title> <body>   # create PR via gh
     python scripts/git_ops.py has-changes               # check if working tree dirty
     python scripts/git_ops.py last-hash                 # print last commit hash (short)

@@ -265,3 +265,116 @@ class TestParseArgs:
             cmd, rest = git_ops._parse_args()
             assert cmd == "commit"
             assert rest == ["skill", "msg"]
+
+
+# ---------------------------------------------------------------------------
+# commit_code()
+# ---------------------------------------------------------------------------
+
+class TestCommitCode:
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    @patch("subprocess.run")
+    def test_splits_code_from_state(self, mock_subproc, mock_run, mock_run_list):
+        """commit_code only stages non-.squidsquad/ files."""
+        # git status --porcelain returns both code and state files
+        mock_run.side_effect = [
+            _mock_result(stdout=" M references/scripts/git_ops.py\n M .squidsquad/skill/working-state.md\n"),
+            _mock_result(stdout="squidsquad/skill/375\n"),  # current branch
+            _mock_result(stdout="main\n"),  # branch --show-current after switch back
+        ]
+        # rev-parse --verify (branch exists)
+        mock_run_list.side_effect = [
+            _mock_result(returncode=0),  # branch exists
+            _mock_result(),  # git checkout
+            _mock_result(),  # git add (code file)
+            _mock_result(),  # git push -u
+            _mock_result(),  # git checkout main
+        ]
+        # git commit
+        mock_subproc.return_value = _mock_result(stdout="1 file changed")
+
+        result = git_ops.commit_code("skill", "squidsquad/skill/375", "test")
+        assert result is True
+
+        # Verify only the code file was staged (not .squidsquad/)
+        add_calls = [c for c in mock_run_list.call_args_list if c[0][0][0:2] == ["git", "add"]]
+        assert len(add_calls) == 1
+        assert add_calls[0][0][0][2] == "references/scripts/git_ops.py"
+
+    @patch("git_ops._run")
+    def test_no_code_changes_returns_false(self, mock_run):
+        """commit_code returns False when only .squidsquad/ files changed."""
+        mock_run.return_value = _mock_result(stdout=" M .squidsquad/skill/working-state.md\n")
+        assert git_ops.commit_code("skill", "squidsquad/skill/375", "test") is False
+
+    @patch("git_ops._run")
+    def test_no_changes_returns_false(self, mock_run):
+        mock_run.return_value = _mock_result(stdout="")
+        assert git_ops.commit_code("skill", "squidsquad/skill/375", "test") is False
+
+
+# ---------------------------------------------------------------------------
+# commit_state()
+# ---------------------------------------------------------------------------
+
+class TestCommitState:
+    @patch("git_ops._run")
+    @patch("git_ops._run_list")
+    @patch("subprocess.run")
+    def test_only_stages_squidsquad_files(self, mock_subproc, mock_run_list, mock_run):
+        """commit_state only stages .squidsquad/ files on main."""
+        mock_run.side_effect = [
+            _mock_result(stdout=" M references/scripts/git_ops.py\n M .squidsquad/skill/working-state.md\n"),
+            _mock_result(stdout="main\n"),  # current branch
+            _mock_result(),  # push
+        ]
+        mock_run_list.return_value = _mock_result()  # git add
+        mock_subproc.return_value = _mock_result(stdout="1 file changed")
+
+        result = git_ops.commit_state("skill", "state update")
+        assert result is True
+
+        add_calls = [c for c in mock_run_list.call_args_list if c[0][0][0:2] == ["git", "add"]]
+        assert len(add_calls) == 1
+        assert add_calls[0][0][0][2] == ".squidsquad/skill/working-state.md"
+
+    @patch("git_ops._run")
+    def test_errors_if_not_on_main(self, mock_run):
+        """commit_state returns False if not on main branch."""
+        mock_run.side_effect = [
+            _mock_result(stdout=" M .squidsquad/skill/working-state.md\n"),
+            _mock_result(stdout="squidsquad/skill/375\n"),  # not on main
+        ]
+        assert git_ops.commit_state("skill", "state update") is False
+
+    @patch("git_ops._run")
+    def test_no_state_changes_returns_false(self, mock_run):
+        mock_run.return_value = _mock_result(stdout=" M references/scripts/git_ops.py\n")
+        assert git_ops.commit_state("skill", "state update") is False
+
+
+# ---------------------------------------------------------------------------
+# branch_exists() / branch_delete() / current_branch()
+# ---------------------------------------------------------------------------
+
+class TestBranchUtilities:
+    @patch("git_ops._run_list")
+    def test_branch_exists_local(self, mock_run):
+        mock_run.return_value = _mock_result(returncode=0)
+        assert git_ops.branch_exists("squidsquad/skill/375") is True
+
+    @patch("git_ops._run_list")
+    def test_branch_not_exists(self, mock_run):
+        mock_run.return_value = _mock_result(returncode=1)
+        assert git_ops.branch_exists("nonexistent") is False
+
+    @patch("git_ops._run_list")
+    def test_branch_delete_success(self, mock_run):
+        mock_run.return_value = _mock_result()
+        assert git_ops.branch_delete("squidsquad/skill/375") is True
+
+    @patch("git_ops._run")
+    def test_current_branch(self, mock_run):
+        mock_run.return_value = _mock_result(stdout="main\n")
+        assert git_ops.current_branch() == "main"
