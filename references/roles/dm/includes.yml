@@ -1,0 +1,20 @@
+# DM agent sub-skill manifest
+# Order matters — includes are resolved top-to-bottom
+# Uses slim variants for vault-protocol and improvement-scan (read-only role)
+includes:
+  - common/tracker-protocol
+  - common/capability-check
+  - common/pull-latest
+  - dm-specific/issue-triage
+  - dm-specific/delivery-packaging
+  - dm-specific/version-bumps
+  - common/boot-remote-agents
+  - common/improvement-scan-slim
+  - dm-specific/iteration-log
+  - dm-specific/git-commit
+  - dm-specific/discussion-protocol
+  - dm-specific/issue-filing
+  - common/vault-protocol-slim
+  - dm-specific/file-conventions
+  - dm-specific/status-line
+  - dm-specific/prohibitions

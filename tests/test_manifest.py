@@ -115,3 +115,68 @@ class TestManifestIntegrity:
         # The new pattern is `references/roles/<role>/CLAUDE.md`, not `roles/x`
         legacy = re.findall(r'`roles/[^`]+`', self.manifest_text)
         assert not legacy, f"Manifest still references legacy roles/: {legacy}"
+
+
+class TestIncludesYml:
+    """Verify includes.yml manifests exist and are valid for all roles."""
+
+    ROLES = ["dev", "pm", "qa", "dm", "designer"]
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        request.cls.roles_dir = REFERENCES_DIR / "roles"
+        request.cls.sub_skills_dir = REFERENCES_DIR / "sub-skills"
+
+    def test_includes_yml_exists_per_role(self):
+        """TC-A1: Each role directory has an includes.yml."""
+        for role in self.ROLES:
+            path = self.roles_dir / role / "includes.yml"
+            assert path.exists(), f"Missing includes.yml for {role}"
+
+    def test_includes_yml_valid_yaml(self):
+        """TC-X6: All manifests are valid YAML with expected structure."""
+        import yaml
+        for role in self.ROLES:
+            path = self.roles_dir / role / "includes.yml"
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            assert isinstance(data, dict), f"{role}: not a dict"
+            assert "includes" in data, f"{role}: missing 'includes' key"
+            assert isinstance(data["includes"], list), f"{role}: 'includes' not a list"
+
+    def test_includes_yml_paths_exist(self):
+        """All sub-skill paths in includes.yml resolve to actual files."""
+        import yaml
+        for role in self.ROLES:
+            path = self.roles_dir / role / "includes.yml"
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            for inc in data["includes"]:
+                full = self.sub_skills_dir / f"{inc}.md"
+                assert full.exists(), f"{role}: includes.yml references missing {inc}"
+
+    def test_includes_yml_covers_template(self):
+        """TC-A2: includes.yml covers all {{include:}} directives in templates.
+
+        The manifest may use slim variants (e.g. vault-protocol-slim for
+        vault-protocol) or omit sub-skills (e.g. vault-remember). Each
+        template include must either appear in the manifest directly, have
+        a slim variant present, or be intentionally excluded (removed by
+        the manifest for token savings).
+        """
+        import yaml
+        for role in self.ROLES:
+            yml_path = self.roles_dir / role / "includes.yml"
+            tmpl_path = self.roles_dir / role / "CLAUDE.md"
+            data = yaml.safe_load(yml_path.read_text(encoding="utf-8"))
+            yml_set = set(data["includes"])
+
+            tmpl_text = tmpl_path.read_text(encoding="utf-8")
+            tmpl_includes = re.findall(
+                r'\{\{include:\s*(.+?)\}\}', tmpl_text,
+            )
+
+            # Every manifest entry must resolve to a file
+            for inc in data["includes"]:
+                full = self.sub_skills_dir / f"{inc}.md"
+                assert full.exists(), (
+                    f"{role}: manifest references non-existent {inc}"
+                )

@@ -311,6 +311,7 @@ Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `i
 
 If the file is empty or has no active task or planning phase, proceed normally to Step 2.
 
+<!-- sub-skill: checkin -->
 ### Step 2 — Check In With Human
 
 Print a brief, non-blocking status note — do NOT wait for a response before continuing:
@@ -339,7 +340,9 @@ If the human has already provided input (earlier in the conversation or between 
   > [YYYY-MM-DD HH:MM] **pm**: Human approved. Status → Planning. Beginning intake process.
   ```
   Only after all planning phases (Research → Discussion → Planning) are complete, change status to `Approved`.
+<!-- /sub-skill: checkin -->
 
+<!-- sub-skill: testing-and-verification -->
 ### Step 3 — Run E2E Tests
 
 Print: `[🦑 HH:MM:SS] Running E2E tests...` (or `[🦑 HH:MM:SS] No E2E command — skipping tests.`)
@@ -412,6 +415,11 @@ For each result:
 4. If all criteria pass with zero gaps: update to `Pending Ship`, append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. Status → Pending Ship.`
 5. **delivery:skip check**: If the task is internal-only (agent template changes, config changes, internal tooling, process improvements) with no user-facing delivery work needed, add `delivery: skip` to the Discussion entry when marking Pending Ship: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. delivery: skip (internal-only, no user-facing changes). Status → Pending Ship.` This tells the DM (or PM fallback) to skip delivery packaging and mark the task Shipped immediately.
 6. If criteria fail: update back to `In Progress`, append Discussion entry with specific failures.
+
+### Step 6c — Increment Ship Counter for Closed Issues
+
+When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last Bump` counter in `config.md`. If DM is present, it handles version bumps. If DM is absent, PM handles version bumps in Step 6d.
+<!-- /sub-skill: testing-and-verification -->
 
 <!-- sub-skill: pr-flow -->
 ### Step 6b — Monitor PRs (if PR Flow enabled)
@@ -492,6 +500,7 @@ Print: `[🦑 HH:MM:SS] No DM present — PM performing delivery for #[NUMBER]..
    Print: `[🦑 HH:MM:SS] Version bumped to vX.Y.Z — tag created and pushed.`
 <!-- /sub-skill: delivery-fallback -->
 
+<!-- sub-skill: health-check -->
 ### Step 7 — Agent Health Check
 
 Print: `[🦑 HH:MM:SS] Checking agent health...`
@@ -515,6 +524,7 @@ Log the script's output in `pm/qa-log.md`. For any agent reporting stalled (👻
 If `.local-config` is missing (no cross-clone paths configured), the script warns and exits cleanly — this is normal for single-clone setups and is not an error.
 
 For programmatic use (e.g. by `boot_remote.py` from #4), the script also accepts `--json` for structured output.
+<!-- /sub-skill: health-check -->
 
 <!-- sub-skill: github-issues -->
 ### Step 7b — Triage External Issues

@@ -515,89 +515,19 @@ If any agents were spawned, print: `[🦑 HH:MM:SS] Booted: [role1, role2, ...]`
 If all agents healthy or stopped, print nothing — silent pass.
 <!-- /sub-skill: boot-remote-agents -->
 
-<!-- sub-skill: improvement-scan -->
-## Improvement Scanning (Quiet Cycle Productivity)
+<!-- sub-skill: improvement-scan-slim -->
+## Improvement Scanning (Filing Only)
 
-During quiet cycles, use your domain expertise to scan the **target project** for improvements. This turns idle time into proactive project improvement. Findings are reported to PM, who files them through the normal tracker pipeline.
+During quiet cycles, if you notice code quality issues, security risks, or clear maintainability problems in files you read during your normal work, file them via the tracker:
 
-### Activation
-
-Check `Improvement Scanning` in `config.md`. If set to `no`, skip scanning entirely.
-
-**Issue gate**: Before triggering a scan, check for open issues assigned to your role:
 ```bash
-python references/scripts/tracker.py list-issues [ROLE] --status open
+python references/scripts/tracker.py create-issue \
+  --title "[title]" --body "**Found by**: [role]-lead (improvement-scan)\n**File**: [path]\n**Finding**: [finding]\n**Recommendation**: [what to do]" \
+  --role [target-role] --severity low --reporter [role]-lead
 ```
-If any issues exist, skip the scan — fix issues instead. Issues always take priority over improvement scanning.
 
-Maintain a **quiet cycle counter** in your working state. Increment it each quiet cycle (when no issues were fixed, no tasks progressed, no verification done). **After 3 consecutive quiet cycles**, trigger an improvement scan on the next quiet cycle (subject to the issue gate above). Reset the counter when:
-- Real work occurs (issue fix, task progress, verification)
-- A scan completes (reset to 0, must accumulate 3 more quiet cycles)
-
-### Scanning Step
-
-When triggered, add a new step to your cycle:
-
-Print: `[🦑 HH:MM:SS] Scanning for improvements...`
-
-Write status bar state: `scanning|🔍 Scanning [target description]...`
-
-1. **Detect project type**: Read `config.md` project info. Scan file extensions, `package.json`, `Cargo.toml`, `go.mod`, etc. to understand the tech stack. No new config field needed — auto-detect at scan time.
-
-2. **Read your SOUL.md self-improvement lens**: Your soul defines what to look for. Consult it before scanning.
-
-3. **Select files to scan**: Pick 3-5 source files from the target project, prioritized by:
-   - Recently changed (most likely to have issues)
-   - Never scanned before (coverage gap)
-   - Oldest since last scan (staleness)
-
-   **Exclude from scanning**: `.squidsquad/`, `node_modules/`, `vendor/`, `.git/`, build output directories (`dist/`, `build/`, `out/`), generated files, and binary files. Only scan source files belonging to the target project.
-
-   Check `.squidsquad/[your-role]/scan-history.md` to avoid re-scanning recently reviewed files.
-
-4. **Scan with your domain lens**: Read your SOUL.md `### Improvement Scan` section for:
-   - **Scan criteria**: what to look for, in priority order
-   - **File patterns**: which file types to target
-   - **Noise filter**: what does NOT constitute a finding
-
-   Apply these criteria to the selected files. If your SOUL.md lacks an Improvement Scan section, fall back to general code quality checks (dead code, error handling, security).
-
-5. **Report findings to PM**: For each finding (max **2 items per scan**), classify it and file via `python references/scripts/tracker.py create-issue` or `create-task`:
-
-   **Classification:**
-   - **Issue** (`type:issue`): something broken, wrong, inconsistent, stale, or not working as specified
-   - **Task** (`type:task`): something new that doesn't exist yet, enhancement, optimization
-
-   File each finding as a GitHub Issue with labels: the appropriate `type:issue` or `type:task`, `role:[target-role]`, `priority:low`, and `improvement-scan`. Include in the Issue body:
-
-   ```
-   **Found by**: [role]-lead (improvement-scan)
-   **File**: [path]
-   **Finding**: [specific finding]
-   **Recommendation**: [what to do]
-   ```
-
-   Tag all findings with the `improvement-scan` label so PM and human can filter them.
-
-6. **Update scan history**: Record the scanned files and any filed items in `.squidsquad/[your-role]/scan-history.md`:
-
-   ```markdown
-   ## Scan — YYYY-MM-DD HH:MM
-
-   - **Files scanned**: [list of 3-5 files]
-   - **Findings**: [list of findings reported, or "none"]
-   - **Items rejected by human**: [list of previously rejected items — never refile these]
-   ```
-
-### Rules
-
-- **PM is the single coordination point** — agents don't file directly to trackers. Report to PM via Discussion.
-- **Default Low priority** — all scan items are Low priority. Human bumps if valuable.
-- **Max 2 items per scan** — prevents noise. Quality over quantity.
-- **Never refile rejected items** — track rejected/dismissed items in scan history. If human says "not worth it," don't suggest it again.
-- **Scanning must not extend cycle time excessively** — if a scan takes too long, reduce file count for next cycle.
-- **PM does NOT auto-approve** scan items — human decides whether to act on them.
-<!-- /sub-skill: improvement-scan -->
+Tag findings with the `improvement-scan` label. Max **2 items per cycle**. Default `priority:low` — human bumps if valuable.
+<!-- /sub-skill: improvement-scan-slim -->
 
 <!-- sub-skill: iteration-log -->
 ### Step 3 — Log Iteration (skip on quiet cycles)
@@ -621,122 +551,7 @@ Create `.squidsquad/designer/iterations/iter-N.md` (increment N from last log):
 After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones.
 <!-- /sub-skill: iteration-log -->
 
-<!-- sub-skill: vault-remember -->
-### Step 4b — Vault Remember (End-of-Cycle Reflection)
 
-Print: `[🦑 HH:MM:SS] Reflecting on cycle...`
-
-**Config gate**: Check vault-remember setting:
-```bash
-python references/scripts/config.py get vault-remember
-```
-If `no`, skip this step entirely.
-
-**Quiet-cycle gate**: Check if this cycle did real work:
-```bash
-python references/scripts/vault_remember.py is-quiet [ROLE]
-```
-If exit code 0 (quiet), skip — nothing to reflect on.
-
-**Reset write counter** at the start of each reflection:
-```bash
-python references/scripts/vault_remember.py reset-writes [ROLE]
-```
-
-**Reflection prompt**: Review this cycle's iteration log and evaluate each category:
-
-1. **DECISIONS**: Any architecture, pattern, or trade-off decisions made this cycle?
-   → If yes: vault-create `galaxy/decision-*.md`
-2. **PATTERNS**: Any reusable patterns discovered or confirmed?
-   → If yes: vault-create `galaxy/pattern-*.md`
-3. **LEARNINGS**: Anything fail or succeed unexpectedly?
-   → If yes: vault-create `galaxy/learning-*.md`
-4. **HUMAN PREFERENCES**: Did the human express any preference, style, or value?
-   → If yes: vault-update `areas/human-profile.md`
-5. **PROJECT CONTEXT**: Did project goals, constraints, or architecture change?
-   → If yes: vault-update `projects/<name>.md` or `BRIEFING.md`
-
-For each candidate, apply these **deterministic gates IN ORDER**:
-
-**Gate 1 — Write budget**:
-```bash
-python references/scripts/vault_remember.py write-budget [ROLE]
-```
-If output is `0`, STOP — no budget remaining this cycle.
-
-**Gate 2 — Dedup check**:
-```bash
-python references/scripts/vault_check.py dedup-check --title "<candidate-name>" --tags "<tags>"
-```
-- If exact match found → SKIP (already in vault)
-- If near-match found → decide: UPDATE existing note or CREATE new
-- If no match → proceed to Gate 3
-
-**Gate 3 — Reusability**: Is this specific to only this cycle with no future value? → SKIP
-
-**Gate 4 — Fresh context test**: Would a fresh agent in a new context benefit from this? → WRITE
-
-**Output format** (in iteration log notes):
-- `WRITE: <type> — <one-line description>` (gates 3+4 passed)
-- `UPDATE: <existing-note> — <what to add>` (dedup found near-match)
-- `SKIP: <reason>`
-
-**After each write**, increment the counter and run vault-check:
-```bash
-python references/scripts/vault_remember.py inc-writes [ROLE]
-# vault-check Level 1 runs automatically per vault-protocol
-```
-
-**Priority when >2 candidates pass gates** (write the top 2 only):
-1. Human preferences (always highest — they shape all future work)
-2. Decisions (architectural choices compound)
-3. Learnings (failure lessons prevent repeat mistakes)
-4. Patterns (useful but can wait a cycle)
-
-Remaining candidates beyond the write budget are noted in the iteration log's Notes field: `Vault-worthy but deferred (budget): [description]`.
-
-**BRIEFING.md updates**: Before updating BRIEFING.md, check the token budget:
-```bash
-python references/scripts/vault_remember.py briefing-budget
-```
-If remaining is 0, do not add to BRIEFING.md without trimming. Trimmed content moves to a galaxy note — never deleted.
-
-**human-profile.md**: If a human preference is detected and `areas/human-profile.md` exists, update it following vault-update protocol. If it does not exist, create it from the seed template at `references/vault-templates/human-profile-seed.md`.
-<!-- /sub-skill: vault-remember -->
-
-<!-- sub-skill: vault-optimize -->
-### Step — Vault Optimize (Quiet Cycle)
-
-During quiet cycles, check if vault optimization is needed. This step runs AFTER the improvement scan check — if the scan ran this cycle, skip optimization.
-
-**Config gate**: Check `Vault Optimize > Enabled` in `config.md`. If `no`, skip entirely.
-
-**Activation**: Only run when the vault has 20+ notes AND this is a quiet cycle with no other work.
-
-Run the optimizer:
-
-```bash
-python references/scripts/vault_optimize.py run
-```
-
-The script handles:
-1. **Prune**: Auto-archives galaxy notes that are both stale (60+ days since update) AND orphaned (no inbound wikilinks). Never prunes notes created today.
-2. **Confidence decay**: Downgrades confidence (high→medium after 60 days, medium→low after 120 days) for stale notes.
-3. **Reindex**: Rebuilds `links` frontmatter from body wikilinks across all notes.
-4. **Relevance scoring**: Computes scores based on link count + recency + confidence. Stored in `.squidsquad/vault/.relevance-index.json`.
-
-**Pending questions**: If optimization surfaces questions that need human input (e.g., "Should these two similar notes be merged?"), add them to the queue:
-
-```bash
-python references/scripts/vault_optimize.py add-question --agent [ROLE] --note [path] --question "[plain language question]"
-```
-
-Questions use plain language — never expose vault internals (galaxy, frontmatter, wikilinks, PARAG). Describe notes by topic. All questions are skippable.
-
-**Status bar**: The pending question count is shown in the status bar. PM mentions it in check-in. Human responds when ready.
-
-If the vault is too small (<20 notes) or optimize is disabled, the script exits cleanly with no output.
-<!-- /sub-skill: vault-optimize -->
 
 <!-- sub-skill: git-commit -->
 ### Step 4 — Commit and Push (skip on quiet cycles)
@@ -847,10 +662,10 @@ Maintain `.squidsquad/designer/working-state.md` to persist context across conte
 
 ---
 
-<!-- sub-skill: vault-protocol -->
-## Vault — Shared Memory Layer
+<!-- sub-skill: vault-protocol-slim -->
+## Vault — Shared Memory Layer (Read-Only)
 
-All agents have read/write access to the shared knowledge vault at `.squidsquad/vault/`. The vault stores institutional knowledge — decisions, patterns, learnings, preferences, and context that shapes the squad's behavior over time. It follows the **PARAG** structure:
+All agents have read access to the shared knowledge vault at `.squidsquad/vault/`. The vault stores institutional knowledge — decisions, patterns, learnings, preferences, and context that shapes the squad's behavior over time. It follows the **PARAG** structure:
 
 ```
 .squidsquad/vault/
@@ -863,192 +678,36 @@ All agents have read/write access to the shared knowledge vault at `.squidsquad/
                     # decisions, patterns, learnings, styles
 ```
 
-### Vault Initialization (vault-init)
-
-If `.squidsquad/vault/` does not exist, initialize it:
-
-1. Create the 5 PARAG directories: `projects/`, `areas/`, `resources/`, `archives/`, `galaxy/`
-2. Add `.gitkeep` files to empty directories (`resources/.gitkeep`, `archives/.gitkeep`) so git tracks them
-3. Create `BRIEFING.md` from the template at `references/vault-templates/BRIEFING.md` — pre-populate with current project context from `config.md`
-4. Create initial `areas/human-profile.md` from the areas template — seed with any known human preferences (can be minimal stub initially)
-5. Create `projects/{project-name}.md` from the projects template — seed with project info from `config.md`
-6. Create `.squidsquad/vault/.obsidian/` directory and add it to `.gitignore` (Obsidian's config is per-user, not shared)
-
-vault-init is **idempotent** — re-running it creates missing directories and files but never overwrites existing vault content.
-
-### Entity Model
-
-| Entity | Location | Purpose |
-|--------|----------|---------|
-| Human profile | `areas/human-profile.md` | Preferences, values, communication style |
-| Company context | `areas/company-context.md` | Culture, standards, brand guidelines |
-| Design system | `areas/design-system.md` | Colors, tokens, typography, component patterns |
-| Code conventions | `areas/code-conventions.md` | Style, patterns, architecture decisions |
-| Project context | `projects/{name}.md` | Goals, constraints, architecture, tech stack |
-| Decisions | `galaxy/decision-*.md` | Individual architectural/design/process decisions |
-| Patterns | `galaxy/pattern-*.md` | Recurring approaches, established conventions |
-| Learnings | `galaxy/learning-*.md` | Lessons learned, what worked/didn't |
-| Styles | `galaxy/style-*.md` | Visual style, writing tone, code style preferences |
-
-### Creating Notes (vault-create)
-
-To create a vault note:
-
-1. Determine the correct folder based on note type (galaxy/ for atomic knowledge, areas/ for ongoing concerns, etc.)
-2. Name the file descriptively using kebab-case with a type prefix for galaxy notes: `decision-use-rest-over-graphql.md`, `pattern-error-handling.md`, `learning-cache-invalidation.md`. Valid galaxy type prefixes: `decision-`, `pattern-`, `learning-`, `style-`. Agents may introduce new prefixes if needed — document them in the Changelog.
-3. Copy the folder's template (from `references/vault-templates/`) and fill in:
-   - **YAML frontmatter**: type, tags, created (today), updated (today), owner (your role), status (`active`), confidence, source, links
-   - **`links` field format**: Use bare note names as a YAML list: `links: [note-name-a, note-name-b]`. Do NOT use wikilink syntax in frontmatter. Wikilinks (`[[note-name]]`) go in the body's Related section only. The `links` field is for machine parsing; the Related section is for human reading.
-   - **`source` field**: How this knowledge was captured. Values: `conversation` (from human discussion), `code` (observed in codebase), `review` (from code/design review), `observation` (inferred from patterns), `research` (from external sources). Not exhaustive — use the closest match.
-   - **Body sections**: fill per template structure
-   - **Changelog**: initial entry with date, your role, and brief context
-4. Use **bare wikilinks** only in the body: `[[note-name]]` — no alias syntax
-5. **Creation threshold**: Only create a note if the insight is reusable across contexts. Transient observations (one-time debugging steps, ephemeral state) belong in iteration logs, not the vault.
-
-### Confidence Levels
-
-- **high**: Human explicitly stated or confirmed this
-- **medium**: Agent observed this directly (e.g., from code review, conversation patterns)
-- **low**: Agent inferred this (e.g., from indirect signals, extrapolation)
-
-### Wikilinks
-
-Use `[[note-name]]` (bare, no aliases) to link related notes in the body. Links create a knowledge graph browsable in Obsidian and traversable via grep:
-
-```bash
-# Find all notes linking TO a given note
-grep -rl '\[\[note-name\]\]' .squidsquad/vault/
-
-# Find what a note links TO
-grep -o '\[\[[^]]*\]\]' .squidsquad/vault/galaxy/decision-example.md
-```
-
 ### BRIEFING.md
 
-`.squidsquad/vault/BRIEFING.md` is a ~50 line summary of active context, injected at session start. It contains:
-- Current project priorities and active work
-- Recent important decisions
-- Key human preferences summary (reference `[[human-profile]]` if it exists — this link is optional during early vault setup)
-- Active constraints or blockers
-
-BRIEFING.md is auto-maintained — agents update it when **significant** context changes (new project priorities, major decisions, constraint changes). Minor cycle-to-cycle updates do NOT warrant a BRIEFING.md edit. It is NOT a full knowledge dump — it is a focused briefing for the current moment.
-
-### Concurrent Access
-
-Multiple agents may write to the vault simultaneously. Git handles merge conflicts at the file level. To minimize conflicts:
-
-- **One note per topic** — don't append to other agents' notes. Create your own note and link to theirs.
-- **Append-only changelogs** — like Discussion entries, Changelog entries are append-only. Git can auto-merge appends to the same file.
-- **If a merge conflict occurs**: Keep both versions. Append the conflicting section below the existing one. Never discard vault content.
-
-### Note Size Guidance
-
-- **Galaxy notes**: Atomic — one idea per note, max ~500 lines. If a note grows beyond this, split it.
-- **Area notes** (human-profile, design-system, etc.): Can grow freely — these are living documents.
-- **Project notes**: Keep focused on active context. Archive historical sections to `archives/` when no longer current.
-- **Resource notes**: No hard limit, but prefer linking to external sources over copying large amounts of content.
-
-### Updating Notes (vault-update)
-
-To update an existing vault note:
-
-1. **Read the full note first** — never update a note you haven't read in this cycle.
-2. **Modify only the targeted section(s)** — preserve all other sections exactly as they are. vault-update is a surgical edit, not a rewrite.
-3. **Never delete existing content** — add to sections, don't remove from them. If content is wrong, add a correction; if superseded, mark it as such in the body and update `status` in frontmatter.
-4. **Update the `updated` frontmatter field** to today's date.
-5. **Append a Changelog entry** describing what changed and why:
-   ```
-   - YYYY-MM-DD — Updated by [agent]. [What changed and why].
-   ```
-6. **Run vault-check Level 1** on the note after updating (see vault-check below).
-
-vault-update preserves the note's identity — same filename, same `created` date, same `owner`. Only `updated`, the targeted body section(s), and the Changelog grow.
+`.squidsquad/vault/BRIEFING.md` is a ~50 line summary of active context. Read it at session start for current priorities, recent decisions, and key human preferences.
 
 ### Searching the Vault (vault-search)
 
-vault-search finds notes by tag, type, keyword, or wikilink traversal. It uses grep internally but presents a generic interface — agents call vault-search without knowing the implementation. A future SQLite/RAG backend (FEAT-SKILL-062) can replace the internals without changing how agents invoke search.
+Find notes by tag, type, keyword, or wikilink traversal:
 
-**Search modes:**
+1. **By tag**: `grep -rl "tags:.*\b<TAG>\b" .squidsquad/vault/ --include="*.md"`
+2. **By type**: `grep -rl "^type: <TYPE>" .squidsquad/vault/ --include="*.md"`
+3. **By keyword**: `grep -rl "<KEYWORD>" .squidsquad/vault/ --include="*.md"`
+4. **By wikilink traversal** (1-hop):
+   - Outbound: `grep -o '\[\[[^]]*\]\]' .squidsquad/vault/<path>`
+   - Inbound: `grep -rl '\[\[<note-name>\]\]' .squidsquad/vault/ --include="*.md"`
 
-1. **By tag**: Find notes whose `tags` frontmatter contains a specific tag.
-   ```bash
-   grep -rl "tags:.*\b<TAG>\b" .squidsquad/vault/ --include="*.md"
-   ```
+**Max 10 results** — return the most recently updated. Cache results within a cycle.
 
-2. **By type**: Find notes with a specific `type` frontmatter value.
-   ```bash
-   grep -rl "^type: <TYPE>" .squidsquad/vault/ --include="*.md"
-   ```
+### Confidence Levels
 
-3. **By keyword** (full-text): Find notes containing a phrase.
-   ```bash
-   grep -rl "<KEYWORD>" .squidsquad/vault/ --include="*.md"
-   ```
-
-4. **By wikilink traversal**: Starting from a note, find connected notes.
-   - **1-hop**: Outbound links (wikilinks in the note's body) + inbound links (other notes linking to this one).
-     ```bash
-     # Outbound: extract wikilinks from the note
-     grep -o '\[\[[^]]*\]\]' .squidsquad/vault/<path> | sed 's/\[\[//g;s/\]\]//g'
-     # Inbound: find notes linking TO this note
-     grep -rl '\[\[<note-name>\]\]' .squidsquad/vault/ --include="*.md"
-     ```
-   - **2-hop**: For each 1-hop result, repeat the outbound+inbound search. Do NOT traverse beyond 2 hops.
-
-**Result format**: Return a list of matching note paths with a brief excerpt (first non-frontmatter content line). **Max 10 results** — if more match, return the 10 most recently updated (sort by `updated` frontmatter). The agent can narrow and re-search.
-
-**Caching**: Within a single cycle, cache search results to avoid repeated grep calls for the same query.
-
-### Checking Vault Health (vault-check)
-
-vault-check validates vault notes for correctness and consistency. Two levels:
-
-#### Level 1 — Single Note + 2-Hop Neighborhood
-
-Runs **automatically after every vault-create or vault-update**. Checks the written note and all notes within 2 wikilink hops.
-
-For each note checked:
-
-1. **Required frontmatter fields**: `type`, `tags`, `created`, `updated`, `owner`, `status`, `confidence`. Warn if any are missing or empty.
-2. **Type-folder match**: Galaxy notes (`galaxy/`) must have type `decision`, `pattern`, `learning`, or `style`. Area notes (`areas/`) must have type `area`. Project notes (`projects/`) must have type `project`. Warn on mismatch.
-3. **Wikilink resolution**: Parse all `[[note-name]]` in the body. For each, verify a file named `note-name.md` exists somewhere in `.squidsquad/vault/`. Warn for each unresolved wikilink.
-4. **Auto-maintain `links` frontmatter**: Parse all `[[note-name]]` from the note's body. Update the `links` field in frontmatter to match (bare names, YAML list). This is automatic — agents do not manually curate the `links` field.
-5. **Galaxy note size**: If the note is in `galaxy/` and exceeds 500 lines, warn and suggest splitting. Do NOT warn for notes in `areas/`, `projects/`, or `resources/`.
-
-Print warnings with `[vault-check]` prefix. If no issues found, print nothing (silent pass).
-
-#### Level 2 — Full Vault Sweep
-
-Runs on-demand (invoked explicitly, not automatic). Checks every `.md` file in `.squidsquad/vault/`:
-
-1. Run all Level 1 checks on every note.
-2. **Orphan detection**: Find notes with zero inbound wikilinks that are not area notes. Area notes and BRIEFING.md are exempt — they serve as entry points.
-3. **Staleness detection**: Find notes with `status: active` and `updated` date older than 30 days. Flag as potentially stale.
-4. **Broken link census**: Aggregate all unresolved wikilinks across the vault.
-5. **Health summary**: Print totals — note count, orphan count, stale count, broken link count.
-
-```bash
-# Quick orphan check: find notes never linked TO
-for f in .squidsquad/vault/galaxy/*.md; do
-  name=$(basename "$f" .md)
-  if ! grep -rl "\[\[$name\]\]" .squidsquad/vault/ --include="*.md" -q 2>/dev/null; then
-    echo "[vault-check] Orphan: $f"
-  fi
-done
-```
+- **high**: Human explicitly stated or confirmed
+- **medium**: Agent observed directly
+- **low**: Agent inferred
 
 ### Rules
 
-- All vault notes are **git-tracked** — full version history
-- Galaxy notes should be **atomic** (one idea per note, max ~500 lines)
-- Area notes can grow freely (human-profile, design-system, etc.)
-- Every note must have the **confidence** field
-- Always append to the **Changelog** section when modifying a note
-- The vault is browsable in the **Obsidian app** — maintain clean structure
-- Empty directories use `.gitkeep` to persist in git
-- **vault-check Level 1 runs after every write** — vault-create and vault-update both trigger it
-- **vault-update never deletes content** — only adds, corrects, or marks as superseded
-<!-- /sub-skill: vault-protocol -->
+- Vault notes are **git-tracked** — full version history
+- Galaxy notes are **atomic** (one idea per note)
+- This role has **read-only** vault access — vault writes are handled by PM and dev agents
+- Use `[[note-name]]` wikilinks to reference vault notes in Discussion entries
+<!-- /sub-skill: vault-protocol-slim -->
 
 ---
 

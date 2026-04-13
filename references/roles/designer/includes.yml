@@ -1,0 +1,19 @@
+# Designer agent sub-skill manifest
+# Order matters — includes are resolved top-to-bottom
+# Uses slim variants for vault-protocol and improvement-scan (read-only role)
+includes:
+  - common/tracker-protocol
+  - common/capability-check
+  - common/pull-latest
+  - designer-specific/design-session
+  - common/boot-remote-agents
+  - common/improvement-scan-slim
+  - designer-specific/iteration-log
+  - designer-specific/git-commit
+  - designer-specific/discussion-protocol
+  - designer-specific/design-capabilities
+  - designer-specific/issue-filing
+  - common/vault-protocol-slim
+  - designer-specific/file-conventions
+  - designer-specific/status-line
+  - designer-specific/prohibitions

@@ -16,6 +16,11 @@ import re
 import sys
 from pathlib import Path
 
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 SUB_SKILLS_DIR = REPO_ROOT / "references" / "sub-skills"
@@ -76,6 +81,131 @@ def _resolve_includes(entry_file: Path) -> str:
     return "\n".join(result)
 
 
+def _load_manifest(role_name: str) -> list | None:
+    """Load includes.yml for a role, with dev-variant inheritance.
+
+    Returns a list of include paths (e.g. ['common/tracker-protocol', ...])
+    or None if no manifest exists.
+
+    Dev variants (skill, be, fe) without their own includes.yml inherit
+    from references/roles/dev/includes.yml.
+    """
+    if yaml is None:
+        return None
+
+    manifest_path = ROLES_DIR / role_name / "includes.yml"
+    if not manifest_path.exists():
+        # Dev variant inheritance: fall back to dev manifest
+        identities = _list_known_role_identities()
+        if role_name not in identities and "dev" in identities:
+            manifest_path = ROLES_DIR / "dev" / "includes.yml"
+        if not manifest_path.exists():
+            return None
+
+    try:
+        data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"WARNING: Failed to parse {manifest_path}: {e}", file=sys.stderr)
+        return None
+
+    if not isinstance(data, dict) or "includes" not in data:
+        return None
+    includes = data["includes"]
+    if not isinstance(includes, list):
+        return None
+
+    # Validate all paths exist
+    for inc_path in includes:
+        full_path = SUB_SKILLS_DIR / f"{inc_path}.md"
+        if not full_path.exists():
+            print(
+                f"ERROR: includes.yml for {role_name} references missing "
+                f"sub-skill: {inc_path} (expected at {full_path})",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    return includes
+
+
+def _resolve_includes_with_manifest(entry_file: Path, manifest: list) -> str:
+    """Resolve includes using manifest order, preserving inline content.
+
+    The manifest declares which sub-skills to include. The entry file's
+    {{include:}} directives are replaced with manifest-resolved content.
+    Inline (non-include) content is preserved in its original position.
+    """
+    text = entry_file.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    result = []
+
+    # Build a set of manifest includes for quick lookup
+    manifest_set = set(manifest)
+
+    for line in lines:
+        inc_match = re.match(r'\s*\{\{include:\s*(.+?)\}\}\s*$', line)
+        rt_match = re.match(r'\s*\{\{runtime:\s*(.+?)\}\}\s*$', line)
+        cap_match = re.match(r'\s*\{\{capability:\s*(.+?)\}\}\s*$', line)
+
+        if inc_match:
+            include_path = inc_match.group(1).strip()
+
+            # Check if the manifest overrides this include
+            # (e.g. vault-protocol -> vault-protocol-slim)
+            resolved_path = include_path
+            if include_path not in manifest_set:
+                # Check for a variant in the manifest that shares the
+                # same base name (e.g. vault-protocol-slim for vault-protocol)
+                base = include_path.rsplit("/", 1)[-1] if "/" in include_path else include_path
+                prefix = include_path.rsplit("/", 1)[0] + "/" if "/" in include_path else ""
+                found = False
+                for m in manifest:
+                    m_base = m.rsplit("/", 1)[-1] if "/" in m else m
+                    if m_base.startswith(base + "-") or base.startswith(m_base + "-"):
+                        resolved_path = m
+                        found = True
+                        break
+                if not found:
+                    # Include is in the template but not in the manifest — skip it
+                    # This enables manifest-driven removal in Phase B
+                    continue
+
+            full_path = SUB_SKILLS_DIR / f"{resolved_path}.md"
+            if not full_path.exists():
+                result.append(f"<!-- ERROR: Missing include: {resolved_path} -->")
+                continue
+            sub_skill_name = full_path.stem
+            content = full_path.read_text(encoding="utf-8").rstrip()
+            result.append(f"<!-- sub-skill: {sub_skill_name} -->")
+            result.append(content)
+            result.append(f"<!-- /sub-skill: {sub_skill_name} -->")
+
+        elif cap_match:
+            cap_id = cap_match.group(1).strip()
+            full_path = CAPABILITIES_DIR / cap_id / "sub-skill.md"
+            if not full_path.exists():
+                result.append(f"<!-- ERROR: Missing capability: {cap_id} -->")
+                continue
+            content = full_path.read_text(encoding="utf-8").rstrip()
+            result.append(f"<!-- sub-skill: capability-{cap_id} -->")
+            result.append(content)
+            result.append(f"<!-- /sub-skill: capability-{cap_id} -->")
+
+        elif rt_match:
+            runtime_path = rt_match.group(1).strip()
+            sub_skill_name = Path(runtime_path).stem
+            result.append(f"<!-- sub-skill: {sub_skill_name} -->")
+            result.append("## Soul")
+            result.append("")
+            result.append("Read `.squidsquad/[ROLE]/SOUL.md` at session start and follow its instructions as your professional identity. If SOUL.md is missing, proceed with default behavior — you are a pragmatic engineer focused on correctness and simplicity.")
+            result.append(f"<!-- /sub-skill: {sub_skill_name} -->")
+
+        else:
+            result.append(line)
+
+    return "\n".join(result)
+
+
 def compose_role(role_name: str) -> str:
     """Compose a role's full template from its entry file.
 
@@ -83,13 +213,21 @@ def compose_role(role_name: str) -> str:
     `references/roles/<role>/CLAUDE.md` (self-contained role directory).
     The legacy `references/sub-skills/roles/<variant>.md` layout has been
     retired.
+
+    If includes.yml exists for the role (or inherited from dev), uses
+    manifest-driven composition. Otherwise falls back to inline
+    {{include:}} resolution.
     """
     entry_file = ROLES_DIR / role_name / "CLAUDE.md"
     if not entry_file.exists():
         print(f"ERROR: Entry file not found: {entry_file}", file=sys.stderr)
         sys.exit(1)
 
-    composed = _resolve_includes(entry_file)
+    manifest = _load_manifest(role_name)
+    if manifest is not None:
+        composed = _resolve_includes_with_manifest(entry_file, manifest)
+    else:
+        composed = _resolve_includes(entry_file)
     return composed
 
 

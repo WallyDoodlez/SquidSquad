@@ -44,13 +44,17 @@ Entry file with includes (the role's own `SOUL.md` sits alongside `CLAUDE.md` in
 Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded `pm` paths to avoid `[ROLE]` ambiguity — PM uses `[ROLE]` to reference dev agents, not itself). PM's `SOUL.md` sits alongside its `CLAUDE.md` and is copied verbatim at install time.
 1. `common/tracker-protocol` — GitHub Issues tracker operations
 2. `common/pull-latest` — Step 1
+2b. `pm-specific/checkin` — Step 2: human check-in and input handling
+2c. `pm-specific/testing-and-verification` — Steps 3-6c: E2E, investigate, verify issues/tasks, ship counter
 3. `pm-specific/pr-flow` — Step 6b
 4. `pm-specific/delivery-fallback` — Step 6d
+4b. `pm-specific/health-check` — Step 7: agent health check
 5. `pm-specific/github-issues` — Step 7b
 5b. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
 6. `common/improvement-scan` — Quiet-cycle improvement scanning
 7. `pm-specific/iteration-log` — Step 8: PM/QA iteration log
 7b. `common/vault-remember` — Step 8b: end-of-cycle vault reflection
+7c. `common/vault-optimize` — Vault optimization on quiet cycles
 8. `pm-specific/git-commit` — Step 9: commit/push
 9. `pm-specific/issue-filing` — Bug Filing Protocol
 10. `pm-specific/task-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
@@ -69,13 +73,12 @@ Entry file with includes:
 2. `common/pull-latest` — Step 1
 3. `qa-specific/verification` — Steps 2-6 (E2E tests, bug investigation, verification, health check)
 3b. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
-4. `common/improvement-scan` — Quiet-cycle improvement scanning
+4. `common/improvement-scan-slim` — Improvement filing only (slim variant)
 5. `qa-specific/iteration-log` — Step 7: QA iteration log
-5b. `common/vault-remember` — Step 7b: end-of-cycle vault reflection
 6. `qa-specific/git-commit` — Step 8: commit/push
 7. `qa-specific/issue-filing` — QA Bug Filing Protocol
 8. `qa-specific/discussion-protocol` — Discussion entry format (qa alias)
-9. `common/vault-protocol` — Vault operations
+9. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
 10. `qa-specific/file-conventions` — QA file/directory conventions
 11. `qa-specific/status-line` — QA status line description
 12. `qa-specific/prohibitions` — QA "never do" rules
@@ -89,14 +92,13 @@ Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardc
 2b. `common/capability-check` — Startup capability verification
 3. `designer-specific/design-session` — Steps 2-2e (design request scanning, feasibility, interactive session, spec production, rejection handling)
 3b. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
-4. `common/improvement-scan` — Quiet-cycle improvement scanning
+4. `common/improvement-scan-slim` — Improvement filing only (slim variant)
 5. `designer-specific/iteration-log` — Step 3: designer iteration log
-5b. `common/vault-remember` — Step 3b: end-of-cycle vault reflection
 6. `designer-specific/git-commit` — Step 4: commit/push
 7. `designer-specific/discussion-protocol` — Discussion entry format (designer alias)
 8. `designer-specific/design-capabilities` — Design capability integration and discovery
 9. `designer-specific/issue-filing` — Designer bug/feature filing
-10. `common/vault-protocol` — Vault operations
+10. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
 11. `designer-specific/file-conventions` — Designer file/directory conventions
 12. `designer-specific/status-line` — Designer status line description
 13. `designer-specific/prohibitions` — Designer "never do" rules
@@ -111,13 +113,12 @@ Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardc
 4. `dm-specific/delivery-packaging` — Steps 2-2c
 4. `dm-specific/version-bumps` — Step 3
 4b. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
-5. `common/improvement-scan` — Quiet-cycle improvement scanning
+5. `common/improvement-scan-slim` — Improvement filing only (slim variant)
 6. `dm-specific/iteration-log` — Step 4: DM iteration log
-6b. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
 7. `dm-specific/git-commit` — Step 5: commit/push
 8. `dm-specific/discussion-protocol` — Discussion entry format (dm alias)
 9. `dm-specific/issue-filing` — DM bug/feature filing
-10. `common/vault-protocol` — Vault operations
+10. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
 11. `dm-specific/file-conventions` — DM file/directory conventions
 12. `dm-specific/status-line` — DM status line description
 13. `dm-specific/prohibitions` — DM "never do" rules
@@ -174,11 +175,20 @@ references/sub-skills/
 │   ├── discussion-protocol.md        (Discussion entry format — shared by dev)
 │   ├── issue-filing.md                 (Self-file + cross-file bug templates — shared by dev)
 │   ├── file-conventions.md           (File/directory conventions — shared by dev)
-│   ├── vault-remember.md             (Step 4b — end-of-cycle vault reflection — shared by all roles)
+│   ├── vault-remember.md             (Step 4b — end-of-cycle vault reflection — PM + dev only)
+│   ├── vault-optimize.md            (Vault optimization on quiet cycles — PM + dev only)
+│   ├── vault-protocol-slim.md       (Vault read-only operations — QA, DM, designer)
+│   ├── improvement-scan-slim.md     (Improvement filing only — QA, DM, designer)
 │   ├── status-line.md                (Status line description — shared by dev)
 │   ├── prohibitions.md               (Shared "never do" rules — shared by dev)
 │   └── capability-check.md          (Startup capability verification — shared by roles with requires_sub_skills)
+├── dev-specific/
+│   ├── triage-issues.md              (Step 2 — triage open issues)
+│   └── implement-tasks.md           (Step 3 — implement approved tasks)
 ├── pm-specific/
+│   ├── checkin.md                  (Step 2 — human check-in and input handling)
+│   ├── testing-and-verification.md (Steps 3-6c — E2E, investigate, verify, ship counter)
+│   ├── health-check.md            (Step 7 — agent health check)
 │   ├── task-intake.md              (5-phase lifecycle + Open Artifacts)
 │   ├── task-approval.md            (Feature Approval Gate)
 │   ├── delivery-fallback.md           (Step 6d — PM delivery when DM absent)

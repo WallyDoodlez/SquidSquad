@@ -1,0 +1,23 @@
+# Dev agent sub-skill manifest
+# Order matters — includes are resolved top-to-bottom
+includes:
+  - common/tracker-protocol
+  - common/pull-latest
+  - common/context-pressure
+  - common/resume-working-state
+  - common/interval-sync
+  - dev-specific/triage-issues
+  - dev-specific/implement-tasks
+  - common/boot-remote-agents
+  - common/improvement-scan
+  - common/iteration-log
+  - common/vault-remember
+  - common/vault-optimize
+  - common/git-commit
+  - common/discussion-protocol
+  - common/issue-filing
+  - common/working-state
+  - common/vault-protocol
+  - common/file-conventions
+  - common/status-line
+  - common/prohibitions

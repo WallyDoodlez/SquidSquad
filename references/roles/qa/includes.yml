@@ -1,0 +1,17 @@
+# QA agent sub-skill manifest
+# Order matters — includes are resolved top-to-bottom
+# Uses slim variants for vault-protocol and improvement-scan (read-only role)
+includes:
+  - common/tracker-protocol
+  - common/pull-latest
+  - qa-specific/verification
+  - common/boot-remote-agents
+  - common/improvement-scan-slim
+  - qa-specific/iteration-log
+  - qa-specific/git-commit
+  - qa-specific/issue-filing
+  - qa-specific/discussion-protocol
+  - common/vault-protocol-slim
+  - qa-specific/file-conventions
+  - qa-specific/status-line
+  - qa-specific/prohibitions
