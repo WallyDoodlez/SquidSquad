@@ -5,7 +5,7 @@
 
 # SquidSquad
 
-**Your AI dev team that coordinates through markdown, not meetings.**
+**Your autonomous AI team — no meetings, no message queues, just git.**
 
 SquidSquad is a [Claude Code](https://claude.ai/code) skill that spins up autonomous AI agents — PM and DM are always present, plus dev, designer, and QA agents matched to your project — that work on your codebase in parallel. No message queues. No orchestration servers. Just a shared `.squidsquad/` folder and git.
 
