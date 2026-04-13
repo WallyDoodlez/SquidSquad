@@ -491,11 +491,17 @@ def _check_unread_feedback(number, caller_role):
     if not comments:
         return []
 
-    # Find the last comment by the caller role
+    # Find the last comment by the caller role (canonicalize for matching)
+    canon = _canonicalize_role(caller_role)
+    # Build all prefix variants: raw, canonical, canonical-lead
+    prefixes = set()
+    for r in (caller_role, canon, f"{canon}-lead"):
+        prefixes.add(f"**{r}**:")
+        prefixes.add(f"**{r} ")
     caller_last_idx = -1
     for i, c in enumerate(comments):
         body = c.get("body", "")
-        if body.startswith(f"**{caller_role}**:") or body.startswith(f"**{caller_role} "):
+        if any(body.startswith(p) for p in prefixes):
             caller_last_idx = i
 
     # Collect all unread feedback after caller's last comment
