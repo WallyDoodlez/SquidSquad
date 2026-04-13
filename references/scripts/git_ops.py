@@ -9,6 +9,8 @@ Usage:
     python scripts/git_ops.py commit <role> <message>    # git commit with role prefix
     python scripts/git_ops.py push                      # git push
     python scripts/git_ops.py commit-push <role> <msg>   # add + commit + push
+    python scripts/git_ops.py commit-code <role> <branch> <msg>  # code files → branch
+    python scripts/git_ops.py commit-state <role> <msg>  # .squidsquad/ files → main
     python scripts/git_ops.py branch-create <name>       # create + checkout branch
     python scripts/git_ops.py branch-switch <name>       # checkout existing branch
     python scripts/git_ops.py pr-create <title> <body>   # create PR via gh
@@ -152,6 +154,138 @@ def pr_create(title, body):
     return url
 
 
+def commit_code(role, branch, message):
+    """Stage and commit only code files (non-.squidsquad/) to a feature branch.
+
+    Switches to the feature branch, stages everything EXCEPT .squidsquad/,
+    commits, pushes the branch, then switches back to main.
+    """
+    # Stash .squidsquad/ changes so they don't get committed to the branch
+    result = _run("git status --porcelain", check=False)
+    if not result.stdout.strip():
+        print("Nothing to commit (no changes)")
+        return False
+
+    # Get list of changed files
+    lines = result.stdout.strip().splitlines()
+    code_files = []
+    state_files = []
+    for line in lines:
+        # git status --porcelain format: XY filename
+        path = line[3:].strip().strip('"')
+        # Handle renames: "old -> new"
+        if " -> " in path:
+            path = path.split(" -> ")[1]
+        if path.startswith(".squidsquad/"):
+            state_files.append(path)
+        else:
+            code_files.append(path)
+
+    if not code_files:
+        print("No code changes to commit (only .squidsquad/ changes)")
+        return False
+
+    # Switch to feature branch
+    current = _run("git branch --show-current").stdout.strip()
+    if current != branch:
+        # Check if branch exists
+        check = _run_list(["git", "rev-parse", "--verify", branch], check=False)
+        if check.returncode == 0:
+            _run_list(["git", "checkout", branch])
+        else:
+            _run_list(["git", "checkout", "-b", branch])
+
+    # Stage only code files
+    for f in code_files:
+        _run_list(["git", "add", f], check=False)
+
+    # Commit
+    alias = _get_alias(role)
+    full_msg = f"{role}: {message}\n\nCo-Authored-By: {alias} <noreply@squidsquad>"
+    result = subprocess.run(
+        ["git", "commit", "-m", full_msg],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        check=False, cwd=str(REPO_ROOT),
+    )
+    if result.returncode != 0:
+        if "nothing to commit" in result.stdout + result.stderr:
+            print("Nothing to commit on branch")
+            _run_list(["git", "checkout", "main"])
+            return False
+        print(f"ERROR: {result.stderr}", file=sys.stderr)
+        _run_list(["git", "checkout", "main"])
+        return False
+
+    # Push branch
+    push_result = _run_list(["git", "push", "-u", "origin", branch], check=False)
+    if push_result.returncode != 0:
+        _log_diagnostic("error", f"branch push failed: {push_result.stderr.strip()[:200]}")
+        print(f"WARNING: branch push failed: {push_result.stderr}", file=sys.stderr)
+
+    print(f"Committed code to {branch}: {message}")
+
+    # Switch back to main
+    _run_list(["git", "checkout", "main"])
+    return True
+
+
+def commit_state(role, message):
+    """Stage and commit only .squidsquad/ files to main.
+
+    Only stages files under .squidsquad/. Commits and pushes to main.
+    """
+    result = _run("git status --porcelain", check=False)
+    if not result.stdout.strip():
+        print("Nothing to commit")
+        return False
+
+    lines = result.stdout.strip().splitlines()
+    state_files = []
+    for line in lines:
+        path = line[3:].strip().strip('"')
+        if " -> " in path:
+            path = path.split(" -> ")[1]
+        if path.startswith(".squidsquad/"):
+            state_files.append(path)
+
+    if not state_files:
+        print("No state changes to commit")
+        return False
+
+    # Ensure we're on main
+    current = _run("git branch --show-current").stdout.strip()
+    if current != "main":
+        _run_list(["git", "checkout", "main"])
+
+    # Stage only .squidsquad/ files
+    for f in state_files:
+        _run_list(["git", "add", f], check=False)
+
+    # Commit
+    alias = _get_alias(role)
+    full_msg = f"{role}: {message}\n\nCo-Authored-By: {alias} <noreply@squidsquad>"
+    result = subprocess.run(
+        ["git", "commit", "-m", full_msg],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        check=False, cwd=str(REPO_ROOT),
+    )
+    if result.returncode != 0:
+        if "nothing to commit" in result.stdout + result.stderr:
+            print("Nothing to commit")
+            return False
+        print(f"ERROR: {result.stderr}", file=sys.stderr)
+        return False
+
+    # Push main
+    push_result = _run("git push", check=False)
+    if push_result.returncode != 0:
+        _log_diagnostic("error", f"state push failed: {push_result.stderr.strip()[:200]}")
+        print(f"WARNING: state push failed: {push_result.stderr}", file=sys.stderr)
+
+    print(f"Committed state to main: {message}")
+    return True
+
+
 def has_changes():
     """Check if working tree has uncommitted changes."""
     result = _run("git status --porcelain")
@@ -210,6 +344,16 @@ def main():
             print("Usage: git_ops.py pr-create <title> <body>", file=sys.stderr)
             sys.exit(1)
         pr_create(rest[0], " ".join(rest[1:]))
+    elif cmd == "commit-code":
+        if len(rest) < 3:
+            print("Usage: git_ops.py commit-code <role> <branch> <message>", file=sys.stderr)
+            sys.exit(1)
+        commit_code(rest[0], rest[1], " ".join(rest[2:]))
+    elif cmd == "commit-state":
+        if len(rest) < 2:
+            print("Usage: git_ops.py commit-state <role> <message>", file=sys.stderr)
+            sys.exit(1)
+        commit_state(rest[0], " ".join(rest[1:]))
     elif cmd == "has-changes":
         has_changes()
     elif cmd == "last-hash":
