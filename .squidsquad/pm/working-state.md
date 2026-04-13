@@ -7,23 +7,23 @@
 
 ## Active Pipeline
 
-- #442 — Rename feature/bug → task/issue (pending-test, 1 gap: issue template filenames)
-- #18 — Vault-optimize (in-progress, 1 gap: statusline wiring)
-- #470 — Triage detection script (in-progress, partial fix only)
-- #401 — Capability sub-skills (on hold, blocked on #442)
+- #195 — Modular sub-skills (in-progress, needs compose manifest tests)
+- #375 — Branch-per-feature (in-progress, needs commit_code/commit_state tests)
+- #606 — config.py duplicate agents (in-progress, phantom designer + qa role)
+- #598 — Planning artifact location (in-progress, template not updated)
 
-## Pending Ship
+## Planned (awaiting approval)
 
-- #195, #606, #598 — awaiting DM delivery (all delivery:skip)
-- #492, #493 — awaiting DM
+- #246 — PR-driven workflow (25 TCs)
+- #5 — Auto-clone add_role.py (20 TCs)
+- #347 — Separate QA from PM (researched)
+- #462 — Adaptive setup questions (researched)
 
-## Manual Track: Stale Label Monitor
+## Stale Label Monitor — COMPLETE
 
-- **What**: Check for closed issues with non-shipped status labels (status:pending-test, status:in-progress, status:pending-ship on closed issues)
-- **Duration**: 20 cycles (started cycle 350)
-- **Cycles remaining**: 10
-- **Findings so far**: cycle 351 — 32 stale labels. Cycle 352 — #270 relapsed. Cycle 358 — #589 stale. Rest clean.
+- 20 cycles monitored (350-372)
+- Findings: 4 incidents (32 historical, #270 relapse, #589 stale, #375 closed directly)
+- Clean for last 5 consecutive cycles
+- Conclusion: prohibition works when agent has fresh session
 
 ## Quiet cycle counter: 0
-
-- **Vault Writes This Cycle**: 1
