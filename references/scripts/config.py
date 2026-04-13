@@ -236,16 +236,21 @@ def _parse_agents_v1(text):
             entry["test_command"] = cmd
         result.append(entry)
 
+    # Collect IDs already emitted to prevent duplicates.
+    seen_ids = {e["id"] for e in result}
+
     # QA presence: any dev role or designer present -> QA is implied.
     # In the legacy schema the explicit indicator is `**PM/QA**: always present`.
     if "PM/QA" in agents_text:
         # QA is conceptually present alongside PM in the PM/QA combined identity.
         # Add it as a separate entry for forward compatibility with v2 readers.
-        if dev_roles:
+        # Skip if qa was already added as a dev role (misconfigured config.md).
+        if dev_roles and "qa" not in seen_ids:
             result.append({"id": "qa", "alias": _alias("qa"), "role": "qa"})
+            seen_ids.add("qa")
 
     # DM presence
-    if "DM**: present" in agents_text:
+    if "DM**: present" in agents_text and "dm" not in seen_ids:
         result.append({"id": "dm", "alias": _alias("dm"), "role": "dm"})
 
     return result

@@ -404,9 +404,12 @@ When picking up a task, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Picking up. Status → In Progress."
    python references/scripts/tracker.py transition [NUMBER] approved in-progress --role [ROLE]-lead
    ```
-2. **Read planning artifacts** (if they exist in `.squidsquad/[ROLE]/planning/`):
-   - Look for files matching the issue number or title
+2. **Read planning artifacts** — PM creates these during task intake. Check both locations:
+   - `.squidsquad/pm/planning/` (PM's planning directory — primary location)
+   - `.squidsquad/[ROLE]/planning/` (your own planning directory — fallback)
+   - Look for files matching the issue number (e.g. `FEAT-SKILL-195-CONTEXT.md`)
    - RESEARCH.md, CONTEXT.md, TEST-PLAN.md — respect locked decisions, note dev discretion areas
+   - If PM comments reference planning artifacts but you cannot find them, **push back** (see Prohibitions)
 3. Write working state: update `.squidsquad/[ROLE]/working-state.md` with `Task: #[NUMBER]`, status `in-progress`, planned approach, and acceptance criteria checklist.
 4. Implement the task according to the acceptance criteria. Respect locked decisions from CONTEXT.md. Implement required side effect mitigations. Update working state as you complete sub-steps.
 5. Run the test command: `[ROLE_TEST_CMD]`
