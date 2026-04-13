@@ -1,27 +1,26 @@
 # Working State
 
-- **Task**: monitoring — #442 and #18 in-progress with skill, #401 on hold
+- **Task**: monitoring pipeline + manual track
 - **Status**: idle
 - **Phase**:
 - **Started**: 2026-04-12
 
 ## Active Pipeline
 
-- #442 — Rename feature/bug → task/issue (in-progress, reworking 11 QA gaps)
-- #18 — Vault-optimize (in-progress, reworking 12 QA gaps)
-- #4 — PM auto-boots team (in-progress, manifest.md fix)
+- #442 — Rename feature/bug → task/issue (pending-test, 1 gap: issue template filenames)
+- #18 — Vault-optimize (in-progress, 1 gap: statusline wiring)
+- #470 — Triage detection script (in-progress, partial fix only)
 - #401 — Capability sub-skills (on hold, blocked on #442)
 
 ## Pending Ship
 
-- #335 — health_check.py (delivery:skip)
+- #492, #493 — awaiting DM
 
-## Filed This Session (pending approval)
+## Manual Track: Stale Label Monitor
 
-- #443 — Human-directed scan tasks
-- #444 — Worker agent cycle planning
-- #450 — Scan dedup + priority by code age
-- #462 — Adaptive setup questions
-- #467 — Pluggable tracker backend (post-v1, low)
+- **What**: Check for closed issues with non-shipped status labels (status:pending-test, status:in-progress, status:pending-ship on closed issues)
+- **Duration**: 20 cycles (started cycle 350)
+- **Cycles remaining**: 20
+- **Findings so far**: none (baseline clean after manual fixes)
 
-## Quiet cycle counter: 2
+## Quiet cycle counter: 0
