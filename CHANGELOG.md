@@ -4,6 +4,36 @@ All notable changes to SquidSquad will be documented in this file. This changelo
 
 ---
 
+## [0.16.0] — 2026-04-12
+
+### Added
+
+- #328 — **Intent-driven setup wizard** — tell the wizard what you're building and it proposes a team. Role manifest registry (5 roles, 4 tools, 2 presets: software-dev, design). PM and DM always installed. Interactive review screen before any disk writes. Re-run detection with regenerate/rebuild options.
+- #4 — **Auto-boot team** — PM automatically spawns all other agents on startup. OS-aware agent launching (macOS Terminal/iTerm, Windows Terminal/PowerShell, Linux tmux).
+- #309 — **Unread feedback guard** — tracker blocks pending-test transitions when oversight comments (PM, QA, human) haven't been read, preventing premature status changes.
+- #442 — **Vocabulary rename** — "feature" → "task", "bug" → "issue" across labels, commands, templates, and docs. Decouples SquidSquad from code-specific terminology so non-dev teams (design, content, marketing) feel at home.
+
+### Fixed
+
+- #320 — Tracker transitions now enforce role-based authority — agents can only perform transitions they own
+- #471 — Issue gate no longer blocked by pending (non-actionable) items — only status:open items block task pickup
+- #472 — Dev SOUL.md now requires test coverage for shipped code
+- #436 — Improvement scan criteria moved from hardcoded sub-skill to SOUL.md templates — each role scans with its own lens
+- #376 — Context-pressure exit replaced with continue — agents no longer kill themselves mid-task
+- #378 — Default context pressure threshold lowered from 80% to 70% for earlier, safer exits
+- #390 — Fixed Windows UTF-8 encoding crash in tracker.py subprocess calls
+- #389 — Status bar no longer shows ghost agents for roles in registry but not installed
+- #373 — npx installer now pre-fetches wizard scripts via deterministic manifest
+- #335 — PM health check rewritten as Python script (health_check.py) — no more prose-based stale-reporting drift
+- #463 — Fixed shell injection risk in boot_remote.py path handling
+- #468 — Fixed path traversal vulnerability in vault_remember.py
+- #360 — Sub-skill developer guide updated for new role directory layout
+- #321, #327 — npx installer stability fixes (dirty worktree abort, --dangerously-skip-permissions)
+- #403 — Tracker no longer creates double-prefixed issue titles
+- #429, #430, #464, #465, #466, #469 — Internal script hardening and test coverage improvements
+
+---
+
 ## [0.15.0] — 2026-04-08
 
 ### Added
