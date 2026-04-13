@@ -37,6 +37,7 @@ BOOT_LOCK = SQUIDSQUAD_DIR / "boot-lock"
 
 COOLDOWN_SECONDS = 600  # 10 minutes between spawn attempts per role
 LOCK_TTL_SECONDS = 30
+GRACE_PERIOD_SECONDS = 120  # 2 minutes after spawn before re-flagging
 
 
 # ---------------------------------------------------------------------------
