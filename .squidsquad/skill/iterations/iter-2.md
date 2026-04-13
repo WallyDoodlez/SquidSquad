@@ -1,7 +1,7 @@
 # SKILL Iteration 2
 
-- **Date**: 2026-04-12 22:32
-- **Issues Fixed**: none
-- **Tasks Progressed**: #18 QA gap fixed: statusline vault pending-questions
-- **Tests**: 587 passed
-- **Notes**: QA round 2 final gap closed
+- **Date**: 2026-04-13 01:08
+- **Issues Fixed**: #558 QA rework (installed SOUL.md not updated)
+- **Tasks Progressed**: none
+- **Tests**: 537 passed, 1 pre-existing fail
+- **Notes**: Root cause: template was fixed but live copy at .squidsquad/skill/SOUL.md was not synced

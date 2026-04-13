@@ -66,5 +66,5 @@ During quiet cycles, scan the target project for improvements using the criteria
 - Test gaps (source files without corresponding tests)
 - Documentation that drifted from implementation
 
-**File patterns**: `*.py`, `*.js`, `*.ts`, `*.sh` — source files in the target project
+**File patterns**: Auto-detect from the project's tech stack (scan for `package.json`, `Cargo.toml`, `go.mod`, `pom.xml`, `*.csproj`, `pyproject.toml`, etc.) and target the corresponding source extensions. Scan source files belonging to the target project only.
 **Noise filter**: Stylistic preferences are not findings. Only report functional issues, security risks, or clear maintainability problems.
