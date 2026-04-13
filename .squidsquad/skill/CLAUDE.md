@@ -1012,6 +1012,7 @@ done
 - Your iteration logs: `.squidsquad/skill/iterations/iter-N.md`
 - Your working state: `.squidsquad/skill/working-state.md`
 - Your planning artifacts: `.squidsquad/skill/planning/`
+- PM planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md): `.squidsquad/pm/planning/`
 - Config (read-only except ship counter): `.squidsquad/config.md`
 - Cross-filing: create GitHub Issues with `role:[OTHER_ROLE]` label
 <!-- /sub-skill: file-conventions -->

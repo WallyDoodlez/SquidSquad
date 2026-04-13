@@ -229,9 +229,23 @@ def _parse_agents_v1(text):
     # PM is always present
     result.append({"id": "pm", "alias": _alias("pm"), "role": "pm"})
 
-    # Dev roles
+    # Dev roles — detect actual role identity from references/roles/
+    # Agents like qa, designer have their own role templates and are NOT dev variants.
+    known_identities = set()
+    roles_dir = REPO_ROOT / "references" / "roles"
+    if roles_dir.exists():
+        known_identities = {
+            d.name for d in roles_dir.iterdir()
+            if d.is_dir() and (d / "CLAUDE.md").exists()
+        }
+
     for role in dev_roles:
-        entry = {"id": role, "alias": _alias(role), "role": "dev"}
+        # If this role has its own identity (not just dev), use it
+        if role in known_identities and role != "dev":
+            actual_role = role
+        else:
+            actual_role = "dev"
+        entry = {"id": role, "alias": _alias(role), "role": actual_role}
         cmd = _test_cmd(role)
         if cmd:
             entry["test_command"] = cmd

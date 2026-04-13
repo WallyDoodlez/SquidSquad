@@ -180,3 +180,53 @@ class TestIncludesYml:
                 assert full.exists(), (
                     f"{role}: manifest references non-existent {inc}"
                 )
+
+
+class TestComposeManifestIntegration:
+    """Test compose.py manifest-driven composition."""
+
+    @pytest.fixture(autouse=True, scope="class")
+    def _setup(self, request):
+        import sys
+        sys.path.insert(0, str(REFERENCES_DIR / "scripts"))
+        request.cls.roles_dir = REFERENCES_DIR / "roles"
+
+    def test_load_manifest_returns_list(self):
+        """_load_manifest returns a list for each role with includes.yml."""
+        from compose import _load_manifest
+        for role in ["dev", "pm", "qa", "dm", "designer"]:
+            result = _load_manifest(role)
+            assert isinstance(result, list), f"{role}: expected list, got {type(result)}"
+            assert len(result) > 0, f"{role}: empty manifest"
+
+    def test_load_manifest_dev_variant_inheritance(self):
+        """Dev variants without includes.yml inherit from dev."""
+        from compose import _load_manifest
+        dev_manifest = _load_manifest("dev")
+        # 'skill' is a dev variant — should inherit dev's manifest
+        skill_manifest = _load_manifest("skill")
+        assert skill_manifest == dev_manifest, (
+            "skill should inherit dev manifest"
+        )
+
+    def test_manifest_composition_matches_inline(self):
+        """Manifest-driven composition produces identical output to inline."""
+        from compose import _resolve_includes, _resolve_includes_with_manifest, _load_manifest
+        # For dev role, both paths should produce identical output
+        entry_file = self.roles_dir / "dev" / "CLAUDE.md"
+        inline_result = _resolve_includes(entry_file)
+        manifest = _load_manifest("dev")
+        manifest_result = _resolve_includes_with_manifest(entry_file, manifest)
+        assert inline_result == manifest_result, (
+            "Manifest composition differs from inline — Phase A invariant broken"
+        )
+
+    def test_slim_variant_substitution(self):
+        """QA manifest with slim variants produces different (smaller) output."""
+        from compose import compose_role
+        # QA uses slim variants, dev uses full — QA should be smaller
+        qa_output = compose_role("qa")
+        dev_output = compose_role("dev")
+        assert len(qa_output) < len(dev_output), (
+            "QA composed output should be smaller than dev (slim variants)"
+        )
