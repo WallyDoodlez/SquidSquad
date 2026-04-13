@@ -277,7 +277,7 @@ class TestCommitCode:
     @patch("subprocess.run")
     def test_splits_code_from_state(self, mock_subproc, mock_run, mock_run_list):
         """commit_code only stages non-.squidsquad/ files."""
-        # git status --porcelain returns both code and state files
+        # git status --porcelain: XY<space>path (3 chars prefix)
         mock_run.side_effect = [
             _mock_result(stdout=" M references/scripts/git_ops.py\n M .squidsquad/skill/working-state.md\n"),
             _mock_result(stdout="squidsquad/skill/375\n"),  # current branch

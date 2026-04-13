@@ -205,11 +205,13 @@ def commit_code(role, branch, message):
         return False
 
     # Get list of changed files
-    lines = result.stdout.strip().splitlines()
+    # Don't strip() the full output — it removes the leading space from
+    # the first line's XY status indicator (e.g. " M file.py").
+    lines = [l for l in result.stdout.splitlines() if l.strip()]
     code_files = []
     state_files = []
     for line in lines:
-        # git status --porcelain format: XY filename
+        # git status --porcelain format: XY<space>filename (3-char prefix)
         path = line[3:].strip().strip('"')
         # Handle renames: "old -> new"
         if " -> " in path:
@@ -277,7 +279,7 @@ def commit_state(role, message):
         print("Nothing to commit")
         return False
 
-    lines = result.stdout.strip().splitlines()
+    lines = [l for l in result.stdout.splitlines() if l.strip()]
     state_files = []
     for line in lines:
         path = line[3:].strip().strip('"')
