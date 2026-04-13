@@ -35,6 +35,8 @@ def _gh(*args: str) -> str:
         ["gh", *args],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         cwd=str(REPO_ROOT),
     )
     if result.returncode != 0:

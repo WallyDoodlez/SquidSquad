@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-13 04:32
+
+- **Files scanned**: references/scripts/triage.py, references/scripts/git_ops.py
+- **Findings**: #774 (triage.py missing encoding=utf-8 — crashes on Windows with Unicode). git_ops.py commit_code had stale comment (fixed inline).
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-12 19:03
 
 - **Files scanned**: references/scripts/vault_optimize.py, references/scripts/vault_remember.py, references/scripts/vault_check.py

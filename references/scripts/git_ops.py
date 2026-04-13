@@ -160,7 +160,6 @@ def commit_code(role, branch, message):
     Switches to the feature branch, stages everything EXCEPT .squidsquad/,
     commits, pushes the branch, then switches back to main.
     """
-    # Stash .squidsquad/ changes so they don't get committed to the branch
     result = _run("git status --porcelain", check=False)
     if not result.stdout.strip():
         print("Nothing to commit (no changes)")
