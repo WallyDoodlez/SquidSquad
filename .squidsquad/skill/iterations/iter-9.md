@@ -1,7 +1,7 @@
 # SKILL Iteration 9
 
-- **Date**: 2026-04-13 04:34
-- **Issues Fixed**: #774 (triage.py encoding)
+- **Date**: 2026-04-13 16:02
+- **Issues Fixed**: #590 planning artifact path mismatch — already fixed in prior commit 3b3332f
 - **Tasks Progressed**: none
-- **Tests**: 546 passed
-- **Notes**: Improvement scan triggered (3 quiet cycles). Found and fixed triage.py Unicode crash.
+- **Tests**: n/a (no code changes)
+- **Notes**: Issue was stale — templates and deployed CLAUDE.md files already had the correct pm/planning/ path.
