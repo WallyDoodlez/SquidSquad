@@ -4,6 +4,31 @@ All notable changes to SquidSquad will be documented in this file. This changelo
 
 ---
 
+## [0.17.0] — 2026-04-13
+
+### Added
+
+- #5 — **Add agent role command** — clone, configure, and boot any role from PM with `add_role.py`. Includes dry-run mode, lock file concurrency protection, role validation against config.md, and duplicate registration checks.
+- #401 — **Capability sub-skills** — replaced the old tool concept with a composable sub-skill ecosystem. Roles declare capabilities via manifests; the system validates availability at startup.
+
+### Fixed
+
+- #875 — boot_remote.py no longer spawns duplicate agents — PID-based process detection kills stale processes before spawning replacements, with a 2-minute startup grace period
+- #632 — .local-config is now created during setup — health checks and auto-boot actually work on fresh installs
+- #606 — config.py no longer returns duplicate or phantom agents in list-agents
+- #598 — Planning artifact location clarified — dev agents now know to read from pm/planning/
+- #591 — All agents now push back on ambiguous context instead of guessing
+- #589 — README punchline updated to reflect non-dev team support
+- #558 — Dev SOUL.md no longer hardcodes file extensions — works with any project type
+- #493 — Skill agent no longer bypasses tracker.py transitions — labels stay in sync
+- #492 — PM can now find status:pending-test items via gh issue list
+- #470 — Skill agent correctly detects QA-rejected in-progress items without human nudge
+- #774 — Fixed triage.py Windows Unicode crash (missing encoding=utf-8)
+- #758 — Designer directory now includes working-state.md
+- #886 — Added 22 unit tests for health_check.py — critical infrastructure coverage
+
+---
+
 ## [0.16.0] — 2026-04-12
 
 ### Added
