@@ -744,6 +744,12 @@ def main():
             sys.exit(1)
         list_issues(pos[0], "task", opts.get("status"))
 
+    elif cmd == "work-queue":
+        if not pos:
+            print("Usage: tracker.py work-queue <role>", file=sys.stderr)
+            sys.exit(1)
+        work_queue(pos[0])
+
     elif cmd in ("create-issue", "create-bug"):
         for req in ("title", "body", "role", "severity"):
             if req not in opts:
