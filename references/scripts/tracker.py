@@ -365,6 +365,82 @@ def list_all_open():
     return issues
 
 
+def work_queue(role):
+    """Return a single prioritized work list for an agent role.
+
+    Priority order (strict):
+    1. In-progress items (resume first)
+    2. Approved issues — severity:high → medium → low
+    3. Approved tasks — priority:high → medium → low
+    4. Open issues — severity:high → medium → low
+
+    Returns a JSON array of {number, title, type, priority, status}.
+    """
+    role_label = f"role:{role}"
+
+    # Single query: all open items for this role
+    result = _run_list(
+        ["gh", "issue", "list", "--label", role_label, "--state", "open",
+         "--json", "number,title,labels", "--limit", "100"],
+        check=False,
+    )
+    if result.returncode != 0:
+        print(f"ERROR: gh failed: {result.stderr}", file=sys.stderr)
+        return []
+    items = json.loads(result.stdout) if result.stdout.strip() else []
+
+    def _get_label(item, prefix):
+        for lbl in item.get("labels", []):
+            if lbl["name"].startswith(prefix):
+                return lbl["name"][len(prefix):]
+        return None
+
+    PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+
+    queue = []
+    for item in items:
+        status = _get_label(item, "status:")
+        item_type = _get_label(item, "type:")
+        priority = _get_label(item, "priority:")
+        severity = _get_label(item, "severity:")
+
+        if not status or not item_type:
+            continue
+
+        # Skip items not actionable by dev agents
+        if status not in ("in-progress", "approved", "open"):
+            continue
+
+        # Determine sort key: (status_rank, type_rank, priority_rank)
+        if status == "in-progress":
+            status_rank = 0
+        elif status == "approved":
+            status_rank = 1
+        else:  # open
+            status_rank = 2
+
+        type_rank = 0 if item_type == "issue" else 1
+        prio = severity if item_type == "issue" else priority
+        prio_rank = PRIORITY_ORDER.get(prio, 1)  # default medium
+
+        queue.append({
+            "number": item["number"],
+            "title": item["title"],
+            "type": item_type,
+            "priority": prio or "medium",
+            "status": status,
+            "_sort": (status_rank, type_rank, prio_rank),
+        })
+
+    queue.sort(key=lambda x: x["_sort"])
+    # Remove sort key from output
+    for item in queue:
+        del item["_sort"]
+
+    print(json.dumps(queue, indent=2))
+    return queue
+
+
 def add_labels(number, labels_str):
     """Add labels to an issue (for metadata labels like design:, squidsquad)."""
     _run_list(["gh", "issue", "edit", str(number), "--add-label", labels_str])
