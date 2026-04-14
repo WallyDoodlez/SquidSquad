@@ -16,7 +16,7 @@
 - **pm**: pm
 - **dm**: dm
 - **qa**: qa
-- **designer**: designer
+
 
 ## Project
 
