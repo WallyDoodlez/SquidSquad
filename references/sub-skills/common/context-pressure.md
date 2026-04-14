@@ -8,6 +8,14 @@ Check `context_window.used_percentage` from the status line JSON (available as t
 python references/scripts/config.py get context-threshold
 ```
 
+**Record context pressure to disk** so external tools (boot script, statusline) can read it:
+
+```bash
+echo "[PERCENTAGE]" > .squidsquad/[ROLE]/context-pressure.tmp && mv -f .squidsquad/[ROLE]/context-pressure.tmp .squidsquad/[ROLE]/context-pressure
+```
+
+Write the integer percentage (e.g. `42`, `78`). Update this file every cycle, even on quiet cycles.
+
 If context usage **exceeds the threshold**:
 1. Compact your current working state into `.squidsquad/[ROLE]/working-state.md` (see Working State File below). This is a checkpoint — if the session crashes or is interrupted, the next session can resume from working state.
 2. Commit and push all pending work.

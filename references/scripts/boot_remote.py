@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""SquidSquad remote agent boot — spawn missing/stalled agents in new terminals.
+"""SquidSquad remote agent boot — spawn dead agents in new terminals.
 
-Reads health_check.py --json output and .local-config to determine which agents
-need booting. Spawns each in a new OS-native terminal window running the agent's
-start-role script.
+PM is the bootmaster. Detection is PID-based: read each agent's .pid file,
+check if the process is alive. If dead (or no PID file) and no .stop sentinel,
+spawn a new terminal.
 
 Usage:
     python scripts/boot_remote.py --role <name>   # Boot a single agent
-    python scripts/boot_remote.py --all            # Boot all stalled/missing agents
+    python scripts/boot_remote.py --all            # Boot all dead agents
     python scripts/boot_remote.py --dry-run --all  # Show what would be booted
     python scripts/boot_remote.py --json --all     # JSON output
     python scripts/boot_remote.py --help
@@ -21,6 +21,7 @@ Exit codes:
 import json
 import os
 import platform
+import re
 import shlex
 import shutil
 import subprocess
@@ -32,20 +33,82 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 SQUIDSQUAD_DIR = REPO_ROOT / ".squidsquad"
 LOCAL_CONFIG = SQUIDSQUAD_DIR / ".local-config"
+CONFIG_MD = SQUIDSQUAD_DIR / "config.md"
 BOOT_LOG = SQUIDSQUAD_DIR / "boot-attempts.log"
 BOOT_LOCK = SQUIDSQUAD_DIR / "boot-lock"
 
 COOLDOWN_SECONDS = 600  # 10 minutes between spawn attempts per role
 LOCK_TTL_SECONDS = 30
-GRACE_PERIOD_SECONDS = 120  # 2 minutes after spawn before re-flagging
 
 
 # ---------------------------------------------------------------------------
-# PID-based process detection and cleanup
+# Config parsing
+# ---------------------------------------------------------------------------
+
+def _parse_local_config():
+    """Parse .local-config → {role: Path(clone_root)}.
+
+    Format: `- **role**: /absolute/path`
+    Returns empty dict if file missing.
+    """
+    if not LOCAL_CONFIG.exists():
+        return {}
+    result = {}
+    try:
+        text = LOCAL_CONFIG.read_text(encoding="utf-8")
+        for line in text.splitlines():
+            m = re.match(r"-\s*\*\*(\w+)\*\*:\s*(.+)", line)
+            if m:
+                role = m.group(1).strip()
+                path = Path(m.group(2).strip())
+                result[role] = path
+    except Exception:
+        pass
+    return result
+
+
+def _parse_dev_agents():
+    """Read Dev Agents list from config.md → list of role names."""
+    if not CONFIG_MD.exists():
+        return []
+    try:
+        text = CONFIG_MD.read_text(encoding="utf-8")
+        m = re.search(r"Dev Agents\*\*:\s*(.+)", text)
+        if m:
+            return [a.strip() for a in m.group(1).split(",") if a.strip()]
+    except Exception:
+        pass
+    return []
+
+
+def _get_all_roles():
+    """Get all agent roles from config + local-config. Excludes 'pm' (bootmaster)."""
+    roles = set()
+    # From config.md Dev Agents
+    roles.update(_parse_dev_agents())
+    # From .local-config
+    roles.update(_parse_local_config().keys())
+    # Add known coordination roles
+    for role in ("dm", "qa", "designer"):
+        role_dir = SQUIDSQUAD_DIR / role
+        if role_dir.exists():
+            roles.add(role)
+    roles.discard("pm")  # PM is the bootmaster, never boots itself
+    return sorted(roles)
+
+
+def _get_clone_path(role):
+    """Get the clone root path for a role. Falls back to REPO_ROOT."""
+    local = _parse_local_config()
+    return local.get(role, REPO_ROOT)
+
+
+# ---------------------------------------------------------------------------
+# PID-based process detection
 # ---------------------------------------------------------------------------
 
 def _read_pid_file(clone_path, role):
-    """Read PID from .squidsquad/{role}/.pid in the target clone. Returns int or None."""
+    """Read PID from .squidsquad/{role}/.pid. Returns int or None."""
     pid_file = Path(clone_path) / ".squidsquad" / role / ".pid"
     if not pid_file.exists():
         return None
@@ -62,7 +125,6 @@ def _is_process_alive(pid):
         return False
     try:
         if platform.system().lower() == "windows":
-            # On Windows, os.kill(pid, 0) doesn't work reliably
             result = subprocess.run(
                 ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
                 capture_output=True, text=True, check=False,
@@ -75,117 +137,39 @@ def _is_process_alive(pid):
         return False
 
 
-def _kill_process(pid):
-    """Terminate a process by PID. Returns (success, message)."""
-    if pid is None:
-        return False, "no PID"
-    try:
-        if platform.system().lower() == "windows":
-            result = subprocess.run(
-                ["taskkill", "/PID", str(pid), "/T", "/F"],
-                capture_output=True, text=True, check=False,
-            )
-            if result.returncode == 0:
-                return True, f"killed PID {pid} (taskkill)"
-            return False, f"taskkill failed: {result.stderr.strip()}"
-        else:
-            import signal
-            os.kill(pid, signal.SIGTERM)
-            # Wait briefly for graceful shutdown
-            for _ in range(10):
-                time.sleep(0.5)
-                try:
-                    os.kill(pid, 0)
-                except (OSError, ProcessLookupError):
-                    return True, f"killed PID {pid} (SIGTERM)"
-            # Force kill if still alive
-            try:
-                os.kill(pid, signal.SIGKILL)
-                return True, f"killed PID {pid} (SIGKILL)"
-            except (OSError, ProcessLookupError):
-                return True, f"killed PID {pid} (already dead)"
-    except Exception as e:
-        return False, f"kill failed: {e}"
+def _has_stop_sentinel(clone_path, role):
+    """Check if .squidsquad/{role}/.stop exists."""
+    stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"
+    return stop_file.exists()
 
 
-def _cleanup_stale_pid(clone_path, role):
-    """Remove stale PID file after killing process."""
-    pid_file = Path(clone_path) / ".squidsquad" / role / ".pid"
-    try:
-        pid_file.unlink(missing_ok=True)
-    except OSError:
-        pass
 
 
-def _check_and_kill_existing(clone_path, role):
-    """Check for existing process and kill if stale. Returns (killed, message)."""
+def _needs_boot(role):
+    """Determine if an agent needs booting based on PID.
+
+    Returns (needs_boot, reason, clone_path).
+    Context pressure restarts are handled by each agent's boot script, not here.
+    """
+    clone_path = _get_clone_path(role)
+
+    # Check .stop sentinel first
+    if _has_stop_sentinel(clone_path, role):
+        return False, "explicitly stopped (.stop sentinel)", str(clone_path)
+
+    # Check PID
     pid = _read_pid_file(clone_path, role)
     if pid is None:
-        return False, "no PID file"
+        return True, "no PID file (agent not running)", str(clone_path)
+
     if not _is_process_alive(pid):
-        _cleanup_stale_pid(clone_path, role)
-        return False, f"stale PID file (PID {pid} not running), cleaned up"
-    # Process is alive but health check says stalled — kill it
-    success, msg = _kill_process(pid)
-    if success:
-        _cleanup_stale_pid(clone_path, role)
-    return success, msg
+        return True, f"process dead (PID {pid} not found)", str(clone_path)
 
-
-def _check_grace_period(role):
-    """Check if role was recently spawned (within grace period). Returns (in_grace, seconds_remaining)."""
-    now = time.time()
-    entries = _read_boot_log()
-    for entry in reversed(entries):
-        if entry.get("role") == role and entry.get("action") == "spawn" and entry.get("success"):
-            elapsed = now - entry.get("timestamp", 0)
-            if elapsed < GRACE_PERIOD_SECONDS:
-                return True, int(GRACE_PERIOD_SECONDS - elapsed)
-    return False, 0
+    return False, f"process alive (PID {pid})", str(clone_path)
 
 
 # ---------------------------------------------------------------------------
-# Health check integration
-# ---------------------------------------------------------------------------
-
-def _run_health_check():
-    """Run health_check.py --json and return parsed report."""
-    try:
-        result = subprocess.run(
-            [sys.executable, str(SCRIPT_DIR / "health_check.py"), "--json"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
-            check=False, cwd=str(REPO_ROOT),
-        )
-        if result.returncode == 2:
-            return None  # Usage error or missing prerequisites
-        return json.loads(result.stdout)
-    except (json.JSONDecodeError, Exception):
-        return None
-
-
-def _needs_boot(agent_report):
-    """Determine if an agent needs booting based on health_check output.
-
-    Detection logic (Q2 from CONTEXT.md):
-    - stopped → SKIP (.stop sentinel honored FIRST)
-    - healthy → SKIP (agent is running)
-    - stalled → BOOT (agent is unresponsive)
-    - unknown → BOOT (no current-state, fresh state or never started)
-    """
-    health = agent_report.get("health", "unknown")
-    if health == "stopped":
-        return False, "explicitly stopped (.stop sentinel)"
-    if health == "healthy":
-        return False, "agent is healthy"
-    if health == "stalled":
-        return True, f"stalled ({agent_report.get('reason', 'no details')})"
-    if health == "unknown":
-        return True, f"unknown ({agent_report.get('reason', 'no details')})"
-    return False, f"unrecognized health: {health}"
-
-
-# ---------------------------------------------------------------------------
-# Rate limiting (side-effect mitigation #3)
+# Rate limiting
 # ---------------------------------------------------------------------------
 
 def _read_boot_log():
@@ -227,18 +211,16 @@ def _check_cooldown(role):
 
 
 # ---------------------------------------------------------------------------
-# Lock file (side-effect mitigation #4)
+# Lock file
 # ---------------------------------------------------------------------------
 
 def _acquire_lock():
     """Acquire boot-lock. Returns True if acquired."""
     try:
         if BOOT_LOCK.exists():
-            # Check TTL
             mtime = BOOT_LOCK.stat().st_mtime
             if time.time() - mtime < LOCK_TTL_SECONDS:
-                return False  # Lock held by another process
-            # Stale lock — remove
+                return False
             BOOT_LOCK.unlink(missing_ok=True)
         BOOT_LOCK.write_text(str(os.getpid()), encoding="utf-8")
         return True
@@ -255,7 +237,7 @@ def _release_lock():
 
 
 # ---------------------------------------------------------------------------
-# OS-aware terminal spawning (Q3 from CONTEXT.md)
+# OS-aware terminal spawning
 # ---------------------------------------------------------------------------
 
 def _detect_os():
@@ -274,7 +256,6 @@ def _find_boot_script(clone_root, role):
     clone_root = Path(clone_root)
     sqdir = clone_root / ".squidsquad"
 
-    # Check for .ps1 on Windows, .sh otherwise
     os_type = _detect_os()
     if os_type == "windows":
         ps1 = sqdir / f"start-{role}.ps1"
@@ -295,10 +276,7 @@ def _find_boot_script(clone_root, role):
 
 
 def _spawn_terminal(clone_root, role, boot_script, script_type):
-    """Spawn a new terminal window running the boot script.
-
-    Returns (success, message).
-    """
+    """Spawn a new terminal window running the boot script. Returns (success, message)."""
     os_type = _detect_os()
     clone_root = Path(clone_root)
     script_path = str(boot_script)
@@ -329,7 +307,7 @@ def _spawn_windows(clone_root, role, script_path, script_type):
                 creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
                 cwd=str(clone_root),
             )
-            return True, f"spawned via wt.exe (Windows Terminal)"
+            return True, "spawned via wt.exe (Windows Terminal)"
         except Exception as e:
             return False, f"wt.exe spawn failed: {e}"
 
@@ -346,7 +324,7 @@ def _spawn_windows(clone_root, role, script_path, script_type):
             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
             cwd=str(clone_root),
         )
-        return True, f"spawned via cmd /c start (fallback)"
+        return True, "spawned via cmd /c start (fallback)"
     except Exception as e:
         return False, f"Windows fallback spawn failed: {e}"
 
@@ -375,7 +353,6 @@ def _spawn_linux(clone_root, role, script_path, script_type):
     if tmux:
         try:
             session_name = f"squidsquad-{role}"
-            # Kill existing dead session if any
             subprocess.run(
                 [tmux, "kill-session", "-t", session_name],
                 capture_output=True, check=False,
@@ -401,7 +378,7 @@ def _spawn_linux(clone_root, role, script_path, script_type):
 # Main boot logic
 # ---------------------------------------------------------------------------
 
-def boot_agent(role, report=None, dry_run=False):
+def boot_agent(role, dry_run=False):
     """Boot a single agent. Returns result dict."""
     result = {
         "role": role,
@@ -411,37 +388,12 @@ def boot_agent(role, report=None, dry_run=False):
         "timestamp": time.time(),
     }
 
-    # Get health report
-    if report is None:
-        report = _run_health_check()
-    if report is None:
-        result["message"] = "health_check.py failed — cannot determine agent state"
-        return result
-
-    # Find agent in report
-    agent = None
-    for a in report.get("agents", []):
-        if a["role"] == role:
-            agent = a
-            break
-    if agent is None:
-        result["message"] = f"agent '{role}' not found in health report"
-        return result
-
-    # Check if boot needed
-    needs, reason = _needs_boot(agent)
+    # PID-based detection
+    needs, reason, clone_path = _needs_boot(role)
     if not needs:
         result["action"] = "skip"
         result["success"] = True
         result["message"] = f"skip: {reason}"
-        return result
-
-    # Check startup grace period (recently spawned agents may still be initializing)
-    in_grace, grace_remaining = _check_grace_period(role)
-    if in_grace:
-        result["action"] = "skip"
-        result["success"] = True
-        result["message"] = f"grace period active ({grace_remaining}s remaining), skipping"
         return result
 
     # Check cooldown
@@ -460,11 +412,6 @@ def boot_agent(role, report=None, dry_run=False):
         return result
 
     # Find boot script
-    clone_path = agent.get("clone_path", "")
-    if not clone_path:
-        result["message"] = "no clone_path in health report"
-        return result
-
     boot_script, script_type = _find_boot_script(clone_path, role)
     if boot_script is None:
         result["message"] = (
@@ -481,21 +428,6 @@ def boot_agent(role, report=None, dry_run=False):
         return result
 
     try:
-        # Kill existing stale process before spawning replacement
-        clone_path_obj = Path(clone_path)
-        killed, kill_msg = _check_and_kill_existing(clone_path, role)
-        if killed:
-            _append_boot_log({
-                "timestamp": time.time(),
-                "role": role,
-                "action": "kill",
-                "success": True,
-                "message": kill_msg,
-                "reason": reason,
-            })
-            # Brief pause to let OS release resources
-            time.sleep(1)
-
         # Spawn
         success, msg = _spawn_terminal(clone_path, role, boot_script, script_type)
         result["action"] = "spawn"
@@ -517,17 +449,16 @@ def boot_agent(role, report=None, dry_run=False):
     return result
 
 
-def boot_all(report=None, dry_run=False):
+def boot_all(dry_run=False):
     """Boot all agents that need it. Returns list of result dicts."""
-    if report is None:
-        report = _run_health_check()
-    if report is None:
-        return [{"role": "all", "action": "error", "success": False,
-                 "message": "health_check.py failed"}]
+    roles = _get_all_roles()
+    if not roles:
+        return [{"role": "all", "action": "skip", "success": True,
+                 "message": "no agents configured"}]
 
     results = []
-    for agent in report.get("agents", []):
-        r = boot_agent(agent["role"], report=report, dry_run=dry_run)
+    for role in roles:
+        r = boot_agent(role, dry_run=dry_run)
         results.append(r)
     return results
 
@@ -561,10 +492,9 @@ def main():
         print("ERROR: .squidsquad/ not found", file=sys.stderr)
         return 2
 
-    # Read config to check if auto-boot is enabled
+    # Check if auto-boot is enabled
     try:
-        config_text = (SQUIDSQUAD_DIR / "config.md").read_text(encoding="utf-8")
-        import re
+        config_text = CONFIG_MD.read_text(encoding="utf-8")
         m = re.search(r"Auto Boot.*?:\s*(yes|no)", config_text, re.IGNORECASE)
         if m and m.group(1).lower() == "no":
             msg = "Auto Boot Agents disabled in config.md"
@@ -574,7 +504,7 @@ def main():
                 print(msg)
             return 0
     except Exception:
-        pass  # Config missing or unparseable — proceed with default (yes)
+        pass
 
     # Run
     if boot_all_flag:

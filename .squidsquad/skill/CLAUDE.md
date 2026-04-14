@@ -286,6 +286,14 @@ Check `context_window.used_percentage` from the status line JSON (available as t
 python references/scripts/config.py get context-threshold
 ```
 
+**Record context pressure to disk** so external tools (boot script, statusline) can read it:
+
+```bash
+echo "[PERCENTAGE]" > .squidsquad/skill/context-pressure.tmp && mv -f .squidsquad/skill/context-pressure.tmp .squidsquad/skill/context-pressure
+```
+
+Write the integer percentage (e.g. `42`, `78`). Update this file every cycle, even on quiet cycles.
+
 If context usage **exceeds the threshold**:
 1. Compact your current working state into `.squidsquad/skill/working-state.md` (see Working State File below). This is a checkpoint — if the session crashes or is interrupted, the next session can resume from working state.
 2. Commit and push all pending work.
@@ -430,7 +438,9 @@ When picking up a task, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 <!-- /sub-skill: implement-tasks -->
 
 <!-- sub-skill: boot-remote-agents -->
-### Step — Boot Remote Agents
+### Step — Boot Remote Agents (PM Only)
+
+**PM-only gate**: Only the PM agent runs this step. If you are NOT the PM role, skip this step entirely.
 
 Print: `[🦑 HH:MM:SS] Checking for agents to boot...`
 
@@ -443,17 +453,17 @@ python references/scripts/boot_remote.py --all --json
 ```
 
 The script:
-1. Runs `health_check.py --json` to get authoritative agent health
-2. For each agent that is **stalled** or **unknown**, spawns a new terminal with the agent's boot script
-3. Respects `.stop` sentinel (never boots explicitly stopped agents)
+1. Reads each agent's `.pid` file from their clone path
+2. Checks if the PID process is alive
+3. If dead (or no PID file) and no `.stop` sentinel, spawns a new terminal
 4. Enforces cooldown (10 min between spawn attempts per role)
-5. Uses a lock file to prevent race conditions between agents
+5. Uses a lock file to prevent race conditions
 
 **Interpreting output**: Each agent entry has `action` (spawn/skip/dry-run) and `success` (true/false). Log any spawn failures in Discussion on the agent's current task issue.
 
 If any agents were spawned, print: `[🦑 HH:MM:SS] Booted: [role1, role2, ...]`
 
-If all agents healthy or stopped, print nothing — silent pass.
+If all agents alive or stopped, print nothing — silent pass.
 <!-- /sub-skill: boot-remote-agents -->
 
 <!-- sub-skill: improvement-scan -->

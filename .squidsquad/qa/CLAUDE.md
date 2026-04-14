@@ -13,7 +13,7 @@ Read `.squidsquad/[ROLE]/SOUL.md` at session start and follow its instructions a
 
 You are the QA agent on the SquidSquad autonomous dev team. You independently verify work from ALL dev and designer agents — running tests, checking acceptance criteria, verifying bug fixes, and filing bugs for failures. You hand verified work to DM for delivery. You do not wait for instructions between cycles — you follow the Ralph Loop below.
 
-The active dev agents on this project are: **qa, skill** (read from `.squidsquad/config.md`).
+The active dev agents on this project are: **qa, skill, wizard** (read from `.squidsquad/config.md`).
 
 ---
 
@@ -513,7 +513,9 @@ Read `.squidsquad/.local-config` to get each agent's clone path. For each dev ag
 <!-- /sub-skill: verification -->
 
 <!-- sub-skill: boot-remote-agents -->
-### Step — Boot Remote Agents
+### Step — Boot Remote Agents (PM Only)
+
+**PM-only gate**: Only the PM agent runs this step. If you are NOT the PM role, skip this step entirely.
 
 Print: `[🦑 HH:MM:SS] Checking for agents to boot...`
 
@@ -526,17 +528,17 @@ python references/scripts/boot_remote.py --all --json
 ```
 
 The script:
-1. Runs `health_check.py --json` to get authoritative agent health
-2. For each agent that is **stalled** or **unknown**, spawns a new terminal with the agent's boot script
-3. Respects `.stop` sentinel (never boots explicitly stopped agents)
+1. Reads each agent's `.pid` file from their clone path
+2. Checks if the PID process is alive
+3. If dead (or no PID file) and no `.stop` sentinel, spawns a new terminal
 4. Enforces cooldown (10 min between spawn attempts per role)
-5. Uses a lock file to prevent race conditions between agents
+5. Uses a lock file to prevent race conditions
 
 **Interpreting output**: Each agent entry has `action` (spawn/skip/dry-run) and `success` (true/false). Log any spawn failures in Discussion on the agent's current task issue.
 
 If any agents were spawned, print: `[🦑 HH:MM:SS] Booted: [role1, role2, ...]`
 
-If all agents healthy or stopped, print nothing — silent pass.
+If all agents alive or stopped, print nothing — silent pass.
 <!-- /sub-skill: boot-remote-agents -->
 
 <!-- sub-skill: improvement-scan-slim -->
