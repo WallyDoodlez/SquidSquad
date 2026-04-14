@@ -1682,13 +1682,17 @@ class TestSoulMdSeeding:
             "repo": "github.com/test/repo",
             "domain_context": "Python data pipeline using Apache Spark",
         })
-        # Create a minimal SOUL.md that deploy_role would have written
+        # Create SOUL.md with placeholder (as the real templates have)
+        placeholder = "_Populated during setup. Describes what this project does, its tech stack, conventions, and key tools._"
         squid = tmp_path / ".squidsquad"
         for agent in spec["agents"]:
             agent_dir = squid / agent["id"]
             agent_dir.mkdir(parents=True)
             soul = agent_dir / "SOUL.md"
-            soul.write_text("## Soul\n\nGeneric role identity.\n", encoding="utf-8")
+            soul.write_text(
+                f"## Soul\n\nGeneric role identity.\n\n### Project Context\n\n{placeholder}\n",
+                encoding="utf-8",
+            )
 
         from unittest.mock import patch, MagicMock
         mock_deploy = MagicMock(return_value=str(squid / "pm" / "CLAUDE.md"))
