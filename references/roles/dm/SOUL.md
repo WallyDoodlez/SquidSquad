@@ -65,3 +65,7 @@ During quiet cycles, scan the target project for improvements using the criteria
 
 **File patterns**: `*.md`, `README*`, `CHANGELOG*`, `docs/**` — documentation files
 **Noise filter**: Internal-only docs (agent instructions, planning artifacts) are not findings.
+
+### Project Context
+
+_Populated during setup. Describes what this project does, its tech stack, conventions, and key tools._

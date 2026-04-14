@@ -515,6 +515,10 @@ def build_config_md(spec):
     lines.append(f"- **Repo**: {project_repo}")
     if project.get("description"):
         lines.append(f"- **Description**: {project['description']}")
+    if project.get("domain_context"):
+        lines.append(f"- **Domain Context**: {project['domain_context']}")
+    if project.get("conventions"):
+        lines.append(f"- **Conventions**: {project['conventions']}")
     lines.append("")
 
     # --- ## Preset ---
@@ -749,8 +753,15 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
         # placeholder substitution uses the agent name.
         claude_path = deploy_role(agent_id, target_root=target_root)
 
-        # SOUL.md — deploy_role wrote it if missing; honour existing files
+        # SOUL.md — deploy_role wrote it if missing; honour existing files.
+        # Seed with ### Project Context section from adaptive answers (#462).
         soul_path = agent_dir / "SOUL.md"
+        domain_ctx = (spec.get("project") or {}).get("domain_context", "")
+        if soul_path.exists() and domain_ctx:
+            soul_text = soul_path.read_text(encoding="utf-8")
+            if "### Project Context" not in soul_text:
+                soul_text += f"\n### Project Context\n\n{domain_ctx}\n"
+                soul_path.write_text(soul_text, encoding="utf-8")
 
         # working-state.md — never overwrite
         ws_path = agent_dir / "working-state.md"

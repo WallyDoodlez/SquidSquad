@@ -68,3 +68,7 @@ During quiet cycles, scan the target project for improvements using the criteria
 
 **File patterns**: Auto-detect from the project's tech stack (scan for `package.json`, `Cargo.toml`, `go.mod`, `pom.xml`, `*.csproj`, `pyproject.toml`, etc.) and target the corresponding source extensions. Scan source files belonging to the target project only.
 **Noise filter**: Stylistic preferences are not findings. Only report functional issues, security risks, or clear maintainability problems.
+
+### Project Context
+
+_Populated during setup. Describes what this project does, its tech stack, conventions, and key tools._
