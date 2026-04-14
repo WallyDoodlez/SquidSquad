@@ -1,8 +1,8 @@
 # Working State
 
-- **Task**: none
-- **Status**: idle
-- **Phase**:
+- **Task**: #922 — SQLite scan index
+- **Status**: in-progress
+- **Phase**: researching FEAT-SKILL-922
 - **Started**: 2026-04-13
 
 ## Active Pipeline

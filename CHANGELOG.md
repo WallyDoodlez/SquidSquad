@@ -4,6 +4,23 @@ All notable changes to SquidSquad will be documented in this file. This changelo
 
 ---
 
+## [0.18.0] — 2026-04-14
+
+### Added
+
+- #347 — **PM/QA role separation** — PM no longer assumes QA duties. QA runs as an independent agent with its own verification cycle. PM falls back to combined mode when QA is absent.
+- #462 — **Adaptive setup questions** — the setup wizard now asks 3 context questions (1 fixed + 2 inferred from your answers) to tailor each agent's personality to your project domain.
+- #897 — **Designer agent cleanup** — removed phantom designer config entries and added `.stop` sentinel for clean agent lifecycle management.
+
+### Fixed
+
+- #894 — health_check.py now returns exit 1 when .local-config is missing instead of silently reporting all-healthy
+- #893 — Fixed tracker.py unread feedback check failing on non-canonical role names
+- #590 — Dev agent planning artifact directory mismatch (pm/planning/ as primary location)
+- #887, #895, #896, #919 — Unit test coverage for cycle.py, vault_check.py, config.py, and vault_remember.py
+
+---
+
 ## [0.17.0] — 2026-04-13
 
 ### Added
