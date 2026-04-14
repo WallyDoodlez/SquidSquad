@@ -14,3 +14,5 @@
 {"timestamp": 1776157394.0733118, "role": "pm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 90m ago (threshold 60m))"}
 {"timestamp": 1776162790.4803479, "role": "pm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 89m ago (threshold 60m))"}
 {"timestamp": 1776168198.4468257, "role": "pm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 90m ago (threshold 60m))"}
+{"timestamp": 1776180679.984711, "role": "pm", "action": "kill", "success": true, "message": "killed PID 204824 (taskkill)", "reason": "stalled (last active 86m ago (threshold 60m))"}
+{"timestamp": 1776180681.0138612, "role": "pm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 86m ago (threshold 60m))"}
