@@ -1,8 +1,8 @@
 # Working State
 
-- **Task**: none
-- **Status**: idle
-- **Phase**:
+- **Task**: #918 — Self-restart mechanism
+- **Status**: in-progress
+- **Phase**: researching FEAT-SKILL-918
 - **Started**: 2026-04-13
 
 ## Active Pipeline

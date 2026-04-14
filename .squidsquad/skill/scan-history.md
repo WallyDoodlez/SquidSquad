@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-14 00:02
+
+- **Files scanned**: references/scripts/compose.py, references/scripts/vault_remember.py, references/scripts/git_ops.py
+- **Findings**: none (all 3 clean — proper encoding, error handling, list-form subprocess calls)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-13 17:31
 
 - **Files scanned**: references/scripts/manifest.py, references/scripts/diagnostics.py, references/scripts/config.py
