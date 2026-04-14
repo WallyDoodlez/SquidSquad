@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-14 03:32
+
+- **Files scanned**: references/scripts/vault_optimize.py, tests/test_start_scripts.py, tests/test_triage.py
+- **Findings**: #923 (test_start_scripts.py ROLES list missing qa and designer — boot script tests incomplete)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-14 00:02
 
 - **Files scanned**: references/scripts/compose.py, references/scripts/vault_remember.py, references/scripts/git_ops.py
