@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-14 05:32
+
+- **Files scanned**: references/sub-skills/dm-specific/version-bumps.md, delivery-packaging.md, issue-triage.md
+- **Findings**: none (all clean — list-bugs/create-bug are valid tracker.py aliases, delivery flow correct)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-14 03:32
 
 - **Files scanned**: references/scripts/vault_optimize.py, tests/test_start_scripts.py, tests/test_triage.py
