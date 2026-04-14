@@ -1,5 +1,53 @@
 # Scan History
 
+## Scan — 2026-04-14 11:34
+
+- **Files scanned**: references/scripts/add_role.py, tests/test_add_role.py, tests/test_work_queue.py, tests/test_feat328_coverage.py
+- **Findings**: none (all clean — list-form subprocess, proper encoding, good test coverage, no security issues)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-14 08:32
+
+- **Files scanned**: references/sub-skills/designer-specific/design-session.md, design-capabilities.md
+- **Findings**: none (clean — proper tracker commands, capability fallback logic, no stale INDEX.md refs)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-14 07:02
+
+- **Files scanned**: references/sub-skills/qa-specific/verification.md (full 160-line review)
+- **Findings**: none (clean — correct tracker commands, branch checkout flow, TEST-PLAN subagent, PR Flow handling)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-14 05:32
+
+- **Files scanned**: references/sub-skills/dm-specific/version-bumps.md, delivery-packaging.md, issue-triage.md
+- **Findings**: none (all clean — list-bugs/create-bug are valid tracker.py aliases, delivery flow correct)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-14 03:32
+
+- **Files scanned**: references/scripts/vault_optimize.py, tests/test_start_scripts.py, tests/test_triage.py
+- **Findings**: #923 (test_start_scripts.py ROLES list missing qa and designer — boot script tests incomplete)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-14 00:02
+
+- **Files scanned**: references/scripts/compose.py, references/scripts/vault_remember.py, references/scripts/git_ops.py
+- **Findings**: none (all 3 clean — proper encoding, error handling, list-form subprocess calls)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-13 17:31
+
+- **Files scanned**: references/scripts/manifest.py, references/scripts/diagnostics.py, references/scripts/config.py
+- **Findings**: none (all 3 clean — proper validation, error handling, YAML safe_load, config redaction)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-13 14:32
+
+- **Files scanned**: references/scripts/triage.py, references/scripts/health_check.py, references/scripts/capability_check.py
+- **Findings**: none (all 3 clean — proper encoding, error handling, correct logic. triage.py has dead code branch in line 109 comparison but no functional impact)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-13 08:02
 
 - **Files scanned**: references/scripts/capability_check.py, references/scripts/diagnostics.py

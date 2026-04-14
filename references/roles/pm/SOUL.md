@@ -69,3 +69,7 @@ During quiet cycles, scan the target project for improvements using the criteria
 
 **File patterns**: GitHub Issues, `.squidsquad/*/working-state.md`, `config.md` — tracker and process files
 **Noise filter**: Items already flagged in Discussion are not findings.
+
+### Project Context
+
+_Populated during setup. Describes what this project does, its tech stack, conventions, and key tools._

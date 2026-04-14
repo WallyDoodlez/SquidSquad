@@ -15,12 +15,12 @@ for ($i = 0; $i -lt $args.Count; $i++) {
 
 # Read alias from config if no --name override
 if (-not $AgentName) {
+    $Alias = ""
     try {
-        $AgentName = (python references/scripts/config.py alias pm 2>$null).Trim()
-    } catch {
-        $AgentName = "squidsquad-pm"
-    }
-    if (-not $AgentName) { $AgentName = "squidsquad-pm" }
+        $Alias = (python references/scripts/config.py alias pm 2>$null).Trim()
+    } catch {}
+    if (-not $Alias) { $Alias = "pm" }
+    $AgentName = "SquidSquad - $Alias"
 }
 
 if (Test-Path .squidsquad) {
@@ -52,6 +52,7 @@ try { python references/scripts/config.py sync-agents 2>$null } catch {}
 $RoleDir = ".squidsquad/pm"
 $PidFile = "$RoleDir/.pid"
 $StopFile = "$RoleDir/.stop"
+$RestartSentinel = "$RoleDir/.restart"
 $RestartLog = "$RoleDir/restart-log.txt"
 $StateFile = "$RoleDir/current-state"
 
@@ -91,8 +92,29 @@ try {
 
         $sysPrompt = "SQUIDSQUAD_ROLE=pm"
         $initMsg = "start the loop"
-        claude --dangerously-skip-permissions --name "$AgentName" --append-system-prompt "$sysPrompt" "$initMsg"
-        $exitCode = $LASTEXITCODE
+
+        # Start Claude as a background process so we can poll for .restart (#918)
+        $claudeProc = Start-Process -FilePath "claude.cmd" -ArgumentList "--dangerously-skip-permissions", "--name", "$AgentName", "--append-system-prompt", "$sysPrompt", "$initMsg" -NoNewWindow -PassThru
+
+        # Background poller: watch for .restart sentinel while Claude is running
+        $watcherJob = Start-Job -ScriptBlock {
+            param($sentinel, $pid)
+            while (-not (Get-Process -Id $pid -ErrorAction SilentlyContinue).HasExited) {
+                if (Test-Path $sentinel) {
+                    Write-Output "[SquidSquad] Restart sentinel detected — stopping Claude (PID $pid)..."
+                    try { Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue } catch {}
+                    break
+                }
+                Start-Sleep -Seconds 5
+            }
+        } -ArgumentList $RestartSentinel, $claudeProc.Id
+
+        $claudeProc.WaitForExit()
+        $exitCode = $claudeProc.ExitCode
+
+        # Clean up watcher
+        Stop-Job $watcherJob -ErrorAction SilentlyContinue
+        Remove-Job $watcherJob -ErrorAction SilentlyContinue
 
         $runtime = [int]((Get-Date) - $startTime).TotalSeconds
 
@@ -102,6 +124,20 @@ try {
             Remove-Item $StopFile -ErrorAction SilentlyContinue
             "stopped|Agent stopped by user" | Set-Content $StateFile -NoNewline
             break
+        }
+
+        # Check for self-restart sentinel (agent requested restart)
+        if (Test-Path $RestartSentinel) {
+            $reason = (Get-Content $RestartSentinel -ErrorAction SilentlyContinue | Select-Object -First 1)
+            if (-not $reason) { $reason = "unknown" }
+            Remove-Item $RestartSentinel -ErrorAction SilentlyContinue
+            $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+            "$ts | exit=$exitCode | self-restart | reason=$reason | runtime=${runtime}s" | Add-Content $RestartLog
+            Write-Host "[SquidSquad] Self-restart requested: $reason. Restarting immediately..."
+            "restarting|Self-restart: $reason" | Set-Content $StateFile -NoNewline
+            $RestartCount = 0
+            Start-Sleep -Seconds 2
+            continue
         }
 
         # Append restart log entry

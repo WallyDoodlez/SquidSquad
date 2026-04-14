@@ -1,13 +1,14 @@
 # SquidSquad Config
 
-- **SquidSquad Version**: 0.16.0
+- **SquidSquad Version**: 0.18.0
 - **Tracker**: github-issues
 - **Architecture Version**: 1
 
 ## Agents
 
-- **Dev Agents**: designer, qa, skill
-- **PM/QA**: always present
+- **Dev Agents**: designer, dev, qa, skill, wizard
+- **PM**: always present
+- **QA**: always present
 - **DM**: present
 
 ## Aliases
@@ -78,4 +79,4 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-- **Shipped Since Last Bump**: 16
+- **Shipped Since Last Bump**: 5

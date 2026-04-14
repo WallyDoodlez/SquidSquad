@@ -23,4 +23,5 @@ includes:
   - common/vault-protocol
   - pm-specific/file-conventions
   - pm-specific/status-line
+  - common/self-restart
   - pm-specific/prohibitions

@@ -14,7 +14,8 @@ done
 
 # Read alias from config if no --name override
 if [ -z "$AGENT_NAME" ]; then
-  AGENT_NAME=$(python references/scripts/config.py alias {{ROLE}} 2>/dev/null || echo "squidsquad-{{ROLE}}")
+  ALIAS=$(python references/scripts/config.py alias {{ROLE}} 2>/dev/null || echo "{{ROLE}}")
+  AGENT_NAME="SquidSquad - ${ALIAS}"
 fi
 
 if [ -d .squidsquad ]; then
@@ -45,6 +46,7 @@ echo "{{ROLE}}" > .squidsquad/.active-role
 ROLE_DIR=".squidsquad/{{ROLE}}"
 PID_FILE="$ROLE_DIR/.pid"
 STOP_FILE="$ROLE_DIR/.stop"
+RESTART_SENTINEL="$ROLE_DIR/.restart"
 RESTART_LOG="$ROLE_DIR/restart-log.txt"
 STATE_FILE="$ROLE_DIR/current-state"
 
@@ -104,9 +106,27 @@ while true; do
 
   claude --dangerously-skip-permissions --name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE={{ROLE}}" "start the loop" &
   CHILD_PID=$!
+
+  # Background poller: watch for .restart sentinel while Claude is running (#918)
+  (
+    while kill -0 "$CHILD_PID" 2>/dev/null; do
+      if [ -f "$RESTART_SENTINEL" ]; then
+        echo "[SquidSquad] Restart sentinel detected — killing Claude (PID $CHILD_PID)..."
+        kill -INT "$CHILD_PID" 2>/dev/null
+        break
+      fi
+      sleep 5
+    done
+  ) &
+  WATCHER_PID=$!
+
   wait "$CHILD_PID"
   EXIT_CODE=$?
   CHILD_PID=""
+
+  # Clean up watcher
+  kill "$WATCHER_PID" 2>/dev/null
+  wait "$WATCHER_PID" 2>/dev/null
 
   END_TIME=$(date +%s)
   RUNTIME=$((END_TIME - START_TIME))
@@ -117,6 +137,19 @@ while true; do
     rm -f "$STOP_FILE"
     echo "stopped|Agent stopped by user" > "$STATE_FILE"
     break
+  fi
+
+  # Check for self-restart sentinel (agent requested restart)
+  if [ -f "$RESTART_SENTINEL" ]; then
+    REASON=$(cat "$RESTART_SENTINEL" 2>/dev/null || echo "unknown")
+    rm -f "$RESTART_SENTINEL"
+    TS=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "$TS | exit=$EXIT_CODE | self-restart | reason=$REASON | runtime=${RUNTIME}s" >> "$RESTART_LOG"
+    echo "[SquidSquad] Self-restart requested: $REASON. Restarting immediately..."
+    echo "restarting|Self-restart: $REASON" > "$STATE_FILE"
+    RESTART_COUNT=0
+    sleep 2
+    continue
   fi
 
   # Append restart log entry: timestamp | exit_code | restart_count | runtime

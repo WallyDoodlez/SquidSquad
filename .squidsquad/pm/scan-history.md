@@ -1,3 +1,11 @@
+## Scan — 2026-04-13 17:32
+
+- **Files scanned**: references/scripts/tracker.py, references/scripts/config.py, references/scripts/health_check.py
+- **Findings**:
+  - #893 — tracker.py _check_unread_feedback role name matching not canonicalized (issue, low)
+  - #894 — health_check.py returns exit 0 when .local-config missing, masks unchecked agents (issue, low)
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-12 18:33
 
 - **Files scanned**: .squidsquad/pm/working-state.md (staleness check against live tracker)

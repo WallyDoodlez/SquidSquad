@@ -20,4 +20,5 @@ includes:
   - common/vault-protocol
   - common/file-conventions
   - common/status-line
+  - common/self-restart
   - common/prohibitions

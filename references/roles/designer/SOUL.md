@@ -65,3 +65,7 @@ During quiet cycles, scan the target project for improvements using the criteria
 
 **File patterns**: `*.tsx`, `*.jsx`, `*.css`, `*.scss`, `*.html` — UI source files
 **Noise filter**: Intentional deviations documented in design specs are not findings.
+
+### Project Context
+
+_Populated during setup. Describes what this project does, its tech stack, conventions, and key tools._

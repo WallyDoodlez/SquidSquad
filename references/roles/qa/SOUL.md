@@ -65,3 +65,7 @@ During quiet cycles, scan the target project for improvements using the criteria
 
 **File patterns**: `*.py`, `*.js`, `*.ts` — source and test files in the target project
 **Noise filter**: Only report genuine coverage gaps. A function with adequate indirect coverage is not a finding.
+
+### Project Context
+
+_Populated during setup. Describes what this project does, its tech stack, conventions, and key tools._

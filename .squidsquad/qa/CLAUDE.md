@@ -13,7 +13,7 @@ Read `.squidsquad/[ROLE]/SOUL.md` at session start and follow its instructions a
 
 You are the QA agent on the SquidSquad autonomous dev team. You independently verify work from ALL dev and designer agents — running tests, checking acceptance criteria, verifying bug fixes, and filing bugs for failures. You hand verified work to DM for delivery. You do not wait for instructions between cycles — you follow the Ralph Loop below.
 
-The active dev agents on this project are: **designer, qa, skill** (read from `.squidsquad/config.md`).
+The active dev agents on this project are: **qa, skill** (read from `.squidsquad/config.md`).
 
 ---
 
@@ -166,7 +166,7 @@ python references/scripts/tracker.py transition [NUMBER] pending-ship shipped --
 Pass your own role — PM uses `--role pm-lead`, QA uses `--role qa-lead`, DM uses `--role dm-lead`, designer uses `--role designer-lead`, dev agents use `--role [ROLE]-lead` (e.g. `skill-lead`). The script rejects:
 
 - **Illegal transitions** (e.g. `pending → shipped`) — never bypassable.
-- **Unauthorized transitions** — e.g. a dev agent trying to run `pending-ship → shipped` (DM-only) or `pending-test → pending-ship` (PM/QA-only). Use `--force` only as a human override.
+- **Unauthorized transitions** — e.g. a dev agent trying to run `pending-ship → shipped` (DM-only) or `pending-test → pending-ship` (PM or QA only). Use `--force` only as a human override.
 - **Unassigned transitions** — dev-style transitions (pickup, pending-test) require your canonical role to match one of the issue's `role:*` labels.
 
 Legal flows and owning roles:
@@ -176,7 +176,7 @@ Legal flows and owning roles:
 - `planned` → `approved` — **PM**
 - `approved` → `in-progress` — **assigned role**
 - `in-progress` → `pending-test` | `approved` — **assigned role**
-- `pending-test` → `in-progress` | `pending-ship` — **PM or QA** (PM always; QA when a separate QA agent is installed. PM holds combined PM/QA identity by default.)
+- `pending-test` → `in-progress` | `pending-ship` — **PM or QA** (both authorized; QA handles verification when installed, PM falls back when QA absent)
 - `pending-ship` → `shipped` — **DM** (auto-closes)
 
 ### Discussion Entries (replaces inline Discussion sections)
@@ -293,8 +293,8 @@ Check `context_window.used_percentage`. Compare against the threshold in `config
 If context usage **exceeds the threshold**:
 1. Compact your current working state into `.squidsquad/qa/working-state.md`.
 2. Commit and push all pending work.
-3. Print: `[🦑 HH:MM:SS] Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
-4. Exit the conversation.
+3. Print: `[🦑 HH:MM:SS] Context pressure at [X]% — working state checkpointed. Continuing normally.`
+4. **Continue the cycle normally.** Claude Code automatically compresses prior messages as context approaches limits. Set a flag so the Self-Restart step (at cycle end) triggers a fresh session after the cycle completes.
 
 ### Step 1c — Resume From Working State
 
@@ -588,6 +588,41 @@ Print: `[🦑 HH:MM:SS] Committing and pushing...`
 python references/scripts/git_ops.py commit-push qa "[brief summary — e2e results, bugs filed, features verified]"
 ```
 <!-- /sub-skill: git-commit -->
+
+<!-- sub-skill: self-restart -->
+### Self-Restart (Sentinel-Based)
+
+At the end of each cycle (after Step Done), check whether a restart is needed. **Never restart mid-cycle** — complete the full Ralph Loop first.
+
+**Restart triggers** (check in order):
+
+1. **Context pressure**: If context usage exceeded the threshold during Step 1b this cycle, trigger a restart to get a fresh context window.
+2. **Template change**: If `.squidsquad/[ROLE]/CLAUDE.md` mtime is newer than the session start time, trigger a restart to pick up updated instructions.
+
+**Pre-restart checklist** (all steps required before writing the sentinel):
+
+1. Save working state to `.squidsquad/[ROLE]/working-state.md`.
+2. Commit and push all pending changes.
+3. Write status bar: `restarting|Self-restart — [reason]`
+4. Print: `[🦑 HH:MM:SS] Self-restart triggered: [reason]. State saved. Restarting...`
+
+**Trigger the restart**:
+
+Write the sentinel file with the reason:
+
+```bash
+echo "[reason]" > .squidsquad/[ROLE]/.restart
+```
+
+The boot script wrapper detects this sentinel, kills the current Claude process, deletes the sentinel, and starts a fresh session. The new session reads `working-state.md` on startup (Step 1c) and resumes where it left off.
+
+**Safety rules**:
+
+- Never write `.restart` mid-cycle — only after the cycle-complete marker.
+- Never write `.restart` if working state has uncommitted changes — commit first.
+- The sentinel is deleted by the boot script after restart — if it persists, the boot script did not detect it (check boot script version).
+- Maximum 3 self-restarts per hour (tracked in `.squidsquad/[ROLE]/restart-log.txt`). If exceeded, skip the restart and print a warning. This prevents infinite restart loops.
+<!-- /sub-skill: self-restart -->
 
 ### Step 9 — Done
 

@@ -37,6 +37,111 @@ BOOT_LOCK = SQUIDSQUAD_DIR / "boot-lock"
 
 COOLDOWN_SECONDS = 600  # 10 minutes between spawn attempts per role
 LOCK_TTL_SECONDS = 30
+GRACE_PERIOD_SECONDS = 120  # 2 minutes after spawn before re-flagging
+
+
+# ---------------------------------------------------------------------------
+# PID-based process detection and cleanup
+# ---------------------------------------------------------------------------
+
+def _read_pid_file(clone_path, role):
+    """Read PID from .squidsquad/{role}/.pid in the target clone. Returns int or None."""
+    pid_file = Path(clone_path) / ".squidsquad" / role / ".pid"
+    if not pid_file.exists():
+        return None
+    try:
+        content = pid_file.read_text(encoding="utf-8").strip()
+        return int(content) if content else None
+    except (ValueError, OSError):
+        return None
+
+
+def _is_process_alive(pid):
+    """Check if a process with the given PID is still running."""
+    if pid is None:
+        return False
+    try:
+        if platform.system().lower() == "windows":
+            # On Windows, os.kill(pid, 0) doesn't work reliably
+            result = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+                capture_output=True, text=True, check=False,
+            )
+            return str(pid) in result.stdout
+        else:
+            os.kill(pid, 0)
+            return True
+    except (OSError, ProcessLookupError, PermissionError):
+        return False
+
+
+def _kill_process(pid):
+    """Terminate a process by PID. Returns (success, message)."""
+    if pid is None:
+        return False, "no PID"
+    try:
+        if platform.system().lower() == "windows":
+            result = subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                capture_output=True, text=True, check=False,
+            )
+            if result.returncode == 0:
+                return True, f"killed PID {pid} (taskkill)"
+            return False, f"taskkill failed: {result.stderr.strip()}"
+        else:
+            import signal
+            os.kill(pid, signal.SIGTERM)
+            # Wait briefly for graceful shutdown
+            for _ in range(10):
+                time.sleep(0.5)
+                try:
+                    os.kill(pid, 0)
+                except (OSError, ProcessLookupError):
+                    return True, f"killed PID {pid} (SIGTERM)"
+            # Force kill if still alive
+            try:
+                os.kill(pid, signal.SIGKILL)
+                return True, f"killed PID {pid} (SIGKILL)"
+            except (OSError, ProcessLookupError):
+                return True, f"killed PID {pid} (already dead)"
+    except Exception as e:
+        return False, f"kill failed: {e}"
+
+
+def _cleanup_stale_pid(clone_path, role):
+    """Remove stale PID file after killing process."""
+    pid_file = Path(clone_path) / ".squidsquad" / role / ".pid"
+    try:
+        pid_file.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _check_and_kill_existing(clone_path, role):
+    """Check for existing process and kill if stale. Returns (killed, message)."""
+    pid = _read_pid_file(clone_path, role)
+    if pid is None:
+        return False, "no PID file"
+    if not _is_process_alive(pid):
+        _cleanup_stale_pid(clone_path, role)
+        return False, f"stale PID file (PID {pid} not running), cleaned up"
+    # Process is alive but health check says stalled — kill it
+    success, msg = _kill_process(pid)
+    if success:
+        _cleanup_stale_pid(clone_path, role)
+    return success, msg
+
+
+def _check_grace_period(role):
+    """Check if role was recently spawned (within grace period). Returns (in_grace, seconds_remaining)."""
+    now = time.time()
+    entries = _read_boot_log()
+    for entry in reversed(entries):
+        if entry.get("role") == role and entry.get("action") == "spawn" and entry.get("success"):
+            elapsed = now - entry.get("timestamp", 0)
+            if elapsed < GRACE_PERIOD_SECONDS:
+                return True, int(GRACE_PERIOD_SECONDS - elapsed)
+    return False, 0
 
 
 # ---------------------------------------------------------------------------
@@ -331,6 +436,14 @@ def boot_agent(role, report=None, dry_run=False):
         result["message"] = f"skip: {reason}"
         return result
 
+    # Check startup grace period (recently spawned agents may still be initializing)
+    in_grace, grace_remaining = _check_grace_period(role)
+    if in_grace:
+        result["action"] = "skip"
+        result["success"] = True
+        result["message"] = f"grace period active ({grace_remaining}s remaining), skipping"
+        return result
+
     # Check cooldown
     in_cooldown, remaining = _check_cooldown(role)
     if in_cooldown:
@@ -368,6 +481,21 @@ def boot_agent(role, report=None, dry_run=False):
         return result
 
     try:
+        # Kill existing stale process before spawning replacement
+        clone_path_obj = Path(clone_path)
+        killed, kill_msg = _check_and_kill_existing(clone_path, role)
+        if killed:
+            _append_boot_log({
+                "timestamp": time.time(),
+                "role": role,
+                "action": "kill",
+                "success": True,
+                "message": kill_msg,
+                "reason": reason,
+            })
+            # Brief pause to let OS release resources
+            time.sleep(1)
+
         # Spawn
         success, msg = _spawn_terminal(clone_path, role, boot_script, script_type)
         result["action"] = "spawn"

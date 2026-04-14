@@ -70,7 +70,7 @@ def _validate_role(role):
     """Check that the role exists in config.md or has a role template."""
     configured = _get_configured_agents()
     roles_dir = REPO_ROOT / "references" / "roles"
-    has_template = (roles_dir / role / "CLAUDE.md").exists() or (roles_dir / "dev" / "CLAUDE.md").exists()
+    has_template = (roles_dir / role / "CLAUDE.md").exists()
 
     if role in configured:
         return True
@@ -149,6 +149,17 @@ def add_role(role, target=None, boot=False, force=False, dry_run=False):
     if not _validate_role(role):
         print(f"ERROR: Role '{role}' not found in config.md or references/roles/", file=sys.stderr)
         return 1
+
+    # Check for duplicate role registration (TC-9)
+    if not force:
+        existing = _parse_local_config()
+        if role in existing:
+            print(
+                f"ERROR: Role '{role}' is already registered at {existing[role]}",
+                file=sys.stderr,
+            )
+            print("Use --force to overwrite the existing registration.", file=sys.stderr)
+            return 1
 
     project_name = _get_project_name()
 

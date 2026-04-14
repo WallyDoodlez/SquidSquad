@@ -1,0 +1,118 @@
+"""Tests for references/scripts/diagnostics.py — log, read, rotate, sanitize."""
+
+import json
+import sys
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
+SCRIPTS = Path(__file__).resolve().parent.parent / "references" / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+import diagnostics
+
+
+class TestLogEntry:
+    def test_creates_log_file(self, tmp_path):
+        log_dir = tmp_path / "diagnostics"
+        log_file = log_dir / "diagnostic.jsonl"
+        with patch.object(diagnostics, "DIAGNOSTICS_DIR", log_dir), \
+             patch.object(diagnostics, "LOG_FILE", log_file):
+            entry = diagnostics.log_entry("warning", "tracker", "test message")
+        assert log_file.exists()
+        assert entry["severity"] == "warning"
+        assert entry["source"] == "tracker"
+        assert entry["message"] == "test message"
+
+    def test_appends_to_existing(self, tmp_path):
+        log_dir = tmp_path / "diagnostics"
+        log_dir.mkdir()
+        log_file = log_dir / "diagnostic.jsonl"
+        log_file.write_text('{"existing": true}\n', encoding="utf-8")
+        with patch.object(diagnostics, "DIAGNOSTICS_DIR", log_dir), \
+             patch.object(diagnostics, "LOG_FILE", log_file):
+            diagnostics.log_entry("info", "cycle", "second entry")
+        lines = log_file.read_text(encoding="utf-8").strip().splitlines()
+        assert len(lines) == 2
+
+    def test_json_context(self, tmp_path):
+        log_dir = tmp_path / "diagnostics"
+        log_file = log_dir / "diagnostic.jsonl"
+        with patch.object(diagnostics, "DIAGNOSTICS_DIR", log_dir), \
+             patch.object(diagnostics, "LOG_FILE", log_file):
+            entry = diagnostics.log_entry("error", "boot", "fail", context='{"pid": 123}')
+        assert entry["context"] == {"pid": 123}
+
+    def test_non_json_context(self, tmp_path):
+        log_dir = tmp_path / "diagnostics"
+        log_file = log_dir / "diagnostic.jsonl"
+        with patch.object(diagnostics, "DIAGNOSTICS_DIR", log_dir), \
+             patch.object(diagnostics, "LOG_FILE", log_file):
+            entry = diagnostics.log_entry("info", "test", "msg", context="plain text")
+        assert entry["context"] == {"raw": "plain text"}
+
+
+class TestReadEntries:
+    def test_reads_last_n(self, tmp_path, capsys):
+        log_file = tmp_path / "diagnostic.jsonl"
+        entries = [json.dumps({"n": i}) for i in range(10)]
+        log_file.write_text("\n".join(entries) + "\n", encoding="utf-8")
+        with patch.object(diagnostics, "LOG_FILE", log_file):
+            result = diagnostics.read_entries(last=3)
+        assert len(result) == 3
+        assert result[0]["n"] == 7
+
+    def test_missing_file_returns_empty(self, tmp_path, capsys):
+        with patch.object(diagnostics, "LOG_FILE", tmp_path / "missing.jsonl"):
+            result = diagnostics.read_entries()
+        assert result == []
+
+    def test_malformed_lines_skipped(self, tmp_path, capsys):
+        log_file = tmp_path / "diagnostic.jsonl"
+        log_file.write_text('{"good": true}\nnot json\n{"also": "good"}\n', encoding="utf-8")
+        with patch.object(diagnostics, "LOG_FILE", log_file):
+            result = diagnostics.read_entries(last=10)
+        assert len(result) == 2
+
+
+class TestRotate:
+    def test_rotates_when_over_500(self, tmp_path):
+        log_file = tmp_path / "diagnostic.jsonl"
+        entries = [json.dumps({"n": i}) for i in range(600)]
+        log_file.write_text("\n".join(entries) + "\n", encoding="utf-8")
+        with patch.object(diagnostics, "LOG_FILE", log_file):
+            diagnostics.rotate()
+        lines = log_file.read_text(encoding="utf-8").strip().splitlines()
+        assert len(lines) == 500
+
+    def test_no_rotation_under_500(self, tmp_path):
+        log_file = tmp_path / "diagnostic.jsonl"
+        entries = [json.dumps({"n": i}) for i in range(100)]
+        log_file.write_text("\n".join(entries) + "\n", encoding="utf-8")
+        with patch.object(diagnostics, "LOG_FILE", log_file):
+            diagnostics.rotate()
+        lines = log_file.read_text(encoding="utf-8").strip().splitlines()
+        assert len(lines) == 100
+
+    def test_missing_file_no_error(self, tmp_path):
+        with patch.object(diagnostics, "LOG_FILE", tmp_path / "missing.jsonl"):
+            diagnostics.rotate()  # should not raise
+
+
+class TestSanitizeConfig:
+    def test_redacts_repo_field(self):
+        config_text = "- **Repo**: github.com/secret/repo\n- **Name**: MyApp\n"
+        with patch.object(diagnostics, "_read_config", return_value=config_text):
+            result = diagnostics._sanitize_config()
+        assert "[REDACTED]" in result
+        assert "secret" not in result
+        assert "MyApp" in result
+
+    def test_preserves_non_sensitive(self):
+        config_text = "- **Minutes**: 30\n- **Enabled**: yes\n"
+        with patch.object(diagnostics, "_read_config", return_value=config_text):
+            result = diagnostics._sanitize_config()
+        assert "30" in result
+        assert "yes" in result
+        assert "[REDACTED]" not in result

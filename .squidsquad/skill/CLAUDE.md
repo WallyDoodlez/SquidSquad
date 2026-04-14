@@ -160,7 +160,7 @@ python references/scripts/tracker.py transition [NUMBER] pending-ship shipped --
 Pass your own role — PM uses `--role pm-lead`, QA uses `--role qa-lead`, DM uses `--role dm-lead`, designer uses `--role designer-lead`, dev agents use `--role skill-lead` (e.g. `skill-lead`). The script rejects:
 
 - **Illegal transitions** (e.g. `pending → shipped`) — never bypassable.
-- **Unauthorized transitions** — e.g. a dev agent trying to run `pending-ship → shipped` (DM-only) or `pending-test → pending-ship` (PM/QA-only). Use `--force` only as a human override.
+- **Unauthorized transitions** — e.g. a dev agent trying to run `pending-ship → shipped` (DM-only) or `pending-test → pending-ship` (PM or QA only). Use `--force` only as a human override.
 - **Unassigned transitions** — dev-style transitions (pickup, pending-test) require your canonical role to match one of the issue's `role:*` labels.
 
 Legal flows and owning roles:
@@ -170,7 +170,7 @@ Legal flows and owning roles:
 - `planned` → `approved` — **PM**
 - `approved` → `in-progress` — **assigned role**
 - `in-progress` → `pending-test` | `approved` — **assigned role**
-- `pending-test` → `in-progress` | `pending-ship` — **PM or QA** (PM always; QA when a separate QA agent is installed. PM holds combined PM/QA identity by default.)
+- `pending-test` → `in-progress` | `pending-ship` — **PM or QA** (both authorized; QA handles verification when installed, PM falls back when QA absent)
 - `pending-ship` → `shipped` — **DM** (auto-closes)
 
 ### Discussion Entries (replaces inline Discussion sections)
@@ -290,7 +290,7 @@ If context usage **exceeds the threshold**:
 1. Compact your current working state into `.squidsquad/skill/working-state.md` (see Working State File below). This is a checkpoint — if the session crashes or is interrupted, the next session can resume from working state.
 2. Commit and push all pending work.
 3. Print: `[🦑 HH:MM:SS] Context pressure at [X]% — working state checkpointed. Continuing normally.`
-4. **Continue the cycle normally.** Claude Code automatically compresses prior messages as context approaches limits, so the conversation can keep going indefinitely. Do NOT exit the conversation — exiting kills the cron loop and there is no auto-restart mechanism.
+4. **Continue the cycle normally.** Claude Code automatically compresses prior messages as context approaches limits, so the conversation can keep going indefinitely. Set a flag so the Self-Restart step (at cycle end) triggers a fresh session after the cycle completes.
 
 If context usage is below threshold, continue normally.
 <!-- /sub-skill: context-pressure -->
@@ -772,6 +772,41 @@ Split commits into code (feature branch) and state (main):
 python references/scripts/git_ops.py commit-push skill "[brief description of work done this cycle]"
 ```
 <!-- /sub-skill: git-commit -->
+
+<!-- sub-skill: self-restart -->
+### Self-Restart (Sentinel-Based)
+
+At the end of each cycle (after Step Done), check whether a restart is needed. **Never restart mid-cycle** — complete the full Ralph Loop first.
+
+**Restart triggers** (check in order):
+
+1. **Context pressure**: If context usage exceeded the threshold during Step 1b this cycle, trigger a restart to get a fresh context window.
+2. **Template change**: If `.squidsquad/skill/CLAUDE.md` mtime is newer than the session start time, trigger a restart to pick up updated instructions.
+
+**Pre-restart checklist** (all steps required before writing the sentinel):
+
+1. Save working state to `.squidsquad/skill/working-state.md`.
+2. Commit and push all pending changes.
+3. Write status bar: `restarting|Self-restart — [reason]`
+4. Print: `[🦑 HH:MM:SS] Self-restart triggered: [reason]. State saved. Restarting...`
+
+**Trigger the restart**:
+
+Write the sentinel file with the reason:
+
+```bash
+echo "[reason]" > .squidsquad/skill/.restart
+```
+
+The boot script wrapper detects this sentinel, kills the current Claude process, deletes the sentinel, and starts a fresh session. The new session reads `working-state.md` on startup (Step 1c) and resumes where it left off.
+
+**Safety rules**:
+
+- Never write `.restart` mid-cycle — only after the cycle-complete marker.
+- Never write `.restart` if working state has uncommitted changes — commit first.
+- The sentinel is deleted by the boot script after restart — if it persists, the boot script did not detect it (check boot script version).
+- Maximum 3 self-restarts per hour (tracked in `.squidsquad/skill/restart-log.txt`). If exceeded, skip the restart and print a warning. This prevents infinite restart loops.
+<!-- /sub-skill: self-restart -->
 
 ### Step 6 — Done
 

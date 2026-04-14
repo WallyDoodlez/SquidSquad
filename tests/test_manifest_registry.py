@@ -195,12 +195,12 @@ class TestShippedRegistry:
         assert set(presets) >= {"software-dev", "design"}
 
     def test_shipped_pipelines_match_spec(self):
-        """Resolved pipelines match CONTEXT.md §713-718 expected sets."""
+        """Resolved pipelines match expected sets (qa always_installed since #347)."""
         _, roles, _, presets = manifest.validate_registry()
         sw = manifest.resolve_pipeline("software-dev", roles, presets)
         assert sw == {"pm", "dm", "designer", "dev", "qa"}
         design = manifest.resolve_pipeline("design", roles, presets)
-        assert design == {"pm", "dm", "designer"}
+        assert design == {"pm", "dm", "qa", "designer"}
 
 
 # ---------------------------------------------------------------------------
