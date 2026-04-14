@@ -128,6 +128,62 @@ Record the collected details in memory as:
 
 ---
 
+## Step 1b — Adaptive context questions
+
+Ask 3 adaptive questions to bootstrap project understanding. Target 3
+questions, max 5 if answers are vague. Multi-part questions are OK.
+
+**Q1 (fixed)**: Seed from `gh repo view --json description` if available.
+Present as: "I see this repo is described as '[description]'. Can you
+tell me more about what it does?" If gh fails or description is empty,
+fall back to: "What does your project do?"
+
+**Q2 (inferred from Q1)**: Based on Q1, identify the largest information
+gap from these categories and ask about it:
+- Tech stack (languages, frameworks, package managers)
+- Test commands (unit tests, E2E tests, lint)
+- External tools (design tools, CI, deployment targets)
+- Conventions/constraints (coding style, branching, PR requirements)
+- Project structure (monorepo, separate FE/BE, microservices)
+
+Do NOT ask about topics already covered in Q1. If Q1 mentioned "React
+and Node.js," do not ask about frontend framework.
+
+**Q3 (inferred from Q1+Q2)**: Ask about the remaining blind spots.
+By Q3, be specific — target exact gaps, not generic follow-ups.
+
+**Stop condition**: Stop after Q3 if you have enough to populate
+`project.description`, `project.domain_context`, and seed SOUL.md.
+If answers are too vague, ask Q4 and Q5 (hard cap). After Q5, move on
+with whatever was gathered.
+
+**Capability detection**: Scan answers for mentions of known capability
+sub-skills (`python references/scripts/manifest.py list capabilities`).
+If a match is found (e.g., "Figma"), pre-select it in the install spec
+for the applicable role. Show pre-selections in the Step 6 review screen.
+
+**Skip-if-answered tracking**: Record which info categories were covered.
+In Step 4 (setup_requirements), skip or pre-fill questions whose answers
+were already gathered here.
+
+Store in the install spec:
+```json
+{
+    "project": {
+        "description": "<processed one-line summary>",
+        "domain_context": "<narrative summary for SOUL.md seeding>",
+        "conventions": "<coding style, branching, constraints>"
+    },
+    "adaptive_answers": [
+        {"question": "Q1 text", "answer": "user answer"},
+        {"question": "Q2 text", "answer": "user answer"},
+        {"question": "Q3 text", "answer": "user answer"}
+    ]
+}
+```
+
+---
+
 ## Step 2 — Intent + specialist roster
 
 This step implements the conversational intent flow (Q-new15). Do NOT

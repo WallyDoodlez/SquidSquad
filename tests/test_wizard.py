@@ -1612,3 +1612,145 @@ class TestStageLabelMigrationContract:
         assert summary["execute"] is True
         assert summary["delete_old"] is True
         assert summary["state"] == "open"
+
+
+# ---------------------------------------------------------------------------
+# #462 — Adaptive setup questions: config.md + SOUL.md seeding
+# ---------------------------------------------------------------------------
+
+
+class TestAdaptiveSetupFields:
+    """build_config_md renders new project fields from adaptive questions (#462)."""
+
+    def test_description_rendered(self):
+        spec = _minimal_spec(project={
+            "name": "my-app",
+            "repo": "github.com/test/repo",
+            "description": "A CLI tool for CSV processing",
+        })
+        text = wizard.build_config_md(spec)
+        assert "**Description**: A CLI tool for CSV processing" in text
+
+    def test_domain_context_rendered(self):
+        spec = _minimal_spec(project={
+            "name": "my-app",
+            "repo": "github.com/test/repo",
+            "domain_context": "Python CLI, uses pandas, deployed via pip",
+        })
+        text = wizard.build_config_md(spec)
+        assert "**Domain Context**: Python CLI, uses pandas, deployed via pip" in text
+
+    def test_conventions_rendered(self):
+        spec = _minimal_spec(project={
+            "name": "my-app",
+            "repo": "github.com/test/repo",
+            "conventions": "PEP 8, trunk-based, squash merge",
+        })
+        text = wizard.build_config_md(spec)
+        assert "**Conventions**: PEP 8, trunk-based, squash merge" in text
+
+    def test_empty_fields_omitted(self):
+        spec = _minimal_spec(project={
+            "name": "my-app",
+            "repo": "github.com/test/repo",
+        })
+        text = wizard.build_config_md(spec)
+        assert "**Description**" not in text
+        assert "**Domain Context**" not in text
+        assert "**Conventions**" not in text
+
+    def test_all_fields_together(self):
+        spec = _minimal_spec(project={
+            "name": "my-app",
+            "repo": "github.com/test/repo",
+            "description": "Web app",
+            "domain_context": "React + Node.js, deployed on Vercel",
+            "conventions": "ESLint, Prettier, conventional commits",
+        })
+        text = wizard.build_config_md(spec)
+        assert "**Description**: Web app" in text
+        assert "**Domain Context**: React + Node.js" in text
+        assert "**Conventions**: ESLint, Prettier" in text
+
+
+class TestSoulMdSeeding:
+    """scaffold_install seeds SOUL.md with Project Context from adaptive answers (#462)."""
+
+    def test_soul_seeded_with_domain_context(self, tmp_path):
+        spec = _minimal_spec(project={
+            "name": "my-app",
+            "repo": "github.com/test/repo",
+            "domain_context": "Python data pipeline using Apache Spark",
+        })
+        # Create a minimal SOUL.md that deploy_role would have written
+        squid = tmp_path / ".squidsquad"
+        for agent in spec["agents"]:
+            agent_dir = squid / agent["id"]
+            agent_dir.mkdir(parents=True)
+            soul = agent_dir / "SOUL.md"
+            soul.write_text("## Soul\n\nGeneric role identity.\n", encoding="utf-8")
+
+        from unittest.mock import patch, MagicMock
+        mock_deploy = MagicMock(return_value=str(squid / "pm" / "CLAUDE.md"))
+        mock_local = MagicMock()
+        with patch.dict("sys.modules", {"compose": MagicMock(
+            deploy_role=mock_deploy, generate_local_config=mock_local
+        )}):
+            wizard.scaffold_install(spec, tmp_path, overwrite_existing=True)
+
+        # Check PM's SOUL.md was seeded
+        soul_text = (squid / "pm" / "SOUL.md").read_text(encoding="utf-8")
+        assert "### Project Context" in soul_text
+        assert "Python data pipeline using Apache Spark" in soul_text
+
+    def test_soul_not_seeded_when_no_domain_context(self, tmp_path):
+        spec = _minimal_spec(project={
+            "name": "my-app",
+            "repo": "github.com/test/repo",
+        })
+        squid = tmp_path / ".squidsquad"
+        for agent in spec["agents"]:
+            agent_dir = squid / agent["id"]
+            agent_dir.mkdir(parents=True)
+            soul = agent_dir / "SOUL.md"
+            soul.write_text("## Soul\n\nGeneric.\n", encoding="utf-8")
+
+        from unittest.mock import patch, MagicMock
+        mock_deploy = MagicMock(return_value=str(squid / "pm" / "CLAUDE.md"))
+        mock_local = MagicMock()
+        with patch.dict("sys.modules", {"compose": MagicMock(
+            deploy_role=mock_deploy, generate_local_config=mock_local
+        )}):
+            wizard.scaffold_install(spec, tmp_path, overwrite_existing=True)
+
+        soul_text = (squid / "pm" / "SOUL.md").read_text(encoding="utf-8")
+        assert "### Project Context" not in soul_text
+
+    def test_soul_not_double_seeded(self, tmp_path):
+        spec = _minimal_spec(project={
+            "name": "my-app",
+            "repo": "github.com/test/repo",
+            "domain_context": "Already seeded context",
+        })
+        squid = tmp_path / ".squidsquad"
+        for agent in spec["agents"]:
+            agent_dir = squid / agent["id"]
+            agent_dir.mkdir(parents=True)
+            soul = agent_dir / "SOUL.md"
+            soul.write_text(
+                "## Soul\n\n### Project Context\n\nExisting content.\n",
+                encoding="utf-8",
+            )
+
+        from unittest.mock import patch, MagicMock
+        mock_deploy = MagicMock(return_value=str(squid / "pm" / "CLAUDE.md"))
+        mock_local = MagicMock()
+        with patch.dict("sys.modules", {"compose": MagicMock(
+            deploy_role=mock_deploy, generate_local_config=mock_local
+        )}):
+            wizard.scaffold_install(spec, tmp_path, overwrite_existing=True)
+
+        soul_text = (squid / "pm" / "SOUL.md").read_text(encoding="utf-8")
+        assert soul_text.count("### Project Context") == 1
+        assert "Existing content" in soul_text
+        assert "Already seeded" not in soul_text
