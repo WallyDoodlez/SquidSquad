@@ -48,7 +48,7 @@ In your project's git repo:
 npx squidsquad
 ```
 
-The bootstrapper checks prerequisites (Node.js 18+, Python, `gh` CLI, Claude Code), seeds the skill into your project, and launches an intent-driven setup wizard. Tell the wizard what you're building — it classifies your intent, proposes a team from curated presets, and walks you through setup one question at a time. PM and DM are always installed; dev, designer, and QA agents are added based on your project type.
+The bootstrapper checks prerequisites (Node.js 18+, Python, `gh` CLI, Claude Code), seeds the skill into your project, and launches an intent-driven setup wizard. The wizard asks 3 quick questions — what your project does, then 2 adaptive follow-ups based on your answers — to understand your domain and tailor each agent's personality. It classifies your intent, proposes a team from curated presets, and walks you through setup. PM and DM are always installed; dev and QA agents are added based on your project type.
 
 **Already have Claude Code open?** You can also run `Set up SquidSquad for my project.` directly in a Claude Code session.
 
