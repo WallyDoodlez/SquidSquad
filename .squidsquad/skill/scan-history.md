@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-14 08:32
+
+- **Files scanned**: references/sub-skills/designer-specific/design-session.md, design-capabilities.md
+- **Findings**: none (clean — proper tracker commands, capability fallback logic, no stale INDEX.md refs)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-14 07:02
 
 - **Files scanned**: references/sub-skills/qa-specific/verification.md (full 160-line review)
