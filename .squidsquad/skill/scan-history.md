@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-14 11:34
+
+- **Files scanned**: references/scripts/add_role.py, tests/test_add_role.py, tests/test_work_queue.py, tests/test_feat328_coverage.py
+- **Findings**: none (all clean — list-form subprocess, proper encoding, good test coverage, no security issues)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-14 08:32
 
 - **Files scanned**: references/sub-skills/designer-specific/design-session.md, design-capabilities.md

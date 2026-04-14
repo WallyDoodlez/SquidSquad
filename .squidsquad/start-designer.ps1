@@ -94,7 +94,7 @@ try {
         $initMsg = "start the loop"
 
         # Start Claude as a background process so we can poll for .restart (#918)
-        $claudeProc = Start-Process -FilePath "claude" -ArgumentList "--dangerously-skip-permissions", "--name", "$AgentName", "--append-system-prompt", "$sysPrompt", "$initMsg" -NoNewWindow -PassThru
+        $claudeProc = Start-Process -FilePath "claude.cmd" -ArgumentList "--dangerously-skip-permissions", "--name", "$AgentName", "--append-system-prompt", "$sysPrompt", "$initMsg" -NoNewWindow -PassThru
 
         # Background poller: watch for .restart sentinel while Claude is running
         $watcherJob = Start-Job -ScriptBlock {
