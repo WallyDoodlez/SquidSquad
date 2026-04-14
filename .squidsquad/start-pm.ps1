@@ -15,12 +15,12 @@ for ($i = 0; $i -lt $args.Count; $i++) {
 
 # Read alias from config if no --name override
 if (-not $AgentName) {
+    $Alias = ""
     try {
-        $AgentName = (python references/scripts/config.py alias pm 2>$null).Trim()
-    } catch {
-        $AgentName = "squidsquad-pm"
-    }
-    if (-not $AgentName) { $AgentName = "squidsquad-pm" }
+        $Alias = (python references/scripts/config.py alias pm 2>$null).Trim()
+    } catch {}
+    if (-not $Alias) { $Alias = "pm" }
+    $AgentName = "SquidSquad - $Alias"
 }
 
 if (Test-Path .squidsquad) {

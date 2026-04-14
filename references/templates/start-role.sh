@@ -14,7 +14,8 @@ done
 
 # Read alias from config if no --name override
 if [ -z "$AGENT_NAME" ]; then
-  AGENT_NAME=$(python references/scripts/config.py alias {{ROLE}} 2>/dev/null || echo "squidsquad-{{ROLE}}")
+  ALIAS=$(python references/scripts/config.py alias {{ROLE}} 2>/dev/null || echo "{{ROLE}}")
+  AGENT_NAME="SquidSquad - ${ALIAS}"
 fi
 
 if [ -d .squidsquad ]; then
