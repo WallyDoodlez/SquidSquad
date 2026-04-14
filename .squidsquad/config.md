@@ -7,7 +7,8 @@
 ## Agents
 
 - **Dev Agents**: qa, skill
-- **PM/QA**: always present
+- **PM**: always present
+- **QA**: always present
 - **DM**: present
 
 ## Aliases

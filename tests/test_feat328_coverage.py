@@ -145,10 +145,10 @@ class TestTC70To77PipelineResolution:
         assert resolved == {"pm", "dm", "designer", "dev", "qa"}
 
     def test_tc75_design_preset(self):
-        """design preset → pm + dm + designer only."""
+        """design preset → pm + dm + qa + designer (qa is always_installed since #347)."""
         _, roles, _, presets = manifest.validate_registry()
         resolved = manifest.resolve_pipeline("design", roles, presets)
-        assert resolved == {"pm", "dm", "designer"}
+        assert resolved == {"pm", "dm", "qa", "designer"}
 
     def test_every_shipped_role_is_reachable_from_some_preset(self):
         """Sanity — every non-infra role appears in at least one preset."""

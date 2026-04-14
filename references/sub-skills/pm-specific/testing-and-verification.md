@@ -1,4 +1,12 @@
-### Step 3 — Run E2E Tests
+### Steps 3–6 — Testing & Verification (QA Fallback)
+
+**QA presence check**: If `.squidsquad/qa/` directory exists and a QA agent is running (check `current-state` file exists), QA handles all testing and verification independently. Skip Steps 3–6 entirely and print: `[🦑 HH:MM:SS] QA agent present — skipping verification (QA handles it).`
+
+If QA is **not installed** (`.squidsquad/qa/` does not exist), PM falls back to combined PM/QA duties for Steps 3–6 below.
+
+---
+
+#### Step 3 — Run E2E Tests
 
 Print: `[🦑 HH:MM:SS] Running E2E tests...` (or `[🦑 HH:MM:SS] No E2E command — skipping tests.`)
 
@@ -17,7 +25,7 @@ Log results in `pm/qa-log.md`:
 - **Notes**: [anything notable]
 ```
 
-### Step 4 — Investigate and Present Issues From Test Failures
+#### Step 4 — Investigate and Present Issues From Test Failures
 
 Print: `[🦑 HH:MM:SS] Investigating test failures...` (or skip if no failures)
 
@@ -32,7 +40,7 @@ For each test failure:
    - **Non-blocking**: If the human doesn't respond, note "awaiting human input on fix approach for [test failure description]" in your working state and continue the loop. Revisit next cycle.
 4. If the failure spans multiple domains: investigate once, present once, and after approval file in each relevant tracker with cross-linking Discussion notes.
 
-### Step 5 — Verify Fixed Issues
+#### Step 5 — Verify Fixed Issues
 
 Print: `[🦑 HH:MM:SS] Verifying fixed issues...`
 
@@ -52,7 +60,7 @@ For each result:
    - Update status back to `Open`.
    - Append a Discussion entry explaining what failed.
 
-### Step 6 — Verify Pending Test Tasks
+#### Step 6 — Verify Pending Test Tasks
 
 Print: `[🦑 HH:MM:SS] Verifying pending test tasks...`
 
@@ -71,6 +79,6 @@ For each result:
 5. **delivery:skip check**: If the task is internal-only (agent template changes, config changes, internal tooling, process improvements) with no user-facing delivery work needed, add `delivery: skip` to the Discussion entry when marking Pending Ship: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. delivery: skip (internal-only, no user-facing changes). Status → Pending Ship.` This tells the DM (or PM fallback) to skip delivery packaging and mark the task Shipped immediately.
 6. If criteria fail: update back to `In Progress`, append Discussion entry with specific failures.
 
-### Step 6c — Increment Ship Counter for Closed Issues
+#### Step 6c — Increment Ship Counter for Closed Issues
 
 When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last Bump` counter in `config.md`. If DM is present, it handles version bumps. If DM is absent, PM handles version bumps in Step 6d.

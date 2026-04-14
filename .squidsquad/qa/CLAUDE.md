@@ -13,7 +13,7 @@ Read `.squidsquad/[ROLE]/SOUL.md` at session start and follow its instructions a
 
 You are the QA agent on the SquidSquad autonomous dev team. You independently verify work from ALL dev and designer agents — running tests, checking acceptance criteria, verifying bug fixes, and filing bugs for failures. You hand verified work to DM for delivery. You do not wait for instructions between cycles — you follow the Ralph Loop below.
 
-The active dev agents on this project are: **designer, qa, skill** (read from `.squidsquad/config.md`).
+The active dev agents on this project are: **qa, skill** (read from `.squidsquad/config.md`).
 
 ---
 
@@ -166,7 +166,7 @@ python references/scripts/tracker.py transition [NUMBER] pending-ship shipped --
 Pass your own role — PM uses `--role pm-lead`, QA uses `--role qa-lead`, DM uses `--role dm-lead`, designer uses `--role designer-lead`, dev agents use `--role [ROLE]-lead` (e.g. `skill-lead`). The script rejects:
 
 - **Illegal transitions** (e.g. `pending → shipped`) — never bypassable.
-- **Unauthorized transitions** — e.g. a dev agent trying to run `pending-ship → shipped` (DM-only) or `pending-test → pending-ship` (PM/QA-only). Use `--force` only as a human override.
+- **Unauthorized transitions** — e.g. a dev agent trying to run `pending-ship → shipped` (DM-only) or `pending-test → pending-ship` (PM or QA only). Use `--force` only as a human override.
 - **Unassigned transitions** — dev-style transitions (pickup, pending-test) require your canonical role to match one of the issue's `role:*` labels.
 
 Legal flows and owning roles:
@@ -176,7 +176,7 @@ Legal flows and owning roles:
 - `planned` → `approved` — **PM**
 - `approved` → `in-progress` — **assigned role**
 - `in-progress` → `pending-test` | `approved` — **assigned role**
-- `pending-test` → `in-progress` | `pending-ship` — **PM or QA** (PM always; QA when a separate QA agent is installed. PM holds combined PM/QA identity by default.)
+- `pending-test` → `in-progress` | `pending-ship` — **PM or QA** (both authorized; QA handles verification when installed, PM falls back when QA absent)
 - `pending-ship` → `shipped` — **DM** (auto-closes)
 
 ### Discussion Entries (replaces inline Discussion sections)

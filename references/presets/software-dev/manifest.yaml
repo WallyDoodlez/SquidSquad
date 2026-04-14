@@ -20,8 +20,7 @@ description: >
 # Order in which each specialist role's install-time questions are asked.
 # The wizard walks this list in order; designer comes before dev so the
 # "design first, build second" flow feels natural. Infrastructure roles
-# (pm, dm) are not listed — they are always installed.
+# (pm, dm, qa) are not listed — they are always installed.
 role_install_order:
   - designer
   - dev
-  - qa
