@@ -105,9 +105,27 @@ while true; do
 
   claude --dangerously-skip-permissions --name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE=dm" "start the loop" &
   CHILD_PID=$!
+
+  # Background poller: watch for .restart sentinel while Claude is running (#918)
+  (
+    while kill -0 "$CHILD_PID" 2>/dev/null; do
+      if [ -f "$RESTART_SENTINEL" ]; then
+        echo "[SquidSquad] Restart sentinel detected — killing Claude (PID $CHILD_PID)..."
+        kill -INT "$CHILD_PID" 2>/dev/null
+        break
+      fi
+      sleep 5
+    done
+  ) &
+  WATCHER_PID=$!
+
   wait "$CHILD_PID"
   EXIT_CODE=$?
   CHILD_PID=""
+
+  # Clean up watcher
+  kill "$WATCHER_PID" 2>/dev/null
+  wait "$WATCHER_PID" 2>/dev/null
 
   END_TIME=$(date +%s)
   RUNTIME=$((END_TIME - START_TIME))

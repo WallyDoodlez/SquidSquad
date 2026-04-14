@@ -92,8 +92,29 @@ try {
 
         $sysPrompt = "SQUIDSQUAD_ROLE=dm"
         $initMsg = "start the loop"
-        claude --dangerously-skip-permissions --name "$AgentName" --append-system-prompt "$sysPrompt" "$initMsg"
-        $exitCode = $LASTEXITCODE
+
+        # Start Claude as a background process so we can poll for .restart (#918)
+        $claudeProc = Start-Process -FilePath "claude" -ArgumentList "--dangerously-skip-permissions", "--name", "$AgentName", "--append-system-prompt", "$sysPrompt", "$initMsg" -NoNewWindow -PassThru
+
+        # Background poller: watch for .restart sentinel while Claude is running
+        $watcherJob = Start-Job -ScriptBlock {
+            param($sentinel, $pid)
+            while (-not (Get-Process -Id $pid -ErrorAction SilentlyContinue).HasExited) {
+                if (Test-Path $sentinel) {
+                    Write-Output "[SquidSquad] Restart sentinel detected — stopping Claude (PID $pid)..."
+                    try { Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue } catch {}
+                    break
+                }
+                Start-Sleep -Seconds 5
+            }
+        } -ArgumentList $RestartSentinel, $claudeProc.Id
+
+        $claudeProc.WaitForExit()
+        $exitCode = $claudeProc.ExitCode
+
+        # Clean up watcher
+        Stop-Job $watcherJob -ErrorAction SilentlyContinue
+        Remove-Job $watcherJob -ErrorAction SilentlyContinue
 
         $runtime = [int]((Get-Date) - $startTime).TotalSeconds
 
