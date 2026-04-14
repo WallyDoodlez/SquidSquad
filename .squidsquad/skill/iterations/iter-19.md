@@ -1,7 +1,7 @@
 # SKILL Iteration 19
 
-- **Date**: 2026-04-13 09:35
+- **Date**: 2026-04-13 21:07
 - **Issues Fixed**: none
-- **Tasks Progressed**: #246 PR-driven workflow (picked up last cycle, checkpointed), #5 add_role.py (clone+configure+sync)
-- **Tests**: 546 passed
-- **Notes**: Two major features in one cycle
+- **Tasks Progressed**: #462 Adaptive setup questions — WIZARD.md Step 1b, wizard.py config/SOUL seeding
+- **Tests**: 762/762 pass (8 new)
+- **Notes**: Full implementation: Step 1b prose, build_config_md new fields, scaffold_install SOUL.md seeding, 5 SOUL.md templates updated.
