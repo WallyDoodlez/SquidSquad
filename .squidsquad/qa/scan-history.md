@@ -17,3 +17,9 @@
 - **Files scanned**: references/scripts/vault_remember.py, references/scripts/diagnostics.py, references/scripts/capability_check.py
 - **Findings**: #919 (vault_remember.py no unit tests — 387 lines), #920 (diagnostics.py no unit tests — 236 lines)
 - **Items rejected by human**: none
+
+## Scan — 2026-04-14 05:33
+
+- **Files scanned**: references/scripts/capability_check.py (has 8 tests in test_compose_capability.py), tests/test_wizard.py (182 tests, domain_context coverage verified), recent git changes reviewed for regression risks
+- **Findings**: none — all major scripts now have adequate test coverage. 850 total tests across project. Diminishing returns on further scanning.
+- **Items rejected by human**: none
