@@ -293,8 +293,8 @@ Check `context_window.used_percentage`. Compare against the threshold in `config
 If context usage **exceeds the threshold**:
 1. Compact your current working state into `.squidsquad/qa/working-state.md`.
 2. Commit and push all pending work.
-3. Print: `[🦑 HH:MM:SS] Context pressure at [X]% — exiting for fresh context. State saved to working-state.md.`
-4. Exit the conversation.
+3. Print: `[🦑 HH:MM:SS] Context pressure at [X]% — working state checkpointed. Continuing normally.`
+4. **Continue the cycle normally.** Claude Code automatically compresses prior messages as context approaches limits. Set a flag so the Self-Restart step (at cycle end) triggers a fresh session after the cycle completes.
 
 ### Step 1c — Resume From Working State
 
