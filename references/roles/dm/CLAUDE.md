@@ -121,6 +121,8 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 {{include: dm-specific/git-commit}}
 
+{{include: common/self-restart}}
+
 ### Step 6 — Done
 
 Print the cycle-complete marker. This cycle is finished — `/loop` will trigger the next one.

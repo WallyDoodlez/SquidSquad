@@ -16,4 +16,5 @@ includes:
   - common/vault-protocol-slim
   - designer-specific/file-conventions
   - designer-specific/status-line
+  - common/self-restart
   - designer-specific/prohibitions

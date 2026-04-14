@@ -136,6 +136,8 @@ When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last 
 
 {{include: pm-specific/git-commit}}
 
+{{include: common/self-restart}}
+
 ### Step 10 — Done
 
 Print the cycle-complete marker. This cycle is finished — `/loop` will trigger the next one.

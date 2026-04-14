@@ -52,6 +52,7 @@ try { python references/scripts/config.py sync-agents 2>$null } catch {}
 $RoleDir = ".squidsquad/{{ROLE}}"
 $PidFile = "$RoleDir/.pid"
 $StopFile = "$RoleDir/.stop"
+$RestartSentinel = "$RoleDir/.restart"
 $RestartLog = "$RoleDir/restart-log.txt"
 $StateFile = "$RoleDir/current-state"
 
@@ -102,6 +103,20 @@ try {
             Remove-Item $StopFile -ErrorAction SilentlyContinue
             "stopped|Agent stopped by user" | Set-Content $StateFile -NoNewline
             break
+        }
+
+        # Check for self-restart sentinel (agent requested restart)
+        if (Test-Path $RestartSentinel) {
+            $reason = (Get-Content $RestartSentinel -ErrorAction SilentlyContinue | Select-Object -First 1)
+            if (-not $reason) { $reason = "unknown" }
+            Remove-Item $RestartSentinel -ErrorAction SilentlyContinue
+            $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+            "$ts | exit=$exitCode | self-restart | reason=$reason | runtime=${runtime}s" | Add-Content $RestartLog
+            Write-Host "[SquidSquad] Self-restart requested: $reason. Restarting immediately..."
+            "restarting|Self-restart: $reason" | Set-Content $StateFile -NoNewline
+            $RestartCount = 0
+            Start-Sleep -Seconds 2
+            continue
         }
 
         # Append restart log entry

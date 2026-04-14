@@ -45,6 +45,7 @@ echo "pm" > .squidsquad/.active-role
 ROLE_DIR=".squidsquad/pm"
 PID_FILE="$ROLE_DIR/.pid"
 STOP_FILE="$ROLE_DIR/.stop"
+RESTART_SENTINEL="$ROLE_DIR/.restart"
 RESTART_LOG="$ROLE_DIR/restart-log.txt"
 STATE_FILE="$ROLE_DIR/current-state"
 
@@ -117,6 +118,19 @@ while true; do
     rm -f "$STOP_FILE"
     echo "stopped|Agent stopped by user" > "$STATE_FILE"
     break
+  fi
+
+  # Check for self-restart sentinel (agent requested restart)
+  if [ -f "$RESTART_SENTINEL" ]; then
+    REASON=$(cat "$RESTART_SENTINEL" 2>/dev/null || echo "unknown")
+    rm -f "$RESTART_SENTINEL"
+    TS=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "$TS | exit=$EXIT_CODE | self-restart | reason=$REASON | runtime=${RUNTIME}s" >> "$RESTART_LOG"
+    echo "[SquidSquad] Self-restart requested: $REASON. Restarting immediately..."
+    echo "restarting|Self-restart: $REASON" > "$STATE_FILE"
+    RESTART_COUNT=0
+    sleep 2
+    continue
   fi
 
   # Append restart log entry: timestamp | exit_code | restart_count | runtime

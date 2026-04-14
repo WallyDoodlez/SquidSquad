@@ -31,6 +31,7 @@ Entry file with includes (the role's own `SOUL.md` sits alongside `CLAUDE.md` in
 8b. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
 8c. `common/vault-optimize` — Vault optimization on quiet cycles
 9. `common/git-commit` — Step 5: commit/push protocol with PR flow
+9b. `common/self-restart` — Sentinel-based self-restart at cycle end
 9. `common/discussion-protocol` — Discussion entry format and rules
 10. `common/issue-filing` — Self-file and cross-file bug templates
 11. `common/working-state` — Working State File format
