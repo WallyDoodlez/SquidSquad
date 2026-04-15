@@ -167,7 +167,9 @@ Every step within the loop also prints a `[🦑 HH:MM:SS]` timestamped marker (e
 
 **Iteration log retention**: each agent keeps the last 20 iteration files in its `iterations/` directory. After logging a new iteration, older files beyond this limit are deleted. Git history preserves them if ever needed.
 
-All agents maintain a **working state file** (`.squidsquad/[role]/working-state.md`) that tracks the current task, completed steps, and remaining work. This file is read on startup to resume mid-task after a context window reset. Agents also check **context pressure** at the start of each cycle — if `context_window.used_percentage` exceeds the threshold in `config.md` (default 70%), they save state, commit, and exit so the boot script can restart them with a fresh context.
+All agents maintain a **working state file** (`.squidsquad/[role]/working-state.md`) that tracks the current task, completed steps, and remaining work. This file is read on startup to resume mid-task after a context window reset. Agents also check **context pressure** at the start of each cycle — if `context_window.used_percentage` exceeds the threshold in `config.md` (default 70%), they save state, commit, and continue (Claude Code compresses prior messages automatically). All agents write their context pressure percentage to `.squidsquad/[role]/context-pressure` each cycle.
+
+**Agent health monitoring**: Boot scripts write a `.health` file (`.squidsquad/[role]/.health`) that tracks each agent's lifecycle: `booting` → `alive` → `restarting` → `dead`. Pre-flight checks (gh auth, correct branch) run before launching the agent — failures are written to `.health` with a reason (e.g. `error|gh auth failed`), preventing crash loops. PM reads these files for reliable health detection instead of inferring status from file timestamps. The boot script wrapper enforces a self-restart rate limit of 3 restarts per hour to prevent restart storms.
 
 **Auto versioning**: PM tracks a `Shipped Since Last Bump` counter in `config.md`. Each time an item is marked `Shipped` (features) or `Closed` (bugs), the counter increments. When the counter reaches `Ship Threshold` (default 10) AND zero open bugs exist across all trackers, PM automatically bumps the minor version (e.g. `0.5.1` → `0.6.0`), updates `config.md` and `SKILL.md` frontmatter, adds a CHANGELOG section, creates a git tag, and pushes. Version bumps bypass PR flow.
 
@@ -225,7 +227,7 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 5. Query GitHub Issues via `gh issue list` with label filters for `status:pending-test` items → verify → update to Pending Ship (DM handles delivery → Shipped)
 5b. If PR Flow enabled: monitor open PRs, sync comments/merges/changes to Issues
 6. Query GitHub Issues via `gh issue list` with label filters for `type:issue` + `status:in-progress` items marked as fixed → verify → close Issue
-7. Agent health check: git log per agent, flag stalled/idle agents (no commits in 2× interval)
+7. Agent health check: read `.health` files for liveness, `current-state` for phase detail, flag stalled/idle agents
 8. If quiet cycle (no issues found, no verifications): skip log/commit, go to sleep
 9. Log iteration to qa/iterations/iter-N.md
 10. git add -A && git commit && git push
@@ -412,7 +414,7 @@ When the user says `/squidsquad-status` (or "squad status", "show me the squad",
 
 1. Read `.squidsquad/config.md` to get the list of dev agents and the loop interval.
 2. For each agent (dev agents + PM + DM if `.squidsquad/dm/` exists):
-   - Check health via `git log --oneline --since="[2×interval] minutes ago" --grep="^[agent]:"` — if commits found, show as `active`; if prior commits exist but none recent, show as `stalled`; else `unknown`.
+   - Check health: read `.squidsquad/[role]/.health` if it exists (values: `alive`, `booting`, `restarting`, `dead`, `error|reason`). Fall back to `git log --oneline --since="[2×interval] minutes ago" --grep="^[agent]:"` if no `.health` file — if commits found, show as `active`; if prior commits exist but none recent, show as `stalled`; else `unknown`.
    - Show last commit time: `git log --oneline --grep="^[agent]:" -1 --format="%ar"`
 3. For each dev agent, query GitHub Issues via `python references/scripts/tracker.py`:
    - `python references/scripts/tracker.py list-issues [role]` — count and list open issues
