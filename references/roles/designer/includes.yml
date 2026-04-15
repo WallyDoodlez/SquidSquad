@@ -5,6 +5,7 @@ includes:
   - common/tracker-protocol
   - common/capability-check
   - common/pull-latest
+  - common/context-pressure
   - designer-specific/design-session
   - common/boot-remote-agents
   - common/improvement-scan-slim

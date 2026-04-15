@@ -2,9 +2,9 @@
 """SquidSquad agent health check — deterministic cross-clone health probe.
 
 Reads .local-config to find each agent's actual clone path, then checks
-each agent's `current-state` file mtime to determine if the agent is
-healthy, stalled, or unknown. Replaces the prose-based PM Step 7 health
-check that was prone to shortcutting (#335).
+each agent's `.health` file (written by boot script wrapper) for liveness
+and `current-state` file for cycle-level phase detail. Falls back to
+current-state mtime when .health is missing (old boot scripts).
 
 Usage:
     python scripts/health_check.py              # Pretty table for humans
@@ -35,6 +35,7 @@ HEALTHY = "healthy"
 STALLED = "stalled"
 UNKNOWN = "unknown"
 STOPPED = "stopped"
+ERROR = "error"
 
 # Emoji for display
 HEALTH_EMOJI = {
@@ -42,6 +43,7 @@ HEALTH_EMOJI = {
     STALLED: "\U0001f47b",  # 👻
     UNKNOWN: "\u2753",       # ❓
     STOPPED: "\u23f9\ufe0f", # ⏹️
+    ERROR: "\u274c",         # ❌
 }
 
 
@@ -121,8 +123,25 @@ def _parse_working_state_task(text):
     return "unknown"
 
 
+def _parse_health_file(text):
+    """Parse .health file content → (status, detail).
+
+    Format: `status` or `status|detail`
+    Valid statuses: booting, alive, restarting, backoff, dead, error
+    """
+    if not text:
+        return None, None
+    line = text.strip().split("\n")[0]
+    parts = line.split("|", 1)
+    status = parts[0].strip() if parts else ""
+    detail = parts[1].strip() if len(parts) > 1 else ""
+    return status, detail
+
+
 def check_agent_health(role, clone_root, interval_minutes, now=None):
     """Check a single agent's health.
+
+    Uses .health file for liveness (primary), current-state mtime as fallback.
 
     Args:
         role: agent id (e.g. "skill", "pm")
@@ -133,7 +152,10 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
     Returns a dict:
         {
             "role": str,
-            "health": "healthy" | "stalled" | "unknown" | "stopped",
+            "health": "healthy" | "stalled" | "unknown" | "stopped" | "error",
+            "health_source": "health-file" | "mtime-fallback",
+            "health_file_status": str | None,
+            "health_file_detail": str | None,
             "clone_path": str,
             "current_state_phase": str,
             "current_state_desc": str,
@@ -150,6 +172,9 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
     result = {
         "role": role,
         "health": UNKNOWN,
+        "health_source": "mtime-fallback",
+        "health_file_status": None,
+        "health_file_detail": None,
         "clone_path": str(clone_root),
         "current_state_phase": "",
         "current_state_desc": "",
@@ -163,14 +188,14 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
         result["reason"] = f"clone path does not exist: {clone_root}"
         return result
 
-    # Check .stop sentinel (Q2 from #4 CONTEXT)
+    # Check .stop sentinel
     stop_file = squid / ".stop"
     if stop_file.exists():
         result["health"] = STOPPED
         result["reason"] = ".stop sentinel present — agent explicitly stopped"
         return result
 
-    # Read current-state
+    # Read current-state for phase info (always, regardless of .health)
     state_file = squid / "current-state"
     state_mtime = _get_file_mtime(state_file)
     state_text = _read_file_head(state_file)
@@ -178,29 +203,100 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
     result["current_state_phase"] = phase
     result["current_state_desc"] = desc
 
-    # Read working-state
+    # Read working-state for task info
     ws_file = squid / "working-state.md"
     ws_text = _read_file_head(ws_file)
     result["task"] = _parse_working_state_task(ws_text)
 
-    # Determine health from current-state mtime
+    # Compute last_active from current-state mtime
+    if state_mtime is not None:
+        elapsed_seconds = now - state_mtime
+        result["last_active_minutes_ago"] = int(elapsed_seconds / 60)
+
+    # --- Primary: read .health file for liveness ---
+    health_file = squid / ".health"
+    health_text = _read_file_head(health_file)
+    health_status, health_detail = _parse_health_file(health_text)
+
+    if health_status is not None:
+        result["health_source"] = "health-file"
+        result["health_file_status"] = health_status
+        result["health_file_detail"] = health_detail
+
+        if health_status == "alive":
+            # .health says alive — trust it for liveness, use current-state for staleness
+            stale_threshold = interval_minutes * 2
+            if state_mtime is not None:
+                elapsed_minutes = int((now - state_mtime) / 60)
+                if elapsed_minutes <= stale_threshold:
+                    result["health"] = HEALTHY
+                    result["reason"] = (
+                        f".health=alive, active {elapsed_minutes}m ago "
+                        f"(threshold {stale_threshold}m)"
+                    )
+                else:
+                    # .health says alive but current-state is stale — agent may be stuck
+                    result["health"] = STALLED
+                    result["reason"] = (
+                        f".health=alive but current-state stale "
+                        f"({elapsed_minutes}m ago, threshold {stale_threshold}m)"
+                    )
+            else:
+                # .health=alive but no current-state yet (agent just booted)
+                result["health"] = HEALTHY
+                result["reason"] = ".health=alive (no current-state yet — freshly booted)"
+
+        elif health_status == "booting":
+            result["health"] = HEALTHY
+            result["reason"] = ".health=booting (agent starting up)"
+
+        elif health_status == "restarting":
+            result["health"] = HEALTHY
+            result["reason"] = ".health=restarting (wrapper restarting agent)"
+
+        elif health_status == "backoff":
+            result["health"] = STALLED
+            result["reason"] = ".health=backoff (crash loop — exponential backoff)"
+
+        elif health_status == "dead":
+            result["health"] = STALLED
+            result["reason"] = ".health=dead (wrapper exited)"
+
+        elif health_status == "error":
+            result["health"] = ERROR
+            detail_msg = f": {health_detail}" if health_detail else ""
+            result["reason"] = f".health=error{detail_msg}"
+
+        else:
+            # Unknown .health status — treat as unknown
+            result["health"] = UNKNOWN
+            result["reason"] = f".health={health_status} (unrecognized)"
+
+        return result
+
+    # --- Fallback: mtime-based detection (no .health file) ---
+    result["health_source"] = "mtime-fallback"
+
     if state_mtime is None:
-        # No current-state file at all
         result["health"] = UNKNOWN
-        result["reason"] = "no current-state file"
+        result["reason"] = "no .health file, no current-state file"
         return result
 
     elapsed_seconds = now - state_mtime
     elapsed_minutes = int(elapsed_seconds / 60)
-    result["last_active_minutes_ago"] = elapsed_minutes
-
-    stale_threshold = interval_minutes * 2  # 2× interval = stalled
+    stale_threshold = interval_minutes * 2
     if elapsed_minutes <= stale_threshold:
         result["health"] = HEALTHY
-        result["reason"] = f"active {elapsed_minutes}m ago (threshold {stale_threshold}m)"
+        result["reason"] = (
+            f"mtime fallback: active {elapsed_minutes}m ago "
+            f"(threshold {stale_threshold}m)"
+        )
     else:
         result["health"] = STALLED
-        result["reason"] = f"last active {elapsed_minutes}m ago (threshold {stale_threshold}m)"
+        result["reason"] = (
+            f"mtime fallback: last active {elapsed_minutes}m ago "
+            f"(threshold {stale_threshold}m)"
+        )
 
     return result
 
@@ -258,12 +354,13 @@ def format_table(report):
     w_role = max(w_role, 5)  # min "Agent"
 
     lines = []
-    header = f"{'Agent':<{w_role}}  Health  Last     Phase            Task"
+    header = f"{'Agent':<{w_role}}  Health  Source   Last     Phase            Task"
     lines.append(header)
     lines.append("-" * len(header))
 
     for a in agents:
         emoji = HEALTH_EMOJI.get(a["health"], "?")
+        source = "file" if a["health_source"] == "health-file" else "mtime"
         last = (
             f"{a['last_active_minutes_ago']}m"
             if a["last_active_minutes_ago"] is not None
@@ -272,7 +369,7 @@ def format_table(report):
         phase = a["current_state_phase"][:15] if a["current_state_phase"] else "-"
         task = a["task"][:20] if a["task"] else "-"
         lines.append(
-            f"{a['role']:<{w_role}}  {emoji:<7} {last:<8} {phase:<16} {task}"
+            f"{a['role']:<{w_role}}  {emoji:<7} {source:<8} {last:<8} {phase:<16} {task}"
         )
 
     return "\n".join(lines) + "\n"

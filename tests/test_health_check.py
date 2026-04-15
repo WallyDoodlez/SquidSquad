@@ -1,4 +1,4 @@
-"""Tests for references/scripts/health_check.py — parsing, health classification."""
+"""Tests for references/scripts/health_check.py — health classification with .health file support."""
 
 import sys
 import time
@@ -100,9 +100,43 @@ class TestParseWorkingStateTask:
         assert health_check._parse_working_state_task(None) == "unknown"
 
 
+class TestParseHealthFile:
+    def test_alive_status(self):
+        status, detail = health_check._parse_health_file("alive")
+        assert status == "alive"
+        assert detail == ""
+
+    def test_error_with_detail(self):
+        status, detail = health_check._parse_health_file("error|gh auth failed")
+        assert status == "error"
+        assert detail == "gh auth failed"
+
+    def test_none_input(self):
+        status, detail = health_check._parse_health_file(None)
+        assert status is None
+        assert detail is None
+
+    def test_empty_input(self):
+        status, detail = health_check._parse_health_file("")
+        assert status is None
+        assert detail is None
+
+    def test_booting_status(self):
+        status, detail = health_check._parse_health_file("booting")
+        assert status == "booting"
+
+    def test_backoff_status(self):
+        status, detail = health_check._parse_health_file("backoff")
+        assert status == "backoff"
+
+    def test_multiline_uses_first(self):
+        status, detail = health_check._parse_health_file("alive\nextra")
+        assert status == "alive"
+
+
 class TestCheckAgentHealth:
     def _setup_agent(self, tmp_path, role, state_text=None, state_age_seconds=0,
-                     stop=False, working_state=None):
+                     stop=False, working_state=None, health_text=None):
         """Create a mock agent directory structure."""
         squid = tmp_path / ".squidsquad" / role
         squid.mkdir(parents=True, exist_ok=True)
@@ -113,7 +147,6 @@ class TestCheckAgentHealth:
         if state_text is not None:
             state_file = squid / "current-state"
             state_file.write_text(state_text)
-            # Backdate the mtime
             if state_age_seconds > 0:
                 import os
                 mtime = time.time() - state_age_seconds
@@ -122,31 +155,109 @@ class TestCheckAgentHealth:
         if working_state:
             (squid / "working-state.md").write_text(working_state)
 
+        if health_text is not None:
+            (squid / ".health").write_text(health_text)
+
         return tmp_path
 
-    def test_healthy_agent(self, tmp_path):
+    # --- .health file primary detection ---
+
+    def test_health_alive_with_recent_state(self, tmp_path):
+        clone = self._setup_agent(tmp_path, "skill",
+                                  state_text="idle|Waiting...",
+                                  health_text="alive")
+        result = health_check.check_agent_health("skill", clone, 30)
+        assert result["health"] == "healthy"
+        assert result["health_source"] == "health-file"
+        assert result["health_file_status"] == "alive"
+
+    def test_health_alive_but_stale_state(self, tmp_path):
+        clone = self._setup_agent(tmp_path, "skill",
+                                  state_text="idle|",
+                                  state_age_seconds=3700,
+                                  health_text="alive")
+        result = health_check.check_agent_health("skill", clone, 30)
+        assert result["health"] == "stalled"
+        assert result["health_source"] == "health-file"
+        assert "stale" in result["reason"]
+
+    def test_health_alive_no_state_yet(self, tmp_path):
+        clone = self._setup_agent(tmp_path, "skill",
+                                  health_text="alive")
+        result = health_check.check_agent_health("skill", clone, 30)
+        assert result["health"] == "healthy"
+        assert "freshly booted" in result["reason"]
+
+    def test_health_booting(self, tmp_path):
+        clone = self._setup_agent(tmp_path, "skill",
+                                  health_text="booting")
+        result = health_check.check_agent_health("skill", clone, 30)
+        assert result["health"] == "healthy"
+        assert "booting" in result["reason"]
+
+    def test_health_restarting(self, tmp_path):
+        clone = self._setup_agent(tmp_path, "skill",
+                                  health_text="restarting")
+        result = health_check.check_agent_health("skill", clone, 30)
+        assert result["health"] == "healthy"
+        assert "restarting" in result["reason"]
+
+    def test_health_backoff(self, tmp_path):
+        clone = self._setup_agent(tmp_path, "skill",
+                                  health_text="backoff")
+        result = health_check.check_agent_health("skill", clone, 30)
+        assert result["health"] == "stalled"
+        assert "backoff" in result["reason"]
+
+    def test_health_dead(self, tmp_path):
+        clone = self._setup_agent(tmp_path, "skill",
+                                  health_text="dead")
+        result = health_check.check_agent_health("skill", clone, 30)
+        assert result["health"] == "stalled"
+        assert "dead" in result["reason"]
+
+    def test_health_error(self, tmp_path):
+        clone = self._setup_agent(tmp_path, "skill",
+                                  health_text="error|gh auth failed")
+        result = health_check.check_agent_health("skill", clone, 30)
+        assert result["health"] == "error"
+        assert "gh auth failed" in result["reason"]
+
+    def test_health_error_no_detail(self, tmp_path):
+        clone = self._setup_agent(tmp_path, "skill",
+                                  health_text="error")
+        result = health_check.check_agent_health("skill", clone, 30)
+        assert result["health"] == "error"
+
+    # --- mtime fallback (no .health file) ---
+
+    def test_mtime_fallback_healthy(self, tmp_path):
         clone = self._setup_agent(tmp_path, "skill",
                                   state_text="idle|Waiting...",
                                   state_age_seconds=5)
         result = health_check.check_agent_health("skill", clone, 30)
         assert result["health"] == "healthy"
-        assert result["role"] == "skill"
+        assert result["health_source"] == "mtime-fallback"
 
-    def test_stalled_agent(self, tmp_path):
+    def test_mtime_fallback_stalled(self, tmp_path):
         clone = self._setup_agent(tmp_path, "skill",
                                   state_text="idle|",
-                                  state_age_seconds=3700)  # ~61 min, threshold is 60
+                                  state_age_seconds=3700)
         result = health_check.check_agent_health("skill", clone, 30)
         assert result["health"] == "stalled"
+        assert result["health_source"] == "mtime-fallback"
 
-    def test_unknown_no_state_file(self, tmp_path):
-        clone = self._setup_agent(tmp_path, "skill")  # No current-state
+    def test_mtime_fallback_no_files(self, tmp_path):
+        clone = self._setup_agent(tmp_path, "skill")
         result = health_check.check_agent_health("skill", clone, 30)
         assert result["health"] == "unknown"
-        assert "no current-state" in result["reason"]
+        assert "no .health file, no current-state" in result["reason"]
+
+    # --- Edge cases ---
 
     def test_stopped_agent(self, tmp_path):
-        clone = self._setup_agent(tmp_path, "skill", stop=True)
+        clone = self._setup_agent(tmp_path, "skill", stop=True,
+                                  health_text="alive")
         result = health_check.check_agent_health("skill", clone, 30)
         assert result["health"] == "stopped"
         assert ".stop" in result["reason"]
@@ -159,15 +270,15 @@ class TestCheckAgentHealth:
     def test_task_extracted_from_working_state(self, tmp_path):
         clone = self._setup_agent(tmp_path, "skill",
                                   state_text="implementing|#42",
+                                  health_text="alive",
                                   working_state="# Working State\n\n- **Task**: #42\n")
         result = health_check.check_agent_health("skill", clone, 30)
         assert result["task"] == "#42"
 
     def test_injectable_now(self, tmp_path):
-        """Verify the 'now' parameter works for deterministic testing."""
         clone = self._setup_agent(tmp_path, "skill",
                                   state_text="idle|")
-        fixed_now = time.time() + 7200  # 2 hours in the future
+        fixed_now = time.time() + 7200
         result = health_check.check_agent_health("skill", clone, 30, now=fixed_now)
         assert result["health"] == "stalled"
         assert result["last_active_minutes_ago"] >= 119
