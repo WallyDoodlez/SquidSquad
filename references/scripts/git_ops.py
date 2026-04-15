@@ -216,7 +216,7 @@ def commit_code(role, branch, message):
         # Handle renames: "old -> new"
         if " -> " in path:
             path = path.split(" -> ")[1]
-        if path.startswith(".squidsquad/"):
+        if path.startswith(".squidsquad/") or path.startswith(".claude/"):
             state_files.append(path)
         else:
             code_files.append(path)

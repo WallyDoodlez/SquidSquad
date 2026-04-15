@@ -302,6 +302,33 @@ class TestCommitCode:
         assert len(add_calls) == 1
         assert add_calls[0][0][0][2] == "references/scripts/git_ops.py"
 
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    @patch("subprocess.run")
+    def test_excludes_claude_dir_from_code(self, mock_subproc, mock_run, mock_run_list):
+        """commit_code excludes .claude/ files (session state) from feature branches."""
+        mock_run.side_effect = [
+            _mock_result(stdout=" M references/scripts/git_ops.py\n M .claude/scheduled_tasks.lock\n M .squidsquad/skill/working-state.md\n"),
+            _mock_result(stdout="squidsquad/skill/960\n"),  # current branch
+            _mock_result(stdout="main\n"),  # branch --show-current after switch back
+        ]
+        mock_run_list.side_effect = [
+            _mock_result(returncode=0),  # branch exists
+            _mock_result(),  # git checkout
+            _mock_result(),  # git add (code file)
+            _mock_result(),  # git push -u
+            _mock_result(),  # git checkout main
+        ]
+        mock_subproc.return_value = _mock_result(stdout="1 file changed")
+
+        result = git_ops.commit_code("skill", "squidsquad/skill/960", "test")
+        assert result is True
+
+        # Only references/scripts/git_ops.py should be staged, not .claude/ or .squidsquad/
+        add_calls = [c for c in mock_run_list.call_args_list if c[0][0][0:2] == ["git", "add"]]
+        assert len(add_calls) == 1
+        assert add_calls[0][0][0][2] == "references/scripts/git_ops.py"
+
     @patch("git_ops._run")
     def test_no_code_changes_returns_false(self, mock_run):
         """commit_code returns False when only .squidsquad/ files changed."""
