@@ -19,7 +19,6 @@
 {"timestamp": 1776175381.2910228, "role": "pm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 87m ago (threshold 60m))"}
 {"timestamp": 1776175477.6160817, "role": "dm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 61m ago (threshold 60m))"}
 {"timestamp": 1776175478.1823442, "role": "qa", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 61m ago (threshold 60m))"}
-{"timestamp": 1776184342.4541938, "role": "pm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 61m ago (threshold 60m))"}
-{"timestamp": 1776205172.8259792, "role": "dm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 317m ago (threshold 60m))"}
-{"timestamp": 1776205173.494303, "role": "pm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 318m ago (threshold 60m))"}
-{"timestamp": 1776205174.2720053, "role": "qa", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 318m ago (threshold 60m))"}
+{"timestamp": 1776205088.2537487, "role": "dm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 1876m ago (threshold 60m))"}
+{"timestamp": 1776205089.6646233, "role": "skill", "action": "kill", "success": true, "message": "killed PID 224056 (taskkill)", "reason": "stalled (last active 106m ago (threshold 60m))"}
+{"timestamp": 1776205090.6840153, "role": "skill", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 106m ago (threshold 60m))"}

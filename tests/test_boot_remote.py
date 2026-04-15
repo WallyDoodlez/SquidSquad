@@ -1,4 +1,4 @@
-"""Tests for references/scripts/boot_remote.py — PID tracking, grace period, kill-before-spawn."""
+"""Tests for references/scripts/boot_remote.py — PID-based agent boot detection."""
 
 import json
 import os
@@ -50,92 +50,73 @@ class TestIsProcessAlive:
         assert boot_remote._is_process_alive(os.getpid()) is True
 
     def test_nonexistent_pid_is_not_alive(self):
-        # PID 99999999 is very unlikely to exist
         assert boot_remote._is_process_alive(99999999) is False
 
 
-class TestCheckGracePeriod:
-    @patch("boot_remote._read_boot_log")
-    def test_no_entries_no_grace(self, mock_log):
-        mock_log.return_value = []
-        in_grace, remaining = boot_remote._check_grace_period("skill")
-        assert in_grace is False
+class TestNeedsBoot:
+    @patch("boot_remote._get_clone_path")
+    def test_stopped_agent_skipped(self, mock_clone, tmp_path):
+        mock_clone.return_value = tmp_path
+        stop_file = tmp_path / ".squidsquad" / "skill" / ".stop"
+        stop_file.parent.mkdir(parents=True)
+        stop_file.write_text("")
+        needs, reason, _ = boot_remote._needs_boot("skill")
+        assert needs is False
+        assert ".stop" in reason
 
-    @patch("boot_remote._read_boot_log")
-    def test_recent_spawn_in_grace(self, mock_log):
-        mock_log.return_value = [
-            {"role": "skill", "action": "spawn", "success": True,
-             "timestamp": time.time() - 30}  # 30s ago
-        ]
-        in_grace, remaining = boot_remote._check_grace_period("skill")
-        assert in_grace is True
-        assert remaining > 0
-
-    @patch("boot_remote._read_boot_log")
-    def test_old_spawn_not_in_grace(self, mock_log):
-        mock_log.return_value = [
-            {"role": "skill", "action": "spawn", "success": True,
-             "timestamp": time.time() - 300}  # 5 min ago
-        ]
-        in_grace, remaining = boot_remote._check_grace_period("skill")
-        assert in_grace is False
-
-    @patch("boot_remote._read_boot_log")
-    def test_failed_spawn_not_in_grace(self, mock_log):
-        mock_log.return_value = [
-            {"role": "skill", "action": "spawn", "success": False,
-             "timestamp": time.time() - 30}  # 30s ago but failed
-        ]
-        in_grace, remaining = boot_remote._check_grace_period("skill")
-        assert in_grace is False
-
-    @patch("boot_remote._read_boot_log")
-    def test_different_role_not_in_grace(self, mock_log):
-        mock_log.return_value = [
-            {"role": "pm", "action": "spawn", "success": True,
-             "timestamp": time.time() - 30}
-        ]
-        in_grace, remaining = boot_remote._check_grace_period("skill")
-        assert in_grace is False
-
-
-class TestCheckAndKillExisting:
-    def test_no_pid_file(self, tmp_path):
-        killed, msg = boot_remote._check_and_kill_existing(tmp_path, "skill")
-        assert killed is False
-        assert "no PID file" in msg
-
-    def test_stale_pid_cleaned_up(self, tmp_path):
-        pid_file = tmp_path / ".squidsquad" / "skill" / ".pid"
-        pid_file.parent.mkdir(parents=True)
-        pid_file.write_text("99999999")  # non-existent PID
-        killed, msg = boot_remote._check_and_kill_existing(tmp_path, "skill")
-        assert killed is False
-        assert "stale PID" in msg
-        assert not pid_file.exists()
+    @patch("boot_remote._get_clone_path")
+    def test_no_pid_needs_boot(self, mock_clone, tmp_path):
+        mock_clone.return_value = tmp_path
+        (tmp_path / ".squidsquad" / "skill").mkdir(parents=True)
+        needs, reason, _ = boot_remote._needs_boot("skill")
+        assert needs is True
+        assert "no PID" in reason
 
     @patch("boot_remote._is_process_alive", return_value=True)
-    @patch("boot_remote._kill_process", return_value=(True, "killed PID 123"))
-    def test_alive_process_killed(self, mock_kill, mock_alive, tmp_path):
+    @patch("boot_remote._get_clone_path")
+    def test_alive_process_skipped(self, mock_clone, mock_alive, tmp_path):
+        mock_clone.return_value = tmp_path
         pid_file = tmp_path / ".squidsquad" / "skill" / ".pid"
         pid_file.parent.mkdir(parents=True)
-        pid_file.write_text("123")
-        killed, msg = boot_remote._check_and_kill_existing(tmp_path, "skill")
-        assert killed is True
-        assert "killed" in msg
-        mock_kill.assert_called_once_with(123)
+        pid_file.write_text("12345")
+        needs, reason, _ = boot_remote._needs_boot("skill")
+        assert needs is False
+        assert "alive" in reason
+
+    @patch("boot_remote._is_process_alive", return_value=False)
+    @patch("boot_remote._get_clone_path")
+    def test_dead_process_needs_boot(self, mock_clone, mock_alive, tmp_path):
+        mock_clone.return_value = tmp_path
+        pid_file = tmp_path / ".squidsquad" / "skill" / ".pid"
+        pid_file.parent.mkdir(parents=True)
+        pid_file.write_text("99999")
+        needs, reason, _ = boot_remote._needs_boot("skill")
+        assert needs is True
+        assert "dead" in reason
 
 
-class TestBootAgentGracePeriod:
-    """Integration: boot_agent skips when grace period is active."""
-
-    @patch("boot_remote._run_health_check")
-    @patch("boot_remote._check_grace_period", return_value=(True, 90))
-    def test_grace_period_skips_spawn(self, mock_grace, mock_health):
-        mock_health.return_value = {
-            "agents": [{"role": "skill", "health": "stalled", "reason": "no update"}]
-        }
+class TestBootAgentCooldown:
+    @patch("boot_remote._needs_boot", return_value=(True, "dead", "/tmp"))
+    @patch("boot_remote._check_cooldown", return_value=(True, 300))
+    def test_cooldown_skips_spawn(self, mock_cool, mock_needs):
         result = boot_remote.boot_agent("skill")
         assert result["action"] == "skip"
-        assert "grace period" in result["message"]
+        assert "cooldown" in result["message"]
         assert result["success"] is True
+
+    @patch("boot_remote._needs_boot", return_value=(False, "alive (PID 123)", "/tmp"))
+    def test_alive_agent_skipped(self, mock_needs):
+        result = boot_remote.boot_agent("skill")
+        assert result["action"] == "skip"
+        assert result["success"] is True
+
+
+class TestGetAllRoles:
+    @patch("boot_remote._parse_dev_agents", return_value=["skill", "wizard"])
+    @patch("boot_remote._parse_local_config", return_value={"skill": Path("/tmp")})
+    def test_excludes_pm(self, mock_local, mock_devs):
+        with patch.object(boot_remote, "SQUIDSQUAD_DIR", Path("/nonexistent")):
+            roles = boot_remote._get_all_roles()
+            assert "pm" not in roles
+            assert "skill" in roles
+            assert "wizard" in roles

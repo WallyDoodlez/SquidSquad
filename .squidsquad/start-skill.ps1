@@ -45,8 +45,8 @@ if (Test-Path $injectScript) { & $injectScript }
 # Register this agent in config.md
 try { python references/scripts/config.py sync-agents 2>$null } catch {}
 
-# Write role for statusline (not used for auto-boot -- system prompt handles that)
-"skill" | Set-Content .squidsquad/.active-role -NoNewline
+# Set env var for statusline (session-scoped, no cross-agent clobber)
+$env:SQUIDSQUAD_ROLE = "skill"
 
 # --- PID lock: prevent double-start ---
 $RoleDir = ".squidsquad/skill"
@@ -55,6 +55,7 @@ $StopFile = "$RoleDir/.stop"
 $RestartSentinel = "$RoleDir/.restart"
 $RestartLog = "$RoleDir/restart-log.txt"
 $StateFile = "$RoleDir/current-state"
+$PressureFile = "$RoleDir/context-pressure"
 
 if (-not (Test-Path $RoleDir)) { New-Item -ItemType Directory -Path $RoleDir -Force | Out-Null }
 
@@ -84,30 +85,74 @@ try {
     $MinRuntimeSeconds = 120
 
     while ($true) {
-        # Reset status bar for a fresh session
+        # Reset status bar and context pressure for a fresh session
         Remove-Item $StateFile -ErrorAction SilentlyContinue
         "idle|Initializing..." | Set-Content $StateFile -NoNewline
+        Remove-Item $PressureFile -ErrorAction SilentlyContinue
 
         $startTime = Get-Date
 
         $sysPrompt = "SQUIDSQUAD_ROLE=skill"
         $initMsg = "start the loop"
 
-        # Start Claude as a background process so we can poll for .restart (#918)
-        $claudeProc = Start-Process -FilePath "claude.cmd" -ArgumentList "--dangerously-skip-permissions", "--name", "$AgentName", "--append-system-prompt", "$sysPrompt", "$initMsg" -NoNewWindow -PassThru
+        # Read context threshold from config (default 70)
+        $CtxThreshold = 70
+        try {
+            $t = (python references/scripts/config.py get context-threshold 2>$null).Trim()
+            if ($t -match '^\d+$') { $CtxThreshold = [int]$t }
+        } catch {}
 
-        # Background poller: watch for .restart sentinel while Claude is running
+        # Use cmd /c to launch — claude is a .cmd shim on Windows, Start-Process can't exec .cmd directly
+        $claudeProc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "claude", "--dangerously-skip-permissions", "--name", "$AgentName", "--append-system-prompt", "$sysPrompt", "$initMsg" -NoNewWindow -PassThru
+
+        # Background poller: watch for .restart sentinel AND context pressure
+        # Context pressure flow:
+        #   1. Agent writes pressure % to context-pressure file (Step 1b, early in cycle)
+        #   2. Watcher detects pressure >= threshold
+        #   3. Watcher waits for agent to finish cycle (idle| in current-state, max 10 min)
+        #   4. Watcher kills process → boot script restarts with fresh context
         $watcherJob = Start-Job -ScriptBlock {
-            param($sentinel, $pid)
+            param($sentinel, $pid, $pressureFile, $stateFile, $threshold)
+            $MaxWaitCycle = 600  # 10 minutes max wait for cycle to finish
             while (-not (Get-Process -Id $pid -ErrorAction SilentlyContinue).HasExited) {
+                # Check .restart sentinel (agent requested restart)
                 if (Test-Path $sentinel) {
                     Write-Output "[SquidSquad] Restart sentinel detected — stopping Claude (PID $pid)..."
-                    try { Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue } catch {}
+                    try { & taskkill /T /F /PID $pid 2>$null } catch {}
                     break
+                }
+                # Check context pressure
+                if (Test-Path $pressureFile) {
+                    $raw = (Get-Content $pressureFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+                    if ($raw -match '^\d+$') {
+                        $pressure = [int]$raw
+                        if ($pressure -ge $threshold) {
+                            Write-Output "[SquidSquad] Context pressure ${pressure}% >= ${threshold}% — waiting for cycle to finish..."
+                            # Wait for agent to finish its current cycle (idle| in current-state)
+                            $waited = 0
+                            while ($waited -lt $MaxWaitCycle) {
+                                if ((Get-Process -Id $pid -ErrorAction SilentlyContinue).HasExited) { break }
+                                if (Test-Path $stateFile) {
+                                    $state = (Get-Content $stateFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+                                    if ($state -match '^idle\|') {
+                                        Write-Output "[SquidSquad] Cycle complete — restarting for fresh context..."
+                                        break
+                                    }
+                                }
+                                Start-Sleep -Seconds 10
+                                $waited += 10
+                            }
+                            if ($waited -ge $MaxWaitCycle) {
+                                Write-Output "[SquidSquad] Timed out waiting for cycle — forcing restart..."
+                            }
+                            try { & taskkill /T /F /PID $pid 2>$null } catch {}
+                            break
+                        }
+                    }
                 }
                 Start-Sleep -Seconds 5
             }
-        } -ArgumentList $RestartSentinel, $claudeProc.Id
+        } -ArgumentList $RestartSentinel, $claudeProc.Id, $PressureFile, $StateFile, $CtxThreshold
 
         $claudeProc.WaitForExit()
         $exitCode = $claudeProc.ExitCode
@@ -138,6 +183,21 @@ try {
             $RestartCount = 0
             Start-Sleep -Seconds 2
             continue
+        }
+
+        # Check if this was a context pressure restart
+        if (Test-Path $PressureFile) {
+            $raw = (Get-Content $PressureFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+            if ($raw -match '^\d+$' -and [int]$raw -ge $CtxThreshold) {
+                $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+                "$ts | exit=$exitCode | context-pressure | pressure=${raw}% | runtime=${runtime}s" | Add-Content $RestartLog
+                Write-Host "[SquidSquad] Context pressure restart (${raw}%). Restarting with fresh context..."
+                "restarting|Context pressure ${raw}% — fresh start" | Set-Content $StateFile -NoNewline
+                Remove-Item $PressureFile -ErrorAction SilentlyContinue
+                $RestartCount = 0
+                Start-Sleep -Seconds 2
+                continue
+            }
         }
 
         # Append restart log entry

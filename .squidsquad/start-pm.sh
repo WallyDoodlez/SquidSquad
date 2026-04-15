@@ -39,8 +39,8 @@ fi
 # Register this agent in config.md
 python references/scripts/config.py sync-agents 2>/dev/null || true
 
-# Write role for statusline (not used for auto-boot — system prompt handles that)
-echo "pm" > .squidsquad/.active-role
+# Set env var for statusline (session-scoped, no cross-agent clobber)
+export SQUIDSQUAD_ROLE="pm"
 
 # --- PID lock: prevent double-start ---
 ROLE_DIR=".squidsquad/pm"
@@ -49,6 +49,7 @@ STOP_FILE="$ROLE_DIR/.stop"
 RESTART_SENTINEL="$ROLE_DIR/.restart"
 RESTART_LOG="$ROLE_DIR/restart-log.txt"
 STATE_FILE="$ROLE_DIR/current-state"
+PRESSURE_FILE="$ROLE_DIR/context-pressure"
 
 mkdir -p "$ROLE_DIR"
 
@@ -98,22 +99,60 @@ COOLDOWN_MAX=300
 MIN_RUNTIME_SECONDS=120
 
 while true; do
-  # Reset status bar for a fresh session
+  # Reset status bar and context pressure for a fresh session
   rm -f "$STATE_FILE"
   echo "idle|Initializing..." > "$STATE_FILE"
+  rm -f "$PRESSURE_FILE"
 
   START_TIME=$(date +%s)
+
+  # Read context threshold from config (default 70)
+  CTX_THRESHOLD=$(python references/scripts/config.py get context-threshold 2>/dev/null || echo "70")
+  CTX_THRESHOLD=${CTX_THRESHOLD//[^0-9]/}
+  [ -z "$CTX_THRESHOLD" ] && CTX_THRESHOLD=70
 
   claude --dangerously-skip-permissions --name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE=pm" "start the loop" &
   CHILD_PID=$!
 
-  # Background poller: watch for .restart sentinel while Claude is running (#918)
+  # Background poller: watch for .restart sentinel AND context pressure
+  # Context pressure flow:
+  #   1. Agent writes pressure % to context-pressure file (Step 1b, early in cycle)
+  #   2. Watcher detects pressure >= threshold
+  #   3. Watcher waits for agent to finish cycle (idle| in current-state, max 10 min)
+  #   4. Watcher kills process → boot script restarts with fresh context
   (
+    MAX_WAIT_CYCLE=600  # 10 minutes max wait for cycle to finish
     while kill -0 "$CHILD_PID" 2>/dev/null; do
+      # Check .restart sentinel (agent requested restart)
       if [ -f "$RESTART_SENTINEL" ]; then
         echo "[SquidSquad] Restart sentinel detected — killing Claude (PID $CHILD_PID)..."
         kill -INT "$CHILD_PID" 2>/dev/null
         break
+      fi
+      # Check context pressure
+      if [ -f "$PRESSURE_FILE" ]; then
+        RAW=$(cat "$PRESSURE_FILE" 2>/dev/null | head -1 | tr -d '[:space:]')
+        if [[ "$RAW" =~ ^[0-9]+$ ]] && [ "$RAW" -ge "$CTX_THRESHOLD" ]; then
+          echo "[SquidSquad] Context pressure ${RAW}% >= ${CTX_THRESHOLD}% — waiting for cycle to finish..."
+          WAITED=0
+          while [ "$WAITED" -lt "$MAX_WAIT_CYCLE" ]; do
+            kill -0 "$CHILD_PID" 2>/dev/null || break
+            if [ -f "$STATE_FILE" ]; then
+              STATE=$(head -1 "$STATE_FILE" 2>/dev/null)
+              if [[ "$STATE" == idle\|* ]]; then
+                echo "[SquidSquad] Cycle complete — restarting for fresh context..."
+                break
+              fi
+            fi
+            sleep 10
+            WAITED=$((WAITED + 10))
+          done
+          if [ "$WAITED" -ge "$MAX_WAIT_CYCLE" ]; then
+            echo "[SquidSquad] Timed out waiting for cycle — forcing restart..."
+          fi
+          kill -INT "$CHILD_PID" 2>/dev/null
+          break
+        fi
       fi
       sleep 5
     done
@@ -150,6 +189,21 @@ while true; do
     RESTART_COUNT=0
     sleep 2
     continue
+  fi
+
+  # Check if this was a context pressure restart
+  if [ -f "$PRESSURE_FILE" ]; then
+    RAW=$(cat "$PRESSURE_FILE" 2>/dev/null | head -1 | tr -d '[:space:]')
+    if [[ "$RAW" =~ ^[0-9]+$ ]] && [ "$RAW" -ge "$CTX_THRESHOLD" ]; then
+      TS=$(date '+%Y-%m-%d %H:%M:%S')
+      echo "$TS | exit=$EXIT_CODE | context-pressure | pressure=${RAW}% | runtime=${RUNTIME}s" >> "$RESTART_LOG"
+      echo "[SquidSquad] Context pressure restart (${RAW}%). Restarting with fresh context..."
+      echo "restarting|Context pressure ${RAW}% — fresh start" > "$STATE_FILE"
+      rm -f "$PRESSURE_FILE"
+      RESTART_COUNT=0
+      sleep 2
+      continue
+    fi
   fi
 
   # Append restart log entry: timestamp | exit_code | restart_count | runtime
