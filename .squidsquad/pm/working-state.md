@@ -5,16 +5,17 @@
 
 ## Active Pipeline
 
-- #5 — Auto-clone add_role.py (in-progress, 2 QA gaps: role validation bypass + duplicate role check)
-- #195 — Modular sub-skills (in-progress, needs compose manifest tests)
-- #375 — Branch-per-feature (in-progress, needs commit_code/commit_state tests)
-- #606 — config.py duplicate agents (in-progress, phantom designer + qa role)
-- #598 — Planning artifact location (in-progress, template not updated)
-- #942 — Boot process overhaul (approved, ready for dev pickup — 34 TCs)
+- #922 — SQLite scan index (in-progress, skill actively implementing)
+- #960 — Feature branch state files (pending-test, QA verifying)
+- #942 — Boot process overhaul (pending-ship, QA verified 34/34 TCs)
+- #474 — PM/QA test coverage verification (approved, awaiting skill pickup)
+- #473 — Dev SOUL.md test coverage requirement (approved, awaiting skill pickup)
+- #592 — Mermaid architecture diagram (approved, awaiting DM pickup)
+- #1022 — health_check.py Unicode crash (open, severity low)
 
 ## Planned (awaiting approval)
 
-- #922 — SQLite scan index (planned, 14 TCs — awaiting execution approval)
+- #922 — SQLite scan index (in-progress — was planned, now executing)
 - #246 — PR-driven workflow (25 TCs)
 - #347 — Separate QA from PM (researched)
 - #462 — Adaptive setup questions (researched)
