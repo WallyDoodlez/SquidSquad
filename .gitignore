@@ -4,6 +4,12 @@
 .squidsquad/*/.pid
 .squidsquad/*/.stop
 .squidsquad/*/restart-log.txt
+.squidsquad/*/context-pressure
+.squidsquad/*/context-pressure.tmp
+.squidsquad/*/.health
+.squidsquad/*/.health.tmp
+.squidsquad/boot-lock
+.squidsquad/boot-attempts.log
 .squidsquad/.local-config
 .squidsquad/.backlog-cache
 .squidsquad/.backlog-cache.tmp
