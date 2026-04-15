@@ -268,6 +268,25 @@ class TestParseArgs:
 
 
 # ---------------------------------------------------------------------------
+# _is_state_file()
+# ---------------------------------------------------------------------------
+
+class TestIsStateFile:
+    def test_squidsquad_files(self):
+        assert git_ops._is_state_file(".squidsquad/skill/working-state.md") is True
+        assert git_ops._is_state_file(".squidsquad/pm/planning/CONTEXT.md") is True
+
+    def test_claude_files(self):
+        assert git_ops._is_state_file(".claude/scheduled_tasks.lock") is True
+        assert git_ops._is_state_file(".claude/settings.local.json") is True
+
+    def test_code_files(self):
+        assert git_ops._is_state_file("references/scripts/git_ops.py") is False
+        assert git_ops._is_state_file("tests/test_git_ops.py") is False
+        assert git_ops._is_state_file("src/main.py") is False
+
+
+# ---------------------------------------------------------------------------
 # commit_code()
 # ---------------------------------------------------------------------------
 
@@ -306,6 +325,14 @@ class TestCommitCode:
     def test_no_code_changes_returns_false(self, mock_run):
         """commit_code returns False when only .squidsquad/ files changed."""
         mock_run.return_value = _mock_result(stdout=" M .squidsquad/skill/working-state.md\n")
+        assert git_ops.commit_code("skill", "squidsquad/skill/375", "test") is False
+
+    @patch("git_ops._run")
+    def test_excludes_claude_state_files(self, mock_run):
+        """commit_code excludes .claude/ state files from feature branches."""
+        mock_run.return_value = _mock_result(
+            stdout=" M .claude/scheduled_tasks.lock\n M .squidsquad/skill/working-state.md\n"
+        )
         assert git_ops.commit_code("skill", "squidsquad/skill/375", "test") is False
 
     @patch("git_ops._run")

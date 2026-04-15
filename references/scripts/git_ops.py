@@ -193,11 +193,18 @@ def pr_create(title, body):
     return url
 
 
-def commit_code(role, branch, message):
-    """Stage and commit only code files (non-.squidsquad/) to a feature branch.
+def _is_state_file(path):
+    """Check if a path is a state/ephemeral file that should not appear in feature PRs."""
+    STATE_PREFIXES = (".squidsquad/", ".claude/")
+    return any(path.startswith(p) for p in STATE_PREFIXES)
 
-    Switches to the feature branch, stages everything EXCEPT .squidsquad/,
-    commits, pushes the branch, then switches back to main.
+
+def commit_code(role, branch, message):
+    """Stage and commit only code files to a feature branch.
+
+    Switches to the feature branch, stages everything EXCEPT state/ephemeral
+    files (.squidsquad/, .claude/), commits, pushes the branch, then switches
+    back to main.
     """
     result = _run("git status --porcelain", check=False)
     if not result.stdout.strip():
@@ -216,13 +223,13 @@ def commit_code(role, branch, message):
         # Handle renames: "old -> new"
         if " -> " in path:
             path = path.split(" -> ")[1]
-        if path.startswith(".squidsquad/"):
+        if _is_state_file(path):
             state_files.append(path)
         else:
             code_files.append(path)
 
     if not code_files:
-        print("No code changes to commit (only .squidsquad/ changes)")
+        print("No code changes to commit (only state/ephemeral changes)")
         return False
 
     # Switch to feature branch
