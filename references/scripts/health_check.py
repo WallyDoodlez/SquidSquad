@@ -17,12 +17,18 @@ Exit codes:
     2 — usage error or missing prerequisites
 """
 
+import io
 import json
 import os
 import re
 import sys
 import time
 from pathlib import Path
+
+# Ensure stdout can handle Unicode emoji on Windows (cp1252 can't encode them)
+if sys.stdout.encoding and sys.stdout.encoding.lower().replace("-", "") != "utf8":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
