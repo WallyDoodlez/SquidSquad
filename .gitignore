@@ -19,6 +19,12 @@
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
 
+# SQLite scan index (per-clone, rebuildable from scan-history.md)
+.squidsquad/scan-index.db
+.squidsquad/scan-index.db-journal
+.squidsquad/scan-index.db-wal
+.squidsquad/scan-index.db-shm
+
 # Node
 node_modules/
 

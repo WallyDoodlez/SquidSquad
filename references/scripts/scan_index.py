@@ -172,14 +172,17 @@ def _walk_source_files(root=None):
 
 def suggest_targets(role, count=5, db_path=None):
     """Return top N files to scan, ranked by composite score."""
+    resolved_db_path = db_path or DB_PATH
     try:
-        conn = _get_db(db_path)
+        conn = _get_db(resolved_db_path)
     except (sqlite3.DatabaseError, sqlite3.OperationalError) as e:
         print(f"WARNING: DB error ({e}), returning empty list", file=sys.stderr)
         return []
 
-    # Lazy churn refresh (if stale > 24h)
-    _maybe_refresh_churn(conn)
+    # Lazy churn refresh (if stale > 24h) — uses its own connection
+    conn.close()
+    _maybe_refresh_churn(resolved_db_path)
+    conn = _get_db(resolved_db_path)
 
     # Get all source files on disk
     root = REPO_ROOT if db_path is None else db_path.parent.parent
@@ -521,11 +524,13 @@ def refresh_churn(db_path=None):
     print(f"Refreshed churn: {len(all_files)} files, {len(renames)} renames detected")
 
 
-def _maybe_refresh_churn(conn):
-    """Refresh churn if data is stale (>24h old)."""
+def _maybe_refresh_churn(db_path):
+    """Refresh churn if data is stale (>24h old). Takes db_path, opens its own connection."""
+    conn = _get_db(db_path)
     row = conn.execute(
         "SELECT MAX(last_refreshed) AS lr FROM git_churn"
     ).fetchone()
+    conn.close()
     if row and row["lr"]:
         try:
             last = datetime.strptime(row["lr"], "%Y-%m-%d %H:%M:%S")
@@ -533,9 +538,7 @@ def _maybe_refresh_churn(conn):
                 return  # fresh enough
         except ValueError:
             pass
-    # Stale or missing — refresh (close and reopen to avoid nesting)
-    db_path = Path(conn.execute("PRAGMA database_list").fetchone()[2])
-    conn.close()
+    # Stale or missing — refresh
     refresh_churn(db_path)
 
 
