@@ -102,8 +102,9 @@ try {
             if ($t -match '^\d+$') { $CtxThreshold = [int]$t }
         } catch {}
 
-        # Start Claude as a background process so we can poll for .restart and context pressure
-        $claudeProc = Start-Process -FilePath "claude" -ArgumentList "--dangerously-skip-permissions", "--name", "$AgentName", "--append-system-prompt", "$sysPrompt", "$initMsg" -NoNewWindow -PassThru
+        # Resolve claude path — npm installs it as a .cmd shim on Windows
+        $claudePath = (Get-Command claude -ErrorAction Stop).Source
+        $claudeProc = Start-Process -FilePath $claudePath -ArgumentList "--dangerously-skip-permissions", "--name", "$AgentName", "--append-system-prompt", "$sysPrompt", "$initMsg" -NoNewWindow -PassThru
 
         # Background poller: watch for .restart sentinel AND context pressure
         # Context pressure flow:
