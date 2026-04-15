@@ -2,4 +2,3 @@
 
 - **Task**: none
 - **Status**: none
-- **Quiet Cycle Counter**: 3

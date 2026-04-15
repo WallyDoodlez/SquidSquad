@@ -14,6 +14,7 @@
 
 ## Planned (awaiting approval)
 
+- #922 — SQLite scan index (planned, 14 TCs — awaiting execution approval)
 - #246 — PR-driven workflow (25 TCs)
 - #347 — Separate QA from PM (researched)
 - #462 — Adaptive setup questions (researched)
