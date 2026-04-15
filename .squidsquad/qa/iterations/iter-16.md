@@ -1,9 +1,9 @@
 # QA Iteration 16
 
-- **Date**: 2026-04-13 22:06
+- **Date**: 2026-04-15 01:13
 - **E2E Tests**: Skipped (no E2E command)
 - **Issues Filed**: none
-- **Issues Verified**: #918 — FAIL. Self-restart sub-skill included correctly but inline context-pressure sections in PM/QA/DM/Designer still say "Exit the conversation." Back to In Progress.
+- **Issues Verified**: #1022 (health_check.py Unicode crash on Windows) — PASS
 - **Tasks Verified**: none
-- **Agent Health**: dm 🦑, pm 🦑, qa 🦑, skill 🦑
-- **Notes**: Self-restart sentinel mechanism is correct (boot scripts, sub-skill, includes.yml all verified). Only the inline context-pressure blocks in 4 non-dev roles need updating to reference the sentinel instead of "exit."
+- **Agent Health**: dm 🦑, pm 🦑 (researching #1074), qa 🦑, skill 🦑
+- **Notes**: Quick verification — UTF-8 TextIOWrapper fix confirmed working on Windows. Ship counter at 11 (above threshold).
