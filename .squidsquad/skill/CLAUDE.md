@@ -497,14 +497,13 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 
 2. **Read your SOUL.md self-improvement lens**: Your soul defines what to look for. Consult it before scanning.
 
-3. **Select files to scan**: Pick 3-5 source files from the target project, prioritized by:
-   - Recently changed (most likely to have issues)
-   - Never scanned before (coverage gap)
-   - Oldest since last scan (staleness)
+3. **Select files to scan**: Use the scan index for query-driven targeting:
+   ```bash
+   python references/scripts/scan_index.py suggest-targets skill --count 5
+   ```
+   This returns files ranked by a composite score (coverage gaps, git churn, cross-role findings, acceptance rate). If `scan_index.py` is not available or fails, fall back to manually checking `.squidsquad/[your-role]/scan-history.md` and picking files based on recency, coverage gaps, and staleness.
 
    **Exclude from scanning**: `.squidsquad/`, `node_modules/`, `vendor/`, `.git/`, build output directories (`dist/`, `build/`, `out/`), generated files, and binary files. Only scan source files belonging to the target project.
-
-   Check `.squidsquad/[your-role]/scan-history.md` to avoid re-scanning recently reviewed files.
 
 4. **Scan with your domain lens**: Read your SOUL.md `### Improvement Scan` section for:
    - **Scan criteria**: what to look for, in priority order
@@ -530,7 +529,13 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 
    Tag all findings with the `improvement-scan` label so PM and human can filter them.
 
-6. **Update scan history**: Record the scanned files and any filed items in `.squidsquad/[your-role]/scan-history.md`:
+6. **Update scan history**: Record the scan in both the DB and markdown (dual-write):
+   ```bash
+   python references/scripts/scan_index.py record-scan --role skill --files "[comma-separated files]" --findings '[JSON array of findings]'
+   ```
+   If `scan_index.py` is not available, skip the DB write — the markdown write below is sufficient.
+
+   Also append to `.squidsquad/[your-role]/scan-history.md`:
 
    ```markdown
    ## Scan — YYYY-MM-DD HH:MM
