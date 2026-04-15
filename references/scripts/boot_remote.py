@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """SquidSquad remote agent boot — spawn dead agents in new terminals.
 
-PM is the bootmaster. Detection is PID-based: read each agent's .pid file,
-check if the process is alive. If dead (or no PID file) and no .stop sentinel,
-spawn a new terminal.
+PM is the bootmaster. Detection uses .health file (primary) with PID fallback:
+read each agent's .health file for liveness status. If .health shows dead/error
+or is missing, check .pid as fallback. If agent needs booting and no .stop
+sentinel, spawn a new terminal. After spawning, polls .health for up to 30s
+to confirm the agent started successfully.
 
 Usage:
     python scripts/boot_remote.py --role <name>   # Boot a single agent
@@ -82,17 +84,25 @@ def _parse_dev_agents():
 
 
 def _get_all_roles():
-    """Get all agent roles from config + local-config. Excludes 'pm' (bootmaster)."""
-    roles = set()
-    # From config.md Dev Agents
-    roles.update(_parse_dev_agents())
-    # From .local-config
-    roles.update(_parse_local_config().keys())
-    # Add known coordination roles
-    for role in ("dm", "qa", "designer"):
-        role_dir = SQUIDSQUAD_DIR / role
-        if role_dir.exists():
-            roles.add(role)
+    """Get all agent roles from config.md only. Excludes 'pm' (bootmaster).
+
+    Only reads the Dev Agents list from config.md — does not scan directories
+    or .local-config for extra roles. This prevents booting agents that have
+    been removed from config.md but still have leftover directories (#943).
+    """
+    roles = set(_parse_dev_agents())
+    # Also check for coordination roles listed in config (DM, QA, Designer sections)
+    if CONFIG_MD.exists():
+        try:
+            text = CONFIG_MD.read_text(encoding="utf-8")
+            # DM: present if "DM**: present" in config
+            if re.search(r"\*\*DM\*\*:\s*present", text, re.IGNORECASE):
+                roles.add("dm")
+            # QA: present if listed in Dev Agents or "QA**: always present"
+            if re.search(r"\*\*QA\*\*:\s*always present", text, re.IGNORECASE):
+                roles.add("qa")
+        except Exception:
+            pass
     roles.discard("pm")  # PM is the bootmaster, never boots itself
     return sorted(roles)
 
@@ -145,9 +155,27 @@ def _has_stop_sentinel(clone_path, role):
 
 
 
-def _needs_boot(role):
-    """Determine if an agent needs booting based on PID.
+def _read_health_file(clone_path, role):
+    """Read .health file for a role. Returns (status, detail) or (None, None)."""
+    health_file = Path(clone_path) / ".squidsquad" / role / ".health"
+    if not health_file.exists():
+        return None, None
+    try:
+        content = health_file.read_text(encoding="utf-8").strip()
+        if not content:
+            return None, None
+        parts = content.split("|", 1)
+        status = parts[0].strip()
+        detail = parts[1].strip() if len(parts) > 1 else ""
+        return status, detail
+    except (OSError, UnicodeDecodeError):
+        return None, None
 
+
+def _needs_boot(role):
+    """Determine if an agent needs booting.
+
+    Uses .health file (primary) with PID fallback.
     Returns (needs_boot, reason, clone_path).
     Context pressure restarts are handled by each agent's boot script, not here.
     """
@@ -157,15 +185,52 @@ def _needs_boot(role):
     if _has_stop_sentinel(clone_path, role):
         return False, "explicitly stopped (.stop sentinel)", str(clone_path)
 
-    # Check PID
+    # Primary: check .health file
+    health_status, health_detail = _read_health_file(clone_path, role)
+    if health_status is not None:
+        if health_status in ("alive", "booting", "restarting"):
+            return False, f".health={health_status} (agent running)", str(clone_path)
+        elif health_status == "dead":
+            return True, ".health=dead (wrapper exited)", str(clone_path)
+        elif health_status == "error":
+            detail_msg = f": {health_detail}" if health_detail else ""
+            return True, f".health=error{detail_msg}", str(clone_path)
+        elif health_status == "backoff":
+            # Agent is in crash loop — wrapper is still running, don't double-boot
+            return False, ".health=backoff (wrapper handling restarts)", str(clone_path)
+
+    # Fallback: check PID (old boot scripts without .health)
     pid = _read_pid_file(clone_path, role)
     if pid is None:
-        return True, "no PID file (agent not running)", str(clone_path)
+        return True, "no .health file, no PID file (agent not running)", str(clone_path)
 
     if not _is_process_alive(pid):
-        return True, f"process dead (PID {pid} not found)", str(clone_path)
+        return True, f"no .health file, process dead (PID {pid} not found)", str(clone_path)
 
-    return False, f"process alive (PID {pid})", str(clone_path)
+    return False, f"no .health file, process alive (PID {pid})", str(clone_path)
+
+
+def _poll_health_after_spawn(clone_path, role, timeout=30):
+    """Poll .health file after spawning, waiting for 'alive' status.
+
+    Returns (confirmed, final_status, message).
+    """
+    poll_interval = 2
+    elapsed = 0
+    while elapsed < timeout:
+        time.sleep(poll_interval)
+        elapsed += poll_interval
+        health_status, health_detail = _read_health_file(clone_path, role)
+        if health_status == "alive":
+            return True, "alive", f"agent confirmed alive after {elapsed}s"
+        elif health_status == "error":
+            detail_msg = f": {health_detail}" if health_detail else ""
+            return False, "error", f"agent boot failed{detail_msg}"
+    # Timeout — check what we have
+    health_status, _ = _read_health_file(clone_path, role)
+    if health_status == "booting":
+        return True, "booting", f"agent still booting after {timeout}s (health unconfirmed)"
+    return True, health_status or "unknown", f"health poll timed out after {timeout}s"
 
 
 # ---------------------------------------------------------------------------
@@ -443,6 +508,17 @@ def boot_agent(role, dry_run=False):
             "message": msg,
             "reason": reason,
         })
+
+        # Post-spawn: poll .health for confirmation (30s timeout)
+        if success and not dry_run:
+            confirmed, health_status, poll_msg = _poll_health_after_spawn(
+                clone_path, role, timeout=30
+            )
+            result["health_confirmed"] = confirmed
+            result["health_status"] = health_status
+            result["message"] = f"{msg} — {poll_msg}"
+            if not confirmed:
+                result["success"] = False
     finally:
         _release_lock()
 

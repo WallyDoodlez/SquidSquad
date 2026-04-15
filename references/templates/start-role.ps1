@@ -56,8 +56,44 @@ $RestartSentinel = "$RoleDir/.restart"
 $RestartLog = "$RoleDir/restart-log.txt"
 $StateFile = "$RoleDir/current-state"
 $PressureFile = "$RoleDir/context-pressure"
+$HealthFile = "$RoleDir/.health"
 
 if (-not (Test-Path $RoleDir)) { New-Item -ItemType Directory -Path $RoleDir -Force | Out-Null }
+
+# --- Helper: atomic write to .health (write .tmp then rename) ---
+function Write-Health {
+    param([string]$Status)
+    $tmp = "$HealthFile.tmp"
+    [System.IO.File]::WriteAllText((Resolve-Path $RoleDir).Path + "/.health.tmp", $Status)
+    Move-Item -Force $tmp $HealthFile -ErrorAction SilentlyContinue
+}
+
+# --- Pre-flight checks: validate environment before entering restart loop ---
+Write-Health "booting"
+Write-Host "[SquidSquad] Pre-flight checks..."
+
+# Check gh auth
+$ghStatus = $null
+try { $ghStatus = & gh auth status 2>&1 } catch {}
+if ($LASTEXITCODE -ne 0) {
+    $errMsg = "error|gh auth failed"
+    Write-Health $errMsg
+    Write-Host "[SquidSquad] FATAL: gh auth check failed. Run 'gh auth login' with 'repo' scope."
+    Write-Host "[SquidSquad] .health written: $errMsg"
+    exit 1
+}
+
+# Check git branch is main
+$currentBranch = (git branch --show-current 2>$null).Trim()
+if ($currentBranch -ne "main") {
+    $errMsg = "error|wrong branch: $currentBranch (expected main)"
+    Write-Health $errMsg
+    Write-Host "[SquidSquad] FATAL: Expected branch 'main', got '$currentBranch'."
+    Write-Host "[SquidSquad] .health written: $errMsg"
+    exit 1
+}
+
+Write-Host "[SquidSquad] Pre-flight OK (gh auth + branch main)."
 
 if (Test-Path $PidFile) {
     $oldPid = (Get-Content $PidFile -ErrorAction SilentlyContinue | Select-Object -First 1)
@@ -67,6 +103,7 @@ if (Test-Path $PidFile) {
         if ($running) {
             Write-Host "[SquidSquad] Agent {{ROLE}} already running (PID $oldPid). Aborting."
             Write-Host "[SquidSquad] If this is stale, remove $PidFile manually."
+            Write-Health "error|already running (PID $oldPid)"
             exit 1
         }
     }
@@ -75,7 +112,7 @@ if (Test-Path $PidFile) {
 }
 $PID | Set-Content $PidFile -NoNewline
 
-# --- Cleanup on exit: remove PID file ---
+# --- Cleanup on exit: remove PID file, write .health dead ---
 try {
     # --- Auto-restart wrapper ---
     $MaxRestarts = 50
@@ -83,12 +120,15 @@ try {
     $CooldownBase = 2
     $CooldownMax = 300
     $MinRuntimeSeconds = 120
+    $SelfRestartLimit = 3  # max self-restarts per hour
 
     while ($true) {
         # Reset status bar and context pressure for a fresh session
         Remove-Item $StateFile -ErrorAction SilentlyContinue
         "idle|Initializing..." | Set-Content $StateFile -NoNewline
         Remove-Item $PressureFile -ErrorAction SilentlyContinue
+
+        Write-Health "alive"
 
         $startTime = Get-Date
 
@@ -169,6 +209,7 @@ try {
             Write-Host "[SquidSquad] Stop file detected. Not restarting."
             Remove-Item $StopFile -ErrorAction SilentlyContinue
             "stopped|Agent stopped by user" | Set-Content $StateFile -NoNewline
+            Write-Health "dead"
             break
         }
 
@@ -177,13 +218,37 @@ try {
             $reason = (Get-Content $RestartSentinel -ErrorAction SilentlyContinue | Select-Object -First 1)
             if (-not $reason) { $reason = "unknown" }
             Remove-Item $RestartSentinel -ErrorAction SilentlyContinue
-            $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-            "$ts | exit=$exitCode | self-restart | reason=$reason | runtime=${runtime}s" | Add-Content $RestartLog
-            Write-Host "[SquidSquad] Self-restart requested: $reason. Restarting immediately..."
-            "restarting|Self-restart: $reason" | Set-Content $StateFile -NoNewline
-            $RestartCount = 0
-            Start-Sleep -Seconds 2
-            continue
+
+            # --- Self-restart rate limit: 3 per hour (hard enforcement) ---
+            $selfRestartCount = 0
+            $oneHourAgo = (Get-Date).AddHours(-1)
+            if (Test-Path $RestartLog) {
+                $lines = Get-Content $RestartLog -ErrorAction SilentlyContinue
+                foreach ($line in $lines) {
+                    if ($line -match "self-restart" -and $line -match "^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})") {
+                        try {
+                            $entryTime = [datetime]::ParseExact($Matches[1], "yyyy-MM-dd HH:mm:ss", $null)
+                            if ($entryTime -gt $oneHourAgo) { $selfRestartCount++ }
+                        } catch {}
+                    }
+                }
+            }
+
+            if ($selfRestartCount -ge $SelfRestartLimit) {
+                $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+                "$ts | exit=$exitCode | self-restart-BLOCKED | reason=$reason | rate-limit ($SelfRestartLimit/hr exceeded) | runtime=${runtime}s" | Add-Content $RestartLog
+                Write-Host "[SquidSquad] Self-restart rate limit ($SelfRestartLimit/hr) exceeded — ignoring .restart sentinel."
+                # Continue running — do NOT restart, fall through to normal crash handling
+            } else {
+                $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+                "$ts | exit=$exitCode | self-restart | reason=$reason | runtime=${runtime}s" | Add-Content $RestartLog
+                Write-Host "[SquidSquad] Self-restart requested: $reason. Restarting immediately..."
+                Write-Health "restarting"
+                "restarting|Self-restart: $reason" | Set-Content $StateFile -NoNewline
+                $RestartCount = 0
+                Start-Sleep -Seconds 2
+                continue
+            }
         }
 
         # Check if this was a context pressure restart
@@ -193,6 +258,7 @@ try {
                 $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
                 "$ts | exit=$exitCode | context-pressure | pressure=${raw}% | runtime=${runtime}s" | Add-Content $RestartLog
                 Write-Host "[SquidSquad] Context pressure restart (${raw}%). Restarting with fresh context..."
+                Write-Health "restarting"
                 "restarting|Context pressure ${raw}% — fresh start" | Set-Content $StateFile -NoNewline
                 Remove-Item $PressureFile -ErrorAction SilentlyContinue
                 $RestartCount = 0
@@ -209,8 +275,11 @@ try {
         if ($RestartCount -ge $MaxRestarts) {
             Write-Host "[SquidSquad] Max restarts ($MaxRestarts) reached. Stopping."
             "error|Max restarts reached" | Set-Content $StateFile -NoNewline
+            Write-Health "error|Max restarts reached"
             break
         }
+
+        Write-Health "backoff"
 
         if ($runtime -lt $MinRuntimeSeconds) {
             # Fast crash — exponential backoff
@@ -229,4 +298,13 @@ try {
     }
 } finally {
     Remove-Item $PidFile -ErrorAction SilentlyContinue
+    # Write final health state if not already set to error/dead
+    if (Test-Path $HealthFile) {
+        $current = Get-Content $HealthFile -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($current -notmatch "^(error|dead)") {
+            Write-Health "dead"
+        }
+    } else {
+        Write-Health "dead"
+    }
 }

@@ -4,6 +4,7 @@
 includes:
   - common/tracker-protocol
   - common/pull-latest
+  - common/context-pressure
   - qa-specific/verification
   - common/boot-remote-agents
   - common/improvement-scan-slim
