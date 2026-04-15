@@ -15,10 +15,13 @@ if [ -f "$USER_STATUSLINE" ] && [ -s "$USER_STATUSLINE" ]; then
   [ -n "$USER_OUTPUT" ] && echo "$USER_OUTPUT"
 fi
 
-# Read role
-ROLE_FILE="$SQDIR/.active-role"
-[ ! -f "$ROLE_FILE" ] && exit 0
-ROLE=$(cat "$ROLE_FILE" | tr -d '[:space:]')
+# Read role — prefer env var (session-scoped), fall back to file (clone-based setups)
+ROLE="${SQUIDSQUAD_ROLE:-}"
+if [ -z "$ROLE" ]; then
+  ROLE_FILE="$SQDIR/.active-role"
+  [ ! -f "$ROLE_FILE" ] && exit 0
+  ROLE=$(cat "$ROLE_FILE" | tr -d '[:space:]')
+fi
 [ -z "$ROLE" ] && exit 0
 
 # ANSI colors

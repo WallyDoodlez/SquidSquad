@@ -124,14 +124,14 @@ class TestStartScriptConsistency:
     """Bash and PS1 scripts for each role are structurally consistent."""
 
     @pytest.mark.parametrize("role", ROLES)
-    def test_both_write_active_role(self, role):
+    def test_both_set_role_env_var(self, role):
         sh = (SQUIDSQUAD_DIR / f"start-{role}.sh").read_text(encoding="utf-8")
         ps1 = (SQUIDSQUAD_DIR / f"start-{role}.ps1").read_text(encoding="utf-8")
-        assert f'echo "{role}"' in sh or f"echo '{role}'" in sh, (
-            f"start-{role}.sh should write role to .active-role"
+        assert f'export SQUIDSQUAD_ROLE="{role}"' in sh, (
+            f"start-{role}.sh should set SQUIDSQUAD_ROLE env var"
         )
-        assert f'"{role}"' in ps1, (
-            f"start-{role}.ps1 should write role to .active-role"
+        assert f'$env:SQUIDSQUAD_ROLE = "{role}"' in ps1, (
+            f"start-{role}.ps1 should set SQUIDSQUAD_ROLE env var"
         )
 
     @pytest.mark.parametrize("role", ROLES)

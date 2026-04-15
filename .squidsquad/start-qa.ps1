@@ -45,8 +45,8 @@ if (Test-Path $injectScript) { & $injectScript }
 # Register this agent in config.md
 try { python references/scripts/config.py sync-agents 2>$null } catch {}
 
-# Write role for statusline (not used for auto-boot -- system prompt handles that)
-"qa" | Set-Content .squidsquad/.active-role -NoNewline
+# Set env var for statusline (session-scoped, no cross-agent clobber)
+$env:SQUIDSQUAD_ROLE = "qa"
 
 # --- PID lock: prevent double-start ---
 $RoleDir = ".squidsquad/qa"
@@ -102,9 +102,9 @@ try {
             if ($t -match '^\d+$') { $CtxThreshold = [int]$t }
         } catch {}
 
-        # Resolve claude path — npm installs it as a .cmd shim on Windows
-        $claudePath = (Get-Command claude -ErrorAction Stop).Source
-        $claudeProc = Start-Process -FilePath $claudePath -ArgumentList "--dangerously-skip-permissions", "--name", "$AgentName", "--append-system-prompt", "$sysPrompt", "$initMsg" -NoNewWindow -PassThru
+        # Start Claude as a background process so we can poll for .restart and context pressure
+        # Use cmd /c to launch — claude is a .cmd shim on Windows, Start-Process can't exec .cmd directly
+        $claudeProc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "claude", "--dangerously-skip-permissions", "--name", "$AgentName", "--append-system-prompt", "$sysPrompt", "$initMsg" -NoNewWindow -PassThru
 
         # Background poller: watch for .restart sentinel AND context pressure
         # Context pressure flow:
@@ -119,7 +119,7 @@ try {
                 # Check .restart sentinel (agent requested restart)
                 if (Test-Path $sentinel) {
                     Write-Output "[SquidSquad] Restart sentinel detected — stopping Claude (PID $pid)..."
-                    try { Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue } catch {}
+                    try { & taskkill /T /F /PID $pid 2>$null } catch {}
                     break
                 }
                 # Check context pressure
@@ -146,7 +146,7 @@ try {
                             if ($waited -ge $MaxWaitCycle) {
                                 Write-Output "[SquidSquad] Timed out waiting for cycle — forcing restart..."
                             }
-                            try { Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue } catch {}
+                            try { & taskkill /T /F /PID $pid 2>$null } catch {}
                             break
                         }
                     }

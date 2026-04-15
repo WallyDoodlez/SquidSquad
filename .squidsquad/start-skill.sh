@@ -39,8 +39,8 @@ fi
 # Register this agent in config.md
 python references/scripts/config.py sync-agents 2>/dev/null || true
 
-# Write role for statusline (not used for auto-boot — system prompt handles that)
-echo "skill" > .squidsquad/.active-role
+# Set env var for statusline (session-scoped, no cross-agent clobber)
+export SQUIDSQUAD_ROLE="skill"
 
 # --- PID lock: prevent double-start ---
 ROLE_DIR=".squidsquad/skill"
