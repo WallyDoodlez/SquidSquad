@@ -1,9 +1,9 @@
 # QA Iteration 15
 
-- **Date**: 2026-04-13 21:40
+- **Date**: 2026-04-15 01:10
 - **E2E Tests**: Skipped (no E2E command)
 - **Issues Filed**: none
-- **Issues Verified**: none
-- **Tasks Verified**: #462 — FAIL. Adaptive setup questions: domain_context silently discarded due to SOUL.md template already containing ### Project Context heading. wizard.py line 762 guard always False. Back to In Progress.
+- **Issues Verified**: #960 (feature branch state file exclusion) — PASS
+- **Tasks Verified**: #922 (SQLite scan index) — PASS (14/14 TCs, 7/7 STs, 0 regressions)
 - **Agent Health**: dm 🦑, pm 🦑, qa 🦑, skill 🦑
-- **Notes**: Subagent reported 17/19 PASS but missed the TC-9 severity. Independent verification caught the silent discard bug — all 5 role templates already have the heading, so scaffold_install never injects domain_context.
+- **Notes**: Both items verified on their feature branches. #960 code fix correct (.claude/ exclusion in commit_code). #922 comprehensive — 36 unit tests, 588 static tests, live CLI smoke tests all pass. Ship counter now at 10 (= threshold).
