@@ -6,7 +6,7 @@
 
 ## Agents
 
-- **Dev Agents**: skill
+- **Dev Agents**: qa, skill
 - **PM**: always present
 - **QA**: always present
 - **DM**: present
@@ -79,4 +79,4 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-- **Shipped Since Last Bump**: 5
+- **Shipped Since Last Bump**: 6

@@ -1,9 +1,7 @@
 # Working State
 
-- **Task**: #922 — SQLite scan index
-- **Status**: in-progress
-- **Phase**: discussing FEAT-SKILL-922
-- **Started**: 2026-04-13
+- **Task**: none
+- **Status**: none
 
 ## Active Pipeline
 
@@ -12,6 +10,7 @@
 - #375 — Branch-per-feature (in-progress, needs commit_code/commit_state tests)
 - #606 — config.py duplicate agents (in-progress, phantom designer + qa role)
 - #598 — Planning artifact location (in-progress, template not updated)
+- #942 — Boot process overhaul (approved, ready for dev pickup — 34 TCs)
 
 ## Planned (awaiting approval)
 
