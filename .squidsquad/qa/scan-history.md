@@ -23,3 +23,9 @@
 - **Files scanned**: references/scripts/capability_check.py (has 8 tests in test_compose_capability.py), tests/test_wizard.py (182 tests, domain_context coverage verified), recent git changes reviewed for regression risks
 - **Findings**: none — all major scripts now have adequate test coverage. 850 total tests across project. Diminishing returns on further scanning.
 - **Items rejected by human**: none
+
+## Scan — 2026-04-17 17:35
+
+- **Files scanned**: references/scripts/compose.py (529 lines, 14 functions, 2 indirect tests), references/scripts/boot_remote.py (608 lines, 24 functions, 29 tests — spawn/lock untested), references/scripts/git_ops.py (427 lines, 39 tests — adequate)
+- **Findings**: #1078 (compose.py no dedicated test file — 529 lines, 14 functions), #1079 (boot_remote.py spawn/lock/poll functions lack unit tests)
+- **Items rejected by human**: none
