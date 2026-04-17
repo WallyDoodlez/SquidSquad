@@ -4,6 +4,15 @@ All notable changes to SquidSquad will be documented in this file. This changelo
 
 ---
 
+## [0.20.0] — 2026-04-17
+
+### Fixed
+
+- #1078 — Added 31 unit tests for compose.py, covering template composition, placeholder substitution, deployment, and config reading
+- #1079 — Added 24 unit tests for boot_remote.py, covering lock management, OS detection, boot script discovery, health polling, and spawn routing
+
+---
+
 ## [0.19.0] — 2026-04-17
 
 ### Added
