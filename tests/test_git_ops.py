@@ -230,6 +230,80 @@ class TestPrCreate:
 # _get_alias()
 # ---------------------------------------------------------------------------
 
+class TestPrMerge:
+    @patch("git_ops._run_list")
+    def test_successful_squash_merge(self, mock_run):
+        # First call: check state → OPEN, second call: merge → success
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN"}'),
+            _mock_result(stdout=""),
+        ]
+        success, msg = git_ops.pr_merge(42)
+        assert success is True
+        assert msg == "merged"
+        # Verify squash merge was called
+        merge_call = mock_run.call_args_list[1]
+        assert "--squash" in merge_call[0][0]
+        assert "--delete-branch" in merge_call[0][0]
+
+    @patch("git_ops._run_list")
+    def test_already_merged(self, mock_run):
+        mock_run.return_value = _mock_result(stdout='{"state": "MERGED"}')
+        success, msg = git_ops.pr_merge(42)
+        assert success is True
+        assert msg == "already merged"
+        # Should only call once (state check), no merge attempt
+        assert mock_run.call_count == 1
+
+    @patch("git_ops._run_list")
+    def test_closed_without_merge(self, mock_run):
+        mock_run.return_value = _mock_result(stdout='{"state": "CLOSED"}')
+        success, msg = git_ops.pr_merge(42)
+        assert success is False
+        assert "closed" in msg.lower()
+
+    @patch("git_ops._run_list")
+    def test_merge_conflict(self, mock_run):
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN"}'),
+            _mock_result(stderr="not mergeable: merge conflict", returncode=1),
+        ]
+        success, msg = git_ops.pr_merge(42)
+        assert success is False
+        assert "merge conflict" in msg
+
+    @patch("git_ops._run_list")
+    def test_unexpected_failure(self, mock_run):
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN"}'),
+            _mock_result(stderr="permission denied", returncode=1),
+        ]
+        success, msg = git_ops.pr_merge(42)
+        assert success is False
+        assert "merge failed" in msg
+
+    @patch("git_ops._run_list")
+    def test_custom_strategy(self, mock_run):
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN"}'),
+            _mock_result(stdout=""),
+        ]
+        git_ops.pr_merge(42, strategy="rebase")
+        merge_call = mock_run.call_args_list[1]
+        assert "--rebase" in merge_call[0][0]
+
+    @patch("git_ops._run_list")
+    def test_state_check_fails_still_attempts_merge(self, mock_run):
+        # State check fails (non-zero), merge succeeds
+        mock_run.side_effect = [
+            _mock_result(returncode=1, stderr="not found"),
+            _mock_result(stdout=""),
+        ]
+        success, msg = git_ops.pr_merge(42)
+        assert success is True
+        assert msg == "merged"
+
+
 class TestGetAlias:
     def test_fallback_to_role(self):
         """When config module unavailable, returns role name."""
