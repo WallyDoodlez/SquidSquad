@@ -2,7 +2,7 @@
 
 - **Task**: #1074 — Auto-merge PRs after QA passes
 - **Status**: in-progress
-- **Phase**: researching FEAT-SKILL-1074
+- **Phase**: discussing FEAT-SKILL-1074
 
 ## Active Pipeline
 
