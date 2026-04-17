@@ -79,8 +79,6 @@ Write `idle|` at cycle end so the status bar shows rotating hints between cycles
 
 {{include: dev-specific/implement-tasks}}
 
-{{include: common/boot-remote-agents}}
-
 {{include: common/improvement-scan}}
 
 {{include: common/iteration-log}}

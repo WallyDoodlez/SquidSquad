@@ -6,7 +6,6 @@ includes:
   - common/pull-latest
   - common/context-pressure
   - qa-specific/verification
-  - common/boot-remote-agents
   - common/improvement-scan-slim
   - qa-specific/iteration-log
   - qa-specific/git-commit

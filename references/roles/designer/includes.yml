@@ -7,7 +7,6 @@ includes:
   - common/pull-latest
   - common/context-pressure
   - designer-specific/design-session
-  - common/boot-remote-agents
   - common/improvement-scan-slim
   - designer-specific/iteration-log
   - designer-specific/git-commit
