@@ -465,6 +465,25 @@ For each PR:
 - **If open with "changes requested" review**: update status back to `In Progress`. Append Discussion entry with the requested changes.
 
 If `PR Flow: no`, skip this step.
+
+**Auto-merge for pending-ship tasks** (runs regardless of PR Flow setting):
+
+When a task transitions to `Pending Ship` and DM **is** present (`.squidsquad/dm/` exists), PM auto-merges the PR before DM handles delivery:
+
+Check auto-merge eligibility (same rules as delivery-fallback Step 0):
+- `Auto Merge: yes` AND `Branch Workflow: yes`
+- Item is `type:task` (not `type:issue`)
+- Item does NOT have `merge:manual` label
+
+If eligible, find and merge the PR:
+```bash
+gh pr list --search "squidsquad/[role]/[NUMBER]" --state open --json number,headRefName --limit 1
+python references/scripts/git_ops.py pr-merge [PR_NUMBER]
+```
+
+Handle results same as delivery-fallback: success → proceed, conflict → route back to dev, failure → fall back to manual.
+
+This ensures PRs are merged before DM picks up delivery, regardless of whether DM or PM handles the shipping transition.
 <!-- /sub-skill: pr-flow -->
 
 ### Step 6c — Increment Ship Counter for Closed Issues
@@ -479,6 +498,39 @@ When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last 
 If `.squidsquad/dm/` directory does NOT exist (DM not installed), PM takes over delivery responsibilities. For each task just marked `Pending Ship` in Steps 6/6b:
 
 Print: `[🦑 HH:MM:SS] No DM present — PM performing delivery for #[NUMBER]...`
+
+**0. Auto-merge PR** (if applicable):
+
+Check auto-merge eligibility:
+```bash
+python references/scripts/config.py get auto-merge
+python references/scripts/config.py get branch-workflow
+```
+
+Auto-merge triggers when ALL of these are true:
+- `Auto Merge: yes` in config.md
+- `Branch Workflow: yes` (otherwise no PR exists — silent no-op)
+- The item is a **task** (has `type:task` label), NOT a bug fix (`type:issue`)
+- The item does NOT have the `merge:manual` label
+
+If eligible, find the PR for this task:
+```bash
+gh pr list --search "squidsquad/[role]/[NUMBER]" --state open --json number,headRefName --limit 1
+```
+
+If a PR is found:
+```bash
+python references/scripts/git_ops.py pr-merge [PR_NUMBER]
+```
+
+Handle results:
+- **Success** (already merged or just merged): Append Discussion: `> [YYYY-MM-DD HH:MM] **pm**: PR #[PR] auto-merged (squash). Proceeding to delivery.`
+- **Merge conflict**: Route back to dev agent. Append Discussion: `> [YYYY-MM-DD HH:MM] **pm**: PR #[PR] has merge conflicts. Routing back to [role] to rebase. Status → In Progress.` Transition back to `in-progress`. Skip remaining delivery for this item.
+- **Unexpected failure**: Log error, fall back to manual merge. Append Discussion: `> [YYYY-MM-DD HH:MM] **pm**: PR #[PR] auto-merge failed: [error]. Manual merge required.` Leave task as pending-ship — human will merge.
+
+If no PR found (direct-to-main or already merged): proceed silently.
+
+If auto-merge is not eligible (config off, bug fix, merge:manual label, branch workflow off): skip silently and proceed to delivery.
 
 **1. Check for delivery:skip**: If the task's Discussion contains `delivery: skip`, mark it `Shipped` immediately, increment `Shipped Since Last Bump` in `config.md`, and append: `> [YYYY-MM-DD HH:MM] **pm**: No DM present. No delivery work needed (delivery: skip). Status → Shipped.` Skip to the version bump check below.
 

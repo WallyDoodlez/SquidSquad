@@ -17,11 +17,13 @@ Usage:
     python scripts/git_ops.py branch-delete <name>       # delete local + remote branch
     python scripts/git_ops.py current-branch             # print current branch name
     python scripts/git_ops.py pr-create <title> <body>   # create PR via gh
+    python scripts/git_ops.py pr-merge <number> [--strategy squash]  # merge PR via gh
     python scripts/git_ops.py has-changes               # check if working tree dirty
     python scripts/git_ops.py last-hash                 # print last commit hash (short)
     python scripts/git_ops.py --help
 """
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -191,6 +193,44 @@ def pr_create(title, body):
     url = result.stdout.strip()
     print(f"PR created: {url}")
     return url
+
+
+def pr_merge(pr_number, strategy="squash"):
+    """Merge a PR via gh CLI. Returns (success, message).
+
+    Checks PR state first — if already merged, returns success.
+    On merge conflict or unexpected failure, returns failure with details.
+    """
+    # Check PR state first
+    state_result = _run_list(
+        ["gh", "pr", "view", str(pr_number), "--json", "state"],
+        check=False,
+    )
+    if state_result.returncode == 0:
+        try:
+            state = json.loads(state_result.stdout.strip()).get("state", "")
+            if state == "MERGED":
+                print(f"PR #{pr_number} already merged")
+                return True, "already merged"
+            if state == "CLOSED":
+                print(f"PR #{pr_number} closed without merge", file=sys.stderr)
+                return False, "PR closed without merge"
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
+    # Attempt merge
+    merge_args = ["gh", "pr", "merge", str(pr_number), f"--{strategy}", "--delete-branch"]
+    result = _run_list(merge_args, check=False)
+    if result.returncode == 0:
+        print(f"PR #{pr_number} merged ({strategy})")
+        return True, "merged"
+    else:
+        error = result.stderr.strip()
+        if "merge conflict" in error.lower() or "not mergeable" in error.lower():
+            print(f"PR #{pr_number} has merge conflicts", file=sys.stderr)
+            return False, "merge conflict"
+        print(f"ERROR: PR #{pr_number} merge failed: {error}", file=sys.stderr)
+        return False, f"merge failed: {error}"
 
 
 def _is_state_file(path):
@@ -392,6 +432,17 @@ def main():
             print("Usage: git_ops.py pr-create <title> <body>", file=sys.stderr)
             sys.exit(1)
         pr_create(rest[0], " ".join(rest[1:]))
+    elif cmd == "pr-merge":
+        if not rest:
+            print("Usage: git_ops.py pr-merge <pr-number> [--strategy squash|merge|rebase]", file=sys.stderr)
+            sys.exit(1)
+        strategy = "squash"
+        if "--strategy" in rest:
+            idx = rest.index("--strategy")
+            if idx + 1 < len(rest):
+                strategy = rest[idx + 1]
+        success, msg = pr_merge(rest[0], strategy)
+        sys.exit(0 if success else 1)
     elif cmd == "commit-code":
         if len(rest) < 3:
             print("Usage: git_ops.py commit-code <role> <branch> <message>", file=sys.stderr)

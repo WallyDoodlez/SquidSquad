@@ -16,3 +16,22 @@ For each PR:
 - **If open with "changes requested" review**: update status back to `In Progress`. Append Discussion entry with the requested changes.
 
 If `PR Flow: no`, skip this step.
+
+**Auto-merge for pending-ship tasks** (runs regardless of PR Flow setting):
+
+When a task transitions to `Pending Ship` and DM **is** present (`.squidsquad/dm/` exists), PM auto-merges the PR before DM handles delivery:
+
+Check auto-merge eligibility (same rules as delivery-fallback Step 0):
+- `Auto Merge: yes` AND `Branch Workflow: yes`
+- Item is `type:task` (not `type:issue`)
+- Item does NOT have `merge:manual` label
+
+If eligible, find and merge the PR:
+```bash
+gh pr list --search "squidsquad/[role]/[NUMBER]" --state open --json number,headRefName --limit 1
+python references/scripts/git_ops.py pr-merge [PR_NUMBER]
+```
+
+Handle results same as delivery-fallback: success → proceed, conflict → route back to dev, failure → fall back to manual.
+
+This ensures PRs are merged before DM picks up delivery, regardless of whether DM or PM handles the shipping transition.

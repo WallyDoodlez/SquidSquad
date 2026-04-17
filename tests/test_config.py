@@ -53,6 +53,13 @@ class TestConfigRequired:
         val = _extract_field(self.config, "skill Tests")
         assert val, "Missing 'skill Tests' field in config.md"
 
+    def test_has_auto_merge(self):
+        assert "## Auto Merge" in self.config, "Missing '## Auto Merge' section"
+        am_section = self.config.split("## Auto Merge")[1].split("##")[0]
+        val = _extract_field(am_section, "Enabled")
+        assert val is not None, "Missing 'Enabled' field in Auto Merge section"
+        assert val.lower() in ("yes", "no"), f"Auto Merge Enabled must be yes/no, got: {val}"
+
     def test_has_pr_flow(self):
         assert "## PR Flow" in self.config, "Missing '## PR Flow' section"
         # Extract Enabled within the PR Flow section
