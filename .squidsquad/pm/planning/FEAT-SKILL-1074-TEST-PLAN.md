@@ -80,6 +80,29 @@
 - **Expected**: `Auto Merge: no` is added to config.md (preserves existing behavior)
 - **Verification**: Read config.md, confirm setting exists with value `no`.
 
+## Verification Method
+
+**Primary: Comprehension test** — Spawn a fresh agent with no prior context. Point it at the modified delivery-fallback sub-skill, git_ops.py, and config.md. Ask the comprehension questions below. If the agent answers all correctly, logic is clear and implemented right. If it gets any wrong, the implementation is buggy or ambiguous.
+
+**Secondary: Happy path smoke test** — One real end-to-end run of TC-1 (create a test branch/PR, let PM auto-merge it). Confirms runtime behavior, not just logic.
+
+### Comprehension Questions (derived from TCs)
+
+1. "What happens when a task PR is ready to ship and Auto Merge is yes?" (TC-1)
+2. "A bug fix just passed QA and Auto Merge is yes. Does the PR auto-merge?" (TC-2)
+3. "A task has the merge:manual label. What happens at ship time?" (TC-3)
+4. "Someone adds merge:manual to a task that's already in-progress. Does it take effect?" (TC-4)
+5. "The human already merged the PR before PM's cycle ran. What does PM do?" (TC-5)
+6. "The PR has merge conflicts. Walk me through what happens." (TC-6)
+7. "Auto Merge is set to no. What happens to task PRs?" (TC-7)
+8. "Branch workflow is off but Auto Merge is yes. What happens?" (TC-8)
+9. "DM is present. Who merges the PR and who marks it shipped?" (TC-9)
+10. "DM is absent. Who does what?" (TC-10)
+11. "gh pr merge fails with an unexpected error. What's the fallback?" (TC-11)
+12. "What's the default Auto Merge value for new installs vs upgrades?" (TC-12, TC-13)
+
+**Pass criteria**: Agent answers all 12 correctly without hints. Any wrong answer = implementation gap.
+
 ## Smoke Tests
 
 - [ ] Config field `Auto Merge` exists and is readable by `config.py get auto-merge`
