@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-17 17:02
+
+- **Files scanned**: references/scripts/boot_remote.py, references/scripts/git_ops.py, tests/test_start_scripts.py
+- **Findings**: none (bare exceptions in boot_remote.py are intentional fire-and-forget; shell=True in git_ops.py already filed as #144; stash pop failure already #145; hardcoded ROLES already #923)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-14 18:20
 
 - **Files scanned**: tests/test_boot_remote.py, tests/test_cycle.py, tests/test_diagnostics.py, tests/test_health_check.py
