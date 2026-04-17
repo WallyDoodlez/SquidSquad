@@ -1,18 +1,21 @@
 # Working State
 
-- **Task**: #922
+- **Task**: version-bump 0.18.0 → 0.19.0
 - **Status**: in-progress
-- **Started**: 2026-04-17 16:51
+- **Started**: 2026-04-17 16:52
 
 ## Completed Steps
-- (none yet)
+- Confirmed threshold met (12 shipped >= 10 threshold)
+- Confirmed zero open issues
 
 ## Remaining Steps
-- Update README.md with user-facing description
-- Update SKILL.md if relevant sections exist
-- Prepare CHANGELOG entry as Discussion comment
-- Transition to Shipped
-- Increment shipped count
+- Update config.md version
+- Update SKILL.md version
+- Collect shipped items and write CHANGELOG entry
+- Commit and push
+- Create git tag
+- Push tags
+- Reset shipped count
 
 ## Key Decisions
-- Feature: SQLite-based improvement scan index for smarter scan targeting
+- Minor bump: 0.18.0 → 0.19.0

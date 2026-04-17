@@ -31,7 +31,7 @@ You have a codebase and Claude Code. You can fix one bug at a time. But what if 
 - **GitHub Issues as tracker** — bugs and features are GitHub Issues with structured labels, not internal files
 - **5-phase feature planning** — Research → Discussion → Planning → Execution → QA, with human approval gates
 - **Shared memory vault** — agents learn your preferences, decisions, and patterns over time via an Obsidian-compatible knowledge base
-- **Self-improvement scanning** — agents proactively find code quality issues, test gaps, and doc drift during quiet cycles
+- **Self-improvement scanning** — agents proactively find code quality issues, test gaps, and doc drift during quiet cycles, with SQLite-backed scan targeting that learns from past results to focus on high-value areas
 - **Live status bar** — emoji-rich status line showing what each agent is doing, backlog counts, context pressure, and cycle countdown
 - **Agent health monitoring** — boot scripts write `.health` files that track each agent's lifecycle (booting → alive → restarting → dead). PM reads these files for reliable health detection — no more false positives from stale file timestamps
 - **Pre-flight checks** — boot scripts verify prerequisites (gh auth, correct branch) before launching agents. Failures are written to `.health` with a reason, preventing crash loops

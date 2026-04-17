@@ -4,6 +4,21 @@ All notable changes to SquidSquad will be documented in this file. This changelo
 
 ---
 
+## [0.19.0] — 2026-04-17
+
+### Added
+
+- #922 — **SQLite-based scan index** — improvement scanning now uses a local SQLite database to track coverage gaps, git churn, and finding acceptance rates, picking higher-value scan targets each cycle instead of scanning at random
+- #942 — **Agent health files** — boot scripts write `.health` status files so PM detects agent state from files, not unreliable timestamp heuristics
+
+### Fixed
+
+- #1022 — Fixed health_check.py crashing on Windows cp1252 terminals due to Unicode emoji in table output
+- #960 — Feature branch commits no longer include working-state and iteration files that don't belong in PRs
+- #940 — Agents no longer spawn repeatedly due to false-positive staleness detection from mtime checks
+
+---
+
 ## [0.18.0] — 2026-04-14
 
 ### Added
