@@ -47,6 +47,10 @@
 
 - **Enabled**: yes
 
+## Auto Merge
+
+- **Enabled**: yes
+
 ## Branch Workflow
 
 - **Enabled**: yes
