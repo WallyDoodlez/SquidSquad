@@ -1,7 +1,8 @@
 # Working State
 
-- **Task**: none
-- **Status**: none
+- **Task**: #475 — Token efficiency audit
+- **Status**: in-progress
+- **Phase**: researching #475
 
 ## Active Pipeline
 
