@@ -255,3 +255,220 @@ class TestGetAllRoles:
             roles = boot_remote._get_all_roles()
             assert "dm" in roles
             assert "qa" in roles
+
+
+# ---------------------------------------------------------------------------
+# _acquire_lock / _release_lock
+# ---------------------------------------------------------------------------
+
+class TestLocking:
+    def test_acquire_lock_creates_file(self, tmp_path):
+        lock_file = tmp_path / "boot-lock"
+        with patch.object(boot_remote, "BOOT_LOCK", lock_file):
+            result = boot_remote._acquire_lock()
+        assert result is True
+        assert lock_file.exists()
+        assert lock_file.read_text(encoding="utf-8") == str(os.getpid())
+
+    def test_acquire_fails_when_locked(self, tmp_path):
+        lock_file = tmp_path / "boot-lock"
+        lock_file.write_text(str(os.getpid()), encoding="utf-8")
+        with patch.object(boot_remote, "BOOT_LOCK", lock_file), \
+             patch.object(boot_remote, "LOCK_TTL_SECONDS", 300):
+            result = boot_remote._acquire_lock()
+        assert result is False
+
+    def test_acquire_cleans_stale_lock(self, tmp_path):
+        lock_file = tmp_path / "boot-lock"
+        lock_file.write_text("99999", encoding="utf-8")
+        # Set mtime to be old
+        old_time = time.time() - 600
+        os.utime(lock_file, (old_time, old_time))
+        with patch.object(boot_remote, "BOOT_LOCK", lock_file), \
+             patch.object(boot_remote, "LOCK_TTL_SECONDS", 300):
+            result = boot_remote._acquire_lock()
+        assert result is True
+
+    def test_release_lock_removes_file(self, tmp_path):
+        lock_file = tmp_path / "boot-lock"
+        lock_file.write_text("12345", encoding="utf-8")
+        with patch.object(boot_remote, "BOOT_LOCK", lock_file):
+            boot_remote._release_lock()
+        assert not lock_file.exists()
+
+    def test_release_lock_no_file_is_noop(self, tmp_path):
+        lock_file = tmp_path / "nonexistent-lock"
+        with patch.object(boot_remote, "BOOT_LOCK", lock_file):
+            boot_remote._release_lock()  # should not raise
+
+
+# ---------------------------------------------------------------------------
+# _detect_os
+# ---------------------------------------------------------------------------
+
+class TestDetectOs:
+    @patch("platform.system", return_value="Windows")
+    def test_windows(self, mock_sys):
+        assert boot_remote._detect_os() == "windows"
+
+    @patch("platform.system", return_value="Darwin")
+    def test_macos(self, mock_sys):
+        assert boot_remote._detect_os() == "macos"
+
+    @patch("platform.system", return_value="Linux")
+    def test_linux(self, mock_sys):
+        assert boot_remote._detect_os() == "linux"
+
+
+# ---------------------------------------------------------------------------
+# _find_boot_script
+# ---------------------------------------------------------------------------
+
+class TestFindBootScript:
+    def test_finds_ps1_on_windows(self, tmp_path):
+        sqdir = tmp_path / ".squidsquad"
+        sqdir.mkdir()
+        ps1 = sqdir / "start-skill.ps1"
+        ps1.write_text("$Role = 'skill'")
+        with patch.object(boot_remote, "_detect_os", return_value="windows"):
+            path, script_type = boot_remote._find_boot_script(tmp_path, "skill")
+        assert path == ps1
+        assert script_type == "ps1"
+
+    def test_finds_sh_on_linux(self, tmp_path):
+        sqdir = tmp_path / ".squidsquad"
+        sqdir.mkdir()
+        sh = sqdir / "start-skill.sh"
+        sh.write_text("#!/bin/bash\nROLE=skill")
+        with patch.object(boot_remote, "_detect_os", return_value="linux"):
+            path, script_type = boot_remote._find_boot_script(tmp_path, "skill")
+        assert path == sh
+        assert script_type == "sh"
+
+    def test_returns_none_when_missing(self, tmp_path):
+        sqdir = tmp_path / ".squidsquad"
+        sqdir.mkdir()
+        with patch.object(boot_remote, "_detect_os", return_value="windows"):
+            path, script_type = boot_remote._find_boot_script(tmp_path, "skill")
+        assert path is None
+        assert script_type is None
+
+    def test_fallback_to_sh_on_windows(self, tmp_path):
+        sqdir = tmp_path / ".squidsquad"
+        sqdir.mkdir()
+        sh = sqdir / "start-skill.sh"
+        sh.write_text("#!/bin/bash\nROLE=skill")
+        with patch.object(boot_remote, "_detect_os", return_value="windows"):
+            path, script_type = boot_remote._find_boot_script(tmp_path, "skill")
+        assert path == sh
+        assert script_type == "sh"
+
+
+# ---------------------------------------------------------------------------
+# _read_boot_log / _append_boot_log / _check_cooldown
+# ---------------------------------------------------------------------------
+
+class TestBootLog:
+    def test_read_empty_log(self, tmp_path):
+        with patch.object(boot_remote, "BOOT_LOG", tmp_path / "nonexistent.log"):
+            result = boot_remote._read_boot_log()
+        assert result == []
+
+    def test_append_and_read(self, tmp_path):
+        log_file = tmp_path / "boot.log"
+        entry = {"role": "skill", "action": "spawn", "timestamp": time.time()}
+        with patch.object(boot_remote, "BOOT_LOG", log_file):
+            boot_remote._append_boot_log(entry)
+            result = boot_remote._read_boot_log()
+        assert len(result) == 1
+        assert result[0]["role"] == "skill"
+
+    def test_read_skips_invalid_json(self, tmp_path):
+        log_file = tmp_path / "boot.log"
+        log_file.write_text('{"valid": true}\nnot json\n{"also": "valid"}\n')
+        with patch.object(boot_remote, "BOOT_LOG", log_file):
+            result = boot_remote._read_boot_log()
+        assert len(result) == 2
+
+    def test_cooldown_active(self, tmp_path):
+        log_file = tmp_path / "boot.log"
+        entry = {"role": "skill", "action": "spawn", "timestamp": time.time()}
+        log_file.write_text(json.dumps(entry) + "\n")
+        with patch.object(boot_remote, "BOOT_LOG", log_file), \
+             patch.object(boot_remote, "COOLDOWN_SECONDS", 600):
+            in_cool, remaining = boot_remote._check_cooldown("skill")
+        assert in_cool is True
+        assert remaining > 0
+
+    def test_cooldown_expired(self, tmp_path):
+        log_file = tmp_path / "boot.log"
+        entry = {"role": "skill", "action": "spawn", "timestamp": time.time() - 1200}
+        log_file.write_text(json.dumps(entry) + "\n")
+        with patch.object(boot_remote, "BOOT_LOG", log_file), \
+             patch.object(boot_remote, "COOLDOWN_SECONDS", 600):
+            in_cool, remaining = boot_remote._check_cooldown("skill")
+        assert in_cool is False
+
+    def test_cooldown_different_role(self, tmp_path):
+        log_file = tmp_path / "boot.log"
+        entry = {"role": "pm", "action": "spawn", "timestamp": time.time()}
+        log_file.write_text(json.dumps(entry) + "\n")
+        with patch.object(boot_remote, "BOOT_LOG", log_file), \
+             patch.object(boot_remote, "COOLDOWN_SECONDS", 600):
+            in_cool, _ = boot_remote._check_cooldown("skill")
+        assert in_cool is False
+
+
+# ---------------------------------------------------------------------------
+# _poll_health_after_spawn
+# ---------------------------------------------------------------------------
+
+class TestPollHealthAfterSpawn:
+    @patch("boot_remote._read_health_file", return_value=("alive", "ok"))
+    @patch("time.sleep")
+    def test_returns_true_on_alive(self, mock_sleep, mock_health, tmp_path):
+        confirmed, status, msg = boot_remote._poll_health_after_spawn(tmp_path, "skill", timeout=10)
+        assert confirmed is True
+        assert status == "alive"
+
+    @patch("boot_remote._read_health_file", return_value=("error", "crash on boot"))
+    @patch("time.sleep")
+    def test_returns_false_on_error(self, mock_sleep, mock_health, tmp_path):
+        confirmed, status, msg = boot_remote._poll_health_after_spawn(tmp_path, "skill", timeout=10)
+        assert confirmed is False
+        assert status == "error"
+        assert "crash on boot" in msg
+
+    @patch("boot_remote._read_health_file", return_value=("booting", None))
+    @patch("time.sleep")
+    def test_timeout_while_booting_returns_true(self, mock_sleep, mock_health, tmp_path):
+        confirmed, status, msg = boot_remote._poll_health_after_spawn(tmp_path, "skill", timeout=2)
+        assert confirmed is True
+        assert status == "booting"
+
+    @patch("boot_remote._read_health_file", return_value=(None, None))
+    @patch("time.sleep")
+    def test_timeout_unknown_returns_true(self, mock_sleep, mock_health, tmp_path):
+        confirmed, status, msg = boot_remote._poll_health_after_spawn(tmp_path, "skill", timeout=2)
+        assert confirmed is True
+        assert "timed out" in msg
+
+
+# ---------------------------------------------------------------------------
+# _spawn_terminal (mock subprocess)
+# ---------------------------------------------------------------------------
+
+class TestSpawnTerminal:
+    @patch("boot_remote._detect_os", return_value="windows")
+    @patch("boot_remote._spawn_windows", return_value=(True, "spawned"))
+    def test_routes_to_windows(self, mock_spawn, mock_os, tmp_path):
+        success, msg = boot_remote._spawn_terminal(tmp_path, "skill", tmp_path / "start.ps1", "ps1")
+        mock_spawn.assert_called_once()
+        assert success is True
+
+    @patch("boot_remote._detect_os", return_value="macos")
+    @patch("boot_remote._spawn_macos", return_value=(True, "spawned"))
+    def test_routes_to_macos(self, mock_spawn, mock_os, tmp_path):
+        success, msg = boot_remote._spawn_terminal(tmp_path, "skill", tmp_path / "start.sh", "sh")
+        mock_spawn.assert_called_once()
+        assert success is True
