@@ -710,17 +710,6 @@ Split commits into code (feature branch) and state (main):
    - If human requested changes via review: fix the issues and push to the branch
    - After pushing fixes, re-request review if appropriate
 
-5. **Merge your PR when task reaches pending-ship**: Each cycle, check for your tasks at `pending-ship` with open PRs:
-   ```bash
-   python references/scripts/tracker.py list-tasks skill --status pending-ship
-   ```
-   For each pending-ship task with an open PR (and `Auto Merge: yes` in config, `type:task` not `type:issue`, no `merge:manual` label):
-   ```bash
-   gh pr list --search "squidsquad/skill/[NUMBER]" --state open --json number,headRefName,mergeable --limit 1
-   python references/scripts/git_ops.py pr-merge [PR_NUMBER]
-   ```
-   On merge conflict: rebase onto main and retry. On success: comment on the issue.
-
 **If `no`** (default — direct-to-main workflow):
 
 ```bash

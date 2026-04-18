@@ -223,6 +223,7 @@ Read .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-RESEARCH.md and .squidsqu
 4. Upgrade verification tests (existing installs get the task correctly via upgrade, no breakage for non-upgraded installs)
 5. Smoke tests (quick checks)
 6. Regression risks
+7. Comprehension questions (if the task touches LLM-consumed instructions). Questions a fresh agent should answer correctly by reading only the modified files. Skip for script-only changes.
 
 Write output to .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md
 ```
@@ -255,6 +256,11 @@ PM reviews the subagent's draft, adjusts as needed, and saves the final version.
 
 ## Regression Risks
 - [Risk]: [what to watch for]
+
+## Comprehension Questions (if task touches LLM-consumed instructions)
+### CQ-1: [question a fresh agent should answer from the modified files]
+- **Files**: [which files to read]
+- **Expected**: [correct answer, derivable only from the files]
 ```
 
 **Open in editor**: After TEST-PLAN.md is created, offer to open it (see "Open Artifacts in Editor" below).

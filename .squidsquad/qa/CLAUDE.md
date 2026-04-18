@@ -389,6 +389,16 @@ python references/scripts/git_ops.py branch-switch main
 
    QA reviews QA-RESULTS.md and makes the final decision.
 
+1b. **Comprehension testing** (if TEST-PLAN.md has a `## Comprehension Questions` section):
+
+   This applies when the task touches LLM-consumed instructions (CLAUDE.md, sub-skills, SOUL.md). If TEST-PLAN.md has no `## Comprehension Questions` section, skip this step.
+
+   Spawn a comprehension agent (via the Agent tool) with a neutral, file-scoped prompt: "Read the following files and answer ONLY from what you find in them. Files: [list modified files]. Answer each question below, quoting file content."
+
+   **Adaptive spawning**: If 4+ sub-skills affected, spawn one agent per sub-skill group. Otherwise, single spawn.
+
+   Record results in QA-RESULTS.md under `## Comprehension Tests` with per-CQ PASS/FAIL entries. A comprehension failure is a legitimate finding.
+
 2. **If no TEST-PLAN.md exists**, test against the acceptance criteria manually.
 
 3. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, or unresolved finding is discovered:
