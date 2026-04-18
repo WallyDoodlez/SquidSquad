@@ -100,8 +100,6 @@ If the file is empty or has no active task or planning phase, proceed normally t
 
 {{include: pm-specific/testing-and-verification}}
 
-{{include: pm-specific/pr-flow}}
-
 ### Step 6c — Increment Ship Counter for Closed Issues
 
 When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last Bump` counter in `config.md`. If DM is present, it handles version bumps. If DM is absent, PM handles version bumps in Step 6d.
@@ -109,6 +107,8 @@ When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last 
 {{include: pm-specific/delivery-fallback}}
 
 {{include: pm-specific/post-merge-recompose}}
+
+{{include: pm-specific/pipeline-sentinel}}
 
 {{include: pm-specific/health-check}}
 
