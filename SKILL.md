@@ -173,6 +173,8 @@ All agents maintain a **working state file** (`.squidsquad/[role]/working-state.
 
 **Auto versioning**: PM tracks a `Shipped Since Last Bump` counter in `config.md`. Each time an item is marked `Shipped` (features) or `Closed` (bugs), the counter increments. When the counter reaches `Ship Threshold` (default 10) AND zero open bugs exist across all trackers, PM automatically bumps the minor version (e.g. `0.5.1` → `0.6.0`), updates `config.md` and `SKILL.md` frontmatter, adds a CHANGELOG section, creates a git tag, and pushes. Version bumps bypass PR flow.
 
+**Multi-model subagents**: Token-heavy tasks (research, discussion prep, test plan drafting, improvement scanning) can be routed to external models via API instead of spawning Claude subagents. Configure which model handles each task type in the `Model Routing` section of `config.md` (e.g. `Research Model: gpt-5.2`, `Comprehension Model: claude`). The router (`references/scripts/model_router.py`) provides a model-agnostic interface with automatic fallback to Claude if the external model fails. Comprehension testing is always Claude-only for same-model fidelity. API keys are managed via environment variables (e.g. `OPENAI_API_KEY`).
+
 ### [Role] Lead Ralph Loop
 
 Each dev agent follows this loop, substituting its own role name and tracker paths:
@@ -423,7 +425,7 @@ When the user says `/squidsquad-status` (or "squad status", "show me the squad",
 
 1. Read `.squidsquad/config.md` to get the list of dev agents and the loop interval.
 2. For each agent (dev agents + PM + DM if `.squidsquad/dm/` exists):
-   - Check health: read `.squidsquad/[role]/.health` if it exists (values: `alive`, `booting`, `restarting`, `dead`, `error|reason`). Fall back to `git log --oneline --since="[2×interval] minutes ago" --grep="^[agent]:"` if no `.health` file — if commits found, show as `active`; if prior commits exist but none recent, show as `stalled`; else `unknown`.
+   - Check health: read `.squidsquad/[role]/.health` if it exists (values: `alive`, `booting`, `restarting`, `dead`, `error|reason`). Note: `.health` files are PID-verified — if the process is dead but `.health` says `alive`, health checks auto-correct it to `dead`. Fall back to `git log --oneline --since="[2×interval] minutes ago" --grep="^[agent]:"` if no `.health` file — if commits found, show as `active`; if prior commits exist but none recent, show as `stalled`; else `unknown`.
    - Show last commit time: `git log --oneline --grep="^[agent]:" -1 --format="%ar"`
 3. For each dev agent, query GitHub Issues via `python references/scripts/tracker.py`:
    - `python references/scripts/tracker.py list-issues [role]` — count and list open issues

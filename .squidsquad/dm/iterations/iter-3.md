@@ -1,5 +1,8 @@
 # Iteration 3
 
-- **Date**: 2026-04-18 14:02
-- **Type**: quiet
-- **Note**: No pending-ship items, 2 bugs still pending PM approval (#302, #303)
+- **Date**: 2026-04-18 15:36
+- **Type**: active
+- **Work Summary**:
+  - #1301 shipped (PID-primary liveness)
+  - #1291 shipped (multi-model subagents)
+- **Notes**: Re-applied README+SKILL.md edits lost during git pull stash/pop. Shipped count now 8/10.

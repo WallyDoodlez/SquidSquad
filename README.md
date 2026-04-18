@@ -33,10 +33,11 @@ You have a codebase and Claude Code. You can fix one bug at a time. But what if 
 - **Shared memory vault** — agents learn your preferences, decisions, and patterns over time via an Obsidian-compatible knowledge base
 - **Self-improvement scanning** — agents proactively find code quality issues, test gaps, and doc drift during quiet cycles, with SQLite-backed scan targeting that learns from past results to focus on high-value areas
 - **Live status bar** — emoji-rich status line showing what each agent is doing, backlog counts, context pressure, and cycle countdown
-- **Agent health monitoring** — boot scripts write `.health` files that track each agent's lifecycle (booting → alive → restarting → dead). PM reads these files for reliable health detection — no more false positives from stale file timestamps
+- **Agent health monitoring** — agent liveness is determined by PID process checks, not file-based state. Boot scripts and health checks verify the actual OS process is running — if the process is dead, the agent is dead, regardless of what `.health` says. `.health` files carry metadata (lifecycle phase, error details) but never gate boot or liveness decisions
 - **Pre-flight checks** — boot scripts verify prerequisites (gh auth, correct branch) before launching agents. Failures are written to `.health` with a reason, preventing crash loops
 - **Auto-restart wrapper** — agents automatically restart with a fresh context when context pressure rises or loops expire, with rate limiting (3 restarts/hour) to prevent restart storms. All agents resume from saved state with no manual reboot needed
 - **Auto-merge** — when QA verifies a task, PM automatically squash-merges the PR so you don't have to. Bug fixes and items tagged `merge:manual` still require your review. Controlled via `Auto Merge` in `config.md`
+- **Multi-model subagents** — route token-heavy tasks (research, discussion prep, test plans, improvement scanning) to external models like GPT 5.2 via API, keeping Claude for the main loop and comprehension testing. Configure per-task model routing in `config.md` under `Model Routing`. Falls back to Claude automatically if the external model is unavailable
 - **Auto versioning** — ships are counted and minor versions auto-bump when thresholds are met
 
 ---
