@@ -1,19 +1,21 @@
-### Step 3 — Log Iteration (skip on quiet cycles)
+### Step 3 — Log Iteration
 
-If no design work was done and no improvement scan was triggered this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 5 (Done). The status bar shows the loop is still running.
+Print: `[🦑 HH:MM:SS] Logging iteration...`
 
-Otherwise, print: `[🦑 HH:MM:SS] Logging iteration...`
+**Every cycle writes a log entry** — active or quiet. Use the cycle script:
 
-Create `.squidsquad/designer/iterations/iter-N.md` (increment N from last log):
+```bash
+# Active cycle (work was done):
+python references/scripts/cycle.py log-iteration designer [N] \
+  --work "[comma-separated summary of work done]" \
+  --notes "[anything notable]"
 
-```markdown
-# Designer Iteration N
+# Quiet cycle (no actionable work):
+python references/scripts/cycle.py log-iteration designer [N] --quiet \
+  --notes "[why quiet, e.g. 'No design tasks assigned']"
 
-- **Date**: YYYY-MM-DD HH:MM
-- **Designs Progressed**: [list issue #numbers, or "none"]
-- **Designs Completed**: [list issue #numbers, or "none"]
-- **Quiet Cycles**: [consecutive count, or "0"]
-- **Notes**: [anything notable]
+# Clean up old logs (keeps most recent 20)
+python references/scripts/cycle.py cleanup-iterations designer
 ```
 
-After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones.
+The script writes a unified format with Date, Type (active/quiet), Work Summary, and Notes. Quiet entries are condensed (2-3 lines).
