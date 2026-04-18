@@ -28,6 +28,16 @@ Write current state: `python references/scripts/cycle.py status-bar [ROLE] resea
 
 **Check artifact resume** (see above) for `FEAT-[ROLE_UPPER]-XXX-RESEARCH.md`. If skipping, proceed to Phase 2A.
 
+**Vault consultation** (before spawning research agent):
+
+1. Read `.squidsquad/vault/BRIEFING.md` for active priorities and constraints.
+2. Search vault for notes related to the task:
+   ```bash
+   grep -rl "<keywords from task title>" .squidsquad/vault/ --include="*.md" | head -10
+   ```
+3. Read any matching notes (decisions, patterns, learnings, human-profile).
+4. Include a summary of relevant vault context in the `--context` argument below so the research agent can incorporate it.
+
 Route to the configured model for research:
 
 ```bash

@@ -4,12 +4,12 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #1345 Boot wrapper .restart sentinel — pending-test, awaiting QA
-- #1291 Multi-model subagents — pending-test (reopened, code was on unmerged branch)
-- #1357 Pipeline sentinel self-healing — approved, high severity
+- #1345 Boot wrapper .restart sentinel — pending-test (PR merged, fix on main)
+- #1291 Multi-model subagents — pending-test (setup flow added)
+- #1395-#1399 Process bugs batch — approved (vault consultation, DM merge, draft PRs, context pressure, PR-close)
 - #473/#474 Test coverage requirements — approved, high severity, 5+ days stalled
+- #1389 Forgejo backend for non-technical teams — pending, awaiting planning approval
 - #1278 Vault-remember diff-based entity extraction — planned, awaiting human approval
-- Improvement scanning active across agents
 
 ## Recent Decisions
 
