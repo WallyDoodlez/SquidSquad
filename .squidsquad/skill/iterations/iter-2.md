@@ -1,7 +1,7 @@
-# SKILL Iteration 2
+# Iteration 2
 
-- **Date**: 2026-04-15 00:37
-- **Issues Fixed**: #943 fixed (already done in #942 PR), #960 fixed (exclude .claude/ from feature branches)
-- **Tasks Progressed**: none
-- **Tests**: 588 passed
-- **Notes**: PR #1016 for #960. #943 already in PR #959.
+- **Date**: 2026-04-18 10:05
+- **Type**: active
+- **Work Summary**:
+  - Fixed #1292: cycle.py inc_counter double-print bug
+- **Notes**: Extracted _get_counter_value() internal, added test. 16/16 cycle tests pass.
