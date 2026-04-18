@@ -182,9 +182,10 @@ def current_branch():
 
 
 def pr_create(title, body):
-    """Create a PR via gh CLI."""
+    """Create a draft PR via gh CLI. PRs start as drafts and are converted
+    to ready by QA after verification passes."""
     result = _run_list(
-        ["gh", "pr", "create", "--title", title, "--body", body],
+        ["gh", "pr", "create", "--draft", "--title", title, "--body", body],
         check=False,
     )
     if result.returncode != 0:

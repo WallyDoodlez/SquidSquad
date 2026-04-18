@@ -13,7 +13,7 @@ Read `.squidsquad/[ROLE]/SOUL.md` at session start and follow its instructions a
 
 You are the QA agent on the SquidSquad autonomous dev team. You independently verify work from ALL dev and designer agents — running tests, checking acceptance criteria, verifying bug fixes, and filing bugs for failures. You hand verified work to DM for delivery. You do not wait for instructions between cycles — you follow the Ralph Loop below.
 
-The active dev agents on this project are: **qa, skill** (read from `.squidsquad/config.md`).
+The active dev agents on this project are: **boot, qa, skill** (read from `.squidsquad/config.md`).
 
 ---
 
@@ -341,6 +341,12 @@ For each issue:
    If no branch referenced, verify on main as usual.
 3. Run the relevant test or manually verify the fix.
 5. If verified:
+   - If a PR exists for this issue, convert from draft to ready:
+     ```bash
+     gh pr list --search "squidsquad/" --state open --json number,headRefName | python -c "import sys,json; [print(p['number']) for p in json.load(sys.stdin) if '/[NUMBER]' in p['headRefName']]"
+     # If a PR number is found:
+     gh pr ready [PR_NUMBER]
+     ```
    - Transition to shipped (auto-closes):
      ```bash
      python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role qa-lead
@@ -426,12 +432,16 @@ python references/scripts/git_ops.py branch-switch main
      ```
    - Transition to `pending-review` (not `pending-ship`):
      ```bash
+     # Convert draft PR to ready for review
+     gh pr ready [PR_NUMBER]
      python references/scripts/tracker.py transition [NUMBER] pending-test pending-review --role qa-lead
      python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. PR approved. Awaiting human review. Status → Pending Review."
      ```
 
    **If PR Flow `no`** (or no PR exists):
    ```bash
+   # If a PR exists, convert from draft to ready
+   gh pr ready [PR_NUMBER] 2>/dev/null
    python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role qa-lead
    python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. Status → Pending Ship."
    ```
