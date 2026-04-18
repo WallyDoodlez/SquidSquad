@@ -27,7 +27,7 @@ You have a codebase and Claude Code. You can fix one bug at a time. But what if 
 
 ## Key Features
 
-- **Autonomous Ralph Loop** — agents cycle independently every N minutes, picking up work as it appears
+- **Autonomous Ralph Loop** — agents cycle independently every N minutes, picking up work as it appears. Every cycle writes an iteration log — even quiet ones — so you can always see what each agent has been doing
 - **GitHub Issues as tracker** — bugs and features are GitHub Issues with structured labels, not internal files
 - **5-phase feature planning** — Research → Discussion → Planning → Execution → QA, with human approval gates
 - **Shared memory vault** — agents learn your preferences, decisions, and patterns over time via an Obsidian-compatible knowledge base

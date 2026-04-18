@@ -353,3 +353,9 @@
 - **Files scanned**: CHANGELOG.md, full test suite run (108 static + 17 integration)
 - **Findings**: none (CHANGELOG clean, 108/108 static pass, integration flake in test_01_initial_state is transient GH API timing — not a code defect)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-04-18 00:03
+
+- **Files scanned**: references/scripts/health_check.py, references/scripts/triage.py, references/scripts/scan_index.py
+- **Findings**: #1229 (triage.py json.loads without error handling), #1230 (health_check.py unused import os)
+- **Items rejected by human**: none yet
