@@ -68,6 +68,13 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 ## Summary
 [2-3 paragraphs: what was researched, recommendation, primary risks]
 
+## Vault Context
+- **BRIEFING.md priorities**: [relevant priorities — or "none"]
+- **Related decisions**: [[note-name]] — [how it constrains this task]
+- **Related patterns**: [[note-name]] — [how to apply]
+- **Human preferences**: [relevant from human-profile — or "none"]
+- **Related learnings**: [[note-name]] — [what to avoid/replicate]
+
 ## Impact Analysis
 - **Files touched**: [list]
 - **Behavior changes**: [list]
