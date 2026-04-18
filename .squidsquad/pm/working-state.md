@@ -2,7 +2,7 @@
 
 - **Task**: #1228 — PM pipeline sentinel
 - **Status**: in-progress
-- **Phase**: discussing #1228
+- **Phase**: none
 
 ## Active Pipeline
 

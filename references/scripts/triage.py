@@ -85,7 +85,10 @@ def find_qa_rejected(role: str) -> list[dict]:
         "--json", "number,title",
         "--limit", "50",
     )
-    items = json.loads(raw) if raw else []
+    try:
+        items = json.loads(raw) if raw else []
+    except json.JSONDecodeError:
+        return []
     if not items:
         return []
 
@@ -97,7 +100,10 @@ def find_qa_rejected(role: str) -> list[dict]:
             "issue", "view", str(number),
             "--json", "comments",
         )
-        detail = json.loads(detail_raw)
+        try:
+            detail = json.loads(detail_raw)
+        except json.JSONDecodeError:
+            continue
         comments = detail.get("comments", [])
         if not comments:
             continue
