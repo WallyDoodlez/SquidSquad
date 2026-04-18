@@ -241,6 +241,29 @@
 - [ ] Provider manifest YAML parses without error
 - [ ] model_router.py has no `shell=True` subprocess calls (security check): `grep -n "shell=True" references/scripts/model_router.py` returns 0 matches
 
+## Quality Comparison Tests (requires OPENAI_API_KEY)
+
+### TC-38: Research output — Claude vs GPT 5.2 side-by-side
+- **Precondition**: `OPENAI_API_KEY` set. A real task exists with sufficient codebase context (use a recently completed task for realistic input).
+- **Steps**: (1) Run model_router.py with `Research Model: gpt-5.2` to produce RESEARCH-external.md. (2) Run the same task via Agent tool (Claude) to produce RESEARCH-claude.md. (3) PM compares both outputs.
+- **Expected**: Both outputs have all required sections. External model output references real files and line numbers (evidence of tool-use exploration). Depth of analysis is comparable — both identify the same major risks and side effects.
+- **Verification**: PM scores both on: section completeness (all headers present), specificity (file paths, line numbers, concrete recommendations), edge case coverage (number of edge cases identified), accuracy (no hallucinated files or functions). Document scores in QA-RESULTS.md.
+- **Pass criteria**: External model scores >= 70% of Claude's score on each dimension. If below, flag as quality concern (does not block — user chose to default research to external).
+
+### TC-39: Test plan output — Claude vs GPT 5.2 side-by-side
+- **Precondition**: Same as TC-38. RESEARCH.md and CONTEXT.md exist for the test task.
+- **Steps**: (1) Run model_router.py with `Test Plan Model: gpt-5.2` to produce TEST-PLAN-external.md. (2) Run via Agent tool to produce TEST-PLAN-claude.md. (3) PM compares.
+- **Expected**: Both produce valid test plans with TC structure. External model covers happy path, edge cases, and regressions.
+- **Verification**: PM scores on: number of TCs, edge case diversity, regression risk identification, comprehension question quality. Document in QA-RESULTS.md.
+- **Pass criteria**: External model produces >= 60% as many meaningful test cases as Claude.
+
+### TC-40: Discussion prep output — Claude vs GPT 5.2 side-by-side
+- **Precondition**: Same as TC-38. RESEARCH.md exists with open questions.
+- **Steps**: (1) Run model_router.py with `Discussion Prep Model: gpt-5.2`. (2) Run via Agent tool. (3) PM compares.
+- **Expected**: Both categorize questions, suggest 3 options each with pros/cons, recommend an option. External model's recommendations are reasonable and actionable.
+- **Verification**: PM scores on: option quality, pros/cons specificity, recommendation justification. Document in QA-RESULTS.md.
+- **Pass criteria**: External model's options and recommendations are usable without major revision.
+
 ## Regression Risks
 
 - **Config.md corruption during upgrade**: If the upgrade script incorrectly inserts the Model Routing section (wrong position, duplicate, malformed markdown), all agents that parse config.md could break. Watch for: agents failing to read config values, duplicate section headers.
