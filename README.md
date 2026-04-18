@@ -36,6 +36,7 @@ You have a codebase and Claude Code. You can fix one bug at a time. But what if 
 - **Agent health monitoring** — boot scripts write `.health` files that track each agent's lifecycle (booting → alive → restarting → dead). PM reads these files for reliable health detection — no more false positives from stale file timestamps
 - **Pre-flight checks** — boot scripts verify prerequisites (gh auth, correct branch) before launching agents. Failures are written to `.health` with a reason, preventing crash loops
 - **Auto-restart wrapper** — agents automatically restart with a fresh context when context pressure rises or loops expire, with rate limiting (3 restarts/hour) to prevent restart storms. All agents resume from saved state with no manual reboot needed
+- **Auto-merge** — when QA verifies a task, PM automatically squash-merges the PR so you don't have to. Bug fixes and items tagged `merge:manual` still require your review. Controlled via `Auto Merge` in `config.md`
 - **Auto versioning** — ships are counted and minor versions auto-bump when thresholds are met
 
 ---

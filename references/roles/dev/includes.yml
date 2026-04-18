@@ -8,7 +8,6 @@ includes:
   - common/interval-sync
   - dev-specific/triage-issues
   - dev-specific/implement-tasks
-  - common/boot-remote-agents
   - common/improvement-scan
   - common/iteration-log
   - common/vault-remember

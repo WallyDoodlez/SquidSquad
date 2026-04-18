@@ -9,7 +9,6 @@ includes:
   - dm-specific/issue-triage
   - dm-specific/delivery-packaging
   - dm-specific/version-bumps
-  - common/boot-remote-agents
   - common/improvement-scan-slim
   - dm-specific/iteration-log
   - dm-specific/git-commit

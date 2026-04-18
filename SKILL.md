@@ -260,6 +260,15 @@ When `PR Flow: yes` is set in `config.md`, dev agents create PRs instead of push
 - **PM and QA still push to main** — only dev agent feature/bug work goes through PRs. PM updates (iterations, planning artifacts) and QA updates (qa-log, iterations) continue to push directly to main. All tracker operations use GitHub Issues regardless of PR flow.
 - When `PR Flow: no` (default), agents push directly to main as before.
 
+### Auto-Merge (optional)
+
+When `Auto Merge: yes` and `Branch Workflow: yes` are set in `config.md`, PM automatically squash-merges PRs for verified tasks — you don't need to merge them manually. After QA marks a task as `Pending Ship`, PM merges the PR before DM handles delivery.
+
+- **Tasks only** — bug fix PRs always require manual human merge for safety.
+- **Per-task override**: add the `merge:manual` label to any task to skip auto-merge and require human review.
+- **Conflict handling**: if a merge conflict is detected, PM routes the task back to the dev agent for rebasing. QA re-verifies after rebase, then PM retries the merge.
+- When `Auto Merge: no` (default for new installs), all PRs require manual merge as before.
+
 ---
 
 ## Setup Instructions

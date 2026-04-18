@@ -6,19 +6,18 @@
 
 ## Active Pipeline
 
-- #475 — Token efficiency audit (approved, skill implementing)
-- #1074 — Auto-merge PRs (approved, awaiting skill pickup)
-- #329 — Consistent per-cycle reporting (planned, awaiting execution approval)
+- #475 — Token efficiency audit (approved, PR #1157 open awaiting merge)
+- #1074 — Auto-merge PRs (approved, DM delivering)
+- #329 — Consistent per-cycle reporting (approved, awaiting skill pickup)
 - #1111 — Heartbeat-based agent liveness (pending, awaiting planning approval)
 - #474 — PM/QA test coverage verification (approved, awaiting skill pickup)
 - #473 — Dev SOUL.md test coverage requirement (approved, awaiting skill pickup)
 - #1022 — health_check.py Unicode crash (open, severity low)
 
-## Planned (awaiting approval)
+## Open PRs
 
-- #329 — Consistent per-cycle reporting (25 TCs)
-- #246 — PR-driven workflow (25 TCs)
-- #347 — Separate QA from PM (researched)
-- #462 — Adaptive setup questions (researched)
+- #1157 — Token efficiency audit (awaiting merge)
+- #1203 — Consistent per-cycle reporting (awaiting merge)
+- #1016 — Exclude .claude/ from feature branch commits (awaiting human merge)
 
-## Quiet cycle counter: 1
+## Quiet cycle counter: 0
