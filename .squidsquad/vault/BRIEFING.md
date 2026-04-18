@@ -4,9 +4,10 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- Improvement scanning active — DM filing doc drift bugs as they surface after version bumps
-- Shipped through v0.14.0: #2 README overhaul, #251 self-diagnostics, #149 runtime SOUL.md, #239 CONTRIBUTING/CODE_OF_CONDUCT, #232 community infra (LICENSE, issue templates), #189 sub-skill guide, #190 ARCHITECTURE.md, #240 boot-time agent registration, #211 phantom fix prevention
-- 13 pending DM doc bugs from improvement scans awaiting triage
+- #1291 Multi-model subagents — approved for execution (skill agent). Plugin architecture with YAML manifests, MCP read-only tools, GPT 5.2 as default external research model
+- #1301 boot_remote.py stale .health bug — high severity, PID should be primary liveness check
+- #1299 Boot script session name bug — open, low severity
+- Improvement scanning active across agents
 
 ## Recent Decisions
 

@@ -2,7 +2,7 @@
 type: area
 tags: [human, preferences, profile]
 created: 2026-04-05
-updated: 2026-04-12
+updated: 2026-04-18
 owner: pm
 status: active
 confidence: medium
@@ -30,6 +30,7 @@ Profile of the human collaborator. Captures preferences, values, communication s
 - Uses Python for scripting, bash for shell operations
 - Repository: SquidSquad autonomous agent framework
 - Context pressure threshold: 70% (human considers 80% too high — agents degrade before hitting 80%)
+- Prefers direct/mechanical checks over indirect state files — "just use PID, it's more direct." OS-level truth (process exists?) beats application-level files (.health) that can go stale. Applies broadly: prefer the most direct verification method available.
 
 ## Decision-Making Style
 
@@ -50,3 +51,4 @@ _Wikilinks to related notes: [[code-conventions]]_
 
 - 2026-04-05 — Seeded by skill-lead (vault-remember). Pre-populated from observed interactions. Confidence: medium (awaiting human review).
 - 2026-04-12 — Updated by skill-lead. Added context pressure threshold preference (70%, human directive via #378).
+- 2026-04-18 — Updated by pm. Added preference for direct/mechanical checks over indirect state files (from #1301 discussion).
