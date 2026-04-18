@@ -167,6 +167,47 @@ def _load_provider_manifest(model):
     return None, None
 
 
+def list_providers():
+    """Discover all available providers by scanning providers/*/manifest.yaml.
+
+    Returns a list of dicts, each with: name, display_name, default_model,
+    models (list of model names), auth_env_var.
+    """
+    if not PROVIDERS_DIR.exists():
+        return []
+
+    try:
+        import yaml
+    except ImportError:
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "pyyaml"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        import yaml
+
+    providers = []
+    for provider_dir in sorted(PROVIDERS_DIR.iterdir()):
+        if not provider_dir.is_dir():
+            continue
+        manifest_path = provider_dir / "manifest.yaml"
+        if not manifest_path.exists():
+            continue
+        try:
+            manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+            providers.append({
+                "name": manifest.get("name", provider_dir.name),
+                "display_name": manifest.get("display_name", provider_dir.name),
+                "default_model": manifest.get("default_model", ""),
+                "models": list(manifest.get("models", {}).keys()),
+                "auth_env_var": manifest.get("auth", {}).get("env_var", ""),
+            })
+        except Exception:
+            continue
+
+    return providers
+
+
 def _ensure_deps(manifest):
     """Auto-install pip dependencies from provider manifest."""
     deps = manifest.get("deps", [])
@@ -690,31 +731,42 @@ def route(task_type, task_id, input_files, output_file, context):
 def main():
     parser = argparse.ArgumentParser(
         description="SquidSquad model router — route subagent work to external models.",
-        epilog=(
-            "Exit codes:\n"
-            "  0 — success (output file written)\n"
-            "  1 — API failure (parent should fall back to Agent tool)\n"
-            "  2 — configuration error (missing API key)\n"
-        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument(
-        "task_type",
-        choices=[
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Route subcommand (default behavior)
+    route_parser = subparsers.add_parser(
+        "route", help="Route a subagent task to an external model",
+        aliases=[
             "research", "discussion-prep", "test-plan",
             "improvement-scan", "qa-execution", "comprehension",
         ],
-        help="Type of subagent task to route",
     )
-    parser.add_argument("--task-id", required=True, help="Task identifier (e.g. FEAT-PM-1291)")
-    parser.add_argument("--input-files", default="", help="Comma-separated input file paths")
-    parser.add_argument("--output-file", required=True, help="Path for output file")
-    parser.add_argument("--context", default="", help="Additional context string")
+    route_parser.add_argument("--task-id", required=True, help="Task identifier")
+    route_parser.add_argument("--input-files", default="", help="Comma-separated input file paths")
+    route_parser.add_argument("--output-file", required=True, help="Path for output file")
+    route_parser.add_argument("--context", default="", help="Additional context string")
+
+    # List providers subcommand
+    subparsers.add_parser("list-providers", help="List available model providers (JSON)")
 
     args = parser.parse_args()
 
-    code = route(args.task_type, args.task_id, args.input_files, args.output_file, args.context)
-    sys.exit(code)
+    if args.command == "list-providers":
+        providers = list_providers()
+        print(json.dumps(providers, indent=2))
+        sys.exit(0)
+    elif args.command in (
+        "route", "research", "discussion-prep", "test-plan",
+        "improvement-scan", "qa-execution", "comprehension",
+    ):
+        task_type = args.command if args.command != "route" else "research"
+        code = route(task_type, args.task_id, args.input_files, args.output_file, args.context)
+        sys.exit(code)
+    else:
+        parser.print_help()
+        sys.exit(2)
 
 
 if __name__ == "__main__":

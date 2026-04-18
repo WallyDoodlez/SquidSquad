@@ -1,6 +1,6 @@
 # SquidSquad Config
 
-- **SquidSquad Version**: 0.20.0
+- **SquidSquad Version**: 0.21.0
 - **Tracker**: github-issues
 - **Architecture Version**: 1
 
@@ -99,4 +99,4 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-- **Shipped Since Last Bump**: 9
+- **Shipped Since Last Bump**: 10

@@ -314,6 +314,46 @@ class TestCLI:
 
 
 # ---------------------------------------------------------------------------
+# list_providers
+# ---------------------------------------------------------------------------
+
+class TestListProviders:
+    def test_discovers_openai_provider(self):
+        """list_providers should find the openai provider from manifest."""
+        providers = model_router.list_providers()
+        names = [p["name"] for p in providers]
+        assert "openai" in names
+
+    def test_provider_has_required_fields(self):
+        """Each provider entry should have name, display_name, default_model, models, auth_env_var."""
+        providers = model_router.list_providers()
+        assert len(providers) > 0
+        for p in providers:
+            assert "name" in p
+            assert "display_name" in p
+            assert "default_model" in p
+            assert "models" in p
+            assert isinstance(p["models"], list)
+            assert "auth_env_var" in p
+
+    def test_empty_providers_dir(self, tmp_path):
+        """list_providers returns empty list when no providers exist."""
+        with patch.object(model_router, "PROVIDERS_DIR", tmp_path / "empty"):
+            result = model_router.list_providers()
+        assert result == []
+
+    def test_cli_list_providers(self, capsys):
+        """CLI list-providers subcommand outputs valid JSON."""
+        with pytest.raises(SystemExit) as exc:
+            sys.argv = ["model_router.py", "list-providers"]
+            model_router.main()
+        assert exc.value.code == 0
+        output = capsys.readouterr().out
+        data = json.loads(output)
+        assert isinstance(data, list)
+
+
+# ---------------------------------------------------------------------------
 # No shell=True
 # ---------------------------------------------------------------------------
 

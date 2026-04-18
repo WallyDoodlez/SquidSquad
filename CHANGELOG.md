@@ -4,6 +4,22 @@ All notable changes to SquidSquad will be documented in this file. This changelo
 
 ---
 
+## [0.21.0] — 2026-04-18
+
+### Added
+
+- #1074 — **Auto-merge PRs** — when QA verifies a task, PM automatically squash-merges the PR so you don't have to. Bug fixes and `merge:manual`-tagged items still require your review
+- #1357 — **Pipeline self-healing** — PM's pipeline sentinel now detects 6 types of stuck tasks (orphaned PRs, shipped-without-merge, stalled approvals, dead-agent work) with two-tier response: unstick immediately, then auto-file a root-cause bug for permanent fix
+
+### Fixed
+
+- #1230 — Removed unused import in health_check.py
+- #1299 — Fixed boot script session names dropping agent role on Windows (cmd /c quote handling)
+- #1301 — Fixed stale agent detection: PID is now the sole liveness check — dead agents are reliably detected and rebooted regardless of .health file state
+- #1345 — Fixed self-restart on Windows: boot wrapper watcher now uses absolute paths so .restart sentinel is reliably detected
+
+---
+
 ## [0.20.0] — 2026-04-17
 
 ### Fixed

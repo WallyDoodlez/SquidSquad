@@ -384,6 +384,60 @@ Record:
 
 ---
 
+## Step 5b — Model routing (optional)
+
+Discover available providers:
+
+```bash
+python references/scripts/model_router.py list-providers
+```
+
+Parse the JSON array. If empty (no providers installed), skip this step silently.
+
+If providers exist, ask:
+
+> SquidSquad can route token-heavy work (research, test plans, etc.) to
+> an external model to save Claude tokens. Want to set that up? (y/N)
+
+If **no** (default): skip. All subagent work stays on Claude. Record:
+
+```
+"model_routing": null
+```
+
+If **yes**:
+
+1. **Pick a provider**: List available providers by `display_name`. If only one, confirm it rather than asking to choose.
+   > Available providers: [list display_names]. Which one?
+
+2. **Pick a model**: Show the provider's models list with the default highlighted.
+   > Models: [list]. Default is **[default_model]**. Press Enter to accept, or type a model name.
+
+3. **Show env var**: Tell the user exactly which environment variable to set.
+   > To use [display_name], set this environment variable:
+   >
+   >   [auth_env_var]=your-api-key
+   >
+   > Set it at the OS level (not just this terminal) so all agents can
+   > use it. On Windows: System Properties → Environment Variables.
+   > On Mac/Linux: add to ~/.bashrc or ~/.zshrc.
+
+4. **Skip validation**: Do NOT attempt a test API call during setup — the user may not have the key yet. The model router handles missing keys gracefully at runtime (falls back to Claude).
+
+Record:
+
+```
+"model_routing": {
+    "provider": "<name>",
+    "model": "<selected model>",
+    "auth_env_var": "<env var name>",
+}
+```
+
+The commit step (Step 7) writes this to the `## Model Routing` section of config.md.
+
+---
+
 ## Step 6 — Review screen
 
 You now have a complete install spec in memory. Compose the summary
