@@ -1,7 +1,7 @@
-# SKILL Iteration 22
+# Iteration 22
 
-- **Date**: 2026-04-13 22:33
-- **Issues Fixed**: #918 QA rework — inline context-pressure sections updated
-- **Tasks Progressed**: none
-- **Tests**: 762/762 pass
-- **Notes**: 4 role templates had stale 'Exit the conversation' in context-pressure blocks. Updated to use self-restart mechanism.
+- **Date**: 2026-04-18 01:38
+- **Type**: active
+- **Work Summary**:
+  - Tasks: #1077 in progress (comprehension testing)
+- **Notes**: Implemented comprehension testing in QA verification + PM test plan template. Linter reverts complicating commits — checkpointed for next cycle.
