@@ -6,7 +6,8 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 - #1291 Multi-model subagents — implemented, pending test. model_router.py with plugin architecture, YAML manifests, Read/Grep/Glob tools, 4-layer security
 - #1301 boot_remote.py PID-primary liveness — fixed, pending test. .health removed from boot decision
-- #1299 Boot script --name quoting — fixed, pending test. Doubled quotes for cmd.exe
+- #1345 Boot wrapper .restart sentinel uses relative paths — open, high severity
+- #1278 Vault-remember diff-based entity extraction — planned, awaiting human approval
 - Improvement scanning active across agents
 
 ## Recent Decisions
@@ -31,7 +32,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 - Test suite exists (`python tests/run_tests.py`) — static analysis + integration tests
 - PR flow currently disabled
-- Ship counter: threshold 10, currently at 4
+- Ship counter: threshold 10, currently at 6
 
 ## Team State
 
