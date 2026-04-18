@@ -455,12 +455,13 @@ Print: `[🦑 HH:MM:SS] Checking open PRs...`
 
 List open SquidSquad PRs:
 ```bash
-gh pr list --search "squidsquad/" --state all --json number,title,state,mergedAt,url --limit 20
+gh pr list --search "squidsquad/" --state all --json number,title,state,mergedAt,url,mergeable --limit 20
 ```
 
 For each PR:
 - **If merged**: find the corresponding tracker item (parse the feature/bug ID from the PR title). Update status to `Pending Ship`. Append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm**: PR [URL] merged by human. Status → Pending Ship.` Apply the same `delivery: skip` logic as Step 6 item 3 if the feature is internal-only.
 - **If closed without merge**: update status back to `In Progress`. Append Discussion entry with note.
+- **If open with merge conflicts** (`mergeable` is `CONFLICTING`): transition the associated task back to `In Progress`. Append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm**: PR #[N] has merge conflicts. Routing back to [role] to rebase. Status → In Progress.`
 - **If open with new comments**: fetch comments via `gh pr view [N] --comments`. Append any new comments to the tracker Discussion: `> [YYYY-MM-DD HH:MM] **pm**: PR comment from [author]: [summary]`
 - **If open with "changes requested" review**: update status back to `In Progress`. Append Discussion entry with the requested changes.
 
@@ -786,27 +787,28 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 <!-- /sub-skill: improvement-scan -->
 
 <!-- sub-skill: iteration-log -->
-### Step 8 — Log Iteration
+### Step 8 — Log Iteration (skip on quiet cycles)
 
-Print: `[🦑 HH:MM:SS] Logging iteration...`
+If no QA issues were found, no issues were verified, no tasks were shipped, no human input was processed, and no improvement scan was triggered this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 10 (Done). The status bar shows the loop is still running.
 
-**Every cycle writes a log entry** — active or quiet. Use the cycle script:
+Otherwise, print: `[🦑 HH:MM:SS] Logging iteration...`
 
-```bash
-# Active cycle (work was done):
-python references/scripts/cycle.py log-iteration pm [N] \
-  --work "[comma-separated summary of work done]" \
-  --notes "[anything notable]"
+Create `.squidsquad/pm/iterations/iter-N.md`:
 
-# Quiet cycle (no actionable work):
-python references/scripts/cycle.py log-iteration pm [N] --quiet \
-  --notes "[why quiet, e.g. 'No pending-test items, no human input']"
+```markdown
+# PM Iteration N
 
-# Clean up old logs (keeps most recent 20)
-python references/scripts/cycle.py cleanup-iterations pm
+- **Date**: YYYY-MM-DD HH:MM
+- **Human Check-in**: [summary of human input, or "no input"]
+- **E2E Tests**: [passed/failed — N tests, X failures / skipped]
+- **Issues Filed**: [list IDs, or "none"]
+- **Issues Verified**: [list IDs, or "none"]
+- **Tasks Shipped**: [list IDs, or "none"]
+- **Agent Health**: [list each agent: healthy/stalled/unknown]
+- **Notes**: [anything notable for the team]
 ```
 
-The script writes a unified format with Date, Type (active/quiet), Work Summary, and Notes. Quiet entries are condensed (2-3 lines).
+After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones. Git history preserves them if ever needed.
 <!-- /sub-skill: iteration-log -->
 
 <!-- sub-skill: vault-remember -->
