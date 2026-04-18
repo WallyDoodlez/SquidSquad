@@ -254,7 +254,7 @@ All agents follow these rules to minimize merge conflicts on shared tracker file
 When `PR Flow: yes` is set in `config.md`, dev agents create PRs instead of pushing directly to main:
 
 - **Branching convention**: `squidsquad/feat-[role]-[issue#]` or `squidsquad/bug-[role]-[issue#]` (e.g. `squidsquad/feat-skill-67`)
-- **Dev agent workflow**: when marking work as `Pending Test`, create a branch, push it, and open a PR via `gh pr create`. Record the PR link in the tracker Discussion.
+- **Dev agent workflow**: when marking work as `Pending Test`, create a branch, push it, and open a **draft** PR via `gh pr create --draft`. QA converts it to ready (`gh pr ready`) after verification passes. This prevents premature merges before QA sign-off.
 - **PM and QA workflow**: each cycle, check open SquidSquad PRs via `gh pr list`. For each PR:
   - If merged: update the tracker item status to `Shipped`
   - If changes requested: update status back to `In Progress` and append the feedback to Discussion
