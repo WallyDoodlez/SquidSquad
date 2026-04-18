@@ -64,52 +64,6 @@ If this fails (exit code 1):
 
 If `gh` works but GitHub is **temporarily unreachable** during a cycle (network blip), skip tracker operations for this cycle and retry next cycle. Print: `[🦑 HH:MM:SS] GitHub unreachable — skipping tracker operations. Will retry next cycle.`
 
-### Label Taxonomy
-
-Issues use labels for structured metadata. The following labels must exist on the repo (created during setup):
-
-**Type:**
-- `issue` — defect, regression, broken behavior
-- `task` — new capability or enhancement
-
-**Priority:**
-- `priority:high` — urgent, blocks other work
-- `priority:medium` — normal priority
-- `priority:low` — nice-to-have, improvement scan items
-
-**Status:**
-- `status:open` — issue filed, awaiting triage
-- `status:pending` — filed, awaiting human approval
-- `status:planning` — approved by human, PM running intake
-- `status:planned` — planning complete, awaiting human approval for execution
-- `status:approved` — human approved, ready for dev pickup
-- `status:in-progress` — agent actively working
-- `status:pending-test` — implementation complete, awaiting QA
-- `status:pending-review` — QA verified, awaiting human PR review (PR Flow only)
-- `status:pending-ship` — QA verified, awaiting DM delivery
-- `status:shipped` — delivered, closed
-
-**Role (assignee domain):**
-- `role:skill` (or `role:fe`, `role:be`, etc.) — dev agent
-- `role:pm` — PM agent
-- `role:qa` — QA agent
-- `role:designer` — designer agent
-- `role:dm` — DM agent
-
-**Design (for tasks needing design):**
-- `design:needed` — designer must produce specs before dev
-- `design:in-progress` — designer working on specs
-- `design:complete` — design approved, dev can proceed
-
-**Severity (for issues):**
-- `severity:high` — critical, blocks usage
-- `severity:medium` — degraded functionality
-- `severity:low` — cosmetic, minor annoyance
-
-**Special:**
-- `squidsquad` — all SquidSquad-managed items get this label
-- `improvement-scan` — filed by improvement scanning (quiet cycle)
-
 ### Reading Issues (replaces INDEX.md scanning)
 
 Use the tracker script for all queries — it encodes correct label formats:
@@ -473,35 +427,6 @@ Print: `[🦑 HH:MM:SS] Version bumped to vX.Y.Z — tag created and pushed.`
 
 **Version bumps always commit directly to main.**
 <!-- /sub-skill: version-bumps -->
-
-<!-- sub-skill: boot-remote-agents -->
-### Step — Boot Remote Agents (PM Only)
-
-**PM-only gate**: Only the PM agent runs this step. If you are NOT the PM role, skip this step entirely.
-
-Print: `[🦑 HH:MM:SS] Checking for agents to boot...`
-
-Check `Auto Boot Agents` in `config.md`. If set to `no`, skip this step entirely.
-
-Run the boot check:
-
-```bash
-python references/scripts/boot_remote.py --all --json
-```
-
-The script:
-1. Reads each agent's `.pid` file from their clone path
-2. Checks if the PID process is alive
-3. If dead (or no PID file) and no `.stop` sentinel, spawns a new terminal
-4. Enforces cooldown (10 min between spawn attempts per role)
-5. Uses a lock file to prevent race conditions
-
-**Interpreting output**: Each agent entry has `action` (spawn/skip/dry-run) and `success` (true/false). Log any spawn failures in Discussion on the agent's current task issue.
-
-If any agents were spawned, print: `[🦑 HH:MM:SS] Booted: [role1, role2, ...]`
-
-If all agents alive or stopped, print nothing — silent pass.
-<!-- /sub-skill: boot-remote-agents -->
 
 <!-- sub-skill: improvement-scan-slim -->
 ## Improvement Scanning (Filing Only)
