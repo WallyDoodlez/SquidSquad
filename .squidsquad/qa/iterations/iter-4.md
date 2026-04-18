@@ -1,8 +1,8 @@
 # Iteration 4
 
-- **Date**: 2026-04-18 14:35
+- **Date**: 2026-04-18 16:02
 - **Type**: active
 - **Work Summary**:
-  - #1301 FAIL (health_check.py not fixed)
-  - #1299 PASS → Pending Ship
-- **Notes**: All agents healthy. #1291 skipped (blocked:human-action).
+  - #1345 boot wrapper paths: FAIL - template fixed but deployed scripts not regenerated
+  - back to In Progress
+- **Notes**: Same pattern as #1291 TC-34 - template changes not propagated to deployed artifacts.
