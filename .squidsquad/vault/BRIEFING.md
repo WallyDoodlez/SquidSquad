@@ -4,8 +4,10 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #1345 Boot wrapper .restart sentinel uses relative paths — in-progress, high severity
-- #473/#474 Test coverage requirements — approved, high severity, awaiting skill pickup (5+ days)
+- #1345 Boot wrapper .restart sentinel — pending-test, awaiting QA
+- #1291 Multi-model subagents — pending-test (reopened, code was on unmerged branch)
+- #1357 Pipeline sentinel self-healing — approved, high severity
+- #473/#474 Test coverage requirements — approved, high severity, 5+ days stalled
 - #1278 Vault-remember diff-based entity extraction — planned, awaiting human approval
 - Improvement scanning active across agents
 
