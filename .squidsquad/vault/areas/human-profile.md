@@ -32,6 +32,13 @@ Profile of the human collaborator. Captures preferences, values, communication s
 - Context pressure threshold: 70% (human considers 80% too high — agents degrade before hitting 80%)
 - Prefers direct/mechanical checks over indirect state files — "just use PID, it's more direct." OS-level truth (process exists?) beats application-level files (.health) that can go stale. Applies broadly: prefer the most direct verification method available.
 
+## Product Vision
+
+- SquidSquad is a general-purpose autonomous team skill — not just for developers
+- Non-technical teams (marketing, ops, content) should be able to use it without GitHub/git knowledge
+- Prefers leveraging existing open-source tools (Forgejo, not custom backends) over building from scratch
+- Systems should self-heal: detect stuck states → unstick immediately → file root-cause bug → agent fixes gap
+
 ## Decision-Making Style
 
 - Delegates operational decisions to agents, steps in for approvals
@@ -52,3 +59,4 @@ _Wikilinks to related notes: [[code-conventions]]_
 - 2026-04-05 — Seeded by skill-lead (vault-remember). Pre-populated from observed interactions. Confidence: medium (awaiting human review).
 - 2026-04-12 — Updated by skill-lead. Added context pressure threshold preference (70%, human directive via #378).
 - 2026-04-18 — Updated by pm. Added preference for direct/mechanical checks over indirect state files (from #1301 discussion).
+- 2026-04-18 — Updated by pm. Added Product Vision section: general-purpose skill for all teams, self-healing systems, prefer existing OSS over custom builds.
