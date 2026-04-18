@@ -1067,7 +1067,20 @@ Write current state: `python references/scripts/cycle.py status-bar [ROLE] resea
 
 **Check artifact resume** (see above) for `FEAT-[ROLE_UPPER]-XXX-RESEARCH.md`. If skipping, proceed to Phase 2A.
 
-Spawn a research agent (via the Agent tool) that analyzes:
+Route to the configured model for research:
+
+```bash
+python references/scripts/model_router.py research \
+  --task-id FEAT-[ROLE_UPPER]-XXX \
+  --input-files "[comma-separated input file paths]" \
+  --output-file ".squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-RESEARCH.md" \
+  --context "Task: [title]. [body summary]"
+```
+
+If exit code is **0**: output file written by external model. Continue to review.
+If exit code is **non-zero** (1 or 2): fall back to spawning a Claude subagent via the Agent tool with the same research prompt.
+
+The research agent (whether external or Claude) analyzes:
 1. **Codebase impact**: files, templates, systems touched; behavior changes
 2. **Side effects**: what could break for users with existing configs, different team shapes, different OS/shells, different project types
 3. **Edge cases**: unusual inputs, failure modes, race conditions, empty states
@@ -1129,18 +1142,17 @@ Write current state: `python references/scripts/cycle.py status-bar [ROLE] discu
 
 **Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-PHASE2-PREP.md`. If skipping, proceed to Phase 2.
 
-For non-trivial tasks, spawn a prep subagent (via the Agent tool) before starting the interactive discussion. The subagent reads the RESEARCH.md and produces a discussion prep file.
+For non-trivial tasks, route to the configured model for discussion prep:
 
-Subagent prompt:
+```bash
+python references/scripts/model_router.py discussion-prep \
+  --task-id FEAT-[ROLE_UPPER]-XXX \
+  --input-files ".squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-RESEARCH.md" \
+  --output-file ".squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-PHASE2-PREP.md" \
+  --context "Prep discussion for FEAT-[ROLE_UPPER]-XXX"
 ```
-Read .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-RESEARCH.md. For each open question in the research:
-1. Categorize it (scope, behavior, compatibility, performance, etc.)
-2. Suggest 3 concrete options with pros/cons for each
-3. Mark your recommended option
-4. Suggest an optimal question order (dependencies first, controversial last)
 
-Write output to .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-PHASE2-PREP.md
-```
+If exit code is **non-zero**: fall back to spawning a Claude subagent via the Agent tool. The subagent reads the RESEARCH.md and produces a discussion prep file with categorized questions, 3 options each with pros/cons, recommended option marked, and optimal question order.
 
 The PM reads PHASE2-PREP.md to inform the discussion suggestions. Delete PHASE2-PREP.md after Phase 2 completes — CONTEXT.md captures the final decisions.
 
@@ -1251,21 +1263,17 @@ Create two artifacts:
 - Acceptance criteria include edge case handling and side effect mitigations
 - References RESEARCH.md and CONTEXT.md
 
-**B) Test plan** — spawn a subagent (via the Agent tool) to draft the test plan.
+**B) Test plan** — route to the configured model for test plan drafting:
 
-Subagent prompt:
+```bash
+python references/scripts/model_router.py test-plan \
+  --task-id FEAT-[ROLE_UPPER]-XXX \
+  --input-files ".squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-RESEARCH.md,.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-CONTEXT.md" \
+  --output-file ".squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md" \
+  --context "Draft test plan for FEAT-[ROLE_UPPER]-XXX"
 ```
-Read .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-RESEARCH.md and .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-CONTEXT.md. Draft a test plan covering:
-1. Happy path test cases with preconditions, steps, expected results, and verification commands
-2. Edge case test cases from research findings
-3. Side effect regression tests (existing behavior that must NOT change)
-4. Upgrade verification tests (existing installs get the task correctly via upgrade, no breakage for non-upgraded installs)
-5. Smoke tests (quick checks)
-6. Regression risks
-7. Comprehension questions (if the task touches LLM-consumed instructions). Questions a fresh agent should answer correctly by reading only the modified files. Skip for script-only changes.
 
-Write output to .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md
-```
+If exit code is **non-zero**: fall back to spawning a Claude subagent via the Agent tool to draft the test plan covering happy paths, edge cases, regressions, upgrade verification, smoke tests, regression risks, and comprehension questions.
 
 PM reviews the subagent's draft, adjusts as needed, and saves the final version. The format should be:
 
