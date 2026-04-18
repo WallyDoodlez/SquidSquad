@@ -99,7 +99,7 @@ references/sub-skills/pm-specific/file-conventions.md
 references/sub-skills/pm-specific/git-commit.md
 references/sub-skills/pm-specific/github-issues.md
 references/sub-skills/pm-specific/iteration-log.md
-references/sub-skills/pm-specific/pr-flow.md
+references/sub-skills/pm-specific/pipeline-sentinel.md
 references/sub-skills/pm-specific/prohibitions.md
 references/sub-skills/pm-specific/status-line.md
 references/sub-skills/qa-specific/issue-filing.md
