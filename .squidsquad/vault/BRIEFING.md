@@ -4,9 +4,9 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #1291 Multi-model subagents — approved for execution (skill agent). Plugin architecture with YAML manifests, MCP read-only tools, GPT 5.2 as default external research model
-- #1301 boot_remote.py stale .health bug — high severity, PID should be primary liveness check
-- #1299 Boot script session name bug — open, low severity
+- #1291 Multi-model subagents — implemented, pending test. model_router.py with plugin architecture, YAML manifests, Read/Grep/Glob tools, 4-layer security
+- #1301 boot_remote.py PID-primary liveness — fixed, pending test. .health removed from boot decision
+- #1299 Boot script --name quoting — fixed, pending test. Doubled quotes for cmd.exe
 - Improvement scanning active across agents
 
 ## Recent Decisions

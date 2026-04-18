@@ -80,6 +80,22 @@
 - **Enabled**: yes
 - **Upstream Reporting**: ask
 
+## Model Routing
+
+- **Default Model**: claude
+- **Research Model**: gpt-5.2
+- **Discussion Prep Model**: claude
+- **Test Plan Model**: claude
+- **QA Execution Model**: claude
+- **Comprehension Model**: claude
+- **Improvement Scan Model**: claude
+- **Fallback Model**: claude
+- **API Timeout Seconds**: 120
+
+## Mandatory Human Approval
+
+- **Enabled**: yes
+
 ## Auto Versioning
 
 - **Ship Threshold**: 10

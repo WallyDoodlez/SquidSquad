@@ -95,7 +95,7 @@ try {
 
         # Start Claude as a background process so we can poll for .restart (#918)
         # Use cmd /c to launch — claude is a .cmd shim on Windows, Start-Process can't exec .cmd directly
-        $claudeProc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "claude", "--dangerously-skip-permissions", "--name", "`"$AgentName`"", "--append-system-prompt", "$sysPrompt", "$initMsg" -NoNewWindow -PassThru
+        $claudeProc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "claude", "--dangerously-skip-permissions", "--name", "`"`"$AgentName`"`"", "--append-system-prompt", "$sysPrompt", "$initMsg" -NoNewWindow -PassThru
 
         # Background poller: watch for .restart sentinel while Claude is running
         $watcherJob = Start-Job -ScriptBlock {
