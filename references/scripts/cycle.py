@@ -11,8 +11,7 @@ Usage:
     python scripts/cycle.py get-counter <role>      # Read quiet cycle counter
     python scripts/cycle.py inc-counter <role>      # Increment quiet cycle counter
     python scripts/cycle.py reset-counter <role>    # Reset counter to 0
-    python scripts/cycle.py is-quiet <role>         # Check if cycle was quiet (no work done)
-    python scripts/cycle.py log-iteration <role> <n> --issues <i> --tasks <t> --tests <t> [--notes <n>]
+    python scripts/cycle.py log-iteration <role> <n> [--quiet] [--work <w>] [--notes <n>]
     python scripts/cycle.py cleanup-iterations <role> [--keep 20]
     python scripts/cycle.py --help
 """
