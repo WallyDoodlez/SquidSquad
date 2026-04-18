@@ -67,6 +67,11 @@ CTX_PCT=$(echo "$INPUT" | grep -oE '"used_percentage"[[:space:]]*:[[:space:]]*[0
 CTX_PCT=${CTX_PCT%%.*}
 CTX_PCT=${CTX_PCT:-0}
 
+# Write real context pressure to disk for agents to read
+if [ -n "$ROLE" ] && [ -d "$SQDIR/$ROLE" ]; then
+  echo "$CTX_PCT" > "$SQDIR/$ROLE/context-pressure.tmp" && mv -f "$SQDIR/$ROLE/context-pressure.tmp" "$SQDIR/$ROLE/context-pressure"
+fi
+
 # Context emoji + colored percentage text
 if [ "$CTX_PCT" -ge 75 ]; then
   CTX_STR="🧠💀 ${RED}${CTX_PCT}%${RESET}"

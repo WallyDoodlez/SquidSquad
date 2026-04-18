@@ -224,6 +224,21 @@ def pr_merge(pr_number, strategy="squash"):
     result = _run_list(merge_args, check=False)
     if result.returncode == 0:
         print(f"PR #{pr_number} merged ({strategy})")
+        # Extract linked issue number from branch name and transition to pending-ship
+        branch_result = _run_list(
+            ["gh", "pr", "view", str(pr_number), "--json", "headRefName"],
+            check=False,
+        )
+        if branch_result.returncode == 0:
+            try:
+                branch_name = json.loads(branch_result.stdout.strip()).get("headRefName", "")
+                # Branch format: squidsquad/role/NUMBER
+                parts = branch_name.split("/")
+                if len(parts) >= 3 and parts[0] == "squidsquad" and parts[2].isdigit():
+                    issue_num = parts[2]
+                    print(f"PR linked to #{issue_num} — GitHub auto-close will handle issue state")
+            except (json.JSONDecodeError, AttributeError, IndexError):
+                pass
         return True, "merged"
     else:
         error = result.stderr.strip()

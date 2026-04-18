@@ -70,7 +70,7 @@ Split commits into code (feature branch) and state (main):
 
    **If PR Flow `no`** — simple PR (no review sections):
    ```bash
-   python references/scripts/git_ops.py pr-create "[ROLE]: #[NUMBER] — [title]" "## #[NUMBER]\n\n[acceptance criteria]\n\nStatus: Pending Test"
+   python references/scripts/git_ops.py pr-create "[ROLE]: #[NUMBER] — [title]" "Closes #[NUMBER]\n\n## #[NUMBER]\n\n[acceptance criteria]\n\nStatus: Pending Test"
    ```
 
    Record the PR URL in the tracker Discussion:
