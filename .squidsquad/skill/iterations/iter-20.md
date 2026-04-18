@@ -1,7 +1,8 @@
-# SKILL Iteration 20
+# Iteration 20
 
-- **Date**: 2026-04-13 21:37
-- **Issues Fixed**: #918 agents cannot self-restart — added sentinel-based restart mechanism
-- **Tasks Progressed**: none
-- **Tests**: 762/762 pass
-- **Notes**: New common/self-restart sub-skill, boot script templates updated (.sh + .ps1), all 5 roles get self-restart, context-pressure references restart.
+- **Date**: 2026-04-18 00:32
+- **Type**: active
+- **Work Summary**:
+  - Issues: #1229 fixed (triage.py json.loads), #1230 fixed (health_check.py unused import)
+  - Tests: passed (17/17)
+- **Notes**: Fixed both scan findings from cycle 19.
