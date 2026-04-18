@@ -526,6 +526,15 @@ If exit code 0 (quiet), skip — nothing to reflect on.
 python references/scripts/vault_remember.py reset-writes skill
 ```
 
+**BRIEFING.md staleness check** (runs before reflection, bypasses write budget):
+
+Read `.squidsquad/vault/BRIEFING.md` and `config.md`. Compare key fields:
+- **Version**: Does BRIEFING.md match `SquidSquad Version` in config.md?
+- **Active agents**: Does BRIEFING.md list the same agents as config.md `Dev Agents`?
+- **Current priorities**: Do listed priorities match open high/medium priority items in the tracker?
+
+If any field is stale, update BRIEFING.md with current values. This is a staleness fix, not new content — it does NOT consume write budget. Run vault-check Level 1 after updating.
+
 **Reflection prompt**: Review this cycle's iteration log and evaluate each category:
 
 1. **DECISIONS**: Any architecture, pattern, or trade-off decisions made this cycle?
@@ -878,7 +887,7 @@ Use `[[note-name]]` (bare, no aliases) to link related notes in the body. Find i
 
 ### BRIEFING.md
 
-`.squidsquad/vault/BRIEFING.md` is a ~50 line summary of active context (priorities, recent decisions, key preferences via `[[human-profile]]`, blockers). Auto-maintained on **significant** changes only — not every cycle. Focused briefing, not a knowledge dump.
+`.squidsquad/vault/BRIEFING.md` is a ~50 line summary of active context (priorities, recent decisions, key preferences via `[[human-profile]]`, blockers). Checked for staleness on every non-quiet cycle — key fields (version, active agents, priorities) are verified against config.md and updated if stale. Token budget applies to new additions, not staleness fixes.
 
 ### Concurrent Access
 

@@ -19,6 +19,15 @@ If exit code 0 (quiet), skip — nothing to reflect on.
 python references/scripts/vault_remember.py reset-writes [ROLE]
 ```
 
+**BRIEFING.md staleness check** (runs before reflection, bypasses write budget):
+
+Read `.squidsquad/vault/BRIEFING.md` and `config.md`. Compare key fields:
+- **Version**: Does BRIEFING.md match `SquidSquad Version` in config.md?
+- **Active agents**: Does BRIEFING.md list the same agents as config.md `Dev Agents`?
+- **Current priorities**: Do listed priorities match open high/medium priority items in the tracker?
+
+If any field is stale, update BRIEFING.md with current values. This is a staleness fix, not new content — it does NOT consume write budget. Run vault-check Level 1 after updating.
+
 **Reflection prompt**: Review this cycle's iteration log and evaluate each category:
 
 1. **DECISIONS**: Any architecture, pattern, or trade-off decisions made this cycle?
