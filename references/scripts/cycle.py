@@ -116,29 +116,51 @@ def reset_counter(role):
     return 0
 
 
-def log_iteration(role, n, bugs="none", features="none", tests="n/a", notes="",
-                   issues=None, tasks=None):
-    """Create an iteration log file.
+def log_iteration(role, n, quiet=False, work=None, notes="",
+                   bugs=None, features=None, issues=None, tasks=None, tests=None):
+    """Create an iteration log file in unified format.
 
-    Accepts both old (bugs/features) and new (issues/tasks) parameter names.
+    All roles use the same format: Date, Type, Work Summary, Notes.
+    Quiet cycles get a condensed 2-3 line entry.
+    Legacy params (bugs/features/issues/tasks/tests) are converted to work bullets.
     """
     ts = _now().strftime("%Y-%m-%d %H:%M")
     iter_dir = SQUIDSQUAD_DIR / role / "iterations"
     iter_dir.mkdir(parents=True, exist_ok=True)
-
-    # Support both old and new parameter names
-    issues_val = issues if issues is not None else bugs
-    tasks_val = tasks if tasks is not None else features
-
-    content = f"""# {role.upper()} Iteration {n}
-
-- **Date**: {ts}
-- **Issues Fixed**: {issues_val}
-- **Tasks Progressed**: {tasks_val}
-- **Tests**: {tests}
-- **Notes**: {notes or 'none'}
-"""
     path = iter_dir / f"iter-{n}.md"
+
+    if quiet:
+        content = (
+            f"# Iteration {n}\n\n"
+            f"- **Date**: {ts}\n"
+            f"- **Type**: quiet\n"
+            f"- **Note**: {notes or 'No actionable work available'}\n"
+        )
+    else:
+        # Build work summary from explicit bullets or legacy params
+        work_bullets = []
+        if work:
+            work_bullets = work if isinstance(work, list) else [work]
+        else:
+            issues_val = issues if issues is not None else bugs
+            tasks_val = tasks if tasks is not None else features
+            if issues_val and issues_val != "none":
+                work_bullets.append(f"Issues: {issues_val}")
+            if tasks_val and tasks_val != "none":
+                work_bullets.append(f"Tasks: {tasks_val}")
+            if tests and tests != "n/a":
+                work_bullets.append(f"Tests: {tests}")
+
+        work_lines = "\n".join(f"  - {b}" for b in work_bullets) if work_bullets else "  - none"
+        content = (
+            f"# Iteration {n}\n\n"
+            f"- **Date**: {ts}\n"
+            f"- **Type**: active\n"
+            f"- **Work Summary**:\n"
+            f"{work_lines}\n"
+            f"- **Notes**: {notes or 'none'}\n"
+        )
+
     path.write_text(content, encoding="utf-8")
     print(f"Created {path.relative_to(REPO_ROOT)}")
     return str(path)
@@ -225,11 +247,16 @@ def main():
         except ValueError:
             print(f"ERROR: iteration number must be numeric, got '{pos[1]}'", file=sys.stderr)
             sys.exit(1)
+        is_quiet_flag = opts.get("quiet", False)
+        work_val = opts.get("work")
+        work_list = [w.strip() for w in work_val.split(",")] if isinstance(work_val, str) else None
         log_iteration(pos[0], iter_n,
-                       issues=opts.get("issues", opts.get("bugs", "none")),
-                       tasks=opts.get("tasks", opts.get("features", "none")),
-                       tests=opts.get("tests", "n/a"),
-                       notes=opts.get("notes", ""))
+                       quiet=bool(is_quiet_flag),
+                       work=work_list,
+                       notes=opts.get("notes", ""),
+                       issues=opts.get("issues", opts.get("bugs")),
+                       tasks=opts.get("tasks", opts.get("features")),
+                       tests=opts.get("tests"))
     elif cmd == "cleanup-iterations":
         if not pos:
             print("Usage: cycle.py cleanup-iterations <role> [--keep N]", file=sys.stderr)

@@ -1,21 +1,21 @@
-### Step 7 — Log Iteration (skip on quiet cycles)
+### Step 7 — Log Iteration
 
-If no QA issues were found, no issues were verified, no tasks were tested, and no improvement scan was triggered, this is a **quiet cycle**. Produce no text output — skip silently to Step 9 (Done). The status bar shows the loop is still running.
+Print: `[🦑 HH:MM:SS] Logging iteration...`
 
-Otherwise, print: `[🦑 HH:MM:SS] Logging iteration...`
+**Every cycle writes a log entry** — active or quiet. Use the cycle script:
 
-Create `.squidsquad/qa/iterations/iter-N.md`:
+```bash
+# Active cycle (work was done):
+python references/scripts/cycle.py log-iteration qa [N] \
+  --work "[comma-separated summary of work done]" \
+  --notes "[anything notable]"
 
-```markdown
-# QA Iteration N
+# Quiet cycle (no actionable work):
+python references/scripts/cycle.py log-iteration qa [N] --quiet \
+  --notes "[why quiet, e.g. 'No pending-test items']"
 
-- **Date**: YYYY-MM-DD HH:MM
-- **E2E Tests**: [passed/failed — N tests, X failures / skipped]
-- **Issues Filed**: [list IDs, or "none"]
-- **Issues Verified**: [list IDs, or "none"]
-- **Tasks Verified**: [list IDs, or "none"]
-- **Agent Health**: [list each agent: healthy/stalled/unknown]
-- **Notes**: [anything notable]
+# Clean up old logs (keeps most recent 20)
+python references/scripts/cycle.py cleanup-iterations qa
 ```
 
-After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones. Git history preserves them if ever needed.
+The script writes a unified format with Date, Type (active/quiet), Work Summary, and Notes. Quiet entries are condensed (2-3 lines).

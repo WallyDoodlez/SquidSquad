@@ -55,9 +55,10 @@ def _write_working_state_field(role, field_pattern, new_value):
 
 
 def is_quiet(role):
-    """Check if current cycle was quiet (no iteration log created recently).
+    """Check if current cycle was quiet based on iteration log content.
 
-    Returns exit code 0 if quiet, 1 if non-quiet.
+    Reads the most recent iter file within the interval window and checks
+    the Type field. Returns exit code 0 if quiet, 1 if non-quiet.
     """
     iter_dir = SQUIDSQUAD_DIR / role / "iterations"
     if not iter_dir.exists():
@@ -72,14 +73,38 @@ def is_quiet(role):
 
     cutoff = datetime.now() - timedelta(minutes=interval)
 
+    # Find most recent iter file within the interval window
+    recent = None
+    recent_mtime = None
     for log_file in iter_dir.glob("iter-*.md"):
         mtime = datetime.fromtimestamp(log_file.stat().st_mtime)
-        if mtime > cutoff:
-            print("non-quiet")
-            return False
+        if mtime > cutoff and (recent_mtime is None or mtime > recent_mtime):
+            recent = log_file
+            recent_mtime = mtime
 
-    print("quiet")
-    return True
+    if recent is None:
+        print("quiet")
+        return True
+
+    # Check file content for Type field
+    try:
+        content = recent.read_text(encoding="utf-8")
+        for line in content.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("- **Type**:"):
+                type_val = stripped.split(":", 1)[1].strip().lower()
+                if type_val == "quiet":
+                    print("quiet")
+                    return True
+                else:
+                    print("non-quiet")
+                    return False
+        # Old-format files without Type field — treat as active (non-quiet)
+        print("non-quiet")
+        return False
+    except (IOError, OSError):
+        print("quiet")
+        return True
 
 
 def write_budget(role):
