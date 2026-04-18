@@ -1,7 +1,7 @@
-# SKILL Iteration 12
+# Iteration 12
 
-- **Date**: 2026-04-17 20:36
-- **Issues Fixed**: none
-- **Tasks Progressed**: #475 rework (deeper compression, 9.8% savings)
-- **Tests**: passed (1 pre-existing transient failure)
-- **Notes**: QA rejected #475 at 7.4%, deeper vault-protocol compression achieved 9.8%.
+- **Date**: 2026-04-18 19:03
+- **Type**: active
+- **Work Summary**:
+  - Fixed #1405 (duplicate of #1397 — PR merge gate already in delivery-packaging.md)
+- **Notes**: No code changes needed, fix was already deployed.
