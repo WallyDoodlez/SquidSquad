@@ -47,9 +47,9 @@ Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded
 2. `common/pull-latest` — Step 1
 2b. `pm-specific/checkin` — Step 2: human check-in and input handling
 2c. `pm-specific/testing-and-verification` — Steps 3-6c: E2E, investigate, verify issues/tasks, ship counter
-3. `pm-specific/pr-flow` — Step 6b
-4. `pm-specific/delivery-fallback` — Step 6d
-4c. `pm-specific/post-merge-recompose` — Step 6e: recompose after branch merge
+3. `pm-specific/delivery-fallback` — Step 6d: PM delivery when DM absent
+3b. `pm-specific/post-merge-recompose` — Step 6e: recompose after branch merge
+3c. `pm-specific/pipeline-sentinel` — Step 6f: always-run pipeline health (conflict detection, stall detection, PR status sync)
 4b. `pm-specific/health-check` — Step 7: agent health check
 5. `pm-specific/github-issues` — Step 7b
 5b. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
