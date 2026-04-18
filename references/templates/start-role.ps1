@@ -49,14 +49,14 @@ try { python references/scripts/config.py sync-agents 2>$null } catch {}
 $env:SQUIDSQUAD_ROLE = "{{ROLE}}"
 
 # --- PID lock: prevent double-start ---
-$RoleDir = ".squidsquad/{{ROLE}}"
-$PidFile = "$RoleDir/.pid"
-$StopFile = "$RoleDir/.stop"
-$RestartSentinel = "$RoleDir/.restart"
-$RestartLog = "$RoleDir/restart-log.txt"
-$StateFile = "$RoleDir/current-state"
-$PressureFile = "$RoleDir/context-pressure"
-$HealthFile = "$RoleDir/.health"
+$RoleDir = Join-Path $repoRoot ".squidsquad/{{ROLE}}"
+$PidFile = Join-Path $RoleDir ".pid"
+$StopFile = Join-Path $RoleDir ".stop"
+$RestartSentinel = Join-Path $RoleDir ".restart"
+$RestartLog = Join-Path $RoleDir "restart-log.txt"
+$StateFile = Join-Path $RoleDir "current-state"
+$PressureFile = Join-Path $RoleDir "context-pressure"
+$HealthFile = Join-Path $RoleDir ".health"
 
 if (-not (Test-Path $RoleDir)) { New-Item -ItemType Directory -Path $RoleDir -Force | Out-Null }
 
