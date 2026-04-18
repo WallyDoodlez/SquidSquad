@@ -556,23 +556,27 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 <!-- /sub-skill: improvement-scan -->
 
 <!-- sub-skill: iteration-log -->
-### Step 4 — Log Iteration (skip on quiet cycles)
+### Step 4 — Log Iteration
 
-If no bugs were fixed and no features were progressed this cycle (and no improvement scan was triggered), this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
+Print: `[🦑 HH:MM:SS] Logging iteration...`
 
-Otherwise, print: `[🦑 HH:MM:SS] Logging iteration...`
-
-Use the cycle script to create and clean up logs:
+**Every cycle writes a log entry** — active or quiet. Use the cycle script:
 
 ```bash
-# Create iteration log
+# Active cycle (work was done):
 python references/scripts/cycle.py log-iteration skill [N] \
-  --bugs "[list or none]" --features "[list or none]" \
-  --tests "[passed/failed]" --notes "[anything notable]"
+  --work "[comma-separated summary of work done]" \
+  --notes "[anything notable]"
+
+# Quiet cycle (no actionable work):
+python references/scripts/cycle.py log-iteration skill [N] --quiet \
+  --notes "[why quiet, e.g. 'No approved tasks available']"
 
 # Clean up old logs (keeps most recent 20)
 python references/scripts/cycle.py cleanup-iterations skill
 ```
+
+The script writes a unified format with Date, Type (active/quiet), Work Summary, and Notes. Quiet entries are condensed (2-3 lines).
 <!-- /sub-skill: iteration-log -->
 
 <!-- sub-skill: vault-remember -->
