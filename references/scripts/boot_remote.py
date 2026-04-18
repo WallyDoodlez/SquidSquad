@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """SquidSquad remote agent boot — spawn dead agents in new terminals.
 
-PM is the bootmaster. Detection uses .health file (primary) with PID fallback:
-read each agent's .health file for liveness status. If .health shows dead/error
-or is missing, check .pid as fallback. If agent needs booting and no .stop
-sentinel, spawn a new terminal. After spawning, polls .health for up to 30s
-to confirm the agent started successfully.
+PM is the bootmaster. Detection uses PID as the sole liveness check:
+read each agent's .pid file and verify the process is running via OS-level
+checks (tasklist on Windows, kill -0 on Unix). The .health file is
+informational only (status display, backoff metadata) — it does NOT gate
+boot decisions. If agent needs booting and no .stop sentinel, spawn a new
+terminal. After spawning, polls .health for up to 30s to confirm the agent
+started successfully.
 
 Usage:
     python scripts/boot_remote.py --role <name>   # Boot a single agent
@@ -175,7 +177,10 @@ def _read_health_file(clone_path, role):
 def _needs_boot(role):
     """Determine if an agent needs booting.
 
-    Uses .health file (primary) with PID fallback.
+    Uses PID as the sole liveness check. The .health file is informational
+    only — it does NOT gate boot decisions. PID is OS-level truth and can't
+    lie, unlike .health which can go stale when agents are killed externally.
+
     Returns (needs_boot, reason, clone_path).
     Context pressure restarts are handled by each agent's boot script, not here.
     """
@@ -185,29 +190,27 @@ def _needs_boot(role):
     if _has_stop_sentinel(clone_path, role):
         return False, "explicitly stopped (.stop sentinel)", str(clone_path)
 
-    # Primary: check .health file
+    # Check .health for backoff — wrapper is still running, don't double-boot
     health_status, health_detail = _read_health_file(clone_path, role)
-    if health_status is not None:
-        if health_status in ("alive", "booting", "restarting"):
-            return False, f".health={health_status} (agent running)", str(clone_path)
-        elif health_status == "dead":
-            return True, ".health=dead (wrapper exited)", str(clone_path)
-        elif health_status == "error":
-            detail_msg = f": {health_detail}" if health_detail else ""
-            return True, f".health=error{detail_msg}", str(clone_path)
-        elif health_status == "backoff":
-            # Agent is in crash loop — wrapper is still running, don't double-boot
-            return False, ".health=backoff (wrapper handling restarts)", str(clone_path)
+    if health_status == "backoff":
+        return False, ".health=backoff (wrapper handling restarts)", str(clone_path)
 
-    # Fallback: check PID (old boot scripts without .health)
+    # Primary: PID-based liveness check
     pid = _read_pid_file(clone_path, role)
     if pid is None:
-        return True, "no .health file, no PID file (agent not running)", str(clone_path)
+        return True, "no PID file (agent not running)", str(clone_path)
 
-    if not _is_process_alive(pid):
-        return True, f"no .health file, process dead (PID {pid} not found)", str(clone_path)
+    if _is_process_alive(pid):
+        return False, f"process alive (PID {pid})", str(clone_path)
 
-    return False, f"no .health file, process alive (PID {pid})", str(clone_path)
+    # PID exists but process is dead — update .health to reflect reality
+    health_file = Path(clone_path) / ".squidsquad" / role / ".health"
+    try:
+        health_file.write_text("dead|stale PID detected by boot_remote", encoding="utf-8")
+    except OSError:
+        pass
+
+    return True, f"process dead (PID {pid} not found)", str(clone_path)
 
 
 def _poll_health_after_spawn(clone_path, role, timeout=30):

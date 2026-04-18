@@ -108,35 +108,64 @@ class TestNeedsBoot:
         assert needs is False
         assert ".stop" in reason
 
+    @patch("boot_remote._is_process_alive", return_value=True)
     @patch("boot_remote._get_clone_path")
-    def test_health_alive_skips_boot(self, mock_clone, tmp_path):
+    def test_health_alive_with_pid_alive_skips_boot(self, mock_clone, mock_alive, tmp_path):
+        """PID is primary — .health=alive is informational. PID alive = skip."""
+        mock_clone.return_value = tmp_path
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        (squid / ".health").write_text("alive")
+        (squid / ".pid").write_text("12345")
+        needs, reason, _ = boot_remote._needs_boot("skill")
+        assert needs is False
+        assert "process alive" in reason
+
+    @patch("boot_remote._is_process_alive", return_value=False)
+    @patch("boot_remote._get_clone_path")
+    def test_health_alive_with_pid_dead_needs_boot(self, mock_clone, mock_alive, tmp_path):
+        """PID is primary — .health=alive but PID dead = stale, needs boot."""
+        mock_clone.return_value = tmp_path
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        (squid / ".health").write_text("alive")
+        (squid / ".pid").write_text("12345")
+        needs, reason, _ = boot_remote._needs_boot("skill")
+        assert needs is True
+        assert "process dead" in reason
+
+    @patch("boot_remote._get_clone_path")
+    def test_health_alive_no_pid_needs_boot(self, mock_clone, tmp_path):
+        """.health=alive but no PID file = can't verify, needs boot."""
         mock_clone.return_value = tmp_path
         squid = tmp_path / ".squidsquad" / "skill"
         squid.mkdir(parents=True)
         (squid / ".health").write_text("alive")
         needs, reason, _ = boot_remote._needs_boot("skill")
-        assert needs is False
-        assert "alive" in reason
+        assert needs is True
+        assert "no PID file" in reason
 
     @patch("boot_remote._get_clone_path")
-    def test_health_booting_skips_boot(self, mock_clone, tmp_path):
+    def test_health_booting_no_pid_needs_boot(self, mock_clone, tmp_path):
+        """.health=booting but no PID file = can't verify, needs boot."""
         mock_clone.return_value = tmp_path
         squid = tmp_path / ".squidsquad" / "skill"
         squid.mkdir(parents=True)
         (squid / ".health").write_text("booting")
         needs, reason, _ = boot_remote._needs_boot("skill")
-        assert needs is False
-        assert "booting" in reason
+        assert needs is True
+        assert "no PID file" in reason
 
     @patch("boot_remote._get_clone_path")
-    def test_health_restarting_skips_boot(self, mock_clone, tmp_path):
+    def test_health_restarting_no_pid_needs_boot(self, mock_clone, tmp_path):
+        """.health=restarting but no PID file = can't verify, needs boot."""
         mock_clone.return_value = tmp_path
         squid = tmp_path / ".squidsquad" / "skill"
         squid.mkdir(parents=True)
         (squid / ".health").write_text("restarting")
         needs, reason, _ = boot_remote._needs_boot("skill")
-        assert needs is False
-        assert "restarting" in reason
+        assert needs is True
+        assert "no PID file" in reason
 
     @patch("boot_remote._get_clone_path")
     def test_health_backoff_skips_boot(self, mock_clone, tmp_path):
@@ -149,34 +178,35 @@ class TestNeedsBoot:
         assert "backoff" in reason
 
     @patch("boot_remote._get_clone_path")
-    def test_health_dead_needs_boot(self, mock_clone, tmp_path):
+    def test_health_dead_no_pid_needs_boot(self, mock_clone, tmp_path):
+        """.health=dead with no PID file — needs boot (no PID to verify)."""
         mock_clone.return_value = tmp_path
         squid = tmp_path / ".squidsquad" / "skill"
         squid.mkdir(parents=True)
         (squid / ".health").write_text("dead")
         needs, reason, _ = boot_remote._needs_boot("skill")
         assert needs is True
-        assert "dead" in reason
+        assert "no PID file" in reason
 
     @patch("boot_remote._get_clone_path")
-    def test_health_error_needs_boot(self, mock_clone, tmp_path):
+    def test_health_error_no_pid_needs_boot(self, mock_clone, tmp_path):
+        """.health=error with no PID file — needs boot (no PID to verify)."""
         mock_clone.return_value = tmp_path
         squid = tmp_path / ".squidsquad" / "skill"
         squid.mkdir(parents=True)
         (squid / ".health").write_text("error|gh auth failed")
         needs, reason, _ = boot_remote._needs_boot("skill")
         assert needs is True
-        assert "error" in reason
-        assert "gh auth failed" in reason
+        assert "no PID file" in reason
 
     @patch("boot_remote._get_clone_path")
     def test_no_health_no_pid_needs_boot(self, mock_clone, tmp_path):
+        """No .health, no .pid — agent not running, needs boot."""
         mock_clone.return_value = tmp_path
         (tmp_path / ".squidsquad" / "skill").mkdir(parents=True)
         needs, reason, _ = boot_remote._needs_boot("skill")
         assert needs is True
-        assert "no .health file" in reason
-        assert "no PID" in reason
+        assert "no PID file" in reason
 
     @patch("boot_remote._is_process_alive", return_value=True)
     @patch("boot_remote._get_clone_path")
