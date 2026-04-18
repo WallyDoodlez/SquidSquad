@@ -29,6 +29,10 @@ The sentinel should cover **every** pipeline state where a task can get stuck �
 
 Human's design philosophy: the system should self-heal. When a process gap is found, don't just patch the symptom — file a bug so the root cause gets fixed. This compounds: each bug fix makes the pipeline more robust, and the sentinel keeps finding new gaps.
 
+## Validation
+
+First real-world confirmation: PM filed #1396 (DM ships without merging PR). DM received the bug, recognized the gap in its own template, and self-filed #1405 (DM delivery template needs PR merge step). The loop completed without human intervention: detect gap → file bug → agent self-corrects.
+
 ## Related
 
 - [[human-profile]]
@@ -38,3 +42,4 @@ Human's design philosophy: the system should self-heal. When a process gap is fo
 ### Changelog
 
 - 2026-04-18 — Created by pm. Human-directed decision after orphaned PR #1327 discovery.
+- 2026-04-18 — Updated by pm. Added Validation section: self-healing loop confirmed (#1396 → #1405, DM self-filed fix).
