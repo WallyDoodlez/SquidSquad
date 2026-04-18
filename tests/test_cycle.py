@@ -92,6 +92,14 @@ class TestCounters:
             result = cycle.inc_counter("skill")
         assert result == 3
 
+    def test_inc_counter_prints_only_new_value(self, tmp_path, capsys):
+        """inc_counter should print exactly one line: the new value (not old+new)."""
+        self._setup_working_state(tmp_path, "skill", counter=5)
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            cycle.inc_counter("skill")
+        output = capsys.readouterr().out.strip()
+        assert output == "6"
+
     def test_reset_counter(self, tmp_path, capsys):
         self._setup_working_state(tmp_path, "skill", counter=5)
         with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):

@@ -71,15 +71,19 @@ def _get_working_state_path(role):
     return SQUIDSQUAD_DIR / role / "working-state.md"
 
 
-def get_counter(role):
-    """Read quiet cycle counter from working-state.md."""
+def _get_counter_value(role):
+    """Read quiet cycle counter value without printing."""
     ws_path = _get_working_state_path(role)
     if not ws_path.exists():
-        print("0")
         return 0
     text = ws_path.read_text(encoding="utf-8")
     match = re.search(r'Quiet Cycle Counter\*\*:\s*(\d+)', text)
-    count = int(match.group(1)) if match else 0
+    return int(match.group(1)) if match else 0
+
+
+def get_counter(role):
+    """Read quiet cycle counter from working-state.md."""
+    count = _get_counter_value(role)
     print(str(count))
     return count
 
@@ -101,8 +105,7 @@ def set_counter(role, value):
 
 def inc_counter(role):
     """Increment quiet cycle counter."""
-    count = get_counter(role)
-    # get_counter already printed, suppress duplicate
+    count = _get_counter_value(role)
     new_count = count + 1
     set_counter(role, new_count)
     print(str(new_count))
