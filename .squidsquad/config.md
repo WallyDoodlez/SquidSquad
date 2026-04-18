@@ -6,7 +6,7 @@
 
 ## Agents
 
-- **Dev Agents**: qa, skill
+- **Dev Agents**: boot, qa, skill
 - **PM**: always present
 - **QA**: always present
 - **DM**: present

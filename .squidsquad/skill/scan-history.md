@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-18 09:41
+
+- **Files scanned**: references/scripts/cycle.py, references/scripts/vault_remember.py, tests/test_git_ops.py
+- **Findings**: #1292 (cycle.py inc_counter double-prints old+new value to stdout)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-17 17:02
 
 - **Files scanned**: references/scripts/boot_remote.py, references/scripts/git_ops.py, tests/test_start_scripts.py
