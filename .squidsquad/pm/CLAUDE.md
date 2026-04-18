@@ -400,47 +400,6 @@ For each result:
 When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last Bump` counter in `config.md`. If DM is present, it handles version bumps. If DM is absent, PM handles version bumps in Step 6d.
 <!-- /sub-skill: testing-and-verification -->
 
-<!-- sub-skill: pr-flow -->
-### Step 6b — Monitor PRs (if PR Flow enabled)
-
-If `PR Flow: yes` in `config.md`:
-
-Print: `[🦑 HH:MM:SS] Checking open PRs...`
-
-List open SquidSquad PRs:
-```bash
-gh pr list --search "squidsquad/" --state all --json number,title,state,mergedAt,url,mergeable --limit 20
-```
-
-For each PR:
-- **If merged**: find the corresponding tracker item (parse the feature/bug ID from the PR title). Update status to `Pending Ship`. Append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm**: PR [URL] merged by human. Status → Pending Ship.` Apply the same `delivery: skip` logic as Step 6 item 3 if the feature is internal-only.
-- **If closed without merge**: update status back to `In Progress`. Append Discussion entry with note.
-- **If open with merge conflicts** (`mergeable` is `CONFLICTING`): transition the associated task back to `In Progress`. Append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm**: PR #[N] has merge conflicts. Routing back to [role] to rebase. Status → In Progress.`
-- **If open with new comments**: fetch comments via `gh pr view [N] --comments`. Append any new comments to the tracker Discussion: `> [YYYY-MM-DD HH:MM] **pm**: PR comment from [author]: [summary]`
-- **If open with "changes requested" review**: update status back to `In Progress`. Append Discussion entry with the requested changes.
-
-If `PR Flow: no`, skip this step.
-
-**Auto-merge for pending-ship tasks** (runs regardless of PR Flow setting):
-
-When a task transitions to `Pending Ship` and DM **is** present (`.squidsquad/dm/` exists), PM auto-merges the PR before DM handles delivery:
-
-Check auto-merge eligibility (same rules as delivery-fallback Step 0):
-- `Auto Merge: yes` AND `Branch Workflow: yes`
-- Item is `type:task` (not `type:issue`)
-- Item does NOT have `merge:manual` label
-
-If eligible, find and merge the PR:
-```bash
-gh pr list --search "squidsquad/[role]/[NUMBER]" --state open --json number,headRefName --limit 1
-python references/scripts/git_ops.py pr-merge [PR_NUMBER]
-```
-
-Handle results same as delivery-fallback: success → proceed, conflict → route back to dev, failure → fall back to manual.
-
-This ensures PRs are merged before DM picks up delivery, regardless of whether DM or PM handles the shipping transition.
-<!-- /sub-skill: pr-flow -->
-
 ### Step 6c — Increment Ship Counter for Closed Issues
 
 When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last Bump` counter in `config.md`. If DM is present, it handles version bumps. If DM is absent, PM handles version bumps in Step 6d.
@@ -566,6 +525,58 @@ For each merged branch that touched files under `references/`:
 
 If no merged branches touched `references/`, skip silently.
 <!-- /sub-skill: post-merge-recompose -->
+
+<!-- sub-skill: pipeline-sentinel -->
+### Step 6f — Pipeline Sentinel (always runs)
+
+This step runs **every cycle regardless of QA presence**. It monitors the ticket pipeline for stalls, conflicts, and unmerged work.
+
+Print: `[🦑 HH:MM:SS] Running pipeline sentinel...`
+
+Write status bar: `python references/scripts/cycle.py status-bar [ROLE] "verifying" "pipeline-sentinel — Checking pipeline health..."`
+
+**1. PR Conflict Detection**
+
+Check Branch Workflow setting:
+```bash
+python references/scripts/config.py get branch-workflow
+```
+
+If `yes`, list open SquidSquad PRs and check for conflicts:
+```bash
+gh pr list --search "squidsquad/" --state open --json number,title,headRefName,mergeable --limit 20
+```
+
+For each PR with `mergeable` = `CONFLICTING`:
+- Parse the issue number from the branch name (e.g., `squidsquad/skill/475` → `#475`)
+- Comment on the issue: `python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "PR #[PR] has merge conflicts. Dev agent: rebase onto main."`
+- If the task is at `pending-ship` or `pending-test`, transition back to `in-progress`:
+  ```bash
+  python references/scripts/tracker.py transition [NUMBER] [current-status] in-progress --role pm-lead
+  ```
+
+**2. Stall Detection**
+
+Query all open SquidSquad items:
+```bash
+gh issue list --label squidsquad --state open --json number,title,labels,updatedAt --limit 50
+```
+
+For each item, check time since last update. If stalled beyond **90 minutes** (3 cycles at 30-min interval):
+- `pending-ship` with unmerged PR: nudge dev agent to merge — `"Task at pending-ship for [N] min. Dev agent: merge PR and mark shipped."`
+- `pending-test` with no QA activity: nudge QA — `"Task at pending-test for [N] min. QA: please verify."`
+- `in-progress` with no recent Discussion comments: nudge assigned agent — `"Task in-progress for [N] min with no recent updates."`
+
+**Max 2 nudges per cycle** to avoid noise. Only nudge items not already nudged in the last 90 minutes (check Discussion for recent PM nudge comments).
+
+**3. PR Status Sync**
+
+For each open PR (from the conflict check query above):
+- **If merged**: find the tracker item, update to `Pending Ship` if not already. Comment: `"PR merged. Status → Pending Ship."`
+- **If closed without merge**: update to `In Progress`. Comment: `"PR closed without merge. Status → In Progress."`
+
+If Branch Workflow is `no`, skip this entire step silently.
+<!-- /sub-skill: pipeline-sentinel -->
 
 <!-- sub-skill: health-check -->
 ### Step 7 — Agent Health Check
