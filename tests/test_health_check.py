@@ -136,8 +136,9 @@ class TestParseHealthFile:
 
 class TestCheckAgentHealth:
     def _setup_agent(self, tmp_path, role, state_text=None, state_age_seconds=0,
-                     stop=False, working_state=None, health_text=None):
+                     stop=False, working_state=None, health_text=None, pid=None):
         """Create a mock agent directory structure."""
+        import os as _os
         squid = tmp_path / ".squidsquad" / role
         squid.mkdir(parents=True, exist_ok=True)
 
@@ -148,9 +149,8 @@ class TestCheckAgentHealth:
             state_file = squid / "current-state"
             state_file.write_text(state_text)
             if state_age_seconds > 0:
-                import os
                 mtime = time.time() - state_age_seconds
-                os.utime(state_file, (mtime, mtime))
+                _os.utime(state_file, (mtime, mtime))
 
         if working_state:
             (squid / "working-state.md").write_text(working_state)
@@ -158,35 +158,75 @@ class TestCheckAgentHealth:
         if health_text is not None:
             (squid / ".health").write_text(health_text)
 
+        if pid is not None:
+            (squid / ".pid").write_text(str(pid))
+
         return tmp_path
 
     # --- .health file primary detection ---
 
-    def test_health_alive_with_recent_state(self, tmp_path):
+    @patch.object(health_check, "_is_process_alive", return_value=True)
+    def test_health_alive_with_recent_state(self, mock_alive, tmp_path):
         clone = self._setup_agent(tmp_path, "skill",
                                   state_text="idle|Waiting...",
-                                  health_text="alive")
+                                  health_text="alive", pid=12345)
         result = health_check.check_agent_health("skill", clone, 30)
         assert result["health"] == "healthy"
         assert result["health_source"] == "health-file"
         assert result["health_file_status"] == "alive"
 
-    def test_health_alive_but_stale_state(self, tmp_path):
+    @patch.object(health_check, "_is_process_alive", return_value=True)
+    def test_health_alive_but_stale_state(self, mock_alive, tmp_path):
         clone = self._setup_agent(tmp_path, "skill",
                                   state_text="idle|",
                                   state_age_seconds=3700,
-                                  health_text="alive")
+                                  health_text="alive", pid=12345)
         result = health_check.check_agent_health("skill", clone, 30)
         assert result["health"] == "stalled"
         assert result["health_source"] == "health-file"
         assert "stale" in result["reason"]
 
-    def test_health_alive_no_state_yet(self, tmp_path):
+    @patch.object(health_check, "_is_process_alive", return_value=True)
+    def test_health_alive_no_state_yet(self, mock_alive, tmp_path):
         clone = self._setup_agent(tmp_path, "skill",
-                                  health_text="alive")
+                                  health_text="alive", pid=12345)
         result = health_check.check_agent_health("skill", clone, 30)
         assert result["health"] == "healthy"
         assert "freshly booted" in result["reason"]
+
+    # --- PID cross-check tests ---
+
+    @patch.object(health_check, "_is_process_alive", return_value=False)
+    def test_health_alive_but_pid_dead(self, mock_alive, tmp_path):
+        """When .health=alive but PID is dead, agent should be stalled."""
+        clone = self._setup_agent(tmp_path, "skill",
+                                  state_text="idle|Waiting...",
+                                  health_text="alive", pid=99999)
+        result = health_check.check_agent_health("skill", clone, 30)
+        assert result["health"] == "stalled"
+        assert "PID 99999 is dead" in result["reason"]
+        health_file = tmp_path / ".squidsquad" / "skill" / ".health"
+        assert "dead" in health_file.read_text(encoding="utf-8")
+
+    def test_health_alive_but_no_pid_file(self, tmp_path):
+        """When .health=alive but no .pid file exists, cannot verify liveness."""
+        clone = self._setup_agent(tmp_path, "skill",
+                                  state_text="idle|Waiting...",
+                                  health_text="alive")
+        result = health_check.check_agent_health("skill", clone, 30)
+        assert result["health"] == "stalled"
+        assert "no .pid file" in result["reason"]
+
+    @patch.object(health_check, "_is_process_alive", return_value=False)
+    def test_pid_dead_autocorrects_health_file(self, mock_alive, tmp_path):
+        """When PID is dead, .health file is auto-corrected to 'dead'."""
+        clone = self._setup_agent(tmp_path, "skill",
+                                  state_text="idle|",
+                                  health_text="alive", pid=11111)
+        health_check.check_agent_health("skill", clone, 30)
+        health_file = tmp_path / ".squidsquad" / "skill" / ".health"
+        content = health_file.read_text(encoding="utf-8")
+        assert content.startswith("dead")
 
     def test_health_booting(self, tmp_path):
         clone = self._setup_agent(tmp_path, "skill",
@@ -267,10 +307,11 @@ class TestCheckAgentHealth:
         assert result["health"] == "unknown"
         assert "does not exist" in result["reason"]
 
-    def test_task_extracted_from_working_state(self, tmp_path):
+    @patch.object(health_check, "_is_process_alive", return_value=True)
+    def test_task_extracted_from_working_state(self, mock_alive, tmp_path):
         clone = self._setup_agent(tmp_path, "skill",
                                   state_text="implementing|#42",
-                                  health_text="alive",
+                                  health_text="alive", pid=12345,
                                   working_state="# Working State\n\n- **Task**: #42\n")
         result = health_check.check_agent_health("skill", clone, 30)
         assert result["task"] == "#42"

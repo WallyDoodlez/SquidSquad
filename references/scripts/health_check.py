@@ -19,7 +19,10 @@ Exit codes:
 
 import io
 import json
+import os
+import platform
 import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -128,6 +131,36 @@ def _parse_working_state_task(text):
     return "unknown"
 
 
+def _read_pid_file(squid_dir):
+    """Read PID from .squidsquad/{role}/.pid. Returns int or None."""
+    pid_file = squid_dir / ".pid"
+    if not pid_file.exists():
+        return None
+    try:
+        content = pid_file.read_text(encoding="utf-8").strip()
+        return int(content) if content else None
+    except (ValueError, OSError):
+        return None
+
+
+def _is_process_alive(pid):
+    """Check if a process with the given PID is still running."""
+    if pid is None:
+        return False
+    try:
+        if platform.system().lower() == "windows":
+            result = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+                capture_output=True, text=True, check=False,
+            )
+            return str(pid) in result.stdout
+        else:
+            os.kill(pid, 0)
+            return True
+    except (OSError, ProcessLookupError, PermissionError):
+        return False
+
+
 def _parse_health_file(text):
     """Parse .health file content → (status, detail).
 
@@ -229,27 +262,51 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
         result["health_file_detail"] = health_detail
 
         if health_status == "alive":
-            # .health says alive — trust it for liveness, use current-state for staleness
+            # PID cross-check: .health can go stale if process was killed externally
+            pid = _read_pid_file(squid)
+            pid_alive = _is_process_alive(pid)
+            result["pid"] = pid
+
+            if not pid_alive:
+                # PID is dead — agent is not actually alive regardless of .health
+                result["health"] = STALLED
+                if pid is not None:
+                    result["reason"] = (
+                        f".health=alive but PID {pid} is dead — stale .health file"
+                    )
+                else:
+                    result["reason"] = (
+                        ".health=alive but no .pid file — cannot verify liveness"
+                    )
+                # Auto-correct stale .health to 'dead'
+                try:
+                    health_file.write_text("dead|stale - corrected by health_check\n",
+                                           encoding="utf-8")
+                except OSError:
+                    pass
+                return result
+
+            # PID is alive — check current-state staleness
             stale_threshold = interval_minutes * 2
             if state_mtime is not None:
                 elapsed_minutes = int((now - state_mtime) / 60)
                 if elapsed_minutes <= stale_threshold:
                     result["health"] = HEALTHY
                     result["reason"] = (
-                        f".health=alive, active {elapsed_minutes}m ago "
+                        f"PID {pid} alive, active {elapsed_minutes}m ago "
                         f"(threshold {stale_threshold}m)"
                     )
                 else:
-                    # .health says alive but current-state is stale — agent may be stuck
+                    # PID alive but current-state is stale — agent may be stuck
                     result["health"] = STALLED
                     result["reason"] = (
-                        f".health=alive but current-state stale "
+                        f"PID {pid} alive but current-state stale "
                         f"({elapsed_minutes}m ago, threshold {stale_threshold}m)"
                     )
             else:
-                # .health=alive but no current-state yet (agent just booted)
+                # PID alive but no current-state yet (agent just booted)
                 result["health"] = HEALTHY
-                result["reason"] = ".health=alive (no current-state yet — freshly booted)"
+                result["reason"] = f"PID {pid} alive (no current-state yet — freshly booted)"
 
         elif health_status == "booting":
             result["health"] = HEALTHY
