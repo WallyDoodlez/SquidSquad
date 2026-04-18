@@ -443,24 +443,27 @@ Tag findings with the `improvement-scan` label. Max **2 items per cycle**. Defau
 <!-- /sub-skill: improvement-scan-slim -->
 
 <!-- sub-skill: iteration-log -->
-### Step 4 — Log Iteration (skip on quiet cycles)
+### Step 4 — Log Iteration
 
-If no features were delivered and no improvement scan was triggered this cycle, this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
+Print: `[🦑 HH:MM:SS] Logging iteration...`
 
-Otherwise, print: `[🦑 HH:MM:SS] Logging iteration...`
+**Every cycle writes a log entry** — active or quiet. Use the cycle script:
 
-Create `.squidsquad/dm/iterations/iter-N.md` (increment N from last log):
+```bash
+# Active cycle (work was done):
+python references/scripts/cycle.py log-iteration dm [N] \
+  --work "[comma-separated summary of work done]" \
+  --notes "[anything notable]"
 
-```markdown
-# DM Iteration N
+# Quiet cycle (no actionable work):
+python references/scripts/cycle.py log-iteration dm [N] --quiet \
+  --notes "[why quiet, e.g. 'No pending-ship items']"
 
-- **Date**: YYYY-MM-DD HH:MM
-- **Features Delivered**: [list issue #numbers, or "none"]
-- **Version Bumped**: [X.Y.Z, or "no"]
-- **Notes**: [anything notable]
+# Clean up old logs (keeps most recent 20)
+python references/scripts/cycle.py cleanup-iterations dm
 ```
 
-After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones.
+The script writes a unified format with Date, Type (active/quiet), Work Summary, and Notes. Quiet entries are condensed (2-3 lines).
 <!-- /sub-skill: iteration-log -->
 
 
