@@ -1,0 +1,324 @@
+"""Tests for model_router.py — multi-model subagent routing."""
+
+import json
+import os
+import sys
+import textwrap
+from pathlib import Path
+from unittest.mock import patch, MagicMock
+
+import pytest
+
+# Add scripts dir to path for imports
+SCRIPT_DIR = Path(__file__).resolve().parent.parent / "references" / "scripts"
+sys.path.insert(0, str(SCRIPT_DIR))
+
+import model_router
+
+
+# ---------------------------------------------------------------------------
+# Config parsing
+# ---------------------------------------------------------------------------
+
+class TestParseModelRouting:
+    def test_parses_model_routing_section(self):
+        config = textwrap.dedent("""\
+        ## Model Routing
+
+        - **Default Model**: claude
+        - **Research Model**: gpt-5.2
+        - **API Timeout Seconds**: 120
+        """)
+        result = model_router._parse_model_routing(config)
+        assert result["default-model"] == "claude"
+        assert result["research-model"] == "gpt-5.2"
+        assert result["api-timeout-seconds"] == "120"
+
+    def test_missing_section_returns_empty(self):
+        config = "## Other Section\n- **Foo**: bar\n"
+        result = model_router._parse_model_routing(config)
+        assert result == {}
+
+    def test_none_config_returns_empty(self):
+        result = model_router._parse_model_routing(None)
+        assert result == {}
+
+
+class TestGetModelForTask:
+    @patch("model_router._read_config")
+    def test_claude_locked_comprehension(self, mock_config):
+        mock_config.return_value = "## Model Routing\n- **Comprehension Model**: gpt-5.2\n"
+        assert model_router.get_model_for_task("comprehension") == "claude"
+
+    @patch("model_router._read_config")
+    def test_claude_locked_qa_execution(self, mock_config):
+        mock_config.return_value = "## Model Routing\n- **QA Execution Model**: gpt-5.2\n"
+        assert model_router.get_model_for_task("qa-execution") == "claude"
+
+    @patch("model_router._read_config")
+    def test_research_reads_config(self, mock_config):
+        mock_config.return_value = "## Model Routing\n- **Research Model**: gpt-5.2\n- **Default Model**: claude\n"
+        assert model_router.get_model_for_task("research") == "gpt-5.2"
+
+    @patch("model_router._read_config")
+    def test_defaults_to_default_model(self, mock_config):
+        mock_config.return_value = "## Model Routing\n- **Default Model**: claude\n"
+        assert model_router.get_model_for_task("research") == "claude"
+
+    @patch("model_router._read_config")
+    def test_missing_config_defaults_claude(self, mock_config):
+        mock_config.return_value = None
+        assert model_router.get_model_for_task("research") == "claude"
+
+
+class TestGetTimeout:
+    @patch("model_router._read_config")
+    def test_reads_timeout(self, mock_config):
+        mock_config.return_value = "## Model Routing\n- **API Timeout Seconds**: 60\n"
+        assert model_router.get_timeout() == 60
+
+    @patch("model_router._read_config")
+    def test_default_timeout(self, mock_config):
+        mock_config.return_value = "## Other\n"
+        assert model_router.get_timeout() == 120
+
+
+# ---------------------------------------------------------------------------
+# Security — 4 layers
+# ---------------------------------------------------------------------------
+
+class TestPathSandbox:
+    def test_repo_path_allowed(self):
+        path = str(model_router.REPO_ROOT / "README.md")
+        assert model_router._is_path_in_sandbox(path) is True
+
+    def test_parent_dir_blocked(self):
+        path = str(model_router.REPO_ROOT.parent / "etc" / "passwd")
+        assert model_router._is_path_in_sandbox(path) is False
+
+    def test_relative_escape_blocked(self):
+        # ../../etc/passwd resolved should be outside repo
+        path = str(model_router.REPO_ROOT / ".." / ".." / "etc" / "passwd")
+        assert model_router._is_path_in_sandbox(path) is False
+
+
+class TestSensitiveFiles:
+    def test_env_blocked(self):
+        assert model_router._is_sensitive_file(".env") is True
+
+    def test_env_local_blocked(self):
+        assert model_router._is_sensitive_file(".env.local") is True
+
+    def test_key_file_blocked(self):
+        assert model_router._is_sensitive_file("server.key") is True
+
+    def test_pem_file_blocked(self):
+        assert model_router._is_sensitive_file("cert.pem") is True
+
+    def test_git_config_blocked(self):
+        path = str(model_router.REPO_ROOT / ".git" / "config")
+        assert model_router._is_sensitive_file(path) is True
+
+    def test_normal_file_allowed(self):
+        assert model_router._is_sensitive_file("README.md") is False
+
+    def test_python_file_allowed(self):
+        assert model_router._is_sensitive_file("model_router.py") is False
+
+
+class TestToolWhitelist:
+    def test_read_whitelisted(self):
+        assert "read" in model_router.TOOL_REGISTRY
+
+    def test_grep_whitelisted(self):
+        assert "grep" in model_router.TOOL_REGISTRY
+
+    def test_glob_whitelisted(self):
+        assert "glob" in model_router.TOOL_REGISTRY
+
+    def test_bash_not_available(self):
+        result = model_router._handle_tool_call("bash", {"command": "ls"})
+        assert "not available" in result
+
+    def test_write_not_available(self):
+        result = model_router._handle_tool_call("write", {"path": "x", "content": "y"})
+        assert "not available" in result
+
+
+# ---------------------------------------------------------------------------
+# Tool implementations
+# ---------------------------------------------------------------------------
+
+class TestToolRead:
+    def test_reads_existing_file(self):
+        path = str(model_router.REPO_ROOT / "README.md")
+        result = model_router._tool_read({"file_path": path})
+        assert "ERROR" not in result
+        assert len(result) > 0
+
+    def test_rejects_path_outside_sandbox(self):
+        result = model_router._tool_read({"file_path": "/etc/passwd"})
+        assert "ERROR" in result
+        assert "boundary" in result
+
+    def test_rejects_sensitive_file(self):
+        # Create a temp .env to test
+        env_path = str(model_router.REPO_ROOT / ".env")
+        result = model_router._tool_read({"file_path": env_path})
+        assert "ERROR" in result
+        assert "sensitive" in result.lower() or "denied" in result.lower()
+
+    def test_nonexistent_file(self):
+        path = str(model_router.REPO_ROOT / "nonexistent_file_abc123.txt")
+        result = model_router._tool_read({"file_path": path})
+        assert "ERROR" in result
+        assert "not found" in result.lower()
+
+
+class TestToolGlob:
+    def test_finds_python_files(self):
+        result = model_router._tool_glob({"pattern": "**/*.py", "path": str(model_router.REPO_ROOT / "references" / "scripts")})
+        assert "model_router.py" in result
+
+    def test_rejects_path_outside_sandbox(self):
+        result = model_router._tool_glob({"pattern": "*.py", "path": "/etc"})
+        assert "ERROR" in result
+
+
+# ---------------------------------------------------------------------------
+# Prompt assembly
+# ---------------------------------------------------------------------------
+
+class TestPromptAssembly:
+    def test_loads_research_template(self):
+        template = model_router._load_prompt_template("research")
+        assert template is not None
+        assert "research" in template.lower() or "analyze" in template.lower()
+
+    def test_loads_discussion_prep_template(self):
+        template = model_router._load_prompt_template("discussion-prep")
+        assert template is not None
+
+    def test_loads_test_plan_template(self):
+        template = model_router._load_prompt_template("test-plan")
+        assert template is not None
+
+    def test_loads_improvement_scan_template(self):
+        template = model_router._load_prompt_template("improvement-scan")
+        assert template is not None
+
+    def test_unknown_task_returns_none(self):
+        template = model_router._load_prompt_template("unknown-task")
+        assert template is None
+
+    def test_assemble_substitutes_variables(self):
+        prompt = model_router.assemble_prompt(
+            "research", "FEAT-TEST-001", "", "Test context"
+        )
+        assert "FEAT-TEST-001" in prompt
+        assert "Test context" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Route logic
+# ---------------------------------------------------------------------------
+
+class TestRoute:
+    @patch("model_router._read_config")
+    def test_claude_config_returns_1(self, mock_config):
+        """All-claude config should exit 1 (use Agent tool)."""
+        mock_config.return_value = "## Model Routing\n- **Default Model**: claude\n"
+        code = model_router.route("research", "TEST", "", "/tmp/out.md", "test")
+        assert code == 1
+
+    @patch("model_router._read_config")
+    def test_comprehension_always_returns_1(self, mock_config):
+        """Comprehension is locked to claude regardless of config."""
+        mock_config.return_value = "## Model Routing\n- **Comprehension Model**: gpt-5.2\n"
+        code = model_router.route("comprehension", "TEST", "", "/tmp/out.md", "test")
+        assert code == 1
+
+    @patch("model_router._read_config")
+    def test_qa_execution_always_returns_1(self, mock_config):
+        """QA execution is locked to claude regardless of config."""
+        mock_config.return_value = "## Model Routing\n- **QA Execution Model**: gpt-5.2\n"
+        code = model_router.route("qa-execution", "TEST", "", "/tmp/out.md", "test")
+        assert code == 1
+
+    @patch("model_router._read_config")
+    def test_missing_api_key_returns_2(self, mock_config, monkeypatch):
+        """Missing API key should exit 2."""
+        mock_config.return_value = "## Model Routing\n- **Research Model**: gpt-5.2\n- **Default Model**: claude\n"
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        code = model_router.route("research", "TEST", "", "/tmp/out.md", "test")
+        assert code == 2
+
+
+# ---------------------------------------------------------------------------
+# Provider manifest
+# ---------------------------------------------------------------------------
+
+class TestProviderManifest:
+    def test_openai_manifest_exists(self):
+        manifest_path = model_router.PROVIDERS_DIR / "openai" / "manifest.yaml"
+        assert manifest_path.exists()
+
+    def test_openai_manifest_loads(self):
+        name, manifest = model_router._load_provider_manifest("gpt-5.2")
+        assert name == "openai"
+        assert manifest is not None
+        assert "auth" in manifest
+        assert manifest["auth"]["env_var"] == "OPENAI_API_KEY"
+
+    def test_unknown_model_returns_none(self):
+        name, manifest = model_router._load_provider_manifest("unknown-model-xyz")
+        assert name is None
+        assert manifest is None
+
+
+# ---------------------------------------------------------------------------
+# OpenAI tool definitions
+# ---------------------------------------------------------------------------
+
+class TestOpenAIToolDefs:
+    def test_three_tools_defined(self):
+        assert len(model_router.OPENAI_TOOL_DEFS) == 3
+
+    def test_all_function_type(self):
+        for tool in model_router.OPENAI_TOOL_DEFS:
+            assert tool["type"] == "function"
+
+    def test_tool_names(self):
+        names = {t["function"]["name"] for t in model_router.OPENAI_TOOL_DEFS}
+        assert names == {"read", "grep", "glob"}
+
+    def test_no_shell_tools(self):
+        names = {t["function"]["name"] for t in model_router.OPENAI_TOOL_DEFS}
+        assert "bash" not in names
+        assert "shell" not in names
+        assert "exec" not in names
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+class TestCLI:
+    def test_help(self):
+        """--help should not crash."""
+        with pytest.raises(SystemExit) as exc:
+            model_router.main.__wrapped__ if hasattr(model_router.main, '__wrapped__') else None
+            sys.argv = ["model_router.py", "--help"]
+            model_router.main()
+        assert exc.value.code == 0
+
+
+# ---------------------------------------------------------------------------
+# No shell=True
+# ---------------------------------------------------------------------------
+
+class TestNoShellTrue:
+    def test_no_shell_true_in_source(self):
+        """model_router.py must not use shell=True (security layer 3)."""
+        source = (model_router.SCRIPT_DIR / "model_router.py").read_text(encoding="utf-8")
+        assert "shell=True" not in source

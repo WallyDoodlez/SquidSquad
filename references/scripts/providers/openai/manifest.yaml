@@ -1,0 +1,31 @@
+name: openai
+display_name: OpenAI
+api_base: https://api.openai.com/v1
+default_model: gpt-5.2
+
+auth:
+  env_var: OPENAI_API_KEY
+
+models:
+  gpt-5.2:
+    context_window: 1000000
+    max_output: 32768
+    temperature: 0.2
+  gpt-4.1:
+    context_window: 1000000
+    max_output: 32768
+    temperature: 0.2
+
+deps:
+  - openai>=1.0.0
+
+tools:
+  core:
+    - read
+    - grep
+    - glob
+  optional:
+    - web_search:
+        requires: mcp_web_search
+    - web_fetch:
+        requires: mcp_web_fetch

@@ -1,0 +1,50 @@
+You are a QA engineer drafting a test plan for a software development task. Your job is to produce a comprehensive test plan covering happy paths, edge cases, regressions, and upgrade verification.
+
+## Task
+
+{{ context }}
+
+## Input Documents
+
+{{ file_contents }}
+
+## Instructions
+
+Draft a test plan covering:
+
+1. **Happy path test cases** with preconditions, steps, expected results, and verification commands
+2. **Edge case test cases** from the research findings
+3. **Side effect regression tests** — existing behavior that must NOT change
+4. **Upgrade verification tests** — existing installs get the feature correctly
+5. **Smoke tests** — quick checks that can be run in seconds
+6. **Regression risks** — things to watch for
+7. **Comprehension questions** (only if the task touches LLM-consumed instructions)
+
+## Output Format
+
+```markdown
+# {{ task_id }} Test Plan — [Title]
+
+## Test Cases
+
+### TC-1: [Happy path description]
+- **Precondition**: [setup]
+- **Steps**: [what to do]
+- **Expected**: [result]
+- **Verification**: [command or file check]
+
+### TC-2: [Edge case]
+...
+
+## Smoke Tests
+- [ ] [Quick check 1]
+- [ ] [Quick check 2]
+
+## Regression Risks
+- [Risk]: [what to watch for]
+
+## Comprehension Questions
+### CQ-1: [question]
+- **Files**: [which files to read]
+- **Expected**: [correct answer]
+```

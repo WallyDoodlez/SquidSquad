@@ -68,6 +68,15 @@ FIELD_MAP = {
     "mandatory-human-approval": ("Mandatory Human Approval", "Enabled"),
     "diagnostics": ("Diagnostics", "Enabled"),
     "upstream-reporting": ("Diagnostics", "Upstream Reporting"),
+    "default-model": ("Model Routing", "Default Model"),
+    "research-model": ("Model Routing", "Research Model"),
+    "discussion-prep-model": ("Model Routing", "Discussion Prep Model"),
+    "test-plan-model": ("Model Routing", "Test Plan Model"),
+    "qa-execution-model": ("Model Routing", "QA Execution Model"),
+    "comprehension-model": ("Model Routing", "Comprehension Model"),
+    "improvement-scan-model": ("Model Routing", "Improvement Scan Model"),
+    "fallback-model": ("Model Routing", "Fallback Model"),
+    "api-timeout-seconds": ("Model Routing", "API Timeout Seconds"),
 }
 
 
