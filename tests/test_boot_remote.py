@@ -53,6 +53,51 @@ class TestIsProcessAlive:
         assert boot_remote._is_process_alive(99999999) is False
 
 
+class TestParseLocalConfig:
+    def test_shared_filesystem_takes_priority(self, tmp_path):
+        """When ~/.squidsquad/clones/ exists, it takes priority over .local-config."""
+        shared_clones = tmp_path / "home" / ".squidsquad" / "clones"
+        shared_clones.mkdir(parents=True)
+        (shared_clones / "skill").write_text("/path/to/skill/clone")
+        (shared_clones / "pm").write_text("/path/to/pm/clone")
+
+        with patch("pathlib.Path.home", return_value=tmp_path / "home"):
+            result = boot_remote._parse_local_config()
+        assert "skill" in result
+        assert "pm" in result
+        assert result["skill"] == Path("/path/to/skill/clone")
+
+    def test_falls_back_to_local_config(self, tmp_path):
+        """When shared clones dir doesn't exist, falls back to .local-config."""
+        local_config = tmp_path / ".local-config"
+        local_config.write_text("- **skill**: /path/to/skill\n")
+
+        with patch("pathlib.Path.home", return_value=tmp_path / "nonexistent"), \
+             patch.object(boot_remote, "LOCAL_CONFIG", local_config):
+            result = boot_remote._parse_local_config()
+        assert "skill" in result
+        assert result["skill"] == Path("/path/to/skill")
+
+    def test_missing_both_returns_empty(self, tmp_path):
+        """When neither shared clones nor .local-config exist, returns empty."""
+        with patch("pathlib.Path.home", return_value=tmp_path / "nonexistent"), \
+             patch.object(boot_remote, "LOCAL_CONFIG", tmp_path / "missing"):
+            result = boot_remote._parse_local_config()
+        assert result == {}
+
+    def test_shared_skips_dotfiles(self, tmp_path):
+        """Hidden files in shared clones dir are skipped."""
+        shared_clones = tmp_path / "home" / ".squidsquad" / "clones"
+        shared_clones.mkdir(parents=True)
+        (shared_clones / ".hidden").write_text("/some/path")
+        (shared_clones / "skill").write_text("/path/to/skill")
+
+        with patch("pathlib.Path.home", return_value=tmp_path / "home"):
+            result = boot_remote._parse_local_config()
+        assert ".hidden" not in result
+        assert "skill" in result
+
+
 class TestReadHealthFile:
     def test_reads_alive(self, tmp_path):
         health_file = tmp_path / ".squidsquad" / "skill" / ".health"
