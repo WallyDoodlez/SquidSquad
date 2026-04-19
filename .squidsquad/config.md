@@ -6,7 +6,7 @@
 
 ## Agents
 
-- **Dev Agents**: boot, qa, skill
+- **Dev Agents**: skill
 - **PM**: always present
 - **QA**: always present
 - **DM**: present
@@ -42,10 +42,6 @@
 ## Context Pressure
 
 - **Threshold**: 70
-
-## Auto Boot Agents
-
-- **Enabled**: yes
 
 ## Auto Merge
 
