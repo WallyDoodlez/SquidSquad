@@ -143,6 +143,103 @@ class TestForgejoAdapter:
         assert adapter.provider == "forgejo"
 
 
+class TestForgejoAdapterErrorHandling:
+    """Error-handling tests for ForgejoAdapter._api() (#1494)."""
+
+    def _make_adapter(self):
+        adapter = forge_adapter.ForgejoAdapter({
+            "provider": "forgejo", "endpoint": "http://localhost:3000",
+            "owner": "testuser", "repo": "myproject",
+        })
+        adapter._token = "test-token"
+        return adapter
+
+    @patch("urllib.request.urlopen")
+    def test_http_401_returns_none(self, mock_urlopen):
+        """HTTP 401 (bad token) returns None."""
+        import urllib.error
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            "http://localhost", 401, "Unauthorized", {}, None
+        )
+        adapter = self._make_adapter()
+        result = adapter._api("GET", "/api/v1/repos/test/test")
+        assert result is None
+
+    @patch("urllib.request.urlopen")
+    def test_http_404_returns_none(self, mock_urlopen):
+        """HTTP 404 (missing repo) returns None."""
+        import urllib.error
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            "http://localhost", 404, "Not Found", {}, None
+        )
+        adapter = self._make_adapter()
+        result = adapter._api("GET", "/repos/test/test")
+        assert result is None
+
+    @patch("urllib.request.urlopen")
+    def test_http_500_returns_none(self, mock_urlopen):
+        """HTTP 500 (server error) returns None."""
+        import urllib.error
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            "http://localhost", 500, "Internal Server Error", {}, None
+        )
+        adapter = self._make_adapter()
+        result = adapter._api("GET", "/repos/test/test")
+        assert result is None
+
+    @patch("urllib.request.urlopen")
+    def test_connection_error_returns_none(self, mock_urlopen):
+        """Connection refused returns None."""
+        mock_urlopen.side_effect = ConnectionRefusedError("Connection refused")
+        adapter = self._make_adapter()
+        result = adapter._api("GET", "/repos/test/test")
+        assert result is None
+
+    @patch("urllib.request.urlopen")
+    def test_timeout_returns_none(self, mock_urlopen):
+        """Timeout returns None."""
+        import socket
+        mock_urlopen.side_effect = socket.timeout("timed out")
+        adapter = self._make_adapter()
+        result = adapter._api("GET", "/repos/test/test")
+        assert result is None
+
+    @patch("urllib.request.urlopen")
+    def test_malformed_json_returns_none(self, mock_urlopen):
+        """Malformed JSON response returns None."""
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"not json {{"
+        mock_resp.__enter__ = lambda s: mock_resp
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_resp
+        adapter = self._make_adapter()
+        result = adapter._api("GET", "/repos/test/test")
+        assert result is None
+
+    @patch("urllib.request.urlopen")
+    def test_valid_response_parsed(self, mock_urlopen):
+        """Valid JSON response is parsed correctly."""
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b'{"number": 42, "title": "test"}'
+        mock_resp.__enter__ = lambda s: mock_resp
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_resp
+        adapter = self._make_adapter()
+        result = adapter._api("GET", "/repos/test/test")
+        assert result == {"number": 42, "title": "test"}
+
+    @patch("urllib.request.urlopen")
+    def test_list_issues_empty_on_error(self, mock_urlopen):
+        """list_issues returns empty list on API error."""
+        import urllib.error
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            "http://localhost", 500, "Error", {}, None
+        )
+        adapter = self._make_adapter()
+        result = adapter.list_issues()
+        assert result == []
+
+
 class TestBaseAdapter:
     def test_edit_labels_calls_both(self):
         adapter = forge_adapter.ForgeAdapter({
