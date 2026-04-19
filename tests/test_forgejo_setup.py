@@ -53,6 +53,25 @@ class TestCheckDocker:
         assert result["ok"] is False
         assert "port" in result["message"].lower()
 
+    @patch("subprocess.run")
+    def test_our_container_running_skips_port_check(self, mock_run):
+        """When squidsquad-forgejo container is running and using ports,
+        check_docker should still return ok=True (port check is skipped)."""
+        def run_side_effect(cmd, **kwargs):
+            # docker ps --filter name=squidsquad-forgejo returns our container
+            if "ps" in cmd and "--filter" in cmd:
+                return MagicMock(
+                    returncode=0, stdout="squidsquad-forgejo\n", stderr=""
+                )
+            # All other docker commands succeed
+            return MagicMock(returncode=0, stdout="Docker 24.0", stderr="")
+
+        mock_run.side_effect = run_side_effect
+        # No socket mock — port check should be skipped entirely
+        result = forgejo_setup.check_docker()
+        assert result["ok"] is True
+        assert result["message"] == "Docker ready"
+
 
 class TestStatus:
     @patch("urllib.request.urlopen")
