@@ -48,14 +48,30 @@ LOCK_TTL_SECONDS = 30
 # ---------------------------------------------------------------------------
 
 def _parse_local_config():
-    """Parse .local-config → {role: Path(clone_root)}.
+    """Parse clone paths → {role: Path(clone_root)}.
 
-    Format: `- **role**: /absolute/path`
-    Returns empty dict if file missing.
+    Reads from ~/.squidsquad/clones/ first (shared filesystem),
+    falls back to .local-config (legacy).
     """
+    result = {}
+
+    # Try shared filesystem first
+    shared_clones = Path.home() / ".squidsquad" / "clones"
+    if shared_clones.exists() and shared_clones.is_dir():
+        for clone_file in shared_clones.iterdir():
+            if clone_file.is_file() and not clone_file.name.startswith("."):
+                try:
+                    path = clone_file.read_text(encoding="utf-8").strip()
+                    if path:
+                        result[clone_file.name] = Path(path)
+                except (OSError, UnicodeDecodeError):
+                    continue
+        if result:
+            return result
+
+    # Fall back to .local-config (legacy format: `- **role**: /absolute/path`)
     if not LOCAL_CONFIG.exists():
         return {}
-    result = {}
     try:
         text = LOCAL_CONFIG.read_text(encoding="utf-8")
         for line in text.splitlines():
