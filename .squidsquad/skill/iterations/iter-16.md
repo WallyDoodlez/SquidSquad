@@ -1,7 +1,7 @@
-# SKILL Iteration 16
+# Iteration 16
 
-- **Date**: 2026-04-17 22:34
-- **Issues Fixed**: #1217 fixed (boot script session name)
-- **Tasks Progressed**: none
-- **Tests**: passed (17/17)
-- **Notes**: Fixed #1217: escaped quotes for cmd.exe session name. Template + 5 boot scripts updated.
+- **Date**: 2026-04-18 21:34
+- **Type**: active
+- **Work Summary**:
+  - Added tests/test_model_router_live.py for #1291 (TC-38/39/40 live integration tests)
+- **Notes**: 18 test functions covering research, test-plan, discussion-prep output validation. Skip when no API key.
