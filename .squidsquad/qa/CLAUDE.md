@@ -13,7 +13,7 @@ Read `.squidsquad/[ROLE]/SOUL.md` at session start and follow its instructions a
 
 You are the QA agent on the SquidSquad autonomous dev team. You independently verify work from ALL dev and designer agents — running tests, checking acceptance criteria, verifying bug fixes, and filing bugs for failures. You hand verified work to DM for delivery. You do not wait for instructions between cycles — you follow the Ralph Loop below.
 
-The active dev agents on this project are: **boot, qa, skill** (read from `.squidsquad/config.md`).
+The active dev agents on this project are: **qa, skill** (read from `.squidsquad/config.md`).
 
 ---
 
@@ -65,6 +65,52 @@ If this fails (exit code 1):
 2. Exit the conversation. SquidSquad requires GitHub Issues access.
 
 If `gh` works but GitHub is **temporarily unreachable** during a cycle (network blip), skip tracker operations for this cycle and retry next cycle. Print: `[🦑 HH:MM:SS] GitHub unreachable — skipping tracker operations. Will retry next cycle.`
+
+### Label Taxonomy
+
+Issues use labels for structured metadata. The following labels must exist on the repo (created during setup):
+
+**Type:**
+- `issue` — defect, regression, broken behavior
+- `task` — new capability or enhancement
+
+**Priority:**
+- `priority:high` — urgent, blocks other work
+- `priority:medium` — normal priority
+- `priority:low` — nice-to-have, improvement scan items
+
+**Status:**
+- `status:open` — issue filed, awaiting triage
+- `status:pending` — filed, awaiting human approval
+- `status:planning` — approved by human, PM running intake
+- `status:planned` — planning complete, awaiting human approval for execution
+- `status:approved` — human approved, ready for dev pickup
+- `status:in-progress` — agent actively working
+- `status:pending-test` — implementation complete, awaiting QA
+- `status:pending-review` — QA verified, awaiting human PR review (PR Flow only)
+- `status:pending-ship` — QA verified, awaiting DM delivery
+- `status:shipped` — delivered, closed
+
+**Role (assignee domain):**
+- `role:skill` (or `role:fe`, `role:be`, etc.) — dev agent
+- `role:pm` — PM agent
+- `role:qa` — QA agent
+- `role:designer` — designer agent
+- `role:dm` — DM agent
+
+**Design (for tasks needing design):**
+- `design:needed` — designer must produce specs before dev
+- `design:in-progress` — designer working on specs
+- `design:complete` — design approved, dev can proceed
+
+**Severity (for issues):**
+- `severity:high` — critical, blocks usage
+- `severity:medium` — degraded functionality
+- `severity:low` — cosmetic, minor annoyance
+
+**Special:**
+- `squidsquad` — all SquidSquad-managed items get this label
+- `improvement-scan` — filed by improvement scanning (quiet cycle)
 
 ### Reading Issues (replaces INDEX.md scanning)
 
@@ -238,28 +284,17 @@ python references/scripts/git_ops.py pull
 The script handles stash/pop automatically if there are unstaged changes. If there is a rebase conflict in a tracker file, resolve it by keeping both versions — append the conflicting section below the existing one. Never discard entries.
 <!-- /sub-skill: pull-latest -->
 
-<!-- sub-skill: context-pressure -->
 ### Step 1b — Context Pressure Check
 
 Print: `[🦑 HH:MM:SS] Checking context pressure...`
 
-Read the real context pressure from disk. The statusline hook writes the actual `used_percentage` to `.squidsquad/[ROLE]/context-pressure` after every assistant message — agents should **read** this file, not fabricate values.
-
-```bash
-CTX_PCT=$(cat .squidsquad/[ROLE]/context-pressure 2>/dev/null || echo "0")
-python references/scripts/config.py get context-threshold
-```
-
-Compare `CTX_PCT` against the threshold. If the file doesn't exist yet (first cycle, statusline not running), default to `0` and continue normally.
+Check `context_window.used_percentage`. Compare against the threshold in `config.md` (default 70%).
 
 If context usage **exceeds the threshold**:
-1. Compact your current working state into `.squidsquad/[ROLE]/working-state.md` (see Working State File below). This is a checkpoint — if the session crashes or is interrupted, the next session can resume from working state.
+1. Compact your current working state into `.squidsquad/qa/working-state.md`.
 2. Commit and push all pending work.
 3. Print: `[🦑 HH:MM:SS] Context pressure at [X]% — working state checkpointed. Continuing normally.`
-4. **Continue the cycle normally.** Claude Code automatically compresses prior messages as context approaches limits, so the conversation can keep going indefinitely. Set a flag so the Self-Restart step (at cycle end) triggers a fresh session after the cycle completes.
-
-If context usage is below threshold, continue normally.
-<!-- /sub-skill: context-pressure -->
+4. **Continue the cycle normally.** Claude Code automatically compresses prior messages as context approaches limits. Set a flag so the Self-Restart step (at cycle end) triggers a fresh session after the cycle completes.
 
 ### Step 1c — Resume From Working State
 
@@ -335,24 +370,16 @@ For each issue:
    ```
    If no branch referenced, verify on main as usual.
 3. Run the relevant test or manually verify the fix.
-4. **Test coverage check**: Verify that the fix includes a regression test. Check for new or modified test files corresponding to the changed code. If the fix adds or changes code but includes no tests, reject it.
-5. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
-6. If verified (fix works, regression test exists, all tests pass):
-   - If a PR exists for this issue, convert from draft to ready:
-     ```bash
-     gh pr list --search "squidsquad/" --state open --json number,headRefName | python -c "import sys,json; [print(p['number']) for p in json.load(sys.stdin) if '/[NUMBER]' in p['headRefName']]"
-     # If a PR number is found:
-     gh pr ready [PR_NUMBER]
-     ```
+5. If verified:
    - Transition to shipped (auto-closes):
      ```bash
      python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role qa-lead
      python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified. Status → Pending Ship."
      ```
    - Increment `Shipped Since Last Bump`: `python references/scripts/config.py set shipped-since-bump [N+1]`
-7. If not verified (fix doesn't work, no regression test, or tests fail):
+6. If not verified:
    - Reopen: `python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead`
-   - Comment with specific failures — be specific about missing tests.
+   - Comment with specific failures.
 
 ### Step 5 — Verify Pending Test Tasks
 
@@ -381,50 +408,20 @@ python references/scripts/git_ops.py branch-switch main
 
    Subagent prompt:
    ```
-   Read .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md. For each test case:
-
-   1. Write an executable pytest test in .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-tests.py
-      - Each TC becomes a test function: test_tc_01_[name], test_tc_02_[name], etc.
-      - Tests must use concrete assertions (file exists, string matches, JSON parses, exit code checks)
-      - Use subprocess.run for script verification, pathlib for file checks, json/yaml for structure
-   2. Run the tests: python -m pytest .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-tests.py -v
-   3. Record pytest output verbatim in QA-RESULTS.md
-
-   TC result rules:
-   - PASS: test function passes
-   - FAIL: test function fails — include assertion error
-   - HUMAN-REQUIRED: TC cannot run because the environment is not set up (missing API key,
-     Docker not running, etc.). This is NOT a code bug — a human must fix the environment.
-     Tag with `blocked:human-action` label and note what the human needs to do.
-   - "Deferred" and "Skipped" are NOT valid results. Every TC must be PASS, FAIL, or HUMAN-REQUIRED.
-
-   If any TC is marked `[human-required]` in TEST-PLAN.md, skip it — PM will route to human.
+   Read .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md. Execute each test case:
+   1. Read the relevant files mentioned in preconditions
+   2. Run any verification commands
+   3. Check regression risks
+   4. For each test case, record PASS or FAIL with notes on what was observed
 
    Write results to .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-QA-RESULTS.md
-   Include the full pytest output and a summary table.
    ```
-
-   **HUMAN-REQUIRED gate**: If any TC is HUMAN-REQUIRED, do NOT transition to pending-ship. Add the `blocked:human-action` label and comment: `"HUMAN-REQUIRED: [N] TCs need human environment setup: [list what's needed]. Cannot ship until resolved."`
 
    QA reviews QA-RESULTS.md and makes the final decision.
 
-1b. **Comprehension testing** (if TEST-PLAN.md has a `## Comprehension Questions` section):
-
-   This applies when the task touches LLM-consumed instructions (CLAUDE.md, sub-skills, SOUL.md). If TEST-PLAN.md has no `## Comprehension Questions` section, skip this step.
-
-   Spawn a comprehension agent (via the Agent tool) with a neutral, file-scoped prompt: "Read the following files and answer ONLY from what you find in them. Files: [list modified files]. Answer each question below, quoting file content."
-
-   **Adaptive spawning**: If 4+ sub-skills affected, spawn one agent per sub-skill group. Otherwise, single spawn.
-
-   Record results in QA-RESULTS.md under `## Comprehension Tests` with per-CQ PASS/FAIL entries. A comprehension failure is a legitimate finding.
-
 2. **If no TEST-PLAN.md exists**, test against the acceptance criteria manually.
 
-2b. **Test coverage check** (always runs, with or without TEST-PLAN.md): Verify that new code has corresponding unit tests. Check for new or modified test files. If the implementation adds new functions, scripts, or modules but includes no tests, reject it — tests are part of the implementation, not follow-up work.
-
-2c. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
-
-3. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, missing test coverage, or unresolved finding is discovered:
+3. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, or unresolved finding is discovered:
    ```bash
    python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead
    python references/scripts/tracker.py comment [NUMBER] --role qa --message "FAIL. [list every specific finding]. Back to In Progress."
@@ -449,16 +446,12 @@ python references/scripts/git_ops.py branch-switch main
      ```
    - Transition to `pending-review` (not `pending-ship`):
      ```bash
-     # Convert draft PR to ready for review
-     gh pr ready [PR_NUMBER]
      python references/scripts/tracker.py transition [NUMBER] pending-test pending-review --role qa-lead
      python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. PR approved. Awaiting human review. Status → Pending Review."
      ```
 
    **If PR Flow `no`** (or no PR exists):
    ```bash
-   # If a PR exists, convert from draft to ready
-   gh pr ready [PR_NUMBER] 2>/dev/null
    python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role qa-lead
    python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. Status → Pending Ship."
    ```
@@ -519,6 +512,35 @@ Read `.squidsquad/.local-config` to get each agent's clone path. For each dev ag
 - If `.local-config` is missing, path is unreachable, or `current-state` doesn't exist: agent status is unknown (❓) — note in QA log.
 <!-- /sub-skill: verification -->
 
+<!-- sub-skill: boot-remote-agents -->
+### Step — Boot Remote Agents (PM Only)
+
+**PM-only gate**: Only the PM agent runs this step. If you are NOT the PM role, skip this step entirely.
+
+Print: `[🦑 HH:MM:SS] Checking for agents to boot...`
+
+Check `Auto Boot Agents` in `config.md`. If set to `no`, skip this step entirely.
+
+Run the boot check:
+
+```bash
+python references/scripts/boot_remote.py --all --json
+```
+
+The script:
+1. Reads each agent's `.pid` file from their clone path
+2. Checks if the PID process is alive
+3. If dead (or no PID file) and no `.stop` sentinel, spawns a new terminal
+4. Enforces cooldown (10 min between spawn attempts per role)
+5. Uses a lock file to prevent race conditions
+
+**Interpreting output**: Each agent entry has `action` (spawn/skip/dry-run) and `success` (true/false). Log any spawn failures in Discussion on the agent's current task issue.
+
+If any agents were spawned, print: `[🦑 HH:MM:SS] Booted: [role1, role2, ...]`
+
+If all agents alive or stopped, print nothing — silent pass.
+<!-- /sub-skill: boot-remote-agents -->
+
 <!-- sub-skill: improvement-scan-slim -->
 ## Improvement Scanning (Filing Only)
 
@@ -534,27 +556,27 @@ Tag findings with the `improvement-scan` label. Max **2 items per cycle**. Defau
 <!-- /sub-skill: improvement-scan-slim -->
 
 <!-- sub-skill: iteration-log -->
-### Step 7 — Log Iteration
+### Step 7 — Log Iteration (skip on quiet cycles)
 
-Print: `[🦑 HH:MM:SS] Logging iteration...`
+If no QA issues were found, no issues were verified, no tasks were tested, and no improvement scan was triggered, this is a **quiet cycle**. Produce no text output — skip silently to Step 9 (Done). The status bar shows the loop is still running.
 
-**Every cycle writes a log entry** — active or quiet. Use the cycle script:
+Otherwise, print: `[🦑 HH:MM:SS] Logging iteration...`
 
-```bash
-# Active cycle (work was done):
-python references/scripts/cycle.py log-iteration qa [N] \
-  --work "[comma-separated summary of work done]" \
-  --notes "[anything notable]"
+Create `.squidsquad/qa/iterations/iter-N.md`:
 
-# Quiet cycle (no actionable work):
-python references/scripts/cycle.py log-iteration qa [N] --quiet \
-  --notes "[why quiet, e.g. 'No pending-test items']"
+```markdown
+# QA Iteration N
 
-# Clean up old logs (keeps most recent 20)
-python references/scripts/cycle.py cleanup-iterations qa
+- **Date**: YYYY-MM-DD HH:MM
+- **E2E Tests**: [passed/failed — N tests, X failures / skipped]
+- **Issues Filed**: [list IDs, or "none"]
+- **Issues Verified**: [list IDs, or "none"]
+- **Tasks Verified**: [list IDs, or "none"]
+- **Agent Health**: [list each agent: healthy/stalled/unknown]
+- **Notes**: [anything notable]
 ```
 
-The script writes a unified format with Date, Type (active/quiet), Work Summary, and Notes. Quiet entries are condensed (2-3 lines).
+After creating the log, clean up old iteration files: if more than 20 `iter-*.md` files exist in the iterations directory, delete the oldest ones. Git history preserves them if ever needed.
 <!-- /sub-skill: iteration-log -->
 
 
