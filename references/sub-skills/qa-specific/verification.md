@@ -101,14 +101,29 @@ python references/scripts/git_ops.py branch-switch main
 
    Subagent prompt:
    ```
-   Read .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md. Execute each test case:
-   1. Read the relevant files mentioned in preconditions
-   2. Run any verification commands
-   3. Check regression risks
-   4. For each test case, record PASS or FAIL with notes on what was observed
+   Read .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md. For each test case:
+
+   1. Write an executable pytest test in .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-tests.py
+      - Each TC becomes a test function: test_tc_01_[name], test_tc_02_[name], etc.
+      - Tests must use concrete assertions (file exists, string matches, JSON parses, exit code checks)
+      - Use subprocess.run for script verification, pathlib for file checks, json/yaml for structure
+   2. Run the tests: python -m pytest .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-tests.py -v
+   3. Record pytest output verbatim in QA-RESULTS.md
+
+   TC result rules:
+   - PASS: test function passes
+   - FAIL: test function fails — include assertion error
+   - BLOCKED: TC requires an external resource that is unavailable (API key, Docker, network).
+     File a blocker issue and note the issue number. Do NOT skip or defer.
+   - "Deferred" is NOT a valid result. Every TC must be PASS, FAIL, or BLOCKED.
+
+   If any TC is marked human-verification in TEST-PLAN.md, skip it — PM will route to human.
 
    Write results to .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-QA-RESULTS.md
+   Include the full pytest output and a summary table.
    ```
+
+   **BLOCKED gate**: If any TC is BLOCKED, do NOT transition to pending-ship. The blocker issue must be resolved first. Comment: `"BLOCKED: [N] TCs blocked on [issue numbers]. Cannot ship until resolved."`
 
    QA reviews QA-RESULTS.md and makes the final decision.
 

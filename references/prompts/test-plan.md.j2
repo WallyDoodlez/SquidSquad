@@ -20,6 +20,13 @@ Draft a test plan covering:
 6. **Regression risks** — things to watch for
 7. **Comprehension questions** (only if the task touches LLM-consumed instructions)
 
+**IMPORTANT — Deterministic TCs**: Every TC must be convertible to an executable pytest test:
+- Use concrete, verifiable assertions (file exists, string matches, JSON structure, exit codes)
+- Verification commands must be runnable by an agent (python scripts, file reads, grep checks)
+- If a TC requires an external resource (API key, Docker), mark it as `[requires: RESOURCE_NAME]`
+- Do NOT write vague criteria like "output quality is comparable" — define measurable thresholds
+- If a TC genuinely requires human judgment (visual, subjective), mark it as `[human-verification]`
+
 ## Output Format
 
 ```markdown
