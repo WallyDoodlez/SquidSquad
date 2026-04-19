@@ -233,10 +233,11 @@ class TestPrCreate:
 class TestPrMerge:
     @patch("git_ops._run_list")
     def test_successful_squash_merge(self, mock_run):
-        # First call: check state → OPEN, second call: merge → success
+        # First call: check state → OPEN, second: merge → success, third: branch name lookup
         mock_run.side_effect = [
             _mock_result(stdout='{"state": "OPEN"}'),
             _mock_result(stdout=""),
+            _mock_result(stdout='{"headRefName": "squidsquad/skill/42"}'),
         ]
         success, msg = git_ops.pr_merge(42)
         assert success is True
@@ -287,6 +288,7 @@ class TestPrMerge:
         mock_run.side_effect = [
             _mock_result(stdout='{"state": "OPEN"}'),
             _mock_result(stdout=""),
+            _mock_result(stdout='{"headRefName": "feature"}'),
         ]
         git_ops.pr_merge(42, strategy="rebase")
         merge_call = mock_run.call_args_list[1]
@@ -294,14 +296,41 @@ class TestPrMerge:
 
     @patch("git_ops._run_list")
     def test_state_check_fails_still_attempts_merge(self, mock_run):
-        # State check fails (non-zero), merge succeeds
+        # State check fails (non-zero), merge succeeds, branch lookup
         mock_run.side_effect = [
             _mock_result(returncode=1, stderr="not found"),
             _mock_result(stdout=""),
+            _mock_result(stdout='{"headRefName": "feature"}'),
         ]
         success, msg = git_ops.pr_merge(42)
         assert success is True
         assert msg == "merged"
+
+
+    @patch("git_ops._run_list")
+    def test_forge_adapter_routing(self, mock_run):
+        """When forge provider is non-GitHub, pr_merge uses the adapter."""
+        mock_adapter = MagicMock()
+        mock_adapter.view_pr.return_value = {"state": "OPEN"}
+        mock_adapter.merge_pr.return_value = (True, "merged")
+
+        mock_config = {"provider": "forgejo", "endpoint": "http://localhost:3000"}
+
+        with patch.dict("sys.modules", {
+            "forge_adapter": MagicMock(
+                get_adapter=MagicMock(return_value=mock_adapter),
+                _read_forge_config=MagicMock(return_value=mock_config),
+            ),
+        }):
+            # Need to re-import to pick up the mock
+            success, msg = git_ops.pr_merge(42)
+
+        assert success is True
+        assert msg == "merged"
+        mock_adapter.view_pr.assert_called_once_with(42)
+        mock_adapter.merge_pr.assert_called_once_with(42, "squash")
+        # gh CLI should NOT be called when adapter handles it
+        mock_run.assert_not_called()
 
 
 class TestGetAlias:
