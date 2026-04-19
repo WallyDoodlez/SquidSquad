@@ -1,8 +1,7 @@
 # Iteration 41
 
-- **Date**: 2026-04-19 10:04
+- **Date**: 2026-04-19 10:05
 - **Type**: active
 - **Work Summary**:
-  - triaged #1517 #1518 — both already fixed in pulled code
-  - transitioned to pending-test
-- **Notes**: Both forgejo_setup.py issues were fixed by another agent before this cycle.
+  - Fixed #1517 (clone_url for existing repos) and #1518 (port check on re-deploy)
+- **Notes**: Both in forgejo_setup.py. All tests pass.
