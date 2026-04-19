@@ -318,7 +318,7 @@ Write results to .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-QA-RESULTS.md
 ```
 
 PM reviews QA-RESULTS.md and makes the final decision:
-- **All pass** → Status → `Shipped`. Delete planning files (`.squidsquad/[ROLE]/planning/FEAT-XXX-*`). Append Discussion entry.
+- **All pass** → Status → `Shipped`. Delete planning files (`.squidsquad/[ROLE]/planning/FEAT-XXX-*`) EXCEPT test files that have been promoted to `tests/`. Append Discussion entry.
 - **Any fail** → Status → `In Progress`. Append Discussion with which test cases failed and what was observed.
 
 The PM decides — the subagent only reports results.
