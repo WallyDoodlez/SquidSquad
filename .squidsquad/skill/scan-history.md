@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-19 09:34
+
+- **Files scanned**: references/scripts/forgejo_setup.py, references/scripts/providers/openai/adapter.py
+- **Findings**: #1517 (create_repo constructs wrong clone_url for existing repos — medium), #1518 (check_docker port check blocks re-deployment — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-19 07:34
 
 - **Files scanned**: references/scripts/forge_adapter.py, references/scripts/shared_fs.py
