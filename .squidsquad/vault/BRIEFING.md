@@ -32,7 +32,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 - Test suite exists (`python tests/run_tests.py`) — static analysis + integration tests
 - PR flow currently disabled
-- Ship counter: threshold 10, currently at 0 (v0.22.0 bumped)
+- Ship counter: threshold 10, currently at 1 (v0.22.0 bumped)
 
 ## Team State
 

@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-19 07:34
+
+- **Files scanned**: references/scripts/forge_adapter.py, references/scripts/shared_fs.py
+- **Findings**: #1500 (ForgejoAdapter.create_pr ignores draft parameter — medium), #1501 (ForgejoAdapter.remove_labels silently swallows failures — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-18 09:41
 
 - **Files scanned**: references/scripts/cycle.py, references/scripts/vault_remember.py, tests/test_git_ops.py
