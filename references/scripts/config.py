@@ -77,6 +77,10 @@ FIELD_MAP = {
     "improvement-scan-model": ("Model Routing", "Improvement Scan Model"),
     "fallback-model": ("Model Routing", "Fallback Model"),
     "api-timeout-seconds": ("Model Routing", "API Timeout Seconds"),
+    "forge-provider": ("Forge Backend", "Provider"),
+    "forge-endpoint": ("Forge Backend", "Endpoint"),
+    "forge-owner": ("Forge Backend", "Owner"),
+    "forge-repo": ("Forge Backend", "Repo"),
 }
 
 
