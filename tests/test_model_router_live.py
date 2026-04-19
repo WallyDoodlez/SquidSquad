@@ -13,6 +13,8 @@ Each test validates the 6 deterministic assertions from TEST-PLAN.md TC-38/39/40
 4. File references are real paths
 5. No hallucinated functions
 6. Tool usage evidence in diagnostics log
+
+If OPENAI_API_KEY is not set, tests FAIL (BLOCKED) — not skipped.
 """
 
 import json
@@ -30,11 +32,15 @@ SCRIPTS = REPO_ROOT / "references" / "scripts"
 MODEL_ROUTER = SCRIPTS / "model_router.py"
 DIAG_LOG = REPO_ROOT / ".squidsquad" / "diagnostics" / "model-routing.log"
 
-# Skip all tests if no API key
-pytestmark = pytest.mark.skipif(
-    not os.environ.get("OPENAI_API_KEY"),
-    reason="OPENAI_API_KEY not set — live tests require a valid API key",
-)
+# FAIL (not skip) if no API key — missing key is BLOCKED, not deferred
+@pytest.fixture(autouse=True, scope="session")
+def _require_api_key():
+    if not os.environ.get("OPENAI_API_KEY"):
+        pytest.fail(
+            "BLOCKED: OPENAI_API_KEY not set. These tests require a valid API key. "
+            "Set the key and re-run, or file a blocker issue.",
+            pytrace=False,
+        )
 
 
 def _run_router(task_type, output_file, context, input_files=""):
