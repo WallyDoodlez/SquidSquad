@@ -26,6 +26,10 @@ Human discovered QA shipped #1291 twice with 14 test cases "deferred" — includ
 
 Human's quality bar: if QA says it passes, there must be executable proof. Subjective verification creates a loophole where TCs can be deferred or hand-waved. The #1291 incident (shipped 3 times, comparison tests never ran) is the motivating case. This compounds with the self-healing philosophy — deterministic tests catch regressions automatically.
 
+## Validation
+
+First real-world result: QA ran 16 live integration tests for #1291. All failed — caught a real API incompatibility (GPT 5.2 requires `max_completion_tokens`, adapter was sending `max_tokens`). Under the old subjective approach, QA deferred these tests twice and shipped anyway. Under deterministic testing, the bug was caught immediately.
+
 ## Related
 
 - [[human-profile]]
@@ -36,3 +40,4 @@ Human's quality bar: if QA says it passes, there must be executable proof. Subje
 ### Changelog
 
 - 2026-04-18 — Created by pm. Human-directed decision after #1291 QA failure (deferred TCs shipped as "zero gaps").
+- 2026-04-18 — Updated by pm. Added Validation: deterministic tests caught real max_tokens bug in #1291 on first run.
