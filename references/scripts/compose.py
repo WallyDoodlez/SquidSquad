@@ -500,7 +500,7 @@ def main():
             output = deploy_role(role)
             lines = output.read_text(encoding="utf-8").count("\n")
             print(f"  {role}: {lines} lines -> {output.relative_to(REPO_ROOT)}")
-        # Generate .local-config for health check and auto-boot
+        # Generate .local-config for health check and watchdog
         lc = generate_local_config(roles)
         print(f"  .local-config: {len(roles)} agents -> {lc.relative_to(REPO_ROOT)}")
 

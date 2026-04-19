@@ -815,7 +815,7 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
             "working_state": str(ws_path),
         })
 
-    # 3. Generate .local-config for health check and auto-boot
+    # 3. Generate .local-config for health check and watchdog
     try:
         from compose import generate_local_config
     except ImportError:

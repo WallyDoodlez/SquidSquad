@@ -215,21 +215,8 @@ For each PR:
 
 If `PR Flow: no`, skip this step.
 
-### Step 6 — Agent Health Check
+### Step 6 — Agent Health Check (Watchdog-Managed)
 
-Print: `[🦑 HH:MM:SS] Checking agent health...`
+Agent health monitoring is handled by the external **watchdog** (`references/scripts/watchdog.py`). QA no longer runs health checks manually.
 
-Check each agent's health by reading their `current-state` file via cross-clone paths from `.squidsquad/.local-config`. Each agent writes to its `current-state` file at the end of every cycle (including quiet cycles), so the file's mtime indicates when the agent last completed a cycle.
-
-Read `.squidsquad/.local-config` to get each agent's clone path. For each dev agent listed in `config.md`, plus PM, plus DM and designer (if their directories exist):
-
-1. Look up the agent's clone path from `.local-config` (format: `- **role**: /absolute/path`).
-2. Read `<path>/.squidsquad/<role>/current-state` and check the file's mtime.
-3. Read the `Iteration Interval > Minutes` value from `config.md` (default 30). An agent is stalled if the `current-state` mtime is older than 2× the iteration interval.
-
-- If `current-state` exists and mtime is recent (within 2× interval): agent is healthy (🦑).
-- If `current-state` exists but mtime is stale (older than 2× interval): agent is **stalled** (👻). Log a warning in `qa/qa-log.md` and append a Discussion note:
-  ```
-  > [YYYY-MM-DD HH:MM] **qa**: Agent [role] appears stalled — no cycle activity for [elapsed] minutes. Please check.
-  ```
-- If `.local-config` is missing, path is unreachable, or `current-state` doesn't exist: agent status is unknown (❓) — note in QA log.
+This step is a no-op — skip it entirely.
