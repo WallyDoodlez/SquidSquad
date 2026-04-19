@@ -1,7 +1,8 @@
 # Iteration 19
 
-- **Date**: 2026-04-18 00:03
+- **Date**: 2026-04-18 23:04
 - **Type**: active
 - **Work Summary**:
-  - none
-- **Notes**: Improvement scan: filed #1229 (triage.py json.loads crash) and #1230 (health_check.py unused import). 3 files scanned.
+  - Fixed #1291 QA gaps: model override env var
+  - template placeholder filter
+- **Notes**: SQUIDSQUAD_MODEL_OVERRIDE forces gpt-5.2 in live tests. Path regex filters <> placeholders.
