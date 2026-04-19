@@ -143,6 +143,12 @@ class TestCheckAndAct:
         """Set up a fake agent directory for testing."""
         squid = tmp_path / ".squidsquad" / role
         squid.mkdir(parents=True, exist_ok=True)
+        # Create CLAUDE.md first with an older mtime so template change
+        # detection doesn't trigger (template_mtime < session_start)
+        (squid / "CLAUDE.md").write_text("# Test agent")
+        import os
+        old_time = time.time() - 3600  # 1 hour ago
+        os.utime(squid / "CLAUDE.md", (old_time, old_time))
         if health_status:
             (squid / ".health").write_text(health_status)
         if pressure is not None:
@@ -151,8 +157,6 @@ class TestCheckAndAct:
             (squid / "current-state").write_text(state)
         if pid:
             (squid / ".pid").write_text(str(pid))
-        # Create CLAUDE.md
-        (squid / "CLAUDE.md").write_text("# Test agent")
 
     @patch.object(watchdog.boot_remote, "_parse_local_config")
     @patch.object(watchdog.health_check, "check_agent_health")
