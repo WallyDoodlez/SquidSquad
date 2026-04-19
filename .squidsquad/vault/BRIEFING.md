@@ -4,12 +4,11 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #1291 Multi-model subagents — in-progress (reopened 3rd time, live API tests required)
-- #1426 Shared filesystem ~/.squidsquad/ — approved, dependency for #1427 and #1389
-- #1428 Deterministic QA testing — approved, changes PM test plans + QA verification
-- #1389 Forgejo backend — approved, depends on #1426
-- #473/#474 Test coverage requirements — approved, high severity, 5+ days stalled (5 nudges)
-- #1427 Model router setup UX — approved, depends on #1426
+- #1389 Forgejo backend — in-progress (skill working, #1426 dependency shipped)
+- #1427 Model router setup UX — approved, unblocked (#1426 shipped)
+- #1470 DeepSeek/base_url support — pending, awaiting approval
+- #473/#474 Test coverage requirements — approved, high severity, 6+ days stalled
+- #1396 DM ships without merging — pending-test, approaching stall threshold
 
 ## Recent Decisions
 
@@ -33,10 +32,10 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 - Test suite exists (`python tests/run_tests.py`) — static analysis + integration tests
 - PR flow currently disabled
-- Ship counter: threshold 10, currently at 8
+- Ship counter: threshold 10, currently at 0 (v0.22.0 bumped)
 
 ## Team State
 
 - Active agents: boot, qa, skill (dev agents), PM (always present), QA (always present), DM (present)
-- Current version: 0.20.0 (Architecture Version 1)
+- Current version: 0.22.0 (Architecture Version 1)
 - Tracker: GitHub Issues with structured labels (`type:`, `status:`, `role:`, `priority:`)
