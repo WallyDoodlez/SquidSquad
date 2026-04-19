@@ -143,6 +143,62 @@ class TestForgejoAdapter:
         assert adapter.provider == "forgejo"
 
 
+class TestTrackerForgeRouting:
+    """Tests that tracker.py functions route through forge_adapter for non-GitHub."""
+
+    def _mock_adapter(self):
+        adapter = MagicMock()
+        adapter.list_issues.return_value = [
+            {"number": 1, "title": "test issue"}
+        ]
+        adapter.create_issue.return_value = {"number": 42, "url": "http://test/42"}
+        return adapter
+
+    def test_list_by_labels_uses_adapter(self):
+        import tracker
+        adapter = self._mock_adapter()
+        with patch.object(tracker, "_get_forge_adapter", return_value=adapter):
+            result = tracker.list_by_labels("type:issue,role:skill")
+        adapter.list_issues.assert_called_once_with(
+            labels=["type:issue", "role:skill"], state="open", limit=50
+        )
+        assert len(result) == 1
+
+    def test_list_all_open_uses_adapter(self):
+        import tracker
+        adapter = self._mock_adapter()
+        with patch.object(tracker, "_get_forge_adapter", return_value=adapter):
+            result = tracker.list_all_open()
+        adapter.list_issues.assert_called_once_with(
+            labels=None, state="open", limit=50
+        )
+        assert len(result) == 1
+
+    def test_create_task_uses_adapter(self):
+        import tracker
+        adapter = self._mock_adapter()
+        with patch.object(tracker, "_get_forge_adapter", return_value=adapter):
+            number = tracker.create_task(
+                "test task", "body", "skill", "medium"
+            )
+        adapter.create_issue.assert_called_once()
+        assert number == 42
+        # Verify title has TASK: prefix
+        call_args = adapter.create_issue.call_args
+        assert call_args[0][0].startswith("TASK:")
+
+    def test_list_by_labels_falls_back_to_gh(self):
+        import tracker
+        with patch.object(tracker, "_get_forge_adapter", return_value=None), \
+             patch.object(tracker, "_run_list") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout='[{"number": 1}]'
+            )
+            result = tracker.list_by_labels("type:issue")
+        mock_run.assert_called_once()
+        assert len(result) == 1
+
+
 class TestBaseAdapter:
     def test_edit_labels_calls_both(self):
         adapter = forge_adapter.ForgeAdapter({
