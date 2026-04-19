@@ -616,12 +616,21 @@ def route(task_type, task_id, input_files, output_file, context):
         )
         return 1
 
-    # Check API key
+    # Check API key — ~/.squidsquad/secrets first, then env var
     auth_env = manifest.get("auth", {}).get("env_var", "")
+    if auth_env:
+        try:
+            from shared_fs import read_secret_or_env
+            api_key = read_secret_or_env(auth_env)
+        except ImportError:
+            api_key = os.environ.get(auth_env)
+        if api_key:
+            # Make available to provider adapters via env
+            os.environ[auth_env] = api_key
     if auth_env and not os.environ.get(auth_env):
         print(
-            f"[model_router] {auth_env} not set — skipping {provider_name}, "
-            f"falling back to Claude for {task_type}.",
+            f"[model_router] {auth_env} not set (checked ~/.squidsquad/secrets and env) — "
+            f"skipping {provider_name}, falling back to Claude for {task_type}.",
             file=sys.stderr,
         )
         return 2

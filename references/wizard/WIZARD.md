@@ -48,6 +48,18 @@ install without working gh would be a broken install.
 
 ---
 
+## Step 0a — Shared filesystem
+
+Initialize the shared filesystem at `~/.squidsquad/`:
+
+```bash
+python references/scripts/shared_fs.py init
+```
+
+This creates `~/.squidsquad/`, `secrets` (restricted permissions), `config`, and `clones/` if they don't already exist. Idempotent — safe to run on re-installs.
+
+---
+
 ## Step 0b — Re-run detection
 
 Run `python references/scripts/wizard.py check-existing` and parse JSON.
