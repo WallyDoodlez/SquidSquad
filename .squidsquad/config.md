@@ -92,6 +92,11 @@
 - **Fallback Model**: claude
 - **API Timeout Seconds**: 120
 
+## Forge Backend
+
+- **Provider**: github
+- **Endpoint**: https://api.github.com
+
 ## Mandatory Human Approval
 
 - **Enabled**: yes

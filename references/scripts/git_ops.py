@@ -182,8 +182,26 @@ def current_branch():
 
 
 def pr_create(title, body):
-    """Create a draft PR via gh CLI. PRs start as drafts and are converted
-    to ready by QA after verification passes."""
+    """Create a draft PR. Uses forge adapter for non-GitHub backends,
+    gh CLI for GitHub. PRs start as drafts — QA converts to ready."""
+    try:
+        from forge_adapter import get_adapter, _read_forge_config
+        config = _read_forge_config()
+        if config["provider"] not in ("github", ""):
+            adapter = get_adapter(config)
+            # Need current branch as head
+            branch_result = _run_list(["git", "branch", "--show-current"], check=False)
+            head = branch_result.stdout.strip() if branch_result.returncode == 0 else "main"
+            result = adapter.create_pr(title, body, head=head, draft=True)
+            if result:
+                print(f"PR created: {result.get('url', '')}")
+                return result.get("url", "")
+            print("ERROR: PR creation failed via forge adapter", file=sys.stderr)
+            return None
+    except ImportError:
+        pass
+
+    # Default: gh CLI
     result = _run_list(
         ["gh", "pr", "create", "--draft", "--title", title, "--body", body],
         check=False,

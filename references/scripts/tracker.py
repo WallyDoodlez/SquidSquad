@@ -38,6 +38,33 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 
+# === FORGE ADAPTER (optional — falls back to direct gh calls if unavailable) ===
+
+_forge_adapter = None
+_forge_checked = False
+
+
+def _get_forge_adapter():
+    """Get the forge adapter if configured for a non-GitHub backend.
+
+    Returns the adapter instance, or None (use direct gh calls).
+    For GitHub provider, returns None — gh CLI is used directly for full compat.
+    Only returns an adapter for Forgejo or other non-GitHub backends.
+    """
+    global _forge_adapter, _forge_checked
+    if _forge_checked:
+        return _forge_adapter
+    _forge_checked = True
+    try:
+        from forge_adapter import get_adapter, _read_forge_config
+        config = _read_forge_config()
+        if config["provider"] not in ("github", ""):
+            _forge_adapter = get_adapter(config)
+    except ImportError:
+        pass
+    return _forge_adapter
+
+
 # === LABEL TAXONOMY (single source of truth) ===
 
 TYPE_LABELS = {"issue": "type:issue", "task": "type:task",
@@ -304,7 +331,16 @@ def _resolve_status(name):
 
 
 def check_gh():
-    """Verify gh CLI access."""
+    """Verify forge backend connectivity (gh CLI or Forgejo API)."""
+    adapter = _get_forge_adapter()
+    if adapter:
+        ok, msg = adapter.check_connection()
+        if not ok:
+            print(f"ERROR: Forge connection check failed: {msg}", file=sys.stderr)
+            return False
+        print("OK")
+        return True
+    # Default: gh CLI check
     result = _run_list(["gh", "issue", "list", "--limit", "1"], check=False)
     if result.returncode != 0:
         print("ERROR: GitHub Issues permission check failed.", file=sys.stderr)
@@ -318,10 +354,18 @@ def list_issues(role, issue_type="bug", status=None):
     """List issues by role and optional type/status filter."""
     type_label = TYPE_LABELS.get(issue_type, f"type:{issue_type}")
     role_label = f"role:{role}"
-    labels = f"{type_label},{role_label}"
+    label_list = [type_label, role_label]
     if status:
-        status_label = _resolve_status(status)
-        labels += f",{status_label}"
+        label_list.append(_resolve_status(status))
+
+    adapter = _get_forge_adapter()
+    if adapter:
+        issues = adapter.list_issues(labels=label_list, state="open", limit=50)
+        print(json.dumps(issues, indent=2))
+        return issues
+
+    # Default: gh CLI
+    labels = ",".join(label_list)
     result = _run_list(
         ["gh", "issue", "list", "--label", labels, "--state", "open",
          "--json", "number,title,labels", "--limit", "50"],
@@ -443,7 +487,11 @@ def work_queue(role):
 
 def add_labels(number, labels_str):
     """Add labels to an issue (for metadata labels like design:, squidsquad)."""
-    _run_list(["gh", "issue", "edit", str(number), "--add-label", labels_str])
+    adapter = _get_forge_adapter()
+    if adapter:
+        adapter.add_labels(number, labels_str.split(","))
+    else:
+        _run_list(["gh", "issue", "edit", str(number), "--add-label", labels_str])
     print(f"#{number}: added labels {labels_str}")
 
 
@@ -464,9 +512,21 @@ def create_issue(title, body, role, severity, reporter=None):
 
     # Strip existing prefix to avoid double ISSUE: ISSUE: or legacy BUG: BUG:
     clean_title = title.removeprefix("ISSUE:").removeprefix("ISSUE :").removeprefix("BUG:").removeprefix("BUG :").strip()
+    full_title = f"ISSUE: {clean_title}"
+    label_list = labels.split(",")
+
+    adapter = _get_forge_adapter()
+    if adapter:
+        result = adapter.create_issue(full_title, full_body, labels=label_list)
+        if not result:
+            print("ERROR: Failed to create issue via forge adapter", file=sys.stderr)
+            return -1
+        print(json.dumps(result))
+        return result.get("number", -1)
+
     result = _run_list([
         "gh", "issue", "create",
-        "--title", f"ISSUE: {clean_title}",
+        "--title", full_title,
         "--body", full_body,
         "--label", labels,
     ])
@@ -658,11 +718,18 @@ def transition(number, from_status, to_status, role=None, force=False):
             )
             sys.exit(1)
 
-    _run_list(["gh", "issue", "edit", str(number), "--remove-label", from_label, "--add-label", to_label])
+    adapter = _get_forge_adapter()
+    if adapter:
+        adapter.edit_labels(number, add=[to_label], remove=[from_label])
+    else:
+        _run_list(["gh", "issue", "edit", str(number), "--remove-label", from_label, "--add-label", to_label])
 
     # Auto-close on shipped
     if to_label == "status:shipped":
-        _run_list(["gh", "issue", "close", str(number)])
+        if adapter:
+            adapter.close_issue(number)
+        else:
+            _run_list(["gh", "issue", "close", str(number)])
 
     print(f"#{number}: {from_label} -> {to_label}")
     return True
@@ -672,12 +739,22 @@ def comment(number, role, message):
     """Add a discussion comment to an issue."""
     # No manual timestamps — GitHub provides them
     body = f"**{role}**: {message}"
-    _run_list(["gh", "issue", "comment", str(number), "--body", body])
+    adapter = _get_forge_adapter()
+    if adapter:
+        adapter.add_comment(number, body)
+    else:
+        _run_list(["gh", "issue", "comment", str(number), "--body", body])
     print(f"Commented on #{number}")
 
 
 def get_labels(number):
     """Get label names for an issue."""
+    adapter = _get_forge_adapter()
+    if adapter:
+        data = adapter.view_issue(number)
+        labels = [l["name"] for l in data.get("labels", [])] if data else []
+        print(json.dumps(labels))
+        return labels
     result = _run_list(["gh", "issue", "view", str(number), "--json", "labels"])
     data = json.loads(result.stdout)
     labels = [l["name"] for l in data.get("labels", [])]
@@ -687,6 +764,14 @@ def get_labels(number):
 
 def get_state(number):
     """Get issue state (OPEN/CLOSED)."""
+    adapter = _get_forge_adapter()
+    if adapter:
+        data = adapter.view_issue(number)
+        state = "OPEN" if data else "UNKNOWN"
+        if data and data.get("state"):
+            state = data["state"]
+        print(state)
+        return state
     result = _run_list(["gh", "issue", "view", str(number), "--json", "state"])
     data = json.loads(result.stdout)
     state = data["state"]
@@ -696,7 +781,11 @@ def get_state(number):
 
 def close_issue(number):
     """Close an issue."""
-    _run_list(["gh", "issue", "close", str(number)])
+    adapter = _get_forge_adapter()
+    if adapter:
+        adapter.close_issue(number)
+    else:
+        _run_list(["gh", "issue", "close", str(number)])
     print(f"Closed #{number}")
 
 
