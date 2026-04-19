@@ -773,8 +773,8 @@ def transition(number, from_status, to_status, role=None, force=False):
             )
             sys.exit(1)
 
-    # 4. Guard: block shipped if unmerged PR exists (bypassable with --force)
-    if to_label == "status:shipped" and not force:
+    # 4. Guard: block shipped if unmerged PR exists (never bypassed, even with --force)
+    if to_label == "status:shipped":
         unmerged = _check_unmerged_pr(number)
         if unmerged:
             pr_num, pr_url = unmerged
@@ -784,7 +784,7 @@ def transition(number, from_status, to_status, role=None, force=False):
             )
             print(
                 f"BLOCKED: Cannot ship #{number} — PR #{pr_num} is open and unmerged. "
-                f"Merge first: {pr_url}. Use --force to override.",
+                f"Merge the PR first: {pr_url}",
                 file=sys.stderr,
             )
             sys.exit(1)

@@ -553,8 +553,8 @@ class TestShippedPRGuard:
         # Should not raise — no unmerged PR
         tracker.transition(42, "pending-ship", "shipped", role="dm-lead")
 
-    def test_force_bypasses_pr_check(self, monkeypatch):
-        """--force skips the PR merge check."""
+    def test_force_does_not_bypass_pr_check(self, monkeypatch, capsys):
+        """--force does NOT bypass the PR merge check (always enforced)."""
         class FakeResult:
             returncode = 0
             stdout = ""
@@ -570,8 +570,13 @@ class TestShippedPRGuard:
             return FakeResult()
 
         monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
-        # Force should bypass
-        tracker.transition(42, "pending-ship", "shipped", role="dm-lead", force=True)
+        # Force should NOT bypass the PR merge check
+        with pytest.raises(SystemExit) as excinfo:
+            tracker.transition(42, "pending-ship", "shipped", role="dm-lead", force=True)
+        assert excinfo.value.code == 1
+        err = capsys.readouterr().err
+        assert "BLOCKED" in err
+        assert "unmerged" in err.lower()
 
 
 # ---------------------------------------------------------------------------
