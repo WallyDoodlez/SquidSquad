@@ -330,6 +330,26 @@ def _resolve_status(name):
     sys.exit(1)
 
 
+def _get_status_labels(number):
+    """Get all status:* labels on an issue."""
+    adapter = _get_forge_adapter()
+    if adapter:
+        data = adapter.view_issue(number)
+        if data:
+            return [l["name"] for l in data.get("labels", [])
+                    if l["name"].startswith("status:")]
+        return []
+    result = _run_list(
+        ["gh", "issue", "view", str(number), "--json", "labels"],
+        check=False,
+    )
+    if result.returncode != 0:
+        return []
+    data = json.loads(result.stdout) if result.stdout.strip() else {}
+    return [l["name"] for l in data.get("labels", [])
+            if l["name"].startswith("status:")]
+
+
 def check_gh():
     """Verify forge backend connectivity (gh CLI or Forgejo API)."""
     adapter = _get_forge_adapter()
@@ -734,11 +754,19 @@ def transition(number, from_status, to_status, role=None, force=False):
             )
             sys.exit(1)
 
+    # Remove ALL existing status:* labels (not just from_label) to prevent
+    # duplicate status labels from accumulating (#1492)
+    existing_status_labels = _get_status_labels(number)
+    labels_to_remove = [l for l in existing_status_labels if l != to_label]
+
     adapter = _get_forge_adapter()
     if adapter:
-        adapter.edit_labels(number, add=[to_label], remove=[from_label])
+        adapter.edit_labels(number, add=[to_label], remove=labels_to_remove)
     else:
-        _run_list(["gh", "issue", "edit", str(number), "--remove-label", from_label, "--add-label", to_label])
+        remove_args = []
+        for label in labels_to_remove:
+            remove_args.extend(["--remove-label", label])
+        _run_list(["gh", "issue", "edit", str(number)] + remove_args + ["--add-label", to_label])
 
     # Auto-close on shipped
     if to_label == "status:shipped":

@@ -5,6 +5,7 @@ state-machine legality, preventing cross-role transitions (e.g. skill-lead
 shipping an issue that only DM should ship).
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -461,6 +462,11 @@ class TestTransitionEnforcement:
 
         def _fake_run_list(cmd, **kw):
             gh_calls.append(cmd)
+            # Return valid labels JSON for _get_status_labels
+            if "view" in cmd and "--json" in cmd:
+                r = FakeResult()
+                r.stdout = '{"labels": [{"name": "status:pending-ship"}]}'
+                return r
             return FakeResult()
 
         monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
@@ -468,7 +474,7 @@ class TestTransitionEnforcement:
         tracker.transition(269, "pending-ship", "shipped",
                            role="skill-lead", force=True)
         # gh was actually called
-        assert any("edit" in c for c in gh_calls)
+        assert any("edit" in str(c) for c in gh_calls)
 
     def test_illegal_transition_rejected_even_with_force(self, monkeypatch, capsys):
         """--force does NOT bypass legality (can't jump pending -> shipped)."""
@@ -494,6 +500,92 @@ class TestTransitionEnforcement:
         assert excinfo.value.code == 1
         err = capsys.readouterr().err
         assert "--role is required" in err
+
+
+class TestDuplicateStatusLabelCleanup:
+    """Regression tests for #1492 — transition removes all old status labels."""
+
+    def test_transition_removes_all_status_labels(self, monkeypatch):
+        """transition() removes ALL status:* labels, not just from_label."""
+        gh_calls = []
+
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def _fake_run_list(cmd, **kw):
+            gh_calls.append(cmd)
+            # Simulate issue with duplicate status labels
+            if "view" in cmd and "--json" in cmd:
+                r = FakeResult()
+                r.stdout = json.dumps({
+                    "labels": [
+                        {"name": "status:open"},
+                        {"name": "status:approved"},
+                        {"name": "role:skill"},
+                        {"name": "type:issue"},
+                    ]
+                })
+                return r
+            return FakeResult()
+
+        monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
+        monkeypatch.setattr(tracker, "_get_issue_role_labels", lambda n: {"skill"})
+
+        tracker.transition(42, "approved", "in-progress", role="skill-lead")
+
+        # Find the edit call
+        edit_calls = [c for c in gh_calls if "edit" in c]
+        assert len(edit_calls) == 1
+        edit_cmd = edit_calls[0]
+
+        # Should remove BOTH status:open and status:approved
+        assert "--remove-label" in edit_cmd
+        remove_indices = [i for i, x in enumerate(edit_cmd) if x == "--remove-label"]
+        removed_labels = [edit_cmd[i + 1] for i in remove_indices]
+        assert "status:open" in removed_labels
+        assert "status:approved" in removed_labels
+
+        # Should add status:in-progress
+        assert "--add-label" in edit_cmd
+        add_idx = edit_cmd.index("--add-label")
+        assert edit_cmd[add_idx + 1] == "status:in-progress"
+
+    def test_transition_skips_removing_target_label(self, monkeypatch):
+        """If the target label already exists, don't remove then re-add it."""
+        gh_calls = []
+
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def _fake_run_list(cmd, **kw):
+            gh_calls.append(cmd)
+            if "view" in cmd and "--json" in cmd:
+                r = FakeResult()
+                r.stdout = json.dumps({
+                    "labels": [{"name": "status:approved"}]
+                })
+                return r
+            return FakeResult()
+
+        monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
+        monkeypatch.setattr(tracker, "_get_issue_role_labels", lambda n: {"skill"})
+
+        tracker.transition(42, "approved", "in-progress", role="skill-lead")
+
+        edit_calls = [c for c in gh_calls if "edit" in c]
+        assert len(edit_calls) == 1
+        edit_cmd = edit_calls[0]
+
+        # Should remove status:approved (the old one)
+        remove_indices = [i for i, x in enumerate(edit_cmd) if x == "--remove-label"]
+        removed_labels = [edit_cmd[i + 1] for i in remove_indices]
+        assert "status:approved" in removed_labels
+        # Should NOT remove status:in-progress (the target)
+        assert "status:in-progress" not in removed_labels
 
 
 # ---------------------------------------------------------------------------
