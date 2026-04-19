@@ -5,6 +5,7 @@ state-machine legality, preventing cross-role transitions (e.g. skill-lead
 shipping an issue that only DM should ship).
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -494,6 +495,88 @@ class TestTransitionEnforcement:
         assert excinfo.value.code == 1
         err = capsys.readouterr().err
         assert "--role is required" in err
+
+
+# ---------------------------------------------------------------------------
+# shipped PR guard (#1676)
+# ---------------------------------------------------------------------------
+
+
+class TestShippedPRGuard:
+    """Transition to shipped must block if unmerged PR exists (#1676)."""
+
+    def test_blocks_when_unmerged_pr_exists(self, monkeypatch, capsys):
+        """shipped transition blocked when an open PR matches the issue number."""
+        call_count = [0]
+
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def _fake_run_list(cmd, **kw):
+            call_count[0] += 1
+            # PR list returns an open PR matching the issue
+            if "pr" in cmd and "list" in cmd:
+                r = FakeResult()
+                r.stdout = json.dumps([
+                    {"number": 99, "headRefName": "squidsquad/skill/42", "url": "http://pr/99"}
+                ])
+                return r
+            return FakeResult()
+
+        monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
+
+        with pytest.raises(SystemExit) as excinfo:
+            tracker.transition(42, "pending-ship", "shipped", role="dm-lead")
+        assert excinfo.value.code == 1
+        err = capsys.readouterr().err
+        assert "BLOCKED" in err
+        assert "unmerged" in err.lower()
+        assert "#99" in err
+
+    def test_allows_when_no_pr(self, monkeypatch):
+        """shipped transition proceeds when no matching PR exists."""
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def _fake_run_list(cmd, **kw):
+            if "pr" in cmd and "list" in cmd:
+                r = FakeResult()
+                r.stdout = "[]"
+                return r
+            return FakeResult()
+
+        monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
+        # Should not raise — no unmerged PR
+        tracker.transition(42, "pending-ship", "shipped", role="dm-lead")
+
+    def test_force_does_not_bypass_pr_check(self, monkeypatch, capsys):
+        """--force does NOT bypass the PR merge check (always enforced)."""
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def _fake_run_list(cmd, **kw):
+            if "pr" in cmd and "list" in cmd:
+                r = FakeResult()
+                r.stdout = json.dumps([
+                    {"number": 99, "headRefName": "squidsquad/skill/42", "url": "http://pr/99"}
+                ])
+                return r
+            return FakeResult()
+
+        monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
+        # Force should NOT bypass the PR merge check
+        with pytest.raises(SystemExit) as excinfo:
+            tracker.transition(42, "pending-ship", "shipped", role="dm-lead", force=True)
+        assert excinfo.value.code == 1
+        err = capsys.readouterr().err
+        assert "BLOCKED" in err
+        assert "unmerged" in err.lower()
 
 
 # ---------------------------------------------------------------------------
