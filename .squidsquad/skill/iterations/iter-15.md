@@ -1,7 +1,8 @@
-# SKILL Iteration 15
+# Iteration 15
 
-- **Date**: 2026-04-17 22:03
-- **Issues Fixed**: #1210 fixed (cycle.py help)
-- **Tasks Progressed**: none
-- **Tests**: passed (17/17)
-- **Notes**: Fixed #1210 (stale is-quiet in help). Rebased PRs #1157 and #1203 to resolve merge conflicts.
+- **Date**: 2026-04-18 20:35
+- **Type**: active
+- **Work Summary**:
+  - Fixed #1428 (deterministic QA tests)
+  - #1427 blocked on #1426
+- **Notes**: QA must write pytest tests for each TC. Deferred not valid. BLOCKED prevents ship. PM test plans must be deterministic.
