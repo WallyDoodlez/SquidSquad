@@ -381,6 +381,15 @@ def list_issues(role, issue_type="bug", status=None):
 
 def list_by_labels(labels_str):
     """List issues by arbitrary label string (for cross-role queries)."""
+    label_list = [l.strip() for l in labels_str.split(",") if l.strip()]
+
+    adapter = _get_forge_adapter()
+    if adapter:
+        issues = adapter.list_issues(labels=label_list, state="open", limit=50)
+        print(json.dumps(issues, indent=2))
+        return issues
+
+    # Default: gh CLI
     result = _run_list(
         ["gh", "issue", "list", "--label", labels_str, "--state", "open",
          "--json", "number,title,labels", "--limit", "50"],
@@ -396,6 +405,13 @@ def list_by_labels(labels_str):
 
 def list_all_open():
     """List all open issues (for ingestion/triage of external issues)."""
+    adapter = _get_forge_adapter()
+    if adapter:
+        issues = adapter.list_issues(labels=None, state="open", limit=50)
+        print(json.dumps(issues, indent=2))
+        return issues
+
+    # Default: gh CLI
     result = _run_list(
         ["gh", "issue", "list", "--state", "open",
          "--json", "number,title,labels,body", "--limit", "50"],
