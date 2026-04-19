@@ -49,3 +49,13 @@
 {"timestamp": 1776566456.2635665, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "claude", "action": "delegate-to-agent-tool"}
 {"timestamp": 1776566469.0159729, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "claude", "action": "delegate-to-agent-tool"}
 {"timestamp": 1776566475.8908913, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1776567942.7634902, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "success", "response_length": 8360, "elapsed_seconds": 45.3}
+{"timestamp": 1776567986.588059, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "success", "response_length": 8352, "elapsed_seconds": 43.0}
+{"timestamp": 1776568027.4906607, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "success", "response_length": 7616, "elapsed_seconds": 40.1}
+{"timestamp": 1776568067.8053586, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "success", "response_length": 8083, "elapsed_seconds": 39.5}
+{"timestamp": 1776568108.5206625, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "success", "response_length": 7653, "elapsed_seconds": 39.9}
+{"timestamp": 1776568152.1936421, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "success", "response_length": 8287, "elapsed_seconds": 42.9}
+{"timestamp": 1776568210.5131855, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "success", "response_length": 15418, "elapsed_seconds": 57.3}
+{"timestamp": 1776568270.8098636, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "success", "response_length": 15067, "elapsed_seconds": 59.5}
+{"timestamp": 1776568323.7800436, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "success", "response_length": 13951, "elapsed_seconds": 52.2}
+{"timestamp": 1776568389.045487, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "success", "response_length": 17004, "elapsed_seconds": 64.4}
