@@ -95,6 +95,11 @@ def get_model_for_task(task_type):
     if task_type in CLAUDE_LOCKED_TASKS:
         return "claude"
 
+    # Allow override for testing (live integration tests force gpt-5.2)
+    override = os.environ.get("SQUIDSQUAD_MODEL_OVERRIDE")
+    if override:
+        return override
+
     config_text = _read_config()
     routing = _parse_model_routing(config_text)
 

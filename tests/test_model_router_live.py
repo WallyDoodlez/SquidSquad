@@ -47,7 +47,13 @@ def _require_api_key():
 
 
 def _run_router(task_type, output_file, context, input_files=""):
-    """Run model_router.py and return (exit_code, output_path)."""
+    """Run model_router.py and return (exit_code, output_path).
+
+    Forces routing to gpt-5.2 by setting SQUIDSQUAD_MODEL_OVERRIDE env var.
+    This ensures live tests always hit the external model regardless of config.
+    """
+    env = os.environ.copy()
+    env["SQUIDSQUAD_MODEL_OVERRIDE"] = "gpt-5.2"
     cmd = [
         sys.executable, str(MODEL_ROUTER), task_type,
         "--task-id", "LIVE-TEST",
@@ -55,7 +61,7 @@ def _run_router(task_type, output_file, context, input_files=""):
         "--output-file", str(output_file),
         "--context", context,
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(REPO_ROOT))
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(REPO_ROOT), env=env)
     return result.returncode, Path(output_file)
 
 
@@ -63,7 +69,8 @@ def _extract_file_paths(text):
     """Extract file paths mentioned in markdown output."""
     # Match paths like references/scripts/foo.py, .squidsquad/bar/baz.md, etc.
     paths = re.findall(r'(?:references/|\.squidsquad/|tests/)\S+\.(?:py|md|yaml|yml|sh|ps1|json)', text)
-    return [p.rstrip('`).,;:') for p in paths]
+    # Filter out template placeholders (e.g. .squidsquad/start-<role>.ps1)
+    return [p.rstrip('`).,;:') for p in paths if '<' not in p and '>' not in p]
 
 
 def _extract_function_refs(text):
