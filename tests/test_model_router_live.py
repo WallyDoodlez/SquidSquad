@@ -29,17 +29,19 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = REPO_ROOT / "references" / "scripts"
+sys.path.insert(0, str(SCRIPTS))
 MODEL_ROUTER = SCRIPTS / "model_router.py"
 DIAG_LOG = REPO_ROOT / ".squidsquad" / "diagnostics" / "model-routing.log"
+
+from shared_fs import read_secret_or_env
 
 # [human-required] if no API key — human must fix the environment
 @pytest.fixture(autouse=True, scope="session")
 def _require_api_key():
-    if not os.environ.get("OPENAI_API_KEY"):
+    if not read_secret_or_env("OPENAI_API_KEY"):
         pytest.fail(
-            "HUMAN-REQUIRED: OPENAI_API_KEY not set. A human must configure "
-            "this environment variable before these tests can run. "
-            "Set it at the OS level, then re-run.",
+            "HUMAN-REQUIRED: OPENAI_API_KEY not found in ~/.squidsquad/secrets "
+            "or environment. A human must configure it before these tests can run.",
             pytrace=False,
         )
 

@@ -42,9 +42,16 @@ def call(model, system_prompt, user_prompt, tools, tool_handler, timeout=120):
     """
     openai = _ensure_openai()
 
-    api_key = os.environ.get("OPENAI_API_KEY")
+    # Read from ~/.squidsquad/secrets first, fall back to env var
+    try:
+        from shared_fs import read_secret_or_env
+        api_key = read_secret_or_env("OPENAI_API_KEY")
+    except ImportError:
+        api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY environment variable not set")
+        raise RuntimeError(
+            "OPENAI_API_KEY not found in ~/.squidsquad/secrets or environment"
+        )
 
     client = openai.OpenAI(api_key=api_key, timeout=timeout)
 
@@ -58,7 +65,7 @@ def call(model, system_prompt, user_prompt, tools, tool_handler, timeout=120):
         kwargs = {
             "model": model,
             "messages": messages,
-            "max_tokens": 32768,
+            "max_completion_tokens": 32768,
             "temperature": 0.2,
         }
         if tools:
