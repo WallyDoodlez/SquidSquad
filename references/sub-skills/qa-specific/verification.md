@@ -113,17 +113,18 @@ python references/scripts/git_ops.py branch-switch main
    TC result rules:
    - PASS: test function passes
    - FAIL: test function fails — include assertion error
-   - BLOCKED: TC requires an external resource that is unavailable (API key, Docker, network).
-     File a blocker issue and note the issue number. Do NOT skip or defer.
-   - "Deferred" is NOT a valid result. Every TC must be PASS, FAIL, or BLOCKED.
+   - HUMAN-REQUIRED: TC cannot run because the environment is not set up (missing API key,
+     Docker not running, etc.). This is NOT a code bug — a human must fix the environment.
+     Tag with `blocked:human-action` label and note what the human needs to do.
+   - "Deferred" and "Skipped" are NOT valid results. Every TC must be PASS, FAIL, or HUMAN-REQUIRED.
 
-   If any TC is marked human-required in TEST-PLAN.md, skip it — PM will route to human.
+   If any TC is marked `[human-required]` in TEST-PLAN.md, skip it — PM will route to human.
 
    Write results to .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-QA-RESULTS.md
    Include the full pytest output and a summary table.
    ```
 
-   **BLOCKED gate**: If any TC is BLOCKED, do NOT transition to pending-ship. The blocker issue must be resolved first. Comment: `"BLOCKED: [N] TCs blocked on [issue numbers]. Cannot ship until resolved."`
+   **HUMAN-REQUIRED gate**: If any TC is HUMAN-REQUIRED, do NOT transition to pending-ship. Add the `blocked:human-action` label and comment: `"HUMAN-REQUIRED: [N] TCs need human environment setup: [list what's needed]. Cannot ship until resolved."`
 
    QA reviews QA-RESULTS.md and makes the final decision.
 

@@ -31,12 +31,9 @@ Draft a test plan covering:
 - Regression: existing test suite passes, output diff before/after
 - Comprehension: expected answers pre-defined, keyword/exact match
 
-**`[human-required]`** — Only for LLM reasoning/judgment quality:
-- LLM reasoning quality: "is this analysis actually insightful?"
-- UX/copy clarity: "is this error message understandable?"
-- Scope/priority judgment: "should this be high or medium?"
-
-**`[requires: RESOURCE_NAME]`** — TC needs an external resource (API key, Docker, etc.)
+**`[human-required]`** — Human must be involved. Two sub-types:
+- **Judgment**: LLM reasoning quality, UX clarity, scope decisions — human evaluates
+- **Environment**: TC needs an external resource (API key, Docker, etc.) that only a human can set up. Mark as `[human-required: RESOURCE_NAME]`. If the resource is missing at test time, the TC result is HUMAN-REQUIRED (not skipped).
 
 **Rules**:
 - Every TC must have one of the above labels — no unlabeled TCs
