@@ -1,32 +1,18 @@
-### Self-Restart (Sentinel-Based)
+### Self-Restart (Watchdog-Managed)
 
-At the end of each cycle (after Step Done), check whether a restart is needed. **Never restart mid-cycle** — complete the full Ralph Loop first.
+Agent lifecycle is managed by the external **watchdog** (`references/scripts/watchdog.py`). Agents do **not** self-restart.
 
-**Restart triggers** (check in order):
+The watchdog handles:
+- **Context pressure restarts**: Detects high context pressure and restarts the agent between cycles.
+- **Template change restarts**: Detects when `.squidsquad/[ROLE]/CLAUDE.md` has been updated and restarts the agent to pick up new instructions.
+- **Dead agent recovery**: Detects crashed/stalled agents and reboots them.
 
-1. **Context pressure**: If context usage exceeded the threshold during Step 1b this cycle, trigger a restart to get a fresh context window.
-2. **Template change**: If `.squidsquad/[ROLE]/CLAUDE.md` mtime is newer than the session start time, trigger a restart to pick up updated instructions.
+**Agent responsibilities** (what you still do):
+- Checkpoint working state when context pressure is high (Step 1b).
+- Write `idle|` to `current-state` at cycle end so the watchdog knows you finished.
+- Continue working normally — the watchdog handles restarts externally.
 
-**Pre-restart checklist** (all steps required before writing the sentinel):
-
-1. Save working state to `.squidsquad/[ROLE]/working-state.md`.
-2. Commit and push all pending changes.
-3. Write status bar: `restarting|Self-restart — [reason]`
-4. Print: `[🦑 HH:MM:SS] Self-restart triggered: [reason]. State saved. Restarting...`
-
-**Trigger the restart**:
-
-Write the sentinel file with the reason:
-
-```bash
-echo "[reason]" > .squidsquad/[ROLE]/.restart
-```
-
-The boot script wrapper detects this sentinel, kills the current Claude process, deletes the sentinel, and starts a fresh session. The new session reads `working-state.md` on startup (Step 1c) and resumes where it left off.
-
-**Safety rules**:
-
-- Never write `.restart` mid-cycle — only after the cycle-complete marker.
-- Never write `.restart` if working state has uncommitted changes — commit first.
-- The sentinel is deleted by the boot script after restart — if it persists, the boot script did not detect it (check boot script version).
-- Maximum 3 self-restarts per hour (tracked in `.squidsquad/[ROLE]/restart-log.txt`). If exceeded, skip the restart and print a warning. This prevents infinite restart loops.
+**You do NOT**:
+- Write `.restart` sentinel files.
+- Check template mtimes for restart triggers.
+- Implement any self-restart logic.
