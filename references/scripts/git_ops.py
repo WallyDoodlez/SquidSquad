@@ -215,11 +215,37 @@ def pr_create(title, body):
 
 
 def pr_merge(pr_number, strategy="squash"):
-    """Merge a PR via gh CLI. Returns (success, message).
+    """Merge a PR. Uses forge adapter for non-GitHub backends,
+    gh CLI for GitHub. Returns (success, message).
 
     Checks PR state first — if already merged, returns success.
     On merge conflict or unexpected failure, returns failure with details.
     """
+    try:
+        from forge_adapter import get_adapter, _read_forge_config
+        config = _read_forge_config()
+        if config["provider"] not in ("github", ""):
+            adapter = get_adapter(config)
+            # Check state first via adapter
+            pr_data = adapter.view_pr(pr_number)
+            if pr_data:
+                state = pr_data.get("state", "")
+                if state == "MERGED":
+                    print(f"PR #{pr_number} already merged")
+                    return True, "already merged"
+                if state == "CLOSED":
+                    print(f"PR #{pr_number} closed without merge", file=sys.stderr)
+                    return False, "PR closed without merge"
+            success, msg = adapter.merge_pr(pr_number, strategy)
+            if success:
+                print(f"PR #{pr_number} merged ({strategy})")
+            else:
+                print(f"ERROR: PR #{pr_number} merge failed: {msg}", file=sys.stderr)
+            return success, msg
+    except ImportError:
+        pass
+
+    # Default: gh CLI
     # Check PR state first
     state_result = _run_list(
         ["gh", "pr", "view", str(pr_number), "--json", "state"],
@@ -242,7 +268,7 @@ def pr_merge(pr_number, strategy="squash"):
     result = _run_list(merge_args, check=False)
     if result.returncode == 0:
         print(f"PR #{pr_number} merged ({strategy})")
-        # Extract linked issue number from branch name and transition to pending-ship
+        # Extract linked issue number from branch name
         branch_result = _run_list(
             ["gh", "pr", "view", str(pr_number), "--json", "headRefName"],
             check=False,
