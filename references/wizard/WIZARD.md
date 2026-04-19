@@ -425,16 +425,20 @@ If **yes**:
 2. **Pick a model**: Show the provider's models list with the default highlighted.
    > Models: [list]. Default is **[default_model]**. Press Enter to accept, or type a model name.
 
-3. **Show env var**: Tell the user exactly which environment variable to set.
-   > To use [display_name], set this environment variable:
-   >
-   >   [auth_env_var]=your-api-key
-   >
-   > Set it at the OS level (not just this terminal) so all agents can
-   > use it. On Windows: System Properties → Environment Variables.
-   > On Mac/Linux: add to ~/.bashrc or ~/.zshrc.
+3. **Guide key setup**: Run the setup-provider subcommand to show the user where to store their API key and open the provider manifest in their editor:
+   ```bash
+   python references/scripts/model_router.py setup-provider <provider_name>
+   ```
+   This shows the env var name, the `~/.squidsquad/secrets` path, and opens the manifest for reference. Keys stored in `~/.squidsquad/secrets` are preferred over environment variables.
 
-4. **Skip validation**: Do NOT attempt a test API call during setup — the user may not have the key yet. The model router handles missing keys gracefully at runtime (falls back to Claude).
+4. **Optional validation**: Ask if the user has set their key and wants to test it:
+   > Have you set your API key? Want me to test the connection? (y/N)
+
+   If yes, run:
+   ```bash
+   python references/scripts/model_router.py validate <provider_name>
+   ```
+   This checks key presence via `~/.squidsquad/secrets` (with env var fallback) and runs a provider-specific validation if available. If validation fails or the user skips, the model router handles missing keys gracefully at runtime (falls back to Claude).
 
 Record:
 
