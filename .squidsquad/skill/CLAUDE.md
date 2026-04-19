@@ -284,55 +284,15 @@ If the interval matches, continue silently.
 <!-- /sub-skill: interval-sync -->
 
 <!-- sub-skill: triage-issues -->
-### Step 2 — Triage Issues
+### Step 2 — Pick Up Work (Deterministic Triage)
 
-Print: `[🦑 HH:MM:SS] Triaging issues...`
+Print: `[🦑 HH:MM:SS] Checking work queue...`
 
-Query GitHub Issues for open issues assigned to your role:
-
-```bash
-python references/scripts/tracker.py list-issues skill --status open
-```
-
-For each issue that does not have a `status:shipped` or closed state:
-
-1. Write working state: update `.squidsquad/skill/working-state.md` with `Task: #[NUMBER]`, status `in-progress`.
-2. Read the issue details: `gh issue view [NUMBER] --json title,body,comments`
-3. Locate the relevant code.
-4. Fix the issue.
-5. Run the test command: `python tests/run_tests.py`
-6. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false` (no modifications), do NOT transition — re-read the issue and apply the fix. Never mark an issue as fixed without actual code changes.
-7. If tests pass and changes exist:
-   - Transition status: `python references/scripts/tracker.py transition [NUMBER] open pending-test --role skill-lead`
-   - Comment: `python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Fixed in commit [hash]. [Brief explanation]. Status → Pending Test."`
-   - Clear working state.
-8. If the root cause belongs to another agent's domain:
-   - Do NOT mark this issue as fixed.
-   - File a new issue: `python references/scripts/tracker.py create-issue --title "[title]" --body "[description]" --role [OTHER_ROLE] --severity [level] --reporter skill-lead`
-   - Comment on the original: `python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Root cause is in [OTHER_ROLE]. Filed #[NEW_NUMBER]. Blocking."`
-   - Clear working state.
-<!-- /sub-skill: triage-issues -->
-
-<!-- sub-skill: implement-tasks -->
-### Step 3 — Implement Tasks
-
-Print: `[🦑 HH:MM:SS] Checking tasks...`
-
-**Issue gate**: Before picking up any task work, check for open issues assigned to your role:
-
-```bash
-python references/scripts/tracker.py list-issues skill --status open
-```
-
-If any open issues exist (non-empty result), **skip all task work this cycle** — issues always take priority. Print: `[🦑 HH:MM:SS] Open issues exist — skipping task pickup.` and proceed to Step 4.
-
-**First, check for QA-rejected items** (higher priority than new work — fix existing before starting new):
+**First, check for QA-rejected items** (highest priority — fix existing before starting new):
 
 ```bash
 python references/scripts/triage.py qa-rejected skill --json
 ```
-
-This script deterministically detects in-progress items (both issues and tasks) with unaddressed QA/PM feedback. It returns a JSON array of items needing rework, each with `number`, `title`, `feedback_from`, `feedback_at`, and `feedback_summary`.
 
 If the result is non-empty, pick up the first item:
 1. Read the full QA feedback: `gh issue view [NUMBER] --json title,body,comments`
@@ -344,19 +304,53 @@ If the result is non-empty, pick up the first item:
    python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role skill-lead
    python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Fixed [N] QA gaps: [list]. Status → Pending Test."
    ```
-6. Clear working state.
+6. Clear working state. Proceed to Step 4.
 
-**Then, check for new approved tasks**:
+**If no QA-rejected items, use the deterministic work queue**:
 
 ```bash
-python references/scripts/tracker.py list-tasks skill --status approved
+python references/scripts/tracker.py work-queue skill
 ```
 
-Pick the highest-priority task (check `priority:high` first, then `priority:medium`, then `priority:low`). Read it: `gh issue view [NUMBER] --json title,body,labels,comments`
+This returns a unified, priority-sorted list of ALL actionable items (issues AND tasks). Priority order is enforced by the script:
+1. In-progress items (resume first)
+2. Approved issues — severity:high → medium → low
+3. Approved tasks — priority:high → medium → low
+4. Open issues — severity:high → medium → low
 
-**Design label check**: If the issue has a `design:needed` or `design:in-progress` label, **skip it** — the designer agent has not completed the design yet. Move to the next task. Issues with `design:complete` or no design label are picked up normally.
+**You MUST pick the first item in the queue.** No discretion to skip, reorder, or cherry-pick. The queue is deterministic — the script decides priority, not you.
 
-When picking up a task, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
+If the queue is empty, print: `[🦑 HH:MM:SS] No actionable work in queue.` and proceed to Step 4.
+
+If the queue returns an item, read it: `gh issue view [NUMBER] --json title,body,labels,comments`
+
+**Design label check**: If the item has a `design:needed` or `design:in-progress` label, skip it and pick the next item in the queue.
+
+**For issues** (type:issue):
+1. Write working state: update `.squidsquad/skill/working-state.md` with `Task: #[NUMBER]`, status `in-progress`.
+2. Transition: `python references/scripts/tracker.py transition [NUMBER] [CURRENT_STATUS] in-progress --role skill-lead`
+3. Comment: `python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Picking up. Status → In Progress."`
+4. Read the issue details, locate the relevant code, fix the issue.
+5. Run the test command: `python tests/run_tests.py`
+6. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false`, do NOT transition — re-read the issue and apply the fix.
+7. If tests pass and changes exist:
+   - Transition: `python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role skill-lead`
+   - Comment: `python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Fixed in commit [hash]. [Brief explanation]. Status → Pending Test."`
+   - Clear working state.
+8. If the root cause belongs to another agent's domain:
+   - File a new issue to the correct role.
+   - Comment on the original with cross-reference.
+   - Clear working state.
+
+**For tasks** (type:task): Follow the task implementation flow below (Step 2b).
+<!-- /sub-skill: triage-issues -->
+
+<!-- sub-skill: implement-tasks -->
+### Step 2b — Implement Task (continued from Step 2)
+
+_This step is reached when Step 2 (deterministic triage) picks a task from the work queue._
+
+Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 
 1. Comment and transition status:
    ```bash

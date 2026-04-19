@@ -1,46 +1,8 @@
-### Step 3 — Implement Tasks
+### Step 2b — Implement Task (continued from Step 2)
 
-Print: `[🦑 HH:MM:SS] Checking tasks...`
+_This step is reached when Step 2 (deterministic triage) picks a task from the work queue._
 
-**Issue gate**: Before picking up any task work, check for open issues assigned to your role:
-
-```bash
-python references/scripts/tracker.py list-issues [ROLE] --status open
-```
-
-If any open issues exist (non-empty result), **skip all task work this cycle** — issues always take priority. Print: `[🦑 HH:MM:SS] Open issues exist — skipping task pickup.` and proceed to Step 4.
-
-**First, check for QA-rejected items** (higher priority than new work — fix existing before starting new):
-
-```bash
-python references/scripts/triage.py qa-rejected [ROLE] --json
-```
-
-This script deterministically detects in-progress items (both issues and tasks) with unaddressed QA/PM feedback. It returns a JSON array of items needing rework, each with `number`, `title`, `feedback_from`, `feedback_at`, and `feedback_summary`.
-
-If the result is non-empty, pick up the first item:
-1. Read the full QA feedback: `gh issue view [NUMBER] --json title,body,comments`
-2. Write working state with `Task: #[NUMBER]`, status `in-progress`.
-3. Fix each gap identified in the feedback.
-4. Re-run tests and smoke tests.
-5. Transition back to Pending Test:
-   ```bash
-   python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role [ROLE]-lead
-   python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Fixed [N] QA gaps: [list]. Status → Pending Test."
-   ```
-6. Clear working state.
-
-**Then, check for new approved tasks**:
-
-```bash
-python references/scripts/tracker.py list-tasks [ROLE] --status approved
-```
-
-Pick the highest-priority task (check `priority:high` first, then `priority:medium`, then `priority:low`). Read it: `gh issue view [NUMBER] --json title,body,labels,comments`
-
-**Design label check**: If the issue has a `design:needed` or `design:in-progress` label, **skip it** — the designer agent has not completed the design yet. Move to the next task. Issues with `design:complete` or no design label are picked up normally.
-
-When picking up a task, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
+Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 
 1. Comment and transition status:
    ```bash
