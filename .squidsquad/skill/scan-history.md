@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-19 19:01
+
+- **Files scanned**: references/scripts/tracker.py, references/scripts/git_ops.py, references/scripts/cycle.py, references/scripts/triage.py, references/scripts/scan_index.py
+- **Findings**: #1708 (watchdog.py test file missing from main — medium), #1709 (tracker.py missing dedicated test file — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-19 09:34
 
 - **Files scanned**: references/scripts/forgejo_setup.py, references/scripts/providers/openai/adapter.py
