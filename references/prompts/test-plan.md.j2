@@ -31,7 +31,7 @@ Draft a test plan covering:
 - Regression: existing test suite passes, output diff before/after
 - Comprehension: expected answers pre-defined, keyword/exact match
 
-**`[human-verification]`** — Only for LLM reasoning/judgment quality:
+**`[human-required]`** — Only for LLM reasoning/judgment quality:
 - LLM reasoning quality: "is this analysis actually insightful?"
 - UX/copy clarity: "is this error message understandable?"
 - Scope/priority judgment: "should this be high or medium?"
@@ -42,7 +42,7 @@ Draft a test plan covering:
 - Every TC must have one of the above labels — no unlabeled TCs
 - Use concrete assertions (file exists, string matches, JSON structure, exit codes)
 - Do NOT write vague criteria — define measurable thresholds
-- Only "is the LLM reasoning correct?" qualifies as human-verification; everything around it (format, structure, completeness, references, state) is deterministic
+- Only "is the LLM reasoning correct?" qualifies as human-required; everything around it (format, structure, completeness, references, state) is deterministic
 
 ## Output Format
 

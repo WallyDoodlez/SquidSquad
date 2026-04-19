@@ -117,7 +117,7 @@ python references/scripts/git_ops.py branch-switch main
      File a blocker issue and note the issue number. Do NOT skip or defer.
    - "Deferred" is NOT a valid result. Every TC must be PASS, FAIL, or BLOCKED.
 
-   If any TC is marked human-verification in TEST-PLAN.md, skip it — PM will route to human.
+   If any TC is marked human-required in TEST-PLAN.md, skip it — PM will route to human.
 
    Write results to .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-QA-RESULTS.md
    Include the full pytest output and a summary table.
