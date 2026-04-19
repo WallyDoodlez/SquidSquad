@@ -243,26 +243,54 @@
 
 ## Quality Comparison Tests (requires OPENAI_API_KEY)
 
-### TC-38: Research output — Claude vs GPT 5.2 side-by-side
-- **Precondition**: `OPENAI_API_KEY` set. A real task exists with sufficient codebase context (use a recently completed task for realistic input).
-- **Steps**: (1) Run model_router.py with `Research Model: gpt-5.2` to produce RESEARCH-external.md. (2) Run the same task via Agent tool (Claude) to produce RESEARCH-claude.md. (3) PM compares both outputs.
-- **Expected**: Both outputs have all required sections. External model output references real files and line numbers (evidence of tool-use exploration). Depth of analysis is comparable — both identify the same major risks and side effects.
-- **Verification**: PM scores both on: section completeness (all headers present), specificity (file paths, line numbers, concrete recommendations), edge case coverage (number of edge cases identified), accuracy (no hallucinated files or functions). Document scores in QA-RESULTS.md.
-- **Pass criteria**: External model scores >= 70% of Claude's score on each dimension. If below, flag as quality concern (does not block — user chose to default research to external).
+### TC-38: Research output — GPT 5.2 produces valid structured output (deterministic)
+- **Precondition**: `OPENAI_API_KEY` set. Input files exist for a recently completed task (e.g., use #1389 planning artifacts as input).
+- **Steps**: Run `python references/scripts/model_router.py research --task-id 1389 --input-files ".squidsquad/pm/planning/FEAT-SKILL-1389-CONTEXT.md" --output-file /tmp/research-gpt.md --context "Research the Forgejo backend task"`
+- **Expected**: Exit code 0. Output file written.
+- **Verification (deterministic assertions)**:
+  1. Output file exists and is non-empty: `test -s /tmp/research-gpt.md`
+  2. Minimum length: `wc -c /tmp/research-gpt.md` >= 2000 chars
+  3. Required sections present: grep for `## Summary`, `## Impact Analysis`, `## Side Effects`, `## Edge Cases`, `## Recommendation`
+  4. File references are real: extract all file paths from output, verify each exists on disk with `test -f`
+  5. No hallucinated functions: extract all `function_name()` or `def function_name` references, grep the codebase to confirm they exist
+  6. Tool usage evidence: check model_router diagnostics log (`.squidsquad/diagnostics/model-routing.log`) shows tool calls were made (Read/Grep/Glob)
+- **Pass criteria**: All 6 assertions pass.
+- **Category**: deterministic
 
-### TC-39: Test plan output — Claude vs GPT 5.2 side-by-side
-- **Precondition**: Same as TC-38. RESEARCH.md and CONTEXT.md exist for the test task.
-- **Steps**: (1) Run model_router.py with `Test Plan Model: gpt-5.2` to produce TEST-PLAN-external.md. (2) Run via Agent tool to produce TEST-PLAN-claude.md. (3) PM compares.
-- **Expected**: Both produce valid test plans with TC structure. External model covers happy path, edge cases, and regressions.
-- **Verification**: PM scores on: number of TCs, edge case diversity, regression risk identification, comprehension question quality. Document in QA-RESULTS.md.
-- **Pass criteria**: External model produces >= 60% as many meaningful test cases as Claude.
+### TC-38b: Research output — quality comparison (human-verification)
+- **Precondition**: TC-38 passed. Claude research output also exists (from original #1389 planning).
+- **Steps**: Human reads both `/tmp/research-gpt.md` and `.squidsquad/pm/planning/FEAT-SKILL-1389-RESEARCH.md`.
+- **Verification**: Human judges whether GPT output identifies similar risks, covers similar scope, and is actionable.
+- **Pass criteria**: Human confirms acceptable quality or flags specific gaps.
+- **Category**: human-verification
 
-### TC-40: Discussion prep output — Claude vs GPT 5.2 side-by-side
-- **Precondition**: Same as TC-38. RESEARCH.md exists with open questions.
-- **Steps**: (1) Run model_router.py with `Discussion Prep Model: gpt-5.2`. (2) Run via Agent tool. (3) PM compares.
-- **Expected**: Both categorize questions, suggest 3 options each with pros/cons, recommend an option. External model's recommendations are reasonable and actionable.
-- **Verification**: PM scores on: option quality, pros/cons specificity, recommendation justification. Document in QA-RESULTS.md.
-- **Pass criteria**: External model's options and recommendations are usable without major revision.
+### TC-39: Test plan output — GPT 5.2 produces valid structured output (deterministic)
+- **Precondition**: `OPENAI_API_KEY` set. RESEARCH.md and CONTEXT.md exist for a task.
+- **Steps**: Run `python references/scripts/model_router.py test-plan --task-id 1389 --input-files ".squidsquad/pm/planning/FEAT-SKILL-1389-RESEARCH.md,.squidsquad/pm/planning/FEAT-SKILL-1389-CONTEXT.md" --output-file /tmp/testplan-gpt.md --context "Draft test plan for Forgejo backend"`
+- **Expected**: Exit code 0. Output file written.
+- **Verification (deterministic assertions)**:
+  1. Output file exists and is non-empty
+  2. Minimum length: >= 1500 chars
+  3. Contains at least 5 test cases: `grep -c "### TC-" /tmp/testplan-gpt.md` >= 5
+  4. Each TC has required fields: for each `### TC-` block, grep for `Precondition`, `Steps`, `Expected`, `Verification`
+  5. Contains smoke tests section: `grep "## Smoke Tests" /tmp/testplan-gpt.md`
+  6. Contains regression risks section: `grep "## Regression Risks" /tmp/testplan-gpt.md`
+- **Pass criteria**: All 6 assertions pass.
+- **Category**: deterministic
+
+### TC-40: Discussion prep output — GPT 5.2 produces valid structured output (deterministic)
+- **Precondition**: `OPENAI_API_KEY` set. RESEARCH.md exists with open questions.
+- **Steps**: Run `python references/scripts/model_router.py discussion-prep --task-id 1389 --input-files ".squidsquad/pm/planning/FEAT-SKILL-1389-RESEARCH.md" --output-file /tmp/discprep-gpt.md --context "Prepare discussion for Forgejo backend"`
+- **Expected**: Exit code 0. Output file written.
+- **Verification (deterministic assertions)**:
+  1. Output file exists and is non-empty
+  2. Minimum length: >= 1000 chars
+  3. Contains at least 3 questions: `grep -cE "^### Q[0-9]|^[0-9]+\." /tmp/discprep-gpt.md` >= 3
+  4. Each question has options: for each question block, grep for at least 2 option/choice entries
+  5. Each question has a recommendation: grep for `recommend` or `Recommended` within each block
+  6. Tool usage evidence: diagnostics log shows tool calls
+- **Pass criteria**: All 6 assertions pass.
+- **Category**: deterministic
 
 ## Regression Risks
 
