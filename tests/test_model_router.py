@@ -354,6 +354,61 @@ class TestListProviders:
 
 
 # ---------------------------------------------------------------------------
+# setup-provider and validate
+# ---------------------------------------------------------------------------
+
+class TestFindProviderManifest:
+    def test_finds_openai(self):
+        path, manifest = model_router._find_provider_manifest("openai")
+        assert path is not None
+        assert manifest is not None
+        assert manifest["name"] == "openai"
+
+    def test_not_found_returns_none(self):
+        path, manifest = model_router._find_provider_manifest("nonexistent")
+        assert path is None
+        assert manifest is None
+
+    def test_case_insensitive(self):
+        path, manifest = model_router._find_provider_manifest("OpenAI")
+        assert manifest is not None
+
+
+class TestSetupProvider:
+    def test_unknown_provider_returns_2(self, capsys):
+        code = model_router.setup_provider("nonexistent")
+        assert code == 2
+        err = capsys.readouterr().err
+        assert "not found" in err
+
+    @patch("os.startfile", create=True)
+    def test_known_provider_returns_0(self, mock_startfile, capsys):
+        code = model_router.setup_provider("openai")
+        assert code == 0
+        out = capsys.readouterr().out
+        assert "OPENAI_API_KEY" in out
+        assert "secrets" in out.lower()
+
+
+class TestValidateProvider:
+    def test_unknown_provider_returns_2(self, capsys):
+        code = model_router.validate_provider("nonexistent")
+        assert code == 2
+
+    def test_no_api_key_returns_1(self, capsys):
+        # Remove key from env AND mock shared_fs to raise ImportError
+        env_copy = os.environ.copy()
+        env_copy.pop("OPENAI_API_KEY", None)
+        with patch.dict(os.environ, env_copy, clear=True):
+            # Mock the import of shared_fs inside validate_provider
+            with patch.dict("sys.modules", {"shared_fs": None}):
+                code = model_router.validate_provider("openai")
+        assert code == 1
+        err = capsys.readouterr().err
+        assert "not set" in err
+
+
+# ---------------------------------------------------------------------------
 # No shell=True
 # ---------------------------------------------------------------------------
 

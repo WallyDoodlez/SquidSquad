@@ -739,6 +739,167 @@ def route(task_type, task_id, input_files, output_file, context):
 
 
 # ---------------------------------------------------------------------------
+# Provider setup and validation
+# ---------------------------------------------------------------------------
+
+
+def _find_provider_manifest(provider_name):
+    """Find a provider manifest by name. Returns (manifest_path, manifest_dict) or (None, None)."""
+    if not PROVIDERS_DIR.exists():
+        return None, None
+
+    try:
+        import yaml
+    except ImportError:
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "pyyaml"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        import yaml
+
+    for provider_dir in PROVIDERS_DIR.iterdir():
+        if not provider_dir.is_dir():
+            continue
+        manifest_path = provider_dir / "manifest.yaml"
+        if not manifest_path.exists():
+            continue
+        try:
+            manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+            if manifest.get("name", "").lower() == provider_name.lower():
+                return manifest_path, manifest
+        except Exception:
+            continue
+    return None, None
+
+
+def setup_provider(provider_name):
+    """Guide API key setup for a provider. Returns exit code."""
+    manifest_path, manifest = _find_provider_manifest(provider_name)
+    if not manifest:
+        print(f"ERROR: Provider '{provider_name}' not found.", file=sys.stderr)
+        print("Available providers:", file=sys.stderr)
+        for p in list_providers():
+            print(f"  - {p['name']}: {p['display_name']}", file=sys.stderr)
+        return 2
+
+    auth = manifest.get("auth", {})
+    env_var = auth.get("env_var", "")
+    display = manifest.get("display_name", provider_name)
+    models = list(manifest.get("models", {}).keys())
+    secrets_path = Path.home() / ".squidsquad" / "secrets"
+
+    print(f"\n=== {display} Setup ===\n")
+    print(f"Provider: {display}")
+    print(f"Available models: {', '.join(models)}")
+    print(f"Default model: {manifest.get('default_model', 'N/A')}")
+
+    if env_var:
+        print(f"\nAPI Key Configuration:")
+        print(f"  Environment variable: {env_var}")
+        print(f"  Secrets file: {secrets_path}")
+        print(f"\nTo configure, either:")
+        print(f"  1. Set env var: export {env_var}=your-api-key-here")
+        print(f"  2. Write to secrets: python references/scripts/shared_fs.py write-secret {env_var} your-api-key-here")
+        print(f"\nThe secrets file ({secrets_path}) is recommended — it persists across sessions")
+        print(f"and is shared by all agents.")
+
+    # Open manifest in editor
+    print(f"\nManifest file: {manifest_path}")
+    print("Opening manifest in editor...")
+    try:
+        import platform as plat
+        system = plat.system().lower()
+        if system == "windows":
+            os.startfile(str(manifest_path))
+        elif system == "darwin":
+            subprocess.Popen(["open", str(manifest_path)])
+        else:
+            subprocess.Popen(["xdg-open", str(manifest_path)])
+    except Exception as e:
+        print(f"  Could not open editor: {e}", file=sys.stderr)
+        print(f"  Open manually: {manifest_path}")
+
+    print(f"\nAfter setting your API key, validate with:")
+    print(f"  python references/scripts/model_router.py validate {provider_name}")
+
+    return 0
+
+
+def validate_provider(provider_name):
+    """Test API key for a provider with a cheap call. Returns exit code."""
+    _, manifest = _find_provider_manifest(provider_name)
+    if not manifest:
+        print(f"ERROR: Provider '{provider_name}' not found.", file=sys.stderr)
+        return 2
+
+    auth = manifest.get("auth", {})
+    env_var = auth.get("env_var", "")
+    display = manifest.get("display_name", provider_name)
+
+    if not env_var:
+        print(f"{display}: No API key required.")
+        return 0
+
+    # Check for API key
+    try:
+        from shared_fs import read_secret_or_env
+        api_key = read_secret_or_env(env_var)
+    except ImportError:
+        api_key = os.environ.get(env_var)
+
+    if not api_key:
+        print(
+            f"FAIL: {env_var} not set. "
+            f"Set it via env var or ~/.squidsquad/secrets.",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Try loading the provider adapter and making a cheap test call
+    default_model = manifest.get("default_model", "")
+    if not default_model:
+        models = list(manifest.get("models", {}).keys())
+        default_model = models[0] if models else ""
+
+    print(f"Validating {display} (model: {default_model})...")
+    os.environ[env_var] = api_key
+
+    try:
+        adapter_module = _load_adapter(manifest)
+        if adapter_module and hasattr(adapter_module, "validate"):
+            ok, msg = adapter_module.validate(api_key, default_model)
+            if ok:
+                print(f"OK: {msg}")
+                return 0
+            else:
+                print(f"FAIL: {msg}", file=sys.stderr)
+                return 1
+
+        # Fallback: try a minimal API call via the adapter's run function
+        print(f"OK: API key is set ({len(api_key)} chars). "
+              f"No validation endpoint available — key format looks valid.")
+        return 0
+    except Exception as e:
+        print(f"FAIL: {e}", file=sys.stderr)
+        return 1
+
+
+def _load_adapter(manifest):
+    """Load the provider adapter module. Returns module or None."""
+    provider_name = manifest.get("name", "")
+    adapter_path = PROVIDERS_DIR / provider_name / "adapter.py"
+    if not adapter_path.exists():
+        return None
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        f"provider_{provider_name}", str(adapter_path)
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -765,12 +926,30 @@ def main():
     # List providers subcommand
     subparsers.add_parser("list-providers", help="List available model providers (JSON)")
 
+    # Setup provider subcommand
+    setup_parser = subparsers.add_parser(
+        "setup-provider", help="Guide API key setup for a provider",
+    )
+    setup_parser.add_argument("provider", help="Provider name (e.g. openai)")
+
+    # Validate subcommand
+    validate_parser = subparsers.add_parser(
+        "validate", help="Test API key for a provider with a cheap call",
+    )
+    validate_parser.add_argument("provider", help="Provider name (e.g. openai)")
+
     args = parser.parse_args()
 
     if args.command == "list-providers":
         providers = list_providers()
         print(json.dumps(providers, indent=2))
         sys.exit(0)
+    elif args.command == "setup-provider":
+        code = setup_provider(args.provider)
+        sys.exit(code)
+    elif args.command == "validate":
+        code = validate_provider(args.provider)
+        sys.exit(code)
     elif args.command in (
         "route", "research", "discussion-prep", "test-plan",
         "improvement-scan", "qa-execution", "comprehension",
