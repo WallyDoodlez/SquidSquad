@@ -39,6 +39,7 @@ You have a codebase and Claude Code. You can fix one bug at a time. But what if 
 - **Auto-merge** — when QA verifies a task, PM automatically squash-merges the PR so you don't have to. Bug fixes and items tagged `merge:manual` still require your review. Controlled via `Auto Merge` in `config.md`
 - **Multi-model subagents** — route token-heavy tasks (research, discussion prep, test plans, improvement scanning) to external models like GPT 5.2 via API, keeping Claude for the main loop and comprehension testing. Configure per-task model routing in `config.md` under `Model Routing`. Falls back to Claude automatically if the external model is unavailable
 - **Pipeline self-healing** — PM's pipeline sentinel detects 6 types of stuck tasks (orphaned PRs, shipped-without-merge, stalled approvals, dead-agent work items, and more). When detected, it unsticks the item immediately and auto-files a root-cause bug so the gap gets fixed permanently
+- **Shared filesystem** — API keys and cross-clone config live in `~/.squidsquad/` instead of environment variables. Secrets are stored with restricted file permissions and read automatically by the model router and providers. No more polluting your shell environment with API keys
 - **Auto versioning** — ships are counted and minor versions auto-bump when thresholds are met
 
 ---

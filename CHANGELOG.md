@@ -4,6 +4,23 @@ All notable changes to SquidSquad will be documented in this file. This changelo
 
 ---
 
+## [0.22.0] — 2026-04-18
+
+### Added
+
+- #1426 — **Shared filesystem** — API keys and cross-clone config now live in `~/.squidsquad/` with restricted file permissions. No more environment variable pollution — secrets are read automatically by the model router and providers
+
+### Fixed
+
+- #1395 — Research phase now consults the shared vault for existing decisions, patterns, and human preferences before investigating
+- #1397 — PRs now start as drafts and convert to ready only after QA passes, preventing premature merges
+- #1398 — Context pressure values now come from real statusline data instead of estimates
+- #1399 — PRs now auto-close linked GitHub Issues on merge via "Closes #N" in PR body
+- #1405 — DM delivery now verifies PR is merged before marking Shipped
+- #1428 — QA verification now requires deterministic pytest tests before marking items as verified
+
+---
+
 ## [0.21.0] — 2026-04-18
 
 ### Added
