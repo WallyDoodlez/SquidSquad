@@ -66,6 +66,12 @@ class TestGetAdapter:
         adapter = forge_adapter.get_adapter(config)
         assert isinstance(adapter, forge_adapter.ForgejoAdapter)
 
+    def test_forgejo_remote_provider(self):
+        config = {"provider": "forgejo-remote", "endpoint": "https://forge.example.com",
+                  "owner": "test", "repo": "repo"}
+        adapter = forge_adapter.get_adapter(config)
+        assert isinstance(adapter, forge_adapter.ForgejoAdapter)
+
     def test_unknown_falls_back_to_github(self):
         config = {"provider": "unknown", "endpoint": "", "owner": "t", "repo": "r"}
         adapter = forge_adapter.get_adapter(config)

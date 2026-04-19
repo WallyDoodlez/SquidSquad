@@ -497,7 +497,7 @@ def get_adapter(config=None):
     provider = config["provider"].lower()
     if provider == "github":
         adapter = GitHubAdapter(config)
-    elif provider in ("forgejo", "forgejo-local"):
+    elif provider in ("forgejo", "forgejo-local", "forgejo-remote"):
         adapter = ForgejoAdapter(config)
     else:
         print(f"[forge] Unknown provider '{provider}', falling back to GitHub",
