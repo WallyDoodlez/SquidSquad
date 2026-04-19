@@ -4,12 +4,12 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #1345 Boot wrapper .restart sentinel — pending-test (PR merged, fix on main)
-- #1291 Multi-model subagents — pending-test (setup flow added)
-- #1395-#1399 Process bugs batch — approved (vault consultation, DM merge, draft PRs, context pressure, PR-close)
-- #473/#474 Test coverage requirements — approved, high severity, 5+ days stalled
-- #1389 Forgejo backend for non-technical teams — pending, awaiting planning approval
-- #1278 Vault-remember diff-based entity extraction — planned, awaiting human approval
+- #1291 Multi-model subagents — in-progress (reopened 3rd time, live API tests required)
+- #1426 Shared filesystem ~/.squidsquad/ — approved, dependency for #1427 and #1389
+- #1428 Deterministic QA testing — approved, changes PM test plans + QA verification
+- #1389 Forgejo backend — approved, depends on #1426
+- #473/#474 Test coverage requirements — approved, high severity, 5+ days stalled (5 nudges)
+- #1427 Model router setup UX — approved, depends on #1426
 
 ## Recent Decisions
 
