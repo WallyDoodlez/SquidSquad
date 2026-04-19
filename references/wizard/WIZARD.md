@@ -450,6 +450,59 @@ The commit step (Step 7) writes this to the `## Model Routing` section of config
 
 ---
 
+## Step 5c — Forge backend (optional)
+
+Ask:
+
+> SquidSquad uses a Git forge for issue tracking and PRs. The default
+> is GitHub. You can also run a self-hosted Forgejo instance for teams
+> that don't use GitHub. Which backend? (GitHub/Forgejo)
+
+If **GitHub** (default): skip. Record:
+
+```
+"forge_backend": {
+    "provider": "github",
+}
+```
+
+If **Forgejo**:
+
+1. **Check Docker**: Run `python references/scripts/forgejo_setup.py check-docker` and parse JSON.
+   - If `ok: false`: show the error message and offer to switch to GitHub or abort.
+   - If `ok: true`: continue.
+
+2. **Deploy**: Run `python references/scripts/forgejo_setup.py deploy` and parse JSON.
+   - If `ok: false`: show the error and offer GitHub fallback.
+   - If `ok: true`: show the URL.
+
+3. **Guide user**: Tell the user:
+   > Forgejo is running at [url]. Open it in your browser to:
+   > 1. Create an admin account (first user becomes admin)
+   > 2. Create a repository for your project
+   >
+   > When you've done that, tell me your username and repo name.
+
+4. **Create token**: After user provides username, run:
+   `python references/scripts/forgejo_setup.py create-token [USERNAME]`
+   This prompts for password interactively. Parse the JSON result.
+   Write the token to secrets: `python references/scripts/shared_fs.py write-secret FORGEJO_TOKEN [token]`
+
+5. Record:
+
+```
+"forge_backend": {
+    "provider": "forgejo",
+    "endpoint": "http://localhost:3000",
+    "owner": "<username>",
+    "repo": "<repo name>",
+}
+```
+
+The commit step (Step 7) writes this to the `## Forge Backend` section of config.md.
+
+---
+
 ## Step 6 — Review screen
 
 You now have a complete install spec in memory. Compose the summary
