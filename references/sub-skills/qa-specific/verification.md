@@ -57,7 +57,9 @@ For each issue:
    ```
    If no branch referenced, verify on main as usual.
 3. Run the relevant test or manually verify the fix.
-5. If verified:
+4. **Test coverage check**: Verify that the fix includes a regression test. Check for new or modified test files corresponding to the changed code. If the fix adds or changes code but includes no tests, reject it.
+5. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
+6. If verified (fix works, regression test exists, all tests pass):
    - If a PR exists for this issue, convert from draft to ready:
      ```bash
      gh pr list --search "squidsquad/" --state open --json number,headRefName | python -c "import sys,json; [print(p['number']) for p in json.load(sys.stdin) if '/[NUMBER]' in p['headRefName']]"
@@ -70,9 +72,9 @@ For each issue:
      python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified. Status → Pending Ship."
      ```
    - Increment `Shipped Since Last Bump`: `python references/scripts/config.py set shipped-since-bump [N+1]`
-6. If not verified:
+7. If not verified (fix doesn't work, no regression test, or tests fail):
    - Reopen: `python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead`
-   - Comment with specific failures.
+   - Comment with specific failures — be specific about missing tests.
 
 ### Step 5 — Verify Pending Test Tasks
 
@@ -140,7 +142,11 @@ python references/scripts/git_ops.py branch-switch main
 
 2. **If no TEST-PLAN.md exists**, test against the acceptance criteria manually.
 
-3. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, or unresolved finding is discovered:
+2b. **Test coverage check** (always runs, with or without TEST-PLAN.md): Verify that new code has corresponding unit tests. Check for new or modified test files. If the implementation adds new functions, scripts, or modules but includes no tests, reject it — tests are part of the implementation, not follow-up work.
+
+2c. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
+
+3. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, missing test coverage, or unresolved finding is discovered:
    ```bash
    python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead
    python references/scripts/tracker.py comment [NUMBER] --role qa --message "FAIL. [list every specific finding]. Back to In Progress."

@@ -53,12 +53,14 @@ python references/scripts/tracker.py list-issues skill --status pending-test
 For each result:
 
 1. Run the relevant test or manually verify the fix.
-2. If verified:
+2. **Test coverage check**: Verify that the fix includes a regression test. Check for new or modified test files corresponding to the changed code. If the fix adds or changes code but includes no tests, reject it.
+3. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
+4. If verified (fix works, regression test exists, all tests pass):
    - Update status to `Verified`, then `Closed`.
    - Append Discussion entries for each transition.
-3. If not verified:
+5. If not verified (fix doesn't work, no regression test, or tests fail):
    - Update status back to `Open`.
-   - Append a Discussion entry explaining what failed.
+   - Append a Discussion entry explaining what failed — be specific about missing tests.
 
 #### Step 6 — Verify Pending Test Tasks
 
@@ -73,7 +75,9 @@ python references/scripts/tracker.py list-tasks skill --status pending-test
 For each result:
 
 1. Test against the acceptance criteria.
-2. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, or unresolved finding is discovered — update back to `In Progress` and append a Discussion entry listing every specific finding. Do NOT mark Pending Ship with "gaps noted for follow-up." ALL findings must be resolved before shipping.
+2. **Test coverage check**: Verify that new code has corresponding unit tests. Check for new or modified test files. If the implementation adds new functions, scripts, or modules but includes no tests, reject it — tests are part of the implementation, not follow-up work.
+3. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
+4. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, missing test coverage, or unresolved finding is discovered — update back to `In Progress` and append a Discussion entry listing every specific finding. Do NOT mark Pending Ship with "gaps noted for follow-up." ALL findings must be resolved before shipping.
 3. **Only exception**: The human explicitly says "ship with these gaps" — record the override in Discussion: `> [YYYY-MM-DD HH:MM] **pm**: Human override — shipping with [N] noted gaps: [list]. Status → Pending Ship.`
 4. If all criteria pass with zero gaps: update to `Pending Ship`, append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. Status → Pending Ship.`
 5. **delivery:skip check**: If the task is internal-only (agent template changes, config changes, internal tooling, process improvements) with no user-facing delivery work needed, add `delivery: skip` to the Discussion entry when marking Pending Ship: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. delivery: skip (internal-only, no user-facing changes). Status → Pending Ship.` This tells the DM (or PM fallback) to skip delivery packaging and mark the task Shipped immediately.
