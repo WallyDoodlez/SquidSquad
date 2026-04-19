@@ -569,6 +569,33 @@ def build_config_md(spec):
         lines.append("- (none)")
     lines.append("")
 
+    # --- ## Forge Backend ---
+    lines.append("## Forge Backend")
+    lines.append("")
+    forge = spec.get("forge_backend") or {}
+    lines.append(f"- **Provider**: {forge.get('provider', 'github')}")
+    lines.append(f"- **Endpoint**: {forge.get('endpoint', 'https://api.github.com')}")
+    if forge.get("owner"):
+        lines.append(f"- **Owner**: {forge['owner']}")
+    if forge.get("repo"):
+        lines.append(f"- **Repo**: {forge['repo']}")
+    lines.append("")
+
+    # --- ## Model Routing ---
+    lines.append("## Model Routing")
+    lines.append("")
+    routing = spec.get("model_routing") or {}
+    lines.append(f"- **Default Model**: {routing.get('model', 'claude')}")
+    lines.append(f"- **Research Model**: {routing.get('model', 'claude')}")
+    lines.append("- **Discussion Prep Model**: claude")
+    lines.append("- **Test Plan Model**: claude")
+    lines.append("- **QA Execution Model**: claude")
+    lines.append("- **Comprehension Model**: claude")
+    lines.append("- **Improvement Scan Model**: claude")
+    lines.append("- **Fallback Model**: claude")
+    lines.append("- **API Timeout Seconds**: 120")
+    lines.append("")
+
     # Ensure exactly one trailing newline
     text = "\n".join(lines).rstrip("\n") + "\n"
     return text

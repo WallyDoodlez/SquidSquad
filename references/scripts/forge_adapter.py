@@ -389,9 +389,12 @@ class ForgejoAdapter(ForgeAdapter):
 
     def remove_labels(self, number, labels):
         label_ids = self._resolve_label_ids(labels)
+        all_ok = True
         for lid in label_ids:
-            self._api("DELETE", f"{self._repo_path()}/issues/{number}/labels/{lid}")
-        return True
+            result = self._api("DELETE", f"{self._repo_path()}/issues/{number}/labels/{lid}")
+            if result is None:
+                all_ok = False
+        return all_ok
 
     def create_pr(self, title, body, head, base="main", draft=True):
         payload = {
@@ -399,6 +402,7 @@ class ForgejoAdapter(ForgeAdapter):
             "body": body,
             "head": head,
             "base": base,
+            "draft": draft,
         }
         data = self._api("POST", f"{self._repo_path()}/pulls", payload)
         if not data:
