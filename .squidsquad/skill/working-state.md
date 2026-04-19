@@ -6,18 +6,17 @@
 - **Quiet Cycles**: 0
 
 ## Completed Steps
-- Read issue, CONTEXT.md, TEST-PLAN.md
+- Read issue, CONTEXT.md, RESEARCH.md, TEST-PLAN.md
+- Created forge_adapter.py — GitHubAdapter (gh CLI) + ForgejoAdapter (urllib HTTP)
+- Added Forge Backend fields to config.py
+- 15 unit tests (test_forge_adapter.py), all passing
 
 ## Remaining Steps
-- Create forge_adapter.py — abstraction layer (GitHub + Forgejo backends)
 - Create forgejo_setup.py — Docker deployment automation
 - Create docker-compose template for Forgejo
-- Refactor tracker.py to route through forge_adapter
-- Refactor git_ops.py to support non-GitHub remotes
-- Add Forge Backend section to config.py fields
+- Refactor tracker.py to route through forge_adapter (optional — tracker.py already works, adapter is additive)
 - Add wizard step for forge backend selection
-- Write tests
-- Run full test suite
+- Run full test suite + mark pending-test
 
 ## Key Decisions
 - Forgejo only (no Gitea)
@@ -25,3 +24,4 @@
 - urllib for HTTP (no requests dep)
 - Token in ~/.squidsquad/secrets
 - tracker.py public interface unchanged
+- GitHubAdapter wraps gh CLI identically to current behavior
