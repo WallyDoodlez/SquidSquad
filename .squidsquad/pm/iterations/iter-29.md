@@ -1,12 +1,5 @@
-# PM Iteration 29
+# Iteration 29
 
-- **Date**: 2026-04-15 00:32
-- **Human Check-in**: no input
-- **E2E Tests**: skipped (QA present)
-- **Issues Filed**: none
-- **Issues Verified**: none (QA handles)
-- **Tasks Shipped**: none
-- **Post-Merge Recompose**: PR #959 merged — recomposed all roles (pm, qa, skill, dm)
-- **Agent Health**: DM 👻 stalled → rebooted ✓, QA 👻 stalled → rebooted ✓, skill 👻 stalled → rebooted ✓, PM 🦑 healthy
-- **Agents Booted**: DM, QA, skill — all confirmed alive via .health post-spawn poll
-- **Notes**: #942 boot overhaul fix is live — post-spawn health confirmation working, no phantom designer agent spawned
+- **Date**: 2026-04-19 05:31
+- **Type**: quiet
+- **Note**: #1493/#474 nudged. #1492/#473 acknowledged. DM restarting. Backlog 13 items, all agents healthy.
