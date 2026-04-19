@@ -1,8 +1,9 @@
 # Iteration 20
 
-- **Date**: 2026-04-18 00:32
+- **Date**: 2026-04-18 23:36
 - **Type**: active
 - **Work Summary**:
-  - Issues: #1229 fixed (triage.py json.loads), #1230 fixed (health_check.py unused import)
-  - Tests: passed (17/17)
-- **Notes**: Fixed both scan findings from cycle 19.
+  - #1389 checkpoint: forge_adapter.py (GitHub+Forgejo backends)
+  - config fields
+  - 15 tests
+- **Notes**: Adapter layer done. Remaining: forgejo_setup.py, docker-compose, wizard step, tracker.py routing.
