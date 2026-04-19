@@ -624,6 +624,45 @@ def _is_feedback_comment(body, caller_role):
     return False, None
 
 
+def _check_unmerged_pr(number):
+    """Check if there's an open PR for this issue number.
+
+    Searches for PRs with branch names matching squidsquad/*/NUMBER.
+    Returns (pr_number, pr_url) if found, None otherwise.
+    """
+    adapter = _get_forge_adapter()
+    if adapter:
+        try:
+            prs = adapter.list_prs(state="open", search=f"squidsquad/ {number}")
+            for pr in prs:
+                head = pr.get("headRefName", "")
+                parts = head.split("/")
+                if len(parts) >= 3 and parts[2] == str(number):
+                    return pr.get("number"), pr.get("url", "")
+        except Exception:
+            pass
+        return None
+
+    # Default: gh CLI
+    result = _run_list(
+        ["gh", "pr", "list", "--state", "open",
+         "--json", "number,headRefName,url", "--limit", "20"],
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        prs = json.loads(result.stdout) if result.stdout.strip() else []
+        for pr in prs:
+            head = pr.get("headRefName", "")
+            parts = head.split("/")
+            if len(parts) >= 3 and parts[2] == str(number):
+                return pr["number"], pr.get("url", "")
+    except (json.JSONDecodeError, KeyError):
+        pass
+    return None
+
+
 def _check_unread_feedback(number, caller_role):
     """Check for unread oversight/human comments after the caller's last comment.
 
@@ -730,6 +769,22 @@ def transition(number, from_status, to_status, role=None, force=False):
                 f"BLOCKED: #{number} has unread feedback from: {roles_summary}. "
                 f"Read and address before transitioning. "
                 f"Use --force to override.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    # 4. Guard: block shipped if unmerged PR exists (bypassable with --force)
+    if to_label == "status:shipped" and not force:
+        unmerged = _check_unmerged_pr(number)
+        if unmerged:
+            pr_num, pr_url = unmerged
+            _log_diagnostic(
+                "error",
+                f"Blocked shipped transition on #{number}: unmerged PR #{pr_num}",
+            )
+            print(
+                f"BLOCKED: Cannot ship #{number} — PR #{pr_num} is open and unmerged. "
+                f"Merge first: {pr_url}. Use --force to override.",
                 file=sys.stderr,
             )
             sys.exit(1)
