@@ -417,6 +417,8 @@ class TestBuildConfigMdStructure:
             "## Tools",
             "## Loop",
             "## Flags",
+            "## Forge Backend",
+            "## Model Routing",
         ]
 
     def test_header_includes_version_and_architecture(self):
