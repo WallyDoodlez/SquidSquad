@@ -1,8 +1,7 @@
 # Iteration 22
 
-- **Date**: 2026-04-19 08:34
+- **Date**: 2026-04-19 16:33
 - **Type**: active
 - **Work Summary**:
-  - #1500 verified (create_pr draft fix) -> Pending Ship
-  - #1501 verified (remove_labels error tracking) -> Pending Ship
-- **Notes**: Both Forgejo adapter fixes confirmed. 16/16 forge tests pass.
+  - Verified #1676 FAIL (--force bypass violates AC 'no bypass flag')
+- **Notes**: Implementation adds PR merge guard but allows --force to bypass, AC explicitly forbids this.
