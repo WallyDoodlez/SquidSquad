@@ -152,6 +152,13 @@ python references/scripts/git_ops.py branch-switch main
    ```
 5. If all criteria pass with zero gaps:
 
+   **Promote test files to tests/** (before transitioning):
+   If any test files exist in `.squidsquad/[ROLE]/planning/` matching `*-tests.py` or `*-QA-RESULTS*.md`:
+   - Copy test `.py` files to `tests/` with naming convention: `tests/test_feat_[NUMBER]_[short_name].py`
+   - If comprehension test files exist, also copy to `tests/`
+   - Verify the promoted tests still pass: `python -m pytest tests/test_feat_[NUMBER]_*.py`
+   - These tests persist as regression tests — they are NOT deleted during planning cleanup
+
    Check PR Flow: `python references/scripts/config.py get pr-flow`
 
    **If PR Flow `yes`** and a PR exists for this issue:
