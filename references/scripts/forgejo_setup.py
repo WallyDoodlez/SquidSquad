@@ -77,13 +77,24 @@ def check_docker():
         result["message"] = "Cannot communicate with Docker daemon."
         return result
 
-    # Check port availability
-    import socket
-    for port in [DEFAULT_PORT, DEFAULT_SSH_PORT]:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            if s.connect_ex(("localhost", port)) == 0:
-                result["message"] = f"Port {port} already in use. Stop the conflicting service."
-                return result
+    # Check port availability — skip if our own Forgejo container is using them
+    is_our_container = False
+    try:
+        container_check = subprocess.run(
+            ["docker", "ps", "--filter", "name=squidsquad-forgejo", "--format", "{{.Names}}"],
+            capture_output=True, text=True, check=False,
+        )
+        is_our_container = "squidsquad-forgejo" in container_check.stdout
+    except Exception:
+        pass
+
+    if not is_our_container:
+        import socket
+        for port in [DEFAULT_PORT, DEFAULT_SSH_PORT]:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                if s.connect_ex(("localhost", port)) == 0:
+                    result["message"] = f"Port {port} already in use. Stop the conflicting service."
+                    return result
 
     result["ok"] = True
     result["message"] = "Docker ready"
@@ -205,7 +216,17 @@ def create_repo(name, token, owner="squid"):
         body = e.read().decode("utf-8", errors="replace")
         if "already exists" in body.lower():
             result["ok"] = True
-            result["clone_url"] = f"{FORGEJO_URL}/{owner}/{name}.git"
+            # Query the actual repo to get the correct clone_url
+            try:
+                repo_req = urllib.request.Request(
+                    f"{FORGEJO_URL}/api/v1/repos/{owner}/{name}",
+                    headers={"Authorization": f"token {token}"},
+                )
+                with urllib.request.urlopen(repo_req, timeout=10) as repo_resp:
+                    repo_data = json.loads(repo_resp.read().decode("utf-8"))
+                    result["clone_url"] = repo_data.get("clone_url", f"{FORGEJO_URL}/{owner}/{name}.git")
+            except Exception:
+                result["clone_url"] = f"{FORGEJO_URL}/{owner}/{name}.git"
             result["message"] = f"Repo '{name}' already exists"
         else:
             result["message"] = f"Failed to create repo: HTTP {e.code} — {body}"
