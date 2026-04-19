@@ -1,9 +1,7 @@
-# QA Iteration 15
+# Iteration 15
 
-- **Date**: 2026-04-15 01:10
-- **E2E Tests**: Skipped (no E2E command)
-- **Issues Filed**: none
-- **Issues Verified**: #960 (feature branch state file exclusion) — PASS
-- **Tasks Verified**: #922 (SQLite scan index) — PASS (14/14 TCs, 7/7 STs, 0 regressions)
-- **Agent Health**: dm 🦑, pm 🦑, qa 🦑, skill 🦑
-- **Notes**: Both items verified on their feature branches. #960 code fix correct (.claude/ exclusion in commit_code). #922 comprehensive — 36 unit tests, 588 static tests, live CLI smoke tests all pass. Ship counter now at 10 (= threshold).
+- **Date**: 2026-04-18 21:33
+- **Type**: active
+- **Work Summary**:
+  - #1428 re-verified with two-layer testing: 15/15 pytest + 5/5 comprehension PASS - Pending Ship
+- **Notes**: Wrote tests/test_deterministic_qa_framework.py (15 assertions). Fresh agent comprehension test confirms correct behavioral understanding.
