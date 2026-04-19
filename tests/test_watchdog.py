@@ -108,10 +108,12 @@ class TestReadCurrentState:
     def test_reads_active_state(self, tmp_path):
         squid = tmp_path / ".squidsquad" / "skill"
         squid.mkdir(parents=True)
-        (squid / "current-state").write_text("implementing|dev-agent — #42")
+        (squid / "current-state").write_text(
+            "implementing|dev-agent - #42", encoding="utf-8"
+        )
         phase, desc = watchdog._read_current_state("skill", tmp_path)
         assert phase == "implementing"
-        assert desc == "dev-agent — #42"
+        assert desc == "dev-agent - #42"
 
     def test_returns_empty_when_missing(self, tmp_path):
         phase, desc = watchdog._read_current_state("skill", tmp_path)
