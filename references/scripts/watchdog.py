@@ -161,12 +161,26 @@ def _get_template_mtime(role, clone_root):
 
 
 def _get_session_start_time(role, clone_root):
-    """Estimate session start time from .health file mtime when it was set to alive.
+    """Get session start time from .health file boot_epoch or .pid mtime.
 
-    Falls back to .pid file mtime as a proxy for when the session started.
+    Reads boot_epoch from .health file format: `alive|boot_epoch=NNNN`.
+    Falls back to .pid file mtime as a proxy.
     """
     squid = Path(clone_root) / ".squidsquad" / role
-    # Use .pid mtime as session start proxy
+
+    # Primary: read boot_epoch from .health file
+    health_file = squid / ".health"
+    try:
+        if health_file.exists():
+            content = health_file.read_text(encoding="utf-8").strip()
+            if "boot_epoch=" in content:
+                for part in content.split("|"):
+                    if part.strip().startswith("boot_epoch="):
+                        return float(part.strip().split("=", 1)[1])
+    except (OSError, ValueError):
+        pass
+
+    # Fallback: .pid mtime
     pid_file = squid / ".pid"
     try:
         if pid_file.exists():
@@ -341,6 +355,14 @@ def check_and_act(roles=None):
                 _kill_agent(pid)
                 action["action"] = "restart"
                 action["detail"] = "template changed since session start"
+                actions.append(action)
+                continue
+            elif pid:
+                # Template changed but agent is busy — defer restart
+                action["action"] = "pending-restart"
+                action["detail"] = (
+                    "template changed — waiting for cycle to complete"
+                )
                 actions.append(action)
                 continue
 

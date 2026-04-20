@@ -4,6 +4,23 @@ All notable changes to SquidSquad will be documented in this file. This changelo
 
 ---
 
+## [0.23.0] — 2026-04-19
+
+### Fixed
+
+- #473 — Dev agent SOUL.md now requires mandatory test coverage for all new code
+- #474 — PM and QA verification now checks for test coverage, not just acceptance criteria
+- #1396 — DM delivery enforces PR merge before shipping (prevents stranded code on branches)
+- #1427 — Model router setup now guides you through API key storage and validates your connection
+- #1494 — PR merge now works with Forgejo backend (was hardcoded to GitHub CLI)
+- #1495 — Added error-handling tests for Forgejo adapter (HTTP errors, timeouts, malformed responses)
+- #1696 — PRs are now automatically converted from draft to ready when items reach pending-ship
+- #1708 — Added comprehensive unit tests for watchdog.py (30 tests, zero coverage → full coverage)
+- #1709 — Added comprehensive unit tests for tracker.py (19 tests, zero coverage → full coverage)
+- #1726 — Added regression test for Forgejo container-skip path
+
+---
+
 ## [0.22.0] — 2026-04-18
 
 ### Added
