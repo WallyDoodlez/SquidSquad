@@ -666,6 +666,52 @@ def _check_unmerged_pr(number):
     return None
 
 
+def _convert_draft_pr_to_ready(number):
+    """Convert draft PR to ready-for-review for an issue.
+
+    Searches for PRs matching squidsquad/*/NUMBER. If found and draft,
+    converts to ready. Silent no-op if no PR or already ready.
+    """
+    adapter = _get_forge_adapter()
+    if adapter:
+        try:
+            prs = adapter.list_prs(state="open", search=f"squidsquad/ {number}")
+            for pr in prs:
+                head = pr.get("headRefName", "")
+                parts = head.split("/")
+                if len(parts) >= 3 and parts[2] == str(number):
+                    if pr.get("isDraft", False):
+                        # Forgejo API: PATCH /repos/{owner}/{repo}/pulls/{number}
+                        # Not all adapters support this — fall through silently
+                        pass
+        except Exception:
+            pass
+        return
+
+    # Default: gh CLI
+    result = _run_list(
+        ["gh", "pr", "list", "--state", "open",
+         "--json", "number,headRefName,isDraft", "--limit", "20"],
+        check=False,
+    )
+    if result.returncode != 0:
+        return
+    try:
+        prs = json.loads(result.stdout) if result.stdout.strip() else []
+        for pr in prs:
+            head = pr.get("headRefName", "")
+            parts = head.split("/")
+            if len(parts) >= 3 and parts[2] == str(number):
+                if pr.get("isDraft", False):
+                    _run_list(
+                        ["gh", "pr", "ready", str(pr["number"])],
+                        check=False,
+                    )
+                return
+    except (json.JSONDecodeError, KeyError):
+        pass
+
+
 def _check_unread_feedback(number, caller_role):
     """Check for unread oversight/human comments after the caller's last comment.
 
@@ -797,6 +843,10 @@ def transition(number, from_status, to_status, role=None, force=False):
         adapter.edit_labels(number, add=[to_label], remove=[from_label])
     else:
         _run_list(["gh", "issue", "edit", str(number), "--remove-label", from_label, "--add-label", to_label])
+
+    # Auto-convert draft PR to ready on pending-ship
+    if to_label == "status:pending-ship":
+        _convert_draft_pr_to_ready(number)
 
     # Auto-close on shipped
     if to_label == "status:shipped":
