@@ -252,12 +252,20 @@ function askLaunch() {
   });
 }
 
+function getPythonBin() {
+  for (const bin of ["python3", "python"]) {
+    const out = tryExec(`${bin} --version`);
+    if (out && out.match(/Python 3/)) return bin;
+  }
+  return "python";
+}
+
 function runRepoScan() {
   const scanScript = path.join("references", "scripts", "repo_scan.py");
   if (fs.existsSync(scanScript)) {
     info("Scanning repository tech stack...");
     try {
-      execSync(`${findPython()} ${scanScript} --save`, {
+      execSync(`${getPythonBin()} ${scanScript} --save`, {
         encoding: "utf-8",
         stdio: ["pipe", "pipe", "pipe"],
       });
