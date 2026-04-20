@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-20 08:01
+
+- **Files scanned**: references/scripts/triage.py, references/scripts/scan_index.py, references/scripts/shared_fs.py
+- **Findings**: #1815 (scan_index.py finding_density inconsistent on first scan — low). triage.py comment ordering is correct (GitHub returns chronological). shared_fs.py clean.
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-20 06:01
 
 - **Files scanned**: packages/cli/index.js, references/scripts/compose.py
