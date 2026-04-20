@@ -195,6 +195,55 @@ class TestListOrphans:
         assert len(orphans) == 2
 
 
+class TestSuggestConnections:
+    def test_suggests_by_tag_overlap(self, tmp_path):
+        vault = tmp_path / "vault"
+        galaxy = vault / "galaxy"
+        galaxy.mkdir(parents=True)
+        (galaxy / "decision-a.md").write_text(
+            "---\ntags: [architecture, watchdog]\n---\nContent about watchdog",
+            encoding="utf-8",
+        )
+        (galaxy / "decision-b.md").write_text(
+            "---\ntags: [architecture, lifecycle]\n---\nContent about lifecycle",
+            encoding="utf-8",
+        )
+        with patch.object(vault_check, "VAULT_DIR", vault):
+            suggestions = vault_check.suggest_connections(galaxy / "decision-a.md")
+        assert len(suggestions) >= 1
+        assert any("decision-b" in s["target"] for s in suggestions)
+
+    def test_no_suggestions_for_unrelated(self, tmp_path):
+        vault = tmp_path / "vault"
+        galaxy = vault / "galaxy"
+        galaxy.mkdir(parents=True)
+        (galaxy / "decision-a.md").write_text(
+            "---\ntags: [frontend]\n---\nContent", encoding="utf-8"
+        )
+        (galaxy / "decision-b.md").write_text(
+            "---\ntags: [backend]\n---\nContent", encoding="utf-8"
+        )
+        with patch.object(vault_check, "VAULT_DIR", vault):
+            suggestions = vault_check.suggest_connections(galaxy / "decision-a.md")
+        assert len(suggestions) == 0
+
+    def test_skips_already_linked(self, tmp_path):
+        vault = tmp_path / "vault"
+        galaxy = vault / "galaxy"
+        galaxy.mkdir(parents=True)
+        (galaxy / "decision-a.md").write_text(
+            "---\ntags: [architecture]\n---\nSee [[decision-b]]",
+            encoding="utf-8",
+        )
+        (galaxy / "decision-b.md").write_text(
+            "---\ntags: [architecture]\n---\nContent", encoding="utf-8"
+        )
+        with patch.object(vault_check, "VAULT_DIR", vault):
+            suggestions = vault_check.suggest_connections(galaxy / "decision-a.md")
+        targets = [s["target"] for s in suggestions]
+        assert "decision-b" not in targets
+
+
 class TestDedupCheck:
     def test_finds_near_duplicate(self, tmp_path):
         vault = tmp_path / "vault"

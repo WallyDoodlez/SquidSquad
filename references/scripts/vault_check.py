@@ -179,6 +179,73 @@ def list_orphans():
     return orphans
 
 
+def suggest_connections(note_path):
+    """Suggest wikilinks for a note based on tag and keyword overlap.
+
+    Scans the vault for notes with overlapping tags or keywords.
+    Returns list of {target, score, reason} suggestions.
+    """
+    note_path = Path(note_path)
+    if not note_path.exists():
+        return []
+
+    text = note_path.read_text(encoding="utf-8")
+    fm = _parse_frontmatter(text)
+    if not fm:
+        return []
+
+    note_name = note_path.stem
+    note_tags = _parse_tag_string(fm.get("tags", ""))
+    note_words = set(note_name.replace("-", " ").lower().split())
+
+    # Get existing wikilinks to avoid suggesting already-linked notes
+    existing_links = set(_extract_wikilinks(text))
+
+    suggestions = []
+    all_notes = _get_all_notes()
+
+    for rel_path, other_path in all_notes.items():
+        other_name = Path(rel_path).stem
+        if other_name == note_name:
+            continue
+        if other_name in existing_links:
+            continue
+
+        other_text = other_path.read_text(encoding="utf-8")
+        other_fm = _parse_frontmatter(other_text)
+        other_tags = _parse_tag_string(other_fm.get("tags", "")) if other_fm else set()
+        other_words = set(other_name.replace("-", " ").lower().split())
+
+        # Calculate overlap
+        tag_overlap = note_tags & other_tags
+        word_overlap = note_words & other_words
+
+        if tag_overlap or word_overlap:
+            score = len(tag_overlap) * 2 + len(word_overlap)
+            if score >= 2:
+                reasons = []
+                if tag_overlap:
+                    reasons.append(f"shared tags: {', '.join(sorted(tag_overlap))}")
+                if word_overlap:
+                    reasons.append(f"shared keywords: {', '.join(sorted(word_overlap))}")
+                suggestions.append({
+                    "target": other_name,
+                    "path": rel_path,
+                    "score": score,
+                    "reason": "; ".join(reasons),
+                })
+
+    # Sort by score descending, return top 5
+    suggestions.sort(key=lambda x: x["score"], reverse=True)
+    top = suggestions[:5]
+
+    if top:
+        for s in top:
+            print(f"[vault-check] Suggest link: [[{s['target']}]] — {s['reason']}")
+
+    return top
+
+
 def _strip_galaxy_prefix(name):
     """Strip common galaxy note type prefixes from a lowercased name."""
     for prefix in ("decision ", "pattern ", "learning ", "style "):
@@ -307,6 +374,12 @@ def main():
             sys.exit(2)
         matches = dedup_check(title, tags)
         sys.exit(1 if matches else 0)
+    elif cmd == "suggest-connections":
+        if len(args) < 2:
+            print("Usage: vault_check.py suggest-connections <note-path>", file=sys.stderr)
+            sys.exit(2)
+        suggestions = suggest_connections(args[1])
+        sys.exit(0)
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)
         sys.exit(1)
