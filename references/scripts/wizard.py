@@ -778,7 +778,16 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
         # deploy_role already handles the compose/substitute/write pipeline;
         # it takes the agent id (not the role identity) because [ROLE]
         # placeholder substitution uses the agent name.
-        claude_path = deploy_role(agent_id, target_root=target_root)
+        try:
+            claude_path = deploy_role(agent_id, target_root=target_root)
+        except (SystemExit, Exception) as e:
+            print(f"  WARNING: Failed to deploy {agent_id}: {e}", file=sys.stderr)
+            summary["agents"].append({
+                "id": agent_id, "role": role_identity,
+                "claude_md": "FAILED", "soul_md": "FAILED",
+                "working_state": "FAILED",
+            })
+            continue
 
         # SOUL.md — deploy_role wrote it if missing; honour existing files.
         # Seed with ### Project Context section from adaptive answers (#462).
