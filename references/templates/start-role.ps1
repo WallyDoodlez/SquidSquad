@@ -128,7 +128,8 @@ try {
         "idle|Initializing..." | Set-Content $StateFile -NoNewline
         Remove-Item $PressureFile -ErrorAction SilentlyContinue
 
-        Write-Health "alive"
+        $bootEpoch = [int][double]::Parse((Get-Date -UFormat %s))
+        Write-Health "alive|boot_epoch=$bootEpoch"
 
         $startTime = Get-Date
 
