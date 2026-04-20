@@ -94,9 +94,11 @@ Legal flows and owning roles:
 - `planning` → `planned` — **PM**
 - `planned` → `approved` — **PM**
 - `approved` → `in-progress` — **assigned role**
-- `in-progress` → `pending-test` | `approved` — **assigned role**
+- `in-progress` → `pending-test` | `approved` | `pending-human-review` | `pending-human-setup` — **assigned role**
+- `pending-human-review` → `in-progress` | `pending-ship` — **assigned role** (HITL designer loop)
+- `pending-human-setup` → `in-progress` — **PM** (environment setup complete)
 - `pending-test` → `in-progress` | `pending-ship` — **PM or QA** (both authorized; QA handles verification when installed, PM falls back when QA absent)
-- `pending-ship` → `shipped` — **DM** (auto-closes)
+- `pending-ship` → `shipped` | `in-progress` — **DM** ships (auto-closes), **PM or QA** routes back on merge conflict
 
 ### Discussion Entries (replaces inline Discussion sections)
 
