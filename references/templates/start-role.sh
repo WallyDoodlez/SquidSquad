@@ -147,9 +147,10 @@ while true; do
   echo "idle|Initializing..." > "$STATE_FILE"
   rm -f "$PRESSURE_FILE"
 
-  write_health "alive"
+  BOOT_EPOCH=$(date +%s)
+  write_health "alive|boot_epoch=$BOOT_EPOCH"
 
-  START_TIME=$(date +%s)
+  START_TIME=$BOOT_EPOCH
 
   # Read context threshold from config (default 70)
   CTX_THRESHOLD=$(python references/scripts/config.py get context-threshold 2>/dev/null || echo "70")
