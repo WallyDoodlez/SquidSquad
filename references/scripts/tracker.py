@@ -130,7 +130,7 @@ LEGAL_TRANSITIONS = {
     },
     "status:pending-test": {"status:in-progress", "status:pending-ship", "status:pending-review"},
     "status:pending-review": {"status:in-progress", "status:pending-ship"},
-    "status:pending-ship": {"status:shipped"},
+    "status:pending-ship": {"status:shipped", "status:in-progress"},
     "status:shipped": set(),  # terminal
 
     # --- #328 Phase E: new pending-human-* transitions (Q-new4, Q7, Q-new11) ---
