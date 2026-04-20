@@ -1,27 +1,31 @@
 # Working State
 
-- **Task**: none
-- **Status**: none
+- **Task**: #1693
+- **Status**: in-progress
+- **Started**: 2026-04-19 22:57
 - **Quiet Cycle Counter**: 0
 
-## Session Summary (checkpoint at context pressure 70%)
+## Completed Steps
+- Gap analysis complete: 27 COVERED, 11 GAP, 8 SKIP out of 44 tickets
+- #1396 verified (shipped PR guard on main)
+- #1726 verified (forgejo regression test)
 
-### Verified This Session
-- #1074 (auto-merge PRs): PASS -> Pending Ship (cycles 4, 9)
-- #475 (token efficiency): FAIL then rework PASS -> Pending Ship (cycles 4, 6)
-- #329 (per-cycle reporting): PASS -> Pending Ship, re-verified post-rebase (cycles 7, 9)
-- #1204 (PR conflict detection): PASS -> Pending Ship (between cycles 7-8)
-- #1230 (unused import os): PASS -> Pending Ship (cycle 14)
-- #1228 (PM pipeline sentinel): FAIL -> In Progress (cycle 15) — test_no_orphan_sub_skills failure, dead pr-flow.md
+## Remaining Steps
+- Write regression tests for 11 gaps:
+  1. #1074 — auto-merge workflow test
+  2. #475 — token efficiency test
+  3. #1228 — pipeline sentinel test
+  4. #1363 — PR label sync test
+  5. #1500 — ForgejoAdapter.create_pr draft flag test
+  6. #1517 — forgejo clone_url test
+  7. #1496 — boot_remote shared_fs fallback test
+  8. #1210 — cycle.py is-quiet handler test
+  9. #1397 — PR draft workflow test
+  10. #1229 — triage json.loads error handling test
+  11. #1277 — BRIEFING.md staleness (check if covered)
+- Dedup report
+- Summary with coverage delta
 
-### Issues Filed This Session
-- #1210 (cycle.py is-quiet help text bug, low severity)
-
-### Agent Health
-- PM stalled since cycle 20 (discussing #1291, 5+ hours)
-- Skill stalled since cycle 24 (pulling, 3+ hours)
-- DM healthy throughout
-
-### Key Decisions
-- TC-37 for #475: accepted 9.8% savings vs 20% AC target because CONTEXT.md scoped to 11% with 8% floor
-- #1228: structural implementation correct but test failure and dead file blocked ship
+## Key Decisions
+- Template/process changes (#474, #473, #1395, #1398, #1405, #1637) skipped — process requirements, not testable code
+- Prioritizing script fix gaps over feature gaps per PM guidance
