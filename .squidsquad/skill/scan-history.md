@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-20 10:01
+
+- **Files scanned**: references/scripts/wizard.py (deploy section), tests/run_tests.py
+- **Findings**: #1827 (wizard.py deploy_role error handling in scaffold_install — low). run_tests.py subprocess output to terminal is intentional (not a bug).
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-20 08:01
 
 - **Files scanned**: references/scripts/triage.py, references/scripts/scan_index.py, references/scripts/shared_fs.py
