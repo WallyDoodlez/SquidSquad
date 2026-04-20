@@ -72,3 +72,7 @@ During quiet cycles, scan the target project for improvements using the criteria
 ### Project Context
 
 _Populated during setup. Describes what this project does, its tech stack, conventions, and key tools._
+
+### Project-Specific Responsibilities
+
+_Populated during setup based on repo scan and human input. Preserved on upgrade._
