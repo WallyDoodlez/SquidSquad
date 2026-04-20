@@ -796,6 +796,23 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
                 soul_text += f"\n### Project Context\n\n{domain_ctx}\n"
                 soul_path.write_text(soul_text, encoding="utf-8")
 
+        # Project-Specific Responsibilities — seed from repo scan if available
+        scan_file = target_root / ".squidsquad" / ".repo-scan.json"
+        if soul_path.exists() and scan_file.exists():
+            try:
+                scan_data = json.loads(scan_file.read_text(encoding="utf-8"))
+                responsibilities = scan_data.get("responsibilities", {})
+                role_resps = responsibilities.get(role_identity, [])
+                if role_resps:
+                    soul_text = soul_path.read_text(encoding="utf-8")
+                    resp_placeholder = "_Populated during setup based on repo scan and human input. Preserved on upgrade._"
+                    if resp_placeholder in soul_text:
+                        resp_lines = "\n".join(f"- {r}" for r in role_resps)
+                        soul_text = soul_text.replace(resp_placeholder, resp_lines)
+                        soul_path.write_text(soul_text, encoding="utf-8")
+            except (json.JSONDecodeError, OSError):
+                pass
+
         # working-state.md — never overwrite
         ws_path = agent_dir / "working-state.md"
         if ws_path.exists():

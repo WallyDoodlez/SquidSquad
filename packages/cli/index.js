@@ -252,7 +252,25 @@ function askLaunch() {
   });
 }
 
+function runRepoScan() {
+  const scanScript = path.join("references", "scripts", "repo_scan.py");
+  if (fs.existsSync(scanScript)) {
+    info("Scanning repository tech stack...");
+    try {
+      execSync(`${findPython()} ${scanScript} --save`, {
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      info("Repo scan saved to .squidsquad/.repo-scan.json");
+    } catch (err) {
+      // Non-fatal — wizard works without scan results
+      info("Repo scan skipped (non-fatal)");
+    }
+  }
+}
+
 function launchClaude() {
+  runRepoScan();
   info("Launching Claude Code with /squidsquad-setup...");
   console.log();
 
