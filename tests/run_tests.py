@@ -32,6 +32,11 @@ STATIC_TEST_MODULES = [
     "test_manifest_registry", "test_wizard", "test_wizard_runbook",
     "test_installer_wiring", "test_config_schema",
     "test_statusline_schema", "test_feat328_coverage",
+    "test_feat_1074_auto_merge", "test_feat_1210_is_quiet",
+    "test_feat_1228_pipeline_sentinel", "test_feat_1229_triage_json",
+    "test_feat_1363_label_sync", "test_feat_1397_draft_pr",
+    "test_feat_1496_shared_fs_fallback", "test_feat_1500_create_pr_draft",
+    "test_feat_1517_clone_url",
 ]
 
 
