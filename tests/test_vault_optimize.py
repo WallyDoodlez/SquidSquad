@@ -336,6 +336,28 @@ class TestGuards:
         assert not ok
         assert "lock" in reason
 
+    def test_atomic_lock_rejects_when_file_exists(self, patched_vault):
+        """_acquire_lock uses O_CREAT|O_EXCL — returns False if lock exists."""
+        # First acquire should succeed
+        assert vault_optimize._acquire_lock() is True
+        lock = patched_vault / ".optimize-lock"
+        assert lock.exists()
+        original_pid = lock.read_text(encoding="utf-8").strip()
+
+        # Second acquire should fail (lock held by first)
+        assert vault_optimize._acquire_lock() is False
+        # Original lock content preserved (not overwritten)
+        assert lock.read_text(encoding="utf-8").strip() == original_pid
+
+        vault_optimize._release_lock()
+
+    def test_atomic_lock_succeeds_after_release(self, patched_vault):
+        """After release, a new lock can be acquired."""
+        assert vault_optimize._acquire_lock() is True
+        vault_optimize._release_lock()
+        assert vault_optimize._acquire_lock() is True
+        vault_optimize._release_lock()
+
 
 # ---------------------------------------------------------------------------
 # Helpers
