@@ -179,11 +179,29 @@ python references/scripts/git_ops.py branch-switch main
      ```
 
    **If PR Flow `no`** (or no PR exists):
+
+   **Merge PR** (if a PR exists for this issue):
    ```bash
-   # If a PR exists, convert from draft to ready
+   # Find and merge the PR
+   gh pr list --search "squidsquad/ [NUMBER]" --state open --json number,headRefName --limit 5
+   ```
+   For each PR with branch matching `squidsquad/*/[NUMBER]`:
+   ```bash
    gh pr ready [PR_NUMBER] 2>/dev/null
+   python references/scripts/git_ops.py pr-merge [PR_NUMBER]
+   ```
+   - **Merge succeeds**: proceed to pending-ship transition
+   - **Merge conflict**: back to in-progress, comment with conflict details, dev rebases
+     ```bash
+     python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead
+     python references/scripts/tracker.py comment [NUMBER] --role qa --message "Merge conflict on PR #[PR_NUMBER]. Dev: rebase and re-submit. Back to In Progress."
+     ```
+   - **No PR found**: proceed (direct-to-main workflow, no merge needed)
+
+   After successful merge (or no PR):
+   ```bash
    python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role qa-lead
-   python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. Status → Pending Ship."
+   python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. PR merged. Status → Pending Ship."
    ```
 
 6. **delivery:skip check**: If the task is internal-only, add `delivery:skip` to the comment message.
