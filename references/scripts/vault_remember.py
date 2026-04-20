@@ -45,13 +45,18 @@ def _read_working_state(role):
 
 
 def _write_working_state_field(role, field_pattern, new_value):
-    """Update a field in working-state.md."""
+    """Update a field in working-state.md. Returns True on success, False on failure."""
     ws_path = SQUIDSQUAD_DIR / role / "working-state.md"
     if not ws_path.exists():
-        return
-    text = ws_path.read_text(encoding="utf-8")
-    new_text = re.sub(field_pattern, new_value, text)
-    ws_path.write_text(new_text, encoding="utf-8")
+        return False
+    try:
+        text = ws_path.read_text(encoding="utf-8")
+        new_text = re.sub(field_pattern, new_value, text)
+        ws_path.write_text(new_text, encoding="utf-8")
+        return True
+    except OSError as e:
+        print(f"WARNING: Failed to update {ws_path}: {e}", file=sys.stderr)
+        return False
 
 
 def is_quiet(role):

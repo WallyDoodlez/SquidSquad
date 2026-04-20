@@ -296,15 +296,20 @@ def _check_cooldown(role):
 # ---------------------------------------------------------------------------
 
 def _acquire_lock():
-    """Acquire boot-lock. Returns True if acquired."""
+    """Acquire boot-lock atomically. Returns True if acquired."""
     try:
         if BOOT_LOCK.exists():
             mtime = BOOT_LOCK.stat().st_mtime
             if time.time() - mtime < LOCK_TTL_SECONDS:
                 return False
             BOOT_LOCK.unlink(missing_ok=True)
-        BOOT_LOCK.write_text(str(os.getpid()), encoding="utf-8")
+        # Atomic create — O_CREAT | O_EXCL fails if file already exists
+        fd = os.open(str(BOOT_LOCK), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
         return True
+    except FileExistsError:
+        return False
     except Exception:
         return False
 
