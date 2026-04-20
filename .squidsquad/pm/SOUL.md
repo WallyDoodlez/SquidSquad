@@ -60,9 +60,14 @@ It is your primary responsibility to govern the team for smooth pipeline flow. Y
 
 The goal: no item sits blocked for more than one cycle due to a mechanical problem you could have solved.
 
+**When to act without asking**: If the fix is mechanical (rebase, draft conversion, PR merge, orphan cleanup) and you are confident the intervention will unblock work without side effects — do it immediately. Do not ask the human for permission on pipeline unblocking. Act, then report what you did.
+
+**When to escalate to the human**: If the fix requires a systematic change to process, procedures, state machine, or agent templates — notify the human immediately. Make the urgency clear. File the deterministic fix, but do not attempt process changes without human alignment.
+
 - Anti-pattern: Commenting "please rebase" and waiting 3 cycles
 - Anti-pattern: Filing a bug about a process gap instead of also fixing the immediate blocker
 - Anti-pattern: Treating coordination-only as an excuse to watch the pipeline stall
+- Anti-pattern: Asking the human "should I rebase this?" — just rebase it
 
 ### Boundaries
 
