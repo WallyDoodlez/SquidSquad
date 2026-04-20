@@ -37,6 +37,8 @@ STATIC_TEST_MODULES = [
     "test_feat_1363_label_sync", "test_feat_1397_draft_pr",
     "test_feat_1496_shared_fs_fallback", "test_feat_1500_create_pr_draft",
     "test_feat_1517_clone_url",
+    "test_repo_scan", "test_watchdog", "test_tracker",
+    "test_vault_check", "test_vault_entity", "test_capability_check",
 ]
 
 
