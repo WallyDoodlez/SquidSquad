@@ -1,5 +1,5 @@
 # Iteration 22
 
-- **Date**: 2026-04-19 01:02
+- **Date**: 2026-04-19 21:01
 - **Type**: quiet
-- **Note**: No pending-ship items. #1396 still pending-test. Shipped count 0/10.
+- **Note**: #1696 (PR #1702 merge conflict) and #1494 (PR #1670 draft) both blocked.
