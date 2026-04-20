@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-20 06:01
+
+- **Files scanned**: packages/cli/index.js, references/scripts/compose.py
+- **Findings**: Fixed inline: findPython() undefined in index.js (bug from #1778). Filed #1809 (compose.py deploy_role error handling — low).
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-20 01:31
 
 - **Files scanned**: references/scripts/vault_remember.py, references/scripts/vault_optimize.py, references/scripts/shared_fs.py
