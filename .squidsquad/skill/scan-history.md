@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-20 01:31
+
+- **Files scanned**: references/scripts/vault_remember.py, references/scripts/vault_optimize.py, references/scripts/shared_fs.py
+- **Findings**: #1755 (vault_remember.py write without error handling — low), #1756 (vault_optimize.py TOCTOU race in lock — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-19 19:01
 
 - **Files scanned**: references/scripts/tracker.py, references/scripts/git_ops.py, references/scripts/cycle.py, references/scripts/triage.py, references/scripts/scan_index.py
