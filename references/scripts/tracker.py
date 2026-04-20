@@ -194,6 +194,9 @@ ROLE_AUTHORITY = {
     # DM owns delivery / shipping
     ("status:pending-ship", "status:shipped"): {"dm"},
 
+    # Backward: pending-ship→in-progress for merge conflicts (#1727)
+    ("status:pending-ship", "status:in-progress"): {"pm", "qa"},
+
     # --- #328 Phase E: authority for new pending-human-* transitions ---
 
     # PM owns the new pending-human-approval intake edges (mirrors the

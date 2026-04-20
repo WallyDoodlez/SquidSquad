@@ -497,6 +497,53 @@ class TestTransitionEnforcement:
         assert "--role is required" in err
 
 
+class TestPendingShipBackwardTransition:
+    """pending-ship→in-progress backward transition for merge conflicts (#1727)."""
+
+    def test_pm_can_route_back(self, monkeypatch):
+        """PM can transition pending-ship→in-progress."""
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def _fake_run_list(cmd, **kw):
+            return FakeResult()
+
+        monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
+        monkeypatch.setattr(tracker, "_check_unread_feedback", lambda n, r: [])
+        # Should not raise
+        tracker.transition(42, "pending-ship", "in-progress", role="pm-lead")
+
+    def test_qa_can_route_back(self, monkeypatch):
+        """QA can transition pending-ship→in-progress."""
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def _fake_run_list(cmd, **kw):
+            return FakeResult()
+
+        monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
+        monkeypatch.setattr(tracker, "_check_unread_feedback", lambda n, r: [])
+        tracker.transition(42, "pending-ship", "in-progress", role="qa-lead")
+
+    def test_dev_cannot_route_back(self, monkeypatch, capsys):
+        """Dev agents cannot transition pending-ship→in-progress."""
+        def _fail(*a, **kw):
+            raise AssertionError("gh should not be called")
+
+        monkeypatch.setattr(tracker, "_run_list", _fail)
+        monkeypatch.setattr(tracker, "_get_issue_role_labels", lambda n: {"skill"})
+
+        with pytest.raises(SystemExit) as excinfo:
+            tracker.transition(42, "pending-ship", "in-progress", role="skill-lead")
+        assert excinfo.value.code == 1
+        err = capsys.readouterr().err
+        assert "Unauthorized" in err
+
+
 # ---------------------------------------------------------------------------
 # shipped PR guard (#1676)
 # ---------------------------------------------------------------------------
