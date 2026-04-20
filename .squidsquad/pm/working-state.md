@@ -2,7 +2,7 @@
 
 - **Task**: #1778 — Project-specific role responsibilities + setup flow overhaul
 - **Status**: in-progress
-- **Phase**: discussing FEAT-SKILL-1778
+- **Phase**: none
 
 ## Quiet cycle counter: 0
 
