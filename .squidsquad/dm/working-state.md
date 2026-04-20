@@ -4,9 +4,9 @@
 - **Status**: none
 - **Quiet Cycle Counter**: 0
 
-## Session Context (checkpoint at cycle 17)
-- Version: v0.22.0
-- Shipped count: 7/10
-- Pending ship: #1494 (PR #1670 draft)
-- Pending bugs: #1396 (pending-test), #302 #303 (pending PM)
-- Template change detected — self-restart pending
+## Session Context (checkpoint at cycle 30)
+- Version: v0.23.0
+- Shipped count: 0/10
+- Pending bugs: #302 #303 (pending PM)
+- Last active delivery: cycle 26 (version bump v0.23.0)
+- Session shipped 10 items this run: #473 #474 #1396 #1427 #1494 #1495 #1696 #1708 #1709 #1726
