@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-20 12:01
+
+- **Files scanned**: references/roles/dev/CLAUDE.md, references/sub-skills/common/tracker-protocol.md
+- **Findings**: #1838 (tracker-protocol.md missing Phase E transitions — low). dev CLAUDE.md clean.
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-20 10:01
 
 - **Files scanned**: references/scripts/wizard.py (deploy section), tests/run_tests.py
