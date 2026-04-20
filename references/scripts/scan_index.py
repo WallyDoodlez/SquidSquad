@@ -346,7 +346,7 @@ def record_scan(role, files, findings_json, db_path=None):
                 (now, new_scan_count, new_finding_count, role, density, f),
             )
         else:
-            density = finding_count_for_file  # first scan
+            density = finding_count_for_file / 1.0  # findings per scan (consistent with update)
             conn.execute(
                 """INSERT INTO file_coverage (file_path, last_scanned_at,
                    total_scan_count, finding_count, last_scanned_by, finding_density)
