@@ -483,9 +483,13 @@ def main():
             print("  e.g.: compose.py deploy skill", file=sys.stderr)
             sys.exit(1)
         role_name = args[1]
-        output = deploy_role(role_name)
-        lines = output.read_text(encoding="utf-8").count("\n")
-        print(f"Deployed {role_name} CLAUDE.md ({lines} lines) -> {output.relative_to(REPO_ROOT)}")
+        try:
+            output = deploy_role(role_name)
+            lines = output.read_text(encoding="utf-8").count("\n")
+            print(f"Deployed {role_name} CLAUDE.md ({lines} lines) -> {output.relative_to(REPO_ROOT)}")
+        except (SystemExit, Exception) as e:
+            print(f"ERROR: Failed to deploy role '{role_name}': {e}", file=sys.stderr)
+            sys.exit(1)
 
     elif cmd == "deploy-all":
         # Deploy all configured agents
@@ -496,10 +500,17 @@ def main():
         dm_dir = REPO_ROOT / ".squidsquad" / "dm"
         if dm_dir.exists():
             roles.append("dm")
+        failed = []
         for role in roles:
-            output = deploy_role(role)
-            lines = output.read_text(encoding="utf-8").count("\n")
-            print(f"  {role}: {lines} lines -> {output.relative_to(REPO_ROOT)}")
+            try:
+                output = deploy_role(role)
+                lines = output.read_text(encoding="utf-8").count("\n")
+                print(f"  {role}: {lines} lines -> {output.relative_to(REPO_ROOT)}")
+            except (SystemExit, Exception) as e:
+                print(f"  {role}: FAILED — {e}", file=sys.stderr)
+                failed.append(role)
+        if failed:
+            print(f"ERROR: {len(failed)} role(s) failed: {', '.join(failed)}", file=sys.stderr)
         # Generate .local-config for health check and auto-boot
         lc = generate_local_config(roles)
         print(f"  .local-config: {len(roles)} agents -> {lc.relative_to(REPO_ROOT)}")
