@@ -569,6 +569,14 @@ def build_config_md(spec):
         lines.append("- (none)")
     lines.append("")
 
+    # --- ## Git Branches ---
+    lines.append("## Git Branches")
+    lines.append("")
+    branches = spec.get("git_branches") or {}
+    lines.append(f"- **Working Branch**: {branches.get('working', 'main')}")
+    lines.append(f"- **State Branch**: {branches.get('state', 'squid-squad')}")
+    lines.append("")
+
     # --- ## Forge Backend ---
     lines.append("## Forge Backend")
     lines.append("")

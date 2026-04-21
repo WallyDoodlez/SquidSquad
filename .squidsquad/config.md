@@ -35,6 +35,11 @@
 - Discussion comments on GitHub Issues are append-only.
 - Push after every completed work unit.
 
+## Git Branches
+
+- **Working Branch**: main
+- **State Branch**: squid-squad
+
 ## Iteration Interval
 
 - **Minutes**: 30

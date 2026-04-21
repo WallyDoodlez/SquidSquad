@@ -89,13 +89,22 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Check git branch is main
+# Check/checkout working branch (configurable, defaults to main)
+$WorkingBranch = "main"
+try {
+    $wb = (python references/scripts/config.py get working-branch 2>$null).Trim()
+    if ($wb) { $WorkingBranch = $wb }
+} catch {}
 $currentBranch = (git branch --show-current 2>$null).Trim()
-if ($currentBranch -ne "main") {
-    $errMsg = "error|wrong branch: $currentBranch (expected main)"
-    Write-Health $errMsg
-    Write-Host "[SquidSquad] FATAL: Expected branch 'main', got '$currentBranch'."
-    Write-Host "[SquidSquad] .health written: $errMsg"
+if ($currentBranch -ne $WorkingBranch) {
+    Write-Host "[SquidSquad] Switching to working branch '$WorkingBranch'..."
+    git checkout $WorkingBranch 2>$null
+    if ($LASTEXITCODE -ne 0) { git checkout -b $WorkingBranch "origin/$WorkingBranch" 2>$null }
+    $currentBranch = (git branch --show-current 2>$null).Trim()
+    if ($currentBranch -ne $WorkingBranch) {
+        $errMsg = "error|wrong branch: $currentBranch (expected $WorkingBranch)"
+        Write-Health $errMsg
+        Write-Host "[SquidSquad] FATAL: Could not switch to '$WorkingBranch', on '$currentBranch'."
     exit 1
 }
 

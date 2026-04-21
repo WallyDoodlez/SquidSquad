@@ -212,11 +212,12 @@ def pr_create(title, body):
     except ImportError:
         pass
 
-    # Default: gh CLI
-    result = _run_list(
-        ["gh", "pr", "create", "--draft", "--title", title, "--body", body],
-        check=False,
-    )
+    # Default: gh CLI — target the configured working branch
+    base_branch = _get_working_branch()
+    cmd = ["gh", "pr", "create", "--draft", "--title", title, "--body", body]
+    if base_branch != "main":
+        cmd.extend(["--base", base_branch])
+    result = _run_list(cmd, check=False)
     if result.returncode != 0:
         print(f"ERROR: PR creation failed: {result.stderr}", file=sys.stderr)
         return None

@@ -77,13 +77,19 @@ if ! gh auth status >/dev/null 2>&1; then
   exit 1
 fi
 
-# Check git branch is main
+# Check/checkout working branch (configurable, defaults to main)
+WORKING_BRANCH=$(python references/scripts/config.py get working-branch 2>/dev/null || echo "main")
+WORKING_BRANCH=${WORKING_BRANCH:-main}
 CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
-if [ "$CURRENT_BRANCH" != "main" ]; then
-  write_health "error|wrong branch: $CURRENT_BRANCH (expected main)"
-  echo "[SquidSquad] FATAL: Expected branch 'main', got '$CURRENT_BRANCH'."
-  echo "[SquidSquad] .health written: error|wrong branch: $CURRENT_BRANCH (expected main)"
-  exit 1
+if [ "$CURRENT_BRANCH" != "$WORKING_BRANCH" ]; then
+  echo "[SquidSquad] Switching to working branch '$WORKING_BRANCH'..."
+  git checkout "$WORKING_BRANCH" 2>/dev/null || git checkout -b "$WORKING_BRANCH" "origin/$WORKING_BRANCH" 2>/dev/null
+  CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+  if [ "$CURRENT_BRANCH" != "$WORKING_BRANCH" ]; then
+    write_health "error|wrong branch: $CURRENT_BRANCH (expected $WORKING_BRANCH)"
+    echo "[SquidSquad] FATAL: Could not switch to '$WORKING_BRANCH', on '$CURRENT_BRANCH'."
+    exit 1
+  fi
 fi
 
 echo "[SquidSquad] Pre-flight OK (gh auth + branch main)."

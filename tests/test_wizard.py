@@ -417,6 +417,7 @@ class TestBuildConfigMdStructure:
             "## Tools",
             "## Loop",
             "## Flags",
+            "## Git Branches",
             "## Forge Backend",
             "## Model Routing",
         ]
