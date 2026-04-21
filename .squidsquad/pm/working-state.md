@@ -2,7 +2,7 @@
 
 - **Task**: #1869 — 3-branch architecture (state bus)
 - **Status**: in-progress
-- **Phase**: discussing FEAT-SKILL-1869
+- **Phase**: none
 
 ## Quiet cycle counter: 0
 
