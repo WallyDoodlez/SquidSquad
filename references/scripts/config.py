@@ -81,6 +81,8 @@ FIELD_MAP = {
     "forge-endpoint": ("Forge Backend", "Endpoint"),
     "forge-owner": ("Forge Backend", "Owner"),
     "forge-repo": ("Forge Backend", "Repo"),
+    "working-branch": ("Git Branches", "Working Branch"),
+    "state-branch": ("Git Branches", "State Branch"),
 }
 
 
