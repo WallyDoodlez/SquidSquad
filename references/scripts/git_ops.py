@@ -32,6 +32,17 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 
 
+def _get_working_branch():
+    """Get the configured working branch name. Falls back to 'main'."""
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from config import get as config_get
+        branch = config_get("working-branch")
+        return branch if branch else "main"
+    except Exception:
+        return "main"
+
+
 def _run(cmd, check=True):
     """Run a shell command from repo root (only for static commands)."""
     return subprocess.run(
