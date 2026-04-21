@@ -39,6 +39,7 @@ STATIC_TEST_MODULES = [
     "test_feat_1517_clone_url",
     "test_repo_scan", "test_watchdog", "test_tracker",
     "test_vault_check", "test_vault_entity", "test_capability_check",
+    "test_state_bus",
 ]
 
 
