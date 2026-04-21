@@ -45,6 +45,12 @@ if (Test-Path $injectScript) { & $injectScript }
 # Register this agent in config.md
 try { python references/scripts/config.py sync-agents 2>$null } catch {}
 
+# Initialize state bus worktree if state_bus.py exists
+$stateBusScript = Join-Path $repoRoot "references/scripts/state_bus.py"
+if (Test-Path $stateBusScript) {
+    try { python $stateBusScript init 2>$null } catch {}
+}
+
 # Set env var for statusline (session-scoped, no cross-agent clobber)
 $env:SQUIDSQUAD_ROLE = "{{ROLE}}"
 

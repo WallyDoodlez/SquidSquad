@@ -39,6 +39,11 @@ fi
 # Register this agent in config.md
 python references/scripts/config.py sync-agents 2>/dev/null || true
 
+# Initialize state bus worktree if state_bus.py exists
+if [ -f references/scripts/state_bus.py ]; then
+  python references/scripts/state_bus.py init 2>/dev/null || true
+fi
+
 # Set env var for statusline (session-scoped, no cross-agent clobber)
 export SQUIDSQUAD_ROLE="{{ROLE}}"
 
