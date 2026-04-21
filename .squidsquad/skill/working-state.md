@@ -6,24 +6,15 @@
 - **Quiet Cycles**: 0
 
 ## Completed Steps
-- Read issue body, CONTEXT.md
-- Understand scope: 3-branch architecture (main, working, state)
+- config.py: added working-branch and state-branch keys
+- state_bus.py: new script for state branch worktree management
+- git_ops.py: added _get_working_branch() helper
 
 ## Remaining Steps
-1. Add Git Branches section to config.md + config.py support
-2. Update git_ops.py for branch-aware pull/push
-3. Create state_bus.py for state branch worktree operations
-4. Update boot scripts for worktree creation + working branch checkout
-5. Update health check / watchdog for state worktree reads
-6. Update cycle.py, vault scripts for state worktree writes
-7. Setup CLI branch name prompts
-8. Migration script
-9. Tests
-10. compose.py deploy-all
-
-## Key Decisions
-- Working branch default: stag (configurable)
-- State branch default: squid-squad (configurable, orphan)
-- Vault on state branch
-- Worktree at .squidsquad-state/
-- Periodic squash (~500 commits)
+- Update boot scripts for worktree creation + working branch checkout
+- Update health check / watchdog for state worktree reads
+- Update cycle.py, vault scripts for state worktree writes
+- Setup CLI branch name prompts
+- Migration script
+- Tests for state_bus.py
+- compose.py deploy-all
