@@ -1,11 +1,19 @@
 # Working State
 
-- **Task**: none
-- **Status**: none
-- **Quiet Cycle Counter**: 0
+- **Task**: #2110, #2109
+- **Status**: in-progress
+- **Started**: 2026-04-22 19:33
 
-## Session Context (checkpoint at cycle 38)
-- Version: v0.23.0
-- Shipped count: 14/10 — bump deferred, #1772 still open
-- Pending bugs: #1772 (open, blocking version bump), #302 #303 (pending PM)
-- Last active delivery: cycle 38 (#2097 config.py write error handling)
+## Completed Steps
+- Merged squidsquad/skill/2109 to main
+- Merged squidsquad/skill/2110 to main
+
+## Remaining Steps
+- Check README/SKILL.md for delivery updates
+- Prepare CHANGELOG entries
+- Transition both to Shipped
+- Increment shipped count
+- Check version bump threshold
+
+## Key Decisions
+- Both are internal bug fixes, no user-facing README changes expected

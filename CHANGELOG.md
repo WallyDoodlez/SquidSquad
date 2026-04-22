@@ -4,6 +4,32 @@ All notable changes to SquidSquad will be documented in this file. This changelo
 
 ---
 
+## [0.24.0] — 2026-04-22
+
+### Added
+
+- #1449 — **Comprehension test pipeline** — deterministic agent-based testing for LLM instructions, so template changes are verified by a fresh agent before shipping
+- #1869 — **3-branch architecture** — state bus runs on a dedicated branch, keeping your working branch clean and main untouched
+
+### Fixed
+
+- #1500 — Forgejo PR creation now respects the draft parameter
+- #1501 — Forgejo remove_labels no longer silently swallows failures
+- #1980 — Version bump now updates package.json and runs npm publish automatically
+- #2007 — Boot scripts now set SQUIDSQUAD_ROLE so agents start with the correct identity
+- #2008 — Setup generates a valid statusLine object in settings.json (was writing a string)
+- #2009 — Setup wizard now generates boot scripts from templates instead of inline stubs
+- #2035 — tracker.py feedback check now handles malformed JSON gracefully
+- #2046 — state_bus.py now validates paths to prevent directory traversal
+- #2058 — compose.py deploy/boot now handles file write errors
+- #2064 — git_ops.py commit-code now returns to main correctly when unstaged changes exist
+- #2086 — wizard.py scaffold_install now reports file/JSON errors instead of silently failing
+- #2097 — config.py set_field now handles write errors
+- #2109 — vault_optimize.py add_question now catches OSError specifically instead of swallowing all exceptions
+- #2110 — Shipped transition now blocks if your feature branch has unmerged commits (prevents stranded code)
+
+---
+
 ## [0.23.0] — 2026-04-19
 
 ### Fixed

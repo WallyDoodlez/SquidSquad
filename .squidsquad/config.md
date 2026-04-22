@@ -1,6 +1,6 @@
 # SquidSquad Config
 
-- **SquidSquad Version**: 0.23.0
+- **SquidSquad Version**: 0.24.0
 - **Tracker**: github-issues
 - **Architecture Version**: 1
 
