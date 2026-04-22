@@ -1,5 +1,6 @@
 """Tests for references/scripts/git_ops.py — mocked subprocess, no real git."""
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -508,3 +509,87 @@ class TestBranchUtilities:
     def test_current_branch(self, mock_run):
         mock_run.return_value = _mock_result(stdout="main\n")
         assert git_ops.current_branch() == "main"
+
+
+# ---------------------------------------------------------------------------
+# update_package_version()
+# ---------------------------------------------------------------------------
+
+class TestUpdatePackageVersion:
+    def test_updates_version(self, tmp_path):
+        pkg = tmp_path / "package.json"
+        pkg.write_text(json.dumps({"name": "test", "version": "0.23.0"}, indent=2))
+        assert git_ops.update_package_version(str(pkg), "0.24.0") is True
+        data = json.loads(pkg.read_text())
+        assert data["version"] == "0.24.0"
+        assert data["name"] == "test"  # other fields preserved
+
+    def test_preserves_all_fields(self, tmp_path):
+        original = {"name": "squid", "version": "1.0.0", "bin": {"squid": "./index.js"}, "keywords": ["ai"]}
+        pkg = tmp_path / "package.json"
+        pkg.write_text(json.dumps(original, indent=2))
+        git_ops.update_package_version(str(pkg), "2.0.0")
+        data = json.loads(pkg.read_text())
+        assert data["version"] == "2.0.0"
+        assert data["bin"] == {"squid": "./index.js"}
+        assert data["keywords"] == ["ai"]
+
+    def test_missing_file_returns_false(self, tmp_path):
+        assert git_ops.update_package_version(str(tmp_path / "nope.json"), "1.0.0") is False
+
+    def test_invalid_json_returns_false(self, tmp_path):
+        pkg = tmp_path / "package.json"
+        pkg.write_text("not json {{{")
+        assert git_ops.update_package_version(str(pkg), "1.0.0") is False
+
+    def test_adds_trailing_newline(self, tmp_path):
+        pkg = tmp_path / "package.json"
+        pkg.write_text(json.dumps({"version": "0.1.0"}))
+        git_ops.update_package_version(str(pkg), "0.2.0")
+        assert pkg.read_text().endswith("\n")
+
+
+# ---------------------------------------------------------------------------
+# npm_publish()
+# ---------------------------------------------------------------------------
+
+class TestNpmPublish:
+    @patch("subprocess.run")
+    def test_successful_publish(self, mock_run, tmp_path):
+        pkg = tmp_path / "package.json"
+        pkg.write_text(json.dumps({"name": "test", "version": "1.0.0"}))
+        mock_run.side_effect = [
+            _mock_result(stdout="testuser\n"),  # npm whoami
+            _mock_result(stdout="+ test@1.0.0\n"),  # npm publish
+        ]
+        assert git_ops.npm_publish(str(tmp_path)) is True
+
+    @patch("subprocess.run")
+    def test_no_auth_skips(self, mock_run, tmp_path):
+        pkg = tmp_path / "package.json"
+        pkg.write_text(json.dumps({"name": "test", "version": "1.0.0"}))
+        mock_run.return_value = _mock_result(stderr="ENEEDAUTH", returncode=1)
+        assert git_ops.npm_publish(str(tmp_path)) is False
+
+    @patch("subprocess.run")
+    def test_already_published_returns_true(self, mock_run, tmp_path):
+        pkg = tmp_path / "package.json"
+        pkg.write_text(json.dumps({"name": "test", "version": "1.0.0"}))
+        mock_run.side_effect = [
+            _mock_result(stdout="testuser\n"),  # npm whoami
+            _mock_result(stderr="cannot publish over previously published version", returncode=1),
+        ]
+        assert git_ops.npm_publish(str(tmp_path)) is True
+
+    def test_missing_package_json_returns_false(self, tmp_path):
+        assert git_ops.npm_publish(str(tmp_path / "nonexistent")) is False
+
+    @patch("subprocess.run")
+    def test_publish_failure(self, mock_run, tmp_path):
+        pkg = tmp_path / "package.json"
+        pkg.write_text(json.dumps({"name": "test", "version": "1.0.0"}))
+        mock_run.side_effect = [
+            _mock_result(stdout="testuser\n"),  # npm whoami
+            _mock_result(stderr="ERR! 403 Forbidden", returncode=1),  # npm publish
+        ]
+        assert git_ops.npm_publish(str(tmp_path)) is False

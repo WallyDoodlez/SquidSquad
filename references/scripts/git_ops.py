@@ -18,6 +18,8 @@ Usage:
     python scripts/git_ops.py current-branch             # print current branch name
     python scripts/git_ops.py pr-create <title> <body>   # create PR via gh
     python scripts/git_ops.py pr-merge <number> [--strategy squash]  # merge PR via gh
+    python scripts/git_ops.py update-package-version <path> <ver>  # update package.json version
+    python scripts/git_ops.py npm-publish <dir>          # npm publish from directory
     python scripts/git_ops.py has-changes               # check if working tree dirty
     python scripts/git_ops.py last-hash                 # print last commit hash (short)
     python scripts/git_ops.py --help
@@ -446,6 +448,86 @@ def commit_state(role, message):
     return True
 
 
+def update_package_version(package_path, version):
+    """Update the version field in a package.json file.
+
+    Args:
+        package_path: Path to package.json (relative to repo root or absolute).
+        version: New version string (e.g. '0.24.0').
+    """
+    pkg_file = Path(package_path)
+    if not pkg_file.is_absolute():
+        pkg_file = REPO_ROOT / pkg_file
+
+    if not pkg_file.exists():
+        print(f"ERROR: {package_path} not found", file=sys.stderr)
+        return False
+
+    try:
+        data = json.loads(pkg_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"ERROR: failed to read {package_path}: {e}", file=sys.stderr)
+        return False
+
+    old_version = data.get("version", "(none)")
+    data["version"] = version
+
+    pkg_file.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    print(f"Updated {package_path}: {old_version} → {version}")
+    return True
+
+
+def npm_publish(package_dir):
+    """Publish a package to npm from the given directory.
+
+    Checks for npm auth first. If auth is missing, prints a warning
+    and returns False without failing the overall bump sequence.
+
+    Args:
+        package_dir: Directory containing package.json (relative or absolute).
+    """
+    pkg_dir = Path(package_dir)
+    if not pkg_dir.is_absolute():
+        pkg_dir = REPO_ROOT / pkg_dir
+
+    pkg_json = pkg_dir / "package.json"
+    if not pkg_json.exists():
+        print(f"ERROR: {pkg_json} not found", file=sys.stderr)
+        return False
+
+    # Check npm auth
+    auth_check = subprocess.run(
+        ["npm", "whoami"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        check=False, cwd=str(pkg_dir),
+    )
+    if auth_check.returncode != 0:
+        print(f"WARNING: npm auth not configured — skipping publish. Run 'npm login' to enable.", file=sys.stderr)
+        print("npm-publish: skipped (no auth)")
+        return False
+
+    # Publish
+    result = subprocess.run(
+        ["npm", "publish", "--access", "public"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        check=False, cwd=str(pkg_dir),
+    )
+    if result.returncode != 0:
+        error = result.stderr.strip()
+        if "already been published" in error.lower() or "cannot publish over" in error.lower():
+            print(f"npm-publish: version already published (skipping)")
+            return True
+        print(f"ERROR: npm publish failed: {error}", file=sys.stderr)
+        _log_diagnostic("error", f"npm publish failed: {error[:200]}")
+        return False
+
+    print(f"npm-publish: published successfully")
+    return True
+
+
 def has_changes():
     """Check if working tree has uncommitted changes."""
     result = _run("git status --porcelain")
@@ -537,6 +619,17 @@ def main():
         branch_delete(rest[0])
     elif cmd == "current-branch":
         current_branch()
+    elif cmd == "update-package-version":
+        if len(rest) < 2:
+            print("Usage: git_ops.py update-package-version <package.json-path> <version>", file=sys.stderr)
+            sys.exit(1)
+        if not update_package_version(rest[0], rest[1]):
+            sys.exit(1)
+    elif cmd == "npm-publish":
+        if not rest:
+            print("Usage: git_ops.py npm-publish <package-dir>", file=sys.stderr)
+            sys.exit(1)
+        npm_publish(rest[0])
     elif cmd == "has-changes":
         has_changes()
     elif cmd == "last-hash":

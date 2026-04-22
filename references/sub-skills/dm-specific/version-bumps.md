@@ -15,7 +15,8 @@ After marking any item `Shipped`, check if a version bump is due:
 2. Increment minor version, reset patch to 0 (e.g. `0.6.0` → `0.7.0`).
 3. Update config: `python references/scripts/config.py set version X.Y.Z`
 4. Update `SKILL.md` YAML frontmatter: set `version` to new version.
-5. Add new section to top of `CHANGELOG.md`:
+5. Update `packages/cli/package.json`: `python references/scripts/git_ops.py update-package-version packages/cli/package.json X.Y.Z`
+6. Add new section to top of `CHANGELOG.md`:
    ```markdown
    ## [X.Y.Z] — YYYY-MM-DD
 
@@ -28,12 +29,17 @@ After marking any item `Shipped`, check if a version bump is due:
    ...
    ```
    List all items shipped since the last bump (scan tracker Discussions for `Status → Shipped` entries since the previous version's date).
-6. Commit: `python references/scripts/git_ops.py commit-push dm "bump version to vX.Y.Z"`
-7. Check if tag exists: `git tag -l "vX.Y.Z"`. If it exists, skip tagging.
-8. Create tag: `git tag vX.Y.Z`
-9. Push tags: `git push --tags`
-10. Reset shipped count: `python references/scripts/config.py set shipped-since-bump 0`
-11. Log in iteration log: add `Version Bumped: X.Y.Z` field.
+7. Commit: `python references/scripts/git_ops.py commit-push dm "bump version to vX.Y.Z"`
+8. Check if tag exists: `git tag -l "vX.Y.Z"`. If it exists, skip tagging.
+9. Create tag: `git tag vX.Y.Z`
+10. Push tags: `git push --tags`
+11. Publish to npm (if `packages/cli/package.json` exists):
+    ```bash
+    python references/scripts/git_ops.py npm-publish packages/cli
+    ```
+    This checks for npm auth before attempting publish. If auth is missing, it prints a warning and continues — the human can publish manually.
+12. Reset shipped count: `python references/scripts/config.py set shipped-since-bump 0`
+13. Log in iteration log: add `Version Bumped: X.Y.Z` field.
 
 Print: `[🦑 HH:MM:SS] Version bumped to vX.Y.Z — tag created and pushed.`
 
