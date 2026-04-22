@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-22 18:32
+
+- **Files scanned**: references/scripts/vault_check.py, references/scripts/vault_optimize.py
+- **Findings**: #2109 (vault_optimize.py add_question silently swallows all exceptions — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-22 16:32
 
 - **Files scanned**: references/scripts/config.py, references/scripts/cycle.py
