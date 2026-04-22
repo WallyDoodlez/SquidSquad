@@ -827,8 +827,10 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
                         resp_lines = "\n".join(f"- {r}" for r in role_resps)
                         soul_text = soul_text.replace(resp_placeholder, resp_lines)
                         soul_path.write_text(soul_text, encoding="utf-8")
-            except (json.JSONDecodeError, OSError):
-                pass
+            except FileNotFoundError:
+                pass  # .repo-scan.json doesn't exist yet — normal
+            except (json.JSONDecodeError, OSError) as e:
+                print(f"WARNING: Failed to read repo scan for {role_identity}: {e}", file=sys.stderr)
 
         # working-state.md — never overwrite
         ws_path = agent_dir / "working-state.md"

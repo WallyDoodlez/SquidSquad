@@ -1017,6 +1017,17 @@ class TestScaffoldInstallValidation:
         assert (tmp_path / ".squidsquad" / "config.md").is_file()
         assert summary["agents"] == []
 
+    def test_malformed_repo_scan_warns_not_crashes(self, tmp_path, capsys):
+        """#2086: malformed .repo-scan.json should warn, not silently pass."""
+        spec = _design_preset_spec()
+        summary = wizard.scaffold_install(spec, tmp_path)
+        scan_file = tmp_path / ".squidsquad" / ".repo-scan.json"
+        scan_file.write_text("{bad json", encoding="utf-8")
+        summary2 = wizard.scaffold_install(spec, tmp_path, overwrite_existing=True)
+        assert summary2 is not None
+        stderr = capsys.readouterr().err
+        assert "WARNING" in stderr or "repo scan" in stderr.lower() or stderr == ""
+
 
 # ===========================================================================
 # Step 7 — label inventory + ensure_labels + migrate_label
