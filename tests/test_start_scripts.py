@@ -147,3 +147,25 @@ class TestStartScriptConsistency:
         ps1 = (SQUIDSQUAD_DIR / f"start-{role}.ps1").read_text(encoding="utf-8")
         assert "current-state" in sh, f"start-{role}.sh should initialize current-state"
         assert "current-state" in ps1, f"start-{role}.ps1 should initialize current-state"
+
+
+class TestInjectPermissionsStatusLine:
+    """inject-permissions scripts fix statusLine to object format (#2008)."""
+
+    def test_bash_script_fixes_statusline(self):
+        content = (SQUIDSQUAD_DIR / "inject-permissions.sh").read_text(encoding="utf-8")
+        assert "statusLine" in content, (
+            "inject-permissions.sh must handle statusLine format"
+        )
+        assert "object" in content.lower() or '"type"' in content, (
+            "inject-permissions.sh must ensure statusLine is an object with type field"
+        )
+
+    def test_ps1_script_fixes_statusline(self):
+        content = (SQUIDSQUAD_DIR / "inject-permissions.ps1").read_text(encoding="utf-8")
+        assert "statusLine" in content, (
+            "inject-permissions.ps1 must handle statusLine format"
+        )
+        assert "object" in content.lower() or "-is [string]" in content, (
+            "inject-permissions.ps1 must detect and fix string statusLine"
+        )
