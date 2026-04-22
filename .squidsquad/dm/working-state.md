@@ -4,8 +4,8 @@
 - **Status**: none
 - **Quiet Cycle Counter**: 0
 
-## Session Context (checkpoint at cycle 15)
+## Session Context (checkpoint at cycle 19)
 - Version: v0.23.0
-- Shipped count: 9/10
-- Pending bugs: #1772 (open, awaiting PM close), #302 #303 (pending PM)
-- Last active delivery: cycle 15 (#2035 tracker.py JSON error handling)
+- Shipped count: 10/10 — bump deferred, #1772 still open
+- Pending bugs: #1772 (open, blocking version bump), #302 #303 (pending PM)
+- Last active delivery: cycle 19 (#2046 path traversal validation)
