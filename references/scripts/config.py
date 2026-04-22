@@ -175,7 +175,11 @@ def set_field(field, value):
             print(f"ERROR: Field '{field}' not found in config.md", file=sys.stderr)
             sys.exit(1)
 
-    CONFIG_PATH.write_text(new_text, encoding="utf-8")
+    try:
+        CONFIG_PATH.write_text(new_text, encoding="utf-8")
+    except OSError as e:
+        print(f"ERROR: Failed to write config.md: {e}", file=sys.stderr)
+        sys.exit(1)
     return value
 
 

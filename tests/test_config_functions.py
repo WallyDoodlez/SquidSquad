@@ -198,6 +198,14 @@ class TestSetField:
             with pytest.raises(SystemExit):
                 config.set_field("nonexistent-field-xyz", "value")
 
+    def test_set_write_failure_exits(self, tmp_path):
+        """#2097: write failure should exit with error, not crash."""
+        cfg = self._setup_config(tmp_path)
+        with patch.object(config, "CONFIG_PATH", cfg), \
+             patch("pathlib.Path.write_text", side_effect=OSError("disk full")):
+            with pytest.raises(SystemExit):
+                config.set_field("interval", "45")
+
 
 class TestGetAlias:
     def _setup_config(self, tmp_path):
