@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-22 05:02
+
+- **Files scanned**: references/scripts/tracker.py
+- **Findings**: #2035 (tracker.py _check_unread_feedback missing JSON parse error handling — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-20 15:31
 
 - **Files scanned**: git log check for new files in last 12h — only repo_scan.py (already scanned)
