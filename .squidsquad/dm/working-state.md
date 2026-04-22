@@ -1,19 +1,11 @@
 # Working State
 
-- **Task**: #2110, #2109
-- **Status**: in-progress
-- **Started**: 2026-04-22 19:33
+- **Task**: none
+- **Status**: none
+- **Quiet Cycle Counter**: 0
 
-## Completed Steps
-- Merged squidsquad/skill/2109 to main
-- Merged squidsquad/skill/2110 to main
-
-## Remaining Steps
-- Check README/SKILL.md for delivery updates
-- Prepare CHANGELOG entries
-- Transition both to Shipped
-- Increment shipped count
-- Check version bump threshold
-
-## Key Decisions
-- Both are internal bug fixes, no user-facing README changes expected
+## Session Context (checkpoint at cycle 137)
+- Version: v0.24.0
+- Shipped count: 0/10 — fresh after version bump
+- Pending bugs: #1772 (pending-test), #302 #303 (pending PM)
+- Last active delivery: cycle 137 (#2110, #2109 shipped, version bump to v0.24.0)
