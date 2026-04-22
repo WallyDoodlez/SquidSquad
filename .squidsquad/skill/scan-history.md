@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-22 09:02
+
+- **Files scanned**: references/scripts/compose.py
+- **Findings**: #2058 (compose.py deploy_role/boot_role missing file write error handling — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-22 07:02
 
 - **Files scanned**: references/scripts/state_bus.py, references/scripts/migrate_state_branch.py
