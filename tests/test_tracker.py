@@ -247,3 +247,42 @@ class TestParseArgs:
         assert cmd == "transition"
         assert "42" in pos
         assert opts["role"] == "skill-lead"
+
+
+class TestCheckUnreadFeedback:
+    """Tests for _check_unread_feedback — #2035 regression."""
+
+    @patch("tracker._run_list")
+    def test_valid_json_no_comments(self, mock_run):
+        mock_run.return_value = _mock_result(stdout='{"comments": []}')
+        result = tracker._check_unread_feedback(42, "skill-lead")
+        assert result == []
+
+    @patch("tracker._run_list")
+    def test_api_failure_returns_sentinel(self, mock_run):
+        mock_run.return_value = _mock_result(returncode=1, stderr="error")
+        result = tracker._check_unread_feedback(42, "skill-lead")
+        assert len(result) == 1
+        assert "API error" in result[0][0]
+
+    @patch("tracker._run_list")
+    def test_malformed_json_returns_sentinel(self, mock_run):
+        """#2035: malformed JSON should fail closed, not raise."""
+        mock_run.return_value = _mock_result(stdout="not valid json {{{")
+        result = tracker._check_unread_feedback(42, "skill-lead")
+        assert len(result) == 1
+        assert "JSON parse error" in result[0][0]
+
+    @patch("tracker._run_list")
+    def test_truncated_json_returns_sentinel(self, mock_run):
+        mock_run.return_value = _mock_result(stdout='{"comments": [')
+        result = tracker._check_unread_feedback(42, "skill-lead")
+        assert len(result) == 1
+        assert "JSON parse error" in result[0][0]
+
+    @patch("tracker._run_list")
+    def test_empty_stdout_returns_sentinel(self, mock_run):
+        mock_run.return_value = _mock_result(stdout="")
+        result = tracker._check_unread_feedback(42, "skill-lead")
+        assert len(result) == 1
+        assert "API error" in result[0][0]

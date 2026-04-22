@@ -726,7 +726,11 @@ def _check_unread_feedback(number, caller_role):
         # Fail closed — if we can't read comments, block the transition
         return [("unknown (API error)", "unknown")]
 
-    data = json.loads(result.stdout)
+    try:
+        data = json.loads(result.stdout)
+    except (json.JSONDecodeError, ValueError):
+        # Fail closed — malformed response blocks transition
+        return [("unknown (JSON parse error)", "unknown")]
     comments = data.get("comments", [])
     if not comments:
         return []
