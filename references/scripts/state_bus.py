@@ -136,13 +136,26 @@ def init():
     return 0
 
 
+def _validate_path(path):
+    """Validate that path stays within STATE_WORKTREE. Returns resolved Path or None."""
+    full_path = (STATE_WORKTREE / path).resolve()
+    try:
+        full_path.relative_to(STATE_WORKTREE.resolve())
+    except ValueError:
+        print(f"ERROR: path traversal blocked: {path}", file=sys.stderr)
+        return None
+    return full_path
+
+
 def read_file(path):
     """Read a file from the state worktree."""
     if not _worktree_exists():
         print("ERROR: State worktree not initialized. Run: state_bus.py init",
               file=sys.stderr)
         return None
-    full_path = STATE_WORKTREE / path
+    full_path = _validate_path(path)
+    if full_path is None:
+        return None
     if not full_path.exists():
         return None
     return full_path.read_text(encoding="utf-8")
@@ -154,7 +167,9 @@ def write_file(path, content):
         print("ERROR: State worktree not initialized. Run: state_bus.py init",
               file=sys.stderr)
         return False
-    full_path = STATE_WORKTREE / path
+    full_path = _validate_path(path)
+    if full_path is None:
+        return False
     full_path.parent.mkdir(parents=True, exist_ok=True)
     full_path.write_text(content, encoding="utf-8")
     return True

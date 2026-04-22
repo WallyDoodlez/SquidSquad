@@ -106,6 +106,44 @@ class TestWriteFile:
             assert state_bus.write_file("test.txt", "x") is False
 
 
+class TestPathTraversal:
+    """#2046: read_file/write_file must block path traversal."""
+
+    def test_read_blocks_parent_traversal(self, tmp_path):
+        wt = tmp_path / "state"
+        wt.mkdir()
+        (wt / ".git").write_text("gitdir: ...")
+        # Create a file outside the worktree
+        (tmp_path / "secret.txt").write_text("sensitive")
+        with patch.object(state_bus, "STATE_WORKTREE", wt):
+            assert state_bus.read_file("../secret.txt") is None
+
+    def test_write_blocks_parent_traversal(self, tmp_path):
+        wt = tmp_path / "state"
+        wt.mkdir()
+        (wt / ".git").write_text("gitdir: ...")
+        with patch.object(state_bus, "STATE_WORKTREE", wt):
+            assert state_bus.write_file("../../evil.txt", "pwned") is False
+        assert not (tmp_path.parent / "evil.txt").exists()
+
+    def test_read_allows_normal_paths(self, tmp_path):
+        wt = tmp_path / "state"
+        wt.mkdir()
+        (wt / ".git").write_text("gitdir: ...")
+        (wt / "sub").mkdir()
+        (wt / "sub" / "file.txt").write_text("ok")
+        with patch.object(state_bus, "STATE_WORKTREE", wt):
+            assert state_bus.read_file("sub/file.txt") == "ok"
+
+    def test_write_allows_normal_paths(self, tmp_path):
+        wt = tmp_path / "state"
+        wt.mkdir()
+        (wt / ".git").write_text("gitdir: ...")
+        with patch.object(state_bus, "STATE_WORKTREE", wt):
+            assert state_bus.write_file("sub/new.txt", "data") is True
+        assert (wt / "sub" / "new.txt").read_text() == "data"
+
+
 class TestStatus:
     def test_outputs_json(self, tmp_path, capsys):
         config = tmp_path / "config.md"
