@@ -1,33 +1,3 @@
-{"timestamp": 1776062203.4508164, "role": "dm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "unknown (no current-state file)"}
-{"timestamp": 1776062203.4750764, "role": "pm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "unknown (no current-state file)"}
-{"timestamp": 1776062284.3069084, "role": "designer", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "unknown (no current-state file)"}
-{"timestamp": 1776062284.3287177, "role": "qa", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "unknown (no current-state file)"}
-{"timestamp": 1776092533.3496265, "role": "designer", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 120m ago (threshold 60m))"}
-{"timestamp": 1776092533.3720856, "role": "dm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 119m ago (threshold 60m))"}
-{"timestamp": 1776092533.3963127, "role": "pm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 119m ago (threshold 60m))"}
-{"timestamp": 1776092533.418589, "role": "qa", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 119m ago (threshold 60m))"}
-{"timestamp": 1776096246.9949174, "role": "skill", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 61m ago (threshold 60m))"}
-{"timestamp": 1776097938.04127, "role": "pm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 81m ago (threshold 60m))"}
-{"timestamp": 1776146621.46459, "role": "pm", "action": "kill", "success": true, "message": "killed PID 31916 (taskkill)", "reason": "stalled (last active 62m ago (threshold 60m))"}
-{"timestamp": 1776146622.5217395, "role": "pm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 62m ago (threshold 60m))"}
-{"timestamp": 1776151990.6359153, "role": "pm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 89m ago (threshold 60m))"}
-{"timestamp": 1776157394.0733118, "role": "pm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 90m ago (threshold 60m))"}
-{"timestamp": 1776162790.4803479, "role": "pm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 89m ago (threshold 60m))"}
-{"timestamp": 1776168198.4468257, "role": "pm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 90m ago (threshold 60m))"}
-{"timestamp": 1776180679.984711, "role": "pm", "action": "kill", "success": true, "message": "killed PID 204824 (taskkill)", "reason": "stalled (last active 86m ago (threshold 60m))"}
-{"timestamp": 1776180681.0138612, "role": "pm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 86m ago (threshold 60m))"}
-{"timestamp": 1776175381.2910228, "role": "pm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 87m ago (threshold 60m))"}
-{"timestamp": 1776175477.6160817, "role": "dm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 61m ago (threshold 60m))"}
-{"timestamp": 1776175478.1823442, "role": "qa", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 61m ago (threshold 60m))"}
-{"timestamp": 1776205088.2537487, "role": "dm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 1876m ago (threshold 60m))"}
-{"timestamp": 1776205089.6646233, "role": "skill", "action": "kill", "success": true, "message": "killed PID 224056 (taskkill)", "reason": "stalled (last active 106m ago (threshold 60m))"}
-{"timestamp": 1776205090.6840153, "role": "skill", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "stalled (last active 106m ago (threshold 60m))"}
-{"timestamp": 1776211803.8218472, "role": "designer", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "no PID file (agent not running)"}
-{"timestamp": 1776211803.8466825, "role": "dm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "no PID file (agent not running)"}
-{"timestamp": 1776211803.8702548, "role": "qa", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "no PID file (agent not running)"}
-{"timestamp": 1776211803.8933077, "role": "skill", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "no PID file (agent not running)"}
-{"timestamp": 1776211803.919081, "role": "wizard", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "no PID file (agent not running)"}
-{"timestamp": 1776212762.0178304, "role": "designer", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "process dead (PID 257460 not found)"}
-{"timestamp": 1776212762.6459217, "role": "dm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "process dead (PID 97196 not found)"}
-{"timestamp": 1776212763.2561374, "role": "qa", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "process dead (PID 266836 not found)"}
-{"timestamp": 1776212764.0370202, "role": "skill", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": "process dead (PID 102448 not found)"}
+{"timestamp": 1776900226.2923508, "role": "dm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": ".health=dead (wrapper exited)"}
+{"timestamp": 1776900228.3182604, "role": "qa", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": ".health=dead (wrapper exited)"}
+{"timestamp": 1776900230.3432271, "role": "skill", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": ".health=dead (wrapper exited)"}
