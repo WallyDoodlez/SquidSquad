@@ -1,0 +1,35 @@
+{
+  "issue": 1428,
+  "title": "Deterministic QA verification framework",
+  "files": [
+    "references/sub-skills/qa-specific/verification.md",
+    "references/prompts/test-plan.md.j2"
+  ],
+  "questions": [
+    {
+      "id": "1",
+      "question": "When a test case cannot run because an API key is missing from the environment, what result status should it receive? Can it be marked as 'skipped' or 'deferred'?",
+      "expected": "It should be marked HUMAN-REQUIRED, not skipped or deferred. 'Deferred' and 'Skipped' are NOT valid results. Every TC must be PASS, FAIL, or HUMAN-REQUIRED."
+    },
+    {
+      "id": "2",
+      "question": "If QA verification finds 3 test case failures but the feature mostly works, can QA transition the item to Pending Ship with a note about the gaps?",
+      "expected": "No. The zero-gap gate requires ALL findings to be resolved before shipping. QA must NOT mark Pending Ship with 'gaps noted for follow-up'. The item goes back to In Progress."
+    },
+    {
+      "id": "3",
+      "question": "Which types of test case assertions qualify as [human-required] vs [deterministic]? Give examples of each.",
+      "expected": "Only 'is the LLM reasoning correct?' qualifies as human-required. Everything around it — format, structure, completeness, file references, state transitions — is deterministic. Human-required has two sub-types: environment (missing API key, Docker, etc.) and human-verification (LLM reasoning quality)."
+    },
+    {
+      "id": "4",
+      "question": "When any TC result is HUMAN-REQUIRED, what must QA do? Can QA still transition to pending-ship?",
+      "expected": "QA must NOT transition to pending-ship. QA adds the blocked:human-action label and comments listing what the human needs to do. The gate is absolute — cannot ship until resolved."
+    },
+    {
+      "id": "5",
+      "question": "Can a test case in a TEST-PLAN.md exist without a category label like [deterministic] or [human-required]?",
+      "expected": "No. Every TC must have one of the category labels — no unlabeled TCs are allowed."
+    }
+  ]
+}
