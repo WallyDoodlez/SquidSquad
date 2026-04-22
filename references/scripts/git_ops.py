@@ -311,6 +311,29 @@ def _is_state_file(path):
     return any(path.startswith(p) for p in STATE_PREFIXES)
 
 
+def _safe_checkout(target_branch):
+    """Switch to target branch, stashing unstaged changes if needed.
+
+    Handles the case where hooks/linters modify files after a commit,
+    which would cause a bare `git checkout` to fail.
+    """
+    current = _run("git branch --show-current", check=False).stdout.strip()
+    if current == target_branch:
+        return True
+    # Try direct checkout first
+    result = _run_list(["git", "checkout", target_branch], check=False)
+    if result.returncode == 0:
+        return True
+    # Unstaged changes blocking checkout — stash and retry
+    _run("git stash -q", check=False)
+    result = _run_list(["git", "checkout", target_branch], check=False)
+    _run("git stash pop -q", check=False)
+    if result.returncode != 0:
+        print(f"ERROR: could not switch to {target_branch}: {result.stderr}", file=sys.stderr)
+        return False
+    return True
+
+
 def commit_code(role, branch, message):
     """Stage and commit only code files to a feature branch.
 
@@ -369,10 +392,10 @@ def commit_code(role, branch, message):
     if result.returncode != 0:
         if "nothing to commit" in result.stdout + result.stderr:
             print("Nothing to commit on branch")
-            _run_list(["git", "checkout", "main"])
+            _safe_checkout("main")
             return False
         print(f"ERROR: {result.stderr}", file=sys.stderr)
-        _run_list(["git", "checkout", "main"])
+        _safe_checkout("main")
         return False
 
     # Push branch
@@ -384,7 +407,7 @@ def commit_code(role, branch, message):
     print(f"Committed code to {branch}: {message}")
 
     # Switch back to main
-    _run_list(["git", "checkout", "main"])
+    _safe_checkout("main")
     return True
 
 
