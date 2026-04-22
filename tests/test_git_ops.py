@@ -508,3 +508,55 @@ class TestBranchUtilities:
     def test_current_branch(self, mock_run):
         mock_run.return_value = _mock_result(stdout="main\n")
         assert git_ops.current_branch() == "main"
+
+
+# ---------------------------------------------------------------------------
+# _safe_checkout()
+# ---------------------------------------------------------------------------
+
+class TestSafeCheckout:
+    """#2064: _safe_checkout handles unstaged changes blocking checkout."""
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_already_on_target(self, mock_run, mock_run_list):
+        mock_run.return_value = _mock_result(stdout="main\n")
+        assert git_ops._safe_checkout("main") is True
+        mock_run_list.assert_not_called()
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_direct_checkout_succeeds(self, mock_run, mock_run_list):
+        mock_run.return_value = _mock_result(stdout="squidsquad/skill/42\n")
+        mock_run_list.return_value = _mock_result()
+        assert git_ops._safe_checkout("main") is True
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_stash_fallback_on_dirty_tree(self, mock_run, mock_run_list):
+        """Direct checkout fails, stash+checkout+pop succeeds."""
+        mock_run.side_effect = [
+            _mock_result(stdout="squidsquad/skill/42\n"),
+            _mock_result(),  # git stash -q
+            _mock_result(),  # git stash pop -q
+        ]
+        mock_run_list.side_effect = [
+            _mock_result(returncode=1, stderr="unstaged changes"),
+            _mock_result(),  # second checkout succeeds
+        ]
+        assert git_ops._safe_checkout("main") is True
+        assert mock_run_list.call_count == 2
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_returns_false_when_all_fails(self, mock_run, mock_run_list):
+        mock_run.side_effect = [
+            _mock_result(stdout="squidsquad/skill/42\n"),
+            _mock_result(),  # stash
+            _mock_result(),  # stash pop
+        ]
+        mock_run_list.side_effect = [
+            _mock_result(returncode=1, stderr="error"),
+            _mock_result(returncode=1, stderr="still error"),
+        ]
+        assert git_ops._safe_checkout("main") is False
