@@ -4,11 +4,8 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #1389 Forgejo backend — in-progress (skill working, #1426 dependency shipped)
-- #1427 Model router setup UX — approved, unblocked (#1426 shipped)
-- #1470 DeepSeek/base_url support — pending, awaiting approval
-- #473/#474 Test coverage requirements — approved, high severity, 6+ days stalled
-- #1396 DM ships without merging — pending-test, approaching stall threshold
+- #1980 Version bump missing package.json update — pending-test (skill fix submitted)
+- No other open issues or approved tasks across agents
 
 ## Recent Decisions
 
@@ -32,10 +29,10 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 - Test suite exists (`python tests/run_tests.py`) — static analysis + integration tests
 - PR flow currently disabled
-- Ship counter: threshold 10, currently at 1 (v0.22.0 bumped)
+- Ship counter: threshold 10, currently at 2 (v0.23.0 bumped)
 
 ## Team State
 
 - Active agents: boot, qa, skill (dev agents), PM (always present), QA (always present), DM (present)
-- Current version: 0.22.0 (Architecture Version 1)
+- Current version: 0.23.0 (Architecture Version 1)
 - Tracker: GitHub Issues with structured labels (`type:`, `status:`, `role:`, `priority:`)
