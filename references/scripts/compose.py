@@ -371,7 +371,11 @@ def deploy_role(role_name: str, target_root: Path = None) -> Path:
 
     output_path = target_root / ".squidsquad" / role_name / "CLAUDE.md"
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(header + final, encoding="utf-8")
+    try:
+        output_path.write_text(header + final, encoding="utf-8")
+    except OSError as e:
+        print(f"ERROR: Failed to write {output_path}: {e}", file=sys.stderr)
+        return None
 
     # Create SOUL.md from the role directory's template if missing
     # (never overwrite an existing local SOUL.md — the installed agent may
@@ -382,10 +386,13 @@ def deploy_role(role_name: str, target_root: Path = None) -> Path:
         role_identity = _get_entry_file_for_role(role_name)  # 'dev' for variants
         soul_template = ROLES_DIR / role_identity / "SOUL.md"
         if soul_template.exists():
-            soul_path.write_text(
-                soul_template.read_text(encoding="utf-8"),
-                encoding="utf-8",
-            )
+            try:
+                soul_path.write_text(
+                    soul_template.read_text(encoding="utf-8"),
+                    encoding="utf-8",
+                )
+            except OSError as e:
+                print(f"WARNING: Failed to write SOUL.md for {role_name}: {e}", file=sys.stderr)
 
     return output_path
 
@@ -411,7 +418,11 @@ def generate_local_config(roles: list, target_root: Path = None) -> Path:
         lines.append(f"- **{role}**: {target_root}")
 
     config_path = target_root / ".squidsquad" / ".local-config"
-    config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    try:
+        config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except OSError as e:
+        print(f"ERROR: Failed to write {config_path}: {e}", file=sys.stderr)
+        return None
     return config_path
 
 
@@ -435,7 +446,11 @@ def boot_role(role_name: str) -> list:
         # .ps1 files need UTF-8 BOM so PowerShell parses Unicode correctly
         newline = "\n" if ext == "sh" else None
         enc = "utf-8-sig" if ext == "ps1" else "utf-8"
-        output_path.write_text(content, encoding=enc, newline=newline)
+        try:
+            output_path.write_text(content, encoding=enc, newline=newline)
+        except OSError as e:
+            print(f"ERROR: Failed to write {output_path}: {e}", file=sys.stderr)
+            continue
         outputs.append(output_path)
 
     return outputs

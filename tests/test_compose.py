@@ -309,6 +309,15 @@ class TestDeployRole:
             compose.deploy_role("skill", target_root=compose_env)
         assert soul.read_text(encoding="utf-8") == "Custom soul content"
 
+    def test_returns_none_on_write_failure(self, compose_env):
+        """#2058: deploy_role returns None on write error instead of crashing."""
+        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
+             patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"), \
+             patch.object(compose, "_read_config_value", return_value=""), \
+             patch("pathlib.Path.write_text", side_effect=OSError("disk full")):
+            result = compose.deploy_role("pm", target_root=compose_env)
+        assert result is None
+
 
 # ---------------------------------------------------------------------------
 # generate_local_config
