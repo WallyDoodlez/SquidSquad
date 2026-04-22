@@ -2,7 +2,7 @@
 
 - **Task**: #2070 — Cycle runner script
 - **Status**: in-progress
-- **Phase**: discussing #2070
+- **Phase**: none
 - **Started**: 2026-04-22 17:31
 
 ## Completed Steps
