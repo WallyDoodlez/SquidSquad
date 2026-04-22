@@ -506,8 +506,8 @@ def add_question(agent, note_path, question):
     try:
         with open(PENDING_FILE, "a", encoding="utf-8") as f:
             f.write(entry + "\n")
-    except Exception:
-        pass
+    except OSError as e:
+        print(f"WARNING: Failed to write pending question: {e}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
