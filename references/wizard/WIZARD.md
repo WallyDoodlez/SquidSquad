@@ -602,6 +602,22 @@ this writes the full `.squidsquad/` tree:
 Parse the JSON summary. If `failed` is non-empty, stop and show the
 user the errors — they can re-run the wizard after fixing them.
 
+### 7.3b — Generate boot scripts
+
+Generate boot scripts for each configured agent from the canonical
+templates:
+
+```bash
+python references/scripts/compose.py boot-all
+```
+
+This creates `.squidsquad/start-<role>.sh` and
+`.squidsquad/start-<role>.ps1` for every configured agent. The
+templates include `SQUIDSQUAD_ROLE` env var, PID locking, pre-flight
+checks, auto-restart loop, context pressure monitoring, and self-restart
+rate limiting. If any script fails to generate, show the error but
+continue — the user can re-run `compose.py boot-all` manually.
+
 ### 7.4 — Ensure GitHub labels
 
 Run `python references/scripts/wizard.py ensure-labels`. This creates
@@ -618,7 +634,7 @@ failed and how to retry.
 Stage and commit the new files:
 
 ```bash
-git add .squidsquad SKILL.md .claude/commands/squidsquad-setup.md
+git add .squidsquad SKILL.md .claude/commands/squidsquad-setup.md .squidsquad/start-*.sh .squidsquad/start-*.ps1
 git commit -m "chore: initialise SquidSquad"
 git push
 ```

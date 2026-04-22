@@ -142,8 +142,21 @@ class TestHelperCommandReferences:
             "wizard.py ensure-labels",
             "manifest.py list",
             "manifest.py load",
+            "compose.py boot-all",
         ):
             assert cmd in runbook, f"Runbook missing critical helper call: {cmd}"
+
+    def test_boot_scripts_generated_in_step7(self, runbook):
+        """Step 7 must generate boot scripts via compose.py boot-all (#2009)."""
+        step7_idx = runbook.find("## Step 7")
+        assert step7_idx != -1, "Missing Step 7"
+        step7 = runbook[step7_idx:]
+        assert "boot-all" in step7, (
+            "Step 7 must call compose.py boot-all to generate boot scripts"
+        )
+        assert "SQUIDSQUAD_ROLE" in step7, (
+            "Step 7 boot script generation must mention SQUIDSQUAD_ROLE env var"
+        )
 
 
 # ---------------------------------------------------------------------------
