@@ -49,3 +49,25 @@ fi
 
 COUNT=$(grep -v '"// ' "$TEMPLATE" | grep -c '"')
 echo "[inject-permissions] Injected $COUNT permission rules from template."
+
+# Ensure statusLine is set as an object (not a string) — #2008
+if command -v jq &>/dev/null; then
+  CURRENT=$(jq -r '.statusLine | type' "$SETTINGS" 2>/dev/null || echo "null")
+  if [ "$CURRENT" != "object" ]; then
+    jq '.statusLine = {"type": "command", "command": "bash .squidsquad/statusline.sh"}' "$SETTINGS" > "$SETTINGS.tmp" && mv -f "$SETTINGS.tmp" "$SETTINGS"
+    echo "[inject-permissions] Fixed statusLine to object format."
+  fi
+elif command -v node &>/dev/null; then
+  node -e "
+    const fs = require('fs');
+    const path = require('path');
+    const settingsPath = path.resolve('$SETTINGS'.replace(/\\\\/g, '/'));
+    const stripBom = s => s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
+    const settings = JSON.parse(stripBom(fs.readFileSync(settingsPath, 'utf8')));
+    if (typeof settings.statusLine !== 'object' || settings.statusLine === null) {
+      settings.statusLine = {type: 'command', command: 'bash .squidsquad/statusline.sh'};
+      fs.writeFileSync(settingsPath + '.tmp', JSON.stringify(settings, null, 2));
+      console.log('[inject-permissions] Fixed statusLine to object format.');
+    }
+  " && [ -f "$SETTINGS.tmp" ] && mv -f "$SETTINGS.tmp" "$SETTINGS" || true
+fi

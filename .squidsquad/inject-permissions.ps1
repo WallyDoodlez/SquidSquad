@@ -41,3 +41,17 @@ Move-Item -Path $tmp -Destination $settings -Force
 
 $count = $permsArray.Count
 Write-Host "[inject-permissions] Injected $count permission rules from template."
+
+# Ensure statusLine is set as an object (not a string) — #2008
+$settingsRaw2 = [System.IO.File]::ReadAllText($settings, [System.Text.Encoding]::UTF8)
+$settingsObj2 = $settingsRaw2 | ConvertFrom-Json
+if ($null -eq $settingsObj2.statusLine -or $settingsObj2.statusLine -is [string]) {
+    $settingsObj2.statusLine = [PSCustomObject]@{
+        type = "command"
+        command = "bash .squidsquad/statusline.sh"
+    }
+    $json2 = $settingsObj2 | ConvertTo-Json -Depth 10
+    [System.IO.File]::WriteAllText($tmp, $json2, $utf8NoBom)
+    Move-Item -Path $tmp -Destination $settings -Force
+    Write-Host "[inject-permissions] Fixed statusLine to object format."
+}
