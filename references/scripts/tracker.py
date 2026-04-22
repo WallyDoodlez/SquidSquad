@@ -627,6 +627,75 @@ def _is_feedback_comment(body, caller_role):
     return False, None
 
 
+def _is_branch_workflow_enabled():
+    """Check if branch workflow is enabled in config."""
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from config import get_field
+        return get_field("branch-workflow").strip().lower() == "yes"
+    except Exception:
+        return False
+
+
+def _get_working_branch():
+    """Get the configured working branch. Falls back to 'main'."""
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from config import get_field
+        branch = get_field("working-branch")
+        return branch.strip() if branch else "main"
+    except Exception:
+        return "main"
+
+
+def _check_unmerged_branch(number):
+    """Check if a feature branch exists with commits not merged to the working branch.
+
+    When branch workflow is enabled, feature branches follow the pattern
+    squidsquad/*/NUMBER. If such a branch exists and has commits not on
+    the working branch (main), shipping should be blocked.
+
+    Returns (branch_name, commit_count) if unmerged branch found, None otherwise.
+    Skips check if branch workflow is disabled.
+    """
+    if not _is_branch_workflow_enabled():
+        return None
+
+    working = _get_working_branch()
+
+    # List all branches matching squidsquad/*/NUMBER pattern
+    result = _run_list(
+        ["git", "branch", "-a", "--list", f"*squidsquad/*/{number}"],
+        check=False,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+
+    for line in result.stdout.strip().splitlines():
+        branch = line.strip().lstrip("* ")
+        # Normalize remotes/origin/ prefix for comparison
+        local_name = branch.replace("remotes/origin/", "")
+
+        # Verify this branch's last path segment matches the issue number
+        parts = local_name.split("/")
+        if len(parts) < 3 or parts[-1] != str(number):
+            continue
+
+        # Check if branch has commits not on the working branch
+        count_result = _run_list(
+            ["git", "rev-list", "--count", f"{working}..{branch}"],
+            check=False,
+        )
+        if count_result.returncode != 0:
+            continue
+
+        count = int(count_result.stdout.strip())
+        if count > 0:
+            return local_name, count
+
+    return None
+
+
 def _check_unmerged_pr(number):
     """Check if there's an open PR for this issue number.
 
@@ -822,7 +891,8 @@ def transition(number, from_status, to_status, role=None, force=False):
             )
             sys.exit(1)
 
-    # 4. Guard: block shipped if unmerged PR exists (never bypassed, even with --force)
+    # 4. Guard: block shipped if unmerged PR or unmerged branch exists
+    #    (never bypassed, even with --force)
     if to_label == "status:shipped":
         unmerged = _check_unmerged_pr(number)
         if unmerged:
@@ -834,6 +904,22 @@ def transition(number, from_status, to_status, role=None, force=False):
             print(
                 f"BLOCKED: Cannot ship #{number} — PR #{pr_num} is open and unmerged. "
                 f"Merge the PR first: {pr_url}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        unmerged_branch = _check_unmerged_branch(number)
+        if unmerged_branch:
+            branch_name, commit_count = unmerged_branch
+            _log_diagnostic(
+                "error",
+                f"Blocked shipped transition on #{number}: branch {branch_name} "
+                f"has {commit_count} unmerged commit(s)",
+            )
+            print(
+                f"BLOCKED: Cannot ship #{number} — branch '{branch_name}' has "
+                f"{commit_count} commit(s) not merged to the working branch. "
+                f"Merge the branch or create a PR first.",
                 file=sys.stderr,
             )
             sys.exit(1)
