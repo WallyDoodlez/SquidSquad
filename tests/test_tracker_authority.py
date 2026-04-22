@@ -627,6 +627,182 @@ class TestShippedPRGuard:
 
 
 
+# ---------------------------------------------------------------------------
+# shipped branch guard (#2110)
+# ---------------------------------------------------------------------------
+
+
+class TestShippedBranchGuard:
+    """Transition to shipped must block if unmerged feature branch exists (#2110)."""
+
+    def test_blocks_when_unmerged_branch_exists(self, monkeypatch, capsys):
+        """shipped transition blocked when feature branch has unmerged commits."""
+
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def _fake_run_list(cmd, **kw):
+            # PR check: no open PRs
+            if "pr" in cmd and "list" in cmd:
+                r = FakeResult()
+                r.stdout = "[]"
+                return r
+            # git branch -a --list: return a matching branch
+            if "branch" in cmd and "--list" in cmd:
+                r = FakeResult()
+                r.stdout = "  squidsquad/skill/42\n"
+                return r
+            # git rev-list --count: 3 unmerged commits
+            if "rev-list" in cmd and "--count" in cmd:
+                r = FakeResult()
+                r.stdout = "3"
+                return r
+            return FakeResult()
+
+        monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
+        monkeypatch.setattr(tracker, "_is_branch_workflow_enabled", lambda: True)
+
+        with pytest.raises(SystemExit) as excinfo:
+            tracker.transition(42, "pending-ship", "shipped", role="dm-lead")
+        assert excinfo.value.code == 1
+        err = capsys.readouterr().err
+        assert "BLOCKED" in err
+        assert "squidsquad/skill/42" in err
+        assert "3 commit(s)" in err
+
+    def test_allows_when_branch_fully_merged(self, monkeypatch):
+        """shipped transition proceeds when feature branch is fully merged."""
+
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def _fake_run_list(cmd, **kw):
+            if "pr" in cmd and "list" in cmd:
+                r = FakeResult()
+                r.stdout = "[]"
+                return r
+            if "branch" in cmd and "--list" in cmd:
+                r = FakeResult()
+                r.stdout = "  squidsquad/skill/42\n"
+                return r
+            # 0 unmerged commits — fully merged
+            if "rev-list" in cmd and "--count" in cmd:
+                r = FakeResult()
+                r.stdout = "0"
+                return r
+            return FakeResult()
+
+        monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
+        monkeypatch.setattr(tracker, "_is_branch_workflow_enabled", lambda: True)
+        # Should not raise — branch is merged
+        tracker.transition(42, "pending-ship", "shipped", role="dm-lead")
+
+    def test_allows_when_no_feature_branch(self, monkeypatch):
+        """shipped transition proceeds when no feature branch exists."""
+
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def _fake_run_list(cmd, **kw):
+            if "pr" in cmd and "list" in cmd:
+                r = FakeResult()
+                r.stdout = "[]"
+                return r
+            # No branches found
+            if "branch" in cmd and "--list" in cmd:
+                r = FakeResult()
+                r.stdout = ""
+                return r
+            return FakeResult()
+
+        monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
+        monkeypatch.setattr(tracker, "_is_branch_workflow_enabled", lambda: True)
+        tracker.transition(42, "pending-ship", "shipped", role="dm-lead")
+
+    def test_skips_check_when_branch_workflow_disabled(self, monkeypatch):
+        """Branch check is skipped entirely when branch workflow is disabled."""
+
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def _fake_run_list(cmd, **kw):
+            if "pr" in cmd and "list" in cmd:
+                r = FakeResult()
+                r.stdout = "[]"
+                return r
+            return FakeResult()
+
+        monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
+        monkeypatch.setattr(tracker, "_is_branch_workflow_enabled", lambda: False)
+        # Should not raise — branch workflow disabled, no branch check
+        tracker.transition(42, "pending-ship", "shipped", role="dm-lead")
+
+    def test_force_does_not_bypass_branch_check(self, monkeypatch, capsys):
+        """--force does NOT bypass the branch merge check."""
+
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def _fake_run_list(cmd, **kw):
+            if "pr" in cmd and "list" in cmd:
+                r = FakeResult()
+                r.stdout = "[]"
+                return r
+            if "branch" in cmd and "--list" in cmd:
+                r = FakeResult()
+                r.stdout = "  squidsquad/skill/42\n"
+                return r
+            if "rev-list" in cmd and "--count" in cmd:
+                r = FakeResult()
+                r.stdout = "2"
+                return r
+            return FakeResult()
+
+        monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
+        monkeypatch.setattr(tracker, "_is_branch_workflow_enabled", lambda: True)
+
+        with pytest.raises(SystemExit) as excinfo:
+            tracker.transition(42, "pending-ship", "shipped", role="dm-lead", force=True)
+        assert excinfo.value.code == 1
+        err = capsys.readouterr().err
+        assert "BLOCKED" in err
+
+    def test_ignores_branch_with_wrong_issue_number(self, monkeypatch):
+        """Branch for a different issue number does not block shipping."""
+
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def _fake_run_list(cmd, **kw):
+            if "pr" in cmd and "list" in cmd:
+                r = FakeResult()
+                r.stdout = "[]"
+                return r
+            if "branch" in cmd and "--list" in cmd:
+                r = FakeResult()
+                # Branch for issue 421, not 42
+                r.stdout = "  squidsquad/skill/421\n"
+                return r
+            return FakeResult()
+
+        monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
+        monkeypatch.setattr(tracker, "_is_branch_workflow_enabled", lambda: True)
+        # Should not raise — branch is for a different issue
+        tracker.transition(42, "pending-ship", "shipped", role="dm-lead")
+
+
 class TestDraftPRConversion:
     """Auto-convert draft PRs to ready on pending-ship transition (#1696)."""
 
