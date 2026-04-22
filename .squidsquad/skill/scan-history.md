@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-22 07:02
+
+- **Files scanned**: references/scripts/state_bus.py, references/scripts/migrate_state_branch.py
+- **Findings**: #2046 (state_bus.py path traversal in read_file/write_file — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-22 05:02
 
 - **Files scanned**: references/scripts/tracker.py
