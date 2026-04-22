@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-22 14:32
+
+- **Files scanned**: references/scripts/wizard.py
+- **Findings**: #2086 (wizard.py scaffold_install silently swallows file/JSON errors — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-22 09:02
 
 - **Files scanned**: references/scripts/compose.py
