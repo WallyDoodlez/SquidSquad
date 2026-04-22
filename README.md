@@ -41,6 +41,7 @@ You have a codebase and Claude Code. You can fix one bug at a time. But what if 
 - **Pipeline self-healing** — PM's pipeline sentinel detects 6 types of stuck tasks (orphaned PRs, shipped-without-merge, stalled approvals, dead-agent work items, and more). When detected, it unsticks the item immediately and auto-files a root-cause bug so the gap gets fixed permanently
 - **Shared filesystem** — API keys and cross-clone config live in `~/.squidsquad/` instead of environment variables. Secrets are stored with restricted file permissions and read automatically by the model router and providers. No more polluting your shell environment with API keys
 - **3-branch architecture** — your `main` branch stays clean. Agents work on a configurable working branch (default `squidsquad`), and all agent state (iterations, health, working state, context pressure) lives on a separate orphan state branch. No more state files polluting your codebase, no stash/pop conflicts from concurrent agents. Existing installs can migrate with `migrate_state_branch.py`
+- **Comprehension testing** — write JSON spec files to automatically verify that agents understand their instructions correctly. The pipeline spawns a test agent (reads only specified files, answers questions) and an eval agent (grades answers against expected behavior), then a deterministic pytest wrapper asserts all questions pass. Add new tests by dropping a `_spec.json` in `tests/comprehension/`
 - **Auto versioning** — ships are counted and minor versions auto-bump when thresholds are met
 
 ---

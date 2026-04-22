@@ -4,8 +4,8 @@
 - **Status**: none
 - **Quiet Cycle Counter**: 0
 
-## Session Context (checkpoint at cycle 4)
+## Session Context (checkpoint at cycle 5)
 - Version: v0.23.0
-- Shipped count: 5/10
-- Pending bugs: #1772 (open, commented — awaiting PM close), #302 #303 (pending PM)
-- Last active delivery: cycle 4 (#1980 version bump npm publish)
+- Shipped count: 6/10
+- Pending bugs: #1772 (open, awaiting PM close), #302 #303 (pending PM)
+- Last active delivery: cycle 5 (#1449 comprehension test pipeline)
