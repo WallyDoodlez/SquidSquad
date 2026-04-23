@@ -58,6 +58,8 @@ npx squidsquad
 
 The bootstrapper checks prerequisites (Node.js 18+, Python, `gh` CLI, Claude Code), seeds the skill into your project, and launches an intent-driven setup wizard. The wizard asks 3 quick questions — what your project does, then 2 adaptive follow-ups based on your answers — to understand your domain and tailor each agent's personality. It classifies your intent, proposes a team from curated presets, and walks you through setup including whether you want PR Flow (human review gate on every change) or direct commits. PM and DM are always installed; dev and QA agents are added based on your project type. After setup, you get a "What's Next" summary with exact boot commands and tips for interacting with your team.
 
+The wizard auto-detects your project context (test commands, tech stack, existing configuration) and saves it to `.squidsquad/.install-spec.json` so future upgrades preserve your choices. For CI or scripted setups, use `python references/scripts/wizard.py setup-yes` to accept all detected defaults without prompts.
+
 **Already have Claude Code open?** You can also run `Set up SquidSquad for my project.` directly in a Claude Code session.
 
 ### 2. Launch

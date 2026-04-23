@@ -55,6 +55,7 @@ Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded
 4b. `pm-specific/health-check` — Step 7: agent health check
 5. `pm-specific/github-issues` — Step 7b
 5b. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
+5c. `pm-specific/soul-shepherd` — Soul shepherd: character signal detection per task
 6. `common/improvement-scan` — Quiet-cycle improvement scanning
 7. `pm-specific/iteration-log` — Step 8: PM/QA iteration log
 7b. `common/vault-remember` — Step 8b: end-of-cycle vault reflection
@@ -207,7 +208,8 @@ references/sub-skills/
 │   ├── iteration-log.md             (Step 8 — PM/QA iteration log)
 │   ├── git-commit.md                (Step 9 — PM commit/push)
 │   ├── github-issues.md              (Step 7b — GitHub Issues ingestion)
-│   └── pipeline-sentinel.md           (Step 6f — pipeline health, always runs)
+│   ├── pipeline-sentinel.md           (Step 6f — pipeline health, always runs)
+│   └── soul-shepherd.md              (Soul shepherd — character signal detection per task)
 ├── qa-specific/
 │   ├── verification.md               (Steps 2-6 — E2E, bugs, verify, health check)
 │   ├── discussion-protocol.md        (Discussion — qa alias)

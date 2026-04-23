@@ -116,6 +116,8 @@ When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last 
 
 {{include: common/boot-remote-agents}}
 
+{{include: pm-specific/soul-shepherd}}
+
 {{include: common/improvement-scan}}
 
 {{include: pm-specific/iteration-log}}

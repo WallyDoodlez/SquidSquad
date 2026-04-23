@@ -12,6 +12,7 @@ includes:
   - pm-specific/health-check
   - pm-specific/github-issues
   - common/boot-remote-agents
+  - pm-specific/soul-shepherd
   - common/improvement-scan
   - pm-specific/iteration-log
   - common/vault-remember

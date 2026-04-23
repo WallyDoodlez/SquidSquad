@@ -44,6 +44,7 @@ FIELD_MAP = {
     "dev-agents": ("Agents", "Dev Agents"),
     "project-name": ("Project", "Name"),
     "repo": ("Project", "Repo"),
+    "project-intent": ("Project", "Intent Description"),
     "skill-tests": ("Test Commands", "skill Tests"),
     "e2e-tests": ("Test Commands", "E2E Tests"),
     "interval": ("Iteration Interval", "Minutes"),
