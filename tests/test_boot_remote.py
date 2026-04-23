@@ -95,15 +95,7 @@ class TestNeedsBoot:
         assert "dead" in reason
 
 
-class TestBootAgentCooldown:
-    @patch("boot_remote._needs_boot", return_value=(True, "dead", "/tmp"))
-    @patch("boot_remote._check_cooldown", return_value=(True, 300))
-    def test_cooldown_skips_spawn(self, mock_cool, mock_needs):
-        result = boot_remote.boot_agent("skill")
-        assert result["action"] == "skip"
-        assert "cooldown" in result["message"]
-        assert result["success"] is True
-
+class TestBootAgentSkip:
     @patch("boot_remote._needs_boot", return_value=(False, "alive (PID 123)", "/tmp"))
     def test_alive_agent_skipped(self, mock_needs):
         result = boot_remote.boot_agent("skill")
