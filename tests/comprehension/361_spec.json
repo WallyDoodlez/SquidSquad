@@ -1,0 +1,25 @@
+{
+  "issue": 361,
+  "title": "Project-adaptive role souls — seed at setup, enrich at runtime",
+  "files": [
+    "references/sub-skills/pm-specific/soul-shepherd.md",
+    "references/scripts/soul_adaptation.py"
+  ],
+  "questions": [
+    {
+      "id": "1",
+      "question": "PM just processed task #500 which mentions 'deploy to Kubernetes via Helm charts'. None of the existing soul adaptations mention Kubernetes. What should PM do?",
+      "expected": "PM detects a new signal in the 'tech-stack' category (Kubernetes + Helm). PM runs: python references/scripts/soul_adaptation.py add skill --category tech-stack --signal 'Deploys to Kubernetes via Helm charts' --task 500, then renders the updated SOUL.md and commits atomically."
+    },
+    {
+      "id": "2",
+      "question": "An existing adaptation says 'This is a backend-only API project' but task #600 adds a React frontend. What should PM do?",
+      "expected": "PM detects a contradiction — 'backend-only' vs React frontend. PM must NOT silently update. PM flags for human in check-in: 'Signal from #600 contradicts existing adaptation: backend-only vs React frontend. Which is correct?' Only after human resolves does PM update."
+    },
+    {
+      "id": "3",
+      "question": "A role's Project Adaptation section has grown to 45 lines. What should PM do?",
+      "expected": "PM should consolidate — merge related entries, trim redundancy, preserve key insights. Keep under the 40-line soft cap. Use: python references/scripts/soul_adaptation.py check-cap <role> to detect this."
+    }
+  ]
+}
