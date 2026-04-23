@@ -989,6 +989,7 @@ Write `idle|` to `current-state` at cycle end so health monitoring works.
 <!-- /sub-skill: self-restart -->
 <!-- /sub-skill: self-restart -->
 
+
 ### Step 10 — Done
 
 Print the cycle-complete marker. This cycle is finished — `/loop` will trigger the next one.
