@@ -302,3 +302,31 @@ class TestBuildQaInputE2eGuard:
 
         result = cycle_pre._build_qa_input("qa")
         assert result["e2e_test_result"]["result"] == "skipped"
+
+
+# ---------------------------------------------------------------------------
+# Comment enrichment (#2272)
+# ---------------------------------------------------------------------------
+
+class TestEnrichWithComments:
+    def test_adds_latest_comment(self, monkeypatch):
+        """_enrich_with_comments adds latest_comment to items."""
+        comment = {"author": "pm-lead", "body": "Blocker!", "createdAt": "2026-04-23"}
+        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: comment)
+        items = [{"number": 42, "title": "Test"}]
+        cycle_pre._enrich_with_comments(items)
+        assert items[0]["latest_comment"] == comment
+
+    def test_handles_no_comment(self, monkeypatch):
+        """Items without comments don't get latest_comment key."""
+        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
+        items = [{"number": 42, "title": "Test"}]
+        cycle_pre._enrich_with_comments(items)
+        assert "latest_comment" not in items[0]
+
+    def test_handles_empty_list(self, monkeypatch):
+        """Empty list doesn't crash."""
+        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
+        items = []
+        cycle_pre._enrich_with_comments(items)
+        assert items == []

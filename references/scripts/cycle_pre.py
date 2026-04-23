@@ -256,6 +256,36 @@ def _dir_exists(role):
 
 
 # ---------------------------------------------------------------------------
+# Comment fetching — latest comment per issue (#2272)
+# ---------------------------------------------------------------------------
+
+
+def _fetch_latest_comment(number):
+    """Fetch the latest comment on an issue. Returns dict or None."""
+    result = _run(
+        ["gh", "issue", "view", str(number), "--json", "comments",
+         "--jq", ".comments[-1] | {author: .author.login, body: .body, createdAt: .createdAt}"],
+        check=False,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    try:
+        return json.loads(result.stdout)
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+
+def _enrich_with_comments(items):
+    """Add latest_comment to each item in a list. Modifies items in place."""
+    for item in items:
+        num = item.get("number")
+        if num:
+            comment = _fetch_latest_comment(num)
+            if comment:
+                item["latest_comment"] = comment
+
+
+# ---------------------------------------------------------------------------
 # Role-specific: Skill
 # ---------------------------------------------------------------------------
 
@@ -275,6 +305,10 @@ def _build_skill_input(role):
         queue = json.loads(result.stdout) if result.returncode == 0 else []
     except (json.JSONDecodeError, ValueError):
         queue = []
+
+    # Enrich queue items with latest comments (#2272)
+    _enrich_with_comments(qa_rejected)
+    _enrich_with_comments(queue)
 
     # Planning artifacts for queued tasks
     planning_artifacts = {}
@@ -420,6 +454,11 @@ def _build_pm_input(role):
     config["shipped_since_bump"] = int(_config_get("shipped-since-bump") or "0")
     config["auto_boot_agents"] = _config_get("auto-boot-agents").lower() == "yes"
 
+    # Enrich tracker items with latest comments (#2272)
+    _enrich_with_comments(tracker_data["pending_test_issues"])
+    _enrich_with_comments(tracker_data["pending_test_tasks"])
+    _enrich_with_comments(tracker_data["pending_ship_tasks"])
+
     return {
         "qa_present": qa_present,
         "dm_present": dm_present,
@@ -495,6 +534,10 @@ def _build_qa_input(role):
             open_prs = json.loads(pr_result.stdout)
     except (json.JSONDecodeError, ValueError):
         pass
+
+    # Enrich verification items with latest comments (#2272)
+    _enrich_with_comments(verification_queue["pending_test_issues"])
+    _enrich_with_comments(verification_queue["pending_test_tasks"])
 
     # Agent health
     health_result = _run_script("health_check.py", "--json")
@@ -601,6 +644,10 @@ def _build_dm_input(role):
                 pending_ship.append(item)
     except (json.JSONDecodeError, ValueError):
         pass
+
+    # Enrich pending-ship items with latest comments (#2272)
+    _enrich_with_comments(pending_ship)
+    _enrich_with_comments(bugs)
 
     # Version bump info
     ship_threshold = int(_config_get("ship-threshold") or "10")
