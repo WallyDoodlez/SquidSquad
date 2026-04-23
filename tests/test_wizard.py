@@ -1862,3 +1862,50 @@ class TestPostSetupSummary:
         }
         result = wizard.post_setup_summary(spec)
         assert "What's Next" in result
+
+
+# ---------------------------------------------------------------------------
+# Install Spec Save/Load (#13)
+# ---------------------------------------------------------------------------
+
+
+class TestInstallSpec:
+    """Save and load .install-spec.json for reproducibility."""
+
+    @pytest.fixture
+    def sample_spec(self):
+        return {
+            "squidsquad_version": "0.25.0",
+            "project": {"name": "my-app", "repo": "github.com/alice/my-app"},
+            "preset": "software-dev",
+            "agents": [{"id": "pm", "role": "pm"}, {"id": "skill", "role": "dev"}],
+            "tools": {},
+            "loop": {"interval_minutes": 30, "context_threshold": 70},
+            "flags": {"pr_flow": False},
+        }
+
+    def test_save_creates_file(self, tmp_path, sample_spec):
+        path = wizard.save_install_spec(sample_spec, tmp_path)
+        assert Path(path).exists()
+        assert ".install-spec.json" in path
+
+    def test_save_load_roundtrip(self, tmp_path, sample_spec):
+        wizard.save_install_spec(sample_spec, tmp_path)
+        loaded = wizard.load_install_spec(tmp_path)
+        assert loaded == sample_spec
+
+    def test_load_missing_returns_none(self, tmp_path):
+        result = wizard.load_install_spec(tmp_path)
+        assert result is None
+
+    def test_save_creates_squidsquad_dir(self, tmp_path, sample_spec):
+        wizard.save_install_spec(sample_spec, tmp_path)
+        assert (tmp_path / ".squidsquad").is_dir()
+
+    def test_overwrite_existing_spec(self, tmp_path, sample_spec):
+        """Saving a spec overwrites the previous one."""
+        wizard.save_install_spec(sample_spec, tmp_path)
+        sample_spec["squidsquad_version"] = "0.26.0"
+        wizard.save_install_spec(sample_spec, tmp_path)
+        loaded = wizard.load_install_spec(tmp_path)
+        assert loaded["squidsquad_version"] == "0.26.0"

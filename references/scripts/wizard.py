@@ -684,6 +684,43 @@ _DEFAULT_WORKING_STATE = """\
 """
 
 
+INSTALL_SPEC_FILENAME = ".install-spec.json"
+
+
+def save_install_spec(spec, target_root):
+    """Save install spec to .squidsquad/.install-spec.json.
+
+    The spec is the wizard's in-memory state — saved for reproducibility,
+    upgrade re-use, and --yes mode. Committed to git so other team members
+    can see what was configured.
+
+    Returns the path written.
+    """
+    target_root = Path(target_root)
+    squid_dir = target_root / ".squidsquad"
+    squid_dir.mkdir(parents=True, exist_ok=True)
+    spec_path = squid_dir / INSTALL_SPEC_FILENAME
+    spec_path.write_text(
+        json.dumps(spec, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return str(spec_path)
+
+
+def load_install_spec(target_root):
+    """Load install spec from .squidsquad/.install-spec.json.
+
+    Returns the spec dict, or None if the file does not exist.
+    Raises ValueError if the file exists but is invalid JSON.
+    """
+    target_root = Path(target_root)
+    spec_path = target_root / ".squidsquad" / INSTALL_SPEC_FILENAME
+    if not spec_path.exists():
+        return None
+    raw = spec_path.read_text(encoding="utf-8")
+    return json.loads(raw)
+
+
 def scaffold_install(spec, target_root, overwrite_existing=False):
     """Write a full `.squidsquad/` tree from an install spec.
 
@@ -857,6 +894,10 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
     else:
         all_roles = [a["id"] for a in spec["agents"]]
         generate_local_config(all_roles, target_root=target_root)
+
+    # 4. Save install spec for reproducibility and upgrade re-use (#13)
+    spec_path = save_install_spec(spec, target_root)
+    summary["install_spec"] = spec_path
 
     return summary
 
@@ -1732,6 +1773,46 @@ def cmd_post_setup_summary(args):
     return 0
 
 
+def cmd_load_spec(args):
+    """Load and print the install spec from .squidsquad/.install-spec.json.
+
+    Usage: wizard.py load-spec [target_dir]
+    """
+    target = args[0] if args else "."
+    spec = load_install_spec(target)
+    if spec is None:
+        print("No .install-spec.json found (pre-#13 install or first run)",
+              file=sys.stderr)
+        return 1
+    _print_json(spec)
+    return 0
+
+
+def cmd_save_spec(args):
+    """Save a JSON install spec to .squidsquad/.install-spec.json.
+
+    Usage: wizard.py save-spec <spec.json|-> [target_dir]
+    """
+    if not args:
+        print("Usage: wizard.py save-spec <spec.json|-> [target_dir]",
+              file=sys.stderr)
+        return 2
+    src = args[0]
+    target = args[1] if len(args) > 1 else "."
+    try:
+        if src == "-":
+            raw = sys.stdin.read()
+        else:
+            raw = Path(src).read_text(encoding="utf-8")
+        spec = json.loads(raw)
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"ERROR: cannot read spec: {e}", file=sys.stderr)
+        return 1
+    path = save_install_spec(spec, target)
+    print(f"Saved: {path}")
+    return 0
+
+
 def main():
     args = sys.argv[1:]
     if not args or args[0] in ("--help", "-h"):
@@ -1755,6 +1836,8 @@ def main():
         "migrate-labels-staged": cmd_migrate_labels_staged,
         "pr-flow-prompt": cmd_pr_flow_prompt,
         "post-setup-summary": cmd_post_setup_summary,
+        "load-spec": cmd_load_spec,
+        "save-spec": cmd_save_spec,
     }
     if cmd not in dispatch:
         print(f"Unknown command: {cmd}", file=sys.stderr)
