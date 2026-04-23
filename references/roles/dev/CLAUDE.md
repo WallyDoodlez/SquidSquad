@@ -91,6 +91,8 @@ Write `idle|` at cycle end so the status bar shows rotating hints between cycles
 
 {{include: common/self-restart}}
 
+{{include: common/agent-lifecycle}}
+
 ### Step 6 — Done
 
 Print the cycle-complete marker. This cycle is finished — `/loop` will trigger the next one.

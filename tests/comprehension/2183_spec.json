@@ -1,0 +1,36 @@
+{
+  "issue": 2183,
+  "title": "Simplified agent lifecycle — singleton, safe restart, heartbeat",
+  "files": [
+    "references/sub-skills/common/self-restart.md",
+    "references/sub-skills/common/agent-lifecycle.md",
+    "references/sub-skills/pm-specific/health-check.md"
+  ],
+  "questions": [
+    {
+      "id": "1",
+      "question": "An agent's context pressure exceeds the threshold. What should the agent do to get a fresh context window?",
+      "expected": "The agent checkpoints working state, completes the current cycle, then writes the restart reason to .squidsquad/[ROLE]/.restart at cycle end. The wrapper detects the sentinel on exit, deletes it, and respawns. Agents only self-restart for context pressure — all other restart reasons go through PM → DM."
+    },
+    {
+      "id": "2",
+      "question": "PM detects that the skill agent's heartbeat is stale (>10s old). What should PM do?",
+      "expected": "PM should plan a reboot. If DM is present, PM requests DM to execute the reboot via reboot_agent.py. If DM is absent, PM executes directly: python references/scripts/reboot_agent.py skill. The script writes .restart sentinel, waits for idle, then kills the process. The wrapper respawns."
+    },
+    {
+      "id": "3",
+      "question": "Can an agent restart itself because its template (CLAUDE.md) changed?",
+      "expected": "No. Agents only self-restart for context pressure. Template change reboots are handled by DM after shipping items that change agent templates/instructions. DM uses reboot_agent.py to safely restart affected agents."
+    },
+    {
+      "id": "4",
+      "question": "What are the three guarantees of the simplified agent lifecycle?",
+      "expected": "1) Singleton — only one instance per role runs at a time (PID lock file). 2) Never kill mid-work — reboot_agent.py waits for the agent to go idle before restarting. 3) Start correctly — wrapper handles pre-flight checks, branch setup, and heartbeat."
+    },
+    {
+      "id": "5",
+      "question": "The wrapper detects that claude crashed after only 5 seconds of runtime. What happens?",
+      "expected": "The wrapper retries once (one crash retry). If the retry also crashes immediately, the wrapper exits. PM will detect the dead heartbeat on its next health check and handle the persistent failure."
+    }
+  ]
+}
