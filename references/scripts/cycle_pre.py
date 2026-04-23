@@ -516,7 +516,7 @@ def _build_qa_input(role):
     # E2E test result (run if configured)
     e2e_result = {"result": "skipped", "tests_run": 0, "failures": []}
     e2e_cmd = _config_get("e2e-tests")
-    if e2e_cmd and e2e_cmd.strip():
+    if e2e_cmd and e2e_cmd.strip() and e2e_cmd.strip().lower() not in ("(none)", "none", ""):
         test_run = _run(e2e_cmd.split(), check=False)
         if test_run.returncode == 0:
             e2e_result["result"] = "passed"

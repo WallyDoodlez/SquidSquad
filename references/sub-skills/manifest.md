@@ -39,6 +39,7 @@ Entry file with includes (the role's own `SOUL.md` sits alongside `CLAUDE.md` in
 13. `common/file-conventions` — File/directory conventions
 14. `common/status-line` — Status line description
 15. `common/prohibitions` — "Never do" rules
+16. `common/cycle-runner` — (optional, feature-flagged) Cycle runner transport layer
 
 ### PM/QA Agent (`references/roles/pm/CLAUDE.md`)
 
@@ -183,7 +184,8 @@ references/sub-skills/
 │   ├── improvement-scan-slim.md     (Improvement filing only — QA, DM, designer)
 │   ├── status-line.md                (Status line description — shared by dev)
 │   ├── prohibitions.md               (Shared "never do" rules — shared by dev)
-│   └── capability-check.md          (Startup capability verification — shared by roles with requires_sub_skills)
+│   ├── capability-check.md          (Startup capability verification — shared by roles with requires_sub_skills)
+│   └── cycle-runner.md              (Cycle runner transport layer — opt-in via feature flag, all roles)
 ├── dev-specific/
 │   ├── triage-issues.md              (Step 2 — triage open issues)
 │   └── implement-tasks.md           (Step 3 — implement approved tasks)

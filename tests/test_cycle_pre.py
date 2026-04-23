@@ -258,3 +258,47 @@ class TestBuildSkillInput:
         result = cycle_pre._build_skill_input("skill")
         assert len(result["work_queue"]["queue"]) == 1
         assert result["work_queue"]["queue"][0]["number"] == 2045
+
+
+# ---------------------------------------------------------------------------
+# QA Input Builder — e2e guard regression (#2070 QA feedback)
+# ---------------------------------------------------------------------------
+
+class TestBuildQaInputE2eGuard:
+    def test_none_placeholder_skips_e2e(self, patch_dirs, monkeypatch):
+        """Config value '(none)' for e2e-tests must not be treated as a command."""
+        empty = MagicMock()
+        empty.returncode = 0
+        empty.stdout = "[]"
+        monkeypatch.setattr(cycle_pre, "_run_script", lambda *a, **kw: empty)
+        monkeypatch.setattr(cycle_pre, "_run", lambda *a, **kw: MagicMock(
+            returncode=0, stdout="[]", stderr=""))
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
+            "e2e-tests": "(none)",
+            "interval": "30",
+            "branch-workflow": "no", "pr-flow": "no",
+            "improvement-scanning": "no", "vault-remember": "no",
+            "vault-optimize": "no",
+        }.get(f, ""))
+
+        result = cycle_pre._build_qa_input("qa")
+        assert result["e2e_test_result"]["result"] == "skipped"
+
+    def test_empty_e2e_skips(self, patch_dirs, monkeypatch):
+        """Empty e2e-tests config must skip."""
+        empty = MagicMock()
+        empty.returncode = 0
+        empty.stdout = "[]"
+        monkeypatch.setattr(cycle_pre, "_run_script", lambda *a, **kw: empty)
+        monkeypatch.setattr(cycle_pre, "_run", lambda *a, **kw: MagicMock(
+            returncode=0, stdout="[]", stderr=""))
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
+            "e2e-tests": "",
+            "interval": "30",
+            "branch-workflow": "no", "pr-flow": "no",
+            "improvement-scanning": "no", "vault-remember": "no",
+            "vault-optimize": "no",
+        }.get(f, ""))
+
+        result = cycle_pre._build_qa_input("qa")
+        assert result["e2e_test_result"]["result"] == "skipped"
