@@ -15,4 +15,5 @@ includes:
   - qa-specific/file-conventions
   - qa-specific/status-line
   - common/self-restart
+  - common/agent-lifecycle
   - qa-specific/prohibitions

@@ -20,4 +20,5 @@ includes:
   - common/file-conventions
   - common/status-line
   - common/self-restart
+  - common/agent-lifecycle
   - common/prohibitions

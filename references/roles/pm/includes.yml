@@ -25,4 +25,5 @@ includes:
   - pm-specific/file-conventions
   - pm-specific/status-line
   - common/self-restart
+  - common/agent-lifecycle
   - pm-specific/prohibitions
