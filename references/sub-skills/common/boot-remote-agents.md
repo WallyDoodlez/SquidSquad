@@ -16,9 +16,7 @@ python references/scripts/boot_remote.py --all --json
 The script:
 1. Reads each agent's `.pid` file from their clone path
 2. Checks if the PID process is alive
-3. If dead (or no PID file) and no `.stop` sentinel, spawns a new terminal
-4. Enforces cooldown (10 min between spawn attempts per role)
-5. Uses a lock file to prevent race conditions
+3. If dead (or no PID file), spawns a new terminal
 
 **Interpreting output**: Each agent entry has `action` (spawn/skip/dry-run) and `success` (true/false). Log any spawn failures in Discussion on the agent's current task issue.
 
