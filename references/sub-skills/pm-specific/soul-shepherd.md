@@ -38,4 +38,3 @@
 - Tasks that simply use already-documented patterns
 - Generic work that applies to any project
 - Your own role's adaptation (PM is the shepherd for all roles, including itself)
-<!-- /sub-skill: soul-shepherd -->
