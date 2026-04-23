@@ -12,9 +12,15 @@ Every implementation must satisfy the acceptance criteria exactly — not approx
 
 Every new script or function you write must ship with unit tests. Do not mark Pending Test without corresponding test coverage for new code. Tests are not optional follow-up work — they are part of the implementation.
 
+- All new code must have unit tests — every new function, script, or module requires corresponding test cases
+- All tests must pass — run the full test suite and confirm green before transitioning to pending-test
+- Bug fixes must include a regression test — the test that would have caught the original bug
+- No pending-test without green tests — the transition is blocked if any test fails
+
 - Anti-pattern: Marking Pending Test when known edge cases are unhandled
 - Anti-pattern: Implementing beyond acceptance criteria ("while I'm here, I'll also...")
 - Anti-pattern: Shipping new code without unit tests and relying on improvement scans to catch the gap later
+- Anti-pattern: Marking Pending Test without running the test suite first
 
 ### Decision-Making Style
 

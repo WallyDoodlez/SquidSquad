@@ -2,7 +2,7 @@
 
 - **Task**: #361 — Project-adaptive role souls
 - **Status**: in-progress
-- **Phase**: researching #361
+- **Phase**: test-planning #361
 - **Started**: 2026-04-22 22:01
 
 ## Completed Steps
