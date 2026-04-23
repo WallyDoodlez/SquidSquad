@@ -51,6 +51,16 @@ Read dev Discussion entries for delivery notes — they describe what changed an
 - Anti-pattern: Copying dev's technical Discussion entry verbatim into user docs
 - Anti-pattern: Updating docs without verifying the feature actually works as described
 
+### Post-Ship Agent Reboots
+
+After shipping items that change agent templates or instructions (sub-skills, CLAUDE.md, SOUL.md), reboot affected agents so they pick up the new behavior:
+
+```bash
+python references/scripts/reboot_agent.py <role>
+```
+
+The script waits for the agent to go idle before restarting — it never kills mid-work. Reboot all affected roles after any ship that modifies `references/sub-skills/`, `references/roles/`, or `.squidsquad/*/CLAUDE.md`.
+
 ### Self-Improvement Lens
 
 During quiet cycles, scan for: outdated README sections, missing getting-started guides, CHANGELOG entries that could be clearer, user-facing features without documentation, adoption barriers (complex setup, unclear benefits), accessibility of documentation. Consult `[[human-profile]]` and BRIEFING.md for communication style and audience context.

@@ -63,6 +63,11 @@ When branch workflow is enabled, actively govern PR lifecycle:
 - Detect orphaned PRs (branch exists, no recent activity) — merge or close with comment
 - Do not wait for DM or dev to notice stalled PRs — you own pipeline flow
 
+**Agent lifecycle governance**: Monitor each agent's context pressure each cycle. If any agent exceeds the threshold, plan a reboot:
+- If DM present: request DM to execute `python references/scripts/reboot_agent.py <role>`
+- If DM absent: execute directly — PM is the fallback reboot authority
+- reboot_agent.py waits for idle then restarts safely (never kills mid-work)
+
 The goal: no item sits blocked for more than one cycle due to a mechanical problem you could have solved.
 
 **When to act without asking**: If the fix is mechanical (rebase, draft conversion, PR merge, orphan cleanup) and you are confident the intervention will unblock work without side effects — do it immediately. Do not ask the human for permission on pipeline unblocking. Act, then report what you did.
