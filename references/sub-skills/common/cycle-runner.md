@@ -1,0 +1,87 @@
+<!-- sub-skill: cycle-runner -->
+## Cycle Runner (Transport Layer)
+
+**Feature flag**: Check `Cycle Runner` in `config.md`. If set to `no` (default), skip this section entirely and use the existing Ralph Loop steps.
+
+When enabled (`Cycle Runner: yes`), the Ralph Loop simplifies to three phases:
+
+### Phase 1 — Pre-Cycle (Mechanical)
+
+```bash
+python references/scripts/cycle_pre.py [ROLE]
+```
+
+This script handles all mechanical operations: git pull, context pressure check, working state read, triage/queue queries, branch setup, and writes `.squidsquad/[ROLE]/cycle-input.json`.
+
+Read the output:
+
+```bash
+cat .squidsquad/[ROLE]/cycle-input.json
+```
+
+The JSON contains everything you need: `role`, `cycle_number`, `timestamp`, `pull_result`, `context_pressure`, `working_state`, and role-specific fields (work queue, verification queue, etc.).
+
+### Phase 2 — Creative Work (Agent)
+
+This is your core work — reasoning, code analysis, code writing, verification, human interaction. Use cycle-input.json to understand the current state. You still have full bash access for:
+- Running tests
+- Reading code
+- Spawning subagents
+- Running verification commands
+- Any creative work that requires shell access
+
+Do NOT use bash for mechanical operations that cycle_pre/post handles (git pull, git push, status bar writes, tracker transitions, iteration logging).
+
+### Phase 3 — Post-Cycle (Mechanical)
+
+Write your results to `.squidsquad/[ROLE]/cycle-output.json`:
+
+```json
+{
+  "role": "[ROLE]",
+  "cycle_number": N,
+  "cycle_type": "active" | "quiet" | "suppressed",
+  "status_transitions": [
+    {"number": 123, "from": "approved", "to": "in-progress"}
+  ],
+  "tracker_comments": [
+    {"number": 123, "message": "Picking up. Status → In Progress."}
+  ],
+  "iteration_summary": "Brief description of work done",
+  "commit_message": "[ROLE]: cycle N — brief description",
+  "working_state_update": "# Working State\n\n- **Task**: none\n...",
+  "restart_needed": false,
+  "restart_reason": null
+}
+```
+
+Then run:
+
+```bash
+python references/scripts/cycle_post.py [ROLE]
+```
+
+The script handles: status transitions, tracker comments, iteration logging, git commits, pushes, version bumps (DM), restart sentinels, and status bar cleanup.
+
+### Role-Specific Fields
+
+**Skill** cycle-output extras:
+- `code_commit`: `{branch, message, pr_needed, pr_title, pr_body}` — for branch workflow
+- `state_commit_message`: separate message for main branch state commit
+- `improvement_scan`: `{files_scanned, findings}` — if scan ran
+
+**PM** cycle-output extras:
+- `human_input_processed`: summary of human input handled
+- `issues_filed`, `issues_verified`, `tasks_verified`, `tasks_shipped`
+- `external_issues_triaged`, `health_alerts`, `vault_writes`
+- `version_bump`: `{new_version, items_included}` — if DM absent
+
+**QA** cycle-output extras:
+- `e2e_log`: `{result, tests_run, failures}`
+- `issues_filed`, `issues_verified`, `tasks_verified`
+- `pr_actions`: `[{pr_number, action, comment}]`
+
+**DM** cycle-output extras:
+- `bugs_fixed`, `deliveries`
+- `version_bump`: `{new_version, items_included}`
+<!-- /sub-skill: cycle-runner -->

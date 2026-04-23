@@ -1,0 +1,754 @@
+#!/usr/bin/env python3
+"""SquidSquad cycle_pre — pre-cycle mechanical operations.
+
+Runs before the agent's creative phase. Handles git pull, context pressure,
+working state, triage, branch setup, and writes cycle-input.json.
+
+Usage:
+    python references/scripts/cycle_pre.py <role>
+    python references/scripts/cycle_pre.py skill
+    python references/scripts/cycle_pre.py pm
+    python references/scripts/cycle_pre.py qa
+    python references/scripts/cycle_pre.py dm
+
+Exit codes:
+    0 — success (cycle-input.json written, possibly degraded)
+    1 — fatal error (cannot continue)
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+
+# Ensure UTF-8 output on Windows
+if sys.stdout.encoding != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr.encoding != "utf-8":
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent.parent
+SQUID_DIR = REPO_ROOT / ".squidsquad"
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _run(cmd, check=False):
+    """Run a command from repo root."""
+    return subprocess.run(
+        cmd, capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
+        check=check, cwd=str(REPO_ROOT),
+    )
+
+
+def _run_script(script, *args, check=False):
+    """Run a Python script in references/scripts/."""
+    return _run([sys.executable, str(SCRIPT_DIR / script)] + list(args), check=check)
+
+
+def _read_file(path):
+    """Read a file, return content or empty string."""
+    try:
+        return Path(path).read_text(encoding="utf-8")
+    except (FileNotFoundError, OSError):
+        return ""
+
+
+def _config_get(field):
+    """Get a config field value. Returns empty string on failure."""
+    result = _run_script("config.py", "get", field)
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
+def _write_status_bar(role, phase, description):
+    """Write status bar state atomically."""
+    state_file = SQUID_DIR / role / "current-state"
+    tmp_file = state_file.with_suffix(".tmp")
+    content = f"{phase}|{description}"
+    try:
+        tmp_file.write_text(content, encoding="utf-8")
+        tmp_file.replace(state_file)
+    except OSError:
+        pass
+
+
+def _timestamp():
+    """Get current timestamp in ISO 8601 format."""
+    return datetime.now().isoformat(timespec="seconds")
+
+
+def _timestamp_short():
+    """Get HH:MM:SS timestamp."""
+    return datetime.now().strftime("%H:%M:%S")
+
+
+# ---------------------------------------------------------------------------
+# Common operations (all roles)
+# ---------------------------------------------------------------------------
+
+
+def _do_pull():
+    """Run git pull. Returns pull_result string."""
+    result = _run_script("git_ops.py", "pull")
+    stdout = result.stdout.strip().lower()
+    if result.returncode != 0:
+        return "error"
+    if "stash pop conflict" in stdout or "stash_conflict" in stdout:
+        return "stash_conflict"
+    if "conflict" in stdout:
+        return "conflict"
+    return "ok"
+
+
+def _get_context_pressure():
+    """Read context pressure and threshold."""
+    pressure_file = None
+    try:
+        # The role's context-pressure file is written by the statusline hook
+        # We don't know role here — caller passes it
+        return None  # Caller handles this
+    except Exception:
+        return None
+
+
+def _read_context_pressure(role):
+    """Read context pressure for a role."""
+    pressure_file = SQUID_DIR / role / "context-pressure"
+    try:
+        used_pct = int(_read_file(pressure_file).strip() or "0")
+    except (ValueError, TypeError):
+        used_pct = 0
+
+    threshold_str = _config_get("context-threshold")
+    try:
+        threshold = int(threshold_str)
+    except (ValueError, TypeError):
+        threshold = 70
+
+    return {
+        "used_pct": used_pct,
+        "threshold": threshold,
+        "exceeded": used_pct >= threshold,
+    }
+
+
+def _read_working_state(role):
+    """Parse working-state.md into structured data."""
+    ws_path = SQUID_DIR / role / "working-state.md"
+    raw = _read_file(ws_path)
+
+    task = "none"
+    status = "none"
+    phase = None
+    suppressed = False
+    completed_steps = []
+    remaining_steps = []
+    key_decisions = []
+    quiet_cycles = 0
+
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- **Task**:"):
+            task = stripped.split(":", 1)[1].strip()
+        elif stripped.startswith("- **Status**:"):
+            status = stripped.split(":", 1)[1].strip()
+        elif stripped.startswith("- **Phase**:"):
+            phase = stripped.split(":", 1)[1].strip()
+            suppressed = True
+        elif stripped.startswith("- **Quiet Cycles**:"):
+            try:
+                quiet_cycles = int(stripped.split(":", 1)[1].strip())
+            except ValueError:
+                quiet_cycles = 0
+
+    # Parse list sections
+    current_section = None
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("## Completed Steps"):
+            current_section = "completed"
+        elif stripped.startswith("## Remaining Steps"):
+            current_section = "remaining"
+        elif stripped.startswith("## Key Decisions"):
+            current_section = "decisions"
+        elif stripped.startswith("## ") or stripped.startswith("# "):
+            current_section = None
+        elif stripped.startswith("- ") and current_section:
+            item = stripped[2:].strip()
+            if current_section == "completed":
+                completed_steps.append(item)
+            elif current_section == "remaining":
+                remaining_steps.append(item)
+            elif current_section == "decisions":
+                key_decisions.append(item)
+
+    result = {
+        "task": task,
+        "status": status,
+        "raw_content": raw,
+    }
+
+    # Role-specific fields
+    if phase is not None:
+        result["phase"] = phase
+        result["suppressed"] = suppressed
+    else:
+        result["suppressed"] = False
+
+    result["completed_steps"] = completed_steps
+    result["remaining_steps"] = remaining_steps
+    result["key_decisions"] = key_decisions
+    result["quiet_cycles"] = quiet_cycles
+
+    return result
+
+
+def _get_cycle_number(role):
+    """Compute next cycle number from existing iteration logs."""
+    iter_dir = SQUID_DIR / role / "iterations"
+    if not iter_dir.exists():
+        return 1
+
+    max_n = 0
+    for f in iter_dir.glob("iter-*.md"):
+        try:
+            n = int(f.stem.split("-")[1])
+            max_n = max(max_n, n)
+        except (IndexError, ValueError):
+            pass
+    return max_n + 1
+
+
+def _check_template_changed(role):
+    """Check if CLAUDE.md has been updated since session start."""
+    template_path = SQUID_DIR / role / "CLAUDE.md"
+    if not template_path.exists():
+        return False
+    # Compare against the restart sentinel or just report mtime
+    # For now, we can't know session start time from here — return False
+    # The agent checks this separately via Step 1c
+    return False
+
+
+def _read_config_flags():
+    """Read common config flags."""
+    return {
+        "branch_workflow": _config_get("branch-workflow").lower() == "yes",
+        "pr_flow": _config_get("pr-flow").lower() == "yes",
+        "improvement_scanning": _config_get("improvement-scanning").lower() == "yes",
+        "vault_remember": _config_get("vault-remember").lower() == "yes",
+        "vault_optimize": _config_get("vault-optimize").lower() == "yes",
+    }
+
+
+def _dir_exists(role):
+    """Check if a role's directory exists."""
+    return (SQUID_DIR / role).is_dir()
+
+
+# ---------------------------------------------------------------------------
+# Role-specific: Skill
+# ---------------------------------------------------------------------------
+
+
+def _build_skill_input(role):
+    """Build cycle-input.json fields specific to the skill agent."""
+    # QA-rejected items
+    result = _run_script("triage.py", "qa-rejected", role, "--json")
+    try:
+        qa_rejected = json.loads(result.stdout) if result.returncode == 0 else []
+    except (json.JSONDecodeError, ValueError):
+        qa_rejected = []
+
+    # Work queue
+    result = _run_script("tracker.py", "work-queue", role)
+    try:
+        queue = json.loads(result.stdout) if result.returncode == 0 else []
+    except (json.JSONDecodeError, ValueError):
+        queue = []
+
+    # Planning artifacts for queued tasks
+    planning_artifacts = {}
+    for item in queue:
+        num = str(item.get("number", ""))
+        if not num:
+            continue
+        artifacts = {}
+        # Check PM planning dir first, then skill planning dir
+        for planning_dir in [SQUID_DIR / "pm" / "planning", SQUID_DIR / role / "planning"]:
+            if not planning_dir.exists():
+                continue
+            for f in planning_dir.glob(f"*{num}*"):
+                name = f.name.upper()
+                if "RESEARCH" in name:
+                    artifacts["research"] = str(f.relative_to(REPO_ROOT))
+                elif "CONTEXT" in name and "PHASE2" not in name:
+                    artifacts["context"] = str(f.relative_to(REPO_ROOT))
+                elif "TEST-PLAN" in name:
+                    artifacts["test_plan"] = str(f.relative_to(REPO_ROOT))
+        if artifacts:
+            planning_artifacts[num] = artifacts
+
+    # Interval
+    interval_str = _config_get("interval")
+    try:
+        interval_minutes = int(interval_str)
+    except (ValueError, TypeError):
+        interval_minutes = 30
+
+    # Test command
+    test_command = _config_get("test-command") or "python tests/run_tests.py"
+
+    config = _read_config_flags()
+    config["test_command"] = test_command
+
+    return {
+        "work_queue": {
+            "qa_rejected": qa_rejected,
+            "queue": queue,
+        },
+        "planning_artifacts": planning_artifacts,
+        "config": config,
+        "quiet_cycle_counter": 0,  # Will be read from working_state
+        "interval_minutes": interval_minutes,
+        "interval_changed": False,  # Agent checks this
+        "template_changed": _check_template_changed(role),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Role-specific: PM
+# ---------------------------------------------------------------------------
+
+
+def _build_pm_input(role):
+    """Build cycle-input.json fields specific to the PM agent."""
+    # Check agent presence
+    qa_present = _dir_exists("qa")
+    dm_present = _dir_exists("dm")
+
+    # Tracker queries
+    tracker_data = {
+        "pending_test_issues": [],
+        "pending_test_tasks": [],
+        "pending_ship_tasks": [],
+        "external_issues": [],
+        "open_prs": [],
+    }
+
+    # Pending test issues (for all dev roles)
+    result = _run_script("tracker.py", "list-issues", "skill", "--status", "pending-test")
+    try:
+        if result.returncode == 0 and result.stdout.strip():
+            items = json.loads(result.stdout)
+            tracker_data["pending_test_issues"] = items if isinstance(items, list) else []
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Pending test tasks
+    result = _run_script("tracker.py", "list-tasks", "skill", "--status", "pending-test")
+    try:
+        if result.returncode == 0 and result.stdout.strip():
+            items = json.loads(result.stdout)
+            tracker_data["pending_test_tasks"] = items if isinstance(items, list) else []
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Pending ship
+    result = _run_script("tracker.py", "list-by-labels", "status:pending-ship")
+    try:
+        if result.returncode == 0 and result.stdout.strip():
+            items = json.loads(result.stdout)
+            tracker_data["pending_ship_tasks"] = items if isinstance(items, list) else []
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # External issues (unlabeled)
+    result = _run_script("tracker.py", "list-all-open")
+    try:
+        if result.returncode == 0 and result.stdout.strip():
+            items = json.loads(result.stdout)
+            tracker_data["external_issues"] = [
+                i for i in (items if isinstance(items, list) else [])
+                if "squidsquad" not in [l.get("name", "") for l in i.get("labels", [])]
+            ]
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Open PRs
+    pr_result = _run(["gh", "pr", "list", "--search", "squidsquad/", "--state", "open",
+                       "--json", "number,title,state,url,headRefName", "--limit", "20"])
+    try:
+        if pr_result.returncode == 0 and pr_result.stdout.strip():
+            tracker_data["open_prs"] = json.loads(pr_result.stdout)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Agent health
+    health_result = _run_script("health_check.py", "--json")
+    agent_health = {}
+    try:
+        if health_result.returncode == 0 and health_result.stdout.strip():
+            health_data = json.loads(health_result.stdout)
+            for entry in (health_data if isinstance(health_data, list) else []):
+                r = entry.get("role", "")
+                s = entry.get("status", "unknown")
+                if r:
+                    agent_health[r] = s
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Merged branches (for recompose check)
+    merged_branches = []
+    merge_result = _run(["git", "log", "--merges", "--oneline", "--since=2 hours ago"])
+    if merge_result.returncode == 0:
+        for line in merge_result.stdout.splitlines():
+            if "squidsquad/" in line.lower():
+                merged_branches.append(line.strip())
+
+    config = _read_config_flags()
+    config["ship_threshold"] = int(_config_get("ship-threshold") or "10")
+    config["shipped_since_bump"] = int(_config_get("shipped-since-bump") or "0")
+    config["auto_boot_agents"] = _config_get("auto-boot-agents").lower() == "yes"
+
+    return {
+        "qa_present": qa_present,
+        "dm_present": dm_present,
+        "e2e_test_result": None,  # PM runs E2E during creative phase if QA absent
+        "tracker": tracker_data,
+        "agent_health": agent_health,
+        "config": config,
+        "merged_branches": merged_branches,
+        "template_changed": _check_template_changed(role),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Role-specific: QA
+# ---------------------------------------------------------------------------
+
+
+def _build_qa_input(role):
+    """Build cycle-input.json fields specific to the QA agent."""
+    # Verification queue — pending test issues with branch info
+    verification_queue = {
+        "pending_test_issues": [],
+        "pending_test_tasks": [],
+    }
+
+    # Pending test issues
+    result = _run_script("tracker.py", "list-issues", "skill", "--status", "pending-test")
+    try:
+        if result.returncode == 0 and result.stdout.strip():
+            items = json.loads(result.stdout)
+            for item in (items if isinstance(items, list) else []):
+                num = item.get("number", "")
+                branch = f"squidsquad/skill/{num}" if num else ""
+                item["branch"] = branch
+                # Check for test plan
+                test_plan_path = ""
+                for planning_dir in [SQUID_DIR / "pm" / "planning", SQUID_DIR / "qa" / "planning"]:
+                    if planning_dir.exists():
+                        for f in planning_dir.glob(f"*{num}*TEST-PLAN*"):
+                            test_plan_path = str(f.relative_to(REPO_ROOT))
+                            break
+                item["test_plan_path"] = test_plan_path
+                verification_queue["pending_test_issues"].append(item)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Pending test tasks
+    result = _run_script("tracker.py", "list-tasks", "skill", "--status", "pending-test")
+    try:
+        if result.returncode == 0 and result.stdout.strip():
+            items = json.loads(result.stdout)
+            for item in (items if isinstance(items, list) else []):
+                num = item.get("number", "")
+                branch = f"squidsquad/skill/{num}" if num else ""
+                item["branch"] = branch
+                test_plan_path = ""
+                for planning_dir in [SQUID_DIR / "pm" / "planning", SQUID_DIR / "qa" / "planning"]:
+                    if planning_dir.exists():
+                        for f in planning_dir.glob(f"*{num}*TEST-PLAN*"):
+                            test_plan_path = str(f.relative_to(REPO_ROOT))
+                            break
+                item["test_plan_path"] = test_plan_path
+                verification_queue["pending_test_tasks"].append(item)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Open PRs
+    open_prs = []
+    pr_result = _run(["gh", "pr", "list", "--state", "open",
+                       "--json", "number,title,state,url,headRefName,reviews", "--limit", "20"])
+    try:
+        if pr_result.returncode == 0 and pr_result.stdout.strip():
+            open_prs = json.loads(pr_result.stdout)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Agent health
+    health_result = _run_script("health_check.py", "--json")
+    agent_health = {}
+    try:
+        if health_result.returncode == 0 and health_result.stdout.strip():
+            health_data = json.loads(health_result.stdout)
+            for entry in (health_data if isinstance(health_data, list) else []):
+                r = entry.get("role", "")
+                s = entry.get("status", "unknown")
+                if r:
+                    agent_health[r] = s
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    config = _read_config_flags()
+    config["iteration_interval"] = int(_config_get("interval") or "30")
+
+    # E2E test result (run if configured)
+    e2e_result = {"result": "skipped", "tests_run": 0, "failures": []}
+    e2e_cmd = _config_get("e2e-tests")
+    if e2e_cmd and e2e_cmd.strip() and e2e_cmd.strip().lower() not in ("(none)", "none", ""):
+        test_run = _run(e2e_cmd.split(), check=False)
+        if test_run.returncode == 0:
+            e2e_result["result"] = "passed"
+        else:
+            e2e_result["result"] = "failed"
+        # Basic parsing — agent interprets details during creative phase
+
+    # Branch setup for first verification item
+    branch_workflow = config.get("branch_workflow", False)
+    first_item = None
+    if verification_queue["pending_test_issues"]:
+        first_item = verification_queue["pending_test_issues"][0]
+    elif verification_queue["pending_test_tasks"]:
+        first_item = verification_queue["pending_test_tasks"][0]
+
+    if branch_workflow and first_item and first_item.get("branch"):
+        branch = first_item["branch"]
+        # Check if branch exists and switch to it
+        exists_result = _run(["git", "rev-parse", "--verify", branch], check=False)
+        if exists_result.returncode != 0:
+            # Try remote
+            exists_result = _run(["git", "rev-parse", "--verify", f"origin/{branch}"], check=False)
+            if exists_result.returncode == 0:
+                _run(["git", "checkout", "-b", branch, f"origin/{branch}"], check=False)
+        else:
+            _run(["git", "checkout", branch], check=False)
+
+    return {
+        "e2e_test_result": e2e_result,
+        "verification_queue": verification_queue,
+        "open_prs": open_prs,
+        "agent_health": agent_health,
+        "config": config,
+        "template_changed": _check_template_changed(role),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Role-specific: DM
+# ---------------------------------------------------------------------------
+
+
+def _build_dm_input(role):
+    """Build cycle-input.json fields specific to the DM agent."""
+    # Bugs assigned to DM
+    bugs = []
+    result = _run_script("tracker.py", "list-issues", "dm")
+    try:
+        if result.returncode == 0 and result.stdout.strip():
+            bugs = json.loads(result.stdout)
+            if not isinstance(bugs, list):
+                bugs = []
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Pending ship items
+    pending_ship = []
+    result = _run_script("tracker.py", "list-by-labels", "status:pending-ship")
+    try:
+        if result.returncode == 0 and result.stdout.strip():
+            items = json.loads(result.stdout)
+            for item in (items if isinstance(items, list) else []):
+                # Check for delivery:skip in comments
+                num = item.get("number", "")
+                delivery_skip = False
+                if num:
+                    comment_result = _run(
+                        ["gh", "issue", "view", str(num), "--json", "comments"],
+                        check=False,
+                    )
+                    try:
+                        if comment_result.returncode == 0:
+                            comment_data = json.loads(comment_result.stdout)
+                            for comment in comment_data.get("comments", []):
+                                if "delivery: skip" in comment.get("body", "").lower() or \
+                                   "delivery:skip" in comment.get("body", "").lower():
+                                    delivery_skip = True
+                                    break
+                    except (json.JSONDecodeError, ValueError):
+                        pass
+                item["delivery_skip"] = delivery_skip
+                pending_ship.append(item)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Version bump info
+    ship_threshold = int(_config_get("ship-threshold") or "10")
+    shipped_since_bump = int(_config_get("shipped-since-bump") or "0")
+    current_version = _config_get("version") or "0.0.0"
+
+    # Count open issues across all roles
+    open_count = 0
+    for check_role in ["skill", "pm", "qa", "dm"]:
+        result = _run_script("tracker.py", "list-issues", check_role, "--status", "open")
+        try:
+            if result.returncode == 0 and result.stdout.strip():
+                items = json.loads(result.stdout)
+                open_count += len(items) if isinstance(items, list) else 0
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    version_bump = {
+        "ship_threshold": ship_threshold,
+        "shipped_since_bump": shipped_since_bump,
+        "bump_due": shipped_since_bump >= ship_threshold,
+        "open_issues_count": open_count,
+        "current_version": current_version,
+    }
+
+    config = _read_config_flags()
+
+    return {
+        "bugs": bugs,
+        "pending_ship": pending_ship,
+        "version_bump": version_bump,
+        "config": config,
+        "template_changed": _check_template_changed(role),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Branch setup for skill agent
+# ---------------------------------------------------------------------------
+
+
+def _setup_skill_branch(working_state, config_flags):
+    """Ensure skill agent is on the correct branch."""
+    if not config_flags.get("branch_workflow", False):
+        return
+
+    task = working_state.get("task", "none")
+    if task == "none" or not task.startswith("#"):
+        return  # No active task — stay on main
+
+    number = task.lstrip("#")
+    branch = f"squidsquad/skill/{number}"
+
+    # Check current branch
+    current = _run(["git", "branch", "--show-current"], check=False)
+    current_branch = current.stdout.strip() if current.returncode == 0 else ""
+
+    if current_branch == branch:
+        return  # Already on correct branch
+
+    # Check if branch exists
+    exists = _run(["git", "rev-parse", "--verify", branch], check=False)
+    if exists.returncode == 0:
+        _run(["git", "checkout", branch], check=False)
+    else:
+        # Check remote
+        remote_exists = _run(["git", "rev-parse", "--verify", f"origin/{branch}"], check=False)
+        if remote_exists.returncode == 0:
+            _run(["git", "checkout", "-b", branch, f"origin/{branch}"], check=False)
+        # If branch doesn't exist at all, stay on main — agent will create it
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+ROLE_BUILDERS = {
+    "skill": _build_skill_input,
+    "pm": _build_pm_input,
+    "qa": _build_qa_input,
+    "dm": _build_dm_input,
+}
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: cycle_pre.py <role>", file=sys.stderr)
+        sys.exit(1)
+
+    role = sys.argv[1]
+    if role not in ROLE_BUILDERS:
+        print(f"ERROR: Unknown role '{role}'. Valid: {list(ROLE_BUILDERS.keys())}",
+              file=sys.stderr)
+        sys.exit(1)
+
+    ts = _timestamp_short()
+    print(f"[🦑 {ts}] cycle_pre starting for {role}...")
+    _write_status_bar(role, "pulling", "pull-latest — Syncing with remote...")
+
+    # 1. Pull
+    pull_result = _do_pull()
+
+    # 2. Context pressure
+    context_pressure = _read_context_pressure(role)
+
+    # 3. Working state
+    working_state = _read_working_state(role)
+
+    # 4. Cycle number
+    cycle_number = _get_cycle_number(role)
+
+    # 5. Branch setup (skill-specific)
+    config_flags = _read_config_flags()
+    if role == "skill":
+        _setup_skill_branch(working_state, config_flags)
+
+    # 6. Status bar
+    _write_status_bar(role, "triaging", "tracker-protocol — Building work queue...")
+
+    # 7. Role-specific input
+    role_input = ROLE_BUILDERS[role](role)
+
+    # 8. Build and write cycle-input.json
+    cycle_input = {
+        "role": role,
+        "cycle_number": cycle_number,
+        "timestamp": _timestamp(),
+        "pull_result": pull_result,
+        "context_pressure": context_pressure,
+        "working_state": working_state,
+    }
+    cycle_input.update(role_input)
+
+    # Update quiet_cycle_counter from working state for skill
+    if role == "skill":
+        cycle_input["quiet_cycle_counter"] = working_state.get("quiet_cycles", 0)
+
+    # Write cycle-input.json
+    output_path = SQUID_DIR / role / "cycle-input.json"
+    output_path.write_text(
+        json.dumps(cycle_input, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    ts = _timestamp_short()
+    print(f"[🦑 {ts}] cycle_pre complete — wrote {output_path.relative_to(REPO_ROOT)}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main() or 0)
