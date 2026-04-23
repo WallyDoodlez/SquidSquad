@@ -42,6 +42,7 @@ You have a codebase and Claude Code. You can fix one bug at a time. But what if 
 - **Shared filesystem** — API keys and cross-clone config live in `~/.squidsquad/` instead of environment variables. Secrets are stored with restricted file permissions and read automatically by the model router and providers. No more polluting your shell environment with API keys
 - **3-branch architecture** — your `main` branch stays clean. Agents work on a configurable working branch (default `squidsquad`), and all agent state (iterations, health, working state, context pressure) lives on a separate orphan state branch. No more state files polluting your codebase, no stash/pop conflicts from concurrent agents. Existing installs can migrate with `migrate_state_branch.py`
 - **Comprehension testing** — write JSON spec files to automatically verify that agents understand their instructions correctly. The pipeline spawns a test agent (reads only specified files, answers questions) and an eval agent (grades answers against expected behavior), then a deterministic pytest wrapper asserts all questions pass. Add new tests by dropping a `_spec.json` in `tests/comprehension/`
+- **Cycle runner (transport layer)** — opt-in feature that separates mechanical operations (git pull, push, branch switching, tracker transitions) from creative agent work. When enabled (`Cycle Runner: yes` in `config.md`), agents call `cycle_pre.py` and `cycle_post.py` scripts that handle all boilerplate, freeing the agent to focus on reasoning, code analysis, and decision-making. Saves significant context window and eliminates branch-switching bugs
 - **Auto versioning** — ships are counted and minor versions auto-bump when thresholds are met
 
 ---
@@ -56,7 +57,7 @@ In your project's git repo:
 npx squidsquad
 ```
 
-The bootstrapper checks prerequisites (Node.js 18+, Python, `gh` CLI, Claude Code), seeds the skill into your project, and launches an intent-driven setup wizard. The wizard asks 3 quick questions — what your project does, then 2 adaptive follow-ups based on your answers — to understand your domain and tailor each agent's personality. It classifies your intent, proposes a team from curated presets, and walks you through setup. PM and DM are always installed; dev and QA agents are added based on your project type.
+The bootstrapper checks prerequisites (Node.js 18+, Python, `gh` CLI, Claude Code), seeds the skill into your project, and launches an intent-driven setup wizard. The wizard asks 3 quick questions — what your project does, then 2 adaptive follow-ups based on your answers — to understand your domain and tailor each agent's personality. It classifies your intent, proposes a team from curated presets, and walks you through setup including whether you want PR Flow (human review gate on every change) or direct commits. PM and DM are always installed; dev and QA agents are added based on your project type. After setup, you get a "What's Next" summary with exact boot commands and tips for interacting with your team.
 
 **Already have Claude Code open?** You can also run `Set up SquidSquad for my project.` directly in a Claude Code session.
 
