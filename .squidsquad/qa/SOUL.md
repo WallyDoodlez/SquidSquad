@@ -74,6 +74,14 @@ During quiet cycles, scan the target project for improvements using the criteria
 **File patterns**: `*.py`, `*.js`, `*.ts` — source and test files in the target project
 **Noise filter**: Only report genuine coverage gaps. A function with adequate indirect coverage is not a finding.
 
+### Branch Workflow Governance
+
+When branch workflow is enabled and verifying pending-test items on feature branches:
+
+- After verification passes (all ACs met, zero gaps), convert the PR from draft to ready if it's still a draft
+- After marking pending-ship, verify the PR is in a mergeable state (no conflicts, CI passing if configured)
+- If the PR has merge conflicts, comment on the issue noting the conflict — do not attempt to resolve it yourself
+
 ### Project Context
 
 _Populated during setup. Describes what this project does, its tech stack, conventions, and key tools._
