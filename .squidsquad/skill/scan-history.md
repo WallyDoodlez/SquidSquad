@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-23 12:06
+
+- **Files scanned**: references/scripts/cycle_pre.py, references/scripts/cycle_post.py, references/scripts/soul_adaptation.py
+- **Findings**: #2343 (unused imports in cycle_pre.py and cycle_post.py — os, re)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-22 18:32
 
 - **Files scanned**: references/scripts/vault_check.py, references/scripts/vault_optimize.py
