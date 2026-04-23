@@ -1,4 +1,3 @@
-<!-- sub-skill: soul-shepherd -->
 ### Step — Soul Shepherd (Character Signal Detection)
 
 **After processing each new task or bug** (during Steps 2-6), evaluate it against the 5-category checklist:
