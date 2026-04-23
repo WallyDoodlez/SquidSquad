@@ -1607,6 +1607,131 @@ def cmd_validate_rerun_action(args):
     return 0 if action is not None else 1
 
 
+def pr_flow_prompt():
+    """Return the PR Flow question text and options for the setup agent."""
+    return {
+        "question": (
+            "Do you want Pull Request review flow enabled?\n\n"
+            "**PR Flow OFF** (default): Agents commit directly to the working branch. "
+            "Code lands immediately. Faster iteration, less overhead per change.\n\n"
+            "**PR Flow ON**: Agents create feature branches and open Pull Requests. "
+            "Code only lands after you review and merge each PR. "
+            "Gives you a review gate on every change."
+        ),
+        "options": ["Off (default — direct commits)", "On (PRs for every change)"],
+        "default": False,
+    }
+
+
+def post_setup_summary(spec):
+    """Generate the 'What's Next' summary after setup completes.
+
+    Returns a formatted string with boot instructions, interaction guide,
+    and status monitoring info based on the configured agents.
+    """
+    agents = spec.get("agents", [])
+    project_name = spec.get("project", {}).get("name", "your project")
+
+    lines = []
+    lines.append("## What's Next")
+    lines.append("")
+    lines.append(f"SquidSquad is installed for **{project_name}**. Here's how to get started:")
+    lines.append("")
+
+    # Boot instructions
+    lines.append("### 1. Boot your agents")
+    lines.append("")
+    lines.append("Each agent runs in its own terminal. Open a terminal for each and run:")
+    lines.append("")
+
+    for agent in agents:
+        agent_id = agent.get("id", "")
+        role = agent.get("role", "")
+        if role == "pm":
+            lines.append(f"```bash")
+            lines.append(f"# Terminal 1 — PM (coordinator)")
+            lines.append(f"claude --resume")
+            lines.append(f"```")
+        elif role == "dev":
+            variant = agent.get("variant", agent_id)
+            lines.append(f"```bash")
+            lines.append(f"# Terminal — {variant} (dev agent)")
+            lines.append(f"claude --resume")
+            lines.append(f"```")
+        elif role == "qa":
+            lines.append(f"```bash")
+            lines.append(f"# Terminal — QA (verification)")
+            lines.append(f"claude --resume")
+            lines.append(f"```")
+        elif role == "dm":
+            lines.append(f"```bash")
+            lines.append(f"# Terminal — DM (delivery)")
+            lines.append(f"claude --resume")
+            lines.append(f"```")
+        elif role == "designer":
+            lines.append(f"```bash")
+            lines.append(f"# Terminal — Designer")
+            lines.append(f"claude --resume")
+            lines.append(f"```")
+    lines.append("")
+
+    # What happens first
+    lines.append("### 2. What happens on the first cycle")
+    lines.append("")
+    lines.append("- PM starts a check-in and waits for your first task or bug report")
+    lines.append("- Dev agents poll for work — nothing to do yet until PM assigns something")
+    lines.append("- QA runs any configured E2E tests and verifies completed work")
+    lines.append("")
+
+    # How to interact
+    lines.append("### 3. How to interact")
+    lines.append("")
+    lines.append("Type in the **PM terminal** to:")
+    lines.append("- Report a bug: describe the issue, PM will investigate and file it")
+    lines.append("- Request a feature: describe what you want, PM will run the planning process")
+    lines.append("- Change priorities: tell PM to bump or lower priority on any item")
+    lines.append("- Approve tasks: PM presents planned tasks for your approval before dev starts")
+    lines.append("")
+
+    # Where to see status
+    lines.append("### 4. Where to see status")
+    lines.append("")
+    lines.append("- **Terminal status bar**: each agent shows a live status line at the bottom")
+    lines.append("- **GitHub Issues**: all bugs, tasks, and progress tracked as labeled Issues")
+    lines.append("- **Iteration logs**: `.squidsquad/<role>/iterations/` for cycle-by-cycle history")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def cmd_pr_flow_prompt(_args):
+    """Print the PR Flow question and options as JSON."""
+    _print_json(pr_flow_prompt())
+    return 0
+
+
+def cmd_post_setup_summary(args):
+    """Read a JSON install spec and print the post-setup summary.
+
+    Usage: wizard.py post-setup-summary <spec.json|->
+    """
+    if not args:
+        print("Usage: wizard.py post-setup-summary <spec.json|->", file=sys.stderr)
+        return 2
+    src = args[0]
+    try:
+        if src == "-":
+            raw = sys.stdin.read()
+        else:
+            raw = Path(src).read_text(encoding="utf-8")
+        spec = json.loads(raw)
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"ERROR: cannot read spec: {e}", file=sys.stderr)
+        return 1
+    print(post_setup_summary(spec))
+    return 0
+
+
 def main():
     args = sys.argv[1:]
     if not args or args[0] in ("--help", "-h"):
@@ -1628,6 +1753,8 @@ def main():
         "list-issues-by-label": cmd_list_issues_by_label,
         "migrate-label": cmd_migrate_label,
         "migrate-labels-staged": cmd_migrate_labels_staged,
+        "pr-flow-prompt": cmd_pr_flow_prompt,
+        "post-setup-summary": cmd_post_setup_summary,
     }
     if cmd not in dispatch:
         print(f"Unknown command: {cmd}", file=sys.stderr)

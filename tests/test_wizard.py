@@ -1775,3 +1775,90 @@ class TestSoulMdSeeding:
         assert soul_text.count("### Project Context") == 1
         assert "Existing content" in soul_text
         assert "Already seeded" not in soul_text
+
+
+# ---------------------------------------------------------------------------
+# PR Flow Prompt (#2006)
+# ---------------------------------------------------------------------------
+
+
+class TestPrFlowPrompt:
+    """PR Flow question returns structured data for agent to present."""
+
+    def test_returns_question_and_options(self):
+        result = wizard.pr_flow_prompt()
+        assert "question" in result
+        assert "options" in result
+        assert "default" in result
+        assert result["default"] is False
+
+    def test_question_uses_plain_language(self):
+        result = wizard.pr_flow_prompt()
+        q = result["question"]
+        assert "PR Flow OFF" in q
+        assert "PR Flow ON" in q
+        # No internal jargon
+        assert "Ralph Loop" not in q
+        assert "tracker.py" not in q
+
+    def test_has_two_options(self):
+        result = wizard.pr_flow_prompt()
+        assert len(result["options"]) == 2
+
+
+# ---------------------------------------------------------------------------
+# Post-Setup Summary (#2006)
+# ---------------------------------------------------------------------------
+
+
+class TestPostSetupSummary:
+    """Post-setup What's Next summary based on configured agents."""
+
+    @pytest.fixture
+    def basic_spec(self):
+        return {
+            "project": {"name": "my-app", "repo": "github.com/alice/my-app"},
+            "preset": "software-dev",
+            "agents": [
+                {"id": "pm", "role": "pm"},
+                {"id": "skill", "role": "dev", "variant": "skill"},
+                {"id": "qa", "role": "qa"},
+            ],
+            "tools": {},
+            "loop": {"interval_minutes": 30},
+            "flags": {"pr_flow": False},
+        }
+
+    def test_includes_project_name(self, basic_spec):
+        result = wizard.post_setup_summary(basic_spec)
+        assert "my-app" in result
+
+    def test_includes_boot_instructions(self, basic_spec):
+        result = wizard.post_setup_summary(basic_spec)
+        assert "Boot your agents" in result
+        assert "claude --resume" in result
+
+    def test_includes_how_to_interact(self, basic_spec):
+        result = wizard.post_setup_summary(basic_spec)
+        assert "How to interact" in result
+        assert "PM terminal" in result
+
+    def test_includes_status_monitoring(self, basic_spec):
+        result = wizard.post_setup_summary(basic_spec)
+        assert "status" in result.lower()
+        assert "GitHub Issues" in result
+
+    def test_lists_all_configured_agents(self, basic_spec):
+        result = wizard.post_setup_summary(basic_spec)
+        assert "PM" in result
+        assert "skill" in result
+        assert "QA" in result
+
+    def test_handles_empty_agents(self):
+        spec = {
+            "project": {"name": "test"},
+            "agents": [],
+            "preset": "x", "tools": {}, "loop": {}, "flags": {},
+        }
+        result = wizard.post_setup_summary(spec)
+        assert "What's Next" in result
