@@ -247,3 +247,102 @@ class TestParseArgs:
         assert cmd == "transition"
         assert "42" in pos
         assert opts["role"] == "skill-lead"
+
+
+# ---------------------------------------------------------------------------
+# work_queue (#2344)
+# ---------------------------------------------------------------------------
+
+
+def _make_gh_item(number, title, status, item_type, priority=None, severity=None):
+    """Build a fake gh issue list item with labels."""
+    labels = [
+        {"name": f"status:{status}"},
+        {"name": f"type:{item_type}"},
+        {"name": "role:skill"},
+    ]
+    if severity:
+        labels.append({"name": f"severity:{severity}"})
+    if priority:
+        labels.append({"name": f"priority:{priority}"})
+    return {"number": number, "title": title, "labels": labels}
+
+
+class TestWorkQueue:
+    """work_queue() returns prioritized work list for agent (#2344)."""
+
+    def test_empty_queue(self, monkeypatch):
+        monkeypatch.setattr(tracker, "_run_list",
+                            lambda *a, **kw: _mock_result(stdout="[]"))
+        result = tracker.work_queue("skill")
+        assert result == []
+
+    def test_single_item(self, monkeypatch):
+        items = [_make_gh_item(42, "Fix bug", "approved", "issue", severity="high")]
+        monkeypatch.setattr(tracker, "_run_list",
+                            lambda *a, **kw: _mock_result(stdout=json.dumps(items)))
+        result = tracker.work_queue("skill")
+        assert len(result) == 1
+        assert result[0]["number"] == 42
+
+    def test_in_progress_first(self, monkeypatch):
+        items = [
+            _make_gh_item(10, "Approved task", "approved", "task", priority="high"),
+            _make_gh_item(20, "In progress", "in-progress", "issue", severity="low"),
+        ]
+        monkeypatch.setattr(tracker, "_run_list",
+                            lambda *a, **kw: _mock_result(stdout=json.dumps(items)))
+        result = tracker.work_queue("skill")
+        assert result[0]["number"] == 20  # in-progress first
+
+    def test_severity_ordering(self, monkeypatch):
+        items = [
+            _make_gh_item(1, "Low bug", "approved", "issue", severity="low"),
+            _make_gh_item(2, "High bug", "approved", "issue", severity="high"),
+            _make_gh_item(3, "Med bug", "approved", "issue", severity="medium"),
+        ]
+        monkeypatch.setattr(tracker, "_run_list",
+                            lambda *a, **kw: _mock_result(stdout=json.dumps(items)))
+        result = tracker.work_queue("skill")
+        assert [r["number"] for r in result] == [2, 3, 1]
+
+    def test_issues_before_tasks(self, monkeypatch):
+        items = [
+            _make_gh_item(10, "Task", "approved", "task", priority="high"),
+            _make_gh_item(20, "Issue", "approved", "issue", severity="high"),
+        ]
+        monkeypatch.setattr(tracker, "_run_list",
+                            lambda *a, **kw: _mock_result(stdout=json.dumps(items)))
+        result = tracker.work_queue("skill")
+        assert result[0]["number"] == 20  # issue before task
+
+    def test_skips_non_actionable_statuses(self, monkeypatch):
+        items = [
+            _make_gh_item(1, "Pending", "pending", "task", priority="high"),
+            _make_gh_item(2, "Shipped", "shipped", "task", priority="high"),
+            _make_gh_item(3, "Approved", "approved", "task", priority="medium"),
+        ]
+        monkeypatch.setattr(tracker, "_run_list",
+                            lambda *a, **kw: _mock_result(stdout=json.dumps(items)))
+        result = tracker.work_queue("skill")
+        assert len(result) == 1
+        assert result[0]["number"] == 3
+
+    def test_mixed_queue_full_ordering(self, monkeypatch):
+        items = [
+            _make_gh_item(1, "Open low issue", "open", "issue", severity="low"),
+            _make_gh_item(2, "Approved med task", "approved", "task", priority="medium"),
+            _make_gh_item(3, "In-progress issue", "in-progress", "issue", severity="medium"),
+            _make_gh_item(4, "Approved high issue", "approved", "issue", severity="high"),
+        ]
+        monkeypatch.setattr(tracker, "_run_list",
+                            lambda *a, **kw: _mock_result(stdout=json.dumps(items)))
+        result = tracker.work_queue("skill")
+        # Order: in-progress(3), approved issue high(4), approved task med(2), open issue low(1)
+        assert [r["number"] for r in result] == [3, 4, 2, 1]
+
+    def test_gh_failure_returns_empty(self, monkeypatch):
+        monkeypatch.setattr(tracker, "_run_list",
+                            lambda *a, **kw: _mock_result(returncode=1, stderr="error"))
+        result = tracker.work_queue("skill")
+        assert result == []
