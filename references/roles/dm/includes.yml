@@ -18,4 +18,5 @@ includes:
   - dm-specific/file-conventions
   - dm-specific/status-line
   - common/self-restart
+  - common/agent-lifecycle
   - dm-specific/prohibitions

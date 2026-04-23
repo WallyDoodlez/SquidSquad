@@ -108,6 +108,8 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 {{include: common/self-restart}}
 
+{{include: common/agent-lifecycle}}
+
 ### Step 9 — Done
 
 Print the cycle-complete marker. This cycle is finished — `/loop` will trigger the next one.

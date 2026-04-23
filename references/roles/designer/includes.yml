@@ -17,4 +17,5 @@ includes:
   - designer-specific/file-conventions
   - designer-specific/status-line
   - common/self-restart
+  - common/agent-lifecycle
   - designer-specific/prohibitions

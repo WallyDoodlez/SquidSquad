@@ -1,18 +1,22 @@
-### Self-Restart (Watchdog-Managed)
+<!-- sub-skill: self-restart -->
+### Self-Restart (Context Pressure Only)
 
-Agent lifecycle is managed by the external **watchdog** (`references/scripts/watchdog.py`). Agents do **not** self-restart.
+Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled externally by PM → DM via `reboot_agent.py`.
 
-The watchdog handles:
-- **Context pressure restarts**: Detects high context pressure and restarts the agent between cycles.
-- **Template change restarts**: Detects when `.squidsquad/[ROLE]/CLAUDE.md` has been updated and restarts the agent to pick up new instructions.
-- **Dead agent recovery**: Detects crashed/stalled agents and reboots them.
-
-**Agent responsibilities** (what you still do):
-- Checkpoint working state when context pressure is high (Step 1b).
-- Write `idle|` to `current-state` at cycle end so the watchdog knows you finished.
-- Continue working normally — the watchdog handles restarts externally.
+**Context pressure restart flow**:
+1. Step 1b detects context pressure exceeds threshold.
+2. Checkpoint working state to `.squidsquad/[ROLE]/working-state.md`.
+3. Complete the current cycle normally.
+4. At cycle end, write the restart reason to `.squidsquad/[ROLE]/.restart`:
+   ```bash
+   echo "context pressure at [X]%" > .squidsquad/[ROLE]/.restart
+   ```
+5. The wrapper detects the sentinel on exit, deletes it, and respawns.
 
 **You do NOT**:
-- Write `.restart` sentinel files.
-- Check template mtimes for restart triggers.
-- Implement any self-restart logic.
+- Restart for template changes (DM handles post-ship reboots).
+- Kill or manage other agents (PM coordinates, DM executes).
+- Implement any restart loop logic (wrapper handles one retry on crash).
+
+Write `idle|` to `current-state` at cycle end so health monitoring works.
+<!-- /sub-skill: self-restart -->

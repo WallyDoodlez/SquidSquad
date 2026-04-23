@@ -36,11 +36,8 @@ REPO_ROOT = SCRIPT_DIR.parent.parent
 SQUIDSQUAD_DIR = REPO_ROOT / ".squidsquad"
 LOCAL_CONFIG = SQUIDSQUAD_DIR / ".local-config"
 CONFIG_MD = SQUIDSQUAD_DIR / "config.md"
-BOOT_LOG = SQUIDSQUAD_DIR / "boot-attempts.log"
-BOOT_LOCK = SQUIDSQUAD_DIR / "boot-lock"
 
-COOLDOWN_SECONDS = 600  # 10 minutes between spawn attempts per role
-LOCK_TTL_SECONDS = 30
+# Removed: BOOT_LOG, BOOT_LOCK, COOLDOWN_SECONDS, LOCK_TTL_SECONDS (#2183)
 
 
 # ---------------------------------------------------------------------------
@@ -226,102 +223,6 @@ def _needs_boot(role):
     return False, f"no .health file, process alive (PID {pid})", str(clone_path)
 
 
-def _poll_health_after_spawn(clone_path, role, timeout=30):
-    """Poll .health file after spawning, waiting for 'alive' status.
-
-    Returns (confirmed, final_status, message).
-    """
-    poll_interval = 2
-    elapsed = 0
-    while elapsed < timeout:
-        time.sleep(poll_interval)
-        elapsed += poll_interval
-        health_status, health_detail = _read_health_file(clone_path, role)
-        if health_status == "alive":
-            return True, "alive", f"agent confirmed alive after {elapsed}s"
-        elif health_status == "error":
-            detail_msg = f": {health_detail}" if health_detail else ""
-            return False, "error", f"agent boot failed{detail_msg}"
-    # Timeout — check what we have
-    health_status, _ = _read_health_file(clone_path, role)
-    if health_status == "booting":
-        return True, "booting", f"agent still booting after {timeout}s (health unconfirmed)"
-    return True, health_status or "unknown", f"health poll timed out after {timeout}s"
-
-
-# ---------------------------------------------------------------------------
-# Rate limiting
-# ---------------------------------------------------------------------------
-
-def _read_boot_log():
-    """Read boot-attempts.log → list of dicts."""
-    if not BOOT_LOG.exists():
-        return []
-    try:
-        lines = BOOT_LOG.read_text(encoding="utf-8").strip().splitlines()
-        entries = []
-        for line in lines:
-            try:
-                entries.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-        return entries
-    except Exception:
-        return []
-
-
-def _append_boot_log(entry):
-    """Append a JSON line to boot-attempts.log."""
-    try:
-        with open(BOOT_LOG, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry) + "\n")
-    except Exception:
-        pass
-
-
-def _check_cooldown(role):
-    """Check if role is in cooldown. Returns (in_cooldown, seconds_remaining)."""
-    now = time.time()
-    entries = _read_boot_log()
-    for entry in reversed(entries):
-        if entry.get("role") == role and entry.get("action") == "spawn":
-            elapsed = now - entry.get("timestamp", 0)
-            if elapsed < COOLDOWN_SECONDS:
-                return True, int(COOLDOWN_SECONDS - elapsed)
-    return False, 0
-
-
-# ---------------------------------------------------------------------------
-# Lock file
-# ---------------------------------------------------------------------------
-
-def _acquire_lock():
-    """Acquire boot-lock atomically. Returns True if acquired."""
-    try:
-        if BOOT_LOCK.exists():
-            mtime = BOOT_LOCK.stat().st_mtime
-            if time.time() - mtime < LOCK_TTL_SECONDS:
-                return False
-            BOOT_LOCK.unlink(missing_ok=True)
-        # Atomic create — O_CREAT | O_EXCL fails if file already exists
-        fd = os.open(str(BOOT_LOCK), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        os.write(fd, str(os.getpid()).encode())
-        os.close(fd)
-        return True
-    except FileExistsError:
-        return False
-    except Exception:
-        return False
-
-
-def _release_lock():
-    """Release boot-lock."""
-    try:
-        BOOT_LOCK.unlink(missing_ok=True)
-    except Exception:
-        pass
-
-
 # ---------------------------------------------------------------------------
 # OS-aware terminal spawning
 # ---------------------------------------------------------------------------
@@ -482,14 +383,6 @@ def boot_agent(role, dry_run=False):
         result["message"] = f"skip: {reason}"
         return result
 
-    # Check cooldown
-    in_cooldown, remaining = _check_cooldown(role)
-    if in_cooldown:
-        result["action"] = "skip"
-        result["success"] = True
-        result["message"] = f"cooldown active ({remaining}s remaining), skipping"
-        return result
-
     # Dry run
     if dry_run:
         result["action"] = "dry-run"
@@ -506,42 +399,11 @@ def boot_agent(role, dry_run=False):
         )
         return result
 
-    # Acquire lock
-    if not _acquire_lock():
-        result["message"] = "boot-lock held by another process, skipping"
-        result["action"] = "skip"
-        result["success"] = True
-        return result
-
-    try:
-        # Spawn
-        success, msg = _spawn_terminal(clone_path, role, boot_script, script_type)
-        result["action"] = "spawn"
-        result["success"] = success
-        result["message"] = msg
-
-        # Log attempt
-        _append_boot_log({
-            "timestamp": time.time(),
-            "role": role,
-            "action": "spawn",
-            "success": success,
-            "message": msg,
-            "reason": reason,
-        })
-
-        # Post-spawn: poll .health for confirmation (30s timeout)
-        if success and not dry_run:
-            confirmed, health_status, poll_msg = _poll_health_after_spawn(
-                clone_path, role, timeout=30
-            )
-            result["health_confirmed"] = confirmed
-            result["health_status"] = health_status
-            result["message"] = f"{msg} — {poll_msg}"
-            if not confirmed:
-                result["success"] = False
-    finally:
-        _release_lock()
+    # Spawn
+    success, msg = _spawn_terminal(clone_path, role, boot_script, script_type)
+    result["action"] = "spawn"
+    result["success"] = success
+    result["message"] = msg
 
     return result
 

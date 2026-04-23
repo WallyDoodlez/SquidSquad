@@ -256,7 +256,7 @@ If context usage **exceeds the threshold**:
 1. Compact your current working state into `.squidsquad/[ROLE]/working-state.md` (see Working State File below). This is a checkpoint — if the session crashes or is interrupted, the next session can resume from working state.
 2. Commit and push all pending work.
 3. Print: `[🦑 HH:MM:SS] Context pressure at [X]% — working state checkpointed. Continuing normally.`
-4. **Continue the cycle normally.** Claude Code automatically compresses prior messages as context approaches limits, so the conversation can keep going indefinitely. The external watchdog will detect the high pressure and restart the agent between cycles — no agent-side restart logic needed.
+4. **Continue the cycle normally.** Claude Code automatically compresses prior messages as context approaches limits, so the conversation can keep going indefinitely. Set a flag so the Self-Restart step (at cycle end) triggers a fresh session after the cycle completes.
 
 If context usage is below threshold, continue normally.
 <!-- /sub-skill: context-pressure -->
@@ -629,17 +629,30 @@ If Branch Workflow is `no`, skip checks 1, 3, 4a, and 4b (PR-related) silently. 
 <!-- /sub-skill: pipeline-sentinel -->
 
 <!-- sub-skill: health-check -->
-### Step 7 — Agent Health Check (Watchdog-Managed)
+<!-- sub-skill: health-check -->
+### Step 7 — Agent Health Check
 
-Agent health monitoring is now handled by the external **watchdog** (`references/scripts/watchdog.py`). PM no longer runs health checks.
+Print: `[🦑 HH:MM:SS] Checking agent health...`
 
-The watchdog:
-1. Checks all agent health every ~30 seconds using `health_check.py`.
-2. Boots dead/stalled agents via `boot_remote.py`.
-3. Handles context pressure and template change restarts.
-4. Logs all actions to `.squidsquad/watchdog-log.txt`.
+Run the deterministic health check script:
 
-This step is a no-op — skip it entirely.
+```bash
+python references/scripts/health_check.py
+```
+
+The script reads each agent's heartbeat file (`.squidsquad/<role>/.health`) — the wrapper writes the current epoch every 5 seconds. If the heartbeat is >10 seconds old, the agent is dead.
+
+Log the script's output in `pm/qa-log.md`. For any agent reporting stalled (👻) or unknown (❓):
+
+1. Append a Discussion note to that agent's latest open tracker item.
+2. If no open item exists, log in `qa-log.md` only.
+
+**Context pressure monitoring**: Check each agent's context pressure file. If any agent exceeds threshold:
+- Plan a reboot via DM: `python references/scripts/tracker.py comment [DM_ISSUE] --role pm --message "Agent [role] context pressure at [X]%. Requesting reboot after current cycle."`
+- If DM absent, execute directly: `python references/scripts/reboot_agent.py [role]`
+
+For programmatic use, the script accepts `--json` for structured output.
+<!-- /sub-skill: health-check -->
 <!-- /sub-skill: health-check -->
 
 <!-- sub-skill: github-issues -->
@@ -672,16 +685,32 @@ If no external issues are found, skip silently.
 <!-- /sub-skill: github-issues -->
 
 <!-- sub-skill: boot-remote-agents -->
-### Step — Boot Remote Agents (Watchdog-Managed)
+<!-- sub-skill: boot-remote-agents -->
+### Step — Boot Remote Agents (PM Only)
 
-Agent booting is now handled by the external **watchdog** (`references/scripts/watchdog.py`). No agent needs to run boot checks.
+**PM-only gate**: Only the PM agent runs this step. If you are NOT the PM role, skip this step entirely.
 
-The watchdog:
-1. Monitors all agent health every ~30 seconds.
-2. Boots dead/stalled agents automatically.
-3. Handles rate limiting and cooldown.
+Print: `[🦑 HH:MM:SS] Checking for agents to boot...`
 
-This step is a no-op — skip it entirely.
+Check `Auto Boot Agents` in `config.md`. If set to `no`, skip this step entirely.
+
+Run the boot check:
+
+```bash
+python references/scripts/boot_remote.py --all --json
+```
+
+The script:
+1. Reads each agent's `.pid` file from their clone path
+2. Checks if the PID process is alive
+3. If dead (or no PID file), spawns a new terminal
+
+**Interpreting output**: Each agent entry has `action` (spawn/skip/dry-run) and `success` (true/false). Log any spawn failures in Discussion on the agent's current task issue.
+
+If any agents were spawned, print: `[🦑 HH:MM:SS] Booted: [role1, role2, ...]`
+
+If all agents alive or stopped, print nothing — silent pass.
+<!-- /sub-skill: boot-remote-agents -->
 <!-- /sub-skill: boot-remote-agents -->
 
 <!-- sub-skill: improvement-scan -->
@@ -953,25 +982,30 @@ python references/scripts/git_ops.py commit-push pm "[brief summary — e2e resu
 <!-- /sub-skill: git-commit -->
 
 <!-- sub-skill: self-restart -->
-### Self-Restart (Watchdog-Managed)
+<!-- sub-skill: self-restart -->
+### Self-Restart (Context Pressure Only)
 
-Agent lifecycle is managed by the external **watchdog** (`references/scripts/watchdog.py`). Agents do **not** self-restart.
+Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled externally by PM → DM via `reboot_agent.py`.
 
-The watchdog handles:
-- **Context pressure restarts**: Detects high context pressure and restarts the agent between cycles.
-- **Template change restarts**: Detects when `.squidsquad/[ROLE]/CLAUDE.md` has been updated and restarts the agent to pick up new instructions.
-- **Dead agent recovery**: Detects crashed/stalled agents and reboots them.
-
-**Agent responsibilities** (what you still do):
-- Checkpoint working state when context pressure is high (Step 1b).
-- Write `idle|` to `current-state` at cycle end so the watchdog knows you finished.
-- Continue working normally — the watchdog handles restarts externally.
+**Context pressure restart flow**:
+1. Step 1b detects context pressure exceeds threshold.
+2. Checkpoint working state to `.squidsquad/[ROLE]/working-state.md`.
+3. Complete the current cycle normally.
+4. At cycle end, write the restart reason to `.squidsquad/[ROLE]/.restart`:
+   ```bash
+   echo "context pressure at [X]%" > .squidsquad/[ROLE]/.restart
+   ```
+5. The wrapper detects the sentinel on exit, deletes it, and respawns.
 
 **You do NOT**:
-- Write `.restart` sentinel files.
-- Check template mtimes for restart triggers.
-- Implement any self-restart logic.
+- Restart for template changes (DM handles post-ship reboots).
+- Kill or manage other agents (PM coordinates, DM executes).
+- Implement any restart loop logic (wrapper handles one retry on crash).
+
+Write `idle|` to `current-state` at cycle end so health monitoring works.
 <!-- /sub-skill: self-restart -->
+<!-- /sub-skill: self-restart -->
+
 
 ### Step 10 — Done
 

@@ -180,12 +180,21 @@ def _is_process_alive(pid):
 def _parse_health_file(text):
     """Parse .health file content → (status, detail).
 
-    Format: `status` or `status|detail`
-    Valid statuses: booting, alive, restarting, backoff, dead, error
+    Supports two formats for transition compatibility (#2183):
+    - **New (heartbeat epoch)**: file contains a Unix epoch integer (e.g. "1745366400").
+      Wrapper writes this every 5s. Parsed as status="heartbeat", detail=epoch_str.
+    - **Legacy (status string)**: `status` or `status|detail`.
+      Valid statuses: booting, alive, restarting, backoff, dead, error.
     """
     if not text:
         return None, None
-    line = text.strip().split("\n")[0]
+    line = text.strip().split("\n")[0].strip()
+
+    # New format: pure epoch integer (10+ digits)
+    if line.isdigit() and len(line) >= 10:
+        return "heartbeat", line
+
+    # Legacy format: status|detail
     parts = line.split("|", 1)
     status = parts[0].strip() if parts else ""
     detail = parts[1].strip() if len(parts) > 1 else ""
@@ -277,14 +286,30 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
         result["health_file_status"] = health_status
         result["health_file_detail"] = health_detail
 
-        if health_status == "alive":
-            # PID cross-check: .health can go stale if process was killed externally
+        if health_status == "heartbeat":
+            # New format: epoch timestamp written by wrapper every 5s
+            try:
+                heartbeat_epoch = int(health_detail)
+                heartbeat_age = now - heartbeat_epoch
+                result["health_file_detail"] = f"epoch={heartbeat_epoch}, age={int(heartbeat_age)}s"
+                if heartbeat_age <= 10:
+                    result["health"] = HEALTHY
+                    result["reason"] = f"heartbeat {int(heartbeat_age)}s ago (alive)"
+                else:
+                    result["health"] = STALLED
+                    result["reason"] = f"heartbeat stale ({int(heartbeat_age)}s ago, threshold 10s)"
+            except (ValueError, TypeError):
+                result["health"] = UNKNOWN
+                result["reason"] = f"heartbeat epoch unparseable: {health_detail}"
+            return result
+
+        elif health_status == "alive":
+            # Legacy format: PID cross-check
             pid = _read_pid_file(squid)
             pid_alive = _is_process_alive(pid)
             result["pid"] = pid
 
             if not pid_alive:
-                # PID is dead — agent is not actually alive regardless of .health
                 result["health"] = STALLED
                 if pid is not None:
                     result["reason"] = (
@@ -294,12 +319,6 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
                     result["reason"] = (
                         ".health=alive but no .pid file — cannot verify liveness"
                     )
-                # Auto-correct stale .health to 'dead'
-                try:
-                    health_file.write_text("dead|stale - corrected by health_check\n",
-                                           encoding="utf-8")
-                except OSError:
-                    pass
                 return result
 
             # PID is alive — check current-state staleness
@@ -313,14 +332,12 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
                         f"(threshold {stale_threshold}m)"
                     )
                 else:
-                    # PID alive but current-state is stale — agent may be stuck
                     result["health"] = STALLED
                     result["reason"] = (
                         f"PID {pid} alive but current-state stale "
                         f"({elapsed_minutes}m ago, threshold {stale_threshold}m)"
                     )
             else:
-                # PID alive but no current-state yet (agent just booted)
                 result["health"] = HEALTHY
                 result["reason"] = f"PID {pid} alive (no current-state yet — freshly booted)"
 

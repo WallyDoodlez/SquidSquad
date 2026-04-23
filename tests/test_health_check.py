@@ -205,8 +205,6 @@ class TestCheckAgentHealth:
         result = health_check.check_agent_health("skill", clone, 30)
         assert result["health"] == "stalled"
         assert "PID 99999 is dead" in result["reason"]
-        health_file = tmp_path / ".squidsquad" / "skill" / ".health"
-        assert "dead" in health_file.read_text(encoding="utf-8")
 
     def test_health_alive_but_no_pid_file(self, tmp_path):
         """When .health=alive but no .pid file exists, cannot verify liveness."""
@@ -218,15 +216,36 @@ class TestCheckAgentHealth:
         assert "no .pid file" in result["reason"]
 
     @patch.object(health_check, "_is_process_alive", return_value=False)
-    def test_pid_dead_autocorrects_health_file(self, mock_alive, tmp_path):
-        """When PID is dead, .health file is auto-corrected to 'dead'."""
+    def test_pid_dead_detected_as_stalled(self, mock_alive, tmp_path):
+        """When PID is dead, agent is detected as stalled (#2183)."""
         clone = self._setup_agent(tmp_path, "skill",
                                   state_text="idle|",
                                   health_text="alive", pid=11111)
-        health_check.check_agent_health("skill", clone, 30)
-        health_file = tmp_path / ".squidsquad" / "skill" / ".health"
-        content = health_file.read_text(encoding="utf-8")
-        assert content.startswith("dead")
+        result = health_check.check_agent_health("skill", clone, 30)
+        assert result["health"] == "stalled"
+
+    # --- Heartbeat epoch tests (#2183) ---
+
+    def test_heartbeat_fresh(self, tmp_path):
+        """New-format heartbeat (epoch) within 10s → healthy."""
+        now = int(time.time())
+        clone = self._setup_agent(tmp_path, "skill",
+                                  health_text=str(now))
+        result = health_check.check_agent_health("skill", clone, 30, now=now)
+        assert result["health"] == "healthy"
+        assert "heartbeat" in result["reason"]
+
+    def test_heartbeat_stale(self, tmp_path):
+        """New-format heartbeat older than 10s → stalled."""
+        now = int(time.time())
+        old_epoch = now - 30  # 30s old
+        clone = self._setup_agent(tmp_path, "skill",
+                                  health_text=str(old_epoch))
+        result = health_check.check_agent_health("skill", clone, 30, now=now)
+        assert result["health"] == "stalled"
+        assert "heartbeat stale" in result["reason"]
+
+    # --- Legacy status tests ---
 
     def test_health_booting(self, tmp_path):
         clone = self._setup_agent(tmp_path, "skill",

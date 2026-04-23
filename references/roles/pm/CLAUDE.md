@@ -128,6 +128,8 @@ When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last 
 
 {{include: common/self-restart}}
 
+{{include: common/agent-lifecycle}}
+
 ### Step 10 — Done
 
 Print the cycle-complete marker. This cycle is finished — `/loop` will trigger the next one.

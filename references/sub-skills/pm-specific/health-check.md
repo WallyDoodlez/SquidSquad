@@ -1,11 +1,24 @@
-### Step 7 — Agent Health Check (Watchdog-Managed)
+<!-- sub-skill: health-check -->
+### Step 7 — Agent Health Check
 
-Agent health monitoring is now handled by the external **watchdog** (`references/scripts/watchdog.py`). PM no longer runs health checks.
+Print: `[🦑 HH:MM:SS] Checking agent health...`
 
-The watchdog:
-1. Checks all agent health every ~30 seconds using `health_check.py`.
-2. Boots dead/stalled agents via `boot_remote.py`.
-3. Handles context pressure and template change restarts.
-4. Logs all actions to `.squidsquad/watchdog-log.txt`.
+Run the deterministic health check script:
 
-This step is a no-op — skip it entirely.
+```bash
+python references/scripts/health_check.py
+```
+
+The script reads each agent's heartbeat file (`.squidsquad/<role>/.health`) — the wrapper writes the current epoch every 5 seconds. If the heartbeat is >10 seconds old, the agent is dead.
+
+Log the script's output in `pm/qa-log.md`. For any agent reporting stalled (👻) or unknown (❓):
+
+1. Append a Discussion note to that agent's latest open tracker item.
+2. If no open item exists, log in `qa-log.md` only.
+
+**Context pressure monitoring**: Check each agent's context pressure file. If any agent exceeds threshold:
+- Plan a reboot via DM: `python references/scripts/tracker.py comment [DM_ISSUE] --role pm --message "Agent [role] context pressure at [X]%. Requesting reboot after current cycle."`
+- If DM absent, execute directly: `python references/scripts/reboot_agent.py [role]`
+
+For programmatic use, the script accepts `--json` for structured output.
+<!-- /sub-skill: health-check -->
