@@ -110,4 +110,4 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-- **Shipped Since Last Bump**: 25
+- **Shipped Since Last Bump**: 9
