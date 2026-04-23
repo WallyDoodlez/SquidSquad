@@ -1,0 +1,24 @@
+{
+  "issue": 2181,
+  "title": "DM delivery enables feature flags on shipping project",
+  "files": [
+    "references/sub-skills/dm-specific/delivery-packaging.md"
+  ],
+  "questions": [
+    {
+      "id": "1",
+      "question": "A task that introduced a 'Cycle Runner: no' feature flag just passed QA and is pending-ship. What must DM do with the flag during delivery?",
+      "expected": "DM must enable it on this project by running 'python references/scripts/config.py set cycle-runner yes'. The flag defaults to no for other installs via upgrade, but the shipping project should always have it enabled."
+    },
+    {
+      "id": "2",
+      "question": "How does DM know which feature flags a shipped task introduced?",
+      "expected": "DM searches the task body and Discussion comments for feature flag references — config field names like 'Cycle Runner', 'PR Flow', etc."
+    },
+    {
+      "id": "3",
+      "question": "A task ships but does NOT introduce any feature flags. What does DM do at step 4 of delivery?",
+      "expected": "Nothing — step 4 only applies when the task introduced a feature flag. If no flags are found in the task body or Discussion, DM skips this step."
+    }
+  ]
+}
