@@ -1,23 +1,24 @@
 # Working State
 
-- **Task**: #361 — Project-adaptive role souls
+- **Task**: #2183 — Simplified agent lifecycle
 - **Status**: in-progress
-- **Phase**: test-planning #361
-- **Started**: 2026-04-22 22:01
+- **Phase**: researching #2183
+- **Started**: 2026-04-23 00:01
 
 ## Completed Steps
-- #13 planning complete (Planned)
-- #2006 approved (fast-track)
-- #361 transitioned to Planning
+- Filed #2183 with full architecture
+- Closed superseded issues (#2182, #1111)
+- Transitioned to Planning
 
 ## Remaining Steps
-- Phase 1: Research
-- Phase 2: Discussion (8 open questions from issue body)
+- Phase 1: Research (audit what to remove + what to build)
+- Phase 2: Discussion
 - Phase 3: Test Plan
 
 ## Key Decisions
-- Separate from #13 but tightly coupled
-- Project-specific delivery lives in SOUL.md
+- Sub-skills as script wrappers pattern
+- PM plans reboots, DM executes
+- Singleton, never kill mid-work, start correctly
 
 ## Quiet cycle counter: 0
 
