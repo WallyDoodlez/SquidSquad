@@ -4,6 +4,26 @@ All notable changes to SquidSquad will be documented in this file. This changelo
 
 ---
 
+## [0.25.0] — 2026-04-23
+
+### Added
+
+- #13 — **Setup flow improvements** — wizard auto-detects your project context (test commands, tech stack), saves choices to `.install-spec.json` for repeatable upgrades, and supports non-interactive setup via `setup-yes` command
+- #361 — **Project-adaptive role souls** — setup wizard generates a "Project Adaptation" section in each agent's SOUL.md based on your project description, so agents understand your specific domain. PM enriches souls further at runtime via soul-shepherd sub-skill
+- #2006 — Setup wizard now asks about PR Flow (human review gate vs direct commits) and shows a "What's Next" summary with boot commands after setup
+- #2070 — **Cycle runner** — opt-in transport layer that separates mechanical git/tracker ops from agent creative work. Agents call `cycle_pre.py` / `cycle_post.py` scripts, freeing context for reasoning
+- #2183 — **Simplified agent lifecycle** — singleton wrapper (PID lock), safe restart (never kills mid-work), heartbeat health detection, PM/DM reboot control via `reboot_agent.py`. Deleted watchdog.py. Net ~800 lines removed
+
+### Fixed
+
+- #2175 — QA and PM souls now include branch workflow governance: QA converts draft PRs to ready, PM merges verified PRs immediately
+- #2181 — DM delivery now enables feature flags on the shipping project after QA passes
+- #2195 — All agents now create feature branches for issue-linked work when Branch Workflow is enabled
+- #2272 — Agents now read latest comments on active tasks each cycle via cycle_pre.py enrichment
+- #2343 — Removed unused imports from cycle_pre.py and cycle_post.py
+
+---
+
 ## [0.24.0] — 2026-04-22
 
 ### Added
