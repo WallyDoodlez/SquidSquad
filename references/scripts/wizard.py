@@ -1933,6 +1933,88 @@ def cmd_generate_defaults(args):
     return 0
 
 
+def cmd_setup_yes(args):
+    """Non-interactive setup: generate defaults, scaffold, ensure labels.
+
+    Usage: wizard.py setup-yes [target_dir]
+
+    Equivalent to `npx squidsquad --yes` — accepts all defaults,
+    skips interactive questions. Good for CI/testing and dogfooding.
+    """
+    target = args[0] if args else "."
+    target_path = Path(target)
+
+    print("[SquidSquad] Non-interactive setup (--yes mode)")
+
+    # 1. Load scan data if available
+    scan_data = {}
+    scan_path = target_path / ".squidsquad" / ".repo-scan.json"
+    if scan_path.exists():
+        try:
+            scan_data = json.loads(scan_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    else:
+        # Run scan
+        try:
+            sys.path.insert(0, str(SCRIPT_DIR))
+            from repo_scan import scan
+            scan_data = scan(str(target_path))
+        except ImportError:
+            pass
+
+    # 2. Load repo info
+    repo_info = {}
+    result = _run(["gh", "repo", "view", "--json", "name,url"], check=False)
+    if result.returncode == 0:
+        try:
+            data = json.loads(result.stdout)
+            repo_info["name"] = data.get("name", "")
+            repo_info["repo"] = data.get("url", "").replace("https://", "")
+        except (json.JSONDecodeError, ValueError):
+            pass
+    if not repo_info.get("name"):
+        repo_info["name"] = target_path.resolve().name
+
+    # 3. Show scan summary
+    summary = format_scan_summary(scan_data)
+    if summary:
+        print(f"\nDetected:\n{summary}\n")
+
+    # 4. Generate default spec
+    spec = generate_default_spec(scan_data, repo_info)
+    print(f"Project: {spec['project']['name']}")
+    print(f"Agents: {', '.join(a['id'] for a in spec['agents'])}")
+    print(f"Stack: {spec['agents'][-1].get('stack', 'general')}")
+
+    # 5. Scaffold
+    print("\nScaffolding...")
+    try:
+        result = scaffold_install(spec, target_path, overwrite_existing=True)
+        print(f"  Created {len(result.get('agents', []))} agent(s)")
+    except (ValueError, FileExistsError) as e:
+        print(f"ERROR: scaffold failed: {e}", file=sys.stderr)
+        return 1
+
+    # 6. Ensure labels
+    print("Creating GitHub labels...")
+    try:
+        label_result = ensure_labels(dry_run=False)
+        created = label_result.get("created", 0)
+        if created:
+            print(f"  Created {created} label(s)")
+        else:
+            print("  All labels exist")
+    except Exception as e:
+        print(f"WARNING: label creation failed: {e}", file=sys.stderr)
+
+    # 7. Post-setup summary
+    print()
+    print(post_setup_summary(spec))
+
+    return 0
+
+
 def cmd_pr_flow_prompt(_args):
     """Print the PR Flow question and options as JSON."""
     _print_json(pr_flow_prompt())
@@ -2028,6 +2110,7 @@ def main():
         "save-spec": cmd_save_spec,
         "scan-summary": cmd_scan_summary,
         "generate-defaults": cmd_generate_defaults,
+        "setup-yes": cmd_setup_yes,
     }
     if cmd not in dispatch:
         print(f"Unknown command: {cmd}", file=sys.stderr)
