@@ -49,10 +49,14 @@ For each Pending Ship task that is NOT skipped:
    > [YYYY-MM-DD HH:MM] **dm**: CHANGELOG entry prepared: "#[NUMBER] — [Title]". Status → Shipped.
    ```
 3. **Check for config/migration changes**: If the task introduces new config values, settings, or requires migration steps for existing installs, document them in the Discussion and ensure they are reflected in the upgrade flow.
-4. Transition the issue to Shipped (auto-closes):
+4. **Enable feature flags**: If the task introduced a feature flag (a config field that defaults to `no` for new/upgraded installs), enable it on this project:
+   - Search the task body and Discussion comments for feature flag references (look for config field names like `Cycle Runner`, `PR Flow`, etc.)
+   - For each flag found, enable it: `python references/scripts/config.py set <field> yes`
+   - The flag defaults to `no` for other installs via upgrade, but the project that built and verified the feature should always have it enabled
+5. Transition the issue to Shipped (auto-closes):
    ```bash
    python references/scripts/tracker.py transition [NUMBER] pending-ship shipped --role dm-lead
    python references/scripts/tracker.py comment [NUMBER] --role dm --message "Delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped."
    ```
-5. Increment shipped count: `python references/scripts/config.py set shipped-since-bump [N+1]`
+6. Increment shipped count: `python references/scripts/config.py set shipped-since-bump [N+1]`
 7. Clear working state.
