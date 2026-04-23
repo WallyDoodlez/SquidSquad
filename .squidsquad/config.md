@@ -76,6 +76,10 @@
 - **BRIEFING Token Budget**: 2000
 - **Confidence Decay Days**: 60
 
+## Cycle Runner
+
+- **Enabled**: no
+
 ## Diagnostics
 
 - **Enabled**: yes
