@@ -78,7 +78,7 @@
 
 ## Cycle Runner
 
-- **Enabled**: no
+- **Enabled**: yes
 
 ## Diagnostics
 
