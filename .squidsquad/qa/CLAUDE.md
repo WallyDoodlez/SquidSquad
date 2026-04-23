@@ -129,9 +129,11 @@ Legal flows and owning roles:
 - `planning` → `planned` — **PM**
 - `planned` → `approved` — **PM**
 - `approved` → `in-progress` — **assigned role**
-- `in-progress` → `pending-test` | `approved` — **assigned role**
+- `in-progress` → `pending-test` | `approved` | `pending-human-review` | `pending-human-setup` — **assigned role**
+- `pending-human-review` → `in-progress` | `pending-ship` — **assigned role** (HITL designer loop)
+- `pending-human-setup` → `in-progress` — **PM** (environment setup complete)
 - `pending-test` → `in-progress` | `pending-ship` — **PM or QA** (both authorized; QA handles verification when installed, PM falls back when QA absent)
-- `pending-ship` → `shipped` — **DM** (auto-closes)
+- `pending-ship` → `shipped` | `in-progress` — **DM** ships (auto-closes), **PM or QA** routes back on merge conflict
 
 ### Discussion Entries (replaces inline Discussion sections)
 
@@ -436,6 +438,13 @@ python references/scripts/git_ops.py branch-switch main
    ```
 5. If all criteria pass with zero gaps:
 
+   **Promote test files to tests/** (before transitioning):
+   If any test files exist in `.squidsquad/[ROLE]/planning/` matching `*-tests.py` or `*-QA-RESULTS*.md`:
+   - Copy test `.py` files to `tests/` with naming convention: `tests/test_feat_[NUMBER]_[short_name].py`
+   - If comprehension test files exist, also copy to `tests/`
+   - Verify the promoted tests still pass: `python -m pytest tests/test_feat_[NUMBER]_*.py`
+   - These tests persist as regression tests — they are NOT deleted during planning cleanup
+
    Check PR Flow: `python references/scripts/config.py get pr-flow`
 
    **If PR Flow `yes`** and a PR exists for this issue:
@@ -456,11 +465,29 @@ python references/scripts/git_ops.py branch-switch main
      ```
 
    **If PR Flow `no`** (or no PR exists):
+
+   **Merge PR** (if a PR exists for this issue):
    ```bash
-   # If a PR exists, convert from draft to ready
+   # Find and merge the PR
+   gh pr list --search "squidsquad/ [NUMBER]" --state open --json number,headRefName --limit 5
+   ```
+   For each PR with branch matching `squidsquad/*/[NUMBER]`:
+   ```bash
    gh pr ready [PR_NUMBER] 2>/dev/null
+   python references/scripts/git_ops.py pr-merge [PR_NUMBER]
+   ```
+   - **Merge succeeds**: proceed to pending-ship transition
+   - **Merge conflict**: back to in-progress, comment with conflict details, dev rebases
+     ```bash
+     python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead
+     python references/scripts/tracker.py comment [NUMBER] --role qa --message "Merge conflict on PR #[PR_NUMBER]. Dev: rebase and re-submit. Back to In Progress."
+     ```
+   - **No PR found**: proceed (direct-to-main workflow, no merge needed)
+
+   After successful merge (or no PR):
+   ```bash
    python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role qa-lead
-   python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. Status → Pending Ship."
+   python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. PR merged. Status → Pending Ship."
    ```
 
 6. **delivery:skip check**: If the task is internal-only, add `delivery:skip` to the comment message.
@@ -570,38 +597,28 @@ python references/scripts/git_ops.py commit-push qa "[brief summary — e2e resu
 <!-- /sub-skill: git-commit -->
 
 <!-- sub-skill: self-restart -->
-### Self-Restart (Sentinel-Based)
+<!-- sub-skill: self-restart -->
+### Self-Restart (Context Pressure Only)
 
-At the end of each cycle (after Step Done), check whether a restart is needed. **Never restart mid-cycle** — complete the full Ralph Loop first.
+Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled externally by PM → DM via `reboot_agent.py`.
 
-**Restart triggers** (check in order):
+**Context pressure restart flow**:
+1. Step 1b detects context pressure exceeds threshold.
+2. Checkpoint working state to `.squidsquad/[ROLE]/working-state.md`.
+3. Complete the current cycle normally.
+4. At cycle end, write the restart reason to `.squidsquad/[ROLE]/.restart`:
+   ```bash
+   echo "context pressure at [X]%" > .squidsquad/[ROLE]/.restart
+   ```
+5. The wrapper detects the sentinel on exit, deletes it, and respawns.
 
-1. **Context pressure**: If context usage exceeded the threshold during Step 1b this cycle, trigger a restart to get a fresh context window.
-2. **Template change**: If `.squidsquad/[ROLE]/CLAUDE.md` mtime is newer than the session start time, trigger a restart to pick up updated instructions.
+**You do NOT**:
+- Restart for template changes (DM handles post-ship reboots).
+- Kill or manage other agents (PM coordinates, DM executes).
+- Implement any restart loop logic (wrapper handles one retry on crash).
 
-**Pre-restart checklist** (all steps required before writing the sentinel):
-
-1. Save working state to `.squidsquad/[ROLE]/working-state.md`.
-2. Commit and push all pending changes.
-3. Write status bar: `restarting|Self-restart — [reason]`
-4. Print: `[🦑 HH:MM:SS] Self-restart triggered: [reason]. State saved. Restarting...`
-
-**Trigger the restart**:
-
-Write the sentinel file with the reason:
-
-```bash
-echo "[reason]" > .squidsquad/[ROLE]/.restart
-```
-
-The boot script wrapper detects this sentinel, kills the current Claude process, deletes the sentinel, and starts a fresh session. The new session reads `working-state.md` on startup (Step 1c) and resumes where it left off.
-
-**Safety rules**:
-
-- Never write `.restart` mid-cycle — only after the cycle-complete marker.
-- Never write `.restart` if working state has uncommitted changes — commit first.
-- The sentinel is deleted by the boot script after restart — if it persists, the boot script did not detect it (check boot script version).
-- Maximum 3 self-restarts per hour (tracked in `.squidsquad/[ROLE]/restart-log.txt`). If exceeded, skip the restart and print a warning. This prevents infinite restart loops.
+Write `idle|` to `current-state` at cycle end so health monitoring works.
+<!-- /sub-skill: self-restart -->
 <!-- /sub-skill: self-restart -->
 
 ### Step 9 — Done
