@@ -6,24 +6,23 @@
 - **Quiet Cycles**: 0
 
 ## Completed Steps
-- Read CONTEXT.md — locked decisions captured
-- Read RESEARCH.md — full flow audit, proposed restructure, question list
-- Identified scope: CLI restructure, scaffold inside Claude, tarball, .install-spec.json, --yes mode
+- Read all planning artifacts
+- Install spec save/load (save_install_spec, load_install_spec, CLI commands)
+- Scaffold auto-saves spec on completion
+- Scan summary display (format_scan_summary, scan-summary CLI command)
+- Default spec generation (generate_default_spec, generate-defaults CLI command)
+- 13 new tests (5 install spec + 4 scan summary + 4 default spec)
+- All tests passing
 
 ## Remaining Steps
-- Read TEST-PLAN.md for acceptance criteria
-- Build scaffold.py (or extend wizard.py) for spec-driven scaffolding
-- Add .install-spec.json save/load to wizard.py
-- Add project scan summary display
-- Update squidsquad-setup skill for new flow
-- Add --yes mode support
-- Write tests
-- Run test suite
+- Update squidsquad-setup skill for new flow (shorter wizard)
+- Add --yes mode support to CLI/wizard
+- Tarball download (DM delivery hook)
+- Integration tests
 - Mark Pending Test
 
 ## Key Decisions
 - Scaffold inside Claude session (single script call)
 - Commit .install-spec.json for reproducibility
-- Tarball download (DM delivery hook, not baked into template)
-- CLI handles model routing (not Claude)
-- --yes mode accepts all defaults
+- Scan summary grouped by category (languages, frameworks, test tools, etc.)
+- Default spec auto-detects test command from scan (pytest, jest, vitest, mocha)

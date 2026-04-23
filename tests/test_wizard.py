@@ -1909,3 +1909,80 @@ class TestInstallSpec:
         wizard.save_install_spec(sample_spec, tmp_path)
         loaded = wizard.load_install_spec(tmp_path)
         assert loaded["squidsquad_version"] == "0.26.0"
+
+
+# ---------------------------------------------------------------------------
+# Scan Summary (#13)
+# ---------------------------------------------------------------------------
+
+
+class TestScanSummary:
+    """format_scan_summary produces grouped human-readable output."""
+
+    def test_full_scan(self):
+        scan = {
+            "languages": ["python", "javascript"],
+            "frameworks": ["nextjs", "express"],
+            "package_managers": ["npm", "pip"],
+            "test_frameworks": ["pytest", "jest"],
+            "ci_cd": ["github-actions"],
+            "deploy_targets": [],
+            "documentation": ["docs"],
+            "monorepo": [],
+        }
+        result = wizard.format_scan_summary(scan)
+        assert "python" in result
+        assert "nextjs" in result
+        assert "pytest" in result
+        assert "github-actions" in result
+
+    def test_empty_scan(self):
+        result = wizard.format_scan_summary({})
+        assert "No project" in result
+
+    def test_none_scan(self):
+        result = wizard.format_scan_summary(None)
+        assert "No project" in result
+
+    def test_partial_scan(self):
+        scan = {"languages": ["rust"], "frameworks": [], "test_frameworks": []}
+        result = wizard.format_scan_summary(scan)
+        assert "rust" in result
+        assert "Frameworks" not in result  # empty list not shown
+
+
+# ---------------------------------------------------------------------------
+# Default Spec Generation (#13)
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateDefaultSpec:
+    """generate_default_spec produces valid spec from scan data."""
+
+    def test_with_scan_data(self):
+        scan = {
+            "languages": ["python"],
+            "frameworks": ["fastapi"],
+            "test_frameworks": ["pytest"],
+        }
+        info = {"name": "my-api", "repo": "github.com/me/my-api"}
+        spec = wizard.generate_default_spec(scan, info)
+        assert spec["project"]["name"] == "my-api"
+        assert spec["agents"][1]["test_command"] == "pytest"
+        assert "fastapi" in spec["agents"][1]["stack"]
+
+    def test_without_scan_data(self):
+        spec = wizard.generate_default_spec()
+        assert spec["project"]["name"] == ""
+        assert spec["agents"][1]["stack"] == "general"
+        assert spec["agents"][1]["test_command"] == ""
+
+    def test_has_required_sections(self):
+        spec = wizard.generate_default_spec()
+        for key in ("project", "preset", "agents", "tools", "loop", "flags"):
+            assert key in spec, f"Missing required key: {key}"
+
+    def test_jest_detection(self):
+        scan = {"test_frameworks": ["jest"]}
+        spec = wizard.generate_default_spec(scan)
+        assert spec["agents"][1]["test_command"] == "npx jest"

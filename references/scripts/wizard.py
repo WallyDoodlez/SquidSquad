@@ -1745,6 +1745,194 @@ def post_setup_summary(spec):
     return "\n".join(lines)
 
 
+def format_scan_summary(scan_data):
+    """Format repo scan data into a grouped human-readable summary.
+
+    Takes the output of repo_scan.scan() and returns a string
+    suitable for presenting to the user during setup.
+    """
+    if not scan_data:
+        return "No project detected (empty repo or no recognizable files)."
+
+    sections = []
+
+    langs = scan_data.get("languages", [])
+    if langs:
+        sections.append(f"**Languages**: {', '.join(langs)}")
+
+    frameworks = scan_data.get("frameworks", [])
+    if frameworks:
+        sections.append(f"**Frameworks**: {', '.join(frameworks)}")
+
+    pkg = scan_data.get("package_managers", [])
+    if pkg:
+        sections.append(f"**Package Managers**: {', '.join(pkg)}")
+
+    tests = scan_data.get("test_frameworks", [])
+    if tests:
+        sections.append(f"**Test Tools**: {', '.join(tests)}")
+
+    ci = scan_data.get("ci_cd", [])
+    if ci:
+        sections.append(f"**CI/CD**: {', '.join(ci)}")
+
+    deploy = scan_data.get("deploy_targets", [])
+    if deploy:
+        sections.append(f"**Deploy**: {', '.join(deploy)}")
+
+    docs = scan_data.get("documentation", [])
+    if docs:
+        sections.append(f"**Docs**: {', '.join(docs)}")
+
+    mono = scan_data.get("monorepo", [])
+    if mono:
+        sections.append(f"**Monorepo**: {', '.join(mono)}")
+
+    if not sections:
+        return "No project features detected."
+
+    return "\n".join(sections)
+
+
+def generate_default_spec(scan_data=None, repo_info=None):
+    """Generate a default install spec from auto-detected data.
+
+    Used by --yes mode and as pre-filled defaults for interactive mode.
+    Returns a spec dict with smart defaults based on scan results.
+    """
+    scan = scan_data or {}
+    info = repo_info or {}
+
+    # Project info
+    project_name = info.get("name", "")
+    project_repo = info.get("repo", "")
+
+    # Detect test command from scan
+    test_frameworks = scan.get("test_frameworks", [])
+    test_command = ""
+    if "pytest" in test_frameworks:
+        test_command = "pytest"
+    elif "jest" in test_frameworks:
+        test_command = "npx jest"
+    elif "vitest" in test_frameworks:
+        test_command = "npx vitest"
+    elif "mocha" in test_frameworks:
+        test_command = "npx mocha"
+
+    # Detect stack from scan
+    langs = scan.get("languages", [])
+    frameworks = scan.get("frameworks", [])
+    stack_parts = []
+    if frameworks:
+        stack_parts.extend(frameworks[:3])
+    if langs:
+        stack_parts.extend(l for l in langs[:3] if l not in stack_parts)
+    stack = " + ".join(stack_parts) if stack_parts else "general"
+
+    # Default agents
+    agents = [
+        {"id": "pm", "alias": "pm", "role": "pm"},
+        {
+            "id": "skill",
+            "alias": "skill",
+            "role": "dev",
+            "variant": "skill",
+            "stack": stack,
+            "test_command": test_command,
+        },
+    ]
+
+    return {
+        "squidsquad_version": "0.25.0",
+        "project": {
+            "name": project_name,
+            "repo": project_repo,
+        },
+        "preset": "software-dev",
+        "agents": agents,
+        "tools": {},
+        "loop": {
+            "interval_minutes": 30,
+            "context_threshold": 70,
+        },
+        "flags": {
+            "pr_flow": False,
+            "improvement_scan": True,
+            "vault_remember": True,
+            "diagnostics": True,
+        },
+        "git_branches": {
+            "working": "main",
+            "state": "squid-squad",
+        },
+        "forge_backend": {
+            "provider": "github",
+            "endpoint": "https://api.github.com",
+        },
+        "model_routing": {
+            "model": "claude",
+        },
+    }
+
+
+def cmd_scan_summary(args):
+    """Run repo scan and print formatted summary.
+
+    Usage: wizard.py scan-summary [target_dir]
+    """
+    target = args[0] if args else "."
+    scan_path = Path(target) / ".squidsquad" / ".repo-scan.json"
+    if scan_path.exists():
+        scan_data = json.loads(scan_path.read_text(encoding="utf-8"))
+    else:
+        # Run scan on the fly
+        try:
+            sys.path.insert(0, str(SCRIPT_DIR))
+            from repo_scan import scan
+            scan_data = scan(target)
+        except ImportError:
+            print("ERROR: repo_scan.py not available", file=sys.stderr)
+            return 1
+    print(format_scan_summary(scan_data))
+    return 0
+
+
+def cmd_generate_defaults(args):
+    """Generate a default install spec from auto-detected data.
+
+    Usage: wizard.py generate-defaults [target_dir]
+    """
+    target = args[0] if args else "."
+    target_path = Path(target)
+
+    # Load scan data
+    scan_data = {}
+    scan_path = target_path / ".squidsquad" / ".repo-scan.json"
+    if scan_path.exists():
+        try:
+            scan_data = json.loads(scan_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # Load repo info
+    repo_info = {}
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "wizard.py"), "repo-info"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            cwd=target,
+        )
+        if result.returncode == 0:
+            repo_info = json.loads(result.stdout)
+    except (json.JSONDecodeError, OSError):
+        pass
+
+    spec = generate_default_spec(scan_data, repo_info)
+    _print_json(spec)
+    return 0
+
+
 def cmd_pr_flow_prompt(_args):
     """Print the PR Flow question and options as JSON."""
     _print_json(pr_flow_prompt())
@@ -1838,6 +2026,8 @@ def main():
         "post-setup-summary": cmd_post_setup_summary,
         "load-spec": cmd_load_spec,
         "save-spec": cmd_save_spec,
+        "scan-summary": cmd_scan_summary,
+        "generate-defaults": cmd_generate_defaults,
     }
     if cmd not in dispatch:
         print(f"Unknown command: {cmd}", file=sys.stderr)
