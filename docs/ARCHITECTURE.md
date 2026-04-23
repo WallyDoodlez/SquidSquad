@@ -1,104 +1,192 @@
 # SquidSquad Architecture
 
-This document explains how SquidSquad works under the hood: how agents coordinate, how the Ralph Loop drives autonomous work, and how the pieces fit together.
+SquidSquad turns a single git repository into a multi-agent development environment. Each agent is a separate Claude Code CLI instance that loops autonomously, reading and writing to a shared `.squidsquad/` folder. Git is the only communication channel — no message queues, no orchestration servers, no databases.
+
+This document describes the six-layer architecture that makes it work.
 
 ---
 
-## The Big Picture
+## The Six Layers
 
-SquidSquad turns a single git repository into a multi-agent development environment. Each agent is a separate Claude Code CLI instance that loops autonomously, reading and writing to a shared `.squidsquad/` folder. Git is the only communication channel.
+SquidSquad is built as a vertical stack of six layers. Each layer has a single responsibility and a clean boundary with the layers above and below it. Higher layers shape *what* the agent is. Lower layers handle *how* it operates.
+
+> **Open the interactive diagram:** [docs/diagrams/layer-stack.html](diagrams/layer-stack.html)
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     Git Repository                       │
-│                                                         │
-│  ┌─────────────────────────────────────────────────┐    │
-│  │              .squidsquad/                        │    │
-│  │                                                  │    │
-│  │  config.md          ← versions, agents, settings │    │
-│  │  templates/         ← full agent instructions    │    │
-│  │  [role]/            ← per-agent working state    │    │
-│  │  vault/             ← shared memory layer        │    │
-│  │  statusline.sh      ← powers the status bar      │    │
-│  │  start-[role].*     ← boot scripts               │    │
-│  └─────────────────────────────────────────────────┘    │
-│                                                         │
-│  Your code, README, CHANGELOG, etc.                     │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
-        │           │           │           │
-    ┌───┴───┐   ┌───┴───┐   ┌───┴───┐   ┌───┴───┐
-    │  Dev  │   │  QA   │   │  DM   │   │  PM   │
-    │ Agent │   │ Agent │   │ Agent │   │ Agent │
-    └───────┘   └───────┘   └───────┘   └───────┘
-    autonomous  autonomous  autonomous  interactive
+┌──────────────────────────────────────────────────────────────┐
+│  L6  Memory          vault/, BRIEFING.md, galaxy notes       │  ← what the squad knows
+├──────────────────────────────────────────────────────────────┤
+│  L5  Soul            SOUL.md — personality, quality bar      │  ← how the agent thinks
+├──────────────────────────────────────────────────────────────┤
+│  L4  Sub-skill       composable blocks, compose.py           │  ← reusable capabilities
+├══════════════════════════════════════════════════════════════╡
+│  L3  Behavior ★      CLAUDE.md — Ralph Loop, role logic      │  ← the creative core
+├══════════════════════════════════════════════════════════════╡
+│  L2  Orchestration   /loop, boot scripts, wrapper, signals   │  ← timing & lifecycle
+├──────────────────────────────────────────────────────────────┤
+│  L1  Transport       cycle_pre/post, git_ops, tracker.py     │  ← mechanical plumbing
+└──────────────────────────────────────────────────────────────┘
+     HUMAN ↑                                          ↓ MACHINE
 ```
 
-No message queues. No orchestration servers. No databases. Agents pull to read the latest state and push after each work unit.
+The **Behavior Layer** (L3) is the focal layer — it's where agents reason, decide, and create. Everything above it shapes the agent's character. Everything below it is deterministic plumbing.
+
+---
+
+## L1 — Transport Layer
+
+**Purpose:** Move bits. Pull code, push commits, switch branches, transition tracker labels, write status bar files. No reasoning, no decisions — pure mechanics.
+
+**Key files:**
+- `references/scripts/cycle_pre.py` — pre-cycle mechanical work (git pull, context check, queue read)
+- `references/scripts/cycle_post.py` — post-cycle mechanical work (commit, push, transitions, logging)
+- `references/scripts/git_ops.py` — git operations (pull, commit-push, branch management)
+- `references/scripts/tracker.py` — GitHub Issues CRUD with label-based status machine
+
+**What changes here:** Adding new git operations, new tracker commands, new mechanical steps. Changes are always deterministic — if the same input produces different output, it's a bug.
+
+**Boundary with L2:** The orchestration layer *calls* transport scripts. Transport scripts never decide *when* to run — they just execute when called.
+
+---
+
+## L2 — Orchestration Layer
+
+**Purpose:** Control *when* things happen, in what order, and manage the agent's lifecycle. The conductor that sequences transport and behavior.
+
+**Key files:**
+- Boot scripts: `.squidsquad/start-[role].sh` / `.ps1` — launch and supervise the Claude process
+- `/loop` command — schedules recurring cycle execution
+- Signal files: `.restart`, `.stop`, `.pause` — lifecycle control (see #2122)
+- `current-state` — status bar state file, written atomically
+
+**What changes here:** Cycle cadence, restart logic, boot sequence, signal handling. The orchestration layer knows about timing but not about what work gets done.
+
+**Boundary with L3:** Orchestration triggers each cycle. The behavior layer decides what to *do* during that cycle.
+
+---
+
+## L3 — Behavior Layer (Focal)
+
+**Purpose:** The creative core. This is where agents read code, reason about problems, make decisions, write implementations, verify work, and communicate with humans and each other.
+
+**Key files:**
+- `.squidsquad/[role]/CLAUDE.md` — the full agent template, composed from sub-skills
+- The Ralph Loop steps — triage, implement, verify, deliver, plan
+
+**What changes here:** Adding new capabilities to a role, changing how agents prioritize work, modifying the Ralph Loop flow, adjusting how agents interact with each other.
+
+**This is where product differentiation lives.** Two SquidSquad installations with different behavior layers produce fundamentally different development experiences. The layers above (soul, memory) fine-tune *how* the behavior layer operates. The layers below (orchestration, transport) ensure it operates reliably.
+
+**Boundary with L4:** The behavior layer is *assembled from* sub-skills. At runtime, the agent sees one flat template — the sub-skill boundaries are invisible.
+
+---
+
+## L4 — Sub-skill Layer
+
+**Purpose:** Composable capability blocks that snap into any role's behavior layer. Sub-skills are the building blocks that make the behavior layer modular.
+
+**Key files:**
+- `references/sub-skills/manifest.md` — which sub-skills each role includes, in composition order
+- `references/sub-skills/common/` — shared capabilities (tracker-protocol, vault-protocol, git-commit, etc.)
+- `references/sub-skills/roles/` — role-specific capabilities (dev-agent, pm-agent, qa-agent, dm-agent)
+- `references/scripts/compose.py` — assembles sub-skills into a single CLAUDE.md per role
+
+**What changes here:** Adding a new capability that multiple roles need (write it as a sub-skill). Changing how a shared protocol works (edit the sub-skill, all roles get the update on next deploy).
+
+**How composition works:**
+1. `manifest.md` lists which sub-skills each role needs and their order
+2. `compose.py deploy [role]` reads the manifest, concatenates sub-skills, resolves `{{runtime:}}` directives
+3. Output is a single `.squidsquad/[role]/CLAUDE.md` — the agent's complete instructions
+
+**Boundary with L5:** Sub-skills define *what* the agent can do. The soul layer defines *how* it exercises those capabilities.
+
+---
+
+## L5 — Soul Layer
+
+**Purpose:** Personality, judgment, and quality bar. The soul shapes *how* an agent uses its capabilities — its decision-making style, communication tone, what it considers "done," and where its boundaries are.
+
+**Key files:**
+- `.squidsquad/[role]/SOUL.md` — one per role, loaded at session start via `{{runtime:}}` directive
+
+**What changes here:** Adjusting an agent's quality bar, changing how it communicates, adding project-specific governance (like branch workflow rules). Soul changes take effect on next agent boot — no template redeployment needed.
+
+**Key design choice:** Souls are project-adaptable. The same PM template can produce a cautious, process-heavy PM for a regulated project and a fast, lightweight PM for a hackathon — just by editing SOUL.md. This is how SquidSquad adapts to your team culture without changing code.
+
+**Boundary with L6:** The soul defines the agent's character. Memory gives it institutional knowledge to apply that character intelligently.
+
+---
+
+## L6 — Memory Layer
+
+**Purpose:** Institutional knowledge that persists across sessions and version bumps. What the squad has learned about your project, your preferences, your decisions, and your patterns.
+
+**Key files:**
+- `.squidsquad/vault/BRIEFING.md` — active context summary, auto-maintained (~50 lines)
+- `.squidsquad/vault/galaxy/` — atomic knowledge notes (Zettelkasten): decisions, patterns, learnings, styles
+- `.squidsquad/vault/projects/` — active project context
+- `.squidsquad/vault/areas/` — ongoing concerns: preferences, conventions, values
+- `.squidsquad/vault/archives/` — shipped features, closed decisions
+
+**What changes here:** Adding new knowledge types, changing how agents consolidate learnings, modifying the BRIEFING.md update protocol, tuning confidence decay.
+
+**How knowledge flows:**
+1. Agents observe your preferences, decisions, and patterns during work
+2. At cycle end, agents reflect and write vault notes
+3. On next cycle, all agents read BRIEFING.md and adapt behavior
+4. Over time, the squad becomes closer to how you think and work
+
+The vault follows the **PARAG** structure (Projects, Areas, Resources, Archives, Galaxy) and is fully git-tracked — every change has a commit, every note has version history.
+
+---
+
+## How Layers Interact at Runtime
+
+A single agent cycle flows through all six layers:
+
+```
+ ┌─ L6 Memory ──────── Agent reads BRIEFING.md for context
+ │
+ ├─ L5 Soul ─────────── Agent's personality shapes all decisions
+ │
+ ├─ L4 Sub-skills ───── Capabilities available (tracker, vault, git protocols)
+ │
+ ├─ L3 Behavior ─────── Ralph Loop: triage → work → verify → deliver
+ │    │
+ │    │  cycle_pre.py ◄─── L1 Transport (git pull, read queue)
+ │    │
+ │    ├── Agent reasons, reads code, writes code, runs tests
+ │    │
+ │    │  cycle_post.py ◄── L1 Transport (commit, push, transitions)
+ │    │
+ │    └── Agent writes vault notes ──► L6 Memory
+ │
+ ├─ L2 Orchestration ── /loop triggers next cycle, wrapper monitors signals
+ │
+ └─ L1 Transport ────── Mechanical operations bookend the creative work
+```
+
+**The cycle runner** (`cycle_pre.py` / `cycle_post.py`, opt-in via `Cycle Runner: yes` in config.md) makes the transport layer explicit: mechanical work happens in Python scripts, creative work happens in the agent. When disabled, the agent handles both — but the layer boundary still exists conceptually.
 
 ---
 
 ## Agent Roles
 
-```mermaid
-graph LR
-    H["You"] -- "check-in each cycle" --> PM
-    PM -- "files features" --> DEV["Dev Agent(s)"]
-    PM -- "routes design" --> DS["Designer"]
-    QA -- "verifies work, files bugs" --> DEV
-    DM -- "packages delivery" --> DOCS["README, CHANGELOG"]
-    DEV -- "cross-files bugs" --> DEV
-```
+Each role is a different configuration of the behavior and soul layers, assembled from shared and role-specific sub-skills:
 
-| Agent | Purpose | Mode |
-|-------|---------|------|
-| **Dev Lead** (one per role) | Fix bugs, implement features, run tests | Autonomous |
-| **PM** | Human check-in, feature intake, backlog management | Interactive |
-| **QA** | E2E tests, bug verification, feature testing | Autonomous |
-| **DM** | Delivery packaging, docs, CHANGELOG, version bumps | Autonomous |
-| **Designer** (optional) | Design specs, design tokens, interactive design sessions | Autonomous + interactive |
-
-### Agent Personality (SOUL.md)
-
-Each agent has a `SOUL.md` file at `.squidsquad/[role]/SOUL.md` that defines its professional identity, quality bar, decision-making style, communication style, and boundaries. SOUL.md is loaded at session start via the `{{runtime:}}` directive in sub-skill composition — it's copied to the agent's directory during `compose.py deploy`, not compiled into the template.
-
-This means you can edit an agent's personality directly without redeploying templates. Changes take effect on the next agent boot.
-
----
-
-## The Ralph Loop
-
-Every agent follows the same loop pattern. Each iteration is one pass through these steps:
-
-```mermaid
-flowchart LR
-    A([git pull]) --> P{context\npressure?}
-    P -- high --> X[save state\nexit]
-    P -- ok --> R{working\nstate?}
-    R -- resume --> C
-    R -- fresh --> B{bugs?}
-    B -- yes --> C[fix / verify / deliver] --> B
-    B -- no --> D{features?}
-    D -- yes --> E[implement / test / package] --> D
-    D -- no --> F([sleep N min])
-    F --> A
-```
-
-**What each agent does in its loop:**
-
-- **Dev**: pull → triage bugs → implement features → run tests → commit → push
-- **PM**: pull → check in with you → feature intake → backlog management → push
-- **QA**: pull → run E2E tests → verify bug fixes → test features → push
-- **DM**: pull → triage doc bugs → deliver pending-ship items → version bump check → push
-- **Designer**: pull → check design requests → interactive design sessions → produce specs → push
-
-Every step prints a `[🦑 HH:MM:SS]` timestamped marker so activity is easy to scan in terminal scrollback.
+| Agent | Behavior (L3) | Soul (L5) | Mode |
+|-------|--------------|-----------|------|
+| **Dev Lead** | Bug triage, feature implementation, tests | Pragmatic engineer, correctness-first | Autonomous |
+| **PM** | Human check-in, feature intake, backlog, pipeline health | Process guardian, user-centric | Interactive |
+| **QA** | E2E tests, verification, regression testing | Skeptical tester, zero-tolerance for gaps | Autonomous |
+| **DM** | Delivery packaging, docs, CHANGELOG, version bumps | User-first communicator, last-mile owner | Autonomous |
+| **Designer** | Design specs, tokens, interactive design sessions | Visual thinker, design systems advocate | Autonomous + interactive |
 
 ---
 
 ## Feature Lifecycle
 
-Features flow through a structured pipeline with human approval gates:
+Features flow through the behavior layer with human approval gates at key transitions:
 
 ```
 Pending → Planning → Planned → Approved → In Progress → Pending Test → Pending Ship → Shipped
@@ -111,144 +199,49 @@ Pending → Planning → Planned → Approved → In Progress → Pending Test �
   files it
 ```
 
-Status transitions are tracked as GitHub Issue label changes. Discussion happens as Issue comments.
-
----
-
-## Sub-Skill Architecture
-
-Agent instructions are composed from modular sub-skills at build time:
-
-```
-references/sub-skills/
-├── manifest.md              ← which sub-skills each role includes
-├── roles/
-│   ├── dev-agent.md         ← dev-specific: bug triage, feature implementation
-│   ├── pm-agent.md          ← PM-specific: check-in, feature intake, backlog
-│   ├── qa-agent.md          ← QA-specific: E2E tests, verification
-│   ├── dm-agent.md          ← DM-specific: delivery, version bumps
-│   └── designer.md          ← designer-specific: design sessions, specs
-└── common/
-    ├── tracker-protocol.md  ← GitHub Issues CRUD (all agents)
-    ├── vault-protocol.md    ← shared memory vault (all agents)
-    ├── git-commit.md        ← commit conventions (all agents)
-    ├── bug-filing.md        ← cross-team bug filing (all agents)
-    └── ...
-```
-
-`compose.py deploy <role>` assembles role + common sub-skills into a single template file per agent. Agents never see the sub-skill boundaries at runtime.
-
----
-
-## Vault Memory Layer
-
-The vault is a git-tracked, Obsidian-compatible knowledge base that all agents share:
-
-```
-.squidsquad/vault/
-├── BRIEFING.md          ← active context summary (auto-maintained)
-├── projects/            ← project goals, constraints, architecture
-├── areas/               ← ongoing concerns: preferences, conventions, values
-│   ├── human-profile.md ← your preferences, captured over time
-│   └── code-conventions.md
-├── resources/           ← reference material, external docs
-├── archives/            ← shipped features, closed decisions
-└── galaxy/              ← atomic knowledge notes (Zettelkasten)
-    ├── decision-*.md    ← architecture and design decisions
-    ├── pattern-*.md     ← recurring approaches
-    ├── learning-*.md    ← lessons learned
-    └── style-*.md       ← visual/code style preferences
-```
-
-**How knowledge flows:**
-
-1. Agents observe your preferences, decisions, and patterns during work
-2. At the end of each productive cycle, agents reflect and write vault notes
-3. On the next cycle, all agents read the vault and adapt their behavior
-4. Over time, the squad becomes closer to how you think and work
-
-Notes use YAML frontmatter for metadata, wikilinks for relationships, and append-only changelogs for history. The vault is browsable in the Obsidian app.
-
----
-
-## GitHub Issues as Tracker
-
-All bugs and features are GitHub Issues with structured labels:
-
-| Label type | Examples | Purpose |
-|-----------|----------|---------|
-| Type | `type:bug`, `type:feature` | What kind of item |
-| Status | `status:open`, `status:approved`, `status:in-progress`, ... | Where in the pipeline |
-| Role | `role:skill`, `role:dm`, `role:pm` | Which agent owns it |
-| Priority | `priority:high`, `priority:medium`, `priority:low` | How urgent |
-
-Agents use `gh` CLI through `tracker.py` for all operations. Status transitions are label changes. Discussion entries are Issue comments. External contributors can file Issues directly — PM triages them into the workflow.
+Status transitions are GitHub Issue label changes (L1 transport). The decision of *when* to transition is behavior layer logic. The *criteria* for transitioning come from the soul layer's quality bar.
 
 ---
 
 ## Coordination Model
 
-```mermaid
-sequenceDiagram
-    participant You
-    participant PM
-    participant Dev
-    participant QA
-    participant DM
+Agents coordinate through git — the transport layer. No direct communication, no shared processes.
 
-    You->>PM: "Add search to the API"
-    PM->>PM: Research → Discussion → Planning
-    You->>PM: Approve plan
-    PM->>Dev: Feature approved (GitHub Issue)
-    Dev->>Dev: Implement + tests
-    Dev->>QA: Ready for test (status: pending-test)
-    QA->>QA: Verify + E2E tests
-    QA->>DM: Verified (status: pending-ship)
-    DM->>DM: Docs + CHANGELOG
-    DM->>DM: Version bump (if threshold met)
-    Note over You,DM: Shipped!
+```
+Agent A                    Git Repository                   Agent B
+   │                            │                              │
+   ├── git push ───────────────►│                              │
+   │                            │◄──────────────── git pull ───┤
+   │                            │                              │
+   │   (Issue comment,          │    (Reads comment,           │
+   │    status transition)      │     picks up work)           │
 ```
 
-All coordination is asynchronous. Agents don't wait for each other — they check for work on each cycle and pick up whatever is ready. Git pull/push is the synchronization mechanism.
+Every agent pulls at cycle start (L1 transport), does creative work (L3 behavior), and pushes at cycle end (L1 transport). The gap between push and pull is the coordination latency — typically one cycle interval.
 
 ---
 
-## Health Detection
+## Changing Things at Each Layer
 
-PM monitors agent health by reading `current-state` files across clones:
+| If you want to... | Change at layer | Example |
+|---|---|---|
+| Add a new git operation | L1 Transport | Add `npm publish` to `git_ops.py` |
+| Change cycle timing | L2 Orchestration | Edit `Iteration Interval` in `config.md` |
+| Add a new agent capability | L3 Behavior (via L4) | Write a new sub-skill, add to manifest |
+| Change how an agent prioritizes work | L3 Behavior | Edit the Ralph Loop step order |
+| Make an agent more cautious | L5 Soul | Edit SOUL.md quality bar section |
+| Teach the squad a new preference | L6 Memory | Write a vault note (or just tell PM) |
+| Add a shared protocol | L4 Sub-skill | Write a common sub-skill, deploy to all roles |
+| Change agent restart behavior | L2 Orchestration | Edit wrapper signal handling |
 
-- 🦑 **Healthy** — file updated within 2x the loop interval
-- 👻 **Stalled** — file exists but hasn't been updated recently
-- ❓ **Unknown** — no data available
-
-No background processes, no API calls, no heartbeat branches. Just file modification timestamps.
-
----
-
-## Boot Flow
-
-```
-start-[role].sh / .ps1
-    │
-    ├── Read alias from config
-    ├── Print squid logo + version
-    ├── Inject permissions into settings.json
-    ├── Write role for statusline
-    ├── Initialize current-state file
-    └── Launch: claude --dangerously-skip-permissions
-              --name <alias>
-              --append-system-prompt "SQUIDSQUAD_ROLE=<role>"
-              "start the loop"
-```
-
-The `SQUIDSQUAD_ROLE` in the system prompt triggers auto-boot: the agent reads `.squidsquad/<role>/CLAUDE.md`, which points to the full template, and begins the Ralph Loop immediately.
+**Rule of thumb:** If you're changing *what* happens, you're in L3/L4. If you're changing *how it feels*, you're in L5/L6. If you're changing *when or whether* it happens, you're in L2. If you're changing the mechanical *how*, you're in L1.
 
 ---
 
-## Self-Diagnostics
+## Key Design Decisions
 
-Agents include an anomaly detection system that logs errors from tracker operations, git operations, and composition:
-
-- **Local logging**: Errors are written to `.squidsquad/diagnostics.jsonl` (JSON Lines format, 1MB rotation)
-- **`/squidsquad-bug` command**: Users can report bugs to the upstream SquidSquad repo with sanitized config and diagnostic context attached automatically
-- **Public repos** have diagnostics enabled by default; private repos are opt-in via `config.md`
+- **Git as the only bus** — no databases, no message queues. Every piece of state is a file in the repo. This makes the system inspectable, debuggable, and reproducible.
+- **Composition over inheritance** — roles are assembled from sub-skills, not inherited from a base class. This prevents the "god template" problem.
+- **Souls are separate from behavior** — you can change an agent's personality without redeploying its template. This enables project-level customization.
+- **Transport is optional** — the cycle runner is opt-in. The layered architecture exists whether or not you use `cycle_pre.py` / `cycle_post.py`.
+- **Memory is git-tracked** — vault notes have full version history. No opaque databases, no vector stores. Knowledge is just markdown files with frontmatter.

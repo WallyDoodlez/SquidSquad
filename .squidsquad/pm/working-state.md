@@ -2,7 +2,7 @@
 
 - **Task**: #2183 — Simplified agent lifecycle
 - **Status**: in-progress
-- **Phase**: researching #2183
+- **Phase**: test-planning #2183
 - **Started**: 2026-04-23 00:01
 
 ## Completed Steps
