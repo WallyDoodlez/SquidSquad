@@ -31,7 +31,8 @@ Entry file with includes (the role's own `SOUL.md` sits alongside `CLAUDE.md` in
 8b. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
 8c. `common/vault-optimize` — Vault optimization on quiet cycles
 9. `common/git-commit` — Step 5: commit/push protocol with PR flow
-9b. `common/self-restart` — Sentinel-based self-restart at cycle end
+9b. `common/self-restart` — Context-pressure self-restart at cycle end
+9c. `common/agent-lifecycle` — Agent lifecycle management (reboot, heartbeat, singleton)
 9. `common/discussion-protocol` — Discussion entry format and rules
 10. `common/issue-filing` — Self-file and cross-file bug templates
 11. `common/working-state` — Working State File format
@@ -185,7 +186,8 @@ references/sub-skills/
 │   ├── status-line.md                (Status line description — shared by dev)
 │   ├── prohibitions.md               (Shared "never do" rules — shared by dev)
 │   ├── capability-check.md          (Startup capability verification — shared by roles with requires_sub_skills)
-│   └── cycle-runner.md              (Cycle runner transport layer — opt-in via feature flag, all roles)
+│   ├── cycle-runner.md              (Cycle runner transport layer — opt-in via feature flag, all roles)
+│   └── agent-lifecycle.md           (Agent lifecycle: reboot, heartbeat, singleton — all roles)
 ├── dev-specific/
 │   ├── triage-issues.md              (Step 2 — triage open issues)
 │   └── implement-tasks.md           (Step 3 — implement approved tasks)

@@ -47,276 +47,138 @@ fi
 # Set env var for statusline (session-scoped, no cross-agent clobber)
 export SQUIDSQUAD_ROLE="{{ROLE}}"
 
-# --- PID lock: prevent double-start ---
+# --- File paths ---
 ROLE_DIR=".squidsquad/{{ROLE}}"
 PID_FILE="$ROLE_DIR/.pid"
-STOP_FILE="$ROLE_DIR/.stop"
 RESTART_SENTINEL="$ROLE_DIR/.restart"
-RESTART_LOG="$ROLE_DIR/restart-log.txt"
 STATE_FILE="$ROLE_DIR/current-state"
-PRESSURE_FILE="$ROLE_DIR/context-pressure"
 HEALTH_FILE="$ROLE_DIR/.health"
 
 mkdir -p "$ROLE_DIR"
 
-# --- Helper: atomic write to .health (write .tmp then rename) ---
+# --- Helper: atomic write to .health ---
 write_health() {
   echo -n "$1" > "$HEALTH_FILE.tmp"
   mv -f "$HEALTH_FILE.tmp" "$HEALTH_FILE"
 }
 
-# --- Pre-flight checks: validate environment before entering restart loop ---
+# --- Pre-flight checks ---
 write_health "booting"
 echo "[SquidSquad] Pre-flight checks..."
 
-# Check gh auth
 if ! gh auth status >/dev/null 2>&1; then
   write_health "error|gh auth failed"
   echo "[SquidSquad] FATAL: gh auth check failed. Run 'gh auth login' with 'repo' scope."
-  echo "[SquidSquad] .health written: error|gh auth failed"
   exit 1
 fi
 
-# Check/checkout working branch (configurable, defaults to main)
 WORKING_BRANCH=$(python references/scripts/config.py get working-branch 2>/dev/null || echo "main")
 WORKING_BRANCH=${WORKING_BRANCH:-main}
 CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
 if [ "$CURRENT_BRANCH" != "$WORKING_BRANCH" ]; then
   echo "[SquidSquad] Switching to working branch '$WORKING_BRANCH'..."
   git checkout "$WORKING_BRANCH" 2>/dev/null || git checkout -b "$WORKING_BRANCH" "origin/$WORKING_BRANCH" 2>/dev/null
-  CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
-  if [ "$CURRENT_BRANCH" != "$WORKING_BRANCH" ]; then
-    write_health "error|wrong branch: $CURRENT_BRANCH (expected $WORKING_BRANCH)"
-    echo "[SquidSquad] FATAL: Could not switch to '$WORKING_BRANCH', on '$CURRENT_BRANCH'."
+  if [ "$(git branch --show-current 2>/dev/null)" != "$WORKING_BRANCH" ]; then
+    write_health "error|wrong branch"
+    echo "[SquidSquad] FATAL: Could not switch to '$WORKING_BRANCH'."
     exit 1
   fi
 fi
 
-echo "[SquidSquad] Pre-flight OK (gh auth + branch main)."
+echo "[SquidSquad] Pre-flight OK."
 
+# --- PID lock: singleton ---
 if [ -f "$PID_FILE" ]; then
   OLD_PID=$(cat "$PID_FILE" 2>/dev/null)
   if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
     echo "[SquidSquad] Agent {{ROLE}} already running (PID $OLD_PID). Aborting."
-    echo "[SquidSquad] If this is stale, remove $PID_FILE manually."
     write_health "error|already running (PID $OLD_PID)"
     exit 1
   fi
-  # Stale PID — clean up
   rm -f "$PID_FILE"
 fi
 echo $$ > "$PID_FILE"
 
-# --- Cleanup trap: remove PID file on any exit, kill child on signal, write .health dead ---
+# --- Cleanup trap ---
 CHILD_PID=""
+HEARTBEAT_PID=""
 cleanup() {
   [ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null || true
+  [ -n "$HEARTBEAT_PID" ] && kill "$HEARTBEAT_PID" 2>/dev/null || true
   rm -f "$PID_FILE"
-  # Write final health state if not already error/dead
-  if [ -f "$HEALTH_FILE" ]; then
-    CURRENT_HEALTH=$(head -1 "$HEALTH_FILE" 2>/dev/null)
-    case "$CURRENT_HEALTH" in
-      error*|dead) ;;  # Already set — don't overwrite
-      *) write_health "dead" ;;
-    esac
-  else
-    write_health "dead"
-  fi
+  write_health "dead"
 }
 trap cleanup EXIT
 
-# --- Double Ctrl+C handling: first breaks child, second breaks wrapper ---
+# --- Double Ctrl+C handling ---
 LAST_SIGINT=0
 on_sigint() {
   NOW=$(date +%s)
   if [ $((NOW - LAST_SIGINT)) -lt 5 ]; then
     echo ""
-    echo "[SquidSquad] Double Ctrl+C — stopping wrapper."
+    echo "[SquidSquad] Double Ctrl+C — stopping."
     echo "stopped|Agent stopped by user" > "$STATE_FILE"
-    write_health "dead"
     exit 0
   fi
   LAST_SIGINT=$NOW
   echo ""
-  echo "[SquidSquad] Ctrl+C received. Press again within 5s to stop wrapper, or wait for claude to exit."
+  echo "[SquidSquad] Ctrl+C received. Press again within 5s to stop, or wait for claude to exit."
   [ -n "$CHILD_PID" ] && kill -INT "$CHILD_PID" 2>/dev/null || true
 }
 trap on_sigint INT
 trap 'echo "[SquidSquad] SIGTERM — stopping."; exit 0' TERM
 
-# --- Auto-restart wrapper ---
-MAX_RESTARTS=50
-RESTART_COUNT=0
-COOLDOWN_BASE=2
-COOLDOWN_MAX=300
-MIN_RUNTIME_SECONDS=120
-SELF_RESTART_LIMIT=3  # max self-restarts per hour
+# --- Heartbeat background job: write epoch every 5s ---
+(
+  while true; do
+    date +%s > "$HEALTH_FILE.tmp"
+    mv -f "$HEALTH_FILE.tmp" "$HEALTH_FILE"
+    sleep 5
+  done
+) &
+HEARTBEAT_PID=$!
 
-while true; do
-  # Reset status bar and context pressure for a fresh session
-  rm -f "$STATE_FILE"
-  echo "idle|Initializing..." > "$STATE_FILE"
-  rm -f "$PRESSURE_FILE"
+# --- Spawn claude ---
+HAS_CRASHED=false
 
-  BOOT_EPOCH=$(date +%s)
-  write_health "alive|boot_epoch=$BOOT_EPOCH"
+rm -f "$STATE_FILE"
+echo "idle|Initializing..." > "$STATE_FILE"
 
-  START_TIME=$BOOT_EPOCH
+claude --dangerously-skip-permissions --name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE={{ROLE}}" "start the loop" &
+CHILD_PID=$!
 
-  # Read context threshold from config (default 70)
-  CTX_THRESHOLD=$(python references/scripts/config.py get context-threshold 2>/dev/null || echo "70")
-  CTX_THRESHOLD=${CTX_THRESHOLD//[^0-9]/}
-  [ -z "$CTX_THRESHOLD" ] && CTX_THRESHOLD=70
+wait "$CHILD_PID"
+EXIT_CODE=$?
+CHILD_PID=""
+END_EPOCH=$(date +%s)
+START_EPOCH=$(cat "$HEALTH_FILE" 2>/dev/null | head -1)
+START_EPOCH=${START_EPOCH:-$END_EPOCH}
 
+# --- Check restart sentinel ---
+if [ -f "$RESTART_SENTINEL" ]; then
+  REASON=$(cat "$RESTART_SENTINEL" 2>/dev/null || echo "unknown")
+  rm -f "$RESTART_SENTINEL"
+  echo "[SquidSquad] Restart requested: $REASON. Respawning..."
+  echo "restarting|$REASON" > "$STATE_FILE"
+  sleep 2
   claude --dangerously-skip-permissions --name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE={{ROLE}}" "start the loop" &
   CHILD_PID=$!
-
-  # Background poller: watch for .restart sentinel AND context pressure
-  # Context pressure flow:
-  #   1. Agent writes pressure % to context-pressure file (Step 1b, early in cycle)
-  #   2. Watcher detects pressure >= threshold
-  #   3. Watcher waits for agent to finish cycle (idle| in current-state, max 10 min)
-  #   4. Watcher kills process → boot script restarts with fresh context
-  (
-    MAX_WAIT_CYCLE=600  # 10 minutes max wait for cycle to finish
-    while kill -0 "$CHILD_PID" 2>/dev/null; do
-      # Check .restart sentinel (agent requested restart)
-      if [ -f "$RESTART_SENTINEL" ]; then
-        echo "[SquidSquad] Restart sentinel detected — killing Claude (PID $CHILD_PID)..."
-        kill -INT "$CHILD_PID" 2>/dev/null
-        break
-      fi
-      # Check context pressure
-      if [ -f "$PRESSURE_FILE" ]; then
-        RAW=$(cat "$PRESSURE_FILE" 2>/dev/null | head -1 | tr -d '[:space:]')
-        if [[ "$RAW" =~ ^[0-9]+$ ]] && [ "$RAW" -ge "$CTX_THRESHOLD" ]; then
-          echo "[SquidSquad] Context pressure ${RAW}% >= ${CTX_THRESHOLD}% — waiting for cycle to finish..."
-          WAITED=0
-          while [ "$WAITED" -lt "$MAX_WAIT_CYCLE" ]; do
-            kill -0 "$CHILD_PID" 2>/dev/null || break
-            if [ -f "$STATE_FILE" ]; then
-              STATE=$(head -1 "$STATE_FILE" 2>/dev/null)
-              if [[ "$STATE" == idle\|* ]]; then
-                echo "[SquidSquad] Cycle complete — restarting for fresh context..."
-                break
-              fi
-            fi
-            sleep 10
-            WAITED=$((WAITED + 10))
-          done
-          if [ "$WAITED" -ge "$MAX_WAIT_CYCLE" ]; then
-            echo "[SquidSquad] Timed out waiting for cycle — forcing restart..."
-          fi
-          kill -INT "$CHILD_PID" 2>/dev/null
-          break
-        fi
-      fi
-      sleep 5
-    done
-  ) &
-  WATCHER_PID=$!
-
   wait "$CHILD_PID"
-  EXIT_CODE=$?
   CHILD_PID=""
+fi
 
-  # Clean up watcher
-  kill "$WATCHER_PID" 2>/dev/null
-  wait "$WATCHER_PID" 2>/dev/null
-
-  END_TIME=$(date +%s)
-  RUNTIME=$((END_TIME - START_TIME))
-
-  # Check for stop sentinel file
-  if [ -f "$STOP_FILE" ]; then
-    echo "[SquidSquad] Stop file detected. Not restarting."
-    rm -f "$STOP_FILE"
-    echo "stopped|Agent stopped by user" > "$STATE_FILE"
-    write_health "dead"
-    break
+# --- One crash retry (if runtime < 30s and no sentinel) ---
+if [ "$EXIT_CODE" -ne 0 ] && [ "$HAS_CRASHED" = false ]; then
+  RUNTIME=$((END_EPOCH - START_EPOCH))
+  if [ "$RUNTIME" -lt 30 ] 2>/dev/null; then
+    HAS_CRASHED=true
+    echo "[SquidSquad] Crash detected (${RUNTIME}s, exit $EXIT_CODE). One retry..."
+    sleep 2
+    claude --dangerously-skip-permissions --name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE={{ROLE}}" "start the loop" &
+    CHILD_PID=$!
+    wait "$CHILD_PID"
+    CHILD_PID=""
   fi
+fi
 
-  # Check for self-restart sentinel (agent requested restart)
-  if [ -f "$RESTART_SENTINEL" ]; then
-    REASON=$(cat "$RESTART_SENTINEL" 2>/dev/null || echo "unknown")
-    rm -f "$RESTART_SENTINEL"
-
-    # --- Self-restart rate limit: 3 per hour (hard enforcement) ---
-    ONE_HOUR_AGO=$(date -d '1 hour ago' +%s 2>/dev/null || date -v-1H +%s 2>/dev/null || echo 0)
-    SELF_RESTART_COUNT=0
-    if [ -f "$RESTART_LOG" ]; then
-      while IFS= read -r line; do
-        if echo "$line" | grep -q "self-restart" && ! echo "$line" | grep -q "self-restart-BLOCKED"; then
-          ENTRY_TS=$(echo "$line" | grep -o '^[0-9-]* [0-9:]*')
-          if [ -n "$ENTRY_TS" ]; then
-            ENTRY_EPOCH=$(date -d "$ENTRY_TS" +%s 2>/dev/null || date -j -f "%Y-%m-%d %H:%M:%S" "$ENTRY_TS" +%s 2>/dev/null || echo 0)
-            if [ "$ENTRY_EPOCH" -gt "$ONE_HOUR_AGO" ] 2>/dev/null; then
-              SELF_RESTART_COUNT=$((SELF_RESTART_COUNT + 1))
-            fi
-          fi
-        fi
-      done < "$RESTART_LOG"
-    fi
-
-    if [ "$SELF_RESTART_COUNT" -ge "$SELF_RESTART_LIMIT" ]; then
-      TS=$(date '+%Y-%m-%d %H:%M:%S')
-      echo "$TS | exit=$EXIT_CODE | self-restart-BLOCKED | reason=$REASON | rate-limit ($SELF_RESTART_LIMIT/hr exceeded) | runtime=${RUNTIME}s" >> "$RESTART_LOG"
-      echo "[SquidSquad] Self-restart rate limit ($SELF_RESTART_LIMIT/hr) exceeded — ignoring .restart sentinel."
-      # Fall through to normal crash handling
-    else
-      TS=$(date '+%Y-%m-%d %H:%M:%S')
-      echo "$TS | exit=$EXIT_CODE | self-restart | reason=$REASON | runtime=${RUNTIME}s" >> "$RESTART_LOG"
-      echo "[SquidSquad] Self-restart requested: $REASON. Restarting immediately..."
-      write_health "restarting"
-      echo "restarting|Self-restart: $REASON" > "$STATE_FILE"
-      RESTART_COUNT=0
-      sleep 2
-      continue
-    fi
-  fi
-
-  # Check if this was a context pressure restart
-  if [ -f "$PRESSURE_FILE" ]; then
-    RAW=$(cat "$PRESSURE_FILE" 2>/dev/null | head -1 | tr -d '[:space:]')
-    if [[ "$RAW" =~ ^[0-9]+$ ]] && [ "$RAW" -ge "$CTX_THRESHOLD" ]; then
-      TS=$(date '+%Y-%m-%d %H:%M:%S')
-      echo "$TS | exit=$EXIT_CODE | context-pressure | pressure=${RAW}% | runtime=${RUNTIME}s" >> "$RESTART_LOG"
-      echo "[SquidSquad] Context pressure restart (${RAW}%). Restarting with fresh context..."
-      write_health "restarting"
-      echo "restarting|Context pressure ${RAW}% — fresh start" > "$STATE_FILE"
-      rm -f "$PRESSURE_FILE"
-      RESTART_COUNT=0
-      sleep 2
-      continue
-    fi
-  fi
-
-  # Append restart log entry: timestamp | exit_code | restart_count | runtime
-  TS=$(date '+%Y-%m-%d %H:%M:%S')
-  echo "$TS | exit=$EXIT_CODE | restart=$((RESTART_COUNT + 1)) | runtime=${RUNTIME}s" >> "$RESTART_LOG"
-
-  RESTART_COUNT=$((RESTART_COUNT + 1))
-  if [ "$RESTART_COUNT" -ge "$MAX_RESTARTS" ]; then
-    echo "[SquidSquad] Max restarts ($MAX_RESTARTS) reached. Stopping."
-    echo "error|Max restarts reached" > "$STATE_FILE"
-    write_health "error|Max restarts reached"
-    break
-  fi
-
-  write_health "backoff"
-
-  if [ "$RUNTIME" -lt "$MIN_RUNTIME_SECONDS" ]; then
-    # Fast crash — exponential backoff
-    COOLDOWN=$((COOLDOWN_BASE * (1 << (RESTART_COUNT - 1))))
-    [ "$COOLDOWN" -gt "$COOLDOWN_MAX" ] && COOLDOWN=$COOLDOWN_MAX
-    echo "[SquidSquad] Fast exit (${RUNTIME}s, exit $EXIT_CODE). Backoff ${COOLDOWN}s..."
-    echo "waiting|Restart backoff (${COOLDOWN}s)" > "$STATE_FILE"
-    sleep "$COOLDOWN"
-  else
-    # Healthy run — reset counter, standard 10s cooldown
-    RESTART_COUNT=0
-    echo "[SquidSquad] Agent exited after ${RUNTIME}s (exit $EXIT_CODE). Restarting in 10s..."
-    echo "restarting|Restarting in 10s..." > "$STATE_FILE"
-    sleep 10
-  fi
-done
+echo "[SquidSquad] Agent {{ROLE}} exited. Wrapper stopping."
