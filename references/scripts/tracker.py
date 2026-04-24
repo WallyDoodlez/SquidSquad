@@ -891,7 +891,44 @@ def transition(number, from_status, to_status, role=None, force=False):
             )
             sys.exit(1)
 
-    # 4. Guard: block shipped if unmerged PR or unmerged branch exists
+    # 4. Guard: TC coverage gate for pending-test -> pending-ship
+    #    (NEVER bypassed, even with --force)
+    if from_label == "status:pending-test" and to_label == "status:pending-ship":
+        try:
+            from tc_coverage import _discover_files, check_coverage
+            tp, qr = _discover_files(number)
+            if tp is not None:
+                if qr is None:
+                    _log_diagnostic(
+                        "error",
+                        f"TC coverage gate blocked #{number}: test plan found but no QA-RESULTS",
+                    )
+                    print(
+                        f"BLOCKED: #{number} has a test plan ({tp.name}) but no QA-RESULTS. "
+                        f"QA must complete all TCs before shipping.",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
+                rc = check_coverage(str(tp), str(qr))
+                if rc != 0:
+                    _log_diagnostic(
+                        "error",
+                        f"TC coverage gate blocked #{number}: exit code {rc}",
+                    )
+                    print(
+                        f"BLOCKED: #{number} failed TC coverage gate (exit {rc}). "
+                        f"All TCs in the test plan must have valid results in QA-RESULTS.",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
+        except ImportError:
+            # tc_coverage.py not available — graceful degradation
+            print(
+                "WARNING: tc_coverage.py not found — TC coverage gate skipped.",
+                file=sys.stderr,
+            )
+
+    # 5. Guard: block shipped if unmerged PR or unmerged branch exists
     #    (never bypassed, even with --force)
     if to_label == "status:shipped":
         unmerged = _check_unmerged_pr(number)
