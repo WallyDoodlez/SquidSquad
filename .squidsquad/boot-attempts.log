@@ -1,3 +1,0 @@
-{"timestamp": 1776900226.2923508, "role": "dm", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": ".health=dead (wrapper exited)"}
-{"timestamp": 1776900228.3182604, "role": "qa", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": ".health=dead (wrapper exited)"}
-{"timestamp": 1776900230.3432271, "role": "skill", "action": "spawn", "success": true, "message": "spawned via wt.exe (Windows Terminal)", "reason": ".health=dead (wrapper exited)"}
