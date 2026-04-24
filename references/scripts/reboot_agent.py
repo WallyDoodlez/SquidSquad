@@ -150,7 +150,8 @@ def main():
             agents = ["pm", "skill"]
 
         exit_code = 0
-        for role in agents:
+        for agent in agents:
+            role = agent['id'] if isinstance(agent, dict) else agent
             rc = reboot(role, timeout=args.timeout, force=args.force)
             if rc != 0:
                 exit_code = rc

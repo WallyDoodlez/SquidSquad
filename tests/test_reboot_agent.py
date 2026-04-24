@@ -125,3 +125,53 @@ class TestGetClonePath:
         local_config.write_text("- **skill**: /custom/path\n", encoding="utf-8")
         path = reboot_agent._get_clone_path("skill")
         assert path == Path("/custom/path")
+
+
+class TestRebootAll:
+    """--all flag handles get_agents() dict output correctly (#2353)."""
+
+    def test_all_flag_with_dict_agents(self, patch_dirs, squid_dir, monkeypatch):
+        """get_agents() returns list of dicts — reboot() must receive string role."""
+        import importlib
+        import config as config_mod
+
+        agents = [
+            {"id": "pm", "alias": "pm", "role": "infra"},
+            {"id": "skill", "alias": "skill", "role": "dev"},
+        ]
+        rebooted_roles = []
+
+        def fake_reboot(role, timeout=60, force=False):
+            rebooted_roles.append(role)
+            return 0
+
+        monkeypatch.setattr(reboot_agent, "reboot", fake_reboot)
+        monkeypatch.setattr(config_mod, "get_agents", lambda: agents)
+
+        with patch("sys.argv", ["reboot_agent.py", "--all"]):
+            rc = reboot_agent.main()
+
+        assert rc == 0
+        assert rebooted_roles == ["pm", "skill"]
+
+    def test_all_flag_with_string_agents_fallback(self, patch_dirs, monkeypatch):
+        """Fallback list of strings still works when get_agents() fails."""
+        import config as config_mod
+
+        rebooted_roles = []
+
+        def fake_reboot(role, timeout=60, force=False):
+            rebooted_roles.append(role)
+            return 0
+
+        monkeypatch.setattr(reboot_agent, "reboot", fake_reboot)
+        def raise_import_error():
+            raise ImportError("no config")
+
+        monkeypatch.setattr(config_mod, "get_agents", raise_import_error)
+
+        with patch("sys.argv", ["reboot_agent.py", "--all"]):
+            rc = reboot_agent.main()
+
+        assert rc == 0
+        assert rebooted_roles == ["pm", "skill"]
