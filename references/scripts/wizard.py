@@ -895,7 +895,19 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
         all_roles = [a["id"] for a in spec["agents"]]
         generate_local_config(all_roles, target_root=target_root)
 
-    # 4. Save install spec for reproducibility and upgrade re-use (#13)
+    # 4. Generate boot scripts (start-[role].sh, start-[role].ps1)
+    try:
+        from compose import boot_role
+    except ImportError:
+        pass
+    else:
+        for agent in spec["agents"]:
+            try:
+                boot_role(agent["id"], target_root=target_root)
+            except (SystemExit, Exception) as e:
+                print(f"  WARNING: Failed to generate boot scripts for {agent['id']}: {e}", file=sys.stderr)
+
+    # 5. Save install spec for reproducibility and upgrade re-use (#13)
     spec_path = save_install_spec(spec, target_root)
     summary["install_spec"] = spec_path
 
