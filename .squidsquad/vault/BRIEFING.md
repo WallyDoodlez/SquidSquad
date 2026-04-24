@@ -4,9 +4,10 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #2350 BRIEFING.md staleness — open (filed by improvement scan)
-- #2189 Architecture documentation — pending-test
-- #1772 DM delivery missing npm publish — pending-test
+- #2353 reboot_agent.py --all dict bug — pending-test (high, role:skill)
+- #2350 BRIEFING.md staleness — open (low, role:pm)
+- #2189 Architecture documentation — pending-test (medium, role:dm)
+- #1772 DM delivery missing npm publish — pending-test (high, role:dm)
 - No approved tasks awaiting pickup
 
 ## Recent Decisions
