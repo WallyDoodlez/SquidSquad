@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-23 20:03
+
+- **Files scanned**: references/vault-templates/*.md, .squidsquad/vault/BRIEFING.md
+- **Findings**: #2350 (BRIEFING.md stale — wrong version, shipped items listed as active, outdated counters)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-23 18:32
 
 - **Files scanned**: test coverage audit across all references/scripts/*.py
