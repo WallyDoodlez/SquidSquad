@@ -468,4 +468,9 @@ async function main() {
   }
 }
 
-main();
+// Export for testing when loaded as a module
+if (require.main === module) {
+  main();
+} else {
+  module.exports = { getCliVersion, downloadTarball, installFilesPerFile, fetchRawFile };
+}
