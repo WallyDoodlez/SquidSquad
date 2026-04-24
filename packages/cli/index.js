@@ -4,8 +4,16 @@
 
 const { execSync, spawn } = require("child_process");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const readline = require("readline");
+
+let tar;
+try {
+  tar = require("tar");
+} catch {
+  tar = null;
+}
 
 const REPO_OWNER = "WallyDoodlez";
 const REPO_NAME = "SquidSquad";
@@ -136,6 +144,127 @@ function fetchRawFile(repoPath) {
   }
 }
 
+function getCliVersion() {
+  try {
+    const pkgPath = path.join(__dirname, "package.json");
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+    return pkg.version || null;
+  } catch {
+    return null;
+  }
+}
+
+function downloadTarball(gitRoot, filePaths) {
+  if (!tar) {
+    info("tar library not available, skipping tarball path");
+    return false;
+  }
+
+  const version = getCliVersion();
+  if (!version) {
+    info("Could not determine CLI version, skipping tarball path");
+    return false;
+  }
+
+  const tag = `v${version}`;
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "squidsquad-"));
+  const tarballPath = path.join(tmpDir, "repo.tar.gz");
+
+  try {
+    info(`Downloading tarball for ${tag}...`);
+    execSync(
+      `gh api "repos/${REPO_OWNER}/${REPO_NAME}/tarball/${tag}" > "${tarballPath}"`,
+      { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"], shell: true, maxBuffer: 50 * 1024 * 1024 }
+    );
+
+    if (!fs.existsSync(tarballPath) || fs.statSync(tarballPath).size === 0) {
+      info("Tarball download produced empty file");
+      return false;
+    }
+
+    // Extract to temp dir
+    const extractDir = path.join(tmpDir, "extracted");
+    fs.mkdirSync(extractDir, { recursive: true });
+
+    tar.extract({
+      file: tarballPath,
+      cwd: extractDir,
+      sync: true,
+    });
+
+    // Find the GitHub archive prefix directory (RepoName-<sha>/)
+    const entries = fs.readdirSync(extractDir);
+    if (entries.length !== 1 || !fs.statSync(path.join(extractDir, entries[0])).isDirectory()) {
+      info("Unexpected tarball structure");
+      return false;
+    }
+    const prefixDir = path.join(extractDir, entries[0]);
+
+    // Build allowlist set for fast lookup
+    const allowSet = new Set(filePaths.map((f) => f.replace(/\\/g, "/")));
+
+    // Validate all manifest files exist in the tarball
+    const missing = [];
+    for (const filePath of filePaths) {
+      const srcPath = path.join(prefixDir, filePath);
+      if (!fs.existsSync(srcPath)) {
+        missing.push(filePath);
+      }
+    }
+
+    if (missing.length > 0) {
+      info(`Tarball missing ${missing.length} manifest files, falling back`);
+      return false;
+    }
+
+    // Copy only allowlisted files into the target repo
+    let copied = 0;
+    for (const filePath of filePaths) {
+      const srcPath = path.join(prefixDir, filePath);
+      const destPath = path.join(gitRoot, filePath);
+      fs.mkdirSync(path.dirname(destPath), { recursive: true });
+      fs.copyFileSync(srcPath, destPath);
+      copied++;
+      if (copied % 20 === 0) {
+        info(`  ${copied}/${filePaths.length} files...`);
+      }
+    }
+
+    success(`${copied} files fetched and placed (via tarball)`);
+    return true;
+  } catch (err) {
+    info(`Tarball unavailable, falling back to per-file fetch...`);
+    return false;
+  } finally {
+    // Clean up temp dir
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      // Best-effort cleanup
+    }
+  }
+}
+
+function installFilesPerFile(gitRoot, filePaths) {
+  info(`Fetching ${filePaths.length} files from SquidSquad...`);
+  let fetched = 0;
+  for (const filePath of filePaths) {
+    const content = fetchRawFile(filePath);
+    if (!content) {
+      fail(`Failed to fetch ${filePath}`);
+      process.exit(1);
+    }
+    const dest = path.join(gitRoot, filePath);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, content, "utf-8");
+    fetched++;
+    if (fetched % 20 === 0) {
+      info(`  ${fetched}/${filePaths.length} files...`);
+    }
+  }
+  success(`${fetched} files fetched and placed`);
+}
+
 function installFiles(gitRoot) {
   // 1. Fetch the file manifest — the single source of truth for what the
   //    wizard needs. Every script, manifest, sub-skill, template, and
@@ -154,24 +283,10 @@ function installFiles(gitRoot) {
     .map((l) => l.trim())
     .filter((l) => l && !l.startsWith("#"));
 
-  info(`Fetching ${filePaths.length} files from SquidSquad...`);
-  let fetched = 0;
-  for (const filePath of filePaths) {
-    const content = fetchRawFile(filePath);
-    if (!content) {
-      fail(`Failed to fetch ${filePath}`);
-      process.exit(1);
-    }
-    const dest = path.join(gitRoot, filePath);
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.writeFileSync(dest, content, "utf-8");
-    fetched++;
-    // Progress every 20 files to avoid silent-looking hangs
-    if (fetched % 20 === 0) {
-      info(`  ${fetched}/${filePaths.length} files...`);
-    }
+  // Try tarball first (10-30x faster), fall back to per-file fetch
+  if (!downloadTarball(gitRoot, filePaths)) {
+    installFilesPerFile(gitRoot, filePaths);
   }
-  success(`${fetched} files fetched and placed`);
 
   // 3. Create .claude/commands/ and write squidsquad-setup.md
   const commandsDir = path.join(gitRoot, ".claude", "commands");
@@ -353,4 +468,9 @@ async function main() {
   }
 }
 
-main();
+// Export for testing when loaded as a module
+if (require.main === module) {
+  main();
+} else {
+  module.exports = { getCliVersion, downloadTarball, installFilesPerFile, fetchRawFile };
+}
