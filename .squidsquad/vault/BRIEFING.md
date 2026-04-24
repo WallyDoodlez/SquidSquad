@@ -8,7 +8,9 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #2350 BRIEFING.md staleness — open (low, role:pm)
 - #2189 Architecture documentation — pending-test (medium, role:dm)
 - #1772 DM delivery missing npm publish — pending-test (high, role:dm)
-- No approved tasks awaiting pickup
+- #2361 TC coverage gate — pending-test (high, role:skill)
+- #2351 Tarball installer — approved (medium, role:skill)
+- No other approved tasks awaiting pickup
 
 ## Recent Decisions
 
