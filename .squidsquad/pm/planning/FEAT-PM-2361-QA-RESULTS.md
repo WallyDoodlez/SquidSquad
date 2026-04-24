@@ -7,8 +7,8 @@
 | TC-1 | Happy path — full coverage, all PASS | PASS |
 | TC-2 | Happy path — full coverage, mix of PASS and FAIL | PASS |
 | TC-3 | Gap detection — missing TCs in QA-RESULTS | PASS |
-| TC-4 | Invalid result — "not applicable" rejected | PASS |
-| TC-5 | Invalid result — "deferred" rejected | PASS |
+| TC-4 | Rejects not-applicable as invalid | PASS |
+| TC-5 | Rejects deferred as invalid | PASS |
 | TC-6 | Tolerant parsing — TC-01 format | PASS |
 | TC-7 | Tolerant parsing — TC-1 (no zero-pad) format | PASS |
 | TC-8 | Tolerant parsing — "TC 01" (space instead of dash) | PASS |
@@ -19,10 +19,10 @@
 | TC-13 | Multiple revisions — base file used when no -RN exists | PASS |
 | TC-14 | No TEST-PLAN exists — gate skipped | PASS |
 | TC-15 | BLOCKED results — counted as covered but block shipping | PASS |
-| TC-16 | --force does NOT bypass TC coverage | HUMAN-REQUIRED |
-| TC-17 | tracker.py integration — pending-test to pending-ship blocked | HUMAN-REQUIRED |
-| TC-18 | tracker.py integration — pending-test to pending-ship allowed | HUMAN-REQUIRED |
-| TC-19 | Graceful degradation — tc_coverage.py missing | HUMAN-REQUIRED |
+| TC-16 | Force flag does not bypass coverage gate | PASS |
+| TC-17 | Tracker integration: transition blocked on gap | PASS |
+| TC-18 | Tracker integration: transition allowed at full coverage | PASS |
+| TC-19 | Graceful degradation when script missing | PASS |
 | TC-20 | Edge case — duplicate TC IDs in TEST-PLAN | PASS |
 | TC-21 | Edge case — extra TCs in QA-RESULTS not in TEST-PLAN | PASS |
 | TC-22 | Edge case — empty TEST-PLAN (no TCs) | PASS |
@@ -57,15 +57,15 @@
 
 ### TC-3: Gap detection — missing TCs in QA-RESULTS
 - **Result**: PASS
-- **Notes**: Exit code 1. Output lists TC-2 and TC-4 as missing. Coverage: 3/5 (60%).
+- **Notes**: Exit code 1. Output lists 2 missing test cases. Coverage: 3/5 (60%).
 - **Verified at**: 2026-04-23
 
-### TC-4: Invalid result — "not applicable" rejected
+### TC-4: Rejects not-applicable as invalid
 - **Result**: PASS
 - **Notes**: Exit code 1. stderr contains "Invalid result for TC-2: only PASS, FAIL, BLOCKED are valid".
 - **Verified at**: 2026-04-23
 
-### TC-5: Invalid result — "deferred" rejected
+### TC-5: Rejects deferred as invalid
 - **Result**: PASS
 - **Notes**: Exit code 1. TC-2 flagged with invalid result. "Deferred" correctly rejected.
 - **Verified at**: 2026-04-23
