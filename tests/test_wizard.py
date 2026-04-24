@@ -887,6 +887,22 @@ class TestScaffoldInstallDesignPreset:
         roles = sorted(a["role"] for a in summary["agents"])
         assert roles == ["designer", "dm", "pm"]
 
+    def test_boot_scripts_generated(self, tmp_path):
+        """scaffold_install generates start-[role].sh and .ps1 for each agent (#2399)."""
+        spec = _design_preset_spec()
+        wizard.scaffold_install(spec, tmp_path)
+        squid = tmp_path / ".squidsquad"
+        for role in ("pm", "designer", "dm"):
+            sh_script = squid / f"start-{role}.sh"
+            ps1_script = squid / f"start-{role}.ps1"
+            assert sh_script.is_file(), f"start-{role}.sh not generated"
+            assert ps1_script.is_file(), f"start-{role}.ps1 not generated"
+            sh_content = sh_script.read_text(encoding="utf-8")
+            ps1_content = ps1_script.read_text(encoding="utf-8")
+            assert "{{ROLE}}" not in sh_content, f"raw placeholder in start-{role}.sh"
+            assert "{{ROLE}}" not in ps1_content, f"raw placeholder in start-{role}.ps1"
+            assert role in sh_content, f"start-{role}.sh missing role name"
+
 
 class TestScaffoldInstallDevVariants:
     def test_software_dev_preset_lays_down_all_six_agents(self, tmp_path):
