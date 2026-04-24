@@ -55,7 +55,7 @@ if (Test-Path $stateBusScript) {
 $env:SQUIDSQUAD_ROLE = "{{ROLE}}"
 
 # --- File paths ---
-$RoleDir = ".squidsquad/{{ROLE}}"
+$RoleDir = Join-Path $repoRoot ".squidsquad/{{ROLE}}"
 $PidFile = "$RoleDir/.pid"
 $RestartSentinel = "$RoleDir/.restart"
 $StateFile = "$RoleDir/current-state"
@@ -116,7 +116,7 @@ $heartbeatJob = Start-Job -ScriptBlock {
         Move-Item -Force "$healthFile.tmp" $healthFile -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 5
     }
-} -ArgumentList (Resolve-Path $HealthFile -ErrorAction SilentlyContinue).Path
+} -ArgumentList (Join-Path $repoRoot ".squidsquad/{{ROLE}}/.health")
 
 # --- Cleanup on exit ---
 $cleanupBlock = {
@@ -129,7 +129,7 @@ try {
     # --- Spawn claude ---
     Set-Content -Path $StateFile -Value "idle|Initializing..."
 
-    $claudeProcess = Start-Process -FilePath "claude" `
+    $claudeProcess = Start-Process -FilePath "claude.exe" `
         -ArgumentList "--dangerously-skip-permissions", "--name", "`"$AgentName`"", "--append-system-prompt", "`"SQUIDSQUAD_ROLE={{ROLE}}`"", "start the loop" `
         -NoNewWindow -PassThru
 
@@ -144,7 +144,7 @@ try {
         Set-Content -Path $StateFile -Value "restarting|$reason"
         Start-Sleep -Seconds 2
 
-        $claudeProcess = Start-Process -FilePath "claude" `
+        $claudeProcess = Start-Process -FilePath "claude.exe" `
             -ArgumentList "--dangerously-skip-permissions", "--name", "`"$AgentName`"", "--append-system-prompt", "`"SQUIDSQUAD_ROLE={{ROLE}}`"", "start the loop" `
             -NoNewWindow -PassThru
         $claudeProcess.WaitForExit()
@@ -156,7 +156,7 @@ try {
         Write-Host "[SquidSquad] Crash detected (exit $exitCode). One retry..."
         Start-Sleep -Seconds 2
 
-        $claudeProcess = Start-Process -FilePath "claude" `
+        $claudeProcess = Start-Process -FilePath "claude.exe" `
             -ArgumentList "--dangerously-skip-permissions", "--name", "`"$AgentName`"", "--append-system-prompt", "`"SQUIDSQUAD_ROLE={{ROLE}}`"", "start the loop" `
             -NoNewWindow -PassThru
         $claudeProcess.WaitForExit()
