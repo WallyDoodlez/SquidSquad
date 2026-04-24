@@ -4,8 +4,10 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #1980 Version bump missing package.json update — pending-test (skill fix submitted)
-- No other open issues or approved tasks across agents
+- #2350 BRIEFING.md staleness — open (filed by improvement scan)
+- #2189 Architecture documentation — pending-test
+- #1772 DM delivery missing npm publish — pending-test
+- No approved tasks awaiting pickup
 
 ## Recent Decisions
 
@@ -29,10 +31,10 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 - Test suite exists (`python tests/run_tests.py`) — static analysis + integration tests
 - PR flow currently disabled
-- Ship counter: threshold 10, currently at 2 (v0.23.0 bumped)
+- Ship counter: threshold 10, currently at 1 (v0.25.0 bumped)
 
 ## Team State
 
 - Active agents: boot, qa, skill (dev agents), PM (always present), QA (always present), DM (present)
-- Current version: 0.23.0 (Architecture Version 1)
+- Current version: 0.25.0 (Architecture Version 1)
 - Tracker: GitHub Issues with structured labels (`type:`, `status:`, `role:`, `priority:`)
