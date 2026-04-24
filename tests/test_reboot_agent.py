@@ -132,6 +132,9 @@ class TestRebootAll:
 
     def test_all_flag_with_dict_agents(self, patch_dirs, squid_dir, monkeypatch):
         """get_agents() returns list of dicts — reboot() must receive string role."""
+        import importlib
+        import config as config_mod
+
         agents = [
             {"id": "pm", "alias": "pm", "role": "infra"},
             {"id": "skill", "alias": "skill", "role": "dev"},
@@ -143,6 +146,7 @@ class TestRebootAll:
             return 0
 
         monkeypatch.setattr(reboot_agent, "reboot", fake_reboot)
+        monkeypatch.setattr(config_mod, "get_agents", lambda: agents)
 
         with patch("sys.argv", ["reboot_agent.py", "--all"]):
             rc = reboot_agent.main()
@@ -151,7 +155,9 @@ class TestRebootAll:
         assert rebooted_roles == ["pm", "skill"]
 
     def test_all_flag_with_string_agents_fallback(self, patch_dirs, monkeypatch):
-        """Fallback list of strings still works."""
+        """Fallback list of strings still works when get_agents() fails."""
+        import config as config_mod
+
         rebooted_roles = []
 
         def fake_reboot(role, timeout=60, force=False):
@@ -159,12 +165,10 @@ class TestRebootAll:
             return 0
 
         monkeypatch.setattr(reboot_agent, "reboot", fake_reboot)
-
-        # Simulate get_agents import failure → falls back to ["pm", "skill"]
-        def bad_import():
+        def raise_import_error():
             raise ImportError("no config")
 
-        monkeypatch.setattr("builtins.__import__", lambda *a, **kw: bad_import())
+        monkeypatch.setattr(config_mod, "get_agents", raise_import_error)
 
         with patch("sys.argv", ["reboot_agent.py", "--all"]):
             rc = reboot_agent.main()
