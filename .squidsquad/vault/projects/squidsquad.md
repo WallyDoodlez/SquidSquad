@@ -6,7 +6,7 @@ updated: 2026-04-08
 owner: pm
 status: active
 confidence: medium
-links: [decision-sub-skill-architecture, code-conventions]
+links: [code-conventions, decision-sub-skill-architecture]
 ---
 
 ## Overview

@@ -7,7 +7,7 @@ owner: pm
 status: active
 confidence: high
 source: conversation
-links: [human-profile, decision-self-healing-sentinel]
+links: [decision-self-healing-sentinel, human-profile]
 ---
 
 ## Context

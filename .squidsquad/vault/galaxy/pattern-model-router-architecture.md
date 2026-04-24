@@ -7,7 +7,7 @@ owner: skill
 status: active
 confidence: high
 source: code
-links: []
+links: [decision-pid-primary-liveness]
 ---
 
 ## Context

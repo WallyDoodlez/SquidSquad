@@ -7,7 +7,7 @@ owner: skill
 status: active
 confidence: high
 source: code
-links: [squidsquad, code-conventions, learning-atomic-migration-strategy]
+links: [code-conventions, learning-atomic-migration-strategy, squidsquad]
 ---
 
 ## Context

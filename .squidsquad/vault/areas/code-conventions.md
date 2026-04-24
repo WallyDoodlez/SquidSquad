@@ -6,7 +6,7 @@ updated: 2026-04-05
 owner: skill
 status: active
 confidence: medium
-links: [squidsquad, decision-sub-skill-architecture]
+links: [decision-sub-skill-architecture, squidsquad]
 ---
 
 ## Overview

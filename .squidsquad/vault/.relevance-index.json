@@ -8,26 +8,98 @@
   "areas/code-conventions.md": {
     "confidence": 6,
     "links": 3,
-    "recency": 10,
-    "score": 6.0
+    "recency": 9,
+    "score": 5.7
   },
   "areas/human-profile.md": {
     "confidence": 6,
+    "links": 5,
+    "recency": 10,
+    "score": 6.8
+  },
+  "galaxy/decision-branch-per-feature-workflow.md": {
+    "confidence": 10,
+    "links": 0,
+    "recency": 10,
+    "score": 6.0
+  },
+  "galaxy/decision-comprehension-test-pipeline.md": {
+    "confidence": 10,
+    "links": 0,
+    "recency": 10,
+    "score": 6.0
+  },
+  "galaxy/decision-cycle-runner-architecture.md": {
+    "confidence": 10,
+    "links": 0,
+    "recency": 10,
+    "score": 6.0
+  },
+  "galaxy/decision-deterministic-testing.md": {
+    "confidence": 10,
+    "links": 0,
+    "recency": 10,
+    "score": 6.0
+  },
+  "galaxy/decision-general-purpose-vision.md": {
+    "confidence": 10,
+    "links": 0,
+    "recency": 10,
+    "score": 6.0
+  },
+  "galaxy/decision-pid-primary-liveness.md": {
+    "confidence": 10,
     "links": 1,
     "recency": 10,
-    "score": 5.2
+    "score": 6.4
+  },
+  "galaxy/decision-self-healing-sentinel.md": {
+    "confidence": 10,
+    "links": 2,
+    "recency": 10,
+    "score": 6.8
   },
   "galaxy/decision-sub-skill-architecture.md": {
     "confidence": 10,
-    "links": 3,
+    "links": 4,
     "recency": 10,
-    "score": 7.2
+    "score": 7.6
+  },
+  "galaxy/decision-watchdog-supervisor.md": {
+    "confidence": 10,
+    "links": 0,
+    "recency": 10,
+    "score": 6.0
   },
   "galaxy/learning-atomic-migration-strategy.md": {
     "confidence": 6,
     "links": 1,
+    "recency": 9,
+    "score": 4.9
+  },
+  "galaxy/learning-commit-code-state-exclusion.md": {
+    "confidence": 10,
+    "links": 1,
     "recency": 10,
-    "score": 5.2
+    "score": 6.4
+  },
+  "galaxy/learning-powershell-start-job-cwd.md": {
+    "confidence": 10,
+    "links": 0,
+    "recency": 10,
+    "score": 6.0
+  },
+  "galaxy/pattern-deterministic-scripts-over-prose.md": {
+    "confidence": 10,
+    "links": 0,
+    "recency": 10,
+    "score": 6.0
+  },
+  "galaxy/pattern-model-router-architecture.md": {
+    "confidence": 10,
+    "links": 0,
+    "recency": 10,
+    "score": 6.0
   },
   "galaxy/pattern-windows-utf8-subprocess.md": {
     "confidence": 10,
@@ -40,5 +112,11 @@
     "links": 3,
     "recency": 10,
     "score": 6.0
+  },
+  "resources/cli-anything-research.md": {
+    "confidence": 6,
+    "links": 0,
+    "recency": 10,
+    "score": 4.8
   }
 }
