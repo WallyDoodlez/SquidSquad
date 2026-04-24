@@ -1,5 +1,17 @@
 # Scan History
 
+## Scan — 2026-04-23 21:03
+
+- **Files scanned**: tests/test_wizard.py, references/scripts/soul_adaptation.py, references/scripts/state_bus.py
+- **Findings**: none (test_wizard.py comprehensive 39 test classes; soul_adaptation.py clean error handling; state_bus.py path traversal already filed #2046)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-04-23 21:03
+
+- **Files scanned**: references/sub-skills/*.md (stale refs check), .squidsquad/*/SOUL.md (adaptation section check), manifest integrity
+- **Findings**: none (no stale watchdog/.stop refs, manifest tests pass, live SOULs correctly lack adaptation section pre-upgrade)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-23 20:03
 
 - **Files scanned**: references/vault-templates/*.md, .squidsquad/vault/BRIEFING.md
