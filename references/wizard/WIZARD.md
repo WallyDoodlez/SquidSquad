@@ -507,6 +507,42 @@ The commit step (Step 7) writes this to the `## Forge Backend` section of config
 
 ---
 
+## Step 5d — Git workflow preferences
+
+Get the PR Flow question from the wizard helper:
+
+```bash
+python references/scripts/wizard.py pr-flow-prompt
+```
+
+Parse the JSON response. Present the `question` text and `options` to the user.
+Default is **Off** (index 0). Record the answer in the flags:
+
+```
+"flags": {
+    ...
+    "pr_flow": true/false,
+}
+```
+
+Then ask about Branch Workflow:
+
+> Feature branch per task? When enabled, dev agents commit code to
+> `squidsquad/<role>/<issue-number>` branches instead of directly to
+> the working branch. PRs are created when work is ready for review.
+> Default is **yes**.
+
+Accept yes/no. Default to **yes**. Record:
+
+```
+"flags": {
+    ...
+    "branch_workflow": true/false,
+}
+```
+
+---
+
 ## Step 6 — Review screen
 
 You now have a complete install spec in memory. Compose the summary
@@ -530,7 +566,7 @@ Roles:
   - dm       (local delivery)
 
 Loop:          10 minutes
-Flags:         improvement-scan: yes, pr-flow: no
+Flags:         improvement-scan: yes, pr-flow: no, branch-workflow: yes
 
 What would you like to do?
   [P] Proceed with setup
@@ -557,7 +593,7 @@ Action semantics:
     `python references/scripts/wizard.py ensure-labels --dry-run`.
   - Re-show the Step 6 menu after the preview.
 
-- **[E] Edit**: ask "which step?" (1-5). Jump back to that step with
+- **[E] Edit**: ask "which step?" (1-5d). Jump back to that step with
   the other answers preserved, then loop back to Step 6.
 
 - **[A] Abort**: exit with "no changes made". Exit code 0.
