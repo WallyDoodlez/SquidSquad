@@ -455,20 +455,6 @@ def main():
         print("ERROR: .squidsquad/ not found", file=sys.stderr)
         return 2
 
-    # Check if auto-boot is enabled
-    try:
-        config_text = CONFIG_MD.read_text(encoding="utf-8")
-        m = re.search(r"Auto Boot.*?:\s*(yes|no)", config_text, re.IGNORECASE)
-        if m and m.group(1).lower() == "no":
-            msg = "Auto Boot Agents disabled in config.md"
-            if use_json:
-                print(json.dumps({"action": "disabled", "message": msg}))
-            else:
-                print(msg)
-            return 0
-    except Exception:
-        pass
-
     # Run
     if boot_all_flag:
         results = boot_all(dry_run=dry_run)

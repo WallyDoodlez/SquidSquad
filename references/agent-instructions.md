@@ -429,30 +429,21 @@ When picking up a task, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 <!-- /sub-skill: implement-tasks -->
 
 <!-- sub-skill: boot-remote-agents -->
-### Step — Boot Remote Agents
+### Step — Boot Results (PM Only)
 
-Print: `[🦑 HH:MM:SS] Checking for agents to boot...`
+**PM-only gate**: Only the PM agent runs this step. If you are NOT the PM role, skip this step entirely.
 
-Check `Auto Boot Agents` in `config.md`. If set to `no`, skip this step entirely.
+Print: `[🦑 HH:MM:SS] Checking boot results...`
 
-Run the boot check:
-
-```bash
-python references/scripts/boot_remote.py --all --json
-```
-
-The script:
-1. Runs `health_check.py --json` to get authoritative agent health
-2. For each agent that is **stalled** or **unknown**, spawns a new terminal with the agent's boot script
-3. Respects `.stop` sentinel (never boots explicitly stopped agents)
-4. Enforces cooldown (10 min between spawn attempts per role)
-5. Uses a lock file to prevent race conditions between agents
+Boot detection runs automatically in `cycle_pre.py` before the creative phase. Read `boot_results` from `cycle-input.json` — it is a list of per-agent result objects, each with `role`, `action`, `success`, and `message` fields.
 
 **Interpreting output**: Each agent entry has `action` (spawn/skip/dry-run) and `success` (true/false). Log any spawn failures in Discussion on the agent's current task issue.
 
 If any agents were spawned, print: `[🦑 HH:MM:SS] Booted: [role1, role2, ...]`
 
-If all agents healthy or stopped, print nothing — silent pass.
+If all agents alive or stopped, print nothing — silent pass.
+
+**Per-role opt-out**: To prevent a specific agent from being booted, create `.squidsquad/<role>/.stop`. This is respected by `boot_remote.py` even when called unconditionally.
 <!-- /sub-skill: boot-remote-agents -->
 
 <!-- sub-skill: improvement-scan -->

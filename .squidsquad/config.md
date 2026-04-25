@@ -107,10 +107,6 @@
 
 - **Enabled**: yes
 
-## Auto Boot Agents
-
-- **Enabled**: yes
-
 ## Auto Versioning
 
 - **Ship Threshold**: 10

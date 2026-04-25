@@ -439,7 +439,18 @@ def _build_pm_input(role):
     config = _read_config_flags()
     config["ship_threshold"] = int(_config_get("ship-threshold") or "10")
     config["shipped_since_bump"] = int(_config_get("shipped-since-bump") or "0")
-    config["auto_boot_agents"] = _config_get("auto-boot-agents").lower() == "yes"
+    # Boot detection — call boot_remote.py and capture results (#2724)
+    boot_results = []
+    boot_result = _run_script("boot_remote.py", "--all", "--dry-run", "--json")
+    try:
+        if boot_result.stdout.strip():
+            boot_data = json.loads(boot_result.stdout)
+            if isinstance(boot_data, list):
+                boot_results = boot_data
+            elif isinstance(boot_data, dict):
+                boot_results = [boot_data]
+    except (json.JSONDecodeError, ValueError):
+        pass
 
     # Approved items — dev pushback visibility (#2494)
     approved_items = []
@@ -512,6 +523,7 @@ def _build_pm_input(role):
         "human_blocked": human_blocked,
         "recently_commented": recently_commented,
         "agent_health": agent_health,
+        "boot_results": boot_results,
         "config": config,
         "merged_branches": merged_branches,
         "template_changed": _check_template_changed(role),
