@@ -47,6 +47,12 @@
     "recency": 10,
     "score": 6.0
   },
+  "galaxy/decision-local-config-priority.md": {
+    "confidence": 10,
+    "links": 0,
+    "recency": 10,
+    "score": 6.0
+  },
   "galaxy/decision-pid-primary-liveness.md": {
     "confidence": 10,
     "links": 1,
