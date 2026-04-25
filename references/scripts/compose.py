@@ -311,14 +311,17 @@ def _get_entry_file_for_role(role_name: str) -> str:
 def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> str:
     """Substitute role-specific placeholders in composed content.
 
-    Dev agents: [ROLE], [ROLE_UPPER], [ROLE_TEST_CMD], [INTERVAL] are substituted.
-    PM/DM/QA/Designer: [ROLE] is NOT substituted (used as dev agent variable).
+    [ROLE] and [ROLE_UPPER] are substituted for ALL roles (needed by
+    cycle-runner sub-skill which is shared across all agents).
+    [ROLE_TEST_CMD], [OTHER_ROLES] are dev-only.
     """
     is_dev = entry_file == "dev"
 
+    # Universal substitution — all roles need [ROLE] for cycle-runner paths
+    content = content.replace("[ROLE]", role_name)
+    content = content.replace("[ROLE_UPPER]", role_name.upper())
+
     if is_dev:
-        content = content.replace("[ROLE]", role_name)
-        content = content.replace("[ROLE_UPPER]", role_name.upper())
 
         # Test command
         test_cmd = _read_config_value(f"{role_name}-tests") or \

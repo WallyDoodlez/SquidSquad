@@ -219,17 +219,93 @@ Phase is one of: `pulling`, `triaging`, `implementing`, `committing`, `idle`. Th
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
 
-<!-- sub-skill: pull-latest -->
-### Step 1 — Pull Latest
+<!-- sub-skill: cycle-runner -->
+<!-- sub-skill: cycle-runner -->
+## Cycle Runner (Transport Layer)
 
-Print: `[🦑 HH:MM:SS] Pulling latest...`
+The Ralph Loop uses a 3-phase flow: mechanical pre-cycle → creative work → mechanical post-cycle. All mechanical operations (git pull, commit, push, triage queries, iteration logging) are handled by deterministic scripts. You focus on creative work only.
+
+### Phase 1 — Pre-Cycle (Mechanical)
 
 ```bash
-python references/scripts/git_ops.py pull
+python references/scripts/cycle_pre.py skill
 ```
 
-The script handles stash/pop automatically if there are unstaged changes. If there is a rebase conflict in a tracker file, resolve it by keeping both versions — append the conflicting section below the existing one. Never discard entries.
-<!-- /sub-skill: pull-latest -->
+This script handles all mechanical operations: git pull, context pressure check, working state read, triage/queue queries, branch setup, and writes `.squidsquad/skill/cycle-input.json`.
+
+Read the output:
+
+```bash
+cat .squidsquad/skill/cycle-input.json
+```
+
+The JSON contains everything you need: `role`, `cycle_number`, `timestamp`, `pull_result`, `context_pressure`, `working_state`, and role-specific fields (work queue, verification queue, etc.).
+
+### Phase 2 — Creative Work (Agent)
+
+This is your core work — reasoning, code analysis, code writing, verification, human interaction. Use cycle-input.json to understand the current state. You still have full bash access for:
+- Running tests
+- Reading code
+- Spawning subagents
+- Running verification commands
+- Any creative work that requires shell access
+
+Do NOT use bash for mechanical operations that cycle_pre/post handles (git pull, git push, status bar writes, tracker transitions, iteration logging).
+
+### Phase 3 — Post-Cycle (Mechanical)
+
+Write your results to `.squidsquad/skill/cycle-output.json`:
+
+```json
+{
+  "role": "skill",
+  "cycle_number": N,
+  "cycle_type": "active" | "quiet" | "suppressed",
+  "status_transitions": [
+    {"number": 123, "from": "approved", "to": "in-progress"}
+  ],
+  "tracker_comments": [
+    {"number": 123, "message": "Picking up. Status → In Progress."}
+  ],
+  "iteration_summary": "Brief description of work done",
+  "commit_message": "skill: cycle N — brief description",
+  "working_state_update": "# Working State\n\n- **Task**: none\n...",
+  "restart_needed": false,
+  "restart_reason": null
+}
+```
+
+Then run:
+
+```bash
+python references/scripts/cycle_post.py skill
+```
+
+The script handles: status transitions, tracker comments, iteration logging, git commits, pushes, version bumps (DM), restart sentinels, and status bar cleanup.
+
+### Role-Specific Fields
+
+**Skill** cycle-output extras:
+- `code_commit`: `{branch, message, pr_needed, pr_title, pr_body}` — for branch workflow
+- `state_commit_message`: separate message for main branch state commit
+- `improvement_scan`: `{files_scanned, findings}` — if scan ran
+
+**PM** cycle-output extras:
+- `human_input_processed`: summary of human input handled
+- `issues_filed`, `issues_verified`, `tasks_verified`, `tasks_shipped`
+- `external_issues_triaged`, `health_alerts`, `vault_writes`
+- `version_bump`: `{new_version, items_included}` — if DM absent
+
+**QA** cycle-output extras:
+- `e2e_log`: `{result, tests_run, failures}`
+- `issues_filed`, `issues_verified`, `tasks_verified`
+- `pr_actions`: `[{pr_number, action, comment}]`
+
+**DM** cycle-output extras:
+- `bugs_fixed`, `deliveries`
+- `version_bump`: `{new_version, items_included}`
+<!-- /sub-skill: cycle-runner -->
+<!-- /sub-skill: cycle-runner -->
 
 <!-- sub-skill: context-pressure -->
 ### Step 1b — Context Pressure Check
@@ -471,30 +547,6 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 - **PM does NOT auto-approve** scan items — human decides whether to act on them.
 <!-- /sub-skill: improvement-scan -->
 
-<!-- sub-skill: iteration-log -->
-### Step 4 — Log Iteration
-
-Print: `[🦑 HH:MM:SS] Logging iteration...`
-
-**Every cycle writes a log entry** — active or quiet. Use the cycle script:
-
-```bash
-# Active cycle (work was done):
-python references/scripts/cycle.py log-iteration skill [N] \
-  --work "[comma-separated summary of work done]" \
-  --notes "[anything notable]"
-
-# Quiet cycle (no actionable work):
-python references/scripts/cycle.py log-iteration skill [N] --quiet \
-  --notes "[why quiet, e.g. 'No approved tasks available']"
-
-# Clean up old logs (keeps most recent 20)
-python references/scripts/cycle.py cleanup-iterations skill
-```
-
-The script writes a unified format with Date, Type (active/quiet), Work Summary, and Notes. Quiet entries are condensed (2-3 lines).
-<!-- /sub-skill: iteration-log -->
-
 <!-- sub-skill: vault-remember -->
 ### Step 4b — Vault Remember (End-of-Cycle Reflection)
 
@@ -621,102 +673,6 @@ Questions use plain language — never expose vault internals (galaxy, frontmatt
 If the vault is too small (<20 notes) or optimize is disabled, the script exits cleanly with no output.
 <!-- /sub-skill: vault-optimize -->
 
-<!-- sub-skill: git-commit -->
-### Step 5 — Commit and Push (skip on quiet cycles)
-
-Print: `[🦑 HH:MM:SS] Committing and pushing...`
-
-Check Branch Workflow setting:
-```bash
-python references/scripts/config.py get branch-workflow
-```
-
-**If `yes`** (branch-per-feature workflow):
-
-Split commits into code (feature branch) and state (main):
-
-1. **If working on a task** (status changed to `Pending Test` or still `In Progress`):
-   - Commit code changes to the feature branch:
-     ```bash
-     python references/scripts/git_ops.py commit-code skill squidsquad/skill/[NUMBER] "[brief description]"
-     ```
-   - Comment the branch name on the issue (first commit only):
-     ```bash
-     python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Working on branch squidsquad/skill/[NUMBER]."
-     ```
-
-2. **Always** commit state changes (.squidsquad/) to main:
-   ```bash
-   python references/scripts/git_ops.py commit-state skill "[brief description of state changes]"
-   ```
-
-3. **When marking Pending Test**, create a PR from the feature branch:
-
-   Check PR Flow setting:
-   ```bash
-   python references/scripts/config.py get pr-flow
-   ```
-
-   **If PR Flow `yes`** — structured PR with review sections:
-   ```bash
-   python references/scripts/git_ops.py pr-create "skill: #[NUMBER] — [title]" "$(cat <<'PRBODY'
-   Closes #[NUMBER]
-
-   ### Summary
-   [Brief description of what was implemented and why]
-
-   ### Acceptance Criteria
-   - [ ] [criterion 1]
-   - [ ] [criterion 2]
-
-   ### Changes
-   - **Files**: [key files changed]
-   - **What**: [what changed]
-   - **Why**: [rationale and key decisions]
-
-   ### QA Status
-   - [ ] Unit tests passing
-   - [ ] Smoke tests passing
-   - [ ] Acceptance criteria met
-   PRBODY
-   )"
-   ```
-
-   After PR creation, post a code review summary as a PR comment:
-   ```bash
-   gh pr comment [PR_NUMBER] --body "## Code Review Summary
-
-   **What changed**: [brief description]
-   **Why**: [rationale]
-   **Key decisions**: [any notable choices]
-   **Files touched**: [list of key files]"
-   ```
-
-   **If PR Flow `no`** — simple PR (no review sections):
-   ```bash
-   python references/scripts/git_ops.py pr-create "skill: #[NUMBER] — [title]" "Closes #[NUMBER]\n\n## #[NUMBER]\n\n[acceptance criteria]\n\nStatus: Pending Test"
-   ```
-
-   Record the PR URL in the tracker Discussion:
-   ```bash
-   python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "PR opened: [URL]. Branch: squidsquad/skill/[NUMBER]. Status → Pending Test."
-   ```
-
-4. **When PR Flow `yes`**: monitor PR comments each cycle for human feedback:
-   ```bash
-   gh pr view [PR_NUMBER] --json comments,reviews
-   ```
-   - If human posted new comments: read and address them (fix code, answer questions, reply on PR)
-   - If human requested changes via review: fix the issues and push to the branch
-   - After pushing fixes, re-request review if appropriate
-
-**If `no`** (default — direct-to-main workflow):
-
-```bash
-python references/scripts/git_ops.py commit-push skill "[brief description of work done this cycle]"
-```
-<!-- /sub-skill: git-commit -->
-
 <!-- sub-skill: self-restart -->
 <!-- sub-skill: self-restart -->
 ### Self-Restart (Context Pressure Only)
@@ -742,6 +698,46 @@ Write `idle|` to `current-state` at cycle end so health monitoring works.
 <!-- /sub-skill: self-restart -->
 <!-- /sub-skill: self-restart -->
 
+<!-- sub-skill: agent-lifecycle -->
+<!-- sub-skill: agent-lifecycle -->
+### Agent Lifecycle
+
+Agent lifecycle is managed by the wrapper script and `reboot_agent.py`. Agents do not manage their own or other agents' processes directly.
+
+**Three guarantees**:
+1. **Singleton**: Only one instance per role runs at a time (PID lock file).
+2. **Never kill mid-work**: `reboot_agent.py` waits for the agent to go idle before restarting.
+3. **Start correctly**: Wrapper handles pre-flight checks, branch setup, and heartbeat.
+
+**Heartbeat**: The wrapper writes the current epoch to `.squidsquad/skill/.health` every 5 seconds. Health monitoring reads this — if >10s old, the agent is considered dead.
+
+**Reboot interface** (for PM and DM):
+```bash
+# Safe reboot — waits for idle, then restarts
+python references/scripts/reboot_agent.py <role>
+
+# Force reboot — kills immediately
+python references/scripts/reboot_agent.py <role> --force
+
+# Reboot all agents
+python references/scripts/reboot_agent.py --all
+
+# Custom timeout (default 300s)
+python references/scripts/reboot_agent.py <role> --timeout 600
+```
+
+**Who reboots whom**:
+- **PM** monitors context pressure and detects when agents need rebooting. PM plans reboots.
+- **DM** executes reboots after shipping items that change agent templates/instructions.
+- **PM fallback**: When DM is absent, PM executes reboots directly via `reboot_agent.py`.
+- **Self-restart**: Agents can only self-restart for context pressure (see Self-Restart sub-skill).
+
+**Sentinel files**:
+- `.restart` — reboot request (written by agent for context pressure, or by `reboot_agent.py`)
+- `.pid` — singleton lock (written by wrapper)
+- `.health` — heartbeat epoch (written by wrapper every 5s)
+<!-- /sub-skill: agent-lifecycle -->
+<!-- /sub-skill: agent-lifecycle -->
 
 ### Step 6 — Done
 

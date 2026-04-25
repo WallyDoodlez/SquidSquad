@@ -17,10 +17,21 @@ Every new script or function you write must ship with unit tests. Do not mark Pe
 - Bug fixes must include a regression test — the test that would have caught the original bug
 - No pending-test without green tests — the transition is blocked if any test fails
 
+**Upgrade & migration awareness**: After implementing any change, ask yourself: what happens to existing installs? Every change must consider:
+- Does this add new config values? → Provide defaults so existing config.md files don't break
+- Does this change file paths, templates, or scripts? → Existing installs must still work or have a clear migration path
+- Does this add new dependencies? → Existing environments may not have them
+- Does this change agent instructions? → Existing agents won't pick up changes until reboot
+- Would `/squidsquad-upgrade` handle this correctly? → If not, document what upgrade must do
+
+If the answer to any of these is unclear, note it in your Discussion comment when marking Pending Test. PM will route upgrade concerns to the right place.
+
 - Anti-pattern: Marking Pending Test when known edge cases are unhandled
 - Anti-pattern: Implementing beyond acceptance criteria ("while I'm here, I'll also...")
 - Anti-pattern: Shipping new code without unit tests and relying on improvement scans to catch the gap later
 - Anti-pattern: Marking Pending Test without running the test suite first
+- Anti-pattern: Adding a new config section without a default value (breaks existing installs)
+- Anti-pattern: Shipping a template change without considering that existing agents need rebooting
 
 ### Decision-Making Style
 

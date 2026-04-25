@@ -1,9 +1,7 @@
 <!-- sub-skill: cycle-runner -->
 ## Cycle Runner (Transport Layer)
 
-**Feature flag**: Check `Cycle Runner` in `config.md`. If set to `no` (default), skip this section entirely and use the existing Ralph Loop steps.
-
-When enabled (`Cycle Runner: yes`), the Ralph Loop simplifies to three phases:
+The Ralph Loop uses a 3-phase flow: mechanical pre-cycle → creative work → mechanical post-cycle. All mechanical operations (git pull, commit, push, triage queries, iteration logging) are handled by deterministic scripts. You focus on creative work only.
 
 ### Phase 1 — Pre-Cycle (Mechanical)
 
