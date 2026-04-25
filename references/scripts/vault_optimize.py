@@ -266,6 +266,8 @@ def prune(dry_run=False):
             if dest.exists():
                 dest = archives_dir / f"{path.stem}-{int(time.time())}{path.suffix}"
             _git_mv(str(path), str(dest))
+            # Remove archived note from dict before rewriting links (#2677)
+            notes.pop(rel, None)
             _rewrite_wikilinks_after_archive(note_name, notes)
             archived.append(f"archived: {rel} -> archives/{dest.name}")
 
