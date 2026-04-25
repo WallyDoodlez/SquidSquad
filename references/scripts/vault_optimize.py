@@ -204,7 +204,7 @@ def prune(dry_run=False):
         for link in _extract_wikilinks(text):
             inbound.setdefault(link, set()).add(rel)
 
-    for rel, path in notes.items():
+    for rel, path in list(notes.items()):
         # Only prune galaxy/ notes
         if not rel.startswith("galaxy/"):
             continue

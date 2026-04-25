@@ -189,6 +189,22 @@ class TestPrune:
         names = " ".join(results)
         assert "decision-today" not in names
 
+    def test_prune_real_removes_from_notes_dict_before_rewrite(self, patched_vault, monkeypatch):
+        """#2677: After git_mv, archived note must be removed from notes dict
+        before _rewrite_wikilinks_after_archive iterates it."""
+        import shutil
+        moved = []
+
+        def fake_git_mv(src, dest):
+            shutil.move(src, dest)
+            moved.append((src, dest))
+
+        monkeypatch.setattr(vault_optimize, "_git_mv", fake_git_mv)
+        # Should not raise OSError from reading a moved file
+        results = vault_optimize.prune(dry_run=False)
+        assert len(moved) > 0  # At least one note archived
+        assert any("archived:" in r for r in results)
+
 
 # ---------------------------------------------------------------------------
 # Decay tests
