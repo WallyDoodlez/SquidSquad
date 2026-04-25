@@ -36,3 +36,5 @@ __pycache__/
 
 # OS/shell artifacts
 *.stackdump
+
+.squidsquad-state/
