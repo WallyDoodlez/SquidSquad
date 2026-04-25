@@ -12,8 +12,14 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #2351 Tarball installer — approved (medium, role:skill)
 - No other approved tasks awaiting pickup
 
+## Core Architecture
+
+- **Clone isolation**: Each agent runs in its own repo clone. PM in primary repo, dev agents in sibling clones (`../RepoName-role`). Paths configured in `.squidsquad/.local-config`. Never use global `~/.squidsquad/clones/`. See `[[decision-clone-isolation-architecture]]`.
+- **Branching**: Code → main branch. State → `squid-squad` branch. Feature branches when branch workflow is on.
+
 ## Recent Decisions
 
+- Clone isolation (v0.25.0) — each agent in own clone, project-local paths only, after cross-project contamination incident
 - Sub-skill architecture shipped (v0.9.0) — monolithic templates split into layered sub-skills with build-time composition
 - GitHub Issues as tracker (v0.9.0) — replaced internal markdown tracker files with GitHub Issues + structured labels
 - Runtime SOUL.md (v0.14.0) — agent personalities are separate files, editable without redeploying templates
@@ -34,7 +40,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 - Test suite exists (`python tests/run_tests.py`) — static analysis + integration tests
 - PR flow currently disabled
-- Ship counter: threshold 10, currently at 1 (v0.25.0 bumped)
+- Ship counter: threshold 10, currently at 30 (bump overdue)
 
 ## Team State
 
