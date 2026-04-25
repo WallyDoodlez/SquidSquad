@@ -1,8 +1,7 @@
 # Iteration 312
 
-- **Date**: 2026-04-25 13:29
+- **Date**: 2026-04-25 13:31
 - **Type**: active
 - **Work Summary**:
-  - #2750 fix complete — boot_remote.py and health_check.py now use project-local .local-config as primary clone path source
-  - preventing cross-project agent boot. 8 regression tests added.
+  - #2750 fixed — reversed clone path priority in boot_remote.py and health_check.py so .local-config (project-scoped) wins over ~/.squidsquad/clones/ (global). Added 7 regression tests across both test files.
 - **Notes**: none
