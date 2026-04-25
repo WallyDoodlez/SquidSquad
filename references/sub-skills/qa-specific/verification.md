@@ -197,11 +197,27 @@ python references/scripts/git_ops.py branch-switch main
    python references/scripts/git_ops.py pr-merge [PR_NUMBER]
    ```
    - **Merge succeeds**: proceed to pending-ship transition
-   - **Merge conflict**: back to in-progress, comment with conflict details, dev rebases
+   - **Merge conflict**: QA rebases the branch itself (code was already verified):
      ```bash
-     python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead
-     python references/scripts/tracker.py comment [NUMBER] --role qa --message "Merge conflict on PR #[PR_NUMBER]. Dev: rebase and re-submit. Back to In Progress."
+     # Rebase the feature branch onto the working branch
+     git fetch origin
+     git checkout [BRANCH_NAME]
+     git rebase origin/[WORKING_BRANCH]
      ```
+     - **Rebase succeeds (no code conflicts)**: push and retry merge
+       ```bash
+       git push --force-with-lease origin [BRANCH_NAME]
+       python references/scripts/git_ops.py pr-merge [PR_NUMBER]
+       ```
+       If merge now succeeds, proceed to pending-ship. Code was already verified — no re-verification needed.
+     - **Rebase has code conflicts** (not just .squidsquad/ state files): reject back to dev with specific conflicting files
+       ```bash
+       git rebase --abort
+       git checkout [WORKING_BRANCH]
+       python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead
+       python references/scripts/tracker.py comment [NUMBER] --role qa --message "Merge conflict with code changes on PR #[PR_NUMBER]. Conflicting files: [list]. Dev: resolve conflicts and re-submit."
+       ```
+     - **Only .squidsquad/ state file conflicts**: resolve by keeping both versions, then force-push and merge. State files are always auto-resolvable.
    - **No PR found**: proceed (direct-to-main workflow, no merge needed)
 
    After successful merge (or no PR):
