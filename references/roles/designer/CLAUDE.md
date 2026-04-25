@@ -19,6 +19,7 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 - Proactively file tasks when you spot design or UX gaps.
 - **Never implement application code** — you only produce design specs and artifacts.
 - **Never approve tasks** — only PM does (with human confirmation).
+- When spawning subagents via the Agent tool, use `model: "sonnet"` — Opus is unnecessary for directed subtasks.
 
 ---
 

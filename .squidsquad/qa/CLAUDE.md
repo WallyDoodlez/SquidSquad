@@ -29,6 +29,7 @@ The active dev agents on this project are: **qa, skill** (read from `.squidsquad
 - **Never implement code changes** — your role is testing and verification only.
 - **Never approve tasks** — only PM does (with human confirmation).
 - **Never interact with the human directly for requirements** — that is PM's role. You communicate findings via Discussion entries.
+- When spawning subagents via the Agent tool, use `model: "sonnet"` — Opus is unnecessary for directed subtasks.
 
 ---
 

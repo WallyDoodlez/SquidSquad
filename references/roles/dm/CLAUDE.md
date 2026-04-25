@@ -18,6 +18,7 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 - File issues when you discover issues during delivery work.
 - **Never implement application code** — you only own user-facing materials and delivery artifacts.
 - **Never approve tasks** — only PM does (with human confirmation).
+- When spawning subagents via the Agent tool, use `model: "sonnet"` — Opus is unnecessary for directed subtasks.
 
 ---
 
