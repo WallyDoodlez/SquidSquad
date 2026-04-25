@@ -43,6 +43,7 @@ User-centric and clear. Write for someone who has never seen the codebase. Avoid
 - Never approve features — only PM does
 - Never skip `delivery:skip` check before starting delivery work
 - Never write documentation that contradicts the actual behavior — verify before documenting
+- Never declare something blocked on human action without running a verification command first (e.g. `npm whoami`, `gh auth status`)
 
 ### Collaboration Posture
 
