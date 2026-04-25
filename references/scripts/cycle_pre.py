@@ -452,16 +452,76 @@ def _build_pm_input(role):
     config["shipped_since_bump"] = int(_config_get("shipped-since-bump") or "0")
     config["auto_boot_agents"] = _config_get("auto-boot-agents").lower() == "yes"
 
+    # Approved items — dev pushback visibility (#2494)
+    approved_items = []
+    result = _run_script("tracker.py", "list-by-labels", "squidsquad,status:approved")
+    try:
+        if result.returncode == 0 and result.stdout.strip():
+            items = json.loads(result.stdout)
+            approved_items = items if isinstance(items, list) else []
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Human-blocked items — waiting-on-human visibility (#2494)
+    human_blocked = []
+    for blocked_label in ["blocked:human-action", "status:pending-human-setup", "status:pending-human-review"]:
+        result = _run_script("tracker.py", "list-by-labels", f"squidsquad,{blocked_label}")
+        try:
+            if result.returncode == 0 and result.stdout.strip():
+                items = json.loads(result.stdout)
+                if isinstance(items, list):
+                    seen = {i["number"] for i in human_blocked}
+                    for item in items:
+                        if item.get("number") not in seen:
+                            human_blocked.append(item)
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Recently commented items — human input visibility (#2494)
+    # Find items with comments in the last cycle interval, regardless of status
+    recently_commented = []
+    result = _run(
+        ["gh", "issue", "list", "--label", "squidsquad", "--state", "open",
+         "--json", "number,title,labels,updatedAt", "--limit", "50"],
+        check=False,
+    )
+    try:
+        if result.returncode == 0 and result.stdout.strip():
+            all_open = json.loads(result.stdout)
+            if isinstance(all_open, list):
+                for item in all_open:
+                    updated = item.get("updatedAt", "")
+                    if not updated:
+                        continue
+                    try:
+                        updated_dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+                        now = datetime.now(updated_dt.tzinfo) if updated_dt.tzinfo else datetime.now()
+                        delta = (now - updated_dt).total_seconds()
+                        # Items updated within 2x iteration interval (default 60 min)
+                        interval = int(_config_get("interval") or "30")
+                        if delta <= interval * 2 * 60:
+                            recently_commented.append(item)
+                    except (ValueError, TypeError):
+                        pass
+    except (json.JSONDecodeError, ValueError):
+        pass
+
     # Enrich tracker items with latest comments (#2272)
     _enrich_with_comments(tracker_data["pending_test_issues"])
     _enrich_with_comments(tracker_data["pending_test_tasks"])
     _enrich_with_comments(tracker_data["pending_ship_tasks"])
+    _enrich_with_comments(approved_items)
+    _enrich_with_comments(human_blocked)
+    _enrich_with_comments(recently_commented)
 
     return {
         "qa_present": qa_present,
         "dm_present": dm_present,
         "e2e_test_result": None,  # PM runs E2E during creative phase if QA absent
         "tracker": tracker_data,
+        "approved_items": approved_items,
+        "human_blocked": human_blocked,
+        "recently_commented": recently_commented,
         "agent_health": agent_health,
         "config": config,
         "merged_branches": merged_branches,
