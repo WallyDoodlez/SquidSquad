@@ -102,6 +102,18 @@ class TestParseTcResults:
         results = tc_coverage.parse_tc_results(text)
         assert results == {1: "PASS", 2: "FAIL", 3: "BLOCKED"}
 
+    def test_heading_title_with_invalid_word_not_matched(self):
+        """Heading title containing 'not-applicable' must not trigger INVALID (#2469)."""
+        text = "### TC-4: Rejects not-applicable as invalid\n- **Result**: PASS\n"
+        results = tc_coverage.parse_tc_results(text)
+        assert results == {4: "PASS"}
+
+    def test_heading_title_with_deferred_not_matched(self):
+        """Heading title containing 'deferred' must not trigger INVALID (#2469)."""
+        text = "### TC-5: Deferred results are rejected\n- **Result**: PASS\n"
+        results = tc_coverage.parse_tc_results(text)
+        assert results == {5: "PASS"}
+
 
 # --- check_coverage ---
 
@@ -262,6 +274,17 @@ class TestCheckCoverage:
         """TC-26: Table row format recognized."""
         plan = "### TC-1: A\n"
         results = "| TC-1 | PASS | notes |\n"
+        p, r = self._write_files(tmp_path, plan, results)
+        assert tc_coverage.check_coverage(p, r) == 0
+
+    def test_heading_title_with_invalid_words_not_false_positive(self, tmp_path):
+        """Heading titles mentioning invalid tokens must not cause false INVALID (#2469)."""
+        plan = "### TC-1: A\n### TC-4: Rejects not-applicable as invalid\n### TC-5: Deferred rejected\n"
+        results = (
+            "### TC-1: A\n- **Result**: PASS\n\n"
+            "### TC-4: Rejects not-applicable as invalid\n- **Result**: PASS\n\n"
+            "### TC-5: Deferred rejected\n- **Result**: PASS\n"
+        )
         p, r = self._write_files(tmp_path, plan, results)
         assert tc_coverage.check_coverage(p, r) == 0
 
