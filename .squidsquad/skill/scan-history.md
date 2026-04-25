@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-25 06:31
+
+- **Files scanned**: references/scripts/cycle_post.py, references/scripts/health_check.py, references/scripts/config.py, references/scripts/triage.py, references/scripts/git_ops.py
+- **Findings**: #2671 (git_ops.py _get_working_branch imports nonexistent config.get — medium)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-25 05:02
 
 - **Files scanned**: references/scripts/health_check.py, references/scripts/add_role.py, references/scripts/cycle_pre.py
