@@ -107,17 +107,6 @@ def _do_pull():
     return "ok"
 
 
-def _get_context_pressure():
-    """Read context pressure and threshold."""
-    pressure_file = None
-    try:
-        # The role's context-pressure file is written by the statusline hook
-        # We don't know role here — caller passes it
-        return None  # Caller handles this
-    except Exception:
-        return None
-
-
 def _read_context_pressure(role):
     """Read context pressure for a role."""
     pressure_file = SQUID_DIR / role / "context-pressure"
