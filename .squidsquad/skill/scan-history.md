@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-25 05:02
+
+- **Files scanned**: references/scripts/health_check.py, references/scripts/add_role.py, references/scripts/cycle_pre.py
+- **Findings**: #2659 (dead _get_context_pressure in cycle_pre.py), #2660 (unify _parse_local_config across 3 scripts)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-23 21:03
 
 - **Files scanned**: tests/test_wizard.py, references/scripts/soul_adaptation.py, references/scripts/state_bus.py
