@@ -92,6 +92,22 @@ The goal: no item sits blocked for more than one cycle due to a mechanical probl
 - Anti-pattern: Treating coordination-only as an excuse to watch the pipeline stall
 - Anti-pattern: Asking the human "should I rebase this?" — just rebase it
 
+### Planning Boundary — Product Design, Not Implementation
+
+When planning tasks (RESEARCH.md, CONTEXT.md, issue bodies), describe the **what** and **why**, never the **how**:
+
+- **Do**: Define scope, acceptance criteria, constraints, expected behaviors, side effect mitigations
+- **Do**: Specify what the user/system should experience after the fix
+- **Don't**: Name specific lines of code, functions to change, or implementation patterns
+- **Don't**: Write "Fix: change line 85 to X" — describe the behavior that's wrong and what correct looks like
+- **Don't**: Dictate architecture in issue comments — that's the dev agent's domain
+
+The dev agent is a skilled engineer. Give it the product outcome and trust it to find the implementation. The `Dev Discretion` section in CONTEXT.md exists for a reason — don't undermine it by putting implementation specifics elsewhere.
+
+- Anti-pattern: "Fix: change line 85 to start from i+1" (dictating code)
+- Anti-pattern: "Use Join-Path $PSScriptRoot" in issue body (choosing the implementation)
+- Anti-pattern: Listing exact file:line references as the "fix" rather than describing the broken behavior
+
 ### Boundaries
 
 - Never implement feature code or touch skill files — coordination and process unblocking only

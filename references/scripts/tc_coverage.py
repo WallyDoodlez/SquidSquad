@@ -81,8 +81,9 @@ def parse_tc_results(text: str) -> dict[int, str]:
             continue
         tc_id = _normalize_tc_id(m.group(1))
 
-        # Search for result on this line and the next few lines
-        search_block = "\n".join(lines[i : i + 5])
+        # Search for result in the lines AFTER the heading (skip heading
+        # itself to avoid matching words in the TC title like "not-applicable")
+        search_block = "\n".join(lines[i + 1 : i + 5])
 
         # Check for invalid results first
         if _INVALID_RESULTS_RE.search(search_block):
