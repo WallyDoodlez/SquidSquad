@@ -45,266 +45,130 @@ if (Test-Path $injectScript) { & $injectScript }
 # Register this agent in config.md
 try { python references/scripts/config.py sync-agents 2>$null } catch {}
 
-# Set env var for statusline (session-scoped, no cross-agent clobber)
+# Initialize state bus worktree if state_bus.py exists
+$stateBusScript = Join-Path $repoRoot "references/scripts/state_bus.py"
+if (Test-Path $stateBusScript) {
+    try { python $stateBusScript init 2>$null } catch {}
+}
+
+# Set env var for statusline
 $env:SQUIDSQUAD_ROLE = "designer"
 
-# --- PID lock: prevent double-start ---
+# --- File paths ---
 $RoleDir = Join-Path $repoRoot ".squidsquad/designer"
-$PidFile = Join-Path $RoleDir ".pid"
-$StopFile = Join-Path $RoleDir ".stop"
-$RestartSentinel = Join-Path $RoleDir ".restart"
-$RestartLog = Join-Path $RoleDir "restart-log.txt"
-$StateFile = Join-Path $RoleDir "current-state"
-$PressureFile = Join-Path $RoleDir "context-pressure"
-$HealthFile = Join-Path $RoleDir ".health"
+$PidFile = "$RoleDir/.pid"
+$RestartSentinel = "$RoleDir/.restart"
+$StateFile = "$RoleDir/current-state"
+$HealthFile = "$RoleDir/.health"
 
 if (-not (Test-Path $RoleDir)) { New-Item -ItemType Directory -Path $RoleDir -Force | Out-Null }
 
-# --- Helper: atomic write to .health (write .tmp then rename) ---
-function Write-Health {
-    param([string]$Status)
-    $tmp = "$HealthFile.tmp"
-    [System.IO.File]::WriteAllText((Resolve-Path $RoleDir).Path + "/.health.tmp", $Status)
-    Move-Item -Force $tmp $HealthFile -ErrorAction SilentlyContinue
+# --- Helper: atomic write to .health ---
+function Write-Health($status) {
+    [System.IO.File]::WriteAllText("$HealthFile.tmp", $status)
+    Move-Item -Force "$HealthFile.tmp" $HealthFile -ErrorAction SilentlyContinue
 }
 
-# --- Pre-flight checks: validate environment before entering restart loop ---
+# --- PID lock: singleton (must be first — before pre-flight to prevent TOCTOU race #2694) ---
+if (Test-Path $PidFile) {
+    $oldPid = (Get-Content $PidFile -ErrorAction SilentlyContinue).Trim()
+    if ($oldPid -and (Get-Process -Id $oldPid -ErrorAction SilentlyContinue)) {
+        Write-Health "error|already running (PID $oldPid)"
+        Write-Host "[SquidSquad] Agent designer already running (PID $oldPid). Aborting."
+        exit 1
+    }
+    Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+}
+$PID > $PidFile
+
+# --- Pre-flight checks ---
 Write-Health "booting"
 Write-Host "[SquidSquad] Pre-flight checks..."
 
-# Check gh auth
-$ghStatus = $null
-try { $ghStatus = & gh auth status 2>&1 } catch {}
+$ghCheck = gh auth status 2>&1
 if ($LASTEXITCODE -ne 0) {
-    $errMsg = "error|gh auth failed"
-    Write-Health $errMsg
+    Write-Health "error|gh auth failed"
     Write-Host "[SquidSquad] FATAL: gh auth check failed. Run 'gh auth login' with 'repo' scope."
-    Write-Host "[SquidSquad] .health written: $errMsg"
     exit 1
 }
 
-# Check git branch is main
-$currentBranch = (git branch --show-current 2>$null).Trim()
-if ($currentBranch -ne "main") {
-    $errMsg = "error|wrong branch: $currentBranch (expected main)"
-    Write-Health $errMsg
-    Write-Host "[SquidSquad] FATAL: Expected branch 'main', got '$currentBranch'."
-    Write-Host "[SquidSquad] .health written: $errMsg"
-    exit 1
-}
-
-Write-Host "[SquidSquad] Pre-flight OK (gh auth + branch main)."
-
-if (Test-Path $PidFile) {
-    $oldPid = (Get-Content $PidFile -ErrorAction SilentlyContinue | Select-Object -First 1)
-    if ($oldPid) {
-        $running = $null
-        try { $running = Get-Process -Id $oldPid -ErrorAction SilentlyContinue } catch {}
-        if ($running) {
-            Write-Host "[SquidSquad] Agent designer already running (PID $oldPid). Aborting."
-            Write-Host "[SquidSquad] If this is stale, remove $PidFile manually."
-            Write-Health "error|already running (PID $oldPid)"
-            exit 1
-        }
+$WorkingBranch = try { (python references/scripts/config.py get working-branch 2>$null).Trim() } catch { "main" }
+if (-not $WorkingBranch) { $WorkingBranch = "main" }
+$CurrentBranch = (git branch --show-current 2>$null).Trim()
+if ($CurrentBranch -ne $WorkingBranch) {
+    Write-Host "[SquidSquad] Switching to working branch '$WorkingBranch'..."
+    git checkout $WorkingBranch 2>$null
+    if ((git branch --show-current 2>$null).Trim() -ne $WorkingBranch) {
+        # Untracked files may conflict with tracked files on the target branch
+        # (e.g. .backlog-cache, scan-index.db regenerated at runtime). Force checkout.
+        Write-Host "[SquidSquad] Checkout blocked by local files, retrying with force..."
+        git checkout -f $WorkingBranch 2>$null
     }
-    # Stale — clean up
-    Remove-Item $PidFile -ErrorAction SilentlyContinue
+    if ((git branch --show-current 2>$null).Trim() -ne $WorkingBranch) {
+        Write-Health "error|wrong branch"
+        Write-Host "[SquidSquad] FATAL: Could not switch to '$WorkingBranch'."
+        exit 1
+    }
 }
-$PID | Set-Content $PidFile -NoNewline
 
-# --- Cleanup on exit: remove PID file, write .health dead ---
-try {
-    # --- Auto-restart wrapper ---
-    $MaxRestarts = 50
-    $RestartCount = 0
-    $CooldownBase = 2
-    $CooldownMax = 300
-    $MinRuntimeSeconds = 120
-    $SelfRestartLimit = 3  # max self-restarts per hour
+Write-Host "[SquidSquad] Pre-flight OK."
 
+# --- Heartbeat background job: write epoch every 5s ---
+$heartbeatJob = Start-Job -ScriptBlock {
+    param($healthFile)
     while ($true) {
-        # Reset status bar and context pressure for a fresh session
-        Remove-Item $StateFile -ErrorAction SilentlyContinue
-        "idle|Initializing..." | Set-Content $StateFile -NoNewline
-        Remove-Item $PressureFile -ErrorAction SilentlyContinue
-
-        Write-Health "alive"
-
-        $startTime = Get-Date
-
-        $sysPrompt = "SQUIDSQUAD_ROLE=designer"
-        $initMsg = "start the loop"
-
-        # Read context threshold from config (default 70)
-        $CtxThreshold = 70
-        try {
-            $t = (python references/scripts/config.py get context-threshold 2>$null).Trim()
-            if ($t -match '^\d+$') { $CtxThreshold = [int]$t }
-        } catch {}
-
-        # Start Claude as a background process so we can poll for .restart and context pressure
-        # Use cmd /c to launch — claude is a .cmd shim on Windows, Start-Process can't exec .cmd directly
-        $claudeProc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "claude", "--dangerously-skip-permissions", "--name", "`"$AgentName`"", "--append-system-prompt", "$sysPrompt", "$initMsg" -NoNewWindow -PassThru
-
-        # Background poller: watch for .restart sentinel AND context pressure
-        # Context pressure flow:
-        #   1. Agent writes pressure % to context-pressure file (Step 1b, early in cycle)
-        #   2. Watcher detects pressure >= threshold
-        #   3. Watcher waits for agent to finish cycle (idle| in current-state, max 10 min)
-        #   4. Watcher kills process → boot script restarts with fresh context
-        $watcherJob = Start-Job -ScriptBlock {
-            param($sentinel, $pid, $pressureFile, $stateFile, $threshold)
-            $MaxWaitCycle = 600  # 10 minutes max wait for cycle to finish
-            while (-not (Get-Process -Id $pid -ErrorAction SilentlyContinue).HasExited) {
-                # Check .restart sentinel (agent requested restart)
-                if (Test-Path $sentinel) {
-                    Write-Output "[SquidSquad] Restart sentinel detected — stopping Claude (PID $pid)..."
-                    try { & taskkill /T /F /PID $pid 2>$null } catch {}
-                    break
-                }
-                # Check context pressure
-                if (Test-Path $pressureFile) {
-                    $raw = (Get-Content $pressureFile -ErrorAction SilentlyContinue | Select-Object -First 1)
-                    if ($raw -match '^\d+$') {
-                        $pressure = [int]$raw
-                        if ($pressure -ge $threshold) {
-                            Write-Output "[SquidSquad] Context pressure ${pressure}% >= ${threshold}% — waiting for cycle to finish..."
-                            # Wait for agent to finish its current cycle (idle| in current-state)
-                            $waited = 0
-                            while ($waited -lt $MaxWaitCycle) {
-                                if ((Get-Process -Id $pid -ErrorAction SilentlyContinue).HasExited) { break }
-                                if (Test-Path $stateFile) {
-                                    $state = (Get-Content $stateFile -ErrorAction SilentlyContinue | Select-Object -First 1)
-                                    if ($state -match '^idle\|') {
-                                        Write-Output "[SquidSquad] Cycle complete — restarting for fresh context..."
-                                        break
-                                    }
-                                }
-                                Start-Sleep -Seconds 10
-                                $waited += 10
-                            }
-                            if ($waited -ge $MaxWaitCycle) {
-                                Write-Output "[SquidSquad] Timed out waiting for cycle — forcing restart..."
-                            }
-                            try { & taskkill /T /F /PID $pid 2>$null } catch {}
-                            break
-                        }
-                    }
-                }
-                Start-Sleep -Seconds 5
-            }
-        } -ArgumentList $RestartSentinel, $claudeProc.Id, $PressureFile, $StateFile, $CtxThreshold
-
-        $claudeProc.WaitForExit()
-        $exitCode = $claudeProc.ExitCode
-
-        # Clean up watcher
-        Stop-Job $watcherJob -ErrorAction SilentlyContinue
-        Remove-Job $watcherJob -ErrorAction SilentlyContinue
-
-        $runtime = [int]((Get-Date) - $startTime).TotalSeconds
-
-        # Check for stop sentinel file
-        if (Test-Path $StopFile) {
-            Write-Host "[SquidSquad] Stop file detected. Not restarting."
-            Remove-Item $StopFile -ErrorAction SilentlyContinue
-            "stopped|Agent stopped by user" | Set-Content $StateFile -NoNewline
-            Write-Health "dead"
-            break
-        }
-
-        # Check for self-restart sentinel (agent requested restart)
-        if (Test-Path $RestartSentinel) {
-            $reason = (Get-Content $RestartSentinel -ErrorAction SilentlyContinue | Select-Object -First 1)
-            if (-not $reason) { $reason = "unknown" }
-            Remove-Item $RestartSentinel -ErrorAction SilentlyContinue
-
-            # --- Self-restart rate limit: 3 per hour (hard enforcement) ---
-            $selfRestartCount = 0
-            $oneHourAgo = (Get-Date).AddHours(-1)
-            if (Test-Path $RestartLog) {
-                $lines = Get-Content $RestartLog -ErrorAction SilentlyContinue
-                foreach ($line in $lines) {
-                    if ($line -match "self-restart" -and $line -match "^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})") {
-                        try {
-                            $entryTime = [datetime]::ParseExact($Matches[1], "yyyy-MM-dd HH:mm:ss", $null)
-                            if ($entryTime -gt $oneHourAgo) { $selfRestartCount++ }
-                        } catch {}
-                    }
-                }
-            }
-
-            if ($selfRestartCount -ge $SelfRestartLimit) {
-                $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-                "$ts | exit=$exitCode | self-restart-BLOCKED | reason=$reason | rate-limit ($SelfRestartLimit/hr exceeded) | runtime=${runtime}s" | Add-Content $RestartLog
-                Write-Host "[SquidSquad] Self-restart rate limit ($SelfRestartLimit/hr) exceeded — ignoring .restart sentinel."
-                # Continue running — do NOT restart, fall through to normal crash handling
-            } else {
-                $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-                "$ts | exit=$exitCode | self-restart | reason=$reason | runtime=${runtime}s" | Add-Content $RestartLog
-                Write-Host "[SquidSquad] Self-restart requested: $reason. Restarting immediately..."
-                Write-Health "restarting"
-                "restarting|Self-restart: $reason" | Set-Content $StateFile -NoNewline
-                $RestartCount = 0
-                Start-Sleep -Seconds 2
-                continue
-            }
-        }
-
-        # Check if this was a context pressure restart
-        if (Test-Path $PressureFile) {
-            $raw = (Get-Content $PressureFile -ErrorAction SilentlyContinue | Select-Object -First 1)
-            if ($raw -match '^\d+$' -and [int]$raw -ge $CtxThreshold) {
-                $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-                "$ts | exit=$exitCode | context-pressure | pressure=${raw}% | runtime=${runtime}s" | Add-Content $RestartLog
-                Write-Host "[SquidSquad] Context pressure restart (${raw}%). Restarting with fresh context..."
-                Write-Health "restarting"
-                "restarting|Context pressure ${raw}% — fresh start" | Set-Content $StateFile -NoNewline
-                Remove-Item $PressureFile -ErrorAction SilentlyContinue
-                $RestartCount = 0
-                Start-Sleep -Seconds 2
-                continue
-            }
-        }
-
-        # Append restart log entry
-        $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        "$ts | exit=$exitCode | restart=$($RestartCount + 1) | runtime=${runtime}s" | Add-Content $RestartLog
-
-        $RestartCount++
-        if ($RestartCount -ge $MaxRestarts) {
-            Write-Host "[SquidSquad] Max restarts ($MaxRestarts) reached. Stopping."
-            "error|Max restarts reached" | Set-Content $StateFile -NoNewline
-            Write-Health "error|Max restarts reached"
-            break
-        }
-
-        Write-Health "backoff"
-
-        if ($runtime -lt $MinRuntimeSeconds) {
-            # Fast crash — exponential backoff
-            $cooldown = [Math]::Min($CooldownBase * [Math]::Pow(2, $RestartCount - 1), $CooldownMax)
-            $cooldown = [int]$cooldown
-            Write-Host "[SquidSquad] Fast exit (${runtime}s, exit $exitCode). Backoff ${cooldown}s..."
-            "waiting|Restart backoff (${cooldown}s)" | Set-Content $StateFile -NoNewline
-            Start-Sleep -Seconds $cooldown
-        } else {
-            # Healthy run — reset counter, standard 10s cooldown
-            $RestartCount = 0
-            Write-Host "[SquidSquad] Agent exited after ${runtime}s (exit $exitCode). Restarting in 10s..."
-            "restarting|Restarting in 10s..." | Set-Content $StateFile -NoNewline
-            Start-Sleep -Seconds 10
-        }
+        $epoch = [int][double]::Parse((Get-Date -UFormat %s))
+        [System.IO.File]::WriteAllText("$healthFile.tmp", "$epoch")
+        Move-Item -Force "$healthFile.tmp" $healthFile -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 5
     }
+} -ArgumentList (Join-Path $repoRoot ".squidsquad/designer/.health")
+
+# --- Cleanup on exit ---
+$cleanupBlock = {
+    if ($heartbeatJob) { Stop-Job $heartbeatJob -ErrorAction SilentlyContinue; Remove-Job $heartbeatJob -ErrorAction SilentlyContinue }
+    Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+    Write-Health "dead"
+}
+
+try {
+    # --- Spawn claude ---
+    Set-Content -Path $StateFile -Value "idle|Initializing..."
+
+    $claudeProcess = Start-Process -FilePath "claude.exe" `
+        -ArgumentList "--dangerously-skip-permissions", "--name", "`"$AgentName`"", "--append-system-prompt", "`"SQUIDSQUAD_ROLE=designer`"", "start the loop" `
+        -NoNewWindow -PassThru
+
+    $claudeProcess.WaitForExit()
+    $exitCode = $claudeProcess.ExitCode
+
+    # --- Check restart sentinel ---
+    if (Test-Path $RestartSentinel) {
+        $reason = (Get-Content $RestartSentinel -ErrorAction SilentlyContinue).Trim()
+        Remove-Item $RestartSentinel -Force -ErrorAction SilentlyContinue
+        Write-Host "[SquidSquad] Restart requested: $reason. Respawning..."
+        Set-Content -Path $StateFile -Value "restarting|$reason"
+        Start-Sleep -Seconds 2
+
+        $claudeProcess = Start-Process -FilePath "claude.exe" `
+            -ArgumentList "--dangerously-skip-permissions", "--name", "`"$AgentName`"", "--append-system-prompt", "`"SQUIDSQUAD_ROLE=designer`"", "start the loop" `
+            -NoNewWindow -PassThru
+        $claudeProcess.WaitForExit()
+    }
+
+    # --- One crash retry (runtime < 30s) ---
+    if ($exitCode -ne 0) {
+        # Simple retry — wrapper exits after this
+        Write-Host "[SquidSquad] Crash detected (exit $exitCode). One retry..."
+        Start-Sleep -Seconds 2
+
+        $claudeProcess = Start-Process -FilePath "claude.exe" `
+            -ArgumentList "--dangerously-skip-permissions", "--name", "`"$AgentName`"", "--append-system-prompt", "`"SQUIDSQUAD_ROLE=designer`"", "start the loop" `
+            -NoNewWindow -PassThru
+        $claudeProcess.WaitForExit()
+    }
+
+    Write-Host "[SquidSquad] Agent designer exited. Wrapper stopping."
 } finally {
-    Remove-Item $PidFile -ErrorAction SilentlyContinue
-    # Write final health state if not already set to error/dead
-    if (Test-Path $HealthFile) {
-        $current = Get-Content $HealthFile -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($current -notmatch "^(error|dead)") {
-            Write-Health "dead"
-        }
-    } else {
-        Write-Health "dead"
-    }
+    & $cleanupBlock
 }

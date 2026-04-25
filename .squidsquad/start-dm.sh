@@ -89,7 +89,12 @@ WORKING_BRANCH=${WORKING_BRANCH:-main}
 CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
 if [ "$CURRENT_BRANCH" != "$WORKING_BRANCH" ]; then
   echo "[SquidSquad] Switching to working branch '$WORKING_BRANCH'..."
-  git checkout "$WORKING_BRANCH" 2>/dev/null || git checkout -b "$WORKING_BRANCH" "origin/$WORKING_BRANCH" 2>/dev/null
+  if ! git checkout "$WORKING_BRANCH" 2>/dev/null; then
+    # Untracked files may conflict with tracked files on the target branch
+    # (e.g. .backlog-cache, scan-index.db regenerated at runtime). Force checkout.
+    echo "[SquidSquad] Checkout blocked by local files, retrying with force..."
+    git checkout -f "$WORKING_BRANCH" 2>/dev/null || git checkout -b "$WORKING_BRANCH" "origin/$WORKING_BRANCH" 2>/dev/null
+  fi
   if [ "$(git branch --show-current 2>/dev/null)" != "$WORKING_BRANCH" ]; then
     write_health "error|wrong branch"
     echo "[SquidSquad] FATAL: Could not switch to '$WORKING_BRANCH'."

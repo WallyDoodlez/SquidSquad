@@ -99,6 +99,12 @@ if ($CurrentBranch -ne $WorkingBranch) {
     Write-Host "[SquidSquad] Switching to working branch '$WorkingBranch'..."
     git checkout $WorkingBranch 2>$null
     if ((git branch --show-current 2>$null).Trim() -ne $WorkingBranch) {
+        # Untracked files may conflict with tracked files on the target branch
+        # (e.g. .backlog-cache, scan-index.db regenerated at runtime). Force checkout.
+        Write-Host "[SquidSquad] Checkout blocked by local files, retrying with force..."
+        git checkout -f $WorkingBranch 2>$null
+    }
+    if ((git branch --show-current 2>$null).Trim() -ne $WorkingBranch) {
         Write-Health "error|wrong branch"
         Write-Host "[SquidSquad] FATAL: Could not switch to '$WorkingBranch'."
         exit 1
