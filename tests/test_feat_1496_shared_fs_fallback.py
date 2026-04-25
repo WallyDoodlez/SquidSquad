@@ -1,8 +1,9 @@
 """Regression tests for #1496 — boot_remote.py shared filesystem fallback.
 
 Verifies that _parse_local_config reads clone paths from the shared filesystem
-(~/.squidsquad/clones/) first, and falls back to .local-config (legacy format)
-when the shared filesystem is not available or empty.
+(~/.squidsquad/clones/) as a fallback when .local-config (project-scoped) is
+absent or empty. Priority was reversed in #2750: .local-config is now primary,
+global clones are fallback.
 """
 
 import sys
@@ -18,16 +19,17 @@ import boot_remote
 
 
 class TestSharedFsFallback:
-    """#1496: _parse_local_config must prefer shared FS, fall back to .local-config."""
+    """#1496: _parse_local_config must read shared FS as fallback when .local-config is absent."""
 
-    def test_shared_fs_takes_priority(self, tmp_path):
-        """#1496: When ~/.squidsquad/clones/ has files, use those paths."""
+    def test_shared_fs_used_when_local_config_missing(self, tmp_path):
+        """#1496/#2750: When .local-config is missing, use ~/.squidsquad/clones/."""
         clones_dir = tmp_path / ".squidsquad" / "clones"
         clones_dir.mkdir(parents=True)
         (clones_dir / "skill").write_text("/home/user/skill-clone", encoding="utf-8")
         (clones_dir / "qa").write_text("/home/user/qa-clone", encoding="utf-8")
 
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        with patch("pathlib.Path.home", return_value=tmp_path), \
+             patch.object(boot_remote, "LOCAL_CONFIG", tmp_path / "nonexistent"):
             result = boot_remote._parse_local_config()
 
         assert result["skill"] == Path("/home/user/skill-clone")
@@ -91,7 +93,8 @@ class TestSharedFsFallback:
         (clones_dir / "skill").write_text("", encoding="utf-8")
         (clones_dir / "qa").write_text("/valid/path", encoding="utf-8")
 
-        with patch("pathlib.Path.home", return_value=tmp_path):
+        with patch("pathlib.Path.home", return_value=tmp_path), \
+             patch.object(boot_remote, "LOCAL_CONFIG", tmp_path / "nonexistent"):
             result = boot_remote._parse_local_config()
 
         # skill has empty content, should be skipped
