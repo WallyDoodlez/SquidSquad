@@ -315,15 +315,15 @@ class TestDeployRole:
 # ---------------------------------------------------------------------------
 
 class TestGenerateLocalConfig:
-    def test_generates_correct_format(self, tmp_path):
+    def test_generates_correct_format_default(self, tmp_path):
+        """Without clone_paths, all agents map to '.' (single-repo fallback)."""
         ss = tmp_path / ".squidsquad"
         ss.mkdir()
         path = compose.generate_local_config(["skill", "pm"], target_root=tmp_path)
         assert path.exists()
         content = path.read_text(encoding="utf-8")
-        assert "- **skill**:" in content
-        assert "- **pm**:" in content
-        assert str(tmp_path.resolve()) in content
+        assert "- **skill**: ." in content
+        assert "- **pm**: ." in content
 
     def test_generates_in_squidsquad_dir(self, tmp_path):
         ss = tmp_path / ".squidsquad"
@@ -331,6 +331,33 @@ class TestGenerateLocalConfig:
         path = compose.generate_local_config(["skill"], target_root=tmp_path)
         assert path.parent.name == ".squidsquad"
         assert path.name == ".local-config"
+
+    def test_with_clone_paths_relative(self, tmp_path):
+        """With clone_paths, writes relative paths per agent."""
+        ss = tmp_path / ".squidsquad"
+        ss.mkdir()
+        clone_paths = {"pm": ".", "skill": "../myproject-skill", "qa": "../myproject-qa"}
+        path = compose.generate_local_config(
+            ["pm", "skill", "qa"], target_root=tmp_path, clone_paths=clone_paths,
+        )
+        content = path.read_text(encoding="utf-8")
+        assert "- **pm**: ." in content
+        assert "- **skill**: ../myproject-skill" in content
+        assert "- **qa**: ../myproject-qa" in content
+        # No absolute paths
+        assert str(tmp_path.resolve()) not in content
+
+    def test_clone_paths_partial(self, tmp_path):
+        """Agents not in clone_paths default to '.'."""
+        ss = tmp_path / ".squidsquad"
+        ss.mkdir()
+        clone_paths = {"skill": "../proj-skill"}
+        path = compose.generate_local_config(
+            ["pm", "skill"], target_root=tmp_path, clone_paths=clone_paths,
+        )
+        content = path.read_text(encoding="utf-8")
+        assert "- **pm**: ." in content
+        assert "- **skill**: ../proj-skill" in content
 
 
 # ---------------------------------------------------------------------------

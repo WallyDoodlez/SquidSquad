@@ -120,3 +120,7 @@
 {"timestamp": 1777083738.212106, "task_type": "research", "task_id": "FEAT-PM-2487", "model": "gpt-5.2", "provider": "openai", "action": "success", "response_length": 11733, "elapsed_seconds": 60.9}
 {"timestamp": 1777090258.7580142, "task_type": "research", "task_id": "FEAT-PM-2496", "model": "gpt-5.2", "provider": "openai", "action": "success", "response_length": 8649, "elapsed_seconds": 43.9}
 {"timestamp": 1777096560.6217835, "task_type": "research", "task_id": "FEAT-PM-2493", "model": "gpt-5.2", "provider": "openai", "action": "success", "response_length": 10625, "elapsed_seconds": 68.9}
+{"timestamp": 1777101172.4339125, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777101172.4349122, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777101172.4359126, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777101199.052349, "task_type": "research", "task_id": "TEST", "model": "gpt-5.2", "provider": "openai", "action": "success", "response_length": 4231, "elapsed_seconds": 25.8}

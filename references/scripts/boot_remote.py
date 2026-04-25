@@ -66,7 +66,8 @@ def _parse_local_config():
         if result:
             return result
 
-    # Fall back to .local-config (legacy format: `- **role**: /absolute/path`)
+    # Fall back to .local-config (format: `- **role**: <path>`)
+    # Relative paths resolve against the repo root (parent of .squidsquad/).
     if not LOCAL_CONFIG.exists():
         return {}
     try:
@@ -75,8 +76,11 @@ def _parse_local_config():
             m = re.match(r"-\s*\*\*(\w+)\*\*:\s*(.+)", line)
             if m:
                 role = m.group(1).strip()
-                path = Path(m.group(2).strip())
-                result[role] = path
+                raw_path = Path(m.group(2).strip())
+                # Resolve relative paths against repo root
+                if not raw_path.is_absolute():
+                    raw_path = (REPO_ROOT / raw_path).resolve()
+                result[role] = raw_path
     except Exception:
         pass
     return result

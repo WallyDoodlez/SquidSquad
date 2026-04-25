@@ -684,6 +684,17 @@ _DEFAULT_WORKING_STATE = """\
 """
 
 
+def _detect_remote_url(repo_dir):
+    """Detect the git remote URL for cloning.
+
+    Returns the origin URL string, or None if not available.
+    """
+    result = _run(["git", "remote", "get-url", "origin"], cwd=str(repo_dir))
+    if result.returncode == 0 and result.stdout.strip():
+        return result.stdout.strip()
+    return None
+
+
 INSTALL_SPEC_FILENAME = ".install-spec.json"
 
 
@@ -886,16 +897,56 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
             "working_state": str(ws_path),
         })
 
-    # 3. Generate .local-config for health check and auto-boot
+    # 3. Create sibling clones for non-PM agents
+    clone_paths = {}  # {agent_id: relative_path_string}
+    non_pm_agents = [a for a in spec["agents"] if a["role"] != "pm"]
+    if non_pm_agents:
+        project_name = (spec.get("project") or {}).get("name") or target_root.name
+        remote_url = _detect_remote_url(target_root)
+        if remote_url:
+            for agent in non_pm_agents:
+                agent_id = agent["id"]
+                clone_dir_name = f"{project_name}-{agent_id}"
+                clone_dir = target_root.parent / clone_dir_name
+                rel_path = f"../{clone_dir_name}"
+                clone_paths[agent_id] = rel_path
+
+                if clone_dir.exists() and (clone_dir / ".git").exists():
+                    # Idempotent: clone already exists, skip
+                    summary.setdefault("existing_clones", []).append(str(clone_dir))
+                else:
+                    try:
+                        result = _run([
+                            "git", "clone", remote_url, str(clone_dir),
+                        ])
+                        if result.returncode != 0:
+                            print(
+                                f"  WARNING: Failed to clone for {agent_id}: "
+                                f"{result.stderr.strip()}",
+                                file=sys.stderr,
+                            )
+                            continue
+                        summary.setdefault("clones_created", []).append(str(clone_dir))
+                    except Exception as e:
+                        print(f"  WARNING: Clone failed for {agent_id}: {e}", file=sys.stderr)
+                        continue
+
+    # PM always maps to current directory
+    for agent in spec["agents"]:
+        if agent["role"] == "pm":
+            clone_paths[agent["id"]] = "."
+
+    # 4. Generate .local-config for health check and auto-boot
     try:
         from compose import generate_local_config
     except ImportError:
         pass
     else:
         all_roles = [a["id"] for a in spec["agents"]]
-        generate_local_config(all_roles, target_root=target_root)
+        generate_local_config(all_roles, target_root=target_root,
+                              clone_paths=clone_paths)
 
-    # 4. Generate boot scripts (start-[role].sh, start-[role].ps1)
+    # 5. Generate boot scripts (start-[role].sh, start-[role].ps1)
     try:
         from compose import boot_role
     except ImportError:
@@ -907,7 +958,7 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
             except (SystemExit, Exception) as e:
                 print(f"  WARNING: Failed to generate boot scripts for {agent['id']}: {e}", file=sys.stderr)
 
-    # 5. Save install spec for reproducibility and upgrade re-use (#13)
+    # 6. Save install spec for reproducibility and upgrade re-use (#13)
     spec_path = save_install_spec(spec, target_root)
     summary["install_spec"] = spec_path
 
