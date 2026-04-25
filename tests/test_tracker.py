@@ -346,3 +346,37 @@ class TestWorkQueue:
                             lambda *a, **kw: _mock_result(returncode=1, stderr="error"))
         result = tracker.work_queue("skill")
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# #2693 regression: pending-review label consistency
+# ---------------------------------------------------------------------------
+
+class TestLabelConsistency:
+    """All statuses referenced in LEGAL_TRANSITIONS and ROLE_AUTHORITY
+    must exist in STATUS_LABELS (resolvable via CLI short-form)."""
+
+    def test_all_transition_statuses_in_status_labels(self):
+        """Every status label in LEGAL_TRANSITIONS must be resolvable."""
+        valid_labels = set(tracker.STATUS_LABELS.values())
+        for src, targets in tracker.LEGAL_TRANSITIONS.items():
+            assert src in valid_labels, \
+                f"LEGAL_TRANSITIONS source {src!r} not in STATUS_LABELS"
+            for tgt in targets:
+                assert tgt in valid_labels, \
+                    f"LEGAL_TRANSITIONS target {tgt!r} (from {src!r}) not in STATUS_LABELS"
+
+    def test_all_authority_statuses_in_status_labels(self):
+        """Every status label in ROLE_AUTHORITY must be resolvable."""
+        valid_labels = set(tracker.STATUS_LABELS.values())
+        for (src, tgt), _roles in tracker.ROLE_AUTHORITY.items():
+            assert src in valid_labels, \
+                f"ROLE_AUTHORITY source {src!r} not in STATUS_LABELS"
+            assert tgt in valid_labels, \
+                f"ROLE_AUTHORITY target {tgt!r} not in STATUS_LABELS"
+
+    def test_no_pending_review_without_human(self):
+        """#2693: status:pending-review should not exist — only status:pending-human-review."""
+        all_labels = set(tracker.STATUS_LABELS.values())
+        assert "status:pending-review" not in all_labels
+        assert "status:pending-human-review" in all_labels
