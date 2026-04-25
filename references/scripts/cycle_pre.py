@@ -418,7 +418,7 @@ def _build_pm_input(role):
     health_result = _run_script("health_check.py", "--json")
     agent_health = {}
     try:
-        if health_result.returncode == 0 and health_result.stdout.strip():
+        if health_result.stdout.strip():
             health_data = json.loads(health_result.stdout)
             for entry in (health_data if isinstance(health_data, list) else []):
                 r = entry.get("role", "")
@@ -590,7 +590,7 @@ def _build_qa_input(role):
     health_result = _run_script("health_check.py", "--json")
     agent_health = {}
     try:
-        if health_result.returncode == 0 and health_result.stdout.strip():
+        if health_result.stdout.strip():
             health_data = json.loads(health_result.stdout)
             for entry in (health_data if isinstance(health_data, list) else []):
                 r = entry.get("role", "")

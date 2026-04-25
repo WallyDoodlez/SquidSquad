@@ -472,3 +472,87 @@ class TestBuildPmInputNewFields:
         result = cycle_pre._build_pm_input("pm")
         assert result["approved_items"][0].get("latest_comment") == comment
         assert result["human_blocked"][0].get("latest_comment") == comment
+
+    def test_agent_health_parsed_on_nonzero_exit(self, patch_dirs, squid_dir, monkeypatch):
+        """Regression #2713: health JSON must be parsed even when health_check.py exits 1."""
+        health_data = [
+            {"role": "skill", "status": "healthy"},
+            {"role": "pm", "status": "unhealthy"},
+        ]
+
+        def fake_run_script(*args, **kwargs):
+            fake = MagicMock()
+            fake.returncode = 0
+            fake.stdout = "[]"
+            if len(args) >= 1 and "health_check.py" in str(args[0]):
+                fake.returncode = 1  # non-zero exit = some agents unhealthy
+                fake.stdout = json.dumps(health_data)
+            elif len(args) >= 2 and "tracker.py" in str(args[0]):
+                subcmd = args[1] if len(args) > 1 else ""
+                fake.stdout = json.dumps({}.get(subcmd, []))
+            return fake
+
+        def fake_run(cmd, **kwargs):
+            fake = MagicMock()
+            fake.returncode = 0
+            fake.stdout = "[]"
+            fake.stderr = ""
+            return fake
+
+        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_pre, "_run", fake_run)
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
+            "branch-workflow": "no", "pr-flow": "no",
+            "improvement-scanning": "no", "vault-remember": "no",
+            "vault-optimize": "no", "ship-threshold": "10",
+            "shipped-since-bump": "0", "auto-boot-agents": "no",
+            "interval": "30",
+        }.get(f, ""))
+        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
+
+        result = cycle_pre._build_pm_input("pm")
+        assert result["agent_health"] == {"skill": "healthy", "pm": "unhealthy"}
+
+
+class TestQAHealthParsing:
+    """Regression #2713: QA builder also affected by health gate bug."""
+
+    def test_qa_agent_health_parsed_on_nonzero_exit(self, patch_dirs, squid_dir, monkeypatch):
+        """QA input parses health JSON even when health_check.py exits 1."""
+        health_data = [
+            {"role": "skill", "status": "healthy"},
+            {"role": "dm", "status": "unknown"},
+        ]
+
+        def fake_run_script(*args, **kwargs):
+            fake = MagicMock()
+            fake.returncode = 0
+            fake.stdout = "[]"
+            if len(args) >= 1 and "health_check.py" in str(args[0]):
+                fake.returncode = 1
+                fake.stdout = json.dumps(health_data)
+            elif len(args) >= 2 and "tracker.py" in str(args[0]):
+                subcmd = args[1] if len(args) > 1 else ""
+                fake.stdout = json.dumps({}.get(subcmd, []))
+            return fake
+
+        def fake_run(cmd, **kwargs):
+            fake = MagicMock()
+            fake.returncode = 0
+            fake.stdout = "[]"
+            fake.stderr = ""
+            return fake
+
+        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_pre, "_run", fake_run)
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
+            "branch-workflow": "no", "pr-flow": "no",
+            "improvement-scanning": "no", "vault-remember": "no",
+            "vault-optimize": "no", "ship-threshold": "10",
+            "shipped-since-bump": "0", "auto-boot-agents": "no",
+            "interval": "30",
+        }.get(f, ""))
+        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
+
+        result = cycle_pre._build_qa_input("qa")
+        assert result["agent_health"] == {"skill": "healthy", "dm": "unknown"}
