@@ -277,7 +277,7 @@ This is your core work — reasoning, code analysis, code writing, verification,
 - Running verification commands
 - Any creative work that requires shell access
 
-Do NOT use bash for mechanical operations that cycle_pre/post handles (git pull, git push, status bar writes, tracker transitions, iteration logging).
+Do NOT use bash for mechanical operations that cycle_pre/post handles (git pull, git commit, git push, status bar writes, tracker transitions, iteration logging).
 
 ### Phase 3 — Post-Cycle (Mechanical)
 
