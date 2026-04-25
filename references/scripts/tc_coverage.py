@@ -76,14 +76,23 @@ def parse_tc_results(text: str) -> dict[int, str]:
     results = {}
     lines = text.splitlines()
     for i, line in enumerate(lines):
-        m = _TC_HEADING_RE.match(line) or _TC_TABLE_RE.match(line)
+        is_table = _TC_TABLE_RE.match(line)
+        m = _TC_HEADING_RE.match(line) or is_table
         if not m:
             continue
         tc_id = _normalize_tc_id(m.group(1))
 
-        # Search for result in the lines AFTER the heading (skip heading
-        # itself to avoid matching words in the TC title like "not-applicable")
-        search_block = "\n".join(lines[i + 1 : i + 5])
+        # For table rows, result is on the same line (| TC-1 | PASS |).
+        # For headings, skip the heading line to avoid matching words in
+        # the TC title like "not-applicable" (#2469). Stop at the next
+        # TC marker to avoid bleeding into adjacent TCs.
+        start = i if is_table else i + 1
+        result_lines = []
+        for j in range(start, min(i + 5, len(lines))):
+            if j != i and (_TC_HEADING_RE.match(lines[j]) or _TC_TABLE_RE.match(lines[j])):
+                break
+            result_lines.append(lines[j])
+        search_block = "\n".join(result_lines)
 
         # Check for invalid results first
         if _INVALID_RESULTS_RE.search(search_block):
