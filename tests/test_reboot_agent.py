@@ -225,15 +225,17 @@ class TestGetClonePath:
         assert path == boot_remote.REPO_ROOT
 
     def test_reads_local_config(self, patch_dirs, squid_dir, monkeypatch, tmp_path):
+        custom_path = tmp_path / "custom" / "clone"
+        custom_path.mkdir(parents=True)
         local_config = squid_dir / ".local-config"
-        local_config.write_text("- **skill**: /custom/path\n", encoding="utf-8")
+        local_config.write_text(f"- **skill**: {custom_path}\n", encoding="utf-8")
         monkeypatch.setattr(boot_remote, "LOCAL_CONFIG", local_config)
         # Block shared filesystem path so it falls through to .local-config
         fake_home = tmp_path / "fakehome"
         fake_home.mkdir()
         monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
         path = reboot_agent._get_clone_path("skill")
-        assert path == Path("/custom/path")
+        assert path == custom_path
 
 
 # ---------------------------------------------------------------------------

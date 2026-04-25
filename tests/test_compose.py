@@ -177,7 +177,8 @@ class TestSubstitutePlaceholders:
             result = compose._substitute_placeholders(content, "skill", "dev")
         assert 'echo "Skill repo -- no automated tests."' in result
 
-    def test_non_dev_role_preserves_role_placeholder(self):
+    def test_non_dev_role_substitutes_role_placeholder(self):
+        """[ROLE] is substituted for all roles (#2487 — universal substitution)."""
         content = "For dev: [ROLE], Active: [ACTIVE_AGENTS], E2E: [E2E_TEST_CMD], Interval: [INTERVAL]"
         with patch.object(compose, "_read_config_value", side_effect=lambda f: {
             "dev-agents": "skill,be",
@@ -185,8 +186,9 @@ class TestSubstitutePlaceholders:
             "interval": "15",
         }.get(f, "")):
             result = compose._substitute_placeholders(content, "pm", "pm")
-        # PM should NOT substitute [ROLE]
-        assert "[ROLE]" in result
+        # [ROLE] is now substituted for ALL roles (cycle-runner needs it)
+        assert "[ROLE]" not in result
+        assert "For dev: pm" in result
         assert "Active: skill,be" in result
         assert "E2E: npm test" in result
         assert "Interval: 15" in result

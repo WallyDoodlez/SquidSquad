@@ -36,10 +36,14 @@ class TestSharedFsFallback:
     def test_falls_back_to_local_config(self, tmp_path):
         """#1496: When shared FS is absent, fall back to .local-config."""
         # No clones dir under home
+        skill_path = tmp_path / "clones" / "skill"
+        qa_path = tmp_path / "clones" / "qa"
+        skill_path.mkdir(parents=True)
+        qa_path.mkdir(parents=True)
         local_config = tmp_path / "local-config"
         local_config_content = (
-            "- **skill**: /opt/squidsquad/skill\n"
-            "- **qa**: /opt/squidsquad/qa\n"
+            f"- **skill**: {skill_path}\n"
+            f"- **qa**: {qa_path}\n"
         )
         local_config.write_text(local_config_content, encoding="utf-8")
 
@@ -47,8 +51,8 @@ class TestSharedFsFallback:
              patch.object(boot_remote, "LOCAL_CONFIG", local_config):
             result = boot_remote._parse_local_config()
 
-        assert result["skill"] == Path("/opt/squidsquad/skill")
-        assert result["qa"] == Path("/opt/squidsquad/qa")
+        assert result["skill"] == skill_path
+        assert result["qa"] == qa_path
 
     def test_empty_shared_fs_falls_back(self, tmp_path):
         """#1496: Empty clones dir (no files) should fall back to .local-config."""
@@ -56,14 +60,16 @@ class TestSharedFsFallback:
         clones_dir.mkdir(parents=True)
         # clones_dir exists but is empty
 
+        fallback_path = tmp_path / "fallback" / "clone"
+        fallback_path.mkdir(parents=True)
         local_config = tmp_path / "local-config"
-        local_config.write_text("- **skill**: /fallback/path\n", encoding="utf-8")
+        local_config.write_text(f"- **skill**: {fallback_path}\n", encoding="utf-8")
 
         with patch("pathlib.Path.home", return_value=tmp_path), \
              patch.object(boot_remote, "LOCAL_CONFIG", local_config):
             result = boot_remote._parse_local_config()
 
-        assert result.get("skill") == Path("/fallback/path")
+        assert result.get("skill") == fallback_path
 
     def test_shared_fs_ignores_dotfiles(self, tmp_path):
         """#1496: Hidden files in clones/ should be ignored."""
