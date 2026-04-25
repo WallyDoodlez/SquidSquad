@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """SquidSquad reboot_agent — safe agent restart via sentinel.
 
-Writes .restart sentinel then waits for the agent to go idle before killing.
-The wrapper detects the sentinel on exit and respawns.
+Reboot == ensure running. If agent is alive, restart it safely. If agent
+is dead, boot it. Uses boot_remote spawn logic for all respawns, ensuring
+a single unified lifecycle path.
 
 Usage:
     python references/scripts/reboot_agent.py <role>
@@ -12,8 +13,8 @@ Usage:
     python references/scripts/reboot_agent.py skill --force
 
 Exit codes:
-    0 — reboot initiated (or agent not running)
-    1 — timeout (agent busy, sentinel cleaned up)
+    0 — reboot/boot completed successfully
+    1 — timeout (agent busy, sentinel cleaned up, no spawn)
     2 — usage error
 """
 
@@ -31,34 +32,19 @@ SQUID_DIR = REPO_ROOT / ".squidsquad"
 DEFAULT_TIMEOUT = 300  # 5 minutes
 POLL_INTERVAL = 2  # seconds
 
+# Import boot_remote for unified clone-path resolution and spawn logic
+sys.path.insert(0, str(SCRIPT_DIR))
+import boot_remote
+
 
 def _get_clone_path(role):
-    """Get the clone path for a role from .local-config."""
-    local_config = SQUID_DIR / ".local-config"
-    if not local_config.exists():
-        return REPO_ROOT  # Single-clone setup
-
-    for line in local_config.read_text(encoding="utf-8").splitlines():
-        if line.strip().startswith(f"- **{role}**:"):
-            path = line.split(":", 1)[1].strip()
-            return Path(path)
-    return REPO_ROOT
+    """Get the clone path for a role. Uses boot_remote's unified resolution."""
+    return boot_remote._get_clone_path(role)
 
 
 def _is_process_alive(pid):
     """Check if a process is alive."""
-    if sys.platform == "win32":
-        result = subprocess.run(
-            ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
-            capture_output=True, text=True, check=False,
-        )
-        return str(pid) in result.stdout
-    else:
-        try:
-            os.kill(pid, 0)
-            return True
-        except OSError:
-            return False
+    return boot_remote._is_process_alive(pid)
 
 
 def _kill_process(pid):
@@ -79,34 +65,86 @@ def _read_current_state(clone_path, role):
         return ""
 
 
+def _spawn_wrapper(role, clone_path):
+    """Spawn a new wrapper for a role using boot_remote logic.
+
+    Returns (success, message).
+    """
+    boot_script, script_type = boot_remote._find_boot_script(clone_path, role)
+    if boot_script is None:
+        return False, (
+            f"no boot script found at {clone_path}/.squidsquad/start-{role}.[sh|ps1]\n"
+            f"Manual boot: cd {clone_path} && claude -p .squidsquad/{role}/CLAUDE.md"
+        )
+
+    # Verify PID is truly dead before spawning (double-start prevention)
+    pid_file = Path(clone_path) / ".squidsquad" / role / ".pid"
+    if pid_file.exists():
+        try:
+            pid = int(pid_file.read_text(encoding="utf-8").strip())
+            if _is_process_alive(pid):
+                return False, f"PID {pid} still alive — cannot spawn (would double-start)"
+        except (ValueError, OSError):
+            pass
+
+    return boot_remote._spawn_terminal(clone_path, role, boot_script, script_type)
+
+
 def reboot(role, timeout=DEFAULT_TIMEOUT, force=False):
-    """Reboot an agent safely."""
+    """Reboot an agent safely. Reboot == ensure running."""
     clone_path = _get_clone_path(role)
     squid = clone_path / ".squidsquad"
     pid_file = squid / role / ".pid"
     restart_file = squid / role / ".restart"
+    stop_file = squid / role / ".stop"
+
+    # Check .stop sentinel first — do not respawn stopped agents
+    if stop_file.exists():
+        print(f"{role}: explicitly stopped (.stop sentinel) — not respawning")
+        return 0
 
     # Check if agent is running
-    if not pid_file.exists():
-        print(f"{role}: not running (no PID file)")
+    has_pid = pid_file.exists()
+    pid = None
+    pid_alive = False
+
+    if has_pid:
+        try:
+            pid = int(pid_file.read_text(encoding="utf-8").strip())
+            pid_alive = _is_process_alive(pid)
+        except (ValueError, OSError):
+            pass
+
+    # Agent not running (no PID file, or PID is dead) → boot it
+    if not pid_alive:
+        reason = "no PID file" if not has_pid else f"PID {pid} dead"
+        print(f"{role}: not running ({reason}) — booting...")
+        success, msg = _spawn_wrapper(role, clone_path)
+        if success:
+            print(f"{role}: booted ({msg})")
+        else:
+            print(f"{role}: boot failed — {msg}", file=sys.stderr)
+            return 1
         return 0
 
-    try:
-        pid = int(pid_file.read_text(encoding="utf-8").strip())
-    except (ValueError, OSError):
-        print(f"{role}: invalid PID file")
-        return 0
-
-    if not _is_process_alive(pid):
-        print(f"{role}: not running (PID {pid} dead)")
-        return 0
-
+    # Agent is running — restart it
     # Write restart sentinel
     restart_file.write_text("reboot requested by reboot_agent.py", encoding="utf-8")
 
     if force:
         _kill_process(pid)
-        print(f"{role}: force reboot initiated (PID {pid})")
+        # Wait briefly for process to die
+        for _ in range(10):
+            if not _is_process_alive(pid):
+                break
+            time.sleep(0.5)
+        print(f"{role}: force killed (PID {pid}) — respawning...")
+        success, msg = _spawn_wrapper(role, clone_path)
+        if success:
+            print(f"{role}: respawned ({msg})")
+        else:
+            print(f"{role}: respawn failed — {msg}", file=sys.stderr)
+            return 1
         return 0
 
     # Wait for idle
@@ -115,17 +153,29 @@ def reboot(role, timeout=DEFAULT_TIMEOUT, force=False):
         state = _read_current_state(clone_path, role)
         if state.startswith("idle"):
             _kill_process(pid)
-            print(f"{role}: reboot initiated (PID {pid}, went idle after {elapsed}s)")
+            # Wait briefly for process to die
+            for _ in range(10):
+                if not _is_process_alive(pid):
+                    break
+                time.sleep(0.5)
+            print(f"{role}: went idle after {elapsed}s, killed PID {pid} — respawning...")
+            success, msg = _spawn_wrapper(role, clone_path)
+            if success:
+                print(f"{role}: respawned ({msg})")
+            else:
+                print(f"{role}: respawn failed — {msg}", file=sys.stderr)
+                return 1
             return 0
         time.sleep(POLL_INTERVAL)
         elapsed += POLL_INTERVAL
 
-    # Timeout — clean up sentinel
+    # Timeout — clean up sentinel, do NOT spawn
     try:
         restart_file.unlink()
     except OSError:
         pass
-    print(f"{role}: timeout waiting for idle ({timeout}s) — agent is busy", file=sys.stderr)
+    print(f"{role}: timeout waiting for idle ({timeout}s) — agent is busy, no spawn",
+          file=sys.stderr)
     return 1
 
 
@@ -143,7 +193,6 @@ def main():
     if args.all:
         # Get all agent roles from config
         try:
-            sys.path.insert(0, str(SCRIPT_DIR))
             from config import get_agents
             agents = get_agents()
         except Exception:
