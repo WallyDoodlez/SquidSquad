@@ -42,6 +42,82 @@ class TestReadPidFile:
         assert result is None
 
 
+class TestParseLocalConfigPriority:
+    """Regression tests for #2750 — .local-config must win over ~/.squidsquad/clones/."""
+
+    def test_local_config_wins_over_global_clones(self, tmp_path):
+        """When both sources exist, .local-config (project-scoped) takes priority."""
+        correct_path = tmp_path / "correct" / "project" / "skill"
+        wrong_path = tmp_path / "wrong" / "project" / "skill"
+
+        config = tmp_path / ".local-config"
+        config.write_text(f"- **skill**: {correct_path}\n")
+
+        global_clones = tmp_path / "fakehome" / ".squidsquad" / "clones"
+        global_clones.mkdir(parents=True)
+        (global_clones / "skill").write_text(f"{wrong_path}\n")
+
+        with patch.object(boot_remote, "LOCAL_CONFIG", config), \
+             patch.object(boot_remote.Path, "home", return_value=tmp_path / "fakehome"):
+            result = boot_remote._parse_local_config()
+
+        assert result["skill"] == correct_path
+
+    def test_global_clones_used_as_fallback(self, tmp_path):
+        """When .local-config is missing, fall back to ~/.squidsquad/clones/."""
+        fallback_path = tmp_path / "fallback" / "path"
+
+        global_clones = tmp_path / "fakehome" / ".squidsquad" / "clones"
+        global_clones.mkdir(parents=True)
+        (global_clones / "skill").write_text(f"{fallback_path}\n")
+
+        with patch.object(boot_remote, "LOCAL_CONFIG", tmp_path / "missing"), \
+             patch.object(boot_remote.Path, "home", return_value=tmp_path / "fakehome"):
+            result = boot_remote._parse_local_config()
+
+        assert result["skill"] == fallback_path
+
+    def test_empty_local_config_falls_through(self, tmp_path):
+        """When .local-config exists but has no valid entries, use global."""
+        config = tmp_path / ".local-config"
+        config.write_text("# comment only\n")
+
+        global_qa = tmp_path / "global" / "qa"
+        global_clones = tmp_path / "fakehome" / ".squidsquad" / "clones"
+        global_clones.mkdir(parents=True)
+        (global_clones / "qa").write_text(f"{global_qa}\n")
+
+        with patch.object(boot_remote, "LOCAL_CONFIG", config), \
+             patch.object(boot_remote.Path, "home", return_value=tmp_path / "fakehome"):
+            result = boot_remote._parse_local_config()
+
+        assert result["qa"] == global_qa
+
+    def test_cross_project_isolation(self, tmp_path):
+        """Core regression: global clones from project B don't leak into project A."""
+        projectA_skill = tmp_path / "projectA" / "skill"
+        projectB_main = tmp_path / "projectB" / "main"
+        projectB_designer = tmp_path / "projectB" / "designer"
+        projectB_skill = tmp_path / "projectB" / "skill"
+
+        config = tmp_path / ".local-config"
+        config.write_text(f"- **skill**: {projectA_skill}\n")
+
+        global_clones = tmp_path / "fakehome" / ".squidsquad" / "clones"
+        global_clones.mkdir(parents=True)
+        (global_clones / "pm").write_text(f"{projectB_main}\n")
+        (global_clones / "designer").write_text(f"{projectB_designer}\n")
+        (global_clones / "skill").write_text(f"{projectB_skill}\n")
+
+        with patch.object(boot_remote, "LOCAL_CONFIG", config), \
+             patch.object(boot_remote.Path, "home", return_value=tmp_path / "fakehome"):
+            result = boot_remote._parse_local_config()
+
+        assert result["skill"] == projectA_skill
+        assert "pm" not in result
+        assert "designer" not in result
+
+
 class TestIsProcessAlive:
     def test_none_pid_is_not_alive(self):
         assert boot_remote._is_process_alive(None) is False

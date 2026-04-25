@@ -15,18 +15,23 @@ import health_check
 
 class TestParseLocalConfig:
     def test_parses_valid_entries(self, tmp_path):
+        pm_path = tmp_path / "pm-clone"
+        skill_path = tmp_path / "skill-clone"
         config = tmp_path / ".local-config"
         config.write_text(
-            "# comment\n\n- **pm**: /path/to/pm\n- **skill**: /path/to/skill\n"
+            f"# comment\n\n- **pm**: {pm_path}\n- **skill**: {skill_path}\n"
         )
         with patch.object(health_check, "LOCAL_CONFIG", config):
             result = health_check._parse_local_config()
         assert "pm" in result
         assert "skill" in result
-        assert result["pm"] == Path("/path/to/pm")
+        assert result["pm"] == pm_path
 
     def test_missing_file_returns_empty(self, tmp_path):
-        with patch.object(health_check, "LOCAL_CONFIG", tmp_path / "missing"):
+        fake_home = tmp_path / "fakehome"
+        fake_home.mkdir()
+        with patch.object(health_check, "LOCAL_CONFIG", tmp_path / "missing"), \
+             patch.object(health_check.Path, "home", return_value=fake_home):
             result = health_check._parse_local_config()
         assert result == {}
 
@@ -37,6 +42,58 @@ class TestParseLocalConfig:
             result = health_check._parse_local_config()
         assert len(result) == 1
         assert "pm" in result
+
+
+class TestParseLocalConfigPriority:
+    """Regression tests for #2750 — .local-config must win over ~/.squidsquad/clones/."""
+
+    def test_local_config_wins_over_global_clones(self, tmp_path):
+        """When both sources exist, .local-config (project-scoped) takes priority."""
+        correct_path = tmp_path / "correct" / "project" / "skill"
+        wrong_path = tmp_path / "wrong" / "project" / "skill"
+
+        config = tmp_path / ".local-config"
+        config.write_text(f"- **skill**: {correct_path}\n")
+
+        global_clones = tmp_path / "fakehome" / ".squidsquad" / "clones"
+        global_clones.mkdir(parents=True)
+        (global_clones / "skill").write_text(f"{wrong_path}\n")
+
+        with patch.object(health_check, "LOCAL_CONFIG", config), \
+             patch.object(health_check.Path, "home", return_value=tmp_path / "fakehome"):
+            result = health_check._parse_local_config()
+
+        assert result["skill"] == correct_path
+
+    def test_global_clones_used_as_fallback(self, tmp_path):
+        """When .local-config is missing, fall back to ~/.squidsquad/clones/."""
+        fallback_path = tmp_path / "fallback" / "path"
+
+        global_clones = tmp_path / "fakehome" / ".squidsquad" / "clones"
+        global_clones.mkdir(parents=True)
+        (global_clones / "skill").write_text(f"{fallback_path}\n")
+
+        with patch.object(health_check, "LOCAL_CONFIG", tmp_path / "missing"), \
+             patch.object(health_check.Path, "home", return_value=tmp_path / "fakehome"):
+            result = health_check._parse_local_config()
+
+        assert result["skill"] == fallback_path
+
+    def test_empty_local_config_falls_through(self, tmp_path):
+        """When .local-config exists but has no valid entries, use global."""
+        config = tmp_path / ".local-config"
+        config.write_text("# comment only\n")
+
+        global_qa = tmp_path / "global" / "qa"
+        global_clones = tmp_path / "fakehome" / ".squidsquad" / "clones"
+        global_clones.mkdir(parents=True)
+        (global_clones / "qa").write_text(f"{global_qa}\n")
+
+        with patch.object(health_check, "LOCAL_CONFIG", config), \
+             patch.object(health_check.Path, "home", return_value=tmp_path / "fakehome"):
+            result = health_check._parse_local_config()
+
+        assert result["qa"] == global_qa
 
 
 class TestReadInterval:

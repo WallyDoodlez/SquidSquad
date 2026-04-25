@@ -47,12 +47,36 @@ CONFIG_MD = SQUIDSQUAD_DIR / "config.md"
 def _parse_local_config():
     """Parse clone paths → {role: Path(clone_root)}.
 
-    Reads from ~/.squidsquad/clones/ first (shared filesystem),
-    falls back to .local-config (legacy).
+    Reads project-local .local-config first (scoped to this repo),
+    falls back to ~/.squidsquad/clones/ (global, shared filesystem).
+
+    .local-config is authoritative because it is project-scoped.
+    The global store (~/.squidsquad/clones/) is shared across all
+    projects on the machine and can contain stale paths from other
+    projects, causing cross-project boot (#2750).
     """
     result = {}
 
-    # Try shared filesystem first
+    # Primary: .local-config (project-scoped, always correct)
+    # Format: `- **role**: <path>` — relative paths resolve against repo root.
+    if LOCAL_CONFIG.exists():
+        try:
+            text = LOCAL_CONFIG.read_text(encoding="utf-8")
+            for line in text.splitlines():
+                m = re.match(r"-\s*\*\*(\w+)\*\*:\s*(.+)", line)
+                if m:
+                    role = m.group(1).strip()
+                    raw_path = Path(m.group(2).strip())
+                    # Resolve relative paths against repo root
+                    if not raw_path.is_absolute():
+                        raw_path = (REPO_ROOT / raw_path).resolve()
+                    result[role] = raw_path
+        except Exception:
+            pass
+        if result:
+            return result
+
+    # Fallback: ~/.squidsquad/clones/ (global shared filesystem)
     shared_clones = Path.home() / ".squidsquad" / "clones"
     if shared_clones.exists() and shared_clones.is_dir():
         for clone_file in shared_clones.iterdir():
@@ -63,26 +87,7 @@ def _parse_local_config():
                         result[clone_file.name] = Path(path)
                 except (OSError, UnicodeDecodeError):
                     continue
-        if result:
-            return result
 
-    # Fall back to .local-config (format: `- **role**: <path>`)
-    # Relative paths resolve against the repo root (parent of .squidsquad/).
-    if not LOCAL_CONFIG.exists():
-        return {}
-    try:
-        text = LOCAL_CONFIG.read_text(encoding="utf-8")
-        for line in text.splitlines():
-            m = re.match(r"-\s*\*\*(\w+)\*\*:\s*(.+)", line)
-            if m:
-                role = m.group(1).strip()
-                raw_path = Path(m.group(2).strip())
-                # Resolve relative paths against repo root
-                if not raw_path.is_absolute():
-                    raw_path = (REPO_ROOT / raw_path).resolve()
-                result[role] = raw_path
-    except Exception:
-        pass
     return result
 
 
