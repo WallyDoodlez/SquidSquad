@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-25 09:02
+
+- **Files scanned**: references/scripts/tracker.py, references/scripts/model_router.py, references/scripts/vault_check.py
+- **Findings**: #2693 (LEGAL_TRANSITIONS references status:pending-review but label is status:pending-human-review)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-25 07:32
 
 - **Files scanned**: references/scripts/cycle_post.py, references/scripts/shared_fs.py, references/scripts/vault_optimize.py
