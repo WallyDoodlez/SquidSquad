@@ -330,3 +330,145 @@ class TestEnrichWithComments:
         items = []
         cycle_pre._enrich_with_comments(items)
         assert items == []
+
+
+# ---------------------------------------------------------------------------
+# PM Input Builder — approved, human-blocked, recently-commented (#2494)
+# ---------------------------------------------------------------------------
+
+class TestBuildPmInputNewFields:
+    """Tests for #2494: approved_items, human_blocked, recently_commented."""
+
+    def _make_mocks(self, monkeypatch, tracker_responses=None, gh_responses=None):
+        """Set up mocks for _run_script and _run with configurable responses."""
+        tracker_responses = tracker_responses or {}
+        gh_responses = gh_responses or {}
+
+        def fake_run_script(*args, **kwargs):
+            fake = MagicMock()
+            fake.returncode = 0
+            fake.stdout = "[]"
+            # Match tracker.py subcommands
+            if len(args) >= 2 and "tracker.py" in str(args[0]):
+                subcmd = args[1] if len(args) > 1 else ""
+                # For list-by-labels, match on the label string
+                if subcmd == "list-by-labels" and len(args) > 2:
+                    label_str = args[2]
+                    fake.stdout = json.dumps(
+                        tracker_responses.get(f"list-by-labels:{label_str}", [])
+                    )
+                elif subcmd in tracker_responses:
+                    fake.stdout = json.dumps(tracker_responses[subcmd])
+            elif len(args) >= 1 and "health_check.py" in str(args[0]):
+                fake.stdout = json.dumps(tracker_responses.get("health", []))
+            return fake
+
+        def fake_run(cmd, **kwargs):
+            fake = MagicMock()
+            fake.returncode = 0
+            fake.stdout = "[]"
+            fake.stderr = ""
+            cmd_str = " ".join(str(c) for c in cmd)
+            for key, val in gh_responses.items():
+                if key in cmd_str:
+                    fake.stdout = json.dumps(val)
+                    break
+            return fake
+
+        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_pre, "_run", fake_run)
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
+            "branch-workflow": "no", "pr-flow": "no",
+            "improvement-scanning": "no", "vault-remember": "no",
+            "vault-optimize": "no", "ship-threshold": "10",
+            "shipped-since-bump": "0", "auto-boot-agents": "no",
+            "interval": "30",
+        }.get(f, ""))
+        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
+
+    def test_approved_items_present(self, patch_dirs, squid_dir, monkeypatch):
+        """PM input includes approved_items field."""
+        approved = [{"number": 100, "title": "Approved task", "labels": []}]
+        self._make_mocks(monkeypatch, tracker_responses={
+            "list-by-labels:squidsquad,status:approved": approved,
+        })
+        result = cycle_pre._build_pm_input("pm")
+        assert "approved_items" in result
+        assert len(result["approved_items"]) == 1
+        assert result["approved_items"][0]["number"] == 100
+
+    def test_approved_items_empty(self, patch_dirs, squid_dir, monkeypatch):
+        """approved_items is empty list when no approved items exist."""
+        self._make_mocks(monkeypatch)
+        result = cycle_pre._build_pm_input("pm")
+        assert result["approved_items"] == []
+
+    def test_human_blocked_items(self, patch_dirs, squid_dir, monkeypatch):
+        """PM input includes human_blocked field with items from all three labels."""
+        blocked = [{"number": 200, "title": "Needs human setup", "labels": []}]
+        review = [{"number": 201, "title": "Needs human review", "labels": []}]
+        self._make_mocks(monkeypatch, tracker_responses={
+            "list-by-labels:squidsquad,blocked:human-action": blocked,
+            "list-by-labels:squidsquad,status:pending-human-setup": [],
+            "list-by-labels:squidsquad,status:pending-human-review": review,
+        })
+        result = cycle_pre._build_pm_input("pm")
+        assert "human_blocked" in result
+        assert len(result["human_blocked"]) == 2
+        numbers = {i["number"] for i in result["human_blocked"]}
+        assert numbers == {200, 201}
+
+    def test_human_blocked_deduplicates(self, patch_dirs, squid_dir, monkeypatch):
+        """Items appearing in multiple blocked queries are not duplicated."""
+        same_item = [{"number": 300, "title": "Same item", "labels": []}]
+        self._make_mocks(monkeypatch, tracker_responses={
+            "list-by-labels:squidsquad,blocked:human-action": same_item,
+            "list-by-labels:squidsquad,status:pending-human-setup": same_item,
+            "list-by-labels:squidsquad,status:pending-human-review": [],
+        })
+        result = cycle_pre._build_pm_input("pm")
+        assert len(result["human_blocked"]) == 1
+
+    def test_recently_commented_present(self, patch_dirs, squid_dir, monkeypatch):
+        """PM input includes recently_commented field."""
+        from datetime import datetime, timezone
+        now_iso = datetime.now(timezone.utc).isoformat()
+        items = [{"number": 400, "title": "Recent", "labels": [], "updatedAt": now_iso}]
+        self._make_mocks(monkeypatch, gh_responses={
+            "issue list": items,
+        })
+        result = cycle_pre._build_pm_input("pm")
+        assert "recently_commented" in result
+
+    def test_recently_commented_filters_old(self, patch_dirs, squid_dir, monkeypatch):
+        """Items updated more than 2x interval ago are excluded."""
+        items = [{"number": 500, "title": "Old", "labels": [], "updatedAt": "2020-01-01T00:00:00Z"}]
+        self._make_mocks(monkeypatch, gh_responses={
+            "issue list": items,
+        })
+        result = cycle_pre._build_pm_input("pm")
+        assert len(result["recently_commented"]) == 0
+
+    def test_all_new_fields_enriched_with_comments(self, patch_dirs, squid_dir, monkeypatch):
+        """All three new fields are enriched with latest comments."""
+        from datetime import datetime, timezone
+        now_iso = datetime.now(timezone.utc).isoformat()
+        comment = {"author": "human", "body": "Please fix", "createdAt": now_iso}
+
+        approved = [{"number": 600, "title": "A", "labels": []}]
+        blocked = [{"number": 601, "title": "B", "labels": []}]
+
+        self._make_mocks(monkeypatch, tracker_responses={
+            "list-by-labels:squidsquad,status:approved": approved,
+            "list-by-labels:squidsquad,blocked:human-action": blocked,
+            "list-by-labels:squidsquad,status:pending-human-setup": [],
+            "list-by-labels:squidsquad,status:pending-human-review": [],
+        }, gh_responses={
+            "issue list": [{"number": 602, "title": "C", "labels": [], "updatedAt": now_iso}],
+        })
+        # Override comment enrichment to add comments
+        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: comment)
+
+        result = cycle_pre._build_pm_input("pm")
+        assert result["approved_items"][0].get("latest_comment") == comment
+        assert result["human_blocked"][0].get("latest_comment") == comment
