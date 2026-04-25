@@ -15,34 +15,38 @@ No meetings. No message queues. Just markdown.
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                      Git Repository                       │
-│                                                          │
-│  ┌──────────┐  ┌──────────┐  ┌────┐  ┌────┐  ┌────┐    │
-│  │[Role]Lead│  │ Designer │  │ QA │  │ PM │  │ DM │    │
-│  │(Claude)  │  │(Claude)  │  │    │  │    │  │    │    │
-│  └────┬─────┘  └────┬─────┘  └──┬─┘  └──┬─┘  └──┬─┘    │
-│       └──────┬───────┘           │       │       │      │
-│              ▼                   ▼       ▼       ▼      │
-│              .squidsquad/                               │
-│              ├── config.md                               │
-│              ├── [role]/          ← one per dev agent    │
-│              │   ├── CLAUDE.md                           │
-│              │   ├── working-state.md                    │
-│              │   ├── planning/                           │
-│              │   └── iterations/                         │
-│              ├── pm/                                     │
-│              │   ├── CLAUDE.md                           │
-│              │   ├── working-state.md                    │
-│              │   └── iterations/                         │
-│              ├── qa/              ← when dev/designer present │
-│              ├── dm/              ← Delivery Manager     │
-│              ├── designer/        ← when designer role defined │
-│              ├── templates/       ← substituted agent instructions │
-│              └── vault/           ← shared knowledge layer │
-│              Bugs & features: GitHub Issues with labels   │
-└──────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph repo["Git Repository"]
+        subgraph agents["Claude Code Agents"]
+            RL["[Role] Lead"]
+            DE["Designer"]
+            QA["QA"]
+            PM["PM"]
+            DM["DM"]
+        end
+
+        subgraph squid[".squidsquad/"]
+            config["config.md"]
+            role_dir["[role]/ — one per dev agent\nCLAUDE.md, working-state.md\nplanning/, iterations/"]
+            pm_dir["pm/\nCLAUDE.md, working-state.md\niterations/"]
+            qa_dir["qa/ — when dev/designer present"]
+            dm_dir["dm/ — Delivery Manager"]
+            designer_dir["designer/ — when designer defined"]
+            templates["templates/ — agent instructions"]
+            vault["vault/ — shared knowledge layer"]
+        end
+
+        GH["GitHub Issues\nBugs & features with labels"]
+    end
+
+    RL --> squid
+    DE --> squid
+    QA --> squid
+    PM --> squid
+    DM --> squid
+    PM --> GH
+    QA --> GH
 ```
 
 ### Roles
