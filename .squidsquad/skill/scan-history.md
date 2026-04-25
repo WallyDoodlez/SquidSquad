@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-25 07:32
+
+- **Files scanned**: references/scripts/cycle_post.py, references/scripts/shared_fs.py, references/scripts/vault_optimize.py
+- **Findings**: #2677 (vault_optimize prune reads stale notes dict after git_mv — OSError on self-linking notes)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-25 06:31
 
 - **Files scanned**: references/scripts/cycle_post.py, references/scripts/health_check.py, references/scripts/config.py, references/scripts/triage.py, references/scripts/git_ops.py
