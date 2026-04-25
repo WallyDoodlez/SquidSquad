@@ -4,13 +4,11 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #2353 reboot_agent.py --all dict bug — pending-test (high, role:skill)
-- #2350 BRIEFING.md staleness — open (low, role:pm)
-- #2189 Architecture documentation — pending-test (medium, role:dm)
-- #1772 DM delivery missing npm publish — pending-test (high, role:dm)
-- #2361 TC coverage gate — pending-test (high, role:skill)
-- #2351 Tarball installer — approved (medium, role:skill)
-- No other approved tasks awaiting pickup
+- #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — DM ready, awaiting human greenlight
+- #2811 Agent clone isolation — pending (high, role:skill) — awaiting human approval
+- #2495 Rewrite /squidsquad-upgrade — pending (high, role:skill) — awaiting human approval
+- No in-progress, pending-test, or pending-ship items
+- 49 pending tasks in backlog awaiting approval
 
 ## Core Architecture
 
@@ -40,10 +38,12 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 - Test suite exists (`python tests/run_tests.py`) — static analysis + integration tests
 - PR flow currently disabled
-- Ship counter: threshold 10, currently at 30 (bump overdue)
+- Ship counter: threshold 10, currently at 31 (bump severely overdue — gated on #3/v1.0.0 decision)
+- 34 pre-existing test failures (QA framework, model_router_live, reboot_agent) + 24 comprehension errors — not blocking shipping
 
 ## Team State
 
 - Active agents: qa, skill (dev agents), PM (always present), QA (always present), DM (present)
-- Current version: 0.25.0 (Architecture Version 1)
+- Current version: 0.25.0
 - Tracker: GitHub Issues with structured labels (`type:`, `status:`, `role:`, `priority:`)
+- Boot detection now runs automatically in cycle_pre.py (#2724 shipped 2026-04-25)
