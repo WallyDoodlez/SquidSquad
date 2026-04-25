@@ -4,6 +4,37 @@ All notable changes to SquidSquad will be documented in this file. This changelo
 
 ---
 
+## [0.26.0] — 2026-04-25
+
+### Added
+
+- #592 — Architecture diagram in SKILL.md now uses Mermaid for clarity and maintainability
+- #2487 — Cycle runner sub-skill wired into all agent templates — consistent mechanical/creative separation across roles
+- #2493 — Setup wizard now creates per-agent working directories for multi-agent execution
+- #2496 — Unified agent lifecycle — single wrapper handles all start/restart/reboot paths
+- #2575 — All agent roles now default to Sonnet for subagent spawns, reducing cost without sacrificing quality
+- #2724 — Agent boot detection moved to cycle_pre.py; new `start-squad` script for one-command team launch
+
+### Fixed
+
+- #1772 — npm publish now runs during version bumps — packages/cli stays in sync with SquidSquad version
+- #2469 — tc_coverage.py regex no longer matches heading text as test results
+- #2494 — PM cycle input now includes approved items, recent human comments, and human-blocked items
+- #2537 — compose.py no longer double-wraps sub-skill markers in deployed CLAUDE.md
+- #2538 — Boot agent now has working-state.md — resolves test_dev_agent_has_working_state failure
+- #2554 — Orphaned boot agent removed from config — no longer causes test failures
+- #2659 — Removed dead _get_context_pressure function from cycle_pre.py
+- #2671 — git_ops.py _get_working_branch no longer imports nonexistent config.get
+- #2677 — vault_optimize prune now refreshes notes dict after git_mv — fixes OSError on self-linking notes
+- #2693 — LEGAL_TRANSITIONS now uses correct label status:pending-human-review
+- #2694 — start-role.ps1 singleton PID check moved before pre-flight — eliminates race condition
+- #2700 — DM now runs `npm whoami` before declaring npm publish blocked on human auth
+- #2701 — Fixed duplicate dependencies key and bin path in packages/cli/package.json
+- #2713 — cycle_pre.py now preserves agent health data when health_check.py exits non-zero
+- #2750 — boot_remote.py now uses project-local clone paths instead of global ~/.squidsquad/clones/
+
+---
+
 ## [0.25.0] — 2026-04-23
 
 ### Added
