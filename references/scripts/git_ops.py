@@ -36,8 +36,8 @@ def _get_working_branch():
     """Get the configured working branch name. Falls back to 'main'."""
     try:
         sys.path.insert(0, str(SCRIPT_DIR))
-        from config import get as config_get
-        branch = config_get("working-branch")
+        from config import get_field
+        branch = get_field("working-branch")
         return branch if branch else "main"
     except Exception:
         return "main"

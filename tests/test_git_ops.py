@@ -508,3 +508,36 @@ class TestBranchUtilities:
     def test_current_branch(self, mock_run):
         mock_run.return_value = _mock_result(stdout="main\n")
         assert git_ops.current_branch() == "main"
+
+
+# ---------------------------------------------------------------------------
+# _get_working_branch (#2671 regression)
+# ---------------------------------------------------------------------------
+
+class TestGetWorkingBranch:
+    def test_reads_config_working_branch(self):
+        """_get_working_branch imports get_field (not nonexistent 'get')."""
+        with patch.dict("sys.modules", {"config": MagicMock()}):
+            import importlib
+            importlib.reload(git_ops)
+            # Mock get_field to return a custom branch
+            with patch("config.get_field", return_value="develop"):
+                result = git_ops._get_working_branch()
+            assert result == "develop"
+
+    def test_falls_back_to_main_on_import_error(self):
+        """Falls back to 'main' if config module unavailable."""
+        with patch.dict("sys.modules", {"config": None}):
+            import importlib
+            importlib.reload(git_ops)
+            result = git_ops._get_working_branch()
+        assert result == "main"
+
+    def test_falls_back_to_main_on_empty_value(self):
+        """Falls back to 'main' if config returns empty string."""
+        with patch.dict("sys.modules", {"config": MagicMock()}):
+            import importlib
+            importlib.reload(git_ops)
+            with patch("config.get_field", return_value=""):
+                result = git_ops._get_working_branch()
+            assert result == "main"
