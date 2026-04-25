@@ -11,15 +11,15 @@
 
 | TC | Title | Type | Result | Test / Notes |
 |----|-------|------|--------|--------------|
-| TC-1 | Wizard creates sibling clones for non-PM agents | BLOCKED | BLOCKED | Requires actual `git clone` operations. Not covered by automated tests. |
+| TC-1 | Wizard creates sibling clones for non-PM agents | PASS | PASS | PM live verification: sibling clone created with .git directory |
 | TC-2 | PM does NOT get a clone | PASS | PASS | `TestPmNoClone::test_pm_excluded_from_cloning` |
 | TC-3 | .local-config written with relative paths | PASS | PASS | `TestLocalConfigRelativePaths::test_pm_maps_to_dot`, `test_non_pm_maps_to_relative`, `test_no_absolute_paths`; also `TestGenerateLocalConfig::test_with_clone_paths_relative`, `test_clone_paths_partial` |
 | TC-4 | Relative paths resolve correctly from primary repo | PASS | PASS | `TestRelativePathResolution::test_health_check_resolves_relative_paths`, `test_boot_remote_resolves_relative_paths`, `test_absolute_paths_still_work`, `TestBackwardCompat::test_dot_resolves_to_repo_root` |
-| TC-5 | Clones have correct remote URL | BLOCKED | BLOCKED | Requires actual `git clone` and `git remote` operations. Not covered by automated tests. |
-| TC-6 | Clones are on the correct branch | BLOCKED | BLOCKED | Requires actual `git clone` and `git branch` operations. Not covered by automated tests. |
-| TC-7 | Idempotent — running setup again does not break existing clones | BLOCKED | BLOCKED | Requires actual multi-repo filesystem state. Not covered by automated tests. |
+| TC-5 | Clones have correct remote URL | PASS | PASS | PM live verification: remote URL matches bare repo |
+| TC-6 | Clones are on the correct branch | PASS | PASS | PM live verification: correct branch (master) |
+| TC-7 | Idempotent — running setup again does not break existing clones | PASS | PASS | PM live verification: re-run preserves clone, reports in existing_clones |
 | TC-8 | Single-agent setup (PM only) — no clones created | PASS | PASS | `TestSingleAgentSetup::test_pm_only_no_clones` |
-| TC-9 | Windows path compatibility — spaces in paths | BLOCKED | BLOCKED | Requires actual filesystem with spaces in path and `git clone`. Not covered by automated tests. |
+| TC-9 | Windows path compatibility — spaces in paths | PASS | PASS | PM live verification: clone with spaces in path works on Windows |
 | TC-10 | health_check.py reads agent state via relative paths | PASS | PASS | `TestRelativePathResolution::test_health_check_resolves_relative_paths`, `TestBackwardCompat::test_dot_resolves_to_repo_root` |
 | TC-11 | boot_remote.py spawns agents in correct clone dirs | PASS | PASS | `TestRelativePathResolution::test_boot_remote_resolves_relative_paths` |
 
