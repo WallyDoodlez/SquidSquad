@@ -128,8 +128,8 @@ LEGAL_TRANSITIONS = {
         "status:pending-human-review",
         "status:pending-human-setup",
     },
-    "status:pending-test": {"status:in-progress", "status:pending-ship", "status:pending-review"},
-    "status:pending-review": {"status:in-progress", "status:pending-ship"},
+    "status:pending-test": {"status:in-progress", "status:pending-ship", "status:pending-human-review"},
+    "status:pending-human-review": {"status:in-progress", "status:pending-ship"},
     "status:pending-ship": {"status:shipped", "status:in-progress"},
     "status:shipped": set(),  # terminal
 
@@ -185,11 +185,11 @@ ROLE_AUTHORITY = {
     # when installed. Dev and DM roles remain locked out.
     ("status:pending-test", "status:in-progress"): {"qa", "pm"},
     ("status:pending-test", "status:pending-ship"): {"qa", "pm"},
-    # PR Flow: QA transitions to pending-review (not pending-ship) when PR Flow enabled
-    ("status:pending-test", "status:pending-review"): {"qa", "pm"},
-    # PR Flow: PM transitions pending-review on merge detection or human review feedback
-    ("status:pending-review", "status:in-progress"): {"pm"},
-    ("status:pending-review", "status:pending-ship"): {"pm"},
+    # PR Flow: QA transitions to pending-human-review (not pending-ship) when PR Flow enabled
+    ("status:pending-test", "status:pending-human-review"): {"qa", "pm"},
+    # PR Flow: PM transitions pending-human-review on merge detection or human review feedback
+    ("status:pending-human-review", "status:in-progress"): {"pm"},
+    ("status:pending-human-review", "status:pending-ship"): {"pm"},
 
     # DM owns delivery / shipping
     ("status:pending-ship", "status:shipped"): {"dm"},
