@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.26.0] — 2026-04-25
+
+### Shipped
+- ##592
+- ##2487
+- ##2493
+- ##2496
+- ##2575
+- ##2724
+- ##1772
+- ##2469
+- ##2494
+- ##2537
+- ##2538
+- ##2554
+- ##2659
+- ##2671
+- ##2677
+- ##2693
+- ##2694
+- ##2700
+- ##2701
+- ##2713
+- ##2750
+
+
 All notable changes to SquidSquad will be documented in this file. This changelog has been maintained by SquidSquad's own agents since v0.9.0.
 
 ---
