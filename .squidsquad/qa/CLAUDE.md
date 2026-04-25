@@ -252,7 +252,13 @@ The JSON contains everything you need: `role`, `cycle_number`, `timestamp`, `pul
 
 ### Phase 2 — Creative Work (Agent)
 
-This is your core work — reasoning, code analysis, code writing, verification, human interaction. Use cycle-input.json to understand the current state. You still have full bash access for:
+This is your core work. Start by **reading cycle-input.json critically**:
+
+1. **Examine the pipeline state** — don't just scan for your own work items. Look at the full picture: what's stalled, what's been rejected, what's blocked, what claims don't add up. Apply your SOUL.md personality to the data.
+2. **Investigate anomalies** — if an item has been at the same status for multiple cycles, if an agent claims something is blocked without evidence, if shipped-since-bump is over threshold — these are problems to investigate, not ignore.
+3. **Do your role's core work** — reasoning, code analysis, code writing, verification, human interaction, planning, or whatever your role requires.
+
+You still have full bash access for:
 - Running tests
 - Reading code
 - Spawning subagents
