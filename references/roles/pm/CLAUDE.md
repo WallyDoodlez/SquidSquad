@@ -84,15 +84,12 @@ Print: `[🦑 HH:MM:SS] Checking working state...`
 
 Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `in-progress`), resume that work.
 
-**Planning phase suppression**: If `working-state.md` contains a `**Phase**:` line with an active planning phase (e.g., `**Phase**: researching #XXX`, `**Phase**: discussing #XXX`, `**Phase**: test-planning #XXX`), this cycle is **suppressed**:
+**Planning phase suppression**: If `cycle-input.json` contains `"suppressed": true` in `working_state` (set when working-state.md has a `**Phase**:` line with an active planning phase), this cycle is **suppressed**:
 
 1. Print: `[🦑 HH:MM:SS] ---- cycle N (suppressed — active planning phase) ----`
-2. Write status bar state: `echo "pulling|Suppressed — planning active" > .squidsquad/pm/current-state.tmp && mv -f .squidsquad/pm/current-state.tmp .squidsquad/pm/current-state`
-3. Run `git pull --rebase` (silent — agents need each other's commits).
-4. Run the **Agent Health Check** (Step 7) — stalled agent detection must not stop during planning.
-5. Write `idle|` to `current-state`.
-6. Print the cycle-complete marker. Skip all other steps (no tracker verification, no iteration log, no commit/push unless the pull introduced changes).
-7. Return — `/loop` will trigger the next cycle.
+2. Write a minimal cycle-output.json with `"cycle_type": "suppressed"` and a brief summary.
+3. Run `python references/scripts/cycle_post.py [ROLE]` — it handles the commit/push and status bar cleanup.
+4. Return — `/loop` will trigger the next cycle.
 
 If the file is empty or has no active task or planning phase, proceed normally to Step 2.
 
