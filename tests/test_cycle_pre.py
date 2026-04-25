@@ -381,7 +381,7 @@ class TestBuildPmInputNewFields:
             "branch-workflow": "no", "pr-flow": "no",
             "improvement-scanning": "no", "vault-remember": "no",
             "vault-optimize": "no", "ship-threshold": "10",
-            "shipped-since-bump": "0", "auto-boot-agents": "no",
+            "shipped-since-bump": "0",
             "interval": "30",
         }.get(f, ""))
         monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
@@ -505,7 +505,7 @@ class TestBuildPmInputNewFields:
             "branch-workflow": "no", "pr-flow": "no",
             "improvement-scanning": "no", "vault-remember": "no",
             "vault-optimize": "no", "ship-threshold": "10",
-            "shipped-since-bump": "0", "auto-boot-agents": "no",
+            "shipped-since-bump": "0",
             "interval": "30",
         }.get(f, ""))
         monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
@@ -549,10 +549,90 @@ class TestQAHealthParsing:
             "branch-workflow": "no", "pr-flow": "no",
             "improvement-scanning": "no", "vault-remember": "no",
             "vault-optimize": "no", "ship-threshold": "10",
-            "shipped-since-bump": "0", "auto-boot-agents": "no",
+            "shipped-since-bump": "0",
             "interval": "30",
         }.get(f, ""))
         monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
 
         result = cycle_pre._build_qa_input("qa")
         assert result["agent_health"] == {"skill": "healthy", "dm": "unknown"}
+
+
+class TestBootResults:
+    """Tests for #2724: boot_results field in PM cycle-input.json."""
+
+    def _make_mocks(self, monkeypatch, boot_data=None, boot_returncode=0):
+        """Set up mocks with configurable boot_remote.py response."""
+
+        def fake_run_script(*args, **kwargs):
+            fake = MagicMock()
+            fake.returncode = 0
+            fake.stdout = "[]"
+            if len(args) >= 1 and "boot_remote.py" in str(args[0]):
+                fake.returncode = boot_returncode
+                fake.stdout = json.dumps(boot_data if boot_data is not None else [])
+            elif len(args) >= 1 and "health_check.py" in str(args[0]):
+                fake.stdout = "[]"
+            elif len(args) >= 2 and "tracker.py" in str(args[0]):
+                fake.stdout = "[]"
+            return fake
+
+        def fake_run(cmd, **kwargs):
+            fake = MagicMock()
+            fake.returncode = 0
+            fake.stdout = "[]"
+            fake.stderr = ""
+            return fake
+
+        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_pre, "_run", fake_run)
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
+            "branch-workflow": "no", "pr-flow": "no",
+            "improvement-scanning": "no", "vault-remember": "no",
+            "vault-optimize": "no", "ship-threshold": "10",
+            "shipped-since-bump": "0",
+            "interval": "30",
+        }.get(f, ""))
+        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
+
+    def test_boot_results_present(self, patch_dirs, squid_dir, monkeypatch):
+        """PM input includes boot_results field."""
+        boot_data = [
+            {"role": "skill", "action": "skip", "success": True, "message": "alive"},
+        ]
+        self._make_mocks(monkeypatch, boot_data=boot_data)
+        result = cycle_pre._build_pm_input("pm")
+        assert "boot_results" in result
+        assert isinstance(result["boot_results"], list)
+        assert len(result["boot_results"]) == 1
+        assert result["boot_results"][0]["role"] == "skill"
+
+    def test_boot_results_empty_when_no_agents(self, patch_dirs, squid_dir, monkeypatch):
+        """boot_results is empty list when no agents configured."""
+        self._make_mocks(monkeypatch, boot_data=[])
+        result = cycle_pre._build_pm_input("pm")
+        assert result["boot_results"] == []
+
+    def test_boot_results_captures_spawn_failure(self, patch_dirs, squid_dir, monkeypatch):
+        """boot_results captures spawn failures (boot_remote.py exits 1)."""
+        boot_data = [
+            {"role": "skill", "action": "spawn", "success": False, "message": "wt.exe not found"},
+        ]
+        self._make_mocks(monkeypatch, boot_data=boot_data, boot_returncode=1)
+        result = cycle_pre._build_pm_input("pm")
+        assert len(result["boot_results"]) == 1
+        assert result["boot_results"][0]["success"] is False
+
+    def test_auto_boot_agents_field_absent(self, patch_dirs, squid_dir, monkeypatch):
+        """Regression #2724: auto_boot_agents field must NOT be in config."""
+        self._make_mocks(monkeypatch)
+        result = cycle_pre._build_pm_input("pm")
+        assert "auto_boot_agents" not in result.get("config", {})
+
+    def test_boot_results_handles_dict_response(self, patch_dirs, squid_dir, monkeypatch):
+        """boot_results handles a single dict response (disabled/error case)."""
+        boot_data = {"action": "error", "message": "no agents"}
+        self._make_mocks(monkeypatch, boot_data=boot_data)
+        result = cycle_pre._build_pm_input("pm")
+        assert isinstance(result["boot_results"], list)
+        assert len(result["boot_results"]) == 1
