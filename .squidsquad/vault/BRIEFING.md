@@ -38,6 +38,6 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Team State
 
-- Active agents: boot, qa, skill (dev agents), PM (always present), QA (always present), DM (present)
+- Active agents: qa, skill (dev agents), PM (always present), QA (always present), DM (present)
 - Current version: 0.25.0 (Architecture Version 1)
 - Tracker: GitHub Issues with structured labels (`type:`, `status:`, `role:`, `priority:`)
