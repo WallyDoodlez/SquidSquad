@@ -2,7 +2,7 @@
 # Order matters — includes are resolved top-to-bottom
 includes:
   - common/tracker-protocol
-  - common/pull-latest
+  - common/cycle-runner
   - common/context-pressure
   - pm-specific/checkin
   - pm-specific/testing-and-verification
@@ -14,10 +14,8 @@ includes:
   - common/boot-remote-agents
   - pm-specific/soul-shepherd
   - common/improvement-scan
-  - pm-specific/iteration-log
   - common/vault-remember
   - common/vault-optimize
-  - pm-specific/git-commit
   - pm-specific/issue-filing
   - pm-specific/task-intake
   - pm-specific/task-approval

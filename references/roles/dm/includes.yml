@@ -4,14 +4,12 @@
 includes:
   - common/tracker-protocol
   - common/capability-check
-  - common/pull-latest
+  - common/cycle-runner
   - common/context-pressure
   - dm-specific/issue-triage
   - dm-specific/delivery-packaging
   - dm-specific/version-bumps
   - common/improvement-scan-slim
-  - dm-specific/iteration-log
-  - dm-specific/git-commit
   - dm-specific/discussion-protocol
   - dm-specific/issue-filing
   - common/vault-protocol-slim

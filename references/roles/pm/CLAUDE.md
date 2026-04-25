@@ -74,7 +74,7 @@ Phase is one of: `pulling`, `checkin`, `testing`, `verifying`, `planning`, `rese
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
 
-{{include: common/pull-latest}}
+{{include: common/cycle-runner}}
 
 {{include: common/context-pressure}}
 
@@ -120,13 +120,9 @@ When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last 
 
 {{include: common/improvement-scan}}
 
-{{include: pm-specific/iteration-log}}
-
 {{include: common/vault-remember}}
 
 {{include: common/vault-optimize}}
-
-{{include: pm-specific/git-commit}}
 
 {{include: common/self-restart}}
 

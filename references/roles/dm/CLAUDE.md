@@ -75,7 +75,7 @@ Phase is one of: `pulling`, `delivering`, `shipping`, `committing`, `idle`. The 
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
 
-{{include: common/pull-latest}}
+{{include: common/cycle-runner}}
 
 {{include: common/context-pressure}}
 
@@ -101,13 +101,9 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 {{include: common/improvement-scan}}
 
-{{include: dm-specific/iteration-log}}
-
 {{include: common/vault-remember}}
 
 {{include: common/vault-optimize}}
-
-{{include: dm-specific/git-commit}}
 
 {{include: common/self-restart}}
 

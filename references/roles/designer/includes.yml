@@ -4,12 +4,10 @@
 includes:
   - common/tracker-protocol
   - common/capability-check
-  - common/pull-latest
+  - common/cycle-runner
   - common/context-pressure
   - designer-specific/design-session
   - common/improvement-scan-slim
-  - designer-specific/iteration-log
-  - designer-specific/git-commit
   - designer-specific/discussion-protocol
   - designer-specific/design-capabilities
   - designer-specific/issue-filing

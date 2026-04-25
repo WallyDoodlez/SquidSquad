@@ -6,7 +6,7 @@
 <!-- sub-skill: qa -->
 ## Soul
 
-Read `.squidsquad/[ROLE]/SOUL.md` at session start and follow its instructions as your professional identity. If SOUL.md is missing, proceed with default behavior — you are a pragmatic engineer focused on correctness and simplicity.
+Read `.squidsquad/qa/SOUL.md` at session start and follow its instructions as your professional identity. If SOUL.md is missing, proceed with default behavior — you are a pragmatic engineer focused on correctness and simplicity.
 <!-- /sub-skill: qa -->
 
 # SquidSquad — QA
@@ -72,10 +72,10 @@ Use the tracker script for all queries — it encodes correct label formats:
 
 ```bash
 # List approved tasks for your role
-python references/scripts/tracker.py list-tasks [ROLE] --status approved
+python references/scripts/tracker.py list-tasks qa --status approved
 
 # List open issues for your role
-python references/scripts/tracker.py list-issues [ROLE]
+python references/scripts/tracker.py list-issues qa
 
 # Get labels or state for a specific issue
 python references/scripts/tracker.py get-labels [NUMBER]
@@ -96,12 +96,12 @@ Use the tracker script to ensure correct label format:
 # File an issue
 python references/scripts/tracker.py create-issue \
   --title "[title]" --body "[description]" \
-  --role [target-role] --severity [high|medium|low] --reporter [ROLE]-lead
+  --role [target-role] --severity [high|medium|low] --reporter qa-lead
 
 # File a task
 python references/scripts/tracker.py create-task \
   --title "[title]" --body "[description]" \
-  --role [target-role] --priority [high|medium|low] --reporter [ROLE]-lead
+  --role [target-role] --priority [high|medium|low] --reporter qa-lead
 ```
 
 The script automatically adds `ISSUE:`/`TASK:` prefix, correct labels, and `squidsquad` tag. Returns JSON with `number` and `url`.
@@ -112,12 +112,12 @@ Use the tracker script — it **enforces legal transitions, role authority, and 
 
 ```bash
 # Transition syntax: tracker.py transition <number> <from> <to> --role <r> [--force]
-python references/scripts/tracker.py transition [NUMBER] approved in-progress --role [ROLE]-lead
-python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role [ROLE]-lead
+python references/scripts/tracker.py transition [NUMBER] approved in-progress --role qa-lead
+python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role qa-lead
 python references/scripts/tracker.py transition [NUMBER] pending-ship shipped --role dm-lead
 ```
 
-Pass your own role — PM uses `--role pm-lead`, QA uses `--role qa-lead`, DM uses `--role dm-lead`, designer uses `--role designer-lead`, dev agents use `--role [ROLE]-lead` (e.g. `skill-lead`). The script rejects:
+Pass your own role — PM uses `--role pm-lead`, QA uses `--role qa-lead`, DM uses `--role dm-lead`, designer uses `--role designer-lead`, dev agents use `--role qa-lead` (e.g. `skill-lead`). The script rejects:
 
 - **Illegal transitions** (e.g. `pending → shipped`) — never bypassable.
 - **Unauthorized transitions** — e.g. a dev agent trying to run `pending-ship → shipped` (DM-only) or `pending-test → pending-ship` (PM or QA only). Use `--force` only as a human override.
@@ -140,7 +140,7 @@ Legal flows and owning roles:
 Discussion entries become Issue comments. Use the tracker script:
 
 ```bash
-python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "[message]"
+python references/scripts/tracker.py comment [NUMBER] --role qa-lead --message "[message]"
 ```
 
 Comments are append-only — never edit or delete previous comments.
@@ -228,34 +228,110 @@ Phase is one of: `pulling`, `testing`, `verifying`, `health`, `committing`, `idl
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
 
-<!-- sub-skill: pull-latest -->
-### Step 1 — Pull Latest
+<!-- sub-skill: cycle-runner -->
+<!-- sub-skill: cycle-runner -->
+## Cycle Runner (Transport Layer)
 
-Print: `[🦑 HH:MM:SS] Pulling latest...`
+The Ralph Loop uses a 3-phase flow: mechanical pre-cycle → creative work → mechanical post-cycle. All mechanical operations (git pull, commit, push, triage queries, iteration logging) are handled by deterministic scripts. You focus on creative work only.
+
+### Phase 1 — Pre-Cycle (Mechanical)
 
 ```bash
-python references/scripts/git_ops.py pull
+python references/scripts/cycle_pre.py qa
 ```
 
-The script handles stash/pop automatically if there are unstaged changes. If there is a rebase conflict in a tracker file, resolve it by keeping both versions — append the conflicting section below the existing one. Never discard entries.
-<!-- /sub-skill: pull-latest -->
+This script handles all mechanical operations: git pull, context pressure check, working state read, triage/queue queries, branch setup, and writes `.squidsquad/qa/cycle-input.json`.
+
+Read the output:
+
+```bash
+cat .squidsquad/qa/cycle-input.json
+```
+
+The JSON contains everything you need: `role`, `cycle_number`, `timestamp`, `pull_result`, `context_pressure`, `working_state`, and role-specific fields (work queue, verification queue, etc.).
+
+### Phase 2 — Creative Work (Agent)
+
+This is your core work — reasoning, code analysis, code writing, verification, human interaction. Use cycle-input.json to understand the current state. You still have full bash access for:
+- Running tests
+- Reading code
+- Spawning subagents
+- Running verification commands
+- Any creative work that requires shell access
+
+Do NOT use bash for mechanical operations that cycle_pre/post handles (git pull, git push, status bar writes, tracker transitions, iteration logging).
+
+### Phase 3 — Post-Cycle (Mechanical)
+
+Write your results to `.squidsquad/qa/cycle-output.json`:
+
+```json
+{
+  "role": "qa",
+  "cycle_number": N,
+  "cycle_type": "active" | "quiet" | "suppressed",
+  "status_transitions": [
+    {"number": 123, "from": "approved", "to": "in-progress"}
+  ],
+  "tracker_comments": [
+    {"number": 123, "message": "Picking up. Status → In Progress."}
+  ],
+  "iteration_summary": "Brief description of work done",
+  "commit_message": "qa: cycle N — brief description",
+  "working_state_update": "# Working State\n\n- **Task**: none\n...",
+  "restart_needed": false,
+  "restart_reason": null
+}
+```
+
+Then run:
+
+```bash
+python references/scripts/cycle_post.py qa
+```
+
+The script handles: status transitions, tracker comments, iteration logging, git commits, pushes, version bumps (DM), restart sentinels, and status bar cleanup.
+
+### Role-Specific Fields
+
+**Skill** cycle-output extras:
+- `code_commit`: `{branch, message, pr_needed, pr_title, pr_body}` — for branch workflow
+- `state_commit_message`: separate message for main branch state commit
+- `improvement_scan`: `{files_scanned, findings}` — if scan ran
+
+**PM** cycle-output extras:
+- `human_input_processed`: summary of human input handled
+- `issues_filed`, `issues_verified`, `tasks_verified`, `tasks_shipped`
+- `external_issues_triaged`, `health_alerts`, `vault_writes`
+- `version_bump`: `{new_version, items_included}` — if DM absent
+
+**QA** cycle-output extras:
+- `e2e_log`: `{result, tests_run, failures}`
+- `issues_filed`, `issues_verified`, `tasks_verified`
+- `pr_actions`: `[{pr_number, action, comment}]`
+
+**DM** cycle-output extras:
+- `bugs_fixed`, `deliveries`
+- `version_bump`: `{new_version, items_included}`
+<!-- /sub-skill: cycle-runner -->
+<!-- /sub-skill: cycle-runner -->
 
 <!-- sub-skill: context-pressure -->
 ### Step 1b — Context Pressure Check
 
 Print: `[🦑 HH:MM:SS] Checking context pressure...`
 
-Read the real context pressure from disk. The statusline hook writes the actual `used_percentage` to `.squidsquad/[ROLE]/context-pressure` after every assistant message — agents should **read** this file, not fabricate values.
+Read the real context pressure from disk. The statusline hook writes the actual `used_percentage` to `.squidsquad/qa/context-pressure` after every assistant message — agents should **read** this file, not fabricate values.
 
 ```bash
-CTX_PCT=$(cat .squidsquad/[ROLE]/context-pressure 2>/dev/null || echo "0")
+CTX_PCT=$(cat .squidsquad/qa/context-pressure 2>/dev/null || echo "0")
 python references/scripts/config.py get context-threshold
 ```
 
 Compare `CTX_PCT` against the threshold. If the file doesn't exist yet (first cycle, statusline not running), default to `0` and continue normally.
 
 If context usage **exceeds the threshold**:
-1. Compact your current working state into `.squidsquad/[ROLE]/working-state.md` (see Working State File below). This is a checkpoint — if the session crashes or is interrupted, the next session can resume from working state.
+1. Compact your current working state into `.squidsquad/qa/working-state.md` (see Working State File below). This is a checkpoint — if the session crashes or is interrupted, the next session can resume from working state.
 2. Commit and push all pending work.
 3. Print: `[🦑 HH:MM:SS] Context pressure at [X]% — working state checkpointed. Continuing normally.`
 4. **Continue the cycle normally.** Claude Code automatically compresses prior messages as context approaches limits, so the conversation can keep going indefinitely. Set a flag so the Self-Restart step (at cycle end) triggers a fresh session after the cycle completes.
@@ -383,13 +459,13 @@ python references/scripts/git_ops.py branch-switch main
 
    Subagent prompt:
    ```
-   Read .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md. For each test case:
+   Read .squidsquad/qa/planning/FEAT-QA-XXX-TEST-PLAN.md. For each test case:
 
-   1. Write an executable pytest test in .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-tests.py
+   1. Write an executable pytest test in .squidsquad/qa/planning/FEAT-QA-XXX-tests.py
       - Each TC becomes a test function: test_tc_01_[name], test_tc_02_[name], etc.
       - Tests must use concrete assertions (file exists, string matches, JSON parses, exit code checks)
       - Use subprocess.run for script verification, pathlib for file checks, json/yaml for structure
-   2. Run the tests: python -m pytest .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-tests.py -v
+   2. Run the tests: python -m pytest .squidsquad/qa/planning/FEAT-QA-XXX-tests.py -v
    3. Record pytest output verbatim in QA-RESULTS.md
 
    TC result rules:
@@ -402,7 +478,7 @@ python references/scripts/git_ops.py branch-switch main
 
    If any TC is marked `[human-required]` in TEST-PLAN.md, skip it — PM will route to human.
 
-   Write results to .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-QA-RESULTS.md
+   Write results to .squidsquad/qa/planning/FEAT-QA-XXX-QA-RESULTS.md
    Include the full pytest output and a summary table.
    ```
 
@@ -439,7 +515,7 @@ python references/scripts/git_ops.py branch-switch main
 5. If all criteria pass with zero gaps:
 
    **Promote test files to tests/** (before transitioning):
-   If any test files exist in `.squidsquad/[ROLE]/planning/` matching `*-tests.py` or `*-QA-RESULTS*.md`:
+   If any test files exist in `.squidsquad/qa/planning/` matching `*-tests.py` or `*-QA-RESULTS*.md`:
    - Copy test `.py` files to `tests/` with naming convention: `tests/test_feat_[NUMBER]_[short_name].py`
    - If comprehension test files exist, also copy to `tests/`
    - Verify the promoted tests still pass: `python -m pytest tests/test_feat_[NUMBER]_*.py`
@@ -450,7 +526,7 @@ python references/scripts/git_ops.py branch-switch main
    **If PR Flow `yes`** and a PR exists for this issue:
    - Post QA results on the PR:
      ```bash
-     gh pr comment [PR_NUMBER] --body "## QA Results\n\n**Status**: PASS\n**Test Plan**: FEAT-[ROLE_UPPER]-XXX-TEST-PLAN.md\n**Results**: [N/N tests passed]\n\nAll acceptance criteria verified."
+     gh pr comment [PR_NUMBER] --body "## QA Results\n\n**Status**: PASS\n**Test Plan**: FEAT-QA-XXX-TEST-PLAN.md\n**Results**: [N/N tests passed]\n\nAll acceptance criteria verified."
      ```
    - Formally approve the PR:
      ```bash
@@ -576,62 +652,7 @@ python references/scripts/tracker.py create-issue \
 Tag findings with the `improvement-scan` label. Max **2 items per cycle**. Default `priority:low` — human bumps if valuable.
 <!-- /sub-skill: improvement-scan-slim -->
 
-<!-- sub-skill: iteration-log -->
-### Step 7 — Log Iteration
 
-Print: `[🦑 HH:MM:SS] Logging iteration...`
-
-**Every cycle writes a log entry** — active or quiet. Use the cycle script:
-
-```bash
-# Active cycle (work was done):
-python references/scripts/cycle.py log-iteration qa [N] \
-  --work "[comma-separated summary of work done]" \
-  --notes "[anything notable]"
-
-# Quiet cycle (no actionable work):
-python references/scripts/cycle.py log-iteration qa [N] --quiet \
-  --notes "[why quiet, e.g. 'No pending-test items']"
-
-# Clean up old logs (keeps most recent 20)
-python references/scripts/cycle.py cleanup-iterations qa
-```
-
-The script writes a unified format with Date, Type (active/quiet), Work Summary, and Notes. Quiet entries are condensed (2-3 lines).
-<!-- /sub-skill: iteration-log -->
-
-
-
-<!-- sub-skill: git-commit -->
-### Step 8 — Commit and Push (skip on quiet cycles)
-
-Print: `[🦑 HH:MM:SS] Committing and pushing...`
-
-Check Branch Workflow setting:
-```bash
-python references/scripts/config.py get branch-workflow
-```
-
-**If `yes`** AND you verified a specific issue/task this cycle (#[NUMBER]):
-
-QA verification results go on the issue's existing feature branch (if it exists). State changes go on main.
-
-1. If a feature branch exists for the verified item:
-   ```bash
-   python references/scripts/git_ops.py commit-code qa squidsquad/skill/[NUMBER] "[brief QA results]"
-   ```
-
-2. Commit state changes (.squidsquad/) to main:
-   ```bash
-   python references/scripts/git_ops.py commit-state qa "[brief summary — verified #NUMBER]"
-   ```
-
-**If `no`** (default) OR no specific issue was verified:
-
-```bash
-python references/scripts/git_ops.py commit-push qa "[brief summary — e2e results, bugs filed, features verified]"
-```
-<!-- /sub-skill: git-commit -->
 
 <!-- sub-skill: self-restart -->
 <!-- sub-skill: self-restart -->
@@ -641,11 +662,11 @@ Agents can signal a restart only when their own context pressure exceeds the thr
 
 **Context pressure restart flow**:
 1. Step 1b detects context pressure exceeds threshold.
-2. Checkpoint working state to `.squidsquad/[ROLE]/working-state.md`.
+2. Checkpoint working state to `.squidsquad/qa/working-state.md`.
 3. Complete the current cycle normally.
-4. At cycle end, write the restart reason to `.squidsquad/[ROLE]/.restart`:
+4. At cycle end, write the restart reason to `.squidsquad/qa/.restart`:
    ```bash
-   echo "context pressure at [X]%" > .squidsquad/[ROLE]/.restart
+   echo "context pressure at [X]%" > .squidsquad/qa/.restart
    ```
 5. The wrapper detects the sentinel on exit, deletes it, and respawns.
 
@@ -669,7 +690,7 @@ Agent lifecycle is managed by the wrapper script and `reboot_agent.py`. Agents d
 2. **Never kill mid-work**: `reboot_agent.py` waits for the agent to go idle before restarting.
 3. **Start correctly**: Wrapper handles pre-flight checks, branch setup, and heartbeat.
 
-**Heartbeat**: The wrapper writes the current epoch to `.squidsquad/[ROLE]/.health` every 5 seconds. Health monitoring reads this — if >10s old, the agent is considered dead.
+**Heartbeat**: The wrapper writes the current epoch to `.squidsquad/qa/.health` every 5 seconds. Health monitoring reads this — if >10s old, the agent is considered dead.
 
 **Reboot interface** (for PM and DM):
 ```bash
