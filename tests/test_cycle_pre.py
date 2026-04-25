@@ -636,3 +636,67 @@ class TestBootResults:
         result = cycle_pre._build_pm_input("pm")
         assert isinstance(result["boot_results"], list)
         assert len(result["boot_results"]) == 1
+
+    def test_tc26_nonzero_exit_empty_stdout(self, patch_dirs, squid_dir, monkeypatch):
+        """TC-26: boot_remote.py non-zero exit with empty stdout — cycle_pre
+        must not crash and boot_results defaults to empty list."""
+
+        def fake_run_script(*args, **kwargs):
+            fake = MagicMock()
+            fake.returncode = 0
+            fake.stdout = "[]"
+            if len(args) >= 1 and "boot_remote.py" in str(args[0]):
+                fake.returncode = 1
+                fake.stdout = ""  # empty — simulates crash/no output
+            elif len(args) >= 1 and "health_check.py" in str(args[0]):
+                fake.stdout = "[]"
+            elif len(args) >= 2 and "tracker.py" in str(args[0]):
+                fake.stdout = "[]"
+            return fake
+
+        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_pre, "_run", lambda cmd, **kw: MagicMock(
+            returncode=0, stdout="[]", stderr=""))
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
+            "branch-workflow": "no", "pr-flow": "no",
+            "improvement-scanning": "no", "vault-remember": "no",
+            "vault-optimize": "no", "ship-threshold": "10",
+            "shipped-since-bump": "0", "interval": "30",
+        }.get(f, ""))
+        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
+
+        result = cycle_pre._build_pm_input("pm")
+        assert isinstance(result["boot_results"], list)
+        assert result["boot_results"] == []
+
+    def test_tc26_nonzero_exit_malformed_stdout(self, patch_dirs, squid_dir, monkeypatch):
+        """TC-26: boot_remote.py non-zero exit with malformed JSON — cycle_pre
+        must not crash and boot_results defaults to empty list."""
+
+        def fake_run_script(*args, **kwargs):
+            fake = MagicMock()
+            fake.returncode = 0
+            fake.stdout = "[]"
+            if len(args) >= 1 and "boot_remote.py" in str(args[0]):
+                fake.returncode = 1
+                fake.stdout = "not valid json{{"
+            elif len(args) >= 1 and "health_check.py" in str(args[0]):
+                fake.stdout = "[]"
+            elif len(args) >= 2 and "tracker.py" in str(args[0]):
+                fake.stdout = "[]"
+            return fake
+
+        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_pre, "_run", lambda cmd, **kw: MagicMock(
+            returncode=0, stdout="[]", stderr=""))
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
+            "branch-workflow": "no", "pr-flow": "no",
+            "improvement-scanning": "no", "vault-remember": "no",
+            "vault-optimize": "no", "ship-threshold": "10",
+            "shipped-since-bump": "0", "interval": "30",
+        }.get(f, ""))
+        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
+
+        result = cycle_pre._build_pm_input("pm")
+        assert isinstance(result["boot_results"], list)
+        assert result["boot_results"] == []
