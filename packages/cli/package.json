@@ -3,7 +3,7 @@
   "version": "0.23.0",
   "description": "Bootstrap SquidSquad onto your project — autonomous AI dev team coordination via Claude Code",
   "bin": {
-    "squidsquad": "./index.js"
+    "squidsquad": "index.js"
   },
   "engines": {
     "node": ">=18"
@@ -21,7 +21,7 @@
     "squidsquad"
   ],
   "dependencies": {
-    "tar": "^7.0.0"
+    "tar": "^7.5.13"
   },
   "license": "AGPL-3.0",
   "repository": {
@@ -30,8 +30,5 @@
     "directory": "packages/cli"
   },
   "homepage": "https://github.com/WallyDoodlez/SquidSquad",
-  "author": "WallyDoodlez",
-  "dependencies": {
-    "tar": "^7.5.13"
-  }
+  "author": "WallyDoodlez"
 }
