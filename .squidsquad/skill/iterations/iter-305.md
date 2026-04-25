@@ -1,9 +1,7 @@
 # Iteration 305
 
-- **Date**: 2026-04-25 09:04
+- **Date**: 2026-04-25 09:23
 - **Type**: active
 - **Work Summary**:
-  - Improvement scan: scanned tracker.py
-  - model_router.py
-  - vault_check.py. Filed #2693 (pending-review label mismatch in LEGAL_TRANSITIONS).
+  - #2694 fixed — PID lock moved before pre-flight in both wrapper templates. 12 regression tests added.
 - **Notes**: none

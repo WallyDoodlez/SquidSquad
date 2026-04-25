@@ -69,6 +69,18 @@ function Write-Health($status) {
     Move-Item -Force "$HealthFile.tmp" $HealthFile -ErrorAction SilentlyContinue
 }
 
+# --- PID lock: singleton (must be first — before pre-flight to prevent TOCTOU race #2694) ---
+if (Test-Path $PidFile) {
+    $oldPid = (Get-Content $PidFile -ErrorAction SilentlyContinue).Trim()
+    if ($oldPid -and (Get-Process -Id $oldPid -ErrorAction SilentlyContinue)) {
+        Write-Health "error|already running (PID $oldPid)"
+        Write-Host "[SquidSquad] Agent {{ROLE}} already running (PID $oldPid). Aborting."
+        exit 1
+    }
+    Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+}
+$PID > $PidFile
+
 # --- Pre-flight checks ---
 Write-Health "booting"
 Write-Host "[SquidSquad] Pre-flight checks..."
@@ -94,18 +106,6 @@ if ($CurrentBranch -ne $WorkingBranch) {
 }
 
 Write-Host "[SquidSquad] Pre-flight OK."
-
-# --- PID lock: singleton ---
-if (Test-Path $PidFile) {
-    $oldPid = (Get-Content $PidFile -ErrorAction SilentlyContinue).Trim()
-    if ($oldPid -and (Get-Process -Id $oldPid -ErrorAction SilentlyContinue)) {
-        Write-Health "error|already running (PID $oldPid)"
-        Write-Host "[SquidSquad] Agent {{ROLE}} already running (PID $oldPid). Aborting."
-        exit 1
-    }
-    Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
-}
-$PID > $PidFile
 
 # --- Heartbeat background job: write epoch every 5s ---
 $heartbeatJob = Start-Job -ScriptBlock {

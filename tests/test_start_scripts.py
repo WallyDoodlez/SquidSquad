@@ -147,3 +147,42 @@ class TestStartScriptConsistency:
         ps1 = (SQUIDSQUAD_DIR / f"start-{role}.ps1").read_text(encoding="utf-8")
         assert "current-state" in sh, f"start-{role}.sh should initialize current-state"
         assert "current-state" in ps1, f"start-{role}.ps1 should initialize current-state"
+
+
+class TestPidLockOrdering:
+    """#2694: PID lock must come before pre-flight to prevent TOCTOU race."""
+
+    def test_sh_template_pid_before_preflight(self):
+        template = (Path(__file__).parent.parent / "references" / "templates" / "start-role.sh")
+        content = template.read_text(encoding="utf-8")
+        pid_pos = content.index("PID lock")
+        preflight_pos = content.index("Pre-flight checks")
+        assert pid_pos < preflight_pos, \
+            "PID lock check must appear before pre-flight checks in start-role.sh"
+
+    def test_ps1_template_pid_before_preflight(self):
+        template = (Path(__file__).parent.parent / "references" / "templates" / "start-role.ps1")
+        content = template.read_text(encoding="utf-8")
+        pid_pos = content.index("PID lock")
+        preflight_pos = content.index("Pre-flight checks")
+        assert pid_pos < preflight_pos, \
+            "PID lock check must appear before pre-flight checks in start-role.ps1"
+
+    @pytest.mark.parametrize("role", ROLES)
+    def test_deployed_sh_pid_before_preflight(self, role):
+        path = SQUIDSQUAD_DIR / f"start-{role}.sh"
+        if not path.exists():
+            pytest.skip(f"start-{role}.sh not deployed")
+        content = path.read_text(encoding="utf-8")
+        pid_pos = content.index("PID lock")
+        preflight_pos = content.index("Pre-flight checks")
+        assert pid_pos < preflight_pos
+
+    @pytest.mark.parametrize("role", ROLES)
+    def test_deployed_ps1_pid_before_preflight(self, role):
+        path = SQUIDSQUAD_DIR / f"start-{role}.ps1"
+        if not path.exists():
+            pytest.skip(f"start-{role}.ps1 not deployed")
+        content = path.read_text(encoding="utf-8")
+        pid_pos = content.index("PID lock")
+        preflight_pos = content.index("Pre-flight checks")

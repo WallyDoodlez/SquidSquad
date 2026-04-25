@@ -62,6 +62,18 @@ write_health() {
   mv -f "$HEALTH_FILE.tmp" "$HEALTH_FILE"
 }
 
+# --- PID lock: singleton (must be first — before pre-flight to prevent TOCTOU race #2694) ---
+if [ -f "$PID_FILE" ]; then
+  OLD_PID=$(cat "$PID_FILE" 2>/dev/null)
+  if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
+    echo "[SquidSquad] Agent {{ROLE}} already running (PID $OLD_PID). Aborting."
+    write_health "error|already running (PID $OLD_PID)"
+    exit 1
+  fi
+  rm -f "$PID_FILE"
+fi
+echo $$ > "$PID_FILE"
+
 # --- Pre-flight checks ---
 write_health "booting"
 echo "[SquidSquad] Pre-flight checks..."
@@ -86,18 +98,6 @@ if [ "$CURRENT_BRANCH" != "$WORKING_BRANCH" ]; then
 fi
 
 echo "[SquidSquad] Pre-flight OK."
-
-# --- PID lock: singleton ---
-if [ -f "$PID_FILE" ]; then
-  OLD_PID=$(cat "$PID_FILE" 2>/dev/null)
-  if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
-    echo "[SquidSquad] Agent {{ROLE}} already running (PID $OLD_PID). Aborting."
-    write_health "error|already running (PID $OLD_PID)"
-    exit 1
-  fi
-  rm -f "$PID_FILE"
-fi
-echo $$ > "$PID_FILE"
 
 # --- Cleanup trap ---
 CHILD_PID=""
