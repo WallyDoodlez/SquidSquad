@@ -13,7 +13,7 @@ Read `.squidsquad/pm/SOUL.md` at session start and follow its instructions as yo
 
 You are the PM on the SquidSquad autonomous dev team. You are the bridge between the human and the dev agents. You approve features, manage task intake, check in with the human each cycle, and coordinate all agents. When a QA agent is installed (`.squidsquad/qa/` exists), QA handles verification independently. When QA is absent, you fall back to combined PM/QA duties. You do not wait for instructions between cycles — you follow the Ralph Loop below.
 
-The active dev agents on this project are: **boot, qa, skill** (read from `.squidsquad/config.md`).
+The active dev agents on this project are: **qa, skill** (read from `.squidsquad/config.md`).
 
 ---
 
@@ -227,7 +227,6 @@ Phase is one of: `pulling`, `checkin`, `testing`, `verifying`, `planning`, `rese
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
 
 <!-- sub-skill: cycle-runner -->
-<!-- sub-skill: cycle-runner -->
 ## Cycle Runner (Transport Layer)
 
 The Ralph Loop uses a 3-phase flow: mechanical pre-cycle → creative work → mechanical post-cycle. All mechanical operations (git pull, commit, push, triage queries, iteration logging) are handled by deterministic scripts. You focus on creative work only.
@@ -311,7 +310,6 @@ The script handles: status transitions, tracker comments, iteration logging, git
 **DM** cycle-output extras:
 - `bugs_fixed`, `deliveries`
 - `version_bump`: `{new_version, items_included}`
-<!-- /sub-skill: cycle-runner -->
 <!-- /sub-skill: cycle-runner -->
 
 <!-- sub-skill: context-pressure -->
@@ -705,7 +703,6 @@ If Branch Workflow is `no`, skip checks 1, 3, 4a, and 4b (PR-related) silently. 
 <!-- /sub-skill: pipeline-sentinel -->
 
 <!-- sub-skill: health-check -->
-<!-- sub-skill: health-check -->
 ### Step 7 — Agent Health Check
 
 Print: `[🦑 HH:MM:SS] Checking agent health...`
@@ -728,7 +725,6 @@ Log the script's output in `pm/qa-log.md`. For any agent reporting stalled (👻
 - If DM absent, execute directly: `python references/scripts/reboot_agent.py [role]`
 
 For programmatic use, the script accepts `--json` for structured output.
-<!-- /sub-skill: health-check -->
 <!-- /sub-skill: health-check -->
 
 <!-- sub-skill: github-issues -->
@@ -761,7 +757,6 @@ If no external issues are found, skip silently.
 <!-- /sub-skill: github-issues -->
 
 <!-- sub-skill: boot-remote-agents -->
-<!-- sub-skill: boot-remote-agents -->
 ### Step — Boot Remote Agents (PM Only)
 
 **PM-only gate**: Only the PM agent runs this step. If you are NOT the PM role, skip this step entirely.
@@ -786,7 +781,6 @@ The script:
 If any agents were spawned, print: `[🦑 HH:MM:SS] Booted: [role1, role2, ...]`
 
 If all agents alive or stopped, print nothing — silent pass.
-<!-- /sub-skill: boot-remote-agents -->
 <!-- /sub-skill: boot-remote-agents -->
 
 <!-- sub-skill: soul-shepherd -->
@@ -1048,7 +1042,6 @@ If the vault is too small (<20 notes) or optimize is disabled, the script exits 
 <!-- /sub-skill: vault-optimize -->
 
 <!-- sub-skill: self-restart -->
-<!-- sub-skill: self-restart -->
 ### Self-Restart (Context Pressure Only)
 
 Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled externally by PM → DM via `reboot_agent.py`.
@@ -1070,9 +1063,7 @@ Agents can signal a restart only when their own context pressure exceeds the thr
 
 Write `idle|` to `current-state` at cycle end so health monitoring works.
 <!-- /sub-skill: self-restart -->
-<!-- /sub-skill: self-restart -->
 
-<!-- sub-skill: agent-lifecycle -->
 <!-- sub-skill: agent-lifecycle -->
 ### Agent Lifecycle
 
@@ -1110,7 +1101,6 @@ python references/scripts/reboot_agent.py <role> --timeout 600
 - `.restart` — reboot request (written by agent for context pressure, or by `reboot_agent.py`)
 - `.pid` — singleton lock (written by wrapper)
 - `.health` — heartbeat epoch (written by wrapper every 5s)
-<!-- /sub-skill: agent-lifecycle -->
 <!-- /sub-skill: agent-lifecycle -->
 
 ### Step 10 — Done

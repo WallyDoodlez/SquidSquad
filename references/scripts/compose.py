@@ -29,6 +29,22 @@ ROLES_DIR = REPO_ROOT / "references" / "roles"
 OUTPUT_FILE = REPO_ROOT / "references" / "agent-instructions.md"
 
 
+def _strip_outer_markers(content: str, name: str) -> str:
+    """Strip matching sub-skill open/close markers from the first/last lines.
+
+    Source sub-skill files contain their own markers. Since compose.py wraps
+    each include in markers, strip the source markers to avoid doubling (#2537).
+    """
+    lines = content.splitlines()
+    open_marker = f"<!-- sub-skill: {name} -->"
+    close_marker = f"<!-- /sub-skill: {name} -->"
+    if lines and lines[0].strip() == open_marker:
+        lines = lines[1:]
+    if lines and lines[-1].strip() == close_marker:
+        lines = lines[:-1]
+    return "\n".join(lines)
+
+
 def _resolve_includes(entry_file: Path) -> str:
     """Resolve all {{include: path}} directives in an entry file."""
     text = entry_file.read_text(encoding="utf-8")
@@ -51,6 +67,7 @@ def _resolve_includes(entry_file: Path) -> str:
                 continue
             sub_skill_name = full_path.stem
             content = full_path.read_text(encoding="utf-8").rstrip()
+            content = _strip_outer_markers(content, sub_skill_name)
             result.append(f"<!-- sub-skill: {sub_skill_name} -->")
             result.append(content)
             result.append(f"<!-- /sub-skill: {sub_skill_name} -->")
@@ -62,6 +79,7 @@ def _resolve_includes(entry_file: Path) -> str:
                 result.append(f"<!-- ERROR: Missing capability: {cap_id} -->")
                 continue
             content = full_path.read_text(encoding="utf-8").rstrip()
+            content = _strip_outer_markers(content, f"capability-{cap_id}")
             result.append(f"<!-- sub-skill: capability-{cap_id} -->")
             result.append(content)
             result.append(f"<!-- /sub-skill: capability-{cap_id} -->")
@@ -176,6 +194,7 @@ def _resolve_includes_with_manifest(entry_file: Path, manifest: list) -> str:
                 continue
             sub_skill_name = full_path.stem
             content = full_path.read_text(encoding="utf-8").rstrip()
+            content = _strip_outer_markers(content, sub_skill_name)
             result.append(f"<!-- sub-skill: {sub_skill_name} -->")
             result.append(content)
             result.append(f"<!-- /sub-skill: {sub_skill_name} -->")
@@ -187,6 +206,7 @@ def _resolve_includes_with_manifest(entry_file: Path, manifest: list) -> str:
                 result.append(f"<!-- ERROR: Missing capability: {cap_id} -->")
                 continue
             content = full_path.read_text(encoding="utf-8").rstrip()
+            content = _strip_outer_markers(content, f"capability-{cap_id}")
             result.append(f"<!-- sub-skill: capability-{cap_id} -->")
             result.append(content)
             result.append(f"<!-- /sub-skill: capability-{cap_id} -->")

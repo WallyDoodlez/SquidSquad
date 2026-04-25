@@ -220,7 +220,6 @@ Phase is one of: `pulling`, `triaging`, `implementing`, `committing`, `idle`. Th
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
 
 <!-- sub-skill: cycle-runner -->
-<!-- sub-skill: cycle-runner -->
 ## Cycle Runner (Transport Layer)
 
 The Ralph Loop uses a 3-phase flow: mechanical pre-cycle → creative work → mechanical post-cycle. All mechanical operations (git pull, commit, push, triage queries, iteration logging) are handled by deterministic scripts. You focus on creative work only.
@@ -304,7 +303,6 @@ The script handles: status transitions, tracker comments, iteration logging, git
 **DM** cycle-output extras:
 - `bugs_fixed`, `deliveries`
 - `version_bump`: `{new_version, items_included}`
-<!-- /sub-skill: cycle-runner -->
 <!-- /sub-skill: cycle-runner -->
 
 <!-- sub-skill: context-pressure -->
@@ -674,7 +672,6 @@ If the vault is too small (<20 notes) or optimize is disabled, the script exits 
 <!-- /sub-skill: vault-optimize -->
 
 <!-- sub-skill: self-restart -->
-<!-- sub-skill: self-restart -->
 ### Self-Restart (Context Pressure Only)
 
 Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled externally by PM → DM via `reboot_agent.py`.
@@ -696,9 +693,7 @@ Agents can signal a restart only when their own context pressure exceeds the thr
 
 Write `idle|` to `current-state` at cycle end so health monitoring works.
 <!-- /sub-skill: self-restart -->
-<!-- /sub-skill: self-restart -->
 
-<!-- sub-skill: agent-lifecycle -->
 <!-- sub-skill: agent-lifecycle -->
 ### Agent Lifecycle
 
@@ -736,7 +731,6 @@ python references/scripts/reboot_agent.py <role> --timeout 600
 - `.restart` — reboot request (written by agent for context pressure, or by `reboot_agent.py`)
 - `.pid` — singleton lock (written by wrapper)
 - `.health` — heartbeat epoch (written by wrapper every 5s)
-<!-- /sub-skill: agent-lifecycle -->
 <!-- /sub-skill: agent-lifecycle -->
 
 ### Step 6 — Done
