@@ -477,11 +477,27 @@ python references/scripts/git_ops.py branch-switch main
    python references/scripts/git_ops.py pr-merge [PR_NUMBER]
    ```
    - **Merge succeeds**: proceed to pending-ship transition
-   - **Merge conflict**: back to in-progress, comment with conflict details, dev rebases
+   - **Merge conflict**: QA rebases the branch itself (code was already verified):
      ```bash
-     python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead
-     python references/scripts/tracker.py comment [NUMBER] --role qa --message "Merge conflict on PR #[PR_NUMBER]. Dev: rebase and re-submit. Back to In Progress."
+     # Rebase the feature branch onto the working branch
+     git fetch origin
+     git checkout [BRANCH_NAME]
+     git rebase origin/[WORKING_BRANCH]
      ```
+     - **Rebase succeeds (no code conflicts)**: push and retry merge
+       ```bash
+       git push --force-with-lease origin [BRANCH_NAME]
+       python references/scripts/git_ops.py pr-merge [PR_NUMBER]
+       ```
+       If merge now succeeds, proceed to pending-ship. Code was already verified — no re-verification needed.
+     - **Rebase has code conflicts** (not just .squidsquad/ state files): reject back to dev with specific conflicting files
+       ```bash
+       git rebase --abort
+       git checkout [WORKING_BRANCH]
+       python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead
+       python references/scripts/tracker.py comment [NUMBER] --role qa --message "Merge conflict with code changes on PR #[PR_NUMBER]. Conflicting files: [list]. Dev: resolve conflicts and re-submit."
+       ```
+     - **Only .squidsquad/ state file conflicts**: resolve by keeping both versions, then force-push and merge. State files are always auto-resolvable.
    - **No PR found**: proceed (direct-to-main workflow, no merge needed)
 
    After successful merge (or no PR):
@@ -642,6 +658,46 @@ Write `idle|` to `current-state` at cycle end so health monitoring works.
 <!-- /sub-skill: self-restart -->
 <!-- /sub-skill: self-restart -->
 
+<!-- sub-skill: agent-lifecycle -->
+<!-- sub-skill: agent-lifecycle -->
+### Agent Lifecycle
+
+Agent lifecycle is managed by the wrapper script and `reboot_agent.py`. Agents do not manage their own or other agents' processes directly.
+
+**Three guarantees**:
+1. **Singleton**: Only one instance per role runs at a time (PID lock file).
+2. **Never kill mid-work**: `reboot_agent.py` waits for the agent to go idle before restarting.
+3. **Start correctly**: Wrapper handles pre-flight checks, branch setup, and heartbeat.
+
+**Heartbeat**: The wrapper writes the current epoch to `.squidsquad/[ROLE]/.health` every 5 seconds. Health monitoring reads this — if >10s old, the agent is considered dead.
+
+**Reboot interface** (for PM and DM):
+```bash
+# Safe reboot — waits for idle, then restarts
+python references/scripts/reboot_agent.py <role>
+
+# Force reboot — kills immediately
+python references/scripts/reboot_agent.py <role> --force
+
+# Reboot all agents
+python references/scripts/reboot_agent.py --all
+
+# Custom timeout (default 300s)
+python references/scripts/reboot_agent.py <role> --timeout 600
+```
+
+**Who reboots whom**:
+- **PM** monitors context pressure and detects when agents need rebooting. PM plans reboots.
+- **DM** executes reboots after shipping items that change agent templates/instructions.
+- **PM fallback**: When DM is absent, PM executes reboots directly via `reboot_agent.py`.
+- **Self-restart**: Agents can only self-restart for context pressure (see Self-Restart sub-skill).
+
+**Sentinel files**:
+- `.restart` — reboot request (written by agent for context pressure, or by `reboot_agent.py`)
+- `.pid` — singleton lock (written by wrapper)
+- `.health` — heartbeat epoch (written by wrapper every 5s)
+<!-- /sub-skill: agent-lifecycle -->
+<!-- /sub-skill: agent-lifecycle -->
 
 ### Step 9 — Done
 
