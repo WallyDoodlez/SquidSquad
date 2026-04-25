@@ -58,15 +58,14 @@
   echo "Exit code: $?"
   ```
 
-### TC-5: Feature flag off skips cycle-runner instructions
-- **Precondition**: `config.md` has `Cycle Runner: no` (default).
+### TC-5: No feature flag gate in deployed templates
+- **Precondition**: Cycle-runner is always on (no feature flag). Templates deployed.
 - **Steps**:
   1. Deploy templates with `python references/scripts/compose.py deploy-all`.
   2. Read a deployed CLAUDE.md (e.g., `.squidsquad/skill/CLAUDE.md`).
-  3. Locate the cycle-runner section.
-  4. Verify the feature flag gate text is present: "If set to `no` (default), skip this section entirely and use the existing Ralph Loop steps."
-- **Expected**: The deployed template contains the feature flag check. When the flag is `no`, an agent following the instructions would skip the cycle-runner section and fall back to existing manual Ralph Loop steps.
-- **Verification**: Read the deployed file and confirm the gate text is present. Manually verify that no cycle-runner scripts are invoked when an agent follows the `Cycle Runner: no` path.
+  3. Search for "Cycle Runner: no" or "skip this section" or feature flag gate text.
+- **Expected**: No feature flag gate text present. The cycle-runner section is unconditional — agents always use the 3-phase flow.
+- **Verification**: `grep -c "skip this section\|Cycle Runner.*no" .squidsquad/skill/CLAUDE.md` returns 0.
 
 ### TC-6: PM suppressed cycles via cycle-input.json
 - **Precondition**: PM working-state.md contains `**Phase**: researching FEAT-PM-2487`. cycle_pre.py parses `**Phase**:` lines.
@@ -131,7 +130,7 @@
 - **Precondition**: Sub-skills `common/pull-latest`, `common/git-commit`, `common/iteration-log` exist in `references/sub-skills/common/`.
 - **Steps**:
   1. Read each deployed CLAUDE.md.
-  2. Check that when Cycle Runner is enabled, the instructions do NOT direct the agent to use pull-latest, git-commit, or iteration-log sub-skills for mechanical operations.
+  2. Check that the instructions do NOT direct the agent to use pull-latest, git-commit, or iteration-log sub-skills for mechanical operations.
   3. Verify these sub-skill files still exist in the codebase as reference documentation.
 - **Expected**: Manual sub-skills remain in the repo. They are NOT included in the cycle flow. The cycle-runner section explicitly handles their responsibilities (pull, commit, push, iteration logging) via scripts. No duplication of mechanical steps.
 - **Verification**:
@@ -165,7 +164,7 @@
   2. Run `python references/scripts/compose.py deploy-all`.
   3. Reboot all agents: `python references/scripts/reboot_agent.py --all`.
   4. Monitor agent health for 2 cycles.
-- **Expected**: All agents boot successfully, read the new cycle-runner instructions, and execute cycles using the 3-phase flow (when Cycle Runner is enabled) or the existing Ralph Loop steps (when disabled).
+- **Expected**: All agents boot successfully, read the new cycle-runner instructions, and execute cycles using the 3-phase flow.
 - **Verification**:
   ```bash
   python references/scripts/compose.py deploy-all
@@ -184,7 +183,7 @@
 - [ ] `python references/scripts/cycle_post.py pm` exits 0 with minimal cycle-output.json
 - [ ] `python tests/run_tests.py` — all existing tests pass after template changes
 - [ ] `grep "Cycle Runner" .squidsquad/skill/CLAUDE.md` returns matches (section present)
-- [ ] Config `Cycle Runner: no` causes agents to skip the cycle-runner section
+- [ ] No feature flag gate text in any deployed CLAUDE.md — cycle-runner is unconditional
 
 ---
 
@@ -195,7 +194,7 @@
 - **Branch workflow conflicts**: cycle_post.py has special handling for skill branch workflow (split commits). If the skill template still instructs manual git-commit sub-skill actions alongside cycle_post, commits may conflict or duplicate.
 - **compose.py breaking on new include**: Adding `{{include: common/cycle-runner}}` to role entry templates may break compose.py if the include path resolution or [ROLE] substitution has edge cases (e.g., nested substitution, escaping).
 - **Windows path issues**: cycle_pre.py and cycle_post.py write to `.squidsquad/<role>/` paths. Verify forward-slash paths work on Windows (project runs on Windows 11).
-- **Missing config key**: The sub-skill checks `Cycle Runner` in config.md. If `config.py` does not support that key name/casing, the feature flag check will fail silently or crash.
+- **Stale config key**: Old installs may have `Cycle Runner: yes/no` in config.md. The sub-skill no longer checks it, but config.py should tolerate the orphaned field without errors.
 
 ---
 
@@ -205,9 +204,9 @@
 - **Files**: `.squidsquad/skill/CLAUDE.md` (deployed, cycle-runner section)
 - **Expected**: Phase 1 is Pre-Cycle (run `cycle_pre.py skill`), Phase 2 is Creative Work (agent's core work using cycle-input.json), Phase 3 is Post-Cycle (write cycle-output.json and run `cycle_post.py skill`).
 
-### CQ-2: When Cycle Runner is set to `no`, what should an agent do with the cycle-runner section?
+### CQ-2: Is the cycle-runner flow optional or always active?
 - **Files**: `.squidsquad/skill/CLAUDE.md` (deployed, cycle-runner section)
-- **Expected**: Skip the cycle-runner section entirely and use the existing Ralph Loop steps (manual pull, commit, iteration logging).
+- **Expected**: Always active. There is no feature flag. Every cycle uses the 3-phase flow: cycle_pre → creative work → cycle_post.
 
 ### CQ-3: What mechanical operations should an agent NOT perform manually when cycle-runner is enabled?
 - **Files**: `.squidsquad/skill/CLAUDE.md` (deployed, cycle-runner section)
