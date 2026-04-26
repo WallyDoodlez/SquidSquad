@@ -146,12 +146,22 @@ def _get_clone_path(role):
 # ---------------------------------------------------------------------------
 
 def _read_pid_file(clone_path, role):
-    """Read PID from .squidsquad/{role}/.pid. Returns int or None."""
+    """Read PID from .squidsquad/{role}/.pid. Returns int or None.
+
+    Handles UTF-16 LE encoding (PowerShell's $PID > $PidFile writes BOM).
+    """
     pid_file = Path(clone_path) / ".squidsquad" / role / ".pid"
     if not pid_file.exists():
         return None
     try:
-        content = pid_file.read_text(encoding="utf-8").strip()
+        raw = pid_file.read_bytes()
+        # Detect UTF-16 LE BOM (PowerShell output)
+        if raw.startswith(b"\xff\xfe"):
+            content = raw.decode("utf-16-le").strip()
+        else:
+            content = raw.decode("utf-8", errors="replace").strip()
+        # Strip BOM character if present after decode
+        content = content.lstrip("\ufeff").strip()
         return int(content) if content else None
     except (ValueError, OSError):
         return None
@@ -184,7 +194,14 @@ def _has_stop_sentinel(clone_path, role):
 
 
 def _read_health_file(clone_path, role):
-    """Read .health file for a role. Returns (status, detail) or (None, None)."""
+    """Read .health file for a role. Returns (status, detail) or (None, None).
+
+    Supports two formats (aligned with health_check.py):
+    - New (heartbeat epoch): file contains a Unix epoch integer (e.g. "1745366400").
+      Wrapper writes this every 5s. Returns ("heartbeat", epoch_str).
+    - Legacy (status string): "status" or "status|detail".
+      Valid statuses: booting, alive, restarting, backoff, dead, error.
+    """
     health_file = Path(clone_path) / ".squidsquad" / role / ".health"
     if not health_file.exists():
         return None, None
@@ -192,7 +209,12 @@ def _read_health_file(clone_path, role):
         content = health_file.read_text(encoding="utf-8").strip()
         if not content:
             return None, None
-        parts = content.split("|", 1)
+        line = content.split("\n")[0].strip()
+        # New format: pure epoch integer (10+ digits)
+        if line.isdigit() and len(line) >= 10:
+            return "heartbeat", line
+        # Legacy format: status|detail
+        parts = line.split("|", 1)
         status = parts[0].strip()
         detail = parts[1].strip() if len(parts) > 1 else ""
         return status, detail
@@ -216,7 +238,18 @@ def _needs_boot(role):
     # Primary: check .health file
     health_status, health_detail = _read_health_file(clone_path, role)
     if health_status is not None:
-        if health_status in ("alive", "booting", "restarting"):
+        if health_status == "heartbeat":
+            # New format: epoch timestamp written by wrapper every 5s
+            try:
+                heartbeat_epoch = int(health_detail)
+                age = time.time() - heartbeat_epoch
+                if age <= 15:
+                    return False, f"heartbeat {int(age)}s ago (alive)", str(clone_path)
+                else:
+                    return True, f"heartbeat stale ({int(age)}s ago, threshold 15s)", str(clone_path)
+            except (ValueError, TypeError):
+                pass  # Fall through to PID fallback
+        elif health_status in ("alive", "booting", "restarting"):
             return False, f".health={health_status} (agent running)", str(clone_path)
         elif health_status == "dead":
             return True, ".health=dead (wrapper exited)", str(clone_path)

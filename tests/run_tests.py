@@ -42,6 +42,7 @@ STATIC_TEST_MODULES = [
     "test_state_bus",
     "test_git_ops", "test_run_comprehension",
     "test_migrate_state_branch",
+    "test_boot_remote",
 ]
 
 
