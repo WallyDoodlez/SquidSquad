@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-26 08:02
+
+- **Files scanned**: references/scripts/compose.py, references/scripts/cycle.py, references/scripts/scan_index.py, references/scripts/state_bus.py, references/scripts/vault_entity.py
+- **Findings**: #3290 (state_bus.py init() mutates main working tree with orphan checkout — no recovery on failure, high)
+- **Items rejected by human**: none yet
+- **Notes**: compose.py has unused `prefix` variable in _resolve_includes_with_manifest (dead code, not a bug — manifest entries already include directory prefix). Not filed (too minor).
+
 ## Scan — 2026-04-26 00:02
 
 - **Files scanned**: references/scripts/soul_adaptation.py, references/scripts/cycle_post.py
