@@ -563,18 +563,7 @@ python references/scripts/config.py get vault-remember
 ```
 If `no`, skip this step entirely.
 
-**Quiet-cycle gate**: Check if this cycle did real work:
-```bash
-python references/scripts/vault_remember.py is-quiet skill
-```
-If exit code 0 (quiet), skip — nothing to reflect on.
-
-**Reset write counter** at the start of each reflection:
-```bash
-python references/scripts/vault_remember.py reset-writes skill
-```
-
-**BRIEFING.md staleness check** (runs before reflection, bypasses write budget):
+**BRIEFING.md staleness check** (runs every cycle — not gated by quiet check):
 
 Read `.squidsquad/vault/BRIEFING.md` and `config.md`. Compare key fields:
 - **Version**: Does BRIEFING.md match `SquidSquad Version` in config.md?
@@ -582,6 +571,17 @@ Read `.squidsquad/vault/BRIEFING.md` and `config.md`. Compare key fields:
 - **Current priorities**: Do listed priorities match open high/medium priority items in the tracker?
 
 If any field is stale, update BRIEFING.md with current values. This is a staleness fix, not new content — it does NOT consume write budget. Run vault-check Level 1 after updating.
+
+**Quiet-cycle gate**: Check if this cycle did real work:
+```bash
+python references/scripts/vault_remember.py is-quiet skill
+```
+If exit code 0 (quiet), skip the reflection below — nothing to reflect on.
+
+**Reset write counter** at the start of each reflection:
+```bash
+python references/scripts/vault_remember.py reset-writes skill
+```
 
 **Reflection prompt**: Review this cycle's iteration log and evaluate each category:
 
@@ -866,7 +866,7 @@ Use `[[note-name]]` (bare, no aliases) to link related notes in the body. Find i
 
 ### BRIEFING.md
 
-`.squidsquad/vault/BRIEFING.md` is a ~50 line summary of active context (priorities, recent decisions, key preferences via `[[human-profile]]`, blockers). Checked for staleness on every non-quiet cycle — key fields (version, active agents, priorities) are verified against config.md and updated if stale. Token budget applies to new additions, not staleness fixes.
+`.squidsquad/vault/BRIEFING.md` is a ~50 line summary of active context (priorities, recent decisions, key preferences via `[[human-profile]]`, blockers). Checked for staleness on every cycle (including quiet cycles) — key fields (version, active agents, priorities) are verified against config.md and updated if stale. Token budget applies to new additions, not staleness fixes.
 
 ### Concurrent Access
 

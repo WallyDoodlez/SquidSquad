@@ -1368,6 +1368,32 @@ options: ["Approve — proceed to test plan", "More discussion needed", "Reject 
 
 **Clear planning phase flag** after CONTEXT.md is written and Phase 2 approval gate is passed.
 
+### Phase 2B — Re-Research Gate
+
+**Light-mode exemption**: Light-mode tasks skip this gate entirely (their research is already abbreviated or skipped).
+
+After Phase 2 approval and before Phase 3, compare CONTEXT.md locked decisions against RESEARCH.md assumptions to detect heavy scope deviation:
+
+1. **Read both artifacts**:
+   - `.squidsquad/pm/planning/FEAT-PM-XXX-RESEARCH.md` — specifically the Impact Analysis, Side Effects, and Edge Cases sections
+   - `.squidsquad/pm/planning/FEAT-PM-XXX-CONTEXT.md` — specifically the Scope and Locked Decisions sections
+
+2. **Evaluate deviation** against these criteria (any ONE triggers re-research):
+   - **New files touched**: CONTEXT.md scope includes files not listed in RESEARCH.md Impact Analysis
+   - **Different behavior**: locked decisions change the expected behavior described in research (e.g., research assumed opt-in but discussion decided opt-out)
+   - **Features added or removed**: scope expanded or contracted beyond what research analyzed
+   - **Fundamentally different approach**: locked decisions chose an implementation strategy research didn't consider (e.g., research assumed config change, discussion decided new script)
+
+   Minor wording changes, cosmetic preferences, or naming choices do NOT trigger re-research.
+
+3. **If deviation detected**:
+   - Print: `[🦑 HH:MM:SS] Scope deviation detected — re-running Phase 1 research with updated scope.`
+   - Re-run Phase 1 research, but pass the CONTEXT.md locked decisions as additional context so the research agent analyzes the *actual* decided scope, not the original proposal
+   - The updated RESEARCH.md replaces the original (CONTEXT.md remains unchanged — it captures the human's decisions)
+   - After re-research completes, proceed to Phase 3
+
+4. **If no deviation**: Proceed silently to Phase 3.
+
 ### Phase 3 — Planning
 
 Write current state: `python references/scripts/cycle.py status-bar pm test-planning "Test plan for FEAT-PM-XXX..."`
