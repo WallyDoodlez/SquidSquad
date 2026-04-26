@@ -83,6 +83,13 @@ class TestLockFile:
             add_role._release_lock()
             assert not (tmp_path / ".lock").exists()
 
+    def test_lock_uses_os_getpid_not_subprocess(self):
+        """#3302: _acquire_lock must use os.getpid(), not subprocess.os.getpid()."""
+        import inspect
+        source = inspect.getsource(add_role._acquire_lock)
+        assert "os.getpid()" in source
+        assert "subprocess.os" not in source
+
 
 class TestDuplicateRoleCheck:
     @patch("add_role._validate_role", return_value=True)

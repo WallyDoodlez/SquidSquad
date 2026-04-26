@@ -19,6 +19,7 @@ Examples:
 """
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -128,7 +129,7 @@ def _acquire_lock():
         LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
         # Use exclusive create — fails if file exists
         fd = LOCK_FILE.open("x")
-        fd.write(str(subprocess.os.getpid()))
+        fd.write(str(os.getpid()))
         fd.close()
         return True
     except FileExistsError:
