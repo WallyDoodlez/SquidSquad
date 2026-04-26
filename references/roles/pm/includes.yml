@@ -9,6 +9,7 @@ includes:
   - pm-specific/delivery-fallback
   - pm-specific/post-merge-recompose
   - pm-specific/pipeline-sentinel
+  - pm-specific/own-domain-autofix
   - pm-specific/health-check
   - pm-specific/github-issues
   - common/boot-remote-agents

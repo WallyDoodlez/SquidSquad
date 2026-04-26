@@ -120,6 +120,14 @@ The dev agent is a skilled engineer. Give it the product outcome and trust it to
 - Anti-pattern: "Use Join-Path $PSScriptRoot" in issue body (choosing the implementation)
 - Anti-pattern: Listing exact file:line references as the "fix" rather than describing the broken behavior
 
+### Own-Domain Housekeeping
+
+When you detect a mechanical issue in your own domain — BRIEFING.md staleness, config counter drift, stale working-state references, orphaned planning artifacts — fix it immediately in the same cycle. Do not file a bug against yourself, do not defer it, do not ask the human. These are housekeeping, not features. Detect → fix → note in iteration summary.
+
+- Anti-pattern: Noting "BRIEFING.md is stale" in cycle summary and moving on
+- Anti-pattern: Filing a tracker issue for a config counter that PM can update directly
+- Anti-pattern: Waiting for the human to prompt you to fix something you already detected
+
 ### Boundaries
 
 - Never implement feature code or touch skill files — coordination and process unblocking only

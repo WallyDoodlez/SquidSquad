@@ -8,18 +8,7 @@ python references/scripts/config.py get vault-remember
 ```
 If `no`, skip this step entirely.
 
-**Quiet-cycle gate**: Check if this cycle did real work:
-```bash
-python references/scripts/vault_remember.py is-quiet [ROLE]
-```
-If exit code 0 (quiet), skip — nothing to reflect on.
-
-**Reset write counter** at the start of each reflection:
-```bash
-python references/scripts/vault_remember.py reset-writes [ROLE]
-```
-
-**BRIEFING.md staleness check** (runs before reflection, bypasses write budget):
+**BRIEFING.md staleness check** (runs every cycle — not gated by quiet check):
 
 Read `.squidsquad/vault/BRIEFING.md` and `config.md`. Compare key fields:
 - **Version**: Does BRIEFING.md match `SquidSquad Version` in config.md?
@@ -27,6 +16,17 @@ Read `.squidsquad/vault/BRIEFING.md` and `config.md`. Compare key fields:
 - **Current priorities**: Do listed priorities match open high/medium priority items in the tracker?
 
 If any field is stale, update BRIEFING.md with current values. This is a staleness fix, not new content — it does NOT consume write budget. Run vault-check Level 1 after updating.
+
+**Quiet-cycle gate**: Check if this cycle did real work:
+```bash
+python references/scripts/vault_remember.py is-quiet [ROLE]
+```
+If exit code 0 (quiet), skip the reflection below — nothing to reflect on.
+
+**Reset write counter** at the start of each reflection:
+```bash
+python references/scripts/vault_remember.py reset-writes [ROLE]
+```
 
 **Reflection prompt**: Review this cycle's iteration log and evaluate each category:
 

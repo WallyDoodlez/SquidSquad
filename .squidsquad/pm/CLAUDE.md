@@ -708,6 +708,29 @@ Parse the JSON output. If the assigned agent's health is `stalled`, `stopped`, o
 If Branch Workflow is `no`, skip checks 1, 3, 4a, and 4b (PR-related) silently. All other checks run regardless.
 <!-- /sub-skill: pipeline-sentinel -->
 
+<!-- sub-skill: own-domain-autofix -->
+### Own-Domain Auto-Fix (PM Rule)
+
+When PM detects an issue in **PM's own domain** during any cycle step, **fix it immediately in the same cycle**. Do not file a bug, do not defer to a future cycle, do not ask the human for permission. Own-domain mechanical fixes are part of PM's housekeeping — they happen inline, silently, and without ceremony.
+
+**What counts as PM's own domain:**
+
+- **BRIEFING.md staleness** — version, active agents, or priorities out of sync with config.md or tracker
+- **Config counters** — `Shipped Since Last Bump` or other config.md counters drifting from actual state
+- **Stale tracker references** — PM Discussion comments referencing closed/shipped items as if active, or working-state.md pointing to completed work
+- **PM planning artifacts** — stale RESEARCH.md, CONTEXT.md, or TEST-PLAN.md left from completed tasks
+- **Vault area notes** — `human-profile.md`, `BRIEFING.md`, or project notes that PM owns and can update directly
+
+**What does NOT count (file to the appropriate agent instead):**
+
+- Code bugs — even if PM discovered them
+- Template/instruction bugs in other agents' CLAUDE.md — file to skill
+- Delivery or changelog issues — file to DM
+- Test failures — file to the owning agent
+
+**Rule**: Detect → fix → log the fix in the iteration summary. One line in Discussion if other agents need to know (e.g., "Updated BRIEFING.md — version was stale"). No tracker item needed for mechanical self-fixes.
+<!-- /sub-skill: own-domain-autofix -->
+
 <!-- sub-skill: health-check -->
 ### Step 7 — Agent Health Check
 
@@ -923,18 +946,7 @@ python references/scripts/config.py get vault-remember
 ```
 If `no`, skip this step entirely.
 
-**Quiet-cycle gate**: Check if this cycle did real work:
-```bash
-python references/scripts/vault_remember.py is-quiet pm
-```
-If exit code 0 (quiet), skip — nothing to reflect on.
-
-**Reset write counter** at the start of each reflection:
-```bash
-python references/scripts/vault_remember.py reset-writes pm
-```
-
-**BRIEFING.md staleness check** (runs before reflection, bypasses write budget):
+**BRIEFING.md staleness check** (runs every cycle — not gated by quiet check):
 
 Read `.squidsquad/vault/BRIEFING.md` and `config.md`. Compare key fields:
 - **Version**: Does BRIEFING.md match `SquidSquad Version` in config.md?
@@ -942,6 +954,17 @@ Read `.squidsquad/vault/BRIEFING.md` and `config.md`. Compare key fields:
 - **Current priorities**: Do listed priorities match open high/medium priority items in the tracker?
 
 If any field is stale, update BRIEFING.md with current values. This is a staleness fix, not new content — it does NOT consume write budget. Run vault-check Level 1 after updating.
+
+**Quiet-cycle gate**: Check if this cycle did real work:
+```bash
+python references/scripts/vault_remember.py is-quiet pm
+```
+If exit code 0 (quiet), skip the reflection below — nothing to reflect on.
+
+**Reset write counter** at the start of each reflection:
+```bash
+python references/scripts/vault_remember.py reset-writes pm
+```
 
 **Reflection prompt**: Review this cycle's iteration log and evaluate each category:
 
@@ -1572,7 +1595,7 @@ Use `[[note-name]]` (bare, no aliases) to link related notes in the body. Find i
 
 ### BRIEFING.md
 
-`.squidsquad/vault/BRIEFING.md` is a ~50 line summary of active context (priorities, recent decisions, key preferences via `[[human-profile]]`, blockers). Checked for staleness on every non-quiet cycle — key fields (version, active agents, priorities) are verified against config.md and updated if stale. Token budget applies to new additions, not staleness fixes.
+`.squidsquad/vault/BRIEFING.md` is a ~50 line summary of active context (priorities, recent decisions, key preferences via `[[human-profile]]`, blockers). Checked for staleness on every cycle (including quiet cycles) — key fields (version, active agents, priorities) are verified against config.md and updated if stale. Token budget applies to new additions, not staleness fixes.
 
 ### Concurrent Access
 

@@ -52,6 +52,7 @@ Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded
 3. `pm-specific/delivery-fallback` — Step 6d: PM delivery when DM absent
 3b. `pm-specific/post-merge-recompose` — Step 6e: recompose after branch merge
 3c. `pm-specific/pipeline-sentinel` — Step 6f: always-run pipeline health (conflict detection, stall detection, PR status sync)
+3d. `pm-specific/own-domain-autofix` — PM auto-fixes own-domain mechanical issues (BRIEFING staleness, config drift) immediately
 4b. `pm-specific/health-check` — Step 7: agent health check
 5. `pm-specific/github-issues` — Step 7b
 5b. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals

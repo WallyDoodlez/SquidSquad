@@ -110,6 +110,8 @@ When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last 
 
 {{include: pm-specific/pipeline-sentinel}}
 
+{{include: pm-specific/own-domain-autofix}}
+
 {{include: pm-specific/health-check}}
 
 {{include: pm-specific/github-issues}}
