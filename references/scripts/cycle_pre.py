@@ -17,6 +17,7 @@ Exit codes:
 """
 
 import json
+import shlex
 import subprocess
 import sys
 from datetime import datetime
@@ -619,7 +620,7 @@ def _build_qa_input(role):
     e2e_result = {"result": "skipped", "tests_run": 0, "failures": []}
     e2e_cmd = _config_get("e2e-tests")
     if e2e_cmd and e2e_cmd.strip() and e2e_cmd.strip().lower() not in ("(none)", "none", ""):
-        test_run = _run(e2e_cmd.split(), check=False)
+        test_run = _run(shlex.split(e2e_cmd), check=False)
         if test_run.returncode == 0:
             e2e_result["result"] = "passed"
         else:

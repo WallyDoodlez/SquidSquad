@@ -700,3 +700,32 @@ class TestBootResults:
         result = cycle_pre._build_pm_input("pm")
         assert isinstance(result["boot_results"], list)
         assert result["boot_results"] == []
+
+
+# ---------------------------------------------------------------------------
+# E2E command uses shlex.split (#3079)
+# ---------------------------------------------------------------------------
+
+class TestE2eCmdShlexSplit:
+    """Regression #3079: e2e_cmd must use shlex.split, not str.split."""
+
+    def test_shlex_import_exists(self):
+        """cycle_pre imports shlex module."""
+        import importlib
+        importlib.reload(cycle_pre)
+        assert hasattr(cycle_pre, 'shlex') or 'shlex' in dir(cycle_pre) or \
+            'shlex' in cycle_pre.__dict__ or \
+            any('shlex' in str(v) for v in vars(cycle_pre).values()), \
+            "cycle_pre.py must import shlex"
+
+    def test_e2e_cmd_uses_shlex_split(self):
+        """Source code uses shlex.split, not bare .split()."""
+        import inspect
+        source = inspect.getsource(cycle_pre._build_qa_input)
+        assert "shlex.split" in source, (
+            "e2e_cmd must use shlex.split() not .split() — "
+            "bare split breaks on paths with spaces"
+        )
+        assert "e2e_cmd.split()" not in source, (
+            "e2e_cmd.split() found — must use shlex.split(e2e_cmd)"
+        )
