@@ -17,6 +17,7 @@ includes:
   - common/improvement-scan
   - common/vault-remember
   - common/vault-optimize
+  - pm-specific/vault-synthesis
   - pm-specific/issue-filing
   - pm-specific/task-intake
   - pm-specific/task-approval

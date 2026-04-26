@@ -126,6 +126,8 @@ When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last 
 
 {{include: common/vault-optimize}}
 
+{{include: pm-specific/vault-synthesis}}
+
 {{include: common/self-restart}}
 
 {{include: common/agent-lifecycle}}
