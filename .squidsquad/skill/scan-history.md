@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-04-25 21:32
+
+- **Files scanned**: references/scripts/boot_remote.py, references/scripts/reboot_agent.py, references/scripts/cycle_pre.py
+- **Findings**: #3078 (reboot_agent.py --all fallback hardcodes [pm, skill] — ignores config agents), #3079 (cycle_pre.py e2e_cmd.split() breaks on paths with spaces)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-04-25 09:02
 
 - **Files scanned**: references/scripts/tracker.py, references/scripts/model_router.py, references/scripts/vault_check.py
