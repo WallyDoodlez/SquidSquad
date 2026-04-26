@@ -20,17 +20,16 @@ fi
 
 if [ -d .squidsquad ]; then
   V=$(grep -o '[0-9][0-9.]*[0-9]' .squidsquad/config.md 2>/dev/null | head -1)
-  cat << LOGO
-
-      ▗▄▖
-     ▟█ █▙
-    ▐█• •█▌
-   ███████
-   ▐█████▌
-    ▐▌▐▌▐▌
-  S Q U I D S Q U A D   v${V:-?}  —  ${AGENT_NAME}
-
-LOGO
+  _R="" _N=""
+  if [ -t 1 ] && [ "$(tput colors 2>/dev/null)" -ge 8 ] 2>/dev/null; then
+    _R=$'\e[1;31m' _N=$'\e[0m'
+  fi
+  echo ""
+  echo "${_R} ____ ____ _  _ _ ___  ____ ____ _  _ ____ ___"
+  echo " [__  |  | |  | | |  \\ [__  |  | |  | |__| |  \\"
+  echo " ___] |_\\| |__| | |__/ ___] |_\\| |__| |  | |__/${_N}"
+  echo "  S Q U I D S Q U A D   v${V:-?}  —  ${AGENT_NAME}"
+  echo ""
 fi
 
 # Inject permissions from template into settings.json
