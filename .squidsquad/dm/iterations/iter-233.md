@@ -1,7 +1,8 @@
 # Iteration 233
 
-- **Date**: 2026-04-26 11:35
+- **Date**: 2026-04-26 11:36
 - **Type**: active
 - **Work Summary**:
-  - Shipped #3296 (task-level branch boundaries). README and SKILL.md updated with user-facing descriptions. Version bump triggered (10/10 shipped).
+  - Shipped #3296 (PR branch checkout). Version bumped to v0.27.0 — 6 added
+  - 4 fixed. Tag created and pushed.
 - **Notes**: none
