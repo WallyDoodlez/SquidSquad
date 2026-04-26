@@ -37,7 +37,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 - Test suite exists (`python tests/run_tests.py`) — static analysis + integration tests
 - PR flow currently disabled
-- Ship counter: threshold 10, currently at 8 (v0.26.0 bumped 2026-04-25 by DM)
+- Ship counter: threshold 10, currently at 9 (v0.26.0 bumped 2026-04-25 by DM)
 - 34 pre-existing test failures (QA framework, model_router_live, reboot_agent) + 24 comprehension errors — not blocking shipping
 
 ## Team State
