@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-26 13:00
+
+- **Files scanned**: references/scripts/git_ops.py, references/scripts/health_check.py, references/scripts/model_router.py, references/scripts/forge_adapter.py, references/scripts/run_comprehension_test.py
+- **Findings**: #3341 (git_ops.py commit_code/commit_state hardcode "main" instead of _get_working_branch() — low)
+- **Items rejected by human**: none yet
+- **Notes**: health_check.py clean. model_router.py clean (auto-pip pattern intentional). forge_adapter.py remove_labels DELETE bug already #1501. run_comprehension_test.py has unused tempfile import (trivially minor, not filed).
+
 ## Scan — 2026-04-26 10:02
 
 - **Files scanned**: references/scripts/add_role.py, references/scripts/capability_check.py, references/scripts/vault_remember.py, references/scripts/vault_entity.py, references/scripts/tc_coverage.py
