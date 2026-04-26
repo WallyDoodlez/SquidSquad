@@ -61,6 +61,8 @@ Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded
 7. `pm-specific/iteration-log` — Step 8: PM/QA iteration log
 7b. `common/vault-remember` — Step 8b: end-of-cycle vault reflection
 7c. `common/vault-optimize` — Vault optimization on quiet cycles
+7d. `pm-specific/vault-synthesis` — Vault synthesis: cross-agent pattern detection and posture emergence (5-cycle trigger)
+7e. `pm-specific/improvement-scan` — PM-specific improvement scanning (process/workflow focus, not code)
 8. `pm-specific/git-commit` — Step 9: commit/push
 9. `pm-specific/issue-filing` — Bug Filing Protocol
 10. `pm-specific/task-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
@@ -210,7 +212,9 @@ references/sub-skills/
 │   ├── git-commit.md                (Step 9 — PM commit/push)
 │   ├── github-issues.md              (Step 7b — GitHub Issues ingestion)
 │   ├── pipeline-sentinel.md           (Step 6f — pipeline health, always runs)
-│   └── soul-shepherd.md              (Soul shepherd — character signal detection per task)
+│   ├── soul-shepherd.md              (Soul shepherd — character signal detection per task)
+│   ├── vault-synthesis.md            (Vault synthesis — cross-agent posture emergence)
+│   └── improvement-scan.md           (PM-specific improvement scan — process/workflow focus)
 ├── qa-specific/
 │   ├── verification.md               (Steps 2-6 — E2E, bugs, verify, health check)
 │   ├── discussion-protocol.md        (Discussion — qa alias)
