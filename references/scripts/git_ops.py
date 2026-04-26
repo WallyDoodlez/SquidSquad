@@ -341,7 +341,7 @@ def commit_code(role, branch, message):
 
     Switches to the feature branch, stages everything EXCEPT state/ephemeral
     files (.squidsquad/, .claude/), commits, pushes the branch, then switches
-    back to main.
+    back to the configured working branch.
     """
     result = _run("git status --porcelain", check=False)
     if not result.stdout.strip():
@@ -369,6 +369,8 @@ def commit_code(role, branch, message):
         print("No code changes to commit (only state/ephemeral changes)")
         return False
 
+    working = _get_working_branch()
+
     # Switch to feature branch
     current = _run("git branch --show-current").stdout.strip()
     if current != branch:
@@ -394,10 +396,10 @@ def commit_code(role, branch, message):
     if result.returncode != 0:
         if "nothing to commit" in result.stdout + result.stderr:
             print("Nothing to commit on branch")
-            _safe_checkout("main")
+            _safe_checkout(working)
             return False
         print(f"ERROR: {result.stderr}", file=sys.stderr)
-        _safe_checkout("main")
+        _safe_checkout(working)
         return False
 
     # Push branch
@@ -408,15 +410,16 @@ def commit_code(role, branch, message):
 
     print(f"Committed code to {branch}: {message}")
 
-    # Switch back to main
-    _safe_checkout("main")
+    # Switch back to working branch
+    _safe_checkout(working)
     return True
 
 
 def commit_state(role, message):
-    """Stage and commit only .squidsquad/ files to main.
+    """Stage and commit only .squidsquad/ files to the working branch.
 
-    Only stages files under .squidsquad/. Commits and pushes to main.
+    Only stages files under .squidsquad/. Commits and pushes to the
+    configured working branch.
     """
     result = _run("git status --porcelain", check=False)
     if not result.stdout.strip():
@@ -436,10 +439,11 @@ def commit_state(role, message):
         print("No state changes to commit")
         return False
 
-    # Must be on main — state changes always go to main
+    # Must be on working branch — state changes always go there
+    working = _get_working_branch()
     current = _run("git branch --show-current").stdout.strip()
-    if current != "main":
-        print(f"ERROR: commit-state requires main branch (currently on {current})", file=sys.stderr)
+    if current != working:
+        print(f"ERROR: commit-state requires {working} branch (currently on {current})", file=sys.stderr)
         return False
 
     # Stage only .squidsquad/ files
