@@ -71,46 +71,52 @@ def _read_interval():
 def _parse_local_config():
     """Parse clone paths → {role: Path(clone_root)}.
 
-    Reads project-local .local-config first (scoped to this repo),
-    falls back to ~/.squidsquad/clones/ (global, shared filesystem).
+    Reads project-local .local-config (scoped to this repo).
+    .local-config is mandatory — if missing, exits with a clear error.
 
-    .local-config is authoritative because it is project-scoped.
-    The global store (~/.squidsquad/clones/) is shared across all
-    projects on the machine and can contain stale paths from other
-    projects, causing cross-project boot (#2750).
+    The global ~/.squidsquad/clones/ fallback was removed (#3100) because
+    it caused cross-project contamination when stale paths from other
+    projects were present (#2750).
     """
+    if not LOCAL_CONFIG.exists():
+        print(
+            f"ERROR: {LOCAL_CONFIG} not found.\n"
+            "Run the SquidSquad setup flow to create .local-config, or create it manually.\n"
+            "Format: - **role**: /absolute/path/to/clone",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
     result = {}
 
-    # Primary: .local-config (project-scoped, always correct)
+    # .local-config (project-scoped, always correct)
     # Format: `- **role**: <path>` — relative paths resolve against repo root.
-    if LOCAL_CONFIG.exists():
-        try:
-            text = LOCAL_CONFIG.read_text(encoding="utf-8")
-            for line in text.splitlines():
-                m = re.match(r"-\s*\*\*(\w+)\*\*:\s*(.+)", line)
-                if m:
-                    role = m.group(1).strip()
-                    raw_path = Path(m.group(2).strip())
-                    # Resolve relative paths against repo root
-                    if not raw_path.is_absolute():
-                        raw_path = (REPO_ROOT / raw_path).resolve()
-                    result[role] = raw_path
-        except Exception:
-            pass
-        if result:
-            return result
+    try:
+        text = LOCAL_CONFIG.read_text(encoding="utf-8")
+        for line in text.splitlines():
+            m = re.match(r"-\s*\*\*(\w+)\*\*:\s*(.+)", line)
+            if m:
+                role = m.group(1).strip()
+                raw_path = Path(m.group(2).strip())
+                # Resolve relative paths against repo root
+                if not raw_path.is_absolute():
+                    raw_path = (REPO_ROOT / raw_path).resolve()
+                result[role] = raw_path
+    except Exception as e:
+        print(
+            f"ERROR: Failed to parse {LOCAL_CONFIG}: {e}\n"
+            "Fix the file or re-run the SquidSquad setup flow.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
-    # Fallback: ~/.squidsquad/clones/ (global shared filesystem)
-    shared_clones = Path.home() / ".squidsquad" / "clones"
-    if shared_clones.exists() and shared_clones.is_dir():
-        for clone_file in shared_clones.iterdir():
-            if clone_file.is_file() and not clone_file.name.startswith("."):
-                try:
-                    path = clone_file.read_text(encoding="utf-8").strip()
-                    if path:
-                        result[clone_file.name] = Path(path)
-                except (OSError, UnicodeDecodeError):
-                    continue
+    if not result:
+        print(
+            f"ERROR: {LOCAL_CONFIG} exists but contains no valid entries.\n"
+            "Expected format: - **role**: /absolute/path/to/clone",
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
     return result
 
