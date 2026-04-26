@@ -138,3 +138,109 @@ class TestRegisterExisting:
         result = add_role.register_existing("qa", str(tmp_path))
         assert result == 0
         mock_sync.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# #3377 regression: clone origin must point to upstream, not local path
+# ---------------------------------------------------------------------------
+
+class TestGetUpstreamUrl:
+    @patch("add_role._run")
+    def test_returns_upstream_url(self, mock_run):
+        mock_run.return_value = _mock_result(stdout="https://github.com/user/repo.git\n")
+        assert add_role._get_upstream_url() == "https://github.com/user/repo.git"
+
+    @patch("add_role._run")
+    def test_returns_none_on_failure(self, mock_run):
+        mock_run.return_value = _mock_result(returncode=1)
+        assert add_role._get_upstream_url() is None
+
+
+class TestFixCloneRemote:
+    @patch("add_role._run")
+    def test_sets_origin_and_fetches(self, mock_run):
+        mock_run.return_value = _mock_result()
+        result = add_role._fix_clone_remote("/clone/path", "https://github.com/user/repo.git")
+        assert result is True
+        # Should call set-url then fetch
+        calls = mock_run.call_args_list
+        assert len(calls) == 2
+        assert calls[0][0][0] == ["git", "remote", "set-url", "origin", "https://github.com/user/repo.git"]
+        assert calls[1][0][0] == ["git", "fetch", "origin"]
+
+    def test_returns_false_on_empty_url(self):
+        assert add_role._fix_clone_remote("/clone/path", None) is False
+        assert add_role._fix_clone_remote("/clone/path", "") is False
+
+    @patch("add_role._run")
+    def test_returns_false_on_set_url_failure(self, mock_run):
+        mock_run.return_value = _mock_result(returncode=1, stderr="error")
+        result = add_role._fix_clone_remote("/clone/path", "https://github.com/user/repo.git")
+        assert result is False
+
+
+class TestAddRoleFixesRemote:
+    @patch("add_role._release_lock")
+    @patch("add_role._acquire_lock", return_value=True)
+    @patch("add_role._sync_local_config")
+    @patch("add_role._parse_local_config", return_value={})
+    @patch("add_role._get_configured_agents", return_value=["pm"])
+    @patch("add_role._validate_role", return_value=True)
+    @patch("add_role._get_project_name", return_value="TestProject")
+    @patch("add_role._fix_clone_remote", return_value=True)
+    @patch("add_role._get_upstream_url", return_value="https://github.com/user/repo.git")
+    @patch("add_role._run")
+    def test_clone_sets_upstream_origin(
+        self, mock_run, mock_upstream, mock_fix, mock_name,
+        mock_validate, mock_agents, mock_parse, mock_sync,
+        mock_lock, mock_unlock, tmp_path,
+    ):
+        """add_role() calls _fix_clone_remote after cloning."""
+        target = tmp_path / "TestProject-qa"
+        # Simulate git clone creating the target + .squidsquad
+        def side_effect(cmd, **kwargs):
+            if cmd[0:2] == ["git", "clone"]:
+                target.mkdir(parents=True, exist_ok=True)
+                (target / ".squidsquad").mkdir()
+            return _mock_result()
+        mock_run.side_effect = side_effect
+
+        result = add_role.add_role("qa", target=str(target))
+        assert result == 0
+        mock_fix.assert_called_once_with(target, "https://github.com/user/repo.git")
+
+
+class TestRegisterExistingFixesRemote:
+    @patch("add_role._sync_local_config")
+    @patch("add_role._parse_local_config", return_value={})
+    @patch("add_role._get_configured_agents", return_value=["pm"])
+    @patch("add_role._fix_clone_remote", return_value=True)
+    @patch("add_role._get_upstream_url", return_value="https://github.com/user/repo.git")
+    @patch("add_role._run")
+    def test_fixes_wrong_origin(
+        self, mock_run, mock_upstream, mock_fix, mock_agents, mock_parse,
+        mock_sync, tmp_path,
+    ):
+        """register_existing() fixes origin when it doesn't match upstream."""
+        (tmp_path / ".squidsquad").mkdir()
+        mock_run.return_value = _mock_result(stdout="/local/path\n")
+        result = add_role.register_existing("qa", str(tmp_path))
+        assert result == 0
+        mock_fix.assert_called_once()
+
+    @patch("add_role._sync_local_config")
+    @patch("add_role._parse_local_config", return_value={})
+    @patch("add_role._get_configured_agents", return_value=["pm"])
+    @patch("add_role._fix_clone_remote")
+    @patch("add_role._get_upstream_url", return_value="https://github.com/user/repo.git")
+    @patch("add_role._run")
+    def test_skips_fix_when_origin_matches(
+        self, mock_run, mock_upstream, mock_fix, mock_agents, mock_parse,
+        mock_sync, tmp_path,
+    ):
+        """register_existing() skips fix when origin already matches upstream."""
+        (tmp_path / ".squidsquad").mkdir()
+        mock_run.return_value = _mock_result(stdout="https://github.com/user/repo.git\n")
+        result = add_role.register_existing("qa", str(tmp_path))
+        assert result == 0
+        mock_fix.assert_not_called()

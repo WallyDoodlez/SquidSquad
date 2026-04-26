@@ -123,6 +123,35 @@ def _sync_local_config(agents_map):
             print(f"  Synced .local-config in {root}")
 
 
+def _get_upstream_url():
+    """Get the upstream (GitHub) URL from the primary repo's origin remote."""
+    result = _run(["git", "remote", "get-url", "origin"], check=False)
+    if result.returncode == 0:
+        return result.stdout.strip()
+    return None
+
+
+def _fix_clone_remote(clone_path, upstream_url):
+    """Reconfigure a clone's origin to point at the upstream URL.
+
+    After git clone --local, origin points to the local filesystem path.
+    This replaces it with the actual upstream URL so the clone can see
+    branches pushed to GitHub by other agents.
+    """
+    if not upstream_url:
+        return False
+    result = _run(
+        ["git", "remote", "set-url", "origin", upstream_url],
+        cwd=clone_path, check=False,
+    )
+    if result.returncode != 0:
+        print(f"  WARNING: Failed to set origin URL: {result.stderr}", file=sys.stderr)
+        return False
+    # Fetch to populate remote refs
+    _run(["git", "fetch", "origin"], cwd=clone_path, check=False)
+    return True
+
+
 def _acquire_lock():
     """Acquire a lock file for concurrency protection. Returns True on success."""
     try:
@@ -209,6 +238,14 @@ def add_role(role, target=None, boot=False, force=False, dry_run=False):
             shutil.rmtree(target)
         _run(["git", "clone", "--local", str(REPO_ROOT), str(target)])
 
+        # Fix origin remote: --local sets it to local path, we need upstream URL
+        upstream_url = _get_upstream_url()
+        if upstream_url:
+            print(f"  Setting origin to upstream: {upstream_url}")
+            _fix_clone_remote(target, upstream_url)
+        else:
+            print("  WARNING: Could not determine upstream URL — clone origin may be wrong", file=sys.stderr)
+
         # Write .active-role in the clone FIRST (before deploy/boot)
         clone_squid = target / ".squidsquad"
         clone_squid.mkdir(parents=True, exist_ok=True)
@@ -274,7 +311,11 @@ def add_role(role, target=None, boot=False, force=False, dry_run=False):
 
 
 def register_existing(role, clone_path):
-    """Register an existing clone in .local-config."""
+    """Register an existing clone in .local-config.
+
+    Also verifies the clone's origin remote points at the upstream URL
+    (not a local filesystem path) and fixes it if needed.
+    """
     clone_path = Path(clone_path).resolve()
     if not clone_path.exists():
         print(f"ERROR: Path does not exist: {clone_path}", file=sys.stderr)
@@ -282,6 +323,18 @@ def register_existing(role, clone_path):
     if not (clone_path / ".squidsquad").exists():
         print(f"ERROR: Not a SquidSquad clone (no .squidsquad/): {clone_path}", file=sys.stderr)
         return 1
+
+    # Verify/fix remote
+    upstream_url = _get_upstream_url()
+    if upstream_url:
+        clone_origin = _run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=clone_path, check=False,
+        )
+        clone_url = clone_origin.stdout.strip() if clone_origin.returncode == 0 else ""
+        if clone_url != upstream_url:
+            print(f"  Fixing origin: {clone_url} → {upstream_url}")
+            _fix_clone_remote(clone_path, upstream_url)
 
     agents_map = _parse_local_config()
     agents_map[role] = str(clone_path)
