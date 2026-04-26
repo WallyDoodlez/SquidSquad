@@ -90,27 +90,42 @@ def init():
     # Create orphan branch if it doesn't exist
     if not _state_branch_exists():
         print(f"Creating orphan state branch '{state_branch}'...")
-        # Create orphan branch with an initial commit
-        _run(["git", "checkout", "--orphan", state_branch])
-        _run(["git", "rm", "-rf", "--cached", "."], check=False)
-        _run(["git", "clean", "-fd"], check=False)
 
-        # Create initial structure
-        state_dir = REPO_ROOT / ".squidsquad-state-init"
-        state_dir.mkdir(exist_ok=True)
-        (state_dir / "README.md").write_text(
-            "# SquidSquad State Bus\n\n"
-            "This branch stores agent state. Never merge into main.\n",
-            encoding="utf-8",
+        # Capture current branch so we can restore on failure (#3290)
+        current_ref = _run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"], check=False
         )
-        _run(["git", "add", "README.md"], cwd=str(state_dir))
-        _run(["git", "commit", "-m", "init: state bus branch"])
-        _run(["git", "push", "-u", "origin", state_branch], check=False)
+        original_branch = current_ref.stdout.strip() if current_ref.returncode == 0 else None
 
-        # Switch back to working branch
-        working_branch, _ = _read_branch_config()
-        _run(["git", "checkout", working_branch], check=False)
-        _run(["git", "checkout", "main"], check=False)
+        state_dir = REPO_ROOT / ".squidsquad-state-init"
+        try:
+            # Create orphan branch with an initial commit
+            _run(["git", "checkout", "--orphan", state_branch])
+            _run(["git", "rm", "-rf", "--cached", "."], check=False)
+            _run(["git", "clean", "-fd"], check=False)
+
+            # Create initial structure
+            state_dir.mkdir(exist_ok=True)
+            (state_dir / "README.md").write_text(
+                "# SquidSquad State Bus\n\n"
+                "This branch stores agent state. Never merge into main.\n",
+                encoding="utf-8",
+            )
+            _run(["git", "add", "README.md"], cwd=str(state_dir))
+            _run(["git", "commit", "-m", "init: state bus branch"])
+            _run(["git", "push", "-u", "origin", state_branch], check=False)
+        finally:
+            # Always restore the original branch (#3290)
+            if original_branch and original_branch != state_branch:
+                result = _run(["git", "checkout", original_branch], check=False)
+                if result.returncode != 0:
+                    # Last resort: try the configured working branch
+                    working_branch, _ = _read_branch_config()
+                    _run(["git", "checkout", working_branch], check=False)
+            # Clean up temp directory
+            import shutil
+            if state_dir.exists():
+                shutil.rmtree(state_dir, ignore_errors=True)
     else:
         print(f"State branch '{state_branch}' already exists.")
 

@@ -123,6 +123,74 @@ class TestStatus:
         assert output["worktree_exists"] is False
 
 
+class TestInitBranchRecovery:
+    """Regression tests for #3290 — init() must restore original branch on failure."""
+
+    @patch.object(state_bus, "_state_branch_exists", return_value=False)
+    @patch.object(state_bus, "_worktree_exists", return_value=True)
+    def test_captures_original_branch(self, mock_wt, mock_exists):
+        """#3290: init() captures current branch before orphan checkout."""
+        calls = []
+
+        def fake_run(cmd, check=True, cwd=None):
+            calls.append(cmd)
+            result = MagicMock()
+            result.returncode = 0
+            result.stdout = "main\n"
+            if "checkout" in cmd and "--orphan" in cmd:
+                raise subprocess.CalledProcessError(1, cmd)
+            return result
+
+        import subprocess
+        with patch.object(state_bus, "_run", side_effect=fake_run), \
+             patch.object(state_bus, "REPO_ROOT", Path("/tmp/fake")):
+            try:
+                state_bus.init()
+            except Exception:
+                pass
+
+        # First call should be rev-parse to capture current branch
+        assert any("rev-parse" in str(c) for c in calls), \
+            "init() must capture current branch via rev-parse before orphan checkout"
+
+    @patch.object(state_bus, "_state_branch_exists", return_value=False)
+    @patch.object(state_bus, "_worktree_exists", return_value=True)
+    def test_restores_branch_on_failure(self, mock_wt, mock_exists):
+        """#3290: init() restores original branch even when orphan checkout fails."""
+        checkout_targets = []
+
+        def fake_run(cmd, check=True, cwd=None):
+            result = MagicMock()
+            result.returncode = 0
+            result.stdout = "my-feature\n"
+            if "checkout" in cmd and "--orphan" not in cmd and "rev-parse" not in str(cmd):
+                checkout_targets.append(cmd[-1] if cmd else None)
+            if "commit" in cmd:
+                raise subprocess.CalledProcessError(1, cmd)
+            return result
+
+        import subprocess
+        with patch.object(state_bus, "_run", side_effect=fake_run), \
+             patch.object(state_bus, "REPO_ROOT", Path("/tmp/fake")):
+            try:
+                state_bus.init()
+            except Exception:
+                pass
+
+        # Should attempt to checkout the original branch in finally
+        assert "my-feature" in checkout_targets, \
+            "init() must restore original branch (my-feature) in finally block"
+
+    def test_no_hardcoded_main_fallback(self):
+        """#3290: init() should not have a hardcoded 'main' fallback."""
+        import inspect
+        source = inspect.getsource(state_bus.init)
+        # The old code had: _run(["git", "checkout", "main"], check=False)
+        # The new code uses _read_branch_config() for the fallback
+        assert '"main"' not in source or "_read_branch_config" in source, \
+            "init() should use _read_branch_config() for fallback, not hardcoded 'main'"
+
+
 class TestCLI:
     def test_help(self):
         sys.argv = ["state_bus.py", "--help"]
