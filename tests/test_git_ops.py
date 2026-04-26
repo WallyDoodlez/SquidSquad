@@ -541,3 +541,81 @@ class TestGetWorkingBranch:
             with patch("config.get_field", return_value=""):
                 result = git_ops._get_working_branch()
             assert result == "main"
+
+
+# ---------------------------------------------------------------------------
+# #3341 regression: commit_code/commit_state use _get_working_branch()
+# ---------------------------------------------------------------------------
+
+class TestCommitCodeUsesWorkingBranch:
+    @patch("git_ops._get_working_branch", return_value="develop")
+    @patch("git_ops._safe_checkout", return_value=True)
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    @patch("subprocess.run")
+    def test_commit_code_switches_back_to_working_branch(
+        self, mock_subproc, mock_run, mock_run_list, mock_safe_checkout, mock_gwb
+    ):
+        """commit_code returns to _get_working_branch(), not hardcoded 'main'."""
+        mock_run.side_effect = [
+            _mock_result(stdout=" M src/app.py\n"),  # git status --porcelain
+            _mock_result(stdout="develop\n"),  # current branch
+        ]
+        mock_run_list.side_effect = [
+            _mock_result(returncode=0),  # rev-parse (branch exists)
+            _mock_result(),  # git checkout
+            _mock_result(),  # git add
+            _mock_result(),  # git push -u
+        ]
+        mock_subproc.return_value = _mock_result(stdout="1 file changed")
+
+        result = git_ops.commit_code("skill", "squidsquad/skill/3341", "test fix")
+        assert result is True
+
+        # Last _safe_checkout call should be to "develop", not "main"
+        last_checkout = mock_safe_checkout.call_args_list[-1]
+        assert last_checkout[0][0] == "develop"
+
+    @patch("git_ops._get_working_branch", return_value="develop")
+    @patch("git_ops._safe_checkout", return_value=True)
+    @patch("git_ops._run")
+    def test_commit_code_error_path_uses_working_branch(
+        self, mock_run, mock_safe_checkout, mock_gwb
+    ):
+        """commit_code error paths also return to working branch, not 'main'."""
+        mock_run.return_value = _mock_result(stdout=" M .squidsquad/state.md\n")
+        result = git_ops.commit_code("skill", "squidsquad/skill/3341", "test")
+        assert result is False
+        # No _safe_checkout calls expected when there are no code files
+
+
+class TestCommitStateUsesWorkingBranch:
+    @patch("git_ops._get_working_branch", return_value="develop")
+    @patch("git_ops._run")
+    def test_commit_state_checks_working_branch(self, mock_run, mock_gwb):
+        """commit_state rejects commits when not on the configured working branch."""
+        mock_run.side_effect = [
+            _mock_result(stdout=" M .squidsquad/skill/working-state.md\n"),
+            _mock_result(stdout="squidsquad/skill/3341\n"),  # not on develop
+        ]
+        result = git_ops.commit_state("skill", "state update")
+        assert result is False
+
+    @patch("git_ops._get_working_branch", return_value="develop")
+    @patch("git_ops._run")
+    @patch("git_ops._run_list")
+    @patch("subprocess.run")
+    def test_commit_state_succeeds_on_working_branch(
+        self, mock_subproc, mock_run_list, mock_run, mock_gwb
+    ):
+        """commit_state succeeds when on the configured working branch."""
+        mock_run.side_effect = [
+            _mock_result(stdout=" M .squidsquad/skill/working-state.md\n"),
+            _mock_result(stdout="develop\n"),  # on working branch
+            _mock_result(),  # push
+        ]
+        mock_run_list.return_value = _mock_result()  # git add
+        mock_subproc.return_value = _mock_result(stdout="1 file changed")
+
+        result = git_ops.commit_state("skill", "state update")
+        assert result is True
