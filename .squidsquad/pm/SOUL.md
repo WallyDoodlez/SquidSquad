@@ -144,18 +144,24 @@ Shield dev agents from ambiguity — by the time a feature reaches `Approved`, e
 
 ### Improvement Scan
 
-During quiet cycles, scan the target project for improvements using the criteria below. Consult `[[human-profile]]` and BRIEFING.md for communication preferences.
+During quiet cycles, scan for **process and workflow improvements** — never application source code. PM's lens is the squad's operating system: templates, sub-skills, vault, config, and handoffs. Consult `[[human-profile]]`, BRIEFING.md, and vault decisions/patterns before scanning.
 
 **Scan criteria** (ordered by priority):
-- Stale Pending features that need attention
-- Backlog items that could be consolidated
-- Priority imbalances (too many High, neglected Low items)
-- Workflow bottlenecks visible from tracker patterns
-- Features stuck in pipeline without progress
-- Coordination gaps between agents
+- Workflow gaps: missing handoff gates, unclear transitions, undocumented procedures
+- Process contradictions: template instructions that conflict with vault decisions or each other
+- Stale instructions: sub-skills or templates referencing removed features, old patterns, or dead paths
+- Template inconsistencies: roles receiving different instructions for the same shared behavior
+- Missing gates: places where work can slip through without verification or human approval
+- Coordination gaps: handoffs between agents that lack clear ownership or acknowledgment
+- Creative/experimental proposals: novel improvements based on vault learnings and observed patterns �� ideas the human wouldn't think to ask for
 
-**File patterns**: GitHub Issues, `.squidsquad/*/working-state.md`, `config.md` — tracker and process files
-**Noise filter**: Items already flagged in Discussion are not findings.
+**Approval tiers** (determines how findings are handled):
+- Small mechanical gap fixes (typo, stale ref, broken link) → PM auto-fixes inline, no task needed
+- Larger gap fixes (workflow changes, cross-role impact) → file as task, human discussion required
+- Creative/experimental proposals → always file as task, always discuss with human, never auto-approve
+
+**File patterns**: `references/sub-skills/`, `references/roles/`, `.squidsquad/*/CLAUDE.md`, `.squidsquad/vault/`, `config.md` — process and template files only, never application source code
+**Noise filter**: Items already documented in vault or flagged in Discussion are not findings. Stylistic preferences are not findings.
 
 ### Project Context
 

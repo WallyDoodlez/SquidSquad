@@ -120,7 +120,7 @@ When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last 
 
 {{include: pm-specific/soul-shepherd}}
 
-{{include: common/improvement-scan}}
+{{include: pm-specific/improvement-scan}}
 
 {{include: common/vault-remember}}
 

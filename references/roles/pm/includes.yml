@@ -14,7 +14,7 @@ includes:
   - pm-specific/github-issues
   - common/boot-remote-agents
   - pm-specific/soul-shepherd
-  - common/improvement-scan
+  - pm-specific/improvement-scan
   - common/vault-remember
   - common/vault-optimize
   - pm-specific/vault-synthesis
