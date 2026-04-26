@@ -1,9 +1,9 @@
 """Regression tests for #1496 — boot_remote.py shared filesystem fallback.
 
-Verifies that _parse_local_config reads clone paths from the shared filesystem
-(~/.squidsquad/clones/) as a fallback when .local-config (project-scoped) is
-absent or empty. Priority was reversed in #2750: .local-config is now primary,
-global clones are fallback.
+Originally verified that _parse_local_config reads clone paths from the shared
+filesystem (~/.squidsquad/clones/) as a fallback. The global fallback was removed
+in #3100 — .local-config is now mandatory. Tests updated to reflect the new
+behavior: missing .local-config exits with code 2.
 """
 
 import sys
@@ -21,19 +21,17 @@ import boot_remote
 class TestSharedFsFallback:
     """#1496: _parse_local_config must read shared FS as fallback when .local-config is absent."""
 
-    def test_shared_fs_used_when_local_config_missing(self, tmp_path):
-        """#1496/#2750: When .local-config is missing, use ~/.squidsquad/clones/."""
+    def test_missing_local_config_exits_not_fallback(self, tmp_path):
+        """#3100: When .local-config is missing, exit with code 2 — no global fallback."""
         clones_dir = tmp_path / ".squidsquad" / "clones"
         clones_dir.mkdir(parents=True)
         (clones_dir / "skill").write_text("/home/user/skill-clone", encoding="utf-8")
-        (clones_dir / "qa").write_text("/home/user/qa-clone", encoding="utf-8")
 
         with patch("pathlib.Path.home", return_value=tmp_path), \
              patch.object(boot_remote, "LOCAL_CONFIG", tmp_path / "nonexistent"):
-            result = boot_remote._parse_local_config()
-
-        assert result["skill"] == Path("/home/user/skill-clone")
-        assert result["qa"] == Path("/home/user/qa-clone")
+            with pytest.raises(SystemExit) as exc_info:
+                boot_remote._parse_local_config()
+        assert exc_info.value.code == 2
 
     def test_falls_back_to_local_config(self, tmp_path):
         """#1496: When shared FS is absent, fall back to .local-config."""
@@ -86,8 +84,8 @@ class TestSharedFsFallback:
         assert ".gitkeep" not in result
         assert "skill" in result
 
-    def test_shared_fs_skips_empty_content(self, tmp_path):
-        """#1496: Clone files with empty content should be skipped."""
+    def test_missing_local_config_exits_even_with_clones(self, tmp_path):
+        """#3100: Global clones with mixed content don't prevent exit when .local-config missing."""
         clones_dir = tmp_path / ".squidsquad" / "clones"
         clones_dir.mkdir(parents=True)
         (clones_dir / "skill").write_text("", encoding="utf-8")
@@ -95,19 +93,17 @@ class TestSharedFsFallback:
 
         with patch("pathlib.Path.home", return_value=tmp_path), \
              patch.object(boot_remote, "LOCAL_CONFIG", tmp_path / "nonexistent"):
-            result = boot_remote._parse_local_config()
+            with pytest.raises(SystemExit) as exc_info:
+                boot_remote._parse_local_config()
+        assert exc_info.value.code == 2
 
-        # skill has empty content, should be skipped
-        assert "skill" not in result
-        assert result["qa"] == Path("/valid/path")
-
-    def test_no_config_returns_empty(self, tmp_path):
-        """#1496: No shared FS and no .local-config returns empty dict."""
+    def test_no_config_exits(self, tmp_path):
+        """#3100: No shared FS and no .local-config exits with code 2."""
         with patch("pathlib.Path.home", return_value=tmp_path / "nowhere"), \
              patch.object(boot_remote, "LOCAL_CONFIG", tmp_path / "nonexistent"):
-            result = boot_remote._parse_local_config()
-
-        assert result == {}
+            with pytest.raises(SystemExit) as exc_info:
+                boot_remote._parse_local_config()
+        assert exc_info.value.code == 2
 
     def test_get_clone_path_falls_back_to_repo_root(self):
         """#1496: _get_clone_path returns REPO_ROOT when role not in config."""
