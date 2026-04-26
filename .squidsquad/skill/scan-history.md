@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-26 10:02
+
+- **Files scanned**: references/scripts/add_role.py, references/scripts/capability_check.py, references/scripts/vault_remember.py, references/scripts/vault_entity.py, references/scripts/tc_coverage.py
+- **Findings**: #3302 (add_role.py uses subprocess.os.getpid() — undocumented internal attribute, medium)
+- **Items rejected by human**: none yet
+- **Notes**: vault_entity.py preference extraction uses simple period-scan for sentence boundaries — low severity, not filed.
+
 ## Scan — 2026-04-26 08:02
 
 - **Files scanned**: references/scripts/compose.py, references/scripts/cycle.py, references/scripts/scan_index.py, references/scripts/state_bus.py, references/scripts/vault_entity.py
