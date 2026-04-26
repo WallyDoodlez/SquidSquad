@@ -191,6 +191,64 @@ def _has_stop_sentinel(clone_path, role):
     return stop_file.exists()
 
 
+# Max age of .booting sentinel before it's considered stale (seconds)
+BOOTING_SENTINEL_TTL = 30
+
+
+def _has_booting_sentinel(clone_path, role):
+    """Check if a recent .booting sentinel exists (boot in progress).
+
+    Returns True if .booting exists and is younger than BOOTING_SENTINEL_TTL.
+    Stale sentinels (from crashed boot attempts) are ignored.
+    """
+    booting_file = Path(clone_path) / ".squidsquad" / role / ".booting"
+    if not booting_file.exists():
+        return False
+    try:
+        age = time.time() - booting_file.stat().st_mtime
+        if age <= BOOTING_SENTINEL_TTL:
+            return True
+        # Stale sentinel — clean it up
+        booting_file.unlink(missing_ok=True)
+        return False
+    except OSError:
+        return False
+
+
+def _write_booting_sentinel(clone_path, role):
+    """Write .booting sentinel to claim the boot slot for a role.
+
+    Uses atomic write (write to .tmp then rename) to avoid races.
+    Returns True if sentinel was written (we got the slot), False if
+    another boot is already in progress.
+    """
+    squid_dir = Path(clone_path) / ".squidsquad" / role
+    booting_file = squid_dir / ".booting"
+
+    # Check if another boot is in progress
+    if _has_booting_sentinel(clone_path, role):
+        return False
+
+    # Write atomically
+    try:
+        squid_dir.mkdir(parents=True, exist_ok=True)
+        tmp = squid_dir / ".booting.tmp"
+        tmp.write_text(str(os.getpid()), encoding="utf-8")
+        tmp.replace(booting_file)
+        return True
+    except OSError:
+        return False
+
+
+def _clear_booting_sentinel(clone_path, role):
+    """Remove .booting sentinel after boot completes or fails."""
+    booting_file = Path(clone_path) / ".squidsquad" / role / ".booting"
+    try:
+        booting_file.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 
 
 def _read_health_file(clone_path, role):
@@ -234,6 +292,10 @@ def _needs_boot(role):
     # Check .stop sentinel first
     if _has_stop_sentinel(clone_path, role):
         return False, "explicitly stopped (.stop sentinel)", str(clone_path)
+
+    # Check .booting sentinel — another boot_remote is already spawning this role
+    if _has_booting_sentinel(clone_path, role):
+        return False, "boot already in progress (.booting sentinel)", str(clone_path)
 
     # Primary: check .health file
     health_status, health_detail = _read_health_file(clone_path, role)
@@ -447,11 +509,22 @@ def boot_agent(role, dry_run=False):
         )
         return result
 
+    # Acquire boot slot — prevents concurrent spawns for the same role
+    if not _write_booting_sentinel(clone_path, role):
+        result["action"] = "skip"
+        result["success"] = True
+        result["message"] = "skip: another boot in progress (.booting sentinel)"
+        return result
+
     # Spawn
     success, msg = _spawn_terminal(clone_path, role, boot_script, script_type)
     result["action"] = "spawn"
     result["success"] = success
     result["message"] = msg
+
+    # Clear sentinel on spawn failure (wrapper clears on success via .health write)
+    if not success:
+        _clear_booting_sentinel(clone_path, role)
 
     return result
 

@@ -245,6 +245,103 @@ class TestReadPidFileUtf16:
         assert result == 67890
 
 
+# ---------------------------------------------------------------------------
+# #3347 regression: inter-process boot lock (.booting sentinel)
+# ---------------------------------------------------------------------------
+
+class TestBootingSentinel:
+    def test_no_sentinel_returns_false(self, tmp_path):
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        assert boot_remote._has_booting_sentinel(tmp_path, "skill") is False
+
+    def test_recent_sentinel_returns_true(self, tmp_path):
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        (squid / ".booting").write_text(str(os.getpid()), encoding="utf-8")
+        assert boot_remote._has_booting_sentinel(tmp_path, "skill") is True
+
+    def test_stale_sentinel_returns_false(self, tmp_path):
+        """Sentinel older than TTL is treated as stale and cleaned up."""
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        booting = squid / ".booting"
+        booting.write_text("99999", encoding="utf-8")
+        # Backdate mtime
+        old_time = time.time() - boot_remote.BOOTING_SENTINEL_TTL - 10
+        os.utime(booting, (old_time, old_time))
+        assert boot_remote._has_booting_sentinel(tmp_path, "skill") is False
+        assert not booting.exists()  # Stale sentinel was cleaned up
+
+    def test_write_sentinel_succeeds(self, tmp_path):
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        assert boot_remote._write_booting_sentinel(tmp_path, "skill") is True
+        assert (squid / ".booting").exists()
+
+    def test_write_sentinel_blocked_by_existing(self, tmp_path):
+        """Second write fails if recent sentinel exists."""
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        (squid / ".booting").write_text(str(os.getpid()), encoding="utf-8")
+        assert boot_remote._write_booting_sentinel(tmp_path, "skill") is False
+
+    def test_clear_sentinel(self, tmp_path):
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        (squid / ".booting").write_text("123", encoding="utf-8")
+        boot_remote._clear_booting_sentinel(tmp_path, "skill")
+        assert not (squid / ".booting").exists()
+
+
+class TestNeedsBootWithSentinel:
+    @patch("boot_remote._get_clone_path")
+    def test_booting_sentinel_prevents_boot(self, mock_clone, tmp_path):
+        """Active .booting sentinel means boot already in progress — skip."""
+        mock_clone.return_value = tmp_path
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        (squid / ".booting").write_text(str(os.getpid()), encoding="utf-8")
+        needs, reason, _ = boot_remote._needs_boot("skill")
+        assert needs is False
+        assert "boot already in progress" in reason
+
+
+class TestBootAgentLock:
+    @patch("boot_remote._spawn_terminal", return_value=(True, "spawned"))
+    @patch("boot_remote._find_boot_script", return_value=(Path("/tmp/start.sh"), "sh"))
+    @patch("boot_remote._needs_boot", return_value=(True, "dead", "/tmp/clone"))
+    def test_writes_sentinel_before_spawn(self, mock_needs, mock_script, mock_spawn, tmp_path):
+        """boot_agent writes .booting sentinel before spawning."""
+        with patch("boot_remote._write_booting_sentinel", return_value=True) as mock_write, \
+             patch("boot_remote._clear_booting_sentinel") as mock_clear:
+            result = boot_remote.boot_agent("skill")
+        assert result["action"] == "spawn"
+        assert result["success"] is True
+        mock_write.assert_called_once()
+        mock_clear.assert_not_called()  # Cleared by wrapper, not boot_remote on success
+
+    @patch("boot_remote._spawn_terminal", return_value=(False, "failed"))
+    @patch("boot_remote._find_boot_script", return_value=(Path("/tmp/start.sh"), "sh"))
+    @patch("boot_remote._needs_boot", return_value=(True, "dead", "/tmp/clone"))
+    def test_clears_sentinel_on_spawn_failure(self, mock_needs, mock_script, mock_spawn, tmp_path):
+        """boot_agent clears .booting sentinel when spawn fails."""
+        with patch("boot_remote._write_booting_sentinel", return_value=True) as mock_write, \
+             patch("boot_remote._clear_booting_sentinel") as mock_clear:
+            result = boot_remote.boot_agent("skill")
+        assert result["success"] is False
+        mock_clear.assert_called_once()
+
+    @patch("boot_remote._find_boot_script", return_value=(Path("/tmp/start.sh"), "sh"))
+    @patch("boot_remote._needs_boot", return_value=(True, "dead", "/tmp/clone"))
+    def test_skips_if_sentinel_blocked(self, mock_needs, mock_script):
+        """boot_agent skips if another boot is in progress."""
+        with patch("boot_remote._write_booting_sentinel", return_value=False):
+            result = boot_remote.boot_agent("skill")
+        assert result["action"] == "skip"
+        assert "another boot in progress" in result["message"]
+
+
 class TestGetAllRoles:
     @patch("boot_remote._parse_dev_agents", return_value=["skill", "qa"])
     @patch("boot_remote._parse_local_config", return_value={"skill": Path("/tmp")})
