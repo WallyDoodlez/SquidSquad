@@ -245,32 +245,14 @@ class TestGetClonePath:
 class TestRebootAll:
     """--all flag handles get_agents() dict output correctly (#2353)."""
 
-    def test_all_flag_with_dict_agents(self, patch_dirs, squid_dir, monkeypatch):
-        """get_agents() returns list of dicts — reboot() must receive string role."""
-        import config as config_mod
-
-        agents = [
-            {"id": "pm", "alias": "pm", "role": "infra"},
-            {"id": "skill", "alias": "skill", "role": "dev"},
-        ]
-        rebooted_roles = []
-
-        def fake_reboot(role, timeout=60, force=False):
-            rebooted_roles.append(role)
-            return 0
-
-        monkeypatch.setattr(reboot_agent, "reboot", fake_reboot)
-        monkeypatch.setattr(config_mod, "get_agents", lambda: agents)
-
-        with patch("sys.argv", ["reboot_agent.py", "--all"]):
-            rc = reboot_agent.main()
-
-        assert rc == 0
-        assert rebooted_roles == ["pm", "skill"]
-
-    def test_all_flag_with_string_agents_fallback(self, patch_dirs, monkeypatch):
-        """Fallback list of strings still works when get_agents() fails."""
-        import config as config_mod
+    def test_all_flag_boots_pm_plus_config_agents(self, patch_dirs, squid_dir, monkeypatch):
+        """--all boots pm (always) plus all agents from config.md."""
+        config_md = squid_dir / "config.md"
+        config_md.write_text(
+            "- **Dev Agents**: skill\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(boot_remote, "CONFIG_MD", config_md)
 
         rebooted_roles = []
 
@@ -279,16 +261,39 @@ class TestRebootAll:
             return 0
 
         monkeypatch.setattr(reboot_agent, "reboot", fake_reboot)
-        def raise_import_error():
-            raise ImportError("no config")
-
-        monkeypatch.setattr(config_mod, "get_agents", raise_import_error)
 
         with patch("sys.argv", ["reboot_agent.py", "--all"]):
             rc = reboot_agent.main()
 
         assert rc == 0
         assert rebooted_roles == ["pm", "skill"]
+
+    def test_all_reads_config_md(self, patch_dirs, squid_dir, monkeypatch):
+        """--all reads agents from config.md via boot_remote, not hardcoded list (#3078)."""
+        # Write config.md with qa and skill as dev agents
+        config_md = squid_dir / "config.md"
+        config_md.write_text(
+            "- **Dev Agents**: qa, skill\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(boot_remote, "CONFIG_MD", config_md)
+
+        rebooted_roles = []
+
+        def fake_reboot(role, timeout=60, force=False):
+            rebooted_roles.append(role)
+            return 0
+
+        monkeypatch.setattr(reboot_agent, "reboot", fake_reboot)
+
+        with patch("sys.argv", ["reboot_agent.py", "--all"]):
+            rc = reboot_agent.main()
+
+        assert rc == 0
+        # Should include pm (always) + qa + skill (from config)
+        assert "pm" in rebooted_roles
+        assert "qa" in rebooted_roles
+        assert "skill" in rebooted_roles
 
 
 # ---------------------------------------------------------------------------

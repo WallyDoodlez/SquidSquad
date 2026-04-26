@@ -191,16 +191,11 @@ def main():
     args = parser.parse_args()
 
     if args.all:
-        # Get all agent roles from config
-        try:
-            from config import get_agents
-            agents = get_agents()
-        except Exception:
-            agents = ["pm", "skill"]
+        # Get all agent roles from config.md via boot_remote (includes PM)
+        agents = ["pm"] + boot_remote._get_all_roles()
 
         exit_code = 0
-        for agent in agents:
-            role = agent['id'] if isinstance(agent, dict) else agent
+        for role in agents:
             rc = reboot(role, timeout=args.timeout, force=args.force)
             if rc != 0:
                 exit_code = rc
