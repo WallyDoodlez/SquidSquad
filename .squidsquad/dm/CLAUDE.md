@@ -448,7 +448,13 @@ If found:
 
 For each Pending Ship task that is NOT skipped:
 
-0. **PR merge gate**: If Branch Workflow is enabled (`python references/scripts/config.py get branch-workflow` → `yes`), check for an associated PR:
+0. **Branch checkout** (#3296): Before inspecting code for delivery, check out the task's feature branch to see the actual changes:
+   ```bash
+   python references/scripts/git_ops.py task-begin [role] [number]
+   ```
+   This is a no-op when branch-workflow is disabled. After delivery work is complete, return to working branch with `python references/scripts/git_ops.py task-end [role] [number]`.
+
+0b. **PR merge gate**: If Branch Workflow is enabled (`python references/scripts/config.py get branch-workflow` → `yes`), check for an associated PR:
    ```bash
    gh pr list --search "squidsquad/" --state open --json number,headRefName,isDraft --limit 20
    ```

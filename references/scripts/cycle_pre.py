@@ -627,25 +627,8 @@ def _build_qa_input(role):
             e2e_result["result"] = "failed"
         # Basic parsing — agent interprets details during creative phase
 
-    # Branch setup for first verification item
-    branch_workflow = config.get("branch_workflow", False)
-    first_item = None
-    if verification_queue["pending_test_issues"]:
-        first_item = verification_queue["pending_test_issues"][0]
-    elif verification_queue["pending_test_tasks"]:
-        first_item = verification_queue["pending_test_tasks"][0]
-
-    if branch_workflow and first_item and first_item.get("branch"):
-        branch = first_item["branch"]
-        # Check if branch exists and switch to it
-        exists_result = _run(["git", "rev-parse", "--verify", branch], check=False)
-        if exists_result.returncode != 0:
-            # Try remote
-            exists_result = _run(["git", "rev-parse", "--verify", f"origin/{branch}"], check=False)
-            if exists_result.returncode == 0:
-                _run(["git", "checkout", "-b", branch, f"origin/{branch}"], check=False)
-        else:
-            _run(["git", "checkout", branch], check=False)
+    # Branch setup removed (#3296) — task-begin/task-end in git_ops.py handles
+    # per-item branch checkout in the creative phase, not cycle-level pre-checkout.
 
     return {
         "e2e_test_result": e2e_result,
@@ -749,35 +732,7 @@ def _build_dm_input(role):
 # ---------------------------------------------------------------------------
 
 
-def _setup_skill_branch(working_state, config_flags):
-    """Ensure skill agent is on the correct branch."""
-    if not config_flags.get("branch_workflow", False):
-        return
-
-    task = working_state.get("task", "none")
-    if task == "none" or not task.startswith("#"):
-        return  # No active task — stay on main
-
-    number = task.lstrip("#")
-    branch = f"squidsquad/skill/{number}"
-
-    # Check current branch
-    current = _run(["git", "branch", "--show-current"], check=False)
-    current_branch = current.stdout.strip() if current.returncode == 0 else ""
-
-    if current_branch == branch:
-        return  # Already on correct branch
-
-    # Check if branch exists
-    exists = _run(["git", "rev-parse", "--verify", branch], check=False)
-    if exists.returncode == 0:
-        _run(["git", "checkout", branch], check=False)
-    else:
-        # Check remote
-        remote_exists = _run(["git", "rev-parse", "--verify", f"origin/{branch}"], check=False)
-        if remote_exists.returncode == 0:
-            _run(["git", "checkout", "-b", branch, f"origin/{branch}"], check=False)
-        # If branch doesn't exist at all, stay on main — agent will create it
+# _setup_skill_branch removed (#3296) — replaced by git_ops.py task-begin/task-end
 
 
 # ---------------------------------------------------------------------------
@@ -819,10 +774,9 @@ def main():
     # 4. Cycle number
     cycle_number = _get_cycle_number(role)
 
-    # 5. Branch setup (skill-specific)
+    # 5. Branch setup removed (#3296) — task-begin/task-end in git_ops.py
+    # handles per-task branch checkout in the creative phase.
     config_flags = _read_config_flags()
-    if role == "skill":
-        _setup_skill_branch(working_state, config_flags)
 
     # 6. Status bar
     _write_status_bar(role, "triaging", "tracker-protocol — Building work queue...")

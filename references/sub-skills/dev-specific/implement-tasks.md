@@ -9,6 +9,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Picking up. Status → In Progress."
    python references/scripts/tracker.py transition [NUMBER] approved in-progress --role [ROLE]-lead
    ```
+1b. **Branch checkout** (#3296): `python references/scripts/git_ops.py task-begin [ROLE] [NUMBER]` — checks out the task's feature branch if branch-workflow is enabled.
 2. **Read planning artifacts** — PM creates these during task intake. Check both locations:
    - `.squidsquad/pm/planning/` (PM's planning directory — primary location)
    - `.squidsquad/[ROLE]/planning/` (your own planning directory — fallback)
@@ -28,5 +29,6 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
      python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role [ROLE]-lead
      python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Implementation complete. All tests passing. Status → Pending Test."
      ```
+   - `python references/scripts/git_ops.py task-end [ROLE] [NUMBER]` — return to working branch.
    - Clear working state.
 11. If tests fail: fix the failure before changing status.

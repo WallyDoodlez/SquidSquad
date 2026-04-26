@@ -408,15 +408,15 @@ python references/scripts/tracker.py list-issues skill --status pending-test
 For each issue:
 
 1. Read details: `gh issue view [NUMBER] --json title,body,comments`
-2. **Branch checkout**: Check if the issue comments reference a feature branch (look for `squidsquad/` branch name). If found:
+2. **Branch checkout** (#3296): Check out the task's feature branch before verification:
    ```bash
-   python references/scripts/git_ops.py branch-switch squidsquad/[role]/[number]
+   python references/scripts/git_ops.py task-begin [role] [number]
    ```
-   Run verification on the branch. When done, switch back:
+   This is a no-op when branch-workflow is disabled. If the branch doesn't exist, task-begin exits non-zero — push back to the submitting agent.
+   Run verification on the branch. When done, return to working branch:
    ```bash
-   python references/scripts/git_ops.py branch-switch main
+   python references/scripts/git_ops.py task-end [role] [number]
    ```
-   If no branch referenced, verify on main as usual.
 3. Run the relevant test or manually verify the fix.
 4. **Test coverage check**: Verify that the fix includes a regression test. Check for new or modified test files corresponding to the changed code. If the fix adds or changes code but includes no tests, reject it.
 5. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
@@ -451,13 +451,13 @@ python references/scripts/tracker.py list-tasks skill --status pending-test
 
 For each task, read it: `gh issue view [NUMBER] --json title,body,labels,comments`
 
-**Branch checkout**: Check if the issue comments reference a feature branch (look for `squidsquad/` branch name or PR URL). If found, checkout the branch before testing:
+**Branch checkout** (#3296): Check out the task's feature branch before testing:
 ```bash
-python references/scripts/git_ops.py branch-switch squidsquad/[role]/[number]
+python references/scripts/git_ops.py task-begin [role] [number]
 ```
-When verification is complete (pass or fail), switch back to main:
+When verification is complete (pass or fail), return to working branch:
 ```bash
-python references/scripts/git_ops.py branch-switch main
+python references/scripts/git_ops.py task-end [role] [number]
 ```
 
 1. **If a TEST-PLAN.md exists** in the PM's planning directory (`.squidsquad/pm/planning/`), spawn a QA subagent (via the Agent tool) to execute the test plan:

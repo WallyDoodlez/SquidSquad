@@ -18,6 +18,8 @@ Usage:
     python scripts/git_ops.py current-branch             # print current branch name
     python scripts/git_ops.py pr-create <title> <body>   # create PR via gh
     python scripts/git_ops.py pr-merge <number> [--strategy squash]  # merge PR via gh
+    python scripts/git_ops.py task-begin <role> <number>  # checkout task's feature branch
+    python scripts/git_ops.py task-end <role> <number>    # return to working branch
     python scripts/git_ops.py has-changes               # check if working tree dirty
     python scripts/git_ops.py last-hash                 # print last commit hash (short)
     python scripts/git_ops.py --help
@@ -469,6 +471,80 @@ def commit_state(role, message):
     return True
 
 
+def task_begin(role, number):
+    """Check out the task's feature branch if branch-workflow is enabled (#3296).
+
+    Derives branch as squidsquad/<role>/<number>.
+    If branch-workflow is disabled, this is a no-op (exit 0).
+    If the branch doesn't exist locally or on origin, exits non-zero
+    so the agent can push back to the submitting role.
+    """
+    # Config gate: no-op if branch workflow disabled
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from config import get_field
+        bw = get_field("branch-workflow") or ""
+        if bw.strip().lower() in ("no", "false", "0", ""):
+            return
+    except Exception:
+        return  # Can't read config — treat as disabled
+
+    branch = f"squidsquad/{role}/{number}"
+    working = _get_working_branch()
+
+    # Check local
+    local = _run_list(["git", "rev-parse", "--verify", f"refs/heads/{branch}"], check=False)
+    if local.returncode == 0:
+        if not _safe_checkout(branch):
+            print(f"ERROR: task-begin failed to checkout {branch}", file=sys.stderr)
+            sys.exit(1)
+        return
+
+    # Check remote
+    remote = _run_list(["git", "rev-parse", "--verify", f"refs/remotes/origin/{branch}"], check=False)
+    if remote.returncode == 0:
+        result = _run_list(["git", "checkout", "-b", branch, f"origin/{branch}"], check=False)
+        if result.returncode == 0:
+            return
+        print(f"ERROR: task-begin failed to checkout {branch} from origin: {result.stderr}", file=sys.stderr)
+        sys.exit(1)
+
+    # Branch not found — push back
+    print(f"ERROR: branch {branch} not found locally or on origin. "
+          f"The submitting agent must push before transitioning to pending-test.",
+          file=sys.stderr)
+    sys.exit(1)
+
+
+def task_end(role, number):
+    """Return to the working branch after task work (#3296).
+
+    If branch-workflow is disabled, this is a no-op.
+    Warns if uncommitted changes remain on the feature branch.
+    """
+    # Config gate
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from config import get_field
+        bw = get_field("branch-workflow") or ""
+        if bw.strip().lower() in ("no", "false", "0", ""):
+            return
+    except Exception:
+        return
+
+    working = _get_working_branch()
+
+    # Warn about uncommitted changes
+    status = _run("git status --porcelain", check=False)
+    if status.stdout.strip():
+        print(f"WARNING: uncommitted changes on current branch. "
+              f"Commit via commit-code before calling task-end.", file=sys.stderr)
+
+    if not _safe_checkout(working):
+        # Fallback to main if working branch checkout fails
+        _safe_checkout("main")
+
+
 def has_changes():
     """Check if working tree has uncommitted changes."""
     result = _run("git status --porcelain")
@@ -560,6 +636,16 @@ def main():
         branch_delete(rest[0])
     elif cmd == "current-branch":
         current_branch()
+    elif cmd == "task-begin":
+        if len(rest) < 2:
+            print("Usage: git_ops.py task-begin <role> <number>", file=sys.stderr)
+            sys.exit(1)
+        task_begin(rest[0], rest[1])
+    elif cmd == "task-end":
+        if len(rest) < 2:
+            print("Usage: git_ops.py task-end <role> <number>", file=sys.stderr)
+            sys.exit(1)
+        task_end(rest[0], rest[1])
     elif cmd == "has-changes":
         has_changes()
     elif cmd == "last-hash":

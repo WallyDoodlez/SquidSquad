@@ -411,18 +411,21 @@ If the queue returns an item, read it: `gh issue view [NUMBER] --json title,body
 
 **For issues** (type:issue):
 1. Write working state: update `.squidsquad/skill/working-state.md` with `Task: #[NUMBER]`, status `in-progress`.
-2. Transition: `python references/scripts/tracker.py transition [NUMBER] [CURRENT_STATUS] in-progress --role skill-lead`
-3. Comment: `python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Picking up. Status → In Progress."`
-4. Read the issue details, locate the relevant code, fix the issue.
-5. Run the test command: `python tests/run_tests.py`
-6. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false`, do NOT transition — re-read the issue and apply the fix.
-7. If tests pass and changes exist:
+2. **Branch checkout** (#3296): `python references/scripts/git_ops.py task-begin skill [NUMBER]` — checks out the task's feature branch if branch-workflow is enabled.
+3. Transition: `python references/scripts/tracker.py transition [NUMBER] [CURRENT_STATUS] in-progress --role skill-lead`
+4. Comment: `python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Picking up. Status → In Progress."`
+5. Read the issue details, locate the relevant code, fix the issue.
+6. Run the test command: `python tests/run_tests.py`
+7. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false`, do NOT transition — re-read the issue and apply the fix.
+8. If tests pass and changes exist:
    - Transition: `python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role skill-lead`
    - Comment: `python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Fixed in commit [hash]. [Brief explanation]. Status → Pending Test."`
+   - `python references/scripts/git_ops.py task-end skill [NUMBER]` — return to working branch.
    - Clear working state.
-8. If the root cause belongs to another agent's domain:
+9. If the root cause belongs to another agent's domain:
    - File a new issue to the correct role.
    - Comment on the original with cross-reference.
+   - `python references/scripts/git_ops.py task-end skill [NUMBER]` — return to working branch.
    - Clear working state.
 
 **For tasks** (type:task): Follow the task implementation flow below (Step 2b).
@@ -440,6 +443,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Picking up. Status → In Progress."
    python references/scripts/tracker.py transition [NUMBER] approved in-progress --role skill-lead
    ```
+1b. **Branch checkout** (#3296): `python references/scripts/git_ops.py task-begin skill [NUMBER]` — checks out the task's feature branch if branch-workflow is enabled.
 2. **Read planning artifacts** — PM creates these during task intake. Check both locations:
    - `.squidsquad/pm/planning/` (PM's planning directory — primary location)
    - `.squidsquad/skill/planning/` (your own planning directory — fallback)
@@ -459,6 +463,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
      python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role skill-lead
      python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Implementation complete. All tests passing. Status → Pending Test."
      ```
+   - `python references/scripts/git_ops.py task-end skill [NUMBER]` — return to working branch.
    - Clear working state.
 11. If tests fail: fix the failure before changing status.
 <!-- /sub-skill: implement-tasks -->
