@@ -1,3 +1,11 @@
+## Scan — 2026-04-26 09:01
+
+- **Files scanned**: BRIEFING.md (staleness), cycle_pre.py (pull mechanism), sub-skills/cycle-runner.md, tracker comments on #3107/#3124 (stale checkout pattern)
+- **Findings**:
+  - BRIEFING.md stale (ship counter, priorities) — fixed inline (own-domain)
+  - #3296 — Stale checkout detection gap: DM and QA tested stale code on #3107 and #3124. Filed as task for human discussion.
+- **Items rejected by human**: (none yet)
+
 ## Scan — 2026-04-26 00:31
 
 - **Files scanned**: GitHub Issues tracker (50 pending items — backlog analysis for staleness, consolidation, title integrity)

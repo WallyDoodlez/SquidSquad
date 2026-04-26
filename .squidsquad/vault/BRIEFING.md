@@ -4,11 +4,10 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — DM ready, awaiting human greenlight
-- #2811 Agent clone isolation — pending (high, role:skill) — awaiting human approval
+- #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — DM ready, awaiting human greenlight (20 days)
+- #3290 state_bus.py orphan checkout risk — pending-test (severity:high, role:skill)
 - #2495 Rewrite /squidsquad-upgrade — pending (high, role:skill) — awaiting human approval
-- No in-progress, pending-test, or pending-ship items
-- 49 pending tasks in backlog awaiting approval
+- 47 pending tasks in backlog awaiting approval
 
 ## Core Architecture
 
@@ -38,7 +37,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 - Test suite exists (`python tests/run_tests.py`) — static analysis + integration tests
 - PR flow currently disabled
-- Ship counter: threshold 10, currently at 3 (v0.26.0 bumped 2026-04-25 by DM)
+- Ship counter: threshold 10, currently at 8 (v0.26.0 bumped 2026-04-25 by DM)
 - 34 pre-existing test failures (QA framework, model_router_live, reboot_agent) + 24 comprehension errors — not blocking shipping
 
 ## Team State
