@@ -4,7 +4,6 @@
 - **Status**: none
 
 ## Completed Steps
-- Investigated #3107 DM blocker — code confirmed on origin/main
 
 ## Remaining Steps
 
