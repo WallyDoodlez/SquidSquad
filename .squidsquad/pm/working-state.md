@@ -4,7 +4,7 @@
 - **Status**: none
 
 ## Completed Steps
-- Verified #3100 — all TCs pass, promoted to pending-ship
+- Fixed stale pending-ship label on #3100
 
 ## Remaining Steps
 
