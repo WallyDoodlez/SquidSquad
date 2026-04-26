@@ -49,7 +49,7 @@ Write status bar state: `scanning|🔍 Scanning process/workflow...`
 3. **Scan with your domain lens**: Read your SOUL.md `### Improvement Scan` section for criteria, approval tiers, and noise filter. Apply to selected files looking for:
    - **Gaps**: missing handoff gates, unclear transitions, undocumented procedures
    - **Contradictions**: template instructions conflicting with vault decisions or each other
-   - **Staleness**: references to removed features, old patterns, or dead code paths
+   - **Staleness**: references to removed features, old patterns, or defunct paths in templates
    - **Inconsistencies**: roles receiving different instructions for the same shared behavior
    - **Creative proposals**: novel improvements based on vault learnings — ideas the human wouldn't think to ask for
 
