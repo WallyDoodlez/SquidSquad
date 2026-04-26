@@ -2,12 +2,12 @@
 type: area
 tags: [human, preferences, profile]
 created: 2026-04-05
-updated: 2026-04-18
+updated: 2026-04-26
 owner: pm
 status: active
 confidence: medium
 source: observation
-links: [code-conventions]
+links: [code-conventions, decision-vault-remember-source-agnostic]
 ---
 
 ## Overview
@@ -39,6 +39,11 @@ Profile of the human collaborator. Captures preferences, values, communication s
 - Prefers leveraging existing open-source tools (Forgejo, not custom backends) over building from scratch
 - Systems should self-heal: detect stuck states → unstick immediately → file root-cause bug → agent fixes gap
 
+## Design Philosophy
+
+- Vault remember reflection should be source-agnostic — any signal (human, QA, PM, agent) evaluated across all categories. See [[decision-vault-remember-source-agnostic]].
+- Thinking about inter-agent conversation/debate system as a prerequisite infrastructure before vault improvements.
+
 ## Decision-Making Style
 
 - Delegates operational decisions to agents, steps in for approvals
@@ -60,3 +65,4 @@ _Wikilinks to related notes: [[code-conventions]]_
 - 2026-04-12 — Updated by skill-lead. Added context pressure threshold preference (70%, human directive via #378).
 - 2026-04-18 — Updated by pm. Added preference for direct/mechanical checks over indirect state files (from #1301 discussion).
 - 2026-04-18 — Updated by pm. Added Product Vision section: general-purpose skill for all teams, self-healing systems, prefer existing OSS over custom builds.
+- 2026-04-26 — Updated by skill-lead. Added Design Philosophy section: source-agnostic vault reflection (human directive), inter-agent conversation system as prerequisite.
