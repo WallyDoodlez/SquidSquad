@@ -5,7 +5,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Active Priorities
 
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — DM ready, awaiting human greenlight (20 days)
-- #3290 state_bus.py orphan checkout risk — pending-test (severity:high, role:skill)
+- #3302 add_role.py subprocess.os.getpid() fix — pending-test (severity:medium, role:skill)
 - #2495 Rewrite /squidsquad-upgrade — pending (high, role:skill) — awaiting human approval
 - 47 pending tasks in backlog awaiting approval
 
@@ -37,12 +37,12 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 - Test suite exists (`python tests/run_tests.py`) — static analysis + integration tests
 - PR flow currently disabled
-- Ship counter: threshold 10, currently at 9 (v0.26.0 bumped 2026-04-25 by DM)
+- Ship counter: threshold 10, currently at 0 (v0.27.0 bumped 2026-04-25 by DM)
 - 34 pre-existing test failures (QA framework, model_router_live, reboot_agent) + 24 comprehension errors — not blocking shipping
 
 ## Team State
 
 - Active agents: qa, skill (dev agents), PM (always present), QA (always present), DM (present)
-- Current version: 0.26.0
+- Current version: 0.27.0
 - Tracker: GitHub Issues with structured labels (`type:`, `status:`, `role:`, `priority:`)
 - Boot detection now runs automatically in cycle_pre.py (#2724 shipped 2026-04-25)
