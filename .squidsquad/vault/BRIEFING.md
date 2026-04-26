@@ -38,12 +38,12 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 - Test suite exists (`python tests/run_tests.py`) — static analysis + integration tests
 - PR flow currently disabled
-- Ship counter: threshold 10, currently at 31 (bump severely overdue — gated on #3/v1.0.0 decision)
+- Ship counter: threshold 10, currently at 0 (v0.26.0 bumped 2026-04-25 by DM)
 - 34 pre-existing test failures (QA framework, model_router_live, reboot_agent) + 24 comprehension errors — not blocking shipping
 
 ## Team State
 
 - Active agents: qa, skill (dev agents), PM (always present), QA (always present), DM (present)
-- Current version: 0.25.0
+- Current version: 0.26.0
 - Tracker: GitHub Issues with structured labels (`type:`, `status:`, `role:`, `priority:`)
 - Boot detection now runs automatically in cycle_pre.py (#2724 shipped 2026-04-25)
