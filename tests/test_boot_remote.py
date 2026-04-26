@@ -342,6 +342,38 @@ class TestBootAgentLock:
         assert "another boot in progress" in result["message"]
 
 
+# ---------------------------------------------------------------------------
+# #3349 regression: stale .restart sentinel cleanup
+# ---------------------------------------------------------------------------
+
+class TestCleanStaleRestart:
+    def test_removes_existing_restart(self, tmp_path):
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        restart = squid / ".restart"
+        restart.write_text("reboot requested by reboot_agent.py", encoding="utf-8")
+        boot_remote._clean_stale_restart(tmp_path, "skill")
+        assert not restart.exists()
+
+    def test_no_restart_is_noop(self, tmp_path):
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        boot_remote._clean_stale_restart(tmp_path, "skill")  # Should not raise
+
+
+class TestBootAgentCleansRestart:
+    @patch("boot_remote._spawn_terminal", return_value=(True, "spawned"))
+    @patch("boot_remote._find_boot_script", return_value=(Path("/tmp/start.sh"), "sh"))
+    @patch("boot_remote._needs_boot", return_value=(True, "dead", "/tmp/clone"))
+    @patch("boot_remote._write_booting_sentinel", return_value=True)
+    def test_cleans_restart_before_spawn(self, mock_sentinel, mock_needs, mock_script, mock_spawn):
+        """boot_agent cleans stale .restart before spawning."""
+        with patch("boot_remote._clean_stale_restart") as mock_clean:
+            result = boot_remote.boot_agent("skill")
+        assert result["action"] == "spawn"
+        mock_clean.assert_called_once_with("/tmp/clone", "skill")
+
+
 class TestGetAllRoles:
     @patch("boot_remote._parse_dev_agents", return_value=["skill", "qa"])
     @patch("boot_remote._parse_local_config", return_value={"skill": Path("/tmp")})

@@ -249,6 +249,21 @@ def _clear_booting_sentinel(clone_path, role):
         pass
 
 
+def _clean_stale_restart(clone_path, role):
+    """Remove .restart sentinel when booting a dead agent (#3349).
+
+    If the agent is dead and has a .restart sentinel, it's stale — from a
+    previous reboot_agent request that was never processed. Removing it
+    prevents the wrapper from triggering an unwanted extra respawn on fresh boot.
+    """
+    restart_file = Path(clone_path) / ".squidsquad" / role / ".restart"
+    if restart_file.exists():
+        try:
+            restart_file.unlink()
+        except OSError:
+            pass
+
+
 
 
 def _read_health_file(clone_path, role):
@@ -508,6 +523,12 @@ def boot_agent(role, dry_run=False):
             f"Manual boot: cd {clone_path} && claude -p .squidsquad/{role}/CLAUDE.md"
         )
         return result
+
+    # Clean stale .restart sentinel — if the agent is dead, any .restart
+    # from a previous reboot_agent request is no longer relevant (#3349).
+    # Without this, the wrapper finds the stale sentinel on fresh boot
+    # and triggers an unwanted extra respawn.
+    _clean_stale_restart(clone_path, role)
 
     # Acquire boot slot — prevents concurrent spawns for the same role
     if not _write_booting_sentinel(clone_path, role):
