@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.27.0] — 2026-04-26
+
+### Added
+- #3100 — Local config is now mandatory — the global `~/.squidsquad/clones/` fallback has been removed for cleaner, per-project isolation
+- #3101 — Agent startup now shows a colorful ANSI art logo matching the README octopus, with automatic monochrome fallback for terminals without color support
+- #3107 — PM now re-runs research when discussion heavily changes the original scope, so plans reflect actual decisions instead of stale assumptions
+- #3124 — PM improvement scans now focus on workflow gaps, stale instructions, and process contradictions instead of source code
+- #3139 — Your squad now detects patterns across agents and proposes shared team principles ("postures") — you review and approve before they take effect
+- #3296 — Agents now check out the correct PR branch before verifying or shipping, preventing stale-code false negatives
+
+### Fixed
+- #3027 — PM now fixes bugs in its own domain immediately instead of deferring to other agents
+- #3078 — `reboot_agent.py --all` now reads configured agents instead of hardcoding `[pm, skill]`
+- #3079 — `cycle_pre.py` no longer breaks on paths containing spaces
+- #3290 — State branch initialization no longer leaves your working tree in a broken state if interrupted
+
 ## [0.26.0] — 2026-04-25
 
 ### Shipped

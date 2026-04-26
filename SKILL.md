@@ -1,7 +1,7 @@
 ---
 name: squidsquad
 description: "Orchestrates a multi-agent AI development team — handles setup, workflow coordination, role management, and autonomous dev cycles."
-version: 0.26.0
+version: 0.27.0
 license: AGPL-3.0
 ---
 
