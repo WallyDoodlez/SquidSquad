@@ -4,7 +4,6 @@
 - **Status**: none
 
 ## Completed Steps
-- Fixed stale pending-ship label on #3100
 
 ## Remaining Steps
 
