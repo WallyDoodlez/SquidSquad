@@ -4,10 +4,10 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — DM ready, awaiting human greenlight (20 days)
-- #3302 add_role.py subprocess.os.getpid() fix — pending-test (severity:medium, role:skill)
+- #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — DM ready, awaiting human greenlight (21 days)
+- #3393 Inter-agent real-time communication layer — pending (high, role:pm) — large initiative, running doc in vault/projects/
 - #2495 Rewrite /squidsquad-upgrade — pending (high, role:skill) — awaiting human approval
-- 47 pending tasks in backlog awaiting approval
+- Recently shipped: #3302, #3341, #3340, #3377, #3348, #3347, #3349 (agent lifecycle + clone remote fixes)
 
 ## Core Architecture
 
@@ -37,8 +37,8 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 - Test suite exists (`python tests/run_tests.py`) — static analysis + integration tests
 - PR flow currently disabled
-- Ship counter: threshold 10, currently at 0 (v0.27.0 bumped 2026-04-25 by DM)
-- 34 pre-existing test failures (QA framework, model_router_live, reboot_agent) + 24 comprehension errors — not blocking shipping
+- Ship counter: threshold 10, currently at 3 (v0.27.0 bumped 2026-04-25 by DM)
+- Test suite: 986 passing (up from ~920 at v0.27.0 — 66 new regression tests added)
 
 ## Team State
 
