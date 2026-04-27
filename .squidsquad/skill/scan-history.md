@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-27 04:30
+
+- **Files scanned**: references/scripts/config.py, references/scripts/triage.py
+- **Findings**: none
+- **Items rejected by human**: none yet
+- **Notes**: Both files clean. config.py well-structured with comprehensive field map. triage.py clean imports, no shell=True.
+
 ## Scan — 2026-04-26 23:00
 
 - **Files scanned**: references/scripts/cycle_post.py, references/scripts/shared_fs.py
