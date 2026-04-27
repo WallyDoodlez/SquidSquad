@@ -17,122 +17,139 @@ This manifest defines how shared sub-skill source files compose into agent templ
 
 ### Dev Agent (`references/roles/dev/CLAUDE.md`)
 
-Entry file with includes (the role's own `SOUL.md` sits alongside `CLAUDE.md` in the role directory and is copied verbatim to `.squidsquad/<role>/SOUL.md` at install time — it is NOT listed in the include order because it is not composed):
+Entry file with includes (the role's own `SOUL.md` sits alongside `CLAUDE.md` in the role directory and is copied verbatim to `.squidsquad/<role>/SOUL.md` at install time — it is NOT listed in the include order because it is not composed). **Source of truth**: `references/roles/dev/includes.yml`.
+
 1. `common/tracker-protocol` — GitHub Issues tracker operations
-2. `common/pull-latest` — Step 1
-3. `common/context-pressure` — Step 1b
-4. `common/resume-working-state` — Step 1c
-5. `common/interval-sync` — Step 1d
-5b. `dev-specific/triage-issues` — Step 2: triage open issues
-5c. `dev-specific/implement-tasks` — Step 3: implement approved tasks
-6. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
-7. `common/improvement-scan` — Quiet-cycle improvement scanning
-8. `common/iteration-log` — Step 4: iteration log format and cleanup
-8b. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
-8c. `common/vault-optimize` — Vault optimization on quiet cycles
-9. `common/git-commit` — Step 5: commit/push protocol with PR flow
-9b. `common/self-restart` — Context-pressure self-restart at cycle end
-9c. `common/agent-lifecycle` — Agent lifecycle management (reboot, heartbeat, singleton)
-9. `common/discussion-protocol` — Discussion entry format and rules
-10. `common/issue-filing` — Self-file and cross-file bug templates
-11. `common/working-state` — Working State File format
-12. `common/vault-protocol` — Vault operations
-13. `common/file-conventions` — File/directory conventions
-14. `common/status-line` — Status line description
-15. `common/prohibitions` — "Never do" rules
-16. `common/cycle-runner` — (optional, feature-flagged) Cycle runner transport layer
-17. `common/chat-etiquette` — (optional, comms-layer) Chat room behavior rules
-18. `common/mention-protocol` — (optional, comms-layer) @mention escalation tiers and noise budget
-19. `common/consensus-protocol` — (optional, comms-layer) Multi-party decision flow in chat
+2. `common/cycle-runner` — Cycle runner transport layer (pre/post cycle mechanical operations)
+3. `common/context-pressure` — Step 1b: context pressure check
+4. `common/resume-working-state` — Step 1c: resume from working state
+5. `common/interval-sync` — Step 1d: interval sync
+6. `dev-specific/triage-issues` — Step 2: deterministic work queue triage
+7. `dev-specific/implement-tasks` — Step 2b: implement approved tasks
+8. `common/improvement-scan` — Quiet-cycle improvement scanning
+9. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
+10. `common/vault-optimize` — Vault optimization on quiet cycles
+11. `common/git-commit` — Step 5: commit/push protocol with PR flow
+12. `common/discussion-protocol` — Discussion entry format and rules
+13. `common/issue-filing` — Self-file and cross-file bug templates
+14. `common/working-state` — Working State File format
+15. `common/vault-protocol` — Vault operations
+16. `common/file-conventions` — File/directory conventions
+17. `common/status-line` — Status line description
+18. `common/self-restart` — Context-pressure self-restart at cycle end
+19. `common/agent-lifecycle` — Agent lifecycle management (reboot, heartbeat, singleton)
+20. `common/prohibitions` — "Never do" rules
 
-### PM/QA Agent (`references/roles/pm/CLAUDE.md`)
+Optional (comms-layer, not yet included by default):
+- `common/chat-etiquette` — Chat room behavior rules
+- `common/mention-protocol` — @mention escalation tiers and noise budget
+- `common/consensus-protocol` — Multi-party decision flow in chat
 
-Entry file with includes (Steps 1b, 1c, Working State are inlined with hardcoded `pm` paths to avoid `[ROLE]` ambiguity — PM uses `[ROLE]` to reference dev agents, not itself). PM's `SOUL.md` sits alongside its `CLAUDE.md` and is copied verbatim at install time.
+### PM Agent (`references/roles/pm/CLAUDE.md`)
+
+Entry file with includes. PM's `SOUL.md` sits alongside its `CLAUDE.md` and is copied verbatim at install time. **Source of truth**: `references/roles/pm/includes.yml`.
+
 1. `common/tracker-protocol` — GitHub Issues tracker operations
-2. `common/pull-latest` — Step 1
-2b. `pm-specific/checkin` — Step 2: human check-in and input handling
-2c. `pm-specific/testing-and-verification` — Steps 3-6c: E2E, investigate, verify issues/tasks, ship counter
-3. `pm-specific/delivery-fallback` — Step 6d: PM delivery when DM absent
-3b. `pm-specific/post-merge-recompose` — Step 6e: recompose after branch merge
-3c. `pm-specific/pipeline-sentinel` — Step 6f: always-run pipeline health (conflict detection, stall detection, PR status sync)
-3d. `pm-specific/own-domain-autofix` — PM auto-fixes own-domain mechanical issues (BRIEFING staleness, config drift) immediately
-4b. `pm-specific/health-check` — Step 7: agent health check
-5. `pm-specific/github-issues` — Step 7b
-5b. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
-5c. `pm-specific/soul-shepherd` — Soul shepherd: character signal detection per task
-6. `common/improvement-scan` — Quiet-cycle improvement scanning
-7. `pm-specific/iteration-log` — Step 8: PM/QA iteration log
-7b. `common/vault-remember` — Step 8b: end-of-cycle vault reflection
-7c. `common/vault-optimize` — Vault optimization on quiet cycles
-7d. `pm-specific/vault-synthesis` — Vault synthesis: cross-agent pattern detection and posture emergence (5-cycle trigger)
-7e. `pm-specific/improvement-scan` — PM-specific improvement scanning (process/workflow focus, not code)
-8. `pm-specific/git-commit` — Step 9: commit/push
-9. `pm-specific/issue-filing` — Bug Filing Protocol
-10. `pm-specific/task-intake` — Feature Lifecycle (5-Phase) + Open Artifacts in Editor
-11. `pm-specific/task-approval` — Feature Approval Gate
-12. `pm-specific/discussion-protocol` — Discussion entry format (pm/qa alias)
-13. `common/vault-protocol` — Vault operations
-14. `pm-specific/file-conventions` — PM file/directory conventions
-15. `pm-specific/status-line` — PM status line description
-16. `pm-specific/prohibitions` — PM "never do" rules
+2. `common/cycle-runner` — Cycle runner transport layer
+3. `common/context-pressure` — Context pressure check
+4. `pm-specific/checkin` — Step 2: human check-in and input handling
+5. `pm-specific/testing-and-verification` — Steps 3-6c: E2E, investigate, verify issues/tasks, ship counter
+6. `pm-specific/delivery-fallback` — Step 6d: PM delivery when DM absent
+7. `pm-specific/post-merge-recompose` — Step 6e: recompose after branch merge
+8. `pm-specific/pipeline-sentinel` — Step 6f: pipeline health (conflict, stall, PR sync)
+9. `pm-specific/own-domain-autofix` — Auto-fix own-domain mechanical issues
+10. `pm-specific/health-check` — Step 7: agent health check
+11. `pm-specific/github-issues` — Step 7b: GitHub Issues management
+12. `common/boot-remote-agents` — Boot stalled/missing agents
+13. `pm-specific/soul-shepherd` — Soul shepherd: character signal detection
+14. `pm-specific/improvement-scan` — PM-specific improvement scanning (process focus)
+15. `common/vault-remember` — End-of-cycle vault reflection
+16. `common/vault-optimize` — Vault optimization on quiet cycles
+17. `pm-specific/vault-synthesis` — Cross-agent pattern detection
+18. `pm-specific/issue-filing` — Bug Filing Protocol
+19. `pm-specific/task-intake` — Feature Lifecycle (5-Phase)
+20. `pm-specific/task-approval` — Feature Approval Gate
+21. `pm-specific/discussion-protocol` — Discussion entry format
+22. `common/vault-protocol` — Vault operations
+23. `pm-specific/file-conventions` — PM file/directory conventions
+24. `pm-specific/status-line` — PM status line description
+25. `common/self-restart` — Self-restart
+26. `common/agent-lifecycle` — Agent lifecycle
+27. `pm-specific/prohibitions` — PM "never do" rules
 
-### QA Agent (`references/roles/qa/CLAUDE.md`) — recommended when dev/designer agents exist
+### QA Agent (`references/roles/qa/CLAUDE.md`)
 
-Entry file with includes:
-   (QA's `SOUL.md` lives at `references/roles/qa/SOUL.md` and is copied verbatim at install time.)
+Entry file with includes. **Source of truth**: `references/roles/qa/includes.yml`.
+
 1. `common/tracker-protocol` — GitHub Issues tracker operations
-2. `common/pull-latest` — Step 1
-3. `qa-specific/verification` — Steps 2-6 (E2E tests, bug investigation, verification, health check)
-3b. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
-4. `common/improvement-scan-slim` — Improvement filing only (slim variant)
-5. `qa-specific/iteration-log` — Step 7: QA iteration log
-6. `qa-specific/git-commit` — Step 8: commit/push
-7. `qa-specific/issue-filing` — QA Bug Filing Protocol
-8. `qa-specific/discussion-protocol` — Discussion entry format (qa alias)
-9. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
-10. `qa-specific/file-conventions` — QA file/directory conventions
-11. `qa-specific/status-line` — QA status line description
-12. `qa-specific/prohibitions` — QA "never do" rules
+2. `common/cycle-runner` — Cycle runner transport layer
+3. `common/context-pressure` — Context pressure check
+4. `qa-specific/verification` — Steps 2-6: E2E tests, verification, health check
+5. `common/improvement-scan-slim` — Improvement filing only (slim variant)
+6. `qa-specific/issue-filing` — QA Bug Filing Protocol
+7. `qa-specific/discussion-protocol` — Discussion entry format
+8. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
+9. `qa-specific/file-conventions` — QA file/directory conventions
+10. `qa-specific/status-line` — QA status line description
+11. `common/self-restart` — Self-restart
+12. `common/agent-lifecycle` — Agent lifecycle
+13. `qa-specific/prohibitions` — QA "never do" rules
 
 ### Designer Agent (`references/roles/designer/CLAUDE.md`)
 
-Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardcoded `designer` paths — Designer uses `[ROLE]` to reference dev agents, not itself):
-   (Designer's `SOUL.md` lives at `references/roles/designer/SOUL.md` and is copied verbatim at install time.)
+Entry file with includes. **Source of truth**: `references/roles/designer/includes.yml`.
+
 1. `common/tracker-protocol` — GitHub Issues tracker operations
-2. `common/pull-latest` — Step 1
-2b. `common/capability-check` — Startup capability verification
-3. `designer-specific/design-session` — Steps 2-2e (design request scanning, feasibility, interactive session, spec production, rejection handling)
-3b. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
-4. `common/improvement-scan-slim` — Improvement filing only (slim variant)
-5. `designer-specific/iteration-log` — Step 3: designer iteration log
-6. `designer-specific/git-commit` — Step 4: commit/push
-7. `designer-specific/discussion-protocol` — Discussion entry format (designer alias)
+2. `common/capability-check` — Startup capability verification
+3. `common/cycle-runner` — Cycle runner transport layer
+4. `common/context-pressure` — Context pressure check
+5. `designer-specific/design-session` — Design request scanning, feasibility, interactive session, spec production
+6. `common/improvement-scan-slim` — Improvement filing only (slim variant)
+7. `designer-specific/discussion-protocol` — Discussion entry format
 8. `designer-specific/design-capabilities` — Design capability integration and discovery
 9. `designer-specific/issue-filing` — Designer bug/feature filing
 10. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
 11. `designer-specific/file-conventions` — Designer file/directory conventions
 12. `designer-specific/status-line` — Designer status line description
-13. `designer-specific/prohibitions` — Designer "never do" rules
+13. `common/self-restart` — Self-restart
+14. `common/agent-lifecycle` — Agent lifecycle
+15. `designer-specific/prohibitions` — Designer "never do" rules
 
 ### DM Agent (`references/roles/dm/CLAUDE.md`)
 
-Entry file with includes (Steps 1b, 1c, 1d, Working State are inlined with hardcoded `dm` paths — DM uses `[ROLE]` to reference dev agents, not itself):
-   (DM's `SOUL.md` lives at `references/roles/dm/SOUL.md` and is copied verbatim at install time.)
+Entry file with includes. **Source of truth**: `references/roles/dm/includes.yml`.
+
 1. `common/tracker-protocol` — GitHub Issues tracker operations
-2. `common/pull-latest` — Step 1
-3. `dm-specific/issue-triage` — Step 1e: triage bugs assigned to DM
-4. `dm-specific/delivery-packaging` — Steps 2-2c
-4. `dm-specific/version-bumps` — Step 3
-4b. `common/boot-remote-agents` — Boot stalled/missing agents in new terminals
-5. `common/improvement-scan-slim` — Improvement filing only (slim variant)
-6. `dm-specific/iteration-log` — Step 4: DM iteration log
-7. `dm-specific/git-commit` — Step 5: commit/push
-8. `dm-specific/discussion-protocol` — Discussion entry format (dm alias)
-9. `dm-specific/issue-filing` — DM bug/feature filing
-10. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
-11. `dm-specific/file-conventions` — DM file/directory conventions
-12. `dm-specific/status-line` — DM status line description
-13. `dm-specific/prohibitions` — DM "never do" rules
+2. `common/capability-check` — Startup capability verification
+3. `common/cycle-runner` — Cycle runner transport layer
+4. `common/context-pressure` — Context pressure check
+5. `dm-specific/issue-triage` — Triage bugs assigned to DM
+6. `dm-specific/delivery-packaging` — Delivery packaging
+7. `dm-specific/version-bumps` — Version bump check + sequence
+8. `common/improvement-scan-slim` — Improvement filing only (slim variant)
+9. `dm-specific/discussion-protocol` — Discussion entry format
+10. `dm-specific/issue-filing` — DM bug/feature filing
+11. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
+12. `dm-specific/file-conventions` — DM file/directory conventions
+13. `dm-specific/status-line` — DM status line description
+14. `common/self-restart` — Self-restart
+15. `common/agent-lifecycle` — Agent lifecycle
+16. `dm-specific/prohibitions` — DM "never do" rules
+
+### Legacy Sub-Skills (not included by any role)
+
+These files exist on disk but are no longer referenced by any role's includes.yml after the cycle-runner migration (#2487). cycle-runner and cycle_post.py handle their responsibilities. Kept for reference; may be deleted in a future cleanup.
+
+- `common/pull-latest` — replaced by cycle_pre.py git pull
+- `common/iteration-log` — replaced by cycle_post.py iteration logging
+- `pm-specific/iteration-log` — replaced by cycle_post.py
+- `pm-specific/git-commit` — replaced by cycle_post.py
+- `qa-specific/iteration-log` — replaced by cycle_post.py
+- `qa-specific/git-commit` — replaced by cycle_post.py
+- `dm-specific/iteration-log` — replaced by cycle_post.py
+- `dm-specific/git-commit` — replaced by cycle_post.py
+- `designer-specific/iteration-log` — replaced by cycle_post.py
+- `designer-specific/git-commit` — replaced by cycle_post.py
 
 ## Include Directive Format
 
@@ -194,7 +211,11 @@ references/sub-skills/
 │   ├── prohibitions.md               (Shared "never do" rules — shared by dev)
 │   ├── capability-check.md          (Startup capability verification — shared by roles with requires_sub_skills)
 │   ├── cycle-runner.md              (Cycle runner transport layer — opt-in via feature flag, all roles)
-│   └── agent-lifecycle.md           (Agent lifecycle: reboot, heartbeat, singleton — all roles)
+│   ├── agent-lifecycle.md           (Agent lifecycle: reboot, heartbeat, singleton — all roles)
+│   ├── self-restart.md              (Context-pressure self-restart — all roles)
+│   ├── chat-etiquette.md            (Chat room behavior rules — comms-layer, optional)
+│   ├── mention-protocol.md          (@mention escalation tiers and noise budget — comms-layer, optional)
+│   └── consensus-protocol.md        (Multi-party decision flow in chat — comms-layer, optional)
 ├── dev-specific/
 │   ├── triage-issues.md              (Step 2 — triage open issues)
 │   └── implement-tasks.md           (Step 3 — implement approved tasks)
