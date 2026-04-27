@@ -247,10 +247,13 @@ class TestRoute:
 
     @patch("model_router._read_config")
     def test_missing_api_key_returns_2(self, mock_config, monkeypatch):
-        """Missing API key should exit 2."""
+        """Missing API key (env + secrets) should exit 2."""
         mock_config.return_value = "## Model Routing\n- **Research Model**: gpt-5.2\n- **Default Model**: claude\n"
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        code = model_router.route("research", "TEST", "", "/tmp/out.md", "test")
+        # Also block the secrets file fallback
+        with patch("model_router.os.environ.get", return_value=None):
+            with patch.dict("sys.modules", {"shared_fs": MagicMock(read_secret_or_env=MagicMock(return_value=None))}):
+                code = model_router.route("research", "TEST", "", "/tmp/out.md", "test")
         assert code == 2
 
 
