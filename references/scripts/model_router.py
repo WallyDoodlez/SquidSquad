@@ -657,15 +657,21 @@ def route(task_type, task_id, input_files, output_file, context):
     # Call provider adapter
     start_time = time.time()
     try:
-        if provider_name == "openai":
-            from providers.openai.adapter import call as openai_call
-            response = openai_call(
+        # Load the provider's adapter module dynamically
+        adapter_module = _load_adapter(manifest)
+        if adapter_module and hasattr(adapter_module, "call"):
+            # Read base_url and auth env var from manifest for OpenAI-compatible providers
+            api_base = manifest.get("api_base", "")
+            auth_env_var = manifest.get("auth", {}).get("env_var", "OPENAI_API_KEY")
+            response = adapter_module.call(
                 model=model,
                 system_prompt=system_prompt,
                 user_prompt=prompt,
                 tools=OPENAI_TOOL_DEFS,
                 tool_handler=_handle_tool_call,
                 timeout=timeout,
+                base_url=api_base if api_base else None,
+                api_key_env=auth_env_var,
             )
         else:
             print(

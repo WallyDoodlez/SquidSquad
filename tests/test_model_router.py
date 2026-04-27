@@ -324,6 +324,20 @@ class TestListProviders:
         names = [p["name"] for p in providers]
         assert "openai" in names
 
+    def test_discovers_deepseek_provider(self):
+        """list_providers should find the deepseek provider from manifest."""
+        providers = model_router.list_providers()
+        names = [p["name"] for p in providers]
+        assert "deepseek" in names
+
+    def test_deepseek_has_correct_fields(self):
+        """DeepSeek provider should have correct auth and models."""
+        providers = model_router.list_providers()
+        ds = [p for p in providers if p["name"] == "deepseek"]
+        assert len(ds) == 1
+        assert ds[0]["auth_env_var"] == "DEEPSEEK_API_KEY"
+        assert "deepseek-r1" in ds[0]["models"]
+
     def test_provider_has_required_fields(self):
         """Each provider entry should have name, display_name, default_model, models, auth_env_var."""
         providers = model_router.list_providers()
@@ -421,21 +435,21 @@ class TestQuotaNotification:
     @patch("model_router._load_provider_manifest")
     @patch("model_router._ensure_deps")
     @patch("model_router._log_diagnostic")
+    @patch("model_router._load_adapter")
     def test_429_prints_prominent_notification(
-        self, mock_diag, mock_deps, mock_manifest, mock_config, capsys
+        self, mock_adapter, mock_diag, mock_deps, mock_manifest, mock_config, capsys
     ):
         """Quota exceeded error prints prominent human-visible notification."""
         mock_manifest.return_value = ("openai", {
             "name": "openai", "auth": {"env_var": "OPENAI_API_KEY"},
-            "deps": [],
+            "api_base": "", "deps": [],
         })
+        fake_module = MagicMock()
+        fake_module.call.side_effect = Exception("Error code: 429 - quota exceeded")
+        mock_adapter.return_value = fake_module
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
             with patch("model_router.assemble_prompt", return_value="test"):
-                with patch(
-                    "providers.openai.adapter.call",
-                    side_effect=Exception("Error code: 429 - quota exceeded"),
-                ):
-                    code = model_router.route("research", "test-1", "", "/tmp/out", "ctx")
+                code = model_router.route("research", "test-1", "", "/tmp/out", "ctx")
         assert code == 1
         captured = capsys.readouterr()
         assert "QUOTA EXCEEDED" in captured.out
@@ -448,21 +462,21 @@ class TestQuotaNotification:
     @patch("model_router._load_provider_manifest")
     @patch("model_router._ensure_deps")
     @patch("model_router._log_diagnostic")
+    @patch("model_router._load_adapter")
     def test_non_quota_error_uses_stderr(
-        self, mock_diag, mock_deps, mock_manifest, mock_config, capsys
+        self, mock_adapter, mock_diag, mock_deps, mock_manifest, mock_config, capsys
     ):
         """Non-quota API errors go to stderr, not the prominent notification."""
         mock_manifest.return_value = ("openai", {
             "name": "openai", "auth": {"env_var": "OPENAI_API_KEY"},
-            "deps": [],
+            "api_base": "", "deps": [],
         })
+        fake_module = MagicMock()
+        fake_module.call.side_effect = Exception("Connection timeout")
+        mock_adapter.return_value = fake_module
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
             with patch("model_router.assemble_prompt", return_value="test"):
-                with patch(
-                    "providers.openai.adapter.call",
-                    side_effect=Exception("Connection timeout"),
-                ):
-                    code = model_router.route("research", "test-1", "", "/tmp/out", "ctx")
+                code = model_router.route("research", "test-1", "", "/tmp/out", "ctx")
         assert code == 1
         captured = capsys.readouterr()
         assert "QUOTA EXCEEDED" not in captured.out

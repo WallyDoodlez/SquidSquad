@@ -1,0 +1,26 @@
+name: deepseek
+display_name: DeepSeek
+api_base: https://api.deepseek.com/v1
+default_model: deepseek-r1
+
+auth:
+  env_var: DEEPSEEK_API_KEY
+
+models:
+  deepseek-r1:
+    context_window: 128000
+    max_output: 32768
+    temperature: 0.2
+  deepseek-chat:
+    context_window: 128000
+    max_output: 32768
+    temperature: 0.2
+
+deps:
+  - openai>=1.0.0
+
+tools:
+  core:
+    - read
+    - grep
+    - glob

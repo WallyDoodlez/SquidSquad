@@ -23,16 +23,19 @@ def _ensure_openai():
         return openai
 
 
-def call(model, system_prompt, user_prompt, tools, tool_handler, timeout=120):
-    """Call OpenAI API with tool-use loop.
+def call(model, system_prompt, user_prompt, tools, tool_handler, timeout=120,
+         base_url=None, api_key_env=None):
+    """Call OpenAI-compatible API with tool-use loop.
 
     Args:
-        model: Model name (e.g. "gpt-5.2")
+        model: Model name (e.g. "gpt-5.2", "deepseek-r1")
         system_prompt: System message content
         user_prompt: User message content
         tools: List of tool definitions in OpenAI function-calling format
         tool_handler: Callable(name, args) -> str that executes tool calls
         timeout: API timeout in seconds
+        base_url: API base URL (default: OpenAI). Enables DeepSeek, Groq, etc.
+        api_key_env: Environment variable name for API key (default: OPENAI_API_KEY)
 
     Returns:
         Final text response from the model.
@@ -42,18 +45,22 @@ def call(model, system_prompt, user_prompt, tools, tool_handler, timeout=120):
     """
     openai = _ensure_openai()
 
-    # Read from ~/.squidsquad/secrets first, fall back to env var
+    # Determine which API key to use
+    env_var = api_key_env or "OPENAI_API_KEY"
     try:
         from shared_fs import read_secret_or_env
-        api_key = read_secret_or_env("OPENAI_API_KEY")
+        api_key = read_secret_or_env(env_var)
     except ImportError:
-        api_key = os.environ.get("OPENAI_API_KEY")
+        api_key = os.environ.get(env_var)
     if not api_key:
         raise RuntimeError(
-            "OPENAI_API_KEY not found in ~/.squidsquad/secrets or environment"
+            f"{env_var} not found in ~/.squidsquad/secrets or environment"
         )
 
-    client = openai.OpenAI(api_key=api_key, timeout=timeout)
+    client_kwargs = {"api_key": api_key, "timeout": timeout}
+    if base_url:
+        client_kwargs["base_url"] = base_url
+    client = openai.OpenAI(**client_kwargs)
 
     messages = [
         {"role": "system", "content": system_prompt},
