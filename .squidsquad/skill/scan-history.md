@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-26 20:00
+
+- **Files scanned**: references/scripts/diagnostics.py, references/scripts/soul_adaptation.py, references/scripts/tc_coverage.py
+- **Findings**: #3409 (tc_coverage.py unused imports glob and os — low)
+- **Items rejected by human**: none yet
+- **Notes**: diagnostics.py clean (minor int() gap at L215 already in prior pattern). soul_adaptation.py clean.
+
 ## Scan — 2026-04-26 13:00
 
 - **Files scanned**: references/scripts/git_ops.py, references/scripts/health_check.py, references/scripts/model_router.py, references/scripts/forge_adapter.py, references/scripts/run_comprehension_test.py
