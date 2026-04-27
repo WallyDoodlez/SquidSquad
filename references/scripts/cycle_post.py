@@ -294,8 +294,11 @@ def _do_version_bump(data, role):
             new_content = old_content + "\n\n" + new_section
         changelog.write_text(new_content, encoding="utf-8")
 
-    # Commit, tag, push
-    _run(["git", "add", "-A"])
+    # Commit, tag, push — stage only version-bump files (not git add -A, #3494)
+    bump_files = [".squidsquad/config.md", "CHANGELOG.md"]
+    if skill_md.exists():
+        bump_files.append("SKILL.md")
+    _run(["git", "add", "--"] + bump_files)
     _run(["git", "commit", "-m", f"chore: bump version to v{new_version}"])
 
     # Check if tag exists
