@@ -31,6 +31,7 @@ Role authority (who may call `transition`):
 """
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -981,9 +982,55 @@ def transition(number, from_status, to_status, role=None, force=False):
     return True
 
 
+def _get_repo_url():
+    """Get the repo URL from config.md for issue link expansion."""
+    try:
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "config.py"), "get", "repo"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            check=False, cwd=str(REPO_ROOT),
+        )
+        repo = result.stdout.strip()
+        if repo:
+            # Normalize: ensure https:// prefix
+            if not repo.startswith("http"):
+                repo = f"https://{repo}"
+            return repo.rstrip("/")
+    except Exception:
+        pass
+    return None
+
+
+def _expand_issue_refs(text):
+    """Expand #NNN issue references to include full URL.
+
+    Transforms '#123' to '#123 (https://github.com/.../issues/123)'.
+    Only expands references that look like issue numbers (1+ digits after #),
+    not preceded by a word character (avoids expanding inside URLs or hex codes).
+    Skips references that already have a URL immediately following.
+    """
+    repo_url = _get_repo_url()
+    if not repo_url:
+        return text
+
+    def _replace(match):
+        num = match.group(1)
+        # Check if already followed by a URL (avoid double-expansion)
+        end = match.end()
+        if end < len(text) and text[end:end + 2] == " (":
+            rest = text[end + 2:]
+            if rest.startswith("http"):
+                return match.group(0)
+        return f"#{num} ({repo_url}/issues/{num})"
+
+    # Match #NNN not preceded by word char, with 1-5 digit issue number
+    return re.sub(r'(?<!\w)#(\d{1,5})\b', _replace, text)
+
+
 def comment(number, role, message):
     """Add a discussion comment to an issue."""
     # No manual timestamps — GitHub provides them
+    message = _expand_issue_refs(message)
     body = f"**{role}**: {message}"
     adapter = _get_forge_adapter()
     if adapter:

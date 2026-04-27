@@ -448,15 +448,3 @@
 {"timestamp": 1777302261.095344, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
 {"timestamp": 1777302261.095344, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
 {"timestamp": 1777302261.095344, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
-{"timestamp": 1777304046.353038, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
-{"timestamp": 1777304046.3540704, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
-{"timestamp": 1777304046.3551116, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
-{"timestamp": 1777305831.541779, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
-{"timestamp": 1777305831.541779, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
-{"timestamp": 1777305831.541779, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
-{"timestamp": 1777305895.6588073, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
-{"timestamp": 1777305895.6588073, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
-{"timestamp": 1777305895.6639452, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
-{"timestamp": 1777306005.3330517, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
-{"timestamp": 1777306005.3330517, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
-{"timestamp": 1777306005.3330517, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
