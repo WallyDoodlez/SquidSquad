@@ -87,7 +87,15 @@ For each result:
    - Copy test `.py` files to `tests/` with naming convention: `tests/test_feat_[NUMBER]_[short_name].py`
    - Verify promoted tests still pass: `python -m pytest tests/test_feat_[NUMBER]_*.py`
    - These tests persist as regression tests — NOT deleted during planning cleanup
-   Update to `Pending Ship`, append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. Status → Pending Ship.`
+
+   **PR Flow gate** (if PR Flow `yes` and a PR exists for this issue):
+   - Check Auto Merge: `python references/scripts/config.py get auto-merge`
+   - Check per-ticket override: look for `review:human-required` label on the issue.
+   - **Auto Merge ON + no `review:human-required`**: merge PR directly (`python references/scripts/git_ops.py pr-merge [PR_NUMBER]`), then transition to `Pending Ship`.
+   - **Auto Merge OFF or `review:human-required`**: transition to `Pending Human Review` (`python references/scripts/tracker.py transition [NUMBER] pending-test pending-human-review --role pm-lead`).
+   - If PR Flow `no` or no PR exists: proceed directly to `Pending Ship`.
+
+   Update to `Pending Ship` (or `Pending Human Review` per above), append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. Status → Pending Ship.`
 5. **delivery:skip check**: If the task is internal-only (agent template changes, config changes, internal tooling, process improvements) with no user-facing delivery work needed, add `delivery: skip` to the Discussion entry when marking Pending Ship: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. delivery: skip (internal-only, no user-facing changes). Status → Pending Ship.` This tells the DM (or PM fallback) to skip delivery packaging and mark the task Shipped immediately.
 6. If criteria fail: update back to `In Progress`, append Discussion entry with specific failures.
 
