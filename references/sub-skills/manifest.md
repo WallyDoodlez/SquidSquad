@@ -142,8 +142,8 @@ These files exist on disk but are no longer referenced by any role's includes.ym
 
 - `common/pull-latest` — replaced by cycle_pre.py git pull
 - `common/iteration-log` — replaced by cycle_post.py iteration logging
-- `pm-specific/iteration-log` — replaced by cycle_post.py
-- `pm-specific/git-commit` — replaced by cycle_post.py
+- ~~pm-specific/iteration-log~~ — deleted (#3499), replaced by cycle_post.py
+- ~~pm-specific/git-commit~~ — deleted (#3499), replaced by cycle_post.py
 - `qa-specific/iteration-log` — replaced by cycle_post.py
 - `qa-specific/git-commit` — replaced by cycle_post.py
 - `dm-specific/iteration-log` — replaced by cycle_post.py
