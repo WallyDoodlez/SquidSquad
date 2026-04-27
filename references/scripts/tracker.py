@@ -139,13 +139,9 @@ LEGAL_TRANSITIONS = {
     # Phase I migration. Its legal targets mirror `pending`'s — PM either
     # schedules planning or fast-tracks to approved.
     "status:pending-human-approval": {"status:planning", "status:approved"},
-    # HITL review (designer loop): human redirects (back to in-progress) or
-    # approves (straight to pending-ship, skipping pending-test because the
-    # human already validated the work).
-    "status:pending-human-review": {
-        "status:in-progress",
-        "status:pending-ship",
-    },
+    # NOTE: pending-human-review targets are defined above (line 132) — not
+    # duplicated here. Both PR Flow and HITL designer loop share the same
+    # legal targets: {in-progress, pending-ship}.
     # Worker-pause-for-environment-setup: PM completes the tool/config setup
     # and hands the issue back to the worker to resume.
     "status:pending-human-setup": {"status:in-progress"},
@@ -187,9 +183,10 @@ ROLE_AUTHORITY = {
     ("status:pending-test", "status:pending-ship"): {"qa", "pm"},
     # PR Flow: QA transitions to pending-human-review (not pending-ship) when PR Flow enabled
     ("status:pending-test", "status:pending-human-review"): {"qa", "pm"},
-    # PR Flow: PM transitions pending-human-review on merge detection or human review feedback
-    ("status:pending-human-review", "status:in-progress"): {"pm"},
-    ("status:pending-human-review", "status:pending-ship"): {"pm"},
+    # pending-human-review transitions: PM (PR Flow merge/feedback) + _assignee
+    # (HITL designer self-pause loop). Both paths share the same targets.
+    ("status:pending-human-review", "status:in-progress"): {"pm", "_assignee"},
+    ("status:pending-human-review", "status:pending-ship"): {"pm", "_assignee"},
 
     # DM owns delivery / shipping
     ("status:pending-ship", "status:shipped"): {"dm"},
@@ -204,11 +201,9 @@ ROLE_AUTHORITY = {
     ("status:pending-human-approval", "status:planning"): {"pm"},
     ("status:pending-human-approval", "status:approved"): {"pm"},
 
-    # The worker self-pauses into human-review (HITL designer loop) and
-    # resumes (redirect or approve) itself — assignee-bound on both sides.
+    # The worker self-pauses into human-review (HITL designer loop).
+    # The resume/approve transitions are merged above with PR Flow entries.
     ("status:in-progress", "status:pending-human-review"): {"_assignee"},
-    ("status:pending-human-review", "status:in-progress"): {"_assignee"},
-    ("status:pending-human-review", "status:pending-ship"): {"_assignee"},
 
     # Worker self-pauses for environment/tool setup; PM completes the setup
     # and hands the issue back to the worker.
@@ -281,22 +276,26 @@ def _check_authority(number, from_label, to_label, caller_role):
     if not canon:
         return False, f"--role is required for transition {from_label} -> {to_label}"
 
+    # Check named roles first (e.g. "pm", "qa", "dm")
+    named_roles = auth - {"_assignee"}
+    if canon in named_roles:
+        return True, None
+
+    # Check assignee-based authority
     if "_assignee" in auth:
         issue_roles = _get_issue_role_labels(number)
         if not issue_roles:
             return False, (
                 f"#{number} has no role:* label — cannot verify assignee authority"
             )
-        if canon not in issue_roles:
-            return False, (
-                f"role '{canon}' is not assigned to #{number} "
-                f"(issue role labels: {sorted(issue_roles)}); only the assigned "
-                f"role may perform {from_label} -> {to_label}"
-            )
-        return True, None
+        if canon in issue_roles:
+            return True, None
+        return False, (
+            f"role '{canon}' is not assigned to #{number} "
+            f"(issue role labels: {sorted(issue_roles)}); only the assigned "
+            f"role may perform {from_label} -> {to_label}"
+        )
 
-    if canon in auth:
-        return True, None
     return False, (
         f"role '{canon}' is not authorized for {from_label} -> {to_label} "
         f"(allowed: {sorted(auth)})"

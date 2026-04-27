@@ -348,13 +348,21 @@ class TestPendingHumanReview:
         )
         assert ok
 
-    def test_pm_cannot_bypass_assignee_on_hitl_approval(self, stub_role_labels):
-        """PM cannot unilaterally ship a HITL-in-review item on the designer's behalf."""
+    def test_pm_can_approve_hitl_via_pr_flow(self, stub_role_labels):
+        """PM can ship pending-human-review items (PR Flow merge path, #3493)."""
         stub_role_labels["labels"] = {"designer"}
         ok, _ = tracker._check_authority(
             1, "status:pending-human-review", "status:pending-ship", "pm-lead"
         )
-        assert not ok
+        assert ok
+
+    def test_pm_can_redirect_hitl_via_pr_flow(self, stub_role_labels):
+        """PM can redirect pending-human-review back to in-progress (#3493)."""
+        stub_role_labels["labels"] = {"designer"}
+        ok, _ = tracker._check_authority(
+            1, "status:pending-human-review", "status:in-progress", "pm-lead"
+        )
+        assert ok
 
 
 class TestPendingHumanSetup:
