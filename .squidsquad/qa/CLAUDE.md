@@ -407,7 +407,6 @@ python references/scripts/tracker.py list-issues skill --status pending-test
 
 For each issue:
 
-0. **Blocked check**: If the item has a `blocked:human-action` label, skip it. Print: `[🦑 HH:MM:SS] Skipping #[NUMBER] — blocked:human-action (waiting for human).` Do not change its status. Move to the next item.
 1. Read details: `gh issue view [NUMBER] --json title,body,comments`
 2. **Branch checkout** (#3296): Check out the task's feature branch before verification:
    ```bash
@@ -450,11 +449,7 @@ python references/scripts/tracker.py list-tasks skill --status pending-test
 
 (Adjust role as needed for other agents.)
 
-For each task:
-
-0. **Blocked check**: If the item has a `blocked:human-action` label, skip it. Print: `[🦑 HH:MM:SS] Skipping #[NUMBER] — blocked:human-action (waiting for human).` Do not change its status. Move to the next item.
-
-Read it: `gh issue view [NUMBER] --json title,body,labels,comments`
+For each task, read it: `gh issue view [NUMBER] --json title,body,labels,comments`
 
 **Branch checkout** (#3296): Check out the task's feature branch before testing:
 ```bash
