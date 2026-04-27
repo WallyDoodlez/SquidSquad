@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-26 23:00
+
+- **Files scanned**: references/scripts/cycle_post.py, references/scripts/shared_fs.py
+- **Findings**: #3433 (cycle_post.py hardcodes 'main' instead of configured working branch — low, same class as #3341)
+- **Items rejected by human**: none yet
+- **Notes**: shared_fs.py clean.
+
 ## Scan — 2026-04-26 20:00
 
 - **Files scanned**: references/scripts/diagnostics.py, references/scripts/soul_adaptation.py, references/scripts/tc_coverage.py
