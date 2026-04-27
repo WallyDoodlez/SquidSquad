@@ -445,7 +445,6 @@ python references/scripts/tracker.py list-issues skill --status pending-test
 
 For each result:
 
-0. **Blocked check**: If the item has a `blocked:human-action` label, skip it. Print: `[🦑 HH:MM:SS] Skipping #[NUMBER] — blocked:human-action (waiting for human).` Do not change its status. Move to the next item.
 1. Run the relevant test or manually verify the fix.
 2. **Test coverage check**: Verify that the fix includes a regression test. Check for new or modified test files corresponding to the changed code. If the fix adds or changes code but includes no tests, reject it.
 3. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
@@ -468,7 +467,6 @@ python references/scripts/tracker.py list-tasks skill --status pending-test
 
 For each result:
 
-0. **Blocked check**: If the item has a `blocked:human-action` label, skip it. Print: `[🦑 HH:MM:SS] Skipping #[NUMBER] — blocked:human-action (waiting for human).` Do not change its status. Move to the next item.
 1. Test against the acceptance criteria.
 2. **Test coverage check**: Verify that new code has corresponding unit tests. Check for new or modified test files. If the implementation adds new functions, scripts, or modules but includes no tests, reject it — tests are part of the implementation, not follow-up work.
 3. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
@@ -1313,6 +1311,7 @@ The research agent (whether external or Claude) analyzes:
 5. **Upgrade & migration**: how do existing installs get this task? What config values, files, templates, or behavioral changes need migration steps? What happens if an existing install doesn't upgrade — does it break or gracefully degrade? This section is ALWAYS required — even trivial tasks must state "N/A — no upgrade impact."
 6. **Prior art**: has something similar been done? What can we learn?
 7. **Capability gap analysis**: check the target agent's role manifest for `requires_sub_skills`. For each declared capability, run `python references/scripts/capability_check.py [TARGET_ROLE]` and report any missing capabilities. If a required capability is unavailable, note it as a risk and check for fallback capabilities in the manifest's `any_of` list.
+8. **Vault candidates**: flag any discoveries worth preserving in the vault — architectural patterns, reusable decisions, or learnings about the codebase. These are candidates only — PM decides whether to vault them. Max 5 candidates.
 
 The agent writes its findings to `.squidsquad/pm/planning/FEAT-PM-XXX-RESEARCH.md`:
 
@@ -1358,6 +1357,10 @@ The agent writes its findings to `.squidsquad/pm/planning/FEAT-PM-XXX-RESEARCH.m
 
 ## Recommendation
 [Straightforward / Feasible with caveats / Needs rethinking]
+
+## Vault Candidates
+- **Type**: [decision/pattern/learning] — [one-line description] — **Why**: [why this is vault-worthy]
+- _(max 5 candidates — flag only, PM decides whether to vault)_
 ```
 
 **If research reveals significant risks**, present your recommendation to the human: "Based on research, this task would [risk]. Recommend: proceed / adjust scope / reject." If warranted, recommend `Rejected` status with justification. Human can override.
