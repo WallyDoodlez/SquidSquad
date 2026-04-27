@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-27 06:30
+
+- **Files scanned**: references/scripts/comms_adapter.py, references/scripts/vault_check.py
+- **Findings**: none
+- **Items rejected by human**: none yet
+- **Notes**: comms_adapter.py self-review (new file this session) — clean. vault_check.py clean, solid parsing.
+
 ## Scan — 2026-04-27 04:30
 
 - **Files scanned**: references/scripts/config.py, references/scripts/triage.py
