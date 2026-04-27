@@ -35,7 +35,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Constraints & Blockers
 
-- Ship counter: threshold 10, currently at 4 (v0.27.0)
+- Ship counter: threshold 10, currently at 6 (v0.27.0)
 - Boot detection: heartbeat-based with boot lock (#3347/#3348/#3349)
 
 ## Team State
