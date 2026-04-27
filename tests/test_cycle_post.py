@@ -260,3 +260,70 @@ class TestStatusBar:
         assert not tmp_file.exists()
         state_file = squid_dir / "skill" / "current-state"
         assert "implementing" in state_file.read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# #3433 regression: _do_commit_push uses configured working branch
+# ---------------------------------------------------------------------------
+
+class TestCommitPushUsesWorkingBranch:
+    def test_skill_branch_workflow_uses_working_branch(self, monkeypatch):
+        """Skill branch workflow checks out configured working branch, not 'main'."""
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = "squidsquad/skill/3433\n"  # on feature branch
+            r.stderr = ""
+            return r
+
+        def fake_run_script(script, *args, **kwargs):
+            calls.append((script, args))
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "develop")
+
+        data = {
+            "cycle_type": "active",
+            "cycle_number": 376,
+            "commit_message": "test",
+            "config": {"branch_workflow": True},
+            "code_commit": {"branch": "squidsquad/skill/3433", "message": "code fix"},
+        }
+        cycle_post._do_commit_push(data, "skill")
+
+        # Should checkout "develop", not "main"
+        checkout_calls = [c for c in calls if isinstance(c, list) and "checkout" in c]
+        assert any("develop" in c for c in checkout_calls), f"Expected 'develop' checkout, got: {checkout_calls}"
+        assert not any(c == ["git", "checkout", "main"] for c in calls if isinstance(c, list))
+
+    def test_qa_uses_working_branch(self, monkeypatch):
+        """QA path checks out configured working branch, not 'main'."""
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = "some-other-branch\n"
+            r.stderr = ""
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "_run_script", lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
+        monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "develop")
+
+        data = {
+            "cycle_type": "active",
+            "cycle_number": 376,
+            "commit_message": "test",
+        }
+        cycle_post._do_commit_push(data, "qa")
+
+        checkout_calls = [c for c in calls if isinstance(c, list) and "checkout" in c]
+        assert any("develop" in c for c in checkout_calls)
+        assert not any(c == ["git", "checkout", "main"] for c in calls if isinstance(c, list))

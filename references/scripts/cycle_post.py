@@ -46,6 +46,17 @@ def _run(cmd, check=False):
     )
 
 
+def _get_working_branch():
+    """Get the configured working branch name. Falls back to 'main'."""
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from config import get_field
+        branch = get_field("working-branch")
+        return branch if branch else "main"
+    except Exception:
+        return "main"
+
+
 def _run_script(script, *args, check=False):
     """Run a Python script in references/scripts/."""
     return _run([sys.executable, str(SCRIPT_DIR / script)] + list(args), check=check)
@@ -212,29 +223,30 @@ def _do_commit_push(data, role):
                 if result.returncode == 0:
                     print(f"  PR created: {result.stdout.strip()}")
 
-        # State commit to main
+        # State commit to working branch
         state_msg = data.get("state_commit_message", commit_msg)
-        # Need to be on main for state commit
+        working = _get_working_branch()
         current = _run(["git", "branch", "--show-current"], check=False)
         current_branch = current.stdout.strip() if current.returncode == 0 else ""
 
-        if current_branch != "main":
-            _run(["git", "checkout", "main"], check=False)
+        if current_branch != working:
+            _run(["git", "checkout", working], check=False)
 
         result = _run_script("git_ops.py", "commit-state", role, state_msg)
         if result.returncode != 0:
             # Fallback: commit-push everything
             _run_script("git_ops.py", "commit-push", role, state_msg)
         else:
-            print(f"  State commit to main")
+            print(f"  State commit to {working}")
 
     elif role == "qa":
-        # QA: switch back to main before committing
+        # QA: switch back to working branch before committing
+        working = _get_working_branch()
         current = _run(["git", "branch", "--show-current"], check=False)
         current_branch = current.stdout.strip() if current.returncode == 0 else ""
 
-        if current_branch != "main":
-            _run(["git", "checkout", "main"], check=False)
+        if current_branch != working:
+            _run(["git", "checkout", working], check=False)
 
         _run_script("git_ops.py", "commit-push", role, commit_msg)
         print(f"  Committed and pushed (QA → main)")
