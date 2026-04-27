@@ -32,7 +32,12 @@ def patch_dirs(squid_dir, tmp_path, monkeypatch):
     monkeypatch.setattr(reboot_agent, "SQUID_DIR", squid_dir)
     monkeypatch.setattr(boot_remote, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(boot_remote, "SQUIDSQUAD_DIR", squid_dir)
-    monkeypatch.setattr(boot_remote, "LOCAL_CONFIG", squid_dir / ".local-config")
+    local_config = squid_dir / ".local-config"
+    local_config.write_text(
+        f"- **skill**: {tmp_path}\n- **pm**: {tmp_path}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(boot_remote, "LOCAL_CONFIG", local_config)
     monkeypatch.setattr(boot_remote, "CONFIG_MD", squid_dir / "config.md")
     return tmp_path
 
@@ -128,11 +133,13 @@ class TestStopSentinel:
 # ---------------------------------------------------------------------------
 
 class TestRebootForce:
-    """Force reboot — kills immediately and spawns new wrapper."""
+    """Force reboot — kills claude subprocess, wrapper respawns."""
 
-    def test_force_kills_and_respawns(self, patch_dirs, squid_dir, monkeypatch):
+    def test_force_kills_claude_pid(self, patch_dirs, squid_dir, monkeypatch):
+        """Force kills .claude-pid (claude), not .pid (wrapper)."""
         (squid_dir / "skill" / ".pid").write_text("12345", encoding="utf-8")
-        alive_pids = {12345}
+        (squid_dir / "skill" / ".claude-pid").write_text("67890", encoding="utf-8")
+        alive_pids = {12345, 67890}
         monkeypatch.setattr(reboot_agent, "_is_process_alive",
                             lambda pid: pid in alive_pids)
 
@@ -145,8 +152,20 @@ class TestRebootForce:
 
         result = reboot_agent.reboot("skill", force=True)
         assert result == 0
-        assert 12345 in killed
-        assert "skill" in spawned
+        assert 67890 in killed  # claude PID killed
+        assert 12345 not in killed  # wrapper PID NOT killed
+        assert spawned == []  # no _spawn_wrapper — wrapper handles respawn
+        assert (squid_dir / "skill" / ".restart").exists()
+
+    def test_force_wrapper_alive_no_claude_pid(self, patch_dirs, squid_dir, monkeypatch):
+        """Force with wrapper alive but no .claude-pid writes sentinel only."""
+        (squid_dir / "skill" / ".pid").write_text("12345", encoding="utf-8")
+        monkeypatch.setattr(reboot_agent, "_is_process_alive", lambda pid: pid == 12345)
+        spawned = _stub_spawn(monkeypatch)
+
+        result = reboot_agent.reboot("skill", force=True)
+        assert result == 0
+        assert spawned == []
         assert (squid_dir / "skill" / ".restart").exists()
 
 
@@ -155,12 +174,14 @@ class TestRebootForce:
 # ---------------------------------------------------------------------------
 
 class TestRebootWaitForIdle:
-    """Normal reboot — writes sentinel, waits for idle, kills, respawns."""
+    """Normal reboot — writes sentinel, waits for idle, kills claude subprocess."""
 
-    def test_idle_detected_and_respawns(self, patch_dirs, squid_dir, monkeypatch):
+    def test_idle_kills_claude_pid(self, patch_dirs, squid_dir, monkeypatch):
+        """Kills .claude-pid when idle, wrapper handles respawn."""
         (squid_dir / "skill" / ".pid").write_text("12345", encoding="utf-8")
+        (squid_dir / "skill" / ".claude-pid").write_text("67890", encoding="utf-8")
         (squid_dir / "skill" / "current-state").write_text("idle|", encoding="utf-8")
-        alive_pids = {12345}
+        alive_pids = {12345, 67890}
         monkeypatch.setattr(reboot_agent, "_is_process_alive",
                             lambda pid: pid in alive_pids)
         monkeypatch.setattr(reboot_agent, "POLL_INTERVAL", 0.01)
@@ -174,21 +195,26 @@ class TestRebootWaitForIdle:
 
         result = reboot_agent.reboot("skill", timeout=1)
         assert result == 0
-        assert 12345 in killed
-        assert "skill" in spawned
+        assert 67890 in killed  # claude PID killed
+        assert 12345 not in killed  # wrapper PID NOT killed
+        assert spawned == []  # no _spawn_wrapper call
 
-    def test_timeout_cleans_sentinel_no_spawn(self, patch_dirs, squid_dir, monkeypatch):
+    def test_timeout_cleans_sentinel_no_kill(self, patch_dirs, squid_dir, monkeypatch):
         (squid_dir / "skill" / ".pid").write_text("12345", encoding="utf-8")
+        (squid_dir / "skill" / ".claude-pid").write_text("67890", encoding="utf-8")
         (squid_dir / "skill" / "current-state").write_text(
             "implementing|Working...", encoding="utf-8")
         monkeypatch.setattr(reboot_agent, "_is_process_alive", lambda pid: True)
         monkeypatch.setattr(reboot_agent, "POLL_INTERVAL", 0.01)
         spawned = _stub_spawn(monkeypatch)
+        killed = []
+        monkeypatch.setattr(reboot_agent, "_kill_process", lambda pid: killed.append(pid))
 
         result = reboot_agent.reboot("skill", timeout=0.05)
         assert result == 1
         assert not (squid_dir / "skill" / ".restart").exists()
-        assert spawned == []  # No spawn on timeout
+        assert spawned == []
+        assert killed == []  # No kill on timeout
 
 
 # ---------------------------------------------------------------------------
@@ -196,21 +222,61 @@ class TestRebootWaitForIdle:
 # ---------------------------------------------------------------------------
 
 class TestSentinelWritten:
-    """Restart sentinel is always written before waiting."""
+    """Restart sentinel is always written before killing claude."""
 
     def test_sentinel_content(self, patch_dirs, squid_dir, monkeypatch):
         (squid_dir / "skill" / ".pid").write_text("12345", encoding="utf-8")
+        (squid_dir / "skill" / ".claude-pid").write_text("67890", encoding="utf-8")
         (squid_dir / "skill" / "current-state").write_text("idle|", encoding="utf-8")
-        alive_pids = {12345}
+        alive_pids = {12345, 67890}
         monkeypatch.setattr(reboot_agent, "_is_process_alive",
                             lambda pid: pid in alive_pids)
+        sentinel_existed_at_kill = []
         def fake_kill(pid):
+            sentinel_existed_at_kill.append(
+                (squid_dir / "skill" / ".restart").exists()
+            )
             alive_pids.discard(pid)
         monkeypatch.setattr(reboot_agent, "_kill_process", fake_kill)
         monkeypatch.setattr(reboot_agent, "POLL_INTERVAL", 0.01)
         _stub_spawn(monkeypatch)
 
         reboot_agent.reboot("skill", timeout=1)
+        # Sentinel must exist BEFORE kill is called
+        assert sentinel_existed_at_kill == [True]
+
+
+# ---------------------------------------------------------------------------
+# .claude-pid reading (#3495)
+# ---------------------------------------------------------------------------
+
+class TestReadClaudePid:
+    """Tests for _read_claude_pid helper."""
+
+    def test_reads_valid_pid(self, patch_dirs, squid_dir, monkeypatch):
+        (squid_dir / "skill" / ".claude-pid").write_text("67890", encoding="utf-8")
+        monkeypatch.setattr(reboot_agent, "_is_process_alive", lambda pid: True)
+        pid, alive = reboot_agent._read_claude_pid(patch_dirs, "skill")
+        assert pid == 67890
+        assert alive is True
+
+    def test_missing_file_returns_none(self, patch_dirs, squid_dir):
+        pid, alive = reboot_agent._read_claude_pid(patch_dirs, "skill")
+        assert pid is None
+        assert alive is False
+
+    def test_invalid_content_returns_none(self, patch_dirs, squid_dir):
+        (squid_dir / "skill" / ".claude-pid").write_text("not-a-number", encoding="utf-8")
+        pid, alive = reboot_agent._read_claude_pid(patch_dirs, "skill")
+        assert pid is None
+        assert alive is False
+
+    def test_dead_pid(self, patch_dirs, squid_dir, monkeypatch):
+        (squid_dir / "skill" / ".claude-pid").write_text("99999", encoding="utf-8")
+        monkeypatch.setattr(reboot_agent, "_is_process_alive", lambda pid: False)
+        pid, alive = reboot_agent._read_claude_pid(patch_dirs, "skill")
+        assert pid == 99999
+        assert alive is False
 
 
 # ---------------------------------------------------------------------------
