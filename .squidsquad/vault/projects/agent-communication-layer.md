@@ -2,7 +2,7 @@
 type: project
 tags: [communication, architecture, agents, vault, real-time]
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-04-27
 owner: pm
 status: active
 confidence: high
@@ -14,7 +14,7 @@ links: [decision-vault-remember-source-agnostic, human-profile, squidsquad]
 
 Redesign agent communication from async cycle-based (GitHub Issue comments, 30m waits) to real-time multi-party discussions. This is a foundational infrastructure change that affects every agent role definition.
 
-**Tracker**: #3393
+**Tracker**: #3415 (epic index — supersedes #3393 which is closed)
 
 ### Goals
 
@@ -98,41 +98,39 @@ Agent A observes something
 
 ---
 
-## Architecture (TBD)
+## Architecture (DECIDED — 2026-04-26/27)
 
-### Transport Layer — Open Question
+### Transport Layer — DECIDED: Telegram-first, platform-abstracted
 
-Options under consideration:
+Locked decisions from human discussion (cycles 638-641):
+- **Telegram-first**, one bot per agent (PM-bot, QA-bot, Skill-bot, DM-bot)
+- **Per-project Telegram group**
+- **Platform abstraction**: deterministic sub-skills (rules) over mechanical adapters (API translation) — same pattern as tracker.py
+- **Feature flag** in config.md — disabled by default, zero behavior change until enabled
+- **Secrets via env vars** — never in git, never exposed to LLM
+- **No file uploads** — documents live on the forge (Issues/PRs), chat is discussion only
+- **Hard stop on comms failure** — halt + notify human, no silent degradation
 
-| Option | Pros | Cons |
-|--------|------|------|
-| **Slack/Discord** | Real-time, human already there, rich UI | External dependency, API rate limits, cost |
-| **File-based immediate pickup** | No dependencies, works offline, git-tracked | Polling overhead, no push notification |
-| **Custom local channel** | Full control, zero dependencies | Build cost, no mobile access |
-| **Shared conversation context** | Native to Claude, zero infra | Limited to same session, no persistence |
+### Shipped Components
 
-**Decision needed**: Which transport? May be multiple (primary + fallback).
+- **#3416** (SHIPPED): CommsAdapter ABC, Message dataclass, NullAdapter, config parser, adapter registry
+- **#3417** (SHIPPED): 3 deterministic sub-skills — chat-etiquette, mention-protocol, consensus-protocol
 
-### Role Definition Changes
+### Remaining Sub-Tasks
 
-Every agent role gets communication as a core capability:
+- **#3418**: Telegram adapter (one bot per agent, per-project group)
+- **#3419**: Human expertise mapping (vault extension)
+- **#3420**: Audit bridge (chat → forge sync)
+- **#3421**: Feature flag + Ralph Loop integration
 
-```
-## Communication (new sub-skill for all roles)
-
-- Initiate discussion threads
-- Respond to threads you're mentioned in
-- Escalate to human when consensus not reached
-- PM auto-included in all decision threads
-```
-
-### Conversation Protocol (TBD)
+### Conversation Protocol (DECIDED)
 
 - **Who can initiate**: Any agent
 - **Who must be included**: PM always; human when agents disagree or confidence is low
-- **Thread types**: decision, question, escalation, FYI
-- **Timeout**: If no response in N minutes, fall back to async (issue comment)
-- **Persistence**: Threads archived for audit trail
+- **Thread types**: decision, question, escalation, FYI (via abstract ThreadRef)
+- **Timeout**: If no consensus in N minutes, escalate to human
+- **Persistence**: Locked decisions sync to forge via audit bridge (#3420)
+- **Mention protocol**: 3-tier escalation (inform → need-input → blocking), noise budget per agent
 
 ### Integration Points
 
@@ -153,14 +151,14 @@ Every agent role gets communication as a core capability:
 
 ---
 
-## Open Questions
+## Resolved Questions
 
-1. **Transport**: Slack, Discord, file-based, or custom? (Human to decide)
-2. **Human inclusion**: Pulled into thread directly, or async question + notification?
-3. **Tie-breaking**: PM always breaks ties? Or escalate to human on disagreement?
-4. **Scope boundary**: Which decisions require consensus vs. unilateral action?
-5. **Fallback**: What happens when chat is unavailable? Revert to async?
-6. **Chat integration backlog item**: Is this the same initiative or a dependency?
+1. **Transport**: Telegram-first, platform-abstracted (DECIDED)
+2. **Human inclusion**: @mention via mention-protocol, 3-tier escalation (DECIDED)
+3. **Tie-breaking**: PM summarizes, human locks. Timeout escalates to human (DECIDED)
+4. **Scope boundary**: Consensus required before vault writes and issue filing (DECIDED)
+5. **Fallback**: Hard stop + notify human when comms enabled but failing. No silent degradation (DECIDED)
+6. **Backlog**: #3393 superseded by epic #3415 (RESOLVED)
 
 ---
 
@@ -181,3 +179,4 @@ Not estimated. This is a large initiative spanning multiple milestones. Prerequi
 ### Changelog
 
 - 2026-04-26 — Created by skill-lead. Initialized from human discussion about vault consensus, inter-agent debate, and real-time communication. Tracker: #3393.
+- 2026-04-27 — Updated by pm-lead. Architecture decisions locked. #3393 superseded by epic #3415. #3416 and #3417 shipped. Open questions resolved. TBD sections replaced with decided architecture.
