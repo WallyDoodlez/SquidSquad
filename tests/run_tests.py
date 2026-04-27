@@ -44,6 +44,7 @@ STATIC_TEST_MODULES = [
     "test_migrate_state_branch",
     "test_boot_remote",
     "test_model_router",
+    "test_comms_adapter",
 ]
 
 
