@@ -97,6 +97,8 @@ def call(model, system_prompt, user_prompt, tools, tool_handler, timeout=120,
             try:
                 fn_args = json.loads(tc.function.arguments)
             except json.JSONDecodeError:
+                print(f"WARNING: malformed tool call args for {fn_name}: "
+                      f"{tc.function.arguments!r}", file=sys.stderr)
                 fn_args = {}
 
             result = tool_handler(fn_name, fn_args)

@@ -478,7 +478,15 @@ For each result:
    - Copy test `.py` files to `tests/` with naming convention: `tests/test_feat_[NUMBER]_[short_name].py`
    - Verify promoted tests still pass: `python -m pytest tests/test_feat_[NUMBER]_*.py`
    - These tests persist as regression tests — NOT deleted during planning cleanup
-   Update to `Pending Ship`, append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. Status → Pending Ship.`
+
+   **PR Flow gate** (if PR Flow `yes` and a PR exists for this issue):
+   - Check Auto Merge: `python references/scripts/config.py get auto-merge`
+   - Check per-ticket override: look for `review:human-required` label on the issue.
+   - **Auto Merge ON + no `review:human-required`**: merge PR directly (`python references/scripts/git_ops.py pr-merge [PR_NUMBER]`), then transition to `Pending Ship`.
+   - **Auto Merge OFF or `review:human-required`**: transition to `Pending Human Review` (`python references/scripts/tracker.py transition [NUMBER] pending-test pending-human-review --role pm-lead`).
+   - If PR Flow `no` or no PR exists: proceed directly to `Pending Ship`.
+
+   Update to `Pending Ship` (or `Pending Human Review` per above), append Discussion entry: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. Status → Pending Ship.`
 5. **delivery:skip check**: If the task is internal-only (agent template changes, config changes, internal tooling, process improvements) with no user-facing delivery work needed, add `delivery: skip` to the Discussion entry when marking Pending Ship: `> [YYYY-MM-DD HH:MM] **pm**: Verified — zero gaps. delivery: skip (internal-only, no user-facing changes). Status → Pending Ship.` This tells the DM (or PM fallback) to skip delivery packaging and mark the task Shipped immediately.
 6. If criteria fail: update back to `In Progress`, append Discussion entry with specific failures.
 
@@ -1303,7 +1311,6 @@ The research agent (whether external or Claude) analyzes:
 5. **Upgrade & migration**: how do existing installs get this task? What config values, files, templates, or behavioral changes need migration steps? What happens if an existing install doesn't upgrade — does it break or gracefully degrade? This section is ALWAYS required — even trivial tasks must state "N/A — no upgrade impact."
 6. **Prior art**: has something similar been done? What can we learn?
 7. **Capability gap analysis**: check the target agent's role manifest for `requires_sub_skills`. For each declared capability, run `python references/scripts/capability_check.py [TARGET_ROLE]` and report any missing capabilities. If a required capability is unavailable, note it as a risk and check for fallback capabilities in the manifest's `any_of` list.
-8. **Vault candidates**: flag any discoveries worth preserving in the vault — architectural patterns, reusable decisions, or learnings about the codebase. These are candidates only — PM decides whether to vault them. Max 5 candidates.
 
 The agent writes its findings to `.squidsquad/pm/planning/FEAT-PM-XXX-RESEARCH.md`:
 
@@ -1349,10 +1356,6 @@ The agent writes its findings to `.squidsquad/pm/planning/FEAT-PM-XXX-RESEARCH.m
 
 ## Recommendation
 [Straightforward / Feasible with caveats / Needs rethinking]
-
-## Vault Candidates
-- **Type**: [decision/pattern/learning] — [one-line description] — **Why**: [why this is vault-worthy]
-- _(max 5 candidates — flag only, PM decides whether to vault)_
 ```
 
 **If research reveals significant risks**, present your recommendation to the human: "Based on research, this task would [risk]. Recommend: proceed / adjust scope / reject." If warranted, recommend `Rejected` status with justification. Human can override.
