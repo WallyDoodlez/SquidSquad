@@ -59,7 +59,7 @@
 
 ## PR Flow
 
-- **Enabled**: no
+- **Enabled**: yes
 
 ## Improvement Scanning
 
