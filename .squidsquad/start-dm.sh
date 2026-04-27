@@ -52,6 +52,7 @@ PID_FILE="$ROLE_DIR/.pid"
 RESTART_SENTINEL="$ROLE_DIR/.restart"
 STATE_FILE="$ROLE_DIR/current-state"
 HEALTH_FILE="$ROLE_DIR/.health"
+CLAUDE_PID_FILE="$ROLE_DIR/.claude-pid"
 
 mkdir -p "$ROLE_DIR"
 
@@ -115,7 +116,7 @@ HEARTBEAT_PID=""
 cleanup() {
   [ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null || true
   [ -n "$HEARTBEAT_PID" ] && kill "$HEARTBEAT_PID" 2>/dev/null || true
-  rm -f "$PID_FILE"
+  rm -f "$PID_FILE" "$CLAUDE_PID_FILE"
   write_health "dead"
 }
 trap cleanup EXIT
@@ -156,6 +157,7 @@ echo "idle|Initializing..." > "$STATE_FILE"
 
 claude --dangerously-skip-permissions --name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE=dm" "start the loop" &
 CHILD_PID=$!
+echo "$CHILD_PID" > "$CLAUDE_PID_FILE"
 
 wait "$CHILD_PID"
 EXIT_CODE=$?
@@ -173,6 +175,7 @@ if [ -f "$RESTART_SENTINEL" ]; then
   sleep 2
   claude --dangerously-skip-permissions --name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE=dm" "start the loop" &
   CHILD_PID=$!
+  echo "$CHILD_PID" > "$CLAUDE_PID_FILE"
   wait "$CHILD_PID"
   CHILD_PID=""
 fi
@@ -186,6 +189,7 @@ if [ "$EXIT_CODE" -ne 0 ] && [ "$HAS_CRASHED" = false ]; then
     sleep 2
     claude --dangerously-skip-permissions --name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE=dm" "start the loop" &
     CHILD_PID=$!
+    echo "$CHILD_PID" > "$CLAUDE_PID_FILE"
     wait "$CHILD_PID"
     CHILD_PID=""
   fi

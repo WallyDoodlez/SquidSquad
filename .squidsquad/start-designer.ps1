@@ -27,13 +27,17 @@ if (Test-Path .squidsquad) {
     $config = Get-Content .squidsquad/config.md -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
     $v = if ($config -match '(\d+\.\d+[\.\d]*)') { $Matches[1] } else { '?' }
 
+    # ANSI color: bold red for banner, reset after
+    $e = [char]27
+    $R = ""; $N = ""
+    if ($env:WT_SESSION -or $env:TERM_PROGRAM -eq "vscode" -or $Host.UI.SupportsVirtualTerminal) {
+        $R = "${e}[1;31m"; $N = "${e}[0m"
+    }
+
     Write-Host ""
-    Write-Host "      ▗▄▖"
-    Write-Host "     ▟█ █▙"
-    Write-Host "    ▐█• •█▌"
-    Write-Host "   ███████"
-    Write-Host "   ▐█████▌"
-    Write-Host "    ▐▌▐▌▐▌"
+    Write-Host "${R} ____ ____ _  _ _ ___  ____ ____ _  _ ____ ___"
+    Write-Host " [__  |  | |  | | |  \ [__  |  | |  | |__| |  \"
+    Write-Host " ___] |_\| |__| | |__/ ___] |_\| |__| |  | |__/${N}"
     Write-Host "  S Q U I D S Q U A D   v$v  -  $AgentName"
     Write-Host ""
 }
@@ -60,6 +64,7 @@ $PidFile = "$RoleDir/.pid"
 $RestartSentinel = "$RoleDir/.restart"
 $StateFile = "$RoleDir/current-state"
 $HealthFile = "$RoleDir/.health"
+$ClaudePidFile = "$RoleDir/.claude-pid"
 
 if (-not (Test-Path $RoleDir)) { New-Item -ItemType Directory -Path $RoleDir -Force | Out-Null }
 
@@ -111,6 +116,13 @@ if ($CurrentBranch -ne $WorkingBranch) {
     }
 }
 
+# Pull latest from remote so agents never run on stale code
+Write-Host "[SquidSquad] Pulling latest '$WorkingBranch'..."
+git pull --ff-only origin $WorkingBranch 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[SquidSquad] WARNING: git pull failed (diverged?). Continuing on local HEAD."
+}
+
 Write-Host "[SquidSquad] Pre-flight OK."
 
 # --- Heartbeat background job: write epoch every 5s ---
@@ -128,6 +140,7 @@ $heartbeatJob = Start-Job -ScriptBlock {
 $cleanupBlock = {
     if ($heartbeatJob) { Stop-Job $heartbeatJob -ErrorAction SilentlyContinue; Remove-Job $heartbeatJob -ErrorAction SilentlyContinue }
     Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+    Remove-Item $ClaudePidFile -Force -ErrorAction SilentlyContinue
     Write-Health "dead"
 }
 
@@ -138,6 +151,7 @@ try {
     $claudeProcess = Start-Process -FilePath "claude.exe" `
         -ArgumentList "--dangerously-skip-permissions", "--name", "`"$AgentName`"", "--append-system-prompt", "`"SQUIDSQUAD_ROLE=designer`"", "start the loop" `
         -NoNewWindow -PassThru
+    $claudeProcess.Id | Out-File -FilePath $ClaudePidFile -Encoding ascii -NoNewline
 
     $claudeProcess.WaitForExit()
     $exitCode = $claudeProcess.ExitCode
@@ -153,6 +167,7 @@ try {
         $claudeProcess = Start-Process -FilePath "claude.exe" `
             -ArgumentList "--dangerously-skip-permissions", "--name", "`"$AgentName`"", "--append-system-prompt", "`"SQUIDSQUAD_ROLE=designer`"", "start the loop" `
             -NoNewWindow -PassThru
+        $claudeProcess.Id | Out-File -FilePath $ClaudePidFile -Encoding ascii -NoNewline
         $claudeProcess.WaitForExit()
     }
 
@@ -165,6 +180,7 @@ try {
         $claudeProcess = Start-Process -FilePath "claude.exe" `
             -ArgumentList "--dangerously-skip-permissions", "--name", "`"$AgentName`"", "--append-system-prompt", "`"SQUIDSQUAD_ROLE=designer`"", "start the loop" `
             -NoNewWindow -PassThru
+        $claudeProcess.Id | Out-File -FilePath $ClaudePidFile -Encoding ascii -NoNewline
         $claudeProcess.WaitForExit()
     }
 

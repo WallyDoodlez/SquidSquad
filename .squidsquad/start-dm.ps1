@@ -64,6 +64,7 @@ $PidFile = "$RoleDir/.pid"
 $RestartSentinel = "$RoleDir/.restart"
 $StateFile = "$RoleDir/current-state"
 $HealthFile = "$RoleDir/.health"
+$ClaudePidFile = "$RoleDir/.claude-pid"
 
 if (-not (Test-Path $RoleDir)) { New-Item -ItemType Directory -Path $RoleDir -Force | Out-Null }
 
@@ -139,6 +140,7 @@ $heartbeatJob = Start-Job -ScriptBlock {
 $cleanupBlock = {
     if ($heartbeatJob) { Stop-Job $heartbeatJob -ErrorAction SilentlyContinue; Remove-Job $heartbeatJob -ErrorAction SilentlyContinue }
     Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+    Remove-Item $ClaudePidFile -Force -ErrorAction SilentlyContinue
     Write-Health "dead"
 }
 
@@ -149,6 +151,7 @@ try {
     $claudeProcess = Start-Process -FilePath "claude.exe" `
         -ArgumentList "--dangerously-skip-permissions", "--name", "`"$AgentName`"", "--append-system-prompt", "`"SQUIDSQUAD_ROLE=dm`"", "start the loop" `
         -NoNewWindow -PassThru
+    $claudeProcess.Id | Out-File -FilePath $ClaudePidFile -Encoding ascii -NoNewline
 
     $claudeProcess.WaitForExit()
     $exitCode = $claudeProcess.ExitCode
@@ -164,6 +167,7 @@ try {
         $claudeProcess = Start-Process -FilePath "claude.exe" `
             -ArgumentList "--dangerously-skip-permissions", "--name", "`"$AgentName`"", "--append-system-prompt", "`"SQUIDSQUAD_ROLE=dm`"", "start the loop" `
             -NoNewWindow -PassThru
+        $claudeProcess.Id | Out-File -FilePath $ClaudePidFile -Encoding ascii -NoNewline
         $claudeProcess.WaitForExit()
     }
 
@@ -176,6 +180,7 @@ try {
         $claudeProcess = Start-Process -FilePath "claude.exe" `
             -ArgumentList "--dangerously-skip-permissions", "--name", "`"$AgentName`"", "--append-system-prompt", "`"SQUIDSQUAD_ROLE=dm`"", "start the loop" `
             -NoNewWindow -PassThru
+        $claudeProcess.Id | Out-File -FilePath $ClaudePidFile -Encoding ascii -NoNewline
         $claudeProcess.WaitForExit()
     }
 
