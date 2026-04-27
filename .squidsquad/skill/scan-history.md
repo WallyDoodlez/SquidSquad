@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-27 09:04
+
+- **Files scanned**: references/scripts/tracker.py, references/scripts/cycle_pre.py, references/scripts/cycle_post.py, references/scripts/git_ops.py, references/scripts/scan_index.py
+- **Findings**: #3493 (tracker.py duplicate ROLE_AUTHORITY keys drop PM authority for pending-human-review — high), #3494 (cycle_post.py version bump uses git add -A — medium)
+- **Items rejected by human**: none yet
+- **Notes**: Also found: git_ops.py shell=True footgun (same class as #144), cycle_pre.py template_changed stub (low), scan_index.py finding misattribution (medium) — deferred due to 2-item limit.
+
 ## Scan — 2026-04-27 06:30
 
 - **Files scanned**: references/scripts/comms_adapter.py, references/scripts/vault_check.py
