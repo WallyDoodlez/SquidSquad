@@ -17,6 +17,7 @@ Analyze the codebase to understand the impact of this task. You have access to R
 2. Understand the current behavior and architecture
 3. Identify side effects, edge cases, and integration risks
 4. Check for upgrade/migration implications
+5. Flag any discoveries worth preserving in the vault — architectural patterns, reusable decisions, or learnings about the codebase (max 5 candidates)
 
 ## Output Format
 
@@ -61,6 +62,10 @@ Write your findings in this exact markdown structure:
 
 ## Recommendation
 [Straightforward / Feasible with caveats / Needs rethinking]
+
+## Vault Candidates
+- **Type**: [decision/pattern/learning] — [one-line description] — **Why**: [why this is vault-worthy]
+- _(max 5 candidates — flag only, PM decides whether to vault)_
 ```
 
 Be specific — name actual files, line numbers, and concrete recommendations. Do not hallucinate file paths or function names — verify they exist using the tools.

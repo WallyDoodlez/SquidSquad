@@ -445,9 +445,3 @@
 {"timestamp": 1777300455.4863384, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
 {"timestamp": 1777300455.4863384, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
 {"timestamp": 1777300455.4863384, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
-{"timestamp": 1777302261.095344, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
-{"timestamp": 1777302261.095344, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
-{"timestamp": 1777302261.095344, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
-{"timestamp": 1777304046.353038, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
-{"timestamp": 1777304046.3540704, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
-{"timestamp": 1777304046.3551116, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
