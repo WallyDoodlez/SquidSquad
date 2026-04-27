@@ -5,44 +5,40 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Active Priorities
 
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — DM ready, awaiting human greenlight (21 days)
-- #3393 Inter-agent real-time communication layer — pending (high, role:pm) — large initiative, running doc in vault/projects/
+- #3415 EPIC: Real-time communication layer — Telegram-first, platform-abstracted. 2/6 sub-tasks shipped (#3416 adapter interface, #3417 sub-skills). 4 remaining (#3418-#3421). Next: #3418 Telegram adapter
 - #2495 Rewrite /squidsquad-upgrade — pending (high, role:skill) — awaiting human approval
-- Recently shipped: #3302, #3341, #3340, #3377, #3348, #3347, #3349 (agent lifecycle + clone remote fixes)
+- #3464 Human-in-the-loop execution — pending (medium)
+- #3465 Layered role definition architecture — pending (medium)
+
+## Recently Shipped (2026-04-26/27 session)
+
+- #3302, #3340, #3341, #3347, #3348, #3349, #3360, #3377 (boot lifecycle + clone fixes)
+- #3416, #3417 (epic:comms-layer foundation: adapter interface + sub-skills)
+- #1470 (DeepSeek base_url), #3466 (PR creation restored)
 
 ## Core Architecture
 
-- **Clone isolation**: Each agent runs in its own repo clone. PM in primary repo, dev agents in sibling clones (`../RepoName-role`). Paths configured in `.squidsquad/.local-config`. Never use global `~/.squidsquad/clones/`. See `[[decision-clone-isolation-architecture]]`.
-- **Branching**: Code → main branch. State → `squid-squad` branch. Feature branches when branch workflow is on.
+- **Clone isolation**: Each agent in own clone, project-local paths. See `[[decision-clone-isolation-architecture]]`.
+- **Branching**: Code → main. State → squid-squad. Feature branches when branch workflow on.
+- **Communication layer** (NEW): Platform-agnostic adapter interface + deterministic sub-skills. Telegram-first. Feature flag controlled.
 
 ## Recent Decisions
 
-- Clone isolation (v0.25.0) — each agent in own clone, project-local paths only, after cross-project contamination incident
-- Sub-skill architecture shipped (v0.9.0) — monolithic templates split into layered sub-skills with build-time composition
-- GitHub Issues as tracker (v0.9.0) — replaced internal markdown tracker files with GitHub Issues + structured labels
-- Runtime SOUL.md (v0.14.0) — agent personalities are separate files, editable without redeploying templates
-- Self-diagnostics (v0.14.0) — `/squidsquad-bug` command for upstream bug reporting with sanitized context
-- Community infrastructure (v0.14.0) — AGPL-3.0 license, GitHub Issue templates, going-public docs
+- Communication layer (v0.27.0+) — deterministic sub-skills over mechanical adapters, Telegram-first, one bot per agent, feature flag
+- Clone isolation (v0.25.0), Sub-skill architecture (v0.9.0), GitHub Issues tracker (v0.9.0)
 - Feature lifecycle: Pending → Planning → Planned → Approved → In Progress → Pending Test → Pending Ship → Shipped
 
 ## Human Preferences
 
-- Never ship with failed test cases — any TC failure sends work back to dev
-- PM should not block on human input in Ralph Loop — note availability and continue
-- Always query GitHub Issues fresh — never answer from memory about pending items
-- DM role is optional — PM auto-activates delivery when DM is absent
-- Git is the audit trail for all content
+- Never ship with failed TCs. Documents live on forge, not chat. Git = audit trail.
 - See `[[human-profile]]` for full preferences
 
 ## Constraints & Blockers
 
-- Test suite exists (`python tests/run_tests.py`) — static analysis + integration tests
-- PR flow currently disabled
-- Ship counter: threshold 10, currently at 3 (v0.27.0 bumped 2026-04-25 by DM)
-- Test suite: 986 passing (up from ~920 at v0.27.0 — 66 new regression tests added)
+- Ship counter: threshold 10, currently at 4 (v0.27.0)
+- Boot detection: heartbeat-based with boot lock (#3347/#3348/#3349)
 
 ## Team State
 
-- Active agents: qa, skill (dev agents), PM (always present), QA (always present), DM (present)
+- Active agents: qa, skill, PM, QA, DM — all present
 - Current version: 0.27.0
-- Tracker: GitHub Issues with structured labels (`type:`, `status:`, `role:`, `priority:`)
-- Boot detection now runs automatically in cycle_pre.py (#2724 shipped 2026-04-25)
