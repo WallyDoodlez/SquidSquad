@@ -11,6 +11,7 @@ includes:
   - common/improvement-scan
   - common/vault-remember
   - common/vault-optimize
+  - common/git-commit
   - common/discussion-protocol
   - common/issue-filing
   - common/working-state

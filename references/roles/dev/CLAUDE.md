@@ -86,6 +86,8 @@ Write `idle|` at cycle end so the status bar shows rotating hints between cycles
 
 {{include: common/vault-optimize}}
 
+{{include: common/git-commit}}
+
 {{include: common/self-restart}}
 
 {{include: common/agent-lifecycle}}
