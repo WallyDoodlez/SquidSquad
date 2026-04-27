@@ -676,17 +676,42 @@ def route(task_type, task_id, input_files, output_file, context):
             return 1
     except Exception as e:
         elapsed = time.time() - start_time
+        error_str = str(e).lower()
+        is_quota = (
+            "429" in str(e)
+            or "rate_limit" in error_str
+            or "rate limit" in error_str
+            or "quota" in error_str
+            or "insufficient_quota" in error_str
+            or "billing" in error_str
+            or type(e).__name__ == "RateLimitError"
+        )
+
+        action = "quota-exceeded" if is_quota else "api-error"
         _log_diagnostic({
             "timestamp": time.time(),
             "task_type": task_type,
             "task_id": task_id,
             "model": model,
             "provider": provider_name,
-            "action": "api-error",
+            "action": action,
             "error": str(e),
             "elapsed_seconds": round(elapsed, 1),
         })
-        print(f"[model_router] API error: {e}. Falling back to Claude.", file=sys.stderr)
+
+        if is_quota:
+            # Prominent human-visible notification — not buried in stderr
+            print(
+                f"\n{'=' * 60}\n"
+                f"⚠ EXTERNAL MODEL QUOTA EXCEEDED\n"
+                f"  Provider: {provider_name} ({model})\n"
+                f"  Error: {e}\n"
+                f"  Action: Add credits or check your plan.\n"
+                f"  Falling back to Claude for this task.\n"
+                f"{'=' * 60}\n"
+            )
+        else:
+            print(f"[model_router] API error: {e}. Falling back to Claude.", file=sys.stderr)
         return 1
 
     elapsed = time.time() - start_time

@@ -412,6 +412,65 @@ class TestValidateProvider:
 # No shell=True
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# #3422 regression: quota exceeded notification
+# ---------------------------------------------------------------------------
+
+class TestQuotaNotification:
+    @patch("model_router._read_config", return_value="## Model Routing\n- **Research Model**: gpt-5.2\n")
+    @patch("model_router._load_provider_manifest")
+    @patch("model_router._ensure_deps")
+    @patch("model_router._log_diagnostic")
+    def test_429_prints_prominent_notification(
+        self, mock_diag, mock_deps, mock_manifest, mock_config, capsys
+    ):
+        """Quota exceeded error prints prominent human-visible notification."""
+        mock_manifest.return_value = ("openai", {
+            "name": "openai", "auth": {"env_var": "OPENAI_API_KEY"},
+            "deps": [],
+        })
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            with patch("model_router.assemble_prompt", return_value="test"):
+                with patch(
+                    "providers.openai.adapter.call",
+                    side_effect=Exception("Error code: 429 - quota exceeded"),
+                ):
+                    code = model_router.route("research", "test-1", "", "/tmp/out", "ctx")
+        assert code == 1
+        captured = capsys.readouterr()
+        assert "QUOTA EXCEEDED" in captured.out
+        assert "Add credits" in captured.out
+        # Verify diagnostic logged as quota-exceeded
+        mock_diag.assert_called_once()
+        assert mock_diag.call_args[0][0]["action"] == "quota-exceeded"
+
+    @patch("model_router._read_config", return_value="## Model Routing\n- **Research Model**: gpt-5.2\n")
+    @patch("model_router._load_provider_manifest")
+    @patch("model_router._ensure_deps")
+    @patch("model_router._log_diagnostic")
+    def test_non_quota_error_uses_stderr(
+        self, mock_diag, mock_deps, mock_manifest, mock_config, capsys
+    ):
+        """Non-quota API errors go to stderr, not the prominent notification."""
+        mock_manifest.return_value = ("openai", {
+            "name": "openai", "auth": {"env_var": "OPENAI_API_KEY"},
+            "deps": [],
+        })
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            with patch("model_router.assemble_prompt", return_value="test"):
+                with patch(
+                    "providers.openai.adapter.call",
+                    side_effect=Exception("Connection timeout"),
+                ):
+                    code = model_router.route("research", "test-1", "", "/tmp/out", "ctx")
+        assert code == 1
+        captured = capsys.readouterr()
+        assert "QUOTA EXCEEDED" not in captured.out
+        assert "Connection timeout" in captured.err
+        mock_diag.assert_called_once()
+        assert mock_diag.call_args[0][0]["action"] == "api-error"
+
+
 class TestNoShellTrue:
     def test_no_shell_true_in_source(self):
         """model_router.py must not use shell=True (security layer 3)."""
