@@ -109,7 +109,7 @@ DESIGN_LABELS = {
     "complete": "design:complete",
 }
 
-SPECIAL_LABELS = {"squidsquad", "improvement-scan", "squidsquad-test"}
+SPECIAL_LABELS = {"squidsquad", "improvement-scan", "squidsquad-test", "review:human-required"}
 
 # === LEGAL STATUS TRANSITIONS (pessimistic enforcement) ===
 
