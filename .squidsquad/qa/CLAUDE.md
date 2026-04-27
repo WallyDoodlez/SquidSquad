@@ -537,12 +537,26 @@ python references/scripts/git_ops.py task-end [role] [number]
      ```bash
      gh pr review [PR_NUMBER] --approve --body "QA verified — zero gaps."
      ```
-   - Transition to `pending-review` (not `pending-ship`):
+   - **Check Auto Merge**: `python references/scripts/config.py get auto-merge`
+   - **Check per-ticket override**: `python references/scripts/tracker.py get-labels [NUMBER]` — look for `review:human-required` label.
+
+   **If Auto Merge `yes` AND no `review:human-required` label** — merge directly:
      ```bash
-     # Convert draft PR to ready for review
      gh pr ready [PR_NUMBER]
-     python references/scripts/tracker.py transition [NUMBER] pending-test pending-review --role qa-lead
-     python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. PR approved. Awaiting human review. Status → Pending Review."
+     python references/scripts/git_ops.py pr-merge [PR_NUMBER]
+     ```
+     - **Merge succeeds**: transition to pending-ship:
+       ```bash
+       python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role qa-lead
+       python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. PR auto-merged. Status → Pending Ship."
+       ```
+     - **Merge conflict**: handle as described in the PR Flow `no` merge conflict section below.
+
+   **If Auto Merge `no` OR `review:human-required` label present** — route to human review:
+     ```bash
+     gh pr ready [PR_NUMBER]
+     python references/scripts/tracker.py transition [NUMBER] pending-test pending-human-review --role qa-lead
+     python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. PR approved. Awaiting human review. Status → Pending Human Review."
      ```
 
    **If PR Flow `no`** (or no PR exists):
