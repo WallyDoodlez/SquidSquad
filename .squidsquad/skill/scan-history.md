@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-27 15:03
+
+- **Files scanned**: references/scripts/providers/deepseek/adapter.py, references/scripts/providers/openai/adapter.py, references/scripts/model_router.py, references/scripts/boot_remote.py, references/scripts/add_role.py
+- **Findings**: #3643 (model_router.py sandbox path check bypassable on Windows — high), #3644 (openai adapter silent JSON parse failure — medium)
+- **Items rejected by human**: none yet
+- **Notes**: Also found: model_router.py route subcommand hardcodes research (high), yaml auto-install duplication (medium), add_role.py stale lock (low) — deferred due to 2-item limit.
+
 ## Scan — 2026-04-27 09:04
 
 - **Files scanned**: references/scripts/tracker.py, references/scripts/cycle_pre.py, references/scripts/cycle_post.py, references/scripts/git_ops.py, references/scripts/scan_index.py
