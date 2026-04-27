@@ -41,6 +41,9 @@ Entry file with includes (the role's own `SOUL.md` sits alongside `CLAUDE.md` in
 14. `common/status-line` — Status line description
 15. `common/prohibitions` — "Never do" rules
 16. `common/cycle-runner` — (optional, feature-flagged) Cycle runner transport layer
+17. `common/chat-etiquette` — (optional, comms-layer) Chat room behavior rules
+18. `common/mention-protocol` — (optional, comms-layer) @mention escalation tiers and noise budget
+19. `common/consensus-protocol` — (optional, comms-layer) Multi-party decision flow in chat
 
 ### PM/QA Agent (`references/roles/pm/CLAUDE.md`)
 

@@ -45,6 +45,7 @@ STATIC_TEST_MODULES = [
     "test_boot_remote",
     "test_model_router",
     "test_comms_adapter",
+    "test_comms_sub_skills",
 ]
 
 
