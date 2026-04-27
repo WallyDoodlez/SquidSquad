@@ -4,11 +4,12 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — DM ready, awaiting human greenlight (21 days)
-- #3415 EPIC: Real-time communication layer — Telegram-first, platform-abstracted. 2/6 sub-tasks shipped (#3416 adapter interface, #3417 sub-skills). 4 remaining (#3418-#3421). Next: #3418 Telegram adapter
+- #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — DM ready, awaiting human greenlight (20+ days)
+- #3664 Move iterations/diagnostics to state branch — pending (high, role:skill) — newly filed, awaiting approval
+- #3663 Dev agent PR conflict rebase — pending-test (medium, role:skill) — QA to verify
+- #3643 model_router.py sandbox path bypass — open bug (high severity, role:skill) — active
+- #3415 EPIC: Real-time communication layer — Telegram-first. 2/6 sub-tasks shipped. 4 remaining (#3418-#3421)
 - #2495 Rewrite /squidsquad-upgrade — pending (high, role:skill) — awaiting human approval
-- #3464 Human-in-the-loop execution — pending (medium)
-- #3465 Layered role definition architecture — pending (medium)
 
 ## Recently Shipped (2026-04-26/27 session)
 
@@ -35,10 +36,10 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Constraints & Blockers
 
-- Ship counter: threshold 10, currently at 6 (v0.27.0)
+- Ship counter: threshold 10, currently at 7 (v0.27.0)
 - Boot detection: heartbeat-based with boot lock (#3347/#3348/#3349)
 
 ## Team State
 
-- Active agents: qa, skill, PM, QA, DM — all present
+- Active agents: pm, qa, skill, dm — all present
 - Current version: 0.27.0
