@@ -772,6 +772,31 @@ Split commits into code (feature branch) and state (main):
    - If human requested changes via review: fix the issues and push to the branch
    - After pushing fixes, re-request review if appropriate
 
+5. **When PR Flow `yes`**: check own open PRs for merge conflicts and rebase:
+   ```bash
+   gh pr list --search "squidsquad/skill/" --state open --json number,headRefName,mergeable --limit 10
+   ```
+   For each PR with `mergeable` = `CONFLICTING` on a branch matching `squidsquad/skill/*`:
+   ```bash
+   git fetch origin
+   git checkout [BRANCH_NAME]
+   git rebase origin/[WORKING_BRANCH]
+   ```
+   - **Rebase succeeds**: force-push and log:
+     ```bash
+     git push --force-with-lease origin [BRANCH_NAME]
+     git checkout [WORKING_BRANCH]
+     ```
+     Log in iteration summary: `Rebased [BRANCH_NAME] — conflict resolved.`
+   - **Rebase has code conflicts**: abort and log (PM/QA will handle):
+     ```bash
+     git rebase --abort
+     git checkout [WORKING_BRANCH]
+     ```
+     Log: `Rebase of [BRANCH_NAME] failed — manual conflict resolution needed.`
+   - Only rebase own branches (`squidsquad/skill/*`) — never touch other agents' PRs.
+   - Skip this step when PR Flow is off or no open PRs exist.
+
 **If `no`** (default — direct-to-main workflow):
 
 ```bash

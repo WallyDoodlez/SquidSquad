@@ -101,6 +101,30 @@ class TestPathSandbox:
         path = str(model_router.REPO_ROOT / ".." / ".." / "etc" / "passwd")
         assert model_router._is_path_in_sandbox(path) is False
 
+    def test_prefix_collision_blocked(self):
+        # /repo-other/file should NOT pass check for sandbox root /repo
+        fake_sibling = str(model_router.REPO_ROOT) + "-other"
+        path = fake_sibling + "/secret.txt"
+        assert model_router._is_path_in_sandbox(path) is False
+
+    def test_case_mismatch_still_resolves(self):
+        # On Windows (case-insensitive FS), mixed-case paths should still
+        # resolve correctly. On Linux this just tests a different-case path
+        # which is genuinely different and should be blocked if not in repo.
+        import os
+        repo_str = str(model_router.REPO_ROOT / "README.md")
+        swapped = repo_str.swapcase()
+        # On case-insensitive FS (Windows): should be True (same file)
+        # On case-sensitive FS (Linux): should be False (different path)
+        result = model_router._is_path_in_sandbox(swapped)
+        if os.name == "nt":
+            assert result is True
+        else:
+            # On case-sensitive FS, swapped case is a different path
+            # that likely doesn't exist, so resolve() keeps it as-is
+            # and it won't be relative to REPO_ROOT
+            assert result is False
+
 
 class TestSensitiveFiles:
     def test_env_blocked(self):
