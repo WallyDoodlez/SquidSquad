@@ -238,7 +238,7 @@ def _is_path_in_sandbox(path_str):
     try:
         resolved = Path(path_str).resolve()
         repo_resolved = REPO_ROOT.resolve()
-        return str(resolved).startswith(str(repo_resolved))
+        return resolved.is_relative_to(repo_resolved)
     except Exception:
         return False
 
