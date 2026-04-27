@@ -445,7 +445,6 @@ python references/scripts/tracker.py list-issues skill --status pending-test
 
 For each result:
 
-0. **Blocked check**: If the item has a `blocked:human-action` label, skip it. Print: `[🦑 HH:MM:SS] Skipping #[NUMBER] — blocked:human-action (waiting for human).` Do not change its status. Move to the next item.
 1. Run the relevant test or manually verify the fix.
 2. **Test coverage check**: Verify that the fix includes a regression test. Check for new or modified test files corresponding to the changed code. If the fix adds or changes code but includes no tests, reject it.
 3. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
@@ -468,7 +467,6 @@ python references/scripts/tracker.py list-tasks skill --status pending-test
 
 For each result:
 
-0. **Blocked check**: If the item has a `blocked:human-action` label, skip it. Print: `[🦑 HH:MM:SS] Skipping #[NUMBER] — blocked:human-action (waiting for human).` Do not change its status. Move to the next item.
 1. Test against the acceptance criteria.
 2. **Test coverage check**: Verify that new code has corresponding unit tests. Check for new or modified test files. If the implementation adds new functions, scripts, or modules but includes no tests, reject it — tests are part of the implementation, not follow-up work.
 3. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
