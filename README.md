@@ -46,6 +46,7 @@ You have a codebase and Claude Code. You can fix one bug at a time. But what if 
 - **Task-level branch boundaries** — when branch workflow is enabled, agents automatically check out the correct feature branch before working on each task (verification, shipping, bug fixes), then return to the working branch when done. This eliminates stale-code issues where agents tested against main instead of the actual changes
 - **Per-agent working directories** — the setup wizard automatically creates isolated git clones for each non-PM agent, so agents can run concurrently without git conflicts. PM stays in the primary repo as the coordination hub. Backward compatible with single-repo setups
 - **Auto versioning** — ships are counted and minor versions auto-bump when thresholds are met
+- **Communication abstraction layer** — a platform-agnostic adapter interface for real-time agent communication. Agents can send messages, create threads, poll for responses, and share files through any supported platform (Telegram, Slack, Discord) without knowing the underlying service. Ships with a NullAdapter so agents work identically whether comms are configured or not. Add a `## Communication` section to `config.md` to enable a provider
 
 ---
 
