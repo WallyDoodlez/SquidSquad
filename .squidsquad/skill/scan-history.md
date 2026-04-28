@@ -1,11 +1,11 @@
 # Scan History
 
-## Scan — 2026-04-27 15:03
+## Scan — 2026-04-27 20:02
 
-- **Files scanned**: references/scripts/providers/deepseek/adapter.py, references/scripts/providers/openai/adapter.py, references/scripts/model_router.py, references/scripts/boot_remote.py, references/scripts/add_role.py
-- **Findings**: #3643 (model_router.py sandbox path check bypassable on Windows — high), #3644 (openai adapter silent JSON parse failure — medium)
+- **Files scanned**: references/scripts/vault_remember.py, references/scripts/state_bus.py, references/scripts/cycle.py, references/scripts/vault_optimize.py, references/scripts/reboot_agent.py
+- **Findings**: #3711 (vault_remember.py startswith path check same bypass as #3643 — medium), #3712 (state_bus.py orphan branch init writes README.md to wrong path — low)
 - **Items rejected by human**: none yet
-- **Notes**: Also found: model_router.py route subcommand hardcodes research (high), yaml auto-install duplication (medium), add_role.py stale lock (low) — deferred due to 2-item limit.
+- **Notes**: vault_optimize.py lock mechanism is correct (O_EXCL provides atomicity). cycle.py and reboot_agent.py are clean.
 
 ## Scan — 2026-04-27 09:04
 
