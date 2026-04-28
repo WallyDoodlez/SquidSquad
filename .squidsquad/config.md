@@ -89,7 +89,7 @@
 ## Model Routing
 
 - **Default Model**: claude
-- **Research Model**: gpt-5.2
+- **Research Model**: deepseek-v4-pro
 - **Discussion Prep Model**: claude
 - **Test Plan Model**: claude
 - **QA Execution Model**: claude

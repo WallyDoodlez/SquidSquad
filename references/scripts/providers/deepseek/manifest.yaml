@@ -1,17 +1,17 @@
 name: deepseek
 display_name: DeepSeek
 api_base: https://api.deepseek.com/v1
-default_model: deepseek-r1
+default_model: deepseek-v4-pro
 
 auth:
   env_var: DEEPSEEK_API_KEY
 
 models:
-  deepseek-r1:
+  deepseek-v4-pro:
     context_window: 128000
     max_output: 32768
     temperature: 0.2
-  deepseek-chat:
+  deepseek-v4-flash:
     context_window: 128000
     max_output: 32768
     temperature: 0.2
