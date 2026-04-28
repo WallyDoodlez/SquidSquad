@@ -335,15 +335,66 @@ def _do_version_bump(data, role):
 
 
 def _do_restart_sentinel(data, role):
-    """Write self-restart sentinel if needed."""
+    """Write self-restart sentinel if needed.
+
+    DEPRECATED: Agents should no longer set restart_needed. Context pressure
+    restarts are handled by _do_stop_after_cycle_check(). This function is
+    kept for one version of backward compatibility — it writes .restart which
+    the wrapper still processes during the transition period.
+    """
     if not data.get("restart_needed"):
         return False
 
     reason = data.get("restart_reason", "unknown")
     sentinel = SQUID_DIR / role / ".restart"
     sentinel.write_text(reason, encoding="utf-8")
-    print(f"  Restart sentinel written: {reason}")
+    print(f"  Restart sentinel written (deprecated): {reason}")
     return True
+
+
+def _do_stop_after_cycle_check(data, role):
+    """Check context pressure and write .stop-after-cycle if exceeded.
+
+    This is the new universal restart mechanism: cycle_post.py mechanically
+    writes the sentinel when context pressure exceeds threshold. The wrapper
+    detects it on exit and respawns. Agents are passive — they don't decide
+    to restart, the mechanical layer does.
+
+    Also checks if an external .stop-after-cycle was already written (e.g. by
+    start_team.py --reboot). If present, checkpoint working state and exit.
+
+    Returns True if agent should exit for restart.
+    """
+    role_dir = SQUID_DIR / role
+    sentinel = role_dir / ".stop-after-cycle"
+
+    # Check if externally written (e.g. start_team.py --reboot)
+    if sentinel.exists():
+        print(f"  .stop-after-cycle detected (external). Agent will exit for restart.")
+        return True
+
+    # Check context pressure from cycle-input.json
+    ctx = data.get("context_pressure", {})
+    if not ctx:
+        # Try reading from cycle-input.json directly
+        input_path = SQUID_DIR / role / "cycle-input.json"
+        if input_path.exists():
+            try:
+                input_data = json.loads(input_path.read_text(encoding="utf-8"))
+                ctx = input_data.get("context_pressure", {})
+            except (json.JSONDecodeError, OSError):
+                pass
+
+    exceeded = ctx.get("exceeded", False)
+    used_pct = ctx.get("used_pct", 0)
+
+    if exceeded:
+        reason = f"context pressure at {used_pct}%"
+        sentinel.write_text(reason, encoding="utf-8")
+        print(f"  .stop-after-cycle written: {reason}")
+        return True
+
+    return False
 
 
 def _do_working_state_update(data, role):
@@ -415,7 +466,7 @@ def main():
     # 6. Commit and push
     _do_commit_push(data, role)
 
-    # 7. Restart sentinel (after commit — safety rule)
+    # 7. Legacy restart sentinel (deprecated — backward compat for one version)
     restarting = _do_restart_sentinel(data, role)
 
     # 8. Cleanup cycle-output.json
@@ -424,14 +475,24 @@ def main():
     except OSError:
         pass
 
-    # 9. Status bar
-    if restarting:
-        _write_status_bar(role, "restarting", f"Self-restart — {data.get('restart_reason', '')}")
+    # 9. Stop-after-cycle check (MUST be last — after commit, after iteration log)
+    # This is the new universal restart mechanism. It checks context pressure
+    # and external sentinel. If triggered, agent exits cleanly for wrapper respawn.
+    stop_for_restart = _do_stop_after_cycle_check(data, role)
+
+    # 10. Status bar
+    if stop_for_restart or restarting:
+        reason = data.get("restart_reason", "sentinel")
+        _write_status_bar(role, "restarting", f"Restart — {reason}")
     else:
         _write_status_bar(role, "idle", "")
 
     ts = _timestamp_short()
     print(f"[🦑 {ts}] cycle_post complete for {role}")
+
+    # Exit code 42 signals wrapper to respawn (stop-after-cycle)
+    if stop_for_restart:
+        return 42
     return 0
 
 
