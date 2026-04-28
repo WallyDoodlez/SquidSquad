@@ -25,6 +25,32 @@
 - #3848
 - #3849
 
+
+## [0.28.0] — 2026-04-28
+
+### Shipped
+- #2183
+- #2195
+- #2272
+- #2343
+- #2344
+- #2495
+- #3302
+- #3360
+- #3416
+- #3417
+- #3664
+- #3711
+- #3712
+- #3735
+- #3747
+- #3800
+- #3807
+- #3813
+- #3814
+- #3848
+- #3849
+
 ### Added
 - #2183 — Simplified agent lifecycle with singleton wrapper, safe restart, and PM/DM control — agents never get killed mid-work
 - #2495 — Upgrade instructions fully rewritten — you can now run `/squidsquad-upgrade` with the correct compose.py-based flow, config v1→v2 patching, and automatic SOUL.md/vault preservation
