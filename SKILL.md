@@ -325,47 +325,68 @@ directory, run the validator, re-deploy. No wizard code change required.
 
 ## Upgrade Instructions
 
-When the user invokes upgrade (via `/squidsquad-upgrade` or "upgrade squidsquad"), use the following agent-based parallel approach.
+When the user invokes upgrade (via `/squidsquad-upgrade` or "upgrade squidsquad"), follow this orchestrator-driven flow. No parallel subagents — compose.py handles all template regeneration.
 
-### Step 1 — Detect Version Gap (orchestrator)
+### Step 1 — Detect Version Gap
 
 Read `.squidsquad/config.md` to get installed `SquidSquad Version`.
 Read `SKILL.md` frontmatter for current version.
 
 If both match: tell the user they're up to date and stop.
 
-Also read the `Agents` section of `config.md` to get the list of active dev role names.
+### Step 2 — Read Install Spec (if present)
 
-### Step 2 — Fan Out Agents in Parallel
+Read `.squidsquad/.install-spec.json` for the install-time configuration (agent list, preset, flags). If the file does not exist (pre-install-spec installations), derive the agent list from the `Dev Agents` field in `config.md` and proceed — the upgrade flow works without it.
 
-Spawn all applicable agents simultaneously. Each agent writes only its assigned files and does not commit.
+### Step 3 — Regenerate Agent Templates
 
-#### If skill version differs — spawn these agents in parallel:
+Run compose.py to rebuild all agent CLAUDE.md files from the current sub-skill sources:
 
-**One agent per active dev role:**
-> Regenerate `.squidsquad/templates/dev-agent-[role].md` from the Dev Agent template in `references/agent-instructions.md`, substituting `[ROLE]`, `[ROLE_UPPER]`, `[ROLE_TEST_CMD]`, `[OTHER_ROLES]`, and `[INTERVAL]` with values from `config.md`. Also regenerate `.squidsquad/start-[role].sh` and `.squidsquad/start-[role].ps1`. **Migration**: if `.squidsquad/[role]/CLAUDE.md` contains `## The Ralph Loop` (inline format, >50 lines), replace it with the bootstrapper format by re-running `python references/scripts/compose.py deploy <role>`. If it is already a bootstrapper (<50 lines, no `## The Ralph Loop`), leave it untouched. Do not touch `bugs/`, `features/`, or `iterations/`.
+```bash
+python references/scripts/compose.py deploy-all
+```
 
-**One agent for PM:**
-> Regenerate `.squidsquad/templates/pm-agent.md` from the PM template in `references/agent-instructions.md`, substituting `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]` from `config.md`. Also regenerate `.squidsquad/start-pm.sh` and `.squidsquad/start-pm.ps1`. **Migration**: if `.squidsquad/pm/CLAUDE.md` contains `## The Ralph Loop` (inline format), replace it with the bootstrapper format by re-running `python references/scripts/compose.py deploy <role>`. If already a bootstrapper, leave it untouched. Do not touch `enhancements.md`, `iterations/`, or `migrations/`.
+This regenerates `.squidsquad/[role]/CLAUDE.md` for every configured agent (dev agents from config + PM + DM if present). Placeholder substitution (`[ROLE]`, `[INTERVAL]`, `[ROLE_TEST_CMD]`, etc.) is handled automatically by compose.py.
 
-**One agent for QA (when dev or designer agents are present):**
-> Regenerate `.squidsquad/templates/qa-agent.md` from the QA template in `references/agent-instructions.md`, substituting `[ACTIVE_AGENTS]`, `[E2E_TEST_CMD]`, and `[INTERVAL]` from `config.md`. Also regenerate `.squidsquad/start-qa.sh` and `.squidsquad/start-qa.ps1` (if QA directory exists). **Migration**: if `.squidsquad/qa/CLAUDE.md` contains `## The Ralph Loop` (inline format), replace it with the bootstrapper format by re-running `python references/scripts/compose.py deploy <role>`. If already a bootstrapper, leave it untouched. If `qa/` does not exist, skip QA setup entirely. Do not touch `qa-log.md` or `iterations/`.
+**SOUL.md preservation**: `compose.py deploy_role` never overwrites an existing SOUL.md — it only writes SOUL.md when the file is missing. User customizations to SOUL.md are preserved across upgrades.
 
-**One agent for DM (Delivery Manager) — optional:**
-> DM is optional. The `dm/` directory is the sole presence indicator — if it exists, DM is enabled; if not, PM handles delivery via Step 6d fallback. **Only create/update DM artifacts if `.squidsquad/dm/` already exists** (user previously opted in). If `dm/` exists: regenerate `.squidsquad/templates/dm-agent.md` from Template 3 in `references/agent-instructions.md`, substituting `[ACTIVE_AGENTS]`, `[INTERVAL]`, and `[ROLE_UPPER]`. Regenerate `.squidsquad/start-dm.sh` and `.squidsquad/start-dm.ps1`. If `dm/` does NOT exist: skip DM setup entirely. Do not create the directory, do not add DM to config.
+**Vault preservation**: The upgrade does not touch `.squidsquad/vault/`. All vault content is preserved.
 
-> **Note:** Create `.squidsquad/templates/` if it does not exist (first upgrade from pre-template architecture).
+### Step 4 — Regenerate Boot Scripts
 
-**One agent for settings:**
-> Update `.claude/settings.json`: ensure `permissions.allow` contains `Edit(.squidsquad/**)`, `Write(.squidsquad/**)`, and the four git commands. Ensure the `SessionStart` hook is present and matches the current template. Ensure the `statusLine` key is present and points to `bash .squidsquad/statusline.sh`. Regenerate `.squidsquad/statusline.sh` by copying `references/statusline.sh`. Remove `.squidsquad/heartbeat.sh` if it exists (heartbeat system replaced by cross-clone file reads). Copy `references/hints-dev.txt` to `.squidsquad/hints-dev.txt`, `references/hints-pm.txt` to `.squidsquad/hints-pm.txt`, and `references/hints-dm.txt` to `.squidsquad/hints-dm.txt`. Merge into existing content — never remove unrelated keys.
+```bash
+python references/scripts/compose.py boot-all
+```
 
-### Step 3 — Update config.md (orchestrator)
+This regenerates `start-[role].sh` and `start-[role].ps1` for all configured agents.
 
-After all agents complete, update `.squidsquad/config.md`:
-- Set `SquidSquad Version` to current skill version
-- If `## Heartbeat` section exists, remove it (heartbeat system replaced by cross-clone file reads in v0.8.0+).
+### Step 5 — Patch Config Schema (v1 → v2)
 
-### Step 4 — Commit and Push
+If `Architecture Version` in config.md is `1` (or absent), add any missing v2 sections with defaults. **Do not delete existing v1 sections** — agents still read them via config.py.
+
+Check for and add these sections if missing (with defaults):
+
+- `## Preset` — `Id: software-dev`
+- `## Tools` — `(none)`
+- `## Loop` — `Interval Minutes: [existing interval value]`, `Context Threshold: [existing threshold value]`
+- `## Flags` — `Diagnostics: yes`, `Improvement Scan: [existing value]`, `PR Flow: [existing value]`, `Vault Remember: [existing value]`
+- `## Git Branches` — `Working Branch: [existing value or main]`, `State Branch: [existing value or squid-squad]`
+- `## Forge Backend` — `Provider: github`, `Endpoint: https://api.github.com`
+- `## Model Routing` — carry over existing values or use defaults (`Default Model: claude`, etc.)
+
+After patching, set `Architecture Version` to `2`.
+
+### Step 6 — Sync Labels
+
+```bash
+python references/scripts/wizard.py ensure-labels
+```
+
+This is idempotent — it creates any missing GitHub Issue labels and skips existing ones.
+
+### Step 7 — Update Version and Commit
+
+Update `SquidSquad Version` in `.squidsquad/config.md` to the current skill version.
 
 ```bash
 git add .squidsquad/ .claude/
@@ -373,9 +394,11 @@ git commit -m "squidsquad: upgrade to [VERSION]"
 git push
 ```
 
-### Step 5 — Report
+**Clone isolation note**: Agents running in sibling clones will receive the updated CLAUDE.md on their next `git pull` (which happens at the start of each cycle via cycle_pre.py). The upgrade only writes to the primary repo — agents are not restarted automatically.
 
-Tell the user: version upgraded from → to, files regenerated per agent, any schema migrations applied, any failures.
+### Step 8 — Report
+
+Tell the user: version upgraded from → to, templates regenerated via compose.py, config schema version, any new sections added, label sync result, any failures.
 
 ---
 

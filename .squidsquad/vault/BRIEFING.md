@@ -4,17 +4,17 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — DM ready, awaiting human greenlight (20+ days)
-- #3664 Move iterations/diagnostics to state branch — pending (high, role:skill) — newly filed, awaiting approval
-- #3415 EPIC: Real-time communication layer — Telegram-first. 2/6 sub-tasks shipped. 4 remaining (#3418-#3421)
-- #2495 Rewrite /squidsquad-upgrade — pending (high, role:skill) — awaiting human approval
+- #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — DM ready, awaiting human greenlight (21 days)
+- #3415 EPIC: Real-time communication layer — Telegram-first, platform-abstracted. 2/6 sub-tasks shipped (#3416 adapter interface, #3417 sub-skills). 4 remaining (#3418-#3421). Next: #3418 Telegram adapter
+- #2495 Rewrite /squidsquad-upgrade — approved (high, role:skill) — blocked on missing planning artifacts (CONTEXT.md, TEST-PLAN.md)
+- #3464 Human-in-the-loop execution — pending (medium)
+- #3465 Layered role definition architecture — pending (medium)
 
 ## Recently Shipped (2026-04-26/27 session)
 
 - #3302, #3340, #3341, #3347, #3348, #3349, #3360, #3377 (boot lifecycle + clone fixes)
 - #3416, #3417 (epic:comms-layer foundation: adapter interface + sub-skills)
 - #1470 (DeepSeek base_url), #3466 (PR creation restored)
-- #3643 (sandbox path fix), #3663 (PR conflict auto-rebase)
 
 ## Core Architecture
 
@@ -35,10 +35,10 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Constraints & Blockers
 
-- Ship counter: threshold 10, currently at 9 (v0.27.0) — 1 more ship triggers version bump
+- Ship counter: threshold 10, currently at 6 (v0.27.0)
 - Boot detection: heartbeat-based with boot lock (#3347/#3348/#3349)
 
 ## Team State
 
-- Active agents: pm, qa, skill, dm — all present
+- Active agents: qa, skill, PM, QA, DM — all present
 - Current version: 0.27.0
