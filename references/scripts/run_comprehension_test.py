@@ -2,18 +2,22 @@
 """Comprehension test pipeline — spawn test + eval agents via claude CLI.
 
 Usage:
-    python references/scripts/run_comprehension_test.py <spec.json> [--output-dir <dir>]
+    python references/scripts/run_comprehension_test.py <spec.json> [--output-dir <dir>] [--force]
 
 The spec JSON defines:
     - files: list of file paths the test agent can read
     - questions: array of {id, question, expected} objects
 
 Pipeline:
-    1. Spawn test agent: reads listed files, answers questions, writes answers.md
-    2. Spawn eval agent: reads answers.md + spec, evaluates, writes results.json
-    3. Exit 0 if all pass, exit 1 if any fail
+    1. Check content-hash cache — skip if spec + files unchanged since last PASS
+    2. Spawn test agent: reads listed files, answers questions, writes answers.md
+    3. Spawn eval agent: reads answers.md + spec, evaluates, writes results.json
+    4. Exit 0 if all pass (update cache), exit 1 if any fail (cache unchanged)
+
+Cache bypass: --force flag or FORCE_CQ=1 env var
 """
 
+import hashlib
 import json
 import os
 import shutil
@@ -24,6 +28,63 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
+CACHE_DIR = REPO_ROOT / "tests" / "comprehension" / ".cache"
+
+
+# ---------------------------------------------------------------------------
+# Content-hash caching
+# ---------------------------------------------------------------------------
+
+def _compute_hash(spec_path, files):
+    """Compute SHA256 over spec file + all listed files. Returns hex digest."""
+    h = hashlib.sha256()
+    # Hash the spec file itself (question changes trigger re-run)
+    try:
+        h.update(Path(spec_path).read_bytes())
+    except OSError:
+        return None
+    # Hash each listed file
+    for f in files:
+        fpath = Path(f)
+        if not fpath.is_absolute():
+            fpath = REPO_ROOT / f
+        try:
+            h.update(fpath.read_bytes())
+        except OSError:
+            # File missing — force re-run
+            return None
+    return h.hexdigest()
+
+
+def _cache_path(spec_path):
+    """Return the cache file path for a given spec."""
+    return CACHE_DIR / f"{Path(spec_path).stem}.hash"
+
+
+def _check_cache(spec_path, files):
+    """Return True if cache hit (files unchanged since last PASS)."""
+    cp = _cache_path(spec_path)
+    if not cp.exists():
+        return False
+    current = _compute_hash(spec_path, files)
+    if current is None:
+        return False
+    try:
+        cached = cp.read_text(encoding="utf-8").strip()
+    except OSError:
+        return False
+    return current == cached
+
+
+def _write_cache(spec_path, files):
+    """Write cache file after a PASS. Atomic write-then-rename."""
+    digest = _compute_hash(spec_path, files)
+    if digest is None:
+        return
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = _cache_path(spec_path).with_suffix(".tmp")
+    tmp.write_text(digest, encoding="utf-8")
+    tmp.replace(_cache_path(spec_path))
 
 
 def _find_claude():
@@ -60,16 +121,18 @@ def _run_agent(claude_bin, prompt, workdir, allowed_tools="Read,Write"):
     return result
 
 
-def run_test(spec_path, output_dir=None):
+def run_test(spec_path, output_dir=None, force=False):
     """Run the comprehension test pipeline.
 
     Args:
         spec_path: Path to the spec JSON file.
         output_dir: Directory for answers.md and results.json. Defaults to
                     a temp directory next to the spec file.
+        force: If True, bypass the content-hash cache.
 
     Returns:
-        (results, output_dir) where results is a list of {id, pass, reason} dicts.
+        (results, output_dir) where results is a list of {id, pass, reason} dicts,
+        or (None, None) if skipped due to cache hit.
     """
     spec_path = Path(spec_path).resolve()
     if not spec_path.exists():
@@ -79,6 +142,12 @@ def run_test(spec_path, output_dir=None):
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
     files = spec.get("files", [])
     questions = spec.get("questions", [])
+
+    # Content-hash cache check
+    force = force or os.environ.get("FORCE_CQ") == "1"
+    if not force and _check_cache(spec_path, files):
+        print(f"Skipped — files unchanged since last PASS ({spec_path.name})")
+        return None, None
 
     if not questions:
         print("ERROR: spec has no questions", file=sys.stderr)
@@ -191,10 +260,15 @@ Write ONLY the JSON array to the results file. No other text.
     # Summary
     passed = sum(1 for r in results if r.get("pass"))
     total = len(results)
+    all_pass = all(r.get("pass") for r in results)
     print(f"\nResults: {passed}/{total} passed")
     for r in results:
         status = "PASS" if r.get("pass") else "FAIL"
         print(f"  Q-{r['id']}: {status} — {r.get('reason', '')}")
+
+    # Write cache only on PASS — failed runs must not update cache
+    if all_pass:
+        _write_cache(spec_path, files)
 
     return results, output_dir
 
@@ -207,12 +281,18 @@ def main():
 
     spec_path = args[0]
     output_dir = None
+    force = "--force" in args
+
     if "--output-dir" in args:
         idx = args.index("--output-dir")
         if idx + 1 < len(args):
             output_dir = args[idx + 1]
 
-    results, out_dir = run_test(spec_path, output_dir)
+    results, out_dir = run_test(spec_path, output_dir, force=force)
+
+    # Cache hit — skipped, exit 0
+    if results is None:
+        sys.exit(0)
 
     # Exit code based on results
     all_pass = all(r.get("pass") for r in results)

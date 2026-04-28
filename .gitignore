@@ -31,6 +31,9 @@ node_modules/
 __pycache__/
 *.pyc
 
+# CQ test cache (per-clone, rebuilt on test pass)
+tests/comprehension/.cache/
+
 # Obsidian (user-specific config, not shared)
 .obsidian/
 
