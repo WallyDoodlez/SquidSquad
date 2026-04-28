@@ -185,3 +185,22 @@ class TestEffectiveConfidence:
              patch.object(vault_remember, "get_field", return_value="60"):
             result = vault_remember.effective_confidence(str(note))
         assert result == "high"
+
+    def test_prefix_collision_blocked(self, tmp_path, capsys):
+        """Path like /vault-other/note.md must not pass check for /vault."""
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        # Create a sibling directory whose name starts with "vault"
+        sibling = tmp_path / "vault-other"
+        sibling.mkdir()
+        note = sibling / "malicious.md"
+        note.write_text(
+            "---\ntype: learning\ntags: test\ncreated: 2026-01-01\n"
+            "updated: 2026-01-01\nowner: test\nstatus: active\n"
+            "confidence: high\nlinks: []\n---\nBody\n"
+        )
+        with patch.object(vault_remember, "VAULT_DIR", vault), \
+             patch.object(vault_remember, "get_field", return_value="60"):
+            with pytest.raises(SystemExit) as exc_info:
+                vault_remember.effective_confidence(str(note))
+            assert exc_info.value.code == 2
