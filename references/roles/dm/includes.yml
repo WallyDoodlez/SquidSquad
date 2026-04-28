@@ -9,7 +9,7 @@ includes:
   - dm-specific/issue-triage
   - dm-specific/delivery-packaging
   - dm-specific/version-bumps
-  - common/improvement-scan-slim
+  - dm-specific/doc-improvement-loop
   - dm-specific/discussion-protocol
   - dm-specific/issue-filing
   - common/vault-protocol-slim

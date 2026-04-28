@@ -100,7 +100,7 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 {{include: dm-specific/version-bumps}}
 
-{{include: common/improvement-scan}}
+{{include: dm-specific/doc-improvement-loop}}
 
 {{include: common/vault-remember}}
 

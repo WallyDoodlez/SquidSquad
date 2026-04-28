@@ -1,0 +1,14 @@
+{
+  "last_scanned": null,
+  "rotation_count": 0,
+  "scan_history": [],
+  "doc_inventory": {
+    "README.md": {"last_scanned": null, "status": "unknown"},
+    "SKILL.md": {"last_scanned": null, "status": "unknown"},
+    "docs/ARCHITECTURE.md": {"last_scanned": null, "status": "unknown"},
+    "docs/sub-skill-guide.md": {"last_scanned": null, "status": "unknown"},
+    "CONTRIBUTING.md": {"last_scanned": null, "status": "unknown"},
+    "CHANGELOG.md": {"last_scanned": null, "status": "unknown"}
+  },
+  "rejected_findings": []
+}
