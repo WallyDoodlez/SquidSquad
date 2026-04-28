@@ -326,7 +326,7 @@ def validate():
     all_issues.extend(check_structure())
     all_issues.extend(check_frontmatter())
     all_issues.extend(check_wikilinks())
-    orphans = list_orphans()
+    list_orphans()
 
     total = len(all_issues)
     if total:

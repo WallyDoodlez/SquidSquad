@@ -211,6 +211,60 @@ class TestListOrphans:
         assert orphans == []
 
 
+class TestValidate:
+    def _setup_valid_vault(self, tmp_path):
+        """Create a minimal valid vault structure."""
+        vault = tmp_path / "vault"
+        for d in vault_check.PARAG_DIRS:
+            (vault / d).mkdir(parents=True)
+        (vault / "BRIEFING.md").write_text("# Briefing", encoding="utf-8")
+        return vault
+
+    def test_passes_on_clean_vault(self, tmp_path):
+        vault = self._setup_valid_vault(tmp_path)
+        with patch.object(vault_check, "VAULT_DIR", vault):
+            assert vault_check.validate() is True
+
+    def test_fails_on_structural_issues(self, tmp_path):
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        # Missing PARAG dirs and BRIEFING.md
+        with patch.object(vault_check, "VAULT_DIR", vault):
+            assert vault_check.validate() is False
+
+    def test_orphans_do_not_block_validation(self, tmp_path):
+        """Regression: #3848 — orphans are informational, not blocking."""
+        vault = self._setup_valid_vault(tmp_path)
+        galaxy = vault / "galaxy"
+        # Create orphan notes (no inbound links)
+        (galaxy / "decision-orphan-a.md").write_text(
+            "---\ntype: decision\ntags: [x]\ncreated: 2026-01-01\n"
+            "updated: 2026-01-01\nowner: skill\nstatus: active\n"
+            "confidence: high\nsource: code\n---\n\nOrphan note A",
+            encoding="utf-8",
+        )
+        (galaxy / "decision-orphan-b.md").write_text(
+            "---\ntype: decision\ntags: [y]\ncreated: 2026-01-01\n"
+            "updated: 2026-01-01\nowner: skill\nstatus: active\n"
+            "confidence: high\nsource: code\n---\n\nOrphan note B",
+            encoding="utf-8",
+        )
+        with patch.object(vault_check, "VAULT_DIR", vault):
+            # Orphans exist but validate should still pass
+            orphans = vault_check.list_orphans()
+            assert len(orphans) == 2
+            # validate() treats orphans as informational — not a failure
+            assert vault_check.validate() is True
+
+    def test_validate_calls_list_orphans(self, tmp_path):
+        """Ensure validate() invokes list_orphans() for its print side effect."""
+        vault = self._setup_valid_vault(tmp_path)
+        with patch.object(vault_check, "VAULT_DIR", vault), \
+             patch.object(vault_check, "list_orphans", wraps=vault_check.list_orphans) as mock_lo:
+            vault_check.validate()
+            mock_lo.assert_called_once()
+
+
 class TestDedupCheck:
     def test_finds_match(self, tmp_path):
         vault = tmp_path / "vault"
