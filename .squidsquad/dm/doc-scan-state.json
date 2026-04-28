@@ -1,9 +1,11 @@
 {
-  "last_scanned": null,
+  "last_scanned": "README.md",
   "rotation_count": 0,
-  "scan_history": [],
+  "scan_history": [
+    {"file": "README.md", "date": "2026-04-28", "findings": 2, "fixes": ["removed stale 'no direct communication' claim (comms layer shipped)", "renamed '3-branch architecture' to 'State branch isolation' with accurate description"]}
+  ],
   "doc_inventory": {
-    "README.md": {"last_scanned": null, "status": "unknown"},
+    "README.md": {"last_scanned": "2026-04-28", "status": "current"},
     "SKILL.md": {"last_scanned": null, "status": "unknown"},
     "docs/ARCHITECTURE.md": {"last_scanned": null, "status": "unknown"},
     "docs/sub-skill-guide.md": {"last_scanned": null, "status": "unknown"},
