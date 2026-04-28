@@ -971,12 +971,15 @@ def transition(number, from_status, to_status, role=None, force=False):
     if to_label == "status:pending-ship":
         _convert_draft_pr_to_ready(number)
 
-    # Auto-close on shipped
+    # Auto-close on shipped (handle already-closed from GitHub auto-close #3747)
     if to_label == "status:shipped":
         if adapter:
             adapter.close_issue(number)
         else:
-            _run_list(["gh", "issue", "close", str(number)])
+            result = _run_list(["gh", "issue", "close", str(number)], check=False)
+            if result.returncode != 0 and "already closed" not in result.stderr.lower():
+                print(f"WARNING: gh issue close #{number} failed: {result.stderr.strip()}",
+                      file=sys.stderr)
 
     print(f"#{number}: {from_label} -> {to_label}")
     return True

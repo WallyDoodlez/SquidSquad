@@ -233,11 +233,12 @@ class TestPrCreate:
 class TestPrMerge:
     @patch("git_ops._run_list")
     def test_successful_squash_merge(self, mock_run):
-        # First call: check state → OPEN, second: merge → success, third: branch name lookup
+        # Calls: 1) check state, 2) merge, 3) branch name lookup, 4) ship transition
         mock_run.side_effect = [
             _mock_result(stdout='{"state": "OPEN"}'),
             _mock_result(stdout=""),
             _mock_result(stdout='{"headRefName": "squidsquad/skill/42"}'),
+            _mock_result(stdout="#42: status:pending-ship -> status:shipped"),
         ]
         success, msg = git_ops.pr_merge(42)
         assert success is True
@@ -246,6 +247,25 @@ class TestPrMerge:
         merge_call = mock_run.call_args_list[1]
         assert "--squash" in merge_call[0][0]
         assert "--delete-branch" in merge_call[0][0]
+
+    @patch("git_ops._run_list")
+    def test_merge_triggers_ship_transition(self, mock_run):
+        """#3747: pr-merge must trigger ship transition for linked issues."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN"}'),
+            _mock_result(stdout=""),
+            _mock_result(stdout='{"headRefName": "squidsquad/skill/99"}'),
+            _mock_result(stdout="#99: status:pending-ship -> status:shipped"),
+        ]
+        git_ops.pr_merge(99)
+        # 4th call should be tracker.py transition
+        ship_call = mock_run.call_args_list[3]
+        ship_cmd = ship_call[0][0]
+        assert "tracker.py" in str(ship_cmd)
+        assert "transition" in ship_cmd
+        assert "99" in ship_cmd
+        assert "pending-ship" in ship_cmd
+        assert "shipped" in ship_cmd
 
     @patch("git_ops._run_list")
     def test_already_merged(self, mock_run):

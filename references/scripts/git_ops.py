@@ -294,7 +294,19 @@ def pr_merge(pr_number, strategy="squash"):
                 parts = branch_name.split("/")
                 if len(parts) >= 3 and parts[0] == "squidsquad" and parts[2].isdigit():
                     issue_num = parts[2]
-                    print(f"PR linked to #{issue_num} — GitHub auto-close will handle issue state")
+                    # Run ship transition so labels + counter stay in sync
+                    # even when GitHub auto-close fires first (#3747)
+                    ship_result = _run_list(
+                        [sys.executable, str(SCRIPT_DIR / "tracker.py"),
+                         "transition", issue_num, "pending-ship", "shipped",
+                         "--role", "dm-lead", "--force"],
+                        check=False,
+                    )
+                    if ship_result.returncode == 0:
+                        print(f"PR linked to #{issue_num} — ship transition applied")
+                    else:
+                        print(f"PR linked to #{issue_num} — ship transition skipped: "
+                              f"{ship_result.stderr.strip()}")
             except (json.JSONDecodeError, AttributeError, IndexError):
                 pass
         return True, "merged"
