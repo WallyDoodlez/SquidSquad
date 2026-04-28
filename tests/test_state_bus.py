@@ -218,6 +218,14 @@ class TestIsStateFile:
     def test_planning_is_not_state(self):
         assert state_bus.is_state_file("pm/planning/FEAT-PM-123-CONTEXT.md") is False
 
+    def test_iterations_dir_no_trailing_slash(self):
+        """#3664 QA fix: bare dir path without trailing slash must match."""
+        assert state_bus.is_state_file("skill/iterations") is True
+
+    def test_diagnostics_dir_no_trailing_slash(self):
+        """#3664 QA fix: bare dir path without trailing slash must match."""
+        assert state_bus.is_state_file("diagnostics") is True
+
 
 class TestStatePath:
     """#3664: state_path resolves to worktree for state files, .squidsquad/ for others."""

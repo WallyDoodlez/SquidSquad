@@ -151,26 +151,29 @@ def init():
 # Path resolution — state files vs main files (#3664)
 # ---------------------------------------------------------------------------
 
-# Patterns for files that belong on the state branch (high-churn agent state).
+# Directory and file names that belong on the state branch (high-churn agent state).
 # Everything else stays on main (code, templates, config, vault, planning).
-_STATE_PATTERNS = (
-    "iterations/",        # .squidsquad/<role>/iterations/
-    "working-state.md",   # .squidsquad/<role>/working-state.md
-    "scan-history.md",    # .squidsquad/<role>/scan-history.md
-    "diagnostics/",       # .squidsquad/diagnostics/
-)
+_STATE_DIRS = {"iterations", "diagnostics"}
+_STATE_FILES = {"working-state.md", "scan-history.md"}
 
 
 def is_state_file(rel_path):
-    """Return True if rel_path (relative to .squidsquad/) is a state-branch file."""
-    rel = str(rel_path).replace("\\", "/")
-    for pattern in _STATE_PATTERNS:
-        if pattern.endswith("/"):
-            if f"/{pattern}" in f"/{rel}" or rel.startswith(pattern):
-                return True
-        else:
-            if rel.endswith(pattern) or f"/{pattern}" in f"/{rel}":
-                return True
+    """Return True if rel_path (relative to .squidsquad/) is a state-branch file.
+
+    Matches directory names and file basenames in path segments, handling
+    paths with or without trailing slashes (e.g. "skill/iterations",
+    "skill/iterations/iter-1.md", "diagnostics/diagnostic.jsonl").
+    """
+    rel = str(rel_path).replace("\\", "/").rstrip("/")
+    parts = rel.split("/")
+    # Check if any path segment is a state directory
+    for part in parts:
+        if part in _STATE_DIRS:
+            return True
+    # Check if the filename is a state file
+    basename = parts[-1] if parts else ""
+    if basename in _STATE_FILES:
+        return True
     return False
 
 
