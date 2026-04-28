@@ -474,15 +474,20 @@ def boot_role(role_name: str, target_root: Path = None) -> list:
     return outputs
 
 
-def boot_all() -> list:
-    """Generate boot scripts for all configured roles."""
+def _collect_all_roles() -> list:
+    """Return all configured roles: dev-agents from config + pm + dm (if present)."""
     agents = _read_config_value("dev-agents") or ""
     roles = [r.strip() for r in agents.split(",") if r.strip()]
     roles.append("pm")  # PM always present
-    # Add DM if directory exists
     dm_dir = REPO_ROOT / ".squidsquad" / "dm"
     if dm_dir.exists():
         roles.append("dm")
+    return roles
+
+
+def boot_all() -> list:
+    """Generate boot scripts for all configured roles."""
+    roles = _collect_all_roles()
     all_outputs = []
     for role in roles:
         outputs = boot_role(role)
@@ -526,13 +531,7 @@ def main():
 
     elif cmd == "deploy-all":
         # Deploy all configured agents
-        agents = _read_config_value("dev-agents") or ""
-        roles = [r.strip() for r in agents.split(",") if r.strip()]
-        roles.append("pm")  # PM always present
-        # Add DM if directory exists
-        dm_dir = REPO_ROOT / ".squidsquad" / "dm"
-        if dm_dir.exists():
-            roles.append("dm")
+        roles = _collect_all_roles()
         failed = []
         for role in roles:
             try:
