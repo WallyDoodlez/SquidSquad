@@ -10,3 +10,5 @@
 {"timestamp": 1777374190.9926195, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
 {"timestamp": 1777374190.9926195, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
 {"timestamp": 1777374190.9926195, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777382662.73983, "task_type": "research", "task_id": "TEST-001", "model": "gpt-5.2", "provider": "openai", "action": "success", "response_length": 8313, "elapsed_seconds": 49.3}
+{"timestamp": 1777383025.5282652, "task_type": "research", "task_id": "DEBUG-002", "model": "gpt-5.2", "provider": "openai", "action": "success", "response_length": 2678, "elapsed_seconds": 28.9}
