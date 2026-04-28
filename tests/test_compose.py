@@ -482,3 +482,41 @@ class TestReadConfigValue:
         with patch.dict("sys.modules", {"config": mock_config}):
             result = compose._read_config_value("bad-field")
         assert result == ""
+
+
+# ---------------------------------------------------------------------------
+# _collect_all_roles
+# ---------------------------------------------------------------------------
+
+class TestCollectAllRoles:
+    def test_includes_dev_agents_and_pm(self, tmp_path):
+        with patch.object(compose, "_read_config_value", return_value="skill,be"), \
+             patch.object(compose, "REPO_ROOT", tmp_path):
+            roles = compose._collect_all_roles()
+        assert roles == ["skill", "be", "pm"]
+
+    def test_includes_dm_when_dir_exists(self, tmp_path):
+        (tmp_path / ".squidsquad" / "dm").mkdir(parents=True)
+        with patch.object(compose, "_read_config_value", return_value="skill"), \
+             patch.object(compose, "REPO_ROOT", tmp_path):
+            roles = compose._collect_all_roles()
+        assert roles == ["skill", "pm", "dm"]
+
+    def test_no_dm_when_dir_missing(self, tmp_path):
+        with patch.object(compose, "_read_config_value", return_value="skill"), \
+             patch.object(compose, "REPO_ROOT", tmp_path):
+            roles = compose._collect_all_roles()
+        assert "dm" not in roles
+
+    def test_empty_dev_agents(self, tmp_path):
+        with patch.object(compose, "_read_config_value", return_value=""), \
+             patch.object(compose, "REPO_ROOT", tmp_path):
+            roles = compose._collect_all_roles()
+        assert roles == ["pm"]
+
+    def test_strips_whitespace_from_agent_names(self, tmp_path):
+        with patch.object(compose, "_read_config_value", return_value=" skill , be "), \
+             patch.object(compose, "REPO_ROOT", tmp_path):
+            roles = compose._collect_all_roles()
+        assert roles[0] == "skill"
+        assert roles[1] == "be"
