@@ -20,11 +20,9 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
-DIAGNOSTICS_DIR = REPO_ROOT / ".squidsquad" / "diagnostics"
-LOG_FILE = DIAGNOSTICS_DIR / "diagnostic.jsonl"
 MAX_LOG_BYTES = 1_000_000  # 1MB cap
 
-# Import config reader
+# Import config reader and state_bus path resolution (#3664)
 sys.path.insert(0, str(SCRIPT_DIR))
 try:
     from config import get_field, _read_config
@@ -33,6 +31,13 @@ except ImportError:
         return None
     def _read_config():
         return ""
+
+try:
+    from state_bus import state_path as _state_path
+    DIAGNOSTICS_DIR = _state_path("diagnostics")
+except ImportError:
+    DIAGNOSTICS_DIR = REPO_ROOT / ".squidsquad" / "diagnostics"
+LOG_FILE = DIAGNOSTICS_DIR / "diagnostic.jsonl"
 
 
 def log_entry(severity, source, message, context=None):

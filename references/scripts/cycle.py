@@ -27,6 +27,14 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 SQUIDSQUAD_DIR = REPO_ROOT / ".squidsquad"
 
+# Import state_bus for path resolution (#3664)
+sys.path.insert(0, str(SCRIPT_DIR))
+try:
+    from state_bus import state_path as _state_path
+except ImportError:
+    def _state_path(rel):
+        return SQUIDSQUAD_DIR / rel
+
 
 def _now():
     """Get current local time."""
@@ -68,7 +76,7 @@ def status_bar(role, phase, description=""):
 
 
 def _get_working_state_path(role):
-    return SQUIDSQUAD_DIR / role / "working-state.md"
+    return _state_path(f"{role}/working-state.md")
 
 
 def get_counter(role):
@@ -125,7 +133,7 @@ def log_iteration(role, n, quiet=False, work=None, notes="",
     Legacy params (bugs/features/issues/tasks/tests) are converted to work bullets.
     """
     ts = _now().strftime("%Y-%m-%d %H:%M")
-    iter_dir = SQUIDSQUAD_DIR / role / "iterations"
+    iter_dir = _state_path(f"{role}/iterations")
     iter_dir.mkdir(parents=True, exist_ok=True)
     path = iter_dir / f"iter-{n}.md"
 
@@ -168,7 +176,7 @@ def log_iteration(role, n, quiet=False, work=None, notes="",
 
 def cleanup_iterations(role, keep=20):
     """Remove oldest iteration files, keeping the most recent `keep` count."""
-    iter_dir = SQUIDSQUAD_DIR / role / "iterations"
+    iter_dir = _state_path(f"{role}/iterations")
     if not iter_dir.exists():
         return 0
 

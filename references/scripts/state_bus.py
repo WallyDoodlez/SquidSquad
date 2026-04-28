@@ -147,6 +147,61 @@ def init():
     return 0
 
 
+# ---------------------------------------------------------------------------
+# Path resolution — state files vs main files (#3664)
+# ---------------------------------------------------------------------------
+
+# Directory and file names that belong on the state branch (high-churn agent state).
+# Everything else stays on main (code, templates, config, vault, planning).
+_STATE_DIRS = {"iterations", "diagnostics"}
+_STATE_FILES = {"working-state.md", "scan-history.md"}
+
+
+def is_state_file(rel_path):
+    """Return True if rel_path (relative to .squidsquad/) is a state-branch file.
+
+    Matches directory names and file basenames in path segments, handling
+    paths with or without trailing slashes (e.g. "skill/iterations",
+    "skill/iterations/iter-1.md", "diagnostics/diagnostic.jsonl").
+    """
+    rel = str(rel_path).replace("\\", "/").rstrip("/")
+    parts = rel.split("/")
+    # Check if any path segment is a state directory
+    for part in parts:
+        if part in _STATE_DIRS:
+            return True
+    # Check if the filename is a state file
+    basename = parts[-1] if parts else ""
+    if basename in _STATE_FILES:
+        return True
+    return False
+
+
+def state_path(rel_path):
+    """Resolve a .squidsquad/ relative path to its actual filesystem location.
+
+    If the path is a state file AND the state worktree exists, returns the
+    path under .squidsquad-state/. Otherwise returns the path under
+    .squidsquad/ (graceful fallback for old installs or non-state files).
+
+    Args:
+        rel_path: path relative to .squidsquad/ (e.g. "skill/iterations/iter-1.md")
+
+    Returns:
+        Path object to the resolved location.
+    """
+    if is_state_file(rel_path) and _worktree_exists():
+        return STATE_WORKTREE / rel_path
+    return REPO_ROOT / ".squidsquad" / rel_path
+
+
+def state_dir(rel_path):
+    """Like state_path but ensures the parent directory exists."""
+    p = state_path(rel_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
 def read_file(path):
     """Read a file from the state worktree."""
     if not _worktree_exists():

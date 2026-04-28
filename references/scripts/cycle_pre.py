@@ -33,6 +33,14 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 SQUID_DIR = REPO_ROOT / ".squidsquad"
 
+# Import state_bus for path resolution (#3664)
+sys.path.insert(0, str(SCRIPT_DIR))
+try:
+    from state_bus import state_path as _state_path
+except ImportError:
+    def _state_path(rel):
+        return SQUID_DIR / rel
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -131,7 +139,7 @@ def _read_context_pressure(role):
 
 def _read_working_state(role):
     """Parse working-state.md into structured data."""
-    ws_path = SQUID_DIR / role / "working-state.md"
+    ws_path = _state_path(f"{role}/working-state.md")
     raw = _read_file(ws_path)
 
     task = "none"
@@ -202,7 +210,7 @@ def _read_working_state(role):
 
 def _get_cycle_number(role):
     """Compute next cycle number from existing iteration logs."""
-    iter_dir = SQUID_DIR / role / "iterations"
+    iter_dir = _state_path(f"{role}/iterations")
     if not iter_dir.exists():
         return 1
 

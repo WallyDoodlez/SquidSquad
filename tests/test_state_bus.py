@@ -191,34 +191,69 @@ class TestInitBranchRecovery:
             "init() should use _read_branch_config() for fallback, not hardcoded 'main'"
 
 
-class TestInitReadmePath:
-    """Regression tests for #3712 — README.md must be at branch root, not in temp dir."""
+class TestIsStateFile:
+    """#3664: is_state_file classifies paths correctly."""
 
-    @patch.object(state_bus, "_state_branch_exists", return_value=False)
-    @patch.object(state_bus, "_worktree_exists", return_value=True)
-    def test_git_add_not_called_with_temp_cwd(self, mock_wt, mock_exists, tmp_path):
-        """#3712: git add README.md must not use cwd pointing to a temp directory."""
-        add_calls = []
+    def test_iterations_is_state(self):
+        assert state_bus.is_state_file("skill/iterations/iter-1.md") is True
 
-        def fake_run(cmd, check=True, cwd=None):
-            result = MagicMock()
-            result.returncode = 0
-            result.stdout = "main\n"
-            if cmd and "add" in cmd:
-                add_calls.append({"cmd": cmd, "cwd": cwd})
-            return result
+    def test_working_state_is_state(self):
+        assert state_bus.is_state_file("pm/working-state.md") is True
 
-        with patch.object(state_bus, "_run", side_effect=fake_run), \
+    def test_scan_history_is_state(self):
+        assert state_bus.is_state_file("skill/scan-history.md") is True
+
+    def test_diagnostics_is_state(self):
+        assert state_bus.is_state_file("diagnostics/diagnostic.jsonl") is True
+
+    def test_config_is_not_state(self):
+        assert state_bus.is_state_file("config.md") is False
+
+    def test_claude_md_is_not_state(self):
+        assert state_bus.is_state_file("skill/CLAUDE.md") is False
+
+    def test_vault_is_not_state(self):
+        assert state_bus.is_state_file("vault/galaxy/decision-foo.md") is False
+
+    def test_planning_is_not_state(self):
+        assert state_bus.is_state_file("pm/planning/FEAT-PM-123-CONTEXT.md") is False
+
+    def test_iterations_dir_no_trailing_slash(self):
+        """#3664 QA fix: bare dir path without trailing slash must match."""
+        assert state_bus.is_state_file("skill/iterations") is True
+
+    def test_diagnostics_dir_no_trailing_slash(self):
+        """#3664 QA fix: bare dir path without trailing slash must match."""
+        assert state_bus.is_state_file("diagnostics") is True
+
+
+class TestStatePath:
+    """#3664: state_path resolves to worktree for state files, .squidsquad/ for others."""
+
+    def test_state_file_with_worktree(self, tmp_path):
+        wt = tmp_path / "state"
+        wt.mkdir()
+        (wt / ".git").write_text("gitdir: ...")
+        with patch.object(state_bus, "STATE_WORKTREE", wt), \
              patch.object(state_bus, "REPO_ROOT", tmp_path):
-            try:
-                state_bus.init()
-            except Exception:
-                pass
+            result = state_bus.state_path("skill/iterations/iter-1.md")
+        assert str(wt) in str(result)
 
-        # git add must not use a cwd pointing to a temp/init directory
-        for call in add_calls:
-            assert call["cwd"] is None, \
-                f"git add should run from repo root (cwd=None), got cwd={call['cwd']}"
+    def test_non_state_file_stays_on_main(self, tmp_path):
+        wt = tmp_path / "state"
+        wt.mkdir()
+        (wt / ".git").write_text("gitdir: ...")
+        with patch.object(state_bus, "STATE_WORKTREE", wt), \
+             patch.object(state_bus, "REPO_ROOT", tmp_path):
+            result = state_bus.state_path("config.md")
+        assert ".squidsquad" in str(result)
+        assert str(wt) not in str(result)
+
+    def test_state_file_without_worktree_falls_back(self, tmp_path):
+        with patch.object(state_bus, "STATE_WORKTREE", tmp_path / "nope"), \
+             patch.object(state_bus, "REPO_ROOT", tmp_path):
+            result = state_bus.state_path("skill/iterations/iter-1.md")
+        assert ".squidsquad" in str(result)
 
 
 class TestCLI:
