@@ -327,3 +327,54 @@ class TestCommitPushUsesWorkingBranch:
         checkout_calls = [c for c in calls if isinstance(c, list) and "checkout" in c]
         assert any("develop" in c for c in checkout_calls)
         assert not any(c == ["git", "checkout", "main"] for c in calls if isinstance(c, list))
+
+
+# ---------------------------------------------------------------------------
+# Stop-after-cycle sentinel (#3807)
+# ---------------------------------------------------------------------------
+
+class TestStopAfterCycleCheck:
+    """Regression tests for #3807: universal sentinel-based restart."""
+
+    def test_writes_sentinel_on_context_pressure(self, patch_dirs, squid_dir):
+        """cycle_post writes .stop-after-cycle when context pressure exceeded."""
+        data = {
+            "context_pressure": {"used_pct": 85, "threshold": 70, "exceeded": True},
+        }
+        result = cycle_post._do_stop_after_cycle_check(data, "skill")
+        assert result is True
+        sentinel = squid_dir / "skill" / ".stop-after-cycle"
+        assert sentinel.exists()
+        assert "85%" in sentinel.read_text(encoding="utf-8")
+
+    def test_no_sentinel_below_threshold(self, patch_dirs, squid_dir):
+        """No sentinel written when context pressure is below threshold."""
+        data = {
+            "context_pressure": {"used_pct": 50, "threshold": 70, "exceeded": False},
+        }
+        result = cycle_post._do_stop_after_cycle_check(data, "skill")
+        assert result is False
+        sentinel = squid_dir / "skill" / ".stop-after-cycle"
+        assert not sentinel.exists()
+
+    def test_detects_external_sentinel(self, patch_dirs, squid_dir):
+        """Detects externally written .stop-after-cycle (e.g. start_team.py --reboot)."""
+        sentinel = squid_dir / "skill" / ".stop-after-cycle"
+        sentinel.write_text("reboot via start_team.py", encoding="utf-8")
+        data = {"context_pressure": {"used_pct": 10, "threshold": 70, "exceeded": False}}
+        result = cycle_post._do_stop_after_cycle_check(data, "skill")
+        assert result is True
+
+    def test_no_context_pressure_data(self, patch_dirs, squid_dir):
+        """No crash when context_pressure is missing from data."""
+        data = {}
+        result = cycle_post._do_stop_after_cycle_check(data, "skill")
+        assert result is False
+
+    def test_legacy_restart_sentinel_still_works(self, patch_dirs, squid_dir):
+        """Backward compat: restart_needed still writes .restart."""
+        data = {"restart_needed": True, "restart_reason": "context pressure at 80%"}
+        result = cycle_post._do_restart_sentinel(data, "skill")
+        assert result is True
+        sentinel = squid_dir / "skill" / ".restart"
+        assert sentinel.exists()

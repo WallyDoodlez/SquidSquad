@@ -64,7 +64,6 @@ $PidFile = "$RoleDir/.pid"
 $RestartSentinel = "$RoleDir/.restart"
 $StateFile = "$RoleDir/current-state"
 $HealthFile = "$RoleDir/.health"
-$ClaudePidFile = "$RoleDir/.claude-pid"
 
 if (-not (Test-Path $RoleDir)) { New-Item -ItemType Directory -Path $RoleDir -Force | Out-Null }
 
@@ -140,51 +139,80 @@ $heartbeatJob = Start-Job -ScriptBlock {
 $cleanupBlock = {
     if ($heartbeatJob) { Stop-Job $heartbeatJob -ErrorAction SilentlyContinue; Remove-Job $heartbeatJob -ErrorAction SilentlyContinue }
     Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
-    Remove-Item $ClaudePidFile -Force -ErrorAction SilentlyContinue
     Write-Health "dead"
 }
 
+$StopSentinel = "$RoleDir/.stop"
+$StopAfterCycleSentinel = "$RoleDir/.stop-after-cycle"
+
 try {
-    # --- Spawn claude ---
-    Set-Content -Path $StateFile -Value "idle|Initializing..."
+    # --- Wrapper loop: respawn indefinitely, .stop is the only brake ---
+    $consecutiveCrashes = 0
+    $maxCrashes = 5
 
-    $claudeProcess = Start-Process -FilePath "claude.exe" `
-        -ArgumentList "--dangerously-skip-permissions", "--name", "`"$AgentName`"", "--append-system-prompt", "`"SQUIDSQUAD_ROLE={{ROLE}}`"", "start the loop" `
-        -NoNewWindow -PassThru
-    $claudeProcess.Id | Out-File -FilePath $ClaudePidFile -Encoding ascii -NoNewline
-
-    $claudeProcess.WaitForExit()
-    $exitCode = $claudeProcess.ExitCode
-
-    # --- Check restart sentinel ---
-    if (Test-Path $RestartSentinel) {
-        $reason = (Get-Content $RestartSentinel -ErrorAction SilentlyContinue).Trim()
-        Remove-Item $RestartSentinel -Force -ErrorAction SilentlyContinue
-        Write-Host "[SquidSquad] Restart requested: $reason. Respawning..."
-        Set-Content -Path $StateFile -Value "restarting|$reason"
-        Start-Sleep -Seconds 2
+    while ($true) {
+        Set-Content -Path $StateFile -Value "idle|Initializing..."
 
         $claudeProcess = Start-Process -FilePath "claude.exe" `
             -ArgumentList "--dangerously-skip-permissions", "--name", "`"$AgentName`"", "--append-system-prompt", "`"SQUIDSQUAD_ROLE={{ROLE}}`"", "start the loop" `
             -NoNewWindow -PassThru
-        $claudeProcess.Id | Out-File -FilePath $ClaudePidFile -Encoding ascii -NoNewline
+
         $claudeProcess.WaitForExit()
+        $exitCode = $claudeProcess.ExitCode
+
+        # --- Check .stop-after-cycle sentinel (new universal mechanism) ---
+        if (Test-Path $StopAfterCycleSentinel) {
+            $reason = (Get-Content $StopAfterCycleSentinel -ErrorAction SilentlyContinue).Trim()
+            Remove-Item $StopAfterCycleSentinel -Force -ErrorAction SilentlyContinue
+
+            # If .stop also exists, exit permanently
+            if (Test-Path $StopSentinel) {
+                Write-Host "[SquidSquad] .stop-after-cycle + .stop detected. Agent {{ROLE}} stopped permanently."
+                break
+            }
+
+            Write-Host "[SquidSquad] .stop-after-cycle: $reason. Respawning..."
+            Write-Health "restarting"
+            Set-Content -Path $StateFile -Value "restarting|$reason"
+            $consecutiveCrashes = 0
+            Start-Sleep -Seconds 2
+            continue
+        }
+
+        # --- Check legacy .restart sentinel (backward compat — remove next version) ---
+        if (Test-Path $RestartSentinel) {
+            $reason = (Get-Content $RestartSentinel -ErrorAction SilentlyContinue).Trim()
+            Remove-Item $RestartSentinel -Force -ErrorAction SilentlyContinue
+            Write-Host "[SquidSquad] DEPRECATED: .restart sentinel detected. Use .stop-after-cycle instead. Respawning..."
+            Write-Health "restarting"
+            Set-Content -Path $StateFile -Value "restarting|$reason"
+            $consecutiveCrashes = 0
+            Start-Sleep -Seconds 2
+            continue
+        }
+
+        # --- Clean exit without sentinel: wrapper stops ---
+        if ($exitCode -eq 0) {
+            Write-Host "[SquidSquad] Agent {{ROLE}} exited cleanly (no sentinel). Wrapper stopping."
+            break
+        }
+
+        # --- Crash handling with exponential backoff ---
+        $consecutiveCrashes++
+        if ($consecutiveCrashes -ge $maxCrashes) {
+            Write-Host "[SquidSquad] Agent {{ROLE}} crashed $consecutiveCrashes times consecutively. Writing .stop and exiting."
+            Write-Health "error|$consecutiveCrashes consecutive crashes"
+            Set-Content -Path $StopSentinel -Value "auto-stopped after $consecutiveCrashes crashes"
+            break
+        }
+
+        $backoff = [math]::Min([math]::Pow(2, $consecutiveCrashes), 300)
+        Write-Host "[SquidSquad] Crash detected (exit $exitCode, attempt $consecutiveCrashes/$maxCrashes). Retrying in ${backoff}s..."
+        Write-Health "backoff"
+        Start-Sleep -Seconds $backoff
     }
 
-    # --- One crash retry (runtime < 30s) ---
-    if ($exitCode -ne 0) {
-        # Simple retry — wrapper exits after this
-        Write-Host "[SquidSquad] Crash detected (exit $exitCode). One retry..."
-        Start-Sleep -Seconds 2
-
-        $claudeProcess = Start-Process -FilePath "claude.exe" `
-            -ArgumentList "--dangerously-skip-permissions", "--name", "`"$AgentName`"", "--append-system-prompt", "`"SQUIDSQUAD_ROLE={{ROLE}}`"", "start the loop" `
-            -NoNewWindow -PassThru
-        $claudeProcess.Id | Out-File -FilePath $ClaudePidFile -Encoding ascii -NoNewline
-        $claudeProcess.WaitForExit()
-    }
-
-    Write-Host "[SquidSquad] Agent {{ROLE}} exited. Wrapper stopping."
+    Write-Host "[SquidSquad] Wrapper for {{ROLE}} exiting."
 } finally {
     & $cleanupBlock
 }

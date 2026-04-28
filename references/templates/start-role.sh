@@ -52,7 +52,6 @@ PID_FILE="$ROLE_DIR/.pid"
 RESTART_SENTINEL="$ROLE_DIR/.restart"
 STATE_FILE="$ROLE_DIR/current-state"
 HEALTH_FILE="$ROLE_DIR/.health"
-CLAUDE_PID_FILE="$ROLE_DIR/.claude-pid"
 
 mkdir -p "$ROLE_DIR"
 
@@ -116,7 +115,7 @@ HEARTBEAT_PID=""
 cleanup() {
   [ -n "$CHILD_PID" ] && kill "$CHILD_PID" 2>/dev/null || true
   [ -n "$HEARTBEAT_PID" ] && kill "$HEARTBEAT_PID" 2>/dev/null || true
-  rm -f "$PID_FILE" "$CLAUDE_PID_FILE"
+  rm -f "$PID_FILE"
   write_health "dead"
 }
 trap cleanup EXIT
@@ -149,50 +148,76 @@ trap 'echo "[SquidSquad] SIGTERM — stopping."; exit 0' TERM
 ) &
 HEARTBEAT_PID=$!
 
-# --- Spawn claude ---
-HAS_CRASHED=false
+# --- Sentinel paths ---
+STOP_SENTINEL="$ROLE_DIR/.stop"
+STOP_AFTER_CYCLE_SENTINEL="$ROLE_DIR/.stop-after-cycle"
 
-rm -f "$STATE_FILE"
-echo "idle|Initializing..." > "$STATE_FILE"
+# --- Wrapper loop: respawn indefinitely, .stop is the only brake ---
+CONSECUTIVE_CRASHES=0
+MAX_CRASHES=5
 
-claude --dangerously-skip-permissions --name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE={{ROLE}}" "start the loop" &
-CHILD_PID=$!
-echo "$CHILD_PID" > "$CLAUDE_PID_FILE"
+while true; do
+  rm -f "$STATE_FILE"
+  echo "idle|Initializing..." > "$STATE_FILE"
 
-wait "$CHILD_PID"
-EXIT_CODE=$?
-CHILD_PID=""
-END_EPOCH=$(date +%s)
-START_EPOCH=$(cat "$HEALTH_FILE" 2>/dev/null | head -1)
-START_EPOCH=${START_EPOCH:-$END_EPOCH}
-
-# --- Check restart sentinel ---
-if [ -f "$RESTART_SENTINEL" ]; then
-  REASON=$(cat "$RESTART_SENTINEL" 2>/dev/null || echo "unknown")
-  rm -f "$RESTART_SENTINEL"
-  echo "[SquidSquad] Restart requested: $REASON. Respawning..."
-  echo "restarting|$REASON" > "$STATE_FILE"
-  sleep 2
   claude --dangerously-skip-permissions --name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE={{ROLE}}" "start the loop" &
   CHILD_PID=$!
-  echo "$CHILD_PID" > "$CLAUDE_PID_FILE"
+
   wait "$CHILD_PID"
+  EXIT_CODE=$?
   CHILD_PID=""
-fi
 
-# --- One crash retry (if runtime < 30s and no sentinel) ---
-if [ "$EXIT_CODE" -ne 0 ] && [ "$HAS_CRASHED" = false ]; then
-  RUNTIME=$((END_EPOCH - START_EPOCH))
-  if [ "$RUNTIME" -lt 30 ] 2>/dev/null; then
-    HAS_CRASHED=true
-    echo "[SquidSquad] Crash detected (${RUNTIME}s, exit $EXIT_CODE). One retry..."
+  # --- Check .stop-after-cycle sentinel (new universal mechanism) ---
+  if [ -f "$STOP_AFTER_CYCLE_SENTINEL" ]; then
+    REASON=$(cat "$STOP_AFTER_CYCLE_SENTINEL" 2>/dev/null || echo "unknown")
+    rm -f "$STOP_AFTER_CYCLE_SENTINEL"
+
+    # If .stop also exists, exit permanently
+    if [ -f "$STOP_SENTINEL" ]; then
+      echo "[SquidSquad] .stop-after-cycle + .stop detected. Agent {{ROLE}} stopped permanently."
+      break
+    fi
+
+    echo "[SquidSquad] .stop-after-cycle: $REASON. Respawning..."
+    write_health "restarting"
+    echo "restarting|$REASON" > "$STATE_FILE"
+    CONSECUTIVE_CRASHES=0
     sleep 2
-    claude --dangerously-skip-permissions --name "$AGENT_NAME" --append-system-prompt "SQUIDSQUAD_ROLE={{ROLE}}" "start the loop" &
-    CHILD_PID=$!
-    echo "$CHILD_PID" > "$CLAUDE_PID_FILE"
-    wait "$CHILD_PID"
-    CHILD_PID=""
+    continue
   fi
-fi
 
-echo "[SquidSquad] Agent {{ROLE}} exited. Wrapper stopping."
+  # --- Check legacy .restart sentinel (backward compat — remove next version) ---
+  if [ -f "$RESTART_SENTINEL" ]; then
+    REASON=$(cat "$RESTART_SENTINEL" 2>/dev/null || echo "unknown")
+    rm -f "$RESTART_SENTINEL"
+    echo "[SquidSquad] DEPRECATED: .restart sentinel detected. Use .stop-after-cycle instead. Respawning..."
+    write_health "restarting"
+    echo "restarting|$REASON" > "$STATE_FILE"
+    CONSECUTIVE_CRASHES=0
+    sleep 2
+    continue
+  fi
+
+  # --- Clean exit without sentinel: wrapper stops ---
+  if [ "$EXIT_CODE" -eq 0 ]; then
+    echo "[SquidSquad] Agent {{ROLE}} exited cleanly (no sentinel). Wrapper stopping."
+    break
+  fi
+
+  # --- Crash handling with exponential backoff ---
+  CONSECUTIVE_CRASHES=$((CONSECUTIVE_CRASHES + 1))
+  if [ "$CONSECUTIVE_CRASHES" -ge "$MAX_CRASHES" ]; then
+    echo "[SquidSquad] Agent {{ROLE}} crashed $CONSECUTIVE_CRASHES times consecutively. Writing .stop and exiting."
+    write_health "error|$CONSECUTIVE_CRASHES consecutive crashes"
+    echo "auto-stopped after $CONSECUTIVE_CRASHES crashes" > "$STOP_SENTINEL"
+    break
+  fi
+
+  BACKOFF=$((2 ** CONSECUTIVE_CRASHES))
+  [ "$BACKOFF" -gt 300 ] && BACKOFF=300
+  echo "[SquidSquad] Crash detected (exit $EXIT_CODE, attempt $CONSECUTIVE_CRASHES/$MAX_CRASHES). Retrying in ${BACKOFF}s..."
+  write_health "backoff"
+  sleep "$BACKOFF"
+done
+
+echo "[SquidSquad] Wrapper for {{ROLE}} exiting."

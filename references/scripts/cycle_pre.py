@@ -437,18 +437,10 @@ def _build_pm_input(role):
     config = _read_config_flags()
     config["ship_threshold"] = int(_config_get("ship-threshold") or "10")
     config["shipped_since_bump"] = int(_config_get("shipped-since-bump") or "0")
-    # Boot detection — call boot_remote.py and capture results (#2724)
+    # Boot detection — DEPRECATED (#3807). PM no longer auto-boots agents.
+    # Wrapper handles all respawning via .stop-after-cycle sentinel.
+    # Field kept as empty list for backward compat until all agents redeployed.
     boot_results = []
-    boot_result = _run_script("boot_remote.py", "--all", "--dry-run", "--json")
-    try:
-        if boot_result.stdout.strip():
-            boot_data = json.loads(boot_result.stdout)
-            if isinstance(boot_data, list):
-                boot_results = boot_data
-            elif isinstance(boot_data, dict):
-                boot_results = [boot_data]
-    except (json.JSONDecodeError, ValueError):
-        pass
 
     # Approved items — dev pushback visibility (#2494)
     approved_items = []
