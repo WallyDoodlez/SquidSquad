@@ -97,21 +97,21 @@ def init():
         )
         original_branch = current_ref.stdout.strip() if current_ref.returncode == 0 else None
 
-        state_dir = REPO_ROOT / ".squidsquad-state-init"
+        readme_path = REPO_ROOT / "README.md"
         try:
             # Create orphan branch with an initial commit
             _run(["git", "checkout", "--orphan", state_branch])
             _run(["git", "rm", "-rf", "--cached", "."], check=False)
             _run(["git", "clean", "-fd"], check=False)
 
-            # Create initial structure
-            state_dir.mkdir(exist_ok=True)
-            (state_dir / "README.md").write_text(
+            # Create initial structure — write directly to repo root
+            # (orphan branch has a clean working tree after rm + clean)
+            readme_path.write_text(
                 "# SquidSquad State Bus\n\n"
                 "This branch stores agent state. Never merge into main.\n",
                 encoding="utf-8",
             )
-            _run(["git", "add", "README.md"], cwd=str(state_dir))
+            _run(["git", "add", "README.md"])
             _run(["git", "commit", "-m", "init: state bus branch"])
             _run(["git", "push", "-u", "origin", state_branch], check=False)
         finally:
@@ -122,10 +122,6 @@ def init():
                     # Last resort: try the configured working branch
                     working_branch, _ = _read_branch_config()
                     _run(["git", "checkout", working_branch], check=False)
-            # Clean up temp directory
-            import shutil
-            if state_dir.exists():
-                shutil.rmtree(state_dir, ignore_errors=True)
     else:
         print(f"State branch '{state_branch}' already exists.")
 

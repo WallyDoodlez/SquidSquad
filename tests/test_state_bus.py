@@ -191,6 +191,36 @@ class TestInitBranchRecovery:
             "init() should use _read_branch_config() for fallback, not hardcoded 'main'"
 
 
+class TestInitReadmePath:
+    """Regression tests for #3712 — README.md must be at branch root, not in temp dir."""
+
+    @patch.object(state_bus, "_state_branch_exists", return_value=False)
+    @patch.object(state_bus, "_worktree_exists", return_value=True)
+    def test_git_add_not_called_with_temp_cwd(self, mock_wt, mock_exists, tmp_path):
+        """#3712: git add README.md must not use cwd pointing to a temp directory."""
+        add_calls = []
+
+        def fake_run(cmd, check=True, cwd=None):
+            result = MagicMock()
+            result.returncode = 0
+            result.stdout = "main\n"
+            if cmd and "add" in cmd:
+                add_calls.append({"cmd": cmd, "cwd": cwd})
+            return result
+
+        with patch.object(state_bus, "_run", side_effect=fake_run), \
+             patch.object(state_bus, "REPO_ROOT", tmp_path):
+            try:
+                state_bus.init()
+            except Exception:
+                pass
+
+        # git add must not use a cwd pointing to a temp/init directory
+        for call in add_calls:
+            assert call["cwd"] is None, \
+                f"git add should run from repo root (cwd=None), got cwd={call['cwd']}"
+
+
 class TestCLI:
     def test_help(self):
         sys.argv = ["state_bus.py", "--help"]
