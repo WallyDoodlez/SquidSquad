@@ -16,9 +16,7 @@ Log the script's output in `pm/qa-log.md`. For any agent reporting stalled (👻
 1. Append a Discussion note to that agent's latest open tracker item.
 2. If no open item exists, log in `qa-log.md` only.
 
-**Context pressure monitoring**: Check each agent's context pressure file. If any agent exceeds threshold:
-- Plan a reboot via DM: `python references/scripts/tracker.py comment [DM_ISSUE] --role pm --message "Agent [role] context pressure at [X]%. Requesting reboot after current cycle."`
-- If DM absent, execute directly: `python references/scripts/reboot_agent.py [role]`
+**Context pressure monitoring**: Check each agent's context pressure file. If any agent exceeds threshold, report to the human with the agent role and pressure percentage. **PM does not execute reboots directly** — agent lifecycle is managed by `start_team.py` and the wrapper scripts.
 
 For programmatic use, the script accepts `--json` for structured output.
 <!-- /sub-skill: health-check -->

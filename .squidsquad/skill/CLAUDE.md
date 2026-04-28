@@ -807,22 +807,21 @@ python references/scripts/git_ops.py commit-push skill "[brief description of wo
 <!-- sub-skill: self-restart -->
 ### Self-Restart (Context Pressure Only)
 
-Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled externally by PM → DM via `reboot_agent.py`.
+Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled externally via `start_team.py --reboot`.
 
 **Context pressure restart flow**:
 1. Step 1b detects context pressure exceeds threshold.
 2. Checkpoint working state to `.squidsquad/skill/working-state.md`.
 3. Complete the current cycle normally.
-4. At cycle end, write the restart reason to `.squidsquad/skill/.restart`:
-   ```bash
-   echo "context pressure at [X]%" > .squidsquad/skill/.restart
-   ```
+4. At cycle end, `cycle_post.py` reads the context pressure from `cycle-input.json` and writes `.squidsquad/skill/.stop-after-cycle` mechanically when pressure exceeds threshold. Agents do not need to set `restart_needed` — the mechanical layer detects and acts.
 5. The wrapper detects the sentinel on exit, deletes it, and respawns.
 
 **You do NOT**:
-- Restart for template changes (DM handles post-ship reboots).
-- Kill or manage other agents (PM coordinates, DM executes).
-- Implement any restart loop logic (wrapper handles one retry on crash).
+- Set `restart_needed` in cycle-output.json (deprecated — `cycle_post.py` detects context pressure mechanically).
+- Write `.stop-after-cycle` directly — `cycle_post.py` handles this mechanically.
+- Restart for template changes (handled externally via `start_team.py --reboot`).
+- Kill or manage other agents (human or `start_team.py` handles this).
+- Implement any restart loop logic (wrapper handles respawn).
 
 Write `idle|` to `current-state` at cycle end so health monitoring works.
 <!-- /sub-skill: self-restart -->
@@ -830,38 +829,39 @@ Write `idle|` to `current-state` at cycle end so health monitoring works.
 <!-- sub-skill: agent-lifecycle -->
 ### Agent Lifecycle
 
-Agent lifecycle is managed by the wrapper script and `reboot_agent.py`. Agents do not manage their own or other agents' processes directly.
+Agent lifecycle is managed by `start_team.py` and the wrapper scripts. Agents do not manage their own or other agents' processes directly.
 
 **Three guarantees**:
 1. **Singleton**: Only one instance per role runs at a time (PID lock file).
-2. **Never kill mid-work**: `reboot_agent.py` waits for the agent to go idle before restarting.
+2. **Graceful stop**: `start_team.py --reboot` writes `.stop-after-cycle` and waits for the agent to finish its current cycle before respawning.
 3. **Start correctly**: Wrapper handles pre-flight checks, branch setup, and heartbeat.
 
 **Heartbeat**: The wrapper writes the current epoch to `.squidsquad/skill/.health` every 5 seconds. Health monitoring reads this — if >10s old, the agent is considered dead.
 
-**Reboot interface** (for PM and DM):
+**Lifecycle interface**:
 ```bash
-# Safe reboot — waits for idle, then restarts
-python references/scripts/reboot_agent.py <role>
+# Start all agents
+python references/scripts/start_team.py --all
 
-# Force reboot — kills immediately
-python references/scripts/reboot_agent.py <role> --force
+# Start single agent
+python references/scripts/start_team.py --role <role>
+
+# Graceful reboot — waits for cycle end, then restarts
+python references/scripts/start_team.py --reboot <role>
 
 # Reboot all agents
-python references/scripts/reboot_agent.py --all
+python references/scripts/start_team.py --reboot --all
 
-# Custom timeout (default 300s)
-python references/scripts/reboot_agent.py <role> --timeout 600
+# Stop agent (permanent until manually restarted)
+python references/scripts/start_team.py --stop <role>
+
+# Stop all agents
+python references/scripts/start_team.py --stop --all
 ```
 
-**Who reboots whom**:
-- **PM** monitors context pressure and detects when agents need rebooting. PM plans reboots.
-- **DM** executes reboots after shipping items that change agent templates/instructions.
-- **PM fallback**: When DM is absent, PM executes reboots directly via `reboot_agent.py`.
-- **Self-restart**: Agents can only self-restart for context pressure (see Self-Restart sub-skill).
-
 **Sentinel files**:
-- `.restart` — reboot request (written by agent for context pressure, or by `reboot_agent.py`)
+- `.stop-after-cycle` — graceful restart request (written by `cycle_post.py` for context pressure, or by `start_team.py --reboot`)
+- `.stop` — permanent stop (written by `start_team.py --stop`, respected by wrapper)
 - `.pid` — singleton lock (written by wrapper)
 - `.health` — heartbeat epoch (written by wrapper every 5s)
 <!-- /sub-skill: agent-lifecycle -->
