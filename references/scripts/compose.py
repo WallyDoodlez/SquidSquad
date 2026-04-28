@@ -404,21 +404,180 @@ def deploy_role(role_name: str, target_root: Path = None) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(header + final, encoding="utf-8")
 
-    # Create SOUL.md from the role directory's template if missing
-    # (never overwrite an existing local SOUL.md — the installed agent may
-    # have customised it). After Q-new22 the SOUL template lives alongside
-    # the role's CLAUDE.md template at references/roles/<role>/SOUL.md.
+    # Assemble SOUL.md from 3 layers if missing (#3465 layered architecture).
+    # Never overwrite an existing local SOUL.md — use upgrade_soul() for that.
     soul_path = target_root / ".squidsquad" / role_name / "SOUL.md"
     if not soul_path.exists():
-        role_identity = _get_entry_file_for_role(role_name)  # 'dev' for variants
-        soul_template = ROLES_DIR / role_identity / "SOUL.md"
-        if soul_template.exists():
-            soul_path.write_text(
-                soul_template.read_text(encoding="utf-8"),
-                encoding="utf-8",
-            )
+        _assemble_and_write_soul(role_name, target_root)
 
     return output_path
+
+
+GENERAL_ROLES_DIR = ROLES_DIR / "general"
+BASE_ROLE_DIR = ROLES_DIR / "base"
+
+# Layer boundary markers in assembled SOUL.md
+SOUL_LAYER_BASE_START = "<!-- layer: base -->"
+SOUL_LAYER_BASE_END = "<!-- /layer: base -->"
+SOUL_LAYER_GENERAL_START = "<!-- layer: general-role -->"
+SOUL_LAYER_GENERAL_END = "<!-- /layer: general-role -->"
+
+
+def _get_general_roles(role_name: str) -> list:
+    """Read general_role field from a role's manifest.yaml.
+
+    Returns a list of general role categories (e.g. ['developer'] or
+    ['coordinator', 'verifier'] for PM's dual assignment).
+    Dev variants (skill, be, fe) inherit from dev's manifest.
+    """
+    if yaml is None:
+        return []
+
+    manifest_path = ROLES_DIR / role_name / "manifest.yaml"
+    if not manifest_path.exists():
+        # Dev variant inheritance
+        identities = _list_known_role_identities()
+        if role_name not in identities and "dev" in identities:
+            manifest_path = ROLES_DIR / "dev" / "manifest.yaml"
+        if not manifest_path.exists():
+            return []
+
+    try:
+        data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+    general = data.get("general_role", [])
+    if isinstance(general, str):
+        return [general]
+    if isinstance(general, list):
+        return general
+    return []
+
+
+def _assemble_soul(role_name: str) -> str:
+    """Assemble a flat SOUL.md from Layer 1 (base) + Layer 2 (general role) + Layer 3 (specific).
+
+    Returns the assembled content as a string. Layer markers are embedded so
+    upgrade_soul() can identify boundaries later.
+    """
+    parts = []
+
+    # Layer 1 — Base agent SOUL
+    base_soul = BASE_ROLE_DIR / "SOUL.md"
+    if base_soul.exists():
+        parts.append(SOUL_LAYER_BASE_START)
+        parts.append(base_soul.read_text(encoding="utf-8").rstrip())
+        parts.append(SOUL_LAYER_BASE_END)
+        parts.append("")
+
+    # Layer 2 — General role SOUL(s)
+    general_roles = _get_general_roles(role_name)
+    if general_roles:
+        l2_parts = []
+        for gr in general_roles:
+            gr_soul = GENERAL_ROLES_DIR / gr / "SOUL.md"
+            if gr_soul.exists():
+                l2_parts.append(gr_soul.read_text(encoding="utf-8").rstrip())
+        if l2_parts:
+            parts.append(SOUL_LAYER_GENERAL_START)
+            parts.append("\n\n".join(l2_parts))
+            parts.append(SOUL_LAYER_GENERAL_END)
+            parts.append("")
+
+    # Layer 3 — Specific role SOUL
+    role_identity = _get_entry_file_for_role(role_name)
+    soul_template = ROLES_DIR / role_identity / "SOUL.md"
+    if soul_template.exists():
+        parts.append(soul_template.read_text(encoding="utf-8").rstrip())
+
+    return "\n".join(parts) + "\n"
+
+
+def _assemble_and_write_soul(role_name: str, target_root: Path = None):
+    """Assemble SOUL.md from 3 layers and write atomically."""
+    if target_root is None:
+        target_root = REPO_ROOT
+    target_root = Path(target_root)
+
+    content = _assemble_soul(role_name)
+    soul_path = target_root / ".squidsquad" / role_name / "SOUL.md"
+    soul_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Atomic write: .tmp then rename
+    tmp_path = soul_path.with_suffix(".md.tmp")
+    tmp_path.write_text(content, encoding="utf-8")
+    tmp_path.replace(soul_path)
+
+
+def upgrade_soul(role_name: str, target_root: Path = None) -> Path:
+    """Re-render Layer 1 and Layer 2 of a deployed SOUL.md, preserving Layer 3.
+
+    This function is used during upgrades to pick up improvements to base and
+    general-role identity without clobbering the specific role's personality,
+    Project Context, Project-Specific Responsibilities, or Project Adaptation.
+
+    If no deployed SOUL.md exists, falls through to full assembly.
+    """
+    if target_root is None:
+        target_root = REPO_ROOT
+    target_root = Path(target_root)
+
+    soul_path = target_root / ".squidsquad" / role_name / "SOUL.md"
+    if not soul_path.exists():
+        _assemble_and_write_soul(role_name, target_root)
+        return soul_path
+
+    existing = soul_path.read_text(encoding="utf-8")
+
+    # Find Layer 3 boundary: everything after the general-role end marker
+    # is Layer 3 content (preserved on upgrade).
+    layer3_content = None
+    if SOUL_LAYER_GENERAL_END in existing:
+        idx = existing.index(SOUL_LAYER_GENERAL_END) + len(SOUL_LAYER_GENERAL_END)
+        layer3_content = existing[idx:].lstrip("\n")
+    elif SOUL_LAYER_BASE_END in existing:
+        # No Layer 2 was present — L3 starts after base end
+        idx = existing.index(SOUL_LAYER_BASE_END) + len(SOUL_LAYER_BASE_END)
+        layer3_content = existing[idx:].lstrip("\n")
+    else:
+        # Legacy flat SOUL.md with no layer markers — treat entire file as L3
+        layer3_content = existing
+
+    # Re-render Layer 1 + Layer 2 from current templates
+    parts = []
+    base_soul = BASE_ROLE_DIR / "SOUL.md"
+    if base_soul.exists():
+        parts.append(SOUL_LAYER_BASE_START)
+        parts.append(base_soul.read_text(encoding="utf-8").rstrip())
+        parts.append(SOUL_LAYER_BASE_END)
+        parts.append("")
+
+    general_roles = _get_general_roles(role_name)
+    if general_roles:
+        l2_parts = []
+        for gr in general_roles:
+            gr_soul = GENERAL_ROLES_DIR / gr / "SOUL.md"
+            if gr_soul.exists():
+                l2_parts.append(gr_soul.read_text(encoding="utf-8").rstrip())
+        if l2_parts:
+            parts.append(SOUL_LAYER_GENERAL_START)
+            parts.append("\n\n".join(l2_parts))
+            parts.append(SOUL_LAYER_GENERAL_END)
+            parts.append("")
+
+    # Append preserved Layer 3
+    if layer3_content:
+        parts.append(layer3_content.rstrip())
+
+    content = "\n".join(parts) + "\n"
+
+    # Atomic write
+    tmp_path = soul_path.with_suffix(".md.tmp")
+    tmp_path.write_text(content, encoding="utf-8")
+    tmp_path.replace(soul_path)
+
+    return soul_path
 
 
 def generate_local_config(roles: list, target_root: Path = None,
@@ -554,6 +713,15 @@ def main():
         # Generate .local-config for health check and auto-boot
         lc = generate_local_config(roles)
         print(f"  .local-config: {len(roles)} agents -> {lc.relative_to(REPO_ROOT)}")
+
+    elif cmd == "upgrade-soul":
+        if len(args) < 2:
+            print("Usage: compose.py upgrade-soul <role>", file=sys.stderr)
+            sys.exit(1)
+        role_name = args[1]
+        soul_path = upgrade_soul(role_name)
+        lines = soul_path.read_text(encoding="utf-8").count("\n")
+        print(f"Upgraded {role_name} SOUL.md ({lines} lines) -> {soul_path.relative_to(REPO_ROOT)}")
 
     elif cmd == "boot":
         if len(args) < 2:

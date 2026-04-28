@@ -384,10 +384,15 @@ def _load_kind(base_dir, kind_dir, validator):
             continue
         manifest = d / "manifest.yaml"
         if not manifest.exists():
-            issues.append(Issue(
-                str(d.relative_to(base_dir.parent)) if hasattr(base_dir, "parent") else str(d),
-                "", "missing manifest.yaml",
-            ))
+            # Skip directories that aren't meant to be entries (e.g. layer
+            # source directories like base/ and general/ under roles/).
+            # Only report missing manifest if the dir has a CLAUDE.md,
+            # indicating it's intended as a role identity.
+            if (d / "CLAUDE.md").exists():
+                issues.append(Issue(
+                    str(d.relative_to(base_dir.parent)) if hasattr(base_dir, "parent") else str(d),
+                    "", "missing manifest.yaml",
+                ))
             continue
         data, err = _load_yaml(manifest)
         if err:

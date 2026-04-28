@@ -21,6 +21,7 @@ show_in_roster: false
 # in preset `role_install_order`.
 always_installed: true
 iteration_mode: normal
+general_role: delivery
 
 # Files that define this role's identity and cycle behaviour.
 soul_template: SOUL.md

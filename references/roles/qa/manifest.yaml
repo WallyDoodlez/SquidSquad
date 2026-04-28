@@ -23,6 +23,7 @@ show_in_roster: true
 # here, which was the point of declaring this field up front in #328.
 always_installed: true
 iteration_mode: normal
+general_role: verifier
 
 # Files that define this role's identity and cycle behaviour.
 soul_template: SOUL.md

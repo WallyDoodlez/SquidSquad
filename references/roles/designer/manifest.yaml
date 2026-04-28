@@ -20,6 +20,7 @@ description: >
 show_in_roster: true
 # Designer is a specialist — installed only when a preset lists it.
 always_installed: false
+general_role: developer
 
 # Files that define this role's identity and cycle behaviour.
 soul_template: SOUL.md
