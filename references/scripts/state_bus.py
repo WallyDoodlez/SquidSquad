@@ -147,6 +147,58 @@ def init():
     return 0
 
 
+# ---------------------------------------------------------------------------
+# Path resolution — state files vs main files (#3664)
+# ---------------------------------------------------------------------------
+
+# Patterns for files that belong on the state branch (high-churn agent state).
+# Everything else stays on main (code, templates, config, vault, planning).
+_STATE_PATTERNS = (
+    "iterations/",        # .squidsquad/<role>/iterations/
+    "working-state.md",   # .squidsquad/<role>/working-state.md
+    "scan-history.md",    # .squidsquad/<role>/scan-history.md
+    "diagnostics/",       # .squidsquad/diagnostics/
+)
+
+
+def is_state_file(rel_path):
+    """Return True if rel_path (relative to .squidsquad/) is a state-branch file."""
+    rel = str(rel_path).replace("\\", "/")
+    for pattern in _STATE_PATTERNS:
+        if pattern.endswith("/"):
+            if f"/{pattern}" in f"/{rel}" or rel.startswith(pattern):
+                return True
+        else:
+            if rel.endswith(pattern) or f"/{pattern}" in f"/{rel}":
+                return True
+    return False
+
+
+def state_path(rel_path):
+    """Resolve a .squidsquad/ relative path to its actual filesystem location.
+
+    If the path is a state file AND the state worktree exists, returns the
+    path under .squidsquad-state/. Otherwise returns the path under
+    .squidsquad/ (graceful fallback for old installs or non-state files).
+
+    Args:
+        rel_path: path relative to .squidsquad/ (e.g. "skill/iterations/iter-1.md")
+
+    Returns:
+        Path object to the resolved location.
+    """
+    if is_state_file(rel_path) and _worktree_exists():
+        return STATE_WORKTREE / rel_path
+    return REPO_ROOT / ".squidsquad" / rel_path
+
+
+def state_dir(rel_path):
+    """Like state_path but ensures the parent directory exists."""
+    p = state_path(rel_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
 def read_file(path):
     """Read a file from the state worktree."""
     if not _worktree_exists():

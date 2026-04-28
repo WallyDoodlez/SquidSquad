@@ -629,55 +629,67 @@ def rebuild(db_path=None):
     root = REPO_ROOT if db_path is None else path.parent.parent
     now = _now_iso()
 
-    # Find all scan-history.md files
+    # Find all scan-history.md files — check both main (.squidsquad/) and
+    # state worktree (.squidsquad-state/) for scan-history.md (#3664)
     squidsquad_dir = root / ".squidsquad"
+    state_dir = root / ".squidsquad-state"
+    search_dirs = [squidsquad_dir]
+    if state_dir.exists():
+        search_dirs.insert(0, state_dir)  # prefer state worktree
     total_scans = 0
     total_findings = 0
+    seen_roles = set()
 
-    for role_dir in sorted(squidsquad_dir.iterdir()):
-        if not role_dir.is_dir():
+    for base_dir in search_dirs:
+        if not base_dir.exists():
             continue
-        history_file = role_dir / "scan-history.md"
-        if not history_file.exists():
-            continue
+        for role_dir in sorted(base_dir.iterdir()):
+            if not role_dir.is_dir():
+                continue
+            role = role_dir.name
+            if role in seen_roles:
+                continue  # already found in state worktree
+            history_file = role_dir / "scan-history.md"
+            if not history_file.exists():
+                continue
+            seen_roles.add(role)
 
-        role = role_dir.name
-        entries = _parse_scan_history(history_file)
+            entries = _parse_scan_history(history_file)
 
-        for entry in entries:
-            for f in entry["files"]:
-                f = _normalize_path(f)
-                try:
-                    cur = conn.execute(
-                        "INSERT INTO scans (role, scanned_at, file_path) VALUES (?, ?, ?)",
-                        (role, entry["timestamp"], f),
-                    )
-                    scan_id = cur.lastrowid
-                    total_scans += 1
-                except sqlite3.IntegrityError:
-                    row = conn.execute(
-                        "SELECT id FROM scans WHERE role=? AND scanned_at=? AND file_path=?",
-                        (role, entry["timestamp"], f),
-                    ).fetchone()
-                    scan_id = row["id"] if row else None
+            for entry in entries:
+                for f in entry["files"]:
+                    f = _normalize_path(f)
+                    try:
+                        cur = conn.execute(
+                            "INSERT INTO scans (role, scanned_at, file_path) VALUES (?, ?, ?)",
+                            (role, entry["timestamp"], f),
+                        )
+                        scan_id = cur.lastrowid
+                        total_scans += 1
+                    except sqlite3.IntegrityError:
+                        row = conn.execute(
+                            "SELECT id FROM scans WHERE role=? AND scanned_at=? AND file_path=?",
+                            (role, entry["timestamp"], f),
+                        ).fetchone()
+                        scan_id = row["id"] if row else None
 
-                if scan_id is None:
-                    continue
+                    if scan_id is None:
+                        continue
 
-                # Insert findings for this file
-                for finding in entry["findings"]:
-                    conn.execute(
-                        """INSERT INTO findings (scan_id, file_path, finding_type,
-                           description, github_issue_number) VALUES (?, ?, ?, ?, ?)""",
-                        (
-                            scan_id,
-                            f,
-                            "issue",  # default from scan-history format
-                            finding.get("description", ""),
-                            finding.get("issue_number"),
-                        ),
-                    )
-                    total_findings += 1
+                    # Insert findings for this file
+                    for finding in entry["findings"]:
+                        conn.execute(
+                            """INSERT INTO findings (scan_id, file_path, finding_type,
+                               description, github_issue_number) VALUES (?, ?, ?, ?, ?)""",
+                            (
+                                scan_id,
+                                f,
+                                "issue",  # default from scan-history format
+                                finding.get("description", ""),
+                                finding.get("issue_number"),
+                            ),
+                        )
+                        total_findings += 1
 
     # Rebuild file_coverage from scans and findings
     conn.execute("DELETE FROM file_coverage")

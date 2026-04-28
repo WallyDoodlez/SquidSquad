@@ -37,7 +37,13 @@ REPO_ROOT = SCRIPT_DIR.parent.parent
 CONFIG_PATH = REPO_ROOT / ".squidsquad" / "config.md"
 PROMPTS_DIR = SCRIPT_DIR.parent / "prompts"
 PROVIDERS_DIR = SCRIPT_DIR / "providers"
-DIAGNOSTICS_DIR = REPO_ROOT / ".squidsquad" / "diagnostics"
+# Resolve diagnostics path via state_bus if available (#3664)
+sys.path.insert(0, str(SCRIPT_DIR))
+try:
+    from state_bus import state_path as _state_path
+    DIAGNOSTICS_DIR = _state_path("diagnostics")
+except ImportError:
+    DIAGNOSTICS_DIR = REPO_ROOT / ".squidsquad" / "diagnostics"
 
 # Tasks that are always Claude-only regardless of config
 CLAUDE_LOCKED_TASKS = {"comprehension", "qa-execution"}
