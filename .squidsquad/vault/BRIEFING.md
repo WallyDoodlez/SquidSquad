@@ -6,7 +6,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — DM ready, awaiting human greenlight (21 days)
 - #3415 EPIC: Real-time communication layer — Telegram-first, platform-abstracted. 2/6 sub-tasks shipped (#3416 adapter interface, #3417 sub-skills). 4 remaining (#3418-#3421). Next: #3418 Telegram adapter
-- #2495 Rewrite /squidsquad-upgrade — pending (high, role:skill) — awaiting human approval
+- #2495 Rewrite /squidsquad-upgrade — approved (high, role:skill) — blocked on missing planning artifacts (CONTEXT.md, TEST-PLAN.md)
 - #3464 Human-in-the-loop execution — pending (medium)
 - #3465 Layered role definition architecture — pending (medium)
 
