@@ -282,6 +282,54 @@ class TestRoute:
 
 
 # ---------------------------------------------------------------------------
+# CLI dispatch — bare 'route' subcommand (#3814)
+# ---------------------------------------------------------------------------
+
+class TestRouteSubcommandTaskType:
+    """Regression test for #3814: bare 'route' should use --task-type, not hardcode 'research'."""
+
+    @patch("model_router.route")
+    def test_bare_route_defaults_to_research(self, mock_route):
+        """Without --task-type, bare 'route' defaults to 'research'."""
+        mock_route.return_value = 0
+        with patch.object(sys, "argv", [
+            "model_router.py", "route", "--task-id", "T1", "--output-file", "/tmp/out.md",
+        ]):
+            with pytest.raises(SystemExit) as exc:
+                model_router.main()
+            assert exc.value.code == 0
+            mock_route.assert_called_once()
+            assert mock_route.call_args[0][0] == "research"
+
+    @patch("model_router.route")
+    def test_bare_route_accepts_task_type_override(self, mock_route):
+        """--task-type overrides the default for bare 'route' subcommand."""
+        mock_route.return_value = 0
+        with patch.object(sys, "argv", [
+            "model_router.py", "route", "--task-type", "test-plan",
+            "--task-id", "T1", "--output-file", "/tmp/out.md",
+        ]):
+            with pytest.raises(SystemExit) as exc:
+                model_router.main()
+            assert exc.value.code == 0
+            mock_route.assert_called_once()
+            assert mock_route.call_args[0][0] == "test-plan"
+
+    @patch("model_router.route")
+    def test_named_alias_uses_command_as_task_type(self, mock_route):
+        """Named aliases (e.g. 'test-plan') use command name, not --task-type."""
+        mock_route.return_value = 0
+        with patch.object(sys, "argv", [
+            "model_router.py", "test-plan", "--task-id", "T1", "--output-file", "/tmp/out.md",
+        ]):
+            with pytest.raises(SystemExit) as exc:
+                model_router.main()
+            assert exc.value.code == 0
+            mock_route.assert_called_once()
+            assert mock_route.call_args[0][0] == "test-plan"
+
+
+# ---------------------------------------------------------------------------
 # Provider manifest
 # ---------------------------------------------------------------------------
 
