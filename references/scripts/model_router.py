@@ -955,6 +955,12 @@ def main():
             "improvement-scan", "qa-execution", "comprehension",
         ],
     )
+    route_parser.add_argument(
+        "--task-type", default="research",
+        choices=["research", "discussion-prep", "test-plan",
+                 "improvement-scan", "qa-execution", "comprehension"],
+        help="Task type when using bare 'route' subcommand (default: research)",
+    )
     route_parser.add_argument("--task-id", required=True, help="Task identifier")
     route_parser.add_argument("--input-files", default="", help="Comma-separated input file paths")
     route_parser.add_argument("--output-file", required=True, help="Path for output file")
@@ -991,7 +997,7 @@ def main():
         "route", "research", "discussion-prep", "test-plan",
         "improvement-scan", "qa-execution", "comprehension",
     ):
-        task_type = args.command if args.command != "route" else "research"
+        task_type = args.command if args.command != "route" else args.task_type
         code = route(task_type, args.task_id, args.input_files, args.output_file, args.context)
         sys.exit(code)
     else:
