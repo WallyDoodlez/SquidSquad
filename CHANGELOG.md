@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.28.0] — 2026-04-28
+
+### Shipped
+- #2183
+- #2195
+- #2272
+- #2343
+- #2344
+- #2495
+- #3302
+- #3360
+- #3416
+- #3417
+- #3664
+- #3711
+- #3712
+- #3735
+- #3747
+- #3800
+- #3807
+- #3813
+- #3814
+- #3848
+- #3849
+
+### Added
+- #2183 — Simplified agent lifecycle with singleton wrapper, safe restart, and PM/DM control — agents never get killed mid-work
+- #2495 — Upgrade instructions fully rewritten — you can now run `/squidsquad-upgrade` with the correct compose.py-based flow, config v1→v2 patching, and automatic SOUL.md/vault preservation
+- #3416 — Communication abstraction layer — agents can send messages, create threads, and share files through any supported platform (Telegram, Slack, Discord) without knowing the underlying service
+- #3417 — Communication sub-skills (chat-etiquette, mention-protocol, consensus-protocol) for consistent cross-platform agent messaging
+- #3664 — Iterations and diagnostics now live on the state branch — no more cross-agent merge conflicts in your working tree
+- #3735 — Comprehension tests now skip when spec files are unchanged, saving expensive Claude CLI calls during routine cycles
+- #3807 — Reboot flow redesigned — agents finish their current cycle before restarting, PM monitors but DM executes reboots
+
+### Fixed
+- #2195 — Agents no longer commit directly to main when Branch Workflow is enabled
+- #2272 — PM now reads comments on active/approved tasks each cycle instead of missing updates
+- #2343 — Removed unused imports in cycle_pre.py and cycle_post.py
+- #2344 — tracker.py work_queue() now has unit tests
+- #3302 — Fixed `add_role.py` using undocumented `subprocess.os.getpid()` attribute
+- #3360 — Skill agent now properly pushes feature branches instead of claiming fixes without pushing
+- #3711 — Fixed vault_remember.py path check bypass vulnerability
+- #3712 — Fixed state_bus.py writing README.md to wrong path during orphan branch init
+- #3747 — GitHub auto-close no longer bypasses tracker.py ship transitions — DM correctly detects closed pending-ship items
+- #3800 — Fixed UnicodeEncodeError on Windows cp1252 console during PR merge ship transitions
+- #3813 — Removed dead `_check_template_changed` stub that permanently returned False
+- #3814 — Fixed model_router.py bare 'route' subcommand silently hardcoding task_type to 'research'
+- #3848 — Fixed vault_check.py validate() silently ignoring orphans in pass/fail decision
+- #3849 — Extracted `_collect_all_roles()` helper to DRY up duplicated logic in compose.py
+
 ## [0.27.0] — 2026-04-26
 
 ### Shipped
