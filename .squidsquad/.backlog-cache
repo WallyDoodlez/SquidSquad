@@ -1,2 +1,6 @@
-skill:bugs=1:feats=2:pship=0
+<<<<<<< Updated upstream
+skill:bugs=1:feats=1:pship=0
+=======
+skill:bugs=1:feats=0:pship=0
+>>>>>>> Stashed changes
 pm:planning=
