@@ -12,7 +12,8 @@ Layer 1: Base Agent (references/roles/base/)
 │   ├── developer/SOUL.md — code-change protocol, PR conventions
 │   ├── coordinator/SOUL.md — pipeline oversight, human check-in
 │   ├── verifier/SOUL.md — zero-gap gate, coverage requirements
-│   └── delivery/SOUL.md — user-first protocol, delivery quality
+│   ├── delivery/SOUL.md — user-first protocol, delivery quality
+│   └── creative/SOUL.md — iteration protocol, handoff quality
 │
 └── Layer 3: Specific Role (references/roles/<role>/)
     ├── SOUL.md — role personality, boundaries, improvement scan
