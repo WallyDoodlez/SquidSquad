@@ -353,6 +353,30 @@ class TestPrMerge:
         mock_run.assert_not_called()
 
 
+class TestNoNonAsciiInPrintStatements:
+    """Regression test for #3800: UnicodeEncodeError on Windows cp1252 console."""
+
+    def test_print_statements_are_ascii_safe(self):
+        """All print() calls in git_ops.py must use only ASCII characters."""
+        source_path = SCRIPTS / "git_ops.py"
+        with open(source_path, "r", encoding="utf-8") as f:
+            for lineno, line in enumerate(f, 1):
+                if "print(" in line:
+                    for col, ch in enumerate(line):
+                        assert ord(ch) <= 127, (
+                            f"Non-ASCII char U+{ord(ch):04X} at line {lineno}, col {col} "
+                            f"in print statement: {line.rstrip()}"
+                        )
+
+    def test_stdout_encoding_safety_net(self):
+        """git_ops.py reconfigures stdout to handle UTF-8 on non-UTF-8 consoles."""
+        source_path = SCRIPTS / "git_ops.py"
+        content = source_path.read_text(encoding="utf-8")
+        assert "TextIOWrapper" in content, (
+            "git_ops.py should reconfigure stdout via TextIOWrapper for encoding safety"
+        )
+
+
 class TestGetAlias:
     def test_fallback_to_role(self):
         """When config module unavailable, returns role name."""

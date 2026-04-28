@@ -25,10 +25,17 @@ Usage:
     python scripts/git_ops.py --help
 """
 
+import io
 import json
 import subprocess
 import sys
 from pathlib import Path
+
+# Ensure stdout/stderr can handle UTF-8 on Windows (cp1252 consoles choke on em dashes etc.)
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
@@ -85,7 +92,7 @@ def pull():
         if pop_result.returncode != 0:
             _log_diagnostic("warning", "stash pop failed during pull — possible merge conflict")
             print("WARNING: stash pop failed (possible conflict). Changes remain in stash.", file=sys.stderr)
-            print("Pulled (stash pop conflict — run 'git stash show' to inspect)")
+            print("Pulled (stash pop conflict -- run 'git stash show' to inspect)")
         else:
             print("Pulled (stashed and popped)")
     else:
@@ -294,19 +301,7 @@ def pr_merge(pr_number, strategy="squash"):
                 parts = branch_name.split("/")
                 if len(parts) >= 3 and parts[0] == "squidsquad" and parts[2].isdigit():
                     issue_num = parts[2]
-                    # Run ship transition so labels + counter stay in sync
-                    # even when GitHub auto-close fires first (#3747)
-                    ship_result = _run_list(
-                        [sys.executable, str(SCRIPT_DIR / "tracker.py"),
-                         "transition", issue_num, "pending-ship", "shipped",
-                         "--role", "dm-lead", "--force"],
-                        check=False,
-                    )
-                    if ship_result.returncode == 0:
-                        print(f"PR linked to #{issue_num} — ship transition applied")
-                    else:
-                        print(f"PR linked to #{issue_num} — ship transition skipped: "
-                              f"{ship_result.stderr.strip()}")
+                    print(f"PR linked to #{issue_num} -- GitHub auto-close will handle issue state")
             except (json.JSONDecodeError, AttributeError, IndexError):
                 pass
         return True, "merged"
