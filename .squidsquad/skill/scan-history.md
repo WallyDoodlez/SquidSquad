@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-28 03:33
+
+- **Files scanned**: references/scripts/cycle_post.py, references/scripts/cycle_pre.py, references/scripts/tracker.py, references/scripts/reboot_agent.py, references/scripts/model_router.py
+- **Findings**: #3813 (cycle_pre.py _check_template_changed dead stub always returns False — low), #3814 (model_router.py bare 'route' subcommand hardcodes task_type to 'research' — low)
+- **Items rejected by human**: none yet
+- **Notes**: tracker.py, reboot_agent.py, cycle_post.py all clean. cycle_pre.py template_changed was previously noted (2026-04-27 scan) but deferred — now filed.
+
 ## Scan — 2026-04-27 20:02
 
 - **Files scanned**: references/scripts/vault_remember.py, references/scripts/state_bus.py, references/scripts/cycle.py, references/scripts/vault_optimize.py, references/scripts/reboot_agent.py
