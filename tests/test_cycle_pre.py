@@ -261,6 +261,34 @@ class TestBuildSkillInput:
 
 
 # ---------------------------------------------------------------------------
+# Dead stub removal regression (#3813)
+# ---------------------------------------------------------------------------
+
+class TestNoTemplateChanged:
+    """Regression test for #3813: template_changed was a dead stub always returning False."""
+
+    def test_skill_input_has_no_template_changed(self, patch_dirs, monkeypatch):
+        """_build_skill_input should not include template_changed field."""
+        empty = MagicMock()
+        empty.returncode = 0
+        empty.stdout = "[]"
+        monkeypatch.setattr(cycle_pre, "_run_script", lambda *a, **kw: empty)
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
+            "interval": "30", "test-command": "",
+            "branch-workflow": "no", "pr-flow": "no",
+            "improvement-scanning": "no", "vault-remember": "no",
+            "vault-optimize": "no",
+        }.get(f, ""))
+
+        result = cycle_pre._build_skill_input("skill")
+        assert "template_changed" not in result
+
+    def test_no_check_template_changed_function(self):
+        """_check_template_changed should not exist — it was a dead stub."""
+        assert not hasattr(cycle_pre, "_check_template_changed")
+
+
+# ---------------------------------------------------------------------------
 # QA Input Builder — e2e guard regression (#2070 QA feedback)
 # ---------------------------------------------------------------------------
 

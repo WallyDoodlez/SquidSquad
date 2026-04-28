@@ -224,16 +224,6 @@ def _get_cycle_number(role):
     return max_n + 1
 
 
-def _check_template_changed(role):
-    """Check if CLAUDE.md has been updated since session start."""
-    template_path = SQUID_DIR / role / "CLAUDE.md"
-    if not template_path.exists():
-        return False
-    # Compare against the restart sentinel or just report mtime
-    # For now, we can't know session start time from here — return False
-    # The agent checks this separately via Step 1c
-    return False
-
 
 def _read_config_flags():
     """Read common config flags."""
@@ -351,7 +341,6 @@ def _build_skill_input(role):
         "quiet_cycle_counter": 0,  # Will be read from working_state
         "interval_minutes": interval_minutes,
         "interval_changed": False,  # Agent checks this
-        "template_changed": _check_template_changed(role),
     }
 
 
@@ -535,7 +524,6 @@ def _build_pm_input(role):
         "boot_results": boot_results,
         "config": config,
         "merged_branches": merged_branches,
-        "template_changed": _check_template_changed(role),
     }
 
 
@@ -644,7 +632,6 @@ def _build_qa_input(role):
         "open_prs": open_prs,
         "agent_health": agent_health,
         "config": config,
-        "template_changed": _check_template_changed(role),
     }
 
 
@@ -731,7 +718,6 @@ def _build_dm_input(role):
         "pending_ship": pending_ship,
         "version_bump": version_bump,
         "config": config,
-        "template_changed": _check_template_changed(role),
     }
 
 
