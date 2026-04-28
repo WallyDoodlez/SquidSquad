@@ -445,6 +445,7 @@ python references/scripts/tracker.py list-issues skill --status pending-test
 
 For each result:
 
+0. **Blocked check**: If the item has a `blocked:human-action` label, skip it. Print: `[🦑 HH:MM:SS] Skipping #[NUMBER] — blocked:human-action (waiting for human).` Do not change its status. Move to the next item.
 1. Run the relevant test or manually verify the fix.
 2. **Test coverage check**: Verify that the fix includes a regression test. Check for new or modified test files corresponding to the changed code. If the fix adds or changes code but includes no tests, reject it.
 3. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
@@ -467,6 +468,7 @@ python references/scripts/tracker.py list-tasks skill --status pending-test
 
 For each result:
 
+0. **Blocked check**: If the item has a `blocked:human-action` label, skip it. Print: `[🦑 HH:MM:SS] Skipping #[NUMBER] — blocked:human-action (waiting for human).` Do not change its status. Move to the next item.
 1. Test against the acceptance criteria.
 2. **Test coverage check**: Verify that new code has corresponding unit tests. Check for new or modified test files. If the implementation adds new functions, scripts, or modules but includes no tests, reject it — tests are part of the implementation, not follow-up work.
 3. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
@@ -757,9 +759,7 @@ Log the script's output in `pm/qa-log.md`. For any agent reporting stalled (👻
 1. Append a Discussion note to that agent's latest open tracker item.
 2. If no open item exists, log in `qa-log.md` only.
 
-**Context pressure monitoring**: Check each agent's context pressure file. If any agent exceeds threshold:
-- Plan a reboot via DM: `python references/scripts/tracker.py comment [DM_ISSUE] --role pm --message "Agent [role] context pressure at [X]%. Requesting reboot after current cycle."`
-- If DM absent, execute directly: `python references/scripts/reboot_agent.py [role]`
+**Context pressure monitoring**: Check each agent's context pressure file. If any agent exceeds threshold, report to the human with the agent role and pressure percentage. **PM does not execute reboots directly** — agent lifecycle is managed by `start_team.py` and the wrapper scripts.
 
 For programmatic use, the script accepts `--json` for structured output.
 <!-- /sub-skill: health-check -->
@@ -794,11 +794,11 @@ If no external issues are found, skip silently.
 <!-- /sub-skill: github-issues -->
 
 <!-- sub-skill: boot-remote-agents -->
-### Step — Boot Results (PM Only)
+### Step — First-Cycle Health Report (PM Only)
 
 **PM-only gate**: Only the PM agent runs this step. If you are NOT the PM role, skip this step entirely.
 
-Print: `[🦑 HH:MM:SS] Checking boot results...`
+Print: `[🦑 HH:MM:SS] Checking agent health...`
 
 Boot detection runs automatically in `cycle_pre.py` before the creative phase. Read `boot_results` from `cycle-input.json` — it is a list of per-agent result objects, each with `role`, `action`, `success`, and `message` fields.
 
@@ -808,7 +808,7 @@ If any agents were spawned, print: `[🦑 HH:MM:SS] Booted: [role1, role2, ...]`
 
 If all agents alive or stopped, print nothing — silent pass.
 
-**Per-role opt-out**: To prevent a specific agent from being booted, create `.squidsquad/<role>/.stop`. This is respected by `boot_remote.py` even when called unconditionally.
+**PM does not boot agents directly.** Agent lifecycle is managed by `start_team.py` and the wrapper scripts. If PM detects a stalled or dead agent, report to the human — do not attempt to spawn or restart agents.
 <!-- /sub-skill: boot-remote-agents -->
 
 <!-- sub-skill: soul-shepherd -->
@@ -1174,22 +1174,20 @@ Log in iteration summary: `Vault synthesis: [N] recent notes reviewed, [M] postu
 <!-- sub-skill: self-restart -->
 ### Self-Restart (Context Pressure Only)
 
-Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled externally by PM → DM via `reboot_agent.py`.
+Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled externally via `start_team.py --reboot`.
 
 **Context pressure restart flow**:
 1. Step 1b detects context pressure exceeds threshold.
 2. Checkpoint working state to `.squidsquad/pm/working-state.md`.
 3. Complete the current cycle normally.
-4. At cycle end, write the restart reason to `.squidsquad/pm/.restart`:
-   ```bash
-   echo "context pressure at [X]%" > .squidsquad/pm/.restart
-   ```
+4. At cycle end, `cycle_post.py` writes `.squidsquad/pm/.stop-after-cycle` mechanically when `restart_needed: true` is set in cycle-output.json.
 5. The wrapper detects the sentinel on exit, deletes it, and respawns.
 
 **You do NOT**:
-- Restart for template changes (DM handles post-ship reboots).
-- Kill or manage other agents (PM coordinates, DM executes).
-- Implement any restart loop logic (wrapper handles one retry on crash).
+- Write `.stop-after-cycle` directly — `cycle_post.py` handles this mechanically.
+- Restart for template changes (handled externally via `start_team.py --reboot`).
+- Kill or manage other agents (human or `start_team.py` handles this).
+- Implement any restart loop logic (wrapper handles respawn).
 
 Write `idle|` to `current-state` at cycle end so health monitoring works.
 <!-- /sub-skill: self-restart -->
@@ -1197,38 +1195,39 @@ Write `idle|` to `current-state` at cycle end so health monitoring works.
 <!-- sub-skill: agent-lifecycle -->
 ### Agent Lifecycle
 
-Agent lifecycle is managed by the wrapper script and `reboot_agent.py`. Agents do not manage their own or other agents' processes directly.
+Agent lifecycle is managed by `start_team.py` and the wrapper scripts. Agents do not manage their own or other agents' processes directly.
 
 **Three guarantees**:
 1. **Singleton**: Only one instance per role runs at a time (PID lock file).
-2. **Never kill mid-work**: `reboot_agent.py` waits for the agent to go idle before restarting.
+2. **Graceful stop**: `start_team.py --reboot` writes `.stop-after-cycle` and waits for the agent to finish its current cycle before respawning.
 3. **Start correctly**: Wrapper handles pre-flight checks, branch setup, and heartbeat.
 
 **Heartbeat**: The wrapper writes the current epoch to `.squidsquad/pm/.health` every 5 seconds. Health monitoring reads this — if >10s old, the agent is considered dead.
 
-**Reboot interface** (for PM and DM):
+**Lifecycle interface**:
 ```bash
-# Safe reboot — waits for idle, then restarts
-python references/scripts/reboot_agent.py <role>
+# Start all agents
+python references/scripts/start_team.py --all
 
-# Force reboot — kills immediately
-python references/scripts/reboot_agent.py <role> --force
+# Start single agent
+python references/scripts/start_team.py --role <role>
+
+# Graceful reboot — waits for cycle end, then restarts
+python references/scripts/start_team.py --reboot <role>
 
 # Reboot all agents
-python references/scripts/reboot_agent.py --all
+python references/scripts/start_team.py --reboot --all
 
-# Custom timeout (default 300s)
-python references/scripts/reboot_agent.py <role> --timeout 600
+# Stop agent (permanent until manually restarted)
+python references/scripts/start_team.py --stop <role>
+
+# Stop all agents
+python references/scripts/start_team.py --stop --all
 ```
 
-**Who reboots whom**:
-- **PM** monitors context pressure and detects when agents need rebooting. PM plans reboots.
-- **DM** executes reboots after shipping items that change agent templates/instructions.
-- **PM fallback**: When DM is absent, PM executes reboots directly via `reboot_agent.py`.
-- **Self-restart**: Agents can only self-restart for context pressure (see Self-Restart sub-skill).
-
 **Sentinel files**:
-- `.restart` — reboot request (written by agent for context pressure, or by `reboot_agent.py`)
+- `.stop-after-cycle` — graceful restart request (written by `cycle_post.py` for context pressure, or by `start_team.py --reboot`)
+- `.stop` — permanent stop (written by `start_team.py --stop`, respected by wrapper)
 - `.pid` — singleton lock (written by wrapper)
 - `.health` — heartbeat epoch (written by wrapper every 5s)
 <!-- /sub-skill: agent-lifecycle -->
@@ -1311,6 +1310,7 @@ The research agent (whether external or Claude) analyzes:
 5. **Upgrade & migration**: how do existing installs get this task? What config values, files, templates, or behavioral changes need migration steps? What happens if an existing install doesn't upgrade — does it break or gracefully degrade? This section is ALWAYS required — even trivial tasks must state "N/A — no upgrade impact."
 6. **Prior art**: has something similar been done? What can we learn?
 7. **Capability gap analysis**: check the target agent's role manifest for `requires_sub_skills`. For each declared capability, run `python references/scripts/capability_check.py [TARGET_ROLE]` and report any missing capabilities. If a required capability is unavailable, note it as a risk and check for fallback capabilities in the manifest's `any_of` list.
+8. **Vault candidates**: flag any discoveries worth preserving in the vault — architectural patterns, reusable decisions, or learnings about the codebase. These are candidates only — PM decides whether to vault them. Max 5 candidates.
 
 The agent writes its findings to `.squidsquad/pm/planning/FEAT-PM-XXX-RESEARCH.md`:
 
@@ -1356,6 +1356,10 @@ The agent writes its findings to `.squidsquad/pm/planning/FEAT-PM-XXX-RESEARCH.m
 
 ## Recommendation
 [Straightforward / Feasible with caveats / Needs rethinking]
+
+## Vault Candidates
+- **Type**: [decision/pattern/learning] — [one-line description] — **Why**: [why this is vault-worthy]
+- _(max 5 candidates — flag only, PM decides whether to vault)_
 ```
 
 **If research reveals significant risks**, present your recommendation to the human: "Based on research, this task would [risk]. Recommend: proceed / adjust scope / reject." If warranted, recommend `Rejected` status with justification. Human can override.

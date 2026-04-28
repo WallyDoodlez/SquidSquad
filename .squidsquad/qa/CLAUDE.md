@@ -407,6 +407,7 @@ python references/scripts/tracker.py list-issues skill --status pending-test
 
 For each issue:
 
+0. **Blocked check**: If the item has a `blocked:human-action` label, skip it. Print: `[🦑 HH:MM:SS] Skipping #[NUMBER] — blocked:human-action (waiting for human).` Do not change its status. Move to the next item.
 1. Read details: `gh issue view [NUMBER] --json title,body,comments`
 2. **Branch checkout** (#3296): Check out the task's feature branch before verification:
    ```bash
@@ -449,7 +450,11 @@ python references/scripts/tracker.py list-tasks skill --status pending-test
 
 (Adjust role as needed for other agents.)
 
-For each task, read it: `gh issue view [NUMBER] --json title,body,labels,comments`
+For each task:
+
+0. **Blocked check**: If the item has a `blocked:human-action` label, skip it. Print: `[🦑 HH:MM:SS] Skipping #[NUMBER] — blocked:human-action (waiting for human).` Do not change its status. Move to the next item.
+
+Read it: `gh issue view [NUMBER] --json title,body,labels,comments`
 
 **Branch checkout** (#3296): Check out the task's feature branch before testing:
 ```bash
@@ -537,12 +542,26 @@ python references/scripts/git_ops.py task-end [role] [number]
      ```bash
      gh pr review [PR_NUMBER] --approve --body "QA verified — zero gaps."
      ```
-   - Transition to `pending-review` (not `pending-ship`):
+   - **Check Auto Merge**: `python references/scripts/config.py get auto-merge`
+   - **Check per-ticket override**: `python references/scripts/tracker.py get-labels [NUMBER]` — look for `review:human-required` label.
+
+   **If Auto Merge `yes` AND no `review:human-required` label** — merge directly:
      ```bash
-     # Convert draft PR to ready for review
      gh pr ready [PR_NUMBER]
-     python references/scripts/tracker.py transition [NUMBER] pending-test pending-review --role qa-lead
-     python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. PR approved. Awaiting human review. Status → Pending Review."
+     python references/scripts/git_ops.py pr-merge [PR_NUMBER]
+     ```
+     - **Merge succeeds**: transition to pending-ship:
+       ```bash
+       python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role qa-lead
+       python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. PR auto-merged. Status → Pending Ship."
+       ```
+     - **Merge conflict**: handle as described in the PR Flow `no` merge conflict section below.
+
+   **If Auto Merge `no` OR `review:human-required` label present** — route to human review:
+     ```bash
+     gh pr ready [PR_NUMBER]
+     python references/scripts/tracker.py transition [NUMBER] pending-test pending-human-review --role qa-lead
+     python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. PR approved. Awaiting human review. Status → Pending Human Review."
      ```
 
    **If PR Flow `no`** (or no PR exists):
@@ -662,22 +681,20 @@ Tag findings with the `improvement-scan` label. Max **2 items per cycle**. Defau
 <!-- sub-skill: self-restart -->
 ### Self-Restart (Context Pressure Only)
 
-Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled externally by PM → DM via `reboot_agent.py`.
+Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled externally via `start_team.py --reboot`.
 
 **Context pressure restart flow**:
 1. Step 1b detects context pressure exceeds threshold.
 2. Checkpoint working state to `.squidsquad/qa/working-state.md`.
 3. Complete the current cycle normally.
-4. At cycle end, write the restart reason to `.squidsquad/qa/.restart`:
-   ```bash
-   echo "context pressure at [X]%" > .squidsquad/qa/.restart
-   ```
+4. At cycle end, `cycle_post.py` writes `.squidsquad/qa/.stop-after-cycle` mechanically when `restart_needed: true` is set in cycle-output.json.
 5. The wrapper detects the sentinel on exit, deletes it, and respawns.
 
 **You do NOT**:
-- Restart for template changes (DM handles post-ship reboots).
-- Kill or manage other agents (PM coordinates, DM executes).
-- Implement any restart loop logic (wrapper handles one retry on crash).
+- Write `.stop-after-cycle` directly — `cycle_post.py` handles this mechanically.
+- Restart for template changes (handled externally via `start_team.py --reboot`).
+- Kill or manage other agents (human or `start_team.py` handles this).
+- Implement any restart loop logic (wrapper handles respawn).
 
 Write `idle|` to `current-state` at cycle end so health monitoring works.
 <!-- /sub-skill: self-restart -->
@@ -685,38 +702,39 @@ Write `idle|` to `current-state` at cycle end so health monitoring works.
 <!-- sub-skill: agent-lifecycle -->
 ### Agent Lifecycle
 
-Agent lifecycle is managed by the wrapper script and `reboot_agent.py`. Agents do not manage their own or other agents' processes directly.
+Agent lifecycle is managed by `start_team.py` and the wrapper scripts. Agents do not manage their own or other agents' processes directly.
 
 **Three guarantees**:
 1. **Singleton**: Only one instance per role runs at a time (PID lock file).
-2. **Never kill mid-work**: `reboot_agent.py` waits for the agent to go idle before restarting.
+2. **Graceful stop**: `start_team.py --reboot` writes `.stop-after-cycle` and waits for the agent to finish its current cycle before respawning.
 3. **Start correctly**: Wrapper handles pre-flight checks, branch setup, and heartbeat.
 
 **Heartbeat**: The wrapper writes the current epoch to `.squidsquad/qa/.health` every 5 seconds. Health monitoring reads this — if >10s old, the agent is considered dead.
 
-**Reboot interface** (for PM and DM):
+**Lifecycle interface**:
 ```bash
-# Safe reboot — waits for idle, then restarts
-python references/scripts/reboot_agent.py <role>
+# Start all agents
+python references/scripts/start_team.py --all
 
-# Force reboot — kills immediately
-python references/scripts/reboot_agent.py <role> --force
+# Start single agent
+python references/scripts/start_team.py --role <role>
+
+# Graceful reboot — waits for cycle end, then restarts
+python references/scripts/start_team.py --reboot <role>
 
 # Reboot all agents
-python references/scripts/reboot_agent.py --all
+python references/scripts/start_team.py --reboot --all
 
-# Custom timeout (default 300s)
-python references/scripts/reboot_agent.py <role> --timeout 600
+# Stop agent (permanent until manually restarted)
+python references/scripts/start_team.py --stop <role>
+
+# Stop all agents
+python references/scripts/start_team.py --stop --all
 ```
 
-**Who reboots whom**:
-- **PM** monitors context pressure and detects when agents need rebooting. PM plans reboots.
-- **DM** executes reboots after shipping items that change agent templates/instructions.
-- **PM fallback**: When DM is absent, PM executes reboots directly via `reboot_agent.py`.
-- **Self-restart**: Agents can only self-restart for context pressure (see Self-Restart sub-skill).
-
 **Sentinel files**:
-- `.restart` — reboot request (written by agent for context pressure, or by `reboot_agent.py`)
+- `.stop-after-cycle` — graceful restart request (written by `cycle_post.py` for context pressure, or by `start_team.py --reboot`)
+- `.stop` — permanent stop (written by `start_team.py --stop`, respected by wrapper)
 - `.pid` — singleton lock (written by wrapper)
 - `.health` — heartbeat epoch (written by wrapper every 5s)
 <!-- /sub-skill: agent-lifecycle -->
