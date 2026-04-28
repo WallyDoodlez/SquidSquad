@@ -40,6 +40,7 @@ class TestPrMergeSquashStrategy:
             _mock_result(stdout=state_json),   # state check
             _mock_result(),                     # merge
             _mock_result(stdout=branch_json),   # branch name
+            _mock_result(),                     # ship transition (#3747)
         ]
         success, msg = git_ops.pr_merge(42)
         assert success is True
@@ -60,6 +61,7 @@ class TestPrMergeSquashStrategy:
             _mock_result(stdout=state_json),
             _mock_result(),
             _mock_result(stdout=branch_json),
+            _mock_result(),                     # ship transition (#3747)
         ]
         success, msg = git_ops.pr_merge(99, strategy="rebase")
         assert success is True
@@ -124,6 +126,7 @@ class TestPrMergeIssueExtraction:
             _mock_result(stdout=state_json),
             _mock_result(),
             _mock_result(stdout=branch_json),
+            _mock_result(),                     # ship transition (#3747)
         ]
         success, _ = git_ops.pr_merge(30)
         assert success is True
