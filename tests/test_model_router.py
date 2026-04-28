@@ -246,6 +246,16 @@ class TestRoute:
         assert code == 1
 
     @patch("model_router._read_config")
+    def test_claude_config_prints_stderr_message(self, mock_config, capsys):
+        """#3970 regression: claude-only config must print a message to stderr, not exit silently."""
+        mock_config.return_value = "## Model Routing\n- **Discussion Prep Model**: claude\n- **Default Model**: claude\n"
+        code = model_router.route("discussion-prep", "TEST", "", "/tmp/out.md", "test")
+        assert code == 1
+        captured = capsys.readouterr()
+        assert "discussion-prep" in captured.err
+        assert "claude" in captured.err.lower()
+
+    @patch("model_router._read_config")
     def test_missing_api_key_returns_2(self, mock_config, monkeypatch):
         """Missing API key (env + secrets) should exit 2."""
         mock_config.return_value = "## Model Routing\n- **Research Model**: gpt-5.2\n- **Default Model**: claude\n"

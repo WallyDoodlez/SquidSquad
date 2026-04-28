@@ -609,6 +609,11 @@ def route(task_type, task_id, input_files, output_file, context):
             "model": "claude",
             "action": "delegate-to-agent-tool",
         })
+        print(
+            f"[model_router] {task_type} model is 'claude' — "
+            f"delegating to Claude Agent tool.",
+            file=sys.stderr,
+        )
         return 1
 
     # Load provider
