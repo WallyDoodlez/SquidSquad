@@ -7,7 +7,7 @@ license: AGPL-3.0
 
 # SquidSquad
 
-You are activating the SquidSquad multi-agent development coordination system. SquidSquad spins up Claude Code CLI instances — one per dev role you define, plus a PM, and a QA when dev or designer agents are present — that work autonomously on a shared codebase by coordinating through markdown files in a `.squidsquad/` folder.
+You are activating the SquidSquad multi-agent development coordination system. SquidSquad spins up Claude Code CLI instances — one per dev role you define, plus a PM, and a QA when dev or designer agents are present — that work autonomously on a shared codebase by coordinating through GitHub Issues and a shared `.squidsquad/` folder.
 
 No meetings. No message queues. Just git and GitHub Issues.
 
@@ -44,8 +44,10 @@ graph TD
     QA --> squid
     PM --> squid
     DM --> squid
+    RL --> GH
     PM --> GH
     QA --> GH
+    DM --> GH
 ```
 
 ### Roles
@@ -58,6 +60,7 @@ SquidSquad always has a **PM** agent. When dev or designer agents are present, a
 | **Designer** (optional) | Design specs, tokens, component specs, `designer/` | Ralph Loop (review design requests → interactive design sessions → produce specs → hand off to dev) |
 | **QA** (auto-added with dev/designer) | Test results, `qa/qa-log.md`, bug verification, feature testing | Ralph Loop (E2E tests → verify bugs → test features → health checks → push) |
 | **PM** | Product backlog, human interaction, feature intake, backlog management | Ralph Loop (check human → feature intake → backlog management → push) |
+| **DM** (optional) | Delivery packaging, docs, CHANGELOG, version bumps, git tags | Ralph Loop (scan pending-ship → deliver docs → version bump → push) |
 
 **Common team shapes:**
 
