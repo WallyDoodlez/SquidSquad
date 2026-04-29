@@ -1,12 +1,13 @@
 {
-  "last_scanned": "README.md",
+  "last_scanned": "SKILL.md:sections-1-3",
   "rotation_count": 0,
   "scan_history": [
-    {"file": "README.md", "date": "2026-04-28", "findings": 2, "fixes": ["removed stale 'no direct communication' claim (comms layer shipped)", "renamed '3-branch architecture' to 'State branch isolation' with accurate description"]}
+    {"file": "README.md", "date": "2026-04-28", "findings": 2, "fixes": ["removed stale 'no direct communication' claim", "renamed '3-branch architecture' to 'State branch isolation'"]},
+    {"file": "SKILL.md:sections-1-3", "date": "2026-04-28", "findings": 3, "fixes": ["'Just markdown' → 'Just git and GitHub Issues'", "removed obsolete templates/ from file structure and diagram", "CLAUDE.md 'bootstrapper (~20 lines)' → 'full agent instructions (compose.py deploy)'"]}
   ],
   "doc_inventory": {
     "README.md": {"last_scanned": "2026-04-28", "status": "current"},
-    "SKILL.md": {"last_scanned": null, "status": "unknown"},
+    "SKILL.md": {"last_scanned": "2026-04-28", "status": "partial (sections 1-3 of ~8)"},
     "docs/ARCHITECTURE.md": {"last_scanned": null, "status": "unknown"},
     "docs/sub-skill-guide.md": {"last_scanned": null, "status": "unknown"},
     "CONTRIBUTING.md": {"last_scanned": null, "status": "unknown"},
