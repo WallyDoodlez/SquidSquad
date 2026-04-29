@@ -123,6 +123,17 @@ class TestReadSecretOrEnv:
             value = shared_fs.read_secret_or_env("MISSING_KEY_XYZ")
         assert value is None
 
+    def test_empty_string_secret_not_dropped(self, tmp_path, monkeypatch):
+        """#4050 regression: empty-string secret must not fall through to env."""
+        fake_home = tmp_path / ".squidsquad"
+        monkeypatch.setenv("EMPTY_KEY", "from_env")
+        with patch.object(shared_fs, "get_home", return_value=fake_home):
+            shared_fs.init()
+            shared_fs.write_secret("EMPTY_KEY", "")
+            value = shared_fs.read_secret_or_env("EMPTY_KEY")
+        # Secrets file takes precedence — even for empty string
+        assert value == ""
+
 
 class TestClones:
     def test_write_and_read(self, tmp_path):

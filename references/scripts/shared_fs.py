@@ -113,7 +113,7 @@ def read_secret_or_env(key):
     Priority: secrets file > environment variable.
     """
     value = read_secret(key)
-    if value:
+    if value is not None:
         return value
     return os.environ.get(key)
 
