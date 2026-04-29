@@ -13,20 +13,6 @@
 - #4093
 - #4094
 
-
-## [0.29.0] — 2026-04-29
-
-### Shipped
-- #3955
-- #4038
-- #4050
-- #4051
-- #4052
-- #4081
-- #4092
-- #4093
-- #4094
-
 ### Fixed
 - #3955 — Sub-skill templates updated to reflect the new agent lifecycle model — self-restart, agent-lifecycle, and boot-remote-agents no longer reference obsolete reboot flow
 - #4038 — tracker.py no longer auto-closes issues on pending-test transition — only shipped transitions close issues

@@ -243,5 +243,5 @@ Every agent pulls at cycle start (L1 transport), does creative work (L3 behavior
 - **Git as the only bus** — no databases, no message queues. Every piece of state is a file in the repo. This makes the system inspectable, debuggable, and reproducible.
 - **Composition over inheritance** — roles are assembled from sub-skills, not inherited from a base class. This prevents the "god template" problem.
 - **Souls are separate from behavior** — you can change an agent's personality without redeploying its template. This enables project-level customization.
-- **Transport is optional** — the cycle runner is opt-in. The layered architecture exists whether or not you use `cycle_pre.py` / `cycle_post.py`.
+- **Transport is deterministic** — the cycle runner (`cycle_pre.py` / `cycle_post.py`) handles all mechanical operations. Agents focus on creative work only.
 - **Memory is git-tracked** — vault notes have full version history. No opaque databases, no vector stores. Knowledge is just markdown files with frontmatter.
