@@ -9,4 +9,4 @@
 
 ## Key Decisions
 
-## Quiet cycle counter: 3
+## Quiet cycle counter: 4
