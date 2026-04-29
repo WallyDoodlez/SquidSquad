@@ -20,8 +20,9 @@ Each layer carries **both** CLAUDE.md (instructions) **and** SOUL.md (personalit
   - Layer 3 = role customization (skill dev, FE dev, PM-for-coding, etc.)
   - NO intermediate "role family" abstraction
 - **Both files layered** (human blocked partial implementation): CLAUDE.md AND SOUL.md must both be layered. Shipping only SOUL.md layering is not acceptable.
-- **CLAUDE.md Layer 3 strategy**: Layer 3 variants get a `includes.yml` with `base_role` + `additional_includes` — inherits all L1+L2 sub-skills from base role, appends variant-specific sub-skills. Layer 3 entry file (`CLAUDE.md`) adds variant-specific prose directives.
+- **SAME assembly pattern for both files** (human directive): CLAUDE.md and SOUL.md use the IDENTICAL layering mechanism — 3 source files (Layer 1 + Layer 2 + Layer 3) assembled into one flat file at deploy time. NOT two different mechanisms. NOT includes.yml `base_role`/`additional_includes` for CLAUDE.md. The same deploy-time flat assembly used for SOUL.md applies to CLAUDE.md too: Layer 1 CLAUDE.md + Layer 2 CLAUDE.md + Layer 3 CLAUDE.md → one flat `.squidsquad/<role>/CLAUDE.md`.
 - **SOUL.md assembly**: Deploy-time flat assembly. compose.py concatenates Layer 1 + Layer 2 + Layer 3 SOUL sources into one flat file. soul_adaptation.py and `{{runtime:}}` unchanged.
+- **CLAUDE.md assembly**: Same as SOUL.md — deploy-time flat assembly. compose.py concatenates Layer 1 CLAUDE.md + Layer 2 CLAUDE.md + Layer 3 CLAUDE.md into one flat file. 3 source files per layer, assembled identically to SOUL.md.
 - **Layer 3 naming**: Hyphen convention — `<base>-<variant>` (e.g., `pm-skill`, `qa-skill`, `dev-ios`). compose.py strips suffix to find base role.
 - **Layer 3 SOUL.md**: Full file (not overlay/patch).
 - **Variant inheritance**: Existing dev variants (skill, be, fe) become Layer 3 customizations. Must include integration test.
