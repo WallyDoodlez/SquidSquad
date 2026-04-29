@@ -233,10 +233,10 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 5b. If PR Flow enabled: monitor open PRs, sync comments/merges/changes to Issues
 6. Query GitHub Issues via `gh issue list` with label filters for `type:issue` + `status:in-progress` items marked as fixed → verify → close Issue
 7. Agent health check: read `.health` files for liveness, `current-state` for phase detail, flag stalled/idle agents
-8. If quiet cycle (no issues found, no verifications): skip log/commit, go to sleep
+8. If quiet cycle (no issues found, no verifications): skip log/commit
 9. Log iteration to qa/iterations/iter-N.md
-10. git add -A && git commit && git push
-11. Sleep [INTERVAL] minutes (from config.md) → repeat
+10. cycle_post.py handles commit, push, and iteration logging
+11. /loop handles re-invocation on interval — no manual sleep
 ```
 
 ---
@@ -250,7 +250,7 @@ All agents follow these rules to minimize merge conflicts on shared tracker file
 - Discussion comments on Issues are append-only: always add a new comment, never edit previous ones.
 - Push after completing each work unit (bug fix, feature, test run).
 - **Commit prefix convention**: every commit message must start with the agent's role name followed by a colon (e.g. `skill: fix bug`, `fe: add button`, `pm: verify features`). This prefix is used by the status line and PM health checks to detect agent activity via `git log --grep`.
-- If a rebase conflict occurs: keep both versions of the conflicted tracker section by appending, never discard.
+- If a rebase conflict occurs on state files (working-state, iterations): keep both versions by appending, never discard. Tracker data lives in GitHub Issues and is conflict-free.
 
 ### PR-Based Approval Flow (optional)
 
@@ -260,7 +260,7 @@ When `PR Flow: yes` is set in `config.md`, dev agents create PRs instead of push
 - **Task-level branch boundaries**: when Branch Workflow is enabled, agents automatically check out the correct feature branch before working on each task item (verification, shipping, bug fixes) and return to the working branch when done. This is handled by the transport layer (`task-begin` / `task-end`) — agents don't manage branches manually.
 - **Dev agent workflow**: when marking work as `Pending Test`, create a branch, push it, and open a **draft** PR via `gh pr create --draft`. QA converts it to ready (`gh pr ready`) after verification passes. This prevents premature merges before QA sign-off.
 - **PM and QA workflow**: each cycle, check open SquidSquad PRs via `gh pr list`. For each PR:
-  - If merged: update the tracker item status to `Shipped`
+  - If merged: update the tracker item status to `Pending Ship` (DM handles delivery and ships)
   - If changes requested: update status back to `In Progress` and append the feedback to Discussion
   - If new comments: append them to the tracker Discussion
 - **PM and QA still push to main** — only dev agent feature/bug work goes through PRs. PM updates (iterations, planning artifacts) and QA updates (qa-log, iterations) continue to push directly to main. All tracker operations use GitHub Issues regardless of PR flow.
