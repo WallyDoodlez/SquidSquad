@@ -594,7 +594,7 @@ def build_config_md(spec):
     lines.append("")
     routing = spec.get("model_routing") or {}
     lines.append(f"- **Default Model**: {routing.get('model', 'claude')}")
-    lines.append(f"- **Research Model**: {routing.get('model', 'claude')}")
+    lines.append(f"- **Research Model**: {routing.get('research_model', 'claude')}")
     lines.append("- **Discussion Prep Model**: claude")
     lines.append("- **Test Plan Model**: claude")
     lines.append("- **QA Execution Model**: claude")

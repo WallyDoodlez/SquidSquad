@@ -460,6 +460,22 @@ class TestBuildConfigMdStructure:
         text = wizard.build_config_md(_minimal_spec())
         assert "Description" not in text
 
+    def test_research_model_uses_own_key(self):
+        """#4123 regression: Research Model must not duplicate Default Model."""
+        spec = _minimal_spec()
+        spec["model_routing"] = {"model": "claude", "research_model": "gpt-5.2"}
+        text = wizard.build_config_md(spec)
+        assert "**Default Model**: claude" in text
+        assert "**Research Model**: gpt-5.2" in text
+
+    def test_research_model_defaults_to_claude(self):
+        """Research Model defaults to claude when not specified."""
+        spec = _minimal_spec()
+        spec["model_routing"] = {"model": "gpt-5.2"}
+        text = wizard.build_config_md(spec)
+        assert "**Default Model**: gpt-5.2" in text
+        assert "**Research Model**: claude" in text
+
 
 class TestBuildConfigMdAgentBlock:
     """Agent entries must match Q-new17 shape exactly."""
