@@ -275,57 +275,68 @@ def _resolve_includes_with_manifest(entry_file: Path, manifest: list) -> str:
     return "\n".join(result)
 
 
-def compose_role(role_name: str) -> str:
-    """Compose a role's full template from its entry file.
+def _assemble_claude(role_name: str) -> str:
+    """Assemble a CLAUDE.md template from Layer 1 + Layer 2 + Layer 3 sources.
 
-    After #328 Q-new22, the entry file lives at
-    `references/roles/<role>/CLAUDE.md` (self-contained role directory).
-    The legacy `references/sub-skills/roles/<variant>.md` layout has been
-    retired.
+    Same concatenation pattern as _assemble_soul():
+    - Layer 1: references/roles/base/CLAUDE.md (shared agent definition)
+    - Layer 2: references/roles/<role>/CLAUDE.md (role definition)
+    - Layer 3: references/roles/<variant>/CLAUDE.md (variant customization)
 
-    Layer 3 variants (pm-skill, dev-ios) use the base role's CLAUDE.md as
-    the entry template, with the merged manifest (base + additional includes).
-    This ensures variants get all base role content plus variant additions.
-
-    If includes.yml exists for the role (or inherited from dev), uses
-    manifest-driven composition. Otherwise falls back to inline
-    {{include:}} resolution.
+    The assembled template still contains {{include:}} directives which
+    are resolved separately by _resolve_includes_with_manifest().
     """
+    parts = []
+
+    # Layer 1 — Base agent CLAUDE.md
+    base_claude = BASE_ROLE_DIR / "CLAUDE.md"
+    if base_claude.exists():
+        parts.append(base_claude.read_text(encoding="utf-8").rstrip())
+        parts.append("")
+
+    # Layer 2 — Role CLAUDE.md (the role's entry template)
     role_identity = _get_entry_file_for_role(role_name)
-    entry_file = ROLES_DIR / role_identity / "CLAUDE.md"
-    if not entry_file.exists():
-        print(f"ERROR: Entry file not found: {entry_file}", file=sys.stderr)
-        sys.exit(1)
+    role_claude = ROLES_DIR / role_identity / "CLAUDE.md"
+    if role_claude.exists():
+        parts.append(role_claude.read_text(encoding="utf-8").rstrip())
 
-    manifest = _load_manifest(role_name)
-    if manifest is not None:
-        composed = _resolve_includes_with_manifest(entry_file, manifest)
-    else:
-        composed = _resolve_includes(entry_file)
+    # Layer 3 — Variant CLAUDE.md (if role_name is a variant and has its own)
+    if role_name != role_identity:
+        variant_claude = ROLES_DIR / role_name / "CLAUDE.md"
+        if variant_claude.exists():
+            parts.append("")
+            parts.append(variant_claude.read_text(encoding="utf-8").rstrip())
 
-    # Layer 3: append additional_includes that aren't in the base template.
-    # The base role's CLAUDE.md only has {{include:}} for its own sub-skills.
-    # Variant additional_includes need to be appended after the base content.
-    variant_yml = ROLES_DIR / role_name / "includes.yml"
-    if yaml and variant_yml.exists():
-        try:
-            vdata = yaml.safe_load(variant_yml.read_text(encoding="utf-8"))
-        except Exception:
-            vdata = {}
-        if isinstance(vdata, dict) and "additional_includes" in vdata:
-            additional = vdata["additional_includes"]
-            if isinstance(additional, list):
-                extra_parts = ["\n---\n"]
-                for inc_path in additional:
-                    full_path = SUB_SKILLS_DIR / f"{inc_path}.md"
-                    if full_path.exists():
-                        name = full_path.stem
-                        content = full_path.read_text(encoding="utf-8").rstrip()
-                        content = _strip_outer_markers(content, name)
-                        extra_parts.append(f"<!-- sub-skill: {name} -->")
-                        extra_parts.append(content)
-                        extra_parts.append(f"<!-- /sub-skill: {name} -->")
-                composed += "\n".join(extra_parts)
+    return "\n".join(parts)
+
+
+def compose_role(role_name: str) -> str:
+    """Compose a role's full CLAUDE.md from 3-layer assembly + include resolution.
+
+    Step 1: Assemble the template from Layer 1 + Layer 2 + Layer 3 CLAUDE.md
+            source files (same concatenation pattern as SOUL.md).
+    Step 2: Resolve {{include:}}, {{runtime:}}, {{capability:}} directives
+            using the role's includes.yml manifest.
+
+    The result is a single flat CLAUDE.md with all sub-skills inlined.
+    """
+    # Step 1: Assemble template from 3 layers
+    assembled = _assemble_claude(role_name)
+
+    # Write to a temp file for include resolution (reuses existing logic)
+    import tempfile
+    tmp = Path(tempfile.mktemp(suffix=".md"))
+    tmp.write_text(assembled, encoding="utf-8")
+
+    try:
+        # Step 2: Resolve includes
+        manifest = _load_manifest(role_name)
+        if manifest is not None:
+            composed = _resolve_includes_with_manifest(tmp, manifest)
+        else:
+            composed = _resolve_includes(tmp)
+    finally:
+        tmp.unlink(missing_ok=True)
 
     return composed
 
