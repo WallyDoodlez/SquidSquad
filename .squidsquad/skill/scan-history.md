@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-29 05:02
+
+- **Files scanned**: references/scripts/forge_adapter.py, references/scripts/health_check.py, references/scripts/shared_fs.py, references/scripts/soul_adaptation.py, references/scripts/triage.py
+- **Findings**: #4050 (shared_fs.py read_secret_or_env falsy check drops valid secrets — medium), #4051 (triage.py find_qa_rejected aborts on single-issue failure — medium)
+- **Items rejected by human**: none yet
+- **Notes**: forge_adapter.py, health_check.py, soul_adaptation.py all clean. All 5 files have test coverage.
+
 ## Scan — 2026-04-28 03:33
 
 - **Files scanned**: references/scripts/cycle_post.py, references/scripts/cycle_pre.py, references/scripts/tracker.py, references/scripts/reboot_agent.py, references/scripts/model_router.py
