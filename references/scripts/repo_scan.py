@@ -89,7 +89,6 @@ FRAMEWORK_FILES = {
     "tsconfig.json": "typescript",
     "manage.py": "django",
     "app.py": "flask",
-    "fastapi": "fastapi",
 }
 
 # CI/CD detection
@@ -219,6 +218,32 @@ def _check_package_json_deps(root, *dep_names):
         return []
 
 
+def _check_python_deps(root, *dep_names):
+    """Check if requirements.txt or pyproject.toml contains specific Python packages."""
+    found = []
+    # Check requirements.txt
+    req = Path(root) / "requirements.txt"
+    if req.exists():
+        try:
+            text = req.read_text(encoding="utf-8").lower()
+            for dep in dep_names:
+                if dep.lower() in text:
+                    found.append(dep)
+        except OSError:
+            pass
+    # Check pyproject.toml [project.dependencies] or [tool.poetry.dependencies]
+    pyp = Path(root) / "pyproject.toml"
+    if pyp.exists():
+        try:
+            text = pyp.read_text(encoding="utf-8").lower()
+            for dep in dep_names:
+                if dep.lower() in text and dep not in found:
+                    found.append(dep)
+        except OSError:
+            pass
+    return found
+
+
 def scan(root=None):
     """Scan a repository and return structured detection results.
 
@@ -272,6 +297,10 @@ def scan(root=None):
                   "nestjs": "nestjs", "tailwindcss": "tailwind"}
         if dep in fw_map:
             detected_frameworks.add(fw_map[dep])
+    # Check Python deps for frameworks not detectable by file presence
+    py_deps = _check_python_deps(root, "fastapi", "flask", "django")
+    for dep in py_deps:
+        detected_frameworks.add(dep)
     result["frameworks"] = sorted(detected_frameworks)
 
     # CI/CD detection
