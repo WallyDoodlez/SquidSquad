@@ -20,7 +20,6 @@ show_in_roster: true
 # Dev is a specialist — only installed in software-development projects.
 always_installed: false
 iteration_mode: normal
-general_role: developer
 
 # Files that define this role's identity and cycle behaviour.
 soul_template: SOUL.md

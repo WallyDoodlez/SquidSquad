@@ -116,23 +116,34 @@ def _resolve_includes(entry_file: Path) -> str:
 
 
 def _load_manifest(role_name: str) -> list | None:
-    """Load includes.yml for a role, with dev-variant inheritance.
+    """Load includes.yml for a role, with variant inheritance.
 
     Returns a list of include paths (e.g. ['common/tracker-protocol', ...])
     or None if no manifest exists.
 
+    Supports two schemas:
+    - Base role (Layer 2): ``includes: [list]``
+    - Variant (Layer 3): ``base_role: <base>`` + ``additional_includes: [list]``
+      Recursively loads the base role's manifest and appends additional includes.
+
     Dev variants (skill, be, fe) without their own includes.yml inherit
-    from references/roles/dev/includes.yml.
+    from references/roles/dev/includes.yml. Non-dev variants use
+    _strip_variant_suffix() to find their base role.
     """
     if yaml is None:
         return None
 
     manifest_path = ROLES_DIR / role_name / "includes.yml"
     if not manifest_path.exists():
-        # Dev variant inheritance: fall back to dev manifest
-        identities = _list_known_role_identities()
-        if role_name not in identities and "dev" in identities:
-            manifest_path = ROLES_DIR / "dev" / "includes.yml"
+        # Try suffix-strip fallback (pm-skill -> pm)
+        base_role = _strip_variant_suffix(role_name)
+        if base_role:
+            manifest_path = ROLES_DIR / base_role / "includes.yml"
+        else:
+            # Legacy dev variant inheritance: fall back to dev manifest
+            identities = _list_known_role_identities()
+            if role_name not in identities and "dev" in identities:
+                manifest_path = ROLES_DIR / "dev" / "includes.yml"
         if not manifest_path.exists():
             return None
 
@@ -142,7 +153,37 @@ def _load_manifest(role_name: str) -> list | None:
         print(f"WARNING: Failed to parse {manifest_path}: {e}", file=sys.stderr)
         return None
 
-    if not isinstance(data, dict) or "includes" not in data:
+    if not isinstance(data, dict):
+        return None
+
+    # Layer 3 variant schema: base_role + additional_includes
+    if "base_role" in data:
+        base_role = data["base_role"]
+        base_includes = _load_manifest(base_role)
+        if base_includes is None:
+            print(
+                f"ERROR: includes.yml for {role_name} declares base_role={base_role} "
+                f"but {base_role} has no includes.yml",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        additional = data.get("additional_includes", [])
+        if not isinstance(additional, list):
+            additional = []
+        # Validate additional includes
+        for inc_path in additional:
+            full_path = SUB_SKILLS_DIR / f"{inc_path}.md"
+            if not full_path.exists():
+                print(
+                    f"ERROR: includes.yml for {role_name} references missing "
+                    f"sub-skill: {inc_path} (expected at {full_path})",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+        return base_includes + additional
+
+    # Base role schema: includes list
+    if "includes" not in data:
         return None
     includes = data["includes"]
     if not isinstance(includes, list):
@@ -315,9 +356,9 @@ def _get_entry_file_for_role(role_name: str) -> str:
 
     After Q-new22 each role has its own self-contained directory at
     `references/roles/<role>/`. For any role that exists in the registry
-    the identity equals the role name. Anything else is treated as a
-    dev variant (e.g. `fe`, `be`, `skill`) and uses the `dev` role
-    template.
+    the identity equals the role name. Anything else is resolved via:
+    1. Suffix-strip: pm-skill -> pm (Layer 3 variant of any base role)
+    2. Dev fallback: skill, be, fe -> dev (legacy dev variants)
 
     After #328 Phase H the identity list is read from the manifest
     registry, not hardcoded — adding a new role directory under
@@ -327,6 +368,10 @@ def _get_entry_file_for_role(role_name: str) -> str:
     identities = _list_known_role_identities()
     if role_name in identities:
         return role_name
+    # Layer 3 variant: strip suffix to find base role (pm-skill -> pm)
+    base_role = _strip_variant_suffix(role_name)
+    if base_role and base_role in identities:
+        return base_role
     # Dev variants (skill, be, fe, bespoke names) compose from the
     # `dev` role template as long as one exists in the registry.
     if "dev" in identities:
@@ -413,53 +458,44 @@ def deploy_role(role_name: str, target_root: Path = None) -> Path:
     return output_path
 
 
-GENERAL_ROLES_DIR = ROLES_DIR / "general"
 BASE_ROLE_DIR = ROLES_DIR / "base"
 
-# Layer boundary markers in assembled SOUL.md
+# Layer boundary marker in assembled SOUL.md
 SOUL_LAYER_BASE_START = "<!-- layer: base -->"
 SOUL_LAYER_BASE_END = "<!-- /layer: base -->"
-SOUL_LAYER_GENERAL_START = "<!-- layer: general-role -->"
-SOUL_LAYER_GENERAL_END = "<!-- /layer: general-role -->"
 
 
-def _get_general_roles(role_name: str) -> list:
-    """Read general_role field from a role's manifest.yaml.
+def _strip_variant_suffix(role_name: str) -> str | None:
+    """Strip the variant suffix from a Layer 3 role name.
 
-    Returns a list of general role categories (e.g. ['developer'] or
-    ['coordinator', 'verifier'] for PM's dual assignment).
-    Dev variants (skill, be, fe) inherit from dev's manifest.
+    Uses rsplit("-", 1) to strip the last hyphen segment and checks if the
+    result is a known base role identity. Returns the base role name, or
+    None if no valid base role is found.
+
+    Examples:
+        pm-skill  -> pm
+        dev-ios   -> dev
+        qa-android -> qa
+        pm        -> None (already a base role)
+        skill     -> None (dev variant without hyphen — handled elsewhere)
     """
-    if yaml is None:
-        return []
-
-    manifest_path = ROLES_DIR / role_name / "manifest.yaml"
-    if not manifest_path.exists():
-        # Dev variant inheritance
-        identities = _list_known_role_identities()
-        if role_name not in identities and "dev" in identities:
-            manifest_path = ROLES_DIR / "dev" / "manifest.yaml"
-        if not manifest_path.exists():
-            return []
-
-    try:
-        data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
-    except Exception:
-        return []
-
-    general = data.get("general_role", [])
-    if isinstance(general, str):
-        return [general]
-    if isinstance(general, list):
-        return general
-    return []
+    if "-" not in role_name:
+        return None
+    base, _ = role_name.rsplit("-", 1)
+    identities = _list_known_role_identities()
+    if base in identities:
+        return base
+    return None
 
 
 def _assemble_soul(role_name: str) -> str:
-    """Assemble a flat SOUL.md from Layer 1 (base) + Layer 2 (general role) + Layer 3 (specific).
+    """Assemble a flat SOUL.md from Layer 1 (base) + role SOUL.
 
-    Returns the assembled content as a string. Layer markers are embedded so
-    upgrade_soul() can identify boundaries later.
+    Layer 1: references/roles/base/SOUL.md (shared agent identity)
+    Role SOUL: the role's own SOUL.md — for variants, this is the variant's
+    full SOUL.md (Layer 3), falling back to the base role's SOUL.md (Layer 2).
+
+    Layer markers are embedded so upgrade_soul() can identify boundaries.
     """
     parts = []
 
@@ -471,25 +507,23 @@ def _assemble_soul(role_name: str) -> str:
         parts.append(SOUL_LAYER_BASE_END)
         parts.append("")
 
-    # Layer 2 — General role SOUL(s)
-    general_roles = _get_general_roles(role_name)
-    if general_roles:
-        l2_parts = []
-        for gr in general_roles:
-            gr_soul = GENERAL_ROLES_DIR / gr / "SOUL.md"
-            if gr_soul.exists():
-                l2_parts.append(gr_soul.read_text(encoding="utf-8").rstrip())
-        if l2_parts:
-            parts.append(SOUL_LAYER_GENERAL_START)
-            parts.append("\n\n".join(l2_parts))
-            parts.append(SOUL_LAYER_GENERAL_END)
-            parts.append("")
+    # Role SOUL — variant's own SOUL.md, or base role's SOUL.md
+    # For variants (pm-skill): try variant's SOUL.md first, fall back to base (pm)
+    # For base roles (pm): use the role's own SOUL.md
+    # For dev variants (skill): use _get_entry_file_for_role -> dev
+    role_soul_path = ROLES_DIR / role_name / "SOUL.md"
+    if not role_soul_path.exists():
+        # Try base role via suffix strip (pm-skill -> pm)
+        base_role = _strip_variant_suffix(role_name)
+        if base_role:
+            role_soul_path = ROLES_DIR / base_role / "SOUL.md"
+        else:
+            # Legacy dev variant fallback (skill -> dev)
+            role_identity = _get_entry_file_for_role(role_name)
+            role_soul_path = ROLES_DIR / role_identity / "SOUL.md"
 
-    # Layer 3 — Specific role SOUL
-    role_identity = _get_entry_file_for_role(role_name)
-    soul_template = ROLES_DIR / role_identity / "SOUL.md"
-    if soul_template.exists():
-        parts.append(soul_template.read_text(encoding="utf-8").rstrip())
+    if role_soul_path.exists():
+        parts.append(role_soul_path.read_text(encoding="utf-8").rstrip())
 
     return "\n".join(parts) + "\n"
 
@@ -511,10 +545,10 @@ def _assemble_and_write_soul(role_name: str, target_root: Path = None):
 
 
 def upgrade_soul(role_name: str, target_root: Path = None) -> Path:
-    """Re-render Layer 1 and Layer 2 of a deployed SOUL.md, preserving Layer 3.
+    """Re-render Layer 1 (base) of a deployed SOUL.md, preserving role content.
 
-    This function is used during upgrades to pick up improvements to base and
-    general-role identity without clobbering the specific role's personality,
+    This function is used during upgrades to pick up improvements to the
+    base agent identity without clobbering the role's personality,
     Project Context, Project-Specific Responsibilities, or Project Adaptation.
 
     If no deployed SOUL.md exists, falls through to full assembly.
@@ -530,21 +564,17 @@ def upgrade_soul(role_name: str, target_root: Path = None) -> Path:
 
     existing = soul_path.read_text(encoding="utf-8")
 
-    # Find Layer 3 boundary: everything after the general-role end marker
-    # is Layer 3 content (preserved on upgrade).
-    layer3_content = None
-    if SOUL_LAYER_GENERAL_END in existing:
-        idx = existing.index(SOUL_LAYER_GENERAL_END) + len(SOUL_LAYER_GENERAL_END)
-        layer3_content = existing[idx:].lstrip("\n")
-    elif SOUL_LAYER_BASE_END in existing:
-        # No Layer 2 was present — L3 starts after base end
+    # Find role content boundary: everything after the base end marker
+    # is role-specific content (preserved on upgrade).
+    role_content = None
+    if SOUL_LAYER_BASE_END in existing:
         idx = existing.index(SOUL_LAYER_BASE_END) + len(SOUL_LAYER_BASE_END)
-        layer3_content = existing[idx:].lstrip("\n")
+        role_content = existing[idx:].lstrip("\n")
     else:
-        # Legacy flat SOUL.md with no layer markers — treat entire file as L3
-        layer3_content = existing
+        # Legacy flat SOUL.md with no layer markers — treat entire file as role content
+        role_content = existing
 
-    # Re-render Layer 1 + Layer 2 from current templates
+    # Re-render Layer 1 from current template
     parts = []
     base_soul = BASE_ROLE_DIR / "SOUL.md"
     if base_soul.exists():
@@ -553,22 +583,9 @@ def upgrade_soul(role_name: str, target_root: Path = None) -> Path:
         parts.append(SOUL_LAYER_BASE_END)
         parts.append("")
 
-    general_roles = _get_general_roles(role_name)
-    if general_roles:
-        l2_parts = []
-        for gr in general_roles:
-            gr_soul = GENERAL_ROLES_DIR / gr / "SOUL.md"
-            if gr_soul.exists():
-                l2_parts.append(gr_soul.read_text(encoding="utf-8").rstrip())
-        if l2_parts:
-            parts.append(SOUL_LAYER_GENERAL_START)
-            parts.append("\n\n".join(l2_parts))
-            parts.append(SOUL_LAYER_GENERAL_END)
-            parts.append("")
-
-    # Append preserved Layer 3
-    if layer3_content:
-        parts.append(layer3_content.rstrip())
+    # Append preserved role content
+    if role_content:
+        parts.append(role_content.rstrip())
 
     content = "\n".join(parts) + "\n"
 

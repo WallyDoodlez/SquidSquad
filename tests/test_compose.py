@@ -526,34 +526,27 @@ class TestCollectAllRoles:
 # Layered role architecture (#3465)
 # ---------------------------------------------------------------------------
 
-class TestGetGeneralRoles:
-    """Test _get_general_roles reads general_role from manifest.yaml."""
+class TestStripVariantSuffix:
+    """Test _strip_variant_suffix resolves variant names to base roles."""
 
-    def test_dev_has_developer(self):
-        roles = compose._get_general_roles("dev")
-        assert roles == ["developer"]
+    def test_pm_skill_resolves_to_pm(self):
+        assert compose._strip_variant_suffix("pm-skill") == "pm"
 
-    def test_pm_has_coordinator_and_verifier(self):
-        roles = compose._get_general_roles("pm")
-        assert "coordinator" in roles
-        assert "verifier" in roles
+    def test_dev_ios_resolves_to_dev(self):
+        assert compose._strip_variant_suffix("dev-ios") == "dev"
 
-    def test_qa_has_verifier(self):
-        roles = compose._get_general_roles("qa")
-        assert roles == ["verifier"]
+    def test_qa_android_resolves_to_qa(self):
+        assert compose._strip_variant_suffix("qa-android") == "qa"
 
-    def test_dm_has_delivery(self):
-        roles = compose._get_general_roles("dm")
-        assert roles == ["delivery"]
+    def test_base_role_returns_none(self):
+        assert compose._strip_variant_suffix("pm") is None
 
-    def test_skill_variant_inherits_from_dev(self):
-        """Dev variants without own manifest inherit general_role from dev."""
-        roles = compose._get_general_roles("skill")
-        assert roles == ["developer"]
+    def test_no_hyphen_returns_none(self):
+        assert compose._strip_variant_suffix("skill") is None
 
 
 class TestAssembleSoul:
-    """Test _assemble_soul produces 3-layer flat output."""
+    """Test _assemble_soul produces L1 base + role SOUL flat output."""
 
     def test_contains_layer1_base_content(self):
         content = compose._assemble_soul("skill")
@@ -561,22 +554,17 @@ class TestAssembleSoul:
         assert "<!-- /layer: base -->" in content
         assert "Core Identity" in content
 
-    def test_contains_layer2_general_role(self):
+    def test_contains_role_soul(self):
+        """Role SOUL (Layer 2) is included after base."""
         content = compose._assemble_soul("skill")
-        assert "<!-- layer: general-role -->" in content
-        assert "<!-- /layer: general-role -->" in content
-        assert "Developer Identity" in content
-
-    def test_contains_layer3_role_specific(self):
-        content = compose._assemble_soul("skill")
-        # Layer 3 is the dev SOUL.md content
+        # Dev SOUL.md content (skill inherits from dev)
         assert "Professional Identity" in content
 
-    def test_pm_dual_layer2(self):
-        """PM gets both coordinator and verifier Layer 2 content."""
+    def test_pm_has_own_soul(self):
+        """PM gets its own role-specific SOUL content."""
         content = compose._assemble_soul("pm")
-        assert "Coordinator Identity" in content
-        assert "Verifier Identity" in content
+        assert "Soul" in content
+        assert "## Project Adaptation" in content
 
     def test_single_flat_file(self):
         """Assembly produces a single string, not multiple files."""
@@ -585,44 +573,37 @@ class TestAssembleSoul:
         assert "## Project Adaptation" in content
 
     def test_project_adaptation_present(self):
-        """Layer 3 includes the Project Adaptation section."""
         content = compose._assemble_soul("qa")
         assert "## Project Adaptation" in content
         assert "<!-- /project-adaptation -->" in content
 
 
 class TestUpgradeSoul:
-    """Test upgrade_soul preserves Layer 3 and Project Adaptation."""
+    """Test upgrade_soul preserves role content and Project Adaptation."""
 
-    def test_preserves_layer3_on_upgrade(self, tmp_path):
-        """upgrade_soul re-renders L1+L2 but keeps L3 unchanged."""
+    def test_preserves_role_content_on_upgrade(self, tmp_path):
+        """upgrade_soul re-renders L1 but keeps role content unchanged."""
         ss = tmp_path / ".squidsquad" / "pm"
         ss.mkdir(parents=True)
 
-        # Initial deploy
         compose._assemble_and_write_soul("pm", tmp_path)
         soul_path = ss / "SOUL.md"
         original = soul_path.read_text(encoding="utf-8")
 
-        # Simulate user customization in Layer 3 area
+        # Simulate user customization
         modified = original.replace(
             "## Project Adaptation",
             "## Project Adaptation\n\nHuman added this custom note."
         )
         soul_path.write_text(modified, encoding="utf-8")
 
-        # Run upgrade
         compose.upgrade_soul("pm", tmp_path)
         upgraded = soul_path.read_text(encoding="utf-8")
 
-        # Layer 1+2 markers present
         assert "<!-- layer: base -->" in upgraded
-        assert "<!-- layer: general-role -->" in upgraded
-        # Custom L3 content preserved
         assert "Human added this custom note." in upgraded
 
     def test_atomic_write_no_tmp_leftover(self, tmp_path):
-        """upgrade_soul uses atomic write — no .tmp file remains."""
         ss = tmp_path / ".squidsquad" / "pm"
         ss.mkdir(parents=True)
         compose._assemble_and_write_soul("pm", tmp_path)
@@ -630,7 +611,6 @@ class TestUpgradeSoul:
         assert not (ss / "SOUL.md.tmp").exists()
 
     def test_creates_if_missing(self, tmp_path):
-        """upgrade_soul creates SOUL.md from scratch if it doesn't exist."""
         ss = tmp_path / ".squidsquad" / "qa"
         ss.mkdir(parents=True)
         compose.upgrade_soul("qa", tmp_path)
@@ -638,8 +618,8 @@ class TestUpgradeSoul:
         assert soul.exists()
         assert "<!-- layer: base -->" in soul.read_text(encoding="utf-8")
 
-    def test_legacy_flat_soul_treated_as_layer3(self, tmp_path):
-        """A pre-migration SOUL.md without markers is preserved as Layer 3."""
+    def test_legacy_flat_soul_preserved(self, tmp_path):
+        """A pre-migration SOUL.md without markers is preserved as role content."""
         ss = tmp_path / ".squidsquad" / "skill"
         ss.mkdir(parents=True)
         legacy_content = "## Soul - Legacy\n\nOld flat content.\n\n## Project Adaptation\n\nCustom.\n<!-- /project-adaptation -->\n"
@@ -648,9 +628,25 @@ class TestUpgradeSoul:
         compose.upgrade_soul("skill", tmp_path)
         upgraded = (ss / "SOUL.md").read_text(encoding="utf-8")
 
-        # New L1+L2 prepended
         assert "<!-- layer: base -->" in upgraded
-        assert "Developer Identity" in upgraded
-        # Old content preserved as L3
         assert "Old flat content." in upgraded
         assert "Custom." in upgraded
+
+
+class TestVariantInheritance:
+    """Test Layer 3 variant inheritance in _load_manifest and _get_entry_file_for_role."""
+
+    def test_get_entry_file_suffix_strip(self):
+        """pm-skill resolves to pm entry file."""
+        result = compose._get_entry_file_for_role("pm-skill")
+        assert result == "pm"
+
+    def test_get_entry_file_dev_variant_unchanged(self):
+        """skill still resolves to dev (legacy behavior)."""
+        result = compose._get_entry_file_for_role("skill")
+        assert result == "dev"
+
+    def test_get_entry_file_base_role_unchanged(self):
+        """pm resolves to pm."""
+        result = compose._get_entry_file_for_role("pm")
+        assert result == "pm"
