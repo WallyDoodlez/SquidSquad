@@ -411,7 +411,7 @@ class TestListProviders:
         ds = [p for p in providers if p["name"] == "deepseek"]
         assert len(ds) == 1
         assert ds[0]["auth_env_var"] == "DEEPSEEK_API_KEY"
-        assert "deepseek-r1" in ds[0]["models"]
+        assert "deepseek-v4-pro" in ds[0]["models"]
 
     def test_provider_has_required_fields(self):
         """Each provider entry should have name, display_name, default_model, models, auth_env_var."""

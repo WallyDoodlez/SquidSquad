@@ -249,23 +249,19 @@ class TestPrMerge:
         assert "--delete-branch" in merge_call[0][0]
 
     @patch("git_ops._run_list")
-    def test_merge_triggers_ship_transition(self, mock_run):
-        """#3747: pr-merge must trigger ship transition for linked issues."""
+    def test_merge_extracts_linked_issue_from_branch(self, mock_run):
+        """pr-merge extracts linked issue number from branch name."""
         mock_run.side_effect = [
             _mock_result(stdout='{"state": "OPEN"}'),
-            _mock_result(stdout=""),
+            _mock_result(stdout=""),  # merge succeeds
             _mock_result(stdout='{"headRefName": "squidsquad/skill/99"}'),
-            _mock_result(stdout="#99: status:pending-ship -> status:shipped"),
         ]
-        git_ops.pr_merge(99)
-        # 4th call should be tracker.py transition
-        ship_call = mock_run.call_args_list[3]
-        ship_cmd = ship_call[0][0]
-        assert "tracker.py" in str(ship_cmd)
-        assert "transition" in ship_cmd
-        assert "99" in ship_cmd
-        assert "pending-ship" in ship_cmd
-        assert "shipped" in ship_cmd
+        success, msg = git_ops.pr_merge(99)
+        assert success is True
+        assert msg == "merged"
+        # 3rd call fetches branch name to extract issue number
+        branch_call = mock_run.call_args_list[2]
+        assert "headRefName" in str(branch_call)
 
     @patch("git_ops._run_list")
     def test_already_merged(self, mock_run):

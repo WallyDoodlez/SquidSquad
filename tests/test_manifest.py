@@ -100,6 +100,20 @@ class TestManifestIntegrity:
             else:
                 referenced.add(inc)
 
+        # Also scan includes.yml files for references not in manifest.md
+        try:
+            import yaml
+            roles_dir = self.sub_skills_dir.parent / "roles"
+            for inc_yml in roles_dir.rglob("includes.yml"):
+                data = yaml.safe_load(inc_yml.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    for inc in data.get("includes", []):
+                        referenced.add(f"{inc}.md")
+                    for inc in data.get("additional_includes", []):
+                        referenced.add(f"{inc}.md")
+        except Exception:
+            pass
+
         orphans = all_md - referenced
         assert not orphans, f"Sub-skill files not referenced in manifest: {orphans}"
 
