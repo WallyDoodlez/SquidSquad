@@ -95,11 +95,15 @@ def find_qa_rejected(role: str) -> list[dict]:
     results = []
     for item in items:
         number = item["number"]
-        # Fetch comments
-        detail_raw = _gh(
-            "issue", "view", str(number),
-            "--json", "comments",
-        )
+        # Fetch comments — isolate per-issue failures so one bad issue
+        # doesn't abort the entire triage scan (#4051).
+        try:
+            detail_raw = _gh(
+                "issue", "view", str(number),
+                "--json", "comments",
+            )
+        except RuntimeError:
+            continue
         try:
             detail = json.loads(detail_raw)
         except json.JSONDecodeError:
