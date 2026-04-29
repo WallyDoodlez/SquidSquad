@@ -24,7 +24,7 @@ iteration_mode: normal
 
 # Files that define this role's identity and cycle behaviour.
 soul_template: SOUL.md
-claude_template: CLAUDE.md
+claude_template: instructions.md
 
 # Terminal node — DM is where every path ends.
 routes_to: []

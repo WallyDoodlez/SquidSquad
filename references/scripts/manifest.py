@@ -387,9 +387,9 @@ def _load_kind(base_dir, kind_dir, validator):
             # Skip directories that aren't deployable roles:
             # - Layer source dirs (base/) — no includes.yml
             # - Layer 3 variant dirs — have includes.yml with base_role
-            # Only report missing manifest for base role dirs (have CLAUDE.md
+            # Only report missing manifest for base role dirs (have instructions.md
             # + includes.yml with 'includes:' key, indicating a deployable role).
-            if (d / "CLAUDE.md").exists():
+            if (d / "instructions.md").exists():
                 inc_yml = d / "includes.yml"
                 is_layer_source = not inc_yml.exists()
                 is_variant = False

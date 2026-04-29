@@ -39,7 +39,7 @@ def compose_env(tmp_path):
     roles = tmp_path / "references" / "roles"
     dev_role = roles / "dev"
     dev_role.mkdir(parents=True)
-    (dev_role / "CLAUDE.md").write_text(
+    (dev_role / "instructions.md").write_text(
         "# Dev Agent\n\n"
         "{{runtime: souls/dev}}\n"
         "{{include: common/tracker-protocol}}\n"
@@ -56,7 +56,7 @@ def compose_env(tmp_path):
 
     pm_role = roles / "pm"
     pm_role.mkdir(parents=True)
-    (pm_role / "CLAUDE.md").write_text(
+    (pm_role / "instructions.md").write_text(
         "# PM Agent\n\n"
         "{{include: common/tracker-protocol}}\n"
         "Active agents: [ACTIVE_AGENTS]\n"
@@ -100,7 +100,7 @@ def compose_env(tmp_path):
 
 class TestResolveIncludes:
     def test_basic_include(self, compose_env):
-        entry = compose_env / "references" / "roles" / "dev" / "CLAUDE.md"
+        entry = compose_env / "references" / "roles" / "dev" / "instructions.md"
         with patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
             result = compose._resolve_includes(entry)
         assert "## Tracker Protocol" in result
@@ -115,7 +115,7 @@ class TestResolveIncludes:
         assert "<!-- ERROR: Missing include: common/nonexistent -->" in result
 
     def test_runtime_directive(self, compose_env):
-        entry = compose_env / "references" / "roles" / "dev" / "CLAUDE.md"
+        entry = compose_env / "references" / "roles" / "dev" / "instructions.md"
         with patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
             result = compose._resolve_includes(entry)
         assert "## Soul" in result
@@ -529,23 +529,26 @@ class TestCollectAllRoles:
 # Layered role architecture (#3465)
 # ---------------------------------------------------------------------------
 
-class TestStripVariantSuffix:
-    """Test _strip_variant_suffix resolves variant names to base roles."""
+class TestResolveVariant:
+    """Test _resolve_variant resolves nested variant directories."""
 
-    def test_pm_skill_resolves_to_pm(self):
-        assert compose._strip_variant_suffix("pm-skill") == "pm"
+    def test_pm_skill_resolves(self):
+        result = compose._resolve_variant("pm-skill")
+        assert result == ("pm", "skill")
 
-    def test_dev_ios_resolves_to_dev(self):
-        assert compose._strip_variant_suffix("dev-ios") == "dev"
+    def test_dev_ios_resolves(self):
+        result = compose._resolve_variant("dev-ios")
+        assert result == ("dev", "ios")
 
-    def test_qa_android_resolves_to_qa(self):
-        assert compose._strip_variant_suffix("qa-android") == "qa"
+    def test_qa_android_resolves(self):
+        result = compose._resolve_variant("qa-android")
+        assert result == ("qa", "android")
 
     def test_base_role_returns_none(self):
-        assert compose._strip_variant_suffix("pm") is None
+        assert compose._resolve_variant("pm") is None
 
     def test_no_hyphen_returns_none(self):
-        assert compose._strip_variant_suffix("skill") is None
+        assert compose._resolve_variant("skill") is None
 
 
 class TestAssembleSoul:

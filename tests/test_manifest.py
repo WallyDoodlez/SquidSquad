@@ -48,7 +48,7 @@ class TestManifestIntegrity:
         """Each role entry file referenced in manifest exists.
 
         After #328 Q-new22, role CLAUDE.md templates live in
-        `references/roles/<role>/CLAUDE.md`, not under sub-skills/.
+        `references/roles/<role>/instructions.md`, not under sub-skills/.
         """
         from conftest import REFERENCES_DIR
         role_refs = re.findall(
@@ -57,10 +57,10 @@ class TestManifestIntegrity:
         )
         assert role_refs, (
             "Expected manifest to reference at least one concrete role "
-            "CLAUDE.md (e.g. `references/roles/pm/CLAUDE.md`)."
+            "CLAUDE.md (e.g. `references/roles/pm/instructions.md`)."
         )
         for role in role_refs:
-            path = REFERENCES_DIR / "roles" / role / "CLAUDE.md"
+            path = REFERENCES_DIR / "roles" / role / "instructions.md"
             assert path.exists(), f"Role entry file missing: {path}"
 
     def test_include_targets_exist(self):
@@ -126,7 +126,7 @@ class TestManifestIntegrity:
 
     def test_legacy_roles_include_namespace_gone(self):
         """Manifest must no longer reference a `roles/` include namespace."""
-        # The new pattern is `references/roles/<role>/CLAUDE.md`, not `roles/x`
+        # The new pattern is `references/roles/<role>/instructions.md`, not `roles/x`
         legacy = re.findall(r'`roles/[^`]+`', self.manifest_text)
         assert not legacy, f"Manifest still references legacy roles/: {legacy}"
 
@@ -179,7 +179,7 @@ class TestIncludesYml:
         import yaml
         for role in self.ROLES:
             yml_path = self.roles_dir / role / "includes.yml"
-            tmpl_path = self.roles_dir / role / "CLAUDE.md"
+            tmpl_path = self.roles_dir / role / "instructions.md"
             data = yaml.safe_load(yml_path.read_text(encoding="utf-8"))
             yml_set = set(data["includes"])
 
@@ -227,7 +227,7 @@ class TestComposeManifestIntegration:
         """Manifest-driven composition produces identical output to inline."""
         from compose import _resolve_includes, _resolve_includes_with_manifest, _load_manifest
         # For dev role, both paths should produce identical output
-        entry_file = self.roles_dir / "dev" / "CLAUDE.md"
+        entry_file = self.roles_dir / "dev" / "instructions.md"
         inline_result = _resolve_includes(entry_file)
         manifest = _load_manifest("dev")
         manifest_result = _resolve_includes_with_manifest(entry_file, manifest)

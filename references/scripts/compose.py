@@ -133,17 +133,18 @@ def _load_manifest(role_name: str) -> list | None:
     if yaml is None:
         return None
 
-    manifest_path = ROLES_DIR / role_name / "includes.yml"
+    # Try nested variant path first (dev-skill -> dev/skill/includes.yml)
+    resolved = _resolve_variant(role_name)
+    if resolved:
+        base, variant = resolved
+        manifest_path = ROLES_DIR / base / variant / "includes.yml"
+    else:
+        manifest_path = ROLES_DIR / role_name / "includes.yml"
     if not manifest_path.exists():
-        # Try suffix-strip fallback (pm-skill -> pm)
-        base_role = _strip_variant_suffix(role_name)
-        if base_role:
-            manifest_path = ROLES_DIR / base_role / "includes.yml"
-        else:
-            # Legacy dev variant inheritance: fall back to dev manifest
-            identities = _list_known_role_identities()
-            if role_name not in identities and "dev" in identities:
-                manifest_path = ROLES_DIR / "dev" / "includes.yml"
+        # Legacy dev variant inheritance: fall back to dev manifest
+        identities = _list_known_role_identities()
+        if role_name not in identities and "dev" in identities:
+            manifest_path = ROLES_DIR / "dev" / "includes.yml"
         if not manifest_path.exists():
             return None
 
@@ -288,21 +289,23 @@ def _assemble_claude(role_name: str) -> str:
     """
     parts = []
 
-    # Layer 1 — Base agent CLAUDE.md
-    base_claude = BASE_ROLE_DIR / "CLAUDE.md"
+    # Layer 1 — Base agent instructions (at roles/ root)
+    base_claude = BASE_ROLE_DIR / "instructions.md"
     if base_claude.exists():
         parts.append(base_claude.read_text(encoding="utf-8").rstrip())
         parts.append("")
 
-    # Layer 2 — Role CLAUDE.md (the role's entry template)
+    # Layer 2 — Role instructions (the role's entry template)
     role_identity = _get_entry_file_for_role(role_name)
-    role_claude = ROLES_DIR / role_identity / "CLAUDE.md"
+    role_claude = ROLES_DIR / role_identity / "instructions.md"
     if role_claude.exists():
         parts.append(role_claude.read_text(encoding="utf-8").rstrip())
 
-    # Layer 3 — Variant CLAUDE.md (if role_name is a variant and has its own)
-    if role_name != role_identity:
-        variant_claude = ROLES_DIR / role_name / "CLAUDE.md"
+    # Layer 3 — Variant instructions (nested: roles/<base>/<variant>/)
+    resolved = _resolve_variant(role_name)
+    if resolved:
+        base, variant = resolved
+        variant_claude = ROLES_DIR / base / variant / "instructions.md"
         if variant_claude.exists():
             parts.append("")
             parts.append(variant_claude.read_text(encoding="utf-8").rstrip())
@@ -345,7 +348,7 @@ def compose_all() -> str:
     """Compose the dev-agent template as the default agent-instructions.md."""
     # agent-instructions.md is the dev template (primary output)
     header = "<!-- GENERATED FILE — DO NOT EDIT. -->\n"
-    header += "<!-- Source: references/roles/dev/CLAUDE.md + sub-skills/ -->\n"
+    header += "<!-- Source: references/roles/dev/instructions.md + sub-skills/ -->\n"
     header += "<!-- Regenerate with: python references/scripts/compose.py all -->\n\n"
     composed = compose_role("dev")
     return header + composed
@@ -388,7 +391,7 @@ def _list_known_role_identities():
         return set()
     return {
         d.name for d in ROLES_DIR.iterdir()
-        if d.is_dir() and (d / "CLAUDE.md").exists()
+        if d.is_dir() and (d / "instructions.md").exists()
     }
 
 
@@ -407,22 +410,13 @@ def _get_entry_file_for_role(role_name: str) -> str:
     without any compose.py edit.
     """
     identities = _list_known_role_identities()
-    # Check if this role is a Layer 3 variant (has base_role in includes.yml).
-    # Variants use their base role's entry template for composition.
-    if role_name in identities and yaml:
-        variant_yml = ROLES_DIR / role_name / "includes.yml"
-        if variant_yml.exists():
-            try:
-                vdata = yaml.safe_load(variant_yml.read_text(encoding="utf-8"))
-                if isinstance(vdata, dict) and "base_role" in vdata:
-                    return vdata["base_role"]
-            except Exception:
-                pass
+    if role_name in identities:
         return role_name
-    # Layer 3 variant without own CLAUDE.md: strip suffix (pm-skill -> pm)
-    base_role = _strip_variant_suffix(role_name)
-    if base_role and base_role in identities:
-        return base_role
+    # Layer 3 variant: resolve nested directory (dev-skill -> dev/skill/)
+    resolved = _resolve_variant(role_name)
+    if resolved:
+        base, _ = resolved
+        return base
     # Dev variants (skill, be, fe, bespoke names) compose from the
     # `dev` role template as long as one exists in the registry.
     if "dev" in identities:
@@ -509,48 +503,54 @@ def deploy_role(role_name: str, target_root: Path = None) -> Path:
     return output_path
 
 
-BASE_ROLE_DIR = ROLES_DIR / "base"
+# Layer 1 source files live at the root of ROLES_DIR (no subdirectory)
+BASE_ROLE_DIR = ROLES_DIR
 
 # Layer boundary marker in assembled SOUL.md
 SOUL_LAYER_BASE_START = "<!-- layer: base -->"
 SOUL_LAYER_BASE_END = "<!-- /layer: base -->"
 
 
-def _strip_variant_suffix(role_name: str) -> str | None:
-    """Strip the variant suffix from a Layer 3 role name.
+def _resolve_variant(role_name: str) -> tuple[str, str] | None:
+    """Resolve a variant role name to (base_role, variant_name).
 
-    Uses rsplit("-", 1) to strip the last hyphen segment and checks if the
-    result is a known base role identity. Returns the base role name, or
-    None if no valid base role is found.
+    Layer 3 variants live nested inside their base role directory:
+    references/roles/<base>/<variant>/. The agent instance name uses
+    a hyphen convention: dev-skill -> roles/dev/skill/.
+
+    Returns (base, variant) or None if not a variant.
 
     Examples:
-        pm-skill  -> pm
-        dev-ios   -> dev
-        qa-android -> qa
-        pm        -> None (already a base role)
-        skill     -> None (dev variant without hyphen — handled elsewhere)
+        dev-skill  -> ("dev", "skill")
+        pm-ios     -> ("pm", "ios")
+        pm         -> None (base role, not a variant)
+        skill      -> None (legacy dev variant without hyphen)
     """
     if "-" not in role_name:
         return None
-    base, _ = role_name.rsplit("-", 1)
+    base, variant = role_name.split("-", 1)
+    variant_dir = ROLES_DIR / base / variant
+    if variant_dir.is_dir() and (variant_dir / "instructions.md").exists():
+        return base, variant
+    # Fallback: check if base is a known identity
     identities = _list_known_role_identities()
-    if base in identities:
-        return base
+    if base in identities and (ROLES_DIR / base / variant).is_dir():
+        return base, variant
     return None
 
 
 def _assemble_soul(role_name: str) -> str:
     """Assemble a flat SOUL.md from Layer 1 (base) + role SOUL.
 
-    Layer 1: references/roles/base/SOUL.md (shared agent identity)
-    Role SOUL: the role's own SOUL.md — for variants, this is the variant's
-    full SOUL.md (Layer 3), falling back to the base role's SOUL.md (Layer 2).
+    Layer 1: references/roles/SOUL.md (at roles root — shared agent identity)
+    Role SOUL: for variants (dev-skill), try roles/dev/skill/SOUL.md first,
+    then fall back to roles/dev/SOUL.md. For base roles, use roles/<role>/SOUL.md.
 
     Layer markers are embedded so upgrade_soul() can identify boundaries.
     """
     parts = []
 
-    # Layer 1 — Base agent SOUL
+    # Layer 1 — Base agent SOUL (at roles/ root)
     base_soul = BASE_ROLE_DIR / "SOUL.md"
     if base_soul.exists():
         parts.append(SOUL_LAYER_BASE_START)
@@ -559,16 +559,16 @@ def _assemble_soul(role_name: str) -> str:
         parts.append("")
 
     # Role SOUL — variant's own SOUL.md, or base role's SOUL.md
-    # For variants (pm-skill): try variant's SOUL.md first, fall back to base (pm)
-    # For base roles (pm): use the role's own SOUL.md
-    # For dev variants (skill): use _get_entry_file_for_role -> dev
-    role_soul_path = ROLES_DIR / role_name / "SOUL.md"
-    if not role_soul_path.exists():
-        # Try base role via suffix strip (pm-skill -> pm)
-        base_role = _strip_variant_suffix(role_name)
-        if base_role:
-            role_soul_path = ROLES_DIR / base_role / "SOUL.md"
-        else:
+    resolved = _resolve_variant(role_name)
+    if resolved:
+        base, variant = resolved
+        # Try variant's own SOUL.md first (roles/<base>/<variant>/SOUL.md)
+        role_soul_path = ROLES_DIR / base / variant / "SOUL.md"
+        if not role_soul_path.exists():
+            role_soul_path = ROLES_DIR / base / "SOUL.md"
+    else:
+        role_soul_path = ROLES_DIR / role_name / "SOUL.md"
+        if not role_soul_path.exists():
             # Legacy dev variant fallback (skill -> dev)
             role_identity = _get_entry_file_for_role(role_name)
             role_soul_path = ROLES_DIR / role_identity / "SOUL.md"
@@ -738,7 +738,7 @@ def main():
         if ROLES_DIR.exists():
             roles = [
                 d.name for d in ROLES_DIR.iterdir()
-                if d.is_dir() and (d / "CLAUDE.md").exists()
+                if d.is_dir() and (d / "instructions.md").exists()
             ]
             print(f"Available roles: {', '.join(sorted(roles))}")
         sys.exit(0)

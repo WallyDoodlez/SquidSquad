@@ -1,49 +1,61 @@
 # Layered Role Architecture
 
-Role definitions compose from 3 layers, assembled at deploy time into flat files.
+Role definitions compose from 4 layers. The directory depth IS the layer.
 
-## Layer Stack
+## Directory Structure
 
 ```
-Layer 1: Agent Definition (references/roles/base/)
-├── SOUL.md — what any SquidSquad agent IS (professionalism, discipline, quality gate)
-│
-├── Layer 2: Role Definition (references/roles/<role>/)
-│   ├── dev/ — engineering specialist (CLAUDE.md, SOUL.md, includes.yml, manifest.yaml)
-│   ├── pm/ — project manager
-│   ├── qa/ — verification specialist
-│   ├── dm/ — delivery manager
-│   └── designer/ — design specialist
-│
-└── Layer 3: Role Customization (references/roles/<base>-<variant>/)
-    ├── dev-skill/, pm-skill/, qa-skill/, dm-skill/ — skill development preset
-    ├── dev-ios/, pm-ios/, qa-ios/, dm-ios/ — iOS preset
-    ├── dev-web/, pm-web/, qa-web/, dm-web/ — web preset
-    ├── dev-android/, pm-android/, qa-android/, dm-android/ — Android preset
-    └── dev-fullstack/, pm-fullstack/, qa-fullstack/, dm-fullstack/ — full-stack preset
+references/roles/
+├── instructions.md              ← Layer 1 (base agent definition)
+├── SOUL.md                      ← Layer 1 (base agent identity)
+├── dev/                         ← Layer 2 (role definition)
+│   ├── instructions.md
+│   ├── SOUL.md
+│   ├── includes.yml
+│   ├── manifest.yaml
+│   └── skill/                   ← Layer 3 (domain variant)
+│       ├── instructions.md
+│       ├── SOUL.md
+│       └── includes.yml
+
+.squidsquad/<agent>/             ← Layer 4 (project-specific)
+├── CLAUDE.md                       (deployed — L1+L2+L3 assembled)
+├── SOUL.md                         (deployed — L1+L2/L3 assembled + Project Adaptation)
+└── role-adaptations.md             (project signals detected by soul-shepherd)
 ```
 
-## How It Works
+## The 4 Layers
 
-**SOUL.md**: `compose.py deploy <role>` assembles: L1 base/SOUL.md + role SOUL.md → flat file.
-For variants, the variant's own SOUL.md replaces the base role's (full file, not overlay).
-Layer marker (`<!-- layer: base -->`) enables `upgrade-soul` to re-render L1 without clobbering role content.
+| Layer | Location | What it defines | Who maintains it |
+|-------|----------|-----------------|------------------|
+| **L1 — Agent** | `roles/` root | What ANY SquidSquad agent is | SquidSquad core |
+| **L2 — Role** | `roles/<role>/` | What a dev/pm/qa/dm IS | SquidSquad core |
+| **L3 — Domain** | `roles/<role>/<variant>/` | Domain specialization (iOS, web, skill) | Preset authors |
+| **L4 — Project** | `.squidsquad/<agent>/` | Project-specific adaptations | soul-shepherd + human |
 
-**CLAUDE.md**: Assembled from entry template + includes.yml sub-skills.
-Layer 3 variants use `includes.yml` with `base_role` + `additional_includes` schema — inherits all base role sub-skills, appends variant-specific ones.
+## How Layers Compose
 
-**Naming**: `<base>-<variant>` (e.g., `pm-skill`). `compose.py` strips suffix to find base role.
+**Horizontal scaling**: Add more roles (L2) or domain variants (L3) without touching existing layers.
+
+**Vertical scaling**: Each layer adds depth without modifying layers above or below it.
+
+**SOUL.md**: L1 base + L2/L3 role SOUL → flat file. L4 Project Adaptation section is appended by soul_adaptation.py at runtime.
+
+**instructions.md → CLAUDE.md**: L1 + L2 + L3 assembled, includes resolved → deployed as `.squidsquad/<agent>/CLAUDE.md`.
+
+**Naming**: Agent instance `dev-skill` maps to `roles/dev/skill/`. compose.py splits on hyphen.
 
 ## Adding a New Role (Layer 2)
 
-1. Create `references/roles/<name>/CLAUDE.md`, `SOUL.md`, `includes.yml`, `manifest.yaml`
-2. Run `compose.py deploy <name>` — Layer 1 base is prepended to SOUL.md automatically
+1. Create `references/roles/<name>/instructions.md`, `SOUL.md`, `includes.yml`, `manifest.yaml`
+2. Run `compose.py deploy <name>`
 
 ## Adding a New Variant (Layer 3)
 
-1. Create `references/roles/<base>-<variant>/` with:
-   - `includes.yml` — `base_role: <base>` + `additional_includes: [<variant>-specific/...]`
-   - `SOUL.md` — full file (copy base role's SOUL.md, add variant section)
-   - `CLAUDE.md` — variant entry file with `{{include:}}` for additional sub-skills
-2. Create `references/sub-skills/<base>-<variant>-specific/` with variant sub-skills
+1. Create `references/roles/<base>/<variant>/` with `instructions.md`, `SOUL.md`, `includes.yml`
+2. Create variant sub-skills in `references/sub-skills/<base>-<variant>-specific/`
 3. Run `compose.py deploy <base>-<variant>`
+
+## Project Adaptation (Layer 4)
+
+Layer 4 is automatic. As PM's soul-shepherd detects project signals (tech stack, domain vocabulary, quality preferences), it adds them to `role-adaptations.md`. soul_adaptation.py renders these into the `## Project Adaptation` section of deployed SOUL.md. No manual setup needed — L4 grows organically as the project develops.

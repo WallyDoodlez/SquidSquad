@@ -23,7 +23,7 @@ always_installed: false
 
 # Files that define this role's identity and cycle behaviour.
 soul_template: SOUL.md
-claude_template: CLAUDE.md
+claude_template: instructions.md
 
 # HITL — designer presents each iteration to the human for review and
 # redirects before moving on. Designer never blocks: in-flight review items

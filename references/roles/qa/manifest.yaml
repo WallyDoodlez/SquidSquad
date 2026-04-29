@@ -26,7 +26,7 @@ iteration_mode: normal
 
 # Files that define this role's identity and cycle behaviour.
 soul_template: SOUL.md
-claude_template: CLAUDE.md
+claude_template: instructions.md
 
 # Verified work goes to delivery.
 routes_to: [dm]

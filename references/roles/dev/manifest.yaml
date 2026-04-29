@@ -23,7 +23,7 @@ iteration_mode: normal
 
 # Files that define this role's identity and cycle behaviour.
 soul_template: SOUL.md
-claude_template: CLAUDE.md
+claude_template: instructions.md
 
 # Dev hands completed work to the verifier, or directly to delivery when no
 # verifier is installed.
