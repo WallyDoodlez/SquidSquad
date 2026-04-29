@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-29 15:02
+
+- **Files scanned**: references/scripts/wizard.py, references/scripts/start_team.py, references/scripts/repo_scan.py, references/scripts/tc_coverage.py, references/scripts/vault_entity.py
+- **Findings**: #4123 (wizard.py build_config_md wrong key for Research Model — medium), #4124 (repo_scan.py FastAPI detection unreachable — medium)
+- **Items rejected by human**: none yet
+- **Notes**: start_team.py, tc_coverage.py, vault_entity.py all clean. All 5 files have test coverage.
+
 ## Scan — 2026-04-29 11:32
 
 - **Files scanned**: references/scripts/add_role.py, references/scripts/boot_remote.py, references/scripts/capability_check.py, references/scripts/config.py, references/scripts/diagnostics.py
