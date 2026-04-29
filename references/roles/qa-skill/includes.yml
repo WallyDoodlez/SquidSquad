@@ -1,0 +1,5 @@
+# Layer 3 variant manifest — qa-skill
+# Inherits all sub-skills from qa, adds skill-specific context.
+base_role: qa
+additional_includes:
+  - qa-skill-specific/domain-context

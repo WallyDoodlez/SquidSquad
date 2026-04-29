@@ -267,10 +267,13 @@ class TestComposeRole:
         assert "# PM Agent" in result
         assert "## Tracker Protocol" in result
 
-    def test_missing_role_exits(self, compose_env):
-        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"):
-            with pytest.raises(SystemExit):
-                compose.compose_role("nonexistent_role_xyz")
+    def test_unknown_role_falls_back_to_dev(self, compose_env):
+        """Unknown roles fall back to dev (dev variant mechanism)."""
+        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
+             patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
+            result = compose.compose_role("nonexistent_role_xyz")
+        # Falls back to dev template
+        assert "# Dev Agent" in result
 
 
 # ---------------------------------------------------------------------------

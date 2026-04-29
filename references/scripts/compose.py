@@ -283,11 +283,16 @@ def compose_role(role_name: str) -> str:
     The legacy `references/sub-skills/roles/<variant>.md` layout has been
     retired.
 
+    Layer 3 variants (pm-skill, dev-ios) use the base role's CLAUDE.md as
+    the entry template, with the merged manifest (base + additional includes).
+    This ensures variants get all base role content plus variant additions.
+
     If includes.yml exists for the role (or inherited from dev), uses
     manifest-driven composition. Otherwise falls back to inline
     {{include:}} resolution.
     """
-    entry_file = ROLES_DIR / role_name / "CLAUDE.md"
+    role_identity = _get_entry_file_for_role(role_name)
+    entry_file = ROLES_DIR / role_identity / "CLAUDE.md"
     if not entry_file.exists():
         print(f"ERROR: Entry file not found: {entry_file}", file=sys.stderr)
         sys.exit(1)
@@ -297,6 +302,31 @@ def compose_role(role_name: str) -> str:
         composed = _resolve_includes_with_manifest(entry_file, manifest)
     else:
         composed = _resolve_includes(entry_file)
+
+    # Layer 3: append additional_includes that aren't in the base template.
+    # The base role's CLAUDE.md only has {{include:}} for its own sub-skills.
+    # Variant additional_includes need to be appended after the base content.
+    variant_yml = ROLES_DIR / role_name / "includes.yml"
+    if yaml and variant_yml.exists():
+        try:
+            vdata = yaml.safe_load(variant_yml.read_text(encoding="utf-8"))
+        except Exception:
+            vdata = {}
+        if isinstance(vdata, dict) and "additional_includes" in vdata:
+            additional = vdata["additional_includes"]
+            if isinstance(additional, list):
+                extra_parts = ["\n---\n"]
+                for inc_path in additional:
+                    full_path = SUB_SKILLS_DIR / f"{inc_path}.md"
+                    if full_path.exists():
+                        name = full_path.stem
+                        content = full_path.read_text(encoding="utf-8").rstrip()
+                        content = _strip_outer_markers(content, name)
+                        extra_parts.append(f"<!-- sub-skill: {name} -->")
+                        extra_parts.append(content)
+                        extra_parts.append(f"<!-- /sub-skill: {name} -->")
+                composed += "\n".join(extra_parts)
+
     return composed
 
 
@@ -366,9 +396,19 @@ def _get_entry_file_for_role(role_name: str) -> str:
     without any compose.py edit.
     """
     identities = _list_known_role_identities()
-    if role_name in identities:
+    # Check if this role is a Layer 3 variant (has base_role in includes.yml).
+    # Variants use their base role's entry template for composition.
+    if role_name in identities and yaml:
+        variant_yml = ROLES_DIR / role_name / "includes.yml"
+        if variant_yml.exists():
+            try:
+                vdata = yaml.safe_load(variant_yml.read_text(encoding="utf-8"))
+                if isinstance(vdata, dict) and "base_role" in vdata:
+                    return vdata["base_role"]
+            except Exception:
+                pass
         return role_name
-    # Layer 3 variant: strip suffix to find base role (pm-skill -> pm)
+    # Layer 3 variant without own CLAUDE.md: strip suffix (pm-skill -> pm)
     base_role = _strip_variant_suffix(role_name)
     if base_role and base_role in identities:
         return base_role
@@ -438,7 +478,7 @@ def deploy_role(role_name: str, target_root: Path = None) -> Path:
     target_root = Path(target_root)
 
     entry_file = _get_entry_file_for_role(role_name)
-    composed = compose_role(entry_file)
+    composed = compose_role(role_name)
     final = _substitute_placeholders(composed, role_name, entry_file)
 
     header = f"# SquidSquad -- {role_name} Lead\n\n"

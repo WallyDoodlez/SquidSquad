@@ -1,0 +1,5 @@
+# Layer 3 variant manifest — dm-skill
+# Inherits all sub-skills from dm, adds skill-specific context.
+base_role: dm
+additional_includes:
+  - dm-skill-specific/domain-context

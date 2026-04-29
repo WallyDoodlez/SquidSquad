@@ -5,33 +5,45 @@ Role definitions compose from 3 layers, assembled at deploy time into flat files
 ## Layer Stack
 
 ```
-Layer 1: Base Agent (references/roles/base/)
-├── SOUL.md — shared identity (timestamps, atomic writes, quality gate)
+Layer 1: Agent Definition (references/roles/base/)
+├── SOUL.md — what any SquidSquad agent IS (professionalism, discipline, quality gate)
 │
-├── Layer 2: General Role (references/roles/general/<category>/)
-│   ├── developer/SOUL.md — code-change protocol, PR conventions
-│   ├── coordinator/SOUL.md — pipeline oversight, human check-in
-│   ├── verifier/SOUL.md — zero-gap gate, coverage requirements
-│   ├── delivery/SOUL.md — user-first protocol, delivery quality
-│   └── creative/SOUL.md — iteration protocol, handoff quality
+├── Layer 2: Role Definition (references/roles/<role>/)
+│   ├── dev/ — engineering specialist (CLAUDE.md, SOUL.md, includes.yml, manifest.yaml)
+│   ├── pm/ — project manager
+│   ├── qa/ — verification specialist
+│   ├── dm/ — delivery manager
+│   └── designer/ — design specialist
 │
-└── Layer 3: Specific Role (references/roles/<role>/)
-    ├── SOUL.md — role personality, boundaries, improvement scan
-    ├── CLAUDE.md — entry template with {{include:}} directives
-    ├── includes.yml — sub-skill composition manifest
-    └── manifest.yaml — role metadata (general_role field maps to L2)
+└── Layer 3: Role Customization (references/roles/<base>-<variant>/)
+    ├── dev-skill/, pm-skill/, qa-skill/, dm-skill/ — skill development preset
+    ├── dev-ios/, pm-ios/, qa-ios/, dm-ios/ — iOS preset
+    ├── dev-web/, pm-web/, qa-web/, dm-web/ — web preset
+    ├── dev-android/, pm-android/, qa-android/, dm-android/ — Android preset
+    └── dev-fullstack/, pm-fullstack/, qa-fullstack/, dm-fullstack/ — full-stack preset
 ```
 
 ## How It Works
 
-- `compose.py deploy <role>` assembles SOUL.md: L1 + L2 + L3 → flat file
-- Layer markers (`<!-- layer: base -->`, `<!-- layer: general-role -->`) embedded for upgrade
-- `compose.py upgrade-soul <role>` re-renders L1+L2, preserves L3 + Project Adaptation
-- Dev variants (skill, be, fe) inherit `general_role` from `dev/manifest.yaml`
-- PM has dual L2: `general_role: [coordinator, verifier]`
+**SOUL.md**: `compose.py deploy <role>` assembles: L1 base/SOUL.md + role SOUL.md → flat file.
+For variants, the variant's own SOUL.md replaces the base role's (full file, not overlay).
+Layer marker (`<!-- layer: base -->`) enables `upgrade-soul` to re-render L1 without clobbering role content.
 
-## Adding a New Role
+**CLAUDE.md**: Assembled from entry template + includes.yml sub-skills.
+Layer 3 variants use `includes.yml` with `base_role` + `additional_includes` schema — inherits all base role sub-skills, appends variant-specific ones.
+
+**Naming**: `<base>-<variant>` (e.g., `pm-skill`). `compose.py` strips suffix to find base role.
+
+## Adding a New Role (Layer 2)
 
 1. Create `references/roles/<name>/CLAUDE.md`, `SOUL.md`, `includes.yml`, `manifest.yaml`
-2. Set `general_role` in manifest.yaml to inherit Layer 2 identity
-3. Run `compose.py deploy <name>` — Layer 1 + Layer 2 are injected automatically
+2. Run `compose.py deploy <name>` — Layer 1 base is prepended to SOUL.md automatically
+
+## Adding a New Variant (Layer 3)
+
+1. Create `references/roles/<base>-<variant>/` with:
+   - `includes.yml` — `base_role: <base>` + `additional_includes: [<variant>-specific/...]`
+   - `SOUL.md` — full file (copy base role's SOUL.md, add variant section)
+   - `CLAUDE.md` — variant entry file with `{{include:}}` for additional sub-skills
+2. Create `references/sub-skills/<base>-<variant>-specific/` with variant sub-skills
+3. Run `compose.py deploy <base>-<variant>`

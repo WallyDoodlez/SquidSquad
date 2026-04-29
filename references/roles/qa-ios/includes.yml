@@ -1,0 +1,5 @@
+# Layer 3 variant manifest — qa-ios
+# Inherits all sub-skills from qa, adds ios-specific context.
+base_role: qa
+additional_includes:
+  - qa-ios-specific/domain-context

@@ -1,0 +1,5 @@
+# Layer 3 variant manifest — qa-android
+# Inherits all sub-skills from qa, adds android-specific context.
+base_role: qa
+additional_includes:
+  - qa-android-specific/domain-context
