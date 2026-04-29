@@ -6,6 +6,7 @@ Validates deterministic QA-rejected item detection:
   - Edge cases: no comments, no feedback, already addressed
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -97,4 +98,39 @@ class TestTriageLiveSmoke:
     def test_qa_rejected_nonexistent_role_returns_empty(self):
         """A role with no in-progress items returns empty list."""
         result = triage.find_qa_rejected("nonexistent_role_xyz")
+        assert result == []
+
+
+class TestFindQaRejectedErrorIsolation:
+    """#4051 regression: single-issue gh failure must not abort the scan."""
+
+    def test_gh_failure_on_one_issue_does_not_abort(self):
+        """If _gh raises RuntimeError for one issue, other issues still process."""
+        from unittest.mock import patch
+
+        # Mock _gh: first list call succeeds with 2 items,
+        # first view call fails, second view call succeeds
+        call_count = 0
+
+        def mock_gh(*args):
+            nonlocal call_count
+            call_count += 1
+            if args[0] == "issue" and args[1] == "list":
+                return json.dumps([
+                    {"number": 9991, "title": "Item A"},
+                    {"number": 9992, "title": "Item B"},
+                ])
+            if args[0] == "issue" and args[1] == "view":
+                if str(args[2]) == "9991":
+                    raise RuntimeError("gh failed for 9991")
+                # 9992 returns no comments — no feedback match
+                return json.dumps({"comments": []})
+            return ""
+
+        with patch.object(triage, "_gh", side_effect=mock_gh):
+            result = triage.find_qa_rejected("skill")
+
+        # Should NOT raise — the RuntimeError for 9991 is caught
+        assert isinstance(result, list)
+        # 9992 had no feedback, so result is empty — but crucially no crash
         assert result == []
