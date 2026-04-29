@@ -1,6 +1,6 @@
 {
-  "last_scanned": "CONTRIBUTING.md",
-  "rotation_count": 0,
+  "last_scanned": "CHANGELOG.md",
+  "rotation_count": 1,
   "scan_history": [
     {"file": "README.md", "date": "2026-04-28", "findings": 2},
     {"file": "SKILL.md:sections-1-3", "date": "2026-04-28", "findings": 3},
@@ -8,7 +8,8 @@
     {"file": "SKILL.md:sections-7-8", "date": "2026-04-28", "findings": 3},
     {"file": "docs/ARCHITECTURE.md", "date": "2026-04-29", "findings": 3},
     {"file": "docs/sub-skill-guide.md", "date": "2026-04-29", "findings": 3},
-    {"file": "CONTRIBUTING.md", "date": "2026-04-29", "findings": 2}
+    {"file": "CONTRIBUTING.md", "date": "2026-04-29", "findings": 2},
+    {"file": "CHANGELOG.md", "date": "2026-04-29", "findings": 3}
   ],
   "doc_inventory": {
     "README.md": {"last_scanned": "2026-04-28", "status": "current"},
@@ -16,7 +17,7 @@
     "docs/ARCHITECTURE.md": {"last_scanned": "2026-04-29", "status": "current"},
     "docs/sub-skill-guide.md": {"last_scanned": "2026-04-29", "status": "current"},
     "CONTRIBUTING.md": {"last_scanned": "2026-04-29", "status": "current"},
-    "CHANGELOG.md": {"last_scanned": null, "status": "unknown"}
+    "CHANGELOG.md": {"last_scanned": "2026-04-29", "status": "current"}
   },
   "rejected_findings": []
 }
