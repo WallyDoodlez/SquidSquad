@@ -231,8 +231,37 @@ def _sanitize_commit_msg(msg: str) -> str:
     )
 
 
+_DISPOSABLE_PATTERNS = [
+    "gen_*.py", "migrate_*.py.bak", "*.scratch.py", "*.scratch.md",
+    "*.debug.log", "*.debug.json",
+]
+
+
+def _check_disposable_files():
+    """Warn if any disposable files are staged for commit (#4081)."""
+    result = _run(["git", "diff", "--cached", "--name-only"], check=False)
+    if result.returncode != 0:
+        return
+    staged = result.stdout.strip().splitlines()
+    import fnmatch
+    warnings = []
+    for f in staged:
+        name = f.rsplit("/", 1)[-1] if "/" in f else f
+        for pat in _DISPOSABLE_PATTERNS:
+            if fnmatch.fnmatch(name, pat):
+                warnings.append(f)
+                break
+    if warnings:
+        print(
+            f"WARNING: Disposable files staged for commit (#4081): "
+            f"{', '.join(warnings)}. Consider removing before push.",
+            file=sys.stderr,
+        )
+
+
 def _do_commit_push(data, role):
     """Handle git commit and push operations."""
+    _check_disposable_files()
     cycle_type = data.get("cycle_type", "quiet")
     commit_msg = data.get("commit_message") or data.get("state_commit_message", "")
     commit_msg = _sanitize_commit_msg(commit_msg)
