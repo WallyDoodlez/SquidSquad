@@ -310,15 +310,21 @@ def _assemble_claude(role_name: str) -> str:
             parts.append("")
             parts.append(variant_claude.read_text(encoding="utf-8").rstrip())
 
-    # Layer 4 — Project directives (PM-owned, applied to all agents)
-    project_directives = REPO_ROOT / ".squidsquad" / "project-directives.md"
-    if project_directives.exists():
-        content = project_directives.read_text(encoding="utf-8").strip()
-        if content:
+    # Layer 4 — Project sub-skills (PM-owned, applied to all agents)
+    # PM writes sub-skills to references/sub-skills/project/*.md
+    # These are auto-included in every agent's CLAUDE.md if present.
+    project_skills_dir = SUB_SKILLS_DIR / "project"
+    if project_skills_dir.is_dir():
+        for skill_file in sorted(project_skills_dir.glob("*.md")):
+            content = skill_file.read_text(encoding="utf-8").rstrip()
+            name = skill_file.stem
+            content = _strip_outer_markers(content, name)
             parts.append("")
             parts.append("---")
             parts.append("")
+            parts.append(f"<!-- sub-skill: project-{name} -->")
             parts.append(content)
+            parts.append(f"<!-- /sub-skill: project-{name} -->")
 
     return "\n".join(parts)
 

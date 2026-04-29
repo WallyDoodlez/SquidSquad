@@ -63,11 +63,11 @@ Layer 4 has two channels:
 ### Automatic: Soul Shepherd (SOUL.md)
 As PM's soul-shepherd detects project signals (tech stack, domain vocabulary, quality preferences), it adds them to `role-adaptations.md`. soul_adaptation.py renders these into the `## Project Adaptation` section of deployed SOUL.md. No manual setup needed — L4 grows organically.
 
-### Manual: Project Directives (CLAUDE.md)
-PM can push behavioral directives to ALL agents without a dev cycle:
+### Manual: Project Sub-Skills (CLAUDE.md)
+PM can push behavioral sub-skills to ALL agents without a dev cycle:
 
-1. Write directives to `.squidsquad/project-directives.md`
+1. Write sub-skills to `references/sub-skills/project/*.md` (standard sub-skill format with `<!-- sub-skill: name -->` markers)
 2. Run `python references/scripts/compose.py deploy-all`
 3. Reboot affected agents (`python references/scripts/reboot_agent.py --all`)
 
-The project-directives file is appended to every agent's CLAUDE.md during assembly. PM owns this file directly — no task filing, no QA verification needed. Use for project-wide rules, constraints, or behavioral adjustments that apply to the entire team.
+Project sub-skills are auto-included in every agent's CLAUDE.md during assembly — same composition mechanism as all other sub-skills. PM owns this directory directly — no task filing, no QA verification needed. Use for project-wide rules, constraints, or behavioral adjustments that apply to the entire team.
