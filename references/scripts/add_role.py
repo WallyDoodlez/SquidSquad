@@ -158,8 +158,15 @@ def _acquire_lock():
         LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
         # Use exclusive create — fails if file exists
         fd = LOCK_FILE.open("x")
-        fd.write(str(os.getpid()))
-        fd.close()
+        try:
+            fd.write(str(os.getpid()))
+            fd.close()
+        except OSError:
+            # Write/close failed — remove the empty lock file to avoid
+            # leaving a stale lock that blocks all future calls (#4093).
+            fd.close()
+            _release_lock()
+            return False
         return True
     except FileExistsError:
         return False

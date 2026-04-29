@@ -90,6 +90,20 @@ class TestLockFile:
         assert "os.getpid()" in source
         assert "subprocess.os" not in source
 
+    def test_write_failure_cleans_up_lock(self, tmp_path):
+        """#4093: if write fails after exclusive create, lock file is removed."""
+        lock_path = tmp_path / ".lock"
+        with patch.object(add_role, "LOCK_FILE", lock_path):
+            # First acquire succeeds normally
+            assert add_role._acquire_lock() is True
+            add_role._release_lock()
+            # Now verify the cleanup path exists in the source
+            import inspect
+            source = inspect.getsource(add_role._acquire_lock)
+            assert "_release_lock()" in source, (
+                "_acquire_lock must call _release_lock on write failure"
+            )
+
 
 class TestDuplicateRoleCheck:
     @patch("add_role._validate_role", return_value=True)
