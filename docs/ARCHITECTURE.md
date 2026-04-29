@@ -86,16 +86,16 @@ The **Behavior Layer** (L3) is the focal layer — it's where agents reason, dec
 **Purpose:** Composable capability blocks that snap into any role's behavior layer. Sub-skills are the building blocks that make the behavior layer modular.
 
 **Key files:**
-- `references/sub-skills/manifest.md` — which sub-skills each role includes, in composition order
-- `references/sub-skills/common/` — shared capabilities (tracker-protocol, vault-protocol, git-commit, etc.)
-- `references/sub-skills/roles/` — role-specific capabilities (dev-agent, pm-agent, qa-agent, dm-agent)
+- `references/roles/[role]/includes.yml` — which sub-skills each role includes, in composition order
+- `references/sub-skills/common/` — shared capabilities (tracker-protocol, vault-protocol, cycle-runner, etc.)
+- `references/sub-skills/[role]-specific/` — role-specific capabilities (e.g., `dm-specific/delivery-packaging`, `pm-specific/health-check`)
 - `references/scripts/compose.py` — assembles sub-skills into a single CLAUDE.md per role
 
 **What changes here:** Adding a new capability that multiple roles need (write it as a sub-skill). Changing how a shared protocol works (edit the sub-skill, all roles get the update on next deploy).
 
 **How composition works:**
-1. `manifest.md` lists which sub-skills each role needs and their order
-2. `compose.py deploy [role]` reads the manifest, concatenates sub-skills, resolves `{{runtime:}}` directives
+1. `includes.yml` per role lists which sub-skills to include and their order
+2. `compose.py deploy [role]` reads `includes.yml`, concatenates sub-skills, resolves `{{runtime:}}` directives
 3. Output is a single `.squidsquad/[role]/CLAUDE.md` — the agent's complete instructions
 
 **Boundary with L5:** Sub-skills define *what* the agent can do. The soul layer defines *how* it exercises those capabilities.
@@ -166,7 +166,7 @@ A single agent cycle flows through all six layers:
  └─ L1 Transport ────── Mechanical operations bookend the creative work
 ```
 
-**The cycle runner** (`cycle_pre.py` / `cycle_post.py`, opt-in via `Cycle Runner: yes` in config.md) makes the transport layer explicit: mechanical work happens in Python scripts, creative work happens in the agent. When disabled, the agent handles both — but the layer boundary still exists conceptually.
+**The cycle runner** (`cycle_pre.py` / `cycle_post.py`) makes the transport layer explicit: mechanical work happens in Python scripts, creative work happens in the agent. All agents use the cycle runner — the layer boundary is always enforced.
 
 ---
 
@@ -205,7 +205,7 @@ Status transitions are GitHub Issue label changes (L1 transport). The decision o
 
 ## Coordination Model
 
-Agents coordinate through git — the transport layer. No direct communication, no shared processes.
+Agents coordinate primarily through git — the transport layer. For real-time coordination, an optional communication abstraction layer supports Telegram, Slack, and Discord (agents work identically with or without it).
 
 ```
 Agent A                    Git Repository                   Agent B
