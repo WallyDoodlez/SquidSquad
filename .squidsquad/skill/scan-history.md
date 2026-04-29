@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-29 11:32
+
+- **Files scanned**: references/scripts/add_role.py, references/scripts/boot_remote.py, references/scripts/capability_check.py, references/scripts/config.py, references/scripts/diagnostics.py
+- **Findings**: #4092 (config.py set_field silent no-op on empty section — high), #4093 (add_role.py stale lock on write failure — medium)
+- **Items rejected by human**: none yet
+- **Notes**: boot_remote.py, capability_check.py, diagnostics.py all clean. All 5 files have test coverage.
+
 ## Scan — 2026-04-29 05:02
 
 - **Files scanned**: references/scripts/forge_adapter.py, references/scripts/health_check.py, references/scripts/shared_fs.py, references/scripts/soul_adaptation.py, references/scripts/triage.py
