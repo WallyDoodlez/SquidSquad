@@ -78,6 +78,21 @@ class TestFrameworkDetection:
         assert "tailwind" in result["frameworks"]
 
 
+    def test_detects_fastapi_from_requirements(self, tmp_path):
+        """#4124 regression: FastAPI detected via requirements.txt, not file presence."""
+        (tmp_path / "requirements.txt").write_text("fastapi>=0.100\nuvicorn\n")
+        result = repo_scan.scan(tmp_path)
+        assert "fastapi" in result["frameworks"]
+
+    def test_detects_fastapi_from_pyproject(self, tmp_path):
+        """#4124: FastAPI detected via pyproject.toml."""
+        (tmp_path / "pyproject.toml").write_text(
+            '[project]\ndependencies = ["fastapi", "uvicorn"]\n'
+        )
+        result = repo_scan.scan(tmp_path)
+        assert "fastapi" in result["frameworks"]
+
+
 class TestCICDDetection:
     def test_detects_github_actions(self, tmp_path):
         (tmp_path / ".github" / "workflows").mkdir(parents=True)
