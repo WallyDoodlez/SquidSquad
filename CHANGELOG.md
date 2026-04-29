@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.29.0] — 2026-04-29
+
+### Shipped
+- #3955
+- #4038
+- #4050
+- #4051
+- #4052
+- #4081
+- #4092
+- #4093
+- #4094
+
+### Fixed
+- #3955 — Sub-skill templates updated to reflect the new agent lifecycle model — self-restart, agent-lifecycle, and boot-remote-agents no longer reference obsolete reboot flow
+- #4038 — tracker.py no longer auto-closes issues on pending-test transition — only shipped transitions close issues
+- #4050 — shared_fs.py `read_secret_or_env` now uses None check instead of falsy check, preventing empty string secrets from falling through
+- #4051 — triage.py `find_qa_rejected` no longer aborts the entire scan when a single-issue `gh` call fails
+- #4052 — Added 15 unit tests for run_comprehension_test.py, covering all 8 functions
+- #4081 — Disposable scripts and debug logs are now gitignored to prevent accidental commits to feature branches
+- #4092 — config.py `set_field` no longer silently fails when the target section text is empty
+- #4093 — add_role.py `_acquire_lock` now cleans up stale lock files on write failure
+- #4094 — Fixed 3 chronic test failures (orphan sub-skill reference, PR merge test, stale deepseek model) — 1126/1126 clean green
+
 ## [0.28.0] — 2026-04-28
 
 ### Shipped
