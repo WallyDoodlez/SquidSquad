@@ -1,8 +1,16 @@
 """Static analysis: Verify config.md has required fields and valid values."""
 
 import re
+import sys
+from pathlib import Path
+from unittest.mock import patch
+
 import pytest
 
+SCRIPTS = Path(__file__).resolve().parent.parent / "references" / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+import config
 from conftest import SQUIDSQUAD_DIR
 
 
@@ -72,3 +80,46 @@ class TestConfigRequired:
         scan_section = self.config.split("## Improvement Scanning")[1].split("##")[0]
         val = _extract_field(scan_section, "Enabled")
         assert val is not None, "Missing 'Enabled' field in Improvement Scanning section"
+
+
+# ---------------------------------------------------------------------------
+# #4092 regression: set_field guards
+# ---------------------------------------------------------------------------
+
+class TestSetFieldGuards:
+    """set_field must not silently no-op on empty sections or duplicate."""
+
+    def test_empty_section_exits(self, tmp_path):
+        """set_field exits with error when the target section is empty."""
+
+        # Config with an empty section
+        config_text = (
+            "# Config\n\n"
+            "## Auto Merge\n\n"
+            "## Git Protocol\n\n"
+            "- **Always**: yes\n"
+        )
+        config_file = tmp_path / "config.md"
+        config_file.write_text(config_text, encoding="utf-8")
+        with patch.object(config, "CONFIG_PATH", config_file):
+            with pytest.raises(SystemExit):
+                config.set_field("auto-merge", "no")
+
+    def test_replace_limited_to_first_occurrence(self, tmp_path):
+        """set_field replaces only the first matching section (count=1)."""
+
+        config_text = (
+            "# Config\n\n"
+            "- **SquidSquad Version**: 0.28.0\n\n"
+            "## Agents\n\n"
+            "- **Dev Agents**: skill\n\n"
+            "## Iteration Interval\n\n"
+            "- **Minutes**: 30\n"
+        )
+        config_file = tmp_path / "config.md"
+        config_file.write_text(config_text, encoding="utf-8")
+        with patch.object(config, "CONFIG_PATH", config_file):
+            config.set_field("version", "0.29.0")
+        result = config_file.read_text(encoding="utf-8")
+        assert result.count("0.29.0") == 1
+        assert result.count("0.28.0") == 0
