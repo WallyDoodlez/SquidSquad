@@ -162,12 +162,15 @@ def set_field(field, value):
         # Section-aware replacement: find the section, then the field within it
         sections = _parse_sections(text)
         section_text = sections.get(section, "")
+        if not section_text:
+            print(f"ERROR: Section '{section}' is empty or missing in config.md", file=sys.stderr)
+            sys.exit(1)
         pattern = rf'(-\s*\*\*{re.escape(field_name)}\*\*:\s*).+'
         new_section, count = re.subn(pattern, rf'\g<1>{value}', section_text, count=1)
         if count == 0:
             print(f"ERROR: Field '{field}' not found in section '{section}'", file=sys.stderr)
             sys.exit(1)
-        new_text = text.replace(section_text, new_section)
+        new_text = text.replace(section_text, new_section, 1)
     else:
         pattern = rf'(-\s*\*\*{re.escape(field_name)}\*\*:\s*).+'
         new_text, count = re.subn(pattern, rf'\g<1>{value}', text, count=1)
