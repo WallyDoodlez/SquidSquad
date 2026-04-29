@@ -424,3 +424,27 @@ class TestSanitizeCommitMsg:
     def test_no_issue_ref(self):
         msg = "skill: quiet cycle — pipeline clean"
         assert cycle_post._sanitize_commit_msg(msg) == msg
+
+
+# ---------------------------------------------------------------------------
+# #4081 regression: disposable file detection
+# ---------------------------------------------------------------------------
+
+class TestDisposablePatterns:
+    """_DISPOSABLE_PATTERNS catches common disposable file names."""
+
+    def test_gen_script_matches(self):
+        import fnmatch
+        assert any(fnmatch.fnmatch("gen_presets.py", p) for p in cycle_post._DISPOSABLE_PATTERNS)
+
+    def test_scratch_matches(self):
+        import fnmatch
+        assert any(fnmatch.fnmatch("notes.scratch.py", p) for p in cycle_post._DISPOSABLE_PATTERNS)
+
+    def test_normal_file_does_not_match(self):
+        import fnmatch
+        assert not any(fnmatch.fnmatch("compose.py", p) for p in cycle_post._DISPOSABLE_PATTERNS)
+
+    def test_test_file_does_not_match(self):
+        import fnmatch
+        assert not any(fnmatch.fnmatch("test_compose.py", p) for p in cycle_post._DISPOSABLE_PATTERNS)

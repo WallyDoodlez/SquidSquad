@@ -37,6 +37,12 @@ tests/comprehension/.cache/
 # Obsidian (user-specific config, not shared)
 .obsidian/
 
+# Disposable scripts and artifacts (one-time generation, migration, debug)
+references/scripts/gen_*.py
+references/scripts/migrate_*.py.bak
+*.scratch.py
+*.scratch.md
+
 # OS/shell artifacts
 *.stackdump
 
