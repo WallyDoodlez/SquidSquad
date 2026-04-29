@@ -448,3 +448,31 @@ class TestDisposablePatterns:
     def test_test_file_does_not_match(self):
         import fnmatch
         assert not any(fnmatch.fnmatch("test_compose.py", p) for p in cycle_post._DISPOSABLE_PATTERNS)
+
+
+# ---------------------------------------------------------------------------
+# #4125 regression: CHANGELOG skip when DM present
+# ---------------------------------------------------------------------------
+
+class TestVersionBumpChangelogSkip:
+    """_do_version_bump skips CHANGELOG when DM is present."""
+
+    def test_skips_changelog_when_dm_present(self, patch_dirs, squid_dir):
+        """#4125: DM owns CHANGELOG — cycle_post must not write it."""
+        # Create DM dir (DM is present)
+        (squid_dir / "dm").mkdir(parents=True, exist_ok=True)
+        # Create a CHANGELOG
+        changelog = patch_dirs / "CHANGELOG.md"
+        changelog.write_text("# Changelog\n\nOld content.\n", encoding="utf-8")
+        # Create config.md for set_field
+        config_md = squid_dir.parent / ".squidsquad" / "config.md"
+        config_md.parent.mkdir(parents=True, exist_ok=True)
+        config_md.write_text("- **SquidSquad Version**: 0.28.0\n", encoding="utf-8")
+
+        data = {"version_bump": {"new_version": "0.29.0", "items_included": [100, 200]}}
+        cycle_post._do_version_bump(data, "pm")
+
+        content = changelog.read_text(encoding="utf-8")
+        # CHANGELOG should NOT have been modified (DM handles it)
+        assert "0.29.0" not in content
+        assert "Old content." in content

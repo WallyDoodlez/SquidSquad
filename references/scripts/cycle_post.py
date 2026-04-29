@@ -355,9 +355,12 @@ def _do_version_bump(data, role):
         content = re.sub(r'version:\s*[\d.]+', f'version: {new_version}', content, count=1)
         skill_md.write_text(content, encoding="utf-8")
 
-    # Add CHANGELOG entry
+    # Add CHANGELOG entry — skip when DM is present (#4125).
+    # DM writes richer CHANGELOG entries (Added/Fixed descriptions).
+    # When DM is absent, PM fallback writes the basic shipped list.
+    dm_dir = REPO_ROOT / ".squidsquad" / "dm"
     changelog = REPO_ROOT / "CHANGELOG.md"
-    if changelog.exists():
+    if changelog.exists() and not dm_dir.exists():
         old_content = changelog.read_text(encoding="utf-8")
         date_str = datetime.now().strftime("%Y-%m-%d")
         items_str = "\n".join(f"- #{n}" for n in items)
