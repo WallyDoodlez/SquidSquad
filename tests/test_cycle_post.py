@@ -378,3 +378,49 @@ class TestStopAfterCycleCheck:
         assert result is True
         sentinel = squid_dir / "skill" / ".restart"
         assert sentinel.exists()
+
+
+# ---------------------------------------------------------------------------
+# #4038 regression: commit message auto-close sanitization
+# ---------------------------------------------------------------------------
+
+class TestSanitizeCommitMsg:
+    """_sanitize_commit_msg must neutralize GitHub auto-close keywords."""
+
+    def test_fixed_hash_escaped(self):
+        result = cycle_post._sanitize_commit_msg("skill: fixed #3465 QA failures")
+        assert "fixed #3465" not in result
+        assert "#3465" in result  # number still present
+
+    def test_fixes_hash_escaped(self):
+        result = cycle_post._sanitize_commit_msg("fixes #123 — typo")
+        assert "fixes #123" not in result
+        assert "#123" in result
+
+    def test_closes_hash_escaped(self):
+        result = cycle_post._sanitize_commit_msg("closes #456")
+        assert "closes #456" not in result
+        assert "#456" in result
+
+    def test_resolves_hash_escaped(self):
+        result = cycle_post._sanitize_commit_msg("Resolved #789 bug")
+        assert "Resolved #789" not in result
+        assert "#789" in result
+
+    def test_non_keyword_untouched(self):
+        result = cycle_post._sanitize_commit_msg("skill: cycle 458 -- implemented #3465")
+        assert "implemented #3465" in result
+
+    def test_multiple_refs_all_escaped(self):
+        result = cycle_post._sanitize_commit_msg("fixed #100, closes #200")
+        assert "fixed #100" not in result
+        assert "closes #200" not in result
+        assert "#100" in result
+        assert "#200" in result
+
+    def test_empty_string(self):
+        assert cycle_post._sanitize_commit_msg("") == ""
+
+    def test_no_issue_ref(self):
+        msg = "skill: quiet cycle — pipeline clean"
+        assert cycle_post._sanitize_commit_msg(msg) == msg

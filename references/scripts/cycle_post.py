@@ -13,6 +13,7 @@ Exit codes:
 """
 
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -204,10 +205,37 @@ def _do_iteration_log(data, role):
         print(f"  Iteration log: iter-{cycle_number}.md")
 
 
+_AUTOCLOSE_RE = re.compile(
+    r'\b(fix(?:e[sd])?|close[sd]?|resolve[sd]?)\s+(#\d+)',
+    re.IGNORECASE,
+)
+
+
+def _sanitize_commit_msg(msg: str) -> str:
+    """Escape GitHub auto-close keywords in commit messages.
+
+    GitHub interprets 'fixed #123', 'closes #456', 'resolves #789' in commit
+    messages pushed to the default branch as directives to close those issues.
+    This is harmful for cycle commits that reference issues without intending
+    to close them (#4038). Replace the keyword with a hyphenated form that
+    preserves readability without triggering auto-close.
+    """
+    def _escape(m):
+        keyword = m.group(1)
+        ref = m.group(2)
+        return f"{keyword} {ref}"  # insert zero-width space before #
+
+    # Insert a zero-width space (U+200B) between keyword and #
+    return _AUTOCLOSE_RE.sub(
+        lambda m: f"{m.group(1)} \u200b{m.group(2)}", msg
+    )
+
+
 def _do_commit_push(data, role):
     """Handle git commit and push operations."""
     cycle_type = data.get("cycle_type", "quiet")
     commit_msg = data.get("commit_message") or data.get("state_commit_message", "")
+    commit_msg = _sanitize_commit_msg(commit_msg)
 
     if not commit_msg:
         commit_msg = f"{role}: cycle {data.get('cycle_number', '?')} — {cycle_type}"
@@ -219,7 +247,7 @@ def _do_commit_push(data, role):
     code_commit = data.get("code_commit")
     if role == "skill" and branch_workflow and code_commit:
         branch = code_commit.get("branch", "")
-        code_msg = code_commit.get("message", "code changes")
+        code_msg = _sanitize_commit_msg(code_commit.get("message", "code changes"))
 
         if branch:
             result = _run_script("git_ops.py", "commit-code", role, branch, code_msg)
@@ -238,7 +266,7 @@ def _do_commit_push(data, role):
                     print(f"  PR created: {result.stdout.strip()}")
 
         # State commit to working branch
-        state_msg = data.get("state_commit_message", commit_msg)
+        state_msg = _sanitize_commit_msg(data.get("state_commit_message", commit_msg))
         working = _get_working_branch()
         current = _run(["git", "branch", "--show-current"], check=False)
         current_branch = current.stdout.strip() if current.returncode == 0 else ""
