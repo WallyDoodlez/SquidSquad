@@ -33,7 +33,7 @@ Sub-skill fragments live under `references/sub-skills/` and role entry files liv
 ```
 references/
 ├── sub-skills/
-│   ├── manifest.md          ← composition rules (which sub-skills each role gets)
+│   ├── manifest.md          ← composition reference doc (documents include order)
 │   ├── common/              ← shared by multiple roles
 │   │   ├── pull-latest.md
 │   │   ├── tracker-protocol.md
@@ -172,11 +172,11 @@ After includes are resolved, placeholders are substituted with values from `conf
 
 ---
 
-## The Manifest
+## The Manifest and Includes
 
-`references/sub-skills/manifest.md` documents the composition order for every role. When adding a new sub-skill, update the manifest to show where it appears in each role's include chain.
+Each role's composition order is defined in `references/roles/<role>/includes.yml` — this is the **source of truth** that `compose.py` reads when building templates. `references/sub-skills/manifest.md` is a reference document that mirrors these include orders for human readability.
 
-The manifest is the source of truth for what each agent template contains.
+When adding a new sub-skill, update the role's `includes.yml` to add it at the right position, and optionally update `manifest.md` to keep the reference doc in sync.
 
 ---
 
@@ -228,9 +228,9 @@ Edit the entry file(s) at `references/roles/<role>/CLAUDE.md` to include your su
 {{include: common/your-new-skill}}
 ```
 
-### Step 5 — Update the manifest
+### Step 5 — Update includes.yml
 
-Add your sub-skill to the composition order in `manifest.md` for each role that includes it.
+Add your sub-skill to `references/roles/<role>/includes.yml` for each role that should include it. Optionally update `manifest.md` to keep the reference doc in sync.
 
 ### Step 6 — Test composition
 

@@ -22,6 +22,7 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team. You work in a loo
 - If an issue's root cause belongs to another agent's domain, file it to their tracker directly.
 - Communicate cross-team through Discussion sections only — never edit another agent's entries.
 - Keep the PM informed by updating issue and task statuses promptly.
+- When spawning subagents via the Agent tool, use `model: "sonnet"` — Opus is unnecessary for directed subtasks.
 
 ---
 
@@ -58,53 +59,6 @@ If this fails (exit code 1):
 2. Exit the conversation. SquidSquad requires GitHub Issues access.
 
 If `gh` works but GitHub is **temporarily unreachable** during a cycle (network blip), skip tracker operations for this cycle and retry next cycle. Print: `[🦑 HH:MM:SS] GitHub unreachable — skipping tracker operations. Will retry next cycle.`
-
-### Label Taxonomy
-
-Issues use labels for structured metadata. The following labels must exist on the repo (created during setup):
-
-**Type:**
-- `issue` — defect, regression, broken behavior
-- `task` — new capability or enhancement
-
-**Priority:**
-- `priority:high` — urgent, blocks other work
-- `priority:medium` — normal priority
-- `priority:low` — nice-to-have, improvement scan items
-
-**Status:**
-- `status:open` — issue filed, awaiting triage
-- `status:pending` — filed, awaiting human approval
-- `status:planning` — approved by human, PM running intake
-- `status:planned` — planning complete, awaiting human approval for execution
-- `status:approved` — human approved, ready for dev pickup
-- `status:in-progress` — agent actively working
-- `status:pending-test` — implementation complete, awaiting QA
-- `status:pending-human-review` — in-progress iteration awaiting HITL review (designer loop)
-- `status:pending-human-setup` — worker paused, needs human to complete tool/environment setup
-- `status:pending-ship` — QA verified, awaiting DM delivery
-- `status:shipped` — delivered, closed
-
-**Role (assignee domain):**
-- `role:skill` (or `role:fe`, `role:be`, etc.) — dev agent
-- `role:pm` — PM agent
-- `role:qa` — QA agent
-- `role:designer` — designer agent
-- `role:dm` — DM agent
-
-**Design (for tasks needing design):**
-- `design:needed` — designer must produce specs before dev
-- `design:in-progress` — designer working on specs
-- `design:complete` — design approved, dev can proceed
-
-**Severity (for issues):**
-- `severity:high` — critical, blocks usage
-- `severity:medium` — degraded functionality
-- `severity:low` — cosmetic, minor annoyance
-
-**Special:**
-- `squidsquad` — all SquidSquad-managed items get this label
-- `improvement-scan` — filed by improvement scanning (quiet cycle)
 
 ### Reading Issues (replaces INDEX.md scanning)
 
@@ -160,7 +114,7 @@ python references/scripts/tracker.py transition [NUMBER] pending-ship shipped --
 Pass your own role — PM uses `--role pm-lead`, QA uses `--role qa-lead`, DM uses `--role dm-lead`, designer uses `--role designer-lead`, dev agents use `--role [ROLE]-lead` (e.g. `skill-lead`). The script rejects:
 
 - **Illegal transitions** (e.g. `pending → shipped`) — never bypassable.
-- **Unauthorized transitions** — e.g. a dev agent trying to run `pending-ship → shipped` (DM-only) or `pending-test → pending-ship` (PM/QA-only). Use `--force` only as a human override.
+- **Unauthorized transitions** — e.g. a dev agent trying to run `pending-ship → shipped` (DM-only) or `pending-test → pending-ship` (PM or QA only). Use `--force` only as a human override.
 - **Unassigned transitions** — dev-style transitions (pickup, pending-test) require your canonical role to match one of the issue's `role:*` labels.
 
 Legal flows and owning roles:
@@ -169,9 +123,11 @@ Legal flows and owning roles:
 - `planning` → `planned` — **PM**
 - `planned` → `approved` — **PM**
 - `approved` → `in-progress` — **assigned role**
-- `in-progress` → `pending-test` | `approved` — **assigned role**
-- `pending-test` → `in-progress` | `pending-ship` — **PM or QA** (PM always; QA when a separate QA agent is installed. PM holds combined PM/QA identity by default.)
-- `pending-ship` → `shipped` — **DM** (auto-closes)
+- `in-progress` → `pending-test` | `approved` | `pending-human-review` | `pending-human-setup` — **assigned role**
+- `pending-human-review` → `in-progress` | `pending-ship` — **assigned role** (HITL designer loop)
+- `pending-human-setup` → `in-progress` — **PM** (environment setup complete)
+- `pending-test` → `in-progress` | `pending-ship` — **PM or QA** (both authorized; QA handles verification when installed, PM falls back when QA absent)
+- `pending-ship` → `shipped` | `in-progress` — **DM** ships (auto-closes), **PM or QA** routes back on merge conflict
 
 ### Discussion Entries (replaces inline Discussion sections)
 
@@ -263,34 +219,117 @@ Phase is one of: `pulling`, `triaging`, `implementing`, `committing`, `idle`. Th
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
 
-<!-- sub-skill: pull-latest -->
-### Step 1 — Pull Latest
+<!-- sub-skill: cycle-runner -->
+## Cycle Runner (Transport Layer)
 
-Print: `[🦑 HH:MM:SS] Pulling latest...`
+The Ralph Loop uses a 3-phase flow: mechanical pre-cycle → creative work → mechanical post-cycle. All mechanical operations (git pull, commit, push, triage queries, iteration logging) are handled by deterministic scripts. You focus on creative work only.
+
+### Phase 1 — Pre-Cycle (Mechanical)
 
 ```bash
-python references/scripts/git_ops.py pull
+python references/scripts/cycle_pre.py [ROLE]
 ```
 
-The script handles stash/pop automatically if there are unstaged changes. If there is a rebase conflict in a tracker file, resolve it by keeping both versions — append the conflicting section below the existing one. Never discard entries.
-<!-- /sub-skill: pull-latest -->
+This script handles all mechanical operations: git pull, context pressure check, working state read, triage/queue queries, branch setup, and writes `.squidsquad/[ROLE]/cycle-input.json`.
+
+Read the output:
+
+```bash
+cat .squidsquad/[ROLE]/cycle-input.json
+```
+
+The JSON contains everything you need: `role`, `cycle_number`, `timestamp`, `pull_result`, `context_pressure`, `working_state`, and role-specific fields (work queue, verification queue, etc.).
+
+### Phase 2 — Creative Work (Agent)
+
+This is your core work. Start by **reading cycle-input.json critically**:
+
+1. **Examine the pipeline state** — don't just scan for your own work items. Look at the full picture: what's stalled, what's been rejected, what's blocked, what claims don't add up. Apply your SOUL.md personality to the data.
+2. **Investigate anomalies** — if an item has been at the same status for multiple cycles, if an agent claims something is blocked without evidence, if shipped-since-bump is over threshold — these are problems to investigate, not ignore.
+3. **Do your role's core work** — reasoning, code analysis, code writing, verification, human interaction, planning, or whatever your role requires.
+
+You still have full bash access for:
+- Running tests
+- Reading code
+- Spawning subagents
+- Running verification commands
+- Any creative work that requires shell access
+
+Do NOT use bash for mechanical operations that cycle_pre/post handles (git pull, git commit, git push, status bar writes, tracker transitions, iteration logging).
+
+### Phase 3 — Post-Cycle (Mechanical)
+
+Write your results to `.squidsquad/[ROLE]/cycle-output.json`:
+
+```json
+{
+  "role": "[ROLE]",
+  "cycle_number": N,
+  "cycle_type": "active" | "quiet" | "suppressed",
+  "status_transitions": [
+    {"number": 123, "from": "approved", "to": "in-progress"}
+  ],
+  "tracker_comments": [
+    {"number": 123, "message": "Picking up. Status → In Progress."}
+  ],
+  "iteration_summary": "Brief description of work done",
+  "commit_message": "[ROLE]: cycle N — brief description",
+  "working_state_update": "# Working State\n\n- **Task**: none\n...",
+  "restart_needed": false,
+  "restart_reason": null
+}
+```
+
+Then run:
+
+```bash
+python references/scripts/cycle_post.py [ROLE]
+```
+
+The script handles: status transitions, tracker comments, iteration logging, git commits, pushes, version bumps (DM), restart sentinels, and status bar cleanup.
+
+### Role-Specific Fields
+
+**Skill** cycle-output extras:
+- `code_commit`: `{branch, message, pr_needed, pr_title, pr_body}` — for branch workflow
+- `state_commit_message`: separate message for main branch state commit
+- `improvement_scan`: `{files_scanned, findings}` — if scan ran
+
+**PM** cycle-output extras:
+- `human_input_processed`: summary of human input handled
+- `issues_filed`, `issues_verified`, `tasks_verified`, `tasks_shipped`
+- `external_issues_triaged`, `health_alerts`, `vault_writes`
+- `version_bump`: `{new_version, items_included}` — if DM absent
+
+**QA** cycle-output extras:
+- `e2e_log`: `{result, tests_run, failures}`
+- `issues_filed`, `issues_verified`, `tasks_verified`
+- `pr_actions`: `[{pr_number, action, comment}]`
+
+**DM** cycle-output extras:
+- `bugs_fixed`, `deliveries`
+- `version_bump`: `{new_version, items_included}`
+<!-- /sub-skill: cycle-runner -->
 
 <!-- sub-skill: context-pressure -->
 ### Step 1b — Context Pressure Check
 
 Print: `[🦑 HH:MM:SS] Checking context pressure...`
 
-Check `context_window.used_percentage` from the status line JSON (available as the `$CONTEXT_USED` environment hint, or by reading the last status line output). Compare against the threshold:
+Read the real context pressure from disk. The statusline hook writes the actual `used_percentage` to `.squidsquad/[ROLE]/context-pressure` after every assistant message — agents should **read** this file, not fabricate values.
 
 ```bash
+CTX_PCT=$(cat .squidsquad/[ROLE]/context-pressure 2>/dev/null || echo "0")
 python references/scripts/config.py get context-threshold
 ```
+
+Compare `CTX_PCT` against the threshold. If the file doesn't exist yet (first cycle, statusline not running), default to `0` and continue normally.
 
 If context usage **exceeds the threshold**:
 1. Compact your current working state into `.squidsquad/[ROLE]/working-state.md` (see Working State File below). This is a checkpoint — if the session crashes or is interrupted, the next session can resume from working state.
 2. Commit and push all pending work.
 3. Print: `[🦑 HH:MM:SS] Context pressure at [X]% — working state checkpointed. Continuing normally.`
-4. **Continue the cycle normally.** Claude Code automatically compresses prior messages as context approaches limits, so the conversation can keep going indefinitely. Do NOT exit the conversation — exiting kills the cron loop and there is no auto-restart mechanism.
+4. **Continue the cycle normally.** Claude Code automatically compresses prior messages as context approaches limits, so the conversation can keep going indefinitely. Set a flag so the Self-Restart step (at cycle end) triggers a fresh session after the cycle completes.
 
 If context usage is below threshold, continue normally.
 <!-- /sub-skill: context-pressure -->
@@ -327,55 +366,15 @@ If the interval matches, continue silently.
 <!-- /sub-skill: interval-sync -->
 
 <!-- sub-skill: triage-issues -->
-### Step 2 — Triage Issues
+### Step 2 — Pick Up Work (Deterministic Triage)
 
-Print: `[🦑 HH:MM:SS] Triaging issues...`
+Print: `[🦑 HH:MM:SS] Checking work queue...`
 
-Query GitHub Issues for open issues assigned to your role:
-
-```bash
-python references/scripts/tracker.py list-issues [ROLE] --status open
-```
-
-For each issue that does not have a `status:shipped` or closed state:
-
-1. Write working state: update `.squidsquad/[ROLE]/working-state.md` with `Task: #[NUMBER]`, status `in-progress`.
-2. Read the issue details: `gh issue view [NUMBER] --json title,body,comments`
-3. Locate the relevant code.
-4. Fix the issue.
-5. Run the test command: `[ROLE_TEST_CMD]`
-6. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false` (no modifications), do NOT transition — re-read the issue and apply the fix. Never mark an issue as fixed without actual code changes.
-7. If tests pass and changes exist:
-   - Transition status: `python references/scripts/tracker.py transition [NUMBER] open pending-test --role [ROLE]-lead`
-   - Comment: `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Fixed in commit [hash]. [Brief explanation]. Status → Pending Test."`
-   - Clear working state.
-8. If the root cause belongs to another agent's domain:
-   - Do NOT mark this issue as fixed.
-   - File a new issue: `python references/scripts/tracker.py create-issue --title "[title]" --body "[description]" --role [OTHER_ROLE] --severity [level] --reporter [ROLE]-lead`
-   - Comment on the original: `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Root cause is in [OTHER_ROLE]. Filed #[NEW_NUMBER]. Blocking."`
-   - Clear working state.
-<!-- /sub-skill: triage-issues -->
-
-<!-- sub-skill: implement-tasks -->
-### Step 3 — Implement Tasks
-
-Print: `[🦑 HH:MM:SS] Checking tasks...`
-
-**Issue gate**: Before picking up any task work, check for open issues assigned to your role:
-
-```bash
-python references/scripts/tracker.py list-issues [ROLE] --status open
-```
-
-If any open issues exist (non-empty result), **skip all task work this cycle** — issues always take priority. Print: `[🦑 HH:MM:SS] Open issues exist — skipping task pickup.` and proceed to Step 4.
-
-**First, check for QA-rejected items** (higher priority than new work — fix existing before starting new):
+**First, check for QA-rejected items** (highest priority — fix existing before starting new):
 
 ```bash
 python references/scripts/triage.py qa-rejected [ROLE] --json
 ```
-
-This script deterministically detects in-progress items (both issues and tasks) with unaddressed QA/PM feedback. It returns a JSON array of items needing rework, each with `number`, `title`, `feedback_from`, `feedback_at`, and `feedback_summary`.
 
 If the result is non-empty, pick up the first item:
 1. Read the full QA feedback: `gh issue view [NUMBER] --json title,body,comments`
@@ -387,25 +386,63 @@ If the result is non-empty, pick up the first item:
    python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role [ROLE]-lead
    python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Fixed [N] QA gaps: [list]. Status → Pending Test."
    ```
-6. Clear working state.
+6. Clear working state. Proceed to Step 4.
 
-**Then, check for new approved tasks**:
+**If no QA-rejected items, use the deterministic work queue**:
 
 ```bash
-python references/scripts/tracker.py list-tasks [ROLE] --status approved
+python references/scripts/tracker.py work-queue [ROLE]
 ```
 
-Pick the highest-priority task (check `priority:high` first, then `priority:medium`, then `priority:low`). Read it: `gh issue view [NUMBER] --json title,body,labels,comments`
+This returns a unified, priority-sorted list of ALL actionable items (issues AND tasks). Priority order is enforced by the script:
+1. In-progress items (resume first)
+2. Approved issues — severity:high → medium → low
+3. Approved tasks — priority:high → medium → low
+4. Open issues — severity:high → medium → low
 
-**Design label check**: If the issue has a `design:needed` or `design:in-progress` label, **skip it** — the designer agent has not completed the design yet. Move to the next task. Issues with `design:complete` or no design label are picked up normally.
+**You MUST pick the first item in the queue.** No discretion to skip, reorder, or cherry-pick. The queue is deterministic — the script decides priority, not you.
 
-When picking up a task, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
+If the queue is empty, print: `[🦑 HH:MM:SS] No actionable work in queue.` and proceed to Step 4.
+
+If the queue returns an item, read it: `gh issue view [NUMBER] --json title,body,labels,comments`
+
+**Design label check**: If the item has a `design:needed` or `design:in-progress` label, skip it and pick the next item in the queue.
+
+**For issues** (type:issue):
+1. Write working state: update `.squidsquad/[ROLE]/working-state.md` with `Task: #[NUMBER]`, status `in-progress`.
+2. **Branch checkout** (#3296): `python references/scripts/git_ops.py task-begin [ROLE] [NUMBER]` — checks out the task's feature branch if branch-workflow is enabled.
+3. Transition: `python references/scripts/tracker.py transition [NUMBER] [CURRENT_STATUS] in-progress --role [ROLE]-lead`
+4. Comment: `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Picking up. Status → In Progress."`
+5. Read the issue details, locate the relevant code, fix the issue.
+6. Run the test command: `[ROLE_TEST_CMD]`
+7. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false`, do NOT transition — re-read the issue and apply the fix.
+8. If tests pass and changes exist:
+   - Transition: `python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role [ROLE]-lead`
+   - Comment: `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Fixed in commit [hash]. [Brief explanation]. Status → Pending Test."`
+   - `python references/scripts/git_ops.py task-end [ROLE] [NUMBER]` — return to working branch.
+   - Clear working state.
+9. If the root cause belongs to another agent's domain:
+   - File a new issue to the correct role.
+   - Comment on the original with cross-reference.
+   - `python references/scripts/git_ops.py task-end [ROLE] [NUMBER]` — return to working branch.
+   - Clear working state.
+
+**For tasks** (type:task): Follow the task implementation flow below (Step 2b).
+<!-- /sub-skill: triage-issues -->
+
+<!-- sub-skill: implement-tasks -->
+### Step 2b — Implement Task (continued from Step 2)
+
+_This step is reached when Step 2 (deterministic triage) picks a task from the work queue._
+
+Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 
 1. Comment and transition status:
    ```bash
    python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Picking up. Status → In Progress."
    python references/scripts/tracker.py transition [NUMBER] approved in-progress --role [ROLE]-lead
    ```
+1b. **Branch checkout** (#3296): `python references/scripts/git_ops.py task-begin [ROLE] [NUMBER]` — checks out the task's feature branch if branch-workflow is enabled.
 2. **Read planning artifacts** — PM creates these during task intake. Check both locations:
    - `.squidsquad/pm/planning/` (PM's planning directory — primary location)
    - `.squidsquad/[ROLE]/planning/` (your own planning directory — fallback)
@@ -425,27 +462,10 @@ When picking up a task, print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
      python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role [ROLE]-lead
      python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Implementation complete. All tests passing. Status → Pending Test."
      ```
+   - `python references/scripts/git_ops.py task-end [ROLE] [NUMBER]` — return to working branch.
    - Clear working state.
 11. If tests fail: fix the failure before changing status.
 <!-- /sub-skill: implement-tasks -->
-
-<!-- sub-skill: boot-remote-agents -->
-### Step — Boot Results (PM Only)
-
-**PM-only gate**: Only the PM agent runs this step. If you are NOT the PM role, skip this step entirely.
-
-Print: `[🦑 HH:MM:SS] Checking boot results...`
-
-Boot detection runs automatically in `cycle_pre.py` before the creative phase. Read `boot_results` from `cycle-input.json` — it is a list of per-agent result objects, each with `role`, `action`, `success`, and `message` fields.
-
-**Interpreting output**: Each agent entry has `action` (spawn/skip/dry-run) and `success` (true/false). Log any spawn failures in Discussion on the agent's current task issue.
-
-If any agents were spawned, print: `[🦑 HH:MM:SS] Booted: [role1, role2, ...]`
-
-If all agents alive or stopped, print nothing — silent pass.
-
-**Per-role opt-out**: To prevent a specific agent from being booted, create `.squidsquad/<role>/.stop`. This is respected by `boot_remote.py` even when called unconditionally.
-<!-- /sub-skill: boot-remote-agents -->
 
 <!-- sub-skill: improvement-scan -->
 ## Improvement Scanning (Quiet Cycle Productivity)
@@ -478,14 +498,13 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 
 2. **Read your SOUL.md self-improvement lens**: Your soul defines what to look for. Consult it before scanning.
 
-3. **Select files to scan**: Pick 3-5 source files from the target project, prioritized by:
-   - Recently changed (most likely to have issues)
-   - Never scanned before (coverage gap)
-   - Oldest since last scan (staleness)
+3. **Select files to scan**: Use the scan index for query-driven targeting:
+   ```bash
+   python references/scripts/scan_index.py suggest-targets [ROLE] --count 5
+   ```
+   This returns files ranked by a composite score (coverage gaps, git churn, cross-role findings, acceptance rate). If `scan_index.py` is not available or fails, fall back to manually checking `.squidsquad/[your-role]/scan-history.md` and picking files based on recency, coverage gaps, and staleness.
 
    **Exclude from scanning**: `.squidsquad/`, `node_modules/`, `vendor/`, `.git/`, build output directories (`dist/`, `build/`, `out/`), generated files, and binary files. Only scan source files belonging to the target project.
-
-   Check `.squidsquad/[your-role]/scan-history.md` to avoid re-scanning recently reviewed files.
 
 4. **Scan with your domain lens**: Read your SOUL.md `### Improvement Scan` section for:
    - **Scan criteria**: what to look for, in priority order
@@ -511,7 +530,13 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 
    Tag all findings with the `improvement-scan` label so PM and human can filter them.
 
-6. **Update scan history**: Record the scanned files and any filed items in `.squidsquad/[your-role]/scan-history.md`:
+6. **Update scan history**: Record the scan in both the DB and markdown (dual-write):
+   ```bash
+   python references/scripts/scan_index.py record-scan --role [ROLE] --files "[comma-separated files]" --findings '[JSON array of findings]'
+   ```
+   If `scan_index.py` is not available, skip the DB write — the markdown write below is sufficient.
+
+   Also append to `.squidsquad/[your-role]/scan-history.md`:
 
    ```markdown
    ## Scan — YYYY-MM-DD HH:MM
@@ -531,26 +556,6 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 - **PM does NOT auto-approve** scan items — human decides whether to act on them.
 <!-- /sub-skill: improvement-scan -->
 
-<!-- sub-skill: iteration-log -->
-### Step 4 — Log Iteration (skip on quiet cycles)
-
-If no bugs were fixed and no features were progressed this cycle (and no improvement scan was triggered), this is a **quiet cycle**. Produce no text output — skip silently to Step 6 (Done). The status bar shows the loop is still running.
-
-Otherwise, print: `[🦑 HH:MM:SS] Logging iteration...`
-
-Use the cycle script to create and clean up logs:
-
-```bash
-# Create iteration log
-python references/scripts/cycle.py log-iteration [ROLE] [N] \
-  --bugs "[list or none]" --features "[list or none]" \
-  --tests "[passed/failed]" --notes "[anything notable]"
-
-# Clean up old logs (keeps most recent 20)
-python references/scripts/cycle.py cleanup-iterations [ROLE]
-```
-<!-- /sub-skill: iteration-log -->
-
 <!-- sub-skill: vault-remember -->
 ### Step 4b — Vault Remember (End-of-Cycle Reflection)
 
@@ -562,11 +567,20 @@ python references/scripts/config.py get vault-remember
 ```
 If `no`, skip this step entirely.
 
+**BRIEFING.md staleness check** (runs every cycle — not gated by quiet check):
+
+Read `.squidsquad/vault/BRIEFING.md` and `config.md`. Compare key fields:
+- **Version**: Does BRIEFING.md match `SquidSquad Version` in config.md?
+- **Active agents**: Does BRIEFING.md list the same agents as config.md `Dev Agents`?
+- **Current priorities**: Do listed priorities match open high/medium priority items in the tracker?
+
+If any field is stale, update BRIEFING.md with current values. This is a staleness fix, not new content — it does NOT consume write budget. Run vault-check Level 1 after updating.
+
 **Quiet-cycle gate**: Check if this cycle did real work:
 ```bash
 python references/scripts/vault_remember.py is-quiet [ROLE]
 ```
-If exit code 0 (quiet), skip — nothing to reflect on.
+If exit code 0 (quiet), skip the reflection below — nothing to reflect on.
 
 **Reset write counter** at the start of each reflection:
 ```bash
@@ -741,7 +755,7 @@ Split commits into code (feature branch) and state (main):
 
    **If PR Flow `no`** — simple PR (no review sections):
    ```bash
-   python references/scripts/git_ops.py pr-create "[ROLE]: #[NUMBER] — [title]" "## #[NUMBER]\n\n[acceptance criteria]\n\nStatus: Pending Test"
+   python references/scripts/git_ops.py pr-create "[ROLE]: #[NUMBER] — [title]" "Closes #[NUMBER]\n\n## #[NUMBER]\n\n[acceptance criteria]\n\nStatus: Pending Test"
    ```
 
    Record the PR URL in the tracker Discussion:
@@ -757,12 +771,99 @@ Split commits into code (feature branch) and state (main):
    - If human requested changes via review: fix the issues and push to the branch
    - After pushing fixes, re-request review if appropriate
 
+5. **When PR Flow `yes`**: check own open PRs for merge conflicts and rebase:
+   ```bash
+   gh pr list --search "squidsquad/[ROLE]/" --state open --json number,headRefName,mergeable --limit 10
+   ```
+   For each PR with `mergeable` = `CONFLICTING` on a branch matching `squidsquad/[ROLE]/*`:
+   ```bash
+   git fetch origin
+   git checkout [BRANCH_NAME]
+   git rebase origin/[WORKING_BRANCH]
+   ```
+   - **Rebase succeeds**: force-push and log:
+     ```bash
+     git push --force-with-lease origin [BRANCH_NAME]
+     git checkout [WORKING_BRANCH]
+     ```
+     Log in iteration summary: `Rebased [BRANCH_NAME] — conflict resolved.`
+   - **Rebase has code conflicts**: abort and log (PM/QA will handle):
+     ```bash
+     git rebase --abort
+     git checkout [WORKING_BRANCH]
+     ```
+     Log: `Rebase of [BRANCH_NAME] failed — manual conflict resolution needed.`
+   - Only rebase own branches (`squidsquad/[ROLE]/*`) — never touch other agents' PRs.
+   - Skip this step when PR Flow is off or no open PRs exist.
+
 **If `no`** (default — direct-to-main workflow):
 
 ```bash
 python references/scripts/git_ops.py commit-push [ROLE] "[brief description of work done this cycle]"
 ```
 <!-- /sub-skill: git-commit -->
+
+<!-- sub-skill: self-restart -->
+### Self-Restart (Context Pressure Only)
+
+Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled externally via `start_team.py --reboot`.
+
+**Context pressure restart flow**:
+1. Step 1b detects context pressure exceeds threshold.
+2. Checkpoint working state to `.squidsquad/[ROLE]/working-state.md`.
+3. Complete the current cycle normally.
+4. At cycle end, `cycle_post.py` reads the context pressure from `cycle-input.json` and writes `.squidsquad/[ROLE]/.stop-after-cycle` mechanically when pressure exceeds threshold. Agents do not need to set `restart_needed` — the mechanical layer detects and acts.
+5. The wrapper detects the sentinel on exit, deletes it, and respawns.
+
+**You do NOT**:
+- Set `restart_needed` in cycle-output.json (deprecated — `cycle_post.py` detects context pressure mechanically).
+- Write `.stop-after-cycle` directly — `cycle_post.py` handles this mechanically.
+- Restart for template changes (handled externally via `start_team.py --reboot`).
+- Kill or manage other agents (human or `start_team.py` handles this).
+- Implement any restart loop logic (wrapper handles respawn).
+
+Write `idle|` to `current-state` at cycle end so health monitoring works.
+<!-- /sub-skill: self-restart -->
+
+<!-- sub-skill: agent-lifecycle -->
+### Agent Lifecycle
+
+Agent lifecycle is managed by `start_team.py` and the wrapper scripts. Agents do not manage their own or other agents' processes directly.
+
+**Three guarantees**:
+1. **Singleton**: Only one instance per role runs at a time (PID lock file).
+2. **Graceful stop**: `start_team.py --reboot` writes `.stop-after-cycle` and waits for the agent to finish its current cycle before respawning.
+3. **Start correctly**: Wrapper handles pre-flight checks, branch setup, and heartbeat.
+
+**Heartbeat**: The wrapper writes the current epoch to `.squidsquad/[ROLE]/.health` every 5 seconds. Health monitoring reads this — if >10s old, the agent is considered dead.
+
+**Lifecycle interface**:
+```bash
+# Start all agents
+python references/scripts/start_team.py --all
+
+# Start single agent
+python references/scripts/start_team.py --role <role>
+
+# Graceful reboot — waits for cycle end, then restarts
+python references/scripts/start_team.py --reboot <role>
+
+# Reboot all agents
+python references/scripts/start_team.py --reboot --all
+
+# Stop agent (permanent until manually restarted)
+python references/scripts/start_team.py --stop <role>
+
+# Stop all agents
+python references/scripts/start_team.py --stop --all
+```
+
+**Sentinel files**:
+- `.stop-after-cycle` — graceful restart request (written by `cycle_post.py` for context pressure, or by `start_team.py --reboot`)
+- `.stop` — permanent stop (written by `start_team.py --stop`, respected by wrapper)
+- `.pid` — singleton lock (written by wrapper)
+- `.health` — heartbeat epoch (written by wrapper every 5s)
+<!-- /sub-skill: agent-lifecycle -->
 
 ### Step 6 — Done
 
@@ -861,45 +962,22 @@ All agents have read/write access to the shared knowledge vault at `.squidsquad/
 
 ### Vault Initialization (vault-init)
 
-If `.squidsquad/vault/` does not exist, initialize it:
-
-1. Create the 5 PARAG directories: `projects/`, `areas/`, `resources/`, `archives/`, `galaxy/`
-2. Add `.gitkeep` files to empty directories (`resources/.gitkeep`, `archives/.gitkeep`) so git tracks them
-3. Create `BRIEFING.md` from the template at `references/vault-templates/BRIEFING.md` — pre-populate with current project context from `config.md`
-4. Create initial `areas/human-profile.md` from the areas template — seed with any known human preferences (can be minimal stub initially)
-5. Create `projects/{project-name}.md` from the projects template — seed with project info from `config.md`
-6. Create `.squidsquad/vault/.obsidian/` directory and add it to `.gitignore` (Obsidian's config is per-user, not shared)
-
-vault-init is **idempotent** — re-running it creates missing directories and files but never overwrites existing vault content.
+If `.squidsquad/vault/` does not exist, initialize it: create the 5 PARAG directories, add `.gitkeep` to empty dirs, create `BRIEFING.md` from `references/vault-templates/BRIEFING.md`, create `areas/human-profile.md` and `projects/{project-name}.md` from templates, create `.squidsquad/vault/.obsidian/` (add to `.gitignore`). vault-init is **idempotent**.
 
 ### Entity Model
 
-| Entity | Location | Purpose |
-|--------|----------|---------|
-| Human profile | `areas/human-profile.md` | Preferences, values, communication style |
-| Company context | `areas/company-context.md` | Culture, standards, brand guidelines |
-| Design system | `areas/design-system.md` | Colors, tokens, typography, component patterns |
-| Code conventions | `areas/code-conventions.md` | Style, patterns, architecture decisions |
-| Project context | `projects/{name}.md` | Goals, constraints, architecture, tech stack |
-| Decisions | `galaxy/decision-*.md` | Individual architectural/design/process decisions |
-| Patterns | `galaxy/pattern-*.md` | Recurring approaches, established conventions |
-| Learnings | `galaxy/learning-*.md` | Lessons learned, what worked/didn't |
-| Styles | `galaxy/style-*.md` | Visual style, writing tone, code style preferences |
+Folder mapping: `areas/` = ongoing concerns (human-profile, code-conventions, design-system, company-context), `projects/` = active project context, `galaxy/` = atomic knowledge notes (decision-\*, pattern-\*, learning-\*, style-\*), `resources/` = reference material, `archives/` = historical context. See `references/docs/vault-reference.md` for full entity table.
 
 ### Creating Notes (vault-create)
 
-To create a vault note:
-
-1. Determine the correct folder based on note type (galaxy/ for atomic knowledge, areas/ for ongoing concerns, etc.)
-2. Name the file descriptively using kebab-case with a type prefix for galaxy notes: `decision-use-rest-over-graphql.md`, `pattern-error-handling.md`, `learning-cache-invalidation.md`. Valid galaxy type prefixes: `decision-`, `pattern-`, `learning-`, `style-`. Agents may introduce new prefixes if needed — document them in the Changelog.
-3. Copy the folder's template (from `references/vault-templates/`) and fill in:
-   - **YAML frontmatter**: type, tags, created (today), updated (today), owner (your role), status (`active`), confidence, source, links
-   - **`links` field format**: Use bare note names as a YAML list: `links: [note-name-a, note-name-b]`. Do NOT use wikilink syntax in frontmatter. Wikilinks (`[[note-name]]`) go in the body's Related section only. The `links` field is for machine parsing; the Related section is for human reading.
-   - **`source` field**: How this knowledge was captured. Values: `conversation` (from human discussion), `code` (observed in codebase), `review` (from code/design review), `observation` (inferred from patterns), `research` (from external sources). Not exhaustive — use the closest match.
-   - **Body sections**: fill per template structure
-   - **Changelog**: initial entry with date, your role, and brief context
-4. Use **bare wikilinks** only in the body: `[[note-name]]` — no alias syntax
-5. **Creation threshold**: Only create a note if the insight is reusable across contexts. Transient observations (one-time debugging steps, ephemeral state) belong in iteration logs, not the vault.
+1. Pick the correct folder (see Entity Model). Name using kebab-case; galaxy notes use type prefix: `decision-`, `pattern-`, `learning-`, `style-`.
+2. Copy the folder's template from `references/vault-templates/` and fill in:
+   - **YAML frontmatter**: type, tags, created, updated, owner, status (`active`), confidence, source, links
+   - **`links`**: bare note names as YAML list (no wikilink syntax in frontmatter)
+   - **`source`**: `conversation`, `code`, `review`, `observation`, or `research`
+   - **Body + Changelog**: fill per template
+3. Use **bare wikilinks** `[[note-name]]` in body only — no aliases
+4. **Creation threshold**: Only create if reusable across contexts. Transient observations belong in iteration logs.
 
 ### Confidence Levels
 
@@ -909,91 +987,32 @@ To create a vault note:
 
 ### Wikilinks
 
-Use `[[note-name]]` (bare, no aliases) to link related notes in the body. Links create a knowledge graph browsable in Obsidian and traversable via grep:
-
-```bash
-# Find all notes linking TO a given note
-grep -rl '\[\[note-name\]\]' .squidsquad/vault/
-
-# Find what a note links TO
-grep -o '\[\[[^]]*\]\]' .squidsquad/vault/galaxy/decision-example.md
-```
+Use `[[note-name]]` (bare, no aliases) to link related notes in the body. Find inbound links: `grep -rl '\[\[note-name\]\]' .squidsquad/vault/`. Find outbound: `grep -o '\[\[[^]]*\]\]' .squidsquad/vault/galaxy/note.md`.
 
 ### BRIEFING.md
 
-`.squidsquad/vault/BRIEFING.md` is a ~50 line summary of active context, injected at session start. It contains:
-- Current project priorities and active work
-- Recent important decisions
-- Key human preferences summary (reference `[[human-profile]]` if it exists — this link is optional during early vault setup)
-- Active constraints or blockers
-
-BRIEFING.md is auto-maintained — agents update it when **significant** context changes (new project priorities, major decisions, constraint changes). Minor cycle-to-cycle updates do NOT warrant a BRIEFING.md edit. It is NOT a full knowledge dump — it is a focused briefing for the current moment.
+`.squidsquad/vault/BRIEFING.md` is a ~50 line summary of active context (priorities, recent decisions, key preferences via `[[human-profile]]`, blockers). Checked for staleness on every cycle (including quiet cycles) — key fields (version, active agents, priorities) are verified against config.md and updated if stale. Token budget applies to new additions, not staleness fixes.
 
 ### Concurrent Access
 
-Multiple agents may write to the vault simultaneously. Git handles merge conflicts at the file level. To minimize conflicts:
-
-- **One note per topic** — don't append to other agents' notes. Create your own note and link to theirs.
-- **Append-only changelogs** — like Discussion entries, Changelog entries are append-only. Git can auto-merge appends to the same file.
-- **If a merge conflict occurs**: Keep both versions. Append the conflicting section below the existing one. Never discard vault content.
+One note per topic — don't append to other agents' notes. Changelogs are append-only. On merge conflict: keep both versions, never discard vault content.
 
 ### Note Size Guidance
 
-- **Galaxy notes**: Atomic — one idea per note, max ~500 lines. If a note grows beyond this, split it.
-- **Area notes** (human-profile, design-system, etc.): Can grow freely — these are living documents.
-- **Project notes**: Keep focused on active context. Archive historical sections to `archives/` when no longer current.
-- **Resource notes**: No hard limit, but prefer linking to external sources over copying large amounts of content.
+Galaxy notes: atomic, max ~500 lines (split if larger). Area notes: grow freely. Project notes: keep focused, archive old sections. Resource notes: prefer linking to external sources.
 
 ### Updating Notes (vault-update)
 
-To update an existing vault note:
-
-1. **Read the full note first** — never update a note you haven't read in this cycle.
-2. **Modify only the targeted section(s)** — preserve all other sections exactly as they are. vault-update is a surgical edit, not a rewrite.
-3. **Never delete existing content** — add to sections, don't remove from them. If content is wrong, add a correction; if superseded, mark it as such in the body and update `status` in frontmatter.
-4. **Update the `updated` frontmatter field** to today's date.
-5. **Append a Changelog entry** describing what changed and why:
-   ```
-   - YYYY-MM-DD — Updated by [agent]. [What changed and why].
-   ```
-6. **Run vault-check Level 1** on the note after updating (see vault-check below).
-
-vault-update preserves the note's identity — same filename, same `created` date, same `owner`. Only `updated`, the targeted body section(s), and the Changelog grow.
+1. **Read the full note first** — never update unread notes.
+2. **Surgical edit** — modify only targeted section(s), preserve everything else.
+3. **Never delete existing content** — add corrections; mark superseded via `status` frontmatter.
+4. **Update `updated`** frontmatter to today's date.
+5. **Append Changelog**: `- YYYY-MM-DD — Updated by [agent]. [What changed and why].`
+6. **Run vault-check Level 1** after updating.
 
 ### Searching the Vault (vault-search)
 
-vault-search finds notes by tag, type, keyword, or wikilink traversal. It uses grep internally but presents a generic interface — agents call vault-search without knowing the implementation. A future SQLite/RAG backend (FEAT-SKILL-062) can replace the internals without changing how agents invoke search.
-
-**Search modes:**
-
-1. **By tag**: Find notes whose `tags` frontmatter contains a specific tag.
-   ```bash
-   grep -rl "tags:.*\b<TAG>\b" .squidsquad/vault/ --include="*.md"
-   ```
-
-2. **By type**: Find notes with a specific `type` frontmatter value.
-   ```bash
-   grep -rl "^type: <TYPE>" .squidsquad/vault/ --include="*.md"
-   ```
-
-3. **By keyword** (full-text): Find notes containing a phrase.
-   ```bash
-   grep -rl "<KEYWORD>" .squidsquad/vault/ --include="*.md"
-   ```
-
-4. **By wikilink traversal**: Starting from a note, find connected notes.
-   - **1-hop**: Outbound links (wikilinks in the note's body) + inbound links (other notes linking to this one).
-     ```bash
-     # Outbound: extract wikilinks from the note
-     grep -o '\[\[[^]]*\]\]' .squidsquad/vault/<path> | sed 's/\[\[//g;s/\]\]//g'
-     # Inbound: find notes linking TO this note
-     grep -rl '\[\[<note-name>\]\]' .squidsquad/vault/ --include="*.md"
-     ```
-   - **2-hop**: For each 1-hop result, repeat the outbound+inbound search. Do NOT traverse beyond 2 hops.
-
-**Result format**: Return a list of matching note paths with a brief excerpt (first non-frontmatter content line). **Max 10 results** — if more match, return the 10 most recently updated (sort by `updated` frontmatter). The agent can narrow and re-search.
-
-**Caching**: Within a single cycle, cache search results to avoid repeated grep calls for the same query.
+Four search modes: **By tag** (`grep -rl "tags:.*\b<TAG>\b" .squidsquad/vault/ --include="*.md"`), **By type** (`grep -rl "^type: <TYPE>" ...`), **By keyword** (`grep -rl "<KEYWORD>" ...`), **By wikilink traversal** (1-hop outbound+inbound, max 2-hop). Max 10 results, sorted by most recently updated. Cache results within a cycle. See `references/docs/vault-reference.md` for full search examples.
 
 ### Checking Vault Health (vault-check)
 
@@ -1015,23 +1034,7 @@ Print warnings with `[vault-check]` prefix. If no issues found, print nothing (s
 
 #### Level 2 — Full Vault Sweep
 
-Runs on-demand (invoked explicitly, not automatic). Checks every `.md` file in `.squidsquad/vault/`:
-
-1. Run all Level 1 checks on every note.
-2. **Orphan detection**: Find notes with zero inbound wikilinks that are not area notes. Area notes and BRIEFING.md are exempt — they serve as entry points.
-3. **Staleness detection**: Find notes with `status: active` and `updated` date older than 30 days. Flag as potentially stale.
-4. **Broken link census**: Aggregate all unresolved wikilinks across the vault.
-5. **Health summary**: Print totals — note count, orphan count, stale count, broken link count.
-
-```bash
-# Quick orphan check: find notes never linked TO
-for f in .squidsquad/vault/galaxy/*.md; do
-  name=$(basename "$f" .md)
-  if ! grep -rl "\[\[$name\]\]" .squidsquad/vault/ --include="*.md" -q 2>/dev/null; then
-    echo "[vault-check] Orphan: $f"
-  fi
-done
-```
+Runs on-demand (invoked explicitly, not automatic). Checks every `.md` file: all Level 1 checks + orphan detection + staleness detection (30+ days) + broken link census + health summary. See `references/docs/vault-reference.md` for details and scripts.
 
 ### Rules
 

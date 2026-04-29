@@ -1,18 +1,19 @@
 {
-  "last_scanned": "docs/ARCHITECTURE.md",
+  "last_scanned": "docs/sub-skill-guide.md",
   "rotation_count": 0,
   "scan_history": [
     {"file": "README.md", "date": "2026-04-28", "findings": 2, "fixes": ["removed stale 'no direct communication' claim", "renamed '3-branch architecture' to 'State branch isolation'"]},
-    {"file": "SKILL.md:sections-1-3", "date": "2026-04-28", "findings": 3, "fixes": ["'Just markdown' → 'Just git and GitHub Issues'", "removed obsolete templates/ from file structure and diagram", "CLAUDE.md 'bootstrapper' → 'full agent instructions'"]},
-    {"file": "SKILL.md:sections-4-6", "date": "2026-04-28", "findings": 3, "fixes": ["PM → DM for auto versioning ownership", "API keys env vars → ~/.squidsquad/secrets", "context pressure 'exit' → 'checkpoint and continue'"]},
-    {"file": "SKILL.md:sections-7-8", "date": "2026-04-28", "findings": 3, "fixes": ["QA loop manual git/sleep → cycle_post.py + /loop", "rebase conflict advice: markdown tracker → state files", "PR merge status 'Shipped' → 'Pending Ship'"]},
-    {"file": "docs/ARCHITECTURE.md", "date": "2026-04-29", "findings": 3, "fixes": ["sub-skill composition manifest.md → includes.yml", "coordination 'no direct communication' → optional comms layer", "cycle runner 'opt-in' → always-on"]}
+    {"file": "SKILL.md:sections-1-3", "date": "2026-04-28", "findings": 3, "fixes": ["'Just markdown' → 'Just git and GitHub Issues'", "removed obsolete templates/", "CLAUDE.md 'bootstrapper' → 'full agent instructions'"]},
+    {"file": "SKILL.md:sections-4-6", "date": "2026-04-28", "findings": 3, "fixes": ["PM → DM for auto versioning", "env vars → ~/.squidsquad/secrets", "context pressure 'exit' → 'continue'"]},
+    {"file": "SKILL.md:sections-7-8", "date": "2026-04-28", "findings": 3, "fixes": ["QA loop git/sleep → cycle_post + /loop", "rebase conflict advice updated", "PR merge 'Shipped' → 'Pending Ship'"]},
+    {"file": "docs/ARCHITECTURE.md", "date": "2026-04-29", "findings": 3, "fixes": ["manifest.md → includes.yml", "'no direct communication' → optional comms", "cycle runner opt-in → always-on"]},
+    {"file": "docs/sub-skill-guide.md", "date": "2026-04-29", "findings": 3, "fixes": ["manifest.md 'composition rules' → 'reference doc'", "manifest.md 'source of truth' → includes.yml", "'Update the manifest' → 'Update includes.yml'"]}
   ],
   "doc_inventory": {
     "README.md": {"last_scanned": "2026-04-28", "status": "current"},
     "SKILL.md": {"last_scanned": "2026-04-28", "status": "current"},
     "docs/ARCHITECTURE.md": {"last_scanned": "2026-04-29", "status": "current"},
-    "docs/sub-skill-guide.md": {"last_scanned": null, "status": "unknown"},
+    "docs/sub-skill-guide.md": {"last_scanned": "2026-04-29", "status": "current"},
     "CONTRIBUTING.md": {"last_scanned": null, "status": "unknown"},
     "CHANGELOG.md": {"last_scanned": null, "status": "unknown"}
   },
