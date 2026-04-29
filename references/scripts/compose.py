@@ -310,6 +310,16 @@ def _assemble_claude(role_name: str) -> str:
             parts.append("")
             parts.append(variant_claude.read_text(encoding="utf-8").rstrip())
 
+    # Layer 4 — Project directives (PM-owned, applied to all agents)
+    project_directives = REPO_ROOT / ".squidsquad" / "project-directives.md"
+    if project_directives.exists():
+        content = project_directives.read_text(encoding="utf-8").strip()
+        if content:
+            parts.append("")
+            parts.append("---")
+            parts.append("")
+            parts.append(content)
+
     return "\n".join(parts)
 
 
