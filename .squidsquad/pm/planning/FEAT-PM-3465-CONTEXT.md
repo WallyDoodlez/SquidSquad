@@ -41,15 +41,12 @@ Each layer carries **both** CLAUDE.md (instructions) **and** SOUL.md (personalit
 
 ## Dev Discretion (dev agent can choose)
 
-- Whether to use `{{extend:}}` directive for Layer 3 entry files vs prose copy (research recommends `{{extend:}}`, ~10 lines)
-- Layer 3 variant-specific sub-skill directory naming (`<variant>-specific/` vs `<base>-specific/<variant>/`)
-- `includes.yml` variant schema details (`base_role` + `additional_includes` recommended)
-- Directory structure for Layer 1 sources
+- Directory structure for layer source files (e.g., `references/layers/1-base/`, `references/layers/2-role/<role>/`, `references/layers/3-preset/<variant>/`)
 - Whether `upgrade_soul()` is a new function or extension of `deploy_role()`
 - Layer 1/2 boundary classification for edge cases (vault-protocol variants, boot-remote-agents)
 - How to document the layer model in `manifest.md`
 - Implementation details of preset content (personality traits, domain vocabulary)
-- Whether existing dev variants (skill/be/fe) get actual new Layer 3 CLAUDE.md content or just rename
+- Whether existing dev variants (skill/be/fe) get actual new Layer 3 content or just rename
 
 ## Side Effect Mitigations (required)
 
