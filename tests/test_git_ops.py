@@ -659,3 +659,48 @@ class TestCommitStateUsesWorkingBranch:
 
         result = git_ops.commit_state("skill", "state update")
         assert result is True
+
+
+# ---------------------------------------------------------------------------
+# _safe_checkout (#4362)
+# ---------------------------------------------------------------------------
+
+class TestSafeCheckout:
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_stash_pop_on_failure_restores_original(self, mock_run, mock_run_list):
+        """On checkout failure after stash, pop restores original branch (#4362)."""
+        mock_run.side_effect = [
+            _mock_result(stdout="main\n"),      # git branch --show-current
+            _mock_result(),                      # git stash -q
+            _mock_result(),                      # git stash pop -q (restore)
+        ]
+        # First checkout fails, second (after stash) also fails
+        mock_run_list.side_effect = [
+            _mock_result(returncode=1, stderr="error"),  # direct checkout
+            _mock_result(returncode=1, stderr="error"),  # stash+checkout
+        ]
+
+        result = git_ops._safe_checkout("feature-branch")
+        assert result is False
+        # Stash pop must be called to restore original state
+        pop_calls = [c for c in mock_run.call_args_list
+                     if "stash pop" in str(c)]
+        assert len(pop_calls) == 1
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_stash_pop_on_success_applies_to_target(self, mock_run, mock_run_list):
+        """On checkout success after stash, pop applies on target branch."""
+        mock_run.side_effect = [
+            _mock_result(stdout="main\n"),      # git branch --show-current
+            _mock_result(),                      # git stash -q
+            _mock_result(),                      # git stash pop -q
+        ]
+        mock_run_list.side_effect = [
+            _mock_result(returncode=1, stderr="error"),  # direct checkout fails
+            _mock_result(returncode=0),                   # stash+checkout succeeds
+        ]
+
+        result = git_ops._safe_checkout("feature-branch")
+        assert result is True

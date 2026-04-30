@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-30 06:32
+
+- **Files scanned**: references/scripts/model_router.py, references/scripts/run_comprehension_test.py, references/scripts/cycle.py, references/scripts/git_ops.py, references/scripts/tracker.py
+- **Findings**: #4362 (git_ops.py _safe_checkout stash pop on wrong branch — medium), #4363 (tracker.py silent None.strip() — low)
+- **Items rejected by human**: none yet
+- **Notes**: model_router.py, run_comprehension_test.py, cycle.py all clean. All 5 files have test coverage.
+
 ## Scan — 2026-04-30 04:32
 
 - **Files scanned**: references/scripts/cycle_pre.py, references/scripts/cycle_post.py, references/scripts/state_bus.py, references/scripts/comms_adapter.py, references/scripts/scan_index.py
