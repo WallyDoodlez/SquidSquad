@@ -56,7 +56,7 @@ The **Behavior Layer** (L3) is the focal layer — it's where agents reason, dec
 **Key files:**
 - Boot scripts: `.squidsquad/start-[role].sh` / `.ps1` — launch and supervise the Claude process
 - `/loop` command — schedules recurring cycle execution
-- Signal files: `.restart`, `.stop`, `.pause` — lifecycle control (see #2122)
+- Signal files: `.stop-after-cycle` (graceful restart), `.stop` (permanent stop), `.pid` (singleton lock), `.health` (heartbeat)
 - `current-state` — status bar state file, written atomically
 
 **What changes here:** Cycle cadence, restart logic, boot sequence, signal handling. The orchestration layer knows about timing but not about what work gets done.

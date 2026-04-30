@@ -1,5 +1,5 @@
 {
-  "last_scanned": "SKILL.md:sections-7-8",
+  "last_scanned": "docs/ARCHITECTURE.md",
   "rotation_count": 5,
   "scan_history": [
     {"file": "README.md", "date": "2026-04-28", "findings": 2},
@@ -18,12 +18,13 @@
     {"file": "README.md", "date": "2026-04-30", "findings": 0},
     {"file": "SKILL.md:sections-1-3", "date": "2026-04-30", "findings": 3, "fixes": ["removed stale 'Fixed' status reference", "added pending-human-review/setup to label taxonomy", "added HITL statuses to feature flow docs"]},
     {"file": "SKILL.md:sections-4-6", "date": "2026-04-30", "findings": 1, "fixes": ["updated rebase conflict guidance to reflect state branch isolation for iterations/working-state"]},
-    {"file": "SKILL.md:sections-7-8", "date": "2026-04-30", "findings": 2, "fixes": ["corrected .health file values in Ralph Loop section (epoch heartbeat, not 'alive' string)", "corrected .health file values in /squidsquad-status section"]}
+    {"file": "SKILL.md:sections-7-8", "date": "2026-04-30", "findings": 2, "fixes": ["corrected .health file values in Ralph Loop section (epoch heartbeat, not 'alive' string)", "corrected .health file values in /squidsquad-status section"]},
+    {"file": "docs/ARCHITECTURE.md", "date": "2026-04-30", "findings": 1, "fixes": ["updated signal files list: .restart/.stop/.pause → .stop-after-cycle/.stop/.pid/.health"]}
   ],
   "doc_inventory": {
     "README.md": {"last_scanned": "2026-04-30", "status": "current"},
     "SKILL.md": {"last_scanned": "2026-04-30", "status": "current"},
-    "docs/ARCHITECTURE.md": {"last_scanned": "2026-04-29", "status": "current"},
+    "docs/ARCHITECTURE.md": {"last_scanned": "2026-04-30", "status": "current"},
     "docs/sub-skill-guide.md": {"last_scanned": "2026-04-29", "status": "current"},
     "CONTRIBUTING.md": {"last_scanned": "2026-04-29", "status": "current"},
     "CHANGELOG.md": {"last_scanned": "2026-04-29", "status": "current"}
