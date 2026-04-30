@@ -6,15 +6,15 @@ includes:
   - common/capability-check
   - common/cycle-runner
   - common/context-pressure
-  - dm-specific/issue-triage
-  - dm-specific/delivery-packaging
-  - dm-specific/version-bumps
-  - dm-specific/doc-improvement-loop
-  - dm-specific/discussion-protocol
-  - dm-specific/issue-filing
+  - roles/dm/issue-triage
+  - roles/dm/delivery-packaging
+  - roles/dm/version-bumps
+  - roles/dm/doc-improvement-loop
+  - roles/dm/discussion-protocol
+  - roles/dm/issue-filing
   - common/vault-protocol-slim
-  - dm-specific/file-conventions
-  - dm-specific/status-line
+  - roles/dm/file-conventions
+  - roles/dm/status-line
   - common/self-restart
   - common/agent-lifecycle
-  - dm-specific/prohibitions
+  - roles/dm/prohibitions

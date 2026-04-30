@@ -2,4 +2,4 @@
 # Inherits all sub-skills from dm, adds fullstack-specific context.
 base_role: dm
 additional_includes:
-  - dm-fullstack-specific/domain-context
+  - roles/dm/fullstack/domain-context

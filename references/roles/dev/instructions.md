@@ -76,9 +76,9 @@ Write `idle|` at cycle end so the status bar shows rotating hints between cycles
 
 {{include: common/interval-sync}}
 
-{{include: dev-specific/triage-issues}}
+{{include: roles/dev/triage-issues}}
 
-{{include: dev-specific/implement-tasks}}
+{{include: roles/dev/implement-tasks}}
 
 {{include: common/improvement-scan}}
 

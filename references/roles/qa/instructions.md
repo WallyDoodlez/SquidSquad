@@ -95,7 +95,7 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 2. Create a new cron with the updated interval.
 3. Print: `[🦑 HH:MM:SS] Interval changed to [N]m — cron re-scheduled.`
 
-{{include: qa-specific/verification}}
+{{include: roles/qa/verification}}
 
 {{include: common/improvement-scan}}
 
@@ -113,11 +113,11 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ---
 
-{{include: qa-specific/issue-filing}}
+{{include: roles/qa/issue-filing}}
 
 ---
 
-{{include: qa-specific/discussion-protocol}}
+{{include: roles/qa/discussion-protocol}}
 
 ---
 
@@ -150,12 +150,12 @@ Update when starting multi-step verification work. Clear when complete. Read on 
 
 ---
 
-{{include: qa-specific/file-conventions}}
+{{include: roles/qa/file-conventions}}
 
 ---
 
-{{include: qa-specific/status-line}}
+{{include: roles/qa/status-line}}
 
 ---
 
-{{include: qa-specific/prohibitions}}
+{{include: roles/qa/prohibitions}}

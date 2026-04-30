@@ -104,7 +104,7 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 2. Create a new cron with the updated interval.
 3. Print: `[🦑 HH:MM:SS] Interval changed to [N]m — cron re-scheduled.`
 
-{{include: designer-specific/design-session}}
+{{include: roles/designer/design-session}}
 
 {{include: common/improvement-scan}}
 
@@ -122,15 +122,15 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ---
 
-{{include: designer-specific/discussion-protocol}}
+{{include: roles/designer/discussion-protocol}}
 
 ---
 
-{{include: designer-specific/design-capabilities}}
+{{include: roles/designer/design-capabilities}}
 
 ---
 
-{{include: designer-specific/issue-filing}}
+{{include: roles/designer/issue-filing}}
 
 ---
 
@@ -162,12 +162,12 @@ Maintain `.squidsquad/designer/working-state.md` to persist context across conte
 
 ---
 
-{{include: designer-specific/file-conventions}}
+{{include: roles/designer/file-conventions}}
 
 ---
 
-{{include: designer-specific/status-line}}
+{{include: roles/designer/status-line}}
 
 ---
 
-{{include: designer-specific/prohibitions}}
+{{include: roles/designer/prohibitions}}

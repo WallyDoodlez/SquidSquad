@@ -2,4 +2,4 @@
 # Inherits all sub-skills from dm, adds ios-specific context.
 base_role: dm
 additional_includes:
-  - dm-ios-specific/domain-context
+  - roles/dm/ios/domain-context

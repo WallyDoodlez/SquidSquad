@@ -53,7 +53,7 @@ references/roles/
 ## Adding a New Variant (Layer 3)
 
 1. Create `references/roles/<base>/<variant>/` with `instructions.md`, `SOUL.md`, `includes.yml`
-2. Create variant sub-skills in `references/sub-skills/<base>-<variant>-specific/`
+2. Create variant sub-skills in `references/sub-skills/roles/<base>/<variant>/`
 3. Run `compose.py deploy <base>-<variant>`
 
 ## Project Adaptation (Layer 4)

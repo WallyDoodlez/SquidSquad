@@ -2,4 +2,4 @@
 # Inherits all sub-skills from pm, adds android-specific context.
 base_role: pm
 additional_includes:
-  - pm-android-specific/domain-context
+  - roles/pm/android/domain-context

@@ -2,4 +2,4 @@
 # Inherits all sub-skills from qa, adds skill-specific context.
 base_role: qa
 additional_includes:
-  - qa-skill-specific/domain-context
+  - roles/qa/skill/domain-context

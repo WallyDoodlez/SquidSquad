@@ -87,9 +87,7 @@ class TestRoleEntryFiles:
             f"Legacy souls directory should not exist after Q-new22: {legacy}"
         )
 
-    def test_legacy_roles_dir_is_gone(self):
-        """Defensive — the legacy sub-skills/roles/ must not reappear."""
-        legacy = REFERENCES_DIR / "sub-skills" / "roles"
-        assert not legacy.exists(), (
-            f"Legacy roles directory should not exist after Q-new22: {legacy}"
-        )
+    def test_role_sub_skills_dir_exists(self):
+        """Role-specific sub-skills live under sub-skills/roles/."""
+        roles_ss = REFERENCES_DIR / "sub-skills" / "roles"
+        assert roles_ss.exists(), "Missing sub-skills/roles/ directory"

@@ -2,4 +2,4 @@
 # Inherits all sub-skills from pm, adds fullstack-specific context.
 base_role: pm
 additional_includes:
-  - pm-fullstack-specific/domain-context
+  - roles/pm/fullstack/domain-context

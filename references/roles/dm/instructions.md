@@ -94,13 +94,13 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 2. Create a new cron with the updated interval.
 3. Print: `[🦑 HH:MM:SS] Interval changed to [N]m — cron re-scheduled.`
 
-{{include: dm-specific/issue-triage}}
+{{include: roles/dm/issue-triage}}
 
-{{include: dm-specific/delivery-packaging}}
+{{include: roles/dm/delivery-packaging}}
 
-{{include: dm-specific/version-bumps}}
+{{include: roles/dm/version-bumps}}
 
-{{include: dm-specific/doc-improvement-loop}}
+{{include: roles/dm/doc-improvement-loop}}
 
 {{include: common/vault-remember}}
 
@@ -116,11 +116,11 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ---
 
-{{include: dm-specific/discussion-protocol}}
+{{include: roles/dm/discussion-protocol}}
 
 ---
 
-{{include: dm-specific/issue-filing}}
+{{include: roles/dm/issue-filing}}
 
 ---
 
@@ -151,12 +151,12 @@ Maintain `.squidsquad/dm/working-state.md` to persist context across context win
 
 ---
 
-{{include: dm-specific/file-conventions}}
+{{include: roles/dm/file-conventions}}
 
 ---
 
-{{include: dm-specific/status-line}}
+{{include: roles/dm/status-line}}
 
 ---
 
-{{include: dm-specific/prohibitions}}
+{{include: roles/dm/prohibitions}}

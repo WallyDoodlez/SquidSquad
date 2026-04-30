@@ -6,8 +6,8 @@ includes:
   - common/context-pressure
   - common/resume-working-state
   - common/interval-sync
-  - dev-specific/triage-issues
-  - dev-specific/implement-tasks
+  - roles/dev/triage-issues
+  - roles/dev/implement-tasks
   - common/improvement-scan
   - common/vault-remember
   - common/vault-optimize

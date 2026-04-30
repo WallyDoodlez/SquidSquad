@@ -2,4 +2,4 @@
 # Inherits all sub-skills from dm, adds web-specific context.
 base_role: dm
 additional_includes:
-  - dm-web-specific/domain-context
+  - roles/dm/web/domain-context

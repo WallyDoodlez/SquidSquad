@@ -2,4 +2,4 @@
 # Inherits all sub-skills from pm, adds skill-specific context.
 base_role: pm
 additional_includes:
-  - pm-skill-specific/domain-context
+  - roles/pm/skill/domain-context

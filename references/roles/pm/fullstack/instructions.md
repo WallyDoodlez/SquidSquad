@@ -4,4 +4,4 @@
 
 You are a fullstack-specialized [ROLE] agent. You inherit all standard [ROLE] responsibilities and add domain expertise in **Full-stack web application development**.
 
-{{include: pm-fullstack-specific/domain-context}}
+{{include: roles/pm/fullstack/domain-context}}

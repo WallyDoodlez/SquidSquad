@@ -4,27 +4,27 @@ includes:
   - common/tracker-protocol
   - common/cycle-runner
   - common/context-pressure
-  - pm-specific/checkin
-  - pm-specific/testing-and-verification
-  - pm-specific/delivery-fallback
-  - pm-specific/post-merge-recompose
-  - pm-specific/pipeline-sentinel
-  - pm-specific/own-domain-autofix
-  - pm-specific/health-check
-  - pm-specific/github-issues
+  - roles/pm/checkin
+  - roles/pm/testing-and-verification
+  - roles/pm/delivery-fallback
+  - roles/pm/post-merge-recompose
+  - roles/pm/pipeline-sentinel
+  - roles/pm/own-domain-autofix
+  - roles/pm/health-check
+  - roles/pm/github-issues
   - common/boot-remote-agents
-  - pm-specific/soul-shepherd
-  - pm-specific/improvement-scan
+  - roles/pm/soul-shepherd
+  - roles/pm/improvement-scan
   - common/vault-remember
   - common/vault-optimize
-  - pm-specific/vault-synthesis
-  - pm-specific/issue-filing
-  - pm-specific/task-intake
-  - pm-specific/task-approval
-  - pm-specific/discussion-protocol
+  - roles/pm/vault-synthesis
+  - roles/pm/issue-filing
+  - roles/pm/task-intake
+  - roles/pm/task-approval
+  - roles/pm/discussion-protocol
   - common/vault-protocol
-  - pm-specific/file-conventions
-  - pm-specific/status-line
+  - roles/pm/file-conventions
+  - roles/pm/status-line
   - common/self-restart
   - common/agent-lifecycle
-  - pm-specific/prohibitions
+  - roles/pm/prohibitions

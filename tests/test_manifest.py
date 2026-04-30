@@ -71,7 +71,7 @@ class TestManifestIntegrity:
         to `references/roles/<role>/`.
         """
         includes = re.findall(
-            r'`((?:common|dev-specific|pm-specific|qa-specific|designer-specific|dm-specific)/[^`]+)`',
+            r'`((?:common|roles)/[^`]+)`',
             self.manifest_text,
         )
         for inc in includes:
@@ -92,7 +92,7 @@ class TestManifestIntegrity:
 
         referenced = set()
         for inc in re.findall(
-            r'`((?:common|dev-specific|pm-specific|qa-specific|designer-specific|dm-specific)/[^`]+)`',
+            r'`((?:common|roles)/[^`]+)`',
             self.manifest_text,
         ):
             if not inc.endswith('.md'):
@@ -124,11 +124,10 @@ class TestManifestIntegrity:
             "was retired by Q-new22."
         )
 
-    def test_legacy_roles_include_namespace_gone(self):
-        """Manifest must no longer reference a `roles/` include namespace."""
-        # The new pattern is `references/roles/<role>/instructions.md`, not `roles/x`
-        legacy = re.findall(r'`roles/[^`]+`', self.manifest_text)
-        assert not legacy, f"Manifest still references legacy roles/: {legacy}"
+    def test_roles_sub_skills_use_new_namespace(self):
+        """Role-specific sub-skills use roles/<role>/ namespace (not <role>-specific/)."""
+        legacy = re.findall(r'`(?:dev|pm|qa|dm|designer)-specific/[^`]+`', self.manifest_text)
+        assert not legacy, f"Manifest still uses legacy <role>-specific/ namespace: {legacy}"
 
 
 class TestIncludesYml:

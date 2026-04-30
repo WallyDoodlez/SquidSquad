@@ -2,4 +2,4 @@
 # Inherits all sub-skills from pm, adds web-specific context.
 base_role: pm
 additional_includes:
-  - pm-web-specific/domain-context
+  - roles/pm/web/domain-context

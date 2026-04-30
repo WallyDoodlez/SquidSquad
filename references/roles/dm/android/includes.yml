@@ -2,4 +2,4 @@
 # Inherits all sub-skills from dm, adds android-specific context.
 base_role: dm
 additional_includes:
-  - dm-android-specific/domain-context
+  - roles/dm/android/domain-context

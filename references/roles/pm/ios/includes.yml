@@ -2,4 +2,4 @@
 # Inherits all sub-skills from pm, adds ios-specific context.
 base_role: pm
 additional_includes:
-  - pm-ios-specific/domain-context
+  - roles/pm/ios/domain-context

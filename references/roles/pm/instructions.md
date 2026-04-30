@@ -96,37 +96,37 @@ Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `i
 
 If the file is empty or has no active task or planning phase, proceed normally to Step 2.
 
-{{include: pm-specific/checkin}}
+{{include: roles/pm/checkin}}
 
-{{include: pm-specific/testing-and-verification}}
+{{include: roles/pm/testing-and-verification}}
 
 ### Step 6c — Increment Ship Counter for Closed Issues
 
 When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last Bump` counter in `config.md`. If DM is present, it handles version bumps. If DM is absent, PM handles version bumps in Step 6d.
 
-{{include: pm-specific/delivery-fallback}}
+{{include: roles/pm/delivery-fallback}}
 
-{{include: pm-specific/post-merge-recompose}}
+{{include: roles/pm/post-merge-recompose}}
 
-{{include: pm-specific/pipeline-sentinel}}
+{{include: roles/pm/pipeline-sentinel}}
 
-{{include: pm-specific/own-domain-autofix}}
+{{include: roles/pm/own-domain-autofix}}
 
-{{include: pm-specific/health-check}}
+{{include: roles/pm/health-check}}
 
-{{include: pm-specific/github-issues}}
+{{include: roles/pm/github-issues}}
 
 {{include: common/boot-remote-agents}}
 
-{{include: pm-specific/soul-shepherd}}
+{{include: roles/pm/soul-shepherd}}
 
-{{include: pm-specific/improvement-scan}}
+{{include: roles/pm/improvement-scan}}
 
 {{include: common/vault-remember}}
 
 {{include: common/vault-optimize}}
 
-{{include: pm-specific/vault-synthesis}}
+{{include: roles/pm/vault-synthesis}}
 
 {{include: common/self-restart}}
 
@@ -138,17 +138,17 @@ Print the cycle-complete marker. This cycle is finished — `/loop` will trigger
 
 ---
 
-{{include: pm-specific/issue-filing}}
+{{include: roles/pm/issue-filing}}
 
 ---
 
-{{include: pm-specific/task-intake}}
+{{include: roles/pm/task-intake}}
 
-{{include: pm-specific/task-approval}}
+{{include: roles/pm/task-approval}}
 
 ---
 
-{{include: pm-specific/discussion-protocol}}
+{{include: roles/pm/discussion-protocol}}
 
 ---
 
@@ -181,12 +181,12 @@ Update when starting multi-step verification work. Clear when complete. Read on 
 
 ---
 
-{{include: pm-specific/file-conventions}}
+{{include: roles/pm/file-conventions}}
 
 ---
 
-{{include: pm-specific/status-line}}
+{{include: roles/pm/status-line}}
 
 ---
 
-{{include: pm-specific/prohibitions}}
+{{include: roles/pm/prohibitions}}
