@@ -220,11 +220,6 @@ def _sanitize_commit_msg(msg: str) -> str:
     to close them (#4038). Replace the keyword with a hyphenated form that
     preserves readability without triggering auto-close.
     """
-    def _escape(m):
-        keyword = m.group(1)
-        ref = m.group(2)
-        return f"{keyword} {ref}"  # insert zero-width space before #
-
     # Insert a zero-width space (U+200B) between keyword and #
     return _AUTOCLOSE_RE.sub(
         lambda m: f"{m.group(1)} \u200b{m.group(2)}", msg
