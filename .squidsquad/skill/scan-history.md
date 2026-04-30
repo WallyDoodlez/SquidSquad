@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-30 11:02
+
+- **Files scanned**: tests/test_model_router.py, tests/test_tracker.py, tests/test_tracker_authority.py, tests/test_git_ops.py, tests/test_config.py
+- **Findings**: none (1 minor test quality note in test_git_ops.py:263 — weak assertion checks mock stdout not call args, but not a functional bug)
+- **Items rejected by human**: none yet
+- **Notes**: All 5 test files clean. No functional issues found.
+
 ## Scan — 2026-04-30 09:02
 
 - **Files scanned**: tests/test_cycle_pre.py, tests/test_cycle_post.py, tests/test_state_bus.py, tests/test_wizard.py, tests/test_installer_wiring.py
