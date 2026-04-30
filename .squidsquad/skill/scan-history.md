@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-29 20:32
+
+- **Files scanned**: references/scripts/compose.py, references/scripts/forgejo_setup.py, references/scripts/manifest.py, references/scripts/migrate_state_branch.py
+- **Findings**: #4200 (forgejo_setup.py credential leak in error messages — high), #4201 (compose.py capability resolution duplication — medium)
+- **Items rejected by human**: none yet
+- **Notes**: manifest.py and migrate_state_branch.py clean. All 4 files have test coverage. This completes coverage of all scripts under references/scripts/.
+
 ## Scan — 2026-04-29 15:02
 
 - **Files scanned**: references/scripts/wizard.py, references/scripts/start_team.py, references/scripts/repo_scan.py, references/scripts/tc_coverage.py, references/scripts/vault_entity.py
