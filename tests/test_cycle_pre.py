@@ -29,9 +29,12 @@ def squid_dir(tmp_path):
 
 @pytest.fixture
 def patch_dirs(squid_dir, tmp_path, monkeypatch):
-    """Patch REPO_ROOT and SQUID_DIR to use tmp_path."""
+    """Patch REPO_ROOT, SQUID_DIR, and _state_path to use tmp_path."""
     monkeypatch.setattr(cycle_pre, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(cycle_pre, "SQUID_DIR", squid_dir)
+    # _state_path is imported from state_bus at load time — patch it so
+    # working state, iterations, etc. resolve to the temp directory
+    monkeypatch.setattr(cycle_pre, "_state_path", lambda rel: squid_dir / rel)
     return tmp_path
 
 
@@ -587,22 +590,19 @@ class TestQAHealthParsing:
 
 
 class TestBootResults:
-    """Tests for #2724: boot_results field in PM cycle-input.json."""
+    """Tests for boot_results field in PM cycle-input.json.
 
-    def _make_mocks(self, monkeypatch, boot_data=None, boot_returncode=0):
-        """Set up mocks with configurable boot_remote.py response."""
+    Boot detection was deprecated (#3807) — boot_results is always [].
+    These tests verify the field exists and is always empty.
+    """
+
+    def _make_mocks(self, monkeypatch):
+        """Set up mocks for _build_pm_input."""
 
         def fake_run_script(*args, **kwargs):
             fake = MagicMock()
             fake.returncode = 0
             fake.stdout = "[]"
-            if len(args) >= 1 and "boot_remote.py" in str(args[0]):
-                fake.returncode = boot_returncode
-                fake.stdout = json.dumps(boot_data if boot_data is not None else [])
-            elif len(args) >= 1 and "health_check.py" in str(args[0]):
-                fake.stdout = "[]"
-            elif len(args) >= 2 and "tracker.py" in str(args[0]):
-                fake.stdout = "[]"
             return fake
 
         def fake_run(cmd, **kwargs):
@@ -624,46 +624,24 @@ class TestBootResults:
         monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
 
     def test_boot_results_present(self, patch_dirs, squid_dir, monkeypatch):
-        """PM input includes boot_results field."""
-        boot_data = [
-            {"role": "skill", "action": "skip", "success": True, "message": "alive"},
-        ]
-        self._make_mocks(monkeypatch, boot_data=boot_data)
+        """PM input includes boot_results field as empty list (#3807)."""
+        self._make_mocks(monkeypatch)
         result = cycle_pre._build_pm_input("pm")
         assert "boot_results" in result
         assert isinstance(result["boot_results"], list)
-        assert len(result["boot_results"]) == 1
-        assert result["boot_results"][0]["role"] == "skill"
+        assert result["boot_results"] == []
 
     def test_boot_results_empty_when_no_agents(self, patch_dirs, squid_dir, monkeypatch):
         """boot_results is empty list when no agents configured."""
-        self._make_mocks(monkeypatch, boot_data=[])
+        self._make_mocks(monkeypatch)
         result = cycle_pre._build_pm_input("pm")
         assert result["boot_results"] == []
-
-    def test_boot_results_captures_spawn_failure(self, patch_dirs, squid_dir, monkeypatch):
-        """boot_results captures spawn failures (boot_remote.py exits 1)."""
-        boot_data = [
-            {"role": "skill", "action": "spawn", "success": False, "message": "wt.exe not found"},
-        ]
-        self._make_mocks(monkeypatch, boot_data=boot_data, boot_returncode=1)
-        result = cycle_pre._build_pm_input("pm")
-        assert len(result["boot_results"]) == 1
-        assert result["boot_results"][0]["success"] is False
 
     def test_auto_boot_agents_field_absent(self, patch_dirs, squid_dir, monkeypatch):
         """Regression #2724: auto_boot_agents field must NOT be in config."""
         self._make_mocks(monkeypatch)
         result = cycle_pre._build_pm_input("pm")
         assert "auto_boot_agents" not in result.get("config", {})
-
-    def test_boot_results_handles_dict_response(self, patch_dirs, squid_dir, monkeypatch):
-        """boot_results handles a single dict response (disabled/error case)."""
-        boot_data = {"action": "error", "message": "no agents"}
-        self._make_mocks(monkeypatch, boot_data=boot_data)
-        result = cycle_pre._build_pm_input("pm")
-        assert isinstance(result["boot_results"], list)
-        assert len(result["boot_results"]) == 1
 
     def test_tc26_nonzero_exit_empty_stdout(self, patch_dirs, squid_dir, monkeypatch):
         """TC-26: boot_remote.py non-zero exit with empty stdout — cycle_pre
