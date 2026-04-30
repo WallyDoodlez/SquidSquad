@@ -157,16 +157,46 @@ class TestRebootForce:
         assert spawned == []  # no _spawn_wrapper — wrapper handles respawn
         assert (squid_dir / "skill" / ".restart").exists()
 
-    def test_force_wrapper_alive_no_claude_pid(self, patch_dirs, squid_dir, monkeypatch):
-        """Force with wrapper alive but no .claude-pid writes sentinel only."""
+    def test_force_wrapper_alive_no_claude_pid_kills_wrapper(self, patch_dirs, squid_dir, monkeypatch):
+        """Force with wrapper alive but no .claude-pid kills wrapper and respawns (#4220)."""
         (squid_dir / "skill" / ".pid").write_text("12345", encoding="utf-8")
-        monkeypatch.setattr(reboot_agent, "_is_process_alive", lambda pid: pid == 12345)
+        alive_pids = {12345}
+        monkeypatch.setattr(reboot_agent, "_is_process_alive",
+                            lambda pid: pid in alive_pids)
+        killed = []
+        def fake_kill(pid):
+            killed.append(pid)
+            alive_pids.discard(pid)
+        monkeypatch.setattr(reboot_agent, "_kill_process", fake_kill)
         spawned = _stub_spawn(monkeypatch)
 
         result = reboot_agent.reboot("skill", force=True)
         assert result == 0
-        assert spawned == []
-        assert (squid_dir / "skill" / ".restart").exists()
+        assert 12345 in killed  # wrapper killed
+        assert "skill" in spawned  # respawned
+        assert not (squid_dir / "skill" / ".pid").exists()  # PID file cleaned up
+
+    def test_force_wrapper_alive_claude_dead_kills_wrapper(self, patch_dirs, squid_dir, monkeypatch):
+        """Force with wrapper alive but claude dead kills wrapper and respawns (#4220)."""
+        (squid_dir / "skill" / ".pid").write_text("12345", encoding="utf-8")
+        (squid_dir / "skill" / ".claude-pid").write_text("67890", encoding="utf-8")
+        alive_pids = {12345}  # wrapper alive, claude dead
+        monkeypatch.setattr(reboot_agent, "_is_process_alive",
+                            lambda pid: pid in alive_pids)
+        killed = []
+        def fake_kill(pid):
+            killed.append(pid)
+            alive_pids.discard(pid)
+        monkeypatch.setattr(reboot_agent, "_kill_process", fake_kill)
+        spawned = _stub_spawn(monkeypatch)
+
+        result = reboot_agent.reboot("skill", force=True)
+        assert result == 0
+        assert 12345 in killed  # wrapper killed
+        assert 67890 not in killed  # claude already dead, not killed
+        assert "skill" in spawned  # respawned
+        assert not (squid_dir / "skill" / ".pid").exists()
+        assert not (squid_dir / "skill" / ".claude-pid").exists()
 
 
 # ---------------------------------------------------------------------------
