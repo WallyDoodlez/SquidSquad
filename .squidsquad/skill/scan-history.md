@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-30 18:02
+
+- **Files scanned**: tests/conftest.py, tests/test_manifest.py, tests/test_vault.py, tests/run_tests.py, tests/test_composition.py
+- **Findings**: none filed (test_manifest.py has dead _extract_inventory_paths with operator precedence bug + cosmetic CLAUDE.md/instructions.md naming mismatch in test_role_entries_exist — both non-functional)
+- **Items rejected by human**: none yet
+- **Notes**: 4 files clean. test_manifest.py notes are cosmetic — test passes correctly.
+
 ## Scan — 2026-04-30 16:02
 
 - **Files scanned**: references/scripts/vault_check.py, references/scripts/vault_optimize.py, references/scripts/vault_remember.py, references/scripts/comms_adapter.py, references/scripts/add_role.py
