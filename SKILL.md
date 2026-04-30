@@ -110,7 +110,7 @@ When you invoke SquidSquad, it creates the following inside your project root. O
     └── galaxy/                 ← atomic knowledge notes (decisions, patterns, learnings)
 ```
 
-> **Note:** All agents share a single GitHub Issues tracker on the repo. Issues are labeled by role, type, and status. QA queries for `Pending Test` and `Fixed` items, verifies them, and comments. DM queries for `Pending Ship` items and handles delivery.
+> **Note:** All agents share a single GitHub Issues tracker on the repo. Issues are labeled by role, type, and status. QA queries for `Pending Test` items, verifies them, and comments. DM queries for `Pending Ship` items and handles delivery.
 
 For `fe, be` the structure gains a `fe/` folder and `start-fe.sh/.ps1` alongside `be/`.
 
@@ -126,7 +126,7 @@ SquidSquad uses GitHub Issues as its tracker. All bugs and features are GitHub I
 |----------|--------|---------|
 | Type | `type:issue`, `type:task` | What kind of item |
 | Priority | `priority:high`, `priority:medium`, `priority:low` | Triage ordering |
-| Status | `status:open`, `status:pending`, `status:planning`, `status:planned`, `status:approved`, `status:in-progress`, `status:pending-test`, `status:pending-ship`, `status:shipped` | Workflow state |
+| Status | `status:open`, `status:pending`, `status:planning`, `status:planned`, `status:approved`, `status:in-progress`, `status:pending-test`, `status:pending-human-review`, `status:pending-human-setup`, `status:pending-ship`, `status:shipped` | Workflow state |
 | Role | `role:skill`, `role:fe`, `role:be`, `role:pm`, `role:qa`, `role:dm`, `role:designer` | Which agent owns it |
 | Severity (bugs) | `severity:high`, `severity:medium`, `severity:low` | Bug impact |
 | Special | `squidsquad`, `improvement-scan` | Metadata |
@@ -139,7 +139,9 @@ Status labels: `status:open` → `status:in-progress` → `status:pending-test` 
 
 Status labels: `status:pending` → `status:planning` → `status:planned` → `status:approved` → `status:in-progress` → `status:pending-test` → `status:pending-ship` → (Issue closed)
 
-> **Note:** `pending` = awaiting human approval to plan. `planning` = PM running Feature Intake (Research → Discussion → Planning). `planned` = planning complete, awaiting human approval for execution. `approved` = human greenlit, dev picks it up. `pending-ship` = QA verified, DM handles delivery. Closed = shipped.
+Agents can also transition to `status:pending-human-review` (HITL design review or PR review gate) or `status:pending-human-setup` (blocked on human environment/tool setup). Both route back to `status:in-progress` once resolved.
+
+> **Note:** `pending` = awaiting human approval to plan. `planning` = PM running Feature Intake (Research → Discussion → Planning). `planned` = planning complete, awaiting human approval for execution. `approved` = human greenlit, dev picks it up. `pending-human-review` = awaiting human review (design iteration or PR). `pending-human-setup` = paused for human to complete tool/environment setup. `pending-ship` = QA verified, DM handles delivery. Closed = shipped.
 
 ### Discussion Protocol
 
