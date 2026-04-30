@@ -2,9 +2,9 @@
   "issue": 2195,
   "title": "Branch workflow enforcement for all agent roles",
   "files": [
-    "references/sub-skills/dm-specific/git-commit.md",
-    "references/sub-skills/qa-specific/git-commit.md",
-    "references/sub-skills/pm-specific/git-commit.md"
+    "references/sub-skills/roles/dm/git-commit.md",
+    "references/sub-skills/roles/qa/git-commit.md",
+    "references/sub-skills/roles/pm/git-commit.md"
   ],
   "questions": [
     {

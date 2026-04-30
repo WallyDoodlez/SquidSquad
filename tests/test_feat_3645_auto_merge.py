@@ -8,8 +8,8 @@ import pytest
 from pathlib import Path
 
 REPO = Path(__file__).parent.parent
-QA_VERIFICATION = REPO / "references/sub-skills/qa-specific/verification.md"
-PM_VERIFICATION = REPO / "references/sub-skills/pm-specific/testing-and-verification.md"
+QA_VERIFICATION = REPO / "references/sub-skills/roles/qa/verification.md"
+PM_VERIFICATION = REPO / "references/sub-skills/roles/pm/testing-and-verification.md"
 SCRIPTS = REPO / "references" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
