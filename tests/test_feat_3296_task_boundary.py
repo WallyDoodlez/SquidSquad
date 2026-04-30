@@ -158,7 +158,7 @@ class TestTaskBoundaryTemplates:
 
     def test_qa_verification_uses_task_begin(self):
         """TC-6: QA verification.md uses task-begin/task-end."""
-        path = SCRIPTS.parent / "sub-skills" / "qa-specific" / "verification.md"
+        path = SCRIPTS.parent / "sub-skills" / "roles" / "qa" / "verification.md"
         content = path.read_text(encoding="utf-8")
         assert "task-begin" in content
         assert "task-end" in content
@@ -166,21 +166,21 @@ class TestTaskBoundaryTemplates:
 
     def test_skill_triage_uses_task_begin(self):
         """TC-8: Skill triage uses task-begin/task-end."""
-        path = SCRIPTS.parent / "sub-skills" / "dev-specific" / "triage-issues.md"
+        path = SCRIPTS.parent / "sub-skills" / "roles" / "dev" / "triage-issues.md"
         content = path.read_text(encoding="utf-8")
         assert "task-begin" in content
         assert "task-end" in content
 
     def test_skill_implement_uses_task_begin(self):
         """TC-8b: Skill implement uses task-begin/task-end."""
-        path = SCRIPTS.parent / "sub-skills" / "dev-specific" / "implement-tasks.md"
+        path = SCRIPTS.parent / "sub-skills" / "roles" / "dev" / "implement-tasks.md"
         content = path.read_text(encoding="utf-8")
         assert "task-begin" in content
         assert "task-end" in content
 
     def test_dm_delivery_uses_task_begin(self):
         """TC-9: DM delivery uses task-begin/task-end."""
-        path = SCRIPTS.parent / "sub-skills" / "dm-specific" / "delivery-packaging.md"
+        path = SCRIPTS.parent / "sub-skills" / "roles" / "dm" / "delivery-packaging.md"
         content = path.read_text(encoding="utf-8")
         assert "task-begin" in content
         assert "task-end" in content
