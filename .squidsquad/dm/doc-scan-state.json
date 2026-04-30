@@ -1,5 +1,5 @@
 {
-  "last_scanned": "SKILL.md:sections-1-3",
+  "last_scanned": "SKILL.md:sections-4-6",
   "rotation_count": 5,
   "scan_history": [
     {"file": "README.md", "date": "2026-04-28", "findings": 2},
@@ -16,7 +16,8 @@
     {"file": "R3-all-docs-sweep", "date": "2026-04-29", "findings": 0},
     {"file": "R4-sweep-tier3", "date": "2026-04-29", "findings": 0},
     {"file": "README.md", "date": "2026-04-30", "findings": 0},
-    {"file": "SKILL.md:sections-1-3", "date": "2026-04-30", "findings": 3, "fixes": ["removed stale 'Fixed' status reference", "added pending-human-review/setup to label taxonomy", "added HITL statuses to feature flow docs"]}
+    {"file": "SKILL.md:sections-1-3", "date": "2026-04-30", "findings": 3, "fixes": ["removed stale 'Fixed' status reference", "added pending-human-review/setup to label taxonomy", "added HITL statuses to feature flow docs"]},
+    {"file": "SKILL.md:sections-4-6", "date": "2026-04-30", "findings": 1, "fixes": ["updated rebase conflict guidance to reflect state branch isolation for iterations/working-state"]}
   ],
   "doc_inventory": {
     "README.md": {"last_scanned": "2026-04-30", "status": "current"},
