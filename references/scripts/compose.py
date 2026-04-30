@@ -45,6 +45,35 @@ def _strip_outer_markers(content: str, name: str) -> str:
     return "\n".join(lines)
 
 
+def _resolve_capability(cap_id: str) -> list[str]:
+    """Resolve a {{capability: id}} directive into content lines."""
+    full_path = CAPABILITIES_DIR / cap_id / "sub-skill.md"
+    if not full_path.exists():
+        return [f"<!-- ERROR: Missing capability: {cap_id} -->"]
+    content = full_path.read_text(encoding="utf-8").rstrip()
+    content = _strip_outer_markers(content, f"capability-{cap_id}")
+    return [
+        f"<!-- sub-skill: capability-{cap_id} -->",
+        content,
+        f"<!-- /sub-skill: capability-{cap_id} -->",
+    ]
+
+
+def _resolve_runtime(runtime_path: str) -> list[str]:
+    """Resolve a {{runtime: path}} directive into content lines."""
+    sub_skill_name = Path(runtime_path).stem
+    return [
+        f"<!-- sub-skill: {sub_skill_name} -->",
+        "## Soul",
+        "",
+        "Read `.squidsquad/[ROLE]/SOUL.md` at session start and follow its "
+        "instructions as your professional identity. If SOUL.md is missing, "
+        "proceed with default behavior — you are a pragmatic engineer focused "
+        "on correctness and simplicity.",
+        f"<!-- /sub-skill: {sub_skill_name} -->",
+    ]
+
+
 def _resolve_includes(entry_file: Path) -> str:
     """Resolve all {{include: path}} directives in an entry file."""
     text = entry_file.read_text(encoding="utf-8")
@@ -74,24 +103,11 @@ def _resolve_includes(entry_file: Path) -> str:
 
         elif cap_match:
             cap_id = cap_match.group(1).strip()
-            full_path = CAPABILITIES_DIR / cap_id / "sub-skill.md"
-            if not full_path.exists():
-                result.append(f"<!-- ERROR: Missing capability: {cap_id} -->")
-                continue
-            content = full_path.read_text(encoding="utf-8").rstrip()
-            content = _strip_outer_markers(content, f"capability-{cap_id}")
-            result.append(f"<!-- sub-skill: capability-{cap_id} -->")
-            result.append(content)
-            result.append(f"<!-- /sub-skill: capability-{cap_id} -->")
+            result.extend(_resolve_capability(cap_id))
 
         elif rt_match:
             runtime_path = rt_match.group(1).strip()
-            sub_skill_name = Path(runtime_path).stem
-            result.append(f"<!-- sub-skill: {sub_skill_name} -->")
-            result.append(f"## Soul")
-            result.append(f"")
-            result.append(f"Read `.squidsquad/[ROLE]/SOUL.md` at session start and follow its instructions as your professional identity. If SOUL.md is missing, proceed with default behavior — you are a pragmatic engineer focused on correctness and simplicity.")
-            result.append(f"<!-- /sub-skill: {sub_skill_name} -->")
+            result.extend(_resolve_runtime(runtime_path))
 
         else:
             result.append(line)
@@ -201,15 +217,7 @@ def _resolve_includes_with_manifest(entry_file: Path, manifest: list) -> str:
 
         elif cap_match:
             cap_id = cap_match.group(1).strip()
-            full_path = CAPABILITIES_DIR / cap_id / "sub-skill.md"
-            if not full_path.exists():
-                result.append(f"<!-- ERROR: Missing capability: {cap_id} -->")
-                continue
-            content = full_path.read_text(encoding="utf-8").rstrip()
-            content = _strip_outer_markers(content, f"capability-{cap_id}")
-            result.append(f"<!-- sub-skill: capability-{cap_id} -->")
-            result.append(content)
-            result.append(f"<!-- /sub-skill: capability-{cap_id} -->")
+            result.extend(_resolve_capability(cap_id))
 
         elif rt_match:
             runtime_path = rt_match.group(1).strip()
