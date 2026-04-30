@@ -1,5 +1,5 @@
 {
-  "last_scanned": "CHANGELOG.md",
+  "last_scanned": "README.md",
   "rotation_count": 6,
   "scan_history": [
     {"file": "README.md", "date": "2026-04-28", "findings": 2},
@@ -22,7 +22,8 @@
     {"file": "docs/ARCHITECTURE.md", "date": "2026-04-30", "findings": 1, "fixes": ["updated signal files list: .restart/.stop/.pause → .stop-after-cycle/.stop/.pid/.health"]},
     {"file": "docs/sub-skill-guide.md", "date": "2026-04-30", "findings": 1, "fixes": ["corrected 'check the manifest' tip to reference includes.yml as source of truth"], "tasks_filed": ["#4378 — document capabilities/ directory"]},
     {"file": "CONTRIBUTING.md", "date": "2026-04-30", "findings": 1, "fixes": ["corrected sub-skills claim — they live in this repo, linked to sub-skill guide"]},
-    {"file": "CHANGELOG.md", "date": "2026-04-30", "findings": 0}
+    {"file": "CHANGELOG.md", "date": "2026-04-30", "findings": 0},
+    {"file": "README.md", "date": "2026-04-30", "findings": 0}
   ],
   "doc_inventory": {
     "README.md": {"last_scanned": "2026-04-30", "status": "current"},
