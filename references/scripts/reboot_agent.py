@@ -152,15 +152,16 @@ def reboot(role, timeout=DEFAULT_TIMEOUT, force=False):
         if force:
             # Force mode: kill the wrapper and respawn fresh — sentinel approach
             # won't work if wrapper is stuck or not checking sentinels
-            print(f"{role}: wrapper alive but claude not running — force-killing wrapper PID {wrapper_pid}")
+            print(f"{role}: wrapper alive but claude not running"
+                  f" — force-killing wrapper PID {wrapper_pid}")
             _kill_process(wrapper_pid)
             for _ in range(10):
                 if not _is_process_alive(wrapper_pid):
                     break
                 time.sleep(0.5)
             if _is_process_alive(wrapper_pid):
-                print(f"{role}: WARNING — wrapper PID {wrapper_pid} still alive after kill",
-                      file=sys.stderr)
+                print(f"{role}: WARNING — wrapper PID {wrapper_pid}"
+                      " still alive after kill", file=sys.stderr)
                 return 1
             # Clean up stale PID files so _spawn_wrapper doesn't reject
             for f in [pid_file, squid / role / ".claude-pid"]:
@@ -181,8 +182,10 @@ def reboot(role, timeout=DEFAULT_TIMEOUT, force=False):
                 return 1
             return 0
         # Non-force: write sentinel so wrapper respawns on its next check
-        restart_file.write_text("reboot requested by reboot_agent.py", encoding="utf-8")
-        print(f"{role}: wrapper alive but claude not running — restart sentinel written")
+        restart_file.write_text(
+            "reboot requested by reboot_agent.py", encoding="utf-8")
+        print(f"{role}: wrapper alive but claude not running"
+              " — restart sentinel written")
         return 0
 
     # Write restart sentinel BEFORE killing so wrapper sees it on claude exit
