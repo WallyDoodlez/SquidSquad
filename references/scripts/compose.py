@@ -574,14 +574,12 @@ def _assemble_soul(role_name: str) -> str:
         parts.append(SOUL_LAYER_BASE_END)
         parts.append("")
 
-    # Role SOUL — variant's own SOUL.md, or base role's SOUL.md
+    # Layer 2 — Role SOUL (base role's SOUL.md)
     resolved = _resolve_variant(role_name)
     if resolved:
         base, variant = resolved
-        # Try variant's own SOUL.md first (roles/<base>/<variant>/SOUL.md)
-        role_soul_path = ROLES_DIR / base / variant / "SOUL.md"
-        if not role_soul_path.exists():
-            role_soul_path = ROLES_DIR / base / "SOUL.md"
+        # Variants always get the base role's SOUL (Layer 2)
+        role_soul_path = ROLES_DIR / base / "SOUL.md"
     else:
         role_soul_path = ROLES_DIR / role_name / "SOUL.md"
         if not role_soul_path.exists():
@@ -591,6 +589,14 @@ def _assemble_soul(role_name: str) -> str:
 
     if role_soul_path.exists():
         parts.append(role_soul_path.read_text(encoding="utf-8").rstrip())
+
+    # Layer 3 — Variant SOUL (variant-specific personality delta)
+    if resolved:
+        base, variant = resolved
+        variant_soul_path = ROLES_DIR / base / variant / "SOUL.md"
+        if variant_soul_path.exists():
+            parts.append("")
+            parts.append(variant_soul_path.read_text(encoding="utf-8").rstrip())
 
     return "\n".join(parts) + "\n"
 
