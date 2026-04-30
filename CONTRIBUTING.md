@@ -43,7 +43,7 @@ Feature requests are triaged by the maintainer. Approved features enter the back
 
 ## What lives in this repo
 
-This repo contains the **core SquidSquad skill**: the coordination framework, agent templates, scripts, and shared infrastructure. Sub-skills (third-party extensions) live in their own repositories and are not contributed here.
+This repo contains the **core SquidSquad skill**: the coordination framework, agent templates, sub-skills, scripts, and shared infrastructure. Sub-skills live in `references/sub-skills/` — see the [Sub-Skill Guide](docs/sub-skill-guide.md) for how to create and contribute them.
 
 ## Questions?
 
