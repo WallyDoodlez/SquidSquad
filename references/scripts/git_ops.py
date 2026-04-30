@@ -336,10 +336,13 @@ def _safe_checkout(target_branch):
     # Unstaged changes blocking checkout — stash and retry
     _run("git stash -q", check=False)
     result = _run_list(["git", "checkout", target_branch], check=False)
-    _run("git stash pop -q", check=False)
     if result.returncode != 0:
+        # Checkout failed — pop stash to restore original branch state
+        _run("git stash pop -q", check=False)
         print(f"ERROR: could not switch to {target_branch}: {result.stderr}", file=sys.stderr)
         return False
+    # Checkout succeeded — pop stash on the target branch
+    _run("git stash pop -q", check=False)
     return True
 
 
