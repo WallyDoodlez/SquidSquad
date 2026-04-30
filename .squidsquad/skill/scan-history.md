@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-30 04:32
+
+- **Files scanned**: references/scripts/cycle_pre.py, references/scripts/cycle_post.py, references/scripts/state_bus.py, references/scripts/comms_adapter.py, references/scripts/scan_index.py
+- **Findings**: #4343 (cycle_post.py dead _escape function — low), #4344 (scan_index.py DB connection leak on json.loads failure — low)
+- **Items rejected by human**: none yet
+- **Notes**: cycle_pre.py, state_bus.py, comms_adapter.py all clean. All 5 files have test coverage.
+
 ## Scan — 2026-04-29 20:32
 
 - **Files scanned**: references/scripts/compose.py, references/scripts/forgejo_setup.py, references/scripts/manifest.py, references/scripts/migrate_state_branch.py
