@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-30 14:02
+
+- **Files scanned**: tests/test_compose.py, tests/test_scan_index.py, tests/test_reboot_agent.py, tests/test_forge_adapter.py, tests/test_diagnostics.py
+- **Findings**: none filed (1 minor: test_scan_index.py:182 tautological assertion in ranking test — too minor to file)
+- **Items rejected by human**: none yet
+- **Notes**: 4 files clean. test_scan_index.py has a weak ranking assertion but not a functional bug.
+
 ## Scan — 2026-04-30 11:02
 
 - **Files scanned**: tests/test_model_router.py, tests/test_tracker.py, tests/test_tracker_authority.py, tests/test_git_ops.py, tests/test_config.py
