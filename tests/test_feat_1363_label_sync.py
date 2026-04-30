@@ -1,7 +1,7 @@
 """Tests for #1363 — PR label sync.
 
 PR label sync is implemented as part of the pipeline sentinel template
-(references/sub-skills/pm-specific/pipeline-sentinel.md, section 3).
+(references/sub-skills/roles/pm/pipeline-sentinel.md, section 3).
 No standalone Python script exists for this feature.
 
 These are content-verification tests ensuring the PR Status Sync
@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SENTINEL_FILE = REPO_ROOT / "references" / "sub-skills" / "pm-specific" / "pipeline-sentinel.md"
+SENTINEL_FILE = REPO_ROOT / "references" / "sub-skills" / "roles" / "pm" / "pipeline-sentinel.md"
 
 
 @pytest.fixture

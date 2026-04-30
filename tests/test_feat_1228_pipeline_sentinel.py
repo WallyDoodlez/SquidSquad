@@ -1,7 +1,7 @@
 """Tests for #1228 — PM pipeline sentinel.
 
 The pipeline sentinel is implemented as template instructions in
-references/sub-skills/pm-specific/pipeline-sentinel.md (not as a Python script).
+references/sub-skills/roles/pm/pipeline-sentinel.md (not as a Python script).
 These are comprehension tests verifying the sub-skill file contains the expected
 sentinel checks.
 """
@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SENTINEL_FILE = REPO_ROOT / "references" / "sub-skills" / "pm-specific" / "pipeline-sentinel.md"
+SENTINEL_FILE = REPO_ROOT / "references" / "sub-skills" / "roles" / "pm" / "pipeline-sentinel.md"
 
 
 @pytest.fixture
