@@ -256,6 +256,16 @@ class TestRecordScan:
         assert row["total_scan_count"] == 2
         conn.close()
 
+    def test_invalid_json_does_not_leak_connection(self, db):
+        """Bad findings_json raises without leaking DB connection (#4344)."""
+        with pytest.raises(json.JSONDecodeError):
+            scan_index.record_scan("skill", ["a.py"], "{bad json", db_path=db)
+        # DB should still be usable (not locked by leaked connection)
+        conn = scan_index._get_db(db)
+        row = conn.execute("SELECT COUNT(*) as c FROM scans").fetchone()
+        assert row["c"] == 0  # no rows inserted
+        conn.close()
+
 
 # ---------------------------------------------------------------------------
 # record-decision

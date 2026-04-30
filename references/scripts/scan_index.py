@@ -283,79 +283,82 @@ def suggest_targets(role, count=5, db_path=None):
 
 def record_scan(role, files, findings_json, db_path=None):
     """Record a scan: insert scan rows, findings, and update file_coverage."""
-    conn = _get_db(db_path)
-    now = _now_iso()
+    # Parse findings before opening DB — fail fast on bad input
     findings = json.loads(findings_json) if isinstance(findings_json, str) else findings_json
 
-    scan_ids = {}
-    for f in files:
-        f = _normalize_path(f)
-        try:
-            cur = conn.execute(
-                "INSERT INTO scans (role, scanned_at, file_path) VALUES (?, ?, ?)",
-                (role, now, f),
-            )
-            scan_ids[f] = cur.lastrowid
-        except sqlite3.IntegrityError:
-            # Duplicate scan entry — skip
-            row = conn.execute(
-                "SELECT id FROM scans WHERE role=? AND scanned_at=? AND file_path=?",
-                (role, now, f),
-            ).fetchone()
-            if row:
-                scan_ids[f] = row["id"]
+    conn = _get_db(db_path)
+    now = _now_iso()
+    try:
+        scan_ids = {}
+        for f in files:
+            f = _normalize_path(f)
+            try:
+                cur = conn.execute(
+                    "INSERT INTO scans (role, scanned_at, file_path) VALUES (?, ?, ?)",
+                    (role, now, f),
+                )
+                scan_ids[f] = cur.lastrowid
+            except sqlite3.IntegrityError:
+                # Duplicate scan entry — skip
+                row = conn.execute(
+                    "SELECT id FROM scans WHERE role=? AND scanned_at=? AND file_path=?",
+                    (role, now, f),
+                ).fetchone()
+                if row:
+                    scan_ids[f] = row["id"]
 
-    # Insert findings
-    for finding in findings:
-        fp = _normalize_path(finding.get("file", files[0] if files else "unknown"))
-        sid = scan_ids.get(fp)
-        if sid is None:
-            # Finding for a file not in the scanned list — use first scan id
-            sid = next(iter(scan_ids.values()), None)
+        # Insert findings
+        for finding in findings:
+            fp = _normalize_path(finding.get("file", files[0] if files else "unknown"))
+            sid = scan_ids.get(fp)
             if sid is None:
-                continue
-        conn.execute(
-            """INSERT INTO findings (scan_id, file_path, finding_type, description,
-               github_issue_number) VALUES (?, ?, ?, ?, ?)""",
-            (
-                sid,
-                fp,
-                finding.get("type", "issue"),
-                finding.get("description", ""),
-                finding.get("issue_number"),
-            ),
-        )
-
-    # Update file_coverage
-    for f in files:
-        f = _normalize_path(f)
-        existing = conn.execute(
-            "SELECT * FROM file_coverage WHERE file_path=?", (f,)
-        ).fetchone()
-        finding_count_for_file = sum(
-            1 for fi in findings if _normalize_path(fi.get("file", "")) == f
-        )
-        if existing:
-            new_scan_count = existing["total_scan_count"] + 1
-            new_finding_count = existing["finding_count"] + finding_count_for_file
-            density = new_finding_count / new_scan_count if new_scan_count > 0 else 0.0
+                # Finding for a file not in the scanned list — use first scan id
+                sid = next(iter(scan_ids.values()), None)
+                if sid is None:
+                    continue
             conn.execute(
-                """UPDATE file_coverage SET last_scanned_at=?, total_scan_count=?,
-                   finding_count=?, last_scanned_by=?, finding_density=?
-                   WHERE file_path=?""",
-                (now, new_scan_count, new_finding_count, role, density, f),
-            )
-        else:
-            density = finding_count_for_file / 1.0  # findings per scan (consistent with update)
-            conn.execute(
-                """INSERT INTO file_coverage (file_path, last_scanned_at,
-                   total_scan_count, finding_count, last_scanned_by, finding_density)
-                   VALUES (?, ?, 1, ?, ?, ?)""",
-                (f, now, finding_count_for_file, role, density),
+                """INSERT INTO findings (scan_id, file_path, finding_type, description,
+                   github_issue_number) VALUES (?, ?, ?, ?, ?)""",
+                (
+                    sid,
+                    fp,
+                    finding.get("type", "issue"),
+                    finding.get("description", ""),
+                    finding.get("issue_number"),
+                ),
             )
 
-    conn.commit()
-    conn.close()
+        # Update file_coverage
+        for f in files:
+            f = _normalize_path(f)
+            existing = conn.execute(
+                "SELECT * FROM file_coverage WHERE file_path=?", (f,)
+            ).fetchone()
+            finding_count_for_file = sum(
+                1 for fi in findings if _normalize_path(fi.get("file", "")) == f
+            )
+            if existing:
+                new_scan_count = existing["total_scan_count"] + 1
+                new_finding_count = existing["finding_count"] + finding_count_for_file
+                density = new_finding_count / new_scan_count if new_scan_count > 0 else 0.0
+                conn.execute(
+                    """UPDATE file_coverage SET last_scanned_at=?, total_scan_count=?,
+                       finding_count=?, last_scanned_by=?, finding_density=?
+                       WHERE file_path=?""",
+                    (now, new_scan_count, new_finding_count, role, density, f),
+                )
+            else:
+                density = finding_count_for_file / 1.0
+                conn.execute(
+                    """INSERT INTO file_coverage (file_path, last_scanned_at,
+                       total_scan_count, finding_count, last_scanned_by, finding_density)
+                       VALUES (?, ?, 1, ?, ?, ?)""",
+                    (f, now, finding_count_for_file, role, density),
+                )
+
+        conn.commit()
+    finally:
+        conn.close()
     print(f"Recorded scan: {len(files)} files, {len(findings)} findings")
 
 
