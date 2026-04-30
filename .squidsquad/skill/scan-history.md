@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-30 16:02
+
+- **Files scanned**: references/scripts/vault_check.py, references/scripts/vault_optimize.py, references/scripts/vault_remember.py, references/scripts/comms_adapter.py, references/scripts/add_role.py
+- **Findings**: none filed (2 minor notes in vault_optimize.py — guard duplication and strip() in archive annotation check — both theoretical, not functional bugs)
+- **Items rejected by human**: none yet
+- **Notes**: 4 files clean. vault_optimize.py has maintenance concerns but no functional bugs. All files have test coverage.
+
 ## Scan — 2026-04-30 14:02
 
 - **Files scanned**: tests/test_compose.py, tests/test_scan_index.py, tests/test_reboot_agent.py, tests/test_forge_adapter.py, tests/test_diagnostics.py
