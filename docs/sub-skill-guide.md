@@ -294,6 +294,6 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full contribution process.
 - **Keep sub-skills atomic** — one behavior per file. If it's doing two things, split it.
 - **Use Python scripts for gates** — don't rely on the agent to remember thresholds or limits. Scripts are deterministic.
 - **Test with `compose.py all`** — catch include errors before deploying.
-- **Check the manifest** — if your sub-skill isn't in the manifest, it won't be composed.
+- **Check includes.yml** — if your sub-skill isn't in the role's `includes.yml`, it won't be composed. Update `manifest.md` too to keep the reference doc in sync.
 - **Use section markers** — they power the status bar and make debugging easier.
 - **Mind the `[ROLE]` ambiguity** — common sub-skills that reference `[ROLE]` paths only work in dev templates. PM and DM must inline those sections.
