@@ -125,3 +125,39 @@ class TestTeardown:
         with patch.object(forgejo_setup, "DEPLOY_DIR", deploy_dir):
             result = forgejo_setup.teardown()
         assert result["ok"] is True
+
+
+# ---------------------------------------------------------------------------
+# #4200 regression: credential leak in error messages
+# ---------------------------------------------------------------------------
+
+class TestCreateTokenCredentialSafety:
+    """create_token must not leak credentials in error messages."""
+
+    def test_http_error_does_not_expose_credentials(self):
+        """#4200: HTTP error must show status code only, not headers/URL."""
+        import urllib.error
+        with patch("urllib.request.urlopen") as mock_urlopen:
+            mock_urlopen.side_effect = urllib.error.HTTPError(
+                url="http://localhost:3000/api/v1/users/admin/tokens",
+                code=401,
+                msg="Unauthorized",
+                hdrs=None,
+                fp=None,
+            )
+            result = forgejo_setup.create_token("admin", "s3cret_password")
+        assert result["ok"] is False
+        assert "HTTP 401" in result["message"]
+        # Credentials must NOT appear in the error message
+        assert "s3cret_password" not in result["message"]
+        assert "admin:s3cret" not in result["message"]
+
+    def test_connection_error_does_not_expose_details(self):
+        """URLError must not expose internal details."""
+        import urllib.error
+        with patch("urllib.request.urlopen") as mock_urlopen:
+            mock_urlopen.side_effect = urllib.error.URLError("connection refused")
+            result = forgejo_setup.create_token("admin", "password123")
+        assert result["ok"] is False
+        assert "connection error" in result["message"]
+        assert "password123" not in result["message"]

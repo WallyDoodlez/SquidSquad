@@ -264,8 +264,14 @@ def create_token(username, password):
             result["ok"] = True
             result["token"] = token_data.get("sha1", "")
             result["message"] = "Token created"
-    except Exception as e:
-        result["message"] = f"Failed to create token: {e}"
+    except urllib.error.HTTPError as e:
+        # Sanitize: only expose status code, not headers/URL which may
+        # contain Base64-encoded credentials (#4200).
+        result["message"] = f"Failed to create token: HTTP {e.code}"
+    except urllib.error.URLError as e:
+        result["message"] = f"Failed to create token: connection error"
+    except Exception:
+        result["message"] = "Failed to create token: unexpected error"
     return result
 
 
