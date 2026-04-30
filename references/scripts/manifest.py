@@ -384,10 +384,28 @@ def _load_kind(base_dir, kind_dir, validator):
             continue
         manifest = d / "manifest.yaml"
         if not manifest.exists():
-            issues.append(Issue(
-                str(d.relative_to(base_dir.parent)) if hasattr(base_dir, "parent") else str(d),
-                "", "missing manifest.yaml",
-            ))
+            # Skip directories that aren't deployable roles:
+            # - Layer source dirs (base/) — no includes.yml
+            # - Layer 3 variant dirs — have includes.yml with base_role
+            # Only report missing manifest for base role dirs (have instructions.md
+            # + includes.yml with 'includes:' key, indicating a deployable role).
+            if (d / "instructions.md").exists():
+                inc_yml = d / "includes.yml"
+                is_layer_source = not inc_yml.exists()
+                is_variant = False
+                if inc_yml.exists():
+                    try:
+                        import yaml as _y
+                        _d = _y.safe_load(inc_yml.read_text(encoding="utf-8"))
+                        if isinstance(_d, dict) and "base_role" in _d:
+                            is_variant = True
+                    except Exception:
+                        pass
+                if not is_layer_source and not is_variant:
+                    issues.append(Issue(
+                        str(d.relative_to(base_dir.parent)) if hasattr(base_dir, "parent") else str(d),
+                        "", "missing manifest.yaml",
+                    ))
             continue
         data, err = _load_yaml(manifest)
         if err:

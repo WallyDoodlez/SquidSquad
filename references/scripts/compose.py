@@ -116,20 +116,32 @@ def _resolve_includes(entry_file: Path) -> str:
 
 
 def _load_manifest(role_name: str) -> list | None:
-    """Load includes.yml for a role, with dev-variant inheritance.
+    """Load includes.yml for a role, with variant inheritance.
 
     Returns a list of include paths (e.g. ['common/tracker-protocol', ...])
     or None if no manifest exists.
 
+    Supports two schemas:
+    - Base role (Layer 2): ``includes: [list]``
+    - Variant (Layer 3): ``base_role: <base>`` + ``additional_includes: [list]``
+      Recursively loads the base role's manifest and appends additional includes.
+
     Dev variants (skill, be, fe) without their own includes.yml inherit
-    from references/roles/dev/includes.yml.
+    from references/roles/dev/includes.yml. Non-dev variants use
+    _strip_variant_suffix() to find their base role.
     """
     if yaml is None:
         return None
 
-    manifest_path = ROLES_DIR / role_name / "includes.yml"
+    # Try nested variant path first (dev-skill -> dev/skill/includes.yml)
+    resolved = _resolve_variant(role_name)
+    if resolved:
+        base, variant = resolved
+        manifest_path = ROLES_DIR / base / variant / "includes.yml"
+    else:
+        manifest_path = ROLES_DIR / role_name / "includes.yml"
     if not manifest_path.exists():
-        # Dev variant inheritance: fall back to dev manifest
+        # Legacy dev variant inheritance: fall back to dev manifest
         identities = _list_known_role_identities()
         if role_name not in identities and "dev" in identities:
             manifest_path = ROLES_DIR / "dev" / "includes.yml"
@@ -142,7 +154,37 @@ def _load_manifest(role_name: str) -> list | None:
         print(f"WARNING: Failed to parse {manifest_path}: {e}", file=sys.stderr)
         return None
 
-    if not isinstance(data, dict) or "includes" not in data:
+    if not isinstance(data, dict):
+        return None
+
+    # Layer 3 variant schema: base_role + additional_includes
+    if "base_role" in data:
+        base_role = data["base_role"]
+        base_includes = _load_manifest(base_role)
+        if base_includes is None:
+            print(
+                f"ERROR: includes.yml for {role_name} declares base_role={base_role} "
+                f"but {base_role} has no includes.yml",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        additional = data.get("additional_includes", [])
+        if not isinstance(additional, list):
+            additional = []
+        # Validate additional includes
+        for inc_path in additional:
+            full_path = SUB_SKILLS_DIR / f"{inc_path}.md"
+            if not full_path.exists():
+                print(
+                    f"ERROR: includes.yml for {role_name} references missing "
+                    f"sub-skill: {inc_path} (expected at {full_path})",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+        return base_includes + additional
+
+    # Base role schema: includes list
+    if "includes" not in data:
         return None
     includes = data["includes"]
     if not isinstance(includes, list):
@@ -234,28 +276,87 @@ def _resolve_includes_with_manifest(entry_file: Path, manifest: list) -> str:
     return "\n".join(result)
 
 
-def compose_role(role_name: str) -> str:
-    """Compose a role's full template from its entry file.
+def _assemble_claude(role_name: str) -> str:
+    """Assemble a CLAUDE.md template from Layer 1 + Layer 2 + Layer 3 sources.
 
-    After #328 Q-new22, the entry file lives at
-    `references/roles/<role>/CLAUDE.md` (self-contained role directory).
-    The legacy `references/sub-skills/roles/<variant>.md` layout has been
-    retired.
+    Same concatenation pattern as _assemble_soul():
+    - Layer 1: references/roles/base/CLAUDE.md (shared agent definition)
+    - Layer 2: references/roles/<role>/CLAUDE.md (role definition)
+    - Layer 3: references/roles/<variant>/CLAUDE.md (variant customization)
 
-    If includes.yml exists for the role (or inherited from dev), uses
-    manifest-driven composition. Otherwise falls back to inline
-    {{include:}} resolution.
+    The assembled template still contains {{include:}} directives which
+    are resolved separately by _resolve_includes_with_manifest().
     """
-    entry_file = ROLES_DIR / role_name / "CLAUDE.md"
-    if not entry_file.exists():
-        print(f"ERROR: Entry file not found: {entry_file}", file=sys.stderr)
-        sys.exit(1)
+    parts = []
 
-    manifest = _load_manifest(role_name)
-    if manifest is not None:
-        composed = _resolve_includes_with_manifest(entry_file, manifest)
-    else:
-        composed = _resolve_includes(entry_file)
+    # Layer 1 — Base agent instructions (at roles/ root)
+    base_claude = BASE_ROLE_DIR / "instructions.md"
+    if base_claude.exists():
+        parts.append(base_claude.read_text(encoding="utf-8").rstrip())
+        parts.append("")
+
+    # Layer 2 — Role instructions (the role's entry template)
+    role_identity = _get_entry_file_for_role(role_name)
+    role_claude = ROLES_DIR / role_identity / "instructions.md"
+    if role_claude.exists():
+        parts.append(role_claude.read_text(encoding="utf-8").rstrip())
+
+    # Layer 3 — Variant instructions (nested: roles/<base>/<variant>/)
+    resolved = _resolve_variant(role_name)
+    if resolved:
+        base, variant = resolved
+        variant_claude = ROLES_DIR / base / variant / "instructions.md"
+        if variant_claude.exists():
+            parts.append("")
+            parts.append(variant_claude.read_text(encoding="utf-8").rstrip())
+
+    # Layer 4 — Project sub-skills (PM-owned, applied to all agents)
+    # PM writes sub-skills to references/sub-skills/project/*.md
+    # These are auto-included in every agent's CLAUDE.md if present.
+    project_skills_dir = SUB_SKILLS_DIR / "project"
+    if project_skills_dir.is_dir():
+        for skill_file in sorted(project_skills_dir.glob("*.md")):
+            content = skill_file.read_text(encoding="utf-8").rstrip()
+            name = skill_file.stem
+            content = _strip_outer_markers(content, name)
+            parts.append("")
+            parts.append("---")
+            parts.append("")
+            parts.append(f"<!-- sub-skill: project-{name} -->")
+            parts.append(content)
+            parts.append(f"<!-- /sub-skill: project-{name} -->")
+
+    return "\n".join(parts)
+
+
+def compose_role(role_name: str) -> str:
+    """Compose a role's full CLAUDE.md from 3-layer assembly + include resolution.
+
+    Step 1: Assemble the template from Layer 1 + Layer 2 + Layer 3 CLAUDE.md
+            source files (same concatenation pattern as SOUL.md).
+    Step 2: Resolve {{include:}}, {{runtime:}}, {{capability:}} directives
+            using the role's includes.yml manifest.
+
+    The result is a single flat CLAUDE.md with all sub-skills inlined.
+    """
+    # Step 1: Assemble template from 3 layers
+    assembled = _assemble_claude(role_name)
+
+    # Write to a temp file for include resolution (reuses existing logic)
+    import tempfile
+    tmp = Path(tempfile.mktemp(suffix=".md"))
+    tmp.write_text(assembled, encoding="utf-8")
+
+    try:
+        # Step 2: Resolve includes
+        manifest = _load_manifest(role_name)
+        if manifest is not None:
+            composed = _resolve_includes_with_manifest(tmp, manifest)
+        else:
+            composed = _resolve_includes(tmp)
+    finally:
+        tmp.unlink(missing_ok=True)
+
     return composed
 
 
@@ -263,7 +364,7 @@ def compose_all() -> str:
     """Compose the dev-agent template as the default agent-instructions.md."""
     # agent-instructions.md is the dev template (primary output)
     header = "<!-- GENERATED FILE — DO NOT EDIT. -->\n"
-    header += "<!-- Source: references/roles/dev/CLAUDE.md + sub-skills/ -->\n"
+    header += "<!-- Source: references/roles/dev/instructions.md + sub-skills/ -->\n"
     header += "<!-- Regenerate with: python references/scripts/compose.py all -->\n\n"
     composed = compose_role("dev")
     return header + composed
@@ -306,7 +407,7 @@ def _list_known_role_identities():
         return set()
     return {
         d.name for d in ROLES_DIR.iterdir()
-        if d.is_dir() and (d / "CLAUDE.md").exists()
+        if d.is_dir() and (d / "instructions.md").exists()
     }
 
 
@@ -315,9 +416,9 @@ def _get_entry_file_for_role(role_name: str) -> str:
 
     After Q-new22 each role has its own self-contained directory at
     `references/roles/<role>/`. For any role that exists in the registry
-    the identity equals the role name. Anything else is treated as a
-    dev variant (e.g. `fe`, `be`, `skill`) and uses the `dev` role
-    template.
+    the identity equals the role name. Anything else is resolved via:
+    1. Suffix-strip: pm-skill -> pm (Layer 3 variant of any base role)
+    2. Dev fallback: skill, be, fe -> dev (legacy dev variants)
 
     After #328 Phase H the identity list is read from the manifest
     registry, not hardcoded — adding a new role directory under
@@ -327,6 +428,11 @@ def _get_entry_file_for_role(role_name: str) -> str:
     identities = _list_known_role_identities()
     if role_name in identities:
         return role_name
+    # Layer 3 variant: resolve nested directory (dev-skill -> dev/skill/)
+    resolved = _resolve_variant(role_name)
+    if resolved:
+        base, _ = resolved
+        return base
     # Dev variants (skill, be, fe, bespoke names) compose from the
     # `dev` role template as long as one exists in the registry.
     if "dev" in identities:
@@ -393,7 +499,7 @@ def deploy_role(role_name: str, target_root: Path = None) -> Path:
     target_root = Path(target_root)
 
     entry_file = _get_entry_file_for_role(role_name)
-    composed = compose_role(entry_file)
+    composed = compose_role(role_name)
     final = _substitute_placeholders(composed, role_name, entry_file)
 
     header = f"# SquidSquad -- {role_name} Lead\n\n"
@@ -404,21 +510,164 @@ def deploy_role(role_name: str, target_root: Path = None) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(header + final, encoding="utf-8")
 
-    # Create SOUL.md from the role directory's template if missing
-    # (never overwrite an existing local SOUL.md — the installed agent may
-    # have customised it). After Q-new22 the SOUL template lives alongside
-    # the role's CLAUDE.md template at references/roles/<role>/SOUL.md.
+    # Assemble SOUL.md from 3 layers if missing (#3465 layered architecture).
+    # Never overwrite an existing local SOUL.md — use upgrade_soul() for that.
     soul_path = target_root / ".squidsquad" / role_name / "SOUL.md"
     if not soul_path.exists():
-        role_identity = _get_entry_file_for_role(role_name)  # 'dev' for variants
-        soul_template = ROLES_DIR / role_identity / "SOUL.md"
-        if soul_template.exists():
-            soul_path.write_text(
-                soul_template.read_text(encoding="utf-8"),
-                encoding="utf-8",
-            )
+        _assemble_and_write_soul(role_name, target_root)
 
     return output_path
+
+
+# Layer 1 source files live at the root of ROLES_DIR (no subdirectory)
+BASE_ROLE_DIR = ROLES_DIR
+
+# Layer boundary marker in assembled SOUL.md
+SOUL_LAYER_BASE_START = "<!-- layer: base -->"
+SOUL_LAYER_BASE_END = "<!-- /layer: base -->"
+
+
+def _resolve_variant(role_name: str) -> tuple[str, str] | None:
+    """Resolve a variant role name to (base_role, variant_name).
+
+    Layer 3 variants live nested inside their base role directory:
+    references/roles/<base>/<variant>/. The agent instance name uses
+    a hyphen convention: dev-skill -> roles/dev/skill/.
+
+    Returns (base, variant) or None if not a variant.
+
+    Examples:
+        dev-skill  -> ("dev", "skill")
+        pm-ios     -> ("pm", "ios")
+        pm         -> None (base role, not a variant)
+        skill      -> None (legacy dev variant without hyphen)
+    """
+    if "-" not in role_name:
+        return None
+    base, variant = role_name.split("-", 1)
+    variant_dir = ROLES_DIR / base / variant
+    if variant_dir.is_dir() and (variant_dir / "instructions.md").exists():
+        return base, variant
+    # Fallback: check if base is a known identity
+    identities = _list_known_role_identities()
+    if base in identities and (ROLES_DIR / base / variant).is_dir():
+        return base, variant
+    return None
+
+
+def _assemble_soul(role_name: str) -> str:
+    """Assemble a flat SOUL.md from Layer 1 (base) + role SOUL.
+
+    Layer 1: references/roles/SOUL.md (at roles root — shared agent identity)
+    Role SOUL: for variants (dev-skill), try roles/dev/skill/SOUL.md first,
+    then fall back to roles/dev/SOUL.md. For base roles, use roles/<role>/SOUL.md.
+
+    Layer markers are embedded so upgrade_soul() can identify boundaries.
+    """
+    parts = []
+
+    # Layer 1 — Base agent SOUL (at roles/ root)
+    base_soul = BASE_ROLE_DIR / "SOUL.md"
+    if base_soul.exists():
+        parts.append(SOUL_LAYER_BASE_START)
+        parts.append(base_soul.read_text(encoding="utf-8").rstrip())
+        parts.append(SOUL_LAYER_BASE_END)
+        parts.append("")
+
+    # Layer 2 — Role SOUL (base role's SOUL.md)
+    resolved = _resolve_variant(role_name)
+    if resolved:
+        base, variant = resolved
+        # Variants always get the base role's SOUL (Layer 2)
+        role_soul_path = ROLES_DIR / base / "SOUL.md"
+    else:
+        role_soul_path = ROLES_DIR / role_name / "SOUL.md"
+        if not role_soul_path.exists():
+            # Legacy dev variant fallback (skill -> dev)
+            role_identity = _get_entry_file_for_role(role_name)
+            role_soul_path = ROLES_DIR / role_identity / "SOUL.md"
+
+    if role_soul_path.exists():
+        parts.append(role_soul_path.read_text(encoding="utf-8").rstrip())
+
+    # Layer 3 — Variant SOUL (variant-specific personality delta)
+    if resolved:
+        base, variant = resolved
+        variant_soul_path = ROLES_DIR / base / variant / "SOUL.md"
+        if variant_soul_path.exists():
+            parts.append("")
+            parts.append(variant_soul_path.read_text(encoding="utf-8").rstrip())
+
+    return "\n".join(parts) + "\n"
+
+
+def _assemble_and_write_soul(role_name: str, target_root: Path = None):
+    """Assemble SOUL.md from 3 layers and write atomically."""
+    if target_root is None:
+        target_root = REPO_ROOT
+    target_root = Path(target_root)
+
+    content = _assemble_soul(role_name)
+    soul_path = target_root / ".squidsquad" / role_name / "SOUL.md"
+    soul_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Atomic write: .tmp then rename
+    tmp_path = soul_path.with_suffix(".md.tmp")
+    tmp_path.write_text(content, encoding="utf-8")
+    tmp_path.replace(soul_path)
+
+
+def upgrade_soul(role_name: str, target_root: Path = None) -> Path:
+    """Re-render Layer 1 (base) of a deployed SOUL.md, preserving role content.
+
+    This function is used during upgrades to pick up improvements to the
+    base agent identity without clobbering the role's personality,
+    Project Context, Project-Specific Responsibilities, or Project Adaptation.
+
+    If no deployed SOUL.md exists, falls through to full assembly.
+    """
+    if target_root is None:
+        target_root = REPO_ROOT
+    target_root = Path(target_root)
+
+    soul_path = target_root / ".squidsquad" / role_name / "SOUL.md"
+    if not soul_path.exists():
+        _assemble_and_write_soul(role_name, target_root)
+        return soul_path
+
+    existing = soul_path.read_text(encoding="utf-8")
+
+    # Find role content boundary: everything after the base end marker
+    # is role-specific content (preserved on upgrade).
+    role_content = None
+    if SOUL_LAYER_BASE_END in existing:
+        idx = existing.index(SOUL_LAYER_BASE_END) + len(SOUL_LAYER_BASE_END)
+        role_content = existing[idx:].lstrip("\n")
+    else:
+        # Legacy flat SOUL.md with no layer markers — treat entire file as role content
+        role_content = existing
+
+    # Re-render Layer 1 from current template
+    parts = []
+    base_soul = BASE_ROLE_DIR / "SOUL.md"
+    if base_soul.exists():
+        parts.append(SOUL_LAYER_BASE_START)
+        parts.append(base_soul.read_text(encoding="utf-8").rstrip())
+        parts.append(SOUL_LAYER_BASE_END)
+        parts.append("")
+
+    # Append preserved role content
+    if role_content:
+        parts.append(role_content.rstrip())
+
+    content = "\n".join(parts) + "\n"
+
+    # Atomic write
+    tmp_path = soul_path.with_suffix(".md.tmp")
+    tmp_path.write_text(content, encoding="utf-8")
+    tmp_path.replace(soul_path)
+
+    return soul_path
 
 
 def generate_local_config(roles: list, target_root: Path = None,
@@ -511,7 +760,7 @@ def main():
         if ROLES_DIR.exists():
             roles = [
                 d.name for d in ROLES_DIR.iterdir()
-                if d.is_dir() and (d / "CLAUDE.md").exists()
+                if d.is_dir() and (d / "instructions.md").exists()
             ]
             print(f"Available roles: {', '.join(sorted(roles))}")
         sys.exit(0)
@@ -554,6 +803,15 @@ def main():
         # Generate .local-config for health check and auto-boot
         lc = generate_local_config(roles)
         print(f"  .local-config: {len(roles)} agents -> {lc.relative_to(REPO_ROOT)}")
+
+    elif cmd == "upgrade-soul":
+        if len(args) < 2:
+            print("Usage: compose.py upgrade-soul <role>", file=sys.stderr)
+            sys.exit(1)
+        role_name = args[1]
+        soul_path = upgrade_soul(role_name)
+        lines = soul_path.read_text(encoding="utf-8").count("\n")
+        print(f"Upgraded {role_name} SOUL.md ({lines} lines) -> {soul_path.relative_to(REPO_ROOT)}")
 
     elif cmd == "boot":
         if len(args) < 2:

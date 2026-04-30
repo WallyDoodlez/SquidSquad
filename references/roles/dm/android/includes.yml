@@ -1,0 +1,5 @@
+# Layer 3 variant manifest — dm-android
+# Inherits all sub-skills from dm, adds android-specific context.
+base_role: dm
+additional_includes:
+  - roles/dm/android/domain-context

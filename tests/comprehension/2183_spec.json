@@ -4,7 +4,7 @@
   "files": [
     "references/sub-skills/common/self-restart.md",
     "references/sub-skills/common/agent-lifecycle.md",
-    "references/sub-skills/pm-specific/health-check.md"
+    "references/sub-skills/roles/pm/health-check.md"
   ],
   "questions": [
     {

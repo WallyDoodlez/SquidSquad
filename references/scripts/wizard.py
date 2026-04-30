@@ -162,9 +162,9 @@ def detect_existing_install(base_dir=None):
     # Catalogue what's inside so the agent can summarise for the user
     contents = sorted(p.name for p in target.iterdir() if not p.name.startswith("."))
     has_config = (target / "config.md").exists()
-    # A per-role directory is any subdir containing a CLAUDE.md
+    # A per-role directory is any subdir containing a CLAUDE.md (deployed output)
     has_roles = any(
-        (target / c / "CLAUDE.md").exists()
+        (target / c / "CLAUDE.md").exists() or (target / c / "instructions.md").exists()
         for c in contents
         if (target / c).is_dir()
     )
@@ -818,10 +818,10 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
         # friendlier error than whatever deploy_role would produce if the
         # entry file is missing.
         role_dir = REPO_ROOT / "references" / "roles" / role_identity
-        if not (role_dir / "CLAUDE.md").exists():
+        if not (role_dir / "instructions.md").exists():
             raise ValueError(
                 f"agent {agent_id!r} references unknown role identity "
-                f"{role_identity!r}: no CLAUDE.md at {role_dir}"
+                f"{role_identity!r}: no instructions.md at {role_dir}"
             )
 
         agent_dir = squid / agent_id

@@ -7,7 +7,7 @@ import pytest
 from pathlib import Path
 
 REPO = Path(__file__).parent.parent
-TASK_INTAKE = REPO / "references/sub-skills/pm-specific/task-intake.md"
+TASK_INTAKE = REPO / "references/sub-skills/roles/pm/task-intake.md"
 RESEARCH_PROMPT = REPO / "references/prompts/research.md.j2"
 
 

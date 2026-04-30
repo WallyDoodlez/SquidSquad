@@ -57,20 +57,20 @@ class TestRoleEntryFiles:
     """
 
     def test_dev_entry_exists(self):
-        path = REFERENCES_DIR / "roles" / "dev" / "CLAUDE.md"
-        assert path.exists(), "Missing references/roles/dev/CLAUDE.md"
+        path = REFERENCES_DIR / "roles" / "dev" / "instructions.md"
+        assert path.exists(), "Missing references/roles/dev/instructions.md"
 
     def test_pm_entry_exists(self):
-        path = REFERENCES_DIR / "roles" / "pm" / "CLAUDE.md"
-        assert path.exists(), "Missing references/roles/pm/CLAUDE.md"
+        path = REFERENCES_DIR / "roles" / "pm" / "instructions.md"
+        assert path.exists(), "Missing references/roles/pm/instructions.md"
 
     def test_all_role_claude_md_files_exist(self):
         expected = {"pm", "dm", "designer", "dev", "qa"}
         missing = {
             role for role in expected
-            if not (REFERENCES_DIR / "roles" / role / "CLAUDE.md").exists()
+            if not (REFERENCES_DIR / "roles" / role / "instructions.md").exists()
         }
-        assert not missing, f"Missing CLAUDE.md for roles: {missing}"
+        assert not missing, f"Missing instructions.md for roles: {missing}"
 
     def test_soul_files_exist(self):
         expected = {"pm", "dm", "designer", "dev", "qa"}
@@ -87,9 +87,7 @@ class TestRoleEntryFiles:
             f"Legacy souls directory should not exist after Q-new22: {legacy}"
         )
 
-    def test_legacy_roles_dir_is_gone(self):
-        """Defensive — the legacy sub-skills/roles/ must not reappear."""
-        legacy = REFERENCES_DIR / "sub-skills" / "roles"
-        assert not legacy.exists(), (
-            f"Legacy roles directory should not exist after Q-new22: {legacy}"
-        )
+    def test_role_sub_skills_dir_exists(self):
+        """Role-specific sub-skills live under sub-skills/roles/."""
+        roles_ss = REFERENCES_DIR / "sub-skills" / "roles"
+        assert roles_ss.exists(), "Missing sub-skills/roles/ directory"

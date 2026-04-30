@@ -20,11 +20,11 @@ class TestTestPlanTemplate:
     def test_deterministic_category_defined(self, template):
         assert "[deterministic]" in template
 
-    def test_human_verification_category_defined(self, template):
-        assert "[human-verification]" in template
+    def test_human_required_category_defined(self, template):
+        assert "[human-required]" in template
 
-    def test_requires_category_defined(self, template):
-        assert "[requires:" in template
+    def test_human_required_resource_defined(self, template):
+        assert "[human-required:" in template
 
     def test_assertion_field_in_tc_format(self, template):
         assert "**Assertion**:" in template
@@ -49,22 +49,19 @@ class TestVerificationSubSkill:
 
     @pytest.fixture
     def verification(self):
-        return (REPO / "references/sub-skills/qa-specific/verification.md").read_text(encoding="utf-8")
+        return (REPO / "references/sub-skills/roles/qa/verification.md").read_text(encoding="utf-8")
 
     def test_deferred_not_valid(self, verification):
-        assert '"Deferred" is NOT a valid result' in verification
+        assert '"Deferred"' in verification and "NOT valid" in verification
 
-    def test_only_pass_fail_blocked(self, verification):
-        assert "PASS, FAIL, or BLOCKED" in verification
+    def test_only_pass_fail_human_required(self, verification):
+        assert "PASS, FAIL, or HUMAN-REQUIRED" in verification
 
-    def test_blocked_requires_filing_issue(self, verification):
-        assert "File a blocker issue" in verification
+    def test_human_required_gate_prevents_shipping(self, verification):
+        assert "HUMAN-REQUIRED gate" in verification
 
-    def test_blocked_gate_prevents_shipping(self, verification):
-        assert "BLOCKED gate" in verification
-
-    def test_human_verification_skip_instruction(self, verification):
-        assert "human-verification" in verification
+    def test_human_required_label_instruction(self, verification):
+        assert "human-action" in verification
 
 
 class TestDeployedQAClaude:
@@ -75,10 +72,10 @@ class TestDeployedQAClaude:
         return (REPO / ".squidsquad/qa/CLAUDE.md").read_text(encoding="utf-8")
 
     def test_deferred_rejection_deployed(self, qa_claude):
-        assert '"Deferred" is NOT a valid result' in qa_claude
+        assert '"Deferred"' in qa_claude and "NOT valid" in qa_claude
 
-    def test_blocked_gate_deployed(self, qa_claude):
-        assert "BLOCKED gate" in qa_claude
+    def test_human_required_gate_deployed(self, qa_claude):
+        assert "HUMAN-REQUIRED gate" in qa_claude
 
-    def test_human_verification_deployed(self, qa_claude):
-        assert "human-verification" in qa_claude
+    def test_human_required_deployed(self, qa_claude):
+        assert "human-required" in qa_claude.lower()

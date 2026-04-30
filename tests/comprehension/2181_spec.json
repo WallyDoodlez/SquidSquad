@@ -2,7 +2,7 @@
   "issue": 2181,
   "title": "DM delivery enables feature flags on shipping project",
   "files": [
-    "references/sub-skills/dm-specific/delivery-packaging.md"
+    "references/sub-skills/roles/dm/delivery-packaging.md"
   ],
   "questions": [
     {

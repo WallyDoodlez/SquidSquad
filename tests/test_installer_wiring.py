@@ -235,9 +235,9 @@ class TestInstallerFileManifest:
             "references/scripts/config.py",
             "references/scripts/tracker.py",
             "references/roles/pm/manifest.yaml",
-            "references/roles/pm/CLAUDE.md",
+            "references/roles/pm/instructions.md",
             "references/roles/pm/SOUL.md",
-            "references/roles/dev/CLAUDE.md",
+            "references/roles/dev/instructions.md",
             "references/presets/software-dev/manifest.yaml",
             "references/presets/design/manifest.yaml",
         ):

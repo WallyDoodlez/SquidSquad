@@ -39,7 +39,7 @@ def compose_env(tmp_path):
     roles = tmp_path / "references" / "roles"
     dev_role = roles / "dev"
     dev_role.mkdir(parents=True)
-    (dev_role / "CLAUDE.md").write_text(
+    (dev_role / "instructions.md").write_text(
         "# Dev Agent\n\n"
         "{{runtime: souls/dev}}\n"
         "{{include: common/tracker-protocol}}\n"
@@ -56,7 +56,7 @@ def compose_env(tmp_path):
 
     pm_role = roles / "pm"
     pm_role.mkdir(parents=True)
-    (pm_role / "CLAUDE.md").write_text(
+    (pm_role / "instructions.md").write_text(
         "# PM Agent\n\n"
         "{{include: common/tracker-protocol}}\n"
         "Active agents: [ACTIVE_AGENTS]\n"
@@ -100,7 +100,7 @@ def compose_env(tmp_path):
 
 class TestResolveIncludes:
     def test_basic_include(self, compose_env):
-        entry = compose_env / "references" / "roles" / "dev" / "CLAUDE.md"
+        entry = compose_env / "references" / "roles" / "dev" / "instructions.md"
         with patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
             result = compose._resolve_includes(entry)
         assert "## Tracker Protocol" in result
@@ -115,7 +115,7 @@ class TestResolveIncludes:
         assert "<!-- ERROR: Missing include: common/nonexistent -->" in result
 
     def test_runtime_directive(self, compose_env):
-        entry = compose_env / "references" / "roles" / "dev" / "CLAUDE.md"
+        entry = compose_env / "references" / "roles" / "dev" / "instructions.md"
         with patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
             result = compose._resolve_includes(entry)
         assert "## Soul" in result
@@ -267,10 +267,13 @@ class TestComposeRole:
         assert "# PM Agent" in result
         assert "## Tracker Protocol" in result
 
-    def test_missing_role_exits(self, compose_env):
-        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"):
-            with pytest.raises(SystemExit):
-                compose.compose_role("nonexistent_role_xyz")
+    def test_unknown_role_falls_back_to_dev(self, compose_env):
+        """Unknown roles fall back to dev (dev variant mechanism)."""
+        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
+             patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
+            result = compose.compose_role("nonexistent_role_xyz")
+        # Falls back to dev template
+        assert "# Dev Agent" in result
 
 
 # ---------------------------------------------------------------------------
@@ -520,3 +523,136 @@ class TestCollectAllRoles:
             roles = compose._collect_all_roles()
         assert roles[0] == "skill"
         assert roles[1] == "be"
+
+
+# ---------------------------------------------------------------------------
+# Layered role architecture (#3465)
+# ---------------------------------------------------------------------------
+
+class TestResolveVariant:
+    """Test _resolve_variant resolves nested variant directories."""
+
+    def test_pm_skill_resolves(self):
+        result = compose._resolve_variant("pm-skill")
+        assert result == ("pm", "skill")
+
+    def test_dev_ios_resolves(self):
+        result = compose._resolve_variant("dev-ios")
+        assert result == ("dev", "ios")
+
+    def test_qa_android_resolves(self):
+        result = compose._resolve_variant("qa-android")
+        assert result == ("qa", "android")
+
+    def test_base_role_returns_none(self):
+        assert compose._resolve_variant("pm") is None
+
+    def test_no_hyphen_returns_none(self):
+        assert compose._resolve_variant("skill") is None
+
+
+class TestAssembleSoul:
+    """Test _assemble_soul produces L1 base + role SOUL flat output."""
+
+    def test_contains_layer1_base_content(self):
+        content = compose._assemble_soul("skill")
+        assert "<!-- layer: base -->" in content
+        assert "<!-- /layer: base -->" in content
+        assert "Core Identity" in content
+
+    def test_contains_role_soul(self):
+        """Role SOUL (Layer 2) is included after base."""
+        content = compose._assemble_soul("skill")
+        # Dev SOUL.md content (skill inherits from dev)
+        assert "Professional Identity" in content
+
+    def test_pm_has_own_soul(self):
+        """PM gets its own role-specific SOUL content."""
+        content = compose._assemble_soul("pm")
+        assert "Soul" in content
+        assert "## Project Adaptation" in content
+
+    def test_single_flat_file(self):
+        """Assembly produces a single string, not multiple files."""
+        content = compose._assemble_soul("pm")
+        assert isinstance(content, str)
+        assert "## Project Adaptation" in content
+
+    def test_project_adaptation_present(self):
+        content = compose._assemble_soul("qa")
+        assert "## Project Adaptation" in content
+        assert "<!-- /project-adaptation -->" in content
+
+
+class TestUpgradeSoul:
+    """Test upgrade_soul preserves role content and Project Adaptation."""
+
+    def test_preserves_role_content_on_upgrade(self, tmp_path):
+        """upgrade_soul re-renders L1 but keeps role content unchanged."""
+        ss = tmp_path / ".squidsquad" / "pm"
+        ss.mkdir(parents=True)
+
+        compose._assemble_and_write_soul("pm", tmp_path)
+        soul_path = ss / "SOUL.md"
+        original = soul_path.read_text(encoding="utf-8")
+
+        # Simulate user customization
+        modified = original.replace(
+            "## Project Adaptation",
+            "## Project Adaptation\n\nHuman added this custom note."
+        )
+        soul_path.write_text(modified, encoding="utf-8")
+
+        compose.upgrade_soul("pm", tmp_path)
+        upgraded = soul_path.read_text(encoding="utf-8")
+
+        assert "<!-- layer: base -->" in upgraded
+        assert "Human added this custom note." in upgraded
+
+    def test_atomic_write_no_tmp_leftover(self, tmp_path):
+        ss = tmp_path / ".squidsquad" / "pm"
+        ss.mkdir(parents=True)
+        compose._assemble_and_write_soul("pm", tmp_path)
+        compose.upgrade_soul("pm", tmp_path)
+        assert not (ss / "SOUL.md.tmp").exists()
+
+    def test_creates_if_missing(self, tmp_path):
+        ss = tmp_path / ".squidsquad" / "qa"
+        ss.mkdir(parents=True)
+        compose.upgrade_soul("qa", tmp_path)
+        soul = ss / "SOUL.md"
+        assert soul.exists()
+        assert "<!-- layer: base -->" in soul.read_text(encoding="utf-8")
+
+    def test_legacy_flat_soul_preserved(self, tmp_path):
+        """A pre-migration SOUL.md without markers is preserved as role content."""
+        ss = tmp_path / ".squidsquad" / "skill"
+        ss.mkdir(parents=True)
+        legacy_content = "## Soul - Legacy\n\nOld flat content.\n\n## Project Adaptation\n\nCustom.\n<!-- /project-adaptation -->\n"
+        (ss / "SOUL.md").write_text(legacy_content, encoding="utf-8")
+
+        compose.upgrade_soul("skill", tmp_path)
+        upgraded = (ss / "SOUL.md").read_text(encoding="utf-8")
+
+        assert "<!-- layer: base -->" in upgraded
+        assert "Old flat content." in upgraded
+        assert "Custom." in upgraded
+
+
+class TestVariantInheritance:
+    """Test Layer 3 variant inheritance in _load_manifest and _get_entry_file_for_role."""
+
+    def test_get_entry_file_suffix_strip(self):
+        """pm-skill resolves to pm entry file."""
+        result = compose._get_entry_file_for_role("pm-skill")
+        assert result == "pm"
+
+    def test_get_entry_file_dev_variant_unchanged(self):
+        """skill still resolves to dev (legacy behavior)."""
+        result = compose._get_entry_file_for_role("skill")
+        assert result == "dev"
+
+    def test_get_entry_file_base_role_unchanged(self):
+        """pm resolves to pm."""
+        result = compose._get_entry_file_for_role("pm")
+        assert result == "pm"

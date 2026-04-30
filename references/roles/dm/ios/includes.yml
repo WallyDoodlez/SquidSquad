@@ -1,0 +1,5 @@
+# Layer 3 variant manifest — dm-ios
+# Inherits all sub-skills from dm, adds ios-specific context.
+base_role: dm
+additional_includes:
+  - roles/dm/ios/domain-context

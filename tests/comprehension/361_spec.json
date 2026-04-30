@@ -2,7 +2,7 @@
   "issue": 361,
   "title": "Project-adaptive role souls — seed at setup, enrich at runtime",
   "files": [
-    "references/sub-skills/pm-specific/soul-shepherd.md",
+    "references/sub-skills/roles/pm/soul-shepherd.md",
     "references/scripts/soul_adaptation.py"
   ],
   "questions": [

@@ -21,25 +21,33 @@ class TestCapabilityDirective:
         cap_dir.mkdir(parents=True)
         (cap_dir / "sub-skill.md").write_text("# Test Capability\nUse this.", encoding="utf-8")
 
+        # Create L1 base (required by layered compose)
+        base_dir = tmp_path / "references" / "roles"
+        base_dir.mkdir(parents=True)
+        (base_dir / "instructions.md").write_text("# Base\n", encoding="utf-8")
+
         # Create a role entry file that uses the capability directive
         role_dir = tmp_path / "references" / "roles" / "dev"
         role_dir.mkdir(parents=True)
-        entry = role_dir / "CLAUDE.md"
-        entry.write_text("# Dev\n{{capability: test_cap}}\nEnd.", encoding="utf-8")
+        (role_dir / "instructions.md").write_text(
+            "# Dev\n{{capability: test_cap}}\nEnd.", encoding="utf-8")
 
-        # Patch CAPABILITIES_DIR and SUB_SKILLS_DIR
+        # Patch CAPABILITIES_DIR, SUB_SKILLS_DIR, ROLES_DIR, and BASE_ROLE_DIR
         orig_cap = compose.CAPABILITIES_DIR
         orig_sub = compose.SUB_SKILLS_DIR
         orig_roles = compose.ROLES_DIR
+        orig_base = compose.BASE_ROLE_DIR
         try:
             compose.CAPABILITIES_DIR = tmp_path / "references" / "sub-skills" / "capabilities"
             compose.SUB_SKILLS_DIR = tmp_path / "references" / "sub-skills"
             compose.ROLES_DIR = tmp_path / "references" / "roles"
+            compose.BASE_ROLE_DIR = tmp_path / "references" / "roles"
             result = compose.compose_role("dev")
         finally:
             compose.CAPABILITIES_DIR = orig_cap
             compose.SUB_SKILLS_DIR = orig_sub
             compose.ROLES_DIR = orig_roles
+            compose.BASE_ROLE_DIR = orig_base
 
         assert "<!-- sub-skill: capability-test_cap -->" in result
         assert "# Test Capability" in result
@@ -49,10 +57,15 @@ class TestCapabilityDirective:
         """A missing capability emits an error comment."""
         import compose
 
+        # Create L1 base (required by layered compose)
+        base_dir = tmp_path / "references" / "roles"
+        base_dir.mkdir(parents=True)
+        (base_dir / "instructions.md").write_text("# Base\n", encoding="utf-8")
+
         role_dir = tmp_path / "references" / "roles" / "dev"
         role_dir.mkdir(parents=True)
-        entry = role_dir / "CLAUDE.md"
-        entry.write_text("# Dev\n{{capability: nonexistent}}\nEnd.", encoding="utf-8")
+        (role_dir / "instructions.md").write_text(
+            "# Dev\n{{capability: nonexistent}}\nEnd.", encoding="utf-8")
 
         # Ensure capabilities dir exists but is empty
         (tmp_path / "references" / "sub-skills" / "capabilities").mkdir(parents=True)
@@ -60,15 +73,18 @@ class TestCapabilityDirective:
         orig_cap = compose.CAPABILITIES_DIR
         orig_sub = compose.SUB_SKILLS_DIR
         orig_roles = compose.ROLES_DIR
+        orig_base = compose.BASE_ROLE_DIR
         try:
             compose.CAPABILITIES_DIR = tmp_path / "references" / "sub-skills" / "capabilities"
             compose.SUB_SKILLS_DIR = tmp_path / "references" / "sub-skills"
             compose.ROLES_DIR = tmp_path / "references" / "roles"
+            compose.BASE_ROLE_DIR = tmp_path / "references" / "roles"
             result = compose.compose_role("dev")
         finally:
             compose.CAPABILITIES_DIR = orig_cap
             compose.SUB_SKILLS_DIR = orig_sub
             compose.ROLES_DIR = orig_roles
+            compose.BASE_ROLE_DIR = orig_base
 
         assert "<!-- ERROR: Missing capability: nonexistent -->" in result
 

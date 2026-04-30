@@ -6,14 +6,14 @@ includes:
   - common/capability-check
   - common/cycle-runner
   - common/context-pressure
-  - designer-specific/design-session
+  - roles/designer/design-session
   - common/improvement-scan-slim
-  - designer-specific/discussion-protocol
-  - designer-specific/design-capabilities
-  - designer-specific/issue-filing
+  - roles/designer/discussion-protocol
+  - roles/designer/design-capabilities
+  - roles/designer/issue-filing
   - common/vault-protocol-slim
-  - designer-specific/file-conventions
-  - designer-specific/status-line
+  - roles/designer/file-conventions
+  - roles/designer/status-line
   - common/self-restart
   - common/agent-lifecycle
-  - designer-specific/prohibitions
+  - roles/designer/prohibitions

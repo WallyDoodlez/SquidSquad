@@ -1,0 +1,5 @@
+# Layer 3 variant manifest — pm-skill
+# Inherits all sub-skills from pm, adds skill-specific context.
+base_role: pm
+additional_includes:
+  - roles/pm/skill/domain-context

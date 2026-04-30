@@ -1,0 +1,5 @@
+# Layer 3 variant manifest — dm-web
+# Inherits all sub-skills from dm, adds web-specific context.
+base_role: dm
+additional_includes:
+  - roles/dm/web/domain-context

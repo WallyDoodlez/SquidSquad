@@ -5,13 +5,13 @@ includes:
   - common/tracker-protocol
   - common/cycle-runner
   - common/context-pressure
-  - qa-specific/verification
+  - roles/qa/verification
   - common/improvement-scan-slim
-  - qa-specific/issue-filing
-  - qa-specific/discussion-protocol
+  - roles/qa/issue-filing
+  - roles/qa/discussion-protocol
   - common/vault-protocol-slim
-  - qa-specific/file-conventions
-  - qa-specific/status-line
+  - roles/qa/file-conventions
+  - roles/qa/status-line
   - common/self-restart
   - common/agent-lifecycle
-  - qa-specific/prohibitions
+  - roles/qa/prohibitions

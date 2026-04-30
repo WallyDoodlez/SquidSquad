@@ -1,0 +1,5 @@
+# Layer 3 variant manifest — pm-ios
+# Inherits all sub-skills from pm, adds ios-specific context.
+base_role: pm
+additional_includes:
+  - roles/pm/ios/domain-context
