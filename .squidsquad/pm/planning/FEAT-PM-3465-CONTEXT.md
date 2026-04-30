@@ -2,11 +2,12 @@
 
 ## Scope
 
-Restructure role definitions into 3 composable layers. **Both CLAUDE.md and SOUL.md must be layered.**
+Restructure role definitions into 4 composable layers. **Both CLAUDE.md and SOUL.md must be layered.**
 
 - **Layer 1 — Agent Definition**: What a SquidSquad agent IS. Shared by every agent regardless of role. (Ralph Loop, tracker protocol, vault protocol, health/heartbeat, cycle runner, context pressure, git protocol, base identity)
 - **Layer 2 — Role Definition**: What a `<role>` agent IS. The concrete role: dev, pm, qa, dm, designer. Role-specific workflow, responsibilities, quality bar, decision style.
 - **Layer 3 — Role Customization**: Specialization of a role for a specific use case. Variants inherit Layer 2 and add/override behavior for a domain.
+- **Layer 4 — Project Specific**: Project-level customization. Instructions and personality specific to THIS project. PM can push behavioral directives here directly (write → recompose → reboot). Managed as project sub-skills (`references/sub-skills/project/*.md`). Soul Shepherd writes observed signals here via soul_adaptation.py.
 
 Each layer carries **both** CLAUDE.md and SOUL.md. These serve distinct purposes:
 
