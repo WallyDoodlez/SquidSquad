@@ -632,7 +632,7 @@ def _is_branch_workflow_enabled():
     try:
         sys.path.insert(0, str(SCRIPT_DIR))
         from config import get_field
-        return get_field("branch-workflow").strip().lower() == "yes"
+        return (get_field("branch-workflow") or "").strip().lower() == "yes"
     except Exception:
         return False
 
