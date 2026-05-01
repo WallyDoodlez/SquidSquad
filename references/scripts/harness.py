@@ -212,11 +212,15 @@ async def lifespan(app: FastAPI):
     _log("Shutting down...")
     state.stop_poller()
 
-    # Clean up port file
-    try:
-        HARNESS_PORT_FILE.unlink(missing_ok=True)
-    except OSError:
-        pass
+    # Clean up port file (retry for Windows file locking)
+    for attempt in range(3):
+        try:
+            if HARNESS_PORT_FILE.exists():
+                HARNESS_PORT_FILE.unlink()
+            break
+        except OSError as e:
+            _log(f"WARNING: Could not delete port file (attempt {attempt + 1}/3): {e}")
+            time.sleep(0.5)
 
     _log("Harness stopped.")
 
@@ -299,16 +303,16 @@ async def stop_all():
 
     results = []
     for role in roles:
-        # Only stop agents that are actually running (not already stopped/unknown)
-        agent = state.get_agent(role)
-        if agent and agent.status in ("stopped", "unknown"):
+        clone_path = boot_remote._get_clone_path(role)
+
+        # Skip agents that are explicitly stopped (.stop sentinel)
+        if boot_remote._has_stop_sentinel(clone_path, role):
             results.append({"role": role, "action": "skip", "success": True,
-                            "message": f"Already {agent.status}"})
-            _log(f"  {role}: skip (already {agent.status})")
+                            "message": "Already stopped"})
+            _log(f"  {role}: skip (already stopped)")
             continue
 
-        clone_path = boot_remote._get_clone_path(role)
-        # Check if agent is actually running before writing sentinels
+        # Skip agents that need booting (dead/not running)
         needs_boot, reason, _ = boot_remote._needs_boot(role)
         if needs_boot:
             results.append({"role": role, "action": "skip", "success": True,
@@ -445,12 +449,20 @@ async def shutdown():
     roles = boot_remote._get_all_roles()
     _log("Shutdown requested...")
 
-    # Only stop agents that are actually running
+    # Only stop agents that are actually running (not stopped, not dead)
     running_roles = []
     for role in roles:
+        clone_path = boot_remote._get_clone_path(role)
+        # Skip explicitly stopped agents
+        if boot_remote._has_stop_sentinel(clone_path, role):
+            _log(f"  {role}: skip (already stopped)")
+            continue
+        # Skip dead/not-running agents
         needs_boot, _, _ = boot_remote._needs_boot(role)
-        if not needs_boot:
-            running_roles.append(role)
+        if needs_boot:
+            _log(f"  {role}: skip (not running)")
+            continue
+        running_roles.append(role)
 
     if running_roles:
         _log(f"Stopping running agents: {', '.join(running_roles)}")
@@ -492,11 +504,17 @@ async def shutdown():
     else:
         _log("No running agents to stop.")
 
-    # Clean up port file BEFORE os._exit to prevent stale file
-    try:
-        HARNESS_PORT_FILE.unlink(missing_ok=True)
-    except OSError:
-        pass
+    # Clean up port file BEFORE os._exit to prevent stale file.
+    # Retry on Windows where file locking can cause transient failures.
+    for attempt in range(3):
+        try:
+            if HARNESS_PORT_FILE.exists():
+                HARNESS_PORT_FILE.unlink()
+                _log("Port discovery file deleted.")
+            break
+        except OSError as e:
+            _log(f"WARNING: Could not delete port file (attempt {attempt + 1}/3): {e}")
+            time.sleep(0.5)
 
     _log("Harness exiting.")
 
