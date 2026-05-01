@@ -13,7 +13,8 @@ Three phases:
 
 ### Phase A — Setup
 - **Pre-flight checks** (before any setup steps): Verify gh CLI auth, git repo exists, remote detected. Not a question — a gate. If pre-flight fails, setup stops with a clear error. Same check also runs at agent boot time.
-- Wizard asks project type during setup: "What type of project? [ios/web/android/multi-platform/pwa/backend/fullstack/skill/custom]"
+- Wizard asks project type during setup: "What type of project? [ios/web/android/multi-platform/pwa/backend/fullstack/skill]"
+- **Auto-detection**: If repo is not empty, repo scan from Step 1 feeds into Step 3 as a pre-selected recommendation (e.g., "Based on scan: Python + FastAPI detected → Backend (recommended)"). User can override. Empty repo = no pre-selection, just the list.
 - Presets:
   - **iOS** — dev-ios + pm-ios + qa-ios + dm-ios
   - **Android** — dev-android + pm-android + qa-android + dm-android
@@ -23,7 +24,6 @@ Three phases:
   - **Backend** — API design, database, auth, performance, scalability, server-side architecture
   - **Full-stack** — dev-fullstack + pm-fullstack + qa-fullstack + dm-fullstack
   - **Skill** — probabilistic/deterministic code development (Claude Code skills)
-  - **Custom** — base L1+L2 only, no L3 preset
 - Selected preset applies L3 for ALL roles at once
 - One question, full team composition
 - **L4 project-specific customization**: Wizard informs the user (no questions, informational only):
@@ -31,6 +31,7 @@ Three phases:
   - Examples: "Enable e2e tests for QA", "Have DM send end-of-day email summaries", "Enforce linting for dev"
   - No data collected during setup — L4 starts empty, user configures when ready
 - L4 can be modified at any time after setup (PM writes → compose → reboot)
+- **Post-setup guidance** (informational): After compose & deploy, setup prints clear instructions on how to boot the squad — does NOT auto-boot. Teaches the user the start command and what to expect (agents will open, PM will check in, etc.)
 - **SOUL.md customization guidance**: Wizard informs the user (no questions, informational only):
   - "Each agent has a personality file (SOUL.md) that shapes how it thinks and communicates. You can customize this anytime by editing the file directly, or by telling PM what you want changed."
   - Examples: "Make QA more strict about accessibility", "Dev should be more cautious with breaking changes", "DM should write changelogs in a casual tone"
