@@ -80,11 +80,16 @@ Split commits into code (feature branch) and state (main):
 
 4. **When PR Flow `yes`**: monitor PR comments each cycle for human feedback:
    ```bash
-   gh pr view [PR_NUMBER] --json comments,reviews
+   gh pr view [PR_NUMBER] --json comments,reviews,isDraft
    ```
+   - If human requested changes via review: **convert the PR to draft first** before making any code changes:
+     ```bash
+     gh pr ready --undo [PR_NUMBER]
+     ```
+     Then fix the issues and push to the branch.
    - If human posted new comments: read and address them (fix code, answer questions, reply on PR)
-   - If human requested changes via review: fix the issues and push to the branch
-   - After pushing fixes, re-request review if appropriate
+   - A PR must NEVER be in ready state while the agent is actively pushing commits to it.
+   - After all fixes are pushed and the task moves to pending-test, the tracker auto-converts the PR back to ready.
 
 5. **When PR Flow `yes`**: check own open PRs for merge conflicts and rebase:
    ```bash

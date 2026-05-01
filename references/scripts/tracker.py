@@ -967,8 +967,8 @@ def transition(number, from_status, to_status, role=None, force=False):
     else:
         _run_list(["gh", "issue", "edit", str(number), "--remove-label", from_label, "--add-label", to_label])
 
-    # Auto-convert draft PR to ready on pending-ship
-    if to_label == "status:pending-ship":
+    # Auto-convert draft PR to ready on pending-test or pending-ship
+    if to_label in ("status:pending-test", "status:pending-ship"):
         _convert_draft_pr_to_ready(number)
 
     # Auto-close on shipped (handle already-closed from GitHub auto-close #3747)
