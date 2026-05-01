@@ -1,15 +1,11 @@
 # Working State
 
-- **Task**: #4449 — L4 content migration
-- **Status**: planned (awaiting human approval)
+- **Task**: none
+- **Status**: none
 
 ## Completed Steps
-- CONTEXT.md with concrete inventory
-- TEST-PLAN.md written
 
 ## Remaining Steps
-- Human approval
-- Execution
 
 ## Key Decisions
 
