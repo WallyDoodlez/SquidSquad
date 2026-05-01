@@ -12,7 +12,8 @@ Three phases:
 ## Locked Decisions (human decided)
 
 ### Phase A — Setup
-- Wizard asks project type during setup: "What type of project? [ios/web/android/multi-platform/pwa/fullstack/skill/custom]"
+- **Pre-flight checks** (before any setup steps): Verify gh CLI auth, git repo exists, remote detected. Not a question — a gate. If pre-flight fails, setup stops with a clear error. Same check also runs at agent boot time.
+- Wizard asks project type during setup: "What type of project? [ios/web/android/multi-platform/pwa/backend/fullstack/skill/custom]"
 - Presets:
   - **iOS** — dev-ios + pm-ios + qa-ios + dm-ios
   - **Android** — dev-android + pm-android + qa-android + dm-android
