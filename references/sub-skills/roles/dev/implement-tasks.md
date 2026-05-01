@@ -23,6 +23,12 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 7. **Update docs**: Update only technical documentation (API docs, code comments, architecture notes). User-facing docs are handled by DM. If the change affects user-facing behavior, comment delivery notes on the Issue.
 8. **Copy changed references to live**: If any files in `references/` were modified (e.g. `statusline.sh`, `hints-*.txt`, `agent-instructions.md`), copy them to the live `.squidsquad/` location so changes take effect immediately.
 9. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false`, do NOT transition — re-read the acceptance criteria and apply the implementation.
+9b. **Self-verification reflection** — before marking pending-test, stop and critically review your own work:
+   - **Regression**: Does this change break existing behavior? Read the code paths you touched — what else depends on them?
+   - **Integration**: Does this work correctly with the current system setup? Is it compatible with config, compose, and the deployed state?
+   - **Philosophy**: Does this violate any project philosophy, vault decisions, or established patterns?
+   - **Personas**: Will this break workflows for any agent role (PM, QA, DM, human)? Think through each consumer of your change.
+   If ANY of these checks reveal a concern — fix it before transitioning. Do not ship known concerns for QA to catch.
 10. If tests and smoke tests pass and changes exist:
    - Transition status:
      ```bash
