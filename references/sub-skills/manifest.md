@@ -13,6 +13,15 @@ This manifest defines how shared sub-skill source files compose into agent templ
 
 > **Legacy location retired (Q-new22, 2026-04-11)**: Role CLAUDE.md and SOUL.md templates used to live under `references/sub-skills/{roles,souls}/`. They are now inside each role's own directory at `references/roles/<role>/`. `pm-lean.md` was retired in the same change — the task-approval and verification behaviours remain in the main PM CLAUDE.md and are driven by which other roles are installed at runtime.
 
+## Layer 4 — Project Sub-skills (auto-included)
+
+Files in `references/sub-skills/project/` are **auto-included** by `compose.py` in every agent's CLAUDE.md. They are NOT listed in any `includes.yml` — the composition engine appends them automatically after all other layers. These are project-specific operational instructions and behavioral directives.
+
+Current project sub-skills:
+- `project/setup-upgrade-gate.md` — hard checklist before pending-test (setup/upgrade sync)
+
+Project sub-skills are owned by PM (via the L4 propagation flow: PM writes → `compose.py deploy-all` → `reboot_agent.py`).
+
 ## Composition Order
 
 ### Dev Agent (`references/roles/dev/CLAUDE.md`)

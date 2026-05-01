@@ -58,6 +58,33 @@ SQUIDSQUAD_DIR = REPO_ROOT / ".squidsquad"
 # Re-run detection — actions the installer agent can take
 RERUN_ACTIONS = ("abort", "regenerate", "full-rebuild")
 
+# Project type → L3 variant mapping. Each preset applies the same variant
+# to all 4 core roles (dev, pm, qa, dm). "custom" = no L3 (base L1+L2 only).
+PROJECT_TYPE_PRESETS = {
+    "ios": "ios",
+    "android": "android",
+    "multi-platform": "fullstack",  # shared codebase concerns
+    "web": "web",
+    "pwa": "web",                   # PWA is a web specialization
+    "backend": "web",               # backend shares web security/API concerns
+    "fullstack": "fullstack",
+    "skill": "skill",
+    "custom": None,                 # no L3 preset
+}
+
+# Human-readable labels for project type selection
+PROJECT_TYPE_LABELS = {
+    "ios": "iOS (Swift/UIKit/SwiftUI)",
+    "android": "Android (Kotlin/Java)",
+    "multi-platform": "Multi-platform (React Native/Flutter/KMP)",
+    "web": "Web (React/Vue/Angular/etc.)",
+    "pwa": "Progressive Web App (service workers, offline-first)",
+    "backend": "Backend (API/database/server-side)",
+    "fullstack": "Full-stack (frontend + backend)",
+    "skill": "Skill (Claude Code skills, probabilistic/deterministic)",
+    "custom": "Custom (base agents only, no domain preset)",
+}
+
 
 # ---------------------------------------------------------------------------
 # Step 0 — gh prerequisite check
@@ -121,6 +148,55 @@ def check_gh():
         "message": "gh is installed and authenticated",
         "fix": [],
     }
+
+
+def preflight(base_dir=None):
+    """Run all pre-flight checks before setup begins.
+
+    Checks (in order):
+    1. gh CLI installed and authenticated
+    2. Current directory is a git repository
+    3. Git remote exists
+
+    Returns a dict with:
+        ok: bool — all checks passed
+        checks: list[dict] — individual check results
+        message: str — summary
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    base_dir = Path(base_dir)
+
+    checks = []
+
+    # 1. gh auth
+    gh_result = check_gh()
+    checks.append({"name": "gh_auth", "ok": gh_result["ok"],
+                    "message": gh_result["message"]})
+    if not gh_result["ok"]:
+        return {"ok": False, "checks": checks,
+                "message": f"Pre-flight failed: {gh_result['message']}"}
+
+    # 2. git repo
+    git_dir = base_dir / ".git"
+    if not git_dir.exists():
+        checks.append({"name": "git_repo", "ok": False,
+                        "message": "not a git repository"})
+        return {"ok": False, "checks": checks,
+                "message": "Pre-flight failed: not a git repository."}
+    checks.append({"name": "git_repo", "ok": True, "message": "git repo found"})
+
+    # 3. git remote
+    remote = _run(["git", "-C", str(base_dir), "remote", "-v"])
+    if remote.returncode != 0 or not remote.stdout.strip():
+        checks.append({"name": "git_remote", "ok": False,
+                        "message": "no git remote detected"})
+        return {"ok": False, "checks": checks,
+                "message": "Pre-flight failed: no git remote detected."}
+    checks.append({"name": "git_remote", "ok": True,
+                    "message": "git remote found"})
+
+    return {"ok": True, "checks": checks, "message": "Pre-flight passed."}
 
 
 # ---------------------------------------------------------------------------
@@ -430,6 +506,34 @@ _AGENT_NESTED_FIELD_ORDER = [
     "stack",
     "test_command",
 ]
+
+
+def apply_project_type(spec, project_type):
+    """Apply a project type preset to an install spec.
+
+    Sets the L3 variant for all core roles (dev, pm, qa, dm) based on the
+    selected project type. Designer keeps its own variant. "custom" = no
+    variant (L1+L2 only).
+
+    Args:
+        spec: the install spec dict (mutated in place).
+        project_type: key from PROJECT_TYPE_PRESETS.
+
+    Returns:
+        The variant name applied (or None for custom).
+    """
+    variant = PROJECT_TYPE_PRESETS.get(project_type)
+    if variant is None:
+        spec["project_type"] = project_type
+        return None
+
+    spec["project_type"] = project_type
+    for agent in spec.get("agents", []):
+        role = agent.get("role", "")
+        # Apply variant to core roles only — designer has its own L3
+        if role in ("dev", "pm", "qa", "dm"):
+            agent["variant"] = variant
+    return variant
 
 
 def build_config_md(spec):
@@ -831,11 +935,17 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
             summary["created_dirs"].append(str(agent_dir))
 
         # CLAUDE.md — composed from role identity template + sub-skills.
-        # deploy_role already handles the compose/substitute/write pipeline;
-        # it takes the agent id (not the role identity) because [ROLE]
-        # placeholder substitution uses the agent name.
+        # deploy_role handles the compose/substitute/write pipeline.
+        # When a variant is set, compose from the variant role (e.g. "dev-ios")
+        # but output to the agent_id directory (e.g. "skill").
+        variant = agent.get("variant")
+        if variant and role_identity != "designer":
+            compose_name = f"{role_identity}-{variant}"
+        else:
+            compose_name = agent_id
         try:
-            claude_path = deploy_role(agent_id, target_root=target_root)
+            claude_path = deploy_role(compose_name, target_root=target_root,
+                                      output_name=agent_id)
         except (SystemExit, Exception) as e:
             print(f"  WARNING: Failed to deploy {agent_id}: {e}", file=sys.stderr)
             summary["agents"].append({
@@ -1494,6 +1604,12 @@ def _print_json(data, ok=True):
 
 def cmd_check_gh(_args):
     result = check_gh()
+    _print_json(result)
+    return 0 if result["ok"] else 1
+
+
+def cmd_preflight(_args):
+    result = preflight()
     _print_json(result)
     return 0 if result["ok"] else 1
 
@@ -2197,6 +2313,7 @@ def main():
         "scan-summary": cmd_scan_summary,
         "generate-defaults": cmd_generate_defaults,
         "setup-yes": cmd_setup_yes,
+        "preflight": cmd_preflight,
     }
     if cmd not in dispatch:
         print(f"Unknown command: {cmd}", file=sys.stderr)
