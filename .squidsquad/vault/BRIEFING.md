@@ -4,28 +4,31 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — DM ready, awaiting human greenlight (21+ days stalled)
-- #3963 EPIC: Web dashboard — visual interface for SquidSquad agent interaction — pending (high, role:skill)
-- #3955 Stale sub-skill lifecycle templates — pending-ship (QA verified, awaiting DM delivery)
-- #3415 EPIC: Real-time communication layer — Telegram-first. 2/6 sub-tasks shipped. 4 remaining (#3418-#3421). Pending approval.
-- #3464 Human-in-the-loop execution — pending (medium)
-- #3465 Layered role definition architecture — pending (medium)
+- #4439 EPIC: SquidSquad Harness — unified agent platform (pending, high, role:skill)
+- #4221 Agent harness — supervisor process for all agents (pending, high, role:skill)
+- #3963 EPIC: Web dashboard — visual interface for SquidSquad (pending, high, role:skill)
+- #4449 L4 project instructions: PM/DM verify distribution packaging (planned, high, role:skill)
+- #3969 DM doc improvement loop — staleness detection (pending-test, high, role:dm)
+- #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm)
 
-## Recently Shipped (2026-04-26/27 session)
+## Recently Shipped
 
-- #3302, #3340, #3341, #3347, #3348, #3349, #3360, #3377 (boot lifecycle + clone fixes)
-- #3416, #3417 (epic:comms-layer foundation: adapter interface + sub-skills)
-- #1470 (DeepSeek base_url), #3466 (PR creation restored)
+- #4541 Agent-driven composition (compose.py LLM pipeline)
+- #4179 Dev L2 SOUL: divide-and-conquer instinct
+- #4084 Draft PR workflow for dev agents
+- #4564 Installer-files.txt duplicate fix
 
 ## Core Architecture
 
-- **Clone isolation**: Each agent in own clone, project-local paths. See `[[decision-clone-isolation-architecture]]`.
+- **Layered roles**: L1 (base) → L2 (role) → L3 (domain) → L4 (project). compose.py assembles.
 - **Branching**: Code → main. State → squid-squad. Feature branches when branch workflow on.
-- **Communication layer** (NEW): Platform-agnostic adapter interface + deterministic sub-skills. Telegram-first. Feature flag controlled.
+- **Communication layer**: Platform-agnostic adapter interface + deterministic sub-skills. Telegram-first. Feature flag controlled.
+- **Tracker**: GitHub Issues with structured labels.
 
 ## Recent Decisions
 
-- Communication layer (v0.27.0+) — deterministic sub-skills over mechanical adapters, Telegram-first, one bot per agent, feature flag
+- Agent-driven composition replaces deterministic compose.py (v0.30.0)
+- Draft PRs: agents create drafts, auto-ready on pending-test (v0.30.0)
 - Clone isolation (v0.25.0), Sub-skill architecture (v0.9.0), GitHub Issues tracker (v0.9.0)
 - Feature lifecycle: Pending → Planning → Planned → Approved → In Progress → Pending Test → Pending Ship → Shipped
 
@@ -36,10 +39,10 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Constraints & Blockers
 
-- Ship counter: threshold 10, currently at 14 (v0.28.0) — bump overdue, likely held for v1.0.0 decision
-- Boot detection: heartbeat-based with boot lock (#3347/#3348/#3349)
+- Boot detection: heartbeat-based with boot lock
+- Harness epic (#4439) is the next major initiative — pending approval
 
 ## Team State
 
-- Active agents: pm, qa, skill, dm — all present and healthy
-- Current version: 0.28.0
+- Active agents: pm, qa, skill, dm, designer
+- Current version: 0.30.0
