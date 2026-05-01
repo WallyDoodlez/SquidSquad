@@ -19,12 +19,12 @@ class TestOwnDomainAutofix:
 
     def test_sub_skill_file_exists(self):
         """The own-domain-autofix.md sub-skill file exists."""
-        path = SUB_SKILLS_DIR / "pm-specific" / "own-domain-autofix.md"
-        assert path.exists(), "Missing pm-specific/own-domain-autofix.md"
+        path = SUB_SKILLS_DIR / "roles/pm" / "own-domain-autofix.md"
+        assert path.exists(), "Missing roles/pm/own-domain-autofix.md"
 
     def test_sub_skill_content_has_required_sections(self):
         """The sub-skill defines what counts and what doesn't."""
-        path = SUB_SKILLS_DIR / "pm-specific" / "own-domain-autofix.md"
+        path = SUB_SKILLS_DIR / "roles/pm" / "own-domain-autofix.md"
         text = path.read_text(encoding="utf-8")
         assert "What counts as PM's own domain" in text
         assert "What does NOT count" in text
@@ -36,13 +36,13 @@ class TestOwnDomainAutofix:
         import yaml
         yml_path = REFERENCES_DIR / "roles" / "pm" / "includes.yml"
         data = yaml.safe_load(yml_path.read_text(encoding="utf-8"))
-        assert "pm-specific/own-domain-autofix" in data["includes"]
+        assert "roles/pm/own-domain-autofix" in data["includes"]
 
     def test_included_in_pm_template(self):
         """PM CLAUDE.md template has the include directive."""
-        tmpl_path = REFERENCES_DIR / "roles" / "pm" / "CLAUDE.md"
+        tmpl_path = REFERENCES_DIR / "roles" / "pm" / "instructions.md"
         text = tmpl_path.read_text(encoding="utf-8")
-        assert "{{include: pm-specific/own-domain-autofix}}" in text
+        assert "{{include: roles/pm/own-domain-autofix}}" in text
 
     def test_composed_pm_has_autofix_section(self):
         """Composed PM CLAUDE.md contains the Own-Domain Auto-Fix section."""
@@ -58,8 +58,8 @@ class TestOwnDomainAutofix:
         yml_path = REFERENCES_DIR / "roles" / "pm" / "includes.yml"
         data = yaml.safe_load(yml_path.read_text(encoding="utf-8"))
         includes = data["includes"]
-        sentinel_idx = includes.index("pm-specific/pipeline-sentinel")
-        autofix_idx = includes.index("pm-specific/own-domain-autofix")
+        sentinel_idx = includes.index("roles/pm/pipeline-sentinel")
+        autofix_idx = includes.index("roles/pm/own-domain-autofix")
         assert autofix_idx > sentinel_idx, (
             "own-domain-autofix should come after pipeline-sentinel"
         )
@@ -67,7 +67,7 @@ class TestOwnDomainAutofix:
     def test_manifest_references_autofix(self):
         """manifest.md references the new sub-skill."""
         manifest = (SUB_SKILLS_DIR / "manifest.md").read_text(encoding="utf-8")
-        assert "pm-specific/own-domain-autofix" in manifest
+        assert "roles/pm/own-domain-autofix" in manifest
 
 
 class TestVaultRememberBriefingGate:

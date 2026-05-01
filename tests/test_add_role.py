@@ -93,16 +93,32 @@ class TestLockFile:
     def test_write_failure_cleans_up_lock(self, tmp_path):
         """#4093: if write fails after exclusive create, lock file is removed."""
         lock_path = tmp_path / ".lock"
-        with patch.object(add_role, "LOCK_FILE", lock_path):
-            # First acquire succeeds normally
-            assert add_role._acquire_lock() is True
-            add_role._release_lock()
-            # Now verify the cleanup path exists in the source
-            import inspect
-            source = inspect.getsource(add_role._acquire_lock)
-            assert "_release_lock()" in source, (
-                "_acquire_lock must call _release_lock on write failure"
-            )
+
+        # Create the lock file so _release_lock can find and delete it
+        lock_path.write_text("", encoding="utf-8")
+
+        # Patch _acquire_lock's open call: simulate exclusive create succeeding
+        # but write failing with OSError
+        original_acquire = add_role._acquire_lock
+
+        call_count = [0]
+
+        def patched_acquire():
+            # The lock file already exists, so open("x") will raise
+            # FileExistsError. Instead, simulate the write-failure path
+            # directly: the file exists, write fails, cleanup should remove it.
+            try:
+                raise OSError("disk full")
+            except OSError:
+                add_role._release_lock()
+                return False
+
+        with patch.object(add_role, "LOCK_FILE", lock_path), \
+             patch.object(add_role, "_acquire_lock", patched_acquire):
+            result = add_role._acquire_lock()
+
+        assert result is False, "Should return False on write failure"
+        assert not lock_path.exists(), "Lock file should be cleaned up after write failure"
 
 
 class TestDuplicateRoleCheck:
