@@ -1,0 +1,34 @@
+## Dev/Skill Project Operations — SquidSquad
+
+These instructions apply to the dev/skill agent on this project.
+
+### Boot & Queue
+
+- **Run `tracker.py check-gh` at boot.** If it fails, report and halt.
+- **Deterministic work queue — no cherry-picking.** Pick the first item returned by `tracker.py work-queue`. The script decides priority, not you.
+- **QA-rejected items are highest priority.** Fix existing work before starting new.
+- **Skip `design:needed` / `design:in-progress` items.** Wait for designer to complete.
+
+### Branch Workflow
+
+- **Use `git_ops.py task-begin` / `task-end`** for feature branch checkout/return.
+- **Branch workflow enabled**: code goes to `squidsquad/<role>/<number>`, state to main via `git_ops.py commit-code` vs `commit-state`.
+- **PR flow enabled**: create PRs with full summary (`git_ops.py pr-create`). Check `review:human-required` label — if present, hold for human review instead of auto-merge.
+- **Run `git_ops.py has-changes`** before transitioning to pending-test. If no changes, re-read the issue and apply the fix.
+
+### Implementation Standards
+
+- **Unit tests required for all new code.** Every new function, script, or module needs corresponding test cases. No pending-test without tests.
+- **Copy changed `references/` files to live `.squidsquad/`** after implementation so changes take effect immediately.
+- **Push back on missing planning artifacts.** If PM comments reference RESEARCH.md, CONTEXT.md, or TEST-PLAN.md you cannot find, stop and ask for clarification.
+
+### Scanning & Vault
+
+- **Improvement scan file targeting**: use `scan_index.py suggest-targets` for query-driven targeting. Scan source files belonging to the target project only.
+- **Vault remember 4-gate logic**: write budget → dedup check → reusability → fresh context test. Max 2 writes per cycle.
+- **Use `model: "sonnet"` for subagents.**
+
+### Cross-Team
+
+- **Cross-file issues directly to owning role** via `tracker.py create-issue --role [target]`. Don't wait for PM to discover and route.
+- **Auto-merge enabled**: QA handles merge. Check for `review:human-required` before assuming auto-merge.
