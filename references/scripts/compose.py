@@ -679,6 +679,51 @@ def upgrade_soul(role_name: str, target_root: Path = None) -> Path:
     return soul_path
 
 
+def is_pre_layer_install(target_root: Path = None) -> bool:
+    """Detect whether this is a pre-layer install (no L1 base files).
+
+    Pre-layer installs have .squidsquad/ but no references/roles/instructions.md
+    (the L1 base entry file added by the layered architecture).
+    """
+    if target_root is None:
+        target_root = REPO_ROOT
+    target_root = Path(target_root)
+    base_entry = target_root / "references" / "roles" / "instructions.md"
+    squid = target_root / ".squidsquad"
+    return squid.exists() and not base_entry.exists()
+
+
+def extract_project_adaptation(role_name: str, target_root: Path = None) -> str:
+    """Extract ## Project Adaptation section from a deployed SOUL.md.
+
+    Returns the extracted content (without the heading), or empty string
+    if not found. Used during upgrade to preserve accumulated signals.
+    """
+    if target_root is None:
+        target_root = REPO_ROOT
+    target_root = Path(target_root)
+
+    soul_path = target_root / ".squidsquad" / role_name / "SOUL.md"
+    if not soul_path.exists():
+        return ""
+
+    text = soul_path.read_text(encoding="utf-8")
+    marker = "## Project Adaptation"
+    if marker not in text:
+        return ""
+
+    idx = text.index(marker) + len(marker)
+    # Find next ## heading or end of file
+    rest = text[idx:]
+    next_heading = rest.find("\n## ")
+    if next_heading >= 0:
+        content = rest[:next_heading]
+    else:
+        content = rest
+
+    return content.strip()
+
+
 def generate_local_config(roles: list, target_root: Path = None,
                           clone_paths: dict = None) -> Path:
     """Generate .squidsquad/.local-config with clone paths for all agents.

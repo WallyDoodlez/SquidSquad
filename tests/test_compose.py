@@ -656,3 +656,53 @@ class TestVariantInheritance:
         """pm resolves to pm."""
         result = compose._get_entry_file_for_role("pm")
         assert result == "pm"
+
+
+# ---------------------------------------------------------------------------
+# Pre-layer detection and Project Adaptation extraction (#4083)
+# ---------------------------------------------------------------------------
+
+class TestPreLayerDetection:
+    def test_pre_layer_install_detected(self, tmp_path):
+        """Pre-layer: .squidsquad/ exists but no L1 base entry file."""
+        (tmp_path / ".squidsquad").mkdir()
+        # No references/roles/instructions.md
+        assert compose.is_pre_layer_install(tmp_path) is True
+
+    def test_post_layer_install_not_detected(self, tmp_path):
+        """Post-layer: both .squidsquad/ and L1 base exist."""
+        (tmp_path / ".squidsquad").mkdir()
+        roles = tmp_path / "references" / "roles"
+        roles.mkdir(parents=True)
+        (roles / "instructions.md").write_text("# Base", encoding="utf-8")
+        assert compose.is_pre_layer_install(tmp_path) is False
+
+    def test_no_install_not_detected(self, tmp_path):
+        """No .squidsquad/ at all — not a pre-layer install."""
+        assert compose.is_pre_layer_install(tmp_path) is False
+
+
+class TestExtractProjectAdaptation:
+    def test_extracts_adaptation_section(self, tmp_path):
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        (squid / "SOUL.md").write_text(
+            "## Soul\nI am a dev.\n\n## Project Adaptation\n"
+            "- Uses Python 3.12\n- Enforces 80% coverage\n\n## Other\nStuff\n",
+            encoding="utf-8",
+        )
+        result = compose.extract_project_adaptation("skill", tmp_path)
+        assert "Python 3.12" in result
+        assert "80% coverage" in result
+        assert "Other" not in result
+
+    def test_no_adaptation_returns_empty(self, tmp_path):
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        (squid / "SOUL.md").write_text("## Soul\nI am a dev.\n", encoding="utf-8")
+        result = compose.extract_project_adaptation("skill", tmp_path)
+        assert result == ""
+
+    def test_missing_soul_returns_empty(self, tmp_path):
+        result = compose.extract_project_adaptation("skill", tmp_path)
+        assert result == ""
