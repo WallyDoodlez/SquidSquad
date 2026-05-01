@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 class TestDmVerifyBeforeBlock:
     def test_prohibitions_has_verify_requirement(self):
         """DM prohibitions sub-skill must require verification before human-block."""
-        path = REPO_ROOT / "references" / "sub-skills" / "dm-specific" / "prohibitions.md"
+        path = REPO_ROOT / "references" / "sub-skills" / "roles" / "dm" / "prohibitions.md"
         content = path.read_text(encoding="utf-8")
         assert "verify" in content.lower()
         assert "pending-human-setup" in content
