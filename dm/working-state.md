@@ -11,4 +11,4 @@
 - none
 
 ## Key Decisions
-- Resolved config.md merge conflict: kept HEAD value (shipped-since-bump: 9)
+- none
