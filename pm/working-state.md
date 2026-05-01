@@ -2,21 +2,16 @@
 
 - **Task**: #4083 — L4 project customization & layer lifecycle
 - **Status**: in-progress
-- **Phase**: discussing FEAT-PM-4083
+- **Phase**: discussing FEAT-PM-4083 (awaiting human approval gate)
 
 ## Completed Steps
-- Phase 2 discussion (all questions locked)
+- Phase 2 discussion complete
 - CONTEXT.md written and updated
-- Setup flow designed (9 presets, Steps 4+5 informational)
 
 ## Remaining Steps
 - Phase 2 approval gate
 - Phase 3: Test plan
 
 ## Key Decisions
-- Setup: wizard asks project type (9 presets), Steps 4+5 informational only
-- Propagation: PM writes L4 → compose → reboot
-- Upgrade: auto-migrate, extract Project Adaptation to L4
-- Gate: hard checklist, all agents, mechanics only
 
-## Quiet cycle counter: 0
+## Quiet cycle counter: 1
