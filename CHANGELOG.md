@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.30.0] — 2026-05-01
+
+### Shipped
+- #4123
+- #4124
+- #4125
+- #4200
+- #4201
+- #4364
+- #4365
+- #4435
+- #4436
+- #4455
+- #4456
+- #4457
+- #4458
+- #4459
+- #4518
+
+### Added
+- #4455 — PM agent now has project-specific instructions (24 instructions + 15 SOUL items) for consistent behavior across sessions
+- #4456 — Dev/Skill agent now has project-specific instructions (16 instructions + 11 SOUL items) for consistent behavior across sessions
+- #4457 — QA agent now has project-specific instructions (16 instructions + 8 SOUL items) for consistent behavior across sessions
+- #4458 — DM agent now has project-specific instructions (12 instructions + 7 SOUL items) for consistent behavior across sessions
+- #4459 — Shared project instructions for all agents (27 instructions + 14 SOUL items) — agents now carry project context automatically
+
+### Fixed
+- #4123 — wizard.py now uses the correct key for Research Model in config generation
+- #4124 — repo_scan.py FastAPI detection unreachable dead code removed
+- #4125 — cycle_post.py version bump no longer duplicates CHANGELOG headers when DM also writes CHANGELOG
+- #4200 — forgejo_setup.py no longer leaks credentials in create_token error messages
+- #4201 — compose.py capability resolution block deduplicated between _resolve_includes functions
+- #4364 — Removed stale PR merge transition test that expected obsolete tracker.py call
+- #4365 — Stale deepseek model test updated to match current provider list
+- #4435 — Fixed 4 test_wizard.py SOUL seeding tests
+- #4436 — Fixed 3 test_roles.py entry file tests after CLAUDE.md → instructions.md rename
+- #4518 — Fixed recurring auto-close bug — commit message sanitization now covers all transition paths, preventing GitHub from closing issues on non-shipped transitions
+
 ## [0.29.0] — 2026-04-29
 
 ### Shipped
