@@ -150,6 +150,55 @@ def check_gh():
     }
 
 
+def preflight(base_dir=None):
+    """Run all pre-flight checks before setup begins.
+
+    Checks (in order):
+    1. gh CLI installed and authenticated
+    2. Current directory is a git repository
+    3. Git remote exists
+
+    Returns a dict with:
+        ok: bool — all checks passed
+        checks: list[dict] — individual check results
+        message: str — summary
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    base_dir = Path(base_dir)
+
+    checks = []
+
+    # 1. gh auth
+    gh_result = check_gh()
+    checks.append({"name": "gh_auth", "ok": gh_result["ok"],
+                    "message": gh_result["message"]})
+    if not gh_result["ok"]:
+        return {"ok": False, "checks": checks,
+                "message": f"Pre-flight failed: {gh_result['message']}"}
+
+    # 2. git repo
+    git_dir = base_dir / ".git"
+    if not git_dir.exists():
+        checks.append({"name": "git_repo", "ok": False,
+                        "message": "not a git repository"})
+        return {"ok": False, "checks": checks,
+                "message": "Pre-flight failed: not a git repository."}
+    checks.append({"name": "git_repo", "ok": True, "message": "git repo found"})
+
+    # 3. git remote
+    remote = _run(["git", "-C", str(base_dir), "remote", "-v"])
+    if remote.returncode != 0 or not remote.stdout.strip():
+        checks.append({"name": "git_remote", "ok": False,
+                        "message": "no git remote detected"})
+        return {"ok": False, "checks": checks,
+                "message": "Pre-flight failed: no git remote detected."}
+    checks.append({"name": "git_remote", "ok": True,
+                    "message": "git remote found"})
+
+    return {"ok": True, "checks": checks, "message": "Pre-flight passed."}
+
+
 # ---------------------------------------------------------------------------
 # Step 0b — re-run detection
 # ---------------------------------------------------------------------------
@@ -1559,6 +1608,12 @@ def cmd_check_gh(_args):
     return 0 if result["ok"] else 1
 
 
+def cmd_preflight(_args):
+    result = preflight()
+    _print_json(result)
+    return 0 if result["ok"] else 1
+
+
 def cmd_check_existing(_args):
     result = detect_existing_install()
     _print_json(result)
@@ -2258,6 +2313,7 @@ def main():
         "scan-summary": cmd_scan_summary,
         "generate-defaults": cmd_generate_defaults,
         "setup-yes": cmd_setup_yes,
+        "preflight": cmd_preflight,
     }
     if cmd not in dispatch:
         print(f"Unknown command: {cmd}", file=sys.stderr)
