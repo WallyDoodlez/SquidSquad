@@ -1,4 +1,8 @@
 designer:bugs=0:feats=0:pship=0
 qa:bugs=0:feats=0:pship=0
+<<<<<<< HEAD
 skill:bugs=1:feats=2:pship=0
+=======
+skill:bugs=1:feats=0:pship=1
+>>>>>>> 4682f7c2 (skill: skill: cycle 569 — fixed ​#4518 (auto-close bug via PR body))
 pm:planning=

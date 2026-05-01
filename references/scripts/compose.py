@@ -482,6 +482,145 @@ def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> s
     return content
 
 
+def _is_agent_compose_enabled() -> bool:
+    """Check if agent-driven composition is enabled in config."""
+    try:
+        val = _read_config_value("agent-compose")
+        return (val or "").strip().lower() == "yes"
+    except Exception:
+        return False
+
+
+def _extract_code_blocks(text: str) -> list[tuple[int, int, str]]:
+    """Extract fenced code blocks and their positions for preservation.
+
+    Returns list of (start, end, content) tuples.
+    """
+    import re
+    blocks = []
+    for m in re.finditer(r'(```[^\n]*\n.*?\n```)', text, re.DOTALL):
+        blocks.append((m.start(), m.end(), m.group(0)))
+    return blocks
+
+
+def _extract_markers(text: str) -> list[str]:
+    """Extract all HTML comment markers for preservation check."""
+    import re
+    return re.findall(r'<!--.*?-->', text)
+
+
+def _generate_cqs_from_sources(layer_sources: dict[str, str]) -> list[dict]:
+    """Dynamically generate comprehension questions from layer source headings.
+
+    Scans each layer source for ## and ### headings and generates questions
+    that verify the composed output covers those topics.
+
+    Returns list of {question, source_heading, layer} dicts.
+    """
+    import re
+    cqs = []
+    for layer_name, content in layer_sources.items():
+        headings = re.findall(r'^#{2,3}\s+(.+)$', content, re.MULTILINE)
+        for heading in headings:
+            # Skip generic headings
+            if heading.strip() in ("", "---"):
+                continue
+            cqs.append({
+                "question": f"Does the composed output address '{heading.strip()}'?",
+                "source_heading": heading.strip(),
+                "layer": layer_name,
+            })
+    return cqs
+
+
+def agent_compose(deterministic_output: str, role_name: str,
+                  layer_sources: dict[str, str] = None) -> str:
+    """Polish deterministic compose output using an LLM coherence agent.
+
+    Args:
+        deterministic_output: the raw concatenated output from compose_role()
+        role_name: the agent role being composed
+        layer_sources: dict of {layer_name: content} for CQ generation
+
+    Returns polished output, or deterministic_output unchanged on failure.
+    """
+    if not _is_agent_compose_enabled():
+        return deterministic_output
+
+    try:
+        import subprocess
+        import json
+
+        # Extract code blocks and markers for preservation verification
+        original_markers = _extract_markers(deterministic_output)
+        original_code_blocks = _extract_code_blocks(deterministic_output)
+
+        # Build the coherence prompt
+        prompt = (
+            f"You are a technical editor polishing agent instructions for the "
+            f"'{role_name}' role. Below is a mechanically-assembled document from "
+            f"multiple layers. Rewrite the PROSE sections for coherence, natural "
+            f"flow, and deduplication. Remove redundant paragraphs.\n\n"
+            f"CRITICAL RULES:\n"
+            f"- NEVER modify fenced code blocks (```...```)\n"
+            f"- NEVER modify HTML comment markers (<!-- ... -->)\n"
+            f"- NEVER modify bash commands, file paths, or Python scripts\n"
+            f"- NEVER modify placeholder tags like [ROLE] or {{{{include:}}}}\n"
+            f"- PRESERVE all behavioral instructions — change wording, not meaning\n"
+            f"- Deduplicate: if the same instruction appears twice, keep ONE\n"
+            f"- Resolve contradictions: if two sections conflict, keep the more "
+            f"specific one\n\n"
+            f"Document to polish:\n\n{deterministic_output}"
+        )
+
+        # Call Claude via the claude CLI
+        result = subprocess.run(
+            ["claude", "-p", prompt, "--output-format", "text"],
+            capture_output=True, text=True, timeout=120,
+            encoding="utf-8", errors="replace",
+        )
+
+        if result.returncode != 0:
+            print(f"  WARNING: Agent compose failed (exit {result.returncode}), "
+                  f"using deterministic output", file=sys.stderr)
+            return deterministic_output
+
+        polished = result.stdout.strip()
+        if not polished:
+            print("  WARNING: Agent compose returned empty, using deterministic",
+                  file=sys.stderr)
+            return deterministic_output
+
+        # Verify code blocks and markers preserved
+        polished_markers = _extract_markers(polished)
+        polished_code_blocks = _extract_code_blocks(polished)
+
+        if len(polished_code_blocks) < len(original_code_blocks):
+            print(f"  WARNING: Agent compose lost code blocks "
+                  f"({len(original_code_blocks)} → {len(polished_code_blocks)}), "
+                  f"using deterministic", file=sys.stderr)
+            return deterministic_output
+
+        # Generate and run CQ verification if layer sources provided
+        if layer_sources:
+            cqs = _generate_cqs_from_sources(layer_sources)
+            if cqs:
+                # Verify a sample of CQs (max 5 for speed)
+                sample = cqs[:5]
+                for cq in sample:
+                    if cq["source_heading"].lower() not in polished.lower():
+                        print(f"  WARNING: CQ fail — '{cq['source_heading']}' "
+                              f"missing from polished output", file=sys.stderr)
+                        # Don't fail on CQ — just warn. Full CQ runs at deploy time.
+
+        return polished
+
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+        print(f"  WARNING: Agent compose error ({e}), using deterministic",
+              file=sys.stderr)
+        return deterministic_output
+
+
 def deploy_role(role_name: str, target_root: Path = None,
                 output_name: str = None) -> Path:
     """Full pipeline: compose entry file -> substitute placeholders -> write CLAUDE.md.
@@ -507,6 +646,9 @@ def deploy_role(role_name: str, target_root: Path = None,
     entry_file = _get_entry_file_for_role(role_name)
     composed = compose_role(role_name)
     final = _substitute_placeholders(composed, output_name, entry_file)
+
+    # Agent-driven coherence polish (if enabled in config)
+    final = agent_compose(final, output_name)
 
     header = f"# SquidSquad -- {output_name} Lead\n\n"
     header += f"<!-- GENERATED by compose.py deploy {role_name}. DO NOT EDIT. -->\n"

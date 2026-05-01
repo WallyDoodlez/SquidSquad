@@ -706,3 +706,87 @@ class TestExtractProjectAdaptation:
     def test_missing_soul_returns_empty(self, tmp_path):
         result = compose.extract_project_adaptation("skill", tmp_path)
         assert result == ""
+
+
+# ---------------------------------------------------------------------------
+# Agent-driven composition (#4541)
+# ---------------------------------------------------------------------------
+
+class TestAgentComposeDisabled:
+    """When Agent Compose is disabled, output passes through unchanged."""
+
+    def test_returns_input_unchanged(self):
+        with patch.object(compose, "_is_agent_compose_enabled", return_value=False):
+            result = compose.agent_compose("hello world", "skill")
+        assert result == "hello world"
+
+
+class TestExtractCodeBlocks:
+    def test_extracts_fenced_blocks(self):
+        text = "prose\n```bash\necho hello\n```\nmore prose\n```python\nprint(1)\n```\n"
+        blocks = compose._extract_code_blocks(text)
+        assert len(blocks) == 2
+        assert "echo hello" in blocks[0][2]
+        assert "print(1)" in blocks[1][2]
+
+    def test_empty_text(self):
+        assert compose._extract_code_blocks("") == []
+
+
+class TestExtractMarkers:
+    def test_finds_html_comments(self):
+        text = "<!-- sub-skill: foo -->\ncontent\n<!-- /sub-skill: foo -->"
+        markers = compose._extract_markers(text)
+        assert len(markers) == 2
+        assert "sub-skill: foo" in markers[0]
+
+    def test_empty_text(self):
+        assert compose._extract_markers("") == []
+
+
+class TestGenerateCQs:
+    def test_generates_from_headings(self):
+        sources = {
+            "L2": "## Quality Bar\n\nContent here\n\n### Communication Style\nMore",
+            "L4": "## Project Operations\n\nStuff",
+        }
+        cqs = compose._generate_cqs_from_sources(sources)
+        headings = [cq["source_heading"] for cq in cqs]
+        assert "Quality Bar" in headings
+        assert "Communication Style" in headings
+        assert "Project Operations" in headings
+
+    def test_empty_sources(self):
+        assert compose._generate_cqs_from_sources({}) == []
+
+    def test_no_headings(self):
+        sources = {"L1": "Just plain text without headings."}
+        assert compose._generate_cqs_from_sources(sources) == []
+
+
+class TestAgentComposeEnabled:
+    """When enabled, verify fallback behavior on subprocess errors."""
+
+    def test_falls_back_on_subprocess_error(self):
+        with patch.object(compose, "_is_agent_compose_enabled", return_value=True), \
+             patch("subprocess.run", side_effect=FileNotFoundError("no claude")):
+            result = compose.agent_compose("original content", "skill")
+        assert result == "original content"
+
+    def test_falls_back_on_empty_output(self):
+        from unittest.mock import MagicMock
+        mock_result = MagicMock(returncode=0, stdout="")
+        with patch.object(compose, "_is_agent_compose_enabled", return_value=True), \
+             patch("subprocess.run", return_value=mock_result):
+            result = compose.agent_compose("original content", "skill")
+        assert result == "original content"
+
+    def test_falls_back_on_lost_code_blocks(self):
+        from unittest.mock import MagicMock
+        original = "prose\n```bash\necho hello\n```\nmore"
+        # Polished output loses the code block
+        mock_result = MagicMock(returncode=0, stdout="just prose, no code")
+        with patch.object(compose, "_is_agent_compose_enabled", return_value=True), \
+             patch("subprocess.run", return_value=mock_result):
+            result = compose.agent_compose(original, "skill")
+        assert result == original  # fell back due to lost code block

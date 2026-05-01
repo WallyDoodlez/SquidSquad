@@ -63,6 +63,7 @@ FIELD_MAP = {
     "briefing-token-budget": ("Vault Remember", "BRIEFING Token Budget"),
     "confidence-decay-days": ("Vault Remember", "Confidence Decay Days"),
     "vault-optimize": ("Vault Optimize", "Enabled"),
+    "agent-compose": ("Agent Compose", "Enabled"),
     "auto-merge": ("Auto Merge", "Enabled"),
     "branch-workflow": ("Branch Workflow", "Enabled"),
     "mandatory-human-approval": ("Mandatory Human Approval", "Enabled"),
