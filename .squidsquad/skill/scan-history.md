@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-04-30 21:32
+
+- **Files scanned**: tests/test_config_functions.py, tests/test_comms_sub_skills.py, tests/test_labels.py, tests/test_references.py, tests/test_config_schema.py
+- **Findings**: none filed (2 minor: tautological alias assertion in test_config_functions.py:211, redundant parametrize in test_config_schema.py:192 — test quality only)
+- **Items rejected by human**: none yet
+- **Notes**: 3 files clean. Codebase coverage extensive — diminishing returns on further scanning.
+
 ## Scan — 2026-04-30 18:02
 
 - **Files scanned**: tests/conftest.py, tests/test_manifest.py, tests/test_vault.py, tests/run_tests.py, tests/test_composition.py
