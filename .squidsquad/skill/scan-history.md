@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-01 06:32
+
+- **Files scanned**: tests/test_capability_check.py, tests/test_comms_adapter.py, tests/test_add_role.py, tests/test_soul_adaptation.py, tests/test_shared_fs.py
+- **Findings**: #4515 (test_add_role.py source inspection test instead of failure-path test — low)
+- **Items rejected by human**: none yet
+- **Notes**: 4 files clean. test_shared_fs.py has minor unchecked return value (not filed).
+
 ## Scan — 2026-04-30 21:32
 
 - **Files scanned**: tests/test_config_functions.py, tests/test_comms_sub_skills.py, tests/test_labels.py, tests/test_references.py, tests/test_config_schema.py
