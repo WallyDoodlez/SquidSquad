@@ -573,9 +573,11 @@ def agent_compose(deterministic_output: str, role_name: str,
             f"Document to polish:\n\n{deterministic_output}"
         )
 
-        # Call Claude via the claude CLI
+        # Call Claude via the claude CLI — pipe prompt via stdin to avoid
+        # Windows command-line length limits (WinError 206 / MAX_PATH).
         result = subprocess.run(
-            ["claude", "-p", prompt, "--output-format", "text"],
+            ["claude", "-p", "--output-format", "text"],
+            input=prompt,
             capture_output=True, text=True, timeout=120,
             encoding="utf-8", errors="replace",
         )

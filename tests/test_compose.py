@@ -790,3 +790,19 @@ class TestAgentComposeEnabled:
              patch("subprocess.run", return_value=mock_result):
             result = compose.agent_compose(original, "skill")
         assert result == original  # fell back due to lost code block
+
+    def test_pipes_prompt_via_stdin_not_cli_arg(self):
+        """Regression: #4608 — prompt must go via stdin to avoid WinError 206."""
+        from unittest.mock import MagicMock
+        mock_result = MagicMock(returncode=0, stdout="polished output")
+        with patch.object(compose, "_is_agent_compose_enabled", return_value=True), \
+             patch("subprocess.run", return_value=mock_result) as mock_run:
+            compose.agent_compose("original content", "skill")
+        args, kwargs = mock_run.call_args
+        # CLI args should NOT contain the prompt text
+        cli_args = args[0]
+        assert "original content" not in " ".join(cli_args), \
+            "prompt must not appear in CLI args (Windows MAX_PATH limit)"
+        # Prompt must be piped via input kwarg
+        assert "input" in kwargs, "prompt must be passed via input= kwarg"
+        assert "original content" in kwargs["input"]
