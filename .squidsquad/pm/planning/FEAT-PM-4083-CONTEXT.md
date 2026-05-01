@@ -12,9 +12,28 @@ Three phases:
 ## Locked Decisions (human decided)
 
 ### Phase A — Setup
-- Wizard asks project type during setup: "What type of project? [ios/web/android/fullstack/skill/custom]"
-- Selected preset applies L3 for ALL roles at once (e.g., selecting "ios" installs dev-ios + pm-ios + qa-ios + dm-ios)
+- Wizard asks project type during setup: "What type of project? [ios/web/android/multi-platform/pwa/fullstack/skill/custom]"
+- Presets:
+  - **iOS** — dev-ios + pm-ios + qa-ios + dm-ios
+  - **Android** — dev-android + pm-android + qa-android + dm-android
+  - **Multi-platform** (iOS + Android) — agents aware of both platforms, shared codebase concerns (React Native, Flutter, KMP), platform-specific build/test/deploy
+  - **Web** — dev-web + pm-web + qa-web + dm-web
+  - **PWA** — progressive web app focus: service workers, offline-first, installability, lighthouse scores, web manifest, push notifications
+  - **Backend** — API design, database, auth, performance, scalability, server-side architecture
+  - **Full-stack** — dev-fullstack + pm-fullstack + qa-fullstack + dm-fullstack
+  - **Skill** — probabilistic/deterministic code development (Claude Code skills)
+  - **Custom** — base L1+L2 only, no L3 preset
+- Selected preset applies L3 for ALL roles at once
 - One question, full team composition
+- **L4 project-specific customization**: Wizard informs the user (no questions, informational only):
+  - "Each agent has an instructions.md file that defines what it does on your project. You can customize agent behavior anytime by editing these files directly, or by telling PM what you want changed."
+  - Examples: "Enable e2e tests for QA", "Have DM send end-of-day email summaries", "Enforce linting for dev"
+  - No data collected during setup — L4 starts empty, user configures when ready
+- L4 can be modified at any time after setup (PM writes → compose → reboot)
+- **SOUL.md customization guidance**: Wizard informs the user (no questions, informational only):
+  - "Each agent has a personality file (SOUL.md) that shapes how it thinks and communicates. You can customize this anytime by editing the file directly, or by telling PM what you want changed."
+  - Examples: "Make QA more strict about accessibility", "Dev should be more cautious with breaking changes", "DM should write changelogs in a casual tone"
+  - No data collected during setup — user configures when ready
 
 ### Phase B — Propagation
 - PM writes to L4 project sub-skill files directly
