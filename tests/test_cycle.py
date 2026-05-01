@@ -68,33 +68,41 @@ class TestCounters:
         )
         return ws
 
+    def _patch(self, tmp_path):
+        """Context manager patching both SQUIDSQUAD_DIR and _state_path."""
+        from contextlib import ExitStack
+        stack = ExitStack()
+        stack.enter_context(patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path))
+        stack.enter_context(patch.object(cycle, "_state_path", lambda rel: tmp_path / rel))
+        return stack
+
     def test_get_counter(self, tmp_path, capsys):
         self._setup_working_state(tmp_path, "skill", counter=3)
-        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+        with self._patch(tmp_path):
             result = cycle.get_counter("skill")
         assert result == 3
 
     def test_get_counter_missing_file(self, tmp_path, capsys):
-        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+        with self._patch(tmp_path):
             result = cycle.get_counter("skill")
         assert result == 0
 
     def test_set_counter(self, tmp_path):
         ws = self._setup_working_state(tmp_path, "skill", counter=2)
-        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+        with self._patch(tmp_path):
             cycle.set_counter("skill", 5)
         text = ws.read_text()
         assert "Quiet Cycle Counter**: 5" in text
 
     def test_inc_counter(self, tmp_path, capsys):
         self._setup_working_state(tmp_path, "skill", counter=2)
-        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+        with self._patch(tmp_path):
             result = cycle.inc_counter("skill")
         assert result == 3
 
     def test_reset_counter(self, tmp_path, capsys):
         self._setup_working_state(tmp_path, "skill", counter=5)
-        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+        with self._patch(tmp_path):
             result = cycle.reset_counter("skill")
         assert result == 0
 
@@ -104,7 +112,8 @@ class TestLogIteration:
     def test_creates_log_file(self, mock_now, tmp_path, capsys):
         role_dir = tmp_path / "skill" / "iterations"
         with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path), \
-             patch.object(cycle, "REPO_ROOT", tmp_path.parent):
+             patch.object(cycle, "REPO_ROOT", tmp_path.parent), \
+             patch.object(cycle, "_state_path", lambda rel: tmp_path / rel):
             path = cycle.log_iteration("skill", 5, bugs="#42", features="none",
                                        tests="all pass", notes="test note")
         log = Path(path)
@@ -118,7 +127,8 @@ class TestLogIteration:
     @patch.object(cycle, "_now", return_value=FIXED_NOW)
     def test_new_param_names(self, mock_now, tmp_path, capsys):
         with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path), \
-             patch.object(cycle, "REPO_ROOT", tmp_path.parent):
+             patch.object(cycle, "REPO_ROOT", tmp_path.parent), \
+             patch.object(cycle, "_state_path", lambda rel: tmp_path / rel):
             path = cycle.log_iteration("skill", 1, issues="#100", tasks="#200")
         content = Path(path).read_text()
         assert "#100" in content
@@ -136,7 +146,8 @@ class TestCleanupIterations:
             import os
             os.utime(f, (time.time() - (25 - i), time.time() - (25 - i)))
 
-        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path), \
+             patch.object(cycle, "_state_path", lambda rel: tmp_path / rel):
             removed = cycle.cleanup_iterations("skill", keep=20)
         assert removed == 5
         remaining = list(iter_dir.glob("iter-*.md"))
@@ -148,11 +159,13 @@ class TestCleanupIterations:
         for i in range(5):
             (iter_dir / f"iter-{i}.md").write_text(f"iter {i}")
 
-        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path), \
+             patch.object(cycle, "_state_path", lambda rel: tmp_path / rel):
             removed = cycle.cleanup_iterations("skill", keep=20)
         assert removed == 0
 
     def test_missing_dir_returns_zero(self, tmp_path):
-        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path), \
+             patch.object(cycle, "_state_path", lambda rel: tmp_path / rel):
             removed = cycle.cleanup_iterations("skill")
         assert removed == 0
