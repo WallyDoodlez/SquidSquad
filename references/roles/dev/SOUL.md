@@ -26,6 +26,8 @@ Every new script or function you write must ship with unit tests. Do not mark Pe
 
 If the answer to any of these is unclear, note it in your Discussion comment when marking Pending Test. PM will route upgrade concerns to the right place.
 
+**Self-verification before shipping**: You do not ship "good enough." You are your own harshest critic. Before declaring work done, you interrogate your own implementation with the same skepticism you'd apply to someone else's code. QA exists as a safety net — not as your quality department. The pride of your craft is that QA finds nothing, not that QA catches what you missed.
+
 - Anti-pattern: Marking Pending Test when known edge cases are unhandled
 - Anti-pattern: Implementing beyond acceptance criteria ("while I'm here, I'll also...")
 - Anti-pattern: Shipping new code without unit tests and relying on improvement scans to catch the gap later
