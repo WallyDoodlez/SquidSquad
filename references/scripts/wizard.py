@@ -58,6 +58,33 @@ SQUIDSQUAD_DIR = REPO_ROOT / ".squidsquad"
 # Re-run detection — actions the installer agent can take
 RERUN_ACTIONS = ("abort", "regenerate", "full-rebuild")
 
+# Project type → L3 variant mapping. Each preset applies the same variant
+# to all 4 core roles (dev, pm, qa, dm). "custom" = no L3 (base L1+L2 only).
+PROJECT_TYPE_PRESETS = {
+    "ios": "ios",
+    "android": "android",
+    "multi-platform": "fullstack",  # shared codebase concerns
+    "web": "web",
+    "pwa": "web",                   # PWA is a web specialization
+    "backend": "web",               # backend shares web security/API concerns
+    "fullstack": "fullstack",
+    "skill": "skill",
+    "custom": None,                 # no L3 preset
+}
+
+# Human-readable labels for project type selection
+PROJECT_TYPE_LABELS = {
+    "ios": "iOS (Swift/UIKit/SwiftUI)",
+    "android": "Android (Kotlin/Java)",
+    "multi-platform": "Multi-platform (React Native/Flutter/KMP)",
+    "web": "Web (React/Vue/Angular/etc.)",
+    "pwa": "Progressive Web App (service workers, offline-first)",
+    "backend": "Backend (API/database/server-side)",
+    "fullstack": "Full-stack (frontend + backend)",
+    "skill": "Skill (Claude Code skills, probabilistic/deterministic)",
+    "custom": "Custom (base agents only, no domain preset)",
+}
+
 
 # ---------------------------------------------------------------------------
 # Step 0 — gh prerequisite check
@@ -430,6 +457,34 @@ _AGENT_NESTED_FIELD_ORDER = [
     "stack",
     "test_command",
 ]
+
+
+def apply_project_type(spec, project_type):
+    """Apply a project type preset to an install spec.
+
+    Sets the L3 variant for all core roles (dev, pm, qa, dm) based on the
+    selected project type. Designer keeps its own variant. "custom" = no
+    variant (L1+L2 only).
+
+    Args:
+        spec: the install spec dict (mutated in place).
+        project_type: key from PROJECT_TYPE_PRESETS.
+
+    Returns:
+        The variant name applied (or None for custom).
+    """
+    variant = PROJECT_TYPE_PRESETS.get(project_type)
+    if variant is None:
+        spec["project_type"] = project_type
+        return None
+
+    spec["project_type"] = project_type
+    for agent in spec.get("agents", []):
+        role = agent.get("role", "")
+        # Apply variant to core roles only — designer has its own L3
+        if role in ("dev", "pm", "qa", "dm"):
+            agent["variant"] = variant
+    return variant
 
 
 def build_config_md(spec):
