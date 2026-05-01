@@ -115,3 +115,8 @@
 
 - **Ship Threshold**: 10
 - **Shipped Since Last Bump**: 9
+
+## Harness
+
+- **Enabled**: yes
+- **Port**: 7373
