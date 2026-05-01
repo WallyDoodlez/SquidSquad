@@ -15,12 +15,11 @@ This manifest defines how shared sub-skill source files compose into agent templ
 
 ## Layer 4 — Project Sub-skills (auto-included)
 
-Files in `references/sub-skills/project/` are **auto-included** by `compose.py` in every agent's CLAUDE.md. They are NOT listed in any `includes.yml` — the composition engine appends them automatically after all other layers. These are project-specific operational instructions and behavioral directives.
+Project-specific L4 content lives in `.squidsquad/project/` (project-local, not distributed). `compose.py` reads `*.md` files from this directory and auto-includes them in every agent's CLAUDE.md after all other layers.
 
-Current project sub-skills:
-- `project/setup-upgrade-gate.md` — hard checklist before pending-test (setup/upgrade sync)
+`references/sub-skills/project/` contains **seed templates only** — copied to `.squidsquad/project/` during setup. These templates are NOT used at compose time.
 
-Project sub-skills are owned by PM (via the L4 propagation flow: PM writes → `compose.py deploy-all` → `reboot_agent.py`).
+Project sub-skills are owned by PM (via the L4 propagation flow: PM writes to `.squidsquad/project/` → `compose.py deploy-all` → `reboot_agent.py`).
 
 ## Composition Order
 

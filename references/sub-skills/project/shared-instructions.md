@@ -1,47 +1,5 @@
-## Project Operations — SquidSquad
+# L4 Project Sub-skill Template
 
-These instructions apply to ALL agents on this project.
-
-### Tracker & Communication
-
-- **GitHub Issues is the single source of truth** for all work tracking. No internal markdown tracker files.
-- **Commit messages use role prefix**: `skill:`, `pm:`, `qa:`, `dm:` — always prefix with your role.
-- **Status lifecycle**: All transitions go through `python references/scripts/tracker.py transition`. Never construct `gh issue edit` label commands manually.
-- **Discussion = issue comments**: append-only. Never edit or delete previous comments.
-- **Timestamps from cycle.py only**: Use `python references/scripts/cycle.py timestamp-short` for step markers, `timestamp` for comments. Never guess or fabricate times.
-- **Bullet points in issue comments**: Use structured, scannable formatting.
-- **Mandatory human approval for features**: Tasks start as `Pending` — a human must explicitly approve before any agent picks them up.
-
-### Cycle & Context
-
-- **Context pressure threshold: 70%**. Checkpoint working state when exceeded, continue normally (Claude Code auto-compresses).
-- **Working state file pattern**: Maintain `.squidsquad/<role>/working-state.md` to persist context across resets.
-- **Iteration interval: 30 minutes**. Context threshold: 70%. Ship threshold: 10.
-- **Deterministic work queue**: Pick the first item. No discretion to skip, reorder, or cherry-pick.
-
-### Git Protocol
-
-- **Always `git pull --rebase` before starting work.** Never push without pulling first.
-- **Atomic writes**: Write to `.tmp` then `mv` for any file other agents or the statusline may read.
-- **Branch workflow enabled**: Feature branches per task (`squidsquad/<role>/<number>`).
-- **PR flow + auto-merge enabled**: PRs created for feature branches, auto-merged when QA passes (unless `review:human-required`).
-
-### Agent Infrastructure
-
-- **Heartbeat `.health` files**: Wrapper writes current epoch every 5 seconds. >10s old = agent dead.
-- **Sentinel files**: `.stop-after-cycle` (graceful restart), `.stop` (permanent stop), `.pid` (singleton lock).
-- **Agent lifecycle via `start_team.py`**: Agents do not manage their own or other agents' processes.
-- **Context pressure restart via `cycle_post.py`**: Mechanical detection, agents don't set `restart_needed`.
-
-### Planning & Verification
-
-- **Planning artifacts in `.squidsquad/pm/planning/`**: RESEARCH.md, CONTEXT.md, TEST-PLAN.md per task.
-- **Clone isolation paths from `.local-config`**: Each agent's clone path resolved via boot_remote.
-- **BRIEFING.md staleness check every cycle**: Version, active agents, priorities verified against config.md.
-- **Bug fixes need research**: PM runs Phase 1 research before filing, not just "fix this."
-- **Any TC failure = back to dev**: Zero-gap gate — all findings must be resolved before shipping.
-
-### Vault
-
-- **Vault PARAG structure**: projects/, areas/, resources/, archives/, galaxy/. All git-tracked.
-- **vault-check Level 1 auto-runs**: After every vault-create or vault-update.
+# This is a seed template. Project-specific content lives in
+# .squidsquad/project/shared-instructions.md (populated during setup).
+# Edit .squidsquad/project/shared-instructions.md to customize agent behavior.
