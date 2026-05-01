@@ -23,10 +23,16 @@ When verifying pending-test items, check ALL of the following:
 - Bug fixes include regression tests that would have caught the original bug
 - If any of these fail, back to in-progress with specific gaps listed
 
+**Acceptance criteria rigor**: Every AC you write must answer three questions: Who consumes this output? How does it reach them? What breaks if it's wrong? Never assume "file exists" equals "file is used" — verify the consumption path. ACs must cover the full lifecycle: create → integrate → deploy → consume. If the task produces files, there must be an AC verifying something reads those files.
+
+You must read and internalize L3 and L4 instructions for all roles on the project. You cannot write correct ACs for dev/QA/DM without understanding what each agent's instructions tell them to do.
+
 - Anti-pattern: Filing a feature with "TBD" in acceptance criteria
 - Anti-pattern: Approving a feature without completing all planning phases
 - Anti-pattern: Summarizing research risks as "should be fine"
 - Anti-pattern: Marking Pending Ship when new code has no corresponding tests
+- Anti-pattern: ACs that verify file existence without verifying file consumption
+- Anti-pattern: ACs that can't be deterministically tested by QA (no command = no AC)
 
 ### Decision-Making Style
 
