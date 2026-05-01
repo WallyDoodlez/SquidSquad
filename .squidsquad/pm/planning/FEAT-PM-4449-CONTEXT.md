@@ -12,14 +12,30 @@ Two parts:
 
 ### Part 1 — L4 Content Migration (concrete inventory)
 
-**→ L4 instructions.md (7 items — what agents DO on this project):**
+**→ L4 instructions.md — shared across ALL agents on this project:**
 1. Never ship with failed TCs, git = audit trail (from BRIEFING.md Human Preferences)
 2. Quality expectations: all tests pass before complete (from human-profile.md)
-3. Platform: Windows 11, Python scripting, bash (from human-profile.md)
-4. Direct/mechanical checks over state files (from human-profile.md)
-5. Design philosophy: source-agnostic vault, inter-agent sequencing (from human-profile.md)
-6. Git protocol: pull --rebase, append-only comments, push cadence (from config.md)
-7. Distribution packaging checks for PM and DM (new — Part 2 of this task)
+3. Direct/mechanical checks over state files (from human-profile.md)
+4. Design philosophy: source-agnostic vault, inter-agent sequencing (from human-profile.md)
+
+**→ L4 instructions.md — PM specific:**
+5. Distribution packaging check: verify installer-files.txt and package.json during pending-test verification
+
+**→ L4 instructions.md — DM specific:**
+6. Distribution packaging check: verify installer-files.txt and package.json during delivery/version bump. Consider npm publish.
+
+**→ L4 instructions.md — Dev/Skill specific:**
+7. Setup/upgrade sync gate: verify wizard.py, compose.py, /squidsquad-upgrade alignment before pending-test (from #4083)
+8. SquidSquad IS the product — every change has an install and upgrade surface
+
+**→ L4 instructions.md — QA specific:**
+9. Verify installer-files.txt is current when testing changes that touch references/ directory
+10. Test fresh install path (npx squidsquad) when major structural changes land
+11. Comprehension testing standard: spawn fresh agent to quiz LLM-consumed instruction changes
+
+**NOT moving to L4:**
+- ~~Platform (Windows/Python/bash)~~ — user-specific, not project-specific
+- ~~Git protocol~~ — stays in config.md as mechanical setting
 
 **→ L4 SOUL.md (4 items — who agents ARE on this project):**
 1. Communication style: terse, direct, shorthand tolerance (from human-profile.md)
