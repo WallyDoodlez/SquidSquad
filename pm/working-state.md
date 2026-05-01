@@ -2,12 +2,12 @@
 
 - **Task**: #4083 — L4 project customization & layer lifecycle
 - **Status**: in-progress
-- **Phase**: discussing FEAT-PM-4083 (awaiting human)
+- **Phase**: discussing FEAT-PM-4083
 
 ## Completed Steps
 - Phase 2 discussion complete
-- CONTEXT.md written and updated
-- Full 8-step setup flow designed
+- CONTEXT.md updated
+- 7-step setup flow with pre-flight gate designed
 
 ## Remaining Steps
 - Phase 2 approval gate
