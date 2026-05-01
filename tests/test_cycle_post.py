@@ -425,6 +425,13 @@ class TestSanitizeCommitMsg:
         msg = "skill: quiet cycle — pipeline clean"
         assert cycle_post._sanitize_commit_msg(msg) == msg
 
+    def test_closes_in_pr_body_escaped(self):
+        """#4518: PR body 'Closes #N' must be sanitized to prevent GitHub auto-close."""
+        body = "Closes #4459\n\n## Summary\nL4 shared content"
+        result = cycle_post._sanitize_commit_msg(body)
+        assert "Closes #4459" not in result
+        assert "#4459" in result
+
 
 # ---------------------------------------------------------------------------
 # #4081 regression: disposable file detection
