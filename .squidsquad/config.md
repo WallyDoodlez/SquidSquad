@@ -114,8 +114,4 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-<<<<<<< HEAD
-- **Shipped Since Last Bump**: 9
-=======
-- **Shipped Since Last Bump**: 0
->>>>>>> 22a53cfd (skill: skill: cycle 569 — fixed ​#4518 (auto-close bug via PR body))
+- **Shipped Since Last Bump**: 10
