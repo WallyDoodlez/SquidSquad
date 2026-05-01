@@ -19,7 +19,7 @@ SUB_SKILLS_DIR = REFERENCES_DIR / "sub-skills"
 @pytest.fixture(scope="module")
 def synthesis_text():
     """Read the vault-synthesis sub-skill content."""
-    path = SUB_SKILLS_DIR / "pm-specific" / "vault-synthesis.md"
+    path = SUB_SKILLS_DIR / "roles/pm" / "vault-synthesis.md"
     assert path.exists(), "vault-synthesis.md not found"
     return path.read_text(encoding="utf-8")
 
@@ -37,7 +37,7 @@ class TestVaultSynthesisStructure:
     """Verify the sub-skill file has required structural elements."""
 
     def test_file_exists(self):
-        assert (SUB_SKILLS_DIR / "pm-specific" / "vault-synthesis.md").exists()
+        assert (SUB_SKILLS_DIR / "roles/pm" / "vault-synthesis.md").exists()
 
     def test_five_cycle_trigger(self, synthesis_text):
         """#3139: Synthesis triggers after 5 consecutive quiet cycles."""
@@ -118,9 +118,9 @@ class TestVaultSynthesisManifest:
 
     def test_manifest_entry_exists(self):
         manifest = (SUB_SKILLS_DIR / "manifest.md").read_text(encoding="utf-8")
-        assert "pm-specific/vault-synthesis" in manifest
+        assert "roles/pm/vault-synthesis" in manifest
 
     def test_includes_yml_entry(self):
         includes_path = REFERENCES_DIR / "roles" / "pm" / "includes.yml"
         includes_text = includes_path.read_text(encoding="utf-8")
-        assert "pm-specific/vault-synthesis" in includes_text
+        assert "roles/pm/vault-synthesis" in includes_text
