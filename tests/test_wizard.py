@@ -2088,3 +2088,48 @@ class TestApplyProjectType:
             spec = {"agents": [{"id": "pm", "role": "pm"}]}
             wizard.apply_project_type(spec, ptype)
             assert spec["project_type"] == ptype
+
+
+# ---------------------------------------------------------------------------
+# preflight (#4083)
+# ---------------------------------------------------------------------------
+
+class TestPreflight:
+    def test_fails_on_gh_auth(self, tmp_path):
+        from unittest.mock import patch, MagicMock
+        with patch.object(wizard, "check_gh",
+                          return_value={"ok": False, "message": "not authenticated"}):
+            result = wizard.preflight(tmp_path)
+        assert result["ok"] is False
+        assert "not authenticated" in result["message"]
+
+    def test_fails_on_no_git_repo(self, tmp_path):
+        from unittest.mock import patch
+        with patch.object(wizard, "check_gh",
+                          return_value={"ok": True, "message": "ready"}):
+            result = wizard.preflight(tmp_path)
+        assert result["ok"] is False
+        assert "git repository" in result["message"]
+
+    def test_fails_on_no_remote(self, tmp_path):
+        from unittest.mock import patch, MagicMock
+        (tmp_path / ".git").mkdir()
+        with patch.object(wizard, "check_gh",
+                          return_value={"ok": True, "message": "ready"}), \
+             patch.object(wizard, "_run",
+                          return_value=MagicMock(returncode=0, stdout="")):
+            result = wizard.preflight(tmp_path)
+        assert result["ok"] is False
+        assert "remote" in result["message"]
+
+    def test_passes_all_checks(self, tmp_path):
+        from unittest.mock import patch, MagicMock
+        (tmp_path / ".git").mkdir()
+        with patch.object(wizard, "check_gh",
+                          return_value={"ok": True, "message": "ready"}), \
+             patch.object(wizard, "_run",
+                          return_value=MagicMock(returncode=0,
+                              stdout="origin\thttps://github.com/test/repo.git (fetch)\n")):
+            result = wizard.preflight(tmp_path)
+        assert result["ok"] is True
+        assert len(result["checks"]) == 3
