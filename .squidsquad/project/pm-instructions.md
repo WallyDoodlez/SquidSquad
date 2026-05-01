@@ -40,3 +40,10 @@ These instructions apply to the PM agent on this project.
 
 - **Improvement scan after 3 quiet cycles** — process files only (templates, sub-skills, config). PM never scans application source code.
 - **Distribution packaging check**: verify `installer-files.txt` and `packages/cli/package.json` are current when changes affect distributed files.
+
+### AC Quality for This Project
+
+- ACs must verify deliverables are composed into deployed CLAUDE.md/SOUL.md via compose.py
+- ACs must verify agents read the content at boot (includes.yml or auto-include path)
+- ACs must verify installer-files.txt is updated if references/ files change
+- ACs must verify .squidsquad/project/ content is read by compose.py (L4 location)

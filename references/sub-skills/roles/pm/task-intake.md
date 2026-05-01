@@ -267,9 +267,20 @@ Write current state: `python references/scripts/cycle.py status-bar [ROLE] test-
 
 Create two artifacts:
 
+**AC Integration Check** — before writing acceptance criteria, run this mental checklist:
+
+1. **Consumer**: Who reads/uses the output of this task? Can they reach it? How?
+2. **Integration**: Does the output traverse a build/deploy/compose step? Does the AC verify it passes through?
+3. **Regression**: What existing behavior could this break? Is there an AC that checks it doesn't?
+4. **Testability**: Can QA execute a single command per AC and get a deterministic PASS/FAIL?
+5. **Architecture**: Does this align with vault decisions, established patterns, and project philosophy?
+
+If any answer is unclear, the AC is incomplete — refine before filing.
+
 **A) GitHub Issue** — create via `python references/scripts/tracker.py create-task` with status `Pending`, referencing planning artifacts:
 - Description includes research-informed constraints
 - Acceptance criteria include edge case handling and side effect mitigations
+- Acceptance criteria verified against the AC Integration Check above
 - References RESEARCH.md and CONTEXT.md
 
 **B) Test plan** — route to the configured model for test plan drafting:
