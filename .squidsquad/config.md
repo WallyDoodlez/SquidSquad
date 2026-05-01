@@ -114,9 +114,13 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-- **Shipped Since Last Bump**: 0
+<<<<<<< Updated upstream
+- **Shipped Since Last Bump**: 9
+=======
+- **Shipped Since Last Bump**: 10
 
 ## Harness
 
 - **Enabled**: yes
 - **Port**: 7373
+>>>>>>> Stashed changes

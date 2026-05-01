@@ -10,6 +10,7 @@
 
 ### Changed
 - #4449 — PM and DM now verify distribution packaging (npm + tarball + installer-files.txt) for project instructions
+- #4459 — Shared project instructions moved from references/ to .squidsquad/project/ for project-local access
 - #4531 — L4 project content relocated from distributed references/ to project-local .squidsquad/
 
 ### Fixed
