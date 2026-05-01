@@ -196,6 +196,9 @@ references/sub-skills/roles/dm/skill/domain-context.md
 references/sub-skills/roles/dm/status-line.md
 references/sub-skills/roles/dm/version-bumps.md
 references/sub-skills/roles/dm/web/domain-context.md
+references/sub-skills/manifest.md
+references/sub-skills/project/shared-instructions.md
+references/sub-skills/project/shared-soul-directives.md
 references/sub-skills/roles/pm/android/domain-context.md
 references/sub-skills/roles/pm/checkin.md
 references/sub-skills/roles/pm/delivery-fallback.md
