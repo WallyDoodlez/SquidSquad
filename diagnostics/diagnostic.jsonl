@@ -128,3 +128,7 @@
 {"timestamp": "2026-05-01T17:14:28.814852", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
 {"timestamp": "2026-05-01T17:14:28.863518", "severity": "error", "source": "git_ops", "message": "push failed: rejected"}
 {"timestamp": "2026-05-01T17:15:39.560516", "severity": "error", "source": "git_ops", "message": "state push failed: To https://github.com/WallyDoodlez/SquidSquad.git\n ! [rejected]          main -> main (fetch first)\nerror: failed to push some refs to 'https://github.com/WallyDoodlez/SquidSquad.git'\nhint: Updates we"}
+{"timestamp": "2026-05-01T17:21:06.174768", "severity": "warning", "source": "tracker", "message": "Blocked transition #4449 status:in-progress -> status:pending-test: unread feedback from pm-lead (2026-05-01T04:54:20Z), pm-lead (2026-05-01T04:57:04Z)"}
+{"timestamp": "2026-05-01T17:21:18.615036", "severity": "error", "source": "tracker", "message": "TC coverage gate blocked #4449: test plan found but no QA-RESULTS"}
+{"timestamp": "2026-05-01T17:21:30.549740", "severity": "error", "source": "tracker", "message": "TC coverage gate blocked #4449: test plan found but no QA-RESULTS"}
+{"timestamp": "2026-05-01T17:21:39.040018", "severity": "warning", "source": "tracker", "message": "Blocked transition #4449 status:pending-test -> status:pending-ship: unread feedback from pm-lead (2026-05-01T04:54:20Z), pm-lead (2026-05-01T04:57:04Z)"}
