@@ -242,6 +242,8 @@ def _validate_role(role: str) -> str:
 
 
 # -- Endpoints --
+# IMPORTANT: /agents/all/* routes MUST be defined BEFORE /agents/{role}/* routes.
+# FastAPI matches routes in definition order — {role} would capture "all" as a role name.
 
 @app.get("/status")
 async def get_status():
@@ -264,6 +266,74 @@ async def list_agents():
     """List agents with state."""
     state.update_health()
     return {"agents": state.all_agents()}
+
+
+@app.post("/agents/all/start")
+async def start_all():
+    """Spawn all configured agents."""
+    roles = boot_remote._get_all_roles()
+    _log(f"Starting all agents: {', '.join(roles)}")
+
+    results = []
+    for role in roles:
+        result = boot_remote.boot_agent(role)
+        results.append(result)
+        status = "OK" if result["success"] else "FAIL"
+        _log(f"  {role}: {result['action']} -- {status}: {result['message']}")
+
+        if result["success"]:
+            agent_state = state.get_agent(role) or AgentState(role)
+            if result["action"] == "spawn":
+                agent_state.status = "starting"
+                agent_state.boot_time = time.time()
+            state.set_agent(role, agent_state)
+
+    return {"results": results}
+
+
+@app.post("/agents/all/stop")
+async def stop_all():
+    """Stop all agents gracefully. Only stops agents that are currently running."""
+    roles = boot_remote._get_all_roles()
+    _log(f"Stopping all agents: {', '.join(roles)}")
+
+    results = []
+    for role in roles:
+        # Only stop agents that are actually running (not already stopped/unknown)
+        agent = state.get_agent(role)
+        if agent and agent.status in ("stopped", "unknown"):
+            results.append({"role": role, "action": "skip", "success": True,
+                            "message": f"Already {agent.status}"})
+            _log(f"  {role}: skip (already {agent.status})")
+            continue
+
+        clone_path = boot_remote._get_clone_path(role)
+        # Check if agent is actually running before writing sentinels
+        needs_boot, reason, _ = boot_remote._needs_boot(role)
+        if needs_boot:
+            results.append({"role": role, "action": "skip", "success": True,
+                            "message": "Not running"})
+            _log(f"  {role}: skip (not running)")
+            continue
+
+        stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"
+        sac_file = Path(clone_path) / ".squidsquad" / role / ".stop-after-cycle"
+
+        try:
+            stop_file.parent.mkdir(parents=True, exist_ok=True)
+            stop_file.write_text("stopped via harness", encoding="utf-8")
+            sac_file.write_text("stopped via harness", encoding="utf-8")
+            results.append({"role": role, "action": "stop", "success": True})
+            _log(f"  {role}: stop sentinel written")
+        except OSError as e:
+            results.append({"role": role, "action": "stop", "success": False, "error": str(e)})
+            _log(f"  {role}: FAILED -- {e}")
+
+        agent_state = state.get_agent(role) or AgentState(role)
+        agent_state.status = "stopped"
+        state.set_agent(role, agent_state)
+
+    return {"results": results}
 
 
 @app.get("/agents/{role}")
@@ -292,7 +362,7 @@ async def start_agent(role: str):
 
     _log(f"Starting {role}...")
     result = boot_remote.boot_agent(role)
-    _log(f"  {role}: {result['action']} — {'OK' if result['success'] else 'FAIL'}: {result['message']}")
+    _log(f"  {role}: {result['action']} -- {'OK' if result['success'] else 'FAIL'}: {result['message']}")
 
     if result["success"]:
         agent_state = state.get_agent(role) or AgentState(role)
@@ -369,108 +439,66 @@ async def restart_agent(role: str):
     }
 
 
-@app.post("/agents/all/start")
-async def start_all():
-    """Spawn all configured agents."""
-    roles = boot_remote._get_all_roles()
-    _log(f"Starting all agents: {', '.join(roles)}")
-
-    results = []
-    for role in roles:
-        result = boot_remote.boot_agent(role)
-        results.append(result)
-        status = "OK" if result["success"] else "FAIL"
-        _log(f"  {role}: {result['action']} — {status}: {result['message']}")
-
-        if result["success"]:
-            agent_state = state.get_agent(role) or AgentState(role)
-            if result["action"] == "spawn":
-                agent_state.status = "starting"
-                agent_state.boot_time = time.time()
-            state.set_agent(role, agent_state)
-
-    return {"results": results}
-
-
-@app.post("/agents/all/stop")
-async def stop_all():
-    """Stop all agents gracefully."""
-    roles = boot_remote._get_all_roles()
-    _log(f"Stopping all agents: {', '.join(roles)}")
-
-    results = []
-    for role in roles:
-        clone_path = boot_remote._get_clone_path(role)
-        stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"
-        sac_file = Path(clone_path) / ".squidsquad" / role / ".stop-after-cycle"
-
-        try:
-            stop_file.parent.mkdir(parents=True, exist_ok=True)
-            stop_file.write_text("stopped via harness", encoding="utf-8")
-            sac_file.write_text("stopped via harness", encoding="utf-8")
-            results.append({"role": role, "action": "stop", "success": True})
-            _log(f"  {role}: stop sentinel written")
-        except OSError as e:
-            results.append({"role": role, "action": "stop", "success": False, "error": str(e)})
-            _log(f"  {role}: FAILED — {e}")
-
-        agent_state = state.get_agent(role) or AgentState(role)
-        agent_state.status = "stopped"
-        state.set_agent(role, agent_state)
-
-    return {"results": results}
-
-
 @app.post("/shutdown")
 async def shutdown():
-    """Stop all agents, then exit harness."""
+    """Stop all agents, then exit harness. Only stops agents that are running."""
     roles = boot_remote._get_all_roles()
-    _log("Shutdown requested — stopping all agents...")
+    _log("Shutdown requested...")
 
-    # Write .stop sentinels for all agents
+    # Only stop agents that are actually running
+    running_roles = []
     for role in roles:
-        clone_path = boot_remote._get_clone_path(role)
-        stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"
-        sac_file = Path(clone_path) / ".squidsquad" / role / ".stop-after-cycle"
-        try:
-            stop_file.parent.mkdir(parents=True, exist_ok=True)
-            stop_file.write_text("stopped via harness shutdown", encoding="utf-8")
-            sac_file.write_text("stopped via harness shutdown", encoding="utf-8")
-        except OSError:
-            pass
+        needs_boot, _, _ = boot_remote._needs_boot(role)
+        if not needs_boot:
+            running_roles.append(role)
 
-    # Wait briefly for agents to reach idle
-    _log("Waiting for agents to idle (max 30s)...")
-    for _ in range(6):
-        all_idle = True
-        for role in roles:
-            state_file = SQUIDSQUAD_DIR / role / "current-state"
+    if running_roles:
+        _log(f"Stopping running agents: {', '.join(running_roles)}")
+        for role in running_roles:
+            clone_path = boot_remote._get_clone_path(role)
+            stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"
+            sac_file = Path(clone_path) / ".squidsquad" / role / ".stop-after-cycle"
             try:
-                content = state_file.read_text(encoding="utf-8").strip()
-                if not content.startswith("idle"):
-                    all_idle = False
-                    break
-            except (OSError, FileNotFoundError):
-                pass  # No state file = not running = idle
-        if all_idle:
-            break
-        time.sleep(5)
+                stop_file.parent.mkdir(parents=True, exist_ok=True)
+                stop_file.write_text("stopped via harness shutdown", encoding="utf-8")
+                sac_file.write_text("stopped via harness shutdown", encoding="utf-8")
+            except OSError:
+                pass
 
-    # Kill remaining agent processes
-    for role in roles:
-        clone_path = boot_remote._get_clone_path(role)
-        claude_pid, alive = reboot_agent._read_claude_pid(Path(clone_path), role)
-        if alive and claude_pid:
-            _log(f"  Killing {role} (PID {claude_pid})...")
-            reboot_agent._kill_process(claude_pid)
+        # Wait briefly for running agents to reach idle
+        _log("Waiting for agents to idle (max 30s)...")
+        for _ in range(6):
+            all_idle = True
+            for role in running_roles:
+                state_file = SQUIDSQUAD_DIR / role / "current-state"
+                try:
+                    content = state_file.read_text(encoding="utf-8").strip()
+                    if not content.startswith("idle"):
+                        all_idle = False
+                        break
+                except (OSError, FileNotFoundError):
+                    pass  # No state file = not running = idle
+            if all_idle:
+                break
+            time.sleep(5)
 
-    # Clean up port file
+        # Kill remaining running agent processes
+        for role in running_roles:
+            clone_path = boot_remote._get_clone_path(role)
+            claude_pid, alive = reboot_agent._read_claude_pid(Path(clone_path), role)
+            if alive and claude_pid:
+                _log(f"  Killing {role} (PID {claude_pid})...")
+                reboot_agent._kill_process(claude_pid)
+    else:
+        _log("No running agents to stop.")
+
+    # Clean up port file BEFORE os._exit to prevent stale file
     try:
         HARNESS_PORT_FILE.unlink(missing_ok=True)
     except OSError:
         pass
 
-    _log("All agents stopped. Harness exiting.")
+    _log("Harness exiting.")
 
     # Schedule process exit after response is sent
     def _exit():

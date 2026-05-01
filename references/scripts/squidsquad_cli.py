@@ -18,6 +18,7 @@ Exit codes:
     2 — usage error
 """
 
+import io
 import json
 import os
 import platform
@@ -28,6 +29,11 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+# Ensure stdout can handle Unicode emoji on Windows (cp1252 can't encode them)
+if sys.stdout.encoding and sys.stdout.encoding.lower().replace("-", "") != "utf8":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
@@ -203,7 +209,7 @@ def cmd_status():
     w = max(len(a.get("role", "")) for a in agents)
     w = max(w, 5)
     print(f"{'Agent':<{w}}  Status")
-    print(f"{'─' * w}  {'─' * 10}")
+    print(f"{'-' * w}  {'-' * 10}")
 
     for a in agents:
         role = a.get("role", "?")
