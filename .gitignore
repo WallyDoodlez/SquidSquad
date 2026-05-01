@@ -13,6 +13,7 @@
 .squidsquad/diagnostics/*.jsonl
 .squidsquad/*/cycle-input.json
 .squidsquad/*/cycle-output.json
+.squidsquad/.harness-port
 
 .claude/commands/squidsquad-*
 .claude/settings.local.json
