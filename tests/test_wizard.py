@@ -2037,3 +2037,54 @@ class TestGenerateDefaultSpec:
         scan = {"test_frameworks": ["jest"]}
         spec = wizard.generate_default_spec(scan)
         assert spec["agents"][1]["test_command"] == "npx jest"
+
+
+# ---------------------------------------------------------------------------
+# apply_project_type (#4083)
+# ---------------------------------------------------------------------------
+
+class TestApplyProjectType:
+    def test_ios_sets_variant_on_core_roles(self):
+        spec = {
+            "agents": [
+                {"id": "pm", "role": "pm"},
+                {"id": "skill", "role": "dev"},
+                {"id": "qa", "role": "qa"},
+                {"id": "dm", "role": "dm"},
+            ]
+        }
+        result = wizard.apply_project_type(spec, "ios")
+        assert result == "ios"
+        assert spec["project_type"] == "ios"
+        for agent in spec["agents"]:
+            assert agent["variant"] == "ios"
+
+    def test_custom_sets_no_variant(self):
+        spec = {
+            "agents": [
+                {"id": "pm", "role": "pm"},
+                {"id": "skill", "role": "dev"},
+            ]
+        }
+        result = wizard.apply_project_type(spec, "custom")
+        assert result is None
+        assert spec["project_type"] == "custom"
+        assert "variant" not in spec["agents"][0]
+        assert "variant" not in spec["agents"][1]
+
+    def test_designer_not_affected(self):
+        spec = {
+            "agents": [
+                {"id": "designer", "role": "designer"},
+                {"id": "skill", "role": "dev"},
+            ]
+        }
+        wizard.apply_project_type(spec, "web")
+        assert "variant" not in spec["agents"][0]  # designer unchanged
+        assert spec["agents"][1]["variant"] == "web"
+
+    def test_all_project_types_valid(self):
+        for ptype in wizard.PROJECT_TYPE_PRESETS:
+            spec = {"agents": [{"id": "pm", "role": "pm"}]}
+            wizard.apply_project_type(spec, ptype)
+            assert spec["project_type"] == ptype

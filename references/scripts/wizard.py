@@ -886,11 +886,17 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
             summary["created_dirs"].append(str(agent_dir))
 
         # CLAUDE.md — composed from role identity template + sub-skills.
-        # deploy_role already handles the compose/substitute/write pipeline;
-        # it takes the agent id (not the role identity) because [ROLE]
-        # placeholder substitution uses the agent name.
+        # deploy_role handles the compose/substitute/write pipeline.
+        # When a variant is set, compose from the variant role (e.g. "dev-ios")
+        # but output to the agent_id directory (e.g. "skill").
+        variant = agent.get("variant")
+        if variant and role_identity != "designer":
+            compose_name = f"{role_identity}-{variant}"
+        else:
+            compose_name = agent_id
         try:
-            claude_path = deploy_role(agent_id, target_root=target_root)
+            claude_path = deploy_role(compose_name, target_root=target_root,
+                                      output_name=agent_id)
         except (SystemExit, Exception) as e:
             print(f"  WARNING: Failed to deploy {agent_id}: {e}", file=sys.stderr)
             summary["agents"].append({
