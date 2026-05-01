@@ -19,3 +19,6 @@
 {"timestamp": 1777409753.2344375, "task_type": "discussion-prep", "task_id": "FEAT-PM-3465", "model": "claude", "action": "delegate-to-agent-tool"}
 {"timestamp": 1777409758.3533227, "task_type": "discussion-prep", "task_id": "FEAT-PM-3465", "model": "claude", "action": "delegate-to-agent-tool"}
 {"timestamp": 1777412095.918764, "task_type": "test-plan", "task_id": "FEAT-PM-3465", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669428.0125995, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669428.0125995, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669428.01557, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
