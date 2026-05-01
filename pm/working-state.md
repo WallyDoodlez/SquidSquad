@@ -1,12 +1,21 @@
 # Working State
 
-- **Task**: none
-- **Status**: none
+- **Task**: #4083 — L4 project customization & layer lifecycle
+- **Status**: in-progress
+- **Phase**: discussing FEAT-PM-4083
 
 ## Completed Steps
+- Phase 2 discussion (7 questions locked)
+- CONTEXT.md written
 
 ## Remaining Steps
+- Human wants more discussion before test plan
+- Phase 3: Test plan
 
 ## Key Decisions
+- Setup: wizard asks project type, applies L3 preset for all roles
+- Propagation: PM writes L4 → compose → reboot (explicit)
+- Upgrade: auto-migrate, extract Project Adaptation to L4
+- Gate: hard checklist, all agents, mechanics only
 
-## Quiet cycle counter: 10
+## Quiet cycle counter: 0
