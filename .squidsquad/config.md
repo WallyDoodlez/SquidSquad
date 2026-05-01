@@ -81,6 +81,10 @@
 
 - **Enabled**: yes
 
+## Agent Compose
+
+- **Enabled**: no
+
 ## Diagnostics
 
 - **Enabled**: yes
