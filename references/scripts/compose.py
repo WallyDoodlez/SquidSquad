@@ -311,9 +311,9 @@ def _assemble_claude(role_name: str) -> str:
             parts.append(variant_claude.read_text(encoding="utf-8").rstrip())
 
     # Layer 4 — Project sub-skills (PM-owned, applied to all agents)
-    # PM writes sub-skills to references/sub-skills/project/*.md
-    # These are auto-included in every agent's CLAUDE.md if present.
-    project_skills_dir = SUB_SKILLS_DIR / "project"
+    # Live project content is in .squidsquad/project/ (project-local).
+    # references/sub-skills/project/ holds seed templates only.
+    project_skills_dir = REPO_ROOT / ".squidsquad" / "project"
     if project_skills_dir.is_dir():
         for skill_file in sorted(project_skills_dir.glob("*.md")):
             content = skill_file.read_text(encoding="utf-8").rstrip()
