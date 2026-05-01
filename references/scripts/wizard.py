@@ -913,6 +913,12 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
         config_path.write_text(config_md_text, encoding="utf-8")
     summary["config_md"] = str(config_path)
 
+    # 1b. L4 project directory — create .squidsquad/project/ for project-local
+    # L4 content. compose.py reads from here, not from references/sub-skills/project/.
+    # Start empty — PM/human populates later via L4 propagation flow.
+    project_dir = squid / "project"
+    project_dir.mkdir(parents=True, exist_ok=True)
+
     # 2. Per-agent directories
     for agent in spec["agents"]:
         agent_id = agent["id"]
