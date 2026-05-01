@@ -285,6 +285,10 @@ def _do_commit_push(data, role):
             if code_commit.get("pr_needed"):
                 pr_title = code_commit.get("pr_title", f"{role}: {branch}")
                 pr_body = code_commit.get("pr_body", f"Branch: {branch}")
+                # Sanitize PR body — GitHub auto-closes issues when PR body
+                # contains "Closes #N" and the PR is merged to default branch.
+                # SquidSquad manages issue lifecycle via tracker.py, not PR merges.
+                pr_body = _sanitize_commit_msg(pr_body)
                 result = _run_script("git_ops.py", "pr-create", pr_title, pr_body)
                 if result.returncode == 0:
                     print(f"  PR created: {result.stdout.strip()}")
