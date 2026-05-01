@@ -812,7 +812,7 @@ class TestShippedBranchGuard:
 
 
 class TestDraftPRConversion:
-    """Auto-convert draft PRs to ready on pending-test and pending-ship transitions (#1696, #4084)."""
+    """Auto-convert draft PRs to ready on pending-ship transition (#1696)."""
 
     def test_converts_draft_to_ready(self, monkeypatch):
         """pending-ship transition calls gh pr ready on matching draft PR."""
@@ -873,36 +873,6 @@ class TestDraftPRConversion:
 
         ready_calls = [c for c in gh_calls if "ready" in c]
         assert len(ready_calls) == 0
-
-    def test_pending_test_converts_draft_to_ready(self, monkeypatch):
-        """#4084: pending-test transition also converts draft PR to ready."""
-        gh_calls = []
-
-        class FakeResult:
-            returncode = 0
-            stdout = ""
-            stderr = ""
-
-        def _fake_run_list(cmd, **kw):
-            gh_calls.append(cmd)
-            if "pr" in cmd and "list" in cmd:
-                r = FakeResult()
-                r.stdout = json.dumps([
-                    {"number": 99, "headRefName": "squidsquad/skill/55",
-                     "isDraft": True, "url": "http://pr/99"}
-                ])
-                return r
-            return FakeResult()
-
-        monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
-        monkeypatch.setattr(tracker, "_get_issue_role_labels", lambda n: {"skill"})
-        monkeypatch.setattr(tracker, "_check_unread_feedback", lambda n, r: [])
-
-        tracker.transition(55, "in-progress", "pending-test", role="skill-lead")
-
-        ready_calls = [c for c in gh_calls if "ready" in c and "--undo" not in c]
-        assert len(ready_calls) == 1
-        assert "99" in str(ready_calls[0])
 
     def test_no_pr_is_silent_noop(self, monkeypatch):
         """pending-ship with no matching PR is a silent no-op."""
