@@ -88,6 +88,9 @@ class TestManifestIntegrity:
             # capabilities/ sub-dir contains tool manifests, not composable sub-skills
             if rel.startswith("capabilities/"):
                 continue
+            # project/ sub-dir contains L4 project sub-skills, auto-included by compose.py
+            if rel.startswith("project/"):
+                continue
             all_md.add(rel)
 
         referenced = set()
