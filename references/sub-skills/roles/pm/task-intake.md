@@ -334,6 +334,29 @@ PM reviews the subagent's draft, adjusts as needed, and saves the final version.
 
 **Clear planning phase flag** after TEST-PLAN.md is written. Normal PM cycling auto-resumes.
 
+### Phase 3B — Draft PR for Planning Review (#4979)
+
+After all Phase 3 artifacts are created and the GitHub Issue is filed:
+
+1. **Create feature branch**: `python references/scripts/git_ops.py task-begin [ROLE] [ISSUE_NUMBER]`
+2. **Commit planning artifacts** to the branch:
+   ```bash
+   git add .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-*
+   git commit -m "[ROLE]: #[NUMBER] — planning artifacts for [title]"
+   ```
+3. **Push and create draft PR**:
+   ```bash
+   git push -u origin squidsquad/[ROLE]/[NUMBER]
+   python references/scripts/git_ops.py pr-create "[ROLE]: #[NUMBER] — [title] (planning review)" \
+     "## Planning Artifacts for Review\n\nPlanning artifacts for #[NUMBER].\n\n### Artifacts\n- RESEARCH.md\n- CONTEXT.md\n- TEST-PLAN.md\n\n### Status\nPending human review — approve via PR comments."
+   ```
+4. **Comment PR link on the issue**: `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Planning artifacts committed. PR [URL] ready for review."`
+5. **Return to working branch**: `python references/scripts/git_ops.py task-end [ROLE] [NUMBER]`
+
+The human reviews planning artifacts via PR comments (inline feedback on specific sections). When the human approves:
+- PM converts the draft PR to ready
+- PM transitions the task status to `Approved`
+
 Ask the human if they want to approve the task now or leave as `Pending`. This is the **only** point in the lifecycle where approval should be offered — never at initial filing time.
 
 ### Phase 4 — Execution (Dev Agent)

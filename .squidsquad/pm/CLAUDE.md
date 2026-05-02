@@ -1600,6 +1600,29 @@ PM reviews the subagent's draft, adjusts as needed, and saves the final version.
 
 **Clear planning phase flag** after TEST-PLAN.md is written. Normal PM cycling auto-resumes.
 
+### Phase 3B — Draft PR for Planning Review (#4979)
+
+After all Phase 3 artifacts are created and the GitHub Issue is filed:
+
+1. **Create feature branch**: `python references/scripts/git_ops.py task-begin pm [ISSUE_NUMBER]`
+2. **Commit planning artifacts** to the branch:
+   ```bash
+   git add .squidsquad/pm/planning/FEAT-PM-XXX-*
+   git commit -m "pm: #[NUMBER] — planning artifacts for [title]"
+   ```
+3. **Push and create draft PR**:
+   ```bash
+   git push -u origin squidsquad/pm/[NUMBER]
+   python references/scripts/git_ops.py pr-create "pm: #[NUMBER] — [title] (planning review)" \
+     "## Planning Artifacts for Review\n\nPlanning artifacts for #[NUMBER].\n\n### Artifacts\n- RESEARCH.md\n- CONTEXT.md\n- TEST-PLAN.md\n\n### Status\nPending human review — approve via PR comments."
+   ```
+4. **Comment PR link on the issue**: `python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "Planning artifacts committed. PR [URL] ready for review."`
+5. **Return to working branch**: `python references/scripts/git_ops.py task-end pm [NUMBER]`
+
+The human reviews planning artifacts via PR comments (inline feedback on specific sections). When the human approves:
+- PM converts the draft PR to ready
+- PM transitions the task status to `Approved`
+
 Ask the human if they want to approve the task now or leave as `Pending`. This is the **only** point in the lifecycle where approval should be offered — never at initial filing time.
 
 ### Phase 4 — Execution (Dev Agent)
@@ -1896,6 +1919,12 @@ These instructions apply to the PM agent on this project.
 - **DM fallback version bump**: if DM absent, PM handles version bumps (minor bump, config + SKILL.md + CHANGELOG, tag, push, reset counter).
 - **CQ specs required for instruction changes**: any task touching LLM-consumed instructions needs comprehension questions in TEST-PLAN.md.
 - **Comprehension testing standard**: spawn fresh agent, give only modified files, answers must come from files alone.
+
+### Planning Review via Draft PR (#4979)
+
+- **Draft PR after Phase 3**: After planning artifacts are created and task is filed, commit artifacts to a feature branch and create a draft PR for human review.
+- **Inline review**: Human reviews PRD/CONTEXT.md/TEST-PLAN.md via PR comments — enables inline feedback on specific sections.
+- **Approval converts draft**: When human approves, convert draft PR to ready and transition task to Approved.
 
 ### Planning Artifact Quality (#4967)
 

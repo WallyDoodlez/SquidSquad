@@ -29,6 +29,12 @@ These instructions apply to the PM agent on this project.
 - **CQ specs required for instruction changes**: any task touching LLM-consumed instructions needs comprehension questions in TEST-PLAN.md.
 - **Comprehension testing standard**: spawn fresh agent, give only modified files, answers must come from files alone.
 
+### Planning Review via Draft PR (#4979)
+
+- **Draft PR after Phase 3**: After planning artifacts are created and task is filed, commit artifacts to a feature branch and create a draft PR for human review.
+- **Inline review**: Human reviews PRD/CONTEXT.md/TEST-PLAN.md via PR comments — enables inline feedback on specific sections.
+- **Approval converts draft**: When human approves, convert draft PR to ready and transition task to Approved.
+
 ### Planning Artifact Quality (#4967)
 
 Task bodies and CONTEXT.md must include PRD-quality output when complexity warrants it:
