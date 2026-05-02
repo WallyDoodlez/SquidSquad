@@ -241,6 +241,29 @@ def _dir_exists(role):
     return (SQUID_DIR / role).is_dir()
 
 
+def _get_verifiable_roles():
+    """Return all roles whose items QA/PM should verify (pending-test).
+
+    Reads dev-agents from config (e.g. 'designer, qa, skill') and adds
+    dm and pm — any role can potentially have pending-test items.
+    Deduplicates and returns a sorted list.
+    """
+    roles = set()
+    raw = _config_get("dev-agents")
+    if raw:
+        for r in raw.split(","):
+            r = r.strip()
+            if r:
+                roles.add(r)
+    else:
+        # Fallback: if config returned nothing, at least include skill
+        roles.add("skill")
+    # Always include dm and pm — they can have pending-test items too
+    roles.add("dm")
+    roles.add("pm")
+    return sorted(roles)
+
+
 # ---------------------------------------------------------------------------
 # Comment fetching — latest comment per issue (#2272)
 # ---------------------------------------------------------------------------
@@ -364,23 +387,34 @@ def _build_pm_input(role):
         "open_prs": [],
     }
 
-    # Pending test issues (for all dev roles)
-    result = _run_script("tracker.py", "list-issues", "skill", "--status", "pending-test")
-    try:
-        if result.returncode == 0 and result.stdout.strip():
-            items = json.loads(result.stdout)
-            tracker_data["pending_test_issues"] = items if isinstance(items, list) else []
-    except (json.JSONDecodeError, ValueError):
-        pass
+    # Pending test issues — query ALL verifiable roles (#4803)
+    verifiable_roles = _get_verifiable_roles()
+    for query_role in verifiable_roles:
+        result = _run_script("tracker.py", "list-issues", query_role, "--status", "pending-test")
+        try:
+            if result.returncode == 0 and result.stdout.strip():
+                items = json.loads(result.stdout)
+                for item in (items if isinstance(items, list) else []):
+                    item["source_role"] = query_role
+                tracker_data["pending_test_issues"].extend(
+                    items if isinstance(items, list) else []
+                )
+        except (json.JSONDecodeError, ValueError):
+            pass
 
-    # Pending test tasks
-    result = _run_script("tracker.py", "list-tasks", "skill", "--status", "pending-test")
-    try:
-        if result.returncode == 0 and result.stdout.strip():
-            items = json.loads(result.stdout)
-            tracker_data["pending_test_tasks"] = items if isinstance(items, list) else []
-    except (json.JSONDecodeError, ValueError):
-        pass
+    # Pending test tasks — query ALL verifiable roles (#4803)
+    for query_role in verifiable_roles:
+        result = _run_script("tracker.py", "list-tasks", query_role, "--status", "pending-test")
+        try:
+            if result.returncode == 0 and result.stdout.strip():
+                items = json.loads(result.stdout)
+                for item in (items if isinstance(items, list) else []):
+                    item["source_role"] = query_role
+                tracker_data["pending_test_tasks"].extend(
+                    items if isinstance(items, list) else []
+                )
+        except (json.JSONDecodeError, ValueError):
+            pass
 
     # Pending ship
     result = _run_script("tracker.py", "list-by-labels", "status:pending-ship")
@@ -532,46 +566,51 @@ def _build_qa_input(role):
         "pending_test_tasks": [],
     }
 
-    # Pending test issues
-    result = _run_script("tracker.py", "list-issues", "skill", "--status", "pending-test")
-    try:
-        if result.returncode == 0 and result.stdout.strip():
-            items = json.loads(result.stdout)
-            for item in (items if isinstance(items, list) else []):
-                num = item.get("number", "")
-                branch = f"squidsquad/skill/{num}" if num else ""
-                item["branch"] = branch
-                # Check for test plan
-                test_plan_path = ""
-                for planning_dir in [SQUID_DIR / "pm" / "planning", SQUID_DIR / "qa" / "planning"]:
-                    if planning_dir.exists():
-                        for f in planning_dir.glob(f"*{num}*TEST-PLAN*"):
-                            test_plan_path = str(f.relative_to(REPO_ROOT))
-                            break
-                item["test_plan_path"] = test_plan_path
-                verification_queue["pending_test_issues"].append(item)
-    except (json.JSONDecodeError, ValueError):
-        pass
+    # Pending test issues — query ALL verifiable roles (#4803)
+    verifiable_roles = _get_verifiable_roles()
+    for query_role in verifiable_roles:
+        result = _run_script("tracker.py", "list-issues", query_role, "--status", "pending-test")
+        try:
+            if result.returncode == 0 and result.stdout.strip():
+                items = json.loads(result.stdout)
+                for item in (items if isinstance(items, list) else []):
+                    num = item.get("number", "")
+                    branch = f"squidsquad/{query_role}/{num}" if num else ""
+                    item["branch"] = branch
+                    item["source_role"] = query_role
+                    # Check for test plan
+                    test_plan_path = ""
+                    for planning_dir in [SQUID_DIR / "pm" / "planning", SQUID_DIR / "qa" / "planning"]:
+                        if planning_dir.exists():
+                            for f in planning_dir.glob(f"*{num}*TEST-PLAN*"):
+                                test_plan_path = str(f.relative_to(REPO_ROOT))
+                                break
+                    item["test_plan_path"] = test_plan_path
+                    verification_queue["pending_test_issues"].append(item)
+        except (json.JSONDecodeError, ValueError):
+            pass
 
-    # Pending test tasks
-    result = _run_script("tracker.py", "list-tasks", "skill", "--status", "pending-test")
-    try:
-        if result.returncode == 0 and result.stdout.strip():
-            items = json.loads(result.stdout)
-            for item in (items if isinstance(items, list) else []):
-                num = item.get("number", "")
-                branch = f"squidsquad/skill/{num}" if num else ""
-                item["branch"] = branch
-                test_plan_path = ""
-                for planning_dir in [SQUID_DIR / "pm" / "planning", SQUID_DIR / "qa" / "planning"]:
-                    if planning_dir.exists():
-                        for f in planning_dir.glob(f"*{num}*TEST-PLAN*"):
-                            test_plan_path = str(f.relative_to(REPO_ROOT))
-                            break
-                item["test_plan_path"] = test_plan_path
-                verification_queue["pending_test_tasks"].append(item)
-    except (json.JSONDecodeError, ValueError):
-        pass
+    # Pending test tasks — query ALL verifiable roles (#4803)
+    for query_role in verifiable_roles:
+        result = _run_script("tracker.py", "list-tasks", query_role, "--status", "pending-test")
+        try:
+            if result.returncode == 0 and result.stdout.strip():
+                items = json.loads(result.stdout)
+                for item in (items if isinstance(items, list) else []):
+                    num = item.get("number", "")
+                    branch = f"squidsquad/{query_role}/{num}" if num else ""
+                    item["branch"] = branch
+                    item["source_role"] = query_role
+                    test_plan_path = ""
+                    for planning_dir in [SQUID_DIR / "pm" / "planning", SQUID_DIR / "qa" / "planning"]:
+                        if planning_dir.exists():
+                            for f in planning_dir.glob(f"*{num}*TEST-PLAN*"):
+                                test_plan_path = str(f.relative_to(REPO_ROOT))
+                                break
+                    item["test_plan_path"] = test_plan_path
+                    verification_queue["pending_test_tasks"].append(item)
+        except (json.JSONDecodeError, ValueError):
+            pass
 
     # Open PRs
     open_prs = []
