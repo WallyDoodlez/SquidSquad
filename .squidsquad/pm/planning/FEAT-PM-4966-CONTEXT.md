@@ -16,13 +16,13 @@ The harness becomes the single owner of agent lifecycle. Wrapper scripts are eli
 
 - **Wrapper removal**: Wrapper scripts deleted entirely. No respawn loop in wrappers — harness is the wrapper. Template wrappers (references/templates/start-role.*) also deleted.
 
-- **.stop-after-cycle cleanup**: cycle_post.py deletes .stop-after-cycle after reading it. Harness also deletes it on crash detection before reboot. Two cleanup points cover all paths.
+- **.stop-after-cycle eliminated entirely**: Replaced with harness intent API. cycle_post.py calls `GET /agents/{role}` and reads the `intent` field (endpoint already exists). No sentinel file written or read. Harness sets intent in-memory only. Safe default on API failure = "no intent, continue running." Clone port discovery via parent-directory walk + default port 7373 fallback. See FEAT-PM-4966-SENTINEL-RESEARCH.md for full analysis.
 
 - **.stop file eliminated**: Intent lives in harness memory only. No .stop sentinel written or read.
 
 - **.restart file eliminated**: Harness manages restarts directly via intent state machine.
 
-- **Sentinel files eliminated**: .health, .pid, .claude-pid, .stop, .restart all removed. Only .stop-after-cycle remains as a harness-to-agent signal.
+- **ALL sentinel files eliminated**: .health, .pid, .claude-pid, .stop, .restart, .stop-after-cycle all removed. Zero sentinel files. Intent communicated via harness API only.
 
 ## Dev Discretion (dev agent can choose)
 
