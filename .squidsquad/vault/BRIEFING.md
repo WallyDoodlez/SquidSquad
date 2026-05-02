@@ -4,19 +4,20 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #4439 EPIC: SquidSquad Harness — unified agent platform (pending, high, role:skill)
+- #4765 compose.py L4 role filtering fix (pending-test, medium, role:skill)
+- #4709 EPIC Harness Phase 2: Event bus + agent communication (planned, high, role:skill)
 - #4221 Agent harness — supervisor process for all agents (pending, high, role:skill)
 - #3963 EPIC: Web dashboard — visual interface for SquidSquad (pending, high, role:skill)
-- #4449 L4 project instructions: PM/DM verify distribution packaging (planned, high, role:skill)
 - #3969 DM doc improvement loop — staleness detection (pending-test, high, role:dm)
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm)
 
 ## Recently Shipped
 
+- #4449 L4 project instructions: PM/DM verify distribution packaging
+- #4439 EPIC: SquidSquad Harness — unified agent platform
 - #4541 Agent-driven composition (compose.py LLM pipeline)
 - #4179 Dev L2 SOUL: divide-and-conquer instinct
 - #4084 Draft PR workflow for dev agents
-- #4564 Installer-files.txt duplicate fix
 
 ## Core Architecture
 
@@ -40,9 +41,9 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Constraints & Blockers
 
 - Boot detection: heartbeat-based with boot lock
-- Harness epic (#4439) is the next major initiative — pending approval
+- Harness epic (#4439) shipped; Phase 2 (#4709) planned, awaiting human approval
 
 ## Team State
 
 - Active agents: pm, qa, skill, dm, designer
-- Current version: 0.30.0
+- Current version: 0.31.0

@@ -132,6 +132,9 @@ def _get_all_roles():
             # QA: present if listed in Dev Agents or "QA**: always present"
             if re.search(r"\*\*QA\*\*:\s*always present", text, re.IGNORECASE):
                 roles.add("qa")
+            # PM: present if "PM**: always present" in config
+            if re.search(r"\*\*PM\*\*:\s*always present", text, re.IGNORECASE):
+                roles.add("pm")
         except Exception:
             pass
     return sorted(roles)
