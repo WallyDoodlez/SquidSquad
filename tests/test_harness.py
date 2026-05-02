@@ -218,5 +218,158 @@ class TestHarnessHealthPolling(unittest.TestCase):
         self.assertEqual(state.get_agent("dm").status, "stopped")
 
 
+class TestEndpointsViaTestClient(unittest.TestCase):
+    """Test FastAPI endpoints using TestClient with mocked dependencies."""
+
+    @classmethod
+    def setUpClass(cls):
+        from fastapi.testclient import TestClient
+        from harness import app, state, AgentState
+
+        # Pre-populate state so endpoints have data to work with
+        state.start_time = time.time()
+        state.port = 7373
+
+        cls.client = TestClient(app, raise_server_exceptions=False)
+        cls.app = app
+        cls.state = state
+
+    def test_get_status(self):
+        """GET /status returns harness and agent info."""
+        with patch("harness.health_check.check_all_agents", return_value={
+            "agents": [{"role": "skill", "health": "healthy", "clone_path": "/a"}],
+            "all_healthy": True,
+        }):
+            resp = self.client.get("/status")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("harness", data)
+        self.assertIn("agents", data)
+        self.assertEqual(data["harness"]["status"], "running")
+
+    def test_get_agents(self):
+        """GET /agents returns agent list."""
+        with patch("harness.health_check.check_all_agents", return_value={
+            "agents": [
+                {"role": "skill", "health": "healthy", "clone_path": "/a"},
+                {"role": "pm", "health": "stalled", "clone_path": "/b"},
+            ],
+            "all_healthy": False,
+        }):
+            resp = self.client.get("/agents")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("agents", data)
+        self.assertGreaterEqual(len(data["agents"]), 1)
+
+    def test_post_agents_all_start(self):
+        """POST /agents/all/start returns 200 with results."""
+        mock_result = {"role": "skill", "action": "skip", "success": True,
+                       "message": "skip: already running", "timestamp": 0}
+        with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+             patch("harness.boot_remote.boot_agent", return_value=mock_result):
+            resp = self.client.post("/agents/all/start")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("results", data)
+        self.assertEqual(len(data["results"]), 1)
+        self.assertTrue(data["results"][0]["success"])
+
+    def test_post_agents_all_stop_skips_stopped(self):
+        """POST /agents/all/stop skips already-stopped agents."""
+        with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+             patch("harness.boot_remote._get_clone_path", return_value="/fake"), \
+             patch("harness.boot_remote._has_stop_sentinel", return_value=True):
+            resp = self.client.post("/agents/all/stop")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["results"][0]["action"], "skip")
+        self.assertIn("Already stopped", data["results"][0]["message"])
+
+    def test_post_agent_start(self):
+        """POST /agents/{role}/start spawns agent."""
+        mock_result = {"role": "skill", "action": "spawn", "success": True,
+                       "message": "spawned", "timestamp": 0}
+        with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+             patch("harness.boot_remote.boot_agent", return_value=mock_result):
+            # Clear any cached running state
+            from harness import state as harness_state
+            if harness_state.get_agent("skill"):
+                harness_state.get_agent("skill").status = "stopped"
+            resp = self.client.post("/agents/skill/start")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data["success"])
+
+    def test_post_agent_stop(self):
+        """POST /agents/{role}/stop writes sentinel."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir):
+                resp = self.client.post("/agents/skill/stop")
+            self.assertEqual(resp.status_code, 200)
+            self.assertTrue((role_dir / ".stop").exists())
+
+    def test_post_agent_restart(self):
+        """POST /agents/{role}/restart calls reboot."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.reboot_agent.reboot", return_value=0):
+                resp = self.client.post("/agents/skill/restart")
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertTrue(data["success"])
+            self.assertEqual(data["action"], "restart")
+
+    def test_post_agent_restart_failure(self):
+        """POST /agents/{role}/restart reports failure."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.reboot_agent.reboot", return_value=1):
+                resp = self.client.post("/agents/skill/restart")
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertFalse(data["success"])
+
+    def test_post_shutdown_returns_202(self):
+        """POST /shutdown returns 202 Accepted (non-blocking)."""
+        with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+             patch("harness.boot_remote._get_clone_path", return_value="/fake"), \
+             patch("harness.boot_remote._has_stop_sentinel", return_value=True), \
+             patch("harness.os._exit"):  # Prevent actual exit
+            resp = self.client.post("/shutdown")
+        self.assertEqual(resp.status_code, 202)
+        data = resp.json()
+        self.assertEqual(data["status"], "shutting_down")
+
+    def test_unknown_role_returns_404(self):
+        """POST /agents/{unknown}/start returns 404."""
+        with patch("harness.boot_remote._get_all_roles", return_value=["skill"]):
+            resp = self.client.post("/agents/nonexistent/start")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_agents_all_start_not_captured_by_role_param(self):
+        """POST /agents/all/start should NOT hit the {role} handler."""
+        mock_result = {"role": "skill", "action": "skip", "success": True,
+                       "message": "skip", "timestamp": 0}
+        with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+             patch("harness.boot_remote.boot_agent", return_value=mock_result):
+            resp = self.client.post("/agents/all/start")
+        # Should be 200 from start_all, not 404 from _validate_role("all")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("results", resp.json())
+
+
 if __name__ == "__main__":
     unittest.main()
