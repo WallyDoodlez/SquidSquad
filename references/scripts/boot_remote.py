@@ -112,7 +112,7 @@ def _parse_dev_agents():
 
 
 def _get_all_roles():
-    """Get all agent roles from config.md only. Excludes 'pm' (bootmaster).
+    """Get all agent roles from config.md, including PM.
 
     Only reads the Dev Agents list from config.md — does not scan directories
     or .local-config for extra roles. This prevents booting agents that have
@@ -123,6 +123,9 @@ def _get_all_roles():
     if CONFIG_MD.exists():
         try:
             text = CONFIG_MD.read_text(encoding="utf-8")
+            # PM: always present
+            if re.search(r"\*\*PM\*\*:\s*always present", text, re.IGNORECASE):
+                roles.add("pm")
             # DM: present if "DM**: present" in config
             if re.search(r"\*\*DM\*\*:\s*present", text, re.IGNORECASE):
                 roles.add("dm")
@@ -131,7 +134,6 @@ def _get_all_roles():
                 roles.add("qa")
         except Exception:
             pass
-    roles.discard("pm")  # PM is the bootmaster, never boots itself
     return sorted(roles)
 
 

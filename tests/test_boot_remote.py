@@ -377,7 +377,21 @@ class TestBootAgentCleansRestart:
 class TestGetAllRoles:
     @patch("boot_remote._parse_dev_agents", return_value=["skill", "qa"])
     @patch("boot_remote._parse_local_config", return_value={"skill": Path("/tmp")})
-    def test_excludes_pm(self, mock_local, mock_devs):
+    def test_includes_pm_from_config(self, mock_local, mock_devs, tmp_path):
+        config = tmp_path / "config.md"
+        config.write_text("- **PM**: always present\n- **DM**: present\n")
+        squid_dir = tmp_path
+        with patch.object(boot_remote, "SQUIDSQUAD_DIR", squid_dir), \
+             patch.object(boot_remote, "CONFIG_MD", config):
+            roles = boot_remote._get_all_roles()
+            assert "pm" in roles
+            assert "skill" in roles
+            assert "qa" in roles
+            assert "dm" in roles
+
+    @patch("boot_remote._parse_dev_agents", return_value=["skill", "qa"])
+    @patch("boot_remote._parse_local_config", return_value={"skill": Path("/tmp")})
+    def test_excludes_pm_when_not_in_config(self, mock_local, mock_devs):
         with patch.object(boot_remote, "SQUIDSQUAD_DIR", Path("/nonexistent")):
             roles = boot_remote._get_all_roles()
             assert "pm" not in roles
