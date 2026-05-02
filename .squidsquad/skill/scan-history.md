@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-02 08:03
+
+- **Files scanned**: references/scripts/cycle_post.py, references/scripts/vault_remember.py, references/scripts/compose.py
+- **Findings**: #4918 (compose.py deprecated tempfile.mktemp() TOCTOU race — low), #4919 (vault_remember.py reset_writes silent no-op when field absent — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-01 22:05
 
 - **Files scanned**: references/scripts/diagnostics.py, references/scripts/harness.py, references/scripts/squidsquad_cli.py, references/scripts/forge_adapter.py, references/scripts/state_bus.py
