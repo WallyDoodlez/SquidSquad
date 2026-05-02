@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-01 22:05
+
+- **Files scanned**: references/scripts/diagnostics.py, references/scripts/harness.py, references/scripts/squidsquad_cli.py, references/scripts/forge_adapter.py, references/scripts/state_bus.py
+- **Findings**: #4746 diagnostics.py generate_report/is_public_repo untested, #4747 harness.py FastAPI endpoints untested
+- **Items rejected by human**: none
+
 ## Scan — 2026-05-01 06:32
 
 - **Files scanned**: tests/test_capability_check.py, tests/test_comms_adapter.py, tests/test_add_role.py, tests/test_soul_adaptation.py, tests/test_shared_fs.py
