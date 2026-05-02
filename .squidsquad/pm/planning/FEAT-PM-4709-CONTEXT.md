@@ -15,13 +15,16 @@ Add event bus to the harness. Mechanical scripts (cycle_pre/cycle_post) emit eve
 
 ```json
 {
-  "event_type": "cycle-start|cycle-end|phase-change",
+  "id": "a3f7b2c1",
+  "event_type": "cycle-start|cycle-end|phase-change|git-*",
   "role": "pm|skill|qa|dm",
   "timestamp": "2026-05-01T18:00:00",
   "cycle_number": 862,
   "payload": {}
 }
 ```
+
+- `id`: short SHA (8 chars, generated from hash of timestamp+role+event_type+payload). Unique per event. Useful for referencing specific events in logs, debugging, and future API queries.
 
 ### Events:
 
@@ -79,10 +82,10 @@ Split display:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ pm:    🦑 #867 idle          ctx: 22%  session: $1.42  week: $18.50        │
-│ skill: 🦑 #867 implementing  ctx: 45%  session: $3.10  week: $42.30        │
-│ qa:    🦑 #165 verifying     ctx: 31%  session: $0.80  week: $12.60        │
-│ dm:    🦑 #47  idle          ctx: 12%  session: $0.35  week: $8.20         │
+│ pm:    🦑 #869 idle       ctx: 22%  │  Session: $5.67                      │
+│ skill: 🦑 #868 implementing ctx: 45%  │  Week:    $81.60                     │
+│ qa:    🦑 #166 verifying  ctx: 31%  │                                      │
+│ dm:    🦑 #48  delivering ctx: 12%  │                                      │
 └─────────────────────────────────────────────────────────────────────────────┘
 [21:03:11] skill git-pull     ok
 [21:03:12] skill cycle-start  #867
@@ -90,13 +93,44 @@ Split display:
 [21:03:33] skill cycle-end    #867 (active)
 ```
 
-Health bar shows per agent:
-- Status icon + current cycle + phase
-- **Context pressure** (% of context window used)
-- **Session usage** (token cost this session)
-- **Week usage** (accumulated token cost this week)
+Health bar shows:
+- **Per agent**: status icon + current cycle + phase + context pressure %
+- **Bottom: two usage bars** (account-wide, Claude provides % only):
 
-Uses basic ANSI cursor control or `rich` library for the persistent header. Dev discretion on implementation.
+Layout: **health pinned top (aligned table), logs scroll below.**
+
+```
+┌─────────┬────┬───────┬──────────────┬──────┐
+│ Agent   │    │ Cycle │ Phase        │ Ctx  │
+├─────────┼────┼───────┼──────────────┼──────┤
+│ pm      │ 🦑 │ #869  │ idle         │ 22%  │
+│ skill   │ 🦑 │ #868  │ implementing │ 45%  │
+│ qa      │ 🦑 │ #166  │ verifying    │ 31%  │
+│ dm      │ 🦑 │ #48   │ delivering   │ 12%  │
+├─────────┴────┴───────┴──────────────┴──────┤
+│ Session: ████████░░░░░░░░░░░░ 42%          │
+│ Weekly:  ██████████████░░░░░░ 68%          │
+└────────────────────────────────────────────┘
+[21:33:42] pm    cycle-start  #869
+[21:34:15] skill git-pull     ok
+[21:35:02] skill git-commit   "feat: event bus" (3 files)
+[21:35:08] skill cycle-end    #868 (active)
+[21:37:10] dm    pr-merge     PR #4715
+[21:37:20] dm    cycle-end    #48 (active) — shipped #4439
+```
+
+- Health table pinned top, redraws in-place on each event
+- Usage bars below health table, also pinned
+- Event log scrolls freely below
+- Table columns aligned: Agent | Status | Cycle | Phase | Context %
+
+Use `rich` library (already installed). Specifically:
+- `rich.table.Table` for the aligned agent health table
+- `rich.progress.Progress` for the session/weekly usage bars
+- `rich.live.Live` for the pinned top section (redraws in-place)
+- `rich.console.Console` for the scrolling event log below
+
+`rich` handles cross-platform terminal rendering (Windows + Mac + Linux).
 
 ## Port Distribution (clone isolation)
 
