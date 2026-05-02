@@ -28,7 +28,7 @@ If exit code 0 (quiet), skip the reflection below — nothing to reflect on.
 python references/scripts/vault_remember.py reset-writes [ROLE]
 ```
 
-**Reflection prompt**: Review this cycle's iteration log and evaluate each category:
+**Reflection prompt**: Review this cycle's iteration log and evaluate each category. Do NOT capture human preferences or behavioral directives here — those belong in soul shepherd (observed signals) or L4 (explicit directives).
 
 1. **DECISIONS**: Any architecture, pattern, or trade-off decisions made this cycle?
    → If yes: vault-create `galaxy/decision-*.md`
@@ -36,9 +36,7 @@ python references/scripts/vault_remember.py reset-writes [ROLE]
    → If yes: vault-create `galaxy/pattern-*.md`
 3. **LEARNINGS**: Anything fail or succeed unexpectedly?
    → If yes: vault-create `galaxy/learning-*.md`
-4. **HUMAN PREFERENCES**: Did the human express any preference, style, or value?
-   → If yes: vault-update `areas/human-profile.md`
-5. **PROJECT CONTEXT**: Did project goals, constraints, or architecture change?
+4. **PROJECT CONTEXT**: Did project goals, constraints, or architecture change?
    → If yes: vault-update `projects/<name>.md` or `BRIEFING.md`
 
 For each candidate, apply these **deterministic gates IN ORDER**:
