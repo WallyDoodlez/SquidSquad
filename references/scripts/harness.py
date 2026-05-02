@@ -64,11 +64,20 @@ except ImportError:
 class AgentState:
     """In-memory state for a single agent."""
 
-    __slots__ = ("role", "status", "last_health_check", "boot_time", "clone_path")
+    __slots__ = ("role", "status", "intent", "last_health_check", "boot_time", "clone_path")
+
+    # Intent values:
+    #   "running"    — agent should be alive; auto-reboot on death (#4949)
+    #   "stopping"   — graceful stop requested; do NOT reboot after death
+    #   "restarting" — graceful restart; reboot after death
+    INTENT_RUNNING = "running"
+    INTENT_STOPPING = "stopping"
+    INTENT_RESTARTING = "restarting"
 
     def __init__(self, role: str, clone_path: str = ""):
         self.role = role
         self.status = "unknown"  # unknown | starting | running | stopped | stalled | error
+        self.intent = self.INTENT_RUNNING  # default: agent should be alive
         self.last_health_check = None
         self.boot_time = None
         self.clone_path = clone_path
@@ -77,6 +86,7 @@ class AgentState:
         return {
             "role": self.role,
             "status": self.status,
+            "intent": self.intent,
             "boot_time": self.boot_time,
             "last_health_check": self.last_health_check,
             "clone_path": self.clone_path,
@@ -107,12 +117,14 @@ class HarnessState:
             return [a.to_dict() for a in self.agents.values()]
 
     def update_health(self):
-        """Poll sentinel files and update agent states."""
+        """Poll sentinel files, update agent states, and auto-reboot (#4949)."""
         try:
             report = health_check.check_all_agents()
         except SystemExit:
             # health_check exits on missing .local-config
             return
+
+        reboot_roles = []
 
         with self._lock:
             for agent_report in report.get("agents", []):
@@ -127,8 +139,12 @@ class HarnessState:
 
                 # Map health_check categories to harness status
                 health = agent_report.get("health", "unknown")
+                prev_status = agent.status
                 if health == "healthy":
                     agent.status = "running"
+                    # Agent came back alive — reset intent to running
+                    if agent.intent == AgentState.INTENT_RESTARTING:
+                        agent.intent = AgentState.INTENT_RUNNING
                 elif health == "stalled":
                     agent.status = "stalled"
                 elif health == "stopped":
@@ -137,6 +153,34 @@ class HarnessState:
                     agent.status = "error"
                 else:
                     agent.status = "unknown"
+
+                # Auto-reboot: agent is dead but should be alive (#4949)
+                is_dead = agent.status in ("stopped", "error", "stalled")
+                was_alive = prev_status == "running"
+                should_reboot = agent.intent in (
+                    AgentState.INTENT_RUNNING,
+                    AgentState.INTENT_RESTARTING,
+                )
+                if is_dead and was_alive and should_reboot:
+                    reboot_roles.append(role)
+                    agent.status = "starting"
+
+                # Stopping intent fulfilled — agent died as requested
+                if is_dead and agent.intent == AgentState.INTENT_STOPPING:
+                    # Clean up .stop-after-cycle if it still exists
+                    sac = Path(agent.clone_path) / ".squidsquad" / role / ".stop-after-cycle"
+                    try:
+                        sac.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+
+        # Reboot outside the lock to avoid blocking health updates
+        for role in reboot_roles:
+            _log(f"Auto-rebooting {role} (was running, intent={self.agents[role].intent})")
+            try:
+                boot_remote.boot_agent(role)
+            except Exception as e:
+                _log(f"Auto-reboot of {role} failed: {e}")
 
     def start_poller(self):
         """Start background health polling thread."""
@@ -297,7 +341,7 @@ async def start_all():
 
 @app.post("/agents/all/stop")
 async def stop_all():
-    """Stop all agents gracefully. Only stops agents that are currently running."""
+    """Stop all agents gracefully (#4949). Sets intent and writes .stop-after-cycle."""
     roles = boot_remote._get_all_roles()
     _log(f"Stopping all agents: {', '.join(roles)}")
 
@@ -305,11 +349,12 @@ async def stop_all():
     for role in roles:
         clone_path = boot_remote._get_clone_path(role)
 
-        # Skip agents that are explicitly stopped (.stop sentinel)
-        if boot_remote._has_stop_sentinel(clone_path, role):
+        # Check if agent is already stopped (intent or health)
+        agent_state = state.get_agent(role)
+        if agent_state and agent_state.intent == AgentState.INTENT_STOPPING:
             results.append({"role": role, "action": "skip", "success": True,
-                            "message": "Already stopped"})
-            _log(f"  {role}: skip (already stopped)")
+                            "message": "Already stopping"})
+            _log(f"  {role}: skip (already stopping)")
             continue
 
         # Skip agents that need booting (dead/not running)
@@ -320,22 +365,21 @@ async def stop_all():
             _log(f"  {role}: skip (not running)")
             continue
 
-        stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"
-        sac_file = Path(clone_path) / ".squidsquad" / role / ".stop-after-cycle"
+        # Set intent and write .stop-after-cycle
+        if not agent_state:
+            agent_state = AgentState(role, clone_path)
+        agent_state.intent = AgentState.INTENT_STOPPING
+        state.set_agent(role, agent_state)
 
+        sac_file = Path(clone_path) / ".squidsquad" / role / ".stop-after-cycle"
         try:
-            stop_file.parent.mkdir(parents=True, exist_ok=True)
-            stop_file.write_text("stopped via harness", encoding="utf-8")
+            sac_file.parent.mkdir(parents=True, exist_ok=True)
             sac_file.write_text("stopped via harness", encoding="utf-8")
             results.append({"role": role, "action": "stop", "success": True})
-            _log(f"  {role}: stop sentinel written")
+            _log(f"  {role}: intent=stopping, .stop-after-cycle written")
         except OSError as e:
             results.append({"role": role, "action": "stop", "success": False, "error": str(e)})
             _log(f"  {role}: FAILED -- {e}")
-
-        agent_state = state.get_agent(role) or AgentState(role)
-        agent_state.status = "stopped"
-        state.set_agent(role, agent_state)
 
     return {"results": results}
 
@@ -371,6 +415,7 @@ async def start_agent(role: str):
     if result["success"]:
         agent_state = state.get_agent(role) or AgentState(role)
         agent_state.status = "starting"
+        agent_state.intent = AgentState.INTENT_RUNNING
         agent_state.boot_time = time.time()
         state.set_agent(role, agent_state)
 
@@ -380,66 +425,63 @@ async def start_agent(role: str):
 
 @app.post("/agents/{role}/stop")
 async def stop_agent(role: str):
-    """Graceful stop — writes .stop sentinel."""
+    """Graceful stop — set intent to stopping, write .stop-after-cycle (#4949)."""
     _validate_role(role)
-    clone_path = boot_remote._get_clone_path(role)
-    stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"
 
-    try:
-        stop_file.parent.mkdir(parents=True, exist_ok=True)
-        stop_file.write_text("stopped via harness", encoding="utf-8")
-    except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Failed to write .stop: {e}")
-
-    # Also write .stop-after-cycle for graceful exit
-    sac_file = Path(clone_path) / ".squidsquad" / role / ".stop-after-cycle"
-    try:
-        sac_file.write_text("stopped via harness", encoding="utf-8")
-    except OSError:
-        pass
-
-    _log(f"Stopped {role} (sentinel written)")
-
+    # Set intent in memory — harness won't reboot after agent exits
     agent_state = state.get_agent(role) or AgentState(role)
-    agent_state.status = "stopped"
+    agent_state.intent = AgentState.INTENT_STOPPING
     state.set_agent(role, agent_state)
 
-    return {"role": role, "action": "stop", "message": "Stop sentinel written"}
+    # Write .stop-after-cycle so cycle_post exits gracefully
+    clone_path = boot_remote._get_clone_path(role)
+    sac_file = Path(clone_path) / ".squidsquad" / role / ".stop-after-cycle"
+    try:
+        sac_file.parent.mkdir(parents=True, exist_ok=True)
+        sac_file.write_text("stopped via harness", encoding="utf-8")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to write .stop-after-cycle: {e}")
+
+    _log(f"Stopped {role} (intent=stopping, .stop-after-cycle written)")
+
+    return {"role": role, "action": "stop", "message": "Stop requested"}
 
 
 @app.post("/agents/{role}/restart")
 async def restart_agent(role: str):
-    """Kill and respawn an agent."""
+    """Graceful restart — set intent, write .stop-after-cycle, reboot on death (#4949)."""
     _validate_role(role)
 
     _log(f"Restarting {role}...")
 
-    # Remove .stop sentinel if present (allow re-start)
+    # Set intent — harness will auto-reboot when agent exits
+    agent_state = state.get_agent(role) or AgentState(role)
+    agent_state.intent = AgentState.INTENT_RESTARTING
+    state.set_agent(role, agent_state)
+
+    # Write .stop-after-cycle so agent exits gracefully after current cycle
     clone_path = boot_remote._get_clone_path(role)
+    sac_file = Path(clone_path) / ".squidsquad" / role / ".stop-after-cycle"
+    try:
+        sac_file.parent.mkdir(parents=True, exist_ok=True)
+        sac_file.write_text("restart via harness", encoding="utf-8")
+    except OSError:
+        pass
+
+    # Remove .stop sentinel if present (allow re-start after previous stop)
     stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"
     try:
         stop_file.unlink(missing_ok=True)
     except OSError:
         pass
 
-    # Use reboot_agent's force mode for immediate restart
-    rc = reboot_agent.reboot(role, timeout=30, force=True)
-    success = rc == 0
-
-    if success:
-        agent_state = state.get_agent(role) or AgentState(role)
-        agent_state.status = "starting"
-        agent_state.boot_time = time.time()
-        state.set_agent(role, agent_state)
-        _log(f"  {role}: restarted")
-    else:
-        _log(f"  {role}: restart failed (exit code {rc})")
+    _log(f"  {role}: restart requested (intent=restarting, .stop-after-cycle written)")
 
     return {
         "role": role,
         "action": "restart",
-        "success": success,
-        "message": "Restarted" if success else f"Restart failed (code {rc})",
+        "success": True,
+        "message": "Restart requested — agent will exit after current cycle and reboot",
     }
 
 
@@ -458,9 +500,10 @@ async def shutdown():
 
         running_roles = []
         for role in roles:
-            clone_path = boot_remote._get_clone_path(role)
-            if boot_remote._has_stop_sentinel(clone_path, role):
-                _log(f"  {role}: skip (already stopped)")
+            # Use intent to check if already stopping (#4949)
+            agent = state.get_agent(role)
+            if agent and agent.intent == AgentState.INTENT_STOPPING:
+                _log(f"  {role}: skip (already stopping)")
                 continue
             needs_boot, _, _ = boot_remote._needs_boot(role)
             if needs_boot:
@@ -472,11 +515,13 @@ async def shutdown():
             _log(f"Stopping running agents: {', '.join(running_roles)}")
             for role in running_roles:
                 clone_path = boot_remote._get_clone_path(role)
-                stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"
+                # Set intent and write .stop-after-cycle (#4949)
+                agent = state.get_agent(role) or AgentState(role, clone_path)
+                agent.intent = AgentState.INTENT_STOPPING
+                state.set_agent(role, agent)
                 sac_file = Path(clone_path) / ".squidsquad" / role / ".stop-after-cycle"
                 try:
-                    stop_file.parent.mkdir(parents=True, exist_ok=True)
-                    stop_file.write_text("stopped via harness shutdown", encoding="utf-8")
+                    sac_file.parent.mkdir(parents=True, exist_ok=True)
                     sac_file.write_text("stopped via harness shutdown", encoding="utf-8")
                 except OSError:
                     pass

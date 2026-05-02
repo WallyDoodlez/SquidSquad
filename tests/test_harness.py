@@ -28,6 +28,7 @@ class TestAgentState(unittest.TestCase):
         s = AgentState("skill", "/some/path")
         self.assertEqual(s.role, "skill")
         self.assertEqual(s.status, "unknown")
+        self.assertEqual(s.intent, AgentState.INTENT_RUNNING)
         self.assertEqual(s.clone_path, "/some/path")
         self.assertIsNone(s.boot_time)
         self.assertIsNone(s.last_health_check)
@@ -275,16 +276,19 @@ class TestEndpointsViaTestClient(unittest.TestCase):
         self.assertEqual(len(data["results"]), 1)
         self.assertTrue(data["results"][0]["success"])
 
-    def test_post_agents_all_stop_skips_stopped(self):
-        """POST /agents/all/stop skips already-stopped agents."""
+    def test_post_agents_all_stop_skips_stopping(self):
+        """POST /agents/all/stop skips agents already stopping (#4949)."""
+        from harness import state as harness_state, AgentState
+        agent = AgentState("skill")
+        agent.intent = AgentState.INTENT_STOPPING
+        harness_state.set_agent("skill", agent)
         with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
-             patch("harness.boot_remote._get_clone_path", return_value="/fake"), \
-             patch("harness.boot_remote._has_stop_sentinel", return_value=True):
+             patch("harness.boot_remote._get_clone_path", return_value="/fake"):
             resp = self.client.post("/agents/all/stop")
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertEqual(data["results"][0]["action"], "skip")
-        self.assertIn("Already stopped", data["results"][0]["message"])
+        self.assertIn("Already stopping", data["results"][0]["message"])
 
     def test_post_agent_start(self):
         """POST /agents/{role}/start spawns agent."""
@@ -302,7 +306,7 @@ class TestEndpointsViaTestClient(unittest.TestCase):
         self.assertTrue(data["success"])
 
     def test_post_agent_stop(self):
-        """POST /agents/{role}/stop writes sentinel."""
+        """POST /agents/{role}/stop sets intent and writes .stop-after-cycle (#4949)."""
         import tempfile
         with tempfile.TemporaryDirectory() as tmpdir:
             role_dir = Path(tmpdir) / ".squidsquad" / "skill"
@@ -311,7 +315,12 @@ class TestEndpointsViaTestClient(unittest.TestCase):
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir):
                 resp = self.client.post("/agents/skill/stop")
             self.assertEqual(resp.status_code, 200)
-            self.assertTrue((role_dir / ".stop").exists())
+            # .stop-after-cycle should be written (graceful exit signal)
+            self.assertTrue((role_dir / ".stop-after-cycle").exists())
+            # Intent should be stopping
+            from harness import state as harness_state, AgentState
+            agent = harness_state.get_agent("skill")
+            self.assertEqual(agent.intent, AgentState.INTENT_STOPPING)
 
     def test_post_agent_restart(self):
         """POST /agents/{role}/restart calls reboot."""
@@ -328,19 +337,24 @@ class TestEndpointsViaTestClient(unittest.TestCase):
             self.assertTrue(data["success"])
             self.assertEqual(data["action"], "restart")
 
-    def test_post_agent_restart_failure(self):
-        """POST /agents/{role}/restart reports failure."""
+    def test_post_agent_restart_sets_intent(self):
+        """POST /agents/{role}/restart sets intent=restarting (#4949)."""
         import tempfile
         with tempfile.TemporaryDirectory() as tmpdir:
             role_dir = Path(tmpdir) / ".squidsquad" / "skill"
             role_dir.mkdir(parents=True)
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
-                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
-                 patch("harness.reboot_agent.reboot", return_value=1):
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir):
                 resp = self.client.post("/agents/skill/restart")
             self.assertEqual(resp.status_code, 200)
             data = resp.json()
-            self.assertFalse(data["success"])
+            self.assertTrue(data["success"])
+            # Intent should be restarting
+            from harness import state as harness_state, AgentState
+            agent = harness_state.get_agent("skill")
+            self.assertEqual(agent.intent, AgentState.INTENT_RESTARTING)
+            # .stop-after-cycle should be written
+            self.assertTrue((role_dir / ".stop-after-cycle").exists())
 
     def test_post_shutdown_returns_202(self):
         """POST /shutdown returns 202 Accepted (non-blocking)."""
@@ -369,6 +383,91 @@ class TestEndpointsViaTestClient(unittest.TestCase):
         # Should be 200 from start_all, not 404 from _validate_role("all")
         self.assertEqual(resp.status_code, 200)
         self.assertIn("results", resp.json())
+
+
+# ---------------------------------------------------------------------------
+# Intent-based lifecycle — regression #4949
+# ---------------------------------------------------------------------------
+
+class TestIntentLifecycle(unittest.TestCase):
+    """Test intent tracking and auto-reboot logic (#4949)."""
+
+    def test_agent_state_has_intent(self):
+        from harness import AgentState
+        s = AgentState("skill")
+        self.assertEqual(s.intent, AgentState.INTENT_RUNNING)
+
+    def test_intent_in_to_dict(self):
+        from harness import AgentState
+        s = AgentState("skill")
+        s.intent = AgentState.INTENT_STOPPING
+        d = s.to_dict()
+        self.assertEqual(d["intent"], "stopping")
+
+    def test_auto_reboot_on_unexpected_death(self):
+        """Agent was running, dies unexpectedly, intent=running → reboot."""
+        from harness import HarnessState, AgentState
+        hs = HarnessState()
+        agent = AgentState("skill", "/tmp/clone")
+        agent.status = "running"
+        agent.intent = AgentState.INTENT_RUNNING
+        hs.set_agent("skill", agent)
+
+        # Simulate health check returning "stopped"
+        mock_report = {
+            "agents": [{"role": "skill", "health": "stopped", "clone_path": "/tmp/clone"}]
+        }
+        with patch("harness.health_check.check_all_agents", return_value=mock_report), \
+             patch("harness.boot_remote.boot_agent") as mock_boot:
+            hs.update_health()
+
+        mock_boot.assert_called_once_with("skill")
+        self.assertEqual(hs.get_agent("skill").status, "starting")
+
+    def test_no_reboot_when_intent_stopping(self):
+        """Agent was running, dies, intent=stopping → do NOT reboot."""
+        from harness import HarnessState, AgentState
+        hs = HarnessState()
+        agent = AgentState("skill", "/tmp/clone")
+        agent.status = "running"
+        agent.intent = AgentState.INTENT_STOPPING
+        hs.set_agent("skill", agent)
+
+        mock_report = {
+            "agents": [{"role": "skill", "health": "stopped", "clone_path": "/tmp/clone"}]
+        }
+        with patch("harness.health_check.check_all_agents", return_value=mock_report), \
+             patch("harness.boot_remote.boot_agent") as mock_boot:
+            hs.update_health()
+
+        mock_boot.assert_not_called()
+
+    def test_reboot_on_restart_intent(self):
+        """Agent dies with intent=restarting → reboot and reset intent."""
+        from harness import HarnessState, AgentState
+        hs = HarnessState()
+        agent = AgentState("skill", "/tmp/clone")
+        agent.status = "running"
+        agent.intent = AgentState.INTENT_RESTARTING
+        hs.set_agent("skill", agent)
+
+        # First health check: agent dies → reboot triggered
+        mock_report_dead = {
+            "agents": [{"role": "skill", "health": "stopped", "clone_path": "/tmp/clone"}]
+        }
+        with patch("harness.health_check.check_all_agents", return_value=mock_report_dead), \
+             patch("harness.boot_remote.boot_agent"):
+            hs.update_health()
+
+        # Second health check: agent came back → intent reset to running
+        mock_report_alive = {
+            "agents": [{"role": "skill", "health": "healthy", "clone_path": "/tmp/clone"}]
+        }
+        with patch("harness.health_check.check_all_agents", return_value=mock_report_alive), \
+             patch("harness.boot_remote.boot_agent"):
+            hs.update_health()
+
+        self.assertEqual(hs.get_agent("skill").intent, AgentState.INTENT_RUNNING)
 
 
 if __name__ == "__main__":
