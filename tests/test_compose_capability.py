@@ -154,10 +154,10 @@ class TestCapabilityCheck:
         import yaml
 
         # Role with any_of
-        role_dir = tmp_path / "roles" / "designer"
+        role_dir = tmp_path / "roles" / "qa"
         role_dir.mkdir(parents=True)
         (role_dir / "manifest.yaml").write_text(
-            "schema_version: 2\nid: designer\nrequires_sub_skills:\n  any_of: [figma, local_html]\n",
+            "schema_version: 2\nid: qa\nrequires_sub_skills:\n  any_of: [figma, local_html]\n",
             encoding="utf-8",
         )
 
@@ -174,7 +174,7 @@ class TestCapabilityCheck:
         try:
             capability_check.ROLES_DIR = tmp_path / "roles"
             capability_check.CAPABILITIES_DIR = tmp_path / "capabilities"
-            code, _ = capability_check.check_role("designer")
+            code, _ = capability_check.check_role("qa")
         finally:
             capability_check.ROLES_DIR = orig_roles
             capability_check.CAPABILITIES_DIR = orig_caps
@@ -185,10 +185,10 @@ class TestCapabilityCheck:
         """any_of exits 1 if no capabilities are available."""
         import capability_check
 
-        role_dir = tmp_path / "roles" / "designer"
+        role_dir = tmp_path / "roles" / "qa"
         role_dir.mkdir(parents=True)
         (role_dir / "manifest.yaml").write_text(
-            "schema_version: 2\nid: designer\nrequires_sub_skills:\n  any_of: [figma, stitch]\n",
+            "schema_version: 2\nid: qa\nrequires_sub_skills:\n  any_of: [figma, stitch]\n",
             encoding="utf-8",
         )
 
@@ -197,7 +197,7 @@ class TestCapabilityCheck:
         try:
             capability_check.ROLES_DIR = tmp_path / "roles"
             capability_check.CAPABILITIES_DIR = tmp_path / "capabilities"
-            code, _ = capability_check.check_role("designer")
+            code, _ = capability_check.check_role("qa")
         finally:
             capability_check.ROLES_DIR = orig_roles
             capability_check.CAPABILITIES_DIR = orig_caps

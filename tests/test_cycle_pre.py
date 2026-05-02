@@ -746,10 +746,10 @@ class TestGetVerifiableRoles:
 
     def test_includes_config_dev_agents(self, monkeypatch):
         """Dev agents from config are included."""
-        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "skill, designer" if f == "dev-agents" else "")
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "skill, qa" if f == "dev-agents" else "")
         roles = cycle_pre._get_verifiable_roles()
         assert "skill" in roles
-        assert "designer" in roles
+        assert "qa" in roles
 
     def test_always_includes_dm_and_pm(self, monkeypatch):
         """dm and pm are always included regardless of config."""
@@ -775,7 +775,7 @@ class TestGetVerifiableRoles:
 
     def test_returns_sorted(self, monkeypatch):
         """Roles are returned in sorted order for determinism."""
-        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "skill, designer, qa" if f == "dev-agents" else "")
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "skill, qa, dev" if f == "dev-agents" else "")
         roles = cycle_pre._get_verifiable_roles()
         assert roles == sorted(roles)
 
@@ -867,7 +867,7 @@ class TestQAInputMultiRole:
 
     def test_qa_branch_uses_correct_role_prefix(self, patch_dirs, squid_dir, monkeypatch):
         """Branch path uses the item's source role, not hardcoded 'skill'."""
-        designer_task = [{"number": 5000, "title": "Designer task", "labels": []}]
+        qa_task = [{"number": 5000, "title": "QA task", "labels": []}]
 
         def fake_run_script(*args, **kwargs):
             fake = MagicMock()
@@ -875,8 +875,8 @@ class TestQAInputMultiRole:
             fake.stdout = "[]"
             if len(args) >= 2 and "tracker.py" in str(args[0]):
                 subcmd = args[1] if len(args) > 1 else ""
-                if subcmd == "list-tasks" and len(args) > 2 and args[2] == "designer":
-                    fake.stdout = json.dumps(designer_task)
+                if subcmd == "list-tasks" and len(args) > 2 and args[2] == "qa":
+                    fake.stdout = json.dumps(qa_task)
             elif len(args) >= 1 and "health_check.py" in str(args[0]):
                 fake.stdout = "[]"
             return fake
@@ -885,7 +885,7 @@ class TestQAInputMultiRole:
         monkeypatch.setattr(cycle_pre, "_run", lambda cmd, **kw: MagicMock(
             returncode=0, stdout="[]", stderr=""))
         monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
-            "dev-agents": "skill, designer",
+            "dev-agents": "skill, qa",
             "e2e-tests": "(none)",
             "interval": "30",
             "branch-workflow": "no", "pr-flow": "no",
@@ -895,10 +895,10 @@ class TestQAInputMultiRole:
         monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
 
         result = cycle_pre._build_qa_input("qa")
-        designer_items = [i for i in result["verification_queue"]["pending_test_tasks"]
-                           if i.get("source_role") == "designer"]
-        assert len(designer_items) == 1
-        assert designer_items[0]["branch"] == "squidsquad/designer/5000"
+        qa_items = [i for i in result["verification_queue"]["pending_test_tasks"]
+                    if i.get("source_role") == "qa"]
+        assert len(qa_items) == 1
+        assert qa_items[0]["branch"] == "squidsquad/qa/5000"
 
 
 class TestPMInputMultiRole:

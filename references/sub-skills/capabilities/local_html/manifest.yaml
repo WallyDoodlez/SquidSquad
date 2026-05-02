@@ -14,6 +14,5 @@ description: >
   files directly in a browser to review each iteration.
 provider: builtin
 docs_url: null
-applicable_roles:
-  - designer
+applicable_roles: []
 sub_skill: sub-skill.md

@@ -32,7 +32,7 @@ claude_template: instructions.md
 # PM prefers handing to a specialist when one exists, and falls through to
 # delivery when no specialist can take the work. Every terminal chain reaches
 # DM so work always lands with someone who can ship it.
-routes_to: [designer, dev, qa, dm]
+routes_to: [dev, qa, dm]
 
 # PM owns tool configuration on everyone else's behalf, but does not require
 # any tool of its own in v1.

@@ -7,17 +7,17 @@
 # Rules for editing this file (Q-new14): describe what the team delivers
 # in domain terms. Do not reference internal paths, scripts, or storage
 # mechanisms.
+#
+# DEPRECATED: The designer role has been removed. This preset now installs
+# no specialist roles — it is effectively equivalent to a bare infrastructure
+# install (pm + dm + qa). Consider using the software-dev preset instead.
 
 schema_version: 2
 id: design
 display_name: Design
 description: >
-  A team focused on design work with a delivery hand-off. The designer
-  iterates with the human on visuals until they are approved, and the
-  finished designs are packaged and delivered.
+  A team focused on design work with a delivery hand-off. The finished
+  designs are packaged and delivered.
 
-# Only one specialist in this preset. The designer is mandatory here —
-# its `install_optional` setup requirement is scoped to the software-dev
-# preset only, so the design preset installs the designer without asking.
-role_install_order:
-  - designer
+# No specialist roles remain in this preset after the designer role was removed.
+role_install_order: []

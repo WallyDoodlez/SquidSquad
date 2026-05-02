@@ -47,11 +47,6 @@ class TestTC47EmptySetupRequirements:
             f"walker should skip these roles entirely in Step 4"
         )
 
-    def test_designer_has_install_optional_only(self):
-        _, roles, _, _ = manifest.validate_registry()
-        ids = [r["id"] for r in roles["designer"]["setup_requirements"]]
-        assert ids == ["install_optional"]
-
     def test_dev_has_variant_and_stack(self):
         _, roles, _, _ = manifest.validate_registry()
         ids = [r["id"] for r in roles["dev"]["setup_requirements"]]
@@ -139,16 +134,16 @@ class TestTC49To52IntervalValidation:
 
 class TestTC70To77PipelineResolution:
     def test_tc70_software_dev_all_roles(self):
-        """software-dev preset → pm + dm + designer + dev + qa."""
+        """software-dev preset → pm + dm + dev + qa."""
         _, roles, _, presets = manifest.validate_registry()
         resolved = manifest.resolve_pipeline("software-dev", roles, presets)
-        assert resolved == {"pm", "dm", "designer", "dev", "qa"}
+        assert resolved == {"pm", "dm", "dev", "qa"}
 
     def test_tc75_design_preset(self):
-        """design preset → pm + dm + qa + designer (qa is always_installed since #347)."""
+        """design preset → pm + dm + qa (qa is always_installed since #347)."""
         _, roles, _, presets = manifest.validate_registry()
         resolved = manifest.resolve_pipeline("design", roles, presets)
-        assert resolved == {"pm", "dm", "qa", "designer"}
+        assert resolved == {"pm", "dm", "qa"}
 
     def test_every_shipped_role_is_reachable_from_some_preset(self):
         """Sanity — every non-infra role appears in at least one preset."""
@@ -239,8 +234,8 @@ class TestSmokeManifestValidation:
         issues, roles, _, _ = manifest.validate_registry()
         errors = [i for i in issues if i.severity == "error"]
         assert not errors, [str(e) for e in errors]
-        # All 5 v1 roles present
-        assert set(roles.keys()) >= {"pm", "dm", "designer", "dev", "qa"}
+        # Core v1 roles present
+        assert set(roles.keys()) >= {"pm", "dm", "dev", "qa"}
 
     def test_st2_tool_manifests_load_cleanly(self):
         _, _, tools, _ = manifest.validate_registry()
@@ -279,8 +274,8 @@ class TestTC78CycleDetectionObsolete:
         ).read_text(encoding="utf-8")
         assert "Cycle detection is intentionally NOT enforced" in module_text
 
-    def test_shipped_registry_validates_despite_pm_designer_cycle(self):
-        """The shipped registry would fail any graph-level cycle check."""
+    def test_shipped_registry_validates_cleanly(self):
+        """The shipped registry must pass validation."""
         issues, _, _, _ = manifest.validate_registry()
         errors = [i for i in issues if i.severity == "error"]
-        assert not errors, "shipped registry has PM<->designer cycle and must still validate"
+        assert not errors, "shipped registry must validate cleanly"

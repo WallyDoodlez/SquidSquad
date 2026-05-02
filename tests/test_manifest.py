@@ -129,14 +129,14 @@ class TestManifestIntegrity:
 
     def test_roles_sub_skills_use_new_namespace(self):
         """Role-specific sub-skills use roles/<role>/ namespace (not <role>-specific/)."""
-        legacy = re.findall(r'`(?:dev|pm|qa|dm|designer)-specific/[^`]+`', self.manifest_text)
+        legacy = re.findall(r'`(?:dev|pm|qa|dm)-specific/[^`]+`', self.manifest_text)
         assert not legacy, f"Manifest still uses legacy <role>-specific/ namespace: {legacy}"
 
 
 class TestIncludesYml:
     """Verify includes.yml manifests exist and are valid for all roles."""
 
-    ROLES = ["dev", "pm", "qa", "dm", "designer"]
+    ROLES = ["dev", "pm", "qa", "dm"]
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -210,7 +210,7 @@ class TestComposeManifestIntegration:
     def test_load_manifest_returns_list(self):
         """_load_manifest returns a list for each role with includes.yml."""
         from compose import _load_manifest
-        for role in ["dev", "pm", "qa", "dm", "designer"]:
+        for role in ["dev", "pm", "qa", "dm"]:
             result = _load_manifest(role)
             assert isinstance(result, list), f"{role}: expected list, got {type(result)}"
             assert len(result) > 0, f"{role}: empty manifest"

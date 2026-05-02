@@ -103,26 +103,6 @@ Entry file with includes. **Source of truth**: `references/roles/qa/includes.yml
 12. `common/agent-lifecycle` — Agent lifecycle
 13. `roles/qa/prohibitions` — QA "never do" rules
 
-### Designer Agent (`references/roles/designer/CLAUDE.md`)
-
-Entry file with includes. **Source of truth**: `references/roles/designer/includes.yml`.
-
-1. `common/tracker-protocol` — GitHub Issues tracker operations
-2. `common/capability-check` — Startup capability verification
-3. `common/cycle-runner` — Cycle runner transport layer
-4. `common/context-pressure` — Context pressure check
-5. `roles/designer/design-session` — Design request scanning, feasibility, interactive session, spec production
-6. `common/improvement-scan-slim` — Improvement filing only (slim variant)
-7. `roles/designer/discussion-protocol` — Discussion entry format
-8. `roles/designer/design-capabilities` — Design capability integration and discovery
-9. `roles/designer/issue-filing` — Designer bug/feature filing
-10. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
-11. `roles/designer/file-conventions` — Designer file/directory conventions
-12. `roles/designer/status-line` — Designer status line description
-13. `common/self-restart` — Self-restart
-14. `common/agent-lifecycle` — Agent lifecycle
-15. `roles/designer/prohibitions` — Designer "never do" rules
-
 ### DM Agent (`references/roles/dm/CLAUDE.md`)
 
 Entry file with includes. **Source of truth**: `references/roles/dm/includes.yml`.
@@ -156,8 +136,6 @@ These files exist on disk but are no longer referenced by any role's includes.ym
 - `roles/qa/git-commit` — replaced by cycle_post.py
 - `roles/dm/iteration-log` — replaced by cycle_post.py
 - `roles/dm/git-commit` — replaced by cycle_post.py
-- `roles/designer/iteration-log` — replaced by cycle_post.py
-- `roles/designer/git-commit` — replaced by cycle_post.py
 
 ## Include Directive Format
 
@@ -213,8 +191,8 @@ references/sub-skills/
 │   ├── file-conventions.md           (File/directory conventions — shared by dev)
 │   ├── vault-remember.md             (Step 4b — end-of-cycle vault reflection — PM + dev only)
 │   ├── vault-optimize.md            (Vault optimization on quiet cycles — PM + dev only)
-│   ├── vault-protocol-slim.md       (Vault read-only operations — QA, DM, designer)
-│   ├── improvement-scan-slim.md     (Improvement filing only — QA, DM, designer)
+│   ├── vault-protocol-slim.md       (Vault read-only operations — QA, DM)
+│   ├── improvement-scan-slim.md     (Improvement filing only — QA, DM)
 │   ├── status-line.md                (Status line description — shared by dev)
 │   ├── prohibitions.md               (Shared "never do" rules — shared by dev)
 │   ├── capability-check.md          (Startup capability verification — shared by roles with requires_sub_skills)
@@ -256,16 +234,6 @@ references/sub-skills/
 │   ├── prohibitions.md               (QA "never do" rules)
 │   ├── iteration-log.md             (Step 7 — QA iteration log)
 │   └── git-commit.md                (Step 8 — QA commit/push)
-├── roles/designer/
-│   ├── design-session.md             (Steps 2-2e — requests, feasibility, session, specs, rejection)
-│   ├── design-capabilities.md        (Design capability integration and discovery)
-│   ├── discussion-protocol.md        (Discussion — designer alias)
-│   ├── issue-filing.md                 (Designer bug/feature filing)
-│   ├── file-conventions.md           (Designer file conventions)
-│   ├── status-line.md                (Designer status line)
-│   ├── prohibitions.md               (Designer "never do" rules)
-│   ├── iteration-log.md             (Step 3 — designer iteration log)
-│   └── git-commit.md                (Step 4 — designer commit/push)
 └── roles/dm/
     ├── issue-triage.md                (Step 1e — triage bugs assigned to DM)
     ├── delivery-packaging.md          (Steps 2-2c — scan, skip, deliver)

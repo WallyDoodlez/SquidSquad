@@ -17,6 +17,5 @@ description: >
 provider: mcp
 mcp_name: figma_mcp
 docs_url: https://www.figma.com/developers/
-applicable_roles:
-  - designer
+applicable_roles: []
 sub_skill: sub-skill.md

@@ -29,7 +29,7 @@ EXPECTED_STATUS_LABELS = {
 }
 EXPECTED_ROLE_LABELS = {
     "role:skill", "role:fe", "role:be", "role:pm", "role:qa",
-    "role:designer", "role:dm",
+    "role:dm",
 }
 EXPECTED_DESIGN_LABELS = {"design:needed", "design:in-progress", "design:complete"}
 EXPECTED_SEVERITY_LABELS = {"severity:high", "severity:medium", "severity:low"}

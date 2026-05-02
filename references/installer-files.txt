@@ -41,10 +41,6 @@ references/scripts/vault_entity.py
 references/scripts/vault_optimize.py
 references/scripts/vault_remember.py
 references/scripts/wizard.py
-references/roles/designer/includes.yml
-references/roles/designer/instructions.md
-references/roles/designer/manifest.yaml
-references/roles/designer/SOUL.md
 references/roles/dev/android/includes.yml
 references/roles/dev/android/instructions.md
 references/roles/dev/android/SOUL.md
@@ -164,15 +160,6 @@ references/sub-skills/common/vault-protocol.md
 references/sub-skills/common/vault-remember.md
 references/sub-skills/common/working-state.md
 references/sub-skills/manifest.md
-references/sub-skills/roles/designer/design-capabilities.md
-references/sub-skills/roles/designer/design-session.md
-references/sub-skills/roles/designer/discussion-protocol.md
-references/sub-skills/roles/designer/file-conventions.md
-references/sub-skills/roles/designer/git-commit.md
-references/sub-skills/roles/designer/issue-filing.md
-references/sub-skills/roles/designer/iteration-log.md
-references/sub-skills/roles/designer/prohibitions.md
-references/sub-skills/roles/designer/status-line.md
 references/sub-skills/roles/dev/android/domain-context.md
 references/sub-skills/roles/dev/fullstack/domain-context.md
 references/sub-skills/roles/dev/implement-tasks.md

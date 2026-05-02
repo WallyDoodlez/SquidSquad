@@ -173,11 +173,11 @@ class TestRegistryCrossReferences:
         }
         # The runbook must at least name every specialist role whose
         # manifest has show_in_roster: true, plus pm and dm.
-        for role in ("pm", "dm", "designer", "dev", "qa"):
+        for role in ("pm", "dm", "dev", "qa"):
             assert role in roles, f"Shipped role missing: {role}"
 
         body_lower = runbook.lower()
-        for role in ("pm", "dm", "designer", "dev", "qa"):
+        for role in ("pm", "dm", "dev", "qa"):
             assert role in body_lower, (
                 f"Runbook never mentions shipped role: {role}"
             )

@@ -492,24 +492,6 @@ class TestBuildConfigMdAgentBlock:
         text = wizard.build_config_md(spec)
         assert "- **pm**: pm" in text
 
-    def test_designer_with_iteration_mode_and_setup(self):
-        spec = _minimal_spec()
-        spec["agents"] = [
-            {
-                "id": "designer",
-                "alias": "designer",
-                "role": "designer",
-                "iteration_mode": "hitl",
-                "setup": {"install_optional": "yes"},
-            },
-        ]
-        text = wizard.build_config_md(spec)
-        assert "- **designer**: designer" in text
-        assert "  - role: designer" in text
-        assert "  - iteration_mode: hitl" in text
-        assert "  - setup:" in text
-        assert "    - install_optional: yes" in text
-
     def test_dev_agent_with_variant_stack_and_test_command(self):
         spec = _minimal_spec()
         spec["agents"] = [
@@ -598,15 +580,15 @@ class TestBuildConfigMdAgentBlock:
 class TestBuildConfigMdToolsSection:
     def test_deferred_tool_unset_placeholder(self):
         spec = _minimal_spec()
-        spec["tools"] = {"designer.tool": None}
+        spec["tools"] = {"dm.tool": None}
         text = wizard.build_config_md(spec)
-        assert "**designer.tool**: (unset" in text
+        assert "**dm.tool**: (unset" in text
 
     def test_empty_string_also_unset(self):
         spec = _minimal_spec()
-        spec["tools"] = {"designer.tool": ""}
+        spec["tools"] = {"dm.tool": ""}
         text = wizard.build_config_md(spec)
-        assert "**designer.tool**: (unset" in text
+        assert "**dm.tool**: (unset" in text
 
     def test_configured_tool_prints_id(self):
         spec = _minimal_spec()
@@ -686,7 +668,7 @@ class TestBuildConfigMdValidation:
 
 
 class TestBuildConfigMdTC01:
-    """Regression test for TC-01 (full software-dev + be+fe + designer=yes)."""
+    """Regression test for TC-01 (full software-dev + be+fe)."""
 
     def test_tc01_full_software_dev_install(self):
         spec = {
@@ -698,13 +680,6 @@ class TestBuildConfigMdTC01:
             "preset": "software-dev",
             "agents": [
                 {"id": "pm", "alias": "peggy", "role": "pm"},
-                {
-                    "id": "designer",
-                    "alias": "designer",
-                    "role": "designer",
-                    "iteration_mode": "hitl",
-                    "setup": {"install_optional": "yes"},
-                },
                 {
                     "id": "be",
                     "alias": "be",
@@ -725,7 +700,6 @@ class TestBuildConfigMdTC01:
                 {"id": "dm", "alias": "dm", "role": "dm"},
             ],
             "tools": {
-                "designer.tool": None,
                 "dm.tool": "local_delivery",
             },
             "loop": {"interval_minutes": 10, "context_threshold": 70},
@@ -738,17 +712,14 @@ class TestBuildConfigMdTC01:
         }
         text = wizard.build_config_md(spec)
 
-        # All 6 agents present with correct shape
+        # All 5 agents present with correct shape
         assert "- **pm**: peggy" in text
-        assert "- **designer**: designer" in text
-        assert "  - iteration_mode: hitl" in text
         assert "- **be**: be" in text
         assert "- **fe**: fe" in text
         assert "- **qa**: qa" in text
         assert "- **dm**: dm" in text
 
-        # Both tool entries match Q-new17 rules
-        assert "**designer.tool**: (unset" in text
+        # Tool entry matches Q-new17 rules
         assert "- **dm.tool**: local_delivery" in text
 
         # Quoted stack values
@@ -797,43 +768,29 @@ class TestFlagLabel:
 
 
 def _design_preset_spec():
-    """Valid install spec for the design preset (pm + designer + dm)."""
+    """Valid install spec for the design preset (pm + dm)."""
     return {
         "squidsquad_version": "0.16.0",
         "project": {"name": "scratch", "repo": "github.com/x/y"},
         "preset": "design",
         "agents": [
             {"id": "pm", "alias": "peggy", "role": "pm"},
-            {
-                "id": "designer",
-                "alias": "designer",
-                "role": "designer",
-                "iteration_mode": "hitl",
-                "setup": {"install_optional": "yes"},
-            },
             {"id": "dm", "alias": "dm", "role": "dm"},
         ],
-        "tools": {"designer.tool": None, "dm.tool": "local_delivery"},
+        "tools": {"dm.tool": "local_delivery"},
         "loop": {"interval_minutes": 10, "context_threshold": 70},
         "flags": {"improvement_scan": True, "pr_flow": False},
     }
 
 
 def _software_dev_spec():
-    """Valid install spec for software-dev preset (pm + designer + be + fe + qa + dm)."""
+    """Valid install spec for software-dev preset (pm + be + fe + qa + dm)."""
     return {
         "squidsquad_version": "0.16.0",
         "project": {"name": "scratch", "repo": "github.com/x/y"},
         "preset": "software-dev",
         "agents": [
             {"id": "pm", "alias": "peggy", "role": "pm"},
-            {
-                "id": "designer",
-                "alias": "designer",
-                "role": "designer",
-                "iteration_mode": "hitl",
-                "setup": {"install_optional": "yes"},
-            },
             {
                 "id": "be",
                 "alias": "be",
@@ -853,7 +810,7 @@ def _software_dev_spec():
             {"id": "qa", "alias": "qa", "role": "qa"},
             {"id": "dm", "alias": "dm", "role": "dm"},
         ],
-        "tools": {"designer.tool": None, "dm.tool": "local_delivery"},
+        "tools": {"dm.tool": "local_delivery"},
         "loop": {"interval_minutes": 10, "context_threshold": 70},
         "flags": {"improvement_scan": True, "pr_flow": False},
     }
@@ -866,7 +823,7 @@ class TestScaffoldInstallDesignPreset:
         squid = tmp_path / ".squidsquad"
         assert squid.is_dir()
         assert (squid / "config.md").is_file()
-        for role in ("pm", "designer", "dm"):
+        for role in ("pm", "dm"):
             assert (squid / role / "CLAUDE.md").is_file()
             assert (squid / role / "SOUL.md").is_file()
             assert (squid / role / "working-state.md").is_file()
@@ -883,7 +840,7 @@ class TestScaffoldInstallDesignPreset:
     def test_working_state_has_default_content(self, tmp_path):
         spec = _design_preset_spec()
         wizard.scaffold_install(spec, tmp_path)
-        for role in ("pm", "designer", "dm"):
+        for role in ("pm", "dm"):
             ws = (tmp_path / ".squidsquad" / role / "working-state.md").read_text(
                 encoding="utf-8"
             )
@@ -897,18 +854,18 @@ class TestScaffoldInstallDesignPreset:
         summary = wizard.scaffold_install(spec, tmp_path)
         assert summary["target"] == str(tmp_path.resolve())
         assert summary["squidsquad_dir"].endswith(".squidsquad")
-        assert len(summary["agents"]) == 3
+        assert len(summary["agents"]) == 2
         ids = sorted(a["id"] for a in summary["agents"])
-        assert ids == ["designer", "dm", "pm"]
+        assert ids == ["dm", "pm"]
         roles = sorted(a["role"] for a in summary["agents"])
-        assert roles == ["designer", "dm", "pm"]
+        assert roles == ["dm", "pm"]
 
     def test_boot_scripts_generated(self, tmp_path):
         """scaffold_install generates start-[role].sh and .ps1 for each agent (#2399)."""
         spec = _design_preset_spec()
         wizard.scaffold_install(spec, tmp_path)
         squid = tmp_path / ".squidsquad"
-        for role in ("pm", "designer", "dm"):
+        for role in ("pm", "dm"):
             sh_script = squid / f"start-{role}.sh"
             ps1_script = squid / f"start-{role}.ps1"
             assert sh_script.is_file(), f"start-{role}.sh not generated"
@@ -921,12 +878,12 @@ class TestScaffoldInstallDesignPreset:
 
 
 class TestScaffoldInstallDevVariants:
-    def test_software_dev_preset_lays_down_all_six_agents(self, tmp_path):
+    def test_software_dev_preset_lays_down_all_five_agents(self, tmp_path):
         spec = _software_dev_spec()
         summary = wizard.scaffold_install(spec, tmp_path)
-        assert len(summary["agents"]) == 6
+        assert len(summary["agents"]) == 5
         squid = tmp_path / ".squidsquad"
-        for role_id in ("pm", "designer", "be", "fe", "qa", "dm"):
+        for role_id in ("pm", "be", "fe", "qa", "dm"):
             assert (squid / role_id / "CLAUDE.md").is_file()
             assert (squid / role_id / "SOUL.md").is_file()
 
@@ -974,7 +931,7 @@ class TestScaffoldInstallSafetyAndIdempotency:
             spec, tmp_path, overwrite_existing=True,
         )
         assert (tmp_path / ".squidsquad" / "pm" / "CLAUDE.md").is_file()
-        assert len(summary["agents"]) == 3
+        assert len(summary["agents"]) == 2
 
     def test_overwrite_preserves_soul_md(self, tmp_path):
         """User customisations to SOUL.md must never be clobbered."""
@@ -1015,9 +972,8 @@ class TestScaffoldInstallSafetyAndIdempotency:
             spec, tmp_path, overwrite_existing=True,
         )
         preserved = summary["preserved"]
-        # All 3 working-state.md files should be in preserved on re-run
+        # All working-state.md files should be in preserved on re-run
         assert any("pm" in p and "working-state" in p for p in preserved)
-        assert any("designer" in p and "working-state" in p for p in preserved)
         assert any("dm" in p and "working-state" in p for p in preserved)
 
 
@@ -2071,17 +2027,6 @@ class TestApplyProjectType:
         assert spec["project_type"] == "custom"
         assert "variant" not in spec["agents"][0]
         assert "variant" not in spec["agents"][1]
-
-    def test_designer_not_affected(self):
-        spec = {
-            "agents": [
-                {"id": "designer", "role": "designer"},
-                {"id": "skill", "role": "dev"},
-            ]
-        }
-        wizard.apply_project_type(spec, "web")
-        assert "variant" not in spec["agents"][0]  # designer unchanged
-        assert spec["agents"][1]["variant"] == "web"
 
     def test_all_project_types_valid(self):
         for ptype in wizard.PROJECT_TYPE_PRESETS:

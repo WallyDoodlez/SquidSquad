@@ -31,8 +31,8 @@ class TestCanonicalizeRole:
         ("qa", "qa"),
         ("qa-lead", "qa"),
         ("dm-lead", "dm"),
-        ("designer", "designer"),
-        ("designer-lead", "designer"),
+        ("qa", "qa"),
+        ("qa-lead", "qa"),
         ("pm (pm)", "pm"),
         ("qa-lead (tester)", "qa"),
         ("skill-lead (wally)", "skill"),
@@ -318,14 +318,14 @@ class TestPendingHumanReview:
     """HITL loop — the assigned worker drives pause + redirect + approve."""
 
     def test_assigned_worker_can_self_pause(self, stub_role_labels):
-        stub_role_labels["labels"] = {"designer"}
+        stub_role_labels["labels"] = {"qa"}
         ok, _ = tracker._check_authority(
-            1, "status:in-progress", "status:pending-human-review", "designer-lead"
+            1, "status:in-progress", "status:pending-human-review", "qa-lead"
         )
         assert ok
 
     def test_unassigned_worker_cannot_self_pause(self, stub_role_labels):
-        stub_role_labels["labels"] = {"designer"}
+        stub_role_labels["labels"] = {"qa"}
         ok, reason = tracker._check_authority(
             1, "status:in-progress", "status:pending-human-review", "skill-lead"
         )
@@ -333,24 +333,24 @@ class TestPendingHumanReview:
         assert "not assigned" in reason
 
     def test_assigned_worker_can_handle_redirect(self, stub_role_labels):
-        """Designer detects a 'redirect' human comment and resumes iteration."""
-        stub_role_labels["labels"] = {"designer"}
+        """QA detects a 'redirect' human comment and resumes iteration."""
+        stub_role_labels["labels"] = {"qa"}
         ok, _ = tracker._check_authority(
-            1, "status:pending-human-review", "status:in-progress", "designer-lead"
+            1, "status:pending-human-review", "status:in-progress", "qa-lead"
         )
         assert ok
 
     def test_assigned_worker_can_handle_approval(self, stub_role_labels):
-        """Designer detects a 'ship it' human comment and moves to pending-ship."""
-        stub_role_labels["labels"] = {"designer"}
+        """QA detects a 'ship it' human comment and moves to pending-ship."""
+        stub_role_labels["labels"] = {"qa"}
         ok, _ = tracker._check_authority(
-            1, "status:pending-human-review", "status:pending-ship", "designer-lead"
+            1, "status:pending-human-review", "status:pending-ship", "qa-lead"
         )
         assert ok
 
     def test_pm_can_approve_hitl_via_pr_flow(self, stub_role_labels):
         """PM can ship pending-human-review items (PR Flow merge path, #3493)."""
-        stub_role_labels["labels"] = {"designer"}
+        stub_role_labels["labels"] = {"qa"}
         ok, _ = tracker._check_authority(
             1, "status:pending-human-review", "status:pending-ship", "pm-lead"
         )
@@ -358,7 +358,7 @@ class TestPendingHumanReview:
 
     def test_pm_can_redirect_hitl_via_pr_flow(self, stub_role_labels):
         """PM can redirect pending-human-review back to in-progress (#3493)."""
-        stub_role_labels["labels"] = {"designer"}
+        stub_role_labels["labels"] = {"qa"}
         ok, _ = tracker._check_authority(
             1, "status:pending-human-review", "status:in-progress", "pm-lead"
         )
@@ -369,14 +369,14 @@ class TestPendingHumanSetup:
     """Worker self-pauses for tool/env setup; PM completes setup and hands back."""
 
     def test_assigned_worker_can_self_pause_for_setup(self, stub_role_labels):
-        stub_role_labels["labels"] = {"designer"}
+        stub_role_labels["labels"] = {"qa"}
         ok, _ = tracker._check_authority(
-            1, "status:in-progress", "status:pending-human-setup", "designer-lead"
+            1, "status:in-progress", "status:pending-human-setup", "qa-lead"
         )
         assert ok
 
     def test_other_worker_cannot_self_pause_for_setup(self, stub_role_labels):
-        stub_role_labels["labels"] = {"designer"}
+        stub_role_labels["labels"] = {"qa"}
         ok, reason = tracker._check_authority(
             1, "status:in-progress", "status:pending-human-setup", "skill-lead"
         )
@@ -385,7 +385,7 @@ class TestPendingHumanSetup:
 
     def test_pm_completes_setup_and_hands_back(self, stub_role_labels):
         """PM owns the resume edge because tool config + composition is PM's job."""
-        stub_role_labels["labels"] = {"designer"}
+        stub_role_labels["labels"] = {"qa"}
         ok, _ = tracker._check_authority(
             1, "status:pending-human-setup", "status:in-progress", "pm-lead"
         )
@@ -398,9 +398,9 @@ class TestPendingHumanSetup:
         checklist. Requiring PM guarantees the infrastructure actually
         changed before the worker is allowed to continue.
         """
-        stub_role_labels["labels"] = {"designer"}
+        stub_role_labels["labels"] = {"qa"}
         ok, reason = tracker._check_authority(
-            1, "status:pending-human-setup", "status:in-progress", "designer-lead"
+            1, "status:pending-human-setup", "status:in-progress", "qa-lead"
         )
         assert not ok
         assert "pm" in reason

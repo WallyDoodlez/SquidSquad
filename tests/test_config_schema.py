@@ -120,11 +120,6 @@ V2_FULL = """\
 
 - **pm**: peggy
   - role: pm
-- **designer**: designer
-  - role: designer
-  - iteration_mode: hitl
-  - setup:
-    - install_optional: yes
 - **be**: be
   - role: dev
   - variant: be
@@ -142,7 +137,6 @@ V2_FULL = """\
 
 ## Tools
 
-- **designer.tool**: (unset — PM will configure on first use)
 - **dm.tool**: local_delivery
 
 ## Loop
@@ -166,9 +160,6 @@ V2_DESIGN_PRESET = """\
 
 - **pm**: peggy
   - role: pm
-- **designer**: designer
-  - role: designer
-  - iteration_mode: hitl
 - **dm**: dm
   - role: dm
 """
@@ -272,19 +263,12 @@ class TestParseAgentsV2:
     def test_full_software_dev_install(self):
         agents = config._parse_agents_v2(V2_FULL)
         ids = [a["id"] for a in agents]
-        assert ids == ["pm", "designer", "be", "fe", "qa", "dm"]
+        assert ids == ["pm", "be", "fe", "qa", "dm"]
 
     def test_simple_agent_entry(self):
         agents = config._parse_agents_v2(V2_FULL)
         pm = next(a for a in agents if a["id"] == "pm")
         assert pm == {"id": "pm", "alias": "peggy", "role": "pm"}
-
-    def test_agent_with_iteration_mode_and_setup_block(self):
-        agents = config._parse_agents_v2(V2_FULL)
-        designer = next(a for a in agents if a["id"] == "designer")
-        assert designer["role"] == "designer"
-        assert designer["iteration_mode"] == "hitl"
-        assert designer["setup"] == {"install_optional": "yes"}
 
     def test_dev_agent_with_quoted_stack_and_test_command(self):
         agents = config._parse_agents_v2(V2_FULL)
@@ -309,10 +293,10 @@ class TestParseAgentsV2:
         fe = next(a for a in agents if a["id"] == "fe")
         assert fe["alias"] == "fe"
 
-    def test_design_preset_only_three_agents(self):
+    def test_design_preset_only_two_agents(self):
         agents = config._parse_agents_v2(V2_DESIGN_PRESET)
         ids = [a["id"] for a in agents]
-        assert ids == ["pm", "designer", "dm"]
+        assert ids == ["pm", "dm"]
 
     def test_empty_agents_section(self):
         text = "- **Architecture Version**: 2\n## Agents\n\n"
@@ -362,7 +346,7 @@ class TestGetAgents:
 
     def test_v2_path(self):
         agents = config.get_agents(V2_FULL)
-        assert any(a["id"] == "designer" for a in agents)
+        assert any(a["id"] == "be" for a in agents)
         assert any(a.get("variant") == "be" for a in agents)
 
     def test_missing_schema_defaults_to_v1(self):
@@ -394,12 +378,6 @@ class TestWizardRoundTrip:
             "preset": "design",
             "agents": [
                 {"id": "pm", "alias": "peggy", "role": "pm"},
-                {
-                    "id": "designer",
-                    "alias": "designer",
-                    "role": "designer",
-                    "iteration_mode": "hitl",
-                },
                 {"id": "dm", "alias": "dm", "role": "dm"},
             ],
             "tools": {"dm.tool": "local_delivery"},
@@ -410,9 +388,7 @@ class TestWizardRoundTrip:
         assert config.detect_schema_version(text) == 2
         agents = config.get_agents(text)
         ids = [a["id"] for a in agents]
-        assert ids == ["pm", "designer", "dm"]
-        designer = next(a for a in agents if a["id"] == "designer")
-        assert designer["iteration_mode"] == "hitl"
+        assert ids == ["pm", "dm"]
 
     def test_full_software_dev_round_trip(self):
         import wizard
@@ -466,11 +442,11 @@ class TestComposeKnownRoles:
         import compose
         ids = compose._list_known_role_identities()
         # Every shipped role manifest should be in the result
-        assert {"pm", "dm", "designer", "dev", "qa"} <= ids
+        assert {"pm", "dm", "dev", "qa"} <= ids
 
     def test_get_entry_file_for_shipped_role(self):
         import compose
-        for role in ("pm", "dm", "designer", "dev", "qa"):
+        for role in ("pm", "dm", "dev", "qa"):
             assert compose._get_entry_file_for_role(role) == role
 
     def test_dev_variants_resolve_to_dev(self):
@@ -484,7 +460,7 @@ class TestComposeKnownRoles:
             encoding="utf-8"
         )
         # The old literal set-of-role-names must not reappear
-        assert 'known_roles = {"pm", "dm", "qa", "designer", "dev"}' not in text
+        assert 'known_roles = {"pm", "dm", "qa", "dev"}' not in text
 
 
 # ---------------------------------------------------------------------------

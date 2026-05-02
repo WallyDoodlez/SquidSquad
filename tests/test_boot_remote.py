@@ -96,7 +96,7 @@ class TestParseLocalConfigMandatory:
 
         assert result["skill"] == projectA_skill
         assert "pm" not in result
-        assert "designer" not in result
+        assert "dm" not in result
 
 
 class TestIsProcessAlive:

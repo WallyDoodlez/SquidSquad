@@ -530,7 +530,7 @@ def apply_project_type(spec, project_type):
     spec["project_type"] = project_type
     for agent in spec.get("agents", []):
         role = agent.get("role", "")
-        # Apply variant to core roles only — designer has its own L3
+        # Apply variant to core roles only
         if role in ("dev", "pm", "qa", "dm"):
             agent["variant"] = variant
     return variant
@@ -555,13 +555,6 @@ def build_config_md(spec):
                     "role": "pm",
                 },
                 {
-                    "id": "designer",
-                    "alias": "designer",
-                    "role": "designer",
-                    "iteration_mode": "hitl",
-                    "setup": {"install_optional": "yes"},
-                },
-                {
                     "id": "be",
                     "alias": "be",
                     "role": "dev",
@@ -571,7 +564,6 @@ def build_config_md(spec):
                 },
             ],
             "tools": {
-                "designer.tool": None,          # deferred -> "(unset ...)"
                 "dm.tool": "local_delivery",
             },
             "loop": {
@@ -945,7 +937,7 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
         # When a variant is set, compose from the variant role (e.g. "dev-ios")
         # but output to the agent_id directory (e.g. "skill").
         variant = agent.get("variant")
-        if variant and role_identity != "designer":
+        if variant:
             compose_name = f"{role_identity}-{variant}"
         else:
             compose_name = agent_id
@@ -1908,11 +1900,6 @@ def post_setup_summary(spec):
         elif role == "dm":
             lines.append(f"```bash")
             lines.append(f"# Terminal — DM (delivery)")
-            lines.append(f"claude --resume")
-            lines.append(f"```")
-        elif role == "designer":
-            lines.append(f"```bash")
-            lines.append(f"# Terminal — Designer")
             lines.append(f"claude --resume")
             lines.append(f"```")
     lines.append("")

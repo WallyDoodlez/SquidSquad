@@ -13,14 +13,12 @@ schema_version: 2
 id: software-dev
 display_name: Software Development
 description: >
-  A team for designing, building, verifying, and shipping software.
-  Includes an optional designer, an engineering specialist in one or
-  more variants (backend, frontend, fullstack), and a verifier.
+  A team for building, verifying, and shipping software.
+  Includes an engineering specialist in one or more variants
+  (backend, frontend, fullstack), and a verifier.
 
 # Order in which each specialist role's install-time questions are asked.
-# The wizard walks this list in order; designer comes before dev so the
-# "design first, build second" flow feels natural. Infrastructure roles
+# The wizard walks this list in order. Infrastructure roles
 # (pm, dm, qa) are not listed — they are always installed.
 role_install_order:
-  - designer
   - dev

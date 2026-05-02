@@ -15,6 +15,5 @@ description: >
 provider: mcp
 mcp_name: google_stitch
 docs_url: https://stitch.withgoogle.com/
-applicable_roles:
-  - designer
+applicable_roles: []
 sub_skill: sub-skill.md

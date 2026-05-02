@@ -12,7 +12,7 @@ from pathlib import Path
 from conftest import SQUIDSQUAD_DIR
 
 # Roles that have start scripts
-ROLES = ["skill", "pm", "dm", "qa", "designer"]
+ROLES = ["skill", "pm", "dm", "qa"]
 
 
 class TestStartScriptsExist:

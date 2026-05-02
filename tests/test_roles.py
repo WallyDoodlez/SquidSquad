@@ -73,7 +73,7 @@ class TestRoleEntryFiles:
         assert path.exists(), "Missing references/roles/pm/instructions.md"
 
     def test_all_role_claude_md_files_exist(self):
-        expected = {"pm", "dm", "designer", "dev", "qa"}
+        expected = {"pm", "dm", "dev", "qa"}
         missing = {
             role for role in expected
             if not (REFERENCES_DIR / "roles" / role / "instructions.md").exists()
@@ -81,7 +81,7 @@ class TestRoleEntryFiles:
         assert not missing, f"Missing instructions.md for roles: {missing}"
 
     def test_soul_files_exist(self):
-        expected = {"pm", "dm", "designer", "dev", "qa"}
+        expected = {"pm", "dm", "dev", "qa"}
         missing = {
             role for role in expected
             if not (REFERENCES_DIR / "roles" / role / "SOUL.md").exists()
