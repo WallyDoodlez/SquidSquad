@@ -503,7 +503,7 @@ For each result:
    **PR Flow gate** (if PR Flow `yes` and a PR exists for this issue):
    - Check Auto Merge: `python references/scripts/config.py get auto-merge`
    - Check per-ticket override: look for `review:human-required` label on the issue.
-   - **Auto Merge ON + no `review:human-required`**: merge PR directly (`python references/scripts/git_ops.py pr-merge [PR_NUMBER]`), then transition to `Pending Ship`.
+   - **Auto Merge ON + no `review:human-required`**: convert draft PR to ready first (`python references/scripts/git_ops.py pr-ready [PR_NUMBER]`), then merge (`python references/scripts/git_ops.py pr-merge [PR_NUMBER]`), then transition to `Pending Ship`.
    - **Auto Merge OFF or `review:human-required`**: transition to `Pending Human Review` (`python references/scripts/tracker.py transition [NUMBER] pending-test pending-human-review --role pm-lead`).
    - If PR Flow `no` or no PR exists: proceed directly to `Pending Ship`.
 
