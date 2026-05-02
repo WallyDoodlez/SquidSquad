@@ -116,6 +116,37 @@ def _do_pull():
     return "ok"
 
 
+def _enforce_branch(role, working_state):
+    """Ensure the agent is on the correct branch before pull (#4942).
+
+    If working-state has an active task, call task-begin to ensure the
+    correct feature branch. Otherwise, ensure the agent is on the
+    working branch (main).
+    """
+    branch_workflow = _config_get("branch-workflow").lower() in ("yes", "true", "1")
+    if not branch_workflow:
+        return
+
+    task = working_state.get("task", "none")
+    status = working_state.get("status", "none")
+
+    if task != "none" and status == "in-progress":
+        # Extract issue number from task field (e.g. "#4942" -> "4942")
+        number = task.lstrip("#").strip()
+        if number.isdigit():
+            result = _run_script("git_ops.py", "task-begin", role, number)
+            if result.returncode != 0:
+                # Non-fatal — log and continue on current branch
+                pass
+    else:
+        # No active task — ensure on working branch
+        working = _config_get("working-branch") or "main"
+        current = _run(["git", "branch", "--show-current"], check=False)
+        current_branch = current.stdout.strip() if current.returncode == 0 else ""
+        if current_branch and current_branch != working:
+            _run(["git", "checkout", working], check=False)
+
+
 def _read_context_pressure(role):
     """Read context pressure for a role."""
     pressure_file = SQUID_DIR / role / "context-pressure"
@@ -787,20 +818,20 @@ def main():
     print(f"[🦑 {ts}] cycle_pre starting for {role}...")
     _write_status_bar(role, "pulling", "pull-latest — Syncing with remote...")
 
-    # 1. Pull
+    # 1a. Read working state early to determine correct branch (#4942)
+    working_state = _read_working_state(role)
+
+    # 1b. Enforce correct branch before pull (#4942)
+    _enforce_branch(role, working_state)
+
+    # 1c. Pull
     pull_result = _do_pull()
 
     # 2. Context pressure
     context_pressure = _read_context_pressure(role)
 
-    # 3. Working state
-    working_state = _read_working_state(role)
-
-    # 4. Cycle number
+    # 3. Cycle number
     cycle_number = _get_cycle_number(role)
-
-    # 5. Branch setup removed (#3296) — task-begin/task-end in git_ops.py
-    # handles per-task branch checkout in the creative phase.
     config_flags = _read_config_flags()
 
     # 6. Status bar

@@ -525,9 +525,12 @@ def task_begin(role, number):
         print(f"ERROR: task-begin failed to checkout {branch} from origin: {result.stderr}", file=sys.stderr)
         sys.exit(1)
 
-    # Branch not found — push back
-    print(f"ERROR: branch {branch} not found locally or on origin. "
-          f"The submitting agent must push before transitioning to pending-test.",
+    # Branch not found — create it (#4942)
+    result = _run_list(["git", "checkout", "-b", branch], check=False)
+    if result.returncode == 0:
+        print(f"Created branch {branch}")
+        return
+    print(f"ERROR: task-begin failed to create {branch}: {result.stderr}",
           file=sys.stderr)
     sys.exit(1)
 

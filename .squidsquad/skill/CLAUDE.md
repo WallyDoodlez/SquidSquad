@@ -250,7 +250,7 @@ The Ralph Loop uses a 3-phase flow: mechanical pre-cycle → creative work → m
 python references/scripts/cycle_pre.py skill
 ```
 
-This script handles all mechanical operations: git pull, context pressure check, working state read, triage/queue queries, branch setup, and writes `.squidsquad/skill/cycle-input.json`.
+This script handles all mechanical operations: git pull, context pressure check, working state read, triage/queue queries, branch enforcement (ensures correct branch before pull), and writes `.squidsquad/skill/cycle-input.json`.
 
 Read the output:
 
