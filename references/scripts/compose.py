@@ -310,14 +310,25 @@ def _assemble_claude(role_name: str) -> str:
             parts.append("")
             parts.append(variant_claude.read_text(encoding="utf-8").rstrip())
 
-    # Layer 4 — Project sub-skills (PM-owned, applied to all agents)
+    # Layer 4 — Project sub-skills (PM-owned, role-filtered)
     # Live project content is in .squidsquad/project/ (project-local).
     # references/sub-skills/project/ holds seed templates only.
+    # Filtering: shared-*.md → all roles, <identity>-*.md → matching role
+    # only, unprefixed files → all roles.
     project_skills_dir = REPO_ROOT / ".squidsquad" / "project"
     if project_skills_dir.is_dir():
+        role_identity = _get_entry_file_for_role(role_name)
+        known_prefixes = _list_known_role_identities()
         for skill_file in sorted(project_skills_dir.glob("*.md")):
-            content = skill_file.read_text(encoding="utf-8").rstrip()
             name = skill_file.stem
+            # Determine the file's target prefix (text before first hyphen)
+            file_prefix = name.split("-", 1)[0] if "-" in name else None
+            # Include if: shared, unprefixed, prefix not a known role, or
+            # prefix matches this role's identity
+            if file_prefix and file_prefix != "shared" and file_prefix in known_prefixes:
+                if file_prefix != role_identity:
+                    continue
+            content = skill_file.read_text(encoding="utf-8").rstrip()
             content = _strip_outer_markers(content, name)
             parts.append("")
             parts.append("---")
