@@ -189,6 +189,58 @@ sequenceDiagram
     H->>H: Exit immediately
 ```
 
+### 5. Harness force-closed — agent recovery
+
+```mermaid
+sequenceDiagram
+    participant O as Operator
+    participant H as Harness
+    participant A1 as Agent 1 (alive)
+    participant A2 as Agent 2 (died)
+
+    O-xH: Force close harness
+
+    Note over A1: Still running in its terminal
+    A1->>A1: cycle_post calls GET /agents/skill
+    A1->>A1: Connection refused — safe default
+    A1->>A1: Exit 0 (continue running)
+    A1->>A1: Next cycle starts normally
+
+    Note over A2: Crashes while harness is down
+    A2-xA2: Process dies — nobody watching
+
+    Note over O: Later...
+    O->>H: python harness.py (restart)
+    H->>H: Read .harness-state.json
+    H->>H: Check PID for Agent 1 — alive
+    H->>H: Resume monitoring Agent 1
+    H->>H: Check PID for Agent 2 — dead
+    H->>H: Intent was running — respawn
+    H->>A2: Spawn new Agent 2
+```
+
+### 6. Agent force-closed — crash recovery
+
+```mermaid
+sequenceDiagram
+    participant O as Operator
+    participant H as Harness
+    participant A as Agent (claude)
+
+    O-xA: Force close agent terminal (taskkill, close window)
+
+    Note over H: PID liveness check fails (~5s)
+    H->>H: Agent PID is dead
+    H->>H: Check intent = running (no stop requested)
+    H->>H: Treat as crash
+    H->>H: Apply crash backoff
+    H->>H: Update .harness-state.json
+    H->>A: Spawn new agent in new terminal
+    A->>A: cycle_pre.py runs
+    A->>A: Reads working-state.md if exists
+    A->>A: Resumes or starts fresh
+```
+
 ## What Gets Removed
 
 | Component | Current Owner | Action |
