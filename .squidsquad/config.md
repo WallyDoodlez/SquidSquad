@@ -115,7 +115,7 @@
 
 - **Ship Threshold**: 10
 <<<<<<< Updated upstream
-- **Shipped Since Last Bump**: 1
+- **Shipped Since Last Bump**: 2
 =======
 - **Shipped Since Last Bump**: 10
 

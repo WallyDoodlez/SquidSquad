@@ -47,6 +47,7 @@ You have a codebase and Claude Code. You can fix one bug at a time. But what if 
 - **Per-agent working directories** — the setup wizard automatically creates isolated git clones for each non-PM agent, so agents can run concurrently without git conflicts. PM stays in the primary repo as the coordination hub. Backward compatible with single-repo setups
 - **Auto versioning** — ships are counted and minor versions auto-bump when thresholds are met
 - **Communication abstraction layer** — a platform-agnostic adapter interface for real-time agent communication. Agents can send messages, create threads, poll for responses, and share files through any supported platform (Telegram, Slack, Discord) without knowing the underlying service. Ships with a NullAdapter so agents work identically whether comms are configured or not. Add a `## Communication` section to `config.md` to enable a provider
+- **Harness (Phase 1)** — a FastAPI-based lifecycle manager that wraps your agents in an HTTP API. The harness polls agent health via sentinel files, starts and stops agents through the existing boot/reboot scripts, and exposes a REST API for all operations. Agents run in independent terminal windows — if the harness crashes, your agents keep running. Port discovery via `.squidsquad/.harness-port`. Use the CLI (`squidsquad_cli.py`) or call the API directly
 
 ---
 
@@ -68,7 +69,18 @@ The wizard auto-detects your project context (test commands, tech stack, existin
 
 ### 2. Launch
 
-Open one terminal per agent. Available boot scripts depend on your setup — check `.squidsquad/start-*.sh` for your list:
+**Option A — Harness (recommended):**
+
+```bash
+python references/scripts/squidsquad_cli.py start    # Boot harness + all agents
+python references/scripts/squidsquad_cli.py status   # Check agent health
+python references/scripts/squidsquad_cli.py stop      # Stop all agents
+python references/scripts/squidsquad_cli.py shutdown   # Stop agents + exit harness
+```
+
+Requires `pip install fastapi uvicorn`. The harness manages agent lifecycle via HTTP API — start, stop, restart individual agents, and monitor health from a single command.
+
+**Option B — Manual (one terminal per agent):**
 
 ```bash
 bash .squidsquad/start-pm.sh       # PM (interactive — you talk to this one)
