@@ -277,6 +277,85 @@ class TestComposeRole:
 
 
 # ---------------------------------------------------------------------------
+# Layer 4 — project sub-skill role filtering
+# ---------------------------------------------------------------------------
+
+class TestL4RoleFiltering:
+    """compose.py L4 should include only role-matched project sub-skills."""
+
+    def _setup_project_files(self, compose_env):
+        """Create project sub-skill files with role prefixes."""
+        # Ensure all role directories exist so known_prefixes includes them
+        roles_dir = compose_env / "references" / "roles"
+        for role in ("dm", "qa"):
+            role_dir = roles_dir / role
+            role_dir.mkdir(parents=True, exist_ok=True)
+            (role_dir / "instructions.md").write_text(
+                f"# {role.upper()} Agent\n", encoding="utf-8")
+        project_dir = compose_env / ".squidsquad" / "project"
+        project_dir.mkdir(parents=True, exist_ok=True)
+        (project_dir / "dev-instructions.md").write_text(
+            "## Dev Instructions\n\nDev-only content.", encoding="utf-8")
+        (project_dir / "pm-instructions.md").write_text(
+            "## PM Instructions\n\nPM-only content.", encoding="utf-8")
+        (project_dir / "dm-instructions.md").write_text(
+            "## DM Instructions\n\nDM-only content.", encoding="utf-8")
+        (project_dir / "qa-instructions.md").write_text(
+            "## QA Instructions\n\nQA-only content.", encoding="utf-8")
+        (project_dir / "shared-instructions.md").write_text(
+            "## Shared Instructions\n\nAll-role content.", encoding="utf-8")
+        (project_dir / "setup-upgrade-gate.md").write_text(
+            "## Setup Gate\n\nUnprefixed content.", encoding="utf-8")
+        return project_dir
+
+    def test_dev_role_gets_only_dev_and_shared(self, compose_env):
+        self._setup_project_files(compose_env)
+        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
+             patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"), \
+             patch.object(compose, "REPO_ROOT", compose_env):
+            result = compose.compose_role("dev")
+        assert "Dev-only content" in result
+        assert "All-role content" in result
+        assert "Unprefixed content" in result
+        assert "PM-only content" not in result
+        assert "DM-only content" not in result
+        assert "QA-only content" not in result
+
+    def test_pm_role_gets_only_pm_and_shared(self, compose_env):
+        self._setup_project_files(compose_env)
+        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
+             patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"), \
+             patch.object(compose, "REPO_ROOT", compose_env):
+            result = compose.compose_role("pm")
+        assert "PM-only content" in result
+        assert "All-role content" in result
+        assert "Unprefixed content" in result
+        assert "Dev-only content" not in result
+        assert "DM-only content" not in result
+        assert "QA-only content" not in result
+
+    def test_skill_variant_gets_dev_files(self, compose_env):
+        """skill agent maps to dev identity, should get dev-* files."""
+        self._setup_project_files(compose_env)
+        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
+             patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"), \
+             patch.object(compose, "REPO_ROOT", compose_env):
+            result = compose.compose_role("skill")
+        assert "Dev-only content" in result
+        assert "All-role content" in result
+        assert "PM-only content" not in result
+
+    def test_no_project_dir_no_error(self, compose_env):
+        """No .squidsquad/project/ dir should not cause an error."""
+        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
+             patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"), \
+             patch.object(compose, "REPO_ROOT", compose_env):
+            result = compose.compose_role("dev")
+        # Should compose fine without project sub-skills
+        assert "# Dev Agent" in result
+
+
+# ---------------------------------------------------------------------------
 # deploy_role
 # ---------------------------------------------------------------------------
 
