@@ -278,10 +278,23 @@ def _do_commit_push(data, role):
             if result.returncode != 0:
                 print(f"WARNING: Code commit failed: {result.stderr.strip()}",
                       file=sys.stderr)
+                # Code may already be committed by the agent during creative
+                # phase (#4837). Ensure the branch is pushed even when
+                # commit-code reports nothing to commit.
+                branch_check = _run(
+                    ["git", "rev-parse", "--verify", branch], check=False)
+                if branch_check.returncode == 0:
+                    push_result = _run(
+                        ["git", "push", "-u", "origin", branch], check=False)
+                    if push_result.returncode == 0:
+                        print(f"  Branch {branch} pushed (code already committed)")
+                    else:
+                        print(f"WARNING: Branch push failed: "
+                              f"{push_result.stderr.strip()}", file=sys.stderr)
             else:
                 print(f"  Code commit to {branch}")
 
-            # Create PR if needed
+            # Create PR if needed — must be on the feature branch (#4837)
             if code_commit.get("pr_needed"):
                 pr_title = code_commit.get("pr_title", f"{role}: {branch}")
                 pr_body = code_commit.get("pr_body", f"Branch: {branch}")
@@ -289,9 +302,19 @@ def _do_commit_push(data, role):
                 # contains "Closes #N" and the PR is merged to default branch.
                 # SquidSquad manages issue lifecycle via tracker.py, not PR merges.
                 pr_body = _sanitize_commit_msg(pr_body)
+                # gh pr create uses the current branch as head — ensure
+                # we're on the feature branch before creating the PR.
+                cur = _run(
+                    ["git", "branch", "--show-current"], check=False)
+                cur_branch = cur.stdout.strip() if cur.returncode == 0 else ""
+                if cur_branch != branch:
+                    _run(["git", "checkout", branch], check=False)
                 result = _run_script("git_ops.py", "pr-create", pr_title, pr_body)
                 if result.returncode == 0:
                     print(f"  PR created: {result.stdout.strip()}")
+                # Switch back — state commit below needs working branch
+                if cur_branch and cur_branch != branch:
+                    _run(["git", "checkout", cur_branch], check=False)
 
         # State commit to working branch
         state_msg = _sanitize_commit_msg(data.get("state_commit_message", commit_msg))

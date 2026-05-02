@@ -483,3 +483,120 @@ class TestVersionBumpChangelogSkip:
         # CHANGELOG should NOT have been modified (DM handles it)
         assert "0.29.0" not in content
         assert "Old content." in content
+
+
+# ---------------------------------------------------------------------------
+# Branch push fallback — regression #4837
+# ---------------------------------------------------------------------------
+
+class TestBranchPushFallback:
+    """Regression #4837: cycle_post must push feature branches even when
+    commit-code reports nothing to commit (code already committed by agent)."""
+
+    def test_pushes_branch_when_commit_code_fails(self, monkeypatch):
+        """When commit-code returns non-zero but branch exists, push the branch."""
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = "main\n"
+            r.stderr = ""
+            return r
+
+        def fake_run_script(script, *args, **kwargs):
+            calls.append((script, args))
+            r = MagicMock()
+            r.stderr = ""
+            r.stdout = ""
+            r.returncode = 0
+            # commit-code fails (nothing to commit — code already committed)
+            if args and "commit-code" in args:
+                r.returncode = 1
+                r.stderr = "Nothing to commit"
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "main")
+
+        data = {
+            "cycle_type": "active",
+            "cycle_number": 590,
+            "commit_message": "test",
+            "config": {"branch_workflow": True},
+            "code_commit": {
+                "branch": "squidsquad/skill/4803",
+                "message": "fix multi-role query",
+            },
+        }
+        cycle_post._do_commit_push(data, "skill")
+
+        # Verify push was called with the feature branch
+        push_calls = [c for c in calls
+                      if isinstance(c, list) and "push" in c
+                      and "squidsquad/skill/4803" in c]
+        assert len(push_calls) >= 1, (
+            f"Expected push of squidsquad/skill/4803, got calls: "
+            f"{[c for c in calls if isinstance(c, list)]}"
+        )
+
+    def test_creates_pr_on_feature_branch(self, monkeypatch):
+        """PR creation checks out the feature branch before calling gh pr create."""
+        calls = []
+        checkout_targets = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = "main\n"
+            r.stderr = ""
+            if isinstance(cmd, list) and "checkout" in cmd:
+                checkout_targets.append(cmd[-1])
+            return r
+
+        def fake_run_script(script, *args, **kwargs):
+            calls.append((script, args))
+            r = MagicMock()
+            r.stderr = ""
+            r.stdout = ""
+            r.returncode = 0
+            # commit-code fails (code already committed)
+            if args and "commit-code" in args:
+                r.returncode = 1
+                r.stderr = "Nothing to commit"
+            elif args and "pr-create" in args:
+                r.returncode = 0
+                r.stdout = "https://github.com/org/repo/pull/42"
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "main")
+
+        data = {
+            "cycle_type": "active",
+            "cycle_number": 590,
+            "commit_message": "test",
+            "config": {"branch_workflow": True},
+            "code_commit": {
+                "branch": "squidsquad/skill/4803",
+                "message": "fix",
+                "pr_needed": True,
+                "pr_title": "skill: #4803",
+                "pr_body": "Fixes #4803",
+            },
+        }
+        cycle_post._do_commit_push(data, "skill")
+
+        # Verify feature branch was checked out before pr-create
+        assert "squidsquad/skill/4803" in checkout_targets, (
+            f"Expected checkout of feature branch before PR creation, "
+            f"got checkouts: {checkout_targets}"
+        )
+        # Verify pr-create was called
+        pr_calls = [c for c in calls
+                    if isinstance(c, tuple) and any("pr-create" in str(a) for a in c)]
+        assert len(pr_calls) == 1, f"Expected pr-create call, got: {calls}"
