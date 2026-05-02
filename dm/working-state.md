@@ -11,4 +11,5 @@
 - none
 
 ## Key Decisions
-- v0.31.0 bump had to be redone 3 times due to commits being lost during rebase conflicts with other agents
+- Root cause: cycle_pre or git_ops left DM on feature branch squidsquad/skill/4439
+- Fixed by manually checking out main before bumping
