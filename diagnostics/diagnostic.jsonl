@@ -324,3 +324,4 @@
 {"timestamp": "2026-05-02T01:10:41.411834", "severity": "error", "source": "tracker", "message": "Unauthorized transition on #4745: role 'pm' is not authorized for status:pending-ship -> status:shipped (allowed: ['dm'])", "context": {"from": "status:pending-ship", "to": "status:shipped", "role": "pm-lead"}}
 {"timestamp": "2026-05-02T01:53:41.631915", "severity": "error", "source": "tracker", "message": "Illegal transition status:open -> status:approved on #4829"}
 {"timestamp": "2026-05-02T04:03:51.565661", "severity": "error", "source": "git_ops", "message": "push failed: To https://github.com/WallyDoodlez/SquidSquad.git\n ! [rejected]          main -> main (fetch first)\nerror: failed to push some refs to 'https://github.com/WallyDoodlez/SquidSquad.git'\nhint: Updates we"}
+{"timestamp": "2026-05-02T17:57:11.048465", "severity": "error", "source": "tracker", "message": "Illegal transition status:open -> status:planned on #5040"}
