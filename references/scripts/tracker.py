@@ -750,9 +750,11 @@ def _convert_draft_pr_to_ready(number):
                 parts = head.split("/")
                 if len(parts) >= 3 and parts[2] == str(number):
                     if pr.get("isDraft", False):
-                        # Forgejo API: PATCH /repos/{owner}/{repo}/pulls/{number}
-                        # Not all adapters support this — fall through silently
-                        pass
+                        # Convert draft to ready via forge adapter (#4991 GAP-3)
+                        try:
+                            adapter.pr_ready(pr.get("number"))
+                        except (AttributeError, Exception):
+                            pass  # Adapter may not support pr_ready
         except Exception:
             pass
         return

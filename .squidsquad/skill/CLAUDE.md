@@ -795,7 +795,7 @@ Split commits into code (feature branch) and state (main):
      Then fix the issues and push to the branch.
    - If human posted new comments: read and address them (fix code, answer questions, reply on PR)
    - A PR must NEVER be in ready state while the agent is actively pushing commits to it.
-   - After all fixes are pushed and the task moves to pending-test, the tracker auto-converts the PR back to ready.
+   - After all fixes are pushed and the task moves to pending-test, `cycle_post.py` commits and creates the PR first, then the status transition triggers auto-conversion of the draft PR to ready.
 
 5. **When PR Flow `yes`**: check own open PRs for merge conflicts and rebase:
    ```bash

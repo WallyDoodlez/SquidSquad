@@ -237,6 +237,30 @@ def pr_create(title, body):
     return url
 
 
+def pr_ready(pr_number):
+    """Convert a draft PR to ready (#4991 GAP-5). Uses forge adapter pattern."""
+    try:
+        from forge_adapter import get_adapter, _read_forge_config
+        config = _read_forge_config()
+        if config["provider"] not in ("github", ""):
+            adapter = get_adapter(config)
+            adapter.pr_ready(pr_number)
+            print(f"PR #{pr_number} converted to ready (via adapter)")
+            return True
+    except (ImportError, AttributeError, Exception):
+        pass
+
+    # Default: gh CLI
+    result = _run_list(
+        ["gh", "pr", "ready", str(pr_number)], check=False)
+    if result.returncode != 0:
+        print(f"ERROR: Failed to convert PR #{pr_number} to ready: {result.stderr}",
+              file=sys.stderr)
+        return False
+    print(f"PR #{pr_number} converted to ready")
+    return True
+
+
 def pr_merge(pr_number, strategy="squash"):
     """Merge a PR. Uses forge adapter for non-GitHub backends,
     gh CLI for GitHub. Returns (success, message).
@@ -622,6 +646,12 @@ def main():
             print("Usage: git_ops.py pr-create <title> <body>", file=sys.stderr)
             sys.exit(1)
         pr_create(rest[0], " ".join(rest[1:]))
+    elif cmd == "pr-ready":
+        if not rest:
+            print("Usage: git_ops.py pr-ready <pr-number>", file=sys.stderr)
+            sys.exit(1)
+        success = pr_ready(rest[0])
+        sys.exit(0 if success else 1)
     elif cmd == "pr-merge":
         if not rest:
             print("Usage: git_ops.py pr-merge <pr-number> [--strategy squash|merge|rebase]", file=sys.stderr)
