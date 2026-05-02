@@ -443,89 +443,86 @@ async def restart_agent(role: str):
     }
 
 
-@app.post("/shutdown")
+@app.post("/shutdown", status_code=202)
 async def shutdown():
-    """Stop all agents, then exit harness. Only stops agents that are running."""
-    roles = boot_remote._get_all_roles()
-    _log("Shutdown requested...")
+    """Stop all agents, then exit harness. Only stops agents that are running.
 
-    # Only stop agents that are actually running (not stopped, not dead)
-    running_roles = []
-    for role in roles:
-        clone_path = boot_remote._get_clone_path(role)
-        # Skip explicitly stopped agents
-        if boot_remote._has_stop_sentinel(clone_path, role):
-            _log(f"  {role}: skip (already stopped)")
-            continue
-        # Skip dead/not-running agents
-        needs_boot, _, _ = boot_remote._needs_boot(role)
-        if needs_boot:
-            _log(f"  {role}: skip (not running)")
-            continue
-        running_roles.append(role)
+    Returns 202 Accepted immediately. Shutdown work runs in a background thread
+    to avoid blocking the async event loop (time.sleep in async = blocked responses).
+    """
+    _log("Shutdown requested — starting background shutdown...")
 
-    if running_roles:
-        _log(f"Stopping running agents: {', '.join(running_roles)}")
-        for role in running_roles:
+    def _do_shutdown():
+        """Background thread: stop agents, clean port file, exit."""
+        roles = boot_remote._get_all_roles()
+
+        running_roles = []
+        for role in roles:
             clone_path = boot_remote._get_clone_path(role)
-            stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"
-            sac_file = Path(clone_path) / ".squidsquad" / role / ".stop-after-cycle"
-            try:
-                stop_file.parent.mkdir(parents=True, exist_ok=True)
-                stop_file.write_text("stopped via harness shutdown", encoding="utf-8")
-                sac_file.write_text("stopped via harness shutdown", encoding="utf-8")
-            except OSError:
-                pass
+            if boot_remote._has_stop_sentinel(clone_path, role):
+                _log(f"  {role}: skip (already stopped)")
+                continue
+            needs_boot, _, _ = boot_remote._needs_boot(role)
+            if needs_boot:
+                _log(f"  {role}: skip (not running)")
+                continue
+            running_roles.append(role)
 
-        # Wait briefly for running agents to reach idle
-        _log("Waiting for agents to idle (max 30s)...")
-        for _ in range(6):
-            all_idle = True
+        if running_roles:
+            _log(f"Stopping running agents: {', '.join(running_roles)}")
             for role in running_roles:
-                state_file = SQUIDSQUAD_DIR / role / "current-state"
+                clone_path = boot_remote._get_clone_path(role)
+                stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"
+                sac_file = Path(clone_path) / ".squidsquad" / role / ".stop-after-cycle"
                 try:
-                    content = state_file.read_text(encoding="utf-8").strip()
-                    if not content.startswith("idle"):
-                        all_idle = False
-                        break
-                except (OSError, FileNotFoundError):
-                    pass  # No state file = not running = idle
-            if all_idle:
+                    stop_file.parent.mkdir(parents=True, exist_ok=True)
+                    stop_file.write_text("stopped via harness shutdown", encoding="utf-8")
+                    sac_file.write_text("stopped via harness shutdown", encoding="utf-8")
+                except OSError:
+                    pass
+
+            _log("Waiting for agents to idle (max 30s)...")
+            for _ in range(6):
+                all_idle = True
+                for role in running_roles:
+                    state_file = SQUIDSQUAD_DIR / role / "current-state"
+                    try:
+                        content = state_file.read_text(encoding="utf-8").strip()
+                        if not content.startswith("idle"):
+                            all_idle = False
+                            break
+                    except (OSError, FileNotFoundError):
+                        pass
+                if all_idle:
+                    break
+                time.sleep(5)
+
+            for role in running_roles:
+                clone_path = boot_remote._get_clone_path(role)
+                claude_pid, alive = reboot_agent._read_claude_pid(Path(clone_path), role)
+                if alive and claude_pid:
+                    _log(f"  Killing {role} (PID {claude_pid})...")
+                    reboot_agent._kill_process(claude_pid)
+        else:
+            _log("No running agents to stop.")
+
+        for attempt in range(3):
+            try:
+                if HARNESS_PORT_FILE.exists():
+                    HARNESS_PORT_FILE.unlink()
+                    _log("Port discovery file deleted.")
                 break
-            time.sleep(5)
+            except OSError as e:
+                _log(f"WARNING: Could not delete port file (attempt {attempt + 1}/3): {e}")
+                time.sleep(0.5)
 
-        # Kill remaining running agent processes
-        for role in running_roles:
-            clone_path = boot_remote._get_clone_path(role)
-            claude_pid, alive = reboot_agent._read_claude_pid(Path(clone_path), role)
-            if alive and claude_pid:
-                _log(f"  Killing {role} (PID {claude_pid})...")
-                reboot_agent._kill_process(claude_pid)
-    else:
-        _log("No running agents to stop.")
-
-    # Clean up port file BEFORE os._exit to prevent stale file.
-    # Retry on Windows where file locking can cause transient failures.
-    for attempt in range(3):
-        try:
-            if HARNESS_PORT_FILE.exists():
-                HARNESS_PORT_FILE.unlink()
-                _log("Port discovery file deleted.")
-            break
-        except OSError as e:
-            _log(f"WARNING: Could not delete port file (attempt {attempt + 1}/3): {e}")
-            time.sleep(0.5)
-
-    _log("Harness exiting.")
-
-    # Schedule process exit after response is sent
-    def _exit():
+        _log("Harness exiting.")
         time.sleep(1)
         os._exit(0)
 
-    threading.Thread(target=_exit, daemon=True).start()
+    threading.Thread(target=_do_shutdown, daemon=True, name="shutdown").start()
 
-    return {"status": "shutting_down", "message": "All agents stopped. Harness exiting."}
+    return {"status": "shutting_down", "message": "Shutdown initiated. Harness will exit shortly."}
 
 
 # ---------------------------------------------------------------------------
