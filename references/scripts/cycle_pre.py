@@ -116,6 +116,14 @@ def _do_pull():
     return "ok"
 
 
+def _get_branch_name(role, number):
+    """Get branch name using configured pattern (#5040)."""
+    pattern = _config_get("branch-pattern")
+    if not pattern:
+        pattern = "squidsquad/{role}/{number}"
+    return pattern.format(role=role, number=number)
+
+
 def _enforce_branch(role, working_state):
     """Ensure the agent is on the correct branch before pull (#4942).
 
@@ -606,7 +614,7 @@ def _build_qa_input(role):
                 items = json.loads(result.stdout)
                 for item in (items if isinstance(items, list) else []):
                     num = item.get("number", "")
-                    branch = f"squidsquad/{query_role}/{num}" if num else ""
+                    branch = _get_branch_name(query_role, num) if num else ""
                     item["branch"] = branch
                     item["source_role"] = query_role
                     # Check for test plan
@@ -629,7 +637,7 @@ def _build_qa_input(role):
                 items = json.loads(result.stdout)
                 for item in (items if isinstance(items, list) else []):
                     num = item.get("number", "")
-                    branch = f"squidsquad/{query_role}/{num}" if num else ""
+                    branch = _get_branch_name(query_role, num) if num else ""
                     item["branch"] = branch
                     item["source_role"] = query_role
                     test_plan_path = ""

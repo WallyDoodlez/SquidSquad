@@ -1139,7 +1139,7 @@ These instructions apply to the dev/skill agent on this project.
 ### Branch Workflow
 
 - **Use `git_ops.py task-begin` / `task-end`** for feature branch checkout/return.
-- **Branch workflow enabled**: code goes to `squidsquad/<role>/<number>`, state to main via `git_ops.py commit-code` vs `commit-state`.
+- **Branch workflow enabled**: code goes to `squidsquad/task/<number>` (unified branch — PM and dev share one branch per task #5040), state to main via `git_ops.py commit-code` vs `commit-state`. Branch pattern configured in config.md `branch-pattern`.
 - **PR flow enabled**: create PRs with full summary (`git_ops.py pr-create`). Check `review:human-required` label — if present, hold for human review instead of auto-merge.
 - **Run `git_ops.py has-changes`** before transitioning to pending-test. If no changes, re-read the issue and apply the fix.
 
@@ -1250,7 +1250,7 @@ These instructions apply to ALL agents on this project.
 
 - **Always `git pull --rebase` before starting work.** Never push without pulling first.
 - **Atomic writes**: Write to `.tmp` then `mv` for any file other agents or the statusline may read.
-- **Branch workflow enabled**: Feature branches per task (`squidsquad/<role>/<number>`).
+- **Branch workflow enabled**: Feature branches per task (pattern from config.md `branch-pattern`, default `squidsquad/task/{number}`).
 - **PR flow + auto-merge enabled**: PRs created for feature branches, auto-merged when QA passes (unless `review:human-required`).
 
 ### Agent Infrastructure

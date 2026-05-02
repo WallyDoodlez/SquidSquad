@@ -40,6 +40,7 @@
 
 - **Working Branch**: main
 - **State Branch**: squid-squad
+- **Branch Pattern**: squidsquad/task/{number}
 
 ## Iteration Interval
 

@@ -511,13 +511,29 @@ def commit_state(role, message):
     return True
 
 
+def get_branch_name(role, number):
+    """Get the branch name for a task (#5040).
+
+    Reads branch-pattern from config. Default: squidsquad/{role}/{number}.
+    Pattern supports {role} and {number} placeholders.
+    """
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from config import get_field
+        pattern = get_field("branch-pattern") or ""
+    except (SystemExit, Exception):
+        pattern = ""
+    if not pattern:
+        pattern = "squidsquad/{role}/{number}"
+    return pattern.format(role=role, number=number)
+
+
 def task_begin(role, number):
     """Check out the task's feature branch if branch-workflow is enabled (#3296).
 
-    Derives branch as squidsquad/<role>/<number>.
+    Uses configured branch pattern (#5040). Prints branch name to stdout
+    so callers can capture it.
     If branch-workflow is disabled, this is a no-op (exit 0).
-    If the branch doesn't exist locally or on origin, exits non-zero
-    so the agent can push back to the submitting role.
     """
     # Config gate: no-op if branch workflow disabled
     try:
@@ -529,7 +545,7 @@ def task_begin(role, number):
     except Exception:
         return  # Can't read config — treat as disabled
 
-    branch = f"squidsquad/{role}/{number}"
+    branch = get_branch_name(role, number)
     working = _get_working_branch()
 
     # Check local
@@ -538,6 +554,7 @@ def task_begin(role, number):
         if not _safe_checkout(branch):
             print(f"ERROR: task-begin failed to checkout {branch}", file=sys.stderr)
             sys.exit(1)
+        print(branch)
         return
 
     # Fetch before checking remote — stale refs cause false negatives in
@@ -549,6 +566,7 @@ def task_begin(role, number):
     if remote.returncode == 0:
         result = _run_list(["git", "checkout", "-b", branch, f"origin/{branch}"], check=False)
         if result.returncode == 0:
+            print(branch)
             return
         print(f"ERROR: task-begin failed to checkout {branch} from origin: {result.stderr}", file=sys.stderr)
         sys.exit(1)
@@ -556,7 +574,7 @@ def task_begin(role, number):
     # Branch not found — create it (#4942)
     result = _run_list(["git", "checkout", "-b", branch], check=False)
     if result.returncode == 0:
-        print(f"Created branch {branch}")
+        print(branch)
         return
     print(f"ERROR: task-begin failed to create {branch}: {result.stderr}",
           file=sys.stderr)
