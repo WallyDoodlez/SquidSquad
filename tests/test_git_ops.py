@@ -51,14 +51,30 @@ class TestPull:
 
     @patch("git_ops._run")
     def test_pull_stash_pop_conflict(self, mock_run):
-        """Stash pop fails → warning printed, still returns True."""
+        """Stash pop fails → stash dropped, still returns True (#4829)."""
         mock_run.side_effect = [
             _mock_result(returncode=1),  # pull fails
             _mock_result(),              # stash
             _mock_result(),              # pull --rebase
             _mock_result(returncode=1),  # stash pop fails
+            _mock_result(),              # stash drop (#4829)
         ]
         assert git_ops.pull() is True
+        assert mock_run.call_count == 5
+
+    @patch("git_ops._run")
+    def test_pull_stash_pop_conflict_drops_stash(self, mock_run):
+        """Regression #4829: failed stash pop must call git stash drop."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),  # pull fails
+            _mock_result(),              # stash
+            _mock_result(),              # pull --rebase
+            _mock_result(returncode=1),  # stash pop fails
+            _mock_result(),              # stash drop
+        ]
+        git_ops.pull()
+        drop_call = mock_run.call_args_list[4]
+        assert drop_call[0][0] == "git stash drop"
 
 
 # ---------------------------------------------------------------------------
@@ -704,3 +720,42 @@ class TestSafeCheckout:
 
         result = git_ops._safe_checkout("feature-branch")
         assert result is True
+
+
+# ---------------------------------------------------------------------------
+# .gitignore volatile file coverage — regression #4829
+# ---------------------------------------------------------------------------
+
+class TestGitignoreVolatileFiles:
+    """Regression #4829: volatile files must be covered by .gitignore patterns."""
+
+    VOLATILE_PATTERNS = [
+        ".squidsquad/.backlog-cache",
+        ".squidsquad/*/.claude-pid",
+        ".claude/scheduled_tasks.lock",
+    ]
+
+    def test_gitignore_covers_volatile_files(self):
+        """All volatile file patterns must appear in .gitignore."""
+        gitignore_path = Path(__file__).resolve().parent.parent / ".gitignore"
+        content = gitignore_path.read_text(encoding="utf-8")
+        for pattern in self.VOLATILE_PATTERNS:
+            assert pattern in content, (
+                f".gitignore missing pattern for volatile file: {pattern}"
+            )
+
+    def test_volatile_files_not_tracked(self):
+        """Volatile files must not be in git index (git ls-files)."""
+        import subprocess
+        result = subprocess.run(
+            ["git", "ls-files"],
+            capture_output=True, text=True, encoding="utf-8",
+            cwd=str(Path(__file__).resolve().parent.parent),
+        )
+        tracked = result.stdout.strip().splitlines()
+        volatile_names = [".backlog-cache", ".claude-pid", "scheduled_tasks.lock"]
+        for name in volatile_names:
+            matches = [f for f in tracked if name in f]
+            assert matches == [], (
+                f"Volatile file(s) still tracked in git index: {matches}"
+            )

@@ -91,8 +91,10 @@ def pull():
         pop_result = _run("git stash pop", check=False)
         if pop_result.returncode != 0:
             _log_diagnostic("warning", "stash pop failed during pull — possible merge conflict")
-            print("WARNING: stash pop failed (possible conflict). Changes remain in stash.", file=sys.stderr)
-            print("Pulled (stash pop conflict -- run 'git stash show' to inspect)")
+            # Drop the failed stash to prevent leak accumulation (#4829)
+            _run("git stash drop", check=False)
+            print("WARNING: stash pop failed -- dropped stale stash entry.", file=sys.stderr)
+            print("Pulled (stash pop conflict -- stale stash dropped)")
         else:
             print("Pulled (stashed and popped)")
     else:
