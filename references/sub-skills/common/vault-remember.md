@@ -71,10 +71,9 @@ python references/scripts/vault_remember.py inc-writes [ROLE]
 ```
 
 **Priority when >2 candidates pass gates** (write the top 2 only):
-1. Human preferences (always highest — they shape all future work)
-2. Decisions (architectural choices compound)
-3. Learnings (failure lessons prevent repeat mistakes)
-4. Patterns (useful but can wait a cycle)
+1. Decisions (architectural choices compound)
+2. Learnings (failure lessons prevent repeat mistakes)
+3. Patterns (useful but can wait a cycle)
 
 Remaining candidates beyond the write budget are noted in the iteration log's Notes field: `Vault-worthy but deferred (budget): [description]`.
 
@@ -84,4 +83,4 @@ python references/scripts/vault_remember.py briefing-budget
 ```
 If remaining is 0, do not add to BRIEFING.md without trimming. Trimmed content moves to a galaxy note — never deleted.
 
-**human-profile.md**: If a human preference is detected and `areas/human-profile.md` exists, update it following vault-update protocol. If it does not exist, create it from the seed template at `references/vault-templates/human-profile-seed.md`.
+**Scope reminder**: The vault stores project and environment facts (conventions, context, decisions, learnings). Human behavioral preferences are captured by soul shepherd (observed) and L4 directives (explicit) — not here.
