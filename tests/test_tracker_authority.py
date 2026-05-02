@@ -926,6 +926,52 @@ class TestDraftPRConversion:
         tracker.transition(42, "pending-test", "pending-ship", role="qa-lead")
 
 
+class TestForgejoAdapterDraftConversion:
+    """Regression #4991 GAP-3: Forgejo adapter must call pr_ready(), not pass."""
+
+    def test_forgejo_adapter_calls_pr_ready(self, monkeypatch):
+        """When forge adapter is available, _convert_draft_pr_to_ready uses it."""
+        from unittest.mock import MagicMock
+        mock_adapter = MagicMock()
+        mock_adapter.list_prs.return_value = [
+            {"number": 77, "headRefName": "squidsquad/skill/42", "isDraft": True}
+        ]
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: mock_adapter)
+
+        tracker._convert_draft_pr_to_ready(42)
+
+        mock_adapter.pr_ready.assert_called_once_with(77)
+
+    def test_forgejo_adapter_skips_non_draft(self, monkeypatch):
+        """Forgejo adapter skips non-draft PRs."""
+        from unittest.mock import MagicMock
+        mock_adapter = MagicMock()
+        mock_adapter.list_prs.return_value = [
+            {"number": 77, "headRefName": "squidsquad/skill/42", "isDraft": False}
+        ]
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: mock_adapter)
+
+        tracker._convert_draft_pr_to_ready(42)
+
+        mock_adapter.pr_ready.assert_not_called()
+
+    def test_forgejo_adapter_no_matching_pr(self, monkeypatch):
+        """Forgejo adapter handles no matching PR gracefully."""
+        from unittest.mock import MagicMock
+        mock_adapter = MagicMock()
+        mock_adapter.list_prs.return_value = [
+            {"number": 77, "headRefName": "squidsquad/pm/99", "isDraft": True}
+        ]
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: mock_adapter)
+
+        tracker._convert_draft_pr_to_ready(42)
+
+        mock_adapter.pr_ready.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # list_issues — label construction and status filtering (#471)
 # ---------------------------------------------------------------------------

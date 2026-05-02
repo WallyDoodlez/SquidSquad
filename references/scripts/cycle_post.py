@@ -311,7 +311,14 @@ def _do_commit_push(data, role):
                     _run(["git", "checkout", branch], check=False)
                 result = _run_script("git_ops.py", "pr-create", pr_title, pr_body)
                 if result.returncode == 0:
-                    print(f"  PR created: {result.stdout.strip()}")
+                    pr_url = result.stdout.strip().split("PR created: ")[-1].strip()
+                    print(f"  PR created: {pr_url}")
+                    # Comment PR URL on tracker issue (#4991 GAP-9)
+                    issue_number = branch.split("/")[-1] if "/" in branch else ""
+                    if issue_number.isdigit() and pr_url:
+                        _run_script("tracker.py", "comment", issue_number,
+                                    "--role", f"{role}-lead",
+                                    "--message", f"PR opened: {pr_url}")
                 # Switch back — state commit below needs working branch
                 if cur_branch and cur_branch != branch:
                     _run(["git", "checkout", cur_branch], check=False)
@@ -529,24 +536,25 @@ def main():
     print(f"[🦑 {ts}] cycle_post starting for {role} (cycle {data.get('cycle_number', '?')})...")
     _write_status_bar(role, "committing", f"git-commit — Post-processing cycle...")
 
-    # 1. Status transitions (before commits — so tracker reflects reality)
+    # 1. Commit and push FIRST — PR must exist before status transitions (#4991 GAP-1)
+    #    Status transitions trigger auto-conversion (draft→ready) which needs the PR.
+    _do_commit_push(data, role)
+
+    # 2. Status transitions (after commits — PR exists for auto-conversion)
     _do_status_transitions(data, role)
 
-    # 2. Tracker comments
+    # 3. Tracker comments
     _do_tracker_comments(data, role)
 
-    # 3. Working state update
+    # 4. Working state update
     _do_working_state_update(data, role)
 
-    # 4. Iteration log
+    # 5. Iteration log
     _do_iteration_log(data, role)
 
-    # 5. Version bump (DM only)
+    # 6. Version bump (DM only)
     if role == "dm":
         _do_version_bump(data, role)
-
-    # 6. Commit and push
-    _do_commit_push(data, role)
 
     # 7. Legacy restart sentinel (deprecated — backward compat for one version)
     restarting = _do_restart_sentinel(data, role)
