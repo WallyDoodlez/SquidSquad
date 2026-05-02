@@ -2,6 +2,7 @@
 .squidsquad/.active-role
 .squidsquad/*/current-state
 .squidsquad/*/.pid
+.squidsquad/*/.claude-pid
 .squidsquad/*/restart-log.txt
 .squidsquad/*/context-pressure
 .squidsquad/*/context-pressure.tmp
