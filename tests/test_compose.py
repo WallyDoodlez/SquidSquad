@@ -885,3 +885,21 @@ class TestAgentComposeEnabled:
         # Prompt must be piped via input kwarg
         assert "input" in kwargs, "prompt must be passed via input= kwarg"
         assert "original content" in kwargs["input"]
+
+
+# ---------------------------------------------------------------------------
+# Regression #4918: no deprecated tempfile.mktemp()
+# ---------------------------------------------------------------------------
+
+class TestNoDeprecatedMktemp:
+    """compose.py must not use deprecated tempfile.mktemp()."""
+
+    def test_source_does_not_call_mktemp(self):
+        import inspect
+        source = inspect.getsource(compose)
+        # mktemp() calls — exclude comments
+        lines = [l for l in source.splitlines()
+                 if "mktemp" in l and not l.strip().startswith("#")]
+        assert lines == [], (
+            f"compose.py still uses deprecated tempfile.mktemp(): {lines}"
+        )

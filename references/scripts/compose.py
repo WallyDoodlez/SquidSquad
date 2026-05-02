@@ -353,10 +353,13 @@ def compose_role(role_name: str) -> str:
     # Step 1: Assemble template from 3 layers
     assembled = _assemble_claude(role_name)
 
-    # Write to a temp file for include resolution (reuses existing logic)
+    # Write to a temp file for include resolution (reuses existing logic).
+    # Use NamedTemporaryFile to avoid TOCTOU race from deprecated mktemp (#4918).
     import tempfile
-    tmp = Path(tempfile.mktemp(suffix=".md"))
-    tmp.write_text(assembled, encoding="utf-8")
+    with tempfile.NamedTemporaryFile(suffix=".md", delete=False, mode="w",
+                                     encoding="utf-8") as tf:
+        tf.write(assembled)
+        tmp = Path(tf.name)
 
     try:
         # Step 2: Resolve includes
