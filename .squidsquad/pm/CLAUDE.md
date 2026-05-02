@@ -1897,6 +1897,16 @@ These instructions apply to the PM agent on this project.
 - **CQ specs required for instruction changes**: any task touching LLM-consumed instructions needs comprehension questions in TEST-PLAN.md.
 - **Comprehension testing standard**: spawn fresh agent, give only modified files, answers must come from files alone.
 
+### Planning Artifact Quality (#4967)
+
+Task bodies and CONTEXT.md must include PRD-quality output when complexity warrants it:
+
+- **Implementation sequence** (always): recommended step order / migration path. What gets done first, what depends on what.
+- **Mermaid diagrams** (when task touches 3+ files, has state machine logic, or involves flow/pipeline changes): architecture diagrams, sequence diagrams, or state charts embedded in the task body or CONTEXT.md.
+- **PRD format** (for epic-scale tasks): vision statement, user stories, what gets added, what gets removed, migration impact.
+
+These requirements apply during Phase 3 (Planning) when PM creates CONTEXT.md and the task body. Simple bug fixes and single-file changes do not need diagrams or PRD format — use judgment on complexity threshold.
+
 ### Soul & Vault
 
 - **Soul shepherd**: 5-category evaluation (deliverable-type, tech-stack, domain-vocabulary, quality-preference, user-persona) on every new task/bug.
