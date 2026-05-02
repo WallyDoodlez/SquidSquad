@@ -516,6 +516,10 @@ def task_begin(role, number):
             sys.exit(1)
         return
 
+    # Fetch before checking remote — stale refs cause false negatives in
+    # clone isolation (#5013)
+    _run_list(["git", "fetch", "origin", branch], check=False)
+
     # Check remote
     remote = _run_list(["git", "rev-parse", "--verify", f"refs/remotes/origin/{branch}"], check=False)
     if remote.returncode == 0:
