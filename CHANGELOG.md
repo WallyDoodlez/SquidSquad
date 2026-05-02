@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.31.0] — 2026-05-01
+
+### Added
+- #4179 — Dev agent now uses divide-and-conquer instinct for complex tasks with sub-agent delegation
+- #4533 — Dev agents now perform mandatory self-verification reflection before marking work as pending-test
+- #4534 — PM acceptance criteria now consider project workflows, philosophy, and regression prevention
+- #4541 — Agent composition is now LLM-driven — reads layer stack and writes coherent output instead of deterministic templating
+
+### Changed
+- #4449 — PM and DM now verify distribution packaging (npm + tarball + installer-files.txt) for project instructions
+- #4531 — L4 project content relocated from distributed references/ to project-local .squidsquad/
+
+### Fixed
+- #4564 — Fixed duplicate entry in installer-files.txt
+- #4608 — Fixed WinError 206 on Windows when composing agent instructions (filename too long)
+- #4609 — Resolved merge conflict in config.md shipped counter
+- #4666 — Fixed config.md version revert after v0.30.0 bump
+
 ## [0.30.0] — 2026-05-01
 
 ### Shipped
