@@ -24,15 +24,26 @@ Add event bus to the harness. Mechanical scripts (cycle_pre/cycle_post) emit eve
 ```
 
 ### Events:
-- **cycle-start**: emitted by cycle_pre.py after writing cycle-input.json
-- **cycle-end**: emitted by cycle_post.py after commit/push
-- **phase-change**: emitted when status bar updates (piggyback on existing write)
+
+**Cycle events** (emitted by cycle_pre/cycle_post):
+- **cycle-start**: after writing cycle-input.json
+- **cycle-end**: after commit/push (includes cycle_type + summary)
+- **phase-change**: when status bar updates
+
+**Git events** (emitted by git_ops.py):
+- **git-pull**: after pull (includes result: ok/conflict/stash)
+- **git-commit**: after commit (includes message, branch, files changed count)
+- **git-push**: after push (includes branch)
+- **pr-create**: after PR creation (includes PR number, title, branch)
+- **pr-merge**: after PR merge (includes PR number)
+- **branch-checkout**: on task-begin/task-end (includes branch name, task number)
 
 ## Implementation
 
 - **event_bus.py** (~50 lines): stdlib urllib, `emit(event_type, role, payload)`. Reads `.harness-port`, POST with 500ms timeout, catches all exceptions silently.
-- **cycle_pre.py**: add `event_bus.emit("cycle-start", role, {"cycle_number": N})` after writing cycle-input.json
-- **cycle_post.py**: add `event_bus.emit("cycle-end", role, {"cycle_number": N, "cycle_type": type, "summary": summary})` after commit/push
+- **cycle_pre.py**: emit `cycle-start` after writing cycle-input.json
+- **cycle_post.py**: emit `cycle-end` after commit/push
+- **git_ops.py**: emit `git-pull`, `git-commit`, `git-push`, `pr-create`, `pr-merge`, `branch-checkout` at each respective operation
 - **Harness /events endpoint**: receives events, appends to bounded stream (1000 max), updates AgentState
 
 ## Harness State Model (extended from Phase 1)
@@ -62,7 +73,30 @@ Harness console shows events as they arrive:
 [18:34:01] dm   cycle-start #45
 ```
 
-Simple scrolling log. No curses/rich. Upgradeable later.
+Split display:
+- **Top: persistent health bar** — always visible, updates in-place. Shows each agent's status (alive/dead, current cycle, current phase). Redraws on each event.
+- **Below: scrolling event log** — events stream below the health bar.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ pm:    🦑 #867 idle          ctx: 22%  session: $1.42  week: $18.50        │
+│ skill: 🦑 #867 implementing  ctx: 45%  session: $3.10  week: $42.30        │
+│ qa:    🦑 #165 verifying     ctx: 31%  session: $0.80  week: $12.60        │
+│ dm:    🦑 #47  idle          ctx: 12%  session: $0.35  week: $8.20         │
+└─────────────────────────────────────────────────────────────────────────────┘
+[21:03:11] skill git-pull     ok
+[21:03:12] skill cycle-start  #867
+[21:03:30] skill git-commit   "fix: async shutdown" (2 files)
+[21:03:33] skill cycle-end    #867 (active)
+```
+
+Health bar shows per agent:
+- Status icon + current cycle + phase
+- **Context pressure** (% of context window used)
+- **Session usage** (token cost this session)
+- **Week usage** (accumulated token cost this week)
+
+Uses basic ANSI cursor control or `rich` library for the persistent header. Dev discretion on implementation.
 
 ## Port Distribution (clone isolation)
 

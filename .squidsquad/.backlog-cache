@@ -1,8 +1,4 @@
 designer:bugs=0:feats=0:pship=0
 qa:bugs=0:feats=0:pship=0
-skill:bugs=1:feats=1:pship=0
-<<<<<<< Updated upstream
+skill:bugs=1:feats=0:pship=1
 pm:planning=
-=======
-pm:planning=4709
->>>>>>> Stashed changes

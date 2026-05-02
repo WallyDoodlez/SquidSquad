@@ -1,10 +1,17 @@
 # Working State
 
-- **Task**: none
-- **Status**: none
-- **Quiet Cycle Counter**: 2
+- **Task**: #4439
+- **Status**: in-progress
+- **Started**: 2026-05-01 21:32
 
-## Session Context (checkpoint at cycle 261)
-- Version: v0.27.0
-- Shipped count: 5/10
-- Last ship: #3416 (cycle 259, 2026-04-27)
+## Completed Steps
+- none
+
+## Remaining Steps
+- Update README.md with harness feature description
+- Prepare CHANGELOG entry
+- Ship
+
+## Key Decisions
+- Harness code already on main via PRs — no PR merge needed
+- Feature branch only has state residue (backlog cache, QA planning cleanup)
