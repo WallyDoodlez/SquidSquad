@@ -392,7 +392,8 @@ class TestGetAllRoles:
     @patch("boot_remote._parse_dev_agents", return_value=["skill", "qa"])
     @patch("boot_remote._parse_local_config", return_value={"skill": Path("/tmp")})
     def test_excludes_pm_when_not_in_config(self, mock_local, mock_devs):
-        with patch.object(boot_remote, "SQUIDSQUAD_DIR", Path("/nonexistent")):
+        with patch.object(boot_remote, "SQUIDSQUAD_DIR", Path("/nonexistent")), \
+             patch.object(boot_remote, "CONFIG_MD", Path("/nonexistent/config.md")):
             roles = boot_remote._get_all_roles()
             assert "pm" not in roles
             assert "skill" in roles

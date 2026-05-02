@@ -37,9 +37,17 @@ class TestRoleDirectories:
             assert claude_md.exists(), f"Missing CLAUDE.md for agent: {agent}"
 
     def test_dev_agent_has_working_state(self):
+        checked = 0
         for agent in self.dev_agents:
-            ws = SQUIDSQUAD_DIR / agent / "working-state.md"
-            assert ws.exists(), f"Missing working-state.md for agent: {agent}"
+            agent_dir = SQUIDSQUAD_DIR / agent
+            ws = agent_dir / "working-state.md"
+            if not ws.exists():
+                # In multi-clone setups, some agents run in other
+                # clones and don't have working-state.md here (#4876).
+                continue
+            checked += 1
+        # At least one local agent must have working state
+        assert checked > 0, "No dev agents have working-state.md locally"
 
     def test_pm_dir_exists(self):
         assert (SQUIDSQUAD_DIR / "pm").is_dir(), "Missing pm/ directory"
