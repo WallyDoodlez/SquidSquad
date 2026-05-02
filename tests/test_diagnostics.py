@@ -1,9 +1,11 @@
-"""Tests for references/scripts/diagnostics.py — log, read, rotate, sanitize."""
+"""Tests for references/scripts/diagnostics.py — log, read, rotate, sanitize,
+generate_report, is_public_repo."""
 
 import json
+import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -116,3 +118,93 @@ class TestSanitizeConfig:
         assert "30" in result
         assert "yes" in result
         assert "[REDACTED]" not in result
+
+
+class TestIsPublicRepo:
+    def test_public_repo(self, capsys):
+        mock_result = MagicMock()
+        mock_result.stdout = '{"isPrivate": false}'
+        with patch("diagnostics.subprocess.run", return_value=mock_result):
+            result = diagnostics.is_public_repo()
+        assert result is True
+        assert "true" in capsys.readouterr().out
+
+    def test_private_repo(self, capsys):
+        mock_result = MagicMock()
+        mock_result.stdout = '{"isPrivate": true}'
+        with patch("diagnostics.subprocess.run", return_value=mock_result):
+            result = diagnostics.is_public_repo()
+        assert result is False
+        assert "false" in capsys.readouterr().out
+
+    def test_missing_field_defaults_private(self, capsys):
+        mock_result = MagicMock()
+        mock_result.stdout = '{}'
+        with patch("diagnostics.subprocess.run", return_value=mock_result):
+            result = diagnostics.is_public_repo()
+        assert result is False
+
+    def test_gh_command_fails(self, capsys):
+        with patch("diagnostics.subprocess.run",
+                   side_effect=subprocess.CalledProcessError(1, "gh")):
+            result = diagnostics.is_public_repo()
+        assert result is None
+        assert "unknown" in capsys.readouterr().out
+
+    def test_invalid_json_response(self, capsys):
+        mock_result = MagicMock()
+        mock_result.stdout = "not json"
+        with patch("diagnostics.subprocess.run", return_value=mock_result):
+            result = diagnostics.is_public_repo()
+        assert result is None
+        assert "unknown" in capsys.readouterr().out
+
+
+class TestGenerateReport:
+    def test_report_contains_version(self, capsys):
+        with patch.object(diagnostics, "get_field", return_value="0.30.0"), \
+             patch.object(diagnostics, "_sanitize_config", return_value="config here"), \
+             patch.object(diagnostics, "LOG_FILE", Path("/nonexistent")):
+            report = diagnostics.generate_report()
+        assert "0.30.0" in report
+        assert "config here" in report
+        assert "Issue Report" in report
+
+    def test_report_with_diagnostics_entries(self, tmp_path, capsys):
+        log_file = tmp_path / "diagnostic.jsonl"
+        log_file.write_text(
+            json.dumps({"severity": "warning", "message": "test"}) + "\n",
+            encoding="utf-8",
+        )
+        with patch.object(diagnostics, "get_field", return_value="1.0.0"), \
+             patch.object(diagnostics, "_sanitize_config", return_value="cfg"), \
+             patch.object(diagnostics, "LOG_FILE", log_file):
+            report = diagnostics.generate_report()
+        assert "Recent Diagnostics" in report
+        assert '"warning"' in report
+
+    def test_report_no_log_file(self, capsys):
+        with patch.object(diagnostics, "get_field", return_value="1.0.0"), \
+             patch.object(diagnostics, "_sanitize_config", return_value="cfg"), \
+             patch.object(diagnostics, "LOG_FILE", Path("/nonexistent")):
+            report = diagnostics.generate_report()
+        assert "Recent Diagnostics" not in report
+        assert "Issue Report" in report
+
+    def test_report_version_unknown_on_error(self, capsys):
+        with patch.object(diagnostics, "get_field", side_effect=SystemExit(1)), \
+             patch.object(diagnostics, "_sanitize_config", return_value="cfg"), \
+             patch.object(diagnostics, "LOG_FILE", Path("/nonexistent")):
+            report = diagnostics.generate_report()
+        assert "unknown" in report
+
+    def test_report_skips_malformed_log_lines(self, tmp_path, capsys):
+        log_file = tmp_path / "diagnostic.jsonl"
+        log_file.write_text("not json\n" + json.dumps({"ok": True}) + "\n",
+                            encoding="utf-8")
+        with patch.object(diagnostics, "get_field", return_value="1.0.0"), \
+             patch.object(diagnostics, "_sanitize_config", return_value="cfg"), \
+             patch.object(diagnostics, "LOG_FILE", log_file):
+            report = diagnostics.generate_report()
+        assert '"ok"' in report
+        assert "not json" not in report
