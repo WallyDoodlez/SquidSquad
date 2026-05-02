@@ -977,3 +977,88 @@ class TestPMInputMultiRole:
         dm_items = [i for i in result["tracker"]["pending_test_issues"]
                      if i.get("source_role") == "dm"]
         assert len(dm_items) == 1
+
+
+# ---------------------------------------------------------------------------
+# Branch enforcement — regression #4942
+# ---------------------------------------------------------------------------
+
+class TestEnforceBranch:
+    """cycle_pre._enforce_branch ensures correct branch before pull."""
+
+    def test_calls_task_begin_for_active_task(self, monkeypatch):
+        """When working-state has an active task, task-begin is called."""
+        calls = []
+
+        def fake_run_script(*args, **kwargs):
+            calls.append(args)
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(cycle_pre, "_config_get",
+                            lambda f: "yes" if f == "branch-workflow" else "main")
+        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_pre, "_run",
+                            lambda cmd, **kw: MagicMock(returncode=0, stdout="main\n", stderr=""))
+
+        ws = {"task": "#4942", "status": "in-progress"}
+        cycle_pre._enforce_branch("skill", ws)
+
+        task_begin_calls = [c for c in calls if "task-begin" in c]
+        assert len(task_begin_calls) == 1
+        assert "4942" in task_begin_calls[0]
+
+    def test_switches_to_working_branch_when_no_task(self, monkeypatch):
+        """When no active task, switches to working branch."""
+        checkout_targets = []
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = "squidsquad/skill/old\n"
+            r.stderr = ""
+            if isinstance(cmd, list) and "checkout" in cmd:
+                checkout_targets.append(cmd[-1])
+            return r
+
+        monkeypatch.setattr(cycle_pre, "_config_get",
+                            lambda f: {"branch-workflow": "yes", "working-branch": "main"}.get(f, ""))
+        monkeypatch.setattr(cycle_pre, "_run", fake_run)
+
+        ws = {"task": "none", "status": "none"}
+        cycle_pre._enforce_branch("skill", ws)
+
+        assert "main" in checkout_targets
+
+    def test_noop_when_branch_workflow_disabled(self, monkeypatch):
+        """No branch enforcement when branch-workflow is disabled."""
+        calls = []
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "no")
+        monkeypatch.setattr(cycle_pre, "_run_script", lambda *a, **kw: calls.append(a))
+        monkeypatch.setattr(cycle_pre, "_run", lambda cmd, **kw: calls.append(cmd))
+
+        ws = {"task": "#100", "status": "in-progress"}
+        cycle_pre._enforce_branch("skill", ws)
+
+        assert len(calls) == 0
+
+    def test_stays_on_working_branch_when_already_there(self, monkeypatch):
+        """No checkout when already on working branch."""
+        checkout_calls = []
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = "main\n"  # already on main
+            r.stderr = ""
+            if isinstance(cmd, list) and "checkout" in cmd:
+                checkout_calls.append(cmd)
+            return r
+
+        monkeypatch.setattr(cycle_pre, "_config_get",
+                            lambda f: {"branch-workflow": "yes", "working-branch": "main"}.get(f, ""))
+        monkeypatch.setattr(cycle_pre, "_run", fake_run)
+
+        ws = {"task": "none", "status": "none"}
+        cycle_pre._enforce_branch("skill", ws)
+
+        assert len(checkout_calls) == 0

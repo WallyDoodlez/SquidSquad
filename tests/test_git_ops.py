@@ -759,3 +759,63 @@ class TestGitignoreVolatileFiles:
             assert matches == [], (
                 f"Volatile file(s) still tracked in git index: {matches}"
             )
+
+
+# ---------------------------------------------------------------------------
+# task_begin — regression #4942
+# ---------------------------------------------------------------------------
+
+class TestTaskBegin:
+    """task_begin should create branch if missing, not error out."""
+
+    @patch("git_ops._get_working_branch", return_value="main")
+    @patch("git_ops._safe_checkout", return_value=True)
+    @patch("git_ops._run_list")
+    def test_checks_out_existing_local_branch(self, mock_run_list, mock_checkout, mock_gwb):
+        """Existing local branch is checked out normally."""
+        # rev-parse succeeds (branch exists locally)
+        mock_run_list.return_value = _mock_result(returncode=0)
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", return_value="yes"):
+            git_ops.task_begin("skill", "100")
+        mock_checkout.assert_called_once_with("squidsquad/skill/100")
+
+    @patch("git_ops._get_working_branch", return_value="main")
+    @patch("git_ops._run_list")
+    def test_creates_branch_when_missing(self, mock_run_list, mock_gwb):
+        """Branch not found locally or on remote — creates it (#4942)."""
+        mock_run_list.side_effect = [
+            _mock_result(returncode=1),  # rev-parse local — not found
+            _mock_result(returncode=1),  # rev-parse remote — not found
+            _mock_result(returncode=0),  # git checkout -b — success
+        ]
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", return_value="yes"):
+            git_ops.task_begin("skill", "200")
+        # Third call should be branch creation
+        create_call = mock_run_list.call_args_list[2]
+        assert create_call[0][0] == ["git", "checkout", "-b", "squidsquad/skill/200"]
+
+    @patch("git_ops._get_working_branch", return_value="main")
+    @patch("git_ops._run_list")
+    def test_checks_out_remote_branch(self, mock_run_list, mock_gwb):
+        """Branch exists on remote only — checks out and tracks."""
+        mock_run_list.side_effect = [
+            _mock_result(returncode=1),  # rev-parse local — not found
+            _mock_result(returncode=0),  # rev-parse remote — found
+            _mock_result(returncode=0),  # checkout -b from origin
+        ]
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", return_value="yes"):
+            git_ops.task_begin("skill", "300")
+        checkout_call = mock_run_list.call_args_list[2]
+        assert "origin/squidsquad/skill/300" in checkout_call[0][0]
+
+    @patch("git_ops._get_working_branch", return_value="main")
+    @patch("git_ops._run_list")
+    def test_noop_when_branch_workflow_disabled(self, mock_run_list, mock_gwb):
+        """task_begin is a no-op when branch-workflow is disabled."""
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", return_value="no"):
+            git_ops.task_begin("skill", "400")
+        mock_run_list.assert_not_called()
