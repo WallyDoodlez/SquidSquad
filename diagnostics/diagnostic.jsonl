@@ -287,3 +287,4 @@
 {"timestamp": "2026-05-01T21:03:13.398768", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #42: branch squidsquad/skill/42 has 2 unmerged commit(s)"}
 {"timestamp": "2026-05-01T21:03:17.521549", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
 {"timestamp": "2026-05-01T21:03:17.578829", "severity": "error", "source": "git_ops", "message": "push failed: rejected"}
+{"timestamp": "2026-05-01T21:06:14.478210", "severity": "error", "source": "tracker", "message": "TC coverage gate blocked #4439: test plan found but no QA-RESULTS"}
