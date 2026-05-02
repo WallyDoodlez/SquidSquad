@@ -786,14 +786,15 @@ class TestTaskBegin:
         """Branch not found locally or on remote — creates it (#4942)."""
         mock_run_list.side_effect = [
             _mock_result(returncode=1),  # rev-parse local — not found
+            _mock_result(returncode=0),  # git fetch origin (#5013)
             _mock_result(returncode=1),  # rev-parse remote — not found
             _mock_result(returncode=0),  # git checkout -b — success
         ]
         with patch.dict("sys.modules", {"config": MagicMock()}), \
              patch("config.get_field", return_value="yes"):
             git_ops.task_begin("skill", "200")
-        # Third call should be branch creation
-        create_call = mock_run_list.call_args_list[2]
+        # Fourth call should be branch creation
+        create_call = mock_run_list.call_args_list[3]
         assert create_call[0][0] == ["git", "checkout", "-b", "squidsquad/skill/200"]
 
     @patch("git_ops._get_working_branch", return_value="main")
@@ -802,14 +803,33 @@ class TestTaskBegin:
         """Branch exists on remote only — checks out and tracks."""
         mock_run_list.side_effect = [
             _mock_result(returncode=1),  # rev-parse local — not found
+            _mock_result(returncode=0),  # git fetch origin (#5013)
             _mock_result(returncode=0),  # rev-parse remote — found
             _mock_result(returncode=0),  # checkout -b from origin
         ]
         with patch.dict("sys.modules", {"config": MagicMock()}), \
              patch("config.get_field", return_value="yes"):
             git_ops.task_begin("skill", "300")
-        checkout_call = mock_run_list.call_args_list[2]
+        checkout_call = mock_run_list.call_args_list[3]
         assert "origin/squidsquad/skill/300" in checkout_call[0][0]
+
+    @patch("git_ops._get_working_branch", return_value="main")
+    @patch("git_ops._run_list")
+    def test_fetches_before_remote_check(self, mock_run_list, mock_gwb):
+        """Regression #5013: task-begin must fetch before checking remote refs."""
+        mock_run_list.side_effect = [
+            _mock_result(returncode=1),  # rev-parse local — not found
+            _mock_result(returncode=0),  # git fetch origin
+            _mock_result(returncode=0),  # rev-parse remote — found after fetch
+            _mock_result(returncode=0),  # checkout -b from origin
+        ]
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", return_value="yes"):
+            git_ops.task_begin("skill", "500")
+        # Second call should be git fetch
+        fetch_call = mock_run_list.call_args_list[1]
+        assert "fetch" in fetch_call[0][0]
+        assert "origin" in fetch_call[0][0]
 
     @patch("git_ops._get_working_branch", return_value="main")
     @patch("git_ops._run_list")
