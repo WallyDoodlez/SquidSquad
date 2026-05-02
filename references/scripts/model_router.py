@@ -602,7 +602,7 @@ def _log_diagnostic(entry):
 def route(task_type, task_id, input_files, output_file, context):
     """Route a subagent task to the configured model.
 
-    Returns 0 on success, 1 on API failure (fallback), 2 on config error.
+    Returns 0 on success, 1 on API failure (fallback), 2 on config error, 3 on timeout.
     """
     model = get_model_for_task(task_type)
 
@@ -660,6 +660,17 @@ def route(task_type, task_id, input_files, output_file, context):
 
     timeout = get_timeout()
 
+    # Write progress indicator to output file (#5046)
+    try:
+        output_path = Path(output_file)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            f"# STATUS: generating...\n# Task: {task_id}\n# Model: {model}\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+
     # Call provider adapter
     start_time = time.time()
     try:
@@ -689,6 +700,11 @@ def route(task_type, task_id, input_files, output_file, context):
     except Exception as e:
         elapsed = time.time() - start_time
         error_str = str(e).lower()
+        is_timeout = (
+            "timeout" in error_str
+            or "timed out" in error_str
+            or type(e).__name__ in ("TimeoutError", "ReadTimeout", "ConnectTimeout")
+        )
         is_quota = (
             "429" in str(e)
             or "rate_limit" in error_str
@@ -699,7 +715,7 @@ def route(task_type, task_id, input_files, output_file, context):
             or type(e).__name__ == "RateLimitError"
         )
 
-        action = "quota-exceeded" if is_quota else "api-error"
+        action = "timeout" if is_timeout else ("quota-exceeded" if is_quota else "api-error")
         _log_diagnostic({
             "timestamp": time.time(),
             "task_type": task_type,
@@ -711,17 +727,30 @@ def route(task_type, task_id, input_files, output_file, context):
             "elapsed_seconds": round(elapsed, 1),
         })
 
+        # Write error status to output file (#5046)
+        try:
+            error_detail = "quota exceeded" if is_quota else str(e)[:200]
+            Path(output_file).write_text(
+                f"# STATUS: error -- {error_detail}\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
+
         if is_quota:
             # Prominent human-visible notification — not buried in stderr
             print(
                 f"\n{'=' * 60}\n"
-                f"⚠ EXTERNAL MODEL QUOTA EXCEEDED\n"
+                f"EXTERNAL MODEL QUOTA EXCEEDED\n"
                 f"  Provider: {provider_name} ({model})\n"
                 f"  Error: {e}\n"
                 f"  Action: Add credits or check your plan.\n"
                 f"  Falling back to Claude for this task.\n"
                 f"{'=' * 60}\n"
             )
+        elif is_timeout:
+            print(f"[model_router] API timeout after {round(elapsed, 1)}s. Falling back to Claude.", file=sys.stderr)
+            return 3
         else:
             print(f"[model_router] API error: {e}. Falling back to Claude.", file=sys.stderr)
         return 1
@@ -745,9 +774,12 @@ def route(task_type, task_id, input_files, output_file, context):
             f"({len(response)} < {MIN_OUTPUT_LENGTH}). Falling back to Claude.",
             file=sys.stderr,
         )
-        # Clean up partial output
+        # Write error status instead of deleting (#5046)
         try:
-            Path(output_file).unlink(missing_ok=True)
+            Path(output_file).write_text(
+                f"# STATUS: error -- output below minimum length ({len(response)} chars)\n",
+                encoding="utf-8",
+            )
         except Exception:
             pass
         return 1

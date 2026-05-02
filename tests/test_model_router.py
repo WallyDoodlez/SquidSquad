@@ -547,7 +547,7 @@ class TestQuotaNotification:
             "api_base": "", "deps": [],
         })
         fake_module = MagicMock()
-        fake_module.call.side_effect = Exception("Connection timeout")
+        fake_module.call.side_effect = Exception("Connection refused")
         mock_adapter.return_value = fake_module
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
             with patch("model_router.assemble_prompt", return_value="test"):
@@ -555,7 +555,7 @@ class TestQuotaNotification:
         assert code == 1
         captured = capsys.readouterr()
         assert "QUOTA EXCEEDED" not in captured.out
-        assert "Connection timeout" in captured.err
+        assert "Connection refused" in captured.err
         mock_diag.assert_called_once()
         assert mock_diag.call_args[0][0]["action"] == "api-error"
 
