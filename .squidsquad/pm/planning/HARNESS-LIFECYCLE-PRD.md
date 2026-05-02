@@ -183,10 +183,14 @@ sequenceDiagram
 
     Note over O: If impatient...
     O->>H: Ctrl+C (second, within 5s)
-    H->>O: "WARNING: will force-kill. Press Ctrl+C again to confirm."
+    H->>O: "WARNING: Harness will exit. Agents keep running and can be recovered on restart."
     O->>H: Ctrl+C (third)
-    H->>H: Force kill all agent processes
-    H->>H: Exit immediately
+    H->>H: Exit harness only (agents survive in their terminals)
+    H->>H: .harness-state.json preserved (intent=stopping for all agents)
+
+    Note over A: Agents still running — no monitoring
+    Note over O: On next harness start, agents are found alive
+    Note over O: Harness resumes monitoring (Scenario 5)
 ```
 
 ### 5. Harness force-closed — agent recovery
@@ -239,6 +243,51 @@ sequenceDiagram
     A->>A: cycle_pre.py runs
     A->>A: Reads working-state.md if exists
     A->>A: Resumes or starts fresh
+```
+
+### 7. Power outage — full system restart
+
+```mermaid
+sequenceDiagram
+    participant O as Operator
+    participant H as Harness
+    participant A1 as Agent 1
+    participant A2 as Agent 2
+    participant D as Disk
+
+    Note over H,A2: Power outage — everything dies instantly
+    H-xH: Dead
+    A1-xA1: Dead (mid-cycle, uncommitted work lost)
+    A2-xA2: Dead
+
+    Note over D: Survives reboot:
+    Note over D: .harness-state.json (PIDs + intents)
+    Note over D: working-state.md (last checkpoint)
+    Note over D: Git repo (all committed work)
+    Note over D: GitHub Issues (remote, always safe)
+
+    Note over O: Machine reboots, operator starts harness
+    O->>H: python harness.py
+    H->>H: gh auth check
+    H->>D: Read .harness-state.json
+    D-->>H: Agent 1: PID 1234, intent=running
+    D-->>H: Agent 2: PID 5678, intent=running
+
+    H->>H: Check PID 1234 — dead (old PID from before reboot)
+    H->>H: Check PID 5678 — dead
+    H->>H: Both had intent=running — respawn both
+
+    H->>A1: Spawn Agent 1 in terminal
+    A1->>A1: cycle_pre.py (git pull, branch check)
+    A1->>A1: Read working-state.md (last checkpoint)
+    A1->>A1: Resume from checkpoint
+
+    H->>A2: Spawn Agent 2 in terminal
+    A2->>A2: cycle_pre.py (git pull, branch check)
+    A2->>A2: Resume from checkpoint
+
+    Note over H,A2: Full recovery — agents resume where they left off
+    Note over H,A2: Only loss: uncommitted work from interrupted cycle
 ```
 
 ## What Gets Removed
@@ -311,8 +360,8 @@ HTTP timeout: 5 seconds.
 ### 7. Ctrl+C Graceful Shutdown
 
 - First Ctrl+C -> graceful stop (set intent=stopping, wait for cycle end)
-- Second Ctrl+C within 5s -> warn: "Will force-kill agent. Press Ctrl+C again to confirm."
-- Third Ctrl+C -> force kill process
+- Second Ctrl+C within 5s -> warn: "Harness will exit. Agents keep running and can be recovered on restart."
+- Third Ctrl+C -> harness exits only (agents survive, recoverable via Scenario 5)
 
 ### 8. Crash Recovery
 
@@ -346,7 +395,7 @@ As an operator (or PM agent), I call `GET /agents/skill/health`. It returns proc
 As an operator, I call `GET /agents/skill/config` to see the agent's current configuration state.
 
 **US-8: Graceful shutdown from terminal**
-As an operator at the harness terminal, I press Ctrl+C to initiate graceful stop. Double Ctrl+C warns about force kill. Triple Ctrl+C force-kills.
+As an operator at the harness terminal, I press Ctrl+C to initiate graceful stop. Double Ctrl+C warns. Triple Ctrl+C exits harness only — agents survive and are recoverable on next harness start.
 
 **US-9: Harness crash recovery**
 The harness crashes while agents are running (in visible terminals). On restart, harness reads `.harness-state.json`, checks which PIDs are alive, and resumes monitoring them.
@@ -368,7 +417,7 @@ The harness crashes while agents are running (in visible terminals). On restart,
 - [ ] Harness crash recovery: reads .harness-state.json, checks PIDs, resumes monitoring
 - [ ] `GET /agents/{role}/health` returns process status, last cycle, phase, context pressure
 - [ ] `GET /agents/{role}/config` exposes agent config sync state
-- [ ] Ctrl+C escalation: single=graceful, double=warn, triple=force-kill
+- [ ] Ctrl+C escalation: single=graceful stop, double=warn, triple=harness exits (agents survive)
 - [ ] Context pressure exit (42) from cycle_post triggers harness reboot
 - [ ] Pre-flight split: harness does gh auth at startup, cycle_pre.py does git pull/branch per cycle
 - [ ] health_check.py updated to query harness API instead of reading .health files (or deprecated)
