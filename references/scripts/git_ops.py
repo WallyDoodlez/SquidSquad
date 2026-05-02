@@ -325,8 +325,8 @@ def pr_merge(pr_number, strategy="squash"):
                 branch_name = json.loads(branch_result.stdout.strip()).get("headRefName", "")
                 # Branch format: squidsquad/role/NUMBER
                 parts = branch_name.split("/")
-                if len(parts) >= 3 and parts[0] == "squidsquad" and parts[2].isdigit():
-                    issue_num = parts[2]
+                if len(parts) >= 2 and parts[0] == "squidsquad" and parts[-1].isdigit():
+                    issue_num = parts[-1]
                     print(f"PR linked to #{issue_num} -- GitHub auto-close will handle issue state")
             except (json.JSONDecodeError, AttributeError, IndexError):
                 pass

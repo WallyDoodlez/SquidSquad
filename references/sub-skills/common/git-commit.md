@@ -12,13 +12,13 @@ python references/scripts/config.py get branch-workflow
 Split commits into code (feature branch) and state (main):
 
 1. **If working on a task** (status changed to `Pending Test` or still `In Progress`):
-   - Commit code changes to the feature branch:
+   - Commit code changes to the feature branch (use the branch name from task-begin output):
      ```bash
-     python references/scripts/git_ops.py commit-code [ROLE] squidsquad/[ROLE]/[NUMBER] "[brief description]"
+     python references/scripts/git_ops.py commit-code [ROLE] [BRANCH] "[brief description]"
      ```
    - Comment the branch name on the issue (first commit only):
      ```bash
-     python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Working on branch squidsquad/[ROLE]/[NUMBER]."
+     python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Working on branch [BRANCH]."
      ```
 
 2. **Always** commit state changes (.squidsquad/) to main:
@@ -75,7 +75,7 @@ Split commits into code (feature branch) and state (main):
 
    Record the PR URL in the tracker Discussion:
    ```bash
-   python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "PR opened: [URL]. Branch: squidsquad/[ROLE]/[NUMBER]. Status → Pending Test."
+   python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "PR opened: [URL]. Branch: [BRANCH]. Status → Pending Test."
    ```
 
 4. **When PR Flow `yes`**: monitor PR comments each cycle for human feedback:
@@ -93,9 +93,9 @@ Split commits into code (feature branch) and state (main):
 
 5. **When PR Flow `yes`**: check own open PRs for merge conflicts and rebase:
    ```bash
-   gh pr list --search "squidsquad/[ROLE]/" --state open --json number,headRefName,mergeable --limit 10
+   gh pr list --search "squidsquad/" --state open --json number,headRefName,mergeable --limit 10
    ```
-   For each PR with `mergeable` = `CONFLICTING` on a branch matching `squidsquad/[ROLE]/*`:
+   For each PR with `mergeable` = `CONFLICTING` on a branch matching `squidsquad/*`:
    ```bash
    git fetch origin
    git checkout [BRANCH_NAME]
@@ -113,7 +113,7 @@ Split commits into code (feature branch) and state (main):
      git checkout [WORKING_BRANCH]
      ```
      Log: `Rebase of [BRANCH_NAME] failed — manual conflict resolution needed.`
-   - Only rebase own branches (`squidsquad/[ROLE]/*`) — never touch other agents' PRs.
+   - Only rebase branches for your own tasks — never touch other agents' PRs.
    - Skip this step when PR Flow is off or no open PRs exist.
 
 **If `no`** (default — direct-to-main workflow):

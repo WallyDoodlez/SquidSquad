@@ -1604,15 +1604,15 @@ PM reviews the subagent's draft, adjusts as needed, and saves the final version.
 
 After all Phase 3 artifacts are created and the GitHub Issue is filed:
 
-1. **Create feature branch**: `python references/scripts/git_ops.py task-begin pm [ISSUE_NUMBER]`
+1. **Create feature branch**: `python references/scripts/git_ops.py task-begin pm [ISSUE_NUMBER]` — capture the branch name from stdout.
 2. **Commit planning artifacts** to the branch:
    ```bash
    git add .squidsquad/pm/planning/FEAT-PM-XXX-*
    git commit -m "pm: #[NUMBER] — planning artifacts for [title]"
    ```
-3. **Push and create draft PR**:
+3. **Push and create draft PR** (use the branch name from task-begin):
    ```bash
-   git push -u origin squidsquad/pm/[NUMBER]
+   git push -u origin [BRANCH]
    python references/scripts/git_ops.py pr-create "pm: #[NUMBER] — [title] (planning review)" \
      "## Planning Artifacts for Review\n\nPlanning artifacts for #[NUMBER].\n\n### Artifacts\n- RESEARCH.md\n- CONTEXT.md\n- TEST-PLAN.md\n\n### Status\nPending human review — approve via PR comments."
    ```
