@@ -765,6 +765,15 @@ class TestGitignoreVolatileFiles:
 # task_begin — regression #4942
 # ---------------------------------------------------------------------------
 
+def _task_begin_config(field):
+    """Mock config.get_field for task_begin tests."""
+    if field == "branch-workflow":
+        return "yes"
+    if field == "branch-pattern":
+        return "squidsquad/{role}/{number}"
+    return ""
+
+
 class TestTaskBegin:
     """task_begin should create branch if missing, not error out."""
 
@@ -776,7 +785,7 @@ class TestTaskBegin:
         # rev-parse succeeds (branch exists locally)
         mock_run_list.return_value = _mock_result(returncode=0)
         with patch.dict("sys.modules", {"config": MagicMock()}), \
-             patch("config.get_field", return_value="yes"):
+             patch("config.get_field", side_effect=_task_begin_config):
             git_ops.task_begin("skill", "100")
         mock_checkout.assert_called_once_with("squidsquad/skill/100")
 
@@ -791,7 +800,7 @@ class TestTaskBegin:
             _mock_result(returncode=0),  # git checkout -b — success
         ]
         with patch.dict("sys.modules", {"config": MagicMock()}), \
-             patch("config.get_field", return_value="yes"):
+             patch("config.get_field", side_effect=_task_begin_config):
             git_ops.task_begin("skill", "200")
         # Fourth call should be branch creation
         create_call = mock_run_list.call_args_list[3]
@@ -808,7 +817,7 @@ class TestTaskBegin:
             _mock_result(returncode=0),  # checkout -b from origin
         ]
         with patch.dict("sys.modules", {"config": MagicMock()}), \
-             patch("config.get_field", return_value="yes"):
+             patch("config.get_field", side_effect=_task_begin_config):
             git_ops.task_begin("skill", "300")
         checkout_call = mock_run_list.call_args_list[3]
         assert "origin/squidsquad/skill/300" in checkout_call[0][0]
@@ -824,7 +833,7 @@ class TestTaskBegin:
             _mock_result(returncode=0),  # checkout -b from origin
         ]
         with patch.dict("sys.modules", {"config": MagicMock()}), \
-             patch("config.get_field", return_value="yes"):
+             patch("config.get_field", side_effect=_task_begin_config):
             git_ops.task_begin("skill", "500")
         # Second call should be git fetch
         fetch_call = mock_run_list.call_args_list[1]
@@ -839,3 +848,22 @@ class TestTaskBegin:
              patch("config.get_field", return_value="no"):
             git_ops.task_begin("skill", "400")
         mock_run_list.assert_not_called()
+
+    @patch("git_ops._get_working_branch", return_value="main")
+    @patch("git_ops._safe_checkout", return_value=True)
+    @patch("git_ops._run_list")
+    def test_uses_configured_branch_pattern(self, mock_run_list, mock_checkout, mock_gwb):
+        """Regression #5040: task-begin uses branch-pattern from config."""
+        mock_run_list.return_value = _mock_result(returncode=0)
+
+        def custom_config(field):
+            if field == "branch-workflow":
+                return "yes"
+            if field == "branch-pattern":
+                return "squidsquad/task/{number}"
+            return ""
+
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", side_effect=custom_config):
+            git_ops.task_begin("skill", "5040")
+        mock_checkout.assert_called_once_with("squidsquad/task/5040")

@@ -709,7 +709,7 @@ def _check_unmerged_pr(number):
             for pr in prs:
                 head = pr.get("headRefName", "")
                 parts = head.split("/")
-                if len(parts) >= 3 and parts[2] == str(number):
+                if len(parts) >= 2 and parts[-1] == str(number):
                     return pr.get("number"), pr.get("url", "")
         except Exception:
             pass
@@ -728,7 +728,7 @@ def _check_unmerged_pr(number):
         for pr in prs:
             head = pr.get("headRefName", "")
             parts = head.split("/")
-            if len(parts) >= 3 and parts[2] == str(number):
+            if len(parts) >= 2 and parts[-1] == str(number):
                 return pr["number"], pr.get("url", "")
     except (json.JSONDecodeError, KeyError):
         pass
@@ -748,7 +748,7 @@ def _convert_draft_pr_to_ready(number):
             for pr in prs:
                 head = pr.get("headRefName", "")
                 parts = head.split("/")
-                if len(parts) >= 3 and parts[2] == str(number):
+                if len(parts) >= 2 and parts[-1] == str(number):
                     if pr.get("isDraft", False):
                         # Convert draft to ready via forge adapter (#4991 GAP-3)
                         try:
@@ -772,7 +772,7 @@ def _convert_draft_pr_to_ready(number):
         for pr in prs:
             head = pr.get("headRefName", "")
             parts = head.split("/")
-            if len(parts) >= 3 and parts[2] == str(number):
+            if len(parts) >= 2 and parts[-1] == str(number):
                 if pr.get("isDraft", False):
                     _run_list(
                         ["gh", "pr", "ready", str(pr["number"])],

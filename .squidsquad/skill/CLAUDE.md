@@ -718,13 +718,13 @@ python references/scripts/config.py get branch-workflow
 Split commits into code (feature branch) and state (main):
 
 1. **If working on a task** (status changed to `Pending Test` or still `In Progress`):
-   - Commit code changes to the feature branch:
+   - Commit code changes to the feature branch (use the branch name from task-begin output):
      ```bash
-     python references/scripts/git_ops.py commit-code skill squidsquad/skill/[NUMBER] "[brief description]"
+     python references/scripts/git_ops.py commit-code skill [BRANCH] "[brief description]"
      ```
    - Comment the branch name on the issue (first commit only):
      ```bash
-     python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Working on branch squidsquad/skill/[NUMBER]."
+     python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Working on branch [BRANCH]."
      ```
 
 2. **Always** commit state changes (.squidsquad/) to main:
@@ -781,7 +781,7 @@ Split commits into code (feature branch) and state (main):
 
    Record the PR URL in the tracker Discussion:
    ```bash
-   python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "PR opened: [URL]. Branch: squidsquad/skill/[NUMBER]. Status → Pending Test."
+   python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "PR opened: [URL]. Branch: [BRANCH]. Status → Pending Test."
    ```
 
 4. **When PR Flow `yes`**: monitor PR comments each cycle for human feedback:
@@ -799,9 +799,9 @@ Split commits into code (feature branch) and state (main):
 
 5. **When PR Flow `yes`**: check own open PRs for merge conflicts and rebase:
    ```bash
-   gh pr list --search "squidsquad/skill/" --state open --json number,headRefName,mergeable --limit 10
+   gh pr list --search "squidsquad/" --state open --json number,headRefName,mergeable --limit 10
    ```
-   For each PR with `mergeable` = `CONFLICTING` on a branch matching `squidsquad/skill/*`:
+   For each PR with `mergeable` = `CONFLICTING` on a branch matching `squidsquad/*`:
    ```bash
    git fetch origin
    git checkout [BRANCH_NAME]
@@ -819,7 +819,7 @@ Split commits into code (feature branch) and state (main):
      git checkout [WORKING_BRANCH]
      ```
      Log: `Rebase of [BRANCH_NAME] failed — manual conflict resolution needed.`
-   - Only rebase own branches (`squidsquad/skill/*`) — never touch other agents' PRs.
+   - Only rebase branches for your own tasks — never touch other agents' PRs.
    - Skip this step when PR Flow is off or no open PRs exist.
 
 **If `no`** (default — direct-to-main workflow):
@@ -1139,7 +1139,7 @@ These instructions apply to the dev/skill agent on this project.
 ### Branch Workflow
 
 - **Use `git_ops.py task-begin` / `task-end`** for feature branch checkout/return.
-- **Branch workflow enabled**: code goes to `squidsquad/<role>/<number>`, state to main via `git_ops.py commit-code` vs `commit-state`.
+- **Branch workflow enabled**: code goes to `squidsquad/task/<number>` (unified branch — PM and dev share one branch per task #5040), state to main via `git_ops.py commit-code` vs `commit-state`. Branch pattern configured in config.md `branch-pattern`.
 - **PR flow enabled**: create PRs with full summary (`git_ops.py pr-create`). Check `review:human-required` label — if present, hold for human review instead of auto-merge.
 - **Run `git_ops.py has-changes`** before transitioning to pending-test. If no changes, re-read the issue and apply the fix.
 
@@ -1250,7 +1250,7 @@ These instructions apply to ALL agents on this project.
 
 - **Always `git pull --rebase` before starting work.** Never push without pulling first.
 - **Atomic writes**: Write to `.tmp` then `mv` for any file other agents or the statusline may read.
-- **Branch workflow enabled**: Feature branches per task (`squidsquad/<role>/<number>`).
+- **Branch workflow enabled**: Feature branches per task (pattern from config.md `branch-pattern`, default `squidsquad/task/{number}`).
 - **PR flow + auto-merge enabled**: PRs created for feature branches, auto-merged when QA passes (unless `review:human-required`).
 
 ### Agent Infrastructure
