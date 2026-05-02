@@ -587,7 +587,7 @@ If exit code 0 (quiet), skip the reflection below — nothing to reflect on.
 python references/scripts/vault_remember.py reset-writes [ROLE]
 ```
 
-**Reflection prompt**: Review this cycle's iteration log and evaluate each category:
+**Reflection prompt**: Review this cycle's iteration log and evaluate each category. Do NOT capture human preferences or behavioral directives here — those belong in soul shepherd (observed signals) or L4 (explicit directives).
 
 1. **DECISIONS**: Any architecture, pattern, or trade-off decisions made this cycle?
    → If yes: vault-create `galaxy/decision-*.md`
@@ -595,9 +595,7 @@ python references/scripts/vault_remember.py reset-writes [ROLE]
    → If yes: vault-create `galaxy/pattern-*.md`
 3. **LEARNINGS**: Anything fail or succeed unexpectedly?
    → If yes: vault-create `galaxy/learning-*.md`
-4. **HUMAN PREFERENCES**: Did the human express any preference, style, or value?
-   → If yes: vault-update `areas/human-profile.md`
-5. **PROJECT CONTEXT**: Did project goals, constraints, or architecture change?
+4. **PROJECT CONTEXT**: Did project goals, constraints, or architecture change?
    → If yes: vault-update `projects/<name>.md` or `BRIEFING.md`
 
 For each candidate, apply these **deterministic gates IN ORDER**:
@@ -632,10 +630,9 @@ python references/scripts/vault_remember.py inc-writes [ROLE]
 ```
 
 **Priority when >2 candidates pass gates** (write the top 2 only):
-1. Human preferences (always highest — they shape all future work)
-2. Decisions (architectural choices compound)
-3. Learnings (failure lessons prevent repeat mistakes)
-4. Patterns (useful but can wait a cycle)
+1. Decisions (architectural choices compound)
+2. Learnings (failure lessons prevent repeat mistakes)
+3. Patterns (useful but can wait a cycle)
 
 Remaining candidates beyond the write budget are noted in the iteration log's Notes field: `Vault-worthy but deferred (budget): [description]`.
 
@@ -645,7 +642,7 @@ python references/scripts/vault_remember.py briefing-budget
 ```
 If remaining is 0, do not add to BRIEFING.md without trimming. Trimmed content moves to a galaxy note — never deleted.
 
-**human-profile.md**: If a human preference is detected and `areas/human-profile.md` exists, update it following vault-update protocol. If it does not exist, create it from the seed template at `references/vault-templates/human-profile-seed.md`.
+**Scope reminder**: The vault stores project and environment facts (conventions, context, decisions, learnings). Human behavioral preferences are captured by soul shepherd (observed) and L4 directives (explicit) — not here.
 <!-- /sub-skill: vault-remember -->
 
 <!-- sub-skill: vault-optimize -->
