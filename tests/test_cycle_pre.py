@@ -735,3 +735,245 @@ class TestE2eCmdShlexSplit:
         assert "e2e_cmd.split()" not in source, (
             "e2e_cmd.split() found — must use shlex.split(e2e_cmd)"
         )
+
+
+# ---------------------------------------------------------------------------
+# Multi-role pending-test queries — regression #4803
+# ---------------------------------------------------------------------------
+
+class TestGetVerifiableRoles:
+    """_get_verifiable_roles returns all roles whose items need verification."""
+
+    def test_includes_config_dev_agents(self, monkeypatch):
+        """Dev agents from config are included."""
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "skill, designer" if f == "dev-agents" else "")
+        roles = cycle_pre._get_verifiable_roles()
+        assert "skill" in roles
+        assert "designer" in roles
+
+    def test_always_includes_dm_and_pm(self, monkeypatch):
+        """dm and pm are always included regardless of config."""
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "skill" if f == "dev-agents" else "")
+        roles = cycle_pre._get_verifiable_roles()
+        assert "dm" in roles
+        assert "pm" in roles
+
+    def test_fallback_when_config_empty(self, monkeypatch):
+        """If config returns empty, at least skill is present."""
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "")
+        roles = cycle_pre._get_verifiable_roles()
+        assert "skill" in roles
+        # dm and pm always added
+        assert "dm" in roles
+        assert "pm" in roles
+
+    def test_deduplicates(self, monkeypatch):
+        """Roles are not duplicated even if they appear in config and hardcoded."""
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "skill, dm, pm" if f == "dev-agents" else "")
+        roles = cycle_pre._get_verifiable_roles()
+        assert roles == sorted(set(roles))
+
+    def test_returns_sorted(self, monkeypatch):
+        """Roles are returned in sorted order for determinism."""
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "skill, designer, qa" if f == "dev-agents" else "")
+        roles = cycle_pre._get_verifiable_roles()
+        assert roles == sorted(roles)
+
+
+class TestQAInputMultiRole:
+    """Regression #4803: QA input must query all verifiable roles, not just skill."""
+
+    def test_qa_queries_all_roles(self, patch_dirs, squid_dir, monkeypatch):
+        """QA input includes pending-test items from dm and other roles."""
+        dm_issue = [{"number": 3969, "title": "DM task", "labels": []}]
+        skill_issue = [{"number": 4000, "title": "Skill task", "labels": []}]
+        queried_roles = []
+
+        def fake_run_script(*args, **kwargs):
+            fake = MagicMock()
+            fake.returncode = 0
+            fake.stdout = "[]"
+            if len(args) >= 2 and "tracker.py" in str(args[0]):
+                subcmd = args[1] if len(args) > 1 else ""
+                if subcmd == "list-issues" and len(args) > 2:
+                    role_arg = args[2]
+                    queried_roles.append(role_arg)
+                    if role_arg == "dm":
+                        fake.stdout = json.dumps(dm_issue)
+                    elif role_arg == "skill":
+                        fake.stdout = json.dumps(skill_issue)
+                elif subcmd == "list-tasks" and len(args) > 2:
+                    queried_roles.append(args[2])
+            elif len(args) >= 1 and "health_check.py" in str(args[0]):
+                fake.stdout = "[]"
+            return fake
+
+        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_pre, "_run", lambda cmd, **kw: MagicMock(
+            returncode=0, stdout="[]", stderr=""))
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
+            "dev-agents": "skill",
+            "e2e-tests": "(none)",
+            "interval": "30",
+            "branch-workflow": "no", "pr-flow": "no",
+            "improvement-scanning": "no", "vault-remember": "no",
+            "vault-optimize": "no",
+        }.get(f, ""))
+        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
+
+        result = cycle_pre._build_qa_input("qa")
+        # Verify dm was queried (the core bug fix)
+        assert "dm" in queried_roles, "QA input must query dm role for pending-test items"
+        assert "pm" in queried_roles, "QA input must query pm role for pending-test items"
+        # Verify dm items appear in verification queue
+        numbers = [i["number"] for i in result["verification_queue"]["pending_test_issues"]]
+        assert 3969 in numbers, "DM pending-test issue must appear in QA verification queue"
+        assert 4000 in numbers, "Skill pending-test issue must appear in QA verification queue"
+
+    def test_qa_items_have_source_role(self, patch_dirs, squid_dir, monkeypatch):
+        """Each item in QA verification queue has source_role field."""
+        dm_issue = [{"number": 3969, "title": "DM task", "labels": []}]
+
+        def fake_run_script(*args, **kwargs):
+            fake = MagicMock()
+            fake.returncode = 0
+            fake.stdout = "[]"
+            if len(args) >= 2 and "tracker.py" in str(args[0]):
+                subcmd = args[1] if len(args) > 1 else ""
+                if subcmd == "list-issues" and len(args) > 2 and args[2] == "dm":
+                    fake.stdout = json.dumps(dm_issue)
+            elif len(args) >= 1 and "health_check.py" in str(args[0]):
+                fake.stdout = "[]"
+            return fake
+
+        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_pre, "_run", lambda cmd, **kw: MagicMock(
+            returncode=0, stdout="[]", stderr=""))
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
+            "dev-agents": "skill",
+            "e2e-tests": "(none)",
+            "interval": "30",
+            "branch-workflow": "no", "pr-flow": "no",
+            "improvement-scanning": "no", "vault-remember": "no",
+            "vault-optimize": "no",
+        }.get(f, ""))
+        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
+
+        result = cycle_pre._build_qa_input("qa")
+        dm_items = [i for i in result["verification_queue"]["pending_test_issues"]
+                     if i.get("source_role") == "dm"]
+        assert len(dm_items) == 1
+        assert dm_items[0]["branch"] == "squidsquad/dm/3969"
+
+    def test_qa_branch_uses_correct_role_prefix(self, patch_dirs, squid_dir, monkeypatch):
+        """Branch path uses the item's source role, not hardcoded 'skill'."""
+        designer_task = [{"number": 5000, "title": "Designer task", "labels": []}]
+
+        def fake_run_script(*args, **kwargs):
+            fake = MagicMock()
+            fake.returncode = 0
+            fake.stdout = "[]"
+            if len(args) >= 2 and "tracker.py" in str(args[0]):
+                subcmd = args[1] if len(args) > 1 else ""
+                if subcmd == "list-tasks" and len(args) > 2 and args[2] == "designer":
+                    fake.stdout = json.dumps(designer_task)
+            elif len(args) >= 1 and "health_check.py" in str(args[0]):
+                fake.stdout = "[]"
+            return fake
+
+        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_pre, "_run", lambda cmd, **kw: MagicMock(
+            returncode=0, stdout="[]", stderr=""))
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
+            "dev-agents": "skill, designer",
+            "e2e-tests": "(none)",
+            "interval": "30",
+            "branch-workflow": "no", "pr-flow": "no",
+            "improvement-scanning": "no", "vault-remember": "no",
+            "vault-optimize": "no",
+        }.get(f, ""))
+        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
+
+        result = cycle_pre._build_qa_input("qa")
+        designer_items = [i for i in result["verification_queue"]["pending_test_tasks"]
+                           if i.get("source_role") == "designer"]
+        assert len(designer_items) == 1
+        assert designer_items[0]["branch"] == "squidsquad/designer/5000"
+
+
+class TestPMInputMultiRole:
+    """Regression #4803: PM input must also query all verifiable roles."""
+
+    def test_pm_queries_all_roles(self, patch_dirs, squid_dir, monkeypatch):
+        """PM input includes pending-test items from dm and other roles."""
+        dm_task = [{"number": 3969, "title": "DM task", "labels": []}]
+        queried_roles = []
+
+        def fake_run_script(*args, **kwargs):
+            fake = MagicMock()
+            fake.returncode = 0
+            fake.stdout = "[]"
+            if len(args) >= 2 and "tracker.py" in str(args[0]):
+                subcmd = args[1] if len(args) > 1 else ""
+                if subcmd == "list-issues" and len(args) > 2:
+                    queried_roles.append(args[2])
+                    if args[2] == "dm":
+                        fake.stdout = json.dumps(dm_task)
+                elif subcmd == "list-tasks" and len(args) > 2:
+                    queried_roles.append(args[2])
+                elif subcmd == "list-by-labels":
+                    fake.stdout = "[]"
+            elif len(args) >= 1 and "health_check.py" in str(args[0]):
+                fake.stdout = "[]"
+            return fake
+
+        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_pre, "_run", lambda cmd, **kw: MagicMock(
+            returncode=0, stdout="[]", stderr=""))
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
+            "dev-agents": "skill",
+            "interval": "30", "ship-threshold": "10", "shipped-since-bump": "0",
+            "branch-workflow": "no", "pr-flow": "no",
+            "improvement-scanning": "no", "vault-remember": "no",
+            "vault-optimize": "no",
+        }.get(f, ""))
+        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
+
+        result = cycle_pre._build_pm_input("pm")
+        assert "dm" in queried_roles, "PM input must query dm role for pending-test items"
+        assert 3969 in [i["number"] for i in result["tracker"]["pending_test_issues"]]
+
+    def test_pm_items_have_source_role(self, patch_dirs, squid_dir, monkeypatch):
+        """PM pending-test items include source_role field."""
+        dm_issue = [{"number": 3969, "title": "DM task", "labels": []}]
+
+        def fake_run_script(*args, **kwargs):
+            fake = MagicMock()
+            fake.returncode = 0
+            fake.stdout = "[]"
+            if len(args) >= 2 and "tracker.py" in str(args[0]):
+                subcmd = args[1] if len(args) > 1 else ""
+                if subcmd == "list-issues" and len(args) > 2 and args[2] == "dm":
+                    fake.stdout = json.dumps(dm_issue)
+                elif subcmd == "list-by-labels":
+                    fake.stdout = "[]"
+            elif len(args) >= 1 and "health_check.py" in str(args[0]):
+                fake.stdout = "[]"
+            return fake
+
+        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_pre, "_run", lambda cmd, **kw: MagicMock(
+            returncode=0, stdout="[]", stderr=""))
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
+            "dev-agents": "skill",
+            "interval": "30", "ship-threshold": "10", "shipped-since-bump": "0",
+            "branch-workflow": "no", "pr-flow": "no",
+            "improvement-scanning": "no", "vault-remember": "no",
+            "vault-optimize": "no",
+        }.get(f, ""))
+        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
+
+        result = cycle_pre._build_pm_input("pm")
+        dm_items = [i for i in result["tracker"]["pending_test_issues"]
+                     if i.get("source_role") == "dm"]
+        assert len(dm_items) == 1
