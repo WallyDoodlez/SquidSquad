@@ -508,9 +508,7 @@ python references/scripts/tracker.py list-issues skill --status open
 ```
 If any issues exist, skip the scan — fix issues instead. Issues always take priority over improvement scanning.
 
-Maintain a **quiet cycle counter** in your working state. Increment it each quiet cycle (when no issues were fixed, no tasks progressed, no verification done). **After 3 consecutive quiet cycles**, trigger an improvement scan on the next quiet cycle (subject to the issue gate above). Reset the counter when:
-- Real work occurs (issue fix, task progress, verification)
-- A scan completes (reset to 0, must accumulate 3 more quiet cycles)
+Trigger an improvement scan on **every quiet cycle** (when no issues were fixed, no tasks progressed, no verification done), subject to the issue gate above.
 
 ### Scanning Step
 
