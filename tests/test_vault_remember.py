@@ -204,3 +204,63 @@ class TestEffectiveConfidence:
             with pytest.raises(SystemExit) as exc_info:
                 vault_remember.effective_confidence(str(note))
             assert exc_info.value.code == 2
+
+
+# ---------------------------------------------------------------------------
+# inc_writes / reset_writes / _upsert_vault_writes — regression #4919
+# ---------------------------------------------------------------------------
+
+class TestIncWrites:
+    def test_increments_existing_counter(self, tmp_path):
+        role_dir = tmp_path / "skill"
+        role_dir.mkdir()
+        ws = role_dir / "working-state.md"
+        ws.write_text(
+            "# Working State\n\n- **Task**: none\n"
+            "- **Vault Writes This Cycle**: 1\n",
+            encoding="utf-8",
+        )
+        with patch.object(vault_remember, "SQUIDSQUAD_DIR", tmp_path):
+            result = vault_remember.inc_writes("skill")
+        assert result == 2
+        assert "**: 2" in ws.read_text(encoding="utf-8")
+
+    def test_creates_field_when_absent(self, tmp_path):
+        role_dir = tmp_path / "skill"
+        role_dir.mkdir()
+        ws = role_dir / "working-state.md"
+        ws.write_text("# Working State\n\n- **Task**: none\n", encoding="utf-8")
+        with patch.object(vault_remember, "SQUIDSQUAD_DIR", tmp_path):
+            result = vault_remember.inc_writes("skill")
+        assert result == 1
+        assert "Vault Writes This Cycle**: 1" in ws.read_text(encoding="utf-8")
+
+
+class TestResetWrites:
+    def test_resets_existing_counter(self, tmp_path):
+        role_dir = tmp_path / "skill"
+        role_dir.mkdir()
+        ws = role_dir / "working-state.md"
+        ws.write_text(
+            "# Working State\n\n- **Task**: none\n"
+            "- **Vault Writes This Cycle**: 3\n",
+            encoding="utf-8",
+        )
+        with patch.object(vault_remember, "SQUIDSQUAD_DIR", tmp_path):
+            result = vault_remember.reset_writes("skill")
+        assert result == 0
+        assert "**: 0" in ws.read_text(encoding="utf-8")
+
+    def test_creates_field_when_absent(self, tmp_path):
+        """Regression #4919: reset_writes must create the field if missing."""
+        role_dir = tmp_path / "skill"
+        role_dir.mkdir()
+        ws = role_dir / "working-state.md"
+        ws.write_text("# Working State\n\n- **Task**: none\n", encoding="utf-8")
+        with patch.object(vault_remember, "SQUIDSQUAD_DIR", tmp_path):
+            result = vault_remember.reset_writes("skill")
+        assert result == 0
+        content = ws.read_text(encoding="utf-8")
+        assert "Vault Writes This Cycle**: 0" in content, (
+            "reset_writes must create the field when absent (#4919)"
+        )

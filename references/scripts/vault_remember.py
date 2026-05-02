@@ -133,41 +133,39 @@ def write_budget(role):
     return remaining
 
 
+def _upsert_vault_writes(role, new_value):
+    """Set the Vault Writes This Cycle field, creating it if absent (#4919)."""
+    ws_text = _read_working_state(role)
+    match = re.search(r'Vault Writes This Cycle\*\*:\s*(\d+)', ws_text)
+    if match:
+        _write_working_state_field(
+            role,
+            r'(Vault Writes This Cycle\*\*:\s*)\d+',
+            rf'\g<1>{new_value}',
+        )
+    else:
+        ws_path = SQUIDSQUAD_DIR / role / "working-state.md"
+        if ws_path.exists():
+            text = ws_path.read_text(encoding="utf-8")
+            text += f"\n- **Vault Writes This Cycle**: {new_value}\n"
+            ws_path.write_text(text, encoding="utf-8")
+    return new_value
+
+
 def inc_writes(role):
     """Increment vault write counter in working-state.md."""
     ws_text = _read_working_state(role)
     match = re.search(r'Vault Writes This Cycle\*\*:\s*(\d+)', ws_text)
     current = int(match.group(1)) if match else 0
     new_count = current + 1
-
-    if match:
-        _write_working_state_field(
-            role,
-            r'(Vault Writes This Cycle\*\*:\s*)\d+',
-            rf'\g<1>{new_count}',
-        )
-    else:
-        # Add the field if missing
-        ws_path = SQUIDSQUAD_DIR / role / "working-state.md"
-        if ws_path.exists():
-            text = ws_path.read_text(encoding="utf-8")
-            text += f"\n- **Vault Writes This Cycle**: {new_count}\n"
-            ws_path.write_text(text, encoding="utf-8")
-
+    _upsert_vault_writes(role, new_count)
     print(str(new_count))
     return new_count
 
 
 def reset_writes(role):
     """Reset vault write counter to 0."""
-    ws_text = _read_working_state(role)
-    match = re.search(r'Vault Writes This Cycle\*\*:\s*(\d+)', ws_text)
-    if match:
-        _write_working_state_field(
-            role,
-            r'(Vault Writes This Cycle\*\*:\s*)\d+',
-            r'\g<1>0',
-        )
+    _upsert_vault_writes(role, 0)
     print("0")
     return 0
 
