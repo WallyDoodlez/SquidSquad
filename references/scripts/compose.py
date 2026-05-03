@@ -926,6 +926,7 @@ def boot_role(role_name: str, target_root: Path = None) -> list:
     Wrapper templates (start-role.ps1/.sh) have been deleted.
     This function is kept for backward compatibility but generates nothing.
     """
+    print(f"  boot {role_name}: no-op (#4966) — agents spawn via thin_launcher.py")
     return []
 
 

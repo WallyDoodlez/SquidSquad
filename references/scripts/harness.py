@@ -796,8 +796,8 @@ class CtrlCHandler:
     """Three-stage Ctrl+C escalation for graceful shutdown (#4966).
 
     1st Ctrl+C: graceful stop (set all agents intent=stopping, wait for cycle end)
-    2nd Ctrl+C within 5s: warn about force kill
-    3rd Ctrl+C: force kill all agent processes
+    2nd Ctrl+C within 5s: warn about force exit
+    3rd Ctrl+C: exit harness immediately (agents survive in their terminals)
     """
 
     def __init__(self):

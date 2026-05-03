@@ -436,9 +436,9 @@ def _do_restart_sentinel(data, role):
     """Write self-restart sentinel if needed.
 
     DEPRECATED: Agents should no longer set restart_needed. Context pressure
-    restarts are handled by _do_stop_after_cycle_check(). This function is
-    kept for one version of backward compatibility — it writes .restart which
-    the wrapper still processes during the transition period.
+    restarts are handled by _do_stop_after_cycle_check() and the harness
+    intent API (#4966). This function is kept for one version of backward
+    compatibility only.
     """
     if not data.get("restart_needed"):
         return False
@@ -621,9 +621,8 @@ def main():
     except OSError:
         pass
 
-    # 9. Stop-after-cycle check (MUST be last — after commit, after iteration log)
-    # This is the new universal restart mechanism. It checks context pressure
-    # and external sentinel. If triggered, agent exits cleanly for wrapper respawn.
+    # 9. Intent + context pressure check (MUST be last — after commit, after log)
+    # Queries harness API for intent, checks context pressure. Exit 42 = harness respawns.
     stop_for_restart = _do_stop_after_cycle_check(data, role)
 
     # 10. Status bar
@@ -636,7 +635,7 @@ def main():
     ts = _timestamp_short()
     print(f"[🦑 {ts}] cycle_post complete for {role}")
 
-    # Exit code 42 signals wrapper to respawn (stop-after-cycle)
+    # Exit code 42 signals harness to respawn (#4966)
     if stop_for_restart:
         return 42
     return 0
