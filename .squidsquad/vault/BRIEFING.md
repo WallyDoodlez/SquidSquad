@@ -4,6 +4,8 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
+- #5136 config.md version field regresses on every PR merge (open, high, role:skill) — active blocker
+- #5126 cycle_post.py version bump guard (in-progress, medium, role:skill) — skill working
 - #4709 EPIC Harness Phase 2: Event bus + agent communication (planned, high, role:skill)
 - #4221 Agent harness — supervisor process for all agents (pending, high, role:skill)
 - #3963 EPIC: Web dashboard — visual interface for SquidSquad (pending, high, role:skill)
