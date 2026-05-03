@@ -565,3 +565,43 @@ class TestNoShellTrue:
         """model_router.py must not use shell=True (security layer 3)."""
         source = (model_router.SCRIPT_DIR / "model_router.py").read_text(encoding="utf-8")
         assert "shell=True" not in source
+
+
+class TestEnsureYaml:
+    """#5125: _ensure_yaml() deduplicates yaml import with error handling."""
+
+    def test_returns_yaml_when_available(self):
+        """Returns yaml module when already installed."""
+        result = model_router._ensure_yaml()
+        assert result is not None
+        assert hasattr(result, "safe_load")
+
+    def test_returns_none_on_pip_failure(self, monkeypatch):
+        """Returns None (not crash) when both import and pip fail."""
+        import builtins
+        original_import = builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "yaml":
+                raise ImportError("no yaml")
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+        monkeypatch.setattr(
+            model_router.subprocess, "check_call",
+            MagicMock(side_effect=model_router.subprocess.CalledProcessError(1, "pip")),
+        )
+        result = model_router._ensure_yaml()
+        assert result is None
+
+    def test_no_duplicate_blocks_in_source(self):
+        """Verify triplicate pattern is eliminated (#5125)."""
+        source = (model_router.SCRIPT_DIR / "model_router.py").read_text(encoding="utf-8")
+        # Count raw "import yaml" lines (excluding the helper function itself)
+        import_lines = [
+            l.strip() for l in source.splitlines()
+            if l.strip() == "import yaml"
+        ]
+        # Should only appear inside _ensure_yaml (2 times: try + after install)
+        assert len(import_lines) <= 2, \
+            f"Found {len(import_lines)} bare 'import yaml' lines — should be ≤2 (inside _ensure_yaml only)"
