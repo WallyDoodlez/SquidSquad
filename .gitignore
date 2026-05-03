@@ -49,3 +49,4 @@ references/scripts/migrate_*.py.bak
 *.stackdump
 
 .squidsquad-state/
+.squidsquad/.harness-state.json
