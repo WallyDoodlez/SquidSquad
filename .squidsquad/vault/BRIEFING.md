@@ -4,11 +4,9 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #4765 compose.py L4 role filtering fix (pending-test, medium, role:skill)
 - #4709 EPIC Harness Phase 2: Event bus + agent communication (planned, high, role:skill)
 - #4221 Agent harness — supervisor process for all agents (pending, high, role:skill)
 - #3963 EPIC: Web dashboard — visual interface for SquidSquad (pending, high, role:skill)
-- #3969 DM doc improvement loop — staleness detection (pending-test, high, role:dm)
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm)
 
 ## Recently Shipped
@@ -45,5 +43,5 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Team State
 
-- Active agents: pm, qa, skill, dm, designer
-- Current version: 0.31.0
+- Active agents: pm, qa, skill, dm
+- Current version: 0.29.0

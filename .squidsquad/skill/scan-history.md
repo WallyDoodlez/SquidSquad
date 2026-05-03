@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-02 20:07
+
+- **Files scanned**: references/scripts/model_router.py, references/scripts/harness.py, references/scripts/squidsquad_cli.py, references/scripts/boot_remote.py, references/scripts/cycle_post.py
+- **Findings**: #5125 (model_router.py triplicate yaml auto-install block — medium), #5126 (cycle_post.py _do_version_bump no-op commit/tag risk — medium)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-02 08:03
 
 - **Files scanned**: references/scripts/cycle_post.py, references/scripts/vault_remember.py, references/scripts/compose.py
