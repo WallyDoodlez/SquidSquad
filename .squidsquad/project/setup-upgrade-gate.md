@@ -9,6 +9,7 @@ Before marking any task `Pending Test`, run this checklist against your changes.
 - [ ] **Modified template structure?** → Update `compose.py deploy` and `/squidsquad-upgrade`
 - [ ] **Added/removed sub-skills?** → Update `includes.yml` and `manifest.md`
 - [ ] **Changed role composition?** → Update `installer-files.txt` manifest
+- [ ] **Upgrade path documented?** → If task changes how agents start, how files are structured, or removes/replaces existing scripts, document the full upgrade sequence (stop → deploy → clean → recompose → start) in the issue or CONTEXT.md. QA must verify the upgrade path works end-to-end.
 
 If ANY box applies and the corresponding update was NOT made, the task is not done. Post your checklist results on the issue before transitioning.
 
