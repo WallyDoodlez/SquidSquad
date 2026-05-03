@@ -54,12 +54,13 @@ The **Behavior Layer** (L3) is the focal layer — it's where agents reason, dec
 **Purpose:** Control *when* things happen, in what order, and manage the agent's lifecycle. The conductor that sequences transport and behavior.
 
 **Key files:**
-- Boot scripts: `.squidsquad/start-[role].sh` / `.ps1` — launch and supervise the Claude process
+- `references/scripts/harness.py` — FastAPI lifecycle manager, owns agent spawning, health monitoring, and crash recovery
+- `references/scripts/thin_launcher.py` — lightweight agent launcher, spawned by harness into terminal windows
 - `/loop` command — schedules recurring cycle execution
-- Signal files: `.stop-after-cycle` (graceful restart), `.stop` (permanent stop), `.pid` (singleton lock), `.health` (heartbeat)
+- `.harness-state.json` — persistent agent state for crash recovery
 - `current-state` — status bar state file, written atomically
 
-**What changes here:** Cycle cadence, restart logic, boot sequence, signal handling. The orchestration layer knows about timing but not about what work gets done.
+**What changes here:** Cycle cadence, restart logic, boot sequence, harness API. The orchestration layer knows about timing but not about what work gets done.
 
 **Boundary with L3:** Orchestration triggers each cycle. The behavior layer decides what to *do* during that cycle.
 
@@ -232,7 +233,7 @@ Every agent pulls at cycle start (L1 transport), does creative work (L3 behavior
 | Make an agent more cautious | L5 Soul | Edit SOUL.md quality bar section |
 | Teach the squad a new preference | L6 Memory | Write a vault note (or just tell PM) |
 | Add a shared protocol | L4 Sub-skill | Write a common sub-skill, deploy to all roles |
-| Change agent restart behavior | L2 Orchestration | Edit wrapper signal handling |
+| Change agent restart behavior | L2 Orchestration | Edit harness intent API or Ctrl+C handling |
 
 **Rule of thumb:** If you're changing *what* happens, you're in L3/L4. If you're changing *how it feels*, you're in L5/L6. If you're changing *when or whether* it happens, you're in L2. If you're changing the mechanical *how*, you're in L1.
 
