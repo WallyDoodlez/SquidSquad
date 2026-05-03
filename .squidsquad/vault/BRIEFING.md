@@ -44,4 +44,4 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Team State
 
 - Active agents: pm, qa, skill, dm
-- Current version: 0.29.0
+- Current version: 0.31.0
