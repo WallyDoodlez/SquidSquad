@@ -4,44 +4,53 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #5136 config.md version field regresses on every PR merge (open, high, role:skill) — active blocker
-- #5126 cycle_post.py version bump guard (in-progress, medium, role:skill) — skill working
+- #5125 model_router.py triplicate yaml fix (pending-test, medium, role:skill)
+- #5344 reboot_agent.py dead code cleanup post-#4966 (open, medium, role:skill)
 - #4709 EPIC Harness Phase 2: Event bus + agent communication (planned, high, role:skill)
-- #4221 Agent harness — supervisor process for all agents (pending, high, role:skill)
 - #3963 EPIC: Web dashboard — visual interface for SquidSquad (pending, high, role:skill)
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm)
 
+## Pending Tasks (filed this session, awaiting approval)
+
+- #5170 L4 dev customization: DeepSeek code review before pending-test (pending, medium)
+- #5171 Harness loads config.md and serves configuration via REST endpoint (pending, medium)
+- #5159 Status bar shows agent 'awaiting restart' state from harness intent API (pending, low)
+
 ## Recently Shipped
 
-- #4449 L4 project instructions: PM/DM verify distribution packaging
-- #4439 EPIC: SquidSquad Harness — unified agent platform
-- #4541 Agent-driven composition (compose.py LLM pipeline)
-- #4179 Dev L2 SOUL: divide-and-conquer instinct
-- #4084 Draft PR workflow for dev agents
+- #4966 Harness absorbs wrapper — full agent lifecycle ownership
+- #5234 PM SOUL.md branch/PR boundaries fix
+- #5208 cycle_pre.py branch guardrail
+- #5136 config.md version regression fix (.gitattributes merge=ours)
+- #5126 cycle_post.py version bump staged-changes guard
 
 ## Core Architecture
 
 - **Layered roles**: L1 (base) → L2 (role) → L3 (domain) → L4 (project). compose.py assembles.
+- **Harness**: Agent lifecycle owned by harness (REST API intent, .harness-state.json). Wrapper scripts eliminated (#4966).
 - **Branching**: Code → main. State → squid-squad. Feature branches when branch workflow on.
-- **Communication layer**: Platform-agnostic adapter interface + deterministic sub-skills. Telegram-first. Feature flag controlled.
+- **PM boundaries**: PM does not rebase, merge PRs, or perform git ops on dev branches (#5234).
 - **Tracker**: GitHub Issues with structured labels.
 
 ## Recent Decisions
 
-- Agent-driven composition replaces deterministic compose.py (v0.30.0)
-- Draft PRs: agents create drafts, auto-ready on pending-test (v0.30.0)
-- Clone isolation (v0.25.0), Sub-skill architecture (v0.9.0), GitHub Issues tracker (v0.9.0)
-- Feature lifecycle: Pending → Planning → Planned → Approved → In Progress → Pending Test → Pending Ship → Shipped
+- Harness owns all agent lifecycle — zero sentinel files, REST API intent (v0.32.0)
+- PM never intervenes in code or branch management — detect, report, nudge only (#5234)
+- cycle_pre.py verifies agent on configured working branch at cycle start (#5208)
+- DeepSeek code review gate planned for dev agent L4 (#5170)
+- Harness config endpoint planned — centralized config reads/writes (#5171)
 
 ## Human Preferences
 
 - Never ship with failed TCs. Documents live on forge, not chat. Git = audit trail.
+- PM should not intervene in code or branch management
+- Dev agent disagreements with external code review escalate to human
 - See `[[human-profile]]` for full preferences
 
 ## Constraints & Blockers
 
-- Boot detection: heartbeat-based with boot lock
-- Harness epic (#4439) shipped; Phase 2 (#4709) planned, awaiting human approval
+- #4966 shipped — upgrade sequence needed (stop → clean sentinels → recompose → start via harness)
+- Phase 2 (#4709) planned, awaiting human approval
 
 ## Team State
 
