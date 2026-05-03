@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """SquidSquad remote agent boot — spawn dead agents in new terminals.
 
-PM is the bootmaster. Detection uses .health file (primary) with PID fallback:
-read each agent's .health file for liveness status. If .health shows dead/error
-or is missing, check .pid as fallback. If agent needs booting and no .stop
-sentinel, spawn a new terminal. After spawning, polls .health for up to 30s
-to confirm the agent started successfully.
+Spawns agents via thin launcher (primary) or legacy wrapper scripts (fallback).
+Detection uses .health file and .pid for liveness. The harness calls boot_agent()
+for auto-reboot; start_team.py calls it for manual boot. Thin launcher writes
+.claude-pid for harness PID tracking (#4966).
 
 Usage:
     python scripts/boot_remote.py --role <name>   # Boot a single agent

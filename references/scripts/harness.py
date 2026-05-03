@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
-"""SquidSquad Harness — FastAPI lifecycle manager for agent processes.
+"""SquidSquad Harness — FastAPI lifecycle manager for agent processes (#4966).
 
-Console application that manages agent lifecycle via HTTP API. Agents run in
-visible terminal windows (same as current boot_remote.py behavior). CLI commands
-(squidsquad_cli.py) communicate with this harness over HTTP on localhost.
+Single supervisor that owns all agent lifecycle. Spawns agents via thin launcher
+in visible terminal windows, monitors liveness via direct PID checks, manages
+intent state machine (running/stopping/restarting/stopped), and persists state
+to .harness-state.json for crash recovery.
 
 Architecture:
-- Wraps existing boot_remote, reboot_agent, and health_check functions directly
-- Reads sentinel files (.pid, .claude-pid, .health) for state — does NOT own PIDs
-- Harness crash does NOT kill agents (they run in independent terminal windows)
+- Owns agent PIDs directly via AgentState.claude_pid + .claude-pid file fallback
+- Intent-based lifecycle: stop/restart set in-memory intent, cycle_post queries API
+- Health polling: direct PID check (primary) → .claude-pid file → health_check.py (legacy)
+- Harness exit does NOT kill agents (they run in independent terminal windows)
+- Crash recovery via .harness-state.json (PIDs, intents, boot times)
 - Port discovery via .squidsquad/.harness-port
 
 Usage:
     python references/scripts/harness.py                    # Start on default port 7373
     python references/scripts/harness.py --port 8080        # Custom port
     SQUIDSQUAD_HARNESS_PORT=9090 python references/scripts/harness.py  # Env override
-
-Phase 1 — no auth, no event bus, no frontend, no web terminal.
 """
 
 import asyncio

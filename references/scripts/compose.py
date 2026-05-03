@@ -920,27 +920,13 @@ TEMPLATES_DIR = REPO_ROOT / "references" / "templates"
 
 
 def boot_role(role_name: str, target_root: Path = None) -> list:
-    """Generate boot scripts (start-[role].sh and start-[role].ps1) from templates."""
-    root = Path(target_root) if target_root else REPO_ROOT
-    outputs = []
-    for ext in ("sh", "ps1"):
-        template_path = TEMPLATES_DIR / f"start-role.{ext}"
-        if not template_path.exists():
-            print(f"ERROR: Template not found: {template_path}", file=sys.stderr)
-            sys.exit(1)
+    """No-op — wrapper scripts eliminated (#4966).
 
-        content = template_path.read_text(encoding="utf-8")
-        content = content.replace("{{ROLE}}", role_name)
-
-        output_path = root / ".squidsquad" / f"start-{role_name}.{ext}"
-        # .sh files must use LF line endings (not CRLF on Windows)
-        # .ps1 files need UTF-8 BOM so PowerShell parses Unicode correctly
-        newline = "\n" if ext == "sh" else None
-        enc = "utf-8-sig" if ext == "ps1" else "utf-8"
-        output_path.write_text(content, encoding=enc, newline=newline)
-        outputs.append(output_path)
-
-    return outputs
+    Agents are now spawned via thin_launcher.py by the harness or boot_remote.
+    Wrapper templates (start-role.ps1/.sh) have been deleted.
+    This function is kept for backward compatibility but generates nothing.
+    """
+    return []
 
 
 def _collect_all_roles() -> list:
