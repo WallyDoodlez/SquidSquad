@@ -1062,3 +1062,110 @@ class TestEnforceBranch:
         cycle_pre._enforce_branch("skill", ws)
 
         assert len(checkout_calls) == 0
+
+
+class TestConfigVersionValidation:
+    """#5136: Post-pull config.md version regression detection."""
+
+    def test_fixes_regressed_version(self, monkeypatch):
+        """Auto-fixes config.md when version < latest git tag."""
+        config_calls = []
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0
+            if isinstance(cmd, list) and "tag" in cmd:
+                r.stdout = "v0.31.0\nv0.30.0\nv0.29.0\n"
+            else:
+                r.stdout = ""
+            r.stderr = ""
+            return r
+
+        def fake_run_script(*args, **kwargs):
+            config_calls.append(args)
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(cycle_pre, "_run", fake_run)
+        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "0.29.0" if f == "version" else "")
+
+        cycle_pre._validate_config_version()
+
+        # Should have called config.py set version 0.31.0
+        set_calls = [c for c in config_calls if "set" in c and "version" in c]
+        assert len(set_calls) == 1
+        assert "0.31.0" in set_calls[0]
+
+    def test_no_fix_when_version_current(self, monkeypatch):
+        """No fix when config.md version matches latest tag."""
+        config_calls = []
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0
+            if isinstance(cmd, list) and "tag" in cmd:
+                r.stdout = "v0.31.0\nv0.30.0\n"
+            else:
+                r.stdout = ""
+            r.stderr = ""
+            return r
+
+        monkeypatch.setattr(cycle_pre, "_run", fake_run)
+        monkeypatch.setattr(cycle_pre, "_run_script", lambda *a, **kw: config_calls.append(a))
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "0.31.0" if f == "version" else "")
+
+        cycle_pre._validate_config_version()
+
+        set_calls = [c for c in config_calls if "set" in c]
+        assert len(set_calls) == 0
+
+    def test_no_downgrade_when_config_newer(self, monkeypatch):
+        """Config version newer than latest tag is not downgraded."""
+        config_calls = []
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0
+            if isinstance(cmd, list) and "tag" in cmd:
+                r.stdout = "v0.31.0\nv0.30.0\n"
+            else:
+                r.stdout = ""
+            r.stderr = ""
+            return r
+
+        monkeypatch.setattr(cycle_pre, "_run", fake_run)
+        monkeypatch.setattr(cycle_pre, "_run_script", lambda *a, **kw: config_calls.append(a))
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "0.32.0" if f == "version" else "")
+
+        cycle_pre._validate_config_version()
+
+        set_calls = [c for c in config_calls if "set" in c]
+        assert len(set_calls) == 0
+
+    def test_no_crash_on_missing_tags(self, monkeypatch):
+        """Graceful when no git tags exist."""
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = ""
+            r.stderr = ""
+            return r
+
+        monkeypatch.setattr(cycle_pre, "_run", fake_run)
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "0.31.0")
+
+        cycle_pre._validate_config_version()  # Should not raise
+
+    def test_no_crash_on_empty_config_version(self, monkeypatch):
+        """Graceful when config has no version field."""
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = "v0.31.0\n"
+            r.stderr = ""
+            return r
+
+        monkeypatch.setattr(cycle_pre, "_run", fake_run)
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "")
+
+        cycle_pre._validate_config_version()  # Should not raise

@@ -13,5 +13,5 @@ If any agents were spawned, print: `[🦑 HH:MM:SS] Booted: [role1, role2, ...]`
 
 If all agents alive or stopped, print nothing — silent pass.
 
-**PM does not boot agents directly.** Agent lifecycle is managed by `start_team.py` and the wrapper scripts. If PM detects a stalled or dead agent, report to the human — do not attempt to spawn or restart agents.
+**PM does not boot agents directly.** Agent lifecycle is managed by the harness (`harness.py`) and `start_team.py` (#4966). If PM detects a stalled or dead agent, report to the human — do not attempt to spawn or restart agents.
 <!-- /sub-skill: boot-remote-agents -->

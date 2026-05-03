@@ -1,0 +1,5 @@
+# SquidSquad merge strategies
+#
+# config.md contains version counters and shared mutable state that must
+# not regress when feature branches merge. Main branch always wins. (#5136)
+.squidsquad/config.md merge=ours
