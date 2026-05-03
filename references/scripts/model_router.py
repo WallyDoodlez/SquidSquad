@@ -48,6 +48,30 @@ except ImportError:
 # Tasks that are always Claude-only regardless of config
 CLAUDE_LOCKED_TASKS = {"comprehension", "qa-execution"}
 
+
+def _ensure_yaml():
+    """Import yaml, auto-installing PyYAML if missing (#5125).
+
+    Returns the yaml module or None on failure.
+    """
+    try:
+        import yaml
+        return yaml
+    except ImportError:
+        pass
+    try:
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "pyyaml"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        import yaml
+        return yaml
+    except (subprocess.CalledProcessError, ImportError) as e:
+        print(f"[model_router] ERROR: Could not install PyYAML: {e}",
+              file=sys.stderr)
+        return None
+
 # Sensitive files that must never be read by external models
 SENSITIVE_PATTERNS = [
     ".env", ".env.*", "*.key", "*.pem", "*.p12", "*.pfx",
@@ -148,17 +172,9 @@ def _load_provider_manifest(model):
     if not PROVIDERS_DIR.exists():
         return None, None
 
-    # Try importing yaml
-    try:
-        import yaml
-    except ImportError:
-        # PyYAML not available, try installing
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "pyyaml"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        import yaml
+    yaml = _ensure_yaml()
+    if yaml is None:
+        return None, None
 
     for provider_dir in PROVIDERS_DIR.iterdir():
         if not provider_dir.is_dir():
@@ -187,15 +203,9 @@ def list_providers():
     if not PROVIDERS_DIR.exists():
         return []
 
-    try:
-        import yaml
-    except ImportError:
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "pyyaml"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        import yaml
+    yaml = _ensure_yaml()
+    if yaml is None:
+        return []
 
     providers = []
     for provider_dir in sorted(PROVIDERS_DIR.iterdir()):
@@ -817,14 +827,9 @@ def _find_provider_manifest(provider_name):
     if not PROVIDERS_DIR.exists():
         return None, None
 
-    try:
-        import yaml
-    except ImportError:
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "pyyaml"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-        import yaml
+    yaml = _ensure_yaml()
+    if yaml is None:
+        return None, None
 
     for provider_dir in PROVIDERS_DIR.iterdir():
         if not provider_dir.is_dir():
