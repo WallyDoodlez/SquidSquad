@@ -409,15 +409,24 @@ class TestRebootAll:
 # Double-start prevention (#2496)
 # ---------------------------------------------------------------------------
 
-class TestDoubleStartPrevention:
-    """_spawn_wrapper checks PID alive before spawning."""
+class TestSpawnWrapperDelegation:
+    """_spawn_wrapper delegates to boot_remote.boot_agent() (#5344)."""
 
-    def test_spawn_blocked_if_pid_alive(self, patch_dirs, squid_dir, monkeypatch):
-        (squid_dir / "skill" / ".pid").write_text("12345", encoding="utf-8")
-        monkeypatch.setattr(reboot_agent, "_is_process_alive", lambda pid: True)
-        monkeypatch.setattr(boot_remote, "_find_boot_script",
-                            lambda cp, r: (Path("/fake/script.sh"), "sh"))
+    def test_delegates_to_boot_agent(self, monkeypatch):
+        """_spawn_wrapper calls boot_remote.boot_agent and returns its result."""
+        mock_result = {"role": "skill", "action": "spawn", "success": True,
+                       "message": "spawned via thin launcher", "timestamp": 0}
+        monkeypatch.setattr(boot_remote, "boot_agent", lambda role, **kw: mock_result)
 
-        success, msg = reboot_agent._spawn_wrapper("skill", patch_dirs)
+        success, msg = reboot_agent._spawn_wrapper("skill", "/fake/path")
+        assert success is True
+        assert "thin launcher" in msg
+
+    def test_returns_failure_from_boot_agent(self, monkeypatch):
+        """_spawn_wrapper propagates boot_agent failure."""
+        mock_result = {"role": "skill", "action": "skip", "success": False,
+                       "message": "no boot script found", "timestamp": 0}
+        monkeypatch.setattr(boot_remote, "boot_agent", lambda role, **kw: mock_result)
+
+        success, msg = reboot_agent._spawn_wrapper("skill", "/fake/path")
         assert success is False
-        assert "still alive" in msg
