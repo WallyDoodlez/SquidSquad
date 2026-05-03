@@ -65,7 +65,8 @@ except ImportError:
 class AgentState:
     """In-memory state for a single agent."""
 
-    __slots__ = ("role", "status", "intent", "last_health_check", "boot_time", "clone_path")
+    __slots__ = ("role", "status", "intent", "last_health_check", "boot_time",
+                 "clone_path", "claude_pid")
 
     # Intent values:
     #   "running"    — agent should be alive; auto-reboot on death (#4949)
@@ -82,6 +83,7 @@ class AgentState:
         self.last_health_check = None
         self.boot_time = None
         self.clone_path = clone_path
+        self.claude_pid = None  # PID of claude process (#4966)
 
     def to_dict(self):
         return {
@@ -91,6 +93,7 @@ class AgentState:
             "boot_time": self.boot_time,
             "last_health_check": self.last_health_check,
             "clone_path": self.clone_path,
+            "claude_pid": self.claude_pid,
         }
 
 
@@ -117,43 +120,96 @@ class HarnessState:
         with self._lock:
             return [a.to_dict() for a in self.agents.values()]
 
-    def update_health(self):
-        """Poll sentinel files, update agent states, and auto-reboot (#4949)."""
+    def _read_claude_pid(self, clone_path, role):
+        """Read claude PID from .claude-pid file and check if alive (#4966).
+
+        Returns (pid, alive) or (None, False).
+        """
+        pid_file = Path(clone_path) / ".squidsquad" / role / ".claude-pid"
+        if not pid_file.exists():
+            return None, False
         try:
-            report = health_check.check_all_agents()
-        except SystemExit:
-            # health_check exits on missing .local-config
+            pid = int(pid_file.read_text(encoding="utf-8").strip())
+        except (ValueError, OSError):
+            return None, False
+        return pid, boot_remote._is_process_alive(pid)
+
+    def update_health(self):
+        """Check agent health via direct PID monitoring (#4966).
+
+        Primary: check stored claude_pid or read .claude-pid file.
+        Fallback: health_check.py for legacy wrapper agents.
+        Auto-reboots dead agents with intent=running.
+        """
+        # Discover agent clone paths from .local-config
+        try:
+            all_roles = boot_remote._get_all_roles()
+        except (SystemExit, Exception):
             return
 
         reboot_roles = []
+        state_changed = False
 
         with self._lock:
-            for agent_report in report.get("agents", []):
-                role = agent_report["role"]
-                if role not in self.agents:
-                    self.agents[role] = AgentState(
-                        role, agent_report.get("clone_path", "")
-                    )
-                agent = self.agents[role]
-                agent.clone_path = agent_report.get("clone_path", "")
-                agent.last_health_check = time.time()
+            for role in all_roles:
+                try:
+                    clone_path = boot_remote._get_clone_path(role)
+                except Exception:
+                    continue
 
-                # Map health_check categories to harness status
-                health = agent_report.get("health", "unknown")
+                if role not in self.agents:
+                    self.agents[role] = AgentState(role, clone_path)
+                agent = self.agents[role]
+                agent.clone_path = clone_path
+                agent.last_health_check = time.time()
                 prev_status = agent.status
-                if health == "healthy":
+
+                # Direct PID check (#4966) — primary health detection
+                pid = agent.claude_pid
+                alive = False
+                if pid:
+                    alive = boot_remote._is_process_alive(pid)
+
+                # If no stored PID or PID stale, try reading .claude-pid file
+                if not alive:
+                    file_pid, file_alive = self._read_claude_pid(clone_path, role)
+                    if file_pid and file_alive:
+                        pid = file_pid
+                        alive = True
+                        agent.claude_pid = pid
+                        state_changed = True
+
+                # Fallback: check .health file for legacy wrapper agents
+                if not alive and not pid:
+                    try:
+                        health_report = health_check.check_agent_health(
+                            role, clone_path,
+                            interval_minutes=30,
+                        )
+                        legacy_health = health_report.get("health", "unknown")
+                        if legacy_health == "healthy":
+                            alive = True
+                        elif legacy_health == "stopped":
+                            # Check .stop sentinel
+                            agent.status = "stopped"
+                    except Exception:
+                        pass
+
+                # Update status
+                if alive:
                     agent.status = "running"
-                    # Agent came back alive — reset intent to running
                     if agent.intent == AgentState.INTENT_RESTARTING:
                         agent.intent = AgentState.INTENT_RUNNING
-                elif health == "stalled":
-                    agent.status = "stalled"
-                elif health == "stopped":
-                    agent.status = "stopped"
-                elif health == "error":
-                    agent.status = "error"
-                else:
-                    agent.status = "unknown"
+                        state_changed = True
+                elif agent.status != "starting":
+                    # Check if explicitly stopped
+                    stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"
+                    if stop_file.exists():
+                        agent.status = "stopped"
+                    elif prev_status == "running":
+                        agent.status = "stalled"
+                    elif agent.status not in ("stopped",):
+                        agent.status = "unknown"
 
                 # Auto-reboot: agent is dead but should be alive (#4949)
                 is_dead = agent.status in ("stopped", "error", "stalled")
@@ -165,13 +221,17 @@ class HarnessState:
                 if is_dead and was_alive and should_reboot:
                     reboot_roles.append(role)
                     agent.status = "starting"
+                    agent.claude_pid = None  # Clear stale PID
+                    state_changed = True
 
                 # Stopping intent fulfilled — agent died as requested (#4966)
                 if is_dead and agent.intent == AgentState.INTENT_STOPPING:
                     agent.intent = "stopped"
+                    agent.claude_pid = None
+                    state_changed = True
 
         # Persist state if anything changed (#4966)
-        if reboot_roles:
+        if state_changed or reboot_roles:
             self.save_state()
 
         # Reboot outside the lock to avoid blocking health updates
@@ -220,6 +280,7 @@ class HarnessState:
                         "status": a.status,
                         "boot_time": a.boot_time,
                         "clone_path": a.clone_path,
+                        "claude_pid": a.claude_pid,
                     }
                     for role, a in self.agents.items()
                 },
@@ -255,6 +316,7 @@ class HarnessState:
                 agent = self.agents[role]
                 agent.intent = agent_data.get("intent", AgentState.INTENT_RUNNING)
                 agent.boot_time = agent_data.get("boot_time")
+                agent.claude_pid = agent_data.get("claude_pid")
 
         _log(f"Restored state for {len(state_data.get('agents', {}))} agents from state file")
 
@@ -399,7 +461,7 @@ async def start_all():
 
 @app.post("/agents/all/stop")
 async def stop_all():
-    """Stop all agents gracefully (#4949). Sets intent and writes .stop-after-cycle."""
+    """Stop all agents gracefully (#4966). Sets intent via API — no sentinel files."""
     roles = boot_remote._get_all_roles()
     _log(f"Stopping all agents: {', '.join(roles)}")
 
@@ -534,7 +596,7 @@ async def get_agent_config(role: str):
 
 @app.post("/agents/{role}/stop")
 async def stop_agent(role: str):
-    """Graceful stop — set intent to stopping, write .stop-after-cycle (#4949)."""
+    """Graceful stop — set intent=stopping (#4966). cycle_post queries API for intent."""
     _validate_role(role)
 
     # Set intent in memory — harness won't reboot after agent exits
@@ -551,7 +613,7 @@ async def stop_agent(role: str):
 
 @app.post("/agents/{role}/restart")
 async def restart_agent(role: str):
-    """Graceful restart — set intent, write .stop-after-cycle, reboot on death (#4949)."""
+    """Graceful restart — set intent=restarting (#4966). Harness reboots on death."""
     _validate_role(role)
 
     _log(f"Restarting {role}...")
@@ -783,26 +845,9 @@ class CtrlCHandler:
         raise KeyboardInterrupt
 
     def _force_kill(self):
-        _log("FORCE KILL — terminating all agent processes...")
-
-        roles = []
-        try:
-            roles = boot_remote._get_all_roles()
-        except Exception:
-            pass
-
-        for role in roles:
-            try:
-                clone_path = boot_remote._get_clone_path(role)
-                claude_pid, alive = reboot_agent._read_claude_pid(Path(clone_path), role)
-                if alive and claude_pid:
-                    reboot_agent._kill_process(claude_pid)
-                    _log(f"  {role}: killed PID {claude_pid}")
-            except Exception as e:
-                _log(f"  {role}: kill failed — {e}")
-
-        _log("All agents force-killed. Exiting.")
-        # Clean up and exit
+        _log("Force exit — harness stopping. Agents survive in their terminals.")
+        # Agents run in independent terminal windows — they survive harness exit.
+        # On harness restart, crash recovery via .harness-state.json resumes monitoring.
         try:
             HARNESS_PORT_FILE.unlink(missing_ok=True)
         except OSError:
