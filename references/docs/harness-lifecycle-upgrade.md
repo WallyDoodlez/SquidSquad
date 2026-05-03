@@ -23,18 +23,20 @@ Pull the latest version containing #4966 changes.
 
 ### 3. Clean stale sentinel files
 
-Remove sentinel files from all agent clones. These are no longer written by the new system:
+Remove stale sentinel files from all agent clones. Only delete files that are no longer written:
 
 ```bash
-# For each clone directory:
+# For each clone directory — safe to delete (no longer written):
 find .squidsquad/ -name ".health" -delete
 find .squidsquad/ -name ".pid" -delete
-find .squidsquad/ -name ".claude-pid" -delete
 find .squidsquad/ -name ".restart" -delete
-find .squidsquad/ -name ".stop" -delete
 find .squidsquad/ -name ".stop-after-cycle" -delete
-find .squidsquad/ -name ".booting" -delete
 ```
+
+**Do NOT delete** these files — still used by the new system:
+- `.claude-pid` — written by thin launcher, read by harness for PID monitoring
+- `.booting` — written by boot_remote for boot slot acquisition
+- `.stop` — written as fallback by start_team.py when harness unreachable
 
 ### 4. Delete old wrapper scripts
 
