@@ -1,5 +1,5 @@
 {
-  "last_scanned": "README.md",
+  "last_scanned": "SKILL.md:sections-1-3",
   "rotation_count": 8,
   "scan_history": [
     {"file": "README.md", "date": "2026-04-28", "findings": 2},
@@ -38,7 +38,8 @@
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-01", "findings": 0},
     {"file": "docs/sub-skill-guide.md", "date": "2026-05-01", "findings": 0},
     {"file": "CHANGELOG.md", "date": "2026-05-02", "findings": 3, "fixes": ["removed redundant Shipped section from v0.28.0", "removed redundant Shipped section from v0.29.0", "removed redundant Shipped section from v0.30.0"]},
-    {"file": "README.md", "date": "2026-05-02", "findings": 0}
+    {"file": "README.md", "date": "2026-05-02", "findings": 0},
+    {"file": "SKILL.md:sections-1-3", "date": "2026-05-03", "findings": 3, "fixes": ["updated PM/QA context pressure from 'save state and exit' to 'checkpoint and continue'", "replaced Dev Loop manual git/sleep with cycle_post.py + /loop", "replaced PM Loop manual git/sleep with cycle_post.py + /loop"]}
   ],
   "doc_inventory": {
     "README.md": {"last_scanned": "2026-05-02", "status": "current"},
