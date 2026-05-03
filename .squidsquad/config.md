@@ -1,6 +1,6 @@
 # SquidSquad Config
 
-- **SquidSquad Version**: 0.29.0
+- **SquidSquad Version**: 0.31.0
 - **Tracker**: github-issues
 - **Architecture Version**: 1
 
@@ -115,11 +115,7 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-<<<<<<< Updated upstream
 - **Shipped Since Last Bump**: 7
-=======
-- **Shipped Since Last Bump**: 0
->>>>>>> Stashed changes
 
 ## Harness
 
