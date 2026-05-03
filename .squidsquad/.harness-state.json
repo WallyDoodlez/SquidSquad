@@ -1,0 +1,13 @@
+{
+  "harness_pid": 397520,
+  "start_time": 1777772346.9223812,
+  "port": 7373,
+  "agents": {
+    "skill": {
+      "intent": "restarting",
+      "status": "starting",
+      "boot_time": null,
+      "clone_path": "/tmp/clone"
+    }
+  }
+}
