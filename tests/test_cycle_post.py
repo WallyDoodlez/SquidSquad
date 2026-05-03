@@ -334,41 +334,52 @@ class TestCommitPushUsesWorkingBranch:
 # ---------------------------------------------------------------------------
 
 class TestStopAfterCycleCheck:
-    """Regression tests for #3807: universal sentinel-based restart."""
+    """#4966: API-based intent check replaces .stop-after-cycle sentinel."""
 
-    def test_writes_sentinel_on_context_pressure(self, patch_dirs, squid_dir):
-        """cycle_post writes .stop-after-cycle when context pressure exceeded."""
+    def test_exits_on_context_pressure(self, patch_dirs, squid_dir):
+        """cycle_post returns True when context pressure exceeded (#4966)."""
         data = {
             "context_pressure": {"used_pct": 85, "threshold": 70, "exceeded": True},
         }
-        result = cycle_post._do_stop_after_cycle_check(data, "skill")
+        with patch.object(cycle_post, "_query_harness_intent", return_value=None):
+            result = cycle_post._do_stop_after_cycle_check(data, "skill")
         assert result is True
-        sentinel = squid_dir / "skill" / ".stop-after-cycle"
-        assert sentinel.exists()
-        assert "85%" in sentinel.read_text(encoding="utf-8")
 
-    def test_no_sentinel_below_threshold(self, patch_dirs, squid_dir):
-        """No sentinel written when context pressure is below threshold."""
+    def test_no_exit_below_threshold(self, patch_dirs, squid_dir):
+        """No exit when context pressure is below threshold."""
         data = {
             "context_pressure": {"used_pct": 50, "threshold": 70, "exceeded": False},
         }
-        result = cycle_post._do_stop_after_cycle_check(data, "skill")
+        with patch.object(cycle_post, "_query_harness_intent", return_value="running"):
+            result = cycle_post._do_stop_after_cycle_check(data, "skill")
         assert result is False
-        sentinel = squid_dir / "skill" / ".stop-after-cycle"
-        assert not sentinel.exists()
 
-    def test_detects_external_sentinel(self, patch_dirs, squid_dir):
-        """Detects externally written .stop-after-cycle (e.g. start_team.py --reboot)."""
-        sentinel = squid_dir / "skill" / ".stop-after-cycle"
-        sentinel.write_text("reboot via start_team.py", encoding="utf-8")
+    def test_exits_on_harness_intent_stopping(self, patch_dirs, squid_dir):
+        """Exits when harness intent is 'stopping' (#4966)."""
         data = {"context_pressure": {"used_pct": 10, "threshold": 70, "exceeded": False}}
-        result = cycle_post._do_stop_after_cycle_check(data, "skill")
+        with patch.object(cycle_post, "_query_harness_intent", return_value="stopping"):
+            result = cycle_post._do_stop_after_cycle_check(data, "skill")
         assert result is True
+
+    def test_exits_on_harness_intent_restarting(self, patch_dirs, squid_dir):
+        """Exits when harness intent is 'restarting' (#4966)."""
+        data = {"context_pressure": {"used_pct": 10, "threshold": 70, "exceeded": False}}
+        with patch.object(cycle_post, "_query_harness_intent", return_value="restarting"):
+            result = cycle_post._do_stop_after_cycle_check(data, "skill")
+        assert result is True
+
+    def test_continues_on_harness_unreachable(self, patch_dirs, squid_dir):
+        """Safe default: continues when harness API is unreachable (#4966)."""
+        data = {"context_pressure": {"used_pct": 10, "threshold": 70, "exceeded": False}}
+        with patch.object(cycle_post, "_query_harness_intent", return_value=None):
+            result = cycle_post._do_stop_after_cycle_check(data, "skill")
+        assert result is False
 
     def test_no_context_pressure_data(self, patch_dirs, squid_dir):
         """No crash when context_pressure is missing from data."""
         data = {}
-        result = cycle_post._do_stop_after_cycle_check(data, "skill")
+        with patch.object(cycle_post, "_query_harness_intent", return_value=None):
+            result = cycle_post._do_stop_after_cycle_check(data, "skill")
         assert result is False
 
     def test_legacy_restart_sentinel_still_works(self, patch_dirs, squid_dir):
@@ -378,6 +389,29 @@ class TestStopAfterCycleCheck:
         assert result is True
         sentinel = squid_dir / "skill" / ".restart"
         assert sentinel.exists()
+
+
+class TestPortDiscovery:
+    """#4966: Port discovery for harness API communication."""
+
+    def test_reads_port_from_harness_port_file(self, patch_dirs, squid_dir):
+        """Reads port from .squidsquad/.harness-port."""
+        port_file = squid_dir / ".harness-port"
+        port_file.write_text("8080", encoding="utf-8")
+        result = cycle_post._discover_harness_port()
+        assert result == 8080
+
+    def test_falls_back_to_default_port(self, patch_dirs, squid_dir):
+        """Falls back to 7373 when no .harness-port file exists."""
+        result = cycle_post._discover_harness_port()
+        assert result == 7373
+
+    def test_handles_invalid_port_file(self, patch_dirs, squid_dir):
+        """Falls back to default on invalid port file content."""
+        port_file = squid_dir / ".harness-port"
+        port_file.write_text("not-a-number", encoding="utf-8")
+        result = cycle_post._discover_harness_port()
+        assert result == 7373
 
 
 # ---------------------------------------------------------------------------
