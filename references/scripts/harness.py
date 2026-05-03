@@ -39,6 +39,7 @@ HARNESS_PORT_FILE = SQUIDSQUAD_DIR / ".harness-port"
 
 DEFAULT_PORT = 7373
 HEALTH_POLL_INTERVAL = 5  # seconds
+HARNESS_STATE_FILE = SQUIDSQUAD_DIR / ".harness-state.json"
 
 import boot_remote
 import health_check
@@ -165,20 +166,20 @@ class HarnessState:
                     reboot_roles.append(role)
                     agent.status = "starting"
 
-                # Stopping intent fulfilled — agent died as requested
+                # Stopping intent fulfilled — agent died as requested (#4966)
                 if is_dead and agent.intent == AgentState.INTENT_STOPPING:
-                    # Clean up .stop-after-cycle if it still exists
-                    sac = Path(agent.clone_path) / ".squidsquad" / role / ".stop-after-cycle"
-                    try:
-                        sac.unlink(missing_ok=True)
-                    except OSError:
-                        pass
+                    agent.intent = "stopped"
+
+        # Persist state if anything changed (#4966)
+        if reboot_roles:
+            self.save_state()
 
         # Reboot outside the lock to avoid blocking health updates
         for role in reboot_roles:
             _log(f"Auto-rebooting {role} (was running, intent={self.agents[role].intent})")
             try:
                 boot_remote.boot_agent(role)
+                self.save_state()
             except Exception as e:
                 _log(f"Auto-reboot of {role} failed: {e}")
 
@@ -203,6 +204,60 @@ class HarnessState:
                 pass  # Don't crash poller on transient errors
             time.sleep(HEALTH_POLL_INTERVAL)
 
+    def save_state(self):
+        """Persist per-agent PIDs and intents to .harness-state.json (#4966).
+
+        Called on spawn, death, intent change. Enables crash recovery.
+        """
+        with self._lock:
+            state_data = {
+                "harness_pid": os.getpid(),
+                "start_time": self.start_time,
+                "port": self.port,
+                "agents": {
+                    role: {
+                        "intent": a.intent,
+                        "status": a.status,
+                        "boot_time": a.boot_time,
+                        "clone_path": a.clone_path,
+                    }
+                    for role, a in self.agents.items()
+                },
+            }
+        try:
+            tmp = HARNESS_STATE_FILE.with_suffix(".tmp")
+            tmp.write_text(json.dumps(state_data, indent=2), encoding="utf-8")
+            tmp.replace(HARNESS_STATE_FILE)
+        except OSError as e:
+            _log(f"WARNING: Could not write state file: {e}")
+
+    def load_state(self):
+        """Load state from .harness-state.json for crash recovery (#4966).
+
+        On harness restart, reads the file and restores agent intents.
+        Process liveness is checked separately via health polling.
+        """
+        if not HARNESS_STATE_FILE.exists():
+            return
+        try:
+            raw = HARNESS_STATE_FILE.read_text(encoding="utf-8")
+            state_data = json.loads(raw)
+        except (json.JSONDecodeError, OSError) as e:
+            _log(f"WARNING: Could not read state file: {e}")
+            return
+
+        with self._lock:
+            for role, agent_data in state_data.get("agents", {}).items():
+                if role not in self.agents:
+                    self.agents[role] = AgentState(
+                        role, agent_data.get("clone_path", "")
+                    )
+                agent = self.agents[role]
+                agent.intent = agent_data.get("intent", AgentState.INTENT_RUNNING)
+                agent.boot_time = agent_data.get("boot_time")
+
+        _log(f"Restored state for {len(state_data.get('agents', {}))} agents from state file")
+
 
 # Global state
 state = HarnessState()
@@ -226,6 +281,9 @@ def _log(msg: str):
 async def lifespan(app: FastAPI):
     """Startup and shutdown hooks."""
     _log(f"Harness starting on port {state.port}...")
+
+    # Crash recovery: load previous state before first health poll (#4966)
+    state.load_state()
 
     # Initial health poll
     state.update_health()
@@ -365,22 +423,15 @@ async def stop_all():
             _log(f"  {role}: skip (not running)")
             continue
 
-        # Set intent and write .stop-after-cycle
+        # Set intent — cycle_post.py queries API for intent (#4966)
         if not agent_state:
             agent_state = AgentState(role, clone_path)
         agent_state.intent = AgentState.INTENT_STOPPING
         state.set_agent(role, agent_state)
+        results.append({"role": role, "action": "stop", "success": True})
+        _log(f"  {role}: intent=stopping")
 
-        sac_file = Path(clone_path) / ".squidsquad" / role / ".stop-after-cycle"
-        try:
-            sac_file.parent.mkdir(parents=True, exist_ok=True)
-            sac_file.write_text("stopped via harness", encoding="utf-8")
-            results.append({"role": role, "action": "stop", "success": True})
-            _log(f"  {role}: intent=stopping, .stop-after-cycle written")
-        except OSError as e:
-            results.append({"role": role, "action": "stop", "success": False, "error": str(e)})
-            _log(f"  {role}: FAILED -- {e}")
-
+    state.save_state()
     return {"results": results}
 
 
@@ -418,9 +469,67 @@ async def start_agent(role: str):
         agent_state.intent = AgentState.INTENT_RUNNING
         agent_state.boot_time = time.time()
         state.set_agent(role, agent_state)
+        state.save_state()
 
     status_code = 200 if result["success"] else 500
     return JSONResponse(status_code=status_code, content=result)
+
+
+@app.get("/agents/{role}/health")
+async def get_agent_health(role: str):
+    """Agent health endpoint — process status, last cycle, phase, context pressure (#4966)."""
+    _validate_role(role)
+    state.update_health()
+    agent = state.get_agent(role)
+
+    result = {
+        "role": role,
+        "alive": False,
+        "status": "unknown",
+        "last_cycle": None,
+        "current_phase": None,
+        "context_pressure": None,
+    }
+
+    if agent:
+        result["alive"] = agent.status == "running"
+        result["status"] = agent.status
+
+    # Read current-state file for phase
+    state_file = SQUIDSQUAD_DIR / role / "current-state"
+    try:
+        result["current_phase"] = state_file.read_text(encoding="utf-8").strip()
+    except (OSError, FileNotFoundError):
+        pass
+
+    # Read context-pressure file
+    ctx_file = SQUIDSQUAD_DIR / role / "context-pressure"
+    try:
+        result["context_pressure"] = int(ctx_file.read_text(encoding="utf-8").strip())
+    except (OSError, FileNotFoundError, ValueError):
+        pass
+
+    return result
+
+
+@app.get("/agents/{role}/config")
+async def get_agent_config(role: str):
+    """Agent config sync state (#4966)."""
+    _validate_role(role)
+
+    result = {"role": role}
+
+    # Read config.md for agent-relevant settings
+    try:
+        import config as cfg
+        result["branch_workflow"] = cfg.get_field("branch-workflow") == "yes"
+        result["pr_flow"] = cfg.get_field("pr-flow") == "yes"
+        result["interval_minutes"] = int(cfg.get_field("interval") or "30")
+        result["version"] = cfg.get_field("version")
+    except Exception:
+        result["error"] = "Could not read config"
+
+    return result
 
 
 @app.post("/agents/{role}/stop")
@@ -429,20 +538,13 @@ async def stop_agent(role: str):
     _validate_role(role)
 
     # Set intent in memory — harness won't reboot after agent exits
+    # cycle_post.py queries GET /agents/{role} and reads intent (#4966)
     agent_state = state.get_agent(role) or AgentState(role)
     agent_state.intent = AgentState.INTENT_STOPPING
     state.set_agent(role, agent_state)
+    state.save_state()
 
-    # Write .stop-after-cycle so cycle_post exits gracefully
-    clone_path = boot_remote._get_clone_path(role)
-    sac_file = Path(clone_path) / ".squidsquad" / role / ".stop-after-cycle"
-    try:
-        sac_file.parent.mkdir(parents=True, exist_ok=True)
-        sac_file.write_text("stopped via harness", encoding="utf-8")
-    except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Failed to write .stop-after-cycle: {e}")
-
-    _log(f"Stopped {role} (intent=stopping, .stop-after-cycle written)")
+    _log(f"Stopped {role} (intent=stopping)")
 
     return {"role": role, "action": "stop", "message": "Stop requested"}
 
@@ -455,27 +557,21 @@ async def restart_agent(role: str):
     _log(f"Restarting {role}...")
 
     # Set intent — harness will auto-reboot when agent exits
+    # cycle_post.py queries GET /agents/{role} and reads intent (#4966)
     agent_state = state.get_agent(role) or AgentState(role)
     agent_state.intent = AgentState.INTENT_RESTARTING
     state.set_agent(role, agent_state)
-
-    # Write .stop-after-cycle so agent exits gracefully after current cycle
-    clone_path = boot_remote._get_clone_path(role)
-    sac_file = Path(clone_path) / ".squidsquad" / role / ".stop-after-cycle"
-    try:
-        sac_file.parent.mkdir(parents=True, exist_ok=True)
-        sac_file.write_text("restart via harness", encoding="utf-8")
-    except OSError:
-        pass
+    state.save_state()
 
     # Remove .stop sentinel if present (allow re-start after previous stop)
+    clone_path = boot_remote._get_clone_path(role)
     stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"
     try:
         stop_file.unlink(missing_ok=True)
     except OSError:
         pass
 
-    _log(f"  {role}: restart requested (intent=restarting, .stop-after-cycle written)")
+    _log(f"  {role}: restart requested (intent=restarting)")
 
     return {
         "role": role,
@@ -515,16 +611,11 @@ async def shutdown():
             _log(f"Stopping running agents: {', '.join(running_roles)}")
             for role in running_roles:
                 clone_path = boot_remote._get_clone_path(role)
-                # Set intent and write .stop-after-cycle (#4949)
+                # Set intent — cycle_post.py queries API for intent (#4966)
                 agent = state.get_agent(role) or AgentState(role, clone_path)
                 agent.intent = AgentState.INTENT_STOPPING
                 state.set_agent(role, agent)
-                sac_file = Path(clone_path) / ".squidsquad" / role / ".stop-after-cycle"
-                try:
-                    sac_file.parent.mkdir(parents=True, exist_ok=True)
-                    sac_file.write_text("stopped via harness shutdown", encoding="utf-8")
-                except OSError:
-                    pass
+            state.save_state()
 
             _log("Waiting for agents to idle (max 30s)...")
             for _ in range(6):

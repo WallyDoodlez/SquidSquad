@@ -16,6 +16,8 @@ import json
 import re
 import subprocess
 import sys
+import urllib.request
+import urllib.error
 from datetime import datetime
 from pathlib import Path
 
@@ -448,28 +450,77 @@ def _do_restart_sentinel(data, role):
     return True
 
 
+def _discover_harness_port():
+    """Discover harness port — default 7373 + parent-dir walk for .harness-port (#4966).
+
+    Returns port number or None if harness is not discoverable.
+    """
+    # First try: read .harness-port from this repo's .squidsquad/
+    port_file = SQUID_DIR / ".harness-port"
+    if port_file.exists():
+        try:
+            return int(port_file.read_text(encoding="utf-8").strip())
+        except (ValueError, OSError):
+            pass
+
+    # Second try: walk parent directories to find .squidsquad/.harness-port
+    # (clone isolation — agent clone may be a child of the primary repo)
+    current = REPO_ROOT.parent
+    for _ in range(5):  # max 5 levels up
+        candidate = current / ".squidsquad" / ".harness-port"
+        if candidate.exists():
+            try:
+                return int(candidate.read_text(encoding="utf-8").strip())
+            except (ValueError, OSError):
+                pass
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+
+    # Fall back to default port
+    return 7373
+
+
+def _query_harness_intent(role):
+    """Query harness API for agent intent (#4966).
+
+    Returns intent string ("running", "stopping", "restarting") or None on failure.
+    Safe default on failure: None (caller treats as "continue running").
+    """
+    port = _discover_harness_port()
+    if port is None:
+        return None
+
+    url = f"http://127.0.0.1:{port}/agents/{role}"
+    try:
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data.get("intent")
+    except (urllib.error.URLError, OSError, json.JSONDecodeError, TimeoutError):
+        # Safe default: harness unreachable, continue running
+        return None
+
+
 def _do_stop_after_cycle_check(data, role):
-    """Check context pressure and write .stop-after-cycle if exceeded.
+    """Check harness intent API and context pressure (#4966).
 
-    This is the new universal restart mechanism: cycle_post.py mechanically
-    writes the sentinel when context pressure exceeds threshold. The wrapper
-    detects it on exit and respawns. Agents are passive — they don't decide
-    to restart, the mechanical layer does.
+    Two independent exit triggers:
+    1. Harness intent: if intent is "stopping" or "restarting", exit 42
+    2. Context pressure: if exceeded, exit 42 (harness will respawn)
 
-    Also checks if an external .stop-after-cycle was already written (e.g. by
-    start_team.py --reboot). If present, checkpoint working state and exit.
+    Safe default on API failure: continue running (exit 0).
 
     Returns True if agent should exit for restart.
     """
-    role_dir = SQUID_DIR / role
-    sentinel = role_dir / ".stop-after-cycle"
-
-    # Check if externally written (e.g. start_team.py --reboot)
-    if sentinel.exists():
-        print(f"  .stop-after-cycle detected (external). Agent will exit for restart.")
+    # 1. Query harness API for intent (replaces .stop-after-cycle file check)
+    intent = _query_harness_intent(role)
+    if intent in ("stopping", "restarting"):
+        print(f"  Harness intent={intent}. Agent will exit for {'stop' if intent == 'stopping' else 'restart'}.")
         return True
 
-    # Check context pressure from cycle-input.json
+    # 2. Check context pressure from cycle-input.json
     ctx = data.get("context_pressure", {})
     if not ctx:
         # Try reading from cycle-input.json directly
@@ -485,9 +536,7 @@ def _do_stop_after_cycle_check(data, role):
     used_pct = ctx.get("used_pct", 0)
 
     if exceeded:
-        reason = f"context pressure at {used_pct}%"
-        sentinel.write_text(reason, encoding="utf-8")
-        print(f"  .stop-after-cycle written: {reason}")
+        print(f"  Context pressure at {used_pct}% — agent will exit for restart.")
         return True
 
     return False
