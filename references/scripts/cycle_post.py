@@ -407,6 +407,13 @@ def _do_version_bump(data, role):
     if skill_md.exists():
         bump_files.append("SKILL.md")
     _run(["git", "add", "--"] + bump_files)
+
+    # Guard: skip commit/tag/push if nothing was staged (#5126)
+    diff_check = _run(["git", "diff", "--cached", "--quiet"])
+    if diff_check.returncode == 0:
+        print(f"  Version bump v{new_version}: no staged changes — skipping commit/tag/push")
+        return
+
     _run(["git", "commit", "-m", f"chore: bump version to v{new_version}"])
 
     # Check if tag exists

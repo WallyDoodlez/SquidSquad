@@ -102,3 +102,77 @@ class TestVersionBumpStaging:
         assert len(add_calls) == 1
         add_cmd = add_calls[0]
         assert "SKILL.md" not in add_cmd
+
+
+class TestVersionBumpNoStagedChanges:
+    """#5126 — skip commit/tag/push when nothing was staged."""
+
+    def test_skips_commit_tag_push_when_no_staged_changes(self, tmp_path, monkeypatch):
+        """If git diff --cached --quiet returns 0 (no changes), skip commit/tag/push."""
+        monkeypatch.setattr(cycle_post, "REPO_ROOT", tmp_path)
+
+        squid = tmp_path / ".squidsquad"
+        squid.mkdir()
+        config_md = squid / "config.md"
+        config_md.write_text("- **SquidSquad Version**: 0.27.0\n", encoding="utf-8")
+        changelog = tmp_path / "CHANGELOG.md"
+        changelog.write_text("# Changelog\n", encoding="utf-8")
+
+        run_calls = []
+        def fake_run(cmd, check=False):
+            run_calls.append(cmd)
+            result = MagicMock()
+            result.stdout = ""
+            # git diff --cached --quiet returns 0 when nothing staged
+            if cmd[:4] == ["git", "diff", "--cached", "--quiet"]:
+                result.returncode = 0
+            else:
+                result.returncode = 0
+            return result
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "_run_script", lambda *a: None)
+
+        data = {"version_bump": {"new_version": "0.28.0", "items_included": []}}
+        cycle_post._do_version_bump(data, "dm")
+
+        # Should NOT have commit, tag, or push calls
+        commit_calls = [c for c in run_calls if c[:2] == ["git", "commit"]]
+        tag_calls = [c for c in run_calls if c[:2] == ["git", "tag"] and "-l" not in c]
+        push_calls = [c for c in run_calls if c[:2] == ["git", "push"]]
+        assert len(commit_calls) == 0, f"Unexpected commit: {commit_calls}"
+        assert len(tag_calls) == 0, f"Unexpected tag: {tag_calls}"
+        assert len(push_calls) == 0, f"Unexpected push: {push_calls}"
+
+    def test_proceeds_when_staged_changes_exist(self, tmp_path, monkeypatch):
+        """If git diff --cached --quiet returns 1 (has changes), proceed normally."""
+        monkeypatch.setattr(cycle_post, "REPO_ROOT", tmp_path)
+
+        squid = tmp_path / ".squidsquad"
+        squid.mkdir()
+        config_md = squid / "config.md"
+        config_md.write_text("- **SquidSquad Version**: 0.27.0\n", encoding="utf-8")
+        changelog = tmp_path / "CHANGELOG.md"
+        changelog.write_text("# Changelog\n", encoding="utf-8")
+
+        run_calls = []
+        def fake_run(cmd, check=False):
+            run_calls.append(cmd)
+            result = MagicMock()
+            result.stdout = ""
+            # git diff --cached --quiet returns 1 when changes are staged
+            if cmd[:4] == ["git", "diff", "--cached", "--quiet"]:
+                result.returncode = 1
+            else:
+                result.returncode = 0
+            return result
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "_run_script", lambda *a: None)
+
+        data = {"version_bump": {"new_version": "0.28.0", "items_included": []}}
+        cycle_post._do_version_bump(data, "dm")
+
+        # Should have commit and push calls
+        commit_calls = [c for c in run_calls if c[:2] == ["git", "commit"]]
+        push_calls = [c for c in run_calls if c[:2] == ["git", "push"]]
+        assert len(commit_calls) == 1, f"Expected 1 commit, got {commit_calls}"
+        assert len(push_calls) >= 1, f"Expected push calls, got {push_calls}"
