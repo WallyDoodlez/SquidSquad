@@ -437,6 +437,20 @@ The harness crashes while agents are running (in visible terminals). On restart,
 - [ ] All existing tests updated or replaced for new architecture
 - [ ] Upgrade path documented: stop agents, deploy, clean stale files, recompose, start via harness
 
+## Instruction Layer Mapping
+
+All instruction changes are **L1 (common sub-skills)** — they apply to every project using the harness. No L4 project-specific instructions needed. Harness config (port, backoff, crash policy) lives in `config.md` which already has a `## Harness` section.
+
+| Layer | Action | File |
+|-------|--------|------|
+| L1 | **Rewrite** `agent-lifecycle.md` — harness owns lifecycle, zero sentinel files, API-based intent, no wrapper scripts | `references/sub-skills/common/agent-lifecycle.md` |
+| L1 | **Update** `cycle-runner.md` — cycle_post checks `GET /agents/{role}` for intent, port discovery, safe default on API failure | `references/sub-skills/common/cycle-runner.md` |
+| L1 | **Delete** `self-restart.md` — harness owns restart, agents don't self-restart | `references/sub-skills/common/self-restart.md` |
+| L1 | **Update** `health-check.md` / `boot-remote-agents.md` — PM queries harness `/agents/{role}/health` API instead of reading .health files | `references/sub-skills/common/health-check.md` and/or `boot-remote-agents.md` |
+| Config | Harness port, crash backoff max, heartbeat interval | `.squidsquad/config.md` `## Harness` section (already exists) |
+
+After sub-skill changes: `compose.py deploy-all` to recompose all agent CLAUDE.md files.
+
 ## Implementation Sequence
 
 1. Add intent API to harness (extend existing `GET /agents/{role}` — already exposes intent)
