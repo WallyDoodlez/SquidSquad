@@ -1,13 +1,19 @@
 {
+<<<<<<< Updated upstream
   "harness_pid": 376404,
   "start_time": 1777770570.7561154,
+=======
+  "harness_pid": 401508,
+  "start_time": 1777775200.4656172,
+>>>>>>> Stashed changes
   "port": 7373,
   "agents": {
     "skill": {
-      "intent": "restarting",
-      "status": "starting",
+      "intent": "stopping",
+      "status": "unknown",
       "boot_time": null,
-      "clone_path": "/tmp/clone"
+      "clone_path": "",
+      "claude_pid": null
     }
   }
 }
