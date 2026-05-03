@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-03 17:32
+
+- **Files scanned**: tests/test_config_functions.py, tests/test_tracker.py, tests/test_state_bus.py
+- **Findings**: #5366 (test_config_functions.py SAMPLE_CONFIG missing ~20 newer FIELD_MAP entries — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-03 16:02
 
 - **Files scanned**: references/scripts/git_ops.py, references/scripts/reboot_agent.py, references/scripts/scan_index.py
