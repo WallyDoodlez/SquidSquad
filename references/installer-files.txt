@@ -224,8 +224,6 @@ references/sub-skills/roles/qa/web/domain-context.md
 references/presets/design/manifest.yaml
 references/presets/software-dev/manifest.yaml
 references/templates/forgejo-compose.yaml
-references/templates/start-role.ps1
-references/templates/start-role.sh
 references/vault-templates/archives-template.md
 references/vault-templates/areas-template.md
 references/vault-templates/BRIEFING.md

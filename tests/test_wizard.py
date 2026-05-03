@@ -860,21 +860,17 @@ class TestScaffoldInstallDesignPreset:
         roles = sorted(a["role"] for a in summary["agents"])
         assert roles == ["dm", "pm"]
 
-    def test_boot_scripts_generated(self, tmp_path):
-        """scaffold_install generates start-[role].sh and .ps1 for each agent (#2399)."""
+    def test_boot_scripts_not_generated(self, tmp_path):
+        """scaffold_install no longer generates wrapper scripts (#4966)."""
         spec = _design_preset_spec()
         wizard.scaffold_install(spec, tmp_path)
         squid = tmp_path / ".squidsquad"
+        # Wrapper scripts eliminated — boot_role is a no-op (#4966)
         for role in ("pm", "dm"):
-            sh_script = squid / f"start-{role}.sh"
-            ps1_script = squid / f"start-{role}.ps1"
-            assert sh_script.is_file(), f"start-{role}.sh not generated"
-            assert ps1_script.is_file(), f"start-{role}.ps1 not generated"
-            sh_content = sh_script.read_text(encoding="utf-8")
-            ps1_content = ps1_script.read_text(encoding="utf-8")
-            assert "{{ROLE}}" not in sh_content, f"raw placeholder in start-{role}.sh"
-            assert "{{ROLE}}" not in ps1_content, f"raw placeholder in start-{role}.ps1"
-            assert role in sh_content, f"start-{role}.sh missing role name"
+            assert not (squid / f"start-{role}.sh").exists(), \
+                f"start-{role}.sh should not be generated (#4966)"
+            assert not (squid / f"start-{role}.ps1").exists(), \
+                f"start-{role}.ps1 should not be generated (#4966)"
 
 
 class TestScaffoldInstallDevVariants:
