@@ -142,9 +142,15 @@ def cmd_reboot(roles, force=False):
             print(f"  [{role}] Force reboot -- killing process...")
             try:
                 import reboot_agent
-                reboot_agent._kill_agent(role)
-            except (ImportError, AttributeError):
-                pass
+                clone_path = boot_remote._get_clone_path(role)
+                claude_pid, alive = reboot_agent._read_claude_pid(
+                    Path(clone_path), role
+                )
+                if alive and claude_pid:
+                    reboot_agent._kill_process(claude_pid)
+                    print(f"  [{role}] Killed PID {claude_pid}")
+            except (ImportError, Exception) as e:
+                print(f"  [{role}] Kill failed: {e}")
             time.sleep(2)
             r = boot_remote.boot_agent(role)
             status = "OK" if r["success"] else "FAIL"
@@ -198,7 +204,7 @@ def main():
 
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--reboot", nargs="?", const=True,
-                        help="Graceful restart (write .stop-after-cycle)")
+                        help="Graceful restart via harness API")
     action.add_argument("--stop", nargs="?", const=True,
                         help="Stop agent(s) permanently (write .stop)")
 

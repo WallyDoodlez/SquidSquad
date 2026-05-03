@@ -612,10 +612,7 @@ def main():
     if role == "dm":
         _do_version_bump(data, role)
 
-    # 7. Legacy restart sentinel (deprecated — backward compat for one version)
-    restarting = _do_restart_sentinel(data, role)
-
-    # 8. Cleanup cycle-output.json
+    # 7. Cleanup cycle-output.json
     try:
         output_path.unlink()
     except OSError:
@@ -625,10 +622,9 @@ def main():
     # Queries harness API for intent, checks context pressure. Exit 42 = harness respawns.
     stop_for_restart = _do_stop_after_cycle_check(data, role)
 
-    # 10. Status bar
-    if stop_for_restart or restarting:
-        reason = data.get("restart_reason", "sentinel")
-        _write_status_bar(role, "restarting", f"Restart — {reason}")
+    # 9. Status bar
+    if stop_for_restart:
+        _write_status_bar(role, "restarting", "Restart — harness intent or context pressure")
     else:
         _write_status_bar(role, "idle", "")
 
