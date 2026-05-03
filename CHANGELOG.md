@@ -21,23 +21,6 @@
 
 ## [0.30.0] — 2026-05-01
 
-### Shipped
-- #4123
-- #4124
-- #4125
-- #4200
-- #4201
-- #4364
-- #4365
-- #4435
-- #4436
-- #4455
-- #4456
-- #4457
-- #4458
-- #4459
-- #4518
-
 ### Added
 - #4455 — PM agent now has project-specific instructions (24 instructions + 15 SOUL items) for consistent behavior across sessions
 - #4456 — Dev/Skill agent now has project-specific instructions (16 instructions + 11 SOUL items) for consistent behavior across sessions
@@ -59,17 +42,6 @@
 
 ## [0.29.0] — 2026-04-29
 
-### Shipped
-- #3955
-- #4038
-- #4050
-- #4051
-- #4052
-- #4081
-- #4092
-- #4093
-- #4094
-
 ### Fixed
 - #3955 — Sub-skill templates updated to reflect the new agent lifecycle model — self-restart, agent-lifecycle, and boot-remote-agents no longer reference obsolete reboot flow
 - #4038 — tracker.py no longer auto-closes issues on pending-test transition — only shipped transitions close issues
@@ -82,29 +54,6 @@
 - #4094 — Fixed 3 chronic test failures (orphan sub-skill reference, PR merge test, stale deepseek model) — 1126/1126 clean green
 
 ## [0.28.0] — 2026-04-28
-
-### Shipped
-- #2183
-- #2195
-- #2272
-- #2343
-- #2344
-- #2495
-- #3302
-- #3360
-- #3416
-- #3417
-- #3664
-- #3711
-- #3712
-- #3735
-- #3747
-- #3800
-- #3807
-- #3813
-- #3814
-- #3848
-- #3849
 
 ### Added
 - #2183 — Simplified agent lifecycle with singleton wrapper, safe restart, and PM/DM control — agents never get killed mid-work
