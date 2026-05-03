@@ -270,11 +270,11 @@ sequenceDiagram
     O->>H: python harness.py
     H->>H: gh auth check
     H->>D: Read .harness-state.json
-    D-->>H: Agent 1: PID 1234, intent=running
-    D-->>H: Agent 2: PID 5678, intent=running
+    D-->>H: Agent 1: PID 1234, intent=running, boot_time=1746200000
+    D-->>H: Agent 2: PID 5678, intent=running, boot_time=1746200001
 
-    H->>H: Check PID 1234 — dead (old PID from before reboot)
-    H->>H: Check PID 5678 — dead
+    H->>H: Check PID 1234 — dead (or recycled: creation time mismatch)
+    H->>H: Check PID 5678 — dead (or recycled: creation time mismatch)
     H->>H: Both had intent=running — respawn both
 
     H->>A1: Spawn Agent 1 in terminal
@@ -304,6 +304,7 @@ sequenceDiagram
 | Crash retry logic | Wrapper (one retry) | **Moved to harness with configurable policy** |
 | Respawn loop | Template wrapper | **Moved to harness** |
 | Heartbeat background job | Wrapper | **Eliminated — harness monitors process directly** |
+| .booting sentinel | boot_remote.py | **Eliminated — harness internal mutex replaces concurrent spawn prevention** |
 
 **Zero sentinel files in target architecture.**
 
@@ -321,8 +322,9 @@ sequenceDiagram
 
 - Spawn claude via terminal (platform-agnostic: wt.exe, Terminal.app, tmux, or PTY — dev discretion)
 - Thin launcher writes claude PID to known location, harness reads it
-- Track PIDs in `.squidsquad/.harness-state.json` (durable across harness restarts)
-- Monitor process liveness directly (PID check, no heartbeat file)
+- Track PIDs + boot_time in `.squidsquad/.harness-state.json` (durable across harness restarts)
+- Monitor process liveness directly (PID check + creation time validation, no heartbeat file)
+- PID recycling detection: compare stored boot_time against actual process creation time. Mismatch = recycled PID, treat as dead.
 - Detect death -> check intent -> act (respawn or stop)
 
 ### 3. Intent State Machine
@@ -332,8 +334,12 @@ Per-agent states: `running`, `stopping`, `restarting`, `stopped`, `crashed`
 Transitions:
 - `/stop` -> intent=stopping -> cycle_post queries API -> sees stopping -> exits 42 -> harness: intent=stopped
 - `/restart` -> intent=restarting -> cycle_post queries API -> sees restarting -> exits 42 -> harness: respawn -> intent=running
-- crash detected (process dies, intent was running) -> harness: respawn -> intent=running
-- context pressure (cycle_post detects locally) -> exits 42 -> harness: respawn -> intent=running
+- crash detected (process dies, intent was running) -> harness: apply backoff -> respawn -> intent=running
+- context pressure (cycle_post detects locally) -> exits 42 -> harness checks intent:
+  - intent=running -> respawn (context pressure recovery)
+  - intent=stopping -> do NOT respawn (operator intent wins)
+
+**Priority rule**: Operator intent always wins over automatic signals. If intent=stopping or intent=stopped at the moment of death, harness never respawns — regardless of exit code.
 
 ### 4. Intent API (replaces .stop-after-cycle)
 
@@ -359,9 +365,9 @@ HTTP timeout: 5 seconds.
 
 ### 7. Ctrl+C Graceful Shutdown
 
-- First Ctrl+C -> graceful stop (set intent=stopping, wait for cycle end)
+- First Ctrl+C -> graceful stop (set intent=stopping for all agents, wait for cycle end). When all agents have exited, harness exits cleanly.
 - Second Ctrl+C within 5s -> warn: "Harness will exit. Agents keep running and can be recovered on restart."
-- Third Ctrl+C -> harness exits only (agents survive, recoverable via Scenario 5)
+- Third Ctrl+C -> harness exits only (agents survive in their terminals, recoverable via Scenario 5)
 
 ### 8. Crash Recovery
 
@@ -407,8 +413,9 @@ The harness crashes while agents are running (in visible terminals). On restart,
 - [ ] compose.py boot subcommand generates thin launcher (PID-reporting one-shot) not full wrapper
 - [ ] Harness spawns agents via terminal with thin launcher (visible terminals)
 - [ ] Thin launcher writes claude PID to known location, harness reads it after spawn
-- [ ] ALL sentinel files eliminated: .health, .pid, .claude-pid, .stop, .stop-after-cycle, .restart
-- [ ] Harness tracks per-agent PIDs and intents in `.squidsquad/.harness-state.json`
+- [ ] ALL sentinel files eliminated: .health, .pid, .claude-pid, .stop, .stop-after-cycle, .restart, .booting
+- [ ] Harness tracks per-agent PIDs, intents, and boot_time in `.squidsquad/.harness-state.json`
+- [ ] Harness validates stored PIDs against process creation time (PID recycling detection)
 - [ ] Intent state machine: running/stopping/restarting/stopped/crashed transitions correct
 - [ ] cycle_post.py queries `GET /agents/{role}` for intent instead of reading .stop-after-cycle file
 - [ ] cycle_post.py safe default on API failure: continue running (exit 0)
@@ -418,7 +425,8 @@ The harness crashes while agents are running (in visible terminals). On restart,
 - [ ] `GET /agents/{role}/health` returns process status, last cycle, phase, context pressure
 - [ ] `GET /agents/{role}/config` exposes agent config sync state
 - [ ] Ctrl+C escalation: single=graceful stop, double=warn, triple=harness exits (agents survive)
-- [ ] Context pressure exit (42) from cycle_post triggers harness reboot
+- [ ] Context pressure exit (42) from cycle_post triggers harness reboot ONLY when intent=running (operator intent wins)
+- [ ] .harness-state.json handles first-run (file doesn't exist = empty state, no error)
 - [ ] Pre-flight split: harness does gh auth at startup, cycle_pre.py does git pull/branch per cycle
 - [ ] health_check.py updated to query harness API instead of reading .health files (or deprecated)
 - [ ] boot_remote.py updated to call harness API instead of spawning terminals (or deprecated)
@@ -437,7 +445,7 @@ The harness crashes while agents are running (in visible terminals). On restart,
 4. Implement harness crash recovery (read state file on startup, check PIDs)
 5. Add harness agent spawn via terminal + thin launcher (PID report back)
 6. Implement Ctrl+C escalation in harness
-7. Update cycle_post.py: replace .stop-after-cycle file check with `GET /agents/{role}` API call
+7. Update cycle_post.py: API-first intent check with .stop-after-cycle file fallback (dual-write transition for one version)
 8. Add port discovery helper to cycle_post.py (default 7373 + parent-dir walk)
 9. Split pre-flight: move gh auth to harness startup, ensure cycle_pre handles git
 10. Add `/agents/{role}/health` and `/agents/{role}/config` endpoints
@@ -447,3 +455,4 @@ The harness crashes while agents are running (in visible terminals). On restart,
 14. Update sub-skills: agent-lifecycle, self-restart, cycle-runner
 15. Recompose all agents
 16. Write upgrade documentation
+17. (Next version) Remove .stop-after-cycle file fallback from cycle_post.py — API-only
