@@ -726,6 +726,91 @@ def _print_banner(port: int):
 
 
 # ---------------------------------------------------------------------------
+# Ctrl+C escalation (#4966)
+# ---------------------------------------------------------------------------
+
+class CtrlCHandler:
+    """Three-stage Ctrl+C escalation for graceful shutdown (#4966).
+
+    1st Ctrl+C: graceful stop (set all agents intent=stopping, wait for cycle end)
+    2nd Ctrl+C within 5s: warn about force kill
+    3rd Ctrl+C: force kill all agent processes
+    """
+
+    def __init__(self):
+        self._press_count = 0
+        self._last_press = 0.0
+        self._shutting_down = False
+
+    def handle(self, signum, frame):
+        now = time.time()
+
+        # Reset counter if >5s since last press
+        if now - self._last_press > 5:
+            self._press_count = 0
+        self._last_press = now
+        self._press_count += 1
+
+        if self._press_count == 1:
+            self._graceful_stop()
+        elif self._press_count == 2:
+            _log("⚠️  Press Ctrl+C again to FORCE KILL all agents.")
+        else:
+            self._force_kill()
+
+    def _graceful_stop(self):
+        if self._shutting_down:
+            return
+        self._shutting_down = True
+        _log("Graceful shutdown — setting all agents to stopping...")
+
+        roles = []
+        try:
+            roles = boot_remote._get_all_roles()
+        except Exception:
+            pass
+
+        for role in roles:
+            agent = state.get_agent(role)
+            if agent and agent.status == "running":
+                agent.intent = AgentState.INTENT_STOPPING
+                state.set_agent(role, agent)
+                _log(f"  {role}: intent=stopping")
+        state.save_state()
+
+        _log("Agents will exit after current cycle. Ctrl+C again to force.")
+        # Let uvicorn handle the actual shutdown
+        raise KeyboardInterrupt
+
+    def _force_kill(self):
+        _log("FORCE KILL — terminating all agent processes...")
+
+        roles = []
+        try:
+            roles = boot_remote._get_all_roles()
+        except Exception:
+            pass
+
+        for role in roles:
+            try:
+                clone_path = boot_remote._get_clone_path(role)
+                claude_pid, alive = reboot_agent._read_claude_pid(Path(clone_path), role)
+                if alive and claude_pid:
+                    reboot_agent._kill_process(claude_pid)
+                    _log(f"  {role}: killed PID {claude_pid}")
+            except Exception as e:
+                _log(f"  {role}: kill failed — {e}")
+
+        _log("All agents force-killed. Exiting.")
+        # Clean up and exit
+        try:
+            HARNESS_PORT_FILE.unlink(missing_ok=True)
+        except OSError:
+            pass
+        os._exit(1)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -747,6 +832,10 @@ def main():
     state.port = actual_port
     _print_banner(actual_port)
 
+    # Install Ctrl+C escalation handler (#4966)
+    ctrl_c = CtrlCHandler()
+    signal.signal(signal.SIGINT, ctrl_c.handle)
+
     # Run uvicorn
     try:
         uvicorn.run(
@@ -756,7 +845,7 @@ def main():
             log_level="warning",  # Suppress uvicorn access logs (harness has its own logging)
         )
     except KeyboardInterrupt:
-        print("\nHarness stopped by Ctrl+C.")
+        _log("Harness stopped.")
     finally:
         # Ensure port file cleanup
         try:

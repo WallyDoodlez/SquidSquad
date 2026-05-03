@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""SquidSquad Thin Launcher — one-shot agent bootstrapper (#4966).
+
+Replaces the wrapper scripts (start-{role}.ps1/.sh). Starts claude in the
+agent's clone directory, writes the PID for harness monitoring, and waits
+for claude to exit. No respawn loop, no heartbeat, no sentinel file checks.
+
+The harness owns all lifecycle decisions (restart, stop, crash recovery).
+
+Usage:
+    python references/scripts/thin_launcher.py <role>
+
+Environment:
+    SQUIDSQUAD_ROLE is set automatically by this script before starting claude.
+
+Exit codes:
+    0  — claude exited normally
+    42 — claude exited with code 42 (context pressure / intent exit)
+    1  — error (could not start claude)
+"""
+
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+
+
+def _write_pid(clone_path, role, pid):
+    """Write claude PID for harness monitoring. Atomic write."""
+    pid_file = Path(clone_path) / ".squidsquad" / role / ".claude-pid"
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+    tmp = pid_file.with_suffix(".tmp")
+    tmp.write_text(str(pid), encoding="utf-8")
+    tmp.replace(pid_file)
+
+
+def _clear_pid(clone_path, role):
+    """Remove PID file on exit."""
+    pid_file = Path(clone_path) / ".squidsquad" / role / ".claude-pid"
+    try:
+        pid_file.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: thin_launcher.py <role>", file=sys.stderr)
+        return 1
+
+    role = sys.argv[1]
+
+    # Resolve clone path — CWD should be the clone root (set by harness/boot_remote)
+    clone_path = os.getcwd()
+
+    # Set environment
+    env = os.environ.copy()
+    env["SQUIDSQUAD_ROLE"] = role
+
+    print(f"[thin-launcher] Starting claude for {role} in {clone_path}")
+
+    try:
+        proc = subprocess.Popen(
+            ["claude"],
+            cwd=clone_path,
+            env=env,
+        )
+    except FileNotFoundError:
+        print("[thin-launcher] ERROR: 'claude' not found on PATH", file=sys.stderr)
+        return 1
+
+    # Write PID for harness monitoring
+    _write_pid(clone_path, role, proc.pid)
+    print(f"[thin-launcher] claude PID: {proc.pid}")
+
+    # Wait for claude to exit — keeps terminal open
+    try:
+        exit_code = proc.wait()
+    except KeyboardInterrupt:
+        # Ctrl+C in terminal — let claude handle it
+        try:
+            exit_code = proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            exit_code = 1
+
+    # Clean up PID file
+    _clear_pid(clone_path, role)
+
+    print(f"[thin-launcher] claude exited with code {exit_code}")
+    return exit_code
+
+
+if __name__ == "__main__":
+    sys.exit(main())
