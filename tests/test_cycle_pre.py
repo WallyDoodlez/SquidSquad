@@ -1064,6 +1064,85 @@ class TestEnforceBranch:
         assert len(checkout_calls) == 0
 
 
+class TestBranchGuardrail:
+    """#5208: cycle_pre detects wrong branch and auto-corrects."""
+
+    def test_returns_correction_when_on_wrong_branch(self, monkeypatch):
+        """Returns branch_correction dict when on a feature branch with no active task."""
+        checkout_targets = []
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0
+            if isinstance(cmd, list) and "branch" in cmd and "--show-current" in cmd:
+                r.stdout = "squidsquad/task/5126\n"
+            elif isinstance(cmd, list) and "checkout" in cmd:
+                checkout_targets.append(cmd[-1])
+                r.stdout = ""
+            else:
+                r.stdout = ""
+            r.stderr = ""
+            return r
+
+        monkeypatch.setattr(cycle_pre, "_config_get",
+                            lambda f: {"branch-workflow": "yes", "working-branch": "main"}.get(f, ""))
+        monkeypatch.setattr(cycle_pre, "_run", fake_run)
+
+        ws = {"task": "none", "status": "none"}
+        result = cycle_pre._enforce_branch("skill", ws)
+
+        assert result is not None
+        assert result["corrected"] is True
+        assert result["was_on"] == "squidsquad/task/5126"
+        assert result["switched_to"] == "main"
+        assert "main" in checkout_targets
+
+    def test_returns_none_when_on_correct_branch(self, monkeypatch):
+        """Returns None when already on working branch."""
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = "main\n"
+            r.stderr = ""
+            return r
+
+        monkeypatch.setattr(cycle_pre, "_config_get",
+                            lambda f: {"branch-workflow": "yes", "working-branch": "main"}.get(f, ""))
+        monkeypatch.setattr(cycle_pre, "_run", fake_run)
+
+        ws = {"task": "none", "status": "none"}
+        result = cycle_pre._enforce_branch("skill", ws)
+
+        assert result is None
+
+    def test_uses_configured_working_branch(self, monkeypatch):
+        """Uses config value, not hardcoded 'main'."""
+        checkout_targets = []
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0
+            if isinstance(cmd, list) and "branch" in cmd and "--show-current" in cmd:
+                r.stdout = "squidsquad/task/999\n"
+            elif isinstance(cmd, list) and "checkout" in cmd:
+                checkout_targets.append(cmd[-1])
+                r.stdout = ""
+            else:
+                r.stdout = ""
+            r.stderr = ""
+            return r
+
+        monkeypatch.setattr(cycle_pre, "_config_get",
+                            lambda f: {"branch-workflow": "yes", "working-branch": "develop"}.get(f, ""))
+        monkeypatch.setattr(cycle_pre, "_run", fake_run)
+
+        ws = {"task": "none", "status": "none"}
+        result = cycle_pre._enforce_branch("skill", ws)
+
+        assert result["switched_to"] == "develop"
+        assert "develop" in checkout_targets
+
+
 class TestConfigVersionValidation:
     """#5136: Post-pull config.md version regression detection."""
 

@@ -125,15 +125,17 @@ def _get_branch_name(role, number):
 
 
 def _enforce_branch(role, working_state):
-    """Ensure the agent is on the correct branch before pull (#4942).
+    """Ensure the agent is on the correct branch before pull (#4942, #5208).
 
     If working-state has an active task, call task-begin to ensure the
     correct feature branch. Otherwise, ensure the agent is on the
-    working branch (main).
+    configured working branch.
+
+    Returns a branch_correction dict if a correction was made, or None.
     """
     branch_workflow = _config_get("branch-workflow").lower() in ("yes", "true", "1")
     if not branch_workflow:
-        return
+        return None
 
     task = working_state.get("task", "none")
     status = working_state.get("status", "none")
@@ -146,13 +148,22 @@ def _enforce_branch(role, working_state):
             if result.returncode != 0:
                 # Non-fatal — log and continue on current branch
                 pass
+        return None
     else:
-        # No active task — ensure on working branch
+        # No active task — ensure on configured working branch (#5208)
         working = _config_get("working-branch") or "main"
         current = _run(["git", "branch", "--show-current"], check=False)
         current_branch = current.stdout.strip() if current.returncode == 0 else ""
         if current_branch and current_branch != working:
+            print(f"  WARNING: Agent on branch '{current_branch}', expected '{working}'. "
+                  f"Switching automatically (#5208).")
             _run(["git", "checkout", working], check=False)
+            return {
+                "corrected": True,
+                "was_on": current_branch,
+                "switched_to": working,
+            }
+        return None
 
 
 def _validate_config_version():
@@ -868,8 +879,8 @@ def main():
     # 1a. Read working state early to determine correct branch (#4942)
     working_state = _read_working_state(role)
 
-    # 1b. Enforce correct branch before pull (#4942)
-    _enforce_branch(role, working_state)
+    # 1b. Enforce correct branch before pull (#4942, #5208)
+    branch_correction = _enforce_branch(role, working_state)
 
     # 1c. Pull
     pull_result = _do_pull()
@@ -903,6 +914,10 @@ def main():
         "working_state": working_state,
     }
     cycle_input.update(role_input)
+
+    # Add branch correction if one was made (#5208)
+    if branch_correction:
+        cycle_input["branch_correction"] = branch_correction
 
     # Update quiet_cycle_counter from working state for skill
     if role == "skill":
