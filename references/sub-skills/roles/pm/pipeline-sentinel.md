@@ -118,6 +118,6 @@ Parse the JSON output. If the assigned agent's health is `stalled`, `stopped`, o
   python references/scripts/tracker.py transition [NUMBER] in-progress approved --role pm-lead
   python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "Agent [role] is [health status]. Returning task to approved for re-pickup."
   ```
-- **Tier 2**: File bug if agent has been unhealthy for >1 hour — `"Agent [role] health is [status] but task #[NUMBER] was in-progress. Boot wrapper may need investigation."`
+- **Tier 2**: File bug if agent has been unhealthy for >1 hour — `"Agent [role] health is [status] but task #[NUMBER] was in-progress. Harness may need investigation."`
 
 If Branch Workflow is `no`, skip checks 1, 3, 4a, and 4b (PR-related) silently. All other checks run regardless.
