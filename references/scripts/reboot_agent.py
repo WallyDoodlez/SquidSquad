@@ -66,28 +66,13 @@ def _read_current_state(clone_path, role):
 
 
 def _spawn_wrapper(role, clone_path):
-    """Spawn a new wrapper for a role using boot_remote logic.
+    """Spawn agent via boot_remote.boot_agent() (#5344).
 
-    Returns (success, message).
+    Delegates to boot_remote which prefers thin launcher (#4966) and
+    falls back to legacy wrapper scripts. Returns (success, message).
     """
-    boot_script, script_type = boot_remote._find_boot_script(clone_path, role)
-    if boot_script is None:
-        return False, (
-            f"no boot script found at {clone_path}/.squidsquad/start-{role}.[sh|ps1]\n"
-            f"Manual boot: cd {clone_path} && claude -p .squidsquad/{role}/CLAUDE.md"
-        )
-
-    # Verify PID is truly dead before spawning (double-start prevention)
-    pid_file = Path(clone_path) / ".squidsquad" / role / ".pid"
-    if pid_file.exists():
-        try:
-            pid = int(pid_file.read_text(encoding="utf-8").strip())
-            if _is_process_alive(pid):
-                return False, f"PID {pid} still alive — cannot spawn (would double-start)"
-        except (ValueError, OSError):
-            pass
-
-    return boot_remote._spawn_terminal(clone_path, role, boot_script, script_type)
+    result = boot_remote.boot_agent(role)
+    return result["success"], result["message"]
 
 
 def _read_claude_pid(clone_path, role):

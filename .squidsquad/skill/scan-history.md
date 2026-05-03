@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-03 16:02
+
+- **Files scanned**: references/scripts/git_ops.py, references/scripts/reboot_agent.py, references/scripts/scan_index.py
+- **Findings**: #5344 (reboot_agent.py _spawn_wrapper() wrapper-centric dead code post-#4966 — medium)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-02 20:07
 
 - **Files scanned**: references/scripts/model_router.py, references/scripts/harness.py, references/scripts/squidsquad_cli.py, references/scripts/boot_remote.py, references/scripts/cycle_post.py
