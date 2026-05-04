@@ -426,6 +426,11 @@ For each issue:
 
 0. **Blocked check**: If the item has a `blocked:human-action` label, skip it. Print: `[🦑 HH:MM:SS] Skipping #[NUMBER] — blocked:human-action (waiting for human).` Do not change its status. Move to the next item.
 1. Read details: `gh issue view [NUMBER] --json title,body,comments`
+1b. **Consult the vault** (#5572) — search for relevant context before verifying:
+   ```bash
+   grep -rl "[keyword from issue]" .squidsquad/vault/ --include="*.md" | head -5
+   ```
+   Check for: decisions that affect expected behavior, patterns the fix should follow, learnings from similar past issues, and human quality preferences (`[[human-profile]]`). This prevents false passes on code that violates vault-documented constraints.
 2. **Branch checkout** (#3296): Check out the task's feature branch before verification:
    ```bash
    python references/scripts/git_ops.py task-begin [role] [number]
