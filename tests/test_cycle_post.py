@@ -634,3 +634,79 @@ class TestBranchPushFallback:
         pr_calls = [c for c in calls
                     if isinstance(c, tuple) and any("pr-create" in str(a) for a in c)]
         assert len(pr_calls) == 1, f"Expected pr-create call, got: {calls}"
+
+
+# ---------------------------------------------------------------------------
+# _verify_remote_branch — #5444, #5526
+# ---------------------------------------------------------------------------
+
+class TestVerifyRemoteBranch:
+    """#5526: _verify_remote_branch must resolve {role} placeholder correctly."""
+
+    def test_resolves_role_placeholder(self, monkeypatch):
+        """When branch-pattern has {role}, it resolves to actual role name."""
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", side_effect=lambda f: {
+                 "branch-workflow": "yes",
+                 "branch-pattern": "squidsquad/{role}/{number}",
+             }.get(f, "")):
+
+            def fake_run(cmd, **kwargs):
+                r = MagicMock()
+                r.returncode = 0
+                r.stdout = "abc123\trefs/heads/squidsquad/skill/100\n"
+                r.stderr = ""
+                return r
+
+            monkeypatch.setattr(cycle_post, "_run", fake_run)
+            result = cycle_post._verify_remote_branch(100, role="skill")
+            assert result is True
+
+    def test_no_wildcard_in_branch_name(self, monkeypatch):
+        """Branch name must not contain '*' — use actual role name (#5526)."""
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = ""
+            r.stderr = ""
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", side_effect=lambda f: {
+                 "branch-workflow": "yes",
+                 "branch-pattern": "squidsquad/{role}/{number}",
+             }.get(f, "")):
+            cycle_post._verify_remote_branch(100, role="skill")
+
+        ls_remote_cmd = calls[0]
+        assert "squidsquad/skill/100" in str(ls_remote_cmd)
+        assert "*" not in str(ls_remote_cmd)
+
+    def test_returns_true_when_workflow_disabled(self):
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", side_effect=lambda f: {
+                 "branch-workflow": "no",
+             }.get(f, "")):
+            assert cycle_post._verify_remote_branch(100, role="skill") is True
+
+    def test_returns_none_on_network_failure(self, monkeypatch):
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 1
+            r.stdout = ""
+            r.stderr = "fatal: unable to access"
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", side_effect=lambda f: {
+                 "branch-workflow": "yes",
+                 "branch-pattern": "squidsquad/task/{number}",
+             }.get(f, "")):
+            assert cycle_post._verify_remote_branch(100) is None
