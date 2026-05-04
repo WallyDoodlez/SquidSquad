@@ -22,7 +22,7 @@ SquidSquad is built as a vertical stack of six layers. Each layer has a single r
 ├══════════════════════════════════════════════════════════════╡
 │  L3  Behavior ★      CLAUDE.md — Ralph Loop, role logic      │  ← the creative core
 ├══════════════════════════════════════════════════════════════╡
-│  L2  Orchestration   /loop, boot scripts, wrapper, signals   │  ← timing & lifecycle
+│  L2  Orchestration   /loop, harness, thin launcher            │  ← timing & lifecycle
 ├──────────────────────────────────────────────────────────────┤
 │  L1  Transport       cycle_pre/post, git_ops, tracker.py     │  ← mechanical plumbing
 └──────────────────────────────────────────────────────────────┘
@@ -162,7 +162,7 @@ A single agent cycle flows through all six layers:
  │    │
  │    └── Agent writes vault notes ──► L6 Memory
  │
- ├─ L2 Orchestration ── /loop triggers next cycle, wrapper monitors signals
+ ├─ L2 Orchestration ── /loop triggers next cycle, harness monitors agents
  │
  └─ L1 Transport ────── Mechanical operations bookend the creative work
 ```
