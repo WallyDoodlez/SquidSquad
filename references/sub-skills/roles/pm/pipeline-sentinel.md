@@ -20,7 +20,7 @@ gh pr list --search "squidsquad/" --state open --json number,title,headRefName,m
 
 For each PR with `mergeable` = `CONFLICTING`:
 - Parse the issue number from the branch name (e.g., `squidsquad/skill/475` → `#475`)
-- Comment on the issue: `python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "PR #[PR] has merge conflicts. Dev agent: rebase onto main."`
+- Comment on the issue: `python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "PR #[PR] has merge conflicts. Dev agent: merge main into your branch and re-push."`
 - If the task is at `pending-ship` or `pending-test`, transition back to `in-progress`:
   ```bash
   python references/scripts/tracker.py transition [NUMBER] [current-status] in-progress --role pm-lead

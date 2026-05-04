@@ -84,7 +84,7 @@ PM's role in the pipeline is **detect, report, nudge, escalate** — never execu
 
 **PM does**:
 - Detect PR conflicts, stalls, orphaned branches via pipeline sentinel
-- Comment on issues routing to the responsible agent ("Dev agent: rebase onto main")
+- Comment on issues routing to the responsible agent ("Dev agent: merge main into your branch")
 - Nudge agents that haven't acted within threshold
 - Convert draft PRs to ready (metadata change, not code)
 - Escalate to human when agents are unresponsive after 2 nudges

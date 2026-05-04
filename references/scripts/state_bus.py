@@ -257,7 +257,7 @@ def commit_and_push(message, role="unknown"):
         if result.returncode == 0:
             return True
         # Pull and retry
-        _run(["git", "pull", "--rebase", "origin", state_branch],
+        _run(["git", "pull", "origin", state_branch],
              cwd=cwd, check=False)
 
     print(f"WARNING: State push failed after 3 attempts", file=sys.stderr)
