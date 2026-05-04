@@ -457,7 +457,7 @@ When the user says `/squidsquad-status` (or "squad status", "show me the squad",
 
 1. Read `.squidsquad/config.md` to get the list of dev agents and the loop interval.
 2. For each agent (dev agents + PM + DM if `.squidsquad/dm/` exists):
-   - Check health: read `.squidsquad/[role]/.health` if it exists. Values are `booting`, `dead`, `error|reason`, or an **epoch timestamp** (heartbeat — if less than 10s old, agent is alive; if stale, agent is dead). The wrapper writes the epoch every 5 seconds while the agent runs. Fall back to `git log --oneline --since="[2×interval] minutes ago" --grep="^[agent]:"` if no `.health` file — if commits found, show as `active`; if prior commits exist but none recent, show as `stalled`; else `unknown`.
+   - Check health: read `.squidsquad/[role]/.health` if it exists. Values are `booting`, `dead`, `error|reason`, or an **epoch timestamp** (heartbeat — if less than 10s old, agent is alive; if stale, agent is dead). The harness writes the epoch every 5 seconds while the agent runs. Fall back to `git log --oneline --since="[2×interval] minutes ago" --grep="^[agent]:"` if no `.health` file — if commits found, show as `active`; if prior commits exist but none recent, show as `stalled`; else `unknown`.
    - Show last commit time: `git log --oneline --grep="^[agent]:" -1 --format="%ar"`
 3. For each dev agent, query GitHub Issues via `python references/scripts/tracker.py`:
    - `python references/scripts/tracker.py list-issues [role]` — count and list open issues
