@@ -8,7 +8,7 @@
 ## Remaining Steps
 
 ## Key Decisions
-- PM clone recovery from stuck rebase via abort+reset
-- #5619 was false alarm (local stale state)
+- Phase 2 #4709 has 8 refinements applied + 5-step deployment runbook
+- Pending: Phase 2 execution approval, v1.0.0 launch (#3), #5620 stuck-rebase L3
 
-## Quiet cycle counter: 0
+## Quiet cycle counter: 1
