@@ -180,6 +180,30 @@ def _read_pid_file(squid_dir):
         return None
 
 
+def _read_claude_pid_file(squid_dir):
+    """Read PID from .squidsquad/{role}/.claude-pid. Returns int or None.
+
+    .claude-pid is written by the thin launcher (#4966) and contains the
+    PID of the claude process itself (not the wrapper).
+    """
+    pid_file = squid_dir / ".claude-pid"
+    if not pid_file.exists():
+        return None
+    try:
+        content = pid_file.read_text(encoding="utf-8").strip()
+        return int(content) if content else None
+    except (ValueError, OSError):
+        return None
+
+
+def _read_any_pid(squid_dir):
+    """Read PID from .claude-pid (preferred) or .pid (fallback). Returns int or None."""
+    pid = _read_claude_pid_file(squid_dir)
+    if pid is not None:
+        return pid
+    return _read_pid_file(squid_dir)
+
+
 def _is_process_alive(pid):
     """Check if a process with the given PID is still running."""
     if pid is None:
@@ -317,8 +341,29 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
                     result["health"] = HEALTHY
                     result["reason"] = f"heartbeat {int(heartbeat_age)}s ago (alive)"
                 else:
-                    result["health"] = STALLED
-                    result["reason"] = f"heartbeat stale ({int(heartbeat_age)}s ago, threshold 10s)"
+                    # Heartbeat stale — cross-check PID before declaring STALLED (#5429)
+                    pid = _read_any_pid(squid)
+                    pid_alive = _is_process_alive(pid)
+                    if pid is not None:
+                        result["pid"] = pid
+                    if pid_alive:
+                        result["health"] = HEALTHY
+                        result["reason"] = (
+                            f"heartbeat stale ({int(heartbeat_age)}s ago) "
+                            f"but PID {pid} alive — harness/wrapper may be down"
+                        )
+                    else:
+                        result["health"] = STALLED
+                        if pid is not None:
+                            result["reason"] = (
+                                f"heartbeat stale ({int(heartbeat_age)}s ago, threshold 10s) "
+                                f"and PID {pid} is dead"
+                            )
+                        else:
+                            result["reason"] = (
+                                f"heartbeat stale ({int(heartbeat_age)}s ago, threshold 10s), "
+                                f"no PID file to cross-check"
+                            )
             except (ValueError, TypeError):
                 result["health"] = UNKNOWN
                 result["reason"] = f"heartbeat epoch unparseable: {health_detail}"

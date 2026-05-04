@@ -188,7 +188,7 @@ All agents maintain a **working state file** (`.squidsquad/[role]/working-state.
 Each dev agent follows this loop, substituting its own role name and tracker paths:
 
 ```
-1. git pull --rebase
+1. git pull
 1b. Context pressure check — if above threshold, checkpoint state and continue (Claude Code compresses prior messages automatically)
 1c. Resume from working-state.md if active task exists
 2. Query GitHub Issues via `gh issue list` with label filters (`role:[role]`, `type:issue`, `status:open` or `status:in-progress`)
@@ -211,7 +211,7 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 ### PM Ralph Loop
 
 ```
-1. git pull --rebase
+1. git pull
 1b. Context pressure check — if above threshold, checkpoint state and continue (Claude Code compresses prior messages automatically)
 1c. Resume from working-state.md if active task exists
 2. Non-blocking human check-in (print note, continue immediately)
@@ -228,7 +228,7 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 ### QA Ralph Loop
 
 ```
-1. git pull --rebase
+1. git pull
 1b. Context pressure check — if above threshold, checkpoint state and continue (Claude Code compresses prior messages automatically)
 1c. Resume from working-state.md if active task exists
 2. Run full e2e test command (from config.md)
@@ -250,7 +250,7 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 
 All agents follow these rules to minimize merge conflicts on shared tracker files:
 
-- Always `git pull --rebase` before starting any work.
+- Always `git pull` before starting any work.
 - GitHub Issue comments are **append-only**: never edit or delete existing comments — only add new comments. Status transitions via label changes (`gh issue edit --add-label / --remove-label`). Closed issues are terminal.
 - Discussion comments on Issues are append-only: always add a new comment, never edit previous ones.
 - Push after completing each work unit (bug fix, feature, test run).

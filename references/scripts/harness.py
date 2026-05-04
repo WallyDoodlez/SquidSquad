@@ -73,9 +73,11 @@ class AgentState:
     #   "running"    — agent should be alive; auto-reboot on death (#4949)
     #   "stopping"   — graceful stop requested; do NOT reboot after death
     #   "restarting" — graceful restart; reboot after death
+    #   "stopped"    — agent died as requested; terminal state
     INTENT_RUNNING = "running"
     INTENT_STOPPING = "stopping"
     INTENT_RESTARTING = "restarting"
+    INTENT_STOPPED = "stopped"
 
     def __init__(self, role: str, clone_path: str = ""):
         self.role = role
@@ -227,7 +229,7 @@ class HarnessState:
 
                 # Stopping intent fulfilled — agent died as requested (#4966)
                 if is_dead and agent.intent == AgentState.INTENT_STOPPING:
-                    agent.intent = "stopped"
+                    agent.intent = AgentState.INTENT_STOPPED
                     agent.claude_pid = None
                     state_changed = True
 

@@ -4,7 +4,7 @@
 Single source of truth for git operations used by agents.
 
 Usage:
-    python scripts/git_ops.py pull                      # git pull --rebase
+    python scripts/git_ops.py pull                      # git pull (merge)
     python scripts/git_ops.py add-all                   # git add -A
     python scripts/git_ops.py commit <role> <message>    # git commit with role prefix
     python scripts/git_ops.py push                      # git push
@@ -82,11 +82,11 @@ def _log_diagnostic(severity, message):
 
 
 def pull():
-    """Pull with rebase (#5378).
+    """Pull with merge (#5378, #5445).
 
     Returns True on success, False on failure. Never crashes.
     """
-    result = _run("git pull --rebase", check=False)
+    result = _run("git pull", check=False)
     if result.returncode == 0:
         print("Pulled")
         return True
@@ -103,11 +103,11 @@ def pull():
         print("WARNING: git stash failed -- skipping pull", file=sys.stderr)
         return False
 
-    retry = _run("git pull --rebase", check=False)
+    retry = _run("git pull", check=False)
     if retry.returncode != 0:
         # Restore stashed changes and report failure
         _run("git stash pop", check=False)
-        print(f"WARNING: git pull --rebase failed after stash -- {retry.stderr.strip()}",
+        print(f"WARNING: git pull failed after stash -- {retry.stderr.strip()}",
               file=sys.stderr)
         return False
 

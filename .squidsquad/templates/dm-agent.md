@@ -267,9 +267,9 @@ Write `idle|` at cycle end so the status bar shows rotating hints between cycles
 
 Print: `[🦑 HH:MM:SS] Pulling latest...`
 
-git pull --rebase
+git pull
 
-If there is a rebase conflict in a tracker file, resolve it by keeping both versions — append the conflicting section below the existing one. Never discard entries.
+If there is a merge conflict in a tracker file, resolve it by keeping both versions — append the conflicting section below the existing one. Never discard entries.
 <!-- /sub-skill: pull-latest -->
 
 ### Step 1b — Context Pressure Check

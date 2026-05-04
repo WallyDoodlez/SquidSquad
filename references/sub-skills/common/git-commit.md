@@ -91,7 +91,7 @@ Split commits into code (feature branch) and state (main):
    - A PR must NEVER be in ready state while the agent is actively pushing commits to it.
    - After all fixes are pushed and the task moves to pending-test, `cycle_post.py` commits and creates the PR first, then the status transition triggers auto-conversion of the draft PR to ready.
 
-5. **When PR Flow `yes`**: check own open PRs for merge conflicts and rebase:
+5. **When PR Flow `yes`**: check own open PRs for merge conflicts and resolve via merge:
    ```bash
    gh pr list --search "squidsquad/" --state open --json number,headRefName,mergeable --limit 10
    ```
@@ -99,21 +99,21 @@ Split commits into code (feature branch) and state (main):
    ```bash
    git fetch origin
    git checkout [BRANCH_NAME]
-   git rebase origin/[WORKING_BRANCH]
+   git merge origin/[WORKING_BRANCH]
    ```
-   - **Rebase succeeds**: force-push and log:
+   - **Merge succeeds (no conflicts)**: push and log:
      ```bash
-     git push --force-with-lease origin [BRANCH_NAME]
+     git push origin [BRANCH_NAME]
      git checkout [WORKING_BRANCH]
      ```
-     Log in iteration summary: `Rebased [BRANCH_NAME] — conflict resolved.`
-   - **Rebase has code conflicts**: abort and log (PM/QA will handle):
+     Log in iteration summary: `Merged [WORKING_BRANCH] into [BRANCH_NAME] — conflict resolved.`
+   - **Merge has code conflicts**: abort and log (PM/QA will handle):
      ```bash
-     git rebase --abort
+     git merge --abort
      git checkout [WORKING_BRANCH]
      ```
-     Log: `Rebase of [BRANCH_NAME] failed — manual conflict resolution needed.`
-   - Only rebase branches for your own tasks — never touch other agents' PRs.
+     Log: `Merge of [WORKING_BRANCH] into [BRANCH_NAME] failed — manual conflict resolution needed.`
+   - Only merge into branches for your own tasks — never touch other agents' PRs.
    - Skip this step when PR Flow is off or no open PRs exist.
 
 **If `no`** (default — direct-to-main workflow):

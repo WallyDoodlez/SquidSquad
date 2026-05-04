@@ -32,7 +32,7 @@
 
 ## Git Protocol
 
-- Always `git pull --rebase` before starting work.
+- Always `git pull` before starting work.
 - Discussion comments on GitHub Issues are append-only.
 - Push after every completed work unit.
 
@@ -115,7 +115,7 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-- **Shipped Since Last Bump**: 7
+- **Shipped Since Last Bump**: 8
 
 ## Harness
 
