@@ -8,6 +8,7 @@
 .squidsquad/*/context-pressure.tmp
 .squidsquad/*/.health
 .squidsquad/*/.health.tmp
+.squidsquad/*/.booting
 .squidsquad/.local-config
 .squidsquad/.backlog-cache
 .squidsquad/.backlog-cache.tmp
