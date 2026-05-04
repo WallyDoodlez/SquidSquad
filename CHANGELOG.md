@@ -82,18 +82,6 @@
 
 ## [0.27.0] — 2026-04-26
 
-### Shipped
-- #3027
-- #3078
-- #3079
-- #3100
-- #3101
-- #3107
-- #3124
-- #3139
-- #3290
-- #3296
-
 ### Added
 - #3100 — Local config is now mandatory — the global `~/.squidsquad/clones/` fallback has been removed for cleaner, per-project isolation
 - #3101 — Agent startup now shows a colorful ANSI art logo matching the README octopus, with automatic monochrome fallback for terminals without color support
@@ -109,29 +97,6 @@
 - #3290 — State branch initialization no longer leaves your working tree in a broken state if interrupted
 
 ## [0.26.0] — 2026-04-25
-
-### Shipped
-- #592
-- #2487
-- #2493
-- #2496
-- #2575
-- #2724
-- #1772
-- #2469
-- #2494
-- #2537
-- #2538
-- #2554
-- #2659
-- #2671
-- #2677
-- #2693
-- #2694
-- #2700
-- #2701
-- #2713
-- #2750
 
 ### Added
 

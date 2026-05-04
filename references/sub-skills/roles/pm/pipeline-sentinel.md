@@ -67,7 +67,7 @@ For each open PR, parse the issue number from the branch name. Check if that iss
 python references/scripts/tracker.py get-state [NUMBER]
 ```
 If the issue is closed but the PR is open and unmerged:
-- **Tier 1**: Close the orphaned PR with comment — `gh pr close [PR_NUMBER] --comment "Closing orphaned PR — tracker item #[NUMBER] already shipped/closed. If code was needed, reopen and merge."`
+- **Tier 1**: Comment on the tracker issue routing to owning agent — `python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "Orphaned PR #[PR] — item shipped but PR still open. [role]-lead or human: close or merge the PR."`
 - **Tier 2**: File bug against DM — `"DM delivery did not enforce PR merge before marking shipped. Item #[NUMBER] shipped but PR #[PR] left open. Code on branch may never reach main."`
 
 **4b. Shipped without merge** — item marked shipped but PR branch never merged (code lost).

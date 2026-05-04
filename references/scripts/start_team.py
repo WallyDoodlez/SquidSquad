@@ -20,8 +20,11 @@ Exit codes:
 """
 
 import argparse
+import json
 import sys
 import time
+import urllib.request
+import urllib.error
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -34,17 +37,39 @@ import boot_remote
 
 
 # ---------------------------------------------------------------------------
-# Sentinel operations
+# Harness API communication (#4966)
 # ---------------------------------------------------------------------------
 
-def _write_stop_after_cycle(role, reason="reboot requested"):
-    """Write .stop-after-cycle sentinel to trigger graceful restart."""
-    role_dir = SQUIDSQUAD_DIR / role
-    if not role_dir.exists():
-        role_dir.mkdir(parents=True, exist_ok=True)
-    sentinel = role_dir / ".stop-after-cycle"
-    sentinel.write_text(reason, encoding="utf-8")
+def _discover_harness_port():
+    """Discover harness port — default 7373 + .harness-port file."""
+    port_file = SQUIDSQUAD_DIR / ".harness-port"
+    if port_file.exists():
+        try:
+            return int(port_file.read_text(encoding="utf-8").strip())
+        except (ValueError, OSError):
+            pass
+    return 7373
 
+
+def _harness_api(method, path, timeout=5):
+    """Call harness API. Returns (success, response_dict) or (False, None)."""
+    port = _discover_harness_port()
+    url = f"http://127.0.0.1:{port}{path}"
+    try:
+        req = urllib.request.Request(url, method=method)
+        if method == "POST":
+            req.add_header("Content-Type", "application/json")
+            req.data = b"{}"
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return True, data
+    except (urllib.error.URLError, OSError, json.JSONDecodeError, TimeoutError):
+        return False, None
+
+
+# ---------------------------------------------------------------------------
+# Sentinel operations (fallback when harness unreachable)
+# ---------------------------------------------------------------------------
 
 def _write_stop(role):
     """Write .stop sentinel to permanently stop an agent."""
@@ -82,22 +107,6 @@ def _is_agent_idle(role):
         return True
 
 
-def _wait_for_exit(role, timeout=300):
-    """Wait for agent to exit after .stop-after-cycle is written."""
-    print(f"  [{role}] Waiting for cycle to complete (timeout {timeout}s)...")
-    start = time.time()
-    while time.time() - start < timeout:
-        # Check if .stop-after-cycle was consumed (agent exited)
-        sentinel = SQUIDSQUAD_DIR / role / ".stop-after-cycle"
-        if not sentinel.exists():
-            # Sentinel consumed = agent exited and wrapper respawned
-            print(f"  [{role}] Cycle complete, respawning...")
-            return True
-        time.sleep(5)
-    print(f"  [{role}] Timeout waiting for cycle completion", file=sys.stderr)
-    return False
-
-
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
@@ -116,7 +125,7 @@ def cmd_boot(roles):
 
 
 def cmd_reboot(roles, force=False):
-    """Gracefully reboot agents via .stop-after-cycle sentinel."""
+    """Gracefully reboot agents via harness API (#4966)."""
     for role in roles:
         _clean_stale_sentinels(role)
 
@@ -131,31 +140,42 @@ def cmd_reboot(roles, force=False):
 
         if force:
             print(f"  [{role}] Force reboot -- killing process...")
-            # Import the kill logic from reboot_agent if available
             try:
                 import reboot_agent
-                reboot_agent._kill_agent(role)
-            except (ImportError, AttributeError):
-                pass
+                clone_path = boot_remote._get_clone_path(role)
+                claude_pid, alive = reboot_agent._read_claude_pid(
+                    Path(clone_path), role
+                )
+                if alive and claude_pid:
+                    reboot_agent._kill_process(claude_pid)
+                    print(f"  [{role}] Killed PID {claude_pid}")
+            except (ImportError, Exception) as e:
+                print(f"  [{role}] Kill failed: {e}")
             time.sleep(2)
             r = boot_remote.boot_agent(role)
             status = "OK" if r["success"] else "FAIL"
             print(f"  [{role}] {r['action']} -- {status}: {r['message']}")
         else:
-            print(f"  [{role}] Writing .stop-after-cycle sentinel...")
-            _write_stop_after_cycle(role, "reboot via start_team.py")
-            # Don't wait — wrapper handles respawn after agent finishes cycle
+            # Use harness API to set intent=restarting (#4966)
+            ok, resp = _harness_api("POST", f"/agents/{role}/restart")
+            if ok:
+                print(f"  [{role}] Harness: restart requested (intent=restarting)")
+            else:
+                print(f"  [{role}] Harness unreachable — agent will continue until next cycle")
 
     return True
 
 
 def cmd_stop(roles):
-    """Stop agents by writing .stop sentinel."""
+    """Stop agents via harness API (#4966)."""
     for role in roles:
-        print(f"  [{role}] Writing .stop sentinel...")
-        _write_stop(role)
-        # Also write .stop-after-cycle so agent exits at cycle end
-        _write_stop_after_cycle(role, "stopped via start_team.py")
+        # Use harness API to set intent=stopping (#4966)
+        ok, resp = _harness_api("POST", f"/agents/{role}/stop")
+        if ok:
+            print(f"  [{role}] Harness: stop requested (intent=stopping)")
+        else:
+            print(f"  [{role}] Harness unreachable — writing .stop sentinel as fallback")
+            _write_stop(role)
     return True
 
 
@@ -184,7 +204,7 @@ def main():
 
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--reboot", nargs="?", const=True,
-                        help="Graceful restart (write .stop-after-cycle)")
+                        help="Graceful restart via harness API")
     action.add_argument("--stop", nargs="?", const=True,
                         help="Stop agent(s) permanently (write .stop)")
 

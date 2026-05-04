@@ -53,9 +53,7 @@ Write your results to `.squidsquad/[ROLE]/cycle-output.json`:
   ],
   "iteration_summary": "Brief description of work done",
   "commit_message": "[ROLE]: cycle N — brief description",
-  "working_state_update": "# Working State\n\n- **Task**: none\n...",
-  "restart_needed": false,
-  "restart_reason": null
+  "working_state_update": "# Working State\n\n- **Task**: none\n..."
 }
 ```
 
@@ -65,7 +63,7 @@ Then run:
 python references/scripts/cycle_post.py [ROLE]
 ```
 
-The script handles: status transitions, tracker comments, iteration logging, git commits, pushes, version bumps (DM), restart sentinels, and status bar cleanup.
+The script handles: status transitions, tracker comments, iteration logging, git commits, pushes, version bumps (DM), and status bar cleanup. Context pressure exit is detected mechanically — `cycle_post.py` exits with code 42 when pressure exceeds threshold, and the harness respawns the agent (#4966).
 
 ### Role-Specific Fields
 

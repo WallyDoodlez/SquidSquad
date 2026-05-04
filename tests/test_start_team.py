@@ -17,15 +17,21 @@ import start_team
 # ---------------------------------------------------------------------------
 
 class TestSentinelOps:
-    def test_write_stop_after_cycle(self, tmp_path):
-        """Writes .stop-after-cycle sentinel."""
+    def test_harness_api_stop(self, tmp_path):
+        """cmd_stop calls harness API instead of writing .stop-after-cycle (#4966)."""
+        with patch.object(start_team, "_harness_api", return_value=(True, {"action": "stop"})):
+            start_team.cmd_stop(["skill"])
+            # No .stop-after-cycle written when harness is reachable
+
+    def test_harness_api_stop_fallback(self, tmp_path):
+        """cmd_stop falls back to .stop sentinel when harness unreachable (#4966)."""
         role_dir = tmp_path / ".squidsquad" / "skill"
         role_dir.mkdir(parents=True)
-        with patch.object(start_team, "SQUIDSQUAD_DIR", tmp_path / ".squidsquad"):
-            start_team._write_stop_after_cycle("skill", "test reboot")
-        sentinel = role_dir / ".stop-after-cycle"
+        with patch.object(start_team, "_harness_api", return_value=(False, None)), \
+             patch.object(start_team, "SQUIDSQUAD_DIR", tmp_path / ".squidsquad"):
+            start_team.cmd_stop(["skill"])
+        sentinel = role_dir / ".stop"
         assert sentinel.exists()
-        assert "test reboot" in sentinel.read_text(encoding="utf-8")
 
     def test_write_stop(self, tmp_path):
         """Writes .stop sentinel."""
@@ -101,3 +107,33 @@ class TestCLIParsing:
                 with patch.object(start_team, "_get_all_roles", return_value=["pm", "skill"]):
                     start_team.main()
                     mock_stop.assert_called_once_with(["skill"])
+
+
+# ---------------------------------------------------------------------------
+# Harness API (#4966)
+# ---------------------------------------------------------------------------
+
+class TestHarnessAPI:
+    def test_discover_port_from_file(self, tmp_path):
+        """Reads port from .harness-port file."""
+        squid = tmp_path / ".squidsquad"
+        squid.mkdir()
+        (squid / ".harness-port").write_text("9090", encoding="utf-8")
+        with patch.object(start_team, "SQUIDSQUAD_DIR", squid):
+            port = start_team._discover_harness_port()
+        assert port == 9090
+
+    def test_discover_port_default(self, tmp_path):
+        """Falls back to 7373 when no .harness-port."""
+        squid = tmp_path / ".squidsquad"
+        squid.mkdir()
+        with patch.object(start_team, "SQUIDSQUAD_DIR", squid):
+            port = start_team._discover_harness_port()
+        assert port == 7373
+
+    def test_cmd_reboot_uses_api(self):
+        """cmd_reboot calls harness restart API (#4966)."""
+        with patch.object(start_team, "_harness_api", return_value=(True, {"action": "restart"})) as mock_api, \
+             patch.object(start_team.boot_remote, "_needs_boot", return_value=(False, "running", "/path")):
+            start_team.cmd_reboot(["skill"])
+            mock_api.assert_called_once_with("POST", "/agents/skill/restart")

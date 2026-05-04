@@ -1,5 +1,37 @@
 # Scan History
 
+## Scan — 2026-05-04 00:40
+
+- **Files scanned**: references/scripts/thin_launcher.py, references/scripts/start_team.py, references/scripts/harness.py
+- **Findings**: #5423 (harness.py undocumented 'stopped' intent state — bare string instead of class constant — low)
+- **Items rejected by human**: none yet
+- **Notes**: thin_launcher.py clean post-#5422 fix. start_team.py has redundant `(ImportError, Exception)` catch (minor, not filed).
+
+## Scan — 2026-05-03 20:55
+
+- **Files scanned**: references/scripts/health_check.py, references/scripts/squidsquad_cli.py, references/scripts/diagnostics.py
+- **Findings**: #5385 (diagnostics.py log rotation after write, not before — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-03 18:32
+
+- **Files scanned**: references/scripts/cycle_pre.py, references/scripts/cycle_post.py, references/scripts/vault_remember.py
+- **Findings**: #5378 (cycle_pre._do_pull() returns 'error' on normal git states — low)
+- **Items rejected by human**: none yet
+- **Notes**: cycle_post._do_restart_sentinel still called from main() on main branch — already fixed on #4966 feature branch, skip.
+
+## Scan — 2026-05-03 17:32
+
+- **Files scanned**: tests/test_config_functions.py, tests/test_tracker.py, tests/test_state_bus.py
+- **Findings**: #5366 (test_config_functions.py SAMPLE_CONFIG missing ~20 newer FIELD_MAP entries — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-03 16:02
+
+- **Files scanned**: references/scripts/git_ops.py, references/scripts/reboot_agent.py, references/scripts/scan_index.py
+- **Findings**: #5344 (reboot_agent.py _spawn_wrapper() wrapper-centric dead code post-#4966 — medium)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-02 20:07
 
 - **Files scanned**: references/scripts/model_router.py, references/scripts/harness.py, references/scripts/squidsquad_cli.py, references/scripts/boot_remote.py, references/scripts/cycle_post.py

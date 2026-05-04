@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 """SquidSquad agent health check — deterministic cross-clone health probe.
 
+DEPRECATION NOTE (#4966): The harness now monitors agent liveness via direct
+PID checks (primary) and .claude-pid file (fallback). This script is used as
+a legacy fallback by harness.update_health() for agents still using wrapper
+scripts. New agents spawned via thin launcher are monitored directly by the
+harness process table.
+
 Reads .local-config to find each agent's actual clone path, then checks
-each agent's `.health` file (written by boot script wrapper) for liveness
-and `current-state` file for cycle-level phase detail. Falls back to
-current-state mtime when .health is missing (old boot scripts).
+each agent's `.health` file for liveness and `current-state` file for
+cycle-level phase detail. Falls back to current-state mtime when .health
+is missing.
 
 Usage:
     python scripts/health_check.py              # Pretty table for humans

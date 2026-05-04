@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """SquidSquad remote agent boot — spawn dead agents in new terminals.
 
-PM is the bootmaster. Detection uses .health file (primary) with PID fallback:
-read each agent's .health file for liveness status. If .health shows dead/error
-or is missing, check .pid as fallback. If agent needs booting and no .stop
-sentinel, spawn a new terminal. After spawning, polls .health for up to 30s
-to confirm the agent started successfully.
+Spawns agents via thin launcher (primary) or legacy wrapper scripts (fallback).
+Detection uses .health file and .pid for liveness. The harness calls boot_agent()
+for auto-reboot; start_team.py calls it for manual boot. Thin launcher writes
+.claude-pid for harness PID tracking (#4966).
 
 Usage:
     python scripts/boot_remote.py --role <name>   # Boot a single agent
@@ -369,10 +368,21 @@ def _detect_os():
 
 
 def _find_boot_script(clone_root, role):
-    """Find the boot script for a role. Returns (path, type) or (None, None)."""
+    """Find the boot script for a role. Returns (path, type) or (None, None).
+
+    Priority (#4966):
+    1. Thin launcher (references/scripts/thin_launcher.py) — new default
+    2. Legacy wrapper scripts (start-{role}.ps1/.sh) — backward compat
+    """
     clone_root = Path(clone_root)
     sqdir = clone_root / ".squidsquad"
 
+    # Prefer thin launcher (#4966) — harness owns lifecycle, no wrapper needed
+    thin_launcher = clone_root / "references" / "scripts" / "thin_launcher.py"
+    if thin_launcher.exists():
+        return thin_launcher, "thin"
+
+    # Legacy fallback: wrapper scripts
     os_type = _detect_os()
     if os_type == "windows":
         ps1 = sqdir / f"start-{role}.ps1"
@@ -411,7 +421,11 @@ def _spawn_windows(clone_root, role, script_path, script_type):
     wt = shutil.which("wt")
     if wt:
         try:
-            if script_type == "ps1":
+            if script_type == "thin":
+                cmd = [wt, "new-tab", "--title", f"squidsquad-{role}",
+                       "-d", str(clone_root),
+                       "python", script_path, role]
+            elif script_type == "ps1":
                 cmd = [wt, "new-tab", "--title", f"squidsquad-{role}",
                        "-d", str(clone_root),
                        "pwsh", "-NoExit", "-File", script_path]
@@ -424,13 +438,17 @@ def _spawn_windows(clone_root, role, script_path, script_type):
                 creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
                 cwd=str(clone_root),
             )
-            return True, "spawned via wt.exe (Windows Terminal)"
+            launcher = "thin launcher" if script_type == "thin" else "wt.exe"
+            return True, f"spawned via {launcher} (Windows Terminal)"
         except Exception as e:
             return False, f"wt.exe spawn failed: {e}"
 
     # Fallback: cmd /c start
     try:
-        if script_type == "ps1":
+        if script_type == "thin":
+            cmd = ["cmd", "/c", "start", f"squidsquad-{role}",
+                   "python", script_path, role]
+        elif script_type == "ps1":
             cmd = ["cmd", "/c", "start", f"squidsquad-{role}",
                    "pwsh", "-NoExit", "-File", script_path]
         else:
@@ -451,15 +469,20 @@ def _spawn_macos(clone_root, role, script_path, script_type):
     try:
         quoted_root = shlex.quote(str(clone_root))
         quoted_script = shlex.quote(str(script_path))
+        if script_type == "thin":
+            run_cmd = f"cd {quoted_root} && python {quoted_script} {role}"
+        else:
+            run_cmd = f"cd {quoted_root} && bash {quoted_script}"
         apple_script = (
             f'tell application "Terminal" to do script '
-            f'"cd {quoted_root} && bash {quoted_script}"'
+            f'"{run_cmd}"'
         )
         subprocess.Popen(
             ["osascript", "-e", apple_script],
             cwd=str(clone_root),
         )
-        return True, "spawned via Terminal.app (osascript)"
+        launcher = "thin launcher" if script_type == "thin" else "Terminal.app"
+        return True, f"spawned via {launcher} (osascript)"
     except Exception as e:
         return False, f"macOS spawn failed: {e}"
 
@@ -476,18 +499,22 @@ def _spawn_linux(clone_root, role, script_path, script_type):
             )
             quoted_root = shlex.quote(str(clone_root))
             quoted_script = shlex.quote(str(script_path))
+            if script_type == "thin":
+                run_cmd = f"cd {quoted_root} && python {quoted_script} {role}"
+            else:
+                run_cmd = f"cd {quoted_root} && bash {quoted_script}"
             subprocess.Popen(
-                [tmux, "new-session", "-d", "-s", session_name,
-                 f"cd {quoted_root} && bash {quoted_script}"],
+                [tmux, "new-session", "-d", "-s", session_name, run_cmd],
                 cwd=str(clone_root),
             )
-            return True, f"spawned via tmux session '{session_name}'"
+            launcher = "thin launcher" if script_type == "thin" else "tmux"
+            return True, f"spawned via {launcher} (tmux session '{session_name}')"
         except Exception as e:
             return False, f"tmux spawn failed: {e}"
 
     return False, (
         f"No terminal available. Manual boot:\n"
-        f"  cd {clone_root} && bash {script_path}"
+        f"  cd {clone_root} && python {script_path} {role}"
     )
 
 

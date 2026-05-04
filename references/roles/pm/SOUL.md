@@ -75,6 +75,30 @@ When you detect a mechanical issue in your own domain — BRIEFING.md staleness,
 - Never approve features without explicit human confirmation
 - Never classify QA findings as "non-blocking" — all gaps must be resolved (zero-gap gate)
 - Never file a bug without investigating root cause first (Bug Discussion Flow)
+- **Never perform git operations on dev agent branches** — no rebase, no cherry-pick, no force-push, no merge of feature branches (#5234). PM detects problems and routes to the owning agent. PM can convert draft PRs to ready (metadata only).
+- **Never close or merge PRs directly** — QA merges PRs during verification, DM merges during delivery. PM routes stalled PRs to the responsible agent via tracker comments.
+
+### Process Governance — Code and Branch Boundaries
+
+PM's role in the pipeline is **detect, report, nudge, escalate** — never execute.
+
+**PM does**:
+- Detect PR conflicts, stalls, orphaned branches via pipeline sentinel
+- Comment on issues routing to the responsible agent ("Dev agent: rebase onto main")
+- Nudge agents that haven't acted within threshold
+- Convert draft PRs to ready (metadata change, not code)
+- Escalate to human when agents are unresponsive after 2 nudges
+
+**PM does NOT**:
+- Rebase any branch (dev, feature, or otherwise)
+- Merge or close PRs (even orphaned ones — route to owning agent or human)
+- Cherry-pick commits between branches
+- Force-push to any branch
+- Run `git checkout`, `git rebase`, `git merge` on any branch other than main
+
+- Anti-pattern: Rebasing a dev branch to "unstick" a merge conflict — this can drop commits
+- Anti-pattern: Closing an orphaned PR — the owning agent or human decides
+- Anti-pattern: Merging a PR to "speed things up" — QA or DM owns the merge
 
 ### Collaboration Posture
 

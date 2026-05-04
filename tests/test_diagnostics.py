@@ -101,6 +101,30 @@ class TestRotate:
         with patch.object(diagnostics, "LOG_FILE", tmp_path / "missing.jsonl"):
             diagnostics.rotate()  # should not raise
 
+    def test_log_entry_rotates_before_write(self, tmp_path):
+        """#5385: rotation is called before write, not after."""
+        log_file = tmp_path / "diagnostic.jsonl"
+        # Create a file over the byte cap
+        log_file.write_text("x" * 200, encoding="utf-8")
+
+        rotate_calls = []
+        original_rotate = diagnostics.rotate
+
+        def tracking_rotate():
+            rotate_calls.append("rotated")
+            original_rotate()
+
+        with patch.object(diagnostics, "LOG_FILE", log_file), \
+             patch.object(diagnostics, "DIAGNOSTICS_DIR", tmp_path), \
+             patch.object(diagnostics, "MAX_LOG_BYTES", 100), \
+             patch.object(diagnostics, "rotate", tracking_rotate):
+            diagnostics.log_entry("info", "test", "after rotation")
+
+        assert len(rotate_calls) == 1, "rotate() should have been called before write"
+        # The new entry should be in the file
+        content = log_file.read_text(encoding="utf-8")
+        assert "after rotation" in content
+
 
 class TestSanitizeConfig:
     def test_redacts_repo_field(self):

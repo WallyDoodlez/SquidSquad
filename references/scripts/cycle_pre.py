@@ -104,15 +104,24 @@ def _timestamp_short():
 
 
 def _do_pull():
-    """Run git pull. Returns pull_result string."""
+    """Run git pull. Returns pull_result string (#5378).
+
+    Inspects stdout to distinguish normal states from real errors.
+    """
     result = _run_script("git_ops.py", "pull")
     stdout = result.stdout.strip().lower()
+    stderr = result.stderr.strip().lower()
+    combined = stdout + " " + stderr
+
+    # Check stdout content first — more reliable than exit code
+    if "stash pop conflict" in combined or "stash_conflict" in combined:
+        return "stash_conflict"
+    if "already up to date" in combined:
+        return "ok"
+    if "pulled" in stdout:
+        return "ok"
     if result.returncode != 0:
         return "error"
-    if "stash pop conflict" in stdout or "stash_conflict" in stdout:
-        return "stash_conflict"
-    if "conflict" in stdout:
-        return "conflict"
     return "ok"
 
 
@@ -125,15 +134,17 @@ def _get_branch_name(role, number):
 
 
 def _enforce_branch(role, working_state):
-    """Ensure the agent is on the correct branch before pull (#4942).
+    """Ensure the agent is on the correct branch before pull (#4942, #5208).
 
     If working-state has an active task, call task-begin to ensure the
     correct feature branch. Otherwise, ensure the agent is on the
-    working branch (main).
+    configured working branch.
+
+    Returns a branch_correction dict if a correction was made, or None.
     """
     branch_workflow = _config_get("branch-workflow").lower() in ("yes", "true", "1")
     if not branch_workflow:
-        return
+        return None
 
     task = working_state.get("task", "none")
     status = working_state.get("status", "none")
@@ -146,13 +157,61 @@ def _enforce_branch(role, working_state):
             if result.returncode != 0:
                 # Non-fatal — log and continue on current branch
                 pass
+        return None
     else:
-        # No active task — ensure on working branch
+        # No active task — ensure on configured working branch (#5208)
         working = _config_get("working-branch") or "main"
         current = _run(["git", "branch", "--show-current"], check=False)
         current_branch = current.stdout.strip() if current.returncode == 0 else ""
         if current_branch and current_branch != working:
+            print(f"  WARNING: Agent on branch '{current_branch}', expected '{working}'. "
+                  f"Switching automatically (#5208).")
             _run(["git", "checkout", working], check=False)
+            return {
+                "corrected": True,
+                "was_on": current_branch,
+                "switched_to": working,
+            }
+        return None
+
+
+def _validate_config_version():
+    """Post-pull validation: fix config.md version if it regressed (#5136).
+
+    Compares config.md version against the latest git tag. If config.md
+    has an older version (branch merge overwrote it), auto-fix to the tag version.
+    """
+    try:
+        # Get latest version tag
+        result = _run(["git", "tag", "--sort=-v:refname", "-l", "v*"], check=False)
+        tags = result.stdout.strip().splitlines() if result.returncode == 0 else []
+        if not tags:
+            return
+        latest_tag = tags[0].lstrip("v")  # e.g. "0.31.0"
+
+        # Get config.md version
+        config_version = _config_get("version")
+        if not config_version:
+            return
+
+        # Compare — simple string comparison works for semver with same digit count
+        # Parse into tuples for proper comparison
+        def _parse_ver(v):
+            try:
+                return tuple(int(x) for x in v.split("."))
+            except (ValueError, AttributeError):
+                return (0,)
+
+        tag_ver = _parse_ver(latest_tag)
+        cfg_ver = _parse_ver(config_version)
+
+        if cfg_ver < tag_ver:
+            # Config version regressed — fix it
+            _run_script("config.py", "set", "version", latest_tag)
+            print(f"  [config] Version regressed ({config_version} < {latest_tag}) — "
+                  f"auto-fixed to {latest_tag} (#5136)")
+    except Exception:
+        pass  # Non-fatal — don't block the cycle
 
 
 def _validate_config_version():
@@ -868,8 +927,8 @@ def main():
     # 1a. Read working state early to determine correct branch (#4942)
     working_state = _read_working_state(role)
 
-    # 1b. Enforce correct branch before pull (#4942)
-    _enforce_branch(role, working_state)
+    # 1b. Enforce correct branch before pull (#4942, #5208)
+    branch_correction = _enforce_branch(role, working_state)
 
     # 1c. Pull
     pull_result = _do_pull()
@@ -903,6 +962,10 @@ def main():
         "working_state": working_state,
     }
     cycle_input.update(role_input)
+
+    # Add branch correction if one was made (#5208)
+    if branch_correction:
+        cycle_input["branch_correction"] = branch_correction
 
     # Update quiet_cycle_counter from working state for skill
     if role == "skill":

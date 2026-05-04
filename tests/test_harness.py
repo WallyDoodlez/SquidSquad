@@ -73,6 +73,66 @@ class TestHarnessState(unittest.TestCase):
         self.assertEqual(roles, {"pm", "skill"})
 
 
+class TestStatePersistence(unittest.TestCase):
+    """#4966: .harness-state.json persistence for crash recovery."""
+
+    def test_save_and_load_state(self):
+        """State file round-trips agent data correctly."""
+        import tempfile
+        from harness import HarnessState, AgentState, HARNESS_STATE_FILE
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".harness-state.json"
+            with patch("harness.HARNESS_STATE_FILE", state_file):
+                # Save state
+                hs = HarnessState()
+                hs.port = 7373
+                agent = AgentState("skill", "/clone/path")
+                agent.intent = AgentState.INTENT_STOPPING
+                agent.status = "running"
+                agent.boot_time = 1000.0
+                hs.set_agent("skill", agent)
+                hs.save_state()
+
+                # Verify file was written
+                self.assertTrue(state_file.exists())
+                data = json.loads(state_file.read_text(encoding="utf-8"))
+                self.assertEqual(data["agents"]["skill"]["intent"], "stopping")
+
+                # Load into new state
+                hs2 = HarnessState()
+                with patch("harness._log"):
+                    hs2.load_state()
+                loaded = hs2.get_agent("skill")
+                self.assertIsNotNone(loaded)
+                self.assertEqual(loaded.intent, AgentState.INTENT_STOPPING)
+                self.assertEqual(loaded.clone_path, "/clone/path")
+
+    def test_load_missing_state_file(self):
+        """load_state is a no-op when state file doesn't exist."""
+        import tempfile
+        from harness import HarnessState
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / "nonexistent.json"
+            with patch("harness.HARNESS_STATE_FILE", state_file):
+                hs = HarnessState()
+                hs.load_state()  # should not raise
+                self.assertEqual(hs.all_agents(), [])
+
+    def test_save_state_atomic_write(self):
+        """State file is written atomically via .tmp rename."""
+        import tempfile
+        from harness import HarnessState, AgentState
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".harness-state.json"
+            with patch("harness.HARNESS_STATE_FILE", state_file):
+                hs = HarnessState()
+                hs.set_agent("pm", AgentState("pm"))
+                hs.save_state()
+                # File should exist, .tmp should not
+                self.assertTrue(state_file.exists())
+                self.assertFalse(state_file.with_suffix(".tmp").exists())
+
+
 class TestPortManagement(unittest.TestCase):
     """Test find_free_port and port reading."""
 
@@ -196,27 +256,51 @@ class TestCLIUsage(unittest.TestCase):
 
 
 class TestHarnessHealthPolling(unittest.TestCase):
-    """Test that HarnessState.update_health maps health_check output correctly."""
+    """Test that HarnessState.update_health uses direct PID checks (#4966)."""
 
-    def test_update_health_maps_statuses(self):
-        from harness import HarnessState
+    def test_update_health_detects_running_via_pid(self):
+        """Agent with alive PID in .claude-pid is detected as running."""
+        import tempfile
+        from harness import HarnessState, AgentState
 
-        mock_report = {
-            "agents": [
-                {"role": "skill", "health": "healthy", "clone_path": "/a"},
-                {"role": "pm", "health": "stalled", "clone_path": "/b"},
-                {"role": "dm", "health": "stopped", "clone_path": "/c"},
-            ],
-            "all_healthy": False,
-        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            # Write a PID file
+            (role_dir / ".claude-pid").write_text(str(os.getpid()), encoding="utf-8")
 
-        state = HarnessState()
-        with patch("harness.health_check.check_all_agents", return_value=mock_report):
-            state.update_health()
+            hs = HarnessState()
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
+                hs.update_health()
 
-        self.assertEqual(state.get_agent("skill").status, "running")
-        self.assertEqual(state.get_agent("pm").status, "stalled")
-        self.assertEqual(state.get_agent("dm").status, "stopped")
+            agent = hs.get_agent("skill")
+            self.assertIsNotNone(agent)
+            self.assertEqual(agent.status, "running")
+            self.assertEqual(agent.claude_pid, os.getpid())
+
+    def test_update_health_detects_dead_agent(self):
+        """Agent with dead PID is detected as not running."""
+        import tempfile
+        from harness import HarnessState, AgentState
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            # Write a PID that doesn't exist (99999999)
+            (role_dir / ".claude-pid").write_text("99999999", encoding="utf-8")
+
+            hs = HarnessState()
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.health_check.check_agent_health", return_value={"health": "unknown"}), \
+                 patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
+                hs.update_health()
+
+            agent = hs.get_agent("skill")
+            self.assertIsNotNone(agent)
+            self.assertNotEqual(agent.status, "running")
 
 
 class TestEndpointsViaTestClient(unittest.TestCase):
@@ -237,10 +321,7 @@ class TestEndpointsViaTestClient(unittest.TestCase):
 
     def test_get_status(self):
         """GET /status returns harness and agent info."""
-        with patch("harness.health_check.check_all_agents", return_value={
-            "agents": [{"role": "skill", "health": "healthy", "clone_path": "/a"}],
-            "all_healthy": True,
-        }):
+        with patch.object(self.state, "update_health"):
             resp = self.client.get("/status")
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
@@ -250,18 +331,11 @@ class TestEndpointsViaTestClient(unittest.TestCase):
 
     def test_get_agents(self):
         """GET /agents returns agent list."""
-        with patch("harness.health_check.check_all_agents", return_value={
-            "agents": [
-                {"role": "skill", "health": "healthy", "clone_path": "/a"},
-                {"role": "pm", "health": "stalled", "clone_path": "/b"},
-            ],
-            "all_healthy": False,
-        }):
+        with patch.object(self.state, "update_health"):
             resp = self.client.get("/agents")
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertIn("agents", data)
-        self.assertGreaterEqual(len(data["agents"]), 1)
 
     def test_post_agents_all_start(self):
         """POST /agents/all/start returns 200 with results."""
@@ -306,21 +380,14 @@ class TestEndpointsViaTestClient(unittest.TestCase):
         self.assertTrue(data["success"])
 
     def test_post_agent_stop(self):
-        """POST /agents/{role}/stop sets intent and writes .stop-after-cycle (#4949)."""
-        import tempfile
-        with tempfile.TemporaryDirectory() as tmpdir:
-            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
-            role_dir.mkdir(parents=True)
-            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
-                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir):
-                resp = self.client.post("/agents/skill/stop")
-            self.assertEqual(resp.status_code, 200)
-            # .stop-after-cycle should be written (graceful exit signal)
-            self.assertTrue((role_dir / ".stop-after-cycle").exists())
-            # Intent should be stopping
-            from harness import state as harness_state, AgentState
-            agent = harness_state.get_agent("skill")
-            self.assertEqual(agent.intent, AgentState.INTENT_STOPPING)
+        """POST /agents/{role}/stop sets intent=stopping (#4966 — no .stop-after-cycle)."""
+        with patch("harness.boot_remote._get_all_roles", return_value=["skill"]):
+            resp = self.client.post("/agents/skill/stop")
+        self.assertEqual(resp.status_code, 200)
+        # Intent should be stopping — no sentinel file written (#4966)
+        from harness import state as harness_state, AgentState
+        agent = harness_state.get_agent("skill")
+        self.assertEqual(agent.intent, AgentState.INTENT_STOPPING)
 
     def test_post_agent_restart(self):
         """POST /agents/{role}/restart calls reboot."""
@@ -338,7 +405,7 @@ class TestEndpointsViaTestClient(unittest.TestCase):
             self.assertEqual(data["action"], "restart")
 
     def test_post_agent_restart_sets_intent(self):
-        """POST /agents/{role}/restart sets intent=restarting (#4949)."""
+        """POST /agents/{role}/restart sets intent=restarting (#4966 — no .stop-after-cycle)."""
         import tempfile
         with tempfile.TemporaryDirectory() as tmpdir:
             role_dir = Path(tmpdir) / ".squidsquad" / "skill"
@@ -349,12 +416,10 @@ class TestEndpointsViaTestClient(unittest.TestCase):
             self.assertEqual(resp.status_code, 200)
             data = resp.json()
             self.assertTrue(data["success"])
-            # Intent should be restarting
+            # Intent should be restarting — no sentinel file (#4966)
             from harness import state as harness_state, AgentState
             agent = harness_state.get_agent("skill")
             self.assertEqual(agent.intent, AgentState.INTENT_RESTARTING)
-            # .stop-after-cycle should be written
-            self.assertTrue((role_dir / ".stop-after-cycle").exists())
 
     def test_post_shutdown_returns_202(self):
         """POST /shutdown returns 202 Accepted (non-blocking)."""
@@ -405,69 +470,96 @@ class TestIntentLifecycle(unittest.TestCase):
         self.assertEqual(d["intent"], "stopping")
 
     def test_auto_reboot_on_unexpected_death(self):
-        """Agent was running, dies unexpectedly, intent=running → reboot."""
+        """Agent was running, dies unexpectedly, intent=running → reboot (#4966)."""
+        import tempfile
         from harness import HarnessState, AgentState
-        hs = HarnessState()
-        agent = AgentState("skill", "/tmp/clone")
-        agent.status = "running"
-        agent.intent = AgentState.INTENT_RUNNING
-        hs.set_agent("skill", agent)
 
-        # Simulate health check returning "stopped"
-        mock_report = {
-            "agents": [{"role": "skill", "health": "stopped", "clone_path": "/tmp/clone"}]
-        }
-        with patch("harness.health_check.check_all_agents", return_value=mock_report), \
-             patch("harness.boot_remote.boot_agent") as mock_boot:
-            hs.update_health()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            # Dead PID
+            (role_dir / ".claude-pid").write_text("99999999", encoding="utf-8")
 
-        mock_boot.assert_called_once_with("skill")
-        self.assertEqual(hs.get_agent("skill").status, "starting")
+            hs = HarnessState()
+            agent = AgentState("skill", tmpdir)
+            agent.status = "running"
+            agent.intent = AgentState.INTENT_RUNNING
+            agent.claude_pid = 99999999
+            hs.set_agent("skill", agent)
+
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.boot_remote.boot_agent") as mock_boot, \
+                 patch("harness.health_check.check_agent_health", return_value={"health": "unknown"}), \
+                 patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
+                hs.update_health()
+
+            mock_boot.assert_called_once_with("skill")
+            self.assertEqual(hs.get_agent("skill").status, "starting")
 
     def test_no_reboot_when_intent_stopping(self):
-        """Agent was running, dies, intent=stopping → do NOT reboot."""
+        """Agent was running, dies, intent=stopping → do NOT reboot (#4966)."""
+        import tempfile
         from harness import HarnessState, AgentState
-        hs = HarnessState()
-        agent = AgentState("skill", "/tmp/clone")
-        agent.status = "running"
-        agent.intent = AgentState.INTENT_STOPPING
-        hs.set_agent("skill", agent)
 
-        mock_report = {
-            "agents": [{"role": "skill", "health": "stopped", "clone_path": "/tmp/clone"}]
-        }
-        with patch("harness.health_check.check_all_agents", return_value=mock_report), \
-             patch("harness.boot_remote.boot_agent") as mock_boot:
-            hs.update_health()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            (role_dir / ".claude-pid").write_text("99999999", encoding="utf-8")
 
-        mock_boot.assert_not_called()
+            hs = HarnessState()
+            agent = AgentState("skill", tmpdir)
+            agent.status = "running"
+            agent.intent = AgentState.INTENT_STOPPING
+            agent.claude_pid = 99999999
+            hs.set_agent("skill", agent)
+
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.boot_remote.boot_agent") as mock_boot, \
+                 patch("harness.health_check.check_agent_health", return_value={"health": "unknown"}), \
+                 patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
+                hs.update_health()
+
+            mock_boot.assert_not_called()
 
     def test_reboot_on_restart_intent(self):
-        """Agent dies with intent=restarting → reboot and reset intent."""
+        """Agent dies with intent=restarting → reboot. Comes back → intent=running (#4966)."""
+        import tempfile
         from harness import HarnessState, AgentState
-        hs = HarnessState()
-        agent = AgentState("skill", "/tmp/clone")
-        agent.status = "running"
-        agent.intent = AgentState.INTENT_RESTARTING
-        hs.set_agent("skill", agent)
 
-        # First health check: agent dies → reboot triggered
-        mock_report_dead = {
-            "agents": [{"role": "skill", "health": "stopped", "clone_path": "/tmp/clone"}]
-        }
-        with patch("harness.health_check.check_all_agents", return_value=mock_report_dead), \
-             patch("harness.boot_remote.boot_agent"):
-            hs.update_health()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            (role_dir / ".claude-pid").write_text("99999999", encoding="utf-8")
 
-        # Second health check: agent came back → intent reset to running
-        mock_report_alive = {
-            "agents": [{"role": "skill", "health": "healthy", "clone_path": "/tmp/clone"}]
-        }
-        with patch("harness.health_check.check_all_agents", return_value=mock_report_alive), \
-             patch("harness.boot_remote.boot_agent"):
-            hs.update_health()
+            hs = HarnessState()
+            agent = AgentState("skill", tmpdir)
+            agent.status = "running"
+            agent.intent = AgentState.INTENT_RESTARTING
+            agent.claude_pid = 99999999
+            hs.set_agent("skill", agent)
 
-        self.assertEqual(hs.get_agent("skill").intent, AgentState.INTENT_RUNNING)
+            # First poll: dead → reboot triggered
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.boot_remote.boot_agent"), \
+                 patch("harness.health_check.check_agent_health", return_value={"health": "unknown"}), \
+                 patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
+                hs.update_health()
+
+            # Second poll: agent came back alive (use current process PID)
+            (role_dir / ".claude-pid").write_text(str(os.getpid()), encoding="utf-8")
+            hs.get_agent("skill").status = "starting"  # was set by reboot
+            hs.get_agent("skill").claude_pid = None  # cleared by reboot
+
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.boot_remote.boot_agent"), \
+                 patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
+                hs.update_health()
+
+            self.assertEqual(hs.get_agent("skill").intent, AgentState.INTENT_RUNNING)
 
 
 if __name__ == "__main__":

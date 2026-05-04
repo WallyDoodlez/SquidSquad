@@ -303,9 +303,7 @@ Write your results to `.squidsquad/pm/cycle-output.json`:
   ],
   "iteration_summary": "Brief description of work done",
   "commit_message": "pm: cycle N — brief description",
-  "working_state_update": "# Working State\n\n- **Task**: none\n...",
-  "restart_needed": false,
-  "restart_reason": null
+  "working_state_update": "# Working State\n\n- **Task**: none\n..."
 }
 ```
 
@@ -315,7 +313,7 @@ Then run:
 python references/scripts/cycle_post.py pm
 ```
 
-The script handles: status transitions, tracker comments, iteration logging, git commits, pushes, version bumps (DM), restart sentinels, and status bar cleanup.
+The script handles: status transitions, tracker comments, iteration logging, git commits, pushes, version bumps (DM), and status bar cleanup. Context pressure exit is detected mechanically — `cycle_post.py` exits with code 42 when pressure exceeds threshold, and the harness respawns the agent (#4966).
 
 ### Role-Specific Fields
 
@@ -681,7 +679,7 @@ For each open PR, parse the issue number from the branch name. Check if that iss
 python references/scripts/tracker.py get-state [NUMBER]
 ```
 If the issue is closed but the PR is open and unmerged:
-- **Tier 1**: Close the orphaned PR with comment — `gh pr close [PR_NUMBER] --comment "Closing orphaned PR — tracker item #[NUMBER] already shipped/closed. If code was needed, reopen and merge."`
+- **Tier 1**: Comment on the tracker issue routing to owning agent — `python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "Orphaned PR #[PR] — item shipped but PR still open. [role]-lead or human: close or merge the PR."`
 - **Tier 2**: File bug against DM — `"DM delivery did not enforce PR merge before marking shipped. Item #[NUMBER] shipped but PR #[PR] left open. Code on branch may never reach main."`
 
 **4b. Shipped without merge** — item marked shipped but PR branch never merged (code lost).
@@ -732,7 +730,7 @@ Parse the JSON output. If the assigned agent's health is `stalled`, `stopped`, o
   python references/scripts/tracker.py transition [NUMBER] in-progress approved --role pm-lead
   python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "Agent [role] is [health status]. Returning task to approved for re-pickup."
   ```
-- **Tier 2**: File bug if agent has been unhealthy for >1 hour — `"Agent [role] health is [status] but task #[NUMBER] was in-progress. Boot wrapper may need investigation."`
+- **Tier 2**: File bug if agent has been unhealthy for >1 hour — `"Agent [role] health is [status] but task #[NUMBER] was in-progress. Harness may need investigation."`
 
 If Branch Workflow is `no`, skip checks 1, 3, 4a, and 4b (PR-related) silently. All other checks run regardless.
 <!-- /sub-skill: pipeline-sentinel -->
@@ -771,14 +769,14 @@ Run the deterministic health check script:
 python references/scripts/health_check.py
 ```
 
-The script reads each agent's heartbeat file (`.squidsquad/<role>/.health`) — the wrapper writes the current epoch every 5 seconds. If the heartbeat is >10 seconds old, the agent is dead.
+The script checks agent liveness via PID monitoring (primary) and `.health` file (legacy fallback). The harness monitors PIDs directly every 5 seconds (#4966).
 
 Log the script's output in `pm/qa-log.md`. For any agent reporting stalled (👻) or unknown (❓):
 
 1. Append a Discussion note to that agent's latest open tracker item.
 2. If no open item exists, log in `qa-log.md` only.
 
-**Context pressure monitoring**: Check each agent's context pressure file. If any agent exceeds threshold, report to the human with the agent role and pressure percentage. **PM does not execute reboots directly** — agent lifecycle is managed by `start_team.py` and the wrapper scripts.
+**Context pressure monitoring**: Check each agent's context pressure file. If any agent exceeds threshold, report to the human with the agent role and pressure percentage. **PM does not execute reboots directly** — agent lifecycle is managed by the harness and `start_team.py` (#4966).
 
 For programmatic use, the script accepts `--json` for structured output.
 <!-- /sub-skill: health-check -->
@@ -827,7 +825,7 @@ If any agents were spawned, print: `[🦑 HH:MM:SS] Booted: [role1, role2, ...]`
 
 If all agents alive or stopped, print nothing — silent pass.
 
-**PM does not boot agents directly.** Agent lifecycle is managed by `start_team.py` and the wrapper scripts. If PM detects a stalled or dead agent, report to the human — do not attempt to spawn or restart agents.
+**PM does not boot agents directly.** Agent lifecycle is managed by the harness (`harness.py`) and `start_team.py` (#4966). If PM detects a stalled or dead agent, report to the human — do not attempt to spawn or restart agents.
 <!-- /sub-skill: boot-remote-agents -->
 
 <!-- sub-skill: soul-shepherd -->
@@ -1188,21 +1186,21 @@ Log in iteration summary: `Vault synthesis: [N] recent notes reviewed, [M] postu
 <!-- sub-skill: self-restart -->
 ### Self-Restart (Context Pressure Only)
 
-Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled externally via `start_team.py --reboot`.
+Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled by the harness via intent API (#4966).
 
 **Context pressure restart flow**:
 1. Step 1b detects context pressure exceeds threshold.
 2. Checkpoint working state to `.squidsquad/pm/working-state.md`.
 3. Complete the current cycle normally.
-4. At cycle end, `cycle_post.py` reads the context pressure from `cycle-input.json` and writes `.squidsquad/pm/.stop-after-cycle` mechanically when pressure exceeds threshold. Agents do not need to set `restart_needed` — the mechanical layer detects and acts.
-5. The wrapper detects the sentinel on exit, deletes it, and respawns.
+4. At cycle end, `cycle_post.py` checks context pressure from `cycle-input.json`. If exceeded, exits with code 42.
+5. The harness detects the exit, sees intent=running, and respawns the agent.
 
 **You do NOT**:
-- Set `restart_needed` in cycle-output.json (deprecated — `cycle_post.py` detects context pressure mechanically).
-- Write `.stop-after-cycle` directly — `cycle_post.py` handles this mechanically.
-- Restart for template changes (handled externally via `start_team.py --reboot`).
-- Kill or manage other agents (human or `start_team.py` handles this).
-- Implement any restart loop logic (wrapper handles respawn).
+- Set `restart_needed` in cycle-output.json (deprecated).
+- Write any sentinel files directly.
+- Restart for template changes (handled by harness via `start_team.py --reboot`).
+- Kill or manage other agents (harness handles this).
+- Implement any restart loop logic (harness handles respawn).
 
 Write `idle|` to `current-state` at cycle end so health monitoring works.
 <!-- /sub-skill: self-restart -->
@@ -1210,14 +1208,20 @@ Write `idle|` to `current-state` at cycle end so health monitoring works.
 <!-- sub-skill: agent-lifecycle -->
 ### Agent Lifecycle
 
-Agent lifecycle is managed by `start_team.py` and the wrapper scripts. Agents do not manage their own or other agents' processes directly.
+Agent lifecycle is managed by the harness (`harness.py`) via REST API (#4966). Agents do not manage their own or other agents' processes directly.
 
 **Three guarantees**:
-1. **Singleton**: Only one instance per role runs at a time (PID lock file).
-2. **Graceful stop**: `start_team.py --reboot` writes `.stop-after-cycle` and waits for the agent to finish its current cycle before respawning.
-3. **Start correctly**: Wrapper handles pre-flight checks, branch setup, and heartbeat.
+1. **Singleton**: Only one instance per role runs at a time (harness process table).
+2. **Graceful stop**: Harness sets intent=stopping via API. `cycle_post.py` queries `GET /agents/{role}` at cycle end, sees the intent, and exits with code 42.
+3. **Start correctly**: Harness spawns agents via thin launcher (`thin_launcher.py`) in visible terminal windows. `cycle_pre.py` handles git pull/branch per cycle.
 
-**Heartbeat**: The wrapper writes the current epoch to `.squidsquad/pm/.health` every 5 seconds. Health monitoring reads this — if >10s old, the agent is considered dead.
+**Health monitoring**: Harness monitors agent liveness via direct PID checks (primary) and `.claude-pid` file (fallback). No heartbeat files needed — the harness polls every 5 seconds.
+
+**Intent state machine** (per-agent, in harness memory + `.harness-state.json`):
+- `running` — agent should be alive; auto-reboot on death
+- `stopping` — graceful stop; do NOT reboot after death
+- `restarting` — graceful restart; reboot after death
+- `stopped` — agent died as requested
 
 **Lifecycle interface**:
 ```bash
@@ -1227,24 +1231,25 @@ python references/scripts/start_team.py --all
 # Start single agent
 python references/scripts/start_team.py --role <role>
 
-# Graceful reboot — waits for cycle end, then restarts
+# Graceful reboot — harness sets intent=restarting
 python references/scripts/start_team.py --reboot <role>
 
 # Reboot all agents
 python references/scripts/start_team.py --reboot --all
 
-# Stop agent (permanent until manually restarted)
+# Stop agent — harness sets intent=stopping
 python references/scripts/start_team.py --stop <role>
 
 # Stop all agents
 python references/scripts/start_team.py --stop --all
 ```
 
-**Sentinel files**:
-- `.stop-after-cycle` — graceful restart request (written by `cycle_post.py` for context pressure, or by `start_team.py --reboot`)
-- `.stop` — permanent stop (written by `start_team.py --stop`, respected by wrapper)
-- `.pid` — singleton lock (written by wrapper)
-- `.health` — heartbeat epoch (written by wrapper every 5s)
+**Crash recovery**: Harness persists state to `.squidsquad/.harness-state.json`. On restart, reads the file, checks which PIDs are alive, and resumes monitoring.
+
+**Ctrl+C escalation** (at harness terminal):
+- 1st Ctrl+C: graceful stop (set all agents intent=stopping, wait for cycle end)
+- 2nd Ctrl+C within 5s: warn about force exit
+- 3rd Ctrl+C: exit harness (agents survive in their terminals)
 <!-- /sub-skill: agent-lifecycle -->
 
 ### Step 10 — Done
@@ -1906,6 +1911,7 @@ These instructions apply to the PM agent on this project.
 ### Pipeline Management
 
 - **Pipeline sentinel**: check PR conflicts, stall detection, PR status sync, stuck-state detection every cycle.
+- **NEVER rebase dev agent branches.** If a PR has merge conflicts, comment on the issue telling the dev agent to resolve. The dev agent owns their branch — conflict resolution is their responsibility, not PM's. PM rebasing dev branches risks dropping implementation commits.
 - **QA fallback**: if QA agent is not installed, PM handles Steps 3-6 (testing + verification).
 - **Post-merge recompose**: when merged branches touch `references/`, run `compose.py deploy-all`.
 - **Agent lifecycle via `start_team.py`** — PM does not boot agents directly. Report stalled agents to human.
@@ -2005,6 +2011,7 @@ Before marking any task `Pending Test`, run this checklist against your changes.
 - [ ] **Modified template structure?** → Update `compose.py deploy` and `/squidsquad-upgrade`
 - [ ] **Added/removed sub-skills?** → Update `includes.yml` and `manifest.md`
 - [ ] **Changed role composition?** → Update `installer-files.txt` manifest
+- [ ] **Upgrade path documented?** → If task changes how agents start, how files are structured, or removes/replaces existing scripts, document the full upgrade sequence (stop → deploy → clean → recompose → start) in the issue or CONTEXT.md. QA must verify the upgrade path works end-to-end.
 
 If ANY box applies and the corresponding update was NOT made, the task is not done. Post your checklist results on the issue before transitioning.
 

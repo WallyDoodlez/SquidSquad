@@ -20,7 +20,8 @@ SAMPLE_CONFIG = """# SquidSquad Config
 ## Agents
 
 - **Dev Agents**: qa, skill
-- **PM/QA**: always present
+- **PM**: always present
+- **QA**: always present
 - **DM**: present
 
 ## Aliases
@@ -29,16 +30,24 @@ SAMPLE_CONFIG = """# SquidSquad Config
 - **pm**: pm
 - **dm**: dm
 - **qa**: qa
+- **designer**: designer
 
 ## Project
 
 - **Name**: TestProject
 - **Repo**: github.com/test/repo
+- **Intent Description**: (not set)
 
 ## Test Commands
 
 - **skill Tests**: python tests/run_tests.py
 - **E2E Tests**: (none)
+
+## Git Branches
+
+- **Working Branch**: main
+- **State Branch**: squid-squad
+- **Branch Pattern**: squidsquad/task/{number}
 
 ## Iteration Interval
 
@@ -48,15 +57,67 @@ SAMPLE_CONFIG = """# SquidSquad Config
 
 - **Threshold**: 70
 
-## PR Flow
+## Auto Merge
 
-- **Enabled**: no
+- **Enabled**: yes
 
 ## Branch Workflow
 
 - **Enabled**: yes
 
+## PR Flow
+
+- **Enabled**: no
+
 ## Improvement Scanning
+
+- **Enabled**: yes
+
+## Vault Optimize
+
+- **Enabled**: yes
+- **Threshold**: 20
+
+## Vault Remember
+
+- **Enabled**: yes
+- **Writes Per Cycle**: 2
+- **BRIEFING Token Budget**: 2000
+- **Confidence Decay Days**: 60
+
+## Cycle Runner
+
+- **Enabled**: yes
+
+## Agent Compose
+
+- **Enabled**: no
+
+## Diagnostics
+
+- **Enabled**: yes
+- **Upstream Reporting**: ask
+
+## Model Routing
+
+- **Default Model**: claude
+- **Research Model**: deepseek-v4-pro
+- **Discussion Prep Model**: claude
+- **Test Plan Model**: claude
+- **QA Execution Model**: claude
+- **Comprehension Model**: claude
+- **Improvement Scan Model**: claude
+- **Fallback Model**: claude
+- **API Timeout Seconds**: 120
+
+## Forge Backend
+
+- **Provider**: github
+- **Endpoint**: https://api.github.com
+- **Owner**: test-owner
+- **Repo**: test-repo
+
+## Mandatory Human Approval
 
 - **Enabled**: yes
 
@@ -65,10 +126,10 @@ SAMPLE_CONFIG = """# SquidSquad Config
 - **Ship Threshold**: 10
 - **Shipped Since Last Bump**: 5
 
-## Vault Remember
+## Harness
 
 - **Enabled**: yes
-- **Writes Per Cycle**: 2
+- **Port**: 7373
 """
 
 
@@ -231,3 +292,17 @@ class TestDetectSchemaVersion:
     def test_malformed_value_defaults_v1(self):
         text = "- **Architecture Version**: abc\n"
         assert config.detect_schema_version(text) == 1
+
+
+class TestFieldMapCoverage:
+    """#5366: All FIELD_MAP entries must resolve against SAMPLE_CONFIG."""
+
+    @pytest.mark.parametrize("key", sorted(config.FIELD_MAP.keys()))
+    def test_field_map_entry_resolves(self, key):
+        """Every FIELD_MAP key must find its section+field in SAMPLE_CONFIG."""
+        section, field = config.FIELD_MAP[key]
+        value = config._parse_field(SAMPLE_CONFIG, section, field)
+        assert value is not None, (
+            f"FIELD_MAP['{key}'] → section='{section}', field='{field}' "
+            f"not found in SAMPLE_CONFIG. Update the fixture."
+        )
