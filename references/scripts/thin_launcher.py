@@ -63,7 +63,7 @@ def main():
 
     try:
         proc = subprocess.Popen(
-            ["claude"],
+            ["claude", "--append-system-prompt", f"SQUIDSQUAD_ROLE={role}"],
             cwd=clone_path,
             env=env,
         )
