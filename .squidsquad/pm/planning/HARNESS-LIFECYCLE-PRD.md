@@ -32,7 +32,7 @@ graph TD
         HM -->|intent=restart| PM
         HM -->|intent=stopped| PM
         HB -->|process dead| HM
-        PM -->|spawn via wt.exe| Launcher
+        PM -->|spawn via terminal| Launcher
         PM -->|on spawn/death| SF
     end
 
@@ -66,86 +66,228 @@ graph TD
     Launcher -->|PID file| PM
 ```
 
-```mermaid
-stateDiagram-v2
-    [*] --> Running: harness spawns agent
+## Scenario Sequence Diagrams
 
-    Running --> CycleLoop: agent alive
-    CycleLoop --> Running: exit 0 (normal cycle)
-    CycleLoop --> GracefulExit: exit 42
-
-    GracefulExit --> HarnessDecision: process exits
-
-    HarnessDecision --> Stopped: intent = stopped
-    HarnessDecision --> Respawn: intent = restart
-    HarnessDecision --> Respawn: intent = running (context pressure)
-
-    Running --> CrashDetected: process dies unexpectedly
-    CrashDetected --> Respawn: intent = running (auto-recover)
-
-    Respawn --> PreFlight: cycle_pre handles git
-    PreFlight --> Running: harness spawns agent
-
-    Stopped --> [*]
-```
+### 1. Startup — harness boots all agents
 
 ```mermaid
-stateDiagram-v2
-    state "Ctrl+C Escalation (Harness Terminal)" as CtrlC {
-        [*] --> WaitingForInput
-        WaitingForInput --> GracefulStop: Ctrl+C
-        GracefulStop --> Warning: Ctrl+C within 5s
-        Warning --> ForceKill: Ctrl+C again
-        GracefulStop --> WaitingForInput: 5s timeout (agent exited)
-    }
+sequenceDiagram
+    participant O as Operator
+    participant H as Harness
+    participant L as Thin Launcher (terminal)
+    participant A as Agent (claude)
 
-    state "Stop Flow" as StopFlow {
-        [*] --> SetIntent: /stop or Ctrl+C
-        SetIntent --> IntentSet: intent = stopping (in-memory)
-        IntentSet --> WaitCycle: agent continues current cycle
-        WaitCycle --> CyclePostChecks: cycle_post calls GET /agents/role
-        CyclePostChecks --> AgentExits: intent = stopping -> exit 42
-        AgentExits --> Done: harness sees intent=stopping, no reboot
-    }
+    O->>H: python harness.py
+    H->>H: gh auth check (once)
+    H->>H: Read config.md (agent list)
 
-    state "Restart Flow" as RestartFlow {
-        [*] --> SetIntent2: /restart
-        SetIntent2 --> IntentSet2: intent = restarting (in-memory)
-        IntentSet2 --> WaitCycle2: agent continues current cycle
-        WaitCycle2 --> CyclePostChecks2: cycle_post calls GET /agents/role
-        CyclePostChecks2 --> AgentExits2: intent = restarting -> exit 42
-        AgentExits2 --> Reboot: harness sees intent=restarting
-        Reboot --> Spawned: new claude process
-    }
+    loop For each configured agent
+        H->>H: Set intent = running
+        H->>L: Spawn via terminal (visible terminal)
+        L->>A: Start claude --append-system-prompt SQUIDSQUAD_ROLE=skill
+        L->>H: Write PID to known location
+        H->>H: Read PID, store in .harness-state.json
+        H->>H: Start monitoring PID liveness
+    end
 
-    state "Crash Flow" as CrashFlow {
-        [*] --> ProcessDies: unexpected death
-        ProcessDies --> HarnessDetects: process monitor
-        HarnessDetects --> AutoReboot: intent was running (no stop requested)
-        AutoReboot --> Spawned2: new claude process
-    }
+    Note over H: All agents running, harness monitoring
+
+    loop Agent cycle (repeating)
+        A->>A: cycle_pre.py (git pull, branch check)
+        A->>A: Creative work
+        A->>H: GET /agents/skill (check intent)
+        H-->>A: {intent: "running"}
+        A->>A: cycle_post.py exits 0 (continue)
+    end
 ```
+
+### 2. Context pressure — agent reboots
 
 ```mermaid
 sequenceDiagram
     participant H as Harness
-    participant A as Agent (cycle_post.py)
-    participant API as GET /agents/role
+    participant A as Agent (claude)
 
-    Note over H: Operator calls /stop
-    H->>H: Set intent = stopping (in-memory)
-    H->>H: Write to .harness-state.json
+    Note over A: Context at 72% (exceeds 70% threshold)
+    A->>A: cycle_pre.py detects pressure in cycle-input.json
+    A->>A: Checkpoint working state
+    A->>A: Complete creative work normally
+    A->>H: GET /agents/skill (check intent)
+    H-->>A: {intent: "running"}
+    A->>A: cycle_post.py detects context pressure
+    A->>A: Exit code 42
 
-    Note over A: Agent finishes creative work
-    A->>API: GET /agents/skill (check intent)
-    API-->>A: {intent: "stopping"}
-    A->>A: Exit with code 42
+    Note over H: Process monitor detects death
+    H->>H: Check intent = running (no stop requested)
+    H->>H: Exit code 42 = context pressure
+    H->>H: Respawn decision: YES
+    H->>H: Run pre-flight (spawn new terminal)
+    H->>A: New claude process starts
+    A->>A: cycle_pre.py runs, reads working-state.md
+    A->>A: Resumes from checkpoint
+```
+
+### 3. Crash — unexpected agent death
+
+```mermaid
+sequenceDiagram
+    participant H as Harness
+    participant A as Agent (claude)
+
+    A->>A: Creative work (mid-cycle)
+    A-xA: Process dies unexpectedly
+
+    Note over H: PID liveness check fails
+    H->>H: Agent PID is dead
+    H->>H: Check intent = running (no stop requested)
+    H->>H: No exit code 42 (crash, not graceful)
+    H->>H: Apply crash backoff
+    H->>H: Respawn decision: YES
+    H->>H: Update .harness-state.json
+    H->>A: Spawn new claude process
+    A->>A: cycle_pre.py runs
+    A->>A: Reads working-state.md if exists
+    A->>A: Resumes or starts fresh
+```
+
+### 4. User shutdown — graceful stop
+
+```mermaid
+sequenceDiagram
+    participant O as Operator
+    participant H as Harness
+    participant A as Agent (claude)
+
+    O->>H: Ctrl+C (first)
+    H->>H: Set intent = stopping for all agents
+    H->>H: Update .harness-state.json
+    H->>O: "Graceful shutdown — waiting for agents to finish cycles..."
+
+    Note over A: Agent is mid-cycle, continues working
+    A->>A: Finishes creative work
+    A->>H: GET /agents/skill (check intent)
+    H-->>A: {intent: "stopping"}
+    A->>A: cycle_post.py sees stopping intent
+    A->>A: Exit code 42
 
     Note over H: Process monitor detects death
     H->>H: Check intent = stopping
-    H->>H: Do NOT respawn
-    H->>H: Set intent = stopped
+    H->>H: Respawn decision: NO
+    H->>H: Mark agent as stopped
     H->>H: Update .harness-state.json
+
+    Note over H: All agents stopped
+    H->>O: "All agents stopped. Harness exiting."
+    H->>H: Clean up .harness-state.json
+    H->>H: Exit
+
+    Note over O: If impatient...
+    O->>H: Ctrl+C (second, within 5s)
+    H->>O: "WARNING: Harness will exit. Agents keep running and can be recovered on restart."
+    O->>H: Ctrl+C (third)
+    H->>H: Exit harness only (agents survive in their terminals)
+    H->>H: .harness-state.json preserved (intent=stopping for all agents)
+
+    Note over A: Agents still running — no monitoring
+    Note over O: On next harness start, agents are found alive
+    Note over O: Harness resumes monitoring (Scenario 5)
+```
+
+### 5. Harness force-closed — agent recovery
+
+```mermaid
+sequenceDiagram
+    participant O as Operator
+    participant H as Harness
+    participant A1 as Agent 1 (alive)
+    participant A2 as Agent 2 (died)
+
+    O-xH: Force close harness
+
+    Note over A1: Still running in its terminal
+    A1->>A1: cycle_post calls GET /agents/skill
+    A1->>A1: Connection refused — safe default
+    A1->>A1: Exit 0 (continue running)
+    A1->>A1: Next cycle starts normally
+
+    Note over A2: Crashes while harness is down
+    A2-xA2: Process dies — nobody watching
+
+    Note over O: Later...
+    O->>H: python harness.py (restart)
+    H->>H: Read .harness-state.json
+    H->>H: Check PID for Agent 1 — alive
+    H->>H: Resume monitoring Agent 1
+    H->>H: Check PID for Agent 2 — dead
+    H->>H: Intent was running — respawn
+    H->>A2: Spawn new Agent 2
+```
+
+### 6. Agent force-closed — crash recovery
+
+```mermaid
+sequenceDiagram
+    participant O as Operator
+    participant H as Harness
+    participant A as Agent (claude)
+
+    O-xA: Force close agent terminal (taskkill, close window)
+
+    Note over H: PID liveness check fails (~5s)
+    H->>H: Agent PID is dead
+    H->>H: Check intent = running (no stop requested)
+    H->>H: Treat as crash
+    H->>H: Apply crash backoff
+    H->>H: Update .harness-state.json
+    H->>A: Spawn new agent in new terminal
+    A->>A: cycle_pre.py runs
+    A->>A: Reads working-state.md if exists
+    A->>A: Resumes or starts fresh
+```
+
+### 7. Power outage — full system restart
+
+```mermaid
+sequenceDiagram
+    participant O as Operator
+    participant H as Harness
+    participant A1 as Agent 1
+    participant A2 as Agent 2
+    participant D as Disk
+
+    Note over H,A2: Power outage — everything dies instantly
+    H-xH: Dead
+    A1-xA1: Dead (mid-cycle, uncommitted work lost)
+    A2-xA2: Dead
+
+    Note over D: Survives reboot:
+    Note over D: .harness-state.json (PIDs + intents)
+    Note over D: working-state.md (last checkpoint)
+    Note over D: Git repo (all committed work)
+    Note over D: GitHub Issues (remote, always safe)
+
+    Note over O: Machine reboots, operator starts harness
+    O->>H: python harness.py
+    H->>H: gh auth check
+    H->>D: Read .harness-state.json
+    D-->>H: Agent 1: PID 1234, intent=running, boot_time=1746200000
+    D-->>H: Agent 2: PID 5678, intent=running, boot_time=1746200001
+
+    H->>H: Check PID 1234 — dead (or recycled: creation time mismatch)
+    H->>H: Check PID 5678 — dead (or recycled: creation time mismatch)
+    H->>H: Both had intent=running — respawn both
+
+    H->>A1: Spawn Agent 1 in terminal
+    A1->>A1: cycle_pre.py (git pull, branch check)
+    A1->>A1: Read working-state.md (last checkpoint)
+    A1->>A1: Resume from checkpoint
+
+    H->>A2: Spawn Agent 2 in terminal
+    A2->>A2: cycle_pre.py (git pull, branch check)
+    A2->>A2: Resume from checkpoint
+
+    Note over H,A2: Full recovery — agents resume where they left off
+    Note over H,A2: Only loss: uncommitted work from interrupted cycle
 ```
 
 ## What Gets Removed
@@ -162,6 +304,7 @@ sequenceDiagram
 | Crash retry logic | Wrapper (one retry) | **Moved to harness with configurable policy** |
 | Respawn loop | Template wrapper | **Moved to harness** |
 | Heartbeat background job | Wrapper | **Eliminated — harness monitors process directly** |
+| .booting sentinel | boot_remote.py | **Eliminated — harness internal mutex replaces concurrent spawn prevention** |
 
 **Zero sentinel files in target architecture.**
 
@@ -170,17 +313,18 @@ sequenceDiagram
 ### 1. Pre-Flight (split ownership)
 
 - **Harness at startup**: `gh auth` verification (once, not per-spawn)
-- **Harness at spawn**: Set `SQUIDSQUAD_ROLE` env var, spawn via wt.exe with thin launcher
+- **Harness at spawn**: Set `SQUIDSQUAD_ROLE` env var, spawn via terminal with thin launcher
 - **cycle_pre.py per cycle**: git checkout working branch, git pull --ff-only, state bus init
 - ~~Inject permissions~~ — not needed
 - Singleton enforcement via harness process table (not PID file)
 
 ### 2. Process Management
 
-- Spawn claude via wt.exe with thin launcher script (visible terminal)
+- Spawn claude via terminal (platform-agnostic: wt.exe, Terminal.app, tmux, or PTY — dev discretion)
 - Thin launcher writes claude PID to known location, harness reads it
-- Track PIDs in `.squidsquad/.harness-state.json` (durable across harness restarts)
-- Monitor process liveness directly (PID check, no heartbeat file)
+- Track PIDs + boot_time in `.squidsquad/.harness-state.json` (durable across harness restarts)
+- Monitor process liveness directly (PID check + creation time validation, no heartbeat file)
+- PID recycling detection: compare stored boot_time against actual process creation time. Mismatch = recycled PID, treat as dead.
 - Detect death -> check intent -> act (respawn or stop)
 
 ### 3. Intent State Machine
@@ -190,8 +334,12 @@ Per-agent states: `running`, `stopping`, `restarting`, `stopped`, `crashed`
 Transitions:
 - `/stop` -> intent=stopping -> cycle_post queries API -> sees stopping -> exits 42 -> harness: intent=stopped
 - `/restart` -> intent=restarting -> cycle_post queries API -> sees restarting -> exits 42 -> harness: respawn -> intent=running
-- crash detected (process dies, intent was running) -> harness: respawn -> intent=running
-- context pressure (cycle_post detects locally) -> exits 42 -> harness: respawn -> intent=running
+- crash detected (process dies, intent was running) -> harness: apply backoff -> respawn -> intent=running
+- context pressure (cycle_post detects locally) -> exits 42 -> harness checks intent:
+  - intent=running -> respawn (context pressure recovery)
+  - intent=stopping -> do NOT respawn (operator intent wins)
+
+**Priority rule**: Operator intent always wins over automatic signals. If intent=stopping or intent=stopped at the moment of death, harness never respawns — regardless of exit code.
 
 ### 4. Intent API (replaces .stop-after-cycle)
 
@@ -217,9 +365,9 @@ HTTP timeout: 5 seconds.
 
 ### 7. Ctrl+C Graceful Shutdown
 
-- First Ctrl+C -> graceful stop (set intent=stopping, wait for cycle end)
-- Second Ctrl+C within 5s -> warn: "Will force-kill agent. Press Ctrl+C again to confirm."
-- Third Ctrl+C -> force kill process
+- First Ctrl+C -> graceful stop (set intent=stopping for all agents, wait for cycle end). When all agents have exited, harness exits cleanly.
+- Second Ctrl+C within 5s -> warn: "Harness will exit. Agents keep running and can be recovered on restart."
+- Third Ctrl+C -> harness exits only (agents survive in their terminals, recoverable via Scenario 5)
 
 ### 8. Crash Recovery
 
@@ -253,7 +401,7 @@ As an operator (or PM agent), I call `GET /agents/skill/health`. It returns proc
 As an operator, I call `GET /agents/skill/config` to see the agent's current configuration state.
 
 **US-8: Graceful shutdown from terminal**
-As an operator at the harness terminal, I press Ctrl+C to initiate graceful stop. Double Ctrl+C warns about force kill. Triple Ctrl+C force-kills.
+As an operator at the harness terminal, I press Ctrl+C to initiate graceful stop. Double Ctrl+C warns. Triple Ctrl+C exits harness only — agents survive and are recoverable on next harness start.
 
 **US-9: Harness crash recovery**
 The harness crashes while agents are running (in visible terminals). On restart, harness reads `.harness-state.json`, checks which PIDs are alive, and resumes monitoring them.
@@ -263,10 +411,11 @@ The harness crashes while agents are running (in visible terminals). On restart,
 - [ ] All start-*.sh and start-*.ps1 wrapper scripts deleted from .squidsquad/ and all clones
 - [ ] Template wrappers (references/templates/start-role.*) deleted or replaced with thin launcher
 - [ ] compose.py boot subcommand generates thin launcher (PID-reporting one-shot) not full wrapper
-- [ ] Harness spawns agents via wt.exe with thin launcher (visible terminals)
+- [ ] Harness spawns agents via terminal with thin launcher (visible terminals)
 - [ ] Thin launcher writes claude PID to known location, harness reads it after spawn
-- [ ] ALL sentinel files eliminated: .health, .pid, .claude-pid, .stop, .stop-after-cycle, .restart
-- [ ] Harness tracks per-agent PIDs and intents in `.squidsquad/.harness-state.json`
+- [ ] ALL sentinel files eliminated: .health, .pid, .claude-pid, .stop, .stop-after-cycle, .restart, .booting
+- [ ] Harness tracks per-agent PIDs, intents, and boot_time in `.squidsquad/.harness-state.json`
+- [ ] Harness validates stored PIDs against process creation time (PID recycling detection)
 - [ ] Intent state machine: running/stopping/restarting/stopped/crashed transitions correct
 - [ ] cycle_post.py queries `GET /agents/{role}` for intent instead of reading .stop-after-cycle file
 - [ ] cycle_post.py safe default on API failure: continue running (exit 0)
@@ -275,8 +424,9 @@ The harness crashes while agents are running (in visible terminals). On restart,
 - [ ] Harness crash recovery: reads .harness-state.json, checks PIDs, resumes monitoring
 - [ ] `GET /agents/{role}/health` returns process status, last cycle, phase, context pressure
 - [ ] `GET /agents/{role}/config` exposes agent config sync state
-- [ ] Ctrl+C escalation: single=graceful, double=warn, triple=force-kill
-- [ ] Context pressure exit (42) from cycle_post triggers harness reboot
+- [ ] Ctrl+C escalation: single=graceful stop, double=warn, triple=harness exits (agents survive)
+- [ ] Context pressure exit (42) from cycle_post triggers harness reboot ONLY when intent=running (operator intent wins)
+- [ ] .harness-state.json handles first-run (file doesn't exist = empty state, no error)
 - [ ] Pre-flight split: harness does gh auth at startup, cycle_pre.py does git pull/branch per cycle
 - [ ] health_check.py updated to query harness API instead of reading .health files (or deprecated)
 - [ ] boot_remote.py updated to call harness API instead of spawning terminals (or deprecated)
@@ -287,15 +437,29 @@ The harness crashes while agents are running (in visible terminals). On restart,
 - [ ] All existing tests updated or replaced for new architecture
 - [ ] Upgrade path documented: stop agents, deploy, clean stale files, recompose, start via harness
 
+## Instruction Layer Mapping
+
+All instruction changes are **L1 (common sub-skills)** — they apply to every project using the harness. No L4 project-specific instructions needed. Harness config (port, backoff, crash policy) lives in `config.md` which already has a `## Harness` section.
+
+| Layer | Action | File |
+|-------|--------|------|
+| L1 | **Rewrite** `agent-lifecycle.md` — harness owns lifecycle, zero sentinel files, API-based intent, no wrapper scripts | `references/sub-skills/common/agent-lifecycle.md` |
+| L1 | **Update** `cycle-runner.md` — cycle_post checks `GET /agents/{role}` for intent, port discovery, safe default on API failure | `references/sub-skills/common/cycle-runner.md` |
+| L1 | **Delete** `self-restart.md` — harness owns restart, agents don't self-restart | `references/sub-skills/common/self-restart.md` |
+| L1 | **Update** `health-check.md` / `boot-remote-agents.md` — PM queries harness `/agents/{role}/health` API instead of reading .health files | `references/sub-skills/common/health-check.md` and/or `boot-remote-agents.md` |
+| Config | Harness port, crash backoff max, heartbeat interval | `.squidsquad/config.md` `## Harness` section (already exists) |
+
+After sub-skill changes: `compose.py deploy-all` to recompose all agent CLAUDE.md files.
+
 ## Implementation Sequence
 
 1. Add intent API to harness (extend existing `GET /agents/{role}` — already exposes intent)
 2. Add `.harness-state.json` persistence (write on spawn/death/intent change)
 3. Implement harness process monitoring (PID liveness check loop, replace heartbeat)
 4. Implement harness crash recovery (read state file on startup, check PIDs)
-5. Add harness agent spawn via wt.exe + thin launcher (PID report back)
+5. Add harness agent spawn via terminal + thin launcher (PID report back)
 6. Implement Ctrl+C escalation in harness
-7. Update cycle_post.py: replace .stop-after-cycle file check with `GET /agents/{role}` API call
+7. Update cycle_post.py: API-first intent check with .stop-after-cycle file fallback (dual-write transition for one version)
 8. Add port discovery helper to cycle_post.py (default 7373 + parent-dir walk)
 9. Split pre-flight: move gh auth to harness startup, ensure cycle_pre handles git
 10. Add `/agents/{role}/health` and `/agents/{role}/config` endpoints
@@ -305,3 +469,4 @@ The harness crashes while agents are running (in visible terminals). On restart,
 14. Update sub-skills: agent-lifecycle, self-restart, cycle-runner
 15. Recompose all agents
 16. Write upgrade documentation
+17. (Next version) Remove .stop-after-cycle file fallback from cycle_post.py — API-only

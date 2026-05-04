@@ -82,23 +82,44 @@ def _log_diagnostic(severity, message):
 
 
 def pull():
-    """Pull with rebase."""
+    """Pull with rebase (#5378).
+
+    Returns True on success, False on failure. Never crashes.
+    """
     result = _run("git pull --rebase", check=False)
-    if result.returncode != 0:
-        # Try stash + pull + pop
-        _run("git stash")
-        _run("git pull --rebase")
-        pop_result = _run("git stash pop", check=False)
-        if pop_result.returncode != 0:
-            _log_diagnostic("warning", "stash pop failed during pull — possible merge conflict")
-            # Drop the failed stash to prevent leak accumulation (#4829)
-            _run("git stash drop", check=False)
-            print("WARNING: stash pop failed -- dropped stale stash entry.", file=sys.stderr)
-            print("Pulled (stash pop conflict -- stale stash dropped)")
-        else:
-            print("Pulled (stashed and popped)")
-    else:
+    if result.returncode == 0:
         print("Pulled")
+        return True
+
+    # Check if the failure is "already up to date" or branch divergence
+    combined = (result.stdout + result.stderr).lower()
+    if "already up to date" in combined or "up to date" in combined:
+        print("Pulled (already up to date)")
+        return True
+
+    # Try stash + pull + pop
+    stash_result = _run("git stash", check=False)
+    if stash_result.returncode != 0:
+        print("WARNING: git stash failed -- skipping pull", file=sys.stderr)
+        return False
+
+    retry = _run("git pull --rebase", check=False)
+    if retry.returncode != 0:
+        # Restore stashed changes and report failure
+        _run("git stash pop", check=False)
+        print(f"WARNING: git pull --rebase failed after stash -- {retry.stderr.strip()}",
+              file=sys.stderr)
+        return False
+
+    pop_result = _run("git stash pop", check=False)
+    if pop_result.returncode != 0:
+        _log_diagnostic("warning", "stash pop failed during pull — possible merge conflict")
+        # Drop the failed stash to prevent leak accumulation (#4829)
+        _run("git stash drop", check=False)
+        print("WARNING: stash pop failed -- dropped stale stash entry.", file=sys.stderr)
+        print("Pulled (stash pop conflict -- stale stash dropped)")
+    else:
+        print("Pulled (stashed and popped)")
     return True
 
 

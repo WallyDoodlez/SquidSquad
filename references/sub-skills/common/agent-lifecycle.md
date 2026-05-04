@@ -1,14 +1,20 @@
 <!-- sub-skill: agent-lifecycle -->
 ### Agent Lifecycle
 
-Agent lifecycle is managed by `start_team.py` and the wrapper scripts. Agents do not manage their own or other agents' processes directly.
+Agent lifecycle is managed by the harness (`harness.py`) via REST API (#4966). Agents do not manage their own or other agents' processes directly.
 
 **Three guarantees**:
-1. **Singleton**: Only one instance per role runs at a time (PID lock file).
-2. **Graceful stop**: `start_team.py --reboot` writes `.stop-after-cycle` and waits for the agent to finish its current cycle before respawning.
-3. **Start correctly**: Wrapper handles pre-flight checks, branch setup, and heartbeat.
+1. **Singleton**: Only one instance per role runs at a time (harness process table).
+2. **Graceful stop**: Harness sets intent=stopping via API. `cycle_post.py` queries `GET /agents/{role}` at cycle end, sees the intent, and exits with code 42.
+3. **Start correctly**: Harness spawns agents via thin launcher (`thin_launcher.py`) in visible terminal windows. `cycle_pre.py` handles git pull/branch per cycle.
 
-**Heartbeat**: The wrapper writes the current epoch to `.squidsquad/[ROLE]/.health` every 5 seconds. Health monitoring reads this — if >10s old, the agent is considered dead.
+**Health monitoring**: Harness monitors agent liveness via direct PID checks (primary) and `.claude-pid` file (fallback). No heartbeat files needed — the harness polls every 5 seconds.
+
+**Intent state machine** (per-agent, in harness memory + `.harness-state.json`):
+- `running` — agent should be alive; auto-reboot on death
+- `stopping` — graceful stop; do NOT reboot after death
+- `restarting` — graceful restart; reboot after death
+- `stopped` — agent died as requested
 
 **Lifecycle interface**:
 ```bash
@@ -18,22 +24,23 @@ python references/scripts/start_team.py --all
 # Start single agent
 python references/scripts/start_team.py --role <role>
 
-# Graceful reboot — waits for cycle end, then restarts
+# Graceful reboot — harness sets intent=restarting
 python references/scripts/start_team.py --reboot <role>
 
 # Reboot all agents
 python references/scripts/start_team.py --reboot --all
 
-# Stop agent (permanent until manually restarted)
+# Stop agent — harness sets intent=stopping
 python references/scripts/start_team.py --stop <role>
 
 # Stop all agents
 python references/scripts/start_team.py --stop --all
 ```
 
-**Sentinel files**:
-- `.stop-after-cycle` — graceful restart request (written by `cycle_post.py` for context pressure, or by `start_team.py --reboot`)
-- `.stop` — permanent stop (written by `start_team.py --stop`, respected by wrapper)
-- `.pid` — singleton lock (written by wrapper)
-- `.health` — heartbeat epoch (written by wrapper every 5s)
+**Crash recovery**: Harness persists state to `.squidsquad/.harness-state.json`. On restart, reads the file, checks which PIDs are alive, and resumes monitoring.
+
+**Ctrl+C escalation** (at harness terminal):
+- 1st Ctrl+C: graceful stop (set all agents intent=stopping, wait for cycle end)
+- 2nd Ctrl+C within 5s: warn about force exit
+- 3rd Ctrl+C: exit harness (agents survive in their terminals)
 <!-- /sub-skill: agent-lifecycle -->

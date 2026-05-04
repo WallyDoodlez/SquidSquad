@@ -449,26 +449,19 @@ class TestGenerateLocalConfig:
 # ---------------------------------------------------------------------------
 
 class TestBootRole:
-    def test_generates_sh_and_ps1(self, compose_env):
-        with patch.object(compose, "TEMPLATES_DIR", compose_env / "references" / "templates"), \
-             patch.object(compose, "REPO_ROOT", compose_env):
-            outputs = compose.boot_role("skill")
-        assert len(outputs) == 2
-        sh = [o for o in outputs if o.suffix == ".sh"][0]
-        ps1 = [o for o in outputs if o.suffix == ".ps1"][0]
-        assert sh.exists()
-        assert ps1.exists()
-        assert "ROLE=skill" in sh.read_text(encoding="utf-8")
-        assert "$Role = 'skill'" in ps1.read_text(encoding="utf-8")
+    """boot_role is a no-op since #4966 (wrapper scripts eliminated)."""
 
-    def test_substitutes_role_placeholder(self, compose_env):
-        with patch.object(compose, "TEMPLATES_DIR", compose_env / "references" / "templates"), \
-             patch.object(compose, "REPO_ROOT", compose_env):
-            outputs = compose.boot_role("pm")
-        sh = [o for o in outputs if o.suffix == ".sh"][0]
-        content = sh.read_text(encoding="utf-8")
-        assert "{{ROLE}}" not in content
-        assert "pm" in content
+    def test_returns_empty_list(self, compose_env):
+        """boot_role returns empty list — wrappers eliminated (#4966)."""
+        outputs = compose.boot_role("skill")
+        assert outputs == []
+
+    def test_no_files_generated(self, compose_env):
+        """No start-*.sh or start-*.ps1 files created (#4966)."""
+        with patch.object(compose, "REPO_ROOT", compose_env):
+            compose.boot_role("pm")
+        sqdir = compose_env / ".squidsquad"
+        assert not list(sqdir.glob("start-pm.*"))
 
 
 class TestStartRolePs1Template:

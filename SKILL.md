@@ -204,15 +204,15 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
    → If Improvement Scanning enabled and quiet cycle counter ≥ 3: scan target project for domain-specific improvements (max 2 per scan). Classify each finding as an **issue** (broken, wrong, or stale behavior — e.g. dead code, incorrect docs, failing edge cases) or **task** (new or enhanced capability — e.g. missing test coverage, performance optimization, UX improvement). File issues directly as GitHub Issues with `type:issue` + `status:open`; file tasks through PM with `type:task` + `status:pending` for human approval
    → Otherwise: skip log/commit, go to sleep
 6. Log iteration to [role]/iterations/iter-N.md
-7. git add -A && git commit && git push
-8. Sleep [INTERVAL] minutes (from config.md) → repeat
+7. cycle_post.py handles commit, push, and iteration logging
+8. /loop handles re-invocation on interval — no manual sleep
 ```
 
 ### PM Ralph Loop
 
 ```
 1. git pull --rebase
-1b. Context pressure check — if above threshold, save state and exit
+1b. Context pressure check — if above threshold, checkpoint state and continue (Claude Code compresses prior messages automatically)
 1c. Resume from working-state.md if active task exists
 2. Non-blocking human check-in (print note, continue immediately)
    → If human has provided input: file bugs to tracker; for features, discuss first (predict intent, surface questions, invite refinement), then file and run Feature Intake Process
@@ -221,15 +221,15 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 3b. If GitHub Issues ingestion enabled: `gh issue list` → ingest new issues into trackers
 4. If quiet cycle (no human input, no intake work): skip log/commit, go to sleep
 5. Log iteration to pm/iterations/iter-N.md
-6. git add -A && git commit && git push
-7. Sleep [INTERVAL] minutes (from config.md) → repeat
+6. cycle_post.py handles commit, push, and iteration logging
+7. /loop handles re-invocation on interval — no manual sleep
 ```
 
 ### QA Ralph Loop
 
 ```
 1. git pull --rebase
-1b. Context pressure check — if above threshold, save state and exit
+1b. Context pressure check — if above threshold, checkpoint state and continue (Claude Code compresses prior messages automatically)
 1c. Resume from working-state.md if active task exists
 2. Run full e2e test command (from config.md)
 3. Log results to qa/qa-log.md

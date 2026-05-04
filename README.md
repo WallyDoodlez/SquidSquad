@@ -34,8 +34,8 @@ You have a codebase and Claude Code. You can fix one bug at a time. But what if 
 - **Shared memory vault** — agents learn your preferences, decisions, and patterns over time via an Obsidian-compatible knowledge base. Periodic vault synthesis detects cross-agent patterns and surfaces emergent team principles ("postures") for your review before they become active
 - **Self-improvement scanning** — agents proactively find code quality issues, test gaps, and doc drift during quiet cycles, with SQLite-backed scan targeting that learns from past results to focus on high-value areas
 - **Live status bar** — emoji-rich status line showing what each agent is doing, backlog counts, context pressure, and cycle countdown
-- **Singleton agent lifecycle** — each agent is guaranteed to have exactly one running instance (PID lock at wrapper level). The wrapper never kills an agent mid-work — it waits for the cycle to complete before restarting. Health is determined by heartbeat, not stale files. PM plans reboots (context pressure, human requests), DM executes them via `reboot_agent.py`. Dead agents are automatically re-booted — reboots always leave the agent running, whether it was alive or not
-- **Pre-flight checks** — boot scripts verify prerequisites (gh auth, correct branch) before launching agents. Failures are written to `.health` with a reason, preventing crash loops
+- **Singleton agent lifecycle** — the harness guarantees exactly one instance per agent. Agents are never killed mid-work — the harness waits for the current cycle to complete before restarting. Crash recovery is automatic via `.harness-state.json` — if the harness restarts, it knows which agents were running and respawns them. Dead agents are automatically re-booted
+- **Pre-flight checks** — the harness verifies prerequisites (gh auth) at startup. Per-cycle checks (correct branch, git pull) run automatically via `cycle_pre.py`
 - **Auto-merge** — when QA verifies a task, PM automatically squash-merges the PR so you don't have to. Bug fixes and items tagged `merge:manual` still require your review. Controlled via `Auto Merge` in `config.md`
 - **Multi-model subagents** — route token-heavy tasks (research, discussion prep, test plans, improvement scanning) to external models like GPT 5.2 via API, keeping Claude for the main loop and comprehension testing. The setup wizard guides you through provider selection, API key storage (in `~/.squidsquad/secrets`), and optional connection validation. Configure per-task model routing in `config.md` under `Model Routing`. Falls back to Claude automatically if the external model is unavailable
 - **Pipeline self-healing** — PM's pipeline sentinel detects 6 types of stuck tasks (orphaned PRs, shipped-without-merge, stalled approvals, dead-agent work items, and more). When detected, it unsticks the item immediately and auto-files a root-cause bug so the gap gets fixed permanently
@@ -47,7 +47,7 @@ You have a codebase and Claude Code. You can fix one bug at a time. But what if 
 - **Per-agent working directories** — the setup wizard automatically creates isolated git clones for each non-PM agent, so agents can run concurrently without git conflicts. PM stays in the primary repo as the coordination hub. Backward compatible with single-repo setups
 - **Auto versioning** — ships are counted and minor versions auto-bump when thresholds are met
 - **Communication abstraction layer** — a platform-agnostic adapter interface for real-time agent communication. Agents can send messages, create threads, poll for responses, and share files through any supported platform (Telegram, Slack, Discord) without knowing the underlying service. Ships with a NullAdapter so agents work identically whether comms are configured or not. Add a `## Communication` section to `config.md` to enable a provider
-- **Harness (Phase 1)** — a FastAPI-based lifecycle manager that wraps your agents in an HTTP API. The harness polls agent health via sentinel files, starts and stops agents through the existing boot/reboot scripts, and exposes a REST API for all operations. Agents run in independent terminal windows — if the harness crashes, your agents keep running. Port discovery via `.squidsquad/.harness-port`. Use the CLI (`squidsquad_cli.py`) or call the API directly
+- **Harness** — a FastAPI-based lifecycle manager that owns the full agent lifecycle. The harness spawns agents via thin launchers into independent terminal windows, monitors health via PID tracking, and exposes a REST API for start/stop/restart/status operations. Crash recovery via `.harness-state.json` — the harness remembers which agents were running. Ctrl+C graceful shutdown (single=finish cycle, double=warn, triple=force exit). Port discovery via `.squidsquad/.harness-port`. Use the CLI (`squidsquad_cli.py`) or call the API directly
 
 ---
 
@@ -69,8 +69,6 @@ The wizard auto-detects your project context (test commands, tech stack, existin
 
 ### 2. Launch
 
-**Option A — Harness (recommended):**
-
 ```bash
 python references/scripts/squidsquad_cli.py start    # Boot harness + all agents
 python references/scripts/squidsquad_cli.py status   # Check agent health
@@ -78,19 +76,7 @@ python references/scripts/squidsquad_cli.py stop      # Stop all agents
 python references/scripts/squidsquad_cli.py shutdown   # Stop agents + exit harness
 ```
 
-Requires `pip install fastapi uvicorn`. The harness manages agent lifecycle via HTTP API — start, stop, restart individual agents, and monitor health from a single command.
-
-**Option B — Manual (one terminal per agent):**
-
-```bash
-bash .squidsquad/start-pm.sh       # PM (interactive — you talk to this one)
-bash .squidsquad/start-skill.sh    # Dev agent (autonomous)
-bash .squidsquad/start-dm.sh       # Delivery Manager (autonomous)
-```
-
-QA, Designer, and additional dev agents get their own `start-[role].sh` scripts based on your team setup.
-
-PowerShell: `.\.squidsquad\start-[role].ps1`
+Requires `pip install fastapi uvicorn`. The harness owns the full agent lifecycle — starting, stopping, restarting, health monitoring, and crash recovery are all managed through a single process. Each agent runs in its own terminal window; if the harness crashes, your agents keep running. Press Ctrl+C once for graceful shutdown (agents finish their current cycle), twice for a warning, three times for immediate exit.
 
 ### 3. Work
 
