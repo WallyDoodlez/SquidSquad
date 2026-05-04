@@ -87,6 +87,10 @@ FIELD_MAP = {
     "branch-pattern": ("Git Branches", "Branch Pattern"),
     "harness-enabled": ("Harness", "Enabled"),
     "harness-port": ("Harness", "Port"),
+    "effort-pm": ("Agent Effort", "pm"),
+    "effort-skill": ("Agent Effort", "skill"),
+    "effort-qa": ("Agent Effort", "qa"),
+    "effort-dm": ("Agent Effort", "dm"),
 }
 
 
