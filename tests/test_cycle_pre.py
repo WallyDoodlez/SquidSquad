@@ -170,13 +170,15 @@ class TestDoPull:
         fake = MagicMock()
         fake.returncode = 0
         fake.stdout = "Pulled"
+        fake.stderr = ""
         monkeypatch.setattr(cycle_pre, "_run_script", lambda *a, **kw: fake)
         assert cycle_pre._do_pull() == "ok"
 
     def test_error(self, monkeypatch):
         fake = MagicMock()
         fake.returncode = 1
-        fake.stdout = "error"
+        fake.stdout = ""
+        fake.stderr = "fatal: network error"
         monkeypatch.setattr(cycle_pre, "_run_script", lambda *a, **kw: fake)
         assert cycle_pre._do_pull() == "error"
 
@@ -184,8 +186,36 @@ class TestDoPull:
         fake = MagicMock()
         fake.returncode = 0
         fake.stdout = "Pulled (stash pop conflict — run 'git stash show')"
+        fake.stderr = ""
         monkeypatch.setattr(cycle_pre, "_run_script", lambda *a, **kw: fake)
         assert cycle_pre._do_pull() == "stash_conflict"
+
+    def test_already_up_to_date_returns_ok(self, monkeypatch):
+        """#5378: 'already up to date' should return 'ok', not 'error'."""
+        fake = MagicMock()
+        fake.returncode = 0
+        fake.stdout = "Pulled (already up to date)"
+        fake.stderr = ""
+        monkeypatch.setattr(cycle_pre, "_run_script", lambda *a, **kw: fake)
+        assert cycle_pre._do_pull() == "ok"
+
+    def test_nonzero_with_pulled_in_stdout_returns_ok(self, monkeypatch):
+        """#5378: If stdout says 'Pulled' but exit code is non-zero, still ok."""
+        fake = MagicMock()
+        fake.returncode = 1
+        fake.stdout = "Pulled"
+        fake.stderr = ""
+        monkeypatch.setattr(cycle_pre, "_run_script", lambda *a, **kw: fake)
+        assert cycle_pre._do_pull() == "ok"
+
+    def test_genuine_error(self, monkeypatch):
+        """Genuine errors (no 'pulled' in stdout) still return 'error'."""
+        fake = MagicMock()
+        fake.returncode = 1
+        fake.stdout = ""
+        fake.stderr = "fatal: unable to access remote"
+        monkeypatch.setattr(cycle_pre, "_run_script", lambda *a, **kw: fake)
+        assert cycle_pre._do_pull() == "error"
 
 
 # ---------------------------------------------------------------------------

@@ -104,15 +104,24 @@ def _timestamp_short():
 
 
 def _do_pull():
-    """Run git pull. Returns pull_result string."""
+    """Run git pull. Returns pull_result string (#5378).
+
+    Inspects stdout to distinguish normal states from real errors.
+    """
     result = _run_script("git_ops.py", "pull")
     stdout = result.stdout.strip().lower()
+    stderr = result.stderr.strip().lower()
+    combined = stdout + " " + stderr
+
+    # Check stdout content first — more reliable than exit code
+    if "stash pop conflict" in combined or "stash_conflict" in combined:
+        return "stash_conflict"
+    if "already up to date" in combined:
+        return "ok"
+    if "pulled" in stdout:
+        return "ok"
     if result.returncode != 0:
         return "error"
-    if "stash pop conflict" in stdout or "stash_conflict" in stdout:
-        return "stash_conflict"
-    if "conflict" in stdout:
-        return "conflict"
     return "ok"
 
 
