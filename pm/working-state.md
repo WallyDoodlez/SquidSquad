@@ -6,7 +6,8 @@
 
 ## Completed Steps
 - Phase 1 Research complete
-- Architecture confirmed: single bus, role-based filtering on consumer
+- Architecture confirmed: single bus, log model not queue
+- Cursor + lag visibility design locked
 
 ## Remaining Steps
 - Resolve open Q: relevance rule location
@@ -14,8 +15,9 @@
 - Phase 3 test plan
 
 ## Key Decisions
-- Single shared bus (one /events endpoint, one deque)
-- Role-based relevance filtering on consumer side
-- Self-events filtered out by default
+- Single shared bus, log model (events stay on consume)
+- Each consumer tracks own cursor
+- Cursor reported via X-Consumer-Cursor header on emission
+- Health bar 'Bus Lag' column + event log fan-out markers
 
 ## Quiet cycle counter: 0
