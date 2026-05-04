@@ -11,7 +11,7 @@ These instructions apply to the QA agent on this project.
 ### Branch Workflow
 
 - **Use `git_ops.py task-begin` / `task-end`** for branch checkout when verifying tasks with code changes.
-- **QA rebase authority**: only rebase for `.squidsquad/` conflicts on your own branches. Never rebase other agents' branches.
+- **QA merge authority**: resolve `.squidsquad/` conflicts via merge on your own branches only. Never modify other agents' branches.
 
 ### Test Execution
 

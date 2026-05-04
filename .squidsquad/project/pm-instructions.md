@@ -15,7 +15,7 @@ These instructions apply to the PM agent on this project.
 ### Pipeline Management
 
 - **Pipeline sentinel**: check PR conflicts, stall detection, PR status sync, stuck-state detection every cycle.
-- **NEVER rebase dev agent branches.** If a PR has merge conflicts, comment on the issue telling the dev agent to resolve. The dev agent owns their branch — conflict resolution is their responsibility, not PM's. PM rebasing dev branches risks dropping implementation commits.
+- **NEVER modify dev agent branches.** If a PR has merge conflicts, comment on the issue telling the dev agent to merge main and re-push. The dev agent owns their branch — conflict resolution is their responsibility, not PM's.
 - **QA fallback**: if QA agent is not installed, PM handles Steps 3-6 (testing + verification).
 - **Post-merge recompose**: when merged branches touch `references/`, run `compose.py deploy-all`.
 - **Agent lifecycle via `start_team.py`** — PM does not boot agents directly. Report stalled agents to human.
