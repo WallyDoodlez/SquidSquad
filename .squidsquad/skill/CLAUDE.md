@@ -573,6 +573,14 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
    - **Items rejected by human**: [list of previously rejected items — never refile these]
    ```
 
+7. **Capture knowledge from navigation** (#5569): As you read files during the scan, you learn things — patterns, gaps, connections between systems. At the end of each scan, log up to **3 knowledge items** (subject to the vault write budget of 2 per cycle):
+
+   - **Vault writes**: learnings, patterns, or decisions discovered during navigation. Use vault-create for new notes, vault-update for existing ones. Apply the same 4-gate logic as vault-remember (write budget → dedup → reusability → fresh context).
+   - **Scan criteria adjustments**: if you notice your scan criteria consistently miss a category of issues, note it in scan-history.md under a `- **Criteria note**:` line for future scans.
+   - **Connection notes**: observations about how systems relate that aren't obvious from a single file — add as vault galaxy notes (`learning-*` or `pattern-*`).
+
+   Only capture genuinely useful knowledge — not noise. If nothing noteworthy was learned, skip this step.
+
 ### Rules
 
 - **PM is the single coordination point** — agents don't file directly to trackers. Report to PM via Discussion.
