@@ -7,7 +7,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #4709 EPIC Harness Phase 2: Event bus + agent communication (planned, high, role:skill)
 - #3963 EPIC: Web dashboard — visual interface for SquidSquad (pending, high, role:skill)
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm)
-- #5423 harness.py undocumented 'stopped' intent state (open, low, role:skill)
+- #5469 .gitattributes merge strategies + .gitignore volatile files (pending-test, high, role:skill)
 
 ## Pending Tasks (filed this session, awaiting approval)
 

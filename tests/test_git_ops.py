@@ -600,6 +600,59 @@ class TestGetWorkingBranch:
 
 
 # ---------------------------------------------------------------------------
+# #5444 regression: commit_code returns False on push failure
+# ---------------------------------------------------------------------------
+
+class TestCommitCodePushFailure:
+    """#5444: commit_code must return False when push fails."""
+
+    @patch("git_ops._get_alias", return_value="skill")
+    @patch("git_ops._get_working_branch", return_value="main")
+    @patch("git_ops._safe_checkout", return_value=True)
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    @patch("subprocess.run")
+    def test_returns_false_on_push_failure(
+        self, mock_subproc, mock_run, mock_run_list, mock_safe_checkout,
+        mock_gwb, mock_alias
+    ):
+        # git status shows code file changed
+        mock_run.side_effect = [
+            _mock_result(stdout=" M src/app.py\n"),  # status --porcelain
+            _mock_result(stdout="squidsquad/task/100\n"),  # branch --show-current
+        ]
+        mock_subproc.return_value = _mock_result()  # git commit succeeds
+        mock_run_list.side_effect = [
+            _mock_result(),  # git add
+            _mock_result(returncode=1, stderr="push rejected"),  # push FAILS
+        ]
+        result = git_ops.commit_code("skill", "squidsquad/task/100", "test")
+        assert result is False
+
+    @patch("git_ops._get_alias", return_value="skill")
+    @patch("git_ops._get_working_branch", return_value="main")
+    @patch("git_ops._safe_checkout", return_value=True)
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    @patch("subprocess.run")
+    def test_returns_true_on_push_success(
+        self, mock_subproc, mock_run, mock_run_list, mock_safe_checkout,
+        mock_gwb, mock_alias
+    ):
+        mock_run.side_effect = [
+            _mock_result(stdout=" M src/app.py\n"),  # status
+            _mock_result(stdout="squidsquad/task/100\n"),  # branch
+        ]
+        mock_subproc.return_value = _mock_result()  # commit
+        mock_run_list.side_effect = [
+            _mock_result(),  # git add
+            _mock_result(),  # push succeeds
+        ]
+        result = git_ops.commit_code("skill", "squidsquad/task/100", "test")
+        assert result is True
+
+
+# ---------------------------------------------------------------------------
 # #3341 regression: commit_code/commit_state use _get_working_branch()
 # ---------------------------------------------------------------------------
 
@@ -814,19 +867,21 @@ class TestTaskBegin:
     @patch("git_ops._get_working_branch", return_value="main")
     @patch("git_ops._run_list")
     def test_creates_branch_when_missing(self, mock_run_list, mock_gwb):
-        """Branch not found locally or on remote — creates it (#4942)."""
+        """Branch not found locally or on remote — creates from origin/main (#5444)."""
         mock_run_list.side_effect = [
             _mock_result(returncode=1),  # rev-parse local — not found
-            _mock_result(returncode=0),  # git fetch origin (#5013)
+            _mock_result(returncode=0),  # git fetch origin branch (#5013)
             _mock_result(returncode=1),  # rev-parse remote — not found
-            _mock_result(returncode=0),  # git checkout -b — success
+            _mock_result(returncode=0),  # git fetch origin main (#5444)
+            _mock_result(returncode=0),  # rev-parse origin/main (#5444)
+            _mock_result(returncode=0),  # git checkout -b from origin/main
         ]
         with patch.dict("sys.modules", {"config": MagicMock()}), \
              patch("config.get_field", side_effect=_task_begin_config):
             git_ops.task_begin("skill", "200")
-        # Fourth call should be branch creation
-        create_call = mock_run_list.call_args_list[3]
-        assert create_call[0][0] == ["git", "checkout", "-b", "squidsquad/skill/200"]
+        # Sixth call should be branch creation from origin/main
+        create_call = mock_run_list.call_args_list[5]
+        assert create_call[0][0] == ["git", "checkout", "-b", "squidsquad/skill/200", "origin/main"]
 
     @patch("git_ops._get_working_branch", return_value="main")
     @patch("git_ops._run_list")
