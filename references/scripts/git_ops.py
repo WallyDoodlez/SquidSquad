@@ -100,14 +100,14 @@ def pull():
     # Try stash + pull + pop
     stash_result = _run("git stash", check=False)
     if stash_result.returncode != 0:
-        print(f"WARNING: git stash failed — skipping pull", file=sys.stderr)
+        print("WARNING: git stash failed -- skipping pull", file=sys.stderr)
         return False
 
     retry = _run("git pull --rebase", check=False)
     if retry.returncode != 0:
         # Restore stashed changes and report failure
         _run("git stash pop", check=False)
-        print(f"WARNING: git pull --rebase failed after stash — {retry.stderr.strip()}",
+        print(f"WARNING: git pull --rebase failed after stash -- {retry.stderr.strip()}",
               file=sys.stderr)
         return False
 
