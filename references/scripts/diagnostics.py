@@ -56,12 +56,12 @@ def log_entry(severity, source, message, context=None):
         except json.JSONDecodeError:
             entry["context"] = {"raw": context}
 
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(json.dumps(entry) + "\n")
-
-    # Auto-rotate if over cap
+    # Auto-rotate before write if over cap (#5385)
     if LOG_FILE.exists() and LOG_FILE.stat().st_size > MAX_LOG_BYTES:
         rotate()
+
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry) + "\n")
 
     return entry
 
