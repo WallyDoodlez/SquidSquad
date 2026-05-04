@@ -978,6 +978,13 @@ def main():
         encoding="utf-8",
     )
 
+    # Emit cycle-start event AFTER cycle-input.json is written (#4709)
+    try:
+        from event_bus import emit as _emit_event
+        _emit_event("cycle-start", role, cycle_number=cycle_number)
+    except (ImportError, Exception):
+        pass
+
     ts = _timestamp_short()
     print(f"[🦑 {ts}] cycle_pre complete — wrote {output_path.relative_to(REPO_ROOT)}")
     return 0

@@ -81,6 +81,25 @@ def _log_diagnostic(severity, message):
         pass
 
 
+def _emit(event_type, payload=None, cycle_number=None):
+    """Fire-and-forget event emission (#4709). Role determined from sys.argv."""
+    try:
+        from event_bus import emit
+        # Determine role from command args (git_ops.py is called with role as arg)
+        role = "unknown"
+        args = sys.argv[1:]
+        # For commands like: commit-code <role> <branch> <msg>
+        # or: task-begin <role> <number>
+        if len(args) >= 2 and args[1] in ("pm", "skill", "qa", "dm"):
+            role = args[1]
+        elif len(args) >= 2 and args[0] in ("commit-code", "commit-state", "commit-push",
+                                             "commit", "task-begin", "task-end"):
+            role = args[1]
+        emit(event_type, role, payload=payload, cycle_number=cycle_number)
+    except (ImportError, Exception):
+        pass
+
+
 def pull():
     """Pull with merge (#5378, #5445).
 
@@ -89,12 +108,14 @@ def pull():
     result = _run("git pull", check=False)
     if result.returncode == 0:
         print("Pulled")
+        _emit("git-pull", {"result": "ok"})
         return True
 
     # Check if the failure is "already up to date" or branch divergence
     combined = (result.stdout + result.stderr).lower()
     if "already up to date" in combined or "up to date" in combined:
         print("Pulled (already up to date)")
+        _emit("git-pull", {"result": "ok"})
         return True
 
     # Try stash + pull + pop
@@ -118,8 +139,10 @@ def pull():
         _run("git stash drop", check=False)
         print("WARNING: stash pop failed -- dropped stale stash entry.", file=sys.stderr)
         print("Pulled (stash pop conflict -- stale stash dropped)")
+        _emit("git-pull", {"result": "stash"})
     else:
         print("Pulled (stashed and popped)")
+        _emit("git-pull", {"result": "stash"})
     return True
 
 
@@ -164,6 +187,10 @@ def push():
         _log_diagnostic("error", f"push failed: {result.stderr.strip()[:200]}")
         print(f"ERROR: push failed: {result.stderr}", file=sys.stderr)
         return False
+    # Determine branch for event payload
+    branch_result = _run("git branch --show-current", check=False)
+    branch = branch_result.stdout.strip() if branch_result.returncode == 0 else ""
+    _emit("git-push", {"branch": branch})
     print("Pushed")
     return True
 
@@ -254,6 +281,11 @@ def pr_create(title, body):
         print(f"ERROR: PR creation failed: {result.stderr}", file=sys.stderr)
         return None
     url = result.stdout.strip()
+    # Extract PR number from URL (e.g. https://github.com/.../pull/123)
+    pr_num = url.rstrip("/").rsplit("/", 1)[-1] if url else ""
+    branch_result = _run("git branch --show-current", check=False)
+    branch = branch_result.stdout.strip() if branch_result.returncode == 0 else ""
+    _emit("pr-create", {"pr_number": pr_num, "title": title[:80], "branch": branch})
     print(f"PR created: {url}")
     return url
 
@@ -306,6 +338,7 @@ def pr_merge(pr_number, strategy="squash"):
                     return False, "PR closed without merge"
             success, msg = adapter.merge_pr(pr_number, strategy)
             if success:
+                _emit("pr-merge", {"pr_number": str(pr_number)})
                 print(f"PR #{pr_number} merged ({strategy})")
             else:
                 print(f"ERROR: PR #{pr_number} merge failed: {msg}", file=sys.stderr)
@@ -335,6 +368,7 @@ def pr_merge(pr_number, strategy="squash"):
     merge_args = ["gh", "pr", "merge", str(pr_number), f"--{strategy}", "--delete-branch"]
     result = _run_list(merge_args, check=False)
     if result.returncode == 0:
+        _emit("pr-merge", {"pr_number": str(pr_number)})
         print(f"PR #{pr_number} merged ({strategy})")
         # Extract linked issue number from branch name
         branch_result = _run_list(
@@ -467,6 +501,11 @@ def commit_code(role, branch, message):
         _safe_checkout(working)
         return False
 
+    # Emit git-commit (code) and git-push events (#4709)
+    _emit("git-commit", {"message": message[:80], "branch": branch,
+                         "files_changed": len(code_files), "commit_type": "code"})
+    _emit("git-push", {"branch": branch})
+
     print(f"Committed code to {branch}: {message}")
 
     # Switch back to working branch
@@ -524,6 +563,10 @@ def commit_state(role, message):
         print(f"ERROR: {result.stderr}", file=sys.stderr)
         return False
 
+    # Emit git-commit (state) event (#4709)
+    _emit("git-commit", {"message": message[:80], "branch": working,
+                         "files_changed": len(state_files), "commit_type": "state"})
+
     # Push main — failure logged but state is committed locally (#5444)
     push_result = _run("git push", check=False)
     if push_result.returncode != 0:
@@ -531,6 +574,8 @@ def commit_state(role, message):
         print(f"WARNING: state push failed: {push_result.stderr}", file=sys.stderr)
         # State push failure is non-fatal — state is committed locally,
         # next cycle's pull will sync. Return True since commit succeeded.
+    else:
+        _emit("git-push", {"branch": working})
 
     print(f"Committed state to main: {message}")
     return True
@@ -579,6 +624,7 @@ def task_begin(role, number):
         if not _safe_checkout(branch):
             print(f"ERROR: task-begin failed to checkout {branch}", file=sys.stderr)
             sys.exit(1)
+        _emit("branch-checkout", {"branch": branch, "task_number": str(number)})
         print(branch)
         return
 
@@ -591,6 +637,7 @@ def task_begin(role, number):
     if remote.returncode == 0:
         result = _run_list(["git", "checkout", "-b", branch, f"origin/{branch}"], check=False)
         if result.returncode == 0:
+            _emit("branch-checkout", {"branch": branch, "task_number": str(number)})
             print(branch)
             return
         print(f"ERROR: task-begin failed to checkout {branch} from origin: {result.stderr}", file=sys.stderr)
@@ -606,6 +653,7 @@ def task_begin(role, number):
         # Fallback: create from current HEAD if origin unreachable
         result = _run_list(["git", "checkout", "-b", branch], check=False)
     if result.returncode == 0:
+        _emit("branch-checkout", {"branch": branch, "task_number": str(number)})
         print(branch)
         return
     print(f"ERROR: task-begin failed to create {branch}: {result.stderr}",
@@ -640,6 +688,8 @@ def task_end(role, number):
     if not _safe_checkout(working):
         # Fallback to main if working branch checkout fails
         _safe_checkout("main")
+
+    _emit("branch-checkout", {"branch": working, "task_number": str(number)})
 
 
 def has_changes():
