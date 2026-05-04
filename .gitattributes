@@ -1,5 +1,19 @@
-# SquidSquad merge strategies
+# SquidSquad merge strategies (#5469)
 #
-# config.md contains version counters and shared mutable state that must
-# not regress when feature branches merge. Main branch always wins. (#5136)
+# Append-only files — keep both sides (union merge)
+# Each section has timestamps; ordering is local-first but readable.
+.squidsquad/*/iterations/*.md merge=union
+.squidsquad/*/scan-history.md merge=union
+.squidsquad/*/qa-log.md merge=union
+
+# Per-agent overwrite files — current branch wins
+# Each agent overwrites these every cycle; current version is always correct.
+.squidsquad/*/working-state.md merge=ours
+.squidsquad/*/current-state merge=ours
+.squidsquad/*/cycle-input.json merge=ours
+.squidsquad/*/cycle-output.json merge=ours
+
+# Shared config — last writer wins (cycle_pre validates post-merge) (#5136)
+# merge=union would produce duplicate field lines (invalid config).
+# Version regressions caught by _validate_config_version().
 .squidsquad/config.md merge=ours
