@@ -58,3 +58,23 @@ class TestAgentInstructions:
             "agent-instructions.md has no sub-skill markers — "
             "may not be composed from sub-skills"
         )
+
+
+class TestRunTestsModuleList:
+    """#5435 regression: all STATIC_TEST_MODULES entries must exist as files."""
+
+    def test_all_static_test_modules_exist(self):
+        """Every entry in STATIC_TEST_MODULES must have a corresponding .py file."""
+        import sys
+        sys.path.insert(0, str(REPO_ROOT / "tests"))
+        from run_tests import STATIC_TEST_MODULES
+
+        tests_dir = REPO_ROOT / "tests"
+        missing = [
+            m for m in STATIC_TEST_MODULES
+            if not (tests_dir / f"{m}.py").exists()
+        ]
+        assert missing == [], (
+            f"STATIC_TEST_MODULES references nonexistent test files: {missing}. "
+            "Remove stale entries or restore the missing files."
+        )
