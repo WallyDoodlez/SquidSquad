@@ -2053,7 +2053,7 @@ These instructions apply to ALL agents on this project.
 
 ### Git Protocol
 
-- **Always `git pull --rebase` before starting work.** Never push without pulling first.
+- **Always `git pull` before starting work.** Never push without pulling first.
 - **Atomic writes**: Write to `.tmp` then `mv` for any file other agents or the statusline may read.
 - **Branch workflow enabled**: Feature branches per task (pattern from config.md `branch-pattern`, default `squidsquad/task/{number}`).
 - **PR flow + auto-merge enabled**: PRs created for feature branches, auto-merged when QA passes (unless `review:human-required`).

@@ -43,7 +43,7 @@ class TestPull:
         mock_run.side_effect = [
             _mock_result(returncode=1),  # pull fails
             _mock_result(),              # stash
-            _mock_result(),              # pull --rebase
+            _mock_result(),              # pull (retry)
             _mock_result(),              # stash pop
         ]
         assert git_ops.pull() is True
@@ -55,7 +55,7 @@ class TestPull:
         mock_run.side_effect = [
             _mock_result(returncode=1),  # pull fails
             _mock_result(),              # stash
-            _mock_result(),              # pull --rebase
+            _mock_result(),              # pull (retry)
             _mock_result(returncode=1),  # stash pop fails
             _mock_result(),              # stash drop (#4829)
         ]
@@ -68,7 +68,7 @@ class TestPull:
         mock_run.side_effect = [
             _mock_result(returncode=1),  # pull fails
             _mock_result(),              # stash
-            _mock_result(),              # pull --rebase
+            _mock_result(),              # pull (retry)
             _mock_result(returncode=1),  # stash pop fails
             _mock_result(),              # stash drop
         ]
