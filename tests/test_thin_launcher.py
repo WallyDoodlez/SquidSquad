@@ -41,6 +41,34 @@ class TestPIDManagement:
         thin_launcher._clear_pid(str(tmp_path), "skill")  # should not raise
 
 
+class TestEffortLevel:
+    """#5573: per-agent effort level from config."""
+
+    def test_reads_effort_from_config(self):
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", return_value="max"):
+            result = thin_launcher._get_effort_level("pm")
+            assert result == "max"
+
+    def test_defaults_to_high(self):
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", return_value=None):
+            result = thin_launcher._get_effort_level("skill")
+            assert result == "high"
+
+    def test_rejects_invalid_level(self):
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", return_value="turbo"):
+            result = thin_launcher._get_effort_level("pm")
+            assert result == "high"
+
+    def test_handles_config_failure(self):
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", side_effect=Exception("no config")):
+            result = thin_launcher._get_effort_level("pm")
+            assert result == "high"
+
+
 class TestThinLauncherBoot:
     """Thin launcher boot_remote integration."""
 
