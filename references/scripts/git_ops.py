@@ -459,11 +459,13 @@ def commit_code(role, branch, message):
         _safe_checkout(working)
         return False
 
-    # Push branch
+    # Push branch — failure is fatal for branch workflow (#5444)
     push_result = _run_list(["git", "push", "-u", "origin", branch], check=False)
     if push_result.returncode != 0:
         _log_diagnostic("error", f"branch push failed: {push_result.stderr.strip()[:200]}")
-        print(f"WARNING: branch push failed: {push_result.stderr}", file=sys.stderr)
+        print(f"ERROR: branch push failed: {push_result.stderr}", file=sys.stderr)
+        _safe_checkout(working)
+        return False
 
     print(f"Committed code to {branch}: {message}")
 
@@ -522,11 +524,13 @@ def commit_state(role, message):
         print(f"ERROR: {result.stderr}", file=sys.stderr)
         return False
 
-    # Push main
+    # Push main — failure logged but state is committed locally (#5444)
     push_result = _run("git push", check=False)
     if push_result.returncode != 0:
         _log_diagnostic("error", f"state push failed: {push_result.stderr.strip()[:200]}")
         print(f"WARNING: state push failed: {push_result.stderr}", file=sys.stderr)
+        # State push failure is non-fatal — state is committed locally,
+        # next cycle's pull will sync. Return True since commit succeeded.
 
     print(f"Committed state to main: {message}")
     return True
@@ -592,8 +596,15 @@ def task_begin(role, number):
         print(f"ERROR: task-begin failed to checkout {branch} from origin: {result.stderr}", file=sys.stderr)
         sys.exit(1)
 
-    # Branch not found — create it (#4942)
-    result = _run_list(["git", "checkout", "-b", branch], check=False)
+    # Branch not found — create from origin/<working> to avoid contamination (#5444)
+    _run_list(["git", "fetch", "origin", working], check=False)
+    origin_ref = f"origin/{working}"
+    ref_check = _run_list(["git", "rev-parse", "--verify", origin_ref], check=False)
+    if ref_check.returncode == 0:
+        result = _run_list(["git", "checkout", "-b", branch, origin_ref], check=False)
+    else:
+        # Fallback: create from current HEAD if origin unreachable
+        result = _run_list(["git", "checkout", "-b", branch], check=False)
     if result.returncode == 0:
         print(branch)
         return
