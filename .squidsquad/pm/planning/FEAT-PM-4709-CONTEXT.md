@@ -26,12 +26,13 @@ Add event bus to the harness. Mechanical scripts (cycle_pre/cycle_post) emit eve
 
 - `id`: short SHA (8 chars, generated from hash of timestamp+role+event_type+payload). Unique per event. Useful for referencing specific events in logs, debugging, and future API queries.
 
-### Events (12 total — 5 categories):
+### Events (16 total — 4 agent-emitted categories + harness-internal reserved):
 
-**Cycle events** (emitted by cycle_pre/cycle_post):
+**Cycle events (4)** (emitted by cycle_pre/cycle_post):
 - **cycle-start**: after writing cycle-input.json
 - **cycle-end**: after commit/push (includes cycle_type + summary)
-- **phase-change**: when status bar updates
+- **cycle-suppressed**: emitted instead of cycle-start when cycle is suppressed (active planning phase). Payload: `reason` (e.g., "discussing FEAT-PM-5622"), `task_number` (the planning task). Without this, suppressed cycles are silent for 30+ min — operator sees no activity.
+- **phase-change**: when status bar updates (current_phase changes)
 
 **Git events** (emitted by git_ops.py — single funnel per operation):
 - **git-pull**: after pull (includes result: ok/conflict/stash)
@@ -41,27 +42,31 @@ Add event bus to the harness. Mechanical scripts (cycle_pre/cycle_post) emit eve
 - **pr-merge**: after PR merge (includes PR number)
 - **branch-checkout**: on task-begin/task-end (includes branch name, task number)
 
-**Task events** (emitted by tracker.py `transition()` — single funnel at status transition):
+**Task lifecycle events (3)** (emitted by tracker.py `transition()` — single funnel):
 - **task-start**: after agent transitions task to `in-progress` (from `approved` for tasks, from `open` for issues). Payload: `task_number`, `from_status`, `assigned_role`, `task_title` (truncated to 80 chars).
 - **task-end**: after agent transitions task to `pending-test` (from `in-progress`). Payload: `task_number`, `assigned_role`, `cycles_to_complete` (computed by counting cycle boundaries between task-start and task-end events for the same task_number, or null if task-start not in current bus history).
+- **status-transition**: generic catch-all for ALL OTHER status changes (not task-start, not task-end). Covers: pending→planning→planned→approved (PM workflow), pending-test→pending-ship (QA verified), pending-test→in-progress (QA rejected), pending-ship→shipped (DM ships), pending-ship→in-progress (PR conflict route back), pending-human-review transitions, →rejected. Payload: `issue_number`, `from_status`, `to_status`, `actor_role`, `reason` (truncated 120 chars).
 
-Emitted from inside `tracker.py transition` after the GitHub API call succeeds — single funnel guarantees consistency.
+Emitted from inside `tracker.py transition` after the GitHub API call succeeds — single funnel guarantees consistency. The transition() function determines which event type to emit based on (from_status, to_status):
+- `* → in-progress` from approved/open → emit `task-start`
+- `in-progress → pending-test` → emit `task-end`
+- everything else → emit `status-transition`
 
-**Comment events** (emitted by tracker.py `comment()` — single funnel for inter-agent messages):
-- **tracker-comment**: after agent posts a comment to a GitHub Issue. Payload: `issue_number`, `commenter_role`, `comment_preview` (first 120 chars, sanitized — no @-close keywords, no \`<<<<\` conflict markers), `mentioned_roles` (list — extracted from `**role**:` markdown bold in comment body).
+**Tracker activity events (3)** (emitted by tracker.py — single funnel per operation):
+- **tracker-comment**: after agent posts a standalone comment to a GitHub Issue (NOT auto-comments from transitions). Payload: `issue_number`, `commenter_role`, `comment_preview` (first 120 chars, sanitized — no @-close keywords, no \`<<<<\` conflict markers), `mentioned_roles` (list — extracted from `**role**:` markdown bold in comment body). Emitted from `tracker.py comment()`. The `transition()` function passes a flag to suppress emission for its auto-comment (avoids double-signal with task-start/task-end).
+- **issue-filed**: after `tracker.py create-issue` succeeds. Payload: `issue_number`, `title` (truncated 80 chars), `target_role`, `severity`, `reporter_role`. Phase 4 enables target role to react immediately — eager pickup of urgent bugs.
+- **task-filed**: after `tracker.py create-task` succeeds. Payload: `task_number`, `title` (truncated 80 chars), `target_role`, `priority`, `reporter_role`. Phase 4 enables target role to prep context for upcoming work without waiting for next cycle's tracker query.
 
-Emitted ONLY from `tracker.py comment()` — NOT from auto-comments posted by `transition()` (those are already tracked via task-start/task-end events; emitting tracker-comment for them would double-signal). The `transition()` function passes a flag to suppress emission for its auto-comment.
-
-**Harness-internal events** (emitted by harness, NOT agents — added per impact review):
-- The harness MAY inject its own events into the stream when internal state changes (intent transitions, health-check results). These bypass the agent emission contract. Specific event types deferred to Phase 3+ (see #5613); Phase 2 just establishes the precedent that harness-internal events are valid stream entries.
+**Harness-internal events** (emitted by harness, NOT agents — reserved for Phase 3+):
+- The harness MAY inject its own events into the stream when internal state changes (intent transitions, health-check results, agent boots, version bumps). These bypass the agent emission contract. Specific event types deferred to Phase 3+ (see #5613); Phase 2 just establishes the precedent that harness-internal events are valid stream entries.
 
 ## Implementation
 
 - **event_bus.py** (~50 lines): stdlib urllib, `emit(event_type, role, payload)`. Reads `.harness-port` via parent-dir walking (fallback 7373), POST with 500ms timeout, catches all exceptions silently.
-- **cycle_pre.py**: emit `cycle-start` after writing cycle-input.json
-- **cycle_post.py**: emit `cycle-end` after commit/push (does NOT emit `git-push` — that comes from git_ops.push only)
+- **cycle_pre.py**: emit `cycle-start` after writing cycle-input.json (or `cycle-suppressed` if suppressed flag set)
+- **cycle_post.py**: emit `cycle-end` after commit/push (does NOT emit `git-push` — that comes from git_ops.push only). Emit `phase-change` whenever status bar updates.
 - **git_ops.py**: emit `git-pull` (in `pull()`), `git-commit` (in `commit_code()` with `commit_type:"code"`, in `commit_state()` with `commit_type:"state"`), `git-push` (in `push()` — single funnel), `pr-create` (in `pr_create()`), `pr-merge` (in `pr_merge()`), `branch-checkout` (in `task_begin()`/`task_end()`)
-- **tracker.py**: emit `task-start` after successful transition to `in-progress`, emit `task-end` after successful transition to `pending-test` (single funnel in `transition()`). Emit `tracker-comment` after successful comment post (single funnel in `comment()`). All emit only on successful GitHub API response. The `transition()` auto-comment suppresses tracker-comment emission to avoid double-signal.
+- **tracker.py**: emit task lifecycle from `transition()` based on from/to status (task-start | task-end | status-transition). Emit `tracker-comment` from `comment()` (suppressed flag for auto-comments from transition). Emit `issue-filed` from `create-issue` after success. Emit `task-filed` from `create-task` after success. All emit only on successful GitHub API response.
 - **Harness /events endpoint**: receives events from agents, appends to bounded stream (1000 max), updates AgentState. Harness can also inject internal events directly into the stream without HTTP roundtrip.
 
 ## Harness State Model (extended from Phase 1)
