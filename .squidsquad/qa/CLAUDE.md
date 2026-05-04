@@ -303,9 +303,7 @@ Write your results to `.squidsquad/qa/cycle-output.json`:
   ],
   "iteration_summary": "Brief description of work done",
   "commit_message": "qa: cycle N — brief description",
-  "working_state_update": "# Working State\n\n- **Task**: none\n...",
-  "restart_needed": false,
-  "restart_reason": null
+  "working_state_update": "# Working State\n\n- **Task**: none\n..."
 }
 ```
 
@@ -315,7 +313,7 @@ Then run:
 python references/scripts/cycle_post.py qa
 ```
 
-The script handles: status transitions, tracker comments, iteration logging, git commits, pushes, version bumps (DM), restart sentinels, and status bar cleanup.
+The script handles: status transitions, tracker comments, iteration logging, git commits, pushes, version bumps (DM), and status bar cleanup. Context pressure exit is detected mechanically — `cycle_post.py` exits with code 42 when pressure exceeds threshold, and the harness respawns the agent (#4966).
 
 ### Role-Specific Fields
 
@@ -700,21 +698,21 @@ Tag findings with the `improvement-scan` label. Max **2 items per cycle**. Defau
 <!-- sub-skill: self-restart -->
 ### Self-Restart (Context Pressure Only)
 
-Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled externally via `start_team.py --reboot`.
+Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled by the harness via intent API (#4966).
 
 **Context pressure restart flow**:
 1. Step 1b detects context pressure exceeds threshold.
 2. Checkpoint working state to `.squidsquad/qa/working-state.md`.
 3. Complete the current cycle normally.
-4. At cycle end, `cycle_post.py` reads the context pressure from `cycle-input.json` and writes `.squidsquad/qa/.stop-after-cycle` mechanically when pressure exceeds threshold. Agents do not need to set `restart_needed` — the mechanical layer detects and acts.
-5. The wrapper detects the sentinel on exit, deletes it, and respawns.
+4. At cycle end, `cycle_post.py` checks context pressure from `cycle-input.json`. If exceeded, exits with code 42.
+5. The harness detects the exit, sees intent=running, and respawns the agent.
 
 **You do NOT**:
-- Set `restart_needed` in cycle-output.json (deprecated — `cycle_post.py` detects context pressure mechanically).
-- Write `.stop-after-cycle` directly — `cycle_post.py` handles this mechanically.
-- Restart for template changes (handled externally via `start_team.py --reboot`).
-- Kill or manage other agents (human or `start_team.py` handles this).
-- Implement any restart loop logic (wrapper handles respawn).
+- Set `restart_needed` in cycle-output.json (deprecated).
+- Write any sentinel files directly.
+- Restart for template changes (handled by harness via `start_team.py --reboot`).
+- Kill or manage other agents (harness handles this).
+- Implement any restart loop logic (harness handles respawn).
 
 Write `idle|` to `current-state` at cycle end so health monitoring works.
 <!-- /sub-skill: self-restart -->
@@ -722,14 +720,20 @@ Write `idle|` to `current-state` at cycle end so health monitoring works.
 <!-- sub-skill: agent-lifecycle -->
 ### Agent Lifecycle
 
-Agent lifecycle is managed by `start_team.py` and the wrapper scripts. Agents do not manage their own or other agents' processes directly.
+Agent lifecycle is managed by the harness (`harness.py`) via REST API (#4966). Agents do not manage their own or other agents' processes directly.
 
 **Three guarantees**:
-1. **Singleton**: Only one instance per role runs at a time (PID lock file).
-2. **Graceful stop**: `start_team.py --reboot` writes `.stop-after-cycle` and waits for the agent to finish its current cycle before respawning.
-3. **Start correctly**: Wrapper handles pre-flight checks, branch setup, and heartbeat.
+1. **Singleton**: Only one instance per role runs at a time (harness process table).
+2. **Graceful stop**: Harness sets intent=stopping via API. `cycle_post.py` queries `GET /agents/{role}` at cycle end, sees the intent, and exits with code 42.
+3. **Start correctly**: Harness spawns agents via thin launcher (`thin_launcher.py`) in visible terminal windows. `cycle_pre.py` handles git pull/branch per cycle.
 
-**Heartbeat**: The wrapper writes the current epoch to `.squidsquad/qa/.health` every 5 seconds. Health monitoring reads this — if >10s old, the agent is considered dead.
+**Health monitoring**: Harness monitors agent liveness via direct PID checks (primary) and `.claude-pid` file (fallback). No heartbeat files needed — the harness polls every 5 seconds.
+
+**Intent state machine** (per-agent, in harness memory + `.harness-state.json`):
+- `running` — agent should be alive; auto-reboot on death
+- `stopping` — graceful stop; do NOT reboot after death
+- `restarting` — graceful restart; reboot after death
+- `stopped` — agent died as requested
 
 **Lifecycle interface**:
 ```bash
@@ -739,24 +743,25 @@ python references/scripts/start_team.py --all
 # Start single agent
 python references/scripts/start_team.py --role <role>
 
-# Graceful reboot — waits for cycle end, then restarts
+# Graceful reboot — harness sets intent=restarting
 python references/scripts/start_team.py --reboot <role>
 
 # Reboot all agents
 python references/scripts/start_team.py --reboot --all
 
-# Stop agent (permanent until manually restarted)
+# Stop agent — harness sets intent=stopping
 python references/scripts/start_team.py --stop <role>
 
 # Stop all agents
 python references/scripts/start_team.py --stop --all
 ```
 
-**Sentinel files**:
-- `.stop-after-cycle` — graceful restart request (written by `cycle_post.py` for context pressure, or by `start_team.py --reboot`)
-- `.stop` — permanent stop (written by `start_team.py --stop`, respected by wrapper)
-- `.pid` — singleton lock (written by wrapper)
-- `.health` — heartbeat epoch (written by wrapper every 5s)
+**Crash recovery**: Harness persists state to `.squidsquad/.harness-state.json`. On restart, reads the file, checks which PIDs are alive, and resumes monitoring.
+
+**Ctrl+C escalation** (at harness terminal):
+- 1st Ctrl+C: graceful stop (set all agents intent=stopping, wait for cycle end)
+- 2nd Ctrl+C within 5s: warn about force exit
+- 3rd Ctrl+C: exit harness (agents survive in their terminals)
 <!-- /sub-skill: agent-lifecycle -->
 
 ### Step 9 — Done
@@ -990,6 +995,7 @@ Before marking any task `Pending Test`, run this checklist against your changes.
 - [ ] **Modified template structure?** → Update `compose.py deploy` and `/squidsquad-upgrade`
 - [ ] **Added/removed sub-skills?** → Update `includes.yml` and `manifest.md`
 - [ ] **Changed role composition?** → Update `installer-files.txt` manifest
+- [ ] **Upgrade path documented?** → If task changes how agents start, how files are structured, or removes/replaces existing scripts, document the full upgrade sequence (stop → deploy → clean → recompose → start) in the issue or CONTEXT.md. QA must verify the upgrade path works end-to-end.
 
 If ANY box applies and the corresponding update was NOT made, the task is not done. Post your checklist results on the issue before transitioning.
 
