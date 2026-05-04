@@ -19,7 +19,7 @@ Code conventions and structural patterns used throughout the SquidSquad project.
 - **Feature/bug IDs**: `#XX` (GitHub Issue numbers, e.g. `#67`, `#93`)
 - **Tracker format**: GitHub Issues with structured labels (type, priority, status, role) — migrated from markdown files in v0.9.0
 - **Discussion protocol**: Append-only, timestamped, role-prefixed entries (`> [YYYY-MM-DD HH:MM] **role**: message`)
-- **Git protocol**: Always `git pull --rebase` before work; tracker files are append-only; push after every completed work unit
+- **Git protocol**: Always `git pull` (merge) before work; tracker files are append-only; push after every completed work unit
 - **Commit messages**: Role-prefixed (`skill: ...`, `pm: ...`, `dm: ...`)
 - **Sub-skill sources**: Stored in `references/sub-skills/` organized by scope (common/, pm/, skill/, dm/)
 - **Composed artifacts**: Generated with `DO NOT EDIT` headers and section markers
