@@ -63,15 +63,20 @@ def _run(cmd, check=False):
     )
 
 
-def _get_working_branch():
-    """Get the configured working branch name. Falls back to 'main'."""
+def _config_get(field):
+    """Read a field from config.md. Returns empty string on failure."""
     try:
         sys.path.insert(0, str(SCRIPT_DIR))
         from config import get_field
-        branch = get_field("working-branch")
-        return branch if branch else "main"
+        return get_field(field) or ""
     except Exception:
-        return "main"
+        return ""
+
+
+def _get_working_branch():
+    """Get the configured working branch name. Falls back to 'main'."""
+    branch = _config_get("working-branch")
+    return branch if branch else "main"
 
 
 def _run_script(script, *args, check=False):
@@ -133,6 +138,30 @@ def _validate_output(data):
 # ---------------------------------------------------------------------------
 
 
+def _verify_remote_branch(number):
+    """Best-effort check that a feature branch exists on remote (#5444).
+
+    Returns True if branch is on remote, False if not, None if check failed.
+    Non-blocking — network failure returns None (proceed with warning).
+    """
+    try:
+        from config import get_field
+        bw = (get_field("branch-workflow") or "").strip().lower()
+        if bw not in ("yes", "true", "1"):
+            return True  # Branch workflow off — no branch expected
+        pattern = get_field("branch-pattern") or "squidsquad/task/{number}"
+        branch = pattern.replace("{number}", str(number))
+        # Replace any remaining placeholders
+        branch = branch.replace("{role}", "*")
+    except Exception:
+        return None  # Can't read config
+
+    result = _run(["git", "ls-remote", "--heads", "origin", branch], check=False)
+    if result.returncode != 0:
+        return None  # Network failure — don't block
+    return branch in result.stdout
+
+
 def _do_status_transitions(data, role):
     """Execute status transitions via tracker.py."""
     transitions = data.get("status_transitions", [])
@@ -146,6 +175,17 @@ def _do_status_transitions(data, role):
         if not number or not from_status or not to_status:
             print(f"WARNING: Skipping invalid transition: {t}", file=sys.stderr)
             continue
+
+        # Verify remote branch exists before pending-test transition (#5444)
+        if to_status == "pending-test" and role in ("skill",):
+            remote_ok = _verify_remote_branch(number)
+            if remote_ok is False:
+                print(f"WARNING: #{number} → pending-test blocked: feature branch "
+                      f"not found on remote. Push may have failed.", file=sys.stderr)
+                continue
+            elif remote_ok is None:
+                print(f"WARNING: #{number} → pending-test: could not verify remote "
+                      f"branch (network?). Proceeding anyway.", file=sys.stderr)
 
         result = _run_script(
             "tracker.py", "transition",
@@ -266,8 +306,14 @@ def _do_commit_push(data, role):
     if not commit_msg:
         commit_msg = f"{role}: cycle {data.get('cycle_number', '?')} — {cycle_type}"
 
-    config_flags = data.get("config", {})
-    branch_workflow = config_flags.get("branch_workflow", False)
+    # Read branch_workflow from config.md directly — not from agent-written
+    # cycle-output.json which may be stale or missing (#5444)
+    branch_workflow = False
+    try:
+        bw = _config_get("branch-workflow")
+        branch_workflow = bw.strip().lower() in ("yes", "true", "1")
+    except Exception:
+        pass
 
     # Skill agent with branch workflow: split commits
     code_commit = data.get("code_commit")
@@ -277,22 +323,26 @@ def _do_commit_push(data, role):
 
         if branch:
             result = _run_script("git_ops.py", "commit-code", role, branch, code_msg)
+            combined = (result.stdout + result.stderr).lower()
             if result.returncode != 0:
-                print(f"WARNING: Code commit failed: {result.stderr.strip()}",
-                      file=sys.stderr)
-                # Code may already be committed by the agent during creative
-                # phase (#4837). Ensure the branch is pushed even when
-                # commit-code reports nothing to commit.
-                branch_check = _run(
-                    ["git", "rev-parse", "--verify", branch], check=False)
-                if branch_check.returncode == 0:
-                    push_result = _run(
-                        ["git", "push", "-u", "origin", branch], check=False)
-                    if push_result.returncode == 0:
-                        print(f"  Branch {branch} pushed (code already committed)")
-                    else:
-                        print(f"WARNING: Branch push failed: "
-                              f"{push_result.stderr.strip()}", file=sys.stderr)
+                # Distinguish nothing-to-commit from push failure (#5444)
+                if "nothing to commit" in combined or "no code changes" in combined:
+                    # Code already committed by agent (#4837) — try pushing
+                    print(f"  Nothing new to commit — ensuring branch is pushed")
+                    branch_check = _run(
+                        ["git", "rev-parse", "--verify", branch], check=False)
+                    if branch_check.returncode == 0:
+                        push_result = _run(
+                            ["git", "push", "-u", "origin", branch], check=False)
+                        if push_result.returncode == 0:
+                            print(f"  Branch {branch} pushed (code already committed)")
+                        else:
+                            print(f"ERROR: Branch push failed: "
+                                  f"{push_result.stderr.strip()}", file=sys.stderr)
+                else:
+                    # Real failure (push failed, commit error, etc.)
+                    print(f"ERROR: Code commit/push failed: {result.stderr.strip()}",
+                          file=sys.stderr)
             else:
                 print(f"  Code commit to {branch}")
 
