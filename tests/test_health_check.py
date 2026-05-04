@@ -183,7 +183,8 @@ class TestParseHealthFile:
 
 class TestCheckAgentHealth:
     def _setup_agent(self, tmp_path, role, state_text=None, state_age_seconds=0,
-                     stop=False, working_state=None, health_text=None, pid=None):
+                     stop=False, working_state=None, health_text=None, pid=None,
+                     claude_pid=None):
         """Create a mock agent directory structure."""
         import os as _os
         squid = tmp_path / ".squidsquad" / role
@@ -207,6 +208,9 @@ class TestCheckAgentHealth:
 
         if pid is not None:
             (squid / ".pid").write_text(str(pid))
+
+        if claude_pid is not None:
+            (squid / ".claude-pid").write_text(str(claude_pid))
 
         return tmp_path
 
@@ -282,8 +286,8 @@ class TestCheckAgentHealth:
         assert result["health"] == "healthy"
         assert "heartbeat" in result["reason"]
 
-    def test_heartbeat_stale(self, tmp_path):
-        """New-format heartbeat older than 10s → stalled."""
+    def test_heartbeat_stale_no_pid(self, tmp_path):
+        """New-format heartbeat older than 10s, no PID file → stalled (#5429)."""
         now = int(time.time())
         old_epoch = now - 30  # 30s old
         clone = self._setup_agent(tmp_path, "skill",
@@ -291,6 +295,44 @@ class TestCheckAgentHealth:
         result = health_check.check_agent_health("skill", clone, 30, now=now)
         assert result["health"] == "stalled"
         assert "heartbeat stale" in result["reason"]
+        assert "no PID file" in result["reason"]
+
+    @patch.object(health_check, "_is_process_alive", return_value=True)
+    def test_heartbeat_stale_but_pid_alive(self, mock_alive, tmp_path):
+        """Heartbeat stale but .claude-pid alive → healthy with warning (#5429)."""
+        now = int(time.time())
+        old_epoch = now - 30  # 30s old
+        clone = self._setup_agent(tmp_path, "skill",
+                                  health_text=str(old_epoch),
+                                  claude_pid=12345)
+        result = health_check.check_agent_health("skill", clone, 30, now=now)
+        assert result["health"] == "healthy"
+        assert "PID 12345 alive" in result["reason"]
+        assert "harness/wrapper may be down" in result["reason"]
+
+    @patch.object(health_check, "_is_process_alive", return_value=True)
+    def test_heartbeat_stale_pid_file_fallback(self, mock_alive, tmp_path):
+        """Heartbeat stale, no .claude-pid but .pid alive → healthy (#5429)."""
+        now = int(time.time())
+        old_epoch = now - 30
+        clone = self._setup_agent(tmp_path, "skill",
+                                  health_text=str(old_epoch),
+                                  pid=54321)
+        result = health_check.check_agent_health("skill", clone, 30, now=now)
+        assert result["health"] == "healthy"
+        assert "PID 54321 alive" in result["reason"]
+
+    @patch.object(health_check, "_is_process_alive", return_value=False)
+    def test_heartbeat_stale_and_pid_dead(self, mock_alive, tmp_path):
+        """Heartbeat stale and PID dead → stalled (#5429)."""
+        now = int(time.time())
+        old_epoch = now - 30
+        clone = self._setup_agent(tmp_path, "skill",
+                                  health_text=str(old_epoch),
+                                  claude_pid=99999)
+        result = health_check.check_agent_health("skill", clone, 30, now=now)
+        assert result["health"] == "stalled"
+        assert "PID 99999 is dead" in result["reason"]
 
     # --- Legacy status tests ---
 
@@ -389,3 +431,42 @@ class TestCheckAgentHealth:
         result = health_check.check_agent_health("skill", clone, 30, now=fixed_now)
         assert result["health"] == "stalled"
         assert result["last_active_minutes_ago"] >= 119
+
+
+class TestReadClaudePidFile:
+    """Tests for _read_claude_pid_file and _read_any_pid (#5429)."""
+
+    def test_read_claude_pid_exists(self, tmp_path):
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        (squid / ".claude-pid").write_text("12345")
+        assert health_check._read_claude_pid_file(squid) == 12345
+
+    def test_read_claude_pid_missing(self, tmp_path):
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        assert health_check._read_claude_pid_file(squid) is None
+
+    def test_read_claude_pid_invalid(self, tmp_path):
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        (squid / ".claude-pid").write_text("not-a-number")
+        assert health_check._read_claude_pid_file(squid) is None
+
+    def test_read_any_pid_prefers_claude_pid(self, tmp_path):
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        (squid / ".claude-pid").write_text("111")
+        (squid / ".pid").write_text("222")
+        assert health_check._read_any_pid(squid) == 111
+
+    def test_read_any_pid_falls_back_to_pid(self, tmp_path):
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        (squid / ".pid").write_text("222")
+        assert health_check._read_any_pid(squid) == 222
+
+    def test_read_any_pid_none_when_neither(self, tmp_path):
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        assert health_check._read_any_pid(squid) is None
