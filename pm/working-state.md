@@ -1,14 +1,21 @@
 # Working State
 
-- **Task**: none
-- **Status**: none
+- **Task**: #5622 Phase 4 agent comm bus
+- **Status**: planning
+- **Phase**: discussing FEAT-PM-5622
 
 ## Completed Steps
+- Phase 1 Research complete
+- Architecture confirmed: single bus, role-based filtering on consumer
 
 ## Remaining Steps
+- Resolve open Q: relevance rule location
+- Phase 2 approval gate
+- Phase 3 test plan
 
 ## Key Decisions
-- Phase 2 #4709 has 8 refinements applied + 5-step deployment runbook
-- Pending: Phase 2 execution approval, v1.0.0 launch (#3), #5620 stuck-rebase L3
+- Single shared bus (one /events endpoint, one deque)
+- Role-based relevance filtering on consumer side
+- Self-events filtered out by default
 
-## Quiet cycle counter: 1
+## Quiet cycle counter: 0
