@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-04 00:40
+
+- **Files scanned**: references/scripts/thin_launcher.py, references/scripts/start_team.py, references/scripts/harness.py
+- **Findings**: #5423 (harness.py undocumented 'stopped' intent state — bare string instead of class constant — low)
+- **Items rejected by human**: none yet
+- **Notes**: thin_launcher.py clean post-#5422 fix. start_team.py has redundant `(ImportError, Exception)` catch (minor, not filed).
+
 ## Scan — 2026-05-03 20:55
 
 - **Files scanned**: references/scripts/health_check.py, references/scripts/squidsquad_cli.py, references/scripts/diagnostics.py

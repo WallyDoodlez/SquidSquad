@@ -4,11 +4,10 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #5125 model_router.py triplicate yaml fix (pending-test, medium, role:skill)
-- #5344 reboot_agent.py dead code cleanup post-#4966 (open, medium, role:skill)
 - #4709 EPIC Harness Phase 2: Event bus + agent communication (planned, high, role:skill)
 - #3963 EPIC: Web dashboard — visual interface for SquidSquad (pending, high, role:skill)
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm)
+- #5423 harness.py undocumented 'stopped' intent state (open, low, role:skill)
 
 ## Pending Tasks (filed this session, awaiting approval)
 
@@ -18,11 +17,11 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Recently Shipped
 
+- #5385 diagnostics.py log rotation before write
+- #5378 cycle_pre pull() crash + _do_pull() false error reporting
+- #5344 reboot_agent._spawn_wrapper delegates to boot_remote
+- #5125 model_router.py yaml dedup + error handling
 - #4966 Harness absorbs wrapper — full agent lifecycle ownership
-- #5234 PM SOUL.md branch/PR boundaries fix
-- #5208 cycle_pre.py branch guardrail
-- #5136 config.md version regression fix (.gitattributes merge=ours)
-- #5126 cycle_post.py version bump staged-changes guard
 
 ## Core Architecture
 
