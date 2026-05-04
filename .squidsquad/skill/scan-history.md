@@ -1,5 +1,18 @@
 # Scan History
 
+## Scan — 2026-05-03 20:55
+
+- **Files scanned**: references/scripts/health_check.py, references/scripts/squidsquad_cli.py, references/scripts/diagnostics.py
+- **Findings**: #5385 (diagnostics.py log rotation after write, not before — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-03 18:32
+
+- **Files scanned**: references/scripts/cycle_pre.py, references/scripts/cycle_post.py, references/scripts/vault_remember.py
+- **Findings**: #5378 (cycle_pre._do_pull() returns 'error' on normal git states — low)
+- **Items rejected by human**: none yet
+- **Notes**: cycle_post._do_restart_sentinel still called from main() on main branch — already fixed on #4966 feature branch, skip.
+
 ## Scan — 2026-05-03 17:32
 
 - **Files scanned**: tests/test_config_functions.py, tests/test_tracker.py, tests/test_state_bus.py
