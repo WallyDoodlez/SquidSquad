@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.32.0] — 2026-05-04
+
+### Added
+- #4966 — Agent lifecycle is now managed by a single harness process — start, stop, restart, and crash recovery all happen through one REST API instead of per-agent wrapper scripts
+- #5569 — Improvement scans now capture up to 3 learnings per scan to the shared vault, building institutional knowledge automatically
+- #5570 — Agents now have situational awareness — they consult institutional knowledge before acting, not just after
+- #5571 — PM research phase now always checks the shared vault for prior decisions and patterns before investigating
+- #5572 — Dev and QA agents now consult vault knowledge before starting work on tasks
+- #5573 — PM agent now uses extended thinking for deeper reasoning during planning and research
+
+### Fixed
+- #4609 — Config merge conflicts in shipped counter no longer block version bumps
+- #4666 — Config version field no longer reverts after version bumps
+- #4745 — Merge conflicts in config.md shared counters resolved cleanly
+- #4746 — diagnostics.py now has test coverage for report generation and repo detection
+- #4747 — Harness API endpoints now have test coverage
+- #4765 — Agent templates now only include project instructions relevant to their role, not all roles
+- #4803 — QA now checks all agent roles for pending-test items, not just skill
+- #4829 — Git stash conflicts from volatile files eliminated with proper .gitignore patterns
+- #4830 — Improvement scanning now triggers every quiet cycle for faster feedback
+- #4837 — Dev agent now properly pushes feature branches and creates PRs
+- #4876 — Multi-clone test suite no longer fails on missing designer working-state
+- #4877 — Stale test for excluded PM role updated to match current behavior
+- #4878 — CLI tool (squidsquad_cli.py) now has test coverage
+- #4879 — Config parser (config.py) test coverage improved
+- #4918 — Template composition no longer uses deprecated mktemp — race condition eliminated
+- #4919 — Vault write counter reset no longer silently fails when field is absent
+- #4942 — Branch checkout now creates missing branches instead of erroring
+- #4949 — Agent lifecycle intent managed by harness API, not sentinel files
+- #4967 — PM task intake now always includes PRD with diagrams and sequences
+- #4979 — PM creates draft PR with PRD after planning, before approval
+- #4991 — PR lifecycle flow fixed — draft-to-ready timing and PM fallback corrected
+- #5013 — QA now fetches before checking remote refs — no more verifying the wrong branch
+- #5040 — PM and dev now share one branch per task for holistic PR review
+- #5046 — Model router now distinguishes API timeout from empty output
+- #5125 — Model router YAML install block deduplicated and error handling added
+- #5126 — Version bump no longer commits without checking for staged changes
+- #5136 — Config version field no longer regresses on PR merges
+- #5208 — Agents now verify they're on the correct branch before starting work
+- #5234 — PM no longer attempts to rebase dev agent branches
+- #5344 — Dead wrapper code removed from reboot script post-harness migration
+- #5366 — Config test fixture updated to cover all current fields
+- #5378 — Pre-cycle git pull no longer reports normal states as errors
+- #5385 — Diagnostics log rotation now happens before write, preventing data loss
+- #5423 — Harness 'stopped' intent state now uses proper constant instead of bare string
+- #5429 — Health check no longer falsely reports agents as stalled when harness heartbeats stop but PIDs are alive
+- #5435 — Test runner no longer silently skips the entire static test suite
+- #5436 — CLI package.json version now stays in sync with config.md
+- #5444 — Branch workflow reliability improved — push timing, contamination, and silent failures fixed
+- #5445 — Conflict resolution now uses merge instead of rebase + force-push
+- #5469 — Git merge strategies and .gitignore patterns eliminate state file merge conflicts
+- #5526 — Remote branch verification no longer fails on wildcard pattern substring matches
+- #5533 — SKILL.md documentation updated to reflect merge-based conflict resolution
+- #5534 — Shipped counter no longer lost during merge conflict resolution
+- #5556 — QA verification instructions updated to reflect merge-based conflict resolution
+
 ## [0.31.0] — 2026-05-01
 
 ### Added
