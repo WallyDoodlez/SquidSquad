@@ -26,7 +26,7 @@ Add event bus to the harness. Mechanical scripts (cycle_pre/cycle_post) emit eve
 
 - `id`: short SHA (8 chars, generated from hash of timestamp+role+event_type+payload). Unique per event. Useful for referencing specific events in logs, debugging, and future API queries.
 
-### Events (9 total — 3 categories):
+### Events (11 total — 4 categories):
 
 **Cycle events** (emitted by cycle_pre/cycle_post):
 - **cycle-start**: after writing cycle-input.json
@@ -41,6 +41,12 @@ Add event bus to the harness. Mechanical scripts (cycle_pre/cycle_post) emit eve
 - **pr-merge**: after PR merge (includes PR number)
 - **branch-checkout**: on task-begin/task-end (includes branch name, task number)
 
+**Task events** (emitted by tracker.py — single funnel at status transition):
+- **task-start**: after agent transitions task to `in-progress` (from `approved` for tasks, from `open` for issues). Payload: `task_number`, `from_status`, `assigned_role`, `task_title` (truncated to 80 chars).
+- **task-end**: after agent transitions task to `pending-test` (from `in-progress`). Payload: `task_number`, `assigned_role`, `cycles_to_complete` (computed by counting cycle boundaries between task-start and task-end events for the same task_number, or null if task-start not in current bus history).
+
+Emitted from inside `tracker.py transition` after the GitHub API call succeeds — single funnel guarantees consistency.
+
 **Harness-internal events** (emitted by harness, NOT agents — added per impact review):
 - The harness MAY inject its own events into the stream when internal state changes (intent transitions, health-check results). These bypass the agent emission contract. Specific event types deferred to Phase 3+ (see #5613); Phase 2 just establishes the precedent that harness-internal events are valid stream entries.
 
@@ -50,6 +56,7 @@ Add event bus to the harness. Mechanical scripts (cycle_pre/cycle_post) emit eve
 - **cycle_pre.py**: emit `cycle-start` after writing cycle-input.json
 - **cycle_post.py**: emit `cycle-end` after commit/push (does NOT emit `git-push` — that comes from git_ops.push only)
 - **git_ops.py**: emit `git-pull` (in `pull()`), `git-commit` (in `commit_code()` with `commit_type:"code"`, in `commit_state()` with `commit_type:"state"`), `git-push` (in `push()` — single funnel), `pr-create` (in `pr_create()`), `pr-merge` (in `pr_merge()`), `branch-checkout` (in `task_begin()`/`task_end()`)
+- **tracker.py**: emit `task-start` after successful transition to `in-progress`, emit `task-end` after successful transition to `pending-test`. Single funnel inside the `transition()` function — emit only on successful GitHub API response.
 - **Harness /events endpoint**: receives events from agents, appends to bounded stream (1000 max), updates AgentState. Harness can also inject internal events directly into the stream without HTTP roundtrip.
 
 ## Harness State Model (extended from Phase 1)
