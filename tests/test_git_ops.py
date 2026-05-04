@@ -732,6 +732,9 @@ class TestGitignoreVolatileFiles:
     VOLATILE_PATTERNS = [
         ".squidsquad/.backlog-cache",
         ".squidsquad/*/.claude-pid",
+        ".squidsquad/*/.health",
+        ".squidsquad/*/.booting",
+        ".squidsquad/scan-index.db",
         ".claude/scheduled_tasks.lock",
     ]
 
@@ -753,12 +756,31 @@ class TestGitignoreVolatileFiles:
             cwd=str(Path(__file__).resolve().parent.parent),
         )
         tracked = result.stdout.strip().splitlines()
-        volatile_names = [".backlog-cache", ".claude-pid", "scheduled_tasks.lock"]
+        volatile_names = [".backlog-cache", ".claude-pid", ".health", ".booting",
+                          "scan-index.db", "scheduled_tasks.lock"]
         for name in volatile_names:
             matches = [f for f in tracked if name in f]
             assert matches == [], (
                 f"Volatile file(s) still tracked in git index: {matches}"
             )
+
+
+class TestGitattributesMergeStrategies:
+    """#5469: .gitattributes merge strategies for state files."""
+
+    def test_gitattributes_exists(self):
+        gitattr = Path(__file__).resolve().parent.parent / ".gitattributes"
+        assert gitattr.exists(), ".gitattributes missing from repo root"
+
+    def test_union_merge_for_append_only(self):
+        content = (Path(__file__).resolve().parent.parent / ".gitattributes").read_text()
+        assert "iterations/*.md merge=union" in content
+        assert "scan-history.md merge=union" in content
+
+    def test_ours_merge_for_overwrite_files(self):
+        content = (Path(__file__).resolve().parent.parent / ".gitattributes").read_text()
+        assert "working-state.md merge=ours" in content
+        assert "config.md merge=ours" in content
 
 
 # ---------------------------------------------------------------------------
