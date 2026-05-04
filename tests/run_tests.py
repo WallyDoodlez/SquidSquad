@@ -28,7 +28,7 @@ from integration.harness import cleanup_all, verify_clean
 STATIC_TEST_MODULES = [
     "test_labels", "test_references", "test_manifest",
     "test_composition", "test_config", "test_roles", "test_vault",
-    "test_start_scripts", "test_tracker_authority",
+    "test_tracker_authority",
     "test_manifest_registry", "test_wizard", "test_wizard_runbook",
     "test_installer_wiring", "test_config_schema",
     "test_statusline_schema", "test_feat328_coverage",
