@@ -462,6 +462,14 @@ class TestIntentLifecycle(unittest.TestCase):
         s = AgentState("skill")
         self.assertEqual(s.intent, AgentState.INTENT_RUNNING)
 
+    def test_all_intent_constants_defined(self):
+        """All four intent states have class constants (#5423)."""
+        from harness import AgentState
+        self.assertEqual(AgentState.INTENT_RUNNING, "running")
+        self.assertEqual(AgentState.INTENT_STOPPING, "stopping")
+        self.assertEqual(AgentState.INTENT_RESTARTING, "restarting")
+        self.assertEqual(AgentState.INTENT_STOPPED, "stopped")
+
     def test_intent_in_to_dict(self):
         from harness import AgentState
         s = AgentState("skill")
@@ -522,6 +530,35 @@ class TestIntentLifecycle(unittest.TestCase):
                 hs.update_health()
 
             mock_boot.assert_not_called()
+
+    def test_stopping_intent_transitions_to_stopped_on_death(self):
+        """Agent dies with intent=stopping → intent transitions to INTENT_STOPPED (#5423)."""
+        import tempfile
+        from harness import HarnessState, AgentState
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            (role_dir / ".claude-pid").write_text("99999999", encoding="utf-8")
+
+            hs = HarnessState()
+            agent = AgentState("skill", tmpdir)
+            agent.status = "running"
+            agent.intent = AgentState.INTENT_STOPPING
+            agent.claude_pid = 99999999
+            hs.set_agent("skill", agent)
+
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.boot_remote.boot_agent") as mock_boot, \
+                 patch("harness.health_check.check_agent_health", return_value={"health": "unknown"}), \
+                 patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
+                hs.update_health()
+
+            # Must use the class constant, not a bare string
+            self.assertEqual(hs.get_agent("skill").intent, AgentState.INTENT_STOPPED)
+            self.assertEqual(AgentState.INTENT_STOPPED, "stopped")
+            self.assertIsNone(hs.get_agent("skill").claude_pid)
 
     def test_reboot_on_restart_intent(self):
         """Agent dies with intent=restarting → reboot. Comes back → intent=running (#4966)."""
