@@ -63,7 +63,13 @@ def main():
 
     try:
         proc = subprocess.Popen(
-            ["claude", "--append-system-prompt", f"SQUIDSQUAD_ROLE={role}"],
+            [
+                "claude",
+                "--append-system-prompt", f"SQUIDSQUAD_ROLE={role}",
+                "--name", f"squidsquad-{role}",
+                "--dangerously-skip-permissions",
+                "Boot. Begin your first Ralph Loop cycle now.",
+            ],
             cwd=clone_path,
             env=env,
         )
