@@ -8,7 +8,7 @@
 - Phase 1 Research complete
 - Architecture confirmed: single bus, log model not queue
 - Cursor + lag visibility design locked
-- Phase 2 scope updated with task-start/task-end events
+- Phase 2 scope expanded with task-start/task-end, tracker-comment, cycle-suppressed, status-transition, issue-filed, task-filed (16 total)
 
 ## Remaining Steps
 - Resolve open Q: relevance rule location
@@ -16,10 +16,8 @@
 - Phase 3 test plan
 
 ## Key Decisions
-- Single shared bus, log model (events stay on consume)
-- Each consumer tracks own cursor
-- Cursor reported via X-Consumer-Cursor header on emission
-- Health bar 'Bus Lag' column + event log fan-out markers
-- 11 event types in Phase 2 (added task-start, task-end)
+- 16 agent-emitted events across 4 categories
+- Harness-internal events reserved for Phase 3+
+- 5 emission points (cycle_pre, cycle_post, git_ops, tracker, harness)
 
 ## Quiet cycle counter: 0
