@@ -138,8 +138,8 @@ def _validate_output(data):
 # ---------------------------------------------------------------------------
 
 
-def _verify_remote_branch(number):
-    """Best-effort check that a feature branch exists on remote (#5444).
+def _verify_remote_branch(number, role="skill"):
+    """Best-effort check that a feature branch exists on remote (#5444, #5526).
 
     Returns True if branch is on remote, False if not, None if check failed.
     Non-blocking — network failure returns None (proceed with warning).
@@ -150,9 +150,7 @@ def _verify_remote_branch(number):
         if bw not in ("yes", "true", "1"):
             return True  # Branch workflow off — no branch expected
         pattern = get_field("branch-pattern") or "squidsquad/task/{number}"
-        branch = pattern.replace("{number}", str(number))
-        # Replace any remaining placeholders
-        branch = branch.replace("{role}", "*")
+        branch = pattern.replace("{number}", str(number)).replace("{role}", role)
     except Exception:
         return None  # Can't read config
 
@@ -178,7 +176,7 @@ def _do_status_transitions(data, role):
 
         # Verify remote branch exists before pending-test transition (#5444)
         if to_status == "pending-test" and role in ("skill",):
-            remote_ok = _verify_remote_branch(number)
+            remote_ok = _verify_remote_branch(number, role)
             if remote_ok is False:
                 print(f"WARNING: #{number} → pending-test blocked: feature branch "
                       f"not found on remote. Push may have failed.", file=sys.stderr)
