@@ -25,6 +25,18 @@ import sys
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+VALID_EFFORT_LEVELS = {"low", "medium", "high", "max"}
+
+
+def _get_effort_level(role):
+    """Read per-agent effort level from config.md. Falls back to 'high'."""
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from config import get_field
+        level = (get_field(f"effort-{role}") or "high").strip().lower()
+        return level if level in VALID_EFFORT_LEVELS else "high"
+    except Exception:
+        return "high"
 
 
 def _write_pid(clone_path, role, pid):
@@ -59,7 +71,9 @@ def main():
     env = os.environ.copy()
     env["SQUIDSQUAD_ROLE"] = role
 
-    print(f"[thin-launcher] Starting claude for {role} in {clone_path}")
+    # Read per-agent effort level from config (#5573)
+    effort = _get_effort_level(role)
+    print(f"[thin-launcher] Starting claude for {role} in {clone_path} (effort={effort})")
 
     try:
         proc = subprocess.Popen(
@@ -67,6 +81,7 @@ def main():
                 "claude",
                 "--append-system-prompt", f"SQUIDSQUAD_ROLE={role}",
                 "--name", f"squidsquad-{role}",
+                "--effort", effort,
                 "--dangerously-skip-permissions",
                 "Boot. Begin your first Ralph Loop cycle now.",
             ],
