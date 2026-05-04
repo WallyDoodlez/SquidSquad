@@ -255,7 +255,7 @@ All agents follow these rules to minimize merge conflicts on shared tracker file
 - Discussion comments on Issues are append-only: always add a new comment, never edit previous ones.
 - Push after completing each work unit (bug fix, feature, test run).
 - **Commit prefix convention**: every commit message must start with the agent's role name followed by a colon (e.g. `skill: fix bug`, `fe: add button`, `pm: verify features`). This prefix is used by the status line and PM health checks to detect agent activity via `git log --grep`.
-- If a rebase conflict occurs on working-branch state files: keep both versions by appending, never discard. Most state files (iterations, working-state, diagnostics) now live on the state branch (`squid-squad`) to avoid cross-agent conflicts. Tracker data lives in GitHub Issues and is conflict-free.
+- If a merge conflict occurs on working-branch state files: keep both versions by appending, never discard. Most state files (iterations, working-state, diagnostics) now live on the state branch (`squid-squad`) to avoid cross-agent conflicts. Tracker data lives in GitHub Issues and is conflict-free.
 
 ### PR-Based Approval Flow (optional)
 
@@ -277,7 +277,7 @@ When `Auto Merge: yes` and `Branch Workflow: yes` are set in `config.md`, PM aut
 
 - **Tasks only** — bug fix PRs always require manual human merge for safety.
 - **Per-task override**: add the `merge:manual` label to any task to skip auto-merge and require human review.
-- **Conflict handling**: if a merge conflict is detected, PM routes the task back to the dev agent for rebasing. QA re-verifies after rebase, then PM retries the merge.
+- **Conflict handling**: if a merge conflict is detected, PM routes the task back to the dev agent to resolve. QA re-verifies after resolution, then PM retries the merge.
 - When `Auto Merge: no` (default for new installs), all PRs require manual merge as before.
 
 ---
