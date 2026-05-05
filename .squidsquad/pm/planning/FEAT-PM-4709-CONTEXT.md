@@ -8,7 +8,7 @@ Add event bus to the harness. Mechanical scripts (cycle_pre/cycle_post) emit eve
 
 - **Event emission via HTTP POST**: Agents emit to `localhost:<port>/events`. Same FastAPI server from Phase 1.
 - **Mechanical scripts emit**: cycle_pre.py and cycle_post.py emit events. Agents don't know about events — zero template changes. Silent fire-and-forget.
-- **Port discovery via file**: `.harness-port` written to each agent clone directory by harness at startup (reads .local-config for paths).
+- **Port discovery via parent-dir walking**: `event_bus.py` reads `.harness-port` from its own clone's `.squidsquad/` with parent-directory fallback walking (matches existing pattern in `cycle_post.py:_discover_harness_port()`). Harness only writes `.harness-port` to the main repo's `.squidsquad/` directory; agent clones discover via parent-dir walk. Default fallback to port 7373 if not found. Simpler and already battle-tested.
 - **Backward compat**: If harness down or event_bus.py missing, silent no-op. Zero behavior change for agents.
 
 ## Event Schema (Phase 2 MVP)
@@ -26,28 +26,48 @@ Add event bus to the harness. Mechanical scripts (cycle_pre/cycle_post) emit eve
 
 - `id`: short SHA (8 chars, generated from hash of timestamp+role+event_type+payload). Unique per event. Useful for referencing specific events in logs, debugging, and future API queries.
 
-### Events:
+### Events (16 total — 4 agent-emitted categories + harness-internal reserved):
 
-**Cycle events** (emitted by cycle_pre/cycle_post):
+**Cycle events (4)** (emitted by cycle_pre/cycle_post):
 - **cycle-start**: after writing cycle-input.json
 - **cycle-end**: after commit/push (includes cycle_type + summary)
-- **phase-change**: when status bar updates
+- **cycle-suppressed**: emitted instead of cycle-start when cycle is suppressed (active planning phase). Payload: `reason` (e.g., "discussing FEAT-PM-5622"), `task_number` (the planning task). Without this, suppressed cycles are silent for 30+ min — operator sees no activity.
+- **phase-change**: when status bar updates (current_phase changes)
 
-**Git events** (emitted by git_ops.py):
+**Git events** (emitted by git_ops.py — single funnel per operation):
 - **git-pull**: after pull (includes result: ok/conflict/stash)
-- **git-commit**: after commit (includes message, branch, files changed count)
-- **git-push**: after push (includes branch)
+- **git-commit**: after commit (includes message, branch, files changed count, **commit_type: "code"|"state"** — distinguishes feature-branch code commits from main-branch state commits)
+- **git-push**: after push (includes branch). **Emitted from `git_ops.push()` only** — single funnel, never from cycle_post.py callers, prevents duplicate events from multi-path push logic (#5444 fallback).
 - **pr-create**: after PR creation (includes PR number, title, branch)
 - **pr-merge**: after PR merge (includes PR number)
 - **branch-checkout**: on task-begin/task-end (includes branch name, task number)
 
+**Task lifecycle events (3)** (emitted by tracker.py `transition()` — single funnel):
+- **task-start**: after agent transitions task to `in-progress` (from `approved` for tasks, from `open` for issues). Payload: `task_number`, `from_status`, `assigned_role`, `task_title` (truncated to 80 chars).
+- **task-end**: after agent transitions task to `pending-test` (from `in-progress`). Payload: `task_number`, `assigned_role`, `cycles_to_complete` (computed by counting cycle boundaries between task-start and task-end events for the same task_number, or null if task-start not in current bus history).
+- **status-transition**: generic catch-all for ALL OTHER status changes (not task-start, not task-end). Covers: pending→planning→planned→approved (PM workflow), pending-test→pending-ship (QA verified), pending-test→in-progress (QA rejected), pending-ship→shipped (DM ships), pending-ship→in-progress (PR conflict route back), pending-human-review transitions, →rejected. Payload: `issue_number`, `from_status`, `to_status`, `actor_role`, `reason` (truncated 120 chars).
+
+Emitted from inside `tracker.py transition` after the GitHub API call succeeds — single funnel guarantees consistency. The transition() function determines which event type to emit based on (from_status, to_status):
+- `* → in-progress` from approved/open → emit `task-start`
+- `in-progress → pending-test` → emit `task-end`
+- everything else → emit `status-transition`
+
+**Tracker activity events (3)** (emitted by tracker.py — single funnel per operation):
+- **tracker-comment**: after agent posts a standalone comment to a GitHub Issue (NOT auto-comments from transitions). Payload: `issue_number`, `commenter_role`, `comment_preview` (first 120 chars, sanitized — no @-close keywords, no \`<<<<\` conflict markers), `mentioned_roles` (list — extracted from `**role**:` markdown bold in comment body). Emitted from `tracker.py comment()`. The `transition()` function passes a flag to suppress emission for its auto-comment (avoids double-signal with task-start/task-end).
+- **issue-filed**: after `tracker.py create-issue` succeeds. Payload: `issue_number`, `title` (truncated 80 chars), `target_role`, `severity`, `reporter_role`. Phase 4 enables target role to react immediately — eager pickup of urgent bugs.
+- **task-filed**: after `tracker.py create-task` succeeds. Payload: `task_number`, `title` (truncated 80 chars), `target_role`, `priority`, `reporter_role`. Phase 4 enables target role to prep context for upcoming work without waiting for next cycle's tracker query.
+
+**Harness-internal events** (emitted by harness, NOT agents — reserved for Phase 3+):
+- The harness MAY inject its own events into the stream when internal state changes (intent transitions, health-check results, agent boots, version bumps). These bypass the agent emission contract. Specific event types deferred to Phase 3+ (see #5613); Phase 2 just establishes the precedent that harness-internal events are valid stream entries.
+
 ## Implementation
 
-- **event_bus.py** (~50 lines): stdlib urllib, `emit(event_type, role, payload)`. Reads `.harness-port`, POST with 500ms timeout, catches all exceptions silently.
-- **cycle_pre.py**: emit `cycle-start` after writing cycle-input.json
-- **cycle_post.py**: emit `cycle-end` after commit/push
-- **git_ops.py**: emit `git-pull`, `git-commit`, `git-push`, `pr-create`, `pr-merge`, `branch-checkout` at each respective operation
-- **Harness /events endpoint**: receives events, appends to bounded stream (1000 max), updates AgentState
+- **event_bus.py** (~50 lines): stdlib urllib, `emit(event_type, role, payload)`. Reads `.harness-port` via parent-dir walking (fallback 7373), POST with 500ms timeout, catches all exceptions silently.
+- **cycle_pre.py**: emit `cycle-start` after writing cycle-input.json (or `cycle-suppressed` if suppressed flag set)
+- **cycle_post.py**: emit `cycle-end` after commit/push (does NOT emit `git-push` — that comes from git_ops.push only). Emit `phase-change` whenever status bar updates.
+- **git_ops.py**: emit `git-pull` (in `pull()`), `git-commit` (in `commit_code()` with `commit_type:"code"`, in `commit_state()` with `commit_type:"state"`), `git-push` (in `push()` — single funnel), `pr-create` (in `pr_create()`), `pr-merge` (in `pr_merge()`), `branch-checkout` (in `task_begin()`/`task_end()`)
+- **tracker.py**: emit task lifecycle from `transition()` based on from/to status (task-start | task-end | status-transition). Emit `tracker-comment` from `comment()` (suppressed flag for auto-comments from transition). Emit `issue-filed` from `create-issue` after success. Emit `task-filed` from `create-task` after success. All emit only on successful GitHub API response.
+- **Harness /events endpoint**: receives events from agents, appends to bounded stream (1000 max), updates AgentState. Harness can also inject internal events directly into the stream without HTTP roundtrip.
 
 ## Harness State Model (extended from Phase 1)
 
@@ -134,10 +154,14 @@ Use `rich` library (already installed). Specifically:
 
 ## Port Distribution (clone isolation)
 
-On harness startup:
-1. Read `.squidsquad/.local-config` for all agent clone paths
-2. Write `.squidsquad/.harness-port` to each clone's `.squidsquad/` directory
-3. event_bus.py reads from its own clone's `.squidsquad/.harness-port`
+Per locked decision above — using parent-dir walking, not per-clone writes:
+
+1. Harness writes `.harness-port` to main repo's `.squidsquad/.harness-port` only (existing behavior)
+2. `event_bus.py` reads `.harness-port` starting from its own clone's `.squidsquad/`, walking up parent directories until found
+3. Falls back to port 7373 if not found at any level
+4. Reuses the pattern already in `cycle_post.py:_discover_harness_port()` (lines 453-482) — extract to shared utility OR replicate the same logic in `event_bus.py`
+
+This works because agent clones are siblings of the main repo (per clone-isolation architecture). Parent-dir walking finds the main `.squidsquad/.harness-port` automatically.
 
 ## Dev Discretion
 
@@ -145,6 +169,18 @@ On harness startup:
 - Whether to add a GET /events endpoint for polling (in addition to console display)
 - Exact console format and colors
 - Whether cycle_post also emits status_transitions from cycle-output.json
+
+## Locked Decisions — Transition Refinements (from agent-transition review)
+
+- **Console mode flag**: harness supports `--console simple|rich` (default `rich`). `simple` preserves current `print()`-based output as fallback. All `_log()` calls route through a `ConsoleWriter` abstraction. This provides a rollback path if rich rendering has terminal issues.
+- **Event bus import warning**: `event_bus.py` import wrapped in `try/except ImportError` with a single-shot stderr warning (`"WARNING: event_bus.py import failed, events disabled"`). Silent runtime exceptions (HTTPError, ConnectionRefused) remain silent — only the import failure logs once. Aids debugging without breaking fire-and-forget contract.
+- **AgentState backfill on harness startup**: when harness boots and discovers running agents via PID checks, it reads existing files to populate health table immediately:
+  - `.squidsquad/<role>/current-state` → `current_phase`
+  - `.squidsquad/<role>/context-pressure` → context %
+  - latest `.squidsquad/<role>/iterations/iter-N.md` → `current_cycle` (parse N from filename)
+  - `last_cycle_start`, `last_cycle_end`, `last_cycle_type` remain "—" until first event (one cycle max)
+
+  Health table shows meaningful data within ~5 seconds of harness restart, not 30 minutes. Phase 1 already reads `current-state` and `context-pressure` for `/agents/{role}/health` (harness.py:563-575) — extend to populate AgentState.
 
 ## Side Effect Mitigations (required)
 
@@ -163,3 +199,22 @@ On harness startup:
 - Custom agent-initiated events from creative phase
 - Telegram/Discord adapters (Phase 6)
 - Event persistence to disk
+- Specific harness-internal event types — `health-check-result`, `intent-transition`, `vault-read`, `merge-resolved` deferred to Phase 3+ per #5613. Phase 2 only establishes the precedent that harness can inject events.
+
+## Impact Review Note
+
+A re-research review (PHASE2-IMPACT-REVIEW-RESEARCH.md) was conducted after 16 ships landed since original planning. Verdict: proceed with the 5 minor adjustments now incorporated above. The shipped changes (push verification #5444, .gitattributes #5469, rebase→merge #5445, PID-first health #5429, etc.) strengthen rather than undermine Phase 2 design.
+
+## Agent Transition Plan (from PHASE2-AGENT-TRANSITION-RESEARCH.md)
+
+5-step deployment runbook. NO agent restarts required. Total harness downtime ~5s.
+
+1. Deploy `event_bus.py` to main repo (silent — not yet imported)
+2. Deploy updated `cycle_pre.py`, `cycle_post.py`, `git_ops.py` with imports + emit calls (try/except ImportError fallback ensures safety)
+3. Wait one cycle (~30 min) — agents pull, manually verify no errors
+4. Graceful stop harness (Ctrl+C), deploy new harness, restart
+5. Next cycle → events flow
+
+**Rollback**: Push revert commit removing import lines + restart old harness. Agents pick up on next cycle. No work lost.
+
+See `.squidsquad/pm/planning/PHASE2-AGENT-TRANSITION-RESEARCH.md` for the full runbook including pre-deployment checklist, per-step verification commands, and 4 rollback scenarios.
