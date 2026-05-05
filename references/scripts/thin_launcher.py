@@ -35,7 +35,7 @@ def _get_effort_level(role):
         from config import get_field
         level = (get_field(f"effort-{role}") or "high").strip().lower()
         return level if level in VALID_EFFORT_LEVELS else "high"
-    except Exception:
+    except (Exception, SystemExit):
         return "high"
 
 

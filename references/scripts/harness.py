@@ -391,12 +391,30 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown hooks."""
     _log(f"Harness starting on port {state.port}...")
 
-    # Crash recovery: load previous state before first health poll (#4966)
-    state.load_state()
+    # --- Verify agent clones ---
+    _log("Verifying agent clones...")
+    try:
+        clone_map = boot_remote._parse_local_config()
+        all_ok = True
+        for role, clone_root in sorted(clone_map.items()):
+            clone_path = Path(clone_root)
+            claude_md = clone_path / ".squidsquad" / role / "CLAUDE.md"
+            if not clone_path.exists():
+                _log(f"  {role}: MISSING — {clone_path}")
+                all_ok = False
+            elif not claude_md.exists():
+                _log(f"  {role}: clone exists but no CLAUDE.md — {clone_path}")
+                all_ok = False
+            else:
+                _log(f"  {role}: OK — {clone_path}")
+        if not all_ok:
+            _log("WARNING: Some clones are missing. Run compose.py to create them.")
+    except (SystemExit, Exception) as e:
+        _log(f"WARNING: Could not verify clones: {e}")
 
-    # Initial health poll
-    state.update_health()
-    state.start_poller()
+    # Write port discovery file FIRST so CLI can detect us ASAP.
+    # The server starts accepting connections after lifespan yields,
+    # so minimize work before the port file + yield.
 
     # Write port discovery file (atomic) — primary repo
     try:
@@ -407,34 +425,55 @@ async def lifespan(app: FastAPI):
     except OSError as e:
         _log(f"WARNING: Could not write port file: {e}")
 
-    # Write port file to each agent clone's .squidsquad/ directory (#4709 TC-7)
-    # Clone isolation: clones are siblings, not children — parent-dir walk won't find
-    # the primary .harness-port. Write directly to each clone.
-    try:
-        clone_paths = boot_remote._parse_local_config()
-        for role, clone_root in clone_paths.items():
-            clone_squid = Path(clone_root) / ".squidsquad"
-            if clone_squid.is_dir() and clone_root != REPO_ROOT:
-                clone_port_file = clone_squid / ".harness-port"
-                try:
-                    clone_tmp = clone_port_file.with_suffix(".tmp")
-                    clone_tmp.write_text(str(state.port), encoding="utf-8")
-                    clone_tmp.replace(clone_port_file)
-                except OSError:
-                    pass  # Non-fatal — clone may not exist yet
-        _log(f"Port file distributed to {len(clone_paths)} clone(s)")
-    except (SystemExit, Exception) as e:
-        _log(f"WARNING: Could not distribute port to clones: {e}")
-
     _log("Harness ready. Ctrl+C to stop.")
     _log(f"API: http://localhost:{state.port}/status")
 
-    # Print initial agent roster
-    agents = state.all_agents()
-    if agents:
-        _log(f"Agents: {', '.join(a['role'] + '=' + a['status'] for a in agents)}")
-    else:
-        _log("No agents detected yet (health poll will discover them).")
+    # All slow I/O (clone port distribution, crash recovery, health check) runs
+    # in background so the server accepts connections immediately (fixes CLI timeout).
+    def _deferred_init():
+        # Write port file to each agent clone's .squidsquad/ directory (#4709 TC-7)
+        try:
+            clone_paths = boot_remote._parse_local_config()
+            for role, clone_root in clone_paths.items():
+                clone_squid = Path(clone_root) / ".squidsquad"
+                if clone_squid.is_dir() and clone_root != REPO_ROOT:
+                    clone_port_file = clone_squid / ".harness-port"
+                    try:
+                        clone_tmp = clone_port_file.with_suffix(".tmp")
+                        clone_tmp.write_text(str(state.port), encoding="utf-8")
+                        clone_tmp.replace(clone_port_file)
+                    except OSError:
+                        pass
+            _log(f"Port file distributed to {len(clone_paths)} clone(s)")
+        except (SystemExit, Exception) as e:
+            _log(f"WARNING: Could not distribute port to clones: {e}")
+
+        _log("Loading saved state...")
+        state.load_state()
+
+        # Skip initial update_health() — it's slow on Windows (tasklist per agent).
+        # The health poller will pick up state within HEALTH_POLL_INTERVAL seconds.
+
+        # Auto-start all agents on harness boot
+        _log("Auto-starting all agents...")
+        try:
+            roles = boot_remote._get_all_roles()
+            for role in roles:
+                result = boot_remote.boot_agent(role)
+                status = "OK" if result["success"] else "FAIL"
+                _log(f"  {role}: {result['action']} -- {status}: {result['message']}")
+                if result["success"]:
+                    agent_state = state.get_agent(role) or AgentState(role)
+                    if result["action"] == "spawn":
+                        agent_state.status = "starting"
+                        agent_state.boot_time = time.time()
+                    state.set_agent(role, agent_state)
+            state.save_state()
+        except Exception as e:
+            _log(f"Auto-start failed: {e}")
+
+    threading.Thread(target=_deferred_init, daemon=True, name="deferred-init").start()
+    state.start_poller()
 
     yield
 

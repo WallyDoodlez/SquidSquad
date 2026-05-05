@@ -117,6 +117,13 @@
 - **Ship Threshold**: 10
 - **Shipped Since Last Bump**: 0
 
+## Agent Effort
+
+- **effort-pm**: high
+- **effort-skill**: high
+- **effort-dm**: high
+- **effort-qa**: high
+
 ## Harness
 
 - **Enabled**: yes
