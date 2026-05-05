@@ -13,6 +13,14 @@
 .squidsquad/*/cycle-input.json merge=ours
 .squidsquad/*/cycle-output.json merge=ours
 
+# Vault files (#5674)
+# BRIEFING.md — last writer wins (staleness fix runs every cycle).
+.squidsquad/vault/BRIEFING.md merge=ours
+# Galaxy/areas/projects notes — append-friendly (changelogs are append-only).
+.squidsquad/vault/galaxy/*.md merge=union
+.squidsquad/vault/areas/*.md merge=union
+.squidsquad/vault/projects/*.md merge=union
+
 # Shared config — last writer wins (cycle_pre validates post-merge) (#5136)
 # merge=union would produce duplicate field lines (invalid config).
 # Version regressions caught by _validate_config_version().

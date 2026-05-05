@@ -835,6 +835,18 @@ class TestGitattributesMergeStrategies:
         assert "working-state.md merge=ours" in content
         assert "config.md merge=ours" in content
 
+    def test_vault_briefing_merge_ours(self):
+        """#5674: BRIEFING.md uses merge=ours (last writer wins)."""
+        content = (Path(__file__).resolve().parent.parent / ".gitattributes").read_text()
+        assert "vault/BRIEFING.md merge=ours" in content
+
+    def test_vault_notes_merge_union(self):
+        """#5674: vault galaxy/areas/projects use merge=union (append-friendly)."""
+        content = (Path(__file__).resolve().parent.parent / ".gitattributes").read_text()
+        assert "vault/galaxy/*.md merge=union" in content
+        assert "vault/areas/*.md merge=union" in content
+        assert "vault/projects/*.md merge=union" in content
+
 
 # ---------------------------------------------------------------------------
 # task_begin — regression #4942
