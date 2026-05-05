@@ -7,6 +7,7 @@
 ## Completed Steps
 - 16 events locked
 - Phase 2 #4709 approved → pending-test (PR #5673)
+- Filed #5674 (.gitattributes vault gap)
 
 ## Remaining Steps
 - Resolve open Q: relevance rule location
@@ -15,6 +16,5 @@
 
 ## Key Decisions
 - 16 events, 5 emission points
-- Filed #5674 for .gitattributes vault gap
 
 ## Quiet cycle counter: 0
