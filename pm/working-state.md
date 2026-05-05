@@ -5,9 +5,8 @@
 - **Phase**: discussing FEAT-PM-5622
 
 ## Completed Steps
-- Phase 1 Research complete
 - 16 events locked
-- Phase 2 #4709 approved → implemented (pending QA)
+- Phase 2 #4709 approved → pending-test (PR #5673)
 
 ## Remaining Steps
 - Resolve open Q: relevance rule location
@@ -15,7 +14,7 @@
 - Phase 3 test plan
 
 ## Key Decisions
-- 16 events: 4 cycle + 6 git + 3 task lifecycle + 3 tracker activity
-- Harness-internal events reserved for Phase 3+
+- 16 events, 5 emission points
+- Filed #5674 for .gitattributes vault gap
 
 ## Quiet cycle counter: 0
