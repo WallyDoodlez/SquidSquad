@@ -6,15 +6,15 @@
 
 ## Completed Steps
 - 16 events locked
-- Phase 2 #4709 approved → pending-test (PR #5673)
-- Filed #5674 (.gitattributes vault gap)
+- Phase 2 #4709 approved → pending-test → REJECTED (TC-7) → in-progress
+- CONTEXT.md port discovery reverted to per-clone writes
 
 ## Remaining Steps
-- Resolve open Q: relevance rule location
-- Phase 2 approval gate
-- Phase 3 test plan
+- Skill re-implements per-clone .harness-port writes
+- Resolve open Q: relevance rule location for #5622
 
 ## Key Decisions
 - 16 events, 5 emission points
+- Per-clone .harness-port writes (NOT parent-dir walking — clones are siblings)
 
 ## Quiet cycle counter: 0
