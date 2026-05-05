@@ -8,7 +8,7 @@ Add event bus to the harness. Mechanical scripts (cycle_pre/cycle_post) emit eve
 
 - **Event emission via HTTP POST**: Agents emit to `localhost:<port>/events`. Same FastAPI server from Phase 1.
 - **Mechanical scripts emit**: cycle_pre.py and cycle_post.py emit events. Agents don't know about events — zero template changes. Silent fire-and-forget.
-- **Port discovery via parent-dir walking**: `event_bus.py` reads `.harness-port` from its own clone's `.squidsquad/` with parent-directory fallback walking (matches existing pattern in `cycle_post.py:_discover_harness_port()`). Harness only writes `.harness-port` to the main repo's `.squidsquad/` directory; agent clones discover via parent-dir walk. Default fallback to port 7373 if not found. Simpler and already battle-tested.
+- **Port discovery — REVERTED to per-clone writes** (corrected after QA found TC-7 failure): Clones are SIBLING directories (../SquidSquad, ../SquidSquad-2, ../SquidSquad-qa), not nested. Parent-dir walking from a sibling clone reaches the common parent dir (Dev/), not the main repo's .squidsquad/. The original Phase 2 design is correct: harness reads .squidsquad/.local-config at startup and writes .harness-port to each agent clone's .squidsquad/ directory. event_bus.py reads from its own clone's .squidsquad/.harness-port (no walking needed). Default fallback to port 7373 if file missing.
 - **Backward compat**: If harness down or event_bus.py missing, silent no-op. Zero behavior change for agents.
 
 ## Event Schema (Phase 2 MVP)
@@ -154,14 +154,21 @@ Use `rich` library (already installed). Specifically:
 
 ## Port Distribution (clone isolation)
 
-Per locked decision above — using parent-dir walking, not per-clone writes:
+**CORRECTED after QA TC-7 failure**: parent-dir walking does NOT work because clones are siblings (../SquidSquad, ../SquidSquad-2, ../SquidSquad-qa), not nested. Walking up from a sibling clone reaches the common parent dir (Dev/), not the main repo's .squidsquad/.
 
-1. Harness writes `.harness-port` to main repo's `.squidsquad/.harness-port` only (existing behavior)
-2. `event_bus.py` reads `.harness-port` starting from its own clone's `.squidsquad/`, walking up parent directories until found
-3. Falls back to port 7373 if not found at any level
-4. Reuses the pattern already in `cycle_post.py:_discover_harness_port()` (lines 453-482) — extract to shared utility OR replicate the same logic in `event_bus.py`
+**Correct approach** (original Phase 2 design):
 
-This works because agent clones are siblings of the main repo (per clone-isolation architecture). Parent-dir walking finds the main `.squidsquad/.harness-port` automatically.
+On harness startup (lifespan()):
+1. Read `.squidsquad/.local-config` for all agent clone paths
+2. For each clone path, write `.harness-port` to that clone's `.squidsquad/` directory (atomic write: .tmp then mv)
+3. On harness shutdown, leave port files (next harness startup overwrites; agents fall back to fire-and-forget if port is stale and connection refused)
+
+On the agent side (event_bus.py):
+1. Read `.harness-port` from THIS clone's `.squidsquad/.harness-port`
+2. Fallback to port 7373 if file missing
+3. POST to `http://127.0.0.1:<port>/events` with 500ms timeout
+
+This is simpler than parent-dir walking and matches what TC-7 verifies. The cycle_post.py `_discover_harness_port()` parent-dir walk is a separate concern (it works for cycle_post because cycle_post runs from the agent's clone, which always has `.harness-port` written).
 
 ## Dev Discretion
 
