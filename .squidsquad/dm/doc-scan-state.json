@@ -1,5 +1,5 @@
 {
-  "last_scanned": "CONTRIBUTING.md",
+  "last_scanned": "CHANGELOG.md",
   "rotation_count": 11,
   "scan_history": [
     {"file": "README.md", "date": "2026-04-28", "findings": 2},
@@ -52,7 +52,8 @@
     {"file": "SKILL.md:sections-7-8", "date": "2026-05-04", "findings": 1, "fixes": ["updated wrapper → harness in /squidsquad-status health check docs"]},
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-04", "findings": 2, "fixes": ["L2 diagram: boot scripts/wrapper/signals → harness/thin launcher", "runtime diagram: wrapper monitors signals → harness monitors agents"]},
     {"file": "docs/sub-skill-guide.md", "date": "2026-05-04", "findings": 0},
-    {"file": "CONTRIBUTING.md", "date": "2026-05-04", "findings": 0}
+    {"file": "CONTRIBUTING.md", "date": "2026-05-04", "findings": 0},
+    {"file": "CHANGELOG.md", "date": "2026-05-04", "findings": 0}
   ],
   "doc_inventory": {
     "README.md": {"last_scanned": "2026-05-04", "status": "current"},
