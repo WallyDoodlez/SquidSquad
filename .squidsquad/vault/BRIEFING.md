@@ -6,15 +6,12 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 - #4709 EPIC Harness Phase 2: Event bus + agent communication (planned, high, role:skill) — re-research complete, ready for approval
 - #3963 EPIC: Web dashboard — visual interface for SquidSquad (pending, high, role:skill)
-<<<<<<< HEAD
-- #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm)
-- #5557 Prohibit direct edits to composed CLAUDE.md + compose.py guard (pending-test, high, role:skill)
-=======
+- #4709 EPIC Harness Phase 2 — IN FLIGHT pending-test PR #5673
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — awaiting human greenlight
+- #5622 EPIC Harness Phase 4 — Agent communication bus (planning, high, role:skill)
 - #5620 L3 PM stuck-rebase recovery (pending, high, role:skill)
 - #5613 Phase 3+ event opportunities (pending, low, role:skill)
 - #5468 External model consultation sub-skill (pending, low, role:skill)
->>>>>>> 56d6feaa150d6a9453e26854321aea32107de32b
 
 ## Pending Tasks (filed this session, awaiting approval)
 
