@@ -8,7 +8,8 @@
 - Phase 1 Research complete
 - Architecture confirmed: single bus, log model not queue
 - Cursor + lag visibility design locked
-- Phase 2 scope expanded with task-start/task-end, tracker-comment, cycle-suppressed, status-transition, issue-filed, task-filed (16 total)
+- 16 agent-emitted events locked across 4 categories
+- Phase 2 #4709 approved for execution
 
 ## Remaining Steps
 - Resolve open Q: relevance rule location
@@ -16,8 +17,8 @@
 - Phase 3 test plan
 
 ## Key Decisions
-- 16 agent-emitted events across 4 categories
+- 16 events: 4 cycle + 6 git + 3 task lifecycle + 3 tracker activity
 - Harness-internal events reserved for Phase 3+
-- 5 emission points (cycle_pre, cycle_post, git_ops, tracker, harness)
+- 5 emission points
 
 ## Quiet cycle counter: 0
