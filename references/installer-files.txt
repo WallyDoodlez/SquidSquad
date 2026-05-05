@@ -18,6 +18,7 @@ references/scripts/cycle.py
 references/scripts/cycle_post.py
 references/scripts/cycle_pre.py
 references/scripts/diagnostics.py
+references/scripts/event_bus.py
 references/scripts/forge_adapter.py
 references/scripts/forgejo_setup.py
 references/scripts/git_ops.py

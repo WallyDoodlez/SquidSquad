@@ -983,6 +983,25 @@ def transition(number, from_status, to_status, role=None, force=False):
                 print(f"WARNING: gh issue close #{number} failed: {result.stderr.strip()}",
                       file=sys.stderr)
 
+    # Emit task lifecycle events (#4709)
+    try:
+        from event_bus import emit as _emit_event
+        # Determine caller role for the event
+        emit_role = (role or "unknown").replace("-lead", "")
+        if to_label == "status:in-progress":
+            _emit_event("task-start", emit_role, payload={
+                "task_number": str(number),
+                "from_status": from_label.replace("status:", ""),
+                "assigned_role": emit_role,
+            })
+        elif to_label == "status:pending-test":
+            _emit_event("task-end", emit_role, payload={
+                "task_number": str(number),
+                "assigned_role": emit_role,
+            })
+    except (ImportError, Exception):
+        pass
+
     print(f"#{number}: {from_label} -> {to_label}")
     return True
 
@@ -1032,7 +1051,7 @@ def _expand_issue_refs(text):
     return re.sub(r'(?<!\w)#(\d{1,5})\b', _replace, text)
 
 
-def comment(number, role, message):
+def comment(number, role, message, _suppress_event=False):
     """Add a discussion comment to an issue."""
     # No manual timestamps — GitHub provides them
     message = _expand_issue_refs(message)
@@ -1043,6 +1062,24 @@ def comment(number, role, message):
     else:
         _run_list(["gh", "issue", "comment", str(number), "--body", body])
     print(f"Commented on #{number}")
+
+    # Emit tracker-comment event (#4709) — suppressed for auto-comments from transition()
+    if not _suppress_event:
+        try:
+            import re as _re
+            from event_bus import emit as _emit_event
+            emit_role = role.split(" ")[0].replace("-lead", "")  # "skill-lead (Ralph)" → "skill"
+            # Extract mentioned roles from **role**: bold patterns
+            mentioned = _re.findall(r'\*\*(\w+)\*\*:', message)
+            preview = message[:120].replace("\n", " ")
+            _emit_event("tracker-comment", emit_role, payload={
+                "issue_number": str(number),
+                "commenter_role": emit_role,
+                "comment_preview": preview,
+                "mentioned_roles": mentioned,
+            })
+        except (ImportError, Exception):
+            pass
 
 
 def get_labels(number):

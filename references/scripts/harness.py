@@ -21,6 +21,7 @@ Usage:
 """
 
 import asyncio
+import collections
 import json
 import os
 import signal
@@ -47,7 +48,7 @@ import health_check
 import reboot_agent
 
 try:
-    from fastapi import FastAPI, HTTPException
+    from fastapi import FastAPI, HTTPException, Request
     from fastapi.responses import JSONResponse
     import uvicorn
 except ImportError:
@@ -67,7 +68,9 @@ class AgentState:
     """In-memory state for a single agent."""
 
     __slots__ = ("role", "status", "intent", "last_health_check", "boot_time",
-                 "clone_path", "claude_pid")
+                 "clone_path", "claude_pid",
+                 "current_cycle", "current_phase", "last_cycle_start",
+                 "last_cycle_end", "last_cycle_type")
 
     # Intent values:
     #   "running"    — agent should be alive; auto-reboot on death (#4949)
@@ -87,6 +90,12 @@ class AgentState:
         self.boot_time = None
         self.clone_path = clone_path
         self.claude_pid = None  # PID of claude process (#4966)
+        # Phase 2 event-derived state (#4709)
+        self.current_cycle = None
+        self.current_phase = None
+        self.last_cycle_start = None
+        self.last_cycle_end = None
+        self.last_cycle_type = None
 
     def to_dict(self):
         return {
@@ -97,6 +106,11 @@ class AgentState:
             "last_health_check": self.last_health_check,
             "clone_path": self.clone_path,
             "claude_pid": self.claude_pid,
+            "current_cycle": self.current_cycle,
+            "current_phase": self.current_phase,
+            "last_cycle_start": self.last_cycle_start,
+            "last_cycle_end": self.last_cycle_end,
+            "last_cycle_type": self.last_cycle_type,
         }
 
 
@@ -324,8 +338,38 @@ class HarnessState:
         _log(f"Restored state for {len(state_data.get('agents', {}))} agents from state file")
 
 
+# ---------------------------------------------------------------------------
+# Event stream (#4709 Phase 2)
+# ---------------------------------------------------------------------------
+
+class EventStream:
+    """Bounded event stream — thread-safe deque with max 1000 events."""
+
+    def __init__(self, maxlen=1000):
+        self._events = collections.deque(maxlen=maxlen)
+        self._lock = threading.Lock()
+
+    def append(self, event: dict):
+        with self._lock:
+            self._events.append(event)
+
+    def get_all(self) -> list[dict]:
+        with self._lock:
+            return list(self._events)
+
+    def get_recent(self, n: int = 50) -> list[dict]:
+        with self._lock:
+            items = list(self._events)
+            return items[-n:] if len(items) > n else items
+
+    def __len__(self):
+        with self._lock:
+            return len(self._events)
+
+
 # Global state
 state = HarnessState()
+event_stream = EventStream()
 
 
 # ---------------------------------------------------------------------------
@@ -354,7 +398,7 @@ async def lifespan(app: FastAPI):
     state.update_health()
     state.start_poller()
 
-    # Write port discovery file (atomic)
+    # Write port discovery file (atomic) — primary repo
     try:
         tmp = HARNESS_PORT_FILE.with_suffix(".tmp")
         tmp.write_text(str(state.port), encoding="utf-8")
@@ -362,6 +406,25 @@ async def lifespan(app: FastAPI):
         _log(f"Port discovery file written: {HARNESS_PORT_FILE}")
     except OSError as e:
         _log(f"WARNING: Could not write port file: {e}")
+
+    # Write port file to each agent clone's .squidsquad/ directory (#4709 TC-7)
+    # Clone isolation: clones are siblings, not children — parent-dir walk won't find
+    # the primary .harness-port. Write directly to each clone.
+    try:
+        clone_paths = boot_remote._parse_local_config()
+        for role, clone_root in clone_paths.items():
+            clone_squid = Path(clone_root) / ".squidsquad"
+            if clone_squid.is_dir() and clone_root != REPO_ROOT:
+                clone_port_file = clone_squid / ".harness-port"
+                try:
+                    clone_tmp = clone_port_file.with_suffix(".tmp")
+                    clone_tmp.write_text(str(state.port), encoding="utf-8")
+                    clone_tmp.replace(clone_port_file)
+                except OSError:
+                    pass  # Non-fatal — clone may not exist yet
+        _log(f"Port file distributed to {len(clone_paths)} clone(s)")
+    except (SystemExit, Exception) as e:
+        _log(f"WARNING: Could not distribute port to clones: {e}")
 
     _log("Harness ready. Ctrl+C to stop.")
     _log(f"API: http://localhost:{state.port}/status")
@@ -379,7 +442,7 @@ async def lifespan(app: FastAPI):
     _log("Shutting down...")
     state.stop_poller()
 
-    # Clean up port file (retry for Windows file locking)
+    # Clean up port files (primary + clones, retry for Windows file locking)
     for attempt in range(3):
         try:
             if HARNESS_PORT_FILE.exists():
@@ -388,6 +451,18 @@ async def lifespan(app: FastAPI):
         except OSError as e:
             _log(f"WARNING: Could not delete port file (attempt {attempt + 1}/3): {e}")
             time.sleep(0.5)
+
+    # Clean up clone port files (#4709)
+    try:
+        clone_paths = boot_remote._parse_local_config()
+        for role, clone_root in clone_paths.items():
+            clone_port = Path(clone_root) / ".squidsquad" / ".harness-port"
+            try:
+                clone_port.unlink(missing_ok=True)
+            except OSError:
+                pass
+    except (SystemExit, Exception):
+        pass
 
     _log("Harness stopped.")
 
@@ -595,6 +670,119 @@ async def get_agent_config(role: str):
         result["error"] = "Could not read config"
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Event bus helpers (#4709 Phase 2)
+# ---------------------------------------------------------------------------
+
+def _update_agent_from_event(event: dict):
+    """Update AgentState fields from a received event."""
+    role = event.get("role")
+    event_type = event.get("event_type")
+    payload = event.get("payload", {})
+    cycle_number = event.get("cycle_number")
+
+    agent = state.get_agent(role)
+    if agent is None:
+        agent = AgentState(role)
+        state.set_agent(role, agent)
+
+    if event_type == "cycle-start":
+        if cycle_number is not None:
+            agent.current_cycle = cycle_number
+        agent.last_cycle_start = event.get("timestamp")
+    elif event_type == "cycle-end":
+        agent.last_cycle_end = event.get("timestamp")
+        agent.last_cycle_type = payload.get("cycle_type")
+    elif event_type == "phase-change":
+        agent.current_phase = payload.get("phase")
+
+
+def _log_event(event: dict):
+    """Print an event to the harness console in compact format."""
+    ts = time.strftime("%H:%M:%S")
+    role = event.get("role", "?")
+    event_type = event.get("event_type", "?")
+    payload = event.get("payload", {})
+    cycle_number = event.get("cycle_number")
+
+    # Build detail string based on event type
+    detail = ""
+    if cycle_number is not None:
+        detail = f"#{cycle_number}"
+    if event_type == "cycle-end":
+        cycle_type = payload.get("cycle_type", "")
+        summary = payload.get("summary", "")
+        if cycle_type:
+            detail += f" ({cycle_type})"
+        if summary:
+            detail += f" — {summary[:60]}"
+    elif event_type == "git-commit":
+        msg = payload.get("message", "")
+        files = payload.get("files_changed", "")
+        if msg:
+            detail = f'"{msg[:40]}"'
+        if files:
+            detail += f" ({files} files)"
+    elif event_type == "git-pull":
+        detail = payload.get("result", "")
+    elif event_type == "git-push":
+        detail = payload.get("branch", "")
+    elif event_type == "pr-create":
+        detail = f"PR #{payload.get('pr_number', '?')}"
+    elif event_type == "pr-merge":
+        detail = f"PR #{payload.get('pr_number', '?')}"
+    elif event_type == "branch-checkout":
+        detail = payload.get("branch", "")
+    elif event_type == "task-start":
+        detail = f"#{payload.get('task_number', '?')}"
+    elif event_type == "task-end":
+        detail = f"#{payload.get('task_number', '?')}"
+    elif event_type == "tracker-comment":
+        preview = payload.get("comment_preview", "")
+        detail = f"#{payload.get('issue_number', '?')} \"{preview[:40]}\""
+    elif event_type == "phase-change":
+        detail = payload.get("phase", "")
+
+    print(f"[{ts}] {role:<6} {event_type:<18} {detail}", flush=True)
+
+
+# ---------------------------------------------------------------------------
+# Event bus endpoints (#4709 Phase 2)
+# ---------------------------------------------------------------------------
+
+@app.post("/events")
+async def receive_event(request: Request):
+    """Receive an event from an agent mechanical script.
+
+    Stores in bounded stream, updates AgentState, logs to console.
+    """
+    body = await request.json()
+
+    # Validate minimal fields
+    event_type = body.get("event_type")
+    role = body.get("role")
+    if not event_type or not role:
+        raise HTTPException(status_code=400, detail="event_type and role are required")
+
+    # Store in stream
+    event_stream.append(body)
+
+    # Update AgentState from event
+    _update_agent_from_event(body)
+
+    # Log to console
+    _log_event(body)
+
+    return {"status": "ok"}
+
+
+@app.get("/events")
+async def get_events(limit: int = 50):
+    """Retrieve recent events from the stream."""
+    events = event_stream.get_recent(limit)
+    return {"events": events, "total": len(event_stream)}
 
 
 @app.post("/agents/{role}/stop")

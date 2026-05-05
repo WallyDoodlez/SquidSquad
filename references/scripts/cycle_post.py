@@ -666,6 +666,16 @@ def main():
     except OSError:
         pass
 
+    # 8. Emit cycle-end event (#4709)
+    try:
+        from event_bus import emit as _emit_event
+        _emit_event("cycle-end", role, payload={
+            "cycle_type": data.get("cycle_type", ""),
+            "summary": data.get("iteration_summary", "")[:60],
+        }, cycle_number=data.get("cycle_number"))
+    except (ImportError, Exception):
+        pass
+
     # 9. Intent + context pressure check (MUST be last — after commit, after log)
     # Queries harness API for intent, checks context pressure. Exit 42 = harness respawns.
     stop_for_restart = _do_stop_after_cycle_check(data, role)
