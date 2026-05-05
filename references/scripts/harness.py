@@ -398,7 +398,7 @@ async def lifespan(app: FastAPI):
     state.update_health()
     state.start_poller()
 
-    # Write port discovery file (atomic)
+    # Write port discovery file (atomic) — primary repo
     try:
         tmp = HARNESS_PORT_FILE.with_suffix(".tmp")
         tmp.write_text(str(state.port), encoding="utf-8")
@@ -406,6 +406,25 @@ async def lifespan(app: FastAPI):
         _log(f"Port discovery file written: {HARNESS_PORT_FILE}")
     except OSError as e:
         _log(f"WARNING: Could not write port file: {e}")
+
+    # Write port file to each agent clone's .squidsquad/ directory (#4709 TC-7)
+    # Clone isolation: clones are siblings, not children — parent-dir walk won't find
+    # the primary .harness-port. Write directly to each clone.
+    try:
+        clone_paths = boot_remote._parse_local_config()
+        for role, clone_root in clone_paths.items():
+            clone_squid = Path(clone_root) / ".squidsquad"
+            if clone_squid.is_dir() and clone_root != REPO_ROOT:
+                clone_port_file = clone_squid / ".harness-port"
+                try:
+                    clone_tmp = clone_port_file.with_suffix(".tmp")
+                    clone_tmp.write_text(str(state.port), encoding="utf-8")
+                    clone_tmp.replace(clone_port_file)
+                except OSError:
+                    pass  # Non-fatal — clone may not exist yet
+        _log(f"Port file distributed to {len(clone_paths)} clone(s)")
+    except (SystemExit, Exception) as e:
+        _log(f"WARNING: Could not distribute port to clones: {e}")
 
     _log("Harness ready. Ctrl+C to stop.")
     _log(f"API: http://localhost:{state.port}/status")
@@ -423,7 +442,7 @@ async def lifespan(app: FastAPI):
     _log("Shutting down...")
     state.stop_poller()
 
-    # Clean up port file (retry for Windows file locking)
+    # Clean up port files (primary + clones, retry for Windows file locking)
     for attempt in range(3):
         try:
             if HARNESS_PORT_FILE.exists():
@@ -432,6 +451,18 @@ async def lifespan(app: FastAPI):
         except OSError as e:
             _log(f"WARNING: Could not delete port file (attempt {attempt + 1}/3): {e}")
             time.sleep(0.5)
+
+    # Clean up clone port files (#4709)
+    try:
+        clone_paths = boot_remote._parse_local_config()
+        for role, clone_root in clone_paths.items():
+            clone_port = Path(clone_root) / ".squidsquad" / ".harness-port"
+            try:
+                clone_port.unlink(missing_ok=True)
+            except OSError:
+                pass
+    except (SystemExit, Exception):
+        pass
 
     _log("Harness stopped.")
 
