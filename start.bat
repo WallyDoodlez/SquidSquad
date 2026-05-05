@@ -1,7 +1,5 @@
 @echo off
-REM SquidSquad — one command to boot everything.
-REM Usage: start.bat (or double-click)
-
+REM SquidSquad — delegates to start.ps1
 cd /d "%~dp0"
-python references/scripts/squidsquad_cli.py start
+pwsh -ExecutionPolicy Bypass -File start.ps1 %*
 pause

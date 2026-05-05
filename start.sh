@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# SquidSquad — ensure deps are installed, then run the harness.
+# SquidSquad — ensure deps, sync clones, run harness.
 # Usage: ./start.sh
 
 set -e
 cd "$(dirname "$0")"
+REPO_ROOT="$(pwd)"
 
 # --- Python 3 ---
 if ! command -v python3 &>/dev/null; then
@@ -30,6 +31,30 @@ python3 -c "import fastapi; import uvicorn" 2>/dev/null || pip3 install fastapi 
 
 # --- claude CLI ---
 command -v claude &>/dev/null || echo "WARNING: 'claude' not on PATH (npm i -g @anthropic-ai/claude-code)"
+
+# --- Sync all clones to main ---
+echo "Syncing clones..."
+# Primary repo
+git checkout main 2>/dev/null && git pull --ff-only 2>/dev/null && echo "  primary: OK" || echo "  primary: WARN (could not sync)"
+
+# Agent clones from .local-config
+if [ -f ".squidsquad/.local-config" ]; then
+    while IFS= read -r line; do
+        role=$(echo "$line" | sed -n 's/^- \*\*\([^*]*\)\*\*: *\(.*\)/\1/p')
+        path=$(echo "$line" | sed -n 's/^- \*\*\([^*]*\)\*\*: *\(.*\)/\2/p')
+        [ -z "$role" ] && continue
+        [ "$path" = "." ] && continue
+        # Resolve relative path
+        if [[ "$path" != /* ]]; then
+            path="$REPO_ROOT/$path"
+        fi
+        if [ -d "$path" ]; then
+            (cd "$path" && git checkout main 2>/dev/null && git pull --ff-only 2>/dev/null && echo "  $role: OK") || echo "  $role: WARN (could not sync $path)"
+        else
+            echo "  $role: MISSING ($path)"
+        fi
+    done < ".squidsquad/.local-config"
+fi
 
 # --- Go ---
 exec python3 references/scripts/harness.py "$@"
