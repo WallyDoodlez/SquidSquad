@@ -35,7 +35,7 @@ command -v claude &>/dev/null || echo "WARNING: 'claude' not on PATH (npm i -g @
 # --- Sync all clones to main ---
 echo "Syncing clones..."
 # Primary repo
-git checkout main 2>/dev/null && git pull --ff-only 2>/dev/null && echo "  primary: OK" || echo "  primary: WARN (could not sync)"
+git checkout main 2>/dev/null && git pull --rebase 2>/dev/null && echo "  primary: OK" || echo "  primary: WARN (could not sync)"
 
 # Agent clones from .local-config
 if [ -f ".squidsquad/.local-config" ]; then
@@ -49,7 +49,7 @@ if [ -f ".squidsquad/.local-config" ]; then
             path="$REPO_ROOT/$path"
         fi
         if [ -d "$path" ]; then
-            (cd "$path" && git checkout main 2>/dev/null && git pull --ff-only 2>/dev/null && echo "  $role: OK") || echo "  $role: WARN (could not sync $path)"
+            (cd "$path" && git checkout main 2>/dev/null && git pull --rebase 2>/dev/null && echo "  $role: OK") || echo "  $role: WARN (could not sync $path)"
         else
             echo "  $role: MISSING ($path)"
         fi

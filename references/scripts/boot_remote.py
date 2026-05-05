@@ -302,54 +302,27 @@ def _read_health_file(clone_path, role):
 def _needs_boot(role):
     """Determine if an agent needs booting.
 
-    Uses .health file (primary) with PID fallback.
+    Simple: check .claude-pid — if process is alive, skip.
     Returns (needs_boot, reason, clone_path).
-    Context pressure restarts are handled by each agent's boot script, not here.
     """
     clone_path = _get_clone_path(role)
 
-    # Check .stop sentinel first
-    if _has_stop_sentinel(clone_path, role):
-        return False, "explicitly stopped (.stop sentinel)", str(clone_path)
+    # Read .claude-pid (written by thin_launcher)
+    pid_file = Path(clone_path) / ".squidsquad" / role / ".claude-pid"
+    if pid_file.exists():
+        try:
+            pid = int(pid_file.read_text(encoding="utf-8").strip())
+            if _is_process_alive(pid):
+                return False, f"already running (PID {pid})", str(clone_path)
+        except (ValueError, OSError):
+            pass
 
-    # Check .booting sentinel — another boot_remote is already spawning this role
-    if _has_booting_sentinel(clone_path, role):
-        return False, "boot already in progress (.booting sentinel)", str(clone_path)
-
-    # Primary: check .health file
-    health_status, health_detail = _read_health_file(clone_path, role)
-    if health_status is not None:
-        if health_status == "heartbeat":
-            # New format: epoch timestamp written by wrapper every 5s
-            try:
-                heartbeat_epoch = int(health_detail)
-                age = time.time() - heartbeat_epoch
-                if age <= 15:
-                    return False, f"heartbeat {int(age)}s ago (alive)", str(clone_path)
-                else:
-                    return True, f"heartbeat stale ({int(age)}s ago, threshold 15s)", str(clone_path)
-            except (ValueError, TypeError):
-                pass  # Fall through to PID fallback
-        elif health_status in ("alive", "booting", "restarting"):
-            return False, f".health={health_status} (agent running)", str(clone_path)
-        elif health_status == "dead":
-            return True, ".health=dead (wrapper exited)", str(clone_path)
-        elif health_status == "error":
-            detail_msg = f": {health_detail}" if health_detail else ""
-            return True, f".health=error{detail_msg}", str(clone_path)
-        elif health_status == "backoff":
-            # Agent is in crash loop — wrapper is still running, don't double-boot
-            return False, ".health=backoff (wrapper handling restarts)", str(clone_path)
-
-    # Fallback: check PID (old boot scripts without .health)
+    # Fallback: check legacy .pid file
     pid = _read_pid_file(clone_path, role)
-    if pid is None:
-        return True, "no .health file, no PID file (agent not running)", str(clone_path)
+    if pid and _is_process_alive(pid):
+        return False, f"already running (PID {pid})", str(clone_path)
 
-    if not _is_process_alive(pid):
-        return True, f"no .health file, process dead (PID {pid} not found)", str(clone_path)
-
-    return False, f"no .health file, process alive (PID {pid})", str(clone_path)
+    return True, "not running", str(clone_path)
 
 
 # ---------------------------------------------------------------------------
@@ -556,28 +529,11 @@ def boot_agent(role, dry_run=False):
         )
         return result
 
-    # Clean stale .restart sentinel — if the agent is dead, any .restart
-    # from a previous reboot_agent request is no longer relevant (#3349).
-    # Without this, the wrapper finds the stale sentinel on fresh boot
-    # and triggers an unwanted extra respawn.
-    _clean_stale_restart(clone_path, role)
-
-    # Acquire boot slot — prevents concurrent spawns for the same role
-    if not _write_booting_sentinel(clone_path, role):
-        result["action"] = "skip"
-        result["success"] = True
-        result["message"] = "skip: another boot in progress (.booting sentinel)"
-        return result
-
     # Spawn
     success, msg = _spawn_terminal(clone_path, role, boot_script, script_type)
     result["action"] = "spawn"
     result["success"] = success
     result["message"] = msg
-
-    # Clear sentinel on spawn failure (wrapper clears on success via .health write)
-    if not success:
-        _clear_booting_sentinel(clone_path, role)
 
     return result
 
