@@ -1,5 +1,19 @@
 # Scan History
 
+## Scan — 2026-05-05 20:34
+
+- **Files scanned**: packages/cli/index.js, README.md, tests/test_model_router.py
+- **Findings**: #5734 (packages/cli/index.js missing path traversal guard on manifest file writes — low)
+- **Items rejected by human**: none yet
+- **Notes**: README.md comprehensive and up-to-date (harness, CLI, features all current). tests/test_model_router.py clean. CLI installer writes fetched files without validating resolved path stays within gitRoot — defense-in-depth concern.
+
+## Scan — 2026-05-05 19:59
+
+- **Files scanned**: references/agent-instructions.md, tests/test_compose.py, SKILL.md
+- **Findings**: #5711 (agent-instructions.md stale — deprecated restart fields in cycle-output example — low), #5712 (SKILL.md file structure diagram references eliminated boot scripts — low)
+- **Items rejected by human**: none yet
+- **Notes**: test_compose.py clean (comprehensive 899-line test file). agent-instructions.md is a generated file that wasn't re-generated after cycle-runner sub-skill update. SKILL.md diagram references start scripts eliminated by #4966.
+
 ## Scan — 2026-05-04 00:40
 
 - **Files scanned**: references/scripts/thin_launcher.py, references/scripts/start_team.py, references/scripts/harness.py
