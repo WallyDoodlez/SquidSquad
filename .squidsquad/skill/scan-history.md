@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-06 02:03
+
+- **Files scanned**: tests/test_manifest.py, references/roles/dev/includes.yml, references/roles/qa/includes.yml
+- **Findings**: none
+- **Items rejected by human**: none yet
+- **Notes**: test_manifest.py comprehensive (integrity, orphan detection, YAML validation, template coverage). dev includes.yml has 23 sub-skills, qa has 17 (slim variants). All paths resolve. Diminishing returns on scanning — most source files covered.
+
 ## Scan — 2026-05-06 01:33
 
 - **Files scanned**: references/sub-skills/common/git-commit.md, tests/test_reboot_agent.py, references/roles/pm/SOUL.md
