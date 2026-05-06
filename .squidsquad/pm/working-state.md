@@ -5,16 +5,18 @@
 - **Last Processed Event ID**: 8fbe9dc0
 
 ## Completed Steps
-- #5622 Phase 3 shipped — event bus read path live
-- BRIEFING.md staleness fixed (twice)
+- #5622 Phase 3 shipped
+- #5856 planned and approved — skill picked up
+- BRIEFING.md staleness fixed
 
 ## Remaining Steps
+- #5856 in-progress (skill working)
 - #3 go public — awaiting human greenlight (stalled 29 days)
-- #5855 vault utility improvement (pending, high)
-- #5783, #5775, #5773, #5620 pending
+- #5855, #5783, #5775, #5773, #5620 pending
+- Phase B event reactions — discussion ongoing with human
 
 ## Key Decisions
-- Phase swap: #5622=Phase 3 (shipped), #3963=Phase 4
-- Bug boundary: process=full RCA, software=behavior only
+- Phase B: no mechanical reactions in cycle_pre — reactions are creative-phase judgment, not hardcoded Python
+- Event reaction approach TBD: prose instructions vs structured table vs config-driven pre-filter
 
 ## Quiet cycle counter: 2
