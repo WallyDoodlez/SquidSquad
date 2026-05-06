@@ -231,8 +231,10 @@ def main():
     args = parser.parse_args()
 
     if args.all:
-        # Get all agent roles from config.md via boot_remote (includes PM)
-        agents = ["pm"] + boot_remote._get_all_roles()
+        # Get all agent roles from config.md via boot_remote, ensure PM included
+        roles = set(boot_remote._get_all_roles())
+        roles.add("pm")  # PM always rebooted — config may omit the explicit line
+        agents = sorted(roles)
 
         exit_code = 0
         for role in agents:

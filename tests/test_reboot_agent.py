@@ -405,6 +405,31 @@ class TestRebootAll:
         assert "skill" in rebooted_roles
 
 
+    def test_all_no_duplicate_pm(self, patch_dirs, squid_dir, monkeypatch):
+        """#5843: --all must not reboot PM twice when _get_all_roles includes pm."""
+        config_md = squid_dir / "config.md"
+        config_md.write_text(
+            "- **Dev Agents**: skill\n"
+            "- **PM**: always present\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(boot_remote, "CONFIG_MD", config_md)
+
+        rebooted_roles = []
+
+        def fake_reboot(role, timeout=60, force=False):
+            rebooted_roles.append(role)
+            return 0
+
+        monkeypatch.setattr(reboot_agent, "reboot", fake_reboot)
+
+        with patch("sys.argv", ["reboot_agent.py", "--all"]):
+            rc = reboot_agent.main()
+
+        assert rc == 0
+        assert rebooted_roles.count("pm") == 1, f"PM rebooted {rebooted_roles.count('pm')} times: {rebooted_roles}"
+
+
 # ---------------------------------------------------------------------------
 # Double-start prevention (#2496)
 # ---------------------------------------------------------------------------
