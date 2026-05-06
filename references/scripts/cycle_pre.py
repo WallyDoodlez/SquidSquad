@@ -392,6 +392,50 @@ def _filter_events_for_role(events, role):
     return [e for e in events if e.get("event_type") in allowed]
 
 
+def _run_mechanical_reactions(events, role):
+    """Execute mechanical reactions for high-confidence idempotent patterns (#5622).
+
+    Reactions are conservative — they verify local state before acting.
+    Returns a list of reaction summaries for inclusion in cycle-input.json.
+    """
+    reactions = []
+    if not events:
+        return reactions
+
+    for event in events:
+        event_type = event.get("event_type", "")
+        payload = event.get("payload", {})
+
+        # Skip self-emitted events to prevent loops
+        if event.get("role") == role:
+            continue
+
+        # Reaction: pr-merge → log for agent awareness (PM handles transitions)
+        if event_type == "pr-merge" and role == "pm":
+            pr_number = payload.get("pr_number")
+            issue_number = payload.get("issue_number")
+            if pr_number and issue_number:
+                reactions.append({
+                    "type": "pr-merge-detected",
+                    "event_id": event.get("id"),
+                    "pr_number": pr_number,
+                    "issue_number": issue_number,
+                })
+
+        # Reaction: verification-failed → surface rework context for dev
+        if event_type == "verification-failed" and role in ("skill", "be", "fe"):
+            issue_number = payload.get("issue_number")
+            if issue_number:
+                reactions.append({
+                    "type": "rework-needed",
+                    "event_id": event.get("id"),
+                    "issue_number": issue_number,
+                    "reason": payload.get("reason", "QA verification failed"),
+                })
+
+    return reactions
+
+
 def _read_config_flags():
     """Read common config flags."""
     return {
@@ -993,6 +1037,9 @@ def main():
     except (ImportError, Exception):
         pass
 
+    # 7c. Mechanical reactions (#5622) — high-confidence idempotent patterns
+    mechanical_reactions = _run_mechanical_reactions(recent_events, role)
+
     # 8. Build and write cycle-input.json
     cycle_input = {
         "role": role,
@@ -1002,6 +1049,7 @@ def main():
         "context_pressure": context_pressure,
         "working_state": working_state,
         "recent_events": recent_events,
+        "mechanical_reactions": mechanical_reactions,
     }
     cycle_input.update(role_input)
 
