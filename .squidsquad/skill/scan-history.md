@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-06 03:34
+
+- **Files scanned**: references/scripts/add_role.py, references/roles/pm/manifest.yaml, references/roles/qa/manifest.yaml
+- **Findings**: none
+- **Items rejected by human**: none yet
+- **Notes**: add_role.py clean — #3302 (subprocess.os.getpid) and #4093 (stale lock) both previously fixed. Role manifests well-structured (schema v2). QA always_installed comment is design reasoning, not stale.
+
 ## Scan — 2026-05-06 02:34
 
 - **Files scanned**: references/scripts/reboot_agent.py, references/wizard/WIZARD.md, tests/test_health_check.py
