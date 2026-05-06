@@ -362,6 +362,20 @@ class EventStream:
             items = list(self._events)
             return items[-n:] if len(items) > n else items
 
+    def get_since(self, since_id: str, limit: int = 100) -> list[dict]:
+        """Return events after the given ID. If ID not found, return oldest available."""
+        with self._lock:
+            items = list(self._events)
+            if not since_id:
+                return items[-limit:] if len(items) > limit else items
+            # Find the index of the since_id event
+            for i, event in enumerate(items):
+                if event.get("id") == since_id:
+                    after = items[i + 1:]
+                    return after[-limit:] if len(after) > limit else after
+            # ID not found (evicted) — return oldest available up to limit
+            return items[-limit:] if len(items) > limit else items
+
     def __len__(self):
         with self._lock:
             return len(self._events)
@@ -805,6 +819,10 @@ async def receive_event(request: Request):
     if not event_type or not role:
         raise HTTPException(status_code=400, detail="event_type and role are required")
 
+    # Stamp received_at for ordering (#5622)
+    import time as _time
+    body["received_at"] = _time.time()
+
     # Store in stream
     event_stream.append(body)
 
@@ -818,9 +836,35 @@ async def receive_event(request: Request):
 
 
 @app.get("/events")
-async def get_events(limit: int = 50):
-    """Retrieve recent events from the stream."""
-    events = event_stream.get_recent(limit)
+async def get_events(
+    limit: int = 100,
+    since: str = None,
+    role: str = None,
+    event_type: str = None,
+):
+    """Retrieve events from the stream with filtering (#5622).
+
+    Query params:
+        since: event ID — return events after this ID
+        role: filter by emitting role
+        event_type: filter by event type (comma-separated for multiple)
+        limit: max events to return (default 100)
+    """
+    if since:
+        events = event_stream.get_since(since, limit=limit * 3)  # over-fetch before filtering
+    else:
+        events = event_stream.get_recent(limit * 3)
+
+    # Apply filters
+    if role:
+        events = [e for e in events if e.get("role") == role]
+    if event_type:
+        types = set(event_type.split(","))
+        events = [e for e in events if e.get("event_type") in types]
+
+    # Apply limit after filtering
+    events = events[-limit:] if len(events) > limit else events
+
     return {"events": events, "total": len(event_stream)}
 
 

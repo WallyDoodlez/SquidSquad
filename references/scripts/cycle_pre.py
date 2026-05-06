@@ -290,6 +290,7 @@ def _read_working_state(role):
     remaining_steps = []
     key_decisions = []
     quiet_cycles = 0
+    last_processed_event_id = None
 
     for line in raw.splitlines():
         stripped = line.strip()
@@ -305,6 +306,10 @@ def _read_working_state(role):
                 quiet_cycles = int(stripped.split(":", 1)[1].strip())
             except ValueError:
                 quiet_cycles = 0
+        elif stripped.startswith("- **Last Processed Event ID**:"):
+            val = stripped.split(":", 1)[1].strip()
+            if val and val != "none":
+                last_processed_event_id = val
 
     # Parse list sections
     current_section = None
@@ -344,6 +349,7 @@ def _read_working_state(role):
     result["remaining_steps"] = remaining_steps
     result["key_decisions"] = key_decisions
     result["quiet_cycles"] = quiet_cycles
+    result["last_processed_event_id"] = last_processed_event_id
 
     return result
 
@@ -363,6 +369,74 @@ def _get_cycle_number(role):
             pass
     return max_n + 1
 
+
+
+# Per-role event type relevance config (#5622)
+# Each role receives only event types relevant to its work.
+# Unlisted roles receive all events (no filtering).
+_ROLE_EVENT_TYPES = {
+    "pm": {"pr-merge", "verification-failed", "verification-passed", "cycle-start",
+            "cycle-end", "task-transition", "agent-health"},
+    "qa": {"pr-merge", "task-transition", "cycle-end", "verification-failed"},
+    "skill": {"pr-merge", "verification-failed", "task-transition"},
+    "dm": {"task-transition", "verification-passed", "pr-merge"},
+}
+
+
+def _filter_events_for_role(events, role):
+    """Filter events to those relevant to the given role (#5622).
+
+    If the role has a configured event type set, only matching events are kept.
+    If the role is not in _ROLE_EVENT_TYPES, all events pass through.
+    """
+    allowed = _ROLE_EVENT_TYPES.get(role)
+    if not allowed:
+        return events
+    return [e for e in events if e.get("event_type") in allowed]
+
+
+def _run_mechanical_reactions(events, role):
+    """Execute mechanical reactions for high-confidence idempotent patterns (#5622).
+
+    Reactions are conservative — they verify local state before acting.
+    Returns a list of reaction summaries for inclusion in cycle-input.json.
+    """
+    reactions = []
+    if not events:
+        return reactions
+
+    for event in events:
+        event_type = event.get("event_type", "")
+        payload = event.get("payload", {})
+
+        # Skip self-emitted events to prevent loops
+        if event.get("role") == role:
+            continue
+
+        # Reaction: pr-merge → log for agent awareness (PM handles transitions)
+        if event_type == "pr-merge" and role == "pm":
+            pr_number = payload.get("pr_number")
+            issue_number = payload.get("issue_number")
+            if pr_number and issue_number:
+                reactions.append({
+                    "type": "pr-merge-detected",
+                    "event_id": event.get("id"),
+                    "pr_number": pr_number,
+                    "issue_number": issue_number,
+                })
+
+        # Reaction: verification-failed → surface rework context for dev
+        if event_type == "verification-failed" and role in ("skill", "be", "fe"):
+            issue_number = payload.get("issue_number")
+            if issue_number:
+                reactions.append({
+                    "type": "rework-needed",
+                    "event_id": event.get("id"),
+                    "issue_number": issue_number,
+                    "reason": payload.get("reason", "QA verification failed"),
+                })
+
+    return reactions
 
 
 def _read_config_flags():
@@ -955,6 +1029,20 @@ def main():
     # 7. Role-specific input
     role_input = ROLE_BUILDERS[role](role)
 
+    # 7b. Read event bus (#5622)
+    recent_events = []
+    try:
+        from event_bus_reader import query as _query_events
+        last_event_id = working_state.get("last_processed_event_id", None)
+        recent_events = _query_events(since=last_event_id, limit=100)
+        # Per-role relevance filtering (#5622 — agents keep what they care about)
+        recent_events = _filter_events_for_role(recent_events, role)
+    except (ImportError, Exception):
+        pass
+
+    # 7c. Mechanical reactions (#5622) — high-confidence idempotent patterns
+    mechanical_reactions = _run_mechanical_reactions(recent_events, role)
+
     # 8. Build and write cycle-input.json
     cycle_input = {
         "role": role,
@@ -963,6 +1051,8 @@ def main():
         "pull_result": pull_result,
         "context_pressure": context_pressure,
         "working_state": working_state,
+        "recent_events": recent_events,
+        "mechanical_reactions": mechanical_reactions,
     }
     cycle_input.update(role_input)
 
