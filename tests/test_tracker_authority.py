@@ -505,6 +505,88 @@ class TestTransitionEnforcement:
         assert "--role is required" in err
 
 
+class TestStatusTransitionEventEmission:
+    """#5856: transition() emits status-transition event on every transition."""
+
+    def test_emits_status_transition_event(self, monkeypatch):
+        """Every transition emits a status-transition event with correct payload."""
+        emitted = []
+
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        monkeypatch.setattr(tracker, "_run_list", lambda *a, **kw: FakeResult())
+        monkeypatch.setattr(tracker, "_get_issue_role_labels", lambda n: {"skill"})
+
+        # Mock event_bus.emit to capture calls
+        import types
+        fake_bus = types.ModuleType("event_bus")
+        fake_bus.emit = lambda event_type, role, payload=None, cycle_number=None: emitted.append(
+            {"event_type": event_type, "role": role, "payload": payload}
+        )
+        monkeypatch.setitem(sys.modules, "event_bus", fake_bus)
+
+        tracker.transition(42, "approved", "in-progress", role="skill-lead")
+
+        assert len(emitted) == 1
+        assert emitted[0]["event_type"] == "status-transition"
+        assert emitted[0]["role"] == "skill"
+        assert emitted[0]["payload"]["issue_number"] == "42"
+        assert emitted[0]["payload"]["from"] == "approved"
+        assert emitted[0]["payload"]["to"] == "in-progress"
+
+    def test_emits_on_all_transitions_not_just_in_progress(self, monkeypatch):
+        """Emission happens for pending-test, pending-ship, shipped — not just in-progress."""
+        emitted = []
+
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        monkeypatch.setattr(tracker, "_run_list", lambda *a, **kw: FakeResult())
+        monkeypatch.setattr(tracker, "_get_issue_role_labels", lambda n: {"pm"})
+
+        import types
+        fake_bus = types.ModuleType("event_bus")
+        fake_bus.emit = lambda event_type, role, payload=None, cycle_number=None: emitted.append(
+            {"event_type": event_type, "payload": payload}
+        )
+        monkeypatch.setitem(sys.modules, "event_bus", fake_bus)
+
+        tracker.transition(99, "pending-test", "pending-ship", role="pm-lead", force=True)
+
+        assert len(emitted) == 1
+        assert emitted[0]["event_type"] == "status-transition"
+        assert emitted[0]["payload"]["from"] == "pending-test"
+        assert emitted[0]["payload"]["to"] == "pending-ship"
+
+    def test_no_dead_task_start_task_end_events(self, monkeypatch):
+        """#5856: task-start and task-end event types must not be emitted."""
+        emitted = []
+
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        monkeypatch.setattr(tracker, "_run_list", lambda *a, **kw: FakeResult())
+        monkeypatch.setattr(tracker, "_get_issue_role_labels", lambda n: {"skill"})
+
+        import types
+        fake_bus = types.ModuleType("event_bus")
+        fake_bus.emit = lambda event_type, role, payload=None, cycle_number=None: emitted.append(event_type)
+        monkeypatch.setitem(sys.modules, "event_bus", fake_bus)
+
+        tracker.transition(42, "approved", "in-progress", role="skill-lead")
+
+        assert "task-start" not in emitted
+        assert "task-end" not in emitted
+        assert "status-transition" in emitted
+
+
 class TestPendingShipBackwardTransition:
     """pending-ship→in-progress backward transition for merge conflicts (#1727)."""
 
