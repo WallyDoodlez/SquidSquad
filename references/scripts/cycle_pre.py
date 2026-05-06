@@ -103,12 +103,15 @@ def _timestamp_short():
 # ---------------------------------------------------------------------------
 
 
-def _do_pull():
+def _do_pull(role=None):
     """Run git pull. Returns pull_result string (#5378).
 
     Inspects stdout to distinguish normal states from real errors.
     """
-    result = _run_script("git_ops.py", "pull")
+    args = ["git_ops.py", "pull"]
+    if role:
+        args.append(role)
+    result = _run_script(*args)
     stdout = result.stdout.strip().lower()
     stderr = result.stderr.strip().lower()
     combined = stdout + " " + stderr
@@ -931,7 +934,7 @@ def main():
     branch_correction = _enforce_branch(role, working_state)
 
     # 1c. Pull
-    pull_result = _do_pull()
+    pull_result = _do_pull(role)
 
     # 1d. Ensure merge=ours driver for config.md (#5136)
     _run(["git", "config", "merge.ours.driver", "true"], check=False)

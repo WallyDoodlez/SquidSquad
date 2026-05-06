@@ -81,26 +81,27 @@ def _log_diagnostic(severity, message):
         pass
 
 
-def _emit(event_type, payload=None, cycle_number=None):
-    """Fire-and-forget event emission (#4709). Role determined from sys.argv."""
+def _emit(event_type, payload=None, cycle_number=None, role=None):
+    """Fire-and-forget event emission (#4709). Role from arg or sys.argv."""
     try:
         from event_bus import emit
-        # Determine role from command args (git_ops.py is called with role as arg)
-        role = "unknown"
-        args = sys.argv[1:]
-        # For commands like: commit-code <role> <branch> <msg>
-        # or: task-begin <role> <number>
-        if len(args) >= 2 and args[1] in ("pm", "skill", "qa", "dm"):
-            role = args[1]
-        elif len(args) >= 2 and args[0] in ("commit-code", "commit-state", "commit-push",
-                                             "commit", "task-begin", "task-end"):
-            role = args[1]
+        # Use explicit role if provided, otherwise determine from sys.argv
+        if role is None:
+            role = "unknown"
+            args = sys.argv[1:]
+            # For commands like: commit-code <role> <branch> <msg>
+            # or: task-begin <role> <number>
+            if len(args) >= 2 and args[1] in ("pm", "skill", "qa", "dm"):
+                role = args[1]
+            elif len(args) >= 2 and args[0] in ("commit-code", "commit-state", "commit-push",
+                                                 "commit", "task-begin", "task-end"):
+                role = args[1]
         emit(event_type, role, payload=payload, cycle_number=cycle_number)
     except (ImportError, Exception):
         pass
 
 
-def pull():
+def pull(role=None):
     """Pull with merge (#5378, #5445).
 
     Returns True on success, False on failure. Never crashes.
@@ -108,14 +109,14 @@ def pull():
     result = _run("git pull", check=False)
     if result.returncode == 0:
         print("Pulled")
-        _emit("git-pull", {"result": "ok"})
+        _emit("git-pull", {"result": "ok"}, role=role)
         return True
 
     # Check if the failure is "already up to date" or branch divergence
     combined = (result.stdout + result.stderr).lower()
     if "already up to date" in combined or "up to date" in combined:
         print("Pulled (already up to date)")
-        _emit("git-pull", {"result": "ok"})
+        _emit("git-pull", {"result": "ok"}, role=role)
         return True
 
     # Try stash + pull + pop
@@ -139,10 +140,10 @@ def pull():
         _run("git stash drop", check=False)
         print("WARNING: stash pop failed -- dropped stale stash entry.", file=sys.stderr)
         print("Pulled (stash pop conflict -- stale stash dropped)")
-        _emit("git-pull", {"result": "stash"})
+        _emit("git-pull", {"result": "stash"}, role=role)
     else:
         print("Pulled (stashed and popped)")
-        _emit("git-pull", {"result": "stash"})
+        _emit("git-pull", {"result": "stash"}, role=role)
     return True
 
 
@@ -180,7 +181,7 @@ def commit(role, message):
     return True
 
 
-def push():
+def push(role=None):
     """Push to remote."""
     result = _run("git push", check=False)
     if result.returncode != 0:
@@ -190,7 +191,7 @@ def push():
     # Determine branch for event payload
     branch_result = _run("git branch --show-current", check=False)
     branch = branch_result.stdout.strip() if branch_result.returncode == 0 else ""
-    _emit("git-push", {"branch": branch})
+    _emit("git-push", {"branch": branch}, role=role)
     print("Pushed")
     return True
 
@@ -720,7 +721,7 @@ def main():
     cmd, rest = _parse_args()
 
     if cmd == "pull":
-        pull()
+        pull(role=rest[0] if rest else None)
     elif cmd == "add-all":
         add_all()
     elif cmd == "commit":
@@ -729,7 +730,7 @@ def main():
             sys.exit(1)
         commit(rest[0], " ".join(rest[1:]))
     elif cmd == "push":
-        push()
+        push(role=rest[0] if rest else None)
     elif cmd == "commit-push":
         if len(rest) < 2:
             print("Usage: git_ops.py commit-push <role> <message>", file=sys.stderr)
