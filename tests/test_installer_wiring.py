@@ -134,10 +134,10 @@ class TestCliIndexJs:
         )
 
     def test_writes_files_to_canonical_paths(self, cli_js):
-        """Each fetched file must be written to its canonical path in the target."""
-        assert "path.join(gitRoot, filePath)" in cli_js, (
-            "CLI must write each fetched file to its canonical path "
-            "relative to the target git root"
+        """Each fetched file must be written to a validated path in the target."""
+        assert "assertWithinRoot(gitRoot, filePath)" in cli_js, (
+            "CLI must write each fetched file to a validated path "
+            "relative to the target git root (via assertWithinRoot)"
         )
 
     def test_commits_references_directory(self, cli_js):
