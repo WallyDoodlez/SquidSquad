@@ -368,6 +368,30 @@ def _get_cycle_number(role):
 
 
 
+# Per-role event type relevance config (#5622)
+# Each role receives only event types relevant to its work.
+# Unlisted roles receive all events (no filtering).
+_ROLE_EVENT_TYPES = {
+    "pm": {"pr-merge", "verification-failed", "verification-passed", "cycle-start",
+            "cycle-end", "task-transition", "agent-health"},
+    "qa": {"pr-merge", "task-transition", "cycle-end", "verification-failed"},
+    "skill": {"pr-merge", "verification-failed", "task-transition"},
+    "dm": {"task-transition", "verification-passed", "pr-merge"},
+}
+
+
+def _filter_events_for_role(events, role):
+    """Filter events to those relevant to the given role (#5622).
+
+    If the role has a configured event type set, only matching events are kept.
+    If the role is not in _ROLE_EVENT_TYPES, all events pass through.
+    """
+    allowed = _ROLE_EVENT_TYPES.get(role)
+    if not allowed:
+        return events
+    return [e for e in events if e.get("event_type") in allowed]
+
+
 def _read_config_flags():
     """Read common config flags."""
     return {
@@ -964,6 +988,8 @@ def main():
         from event_bus_reader import query as _query_events
         last_event_id = working_state.get("last_processed_event_id", None)
         recent_events = _query_events(since=last_event_id, limit=100)
+        # Per-role relevance filtering (#5622 — agents keep what they care about)
+        recent_events = _filter_events_for_role(recent_events, role)
     except (ImportError, Exception):
         pass
 
