@@ -788,10 +788,11 @@ def _log_event(event: dict):
         detail = f"PR #{payload.get('pr_number', '?')}"
     elif event_type == "branch-checkout":
         detail = payload.get("branch", "")
-    elif event_type == "task-start":
-        detail = f"#{payload.get('task_number', '?')}"
-    elif event_type == "task-end":
-        detail = f"#{payload.get('task_number', '?')}"
+    elif event_type == "status-transition":
+        issue = payload.get("issue_number", "?")
+        from_s = payload.get("from", "?")
+        to_s = payload.get("to", "?")
+        detail = f"#{issue} {from_s} → {to_s}"
     elif event_type == "tracker-comment":
         preview = payload.get("comment_preview", "")
         detail = f"#{payload.get('issue_number', '?')} \"{preview[:40]}\""
