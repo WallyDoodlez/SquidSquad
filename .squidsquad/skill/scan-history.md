@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-06 04:33
+
+- **Files scanned**: references/scripts/vault_remember.py, references/sub-skills/common/improvement-scan.md, docs/sub-skill-guide.md
+- **Findings**: none
+- **Items rejected by human**: none yet
+- **Notes**: vault_remember.py clean (proper error handling, config fallbacks). Event bus confirmed live this cycle — 10 pr-merge events in recent_events. 5 consecutive no-finding scans — codebase quality is high.
+
 ## Scan — 2026-05-06 04:03
 
 - **Files scanned**: references/scripts/cycle.py, tests/test_add_role.py, references/sub-skills/common/context-pressure.md
