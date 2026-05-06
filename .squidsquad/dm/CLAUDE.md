@@ -455,7 +455,7 @@ If found:
 - Transition the issue to Shipped (auto-closes):
   ```bash
   python references/scripts/tracker.py transition [NUMBER] pending-ship shipped --role dm-lead
-  python references/scripts/tracker.py comment [NUMBER] --role dm --message "No delivery work needed (delivery: skip). Status → Shipped."
+  python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "No delivery work needed (delivery: skip). Status → Shipped."
   ```
 - Increment shipped count: `python references/scripts/config.py set shipped-since-bump [N+1]`
 - Clear working state.
@@ -496,7 +496,7 @@ For each Pending Ship task that is NOT skipped:
 5. Transition the issue to Shipped (auto-closes):
    ```bash
    python references/scripts/tracker.py transition [NUMBER] pending-ship shipped --role dm-lead
-   python references/scripts/tracker.py comment [NUMBER] --role dm --message "Delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped."
+   python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "Delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped."
    ```
 6. Increment shipped count: `python references/scripts/config.py set shipped-since-bump [N+1]`
 7. Clear working state.
