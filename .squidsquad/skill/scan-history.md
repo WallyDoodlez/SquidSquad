@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-06 04:03
+
+- **Files scanned**: references/scripts/cycle.py, tests/test_add_role.py, references/sub-skills/common/context-pressure.md
+- **Findings**: none
+- **Items rejected by human**: none yet
+- **Notes**: cycle.py clean (285 lines). inc_counter double-print still present but already filed as #1292. context-pressure.md not read this cycle.
+
 ## Scan — 2026-05-06 03:34
 
 - **Files scanned**: references/scripts/add_role.py, references/roles/pm/manifest.yaml, references/roles/qa/manifest.yaml
