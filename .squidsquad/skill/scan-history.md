@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-06 05:33
+
+- **Files scanned**: references/roles/dev/manifest.yaml, references/prompts/test-plan.md.j2, references/roles/dm/manifest.yaml
+- **Findings**: none
+- **Items rejected by human**: none yet
+- **Notes**: dev manifest clean (schema v2, variant + stack setup_requirements). test-plan.md.j2 comprehensive (deterministic vs human-required labeling). 7 consecutive no-finding scans.
+
 ## Scan — 2026-05-06 04:33
 
 - **Files scanned**: references/scripts/vault_remember.py, references/sub-skills/common/improvement-scan.md, docs/sub-skill-guide.md
