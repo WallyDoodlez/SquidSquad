@@ -372,9 +372,9 @@ class EventStream:
             for i, event in enumerate(items):
                 if event.get("id") == since_id:
                     after = items[i + 1:]
-                    return after[-limit:] if len(after) > limit else after
+                    return after[:limit]
             # ID not found (evicted) — return oldest available up to limit
-            return items[-limit:] if len(items) > limit else items
+            return items[:limit]
 
     def __len__(self):
         with self._lock:
@@ -862,8 +862,8 @@ async def get_events(
         types = set(event_type.split(","))
         events = [e for e in events if e.get("event_type") in types]
 
-    # Apply limit after filtering
-    events = events[-limit:] if len(events) > limit else events
+    # Apply limit after filtering (chronological — first N, not last N)
+    events = events[:limit]
 
     return {"events": events, "total": len(event_stream)}
 

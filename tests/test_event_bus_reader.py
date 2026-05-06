@@ -146,8 +146,8 @@ class TestEventStreamGetSince:
                     for i, event in enumerate(items):
                         if event.get("id") == since_id:
                             after = items[i + 1:]
-                            return after[-limit:] if len(after) > limit else after
-                    return items[-limit:] if len(items) > limit else items
+                            return after[:limit]
+                    return items[:limit]
 
         stream = TestStream()
         for e in events:
@@ -178,12 +178,21 @@ class TestEventStreamGetSince:
         result = stream.get_since("nonexistent")
         assert len(result) == 2
 
-    def test_respects_limit(self):
+    def test_respects_limit_no_cursor(self):
+        """No cursor (first cycle) — returns most recent N."""
         events = [{"id": str(i)} for i in range(10)]
         stream = self._make_stream(events)
         result = stream.get_since(None, limit=3)
         assert len(result) == 3
-        assert result[0]["id"] == "7"  # last 3
+        assert result[0]["id"] == "7"  # last 3 (most recent for first-time)
+
+    def test_respects_limit_with_cursor(self):
+        """With cursor — returns first N chronologically after cursor."""
+        events = [{"id": str(i)} for i in range(10)]
+        stream = self._make_stream(events)
+        result = stream.get_since("2", limit=3)
+        assert len(result) == 3
+        assert result[0]["id"] == "3"  # first 3 after cursor (chronological)
 
     def test_empty_after_last_event(self):
         events = [{"id": "a"}, {"id": "b"}]

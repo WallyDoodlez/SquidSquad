@@ -644,13 +644,7 @@ def _advance_event_cursor(data, role):
             content,
         )
     else:
-        # Add after Status line
-        content = content.replace(
-            "- **Status**:",
-            f"- **Status**:",
-            1,
-        )
-        # Find the end of the header fields and insert
+        # Add after the last header field
         lines = content.splitlines()
         insert_idx = None
         for i, line in enumerate(lines):
