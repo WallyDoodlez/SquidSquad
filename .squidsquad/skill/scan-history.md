@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-06 01:33
+
+- **Files scanned**: references/sub-skills/common/git-commit.md, tests/test_reboot_agent.py, references/roles/pm/SOUL.md
+- **Findings**: none
+- **Items rejected by human**: none yet
+- **Notes**: git-commit.md correctly documents branch workflow, PR draft handling, conflict resolution. test_reboot_agent.py comprehensive (dead boot, stop sentinel, force kill). pm/SOUL.md clean.
+
 ## Scan — 2026-05-06 01:04
 
 - **Files scanned**: references/statusline.sh, references/roles/dm/includes.yml, references/scripts/vault_optimize.py
