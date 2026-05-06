@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-06 01:04
+
+- **Files scanned**: references/statusline.sh, references/roles/dm/includes.yml, references/scripts/vault_optimize.py
+- **Findings**: none
+- **Items rejected by human**: none yet
+- **Notes**: statusline.sh well-structured (319 lines, schema-aware agent resolution, backlog caching, vault questions). DM includes.yml intentionally different from dev (slim vault, no improvement-scan). All clean.
+
 ## Scan — 2026-05-05 22:03
 
 - **Files scanned**: references/sub-skills/roles/dm/delivery-packaging.md, references/roles/qa/instructions.md, docs/ARCHITECTURE.md
