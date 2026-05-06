@@ -5,6 +5,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Active Priorities
 
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — awaiting human greenlight
+- #5855 Vault is static decision log, not living memory (pending, high, role:skill)
 - #3963 EPIC: Web dashboard — Harness Phase 4 (pending, high, role:skill) — depends on #5622
 - #5783 L3: bug investigation boundary — PM symptoms, dev RCA (pending, medium, role:skill)
 - #5775 Move pipeline sentinel from PM cycle to harness TUI (pending, medium, role:skill)
