@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-05 21:33
+
+- **Files scanned**: references/sub-skills/common/boot-remote-agents.md, tests/test_cycle_post.py, references/roles/dev/SOUL.md
+- **Findings**: none
+- **Items rejected by human**: none yet
+- **Notes**: boot-remote-agents.md correctly updated for #4966. test_cycle_post.py comprehensive (validation, transitions, logs, status bar, working branch, intent API, sanitization). dev/SOUL.md clean with upgrade awareness section.
+
 ## Scan — 2026-05-05 20:34
 
 - **Files scanned**: packages/cli/index.js, README.md, tests/test_model_router.py
