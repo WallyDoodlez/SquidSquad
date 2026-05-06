@@ -111,7 +111,7 @@ When you invoke SquidSquad, it creates the following inside your project root. O
 
 > **Note:** All agents share a single GitHub Issues tracker on the repo. Issues are labeled by role, type, and status. QA queries for `Pending Test` items, verifies them, and comments. DM queries for `Pending Ship` items and handles delivery.
 
-For `fe, be` the structure gains a `fe/` folder and `start-fe.sh/.ps1` alongside `be/`.
+For `fe, be` the structure gains a `fe/` folder alongside `be/`.
 
 ---
 
@@ -353,15 +353,7 @@ This regenerates `.squidsquad/[role]/CLAUDE.md` for every configured agent (dev 
 
 **Vault preservation**: The upgrade does not touch `.squidsquad/vault/`. All vault content is preserved.
 
-### Step 4 — Regenerate Boot Scripts
-
-```bash
-python references/scripts/compose.py boot-all
-```
-
-This regenerates `start-[role].sh` and `start-[role].ps1` for all configured agents.
-
-### Step 5 — Patch Config Schema (v1 → v2)
+### Step 4 — Patch Config Schema (v1 → v2)
 
 If `Architecture Version` in config.md is `1` (or absent), add any missing v2 sections with defaults. **Do not delete existing v1 sections** — agents still read them via config.py.
 
@@ -377,7 +369,7 @@ Check for and add these sections if missing (with defaults):
 
 After patching, set `Architecture Version` to `2`.
 
-### Step 6 — Sync Labels
+### Step 5 — Sync Labels
 
 ```bash
 python references/scripts/wizard.py ensure-labels
@@ -385,7 +377,7 @@ python references/scripts/wizard.py ensure-labels
 
 This is idempotent — it creates any missing GitHub Issue labels and skips existing ones.
 
-### Step 7 — Update Version and Commit
+### Step 6 — Update Version and Commit
 
 Update `SquidSquad Version` in `.squidsquad/config.md` to the current skill version.
 
@@ -397,7 +389,7 @@ git push
 
 **Clone isolation note**: Agents running in sibling clones will receive the updated CLAUDE.md on their next `git pull` (which happens at the start of each cycle via cycle_pre.py). The upgrade only writes to the primary repo — agents are not restarted automatically.
 
-### Step 8 — Report
+### Step 7 — Report
 
 Tell the user: version upgraded from → to, templates regenerated via compose.py, config schema version, any new sections added, label sync result, any failures.
 
