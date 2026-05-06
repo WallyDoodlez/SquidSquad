@@ -74,3 +74,54 @@ describe("installFilesPerFile", () => {
     assert.equal(typeof cli.installFilesPerFile, "function");
   });
 });
+
+// --- assertWithinRoot ---
+
+describe("assertWithinRoot", () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "squid-path-test-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("allows normal relative paths", () => {
+    const result = cli.assertWithinRoot(tmpDir, "references/scripts/foo.py");
+    assert.equal(result, path.resolve(tmpDir, "references/scripts/foo.py"));
+  });
+
+  it("allows nested paths", () => {
+    const result = cli.assertWithinRoot(tmpDir, "a/b/c/d.txt");
+    assert.equal(result, path.resolve(tmpDir, "a/b/c/d.txt"));
+  });
+
+  it("allows root-level files", () => {
+    const result = cli.assertWithinRoot(tmpDir, "SKILL.md");
+    assert.equal(result, path.resolve(tmpDir, "SKILL.md"));
+  });
+
+  it("blocks path traversal with ../", (t) => {
+    const originalExit = process.exit;
+    let exitCalled = false;
+    process.exit = () => { exitCalled = true; throw new Error("exit"); };
+    try {
+      cli.assertWithinRoot(tmpDir, "../../etc/passwd");
+    } catch { /* expected */ }
+    process.exit = originalExit;
+    assert.equal(exitCalled, true);
+  });
+
+  it("blocks path traversal in nested context", (t) => {
+    const originalExit = process.exit;
+    let exitCalled = false;
+    process.exit = () => { exitCalled = true; throw new Error("exit"); };
+    try {
+      cli.assertWithinRoot(tmpDir, "references/../../../.bashrc");
+    } catch { /* expected */ }
+    process.exit = originalExit;
+    assert.equal(exitCalled, true);
+  });
+});

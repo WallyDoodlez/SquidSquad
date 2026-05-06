@@ -126,6 +126,17 @@ function checkClaudeCli() {
   success(`Claude Code CLI v${ver}`);
 }
 
+// --- Path safety ---
+
+function assertWithinRoot(root, filePath) {
+  const resolved = path.resolve(root, filePath);
+  if (!resolved.startsWith(path.resolve(root) + path.sep) && resolved !== path.resolve(root)) {
+    fail(`Path traversal blocked: ${filePath}`);
+    process.exit(1);
+  }
+  return resolved;
+}
+
 // --- File fetching ---
 
 function fetchRawFile(repoPath) {
@@ -221,7 +232,7 @@ function downloadTarball(gitRoot, filePaths) {
     let copied = 0;
     for (const filePath of filePaths) {
       const srcPath = path.join(prefixDir, filePath);
-      const destPath = path.join(gitRoot, filePath);
+      const destPath = assertWithinRoot(gitRoot, filePath);
       fs.mkdirSync(path.dirname(destPath), { recursive: true });
       fs.copyFileSync(srcPath, destPath);
       copied++;
@@ -254,7 +265,7 @@ function installFilesPerFile(gitRoot, filePaths) {
       fail(`Failed to fetch ${filePath}`);
       process.exit(1);
     }
-    const dest = path.join(gitRoot, filePath);
+    const dest = assertWithinRoot(gitRoot, filePath);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.writeFileSync(dest, content, "utf-8");
     fetched++;
@@ -472,5 +483,5 @@ async function main() {
 if (require.main === module) {
   main();
 } else {
-  module.exports = { getCliVersion, downloadTarball, installFilesPerFile, fetchRawFile };
+  module.exports = { getCliVersion, downloadTarball, installFilesPerFile, fetchRawFile, assertWithinRoot };
 }
