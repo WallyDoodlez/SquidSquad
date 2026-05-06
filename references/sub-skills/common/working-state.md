@@ -8,6 +8,7 @@ Maintain `.squidsquad/[ROLE]/working-state.md` to persist context across context
 - **Task**: [#NUMBER, or "none"]
 - **Status**: [in-progress / blocked / none]
 - **Started**: [YYYY-MM-DD HH:MM]
+- **Last Processed Event ID**: [8-char hex ID, or "none"]
 
 ## Completed Steps
 - [what has been done so far]

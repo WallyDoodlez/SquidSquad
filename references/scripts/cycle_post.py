@@ -601,6 +601,73 @@ def _do_working_state_update(data, role):
     ws_path.write_text(update, encoding="utf-8")
 
 
+def _advance_event_cursor(data, role):
+    """Advance the event bus cursor in working-state.md after successful cycle (#5622).
+
+    Only advances if recent_events were present in cycle-input.json.
+    Cursor advances AFTER creative phase (crash safety — if agent crashes,
+    events are re-read next cycle).
+    """
+    # Read cycle-input.json to get the events that were processed
+    input_path = SQUID_DIR / role / "cycle-input.json"
+    if not input_path.exists():
+        return
+
+    try:
+        input_data = json.loads(input_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return
+
+    recent_events = input_data.get("recent_events", [])
+    if not recent_events:
+        return
+
+    # The last event's ID becomes the new cursor
+    last_event_id = recent_events[-1].get("id")
+    if not last_event_id:
+        return
+
+    # Update working-state.md with the new cursor
+    ws_path = _state_path(f"{role}/working-state.md")
+    if not ws_path.exists():
+        return
+
+    content = ws_path.read_text(encoding="utf-8")
+
+    # Replace existing cursor line or add it
+    cursor_line = f"- **Last Processed Event ID**: {last_event_id}"
+    if "- **Last Processed Event ID**:" in content:
+        import re
+        content = re.sub(
+            r"- \*\*Last Processed Event ID\*\*:.*",
+            cursor_line,
+            content,
+        )
+    else:
+        # Add after Status line
+        content = content.replace(
+            "- **Status**:",
+            f"- **Status**:",
+            1,
+        )
+        # Find the end of the header fields and insert
+        lines = content.splitlines()
+        insert_idx = None
+        for i, line in enumerate(lines):
+            if line.strip().startswith("- **Status**:"):
+                insert_idx = i + 1
+            elif line.strip().startswith("- **Started**:"):
+                insert_idx = i + 1
+        if insert_idx is not None:
+            lines.insert(insert_idx, cursor_line)
+            content = "\n".join(lines) + "\n"
+        else:
+            # Fallback: append after first blank line
+            content = content.rstrip() + f"\n{cursor_line}\n"
+
+    ws_path.write_text(content, encoding="utf-8")
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -652,6 +719,9 @@ def main():
 
     # 4. Working state update
     _do_working_state_update(data, role)
+
+    # 4b. Advance event bus cursor (#5622)
+    _advance_event_cursor(data, role)
 
     # 5. Iteration log
     _do_iteration_log(data, role)
