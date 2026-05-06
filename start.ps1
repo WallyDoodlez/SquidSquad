@@ -1,7 +1,7 @@
 # SquidSquad — ensure deps, sync clones, run harness.
 # Usage: pwsh start.ps1
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $RepoRoot
 
@@ -17,7 +17,8 @@ if ($LASTEXITCODE -ne 0) { pip install fastapi uvicorn }
 # --- Sync all clones to main ---
 Write-Host "Syncing clones..."
 # Primary repo
-git checkout main 2>$null; git pull --ff-only 2>$null
+$null = git checkout main 2>&1
+$null = git pull --rebase 2>&1
 Write-Host "  primary: OK"
 
 # Agent clones from .local-config
@@ -35,7 +36,8 @@ if (Test-Path $localConfig) {
             if (Test-Path $path) {
                 Push-Location $path
                 try {
-                    git checkout main 2>$null; git pull --ff-only 2>$null
+                    $null = git checkout main 2>&1
+                    $null = git pull --rebase 2>&1
                     Write-Host "  ${role}: OK"
                 } catch {
                     Write-Host "  ${role}: WARN (could not sync)"
