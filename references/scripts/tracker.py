@@ -983,22 +983,15 @@ def transition(number, from_status, to_status, role=None, force=False):
                 print(f"WARNING: gh issue close #{number} failed: {result.stderr.strip()}",
                       file=sys.stderr)
 
-    # Emit task lifecycle events (#4709)
+    # Emit status-transition event on every transition (#5856)
     try:
         from event_bus import emit as _emit_event
-        # Determine caller role for the event
         emit_role = (role or "unknown").replace("-lead", "")
-        if to_label == "status:in-progress":
-            _emit_event("task-start", emit_role, payload={
-                "task_number": str(number),
-                "from_status": from_label.replace("status:", ""),
-                "assigned_role": emit_role,
-            })
-        elif to_label == "status:pending-test":
-            _emit_event("task-end", emit_role, payload={
-                "task_number": str(number),
-                "assigned_role": emit_role,
-            })
+        _emit_event("status-transition", emit_role, payload={
+            "issue_number": str(number),
+            "from": from_label.replace("status:", ""),
+            "to": to_label.replace("status:", ""),
+        })
     except (ImportError, Exception):
         pass
 

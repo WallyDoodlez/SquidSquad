@@ -376,10 +376,10 @@ def _get_cycle_number(role):
 # Unlisted roles receive all events (no filtering).
 _ROLE_EVENT_TYPES = {
     "pm": {"pr-merge", "verification-failed", "verification-passed", "cycle-start",
-            "cycle-end", "task-transition", "agent-health"},
-    "qa": {"pr-merge", "task-transition", "cycle-end", "verification-failed"},
-    "skill": {"pr-merge", "verification-failed", "task-transition"},
-    "dm": {"task-transition", "verification-passed", "pr-merge"},
+            "cycle-end", "status-transition", "agent-health"},
+    "qa": {"pr-merge", "status-transition", "cycle-end", "verification-failed"},
+    "skill": {"pr-merge", "verification-failed", "status-transition"},
+    "dm": {"status-transition", "verification-passed", "pr-merge"},
 }
 
 
