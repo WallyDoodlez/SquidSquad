@@ -2,18 +2,14 @@
 
 - **Task**: none
 - **Status**: none
-- **Last Processed Event ID**: 25bca513
+- **Last Processed Event ID**: 8fbe9dc0
 
 ## Completed Steps
-- #5622 Phase 3 planning complete, approved for execution
+- #5622 Phase 3 shipped
+- BRIEFING.md staleness fixed
 
 ## Remaining Steps
-- #5774 pending-test (PR #5781)
-- #5782 in-progress (QA rejected)
-- #5773, #5783, #5775 pending
+- #3 go public (stalled 29 days)
+- #5783, #5775, #5773, #5620 pending
 
-## Key Decisions
-- Phase swap: #5622=Phase 3, #3963=Phase 4
-- Bug boundary: process=full RCA, software=behavior only
-
-## Quiet cycle counter: 0
+## Quiet cycle counter: 1
