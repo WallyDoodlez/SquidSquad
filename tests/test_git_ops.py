@@ -139,6 +139,54 @@ class TestPush:
 
 
 # ---------------------------------------------------------------------------
+# pull/push role propagation (#5782)
+# ---------------------------------------------------------------------------
+
+class TestPullEmitsRole:
+    @patch("git_ops._emit")
+    @patch("git_ops._run")
+    def test_pull_emits_role(self, mock_run, mock_emit):
+        """pull(role='pm') passes role to _emit()."""
+        mock_run.return_value = _mock_result()
+        git_ops.pull(role="pm")
+        mock_emit.assert_called()
+        _, kwargs = mock_emit.call_args
+        assert kwargs.get("role") == "pm"
+
+    @patch("git_ops._emit")
+    @patch("git_ops._run")
+    def test_pull_without_role_backward_compat(self, mock_run, mock_emit):
+        """pull() without role still works (role=None passed to _emit)."""
+        mock_run.return_value = _mock_result()
+        git_ops.pull()
+        mock_emit.assert_called()
+        _, kwargs = mock_emit.call_args
+        assert kwargs.get("role") is None
+
+
+class TestPushEmitsRole:
+    @patch("git_ops._emit")
+    @patch("git_ops._run")
+    def test_push_emits_role(self, mock_run, mock_emit):
+        """push(role='skill') passes role to _emit()."""
+        mock_run.return_value = _mock_result()
+        git_ops.push(role="skill")
+        mock_emit.assert_called()
+        _, kwargs = mock_emit.call_args
+        assert kwargs.get("role") == "skill"
+
+    @patch("git_ops._emit")
+    @patch("git_ops._run")
+    def test_push_without_role_backward_compat(self, mock_run, mock_emit):
+        """push() without role still works (role=None passed to _emit)."""
+        mock_run.return_value = _mock_result()
+        git_ops.push()
+        mock_emit.assert_called()
+        _, kwargs = mock_emit.call_args
+        assert kwargs.get("role") is None
+
+
+# ---------------------------------------------------------------------------
 # commit_push()
 # ---------------------------------------------------------------------------
 
