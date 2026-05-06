@@ -61,10 +61,11 @@
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-06", "findings": 2, "fixes": ["updated Coordination Model: git-only → git + event bus with diagram", "updated Key Design Decisions: git as only bus → git audit trail + event bus for real-time"]},
     {"file": "docs/sub-skill-guide.md", "date": "2026-05-06", "findings": 2, "fixes": ["corrected role-specific sub-skill paths: <role>-specific/ → roles/<role>/", "corrected entry file name: CLAUDE.md → instructions.md (all references)"]},
     {"file": "CONTRIBUTING.md", "date": "2026-05-06", "findings": 0},
-    {"file": "CHANGELOG.md", "date": "2026-05-06", "findings": 0}
+    {"file": "CHANGELOG.md", "date": "2026-05-06", "findings": 0},
+    {"file": "README.md", "date": "2026-05-06", "findings": 0}
   ],
   "doc_inventory": {
-    "README.md": {"last_scanned": "2026-05-04", "status": "current"},
+    "README.md": {"last_scanned": "2026-05-06", "status": "current"},
     "SKILL.md": {"last_scanned": "2026-05-06", "status": "current"},
     "docs/ARCHITECTURE.md": {"last_scanned": "2026-05-06", "status": "current"},
     "docs/sub-skill-guide.md": {"last_scanned": "2026-05-06", "status": "current"},
