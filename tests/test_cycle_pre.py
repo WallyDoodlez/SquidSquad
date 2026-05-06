@@ -108,6 +108,44 @@ class TestReadWorkingState:
         assert result["suppressed"] is True
         assert result["phase"] == "researching #2070"
 
+    def test_last_processed_event_id(self, patch_dirs, squid_dir):
+        """#5622: working state parser reads Last Processed Event ID."""
+        ws = squid_dir / "skill" / "working-state.md"
+        ws.write_text(
+            "# Working State\n\n"
+            "- **Task**: #5622\n"
+            "- **Status**: in-progress\n"
+            "- **Last Processed Event ID**: abc12345\n",
+            encoding="utf-8",
+        )
+        result = cycle_pre._read_working_state("skill")
+        assert result["last_processed_event_id"] == "abc12345"
+
+    def test_last_processed_event_id_none(self, patch_dirs, squid_dir):
+        """#5622: 'none' value results in None."""
+        ws = squid_dir / "skill" / "working-state.md"
+        ws.write_text(
+            "# Working State\n\n"
+            "- **Task**: none\n"
+            "- **Status**: none\n"
+            "- **Last Processed Event ID**: none\n",
+            encoding="utf-8",
+        )
+        result = cycle_pre._read_working_state("skill")
+        assert result["last_processed_event_id"] is None
+
+    def test_last_processed_event_id_missing(self, patch_dirs, squid_dir):
+        """#5622: field absent defaults to None."""
+        ws = squid_dir / "skill" / "working-state.md"
+        ws.write_text(
+            "# Working State\n\n"
+            "- **Task**: none\n"
+            "- **Status**: none\n",
+            encoding="utf-8",
+        )
+        result = cycle_pre._read_working_state("skill")
+        assert result["last_processed_event_id"] is None
+
 
 # ---------------------------------------------------------------------------
 # Cycle Number
