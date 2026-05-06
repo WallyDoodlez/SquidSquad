@@ -4,14 +4,13 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #4709 EPIC Harness Phase 2: Event bus + agent communication (planned, high, role:skill) — re-research complete, ready for approval
-- #3963 EPIC: Web dashboard — visual interface for SquidSquad (pending, high, role:skill)
-- #4709 EPIC Harness Phase 2 — IN FLIGHT pending-test PR #5673
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — awaiting human greenlight
-- #5622 EPIC Harness Phase 4 — Agent communication bus (planning, high, role:skill)
+- #3963 EPIC: Web dashboard — Harness Phase 4 (pending, high, role:skill) — depends on #5622
+- #5783 L3: bug investigation boundary — PM symptoms, dev RCA (pending, medium, role:skill)
+- #5775 Move pipeline sentinel from PM cycle to harness TUI (pending, medium, role:skill)
+- #5773 Document start.sh as boot entry point (pending, medium, role:dm)
 - #5620 L3 PM stuck-rebase recovery (pending, high, role:skill)
-- #5613 Phase 3+ event opportunities (pending, low, role:skill)
-- #5468 External model consultation sub-skill (pending, low, role:skill)
+- #5613 Phase 3+ event types (pending, low, role:skill)
 
 ## Pending Tasks (filed this session, awaiting approval)
 
@@ -19,8 +18,12 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #5171 Harness loads config.md and serves configuration via REST endpoint (pending, medium)
 - #5159 Status bar shows agent 'awaiting restart' state from harness intent API (pending, low)
 
-## Recently Shipped (this session — v0.32.0)
+## Recently Shipped
 
+- #5622 EPIC Harness Phase 3: Agent communication bus — agents read events (shipped)
+- #4709 EPIC Harness Phase 2: Event bus emission infrastructure (shipped)
+- #5774 start.sh/start.ps1 installer manifest fix (shipped)
+- #5782 git_ops.py unknown role in events (shipped)
 - #5573 PM agent uses --effort max (config-driven per-agent effort)
 - #5572 L2 Dev/QA vault consultation before work
 - #5571 L2 PM vault mandatory in research
@@ -69,7 +72,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Constraints & Blockers
 
 - #4966 shipped — upgrade sequence needed (stop → clean sentinels → recompose → start via harness)
-- Phase 2 (#4709) planned, awaiting human approval
+- Harness Phase 2 + 3 shipped — event bus bidirectional (emit + read) is live
 
 ## Team State
 
