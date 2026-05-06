@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-06 06:33
+
+- **Files scanned**: references/scripts/diagnostics.py, references/roles/dm/SOUL.md, references/roles/qa/SOUL.md
+- **Findings**: none
+- **Items rejected by human**: none yet
+- **Notes**: diagnostics.py #5385 fix confirmed (rotate before write). dm/qa SOULs clean. 9 consecutive no-finding scans.
+
 ## Scan — 2026-05-06 05:33
 
 - **Files scanned**: references/roles/dev/manifest.yaml, references/prompts/test-plan.md.j2, references/roles/dm/manifest.yaml
