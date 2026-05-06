@@ -206,7 +206,7 @@ Status transitions are GitHub Issue label changes (L1 transport). The decision o
 
 ## Coordination Model
 
-Agents coordinate primarily through git — the transport layer. For real-time coordination, an optional communication abstraction layer supports Telegram, Slack, and Discord (agents work identically with or without it).
+Agents coordinate through two channels: **git** (the audit trail) and the **event bus** (real-time coordination). Git carries the durable state — Issue comments, status transitions, code. The event bus carries ephemeral signals — PR merges, verification results, cycle completions — so agents can react within seconds instead of waiting for the next cycle.
 
 ```
 Agent A                    Git Repository                   Agent B
@@ -214,11 +214,12 @@ Agent A                    Git Repository                   Agent B
    ├── git push ───────────────►│                              │
    │                            │◄──────────────── git pull ───┤
    │                            │                              │
-   │   (Issue comment,          │    (Reads comment,           │
-   │    status transition)      │     picks up work)           │
+   │        Event Bus (Harness)                                │
+   │   ├── emit(pr-merge) ─────────────────► read(pr-merge) ──┤
+   │   │   (milliseconds)                    (next cycle_pre)  │
 ```
 
-Every agent pulls at cycle start (L1 transport), does creative work (L3 behavior), and pushes at cycle end (L1 transport). The gap between push and pull is the coordination latency — typically one cycle interval.
+Git coordination latency is one cycle interval. Event bus coordination is near-instant — agents read events at cycle start via `cycle_pre.py`. High-confidence patterns (like PR merge → ship) trigger mechanical reactions automatically. If the event bus is unreachable, agents fall back gracefully to git-only polling. External chat adapters (Telegram, Slack, Discord) plug into the event bus as additional consumers.
 
 ---
 
@@ -241,7 +242,7 @@ Every agent pulls at cycle start (L1 transport), does creative work (L3 behavior
 
 ## Key Design Decisions
 
-- **Git as the only bus** — no databases, no message queues. Every piece of state is a file in the repo. This makes the system inspectable, debuggable, and reproducible.
+- **Git as the audit trail, event bus for real-time** — all durable state lives in git (files in the repo, GitHub Issues). The in-memory event bus on the harness handles ephemeral coordination signals. If the bus is down, agents fall back to git-only polling. No external databases, no persistent queues.
 - **Composition over inheritance** — roles are assembled from sub-skills, not inherited from a base class. This prevents the "god template" problem.
 - **Souls are separate from behavior** — you can change an agent's personality without redeploying its template. This enables project-level customization.
 - **Transport is deterministic** — the cycle runner (`cycle_pre.py` / `cycle_post.py`) handles all mechanical operations. Agents focus on creative work only.

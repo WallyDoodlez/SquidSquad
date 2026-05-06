@@ -40,14 +40,15 @@ references/
 │   │   ├── vault-protocol.md
 │   │   ├── vault-remember.md
 │   │   └── ...
-│   ├── pm-specific/         ← PM-only behaviors
-│   ├── qa-specific/         ← QA-only behaviors
-│   ├── dm-specific/         ← DM-only behaviors
-│   └── designer-specific/   ← Designer-only behaviors
+│   └── roles/               ← role-specific behaviors
+│       ├── pm/              ← PM-only behaviors
+│       ├── qa/              ← QA-only behaviors
+│       ├── dm/              ← DM-only behaviors
+│       └── dev/             ← Dev-only behaviors
 │
 └── roles/                   ← one self-contained directory per role
     ├── dev/
-    │   ├── CLAUDE.md        ← entry file with {{include}} directives
+    │   ├── instructions.md  ← entry file with {{include}} directives
     │   ├── SOUL.md          ← personality template (deployed to .squidsquad/<role>/SOUL.md)
     │   └── manifest.yaml
     ├── pm/
@@ -64,7 +65,7 @@ references/
 
 ### Entry Files
 
-Each agent role has an **entry file** at `references/roles/<role>/CLAUDE.md` that defines the template skeleton using `{{include}}` directives:
+Each agent role has an **entry file** at `references/roles/<role>/instructions.md` that defines the template skeleton using `{{include}}` directives:
 
 ```markdown
 {{runtime: souls/dev}}
@@ -114,7 +115,7 @@ Unlike `{{include:}}` which compiles content into the template at build time, `{
 ### Build Pipeline
 
 ```
-references/roles/<role>/CLAUDE.md        (entry file with {{include}} directives)
+references/roles/<role>/instructions.md   (entry file with {{include}} directives)
         │
         ▼  compose.py all
 references/agent-instructions.md         (all includes resolved, section markers added)
@@ -196,7 +197,7 @@ Bad examples:
 ### Step 2 — Choose the location
 
 - **Common** (`references/sub-skills/common/`): If 2+ roles need this behavior
-- **Role-specific** (`references/sub-skills/[role]-specific/`): If only one role uses it
+- **Role-specific** (`references/sub-skills/roles/[role]/`): If only one role uses it
 - **Soul** (`references/roles/<role>/SOUL.md`): Personality/communication style — edit the role's SOUL.md template directly (not a sub-skill fragment)
 
 ### Step 3 — Write the sub-skill
@@ -222,7 +223,7 @@ Rules:
 
 ### Step 4 — Add the include directive
 
-Edit the entry file(s) at `references/roles/<role>/CLAUDE.md` to include your sub-skill at the right position:
+Edit the entry file(s) at `references/roles/<role>/instructions.md` to include your sub-skill at the right position:
 
 ```markdown
 {{include: common/your-new-skill}}
