@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-05 22:03
+
+- **Files scanned**: references/sub-skills/roles/dm/delivery-packaging.md, references/roles/qa/instructions.md, docs/ARCHITECTURE.md
+- **Findings**: #5772 (delivery-packaging.md tracker comment commands use --role dm instead of dm-lead — low)
+- **Items rejected by human**: none yet
+- **Notes**: QA instructions.md uses raw echo+mv for status bar instead of cycle.py helper (functional but less portable — noted, not filed). delivery-packaging.md has inconsistency where transitions use dm-lead but comments use bare dm.
+
 ## Scan — 2026-05-05 21:33
 
 - **Files scanned**: references/sub-skills/common/boot-remote-agents.md, tests/test_cycle_post.py, references/roles/dev/SOUL.md
