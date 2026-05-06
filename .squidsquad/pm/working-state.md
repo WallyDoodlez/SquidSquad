@@ -2,21 +2,21 @@
 
 - **Task**: none
 - **Status**: none
-- **Last Processed Event ID**: 8fbe9dc0
+- **Last Processed Event ID**: bac4568c
 
 ## Completed Steps
 - #5622 Phase 3 shipped
-- #5856 planned and approved — skill picked up
-- BRIEFING.md staleness fixed
+- #5856 planned, approved, skill shipped — now pending-test
 
 ## Remaining Steps
-- #5856 in-progress (skill working)
-- #3 go public — awaiting human greenlight (stalled 29 days)
-- #5855, #5783, #5775, #5773, #5620 pending
-- Phase B event reactions — discussion ongoing with human
+- #5856 pending-test (QA verifying)
+- #5868 event consumption sub-skill (pending)
+- #5855 vault utility (pending)
+- #3 go public (stalled 29 days)
+- #5783, #5775, #5773, #5620 pending
 
 ## Key Decisions
-- Phase B: no mechanical reactions in cycle_pre — reactions are creative-phase judgment, not hardcoded Python
-- Event reaction approach TBD: prose instructions vs structured table vs config-driven pre-filter
+- Phase B: compose-time event contract generation, config.md storage, no new files
+- Mechanical emissions stay hardcoded; creative emissions config-driven
 
-## Quiet cycle counter: 2
+## Quiet cycle counter: 0
