@@ -20,9 +20,9 @@ For each merged branch that touched files under `references/`:
    ```bash
    git diff HEAD~1 --name-only -- references/
    ```
-2. If `references/` was modified, recompose all affected roles:
-   ```bash
-   python references/scripts/compose.py deploy-all
+2. If `references/` was modified, recompose all roles via the compose skill:
+   ```
+   /squidsquad-compose
    ```
 3. Comment on the associated issue:
    ```bash

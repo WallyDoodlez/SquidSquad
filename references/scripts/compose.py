@@ -938,16 +938,6 @@ def generate_local_config(roles: list, target_root: Path = None,
 TEMPLATES_DIR = REPO_ROOT / "references" / "templates"
 
 
-def boot_role(role_name: str, target_root: Path = None) -> list:
-    """No-op — wrapper scripts eliminated (#4966).
-
-    Agents are now spawned via thin_launcher.py by the harness or boot_remote.
-    Wrapper templates (start-role.ps1/.sh) have been deleted.
-    This function is kept for backward compatibility but generates nothing.
-    """
-    print(f"  boot {role_name}: no-op (#4966) — agents spawn via thin_launcher.py")
-    return []
-
 
 def _collect_all_roles() -> list:
     """Return all configured roles: dev-agents from config + pm + dm (if present)."""
@@ -959,15 +949,6 @@ def _collect_all_roles() -> list:
         roles.append("dm")
     return roles
 
-
-def boot_all() -> list:
-    """Generate boot scripts for all configured roles."""
-    roles = _collect_all_roles()
-    all_outputs = []
-    for role in roles:
-        outputs = boot_role(role)
-        all_outputs.extend(outputs)
-    return all_outputs
 
 
 def main():
@@ -1030,21 +1011,6 @@ def main():
         soul_path = upgrade_soul(role_name)
         lines = soul_path.read_text(encoding="utf-8").count("\n")
         print(f"Upgraded {role_name} SOUL.md ({lines} lines) -> {soul_path.relative_to(REPO_ROOT)}")
-
-    elif cmd == "boot":
-        if len(args) < 2:
-            print("Usage: compose.py boot <role>", file=sys.stderr)
-            print("  e.g.: compose.py boot skill", file=sys.stderr)
-            sys.exit(1)
-        role_name = args[1]
-        outputs = boot_role(role_name)
-        for out in outputs:
-            print(f"Generated {out.relative_to(REPO_ROOT)}")
-
-    elif cmd == "boot-all":
-        outputs = boot_all()
-        for out in outputs:
-            print(f"  {out.relative_to(REPO_ROOT)}")
 
     else:
         # Treat as role entry file name

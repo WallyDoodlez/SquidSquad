@@ -448,21 +448,6 @@ class TestGenerateLocalConfig:
 # boot_role
 # ---------------------------------------------------------------------------
 
-class TestBootRole:
-    """boot_role is a no-op since #4966 (wrapper scripts eliminated)."""
-
-    def test_returns_empty_list(self, compose_env):
-        """boot_role returns empty list — wrappers eliminated (#4966)."""
-        outputs = compose.boot_role("skill")
-        assert outputs == []
-
-    def test_no_files_generated(self, compose_env):
-        """No start-*.sh or start-*.ps1 files created (#4966)."""
-        with patch.object(compose, "REPO_ROOT", compose_env):
-            compose.boot_role("pm")
-        sqdir = compose_env / ".squidsquad"
-        assert not list(sqdir.glob("start-pm.*"))
-
 
 class TestStartRolePs1Template:
     """Real template checks for start-role.ps1 (#2411)."""
