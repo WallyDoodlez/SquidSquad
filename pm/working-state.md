@@ -1,21 +1,18 @@
 # Working State
 
-- **Task**: #5622 Phase 4 agent comm bus
-- **Status**: planning
-- **Phase**: discussing FEAT-PM-5622
+- **Task**: none
+- **Status**: none
 
 ## Completed Steps
-- 16 events locked
-- Phase 2 #4709 SHIPPED (event bus emission infrastructure deployed)
+- #5622 Phase 3 planning complete, approved for execution
 
 ## Remaining Steps
-- Human restarts harness to activate /events endpoint
-- Resolve open Q: relevance rule location for #5622
-- #5674 (.gitattributes vault gap) — pending QA rework
-- #5620 L3 stuck-rebase recovery — pending approval
+- #5774 pending-test (PR #5781)
+- #5782 in-progress (QA rejected)
+- #5773, #5783, #5775 pending
 
 ## Key Decisions
-- 16 events shipping in Phase 2
-- Per-clone .harness-port writes (corrected design)
+- Phase swap: #5622=Phase 3, #3963=Phase 4
+- Bug boundary: process=full RCA, software=behavior only
 
 ## Quiet cycle counter: 0
