@@ -5,7 +5,6 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Active Priorities
 
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — awaiting human greenlight
-- #5856 tracker.py status-transition events (pending-test, high, role:skill) — wiring fix
 - #5868 Event consumption sub-skill (pending, high, role:skill) — compose-time config
 - #5855 Vault is static decision log, not living memory (pending, high, role:skill)
 - #3963 EPIC: Web dashboard — Harness Phase 4 (pending, high, role:skill) — depends on #5622
@@ -23,6 +22,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Recently Shipped
 
+- #5856 tracker.py status-transition events — bus now has real coordination signals (shipped)
 - #5622 EPIC Harness Phase 3: Agent communication bus — agents read events (shipped)
 - #4709 EPIC Harness Phase 2: Event bus emission infrastructure (shipped)
 - #5774 start.sh/start.ps1 installer manifest fix (shipped)
