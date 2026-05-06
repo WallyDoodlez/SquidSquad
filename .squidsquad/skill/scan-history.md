@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-06 02:34
+
+- **Files scanned**: references/scripts/reboot_agent.py, references/wizard/WIZARD.md, tests/test_health_check.py
+- **Findings**: #5843 (reboot_agent.py --all double-reboots PM — duplicate in agent list — low)
+- **Items rejected by human**: none yet
+- **Notes**: reboot_agent.py line 235 prepends "pm" but _get_all_roles() already includes it. Also boot_remote.py:134-136 duplicates lines 126-127 (harmless set dedup). WIZARD.md and test_health_check.py not read this cycle (finding found early).
+
 ## Scan — 2026-05-06 02:03
 
 - **Files scanned**: tests/test_manifest.py, references/roles/dev/includes.yml, references/roles/qa/includes.yml
