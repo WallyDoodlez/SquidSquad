@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.33.0] — 2026-05-06
+
+### Added
+- #4709 — Agents now emit coordination signals (status changes, PR merges) to a shared event bus — the foundation for real-time awareness
+- #5622 — Your agents now coordinate in real-time — when QA verifies a fix or a PR is merged, other agents react within seconds instead of waiting for the next 30-minute cycle
+- #5856 — Tracker status transitions are now broadcast as real-time events, enabling faster cross-agent coordination
+- #5888 — New `/squidsquad-compose` command for managing agent template composition without manual script calls
+- #5557 — Agents are now prevented from accidentally overwriting their composed instruction files — compose.py guards against direct edits
+- #3969 — DM agent now proactively scans user-facing docs during quiet cycles, fixing staleness, version drift, and dead links
+
+### Fixed
+- #5915 — Harness no longer crashes on Windows when auto-starting agents (WindowsPath not JSON serializable)
+- #5782 — Event bus no longer crashes when processing events from unknown agent roles
+- #5774 — Installer manifest (start.sh/start.ps1) now lists the correct files
+- #5745, #5712 — SKILL.md documentation updated to remove references to eliminated boot scripts
+- #5916 — 12 stale tests in boot_remote.py restored after sentinel check migration
+
 ## [0.32.0] — 2026-05-04
 
 ### Added
