@@ -1054,17 +1054,16 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
         generate_local_config(all_roles, target_root=target_root,
                               clone_paths=clone_paths)
 
-    # 5. Generate boot scripts (start-[role].sh, start-[role].ps1)
-    try:
-        from compose import boot_role
-    except ImportError:
-        pass
-    else:
-        for agent in spec["agents"]:
-            try:
-                boot_role(agent["id"], target_root=target_root)
-            except (SystemExit, Exception) as e:
-                print(f"  WARNING: Failed to generate boot scripts for {agent['id']}: {e}", file=sys.stderr)
+    # 5. Copy skill commands to .claude/commands/ (#5888)
+    ref_commands = target_root / "references" / "commands"
+    claude_commands = target_root / ".claude" / "commands"
+    if ref_commands.exists():
+        claude_commands.mkdir(parents=True, exist_ok=True)
+        for cmd_file in ref_commands.glob("*.md"):
+            dest = claude_commands / cmd_file.name
+            if not dest.exists():  # don't overwrite user customizations
+                import shutil
+                shutil.copy2(cmd_file, dest)
 
     # 6. Save install spec for reproducibility and upgrade re-use (#13)
     spec_path = save_install_spec(spec, target_root)

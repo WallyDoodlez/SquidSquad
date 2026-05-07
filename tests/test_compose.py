@@ -445,45 +445,6 @@ class TestGenerateLocalConfig:
 
 
 # ---------------------------------------------------------------------------
-# boot_role
-# ---------------------------------------------------------------------------
-
-
-class TestStartRolePs1Template:
-    """Real template checks for start-role.ps1 (#2411)."""
-
-    def test_role_dir_is_absolute(self):
-        """RoleDir must use Join-Path or $repoRoot, not a bare relative path."""
-        template = Path(compose.TEMPLATES_DIR) / "start-role.ps1"
-        if not template.exists():
-            pytest.skip("start-role.ps1 template not found")
-        content = template.read_text(encoding="utf-8")
-        # Must not have a bare relative assignment like $RoleDir = ".squidsquad/..."
-        for line in content.splitlines():
-            if "$RoleDir" in line and "=" in line and '".squidsquad' in line:
-                assert "Join-Path" in line or "$repoRoot" in line or "$PSScriptRoot" in line, \
-                    f"RoleDir must be absolute: {line.strip()}"
-
-    def test_no_resolve_path_on_health_file(self):
-        """Resolve-Path fails on non-existent files — use Join-Path instead."""
-        template = Path(compose.TEMPLATES_DIR) / "start-role.ps1"
-        if not template.exists():
-            pytest.skip("start-role.ps1 template not found")
-        content = template.read_text(encoding="utf-8")
-        assert "Resolve-Path $HealthFile" not in content, \
-            "Resolve-Path fails on non-existent files — use Join-Path"
-
-    def test_claude_exe_not_bare_claude(self):
-        """Start-Process must use claude.exe, not bare 'claude'."""
-        template = Path(compose.TEMPLATES_DIR) / "start-role.ps1"
-        if not template.exists():
-            pytest.skip("start-role.ps1 template not found")
-        content = template.read_text(encoding="utf-8")
-        for line in content.splitlines():
-            if "Start-Process" in line and "claude" in line.lower():
-                assert "claude.exe" in line, \
-                    f"Start-Process must use claude.exe: {line.strip()}"
-
 
 # ---------------------------------------------------------------------------
 # _load_manifest (requires pyyaml)

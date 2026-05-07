@@ -335,13 +335,26 @@ function installFiles(gitRoot) {
   fs.writeFileSync(path.join(commandsDir, "squidsquad-setup.md"), setupCommand, "utf-8");
   success("Created /squidsquad-setup command");
 
+  // 3b. Copy skill commands from references/commands/ to .claude/commands/
+  const refCommandsDir = path.join(gitRoot, "references", "commands");
+  if (fs.existsSync(refCommandsDir)) {
+    for (const file of fs.readdirSync(refCommandsDir)) {
+      if (file.endsWith(".md")) {
+        const src = path.join(refCommandsDir, file);
+        const dest = path.join(commandsDir, file);
+        fs.copyFileSync(src, dest);
+      }
+    }
+    success("Copied skill commands (compose, upgrade)");
+  }
+
   // 4. Commit ALL fetched files + the slash command so /squidsquad-setup
   //    doesn't abort on a dirty worktree. This stages references/, SKILL.md,
   //    and .claude/commands/ in a single commit.
   info("Committing SquidSquad files...");
   try {
     execSync(
-      "git add SKILL.md references/ .claude/commands/squidsquad-setup.md",
+      "git add SKILL.md start.sh start.ps1 references/ .claude/commands/",
       { cwd: gitRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
     );
     execSync(

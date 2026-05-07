@@ -341,11 +341,13 @@ Read `.squidsquad/.install-spec.json` for the install-time configuration (agent 
 
 ### Step 3 — Regenerate Agent Templates
 
-Run compose.py to rebuild all agent CLAUDE.md files from the current sub-skill sources:
+Rebuild all agent CLAUDE.md files from the current sub-skill sources using the compose skill:
 
-```bash
-python references/scripts/compose.py deploy-all
 ```
+/squidsquad-compose
+```
+
+Or directly via CLI: `python references/scripts/compose.py deploy-all`
 
 This regenerates `.squidsquad/[role]/CLAUDE.md` for every configured agent (dev agents from config + PM + DM if present). Placeholder substitution (`[ROLE]`, `[INTERVAL]`, `[ROLE_TEST_CMD]`, etc.) is handled automatically by compose.py.
 

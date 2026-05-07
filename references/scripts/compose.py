@@ -935,7 +935,6 @@ def generate_local_config(roles: list, target_root: Path = None,
     return config_path
 
 
-TEMPLATES_DIR = REPO_ROOT / "references" / "templates"
 
 
 
