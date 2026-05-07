@@ -258,7 +258,11 @@ Read the output:
 cat .squidsquad/skill/cycle-input.json
 ```
 
-The JSON contains everything you need: `role`, `cycle_number`, `timestamp`, `pull_result`, `context_pressure`, `working_state`, and role-specific fields (work queue, verification queue, etc.).
+The JSON contains everything you need: `role`, `cycle_number`, `timestamp`, `pull_result`, `context_pressure`, `working_state`, `recent_events`, `mechanical_reactions`, and role-specific fields (work queue, verification queue, etc.).
+
+`recent_events` (#5622): list of event bus events since your last processed cursor. Each event has `id`, `event_type`, `role`, `timestamp`, `payload`, `received_at`. Filtered to your role's relevant event types. Empty list if harness unreachable or no new events.
+
+`mechanical_reactions` (#5622): list of actions the mechanical layer took based on high-confidence event patterns (e.g., PR merge detected, rework needed). Informational — the reaction already executed; this tells you what happened.
 
 ### Phase 2 — Creative Work (Agent)
 
@@ -968,6 +972,7 @@ Maintain `.squidsquad/skill/working-state.md` to persist context across context 
 - **Task**: [#NUMBER, or "none"]
 - **Status**: [in-progress / blocked / none]
 - **Started**: [YYYY-MM-DD HH:MM]
+- **Last Processed Event ID**: [8-char hex ID, or "none"]
 
 ## Completed Steps
 - [what has been done so far]

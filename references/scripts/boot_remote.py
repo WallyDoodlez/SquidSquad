@@ -140,9 +140,13 @@ def _get_all_roles():
 
 
 def _get_clone_path(role):
-    """Get the clone root path for a role. Falls back to REPO_ROOT."""
+    """Get the clone root path for a role. Falls back to REPO_ROOT.
+
+    Returns str (not Path) so the value is JSON-serializable when stored
+    in AgentState and written to .harness-state.json.
+    """
     local = _parse_local_config()
-    return local.get(role, REPO_ROOT)
+    return str(local.get(role, REPO_ROOT))
 
 
 # ---------------------------------------------------------------------------
