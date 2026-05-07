@@ -126,3 +126,5 @@
 {"timestamp": 1778117983.530309, "task_type": "discussion-prep", "task_id": "FEAT-PM-5868", "model": "claude", "action": "delegate-to-agent-tool"}
 {"timestamp": 1778123922.970585, "task_type": "research", "task_id": "FEAT-PM-5868-FEASIBILITY", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 21147, "elapsed_seconds": 350.7}
 {"timestamp": 1778132997.635157, "task_type": "research", "task_id": "FEAT-PM-5613-MONITOR", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 21511, "elapsed_seconds": 330.9}
+{"timestamp": 1778190645.633838, "task_type": "research", "task_id": "PR-5994-CODE-REVIEW", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 20962, "elapsed_seconds": 417.3}
+{"timestamp": 1778190829.244077, "task_type": "research", "task_id": "FEAT-PM-5932", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 16555, "elapsed_seconds": 322.5}
