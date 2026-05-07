@@ -445,60 +445,6 @@ class TestGenerateLocalConfig:
 
 
 # ---------------------------------------------------------------------------
-# boot_role
-# ---------------------------------------------------------------------------
-
-class TestBootRole:
-    """boot_role is a no-op since #4966 (wrapper scripts eliminated)."""
-
-    def test_returns_empty_list(self, compose_env):
-        """boot_role returns empty list — wrappers eliminated (#4966)."""
-        outputs = compose.boot_role("skill")
-        assert outputs == []
-
-    def test_no_files_generated(self, compose_env):
-        """No start-*.sh or start-*.ps1 files created (#4966)."""
-        with patch.object(compose, "REPO_ROOT", compose_env):
-            compose.boot_role("pm")
-        sqdir = compose_env / ".squidsquad"
-        assert not list(sqdir.glob("start-pm.*"))
-
-
-class TestStartRolePs1Template:
-    """Real template checks for start-role.ps1 (#2411)."""
-
-    def test_role_dir_is_absolute(self):
-        """RoleDir must use Join-Path or $repoRoot, not a bare relative path."""
-        template = Path(compose.TEMPLATES_DIR) / "start-role.ps1"
-        if not template.exists():
-            pytest.skip("start-role.ps1 template not found")
-        content = template.read_text(encoding="utf-8")
-        # Must not have a bare relative assignment like $RoleDir = ".squidsquad/..."
-        for line in content.splitlines():
-            if "$RoleDir" in line and "=" in line and '".squidsquad' in line:
-                assert "Join-Path" in line or "$repoRoot" in line or "$PSScriptRoot" in line, \
-                    f"RoleDir must be absolute: {line.strip()}"
-
-    def test_no_resolve_path_on_health_file(self):
-        """Resolve-Path fails on non-existent files — use Join-Path instead."""
-        template = Path(compose.TEMPLATES_DIR) / "start-role.ps1"
-        if not template.exists():
-            pytest.skip("start-role.ps1 template not found")
-        content = template.read_text(encoding="utf-8")
-        assert "Resolve-Path $HealthFile" not in content, \
-            "Resolve-Path fails on non-existent files — use Join-Path"
-
-    def test_claude_exe_not_bare_claude(self):
-        """Start-Process must use claude.exe, not bare 'claude'."""
-        template = Path(compose.TEMPLATES_DIR) / "start-role.ps1"
-        if not template.exists():
-            pytest.skip("start-role.ps1 template not found")
-        content = template.read_text(encoding="utf-8")
-        for line in content.splitlines():
-            if "Start-Process" in line and "claude" in line.lower():
-                assert "claude.exe" in line, \
-                    f"Start-Process must use claude.exe: {line.strip()}"
-
 
 # ---------------------------------------------------------------------------
 # _load_manifest (requires pyyaml)

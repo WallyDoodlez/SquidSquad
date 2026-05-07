@@ -1,7 +1,7 @@
 # SquidSquad installer file manifest
 # Every file the wizard needs, fetched by npx squidsquad before
 # launching Claude. One path per line, relative to repo root.
-# Total: 256 files
+# Total: 258 files
 #
 # Maintained alongside the wizard - when you add a new role,
 # capability, preset, or sub-skill, add its files here too.
@@ -9,6 +9,8 @@
 SKILL.md
 start.sh
 start.ps1
+references/commands/squidsquad-compose.md
+references/commands/squidsquad-upgrade.md
 references/wizard/WIZARD.md
 references/scripts/add_role.py
 references/scripts/boot_remote.py
