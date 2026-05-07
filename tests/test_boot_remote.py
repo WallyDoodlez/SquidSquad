@@ -99,6 +99,35 @@ class TestParseLocalConfigMandatory:
         assert "dm" not in result
 
 
+class TestGetClonePath:
+    """Regression tests for _get_clone_path() JSON serialization (#5915)."""
+
+    def test_returns_str_not_path(self, tmp_path):
+        """_get_clone_path must return str so AgentState is JSON-serializable."""
+        config = tmp_path / ".local-config"
+        config.write_text(f"- **skill**: {tmp_path / 'skill-clone'}\n")
+
+        with patch.object(boot_remote, "LOCAL_CONFIG", config):
+            result = boot_remote._get_clone_path("skill")
+
+        assert isinstance(result, str), (
+            f"_get_clone_path must return str, got {type(result).__name__}"
+        )
+        # Must be JSON-serializable (the original bug)
+        import json
+        json.dumps({"clone_path": result})  # Should not raise
+
+    def test_fallback_returns_str(self, tmp_path):
+        """Fallback to REPO_ROOT also returns str."""
+        config = tmp_path / ".local-config"
+        config.write_text(f"- **pm**: {tmp_path / 'pm-clone'}\n")
+
+        with patch.object(boot_remote, "LOCAL_CONFIG", config):
+            result = boot_remote._get_clone_path("skill")  # not in config
+
+        assert isinstance(result, str)
+
+
 class TestIsProcessAlive:
     def test_none_pid_is_not_alive(self):
         assert boot_remote._is_process_alive(None) is False
