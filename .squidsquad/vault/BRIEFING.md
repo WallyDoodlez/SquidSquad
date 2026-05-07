@@ -5,7 +5,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Active Priorities
 
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — awaiting human greenlight
-- #5868 Event consumption sub-skill (pending-test, high, role:skill) — skill addressed validator flaw, back for QA re-verification. review:human-required
+- #5868 Event consumption sub-skill (pending-human-review, high, role:skill) — QA verified, PR #5994 awaiting human review. Validator cycles downgraded to warnings
 - #5855 Vault is static decision log, not living memory (pending, high, role:skill)
 - #3963 EPIC: Web dashboard — Harness Phase 4 (pending, high, role:skill) — depends on #5622
 - #5783 L3: bug investigation boundary — PM symptoms, dev RCA (pending, medium, role:skill)
