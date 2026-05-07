@@ -98,15 +98,26 @@ class TestReactionCycles:
         findings = check_reaction_cycles(reactions)
         assert len(findings) == 0
 
-    def test_same_event_bidirectional_is_error(self):
+    def test_infrastructure_event_cycle_is_warning(self):
+        """Infrastructure events (EMITTED tier) downgrade to warning — cascade protected."""
         reactions = {
             "skill": {"emits": ["status-transition"], "reacts_to": ["status-transition"]},
             "pm": {"emits": ["status-transition"], "reacts_to": ["status-transition"]},
         }
         findings = check_reaction_cycles(reactions)
         assert len(findings) >= 1
-        assert findings[0].severity == "error"
+        assert findings[0].severity == "warning"  # Not error — cascade protected
         assert findings[0].check == "reaction-cycle"
+
+    def test_non_infrastructure_cycle_is_error(self):
+        """Non-infrastructure bidirectional cycles are still errors."""
+        reactions = {
+            "skill": {"emits": ["verification-failed"], "reacts_to": ["verification-failed"]},
+            "pm": {"emits": ["verification-failed"], "reacts_to": ["verification-failed"]},
+        }
+        findings = check_reaction_cycles(reactions)
+        assert len(findings) >= 1
+        assert findings[0].severity == "error"
 
     def test_single_role_no_cycle(self):
         """Single role can't form a pairwise cycle."""

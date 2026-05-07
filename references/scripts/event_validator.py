@@ -134,7 +134,12 @@ def check_orphaned_emits(reactions):
 
 
 def check_reaction_cycles(reactions):
-    """Check for circular reaction chains (A reacts to B's emit, B reacts to A's emit)."""
+    """Check for circular reaction chains (A reacts to B's emit, B reacts to A's emit).
+
+    Infrastructure-emitted events (EMITTED tier) are downgraded to warnings
+    because they have runtime cascade protection (cursor dedup in cycle_pre.py).
+    Only non-infrastructure bidirectional cycles are errors.
+    """
     findings = []
     roles = list(reactions.keys())
 
@@ -151,17 +156,25 @@ def check_reaction_cycles(reactions):
             b_triggers_a = emits_b & reacts_a
 
             if a_triggers_b and b_triggers_a:
-                # Check if any overlapping event could cause a loop
-                # (same event type in both directions)
                 loop_events = a_triggers_b & b_triggers_a
                 if loop_events:
                     for evt in loop_events:
                         desc = _describe(evt)
-                        findings.append(Finding(
-                            "error", "reaction-cycle",
-                            f"Potential infinite loop: {role_a} and {role_b} both emit and react to {desc}.",
+                        # Infrastructure events have runtime cascade protection
+                        # (cursor dedup in cycle_pre.py) — downgrade to warning
+                        severity = "warning" if evt in EMITTED else "error"
+                        detail = (
                             f"If {role_a} emits this event, {role_b} reacts and may emit it back, "
-                            f"causing {role_a} to react again. Break the cycle by removing one side.",
+                            f"causing {role_a} to react again."
+                        )
+                        if severity == "warning":
+                            detail += " Runtime cascade protection (cursor dedup) prevents infinite loops."
+                        else:
+                            detail += " Break the cycle by removing one side."
+                        findings.append(Finding(
+                            severity, "reaction-cycle",
+                            f"Bidirectional dependency: {role_a} and {role_b} both emit and react to {desc}.",
+                            detail,
                         ))
     return findings
 

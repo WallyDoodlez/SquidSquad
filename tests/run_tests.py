@@ -50,6 +50,7 @@ STATIC_TEST_MODULES = [
     "test_event_catalog",
     "test_event_validator",
     "test_event_config",
+    "test_event_derivation",
 ]
 
 
