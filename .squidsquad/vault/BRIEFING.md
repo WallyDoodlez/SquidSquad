@@ -21,7 +21,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #5159 Status bar shows agent 'awaiting restart' state from harness intent API (pending, low)
 - #5932 L2: External code review loop before pending-test (pending, high, role:skill)
 - #6000 Harness Ctrl+C does not trigger graceful shutdown (open, high, role:skill)
-- #6007 QA L2 finding routing lacks role-awareness (open, high, role:skill)
+- #6007 QA L2 finding routing lacks role-awareness (shipped/closed)
 
 ## Recently Shipped
 

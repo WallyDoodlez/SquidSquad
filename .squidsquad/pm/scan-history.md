@@ -75,3 +75,10 @@
 - **Findings**: none — both files correctly reference harness lifecycle, no stale wrapper refs
 - **Auto-fixed**: none
 - **Items rejected by human**: (none)
+
+## Scan — 2026-05-07 11:02
+
+- **Files scanned**: QA sub-skills (issue-filing.md, discussion-protocol.md, prohibitions.md, verification.md)
+- **Findings**: Confirmed #6007 covers the gaps — issue-filing too thin, no structured finding format, no routing process. No additional findings beyond #6007
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
