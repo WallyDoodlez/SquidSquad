@@ -47,6 +47,9 @@ STATIC_TEST_MODULES = [
     "test_comms_adapter",
     "test_comms_sub_skills",
     "test_event_bus",
+    "test_event_catalog",
+    "test_event_validator",
+    "test_event_config",
 ]
 
 

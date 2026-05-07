@@ -300,7 +300,7 @@ def write_event_reactions(reactions_dict, text=None):
         # Match from "## Event Reactions" to next "## " or end of file
         pattern = r'(## Event Reactions\s*\n)(.*?)(?=\n## |\Z)'
         replacement = "## Event Reactions\n" + "\n".join(lines[1:]) + "\n"
-        new_text = re.sub(pattern, replacement, text, flags=re.DOTALL)
+        new_text = re.sub(pattern, replacement, text, count=1, flags=re.DOTALL)
     else:
         # Append to end of file
         new_text = text.rstrip() + "\n" + new_section
