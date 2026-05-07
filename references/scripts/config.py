@@ -205,6 +205,113 @@ def get_alias(role):
 
 
 # ---------------------------------------------------------------------------
+# Event Reactions section parsing (#5868)
+# ---------------------------------------------------------------------------
+
+
+def get_event_reactions(text=None):
+    """Parse the ## Event Reactions section from config.md.
+
+    Returns a dict: {role: {"emits": [str], "reacts_to": [str]}} or empty dict
+    if the section is absent or malformed. Never raises — graceful fallback.
+    """
+    if text is None:
+        text = _read_config()
+    sections = _parse_sections(text)
+    section_text = sections.get("Event Reactions", "")
+    if not section_text.strip():
+        return {}
+
+    result = {}
+    current_role = None
+
+    for line in section_text.splitlines():
+        # Detect ### role heading
+        role_match = re.match(r'^###\s+(\w+)', line)
+        if role_match:
+            current_role = role_match.group(1).strip()
+            result[current_role] = {"emits": [], "reacts_to": []}
+            continue
+
+        if not current_role:
+            continue
+
+        # Parse - **emits**: event1, event2, ...
+        emits_match = re.match(r'-\s*\*\*emits\*\*:\s*(.+)', line)
+        if emits_match:
+            raw = emits_match.group(1).strip()
+            result[current_role]["emits"] = [
+                e.strip() for e in raw.split(",") if e.strip()
+            ]
+            continue
+
+        # Parse - **reacts-to**: event1, event2, ...
+        reacts_match = re.match(r'-\s*\*\*reacts-to\*\*:\s*(.+)', line)
+        if reacts_match:
+            raw = reacts_match.group(1).strip()
+            result[current_role]["reacts_to"] = [
+                e.strip() for e in raw.split(",") if e.strip()
+            ]
+            continue
+
+    return result
+
+
+def get_event_filters_for_role(role, text=None):
+    """Get the reacts-to event types for a specific role from Event Reactions.
+
+    Returns a set of event type strings, or None if the section is absent
+    (caller should fall back to hardcoded defaults).
+    """
+    reactions = get_event_reactions(text)
+    if not reactions:
+        return None
+    role_data = reactions.get(role)
+    if not role_data:
+        return None
+    reacts_to = role_data.get("reacts_to", [])
+    return set(reacts_to) if reacts_to else None
+
+
+def write_event_reactions(reactions_dict, text=None):
+    """Write the ## Event Reactions section to config.md.
+
+    reactions_dict: {role: {"emits": [str], "reacts_to": [str]}}
+    Atomic write — replaces the entire section or appends if absent.
+    """
+    if text is None:
+        text = _read_config()
+
+    # Build the new section content
+    lines = ["\n## Event Reactions\n"]
+    for role in sorted(reactions_dict.keys()):
+        data = reactions_dict[role]
+        lines.append(f"\n### {role}")
+        emits = ", ".join(data.get("emits", []))
+        reacts_to = ", ".join(data.get("reacts_to", []))
+        lines.append(f"- **emits**: {emits}")
+        lines.append(f"- **reacts-to**: {reacts_to}")
+    new_section = "\n".join(lines) + "\n"
+
+    # Replace existing section or append
+    sections = _parse_sections(text)
+    if "Event Reactions" in sections:
+        # Find and replace the section in the raw text
+        # Match from "## Event Reactions" to next "## " or end of file
+        pattern = r'(## Event Reactions\s*\n)(.*?)(?=\n## |\Z)'
+        replacement = "## Event Reactions\n" + "\n".join(lines[1:]) + "\n"
+        new_text = re.sub(pattern, replacement, text, flags=re.DOTALL)
+    else:
+        # Append to end of file
+        new_text = text.rstrip() + "\n" + new_section
+
+    # Atomic write
+    tmp = CONFIG_PATH.with_suffix(".tmp")
+    tmp.write_text(new_text, encoding="utf-8")
+    tmp.replace(CONFIG_PATH)
+
+
+# ---------------------------------------------------------------------------
 # Schema-aware agent parsing (#328 Phase H)
 # ---------------------------------------------------------------------------
 
