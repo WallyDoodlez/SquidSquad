@@ -27,11 +27,9 @@ For each finding (test failure, gap, or defect discovered during verification):
 
 **Step 3a — Classify the finding:**
 
-Determine the finding category to identify the responsible role:
-- **Implementation defect** (code bug, wrong behavior, crash): Route to the dev role that built it. Check the `role:*` label on the issue to identify the implementer.
-- **Specification/AC gap** (acceptance criteria ambiguous, missing, or contradictory): Route to PM — PM owns specs and acceptance criteria.
-- **Design defect** (UI/UX issue, visual mismatch, interaction problem): Route to designer if present (check config.md Dev Agents), otherwise PM.
-- **Test infrastructure issue** (test environment broken, missing dependency): Route to the role that owns the test infrastructure, or flag as `blocked:human-action`.
+Determine the finding category using your domain-specific finding categories (defined in your L3 layer). If no domain categories are available, use this generic process:
+- Identify which role's **declared responsibilities** (from config.md team composition) the finding falls under.
+- If ownership is unclear, escalate to PM — PM is always present and owns coordination.
 
 **Step 3b — Check for duplicates:**
 
