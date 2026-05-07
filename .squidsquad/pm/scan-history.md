@@ -68,3 +68,10 @@
 - **Findings**:
   - #211 — Skill-lead phantom fix pattern (15 occurrences, HIGH)
 - **Items rejected by human**: (none yet)
+
+## Scan — 2026-05-07 09:02
+
+- **Files scanned**: SKILL.md, README.md (stale references to wrappers, old versions, pre-harness patterns)
+- **Findings**: none — both files correctly reference harness lifecycle, no stale wrapper refs
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
