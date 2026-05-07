@@ -82,3 +82,10 @@
 - **Findings**: Confirmed #6007 covers the gaps — issue-filing too thin, no structured finding format, no routing process. No additional findings beyond #6007
 - **Auto-fixed**: none
 - **Items rejected by human**: (none)
+
+## Scan — 2026-05-07 14:02
+
+- **Files scanned**: Dev sub-skills (triage-issues.md, implement-tasks.md), common improvement-scan.md
+- **Findings**: none — triage deterministic queue correct, implement-tasks flow clean, improvement-scan well-structured
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
