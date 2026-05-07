@@ -140,9 +140,13 @@ def _get_all_roles():
 
 
 def _get_clone_path(role):
-    """Get the clone root path for a role. Falls back to REPO_ROOT."""
+    """Get the clone root path for a role. Falls back to REPO_ROOT.
+
+    Returns str (not Path) so the value is JSON-serializable when stored
+    in AgentState and written to .harness-state.json.
+    """
     local = _parse_local_config()
-    return local.get(role, REPO_ROOT)
+    return str(local.get(role, REPO_ROOT))
 
 
 # ---------------------------------------------------------------------------
@@ -302,27 +306,41 @@ def _read_health_file(clone_path, role):
 def _needs_boot(role):
     """Determine if an agent needs booting.
 
-    Simple: check .claude-pid — if process is alive, skip.
+    Checks (in order): .stop sentinel, .booting lock, .claude-pid, .pid.
     Returns (needs_boot, reason, clone_path).
     """
     clone_path = _get_clone_path(role)
 
-    # Read .claude-pid (written by thin_launcher)
+    # .stop sentinel — agent was explicitly stopped (harness fallback)
+    stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"
+    if stop_file.exists():
+        return False, ".stop sentinel present", str(clone_path)
+
+    # .booting sentinel — another boot is already in progress
+    if _has_booting_sentinel(clone_path, role):
+        return False, "boot already in progress", str(clone_path)
+
+    # Primary: .claude-pid (written by thin_launcher)
     pid_file = Path(clone_path) / ".squidsquad" / role / ".claude-pid"
     if pid_file.exists():
         try:
             pid = int(pid_file.read_text(encoding="utf-8").strip())
             if _is_process_alive(pid):
-                return False, f"already running (PID {pid})", str(clone_path)
+                return False, f"alive (PID {pid})", str(clone_path)
+            else:
+                return True, f"dead (PID {pid})", str(clone_path)
         except (ValueError, OSError):
             pass
 
-    # Fallback: check legacy .pid file
+    # Fallback: legacy .pid file
     pid = _read_pid_file(clone_path, role)
-    if pid and _is_process_alive(pid):
-        return False, f"already running (PID {pid})", str(clone_path)
+    if pid:
+        if _is_process_alive(pid):
+            return False, f"alive (PID {pid})", str(clone_path)
+        else:
+            return True, f"dead (PID {pid})", str(clone_path)
 
-    return True, "not running", str(clone_path)
+    return True, "no PID file found", str(clone_path)
 
 
 # ---------------------------------------------------------------------------
@@ -520,9 +538,20 @@ def boot_agent(role, dry_run=False):
         result["message"] = f"would boot: {reason}"
         return result
 
+    # Boot lock — claim the slot (#3347)
+    if not _write_booting_sentinel(clone_path, role):
+        result["action"] = "skip"
+        result["success"] = True
+        result["message"] = "another boot in progress"
+        return result
+
+    # Clean stale .restart sentinel (#3349)
+    _clean_stale_restart(clone_path, role)
+
     # Find boot script
     boot_script, script_type = _find_boot_script(clone_path, role)
     if boot_script is None:
+        _clear_booting_sentinel(clone_path, role)
         result["message"] = (
             f"no boot script found at {clone_path}/.squidsquad/start-{role}.[sh|ps1]\n"
             f"Manual boot: cd {clone_path} && claude -p .squidsquad/{role}/CLAUDE.md"
@@ -534,6 +563,10 @@ def boot_agent(role, dry_run=False):
     result["action"] = "spawn"
     result["success"] = success
     result["message"] = msg
+
+    # Clear sentinel on failure (on success, thin_launcher clears it)
+    if not success:
+        _clear_booting_sentinel(clone_path, role)
 
     return result
 
