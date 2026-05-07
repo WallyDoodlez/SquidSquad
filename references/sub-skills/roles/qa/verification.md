@@ -17,20 +17,57 @@ Log results in `qa/qa-log.md`:
 - **Notes**: [anything notable]
 ```
 
-### Step 3 — Investigate and File Issues From Test Failures
+### Step 3 — Investigate and Route Findings
 
 Print: `[🦑 HH:MM:SS] Investigating test failures...` (or skip if no failures)
 
-For each test failure:
+#### Finding Routing Process
 
-1. Determine which agent's domain the failure is in.
-2. Check if an issue already exists: `python references/scripts/tracker.py list-by-labels "type:issue,squidsquad"` and search output for keywords. If found, comment on the existing issue — do not duplicate.
-3. If new and the failure is **objective** (clear test pass/fail, crash, error):
-   - File immediately: `python references/scripts/tracker.py create-issue --title "[title]" --body "[description with test evidence]" --role [target-role] --severity [high|medium|low] --reporter qa`
-4. If the finding is **subjective** (coherence issue, style concern, design inconsistency):
-   - Flag for human review via PM: `python references/scripts/tracker.py comment [NUMBER] --role qa --message "Subjective finding flagged for PM/human review: [description]"`
-   - Do NOT file an issue yet — PM and human decide.
-5. If the failure spans multiple domains: file in each relevant role with cross-linking comments.
+For each finding (test failure, gap, or defect discovered during verification):
+
+**Step 3a — Classify the finding:**
+
+Determine the finding category to identify the responsible role:
+- **Implementation defect** (code bug, wrong behavior, crash): Route to the dev role that built it. Check the `role:*` label on the issue to identify the implementer.
+- **Specification/AC gap** (acceptance criteria ambiguous, missing, or contradictory): Route to PM — PM owns specs and acceptance criteria.
+- **Design defect** (UI/UX issue, visual mismatch, interaction problem): Route to designer if present (check config.md Dev Agents), otherwise PM.
+- **Test infrastructure issue** (test environment broken, missing dependency): Route to the role that owns the test infrastructure, or flag as `blocked:human-action`.
+
+**Step 3b — Check for duplicates:**
+
+```bash
+python references/scripts/tracker.py list-by-labels "type:issue,squidsquad"
+```
+Search output for keywords matching this finding. If a matching issue exists, comment on it — do not duplicate.
+
+**Step 3c — Document and file:**
+
+Every finding must include structured evidence:
+
+```
+**Finding**: [what is wrong — specific and testable]
+**Evidence**: [test output, file:line, command that reproduces it]
+**Category**: [implementation defect | spec gap | design defect | test infra]
+**Routed to**: [role] — [why this role is responsible]
+```
+
+- If **objective** (clear pass/fail, crash, error): File immediately with the structured format above.
+  ```bash
+  python references/scripts/tracker.py create-issue --title "[title]" --body "[structured finding]" --role [target-role] --severity [high|medium|low] --reporter qa
+  ```
+- If **subjective** (coherence issue, style concern, architectural question): Flag for PM/human review. Do NOT file an issue — PM and human decide.
+  ```bash
+  python references/scripts/tracker.py comment [NUMBER] --role qa --message "Subjective finding flagged for PM/human review: [structured description]"
+  ```
+- If **ownership unclear**: Escalate to PM. PM is always present and owns coordination.
+- If the finding **spans multiple domains**: File to the primary responsible role, cross-reference others in comments.
+
+**Step 3d — Record on PR (if PR flow enabled):**
+
+If the finding relates to a PR, also post the structured finding as a PR comment for inline review context:
+```bash
+gh pr comment [PR_NUMBER] --body "## QA Finding\n\n[structured finding from 3c]"
+```
 
 ### Step 4 — Verify Fixed Issues
 
