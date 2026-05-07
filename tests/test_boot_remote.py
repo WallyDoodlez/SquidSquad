@@ -127,7 +127,7 @@ class TestNeedsBoot:
         (tmp_path / ".squidsquad" / "skill").mkdir(parents=True)
         needs, reason, _ = boot_remote._needs_boot("skill")
         assert needs is True
-        assert "no PID" in reason
+        assert "no PID" in reason or "not running" in reason
 
     @patch("boot_remote._is_process_alive", return_value=True)
     @patch("boot_remote._get_clone_path")
@@ -200,29 +200,22 @@ class TestReadHealthFileHeartbeat:
 
 
 class TestNeedsBootHeartbeat:
-    @patch("boot_remote._get_clone_path")
-    def test_recent_heartbeat_is_alive(self, mock_clone, tmp_path):
-        """Recent heartbeat epoch (within 15s) means agent is alive."""
-        mock_clone.return_value = tmp_path
-        squid = tmp_path / ".squidsquad" / "skill"
-        squid.mkdir(parents=True)
-        # Write current epoch
-        (squid / ".health").write_text(str(int(time.time())), encoding="utf-8")
-        needs, reason, _ = boot_remote._needs_boot("skill")
-        assert needs is False
-        assert "alive" in reason
+    """Heartbeat (.health) is no longer checked by _needs_boot per #4966.
+    PID-based detection is primary. These tests verify the helper function
+    still works (tested in TestReadHealthFileHeartbeat above), and that
+    _needs_boot correctly falls through to PID checks when .health exists.
+    """
 
     @patch("boot_remote._get_clone_path")
-    def test_stale_heartbeat_needs_boot(self, mock_clone, tmp_path):
-        """Stale heartbeat epoch (older than 15s) means agent is dead."""
+    def test_heartbeat_alone_does_not_prevent_boot(self, mock_clone, tmp_path):
+        """A .health file alone (no PID file) still triggers boot needed."""
         mock_clone.return_value = tmp_path
         squid = tmp_path / ".squidsquad" / "skill"
         squid.mkdir(parents=True)
-        # Write epoch from 60s ago
-        (squid / ".health").write_text(str(int(time.time()) - 60), encoding="utf-8")
+        # Write current epoch — but no PID file
+        (squid / ".health").write_text(str(int(time.time())), encoding="utf-8")
         needs, reason, _ = boot_remote._needs_boot("skill")
-        assert needs is True
-        assert "stale" in reason
+        assert needs is True  # PID-based detection is primary per #4966
 
 
 class TestReadPidFileUtf16:
