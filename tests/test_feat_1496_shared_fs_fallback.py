@@ -106,7 +106,7 @@ class TestSharedFsFallback:
         assert exc_info.value.code == 2
 
     def test_get_clone_path_falls_back_to_repo_root(self):
-        """#1496: _get_clone_path returns REPO_ROOT when role not in config."""
+        """#1496: _get_clone_path returns REPO_ROOT (as str) when role not in config."""
         with patch.object(boot_remote, "_parse_local_config", return_value={}):
             result = boot_remote._get_clone_path("unknown_role")
-        assert result == boot_remote.REPO_ROOT
+        assert result == str(boot_remote.REPO_ROOT)
