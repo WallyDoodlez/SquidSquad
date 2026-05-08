@@ -130,3 +130,10 @@
 {"timestamp": 1778190829.244077, "task_type": "research", "task_id": "FEAT-PM-5932", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 16555, "elapsed_seconds": 322.5}
 {"timestamp": 1778246359.731334, "task_type": "research", "task_id": "FEAT-PM-6055", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 16573, "elapsed_seconds": 297.2}
 {"timestamp": 1778275804.8026972, "task_type": "research", "task_id": "FEAT-PM-6126", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 17370, "elapsed_seconds": 320.6}
+{"timestamp": 1778279561.1899607, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778279561.1899607, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778279561.1899607, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778279618.339457, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778279618.339457, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778279618.339457, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778279631.7178767, "task_type": "code-review", "task_id": "#6138", "model": "claude", "action": "delegate-to-agent-tool"}
