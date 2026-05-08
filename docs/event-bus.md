@@ -139,6 +139,32 @@ For example, DM only cares about status transitions (to catch pending-ship items
 
 ---
 
+## Event Contracts — Compose-Time Configuration
+
+Event filtering and reactions are not hardcoded — they are **derived at compose time**. When you run `compose.py deploy-all`, the system reads each role's L1-L4 instructions and automatically generates an event contract in `config.md` under `## Event Reactions`.
+
+```mermaid
+flowchart LR
+    L1["L1-L4<br/>Instructions"] -->|compose.py| CONTRACT["Event Contract<br/>(config.md)"]
+    CONTRACT -->|cycle_pre.py| FILTER["Runtime<br/>Filtering + Reactions"]
+```
+
+You never write event configuration manually. The compose step figures out:
+- **What events each role emits** and when
+- **What events each role reacts to** and what action to take
+
+If the `## Event Reactions` section is missing (fresh install, pre-compose), agents fall back to hardcoded defaults — zero behavior change. The first `compose.py deploy-all` populates it automatically.
+
+After composing, a **cross-agent validator** checks the full bus wiring:
+- Every emitted event has at least one consumer
+- No contradictory reactions between agents
+- No circular reaction chains
+- Complete workflow coverage (no silent gaps)
+
+Validation failures are warnings, not blockers — agents gracefully degrade to cycle polling.
+
+---
+
 ## Mechanical Reactions vs. Creative Decisions
 
 When an agent reads events, some patterns are so predictable that the system handles them automatically. Others require the agent's judgment.
