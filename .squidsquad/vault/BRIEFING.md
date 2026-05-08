@@ -5,10 +5,10 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Active Priorities
 
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — awaiting human greenlight
-- #5932 L2 external code review loop (planned, high, role:skill) — awaiting approval, depends on #6057
-- #6055 Enforce role separation PM/QA/DM (pending, high, role:skill)
-- #6056 Replace /loop with event-driven Monitor tool (pending, medium, role:skill) — after #5932/#6055
-- #6057 Add in-progress → planning transition (open, high, role:skill) — prerequisite for #5932
+- #6056 Replace /loop with event-driven Monitor tool (pending, medium, role:skill) — next after #6086/#6087
+- #6085 Event bus architecture docs (approved, medium, role:dm) — DM working
+- #6086 L1: issue/PR context descriptions (open, medium, role:skill) — hold lifted
+- #6087 L2: status line redesign (pending, medium, role:skill) — needs approval to plan
 - #5855 Vault is static decision log, not living memory (pending, high, role:skill)
 - #3963 EPIC: Web dashboard — Harness Phase 4 (pending, high, role:skill) — depends on #5622
 - #5783 L3: bug investigation boundary — PM symptoms, dev RCA (pending, medium, role:skill)
@@ -24,7 +24,10 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #5159 Status bar shows agent 'awaiting restart' state from harness intent API (pending, low)
 ## Recently Shipped
 
-- #5868 Event consumption sub-skill — compose-time reaction config (shipped)
+- #6055 Enforce role separation — PM/QA/DM mandatory (shipped)
+- #5932 L2 external code review loop (shipped)
+- #6057 State machine in-progress → planning (shipped)
+- #5868 Event consumption sub-skill (shipped)
 - #6000 Harness Ctrl+C fix (shipped)
 - #6007 QA L2 finding routing (shipped)
 - #5888 /squidsquad-compose skill (shipped)
