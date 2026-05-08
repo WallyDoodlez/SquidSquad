@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-08 18:10
+
+- **Files scanned**: references/scripts/tracker.py, references/scripts/wizard.py, references/scripts/cycle_pre.py
+- **Findings**: #6138 (cycle_pre.py duplicate _validate_config_version definition — lines 181 and 220 are identical — low)
+- **Items rejected by human**: none yet
+- **Notes**: tracker.py clean — comprehensive guards, no new issues. wizard.py has redundant local `import shutil` at line 1065 (already imported at module level) — cosmetic, not filed. cycle_pre.py has duplicate function from likely bad merge.
+
 ## Scan — 2026-05-06 07:03
 
 - **Files scanned**: references/scripts/harness.py, references/sub-skills/common/cycle-runner.md, references/roles/dm/SOUL.md
