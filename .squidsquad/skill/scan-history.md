@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-08 19:32
+
+- **Files scanned**: references/scripts/compose.py, references/scripts/boot_remote.py, references/scripts/config.py
+- **Findings**: none (2 previously-seen minor items: compose.py dead `prefix` var in _resolve_includes_with_manifest — noted 2026-04-26 as too minor; boot_remote.py duplicate PM regex check lines 126+135 — noted 2026-05-06 as harmless dedup)
+- **Items rejected by human**: none yet
+- **Notes**: config.py clean (603 lines). All 3 files have test coverage.
+
 ## Scan — 2026-05-08 18:10
 
 - **Files scanned**: references/scripts/tracker.py, references/scripts/wizard.py, references/scripts/cycle_pre.py
