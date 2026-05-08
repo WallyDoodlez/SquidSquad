@@ -186,6 +186,57 @@
 
 ---
 
+### TC-16: Reactive pull on pr-merged — agent pulls after current task
+
+- **Precondition**: Harness running. An agent (e.g. skill) is active with a current task in-progress. A PR is merged via POST /merge.
+- **Steps**:
+  1. Confirm agent is mid-task (check `current-state` file shows active work).
+  2. POST to `/merge` with a valid PR.
+  3. Wait for `pr-merged` event.
+  4. Observe agent behavior: does it interrupt mid-task? Does it pull after task completes?
+  5. Check agent's next `cycle-input.json` for evidence of reactive pull.
+- **Expected**: Agent does NOT interrupt mid-task. After the current task completes (next between-task boundary), agent runs `git pull`. The pull happens before starting the next task, not at the next 30-min cycle boundary. `cycle_pre.py` pull remains as fallback but the reactive pull fires first.
+- **Verification**: Agent's git log shows a pull within minutes of the merge, not at the next 30-min cycle. No mid-task interruption observed (agent's current-state transitions normally through its task).
+
+---
+
+### TC-17: Reactive pull — cycle_pre.py pull still works as fallback
+
+- **Precondition**: An agent running without harness event bus (simulating missed event). A merge has happened on main.
+- **Steps**:
+  1. Merge a commit directly to main (bypassing harness — simulates missed event).
+  2. Wait for the agent's next cycle to trigger via /loop.
+  3. Check that cycle_pre.py runs git pull and picks up the new commit.
+- **Expected**: cycle_pre.py pull detects the new commit and pulls it. The fallback path still works even when events are missed.
+- **Verification**: `cycle-input.json` shows `pull_result: "ok"` and agent has the latest commit.
+
+---
+
+### TC-18: Harness reboots affected agents after compose
+
+- **Precondition**: Harness running. All agents alive. A PR that touches `references/sub-skills/roles/skill/` is ready to merge.
+- **Steps**:
+  1. Record all agents' PIDs.
+  2. POST to `/merge` with the PR.
+  3. Wait for `pr-merged` then `compose-completed` events.
+  4. Wait up to 60s for harness to reboot affected agents.
+  5. Check PIDs and harness state.
+- **Expected**: After compose completes, harness determines that skill's CLAUDE.md changed. Harness sets skill's intent to `restarting`. Skill agent completes current cycle and exits. Harness respawns skill with new templates. Other agents (pm, qa, dm) are NOT rebooted if their templates didn't change.
+- **Verification**: Skill's PID changes (new process). PM/QA/DM PIDs unchanged (unless their templates also changed). `.harness-state.json` shows skill went through `restarting` → `running`. `compose-completed` event payload includes `affected_roles` list.
+
+---
+
+### TC-19: Harness reboot — only affected agents restart
+
+- **Precondition**: Harness running. A PR that touches only `references/sub-skills/shared/` (affecting all roles) vs one that touches only `references/sub-skills/roles/dm/` (affecting only DM).
+- **Steps**:
+  1. Merge a PR touching only DM-specific sub-skills via POST /merge.
+  2. After compose, check which agents were rebooted.
+- **Expected**: Only DM is rebooted. PM, QA, Skill remain running. Harness compares composed CLAUDE.md/SOUL.md before and after compose to determine affected roles.
+- **Verification**: Only DM's PID changes. Other agents' PIDs unchanged. Harness logs show "affected roles: [dm]".
+
+---
+
 ## Smoke Tests
 
 - [ ] `curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": 1, "branch": "test", "role": "qa"}'` returns `202`
@@ -197,6 +248,8 @@
 - [ ] `grep "compose-completed" references/scripts/cycle_pre.py` returns at least one match
 - [ ] `grep "pr-merged" references/scripts/event_catalog.py` returns at least one match
 - [ ] `grep "compose-completed" references/scripts/event_catalog.py` returns at least one match
+- [ ] After a merge touching references/, only affected agents reboot (check PIDs)
+- [ ] Agent pulls within minutes of a pr-merged event, not waiting for next 30-min cycle
 
 ---
 

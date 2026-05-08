@@ -2,15 +2,19 @@
 
 ## Scope
 
-Move PR merge execution and post-merge compose from agents to the harness. Agents request merges via REST endpoint, harness executes merge + conditional compose, emits events back.
+Move PR merge execution and post-merge compose from agents to the harness. Agents request merges via REST endpoint, harness executes merge + conditional compose + reboot of affected agents. Agents react to pr-merged events by pulling after their current task completes. The Ralph Loop becomes a lightweight health/logging loop — events drive code freshness, not polling.
 
 ## Locked Decisions (human decided)
 
 - **Dedicated POST /merge endpoint**: Clean REST semantics, not event interception. Harness still emits request-merge event for audit trail
-- **Async — 202 Accepted**: Return immediately. Emit pr-merged and compose-completed events when done. Agent sees them next cycle
+- **Async — 202 Accepted**: Return immediately. Emit pr-merged and compose-completed events when done
 - **Full payload on pr-merged**: PR number, branch, issue number, files_changed. Maximum context for agents
 - **Auto-compose always-on**: If merged files touch references/, compose runs. No config flag. No way to forget or disable
-- **Harness merges from primary repo**: Not from agent clones. GitHub handles merge server-side via `gh pr merge`. Agents get changes on next git pull
+- **Harness merges from primary repo**: Not from agent clones. GitHub handles merge server-side via `gh pr merge`
+- **Harness owns the full chain**: Merge → compose (if references/ touched) → reboot affected agents. Agents don't detect template changes — harness handles restart
+- **Reactive pull on pr-merged**: Agents react to pr-merged event by queuing a git pull to run right after their current task completes (not mid-task interruption). Agents get updated code within minutes of a merge, not waiting up to 30 min
+- **Cycle_pre.py pull kept as fallback**: The pull in cycle_pre.py stays in case an event is missed. Events handle the normal case, cycle handles the fallback
+- **Ralph Loop becomes lightweight**: The /loop cycle continues for health tracking, logging, and iteration bookkeeping. Events drive code freshness and work pickup, not the polling loop
 
 ## Dev Discretion (dev agent can choose)
 
