@@ -1,35 +1,29 @@
 # Working State
 
-- **Task**: #5868
+- **Task**: #5932
 - **Status**: in-progress
-- **Started**: 2026-05-07 01:32
-- **Last Processed Event ID**: d227e7dd
+- **Started**: 2026-05-08 08:32
+- **Last Processed Event ID**: bb4971bc
 
 ## Completed Steps
-- Read issue body (10 ACs, 23 TCs)
 - Read CONTEXT.md (locked decisions, dev discretion)
-- Checked out feature branch squidsquad/task/5868
-- Transitioned to in-progress
+- Checked out feature branch squidsquad/task/5932
 
 ## Remaining Steps
-- Read RESEARCH.md and TEST-PLAN.md for full context
-- AC-1: Emission Catalog (three-tier Python module)
-- AC-2: Config.md Event Reactions Section (format + config.py parsing)
-- AC-5: cycle_pre.py refactoring (read from config, hardcoded fallback)
-- AC-4: Cross-Agent Validation (deterministic validator)
-- AC-6: event-reactions.md sub-skill
-- AC-3: LLM Derivation (compose.py integration with Claude CLI)
-- AC-7: Graceful Degradation & Rollback Safety
-- AC-8: End-to-End Integration
-- AC-9: Side Effect Mitigations
-- AC-10: All Deployment Scenarios
-- Run full test suite
-- Post setup/upgrade sync check
-- Transition to pending-test
+- Read full issue body for ACs
+- Add config.md `Code Review Model` field to config.py FIELD_MAP
+- Add `code-review` task type to model_router.py
+- Create prompt template references/prompts/code-review.md.j2
+- Add external code review step to implement-tasks.md (between 9b and 10)
+- Implement disposition tracking (PR comments)
+- Implement file-to-PM rejection path (in-progress → planning)
+- Implement loop cap (5 iterations) with escalation
+- Implement fallback to Claude Agent when external model unavailable
+- Run tests, post sync check, transition to pending-test
 
 ## Key Decisions
-- Implementation order: catalog → config → cycle_pre → validation → sub-skill → derivation (recommended in CONTEXT.md)
-- Mechanical emissions stay hardcoded in scripts (locked decision)
-- Config-driven emission is out of scope (locked decision)
-- Three-tier authority model: emitted, recognized, unknown (locked decision)
-- review:human-required on PR — manual merge needed
+- L2 — applies to all projects
+- Model configurable via config.md, default `claude`
+- Loop cap hardcoded at 5
+- File-to-PM = full re-plan (in-progress → planning via #6057)
+- Dispositions: fix, file-to-pm, justified-ignore
