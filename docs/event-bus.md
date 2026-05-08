@@ -68,30 +68,37 @@ The key design: **emitting never blocks** (500ms timeout, silent on failure) and
 
 ## Event Types
 
-Agents emit these events during normal operations:
+The event catalog uses a **three-tier model** to classify events:
 
-### Work Coordination
+- **Emitted** — actively produced by mechanical scripts during normal operations. These fire automatically whenever the triggering action occurs.
+- **Recognized** — agents can subscribe and react to these, but they are emitted by the agent's creative phase (not mechanical scripts). They require the agent to explicitly emit them as part of its reasoning.
+- **Unknown** — any event type not in the catalog. Silently ignored by the system.
 
-| Event | Emitted By | When | What It Tells Other Agents |
-|-------|-----------|------|---------------------------|
+This distinction matters because emitted events are guaranteed (the script always fires them) while recognized events depend on agent judgment (the agent decides when to emit them).
+
+### Emitted Events (Mechanical)
+
+| Event | Source Script | When | What It Tells Other Agents |
+|-------|-------------|------|---------------------------|
 | `status-transition` | tracker.py | Any status label change | "Issue #42 moved from pending-test to pending-ship" |
 | `tracker-comment` | tracker.py | A comment is posted on an issue | "QA commented on #42 — mentioned skill agent" |
 | `pr-merge` | git_ops.py | A PR is merged | "PR #99 was merged — related issue can ship" |
 | `pr-create` | git_ops.py | A PR is opened | "New PR #99 for review" |
-| `verification-failed` | QA | QA rejects work | "Issue #42 failed verification — dev needs to rework" |
-| `verification-passed` | QA or PM | QA/PM approves work | "Issue #42 passed verification — ready to ship" |
-| `agent-health` | QA | Agent health observation | "Skill agent hasn't cycled in 45 minutes" |
-
-### Lifecycle
-
-| Event | Emitted By | When | What It Tells Other Agents |
-|-------|-----------|------|---------------------------|
+| `git-commit` | git_ops.py | Agent creates a commit | "Skill committed code changes" |
+| `git-push` | git_ops.py | Agent pushes changes | "New commits on main from skill" |
+| `git-pull` | git_ops.py | Agent pulls latest | "Skill agent synced with remote" |
 | `cycle-start` | cycle_pre.py | Agent begins a cycle | "Skill agent started cycle 862" |
 | `cycle-end` | cycle_post.py | Agent finishes a cycle | "Skill agent finished — quiet cycle" |
-| `git-pull` | git_ops.py | Agent pulls latest | "Skill agent synced with remote" |
-| `git-push` | git_ops.py | Agent pushes changes | "New commits on main from skill" |
-| `git-commit` | git_ops.py | Agent creates a commit | "Skill committed code changes" |
 | `branch-checkout` | git_ops.py | Agent switches branches | "Skill checked out task/5868" |
+
+### Recognized Events (Agent-Emitted)
+
+| Event | Typical Emitter | When | What It Tells Other Agents |
+|-------|----------------|------|---------------------------|
+| `verification-failed` | QA or PM | QA/PM rejects work | "Issue #42 failed verification — dev needs to rework" |
+| `verification-passed` | QA or PM | QA/PM approves work | "Issue #42 passed verification — ready to ship" |
+| `agent-health` | QA | Agent health observation | "Skill agent hasn't cycled in 45 minutes" |
+| `phase-change` | PM or harness | Task lifecycle phase change | "Issue #42 moved from planning to execution" |
 
 ### Event Format
 
@@ -129,16 +136,16 @@ graph TD
     EVENTS --> SKILL_FILTER["Skill Filter"]
     EVENTS --> DM_FILTER["DM Filter"]
 
-    PM_FILTER --> PM_EVENTS["agent-health<br/>pr-merge<br/>status-transition<br/>tracker-comment<br/>verification-failed/passed"]
+    PM_FILTER --> PM_EVENTS["agent-health<br/>phase-change<br/>pr-merge<br/>status-transition<br/>tracker-comment<br/>verification-failed/passed"]
 
-    QA_FILTER --> QA_EVENTS["status-transition"]
+    QA_FILTER --> QA_EVENTS["agent-health<br/>status-transition"]
 
-    SKILL_FILTER --> SKILL_EVENTS["status-transition<br/>tracker-comment<br/>verification-failed/passed"]
+    SKILL_FILTER --> SKILL_EVENTS["cycle-start/end<br/>status-transition<br/>tracker-comment<br/>verification-failed"]
 
-    DM_FILTER --> DM_EVENTS["status-transition<br/>tracker-comment<br/>verification-passed"]
+    DM_FILTER --> DM_EVENTS["agent-health<br/>pr-merge<br/>status-transition<br/>verification-passed"]
 ```
 
-For example, DM cares about status transitions (to catch pending-ship items), tracker comments (to read delivery notes), and verification signals. QA has the tightest filter — it only watches status transitions to know when work is ready for verification. PM has the widest view because it coordinates the whole pipeline.
+PM has the widest filter because it coordinates the whole pipeline — it needs health alerts, phase changes, PR merges, status transitions, comments, and verification results. QA watches agent health and status transitions to know when work is ready for verification. Skill watches for cycle signals, comments mentioning it, and verification failures that mean rework. DM watches for status transitions (to catch pending-ship items), PR merges, health alerts, and verification signals.
 
 ---
 
@@ -283,7 +290,8 @@ If the port file doesn't exist (harness not running), all event operations silen
 The event bus is actively evolving. Planned enhancements:
 
 - **Event-driven agent scheduling** (#6056) — replace timer-based `/loop` with harness-driven wake signals, so agents only cycle when there's work. Hybrid model: harness emits timer events, agents subscribe to relevant triggers. Significant token savings for quiet periods.
-- **Additional event types** (#5613) — `phase-change` signals for agent state transitions, richer payload data for existing events.
+- **Harness-owned PR merge + compose** (#6126) — centralize PR merge and template recomposition in the harness, enabling new event types like `request-merge` and `compose-completed`.
+- **Additional event types** (#5613) — richer payload data for existing events and new domain-specific signals.
 
 ---
 
