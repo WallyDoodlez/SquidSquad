@@ -61,8 +61,8 @@ Entry file with includes. PM's `SOUL.md` sits alongside its `CLAUDE.md` and is c
 2. `common/cycle-runner` — Cycle runner transport layer
 3. `common/context-pressure` — Context pressure check
 4. `roles/pm/checkin` — Step 2: human check-in and input handling
-5. `roles/pm/testing-and-verification` — Steps 3-6c: E2E, investigate, verify issues/tasks, ship counter
-6. `roles/pm/delivery-fallback` — Step 6d: PM delivery when DM absent
+5. `roles/pm/testing-and-verification` — Steps 3-6c: QA handles verification (PM delegates)
+6. `roles/pm/delivery-fallback` — Delivery: DM handles all delivery (PM delegates)
 7. `roles/pm/post-merge-recompose` — Step 6e: recompose after branch merge
 8. `roles/pm/pipeline-sentinel` — Step 6f: pipeline health (conflict, stall, PR sync)
 9. `roles/pm/own-domain-autofix` — Auto-fix own-domain mechanical issues
@@ -212,7 +212,7 @@ references/sub-skills/
 │   ├── post-merge-recompose.md    (Step 6e — recompose after branch merge)
 │   ├── task-intake.md              (5-phase lifecycle + Open Artifacts)
 │   ├── task-approval.md            (Feature Approval Gate)
-│   ├── delivery-fallback.md           (Step 6d — PM delivery when DM absent)
+│   ├── delivery-fallback.md           (Delivery — DM handles all delivery)
 │   ├── discussion-protocol.md        (Discussion — pm/qa alias)
 │   ├── issue-filing.md                 (Bug Filing Protocol)
 │   ├── file-conventions.md           (PM file conventions)

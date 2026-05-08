@@ -80,7 +80,7 @@ The script handles: status transitions, tracker comments, iteration logging, git
 - `human_input_processed`: summary of human input handled
 - `issues_filed`, `issues_verified`, `tasks_verified`, `tasks_shipped`
 - `external_issues_triaged`, `health_alerts`, `vault_writes`
-- `version_bump`: `{new_version, items_included}` — if DM absent
+- `version_bump`: `{new_version, items_included}` — deprecated (DM always present)
 
 **QA** cycle-output extras:
 - `e2e_log`: `{result, tests_run, failures}`
