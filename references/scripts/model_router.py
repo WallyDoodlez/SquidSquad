@@ -141,6 +141,7 @@ def get_model_for_task(task_type):
         "improvement-scan": "improvement-scan-model",
         "qa-execution": "qa-execution-model",
         "comprehension": "comprehension-model",
+        "code-review": "code-review-model",  # #5932
     }
 
     key = key_map.get(task_type, f"{task_type}-model")
@@ -535,6 +536,7 @@ def _load_prompt_template(task_type):
         "discussion-prep": "discussion-prep.md.j2",
         "test-plan": "test-plan.md.j2",
         "improvement-scan": "improvement-scan.md.j2",
+        "code-review": "code-review.md.j2",  # #5932
     }
     filename = template_map.get(task_type)
     if not filename:
@@ -989,7 +991,7 @@ def main():
         "route", help="Route a subagent task to an external model",
         aliases=[
             "research", "discussion-prep", "test-plan",
-            "improvement-scan", "qa-execution", "comprehension",
+            "improvement-scan", "qa-execution", "comprehension", "code-review",
         ],
     )
     route_parser.add_argument(
@@ -1032,7 +1034,7 @@ def main():
         sys.exit(code)
     elif args.command in (
         "route", "research", "discussion-prep", "test-plan",
-        "improvement-scan", "qa-execution", "comprehension",
+        "improvement-scan", "qa-execution", "comprehension", "code-review",
     ):
         task_type = args.command if args.command != "route" else args.task_type
         code = route(task_type, args.task_id, args.input_files, args.output_file, args.context)
