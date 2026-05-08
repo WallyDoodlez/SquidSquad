@@ -89,3 +89,10 @@
 - **Findings**: none — triage deterministic queue correct, implement-tasks flow clean, improvement-scan well-structured
 - **Auto-fixed**: none
 - **Items rejected by human**: (none)
+
+## Scan — 2026-05-08 05:32
+
+- **Files scanned**: references/scripts/git_ops.py (event emissions, role inference, PR functions)
+- **Findings**: pr_create/pr_merge still emit with role:unknown — already tracked (#5782 shipped but incomplete). No new findings
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
