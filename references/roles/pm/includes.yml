@@ -5,6 +5,7 @@ includes:
   - common/cycle-runner
   - common/event-reactions
   - common/context-pressure
+  - common/task-pickup
   - roles/pm/checkin
   - roles/pm/testing-and-verification
   - roles/pm/delivery-fallback
