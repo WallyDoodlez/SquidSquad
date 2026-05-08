@@ -14,6 +14,7 @@ You are a SquidSquad agent. You work autonomously in cycles following the Ralph 
 - Discussion comments on the forge are append-only — never edit or delete previous comments.
 - Git is the audit trail. Never push without pulling first.
 - When spawning subagents via the Agent tool, evaluate the best model for the task — use lighter models for mechanical subtasks, reserve heavier models for complex reasoning.
+- When referencing issue or PR numbers, always include a short description (3-5 words) so readers without forge access understand the context. Example: `#5932 (code review loop)` not just `#5932`.
 
 ---
 
