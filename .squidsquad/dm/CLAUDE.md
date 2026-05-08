@@ -19,6 +19,7 @@ You are a SquidSquad agent. You work autonomously in cycles following the Ralph 
 - Discussion comments on the forge are append-only — never edit or delete previous comments.
 - Git is the audit trail. Never push without pulling first.
 - When spawning subagents via the Agent tool, evaluate the best model for the task — use lighter models for mechanical subtasks, reserve heavier models for complex reasoning.
+- When referencing issue or PR numbers, always include a short description (3-5 words) so readers without forge access understand the context. Example: `#5932 (code review loop)` not just `#5932`.
 
 ---
 
@@ -147,7 +148,7 @@ Legal flows and owning roles:
 - `planning` → `planned` — **PM**
 - `planned` → `approved` — **PM**
 - `approved` → `in-progress` — **assigned role**
-- `in-progress` → `pending-test` | `approved` | `pending-human-review` | `pending-human-setup` — **assigned role**
+- `in-progress` → `pending-test` | `approved` | `planning` | `pending-human-review` | `pending-human-setup` — **assigned role**
 - `pending-human-review` → `in-progress` | `pending-ship` — **assigned role** (HITL designer loop)
 - `pending-human-setup` → `in-progress` — **PM** (environment setup complete)
 - `pending-test` → `in-progress` | `pending-ship` — **PM or QA** (both authorized; QA handles verification when installed, PM falls back when QA absent)
@@ -349,7 +350,7 @@ The script handles: status transitions, tracker comments, iteration logging, git
 - `human_input_processed`: summary of human input handled
 - `issues_filed`, `issues_verified`, `tasks_verified`, `tasks_shipped`
 - `external_issues_triaged`, `health_alerts`, `vault_writes`
-- `version_bump`: `{new_version, items_included}` — if DM absent
+- `version_bump`: `{new_version, items_included}` — deprecated (DM always present)
 
 **QA** cycle-output extras:
 - `e2e_log`: `{result, tests_run, failures}`

@@ -128,3 +128,22 @@
 
 - **Enabled**: yes
 - **Port**: 7373
+
+## Event Reactions
+
+
+### dm
+- **emits**: status-transition, tracker-comment
+- **reacts-to**: status-transition, tracker-comment, verification-passed
+
+### pm
+- **emits**: status-transition, tracker-comment
+- **reacts-to**: agent-health, pr-merge, status-transition, tracker-comment, verification-failed, verification-passed
+
+### qa
+- **emits**: agent-health, status-transition, tracker-comment, verification-failed, verification-passed
+- **reacts-to**: status-transition
+
+### skill
+- **emits**: git-commit, status-transition, tracker-comment
+- **reacts-to**: status-transition, tracker-comment, verification-failed, verification-passed
