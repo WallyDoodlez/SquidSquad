@@ -1156,16 +1156,29 @@ def main():
     ctrl_c = CtrlCHandler()
     signal.signal(signal.SIGINT, ctrl_c.handle)
 
-    # Run uvicorn
+    # Run uvicorn in a daemon thread so the main thread stays available
+    # for signal handling. On Windows, signal handlers set via
+    # signal.signal() only fire in the main thread — if uvicorn.run()
+    # blocks the main thread, Ctrl+C is never delivered to our handler.
+    config = uvicorn.Config(
+        app,
+        host="127.0.0.1",
+        port=actual_port,
+        log_level="warning",
+    )
+    server = uvicorn.Server(config)
+
+    server_thread = threading.Thread(target=server.run, daemon=True, name="uvicorn")
+    server_thread.start()
+
     try:
-        uvicorn.run(
-            app,
-            host="127.0.0.1",
-            port=actual_port,
-            log_level="warning",  # Suppress uvicorn access logs (harness has its own logging)
-        )
+        # Main thread waits — signal.signal handler fires here on Ctrl+C
+        while server_thread.is_alive():
+            server_thread.join(timeout=1.0)
     except KeyboardInterrupt:
         _log("Harness stopped.")
+        server.should_exit = True
+        server_thread.join(timeout=5)
     finally:
         # Ensure port file cleanup
         try:
