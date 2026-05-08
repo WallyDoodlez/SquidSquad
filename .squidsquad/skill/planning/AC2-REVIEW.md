@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 Now I have all the information needed. Here is the complete research document:
 
 ---
@@ -126,3 +127,8 @@ AC-2 of #5868 adds three functions to `references/scripts/config.py` (lines 207�
 - **Type**: decision — "Event contract validation is config-driven, not prose-driven" — **Why**: Per RESEARCH.md, the `Event Reactions` section is consumed mechanically by `cycle_pre.py` (Python script), not parsed by LLM agents from CLAUDE.md prose. This implements the deterministic-scripts-over-prose pattern at the config level, establishing that structured agent behavior declarations live in config.md, not in sub-skills.
 
 - **Type**: learning — "Graceful degradation requires distinguishing 'absent' from 'empty'" — **Why**: `get_event_filters_for_role` returns `None` for both "section missing" and "empty reacts_to list." This conflates two semantically different states. Future fallback-returning functions should use a three-way signal: absent (None), present-but-empty (empty collection), or present-with-data (filled collection).
+=======
+# STATUS: generating...
+# Task: FEAT-SKILL-5868-AC2-REVIEW
+# Model: deepseek-v4-pro
+>>>>>>> origin/main

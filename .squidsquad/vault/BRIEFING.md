@@ -5,7 +5,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Active Priorities
 
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — awaiting human greenlight
-- #5868 Event consumption sub-skill (pending, high, role:skill) — compose-time config
+- #5868 Event consumption sub-skill (pending-human-review, high, role:skill) — QA verified, PR #5994 awaiting human review. Validator cycles downgraded to warnings
 - #5855 Vault is static decision log, not living memory (pending, high, role:skill)
 - #3963 EPIC: Web dashboard — Harness Phase 4 (pending, high, role:skill) — depends on #5622
 - #5783 L3: bug investigation boundary — PM symptoms, dev RCA (pending, medium, role:skill)
@@ -19,8 +19,14 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #5170 L4 dev customization: DeepSeek code review before pending-test (pending, medium)
 - #5171 Harness loads config.md and serves configuration via REST endpoint (pending, medium)
 - #5159 Status bar shows agent 'awaiting restart' state from harness intent API (pending, low)
+- #5932 L2: External code review loop before pending-test (pending, high, role:skill)
+- #6000 Harness Ctrl+C does not trigger graceful shutdown (open, high, role:skill)
+- #6007 QA L2 finding routing lacks role-awareness (shipped/closed)
 
 ## Recently Shipped
+
+- #5888 /squidsquad-compose skill — single entry point for template composition (shipped)
+- #5915 WindowsPath JSON serialization fix (shipped) — v0.33.0
 
 - #5856 tracker.py status-transition events — bus now has real coordination signals (shipped)
 - #5622 EPIC Harness Phase 3: Agent communication bus — agents read events (shipped)
@@ -63,7 +69,8 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - Improvement scans capture up to 3 vault writes per scan (#5569)
 - Skill never edits composed CLAUDE.md — source templates only (#5557)
 - PM agent uses --effort max for extended thinking (#5573)
-- Harness owns all agent lifecycle — REST API intent (v0.32.0)
+- Harness owns all agent lifecycle — REST API intent (v0.33.0)
+- Compose is its own skill (/squidsquad-compose) — single entry point (#5888)
 
 ## Human Preferences
 
@@ -80,4 +87,4 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Team State
 
 - Active agents: pm, qa, skill, dm
-- Current version: 0.32.0
+- Current version: 0.33.0

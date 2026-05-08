@@ -3,3 +3,4 @@
 base_role: qa
 additional_includes:
   - roles/qa/skill/domain-context
+  - roles/qa/skill/finding-categories

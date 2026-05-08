@@ -97,7 +97,7 @@ def reboot(role, timeout=DEFAULT_TIMEOUT, force=False):
     (.pid). The wrapper stays alive, detects claude exit, reads .restart
     sentinel, and respawns claude automatically.
     """
-    clone_path = _get_clone_path(role)
+    clone_path = Path(_get_clone_path(role))
     squid = clone_path / ".squidsquad"
     pid_file = squid / role / ".pid"
     restart_file = squid / role / ".restart"

@@ -68,3 +68,24 @@
 - **Findings**:
   - #211 — Skill-lead phantom fix pattern (15 occurrences, HIGH)
 - **Items rejected by human**: (none yet)
+
+## Scan — 2026-05-07 09:02
+
+- **Files scanned**: SKILL.md, README.md (stale references to wrappers, old versions, pre-harness patterns)
+- **Findings**: none — both files correctly reference harness lifecycle, no stale wrapper refs
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-07 11:02
+
+- **Files scanned**: QA sub-skills (issue-filing.md, discussion-protocol.md, prohibitions.md, verification.md)
+- **Findings**: Confirmed #6007 covers the gaps — issue-filing too thin, no structured finding format, no routing process. No additional findings beyond #6007
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-07 14:02
+
+- **Files scanned**: Dev sub-skills (triage-issues.md, implement-tasks.md), common improvement-scan.md
+- **Findings**: none — triage deterministic queue correct, implement-tasks flow clean, improvement-scan well-structured
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
