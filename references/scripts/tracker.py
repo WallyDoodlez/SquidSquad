@@ -123,6 +123,8 @@ LEGAL_TRANSITIONS = {
     "status:in-progress": {
         "status:pending-test",
         "status:approved",
+        # #6057: code review rejection path — dev sends task back to PM for re-planning
+        "status:planning",
         # #328 Phase E: worker self-pause edges (Q7 HITL + Q-new11 tool setup).
         # The assigned worker moves its own in-progress issue into a
         # human-waiting state when it needs human input or environment work.
@@ -175,6 +177,7 @@ ROLE_AUTHORITY = {
     ("status:approved", "status:in-progress"): {"_assignee"},
     ("status:in-progress", "status:pending-test"): {"_assignee"},
     ("status:in-progress", "status:approved"): {"_assignee"},
+    ("status:in-progress", "status:planning"): {"_assignee"},  # #6057 code review rejection
 
     # QA/PM owns verification. PM is always authorized because the PM agent
     # holds the combined PM/QA identity in deployments without a dedicated QA
