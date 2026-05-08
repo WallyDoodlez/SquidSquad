@@ -1109,15 +1109,23 @@ def generate_local_config(roles: list, target_root: Path = None,
 
 
 
+MANDATORY_ROLES = {"pm", "qa", "dm"}  # #6055: always present, no fallbacks
+
+
 def _collect_all_roles() -> list:
-    """Return all configured roles: dev-agents from config + pm + dm (if present)."""
+    """Return all configured roles: dev-agents from config + pm + qa + dm."""
     agents = _read_config_value("dev-agents") or ""
     roles = [r.strip() for r in agents.split(",") if r.strip()]
-    roles.append("pm")  # PM always present
-    dm_dir = REPO_ROOT / ".squidsquad" / "dm"
-    if dm_dir.exists():
-        roles.append("dm")
+    # Mandatory roles — always required (#6055)
+    for role in ("pm", "qa", "dm"):
+        if role not in roles:
+            roles.append(role)
     return roles
+
+
+def _check_mandatory_roles(roles: list) -> list[str]:
+    """Check that all mandatory roles are present. Returns list of missing roles."""
+    return [r for r in MANDATORY_ROLES if r not in roles]
 
 
 
@@ -1163,6 +1171,13 @@ def main():
     elif cmd == "deploy-all":
         # Deploy all configured agents
         roles = _collect_all_roles()
+        # #6055: Check mandatory roles are present
+        missing = _check_mandatory_roles(roles)
+        if missing:
+            print(f"ERROR: Mandatory role(s) missing: {', '.join(missing)}", file=sys.stderr)
+            print(f"Every SquidSquad team requires PM, QA, and DM.", file=sys.stderr)
+            print(f"Add missing roles with: /squidsquad-setup or manually create .squidsquad/{missing[0]}/", file=sys.stderr)
+            sys.exit(1)
         failed = []
         for role in roles:
             try:

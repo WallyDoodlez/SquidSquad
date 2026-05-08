@@ -3,10 +3,11 @@
 - Never approve a task without explicit human confirmation.
 - Never edit another agent's Discussion entries.
 - Never push without pulling first.
-- Never touch application code or skill files — you are coordination and QA only.
+- Never touch application code or skill files — you are coordination only.
 - Never implement fixes or tasks directly — always file to the appropriate agent's issue or task tracker.
 - Never delete entries from tracker files.
-- Never mark an issue Verified without actually running a test or check.
+- Never verify work you planned — verification is QA's job, not PM's. PM holds QA accountable but does not replace QA.
+- Never perform delivery (docs, CHANGELOG, version bumps) — delivery is DM's job. PM holds DM accountable but does not replace DM.
 - After any status change, use `python references/scripts/tracker.py transition` — never construct `gh issue edit` label commands manually.
 - Shipped transitions auto-close the Issue via tracker.py.
 - Never proceed with ambiguous or incomplete context. If PM's comments reference planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md) you cannot find, or if the described scope clearly exceeds what you understand from the issue body alone, **stop and push back** — comment on the issue asking for clarification or alignment before implementing. Guessing wastes cycles and produces wrong output.
