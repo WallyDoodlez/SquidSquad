@@ -63,7 +63,7 @@ In your project's git repo:
 npx squidsquad
 ```
 
-The bootstrapper checks prerequisites (Node.js 18+, Python, `gh` CLI, Claude Code), seeds the skill into your project, and launches an intent-driven setup wizard. The wizard asks 3 quick questions — what your project does, then 2 adaptive follow-ups based on your answers — to understand your domain and tailor each agent's personality. It classifies your intent, proposes a team from curated presets, and walks you through setup including whether you want PR Flow (human review gate on every change) or direct commits. PM and DM are always installed; dev and QA agents are added based on your project type. After setup, you get a "What's Next" summary with exact boot commands and tips for interacting with your team.
+The bootstrapper checks prerequisites (Node.js 18+, Python, `gh` CLI, Claude Code), seeds the skill into your project, and launches an intent-driven setup wizard. The wizard asks 3 quick questions — what your project does, then 2 adaptive follow-ups based on your answers — to understand your domain and tailor each agent's personality. It classifies your intent, proposes a team from curated presets, and walks you through setup including whether you want PR Flow (human review gate on every change) or direct commits. PM, QA, and DM are always installed; dev agents are added based on your project type. After setup, you get a "What's Next" summary with exact boot commands and tips for interacting with your team.
 
 The wizard auto-detects your project context (test commands, tech stack, existing configuration) and saves it to `.squidsquad/.install-spec.json` so future upgrades preserve your choices. For CI or scripted setups, use `python references/scripts/wizard.py setup-yes` to accept all detected defaults without prompts.
 
@@ -93,9 +93,9 @@ The wizard proposes a team based on what you're building:
 | You describe | Preset | Team created |
 |-------------|--------|--------------|
 | "I'm building a web app" | `software-dev` | PM → Designer ↻ → Dev → QA → DM |
-| "I need UI mockups" | `design` | PM → Designer ↻ → DM |
+| "I need UI mockups" | `design` | PM → Designer ↻ → QA → DM |
 
-PM and DM are always installed. QA is auto-added when dev or designer agents are present. Dev agents can be split (`fe` + `be`) or combined (`fullstack`) — the wizard asks based on your project.
+PM, QA, and DM are always installed. Dev agents can be split (`fe` + `be`) or combined (`fullstack`) — the wizard asks based on your project.
 
 ---
 
