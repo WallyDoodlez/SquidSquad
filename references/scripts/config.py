@@ -76,6 +76,7 @@ FIELD_MAP = {
     "qa-execution-model": ("Model Routing", "QA Execution Model"),
     "comprehension-model": ("Model Routing", "Comprehension Model"),
     "improvement-scan-model": ("Model Routing", "Improvement Scan Model"),
+    "code-review-model": ("Model Routing", "Code Review Model"),  # #5932
     "fallback-model": ("Model Routing", "Fallback Model"),
     "api-timeout-seconds": ("Model Routing", "API Timeout Seconds"),
     "forge-provider": ("Forge Backend", "Provider"),
