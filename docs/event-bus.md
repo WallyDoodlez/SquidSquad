@@ -75,9 +75,12 @@ Agents emit these events during normal operations:
 | Event | Emitted By | When | What It Tells Other Agents |
 |-------|-----------|------|---------------------------|
 | `status-transition` | tracker.py | Any status label change | "Issue #42 moved from pending-test to pending-ship" |
+| `tracker-comment` | tracker.py | A comment is posted on an issue | "QA commented on #42 — mentioned skill agent" |
 | `pr-merge` | git_ops.py | A PR is merged | "PR #99 was merged — related issue can ship" |
 | `pr-create` | git_ops.py | A PR is opened | "New PR #99 for review" |
-| `verification-failed` | QA scripts | QA rejects work | "Issue #42 failed verification — dev needs to rework" |
+| `verification-failed` | QA | QA rejects work | "Issue #42 failed verification — dev needs to rework" |
+| `verification-passed` | QA or PM | QA/PM approves work | "Issue #42 passed verification — ready to ship" |
+| `agent-health` | QA | Agent health observation | "Skill agent hasn't cycled in 45 minutes" |
 
 ### Lifecycle
 
@@ -126,16 +129,16 @@ graph TD
     EVENTS --> SKILL_FILTER["Skill Filter"]
     EVENTS --> DM_FILTER["DM Filter"]
 
-    PM_FILTER --> PM_EVENTS["pr-merge<br/>status-transition<br/>cycle-start/end<br/>verification-failed/passed<br/>agent-health"]
+    PM_FILTER --> PM_EVENTS["agent-health<br/>pr-merge<br/>status-transition<br/>tracker-comment<br/>verification-failed/passed"]
 
-    QA_FILTER --> QA_EVENTS["pr-merge<br/>status-transition<br/>cycle-end<br/>verification-failed"]
+    QA_FILTER --> QA_EVENTS["status-transition"]
 
-    SKILL_FILTER --> SKILL_EVENTS["pr-merge<br/>status-transition<br/>verification-failed"]
+    SKILL_FILTER --> SKILL_EVENTS["status-transition<br/>tracker-comment<br/>verification-failed/passed"]
 
-    DM_FILTER --> DM_EVENTS["status-transition<br/>verification-passed<br/>pr-merge"]
+    DM_FILTER --> DM_EVENTS["status-transition<br/>tracker-comment<br/>verification-passed"]
 ```
 
-For example, DM only cares about status transitions (to catch pending-ship items) and PR merges. It doesn't need to see every git pull or cycle start.
+For example, DM cares about status transitions (to catch pending-ship items), tracker comments (to read delivery notes), and verification signals. QA has the tightest filter — it only watches status transitions to know when work is ready for verification. PM has the widest view because it coordinates the whole pipeline.
 
 ---
 
@@ -222,6 +225,20 @@ If the agent crashes mid-cycle, the cursor hasn't advanced yet — events are sa
 
 ---
 
+## Cascade Protection
+
+Events can trigger actions that emit more events. Without safeguards, this could create infinite loops — QA emits a status change, PM reacts and emits a comment, which triggers skill to react, which emits another status change, and so on.
+
+Two mechanisms prevent this:
+
+1. **Self-event filter**: An agent never reacts to its own events. If QA emits a `status-transition`, QA's mechanical reaction phase skips it. Only other agents see it.
+
+2. **Cursor deduplication**: Events emitted during a cycle land *after* the cursor position. The emitting agent won't re-read them on its next cycle because the cursor has already advanced past them.
+
+Together, these guarantee that event chains always terminate. Agent A emits → Agent B reacts → Agent B emits → Agent A sees it next cycle (but doesn't re-trigger the original action because the cursor has moved).
+
+---
+
 ## What Happens When the Bus Is Down
 
 The event bus is **strictly optional**. Every interaction is wrapped in error handling that silently falls back:
@@ -250,6 +267,23 @@ L3  Behavior ★    ← decides what events MEAN
 L2  Orchestration ← timing & lifecycle
 L1  Transport     ← event bus lives here (emit/read)
 ```
+
+---
+
+## Port Discovery
+
+Each agent needs to know the harness port to emit and read events. The harness writes its port to `.squidsquad/.harness-port` at startup. Agents discover it by checking this file, walking up to 5 parent directories if needed (supporting per-agent clone isolation where agents run in separate git clones).
+
+If the port file doesn't exist (harness not running), all event operations silently no-op. No configuration required — it just works when the harness is running and gracefully disappears when it isn't.
+
+---
+
+## Future Work
+
+The event bus is actively evolving. Planned enhancements:
+
+- **Event-driven agent scheduling** (#6056) — replace timer-based `/loop` with harness-driven wake signals, so agents only cycle when there's work. Hybrid model: harness emits timer events, agents subscribe to relevant triggers. Significant token savings for quiet periods.
+- **Additional event types** (#5613) — `phase-change` signals for agent state transitions, richer payload data for existing events.
 
 ---
 
