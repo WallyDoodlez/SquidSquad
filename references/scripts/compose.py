@@ -12,7 +12,9 @@ Usage:
     python scripts/compose.py --help
 """
 
+import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -547,6 +549,175 @@ def _generate_cqs_from_sources(layer_sources: dict[str, str]) -> list[dict]:
     return cqs
 
 
+def derive_event_contract(composed_text: str, role_name: str) -> dict | None:
+    """Derive event contract for a role from its composed instructions.
+
+    Calls Claude CLI to read the role's full instruction set and derive
+    what events it should emit and react to. Returns a dict:
+    {"emits": [str], "reacts_to": [str]} or None on failure.
+
+    Runs unconditionally on every compose (#5868 AC-3).
+    """
+    try:
+        from event_catalog import EMITTED, RECOGNIZED
+
+        # Build the catalog reference for the prompt
+        emitted_names = ", ".join(sorted(EMITTED.keys()))
+        recognized_names = ", ".join(sorted(RECOGNIZED.keys()))
+
+        prompt = (
+            f"You are analyzing agent instructions for the '{role_name}' role "
+            f"to derive its event bus contract.\n\n"
+            f"VALID EVENT TYPES (use ONLY these):\n"
+            f"  Infrastructure-emitted: {emitted_names}\n"
+            f"  Planned/recognized: {recognized_names}\n\n"
+            f"RULES:\n"
+            f"- emits: events this role's ACTIONS cause to be produced "
+            f"(e.g. if the role runs tracker transitions, it causes status-transition events). "
+            f"Do NOT include infrastructure events the role merely triggers indirectly "
+            f"(e.g. git-pull, cycle-start are emitted by scripts, not by roles).\n"
+            f"- reacts-to: events this role should RECEIVE and act on based on its responsibilities.\n"
+            f"- Use ONLY event types from the valid list above. Never invent new types.\n"
+            f"- Output ONLY valid JSON. No explanation, no markdown, no code fences.\n\n"
+            f"OUTPUT FORMAT (JSON only):\n"
+            f'{{"emits": ["event-type-1", "event-type-2"], '
+            f'"reacts_to": ["event-type-3", "event-type-4"]}}\n\n'
+            f"INSTRUCTIONS TO ANALYZE:\n\n{composed_text[:8000]}"
+        )
+
+        result = subprocess.run(
+            ["claude", "-p", "--output-format", "text"],
+            input=prompt,
+            capture_output=True, text=True, timeout=60,
+            encoding="utf-8", errors="replace",
+        )
+
+        if result.returncode != 0:
+            print(f"  WARNING: Event contract derivation failed for {role_name} "
+                  f"(exit {result.returncode})", file=sys.stderr)
+            return None
+
+        raw = result.stdout.strip()
+        if not raw:
+            print(f"  WARNING: Event contract derivation returned empty for {role_name}",
+                  file=sys.stderr)
+            return None
+
+        # Parse JSON — strip any markdown fences the LLM might add
+        clean = raw
+        if clean.startswith("```"):
+            clean = "\n".join(clean.split("\n")[1:])
+        if clean.endswith("```"):
+            clean = "\n".join(clean.split("\n")[:-1])
+        clean = clean.strip()
+
+        contract = json.loads(clean)
+
+        # Validate structure
+        if not isinstance(contract, dict):
+            print(f"  WARNING: Event contract for {role_name} is not a dict",
+                  file=sys.stderr)
+            return None
+
+        emits = contract.get("emits", [])
+        reacts_to = contract.get("reacts_to", [])
+
+        if not isinstance(emits, list) or not isinstance(reacts_to, list):
+            print(f"  WARNING: Event contract for {role_name} has invalid lists",
+                  file=sys.stderr)
+            return None
+
+        # Filter to only valid event types (reject hallucinations with warning)
+        valid = set(EMITTED.keys()) | set(RECOGNIZED.keys())
+        dropped = [e for e in emits if isinstance(e, str) and e not in valid]
+        dropped += [r for r in reacts_to if isinstance(r, str) and r not in valid]
+        if dropped:
+            print(f"  WARNING: {role_name} derivation produced unknown event types "
+                  f"(dropped {len(dropped)}): {', '.join(dropped[:5])}", file=sys.stderr)
+        emits = [e for e in emits if isinstance(e, str) and e in valid]
+        reacts_to = [r for r in reacts_to if isinstance(r, str) and r in valid]
+
+        return {"emits": emits, "reacts_to": reacts_to}
+
+    except (json.JSONDecodeError, subprocess.TimeoutExpired, FileNotFoundError,
+            OSError, ImportError) as e:
+        print(f"  WARNING: Event contract derivation error for {role_name}: {e}",
+              file=sys.stderr)
+        return None
+
+
+def derive_and_write_event_contracts(roles: list[str] = None,
+                                     target_root: Path = None) -> bool:
+    """Derive event contracts for all roles and write to config.md.
+
+    Calls derive_event_contract for each role, writes results to the
+    Event Reactions section, then runs cross-agent validation.
+    Returns True if validation passes, False on errors.
+    """
+    if target_root is None:
+        target_root = REPO_ROOT
+    target_root = Path(target_root)
+
+    if roles is None:
+        # Discover all deployed roles
+        sqdir = target_root / ".squidsquad"
+        roles = [
+            d.name for d in sorted(sqdir.iterdir())
+            if d.is_dir() and (d / "CLAUDE.md").exists()
+        ]
+
+    if not roles:
+        print("  No roles found for event contract derivation.", file=sys.stderr)
+        return True  # No roles = nothing to validate
+
+    contracts = {}
+    for role in roles:
+        claude_md = target_root / ".squidsquad" / role / "CLAUDE.md"
+        if not claude_md.exists():
+            continue
+
+        print(f"  Deriving event contract for {role}...")
+        text = claude_md.read_text(encoding="utf-8")
+        contract = derive_event_contract(text, role)
+        if contract:
+            contracts[role] = contract
+        else:
+            print(f"  WARNING: Could not derive contract for {role}, skipping",
+                  file=sys.stderr)
+
+    if not contracts:
+        print("  No event contracts derived. Skipping validation.")
+        return True
+
+    # Merge with existing contracts (preserve roles that failed derivation)
+    try:
+        from config import get_event_reactions, write_event_reactions
+        existing = get_event_reactions()
+        if existing:
+            merged = dict(existing)
+            merged.update(contracts)  # New derivations override, others preserved
+            contracts = merged
+        # Sort event type lists for idempotency
+        for role_data in contracts.values():
+            role_data["emits"] = sorted(role_data.get("emits", []))
+            role_data["reacts_to"] = sorted(role_data.get("reacts_to", []))
+        write_event_reactions(contracts)
+        print(f"  Event contracts written for {len(contracts)} role(s).")
+    except Exception as e:
+        print(f"  WARNING: Could not write event contracts: {e}", file=sys.stderr)
+        return True  # Graceful degradation
+
+    # Run cross-agent validation
+    try:
+        from event_validator import validate_and_print
+        exit_code = validate_and_print()
+        return exit_code == 0
+    except ImportError:
+        print("  WARNING: event_validator not available, skipping validation",
+              file=sys.stderr)
+        return True
+
+
 def agent_compose(deterministic_output: str, role_name: str,
                   layer_sources: dict[str, str] = None) -> str:
     """Polish deterministic compose output using an LLM coherence agent.
@@ -983,6 +1154,11 @@ def main():
         except (SystemExit, Exception) as e:
             print(f"ERROR: Failed to deploy role '{role_name}': {e}", file=sys.stderr)
             sys.exit(1)
+        # Event contract derivation + cross-agent validation (#5868)
+        print("Deriving event contracts...")
+        if not derive_and_write_event_contracts():
+            print("WARNING: Event contract validation found errors. "
+                  "Review and fix, or re-run compose.", file=sys.stderr)
 
     elif cmd == "deploy-all":
         # Deploy all configured agents
@@ -1001,6 +1177,11 @@ def main():
         # Generate .local-config for health check and auto-boot
         lc = generate_local_config(roles)
         print(f"  .local-config: {len(roles)} agents -> {lc.relative_to(REPO_ROOT)}")
+        # Event contract derivation + cross-agent validation (#5868)
+        print("Deriving event contracts...")
+        if not derive_and_write_event_contracts(roles):
+            print("WARNING: Event contract validation found errors. "
+                  "Review and fix, or re-run compose.", file=sys.stderr)
 
     elif cmd == "upgrade-soul":
         if len(args) < 2:
