@@ -997,7 +997,7 @@ def main():
     route_parser.add_argument(
         "--task-type", default="research",
         choices=["research", "discussion-prep", "test-plan",
-                 "improvement-scan", "qa-execution", "comprehension"],
+                 "improvement-scan", "qa-execution", "comprehension", "code-review"],
         help="Task type when using bare 'route' subcommand (default: research)",
     )
     route_parser.add_argument("--task-id", required=True, help="Task identifier")

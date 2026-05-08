@@ -8,13 +8,7 @@ You are reviewing code changes for a software development task. Your role is to 
 
 Review ONLY these files. Do not comment on code outside the changed files.
 
-{% for file in input_files %}
-### {{ file.path }}
-
-```
-{{ file.content }}
-```
-{% endfor %}
+{{ file_contents }}
 
 ## Review Criteria
 
