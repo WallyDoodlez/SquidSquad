@@ -5,7 +5,10 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Active Priorities
 
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — awaiting human greenlight
-- #5868 Event consumption sub-skill (pending-human-review, high, role:skill) — conflicts resolved, DeepSeek findings fixed, QA re-verified 59/59. PR #5994 ready for human merge
+- #5932 L2 external code review loop (planned, high, role:skill) — awaiting approval, depends on #6057
+- #6055 Enforce role separation PM/QA/DM (pending, high, role:skill)
+- #6056 Replace /loop with event-driven Monitor tool (pending, medium, role:skill) — after #5932/#6055
+- #6057 Add in-progress → planning transition (open, high, role:skill) — prerequisite for #5932
 - #5855 Vault is static decision log, not living memory (pending, high, role:skill)
 - #3963 EPIC: Web dashboard — Harness Phase 4 (pending, high, role:skill) — depends on #5622
 - #5783 L3: bug investigation boundary — PM symptoms, dev RCA (pending, medium, role:skill)
@@ -19,13 +22,12 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #5170 L4 dev customization: DeepSeek code review before pending-test (pending, medium)
 - #5171 Harness loads config.md and serves configuration via REST endpoint (pending, medium)
 - #5159 Status bar shows agent 'awaiting restart' state from harness intent API (pending, low)
-- #5932 L2: External code review loop before pending-test (pending, high, role:skill)
-- #6000 Harness Ctrl+C does not trigger graceful shutdown (open, high, role:skill)
-- #6007 QA L2 finding routing lacks role-awareness (shipped/closed)
-
 ## Recently Shipped
 
-- #5888 /squidsquad-compose skill — single entry point for template composition (shipped)
+- #5868 Event consumption sub-skill — compose-time reaction config (shipped)
+- #6000 Harness Ctrl+C fix (shipped)
+- #6007 QA L2 finding routing (shipped)
+- #5888 /squidsquad-compose skill (shipped)
 - #5915 WindowsPath JSON serialization fix (shipped) — v0.33.0
 
 - #5856 tracker.py status-transition events — bus now has real coordination signals (shipped)
