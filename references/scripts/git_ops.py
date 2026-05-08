@@ -339,7 +339,7 @@ def pr_merge(pr_number, strategy="squash"):
                     return False, "PR closed without merge"
             success, msg = adapter.merge_pr(pr_number, strategy)
             if success:
-                _emit("pr-merge", {"pr_number": str(pr_number)})
+                # pr-merge event removed (#6126) — harness emits pr-merged instead
                 print(f"PR #{pr_number} merged ({strategy})")
             else:
                 print(f"ERROR: PR #{pr_number} merge failed: {msg}", file=sys.stderr)
@@ -369,7 +369,7 @@ def pr_merge(pr_number, strategy="squash"):
     merge_args = ["gh", "pr", "merge", str(pr_number), f"--{strategy}", "--delete-branch"]
     result = _run_list(merge_args, check=False)
     if result.returncode == 0:
-        _emit("pr-merge", {"pr_number": str(pr_number)})
+        # pr-merge event removed (#6126) — harness emits pr-merged instead
         print(f"PR #{pr_number} merged ({strategy})")
         # Extract linked issue number from branch name
         branch_result = _run_list(

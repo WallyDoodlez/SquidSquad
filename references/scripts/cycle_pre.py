@@ -375,11 +375,12 @@ def _get_cycle_number(role):
 # Each role receives only event types relevant to its work.
 # Unlisted roles receive all events (no filtering).
 _ROLE_EVENT_TYPES = {
-    "pm": {"pr-merge", "verification-failed", "verification-passed", "cycle-start",
-            "cycle-end", "status-transition", "agent-health"},
-    "qa": {"pr-merge", "status-transition", "cycle-end", "verification-failed"},
-    "skill": {"pr-merge", "verification-failed", "status-transition"},
-    "dm": {"status-transition", "verification-passed", "pr-merge"},
+    "pm": {"pr-merged", "compose-completed", "verification-failed", "verification-passed",
+            "cycle-start", "cycle-end", "status-transition", "agent-health"},
+    "qa": {"pr-merged", "compose-completed", "status-transition", "cycle-end",
+            "verification-failed"},
+    "skill": {"pr-merged", "compose-completed", "verification-failed", "status-transition"},
+    "dm": {"status-transition", "verification-passed", "pr-merged", "compose-completed"},
 }
 
 
@@ -424,8 +425,9 @@ def _run_mechanical_reactions(events, role):
         if event.get("role") == role:
             continue
 
-        # Reaction: pr-merge → log for agent awareness (PM handles transitions)
-        if event_type == "pr-merge" and role == "pm":
+        # Reaction: pr-merged → log for agent awareness (PM handles transitions)
+        # (#6126) Updated from pr-merge to pr-merged — harness emits this now
+        if event_type == "pr-merged" and role == "pm":
             pr_number = payload.get("pr_number")
             issue_number = payload.get("issue_number")
             if pr_number and issue_number:
@@ -435,6 +437,15 @@ def _run_mechanical_reactions(events, role):
                     "pr_number": pr_number,
                     "issue_number": issue_number,
                 })
+
+        # Reaction: pr-merged → queue reactive pull for non-PM agents (#6126 AC-9)
+        if event_type == "pr-merged" and payload.get("success") and role != "pm":
+            reactions.append({
+                "type": "reactive-pull-needed",
+                "event_id": event.get("id"),
+                "pr_number": payload.get("pr_number"),
+                "issue_number": payload.get("issue_number"),
+            })
 
         # Reaction: verification-failed → surface rework context for dev
         if event_type == "verification-failed" and role in ("skill", "be", "fe"):

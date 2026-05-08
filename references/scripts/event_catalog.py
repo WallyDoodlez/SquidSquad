@@ -70,9 +70,19 @@ EMITTED = {
         "payload_fields": ["pr_number", "title", "branch"],
     },
     "pr-merge": {
-        "description": "A pull request was merged (code landed on main)",
+        "description": "A pull request was merged (code landed on main) — DEPRECATED: use pr-merged from harness",
         "source": "git_ops.py",
         "payload_fields": ["pr_number"],
+    },
+    "pr-merged": {
+        "description": "Harness merged a PR — full payload with files changed",
+        "source": "harness.py",
+        "payload_fields": ["pr_number", "branch", "issue_number", "files_changed", "success"],
+    },
+    "compose-completed": {
+        "description": "Harness ran compose.py deploy-all after a merge touching references/",
+        "source": "harness.py",
+        "payload_fields": ["success", "error", "trigger_pr"],
     },
 }
 
@@ -98,6 +108,11 @@ RECOGNIZED = {
         "description": "Task moved to a new lifecycle phase (planning, execution, etc.)",
         "planned_source": "harness.py or pm cycle",
         "payload_fields": ["issue_number", "phase"],
+    },
+    "request-merge": {
+        "description": "Agent requested harness to merge a PR — audit trail",
+        "planned_source": "harness.py (logged on POST /merge)",
+        "payload_fields": ["pr_number", "branch", "role"],
     },
 }
 

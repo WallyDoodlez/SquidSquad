@@ -207,7 +207,6 @@ references/sub-skills/roles/pm/ios/domain-context.md
 references/sub-skills/roles/pm/issue-filing.md
 references/sub-skills/roles/pm/own-domain-autofix.md
 references/sub-skills/roles/pm/pipeline-sentinel.md
-references/sub-skills/roles/pm/post-merge-recompose.md
 references/sub-skills/roles/pm/prohibitions.md
 references/sub-skills/roles/pm/skill/domain-context.md
 references/sub-skills/roles/pm/soul-shepherd.md

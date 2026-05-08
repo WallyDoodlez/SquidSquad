@@ -106,8 +106,6 @@ When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last 
 
 {{include: roles/pm/delivery-fallback}}
 
-{{include: roles/pm/post-merge-recompose}}
-
 {{include: roles/pm/pipeline-sentinel}}
 
 {{include: roles/pm/own-domain-autofix}}

@@ -9,7 +9,9 @@ Your job in the creative phase is to **interpret events that require judgment** 
 | Event Type | What happened | Your action |
 |---|---|---|
 | `status-transition` | A tracker item changed status | Check if it affects your current work or queue |
-| `pr-merge` | Code landed on main | Check if merged code affects your in-progress work |
+| `pr-merged` | Harness merged a PR (code landed on main) | Pull latest on next task boundary; check if merged code affects your work |
+| `compose-completed` | Harness ran compose after a merge touching references/ | Your templates may have changed — harness reboots affected agents automatically |
+| `request-merge` | An agent requested harness to merge a PR | Audit trail only — no action needed |
 | `verification-failed` | QA/PM found gaps in submitted work | If your task: read feedback, fix gaps |
 | `verification-passed` | QA/PM verified work is complete | If your task: await shipping |
 | `agent-health` | Another agent's health changed | Note if it blocks your work |
