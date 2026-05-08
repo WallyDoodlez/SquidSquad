@@ -6,6 +6,7 @@ includes:
   - common/cycle-runner
   - common/event-reactions
   - common/context-pressure
+  - common/task-pickup
   - roles/qa/verification
   - common/improvement-scan-slim
   - roles/qa/issue-filing
