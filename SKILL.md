@@ -30,7 +30,7 @@ graph TD
             config["config.md"]
             role_dir["[role]/ — one per dev agent\nCLAUDE.md, working-state.md\nplanning/, iterations/"]
             pm_dir["pm/\nCLAUDE.md, working-state.md\niterations/"]
-            qa_dir["qa/ — when dev/designer present"]
+            qa_dir["qa/ — QA agent"]
             dm_dir["dm/ — Delivery Manager"]
             designer_dir["designer/ — when designer defined"]
             vault["vault/ — shared knowledge layer"]
@@ -52,7 +52,7 @@ graph TD
 
 ### Roles
 
-SquidSquad always has a **PM** agent. When dev or designer agents are present, a **QA** agent is automatically added to independently verify their work. Dev agents are flexible — you define them at setup time. You can also add a **Designer** agent for projects that need design-to-code workflows.
+SquidSquad always has **PM**, **QA**, and **DM** agents. Dev agents are flexible — you define them at setup time. You can also add a **Designer** agent for projects that need design-to-code workflows.
 
 | Agent | Owns | Loop |
 |-------|------|------|
@@ -99,7 +99,7 @@ When you invoke SquidSquad, it creates the following inside your project root. O
 │   ├── enhancements.md         ← product backlog / enhancement proposals
 │   ├── iterations/             ← iter-N.md logs per cycle
 │   └── migrations/             ← historical migration logs (markdown tracker era)
-├── qa/                         ← QA (optional — same structure as [role]/, plus qa-log.md)
+├── qa/                         ← QA (same structure as [role]/, plus qa-log.md)
 └── vault/                      ← shared memory layer (all agents R/W)
     ├── BRIEFING.md             ← daily context briefing read by all agents at boot
     ├── projects/               ← active project context, goals, constraints
