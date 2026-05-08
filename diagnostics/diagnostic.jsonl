@@ -484,3 +484,14 @@
 {"timestamp": "2026-05-08T19:15:21.413236", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #42: unmerged PR #99"}
 {"timestamp": "2026-05-08T19:15:21.466844", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #42: branch squidsquad/skill/42 has 3 unmerged commit(s)"}
 {"timestamp": "2026-05-08T19:15:23.054646", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #42: branch squidsquad/skill/42 has 2 unmerged commit(s)"}
+{"timestamp": "2026-05-08T19:18:02.469103", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
+{"timestamp": "2026-05-08T19:18:02.527506", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
+{"timestamp": "2026-05-08T19:18:02.589639", "severity": "error", "source": "git_ops", "message": "push failed: rejected"}
+{"timestamp": "2026-05-08T19:19:04.181702", "severity": "error", "source": "tracker", "message": "Unauthorized transition on #269: role 'skill' is not authorized for status:pending-ship -> status:shipped (allowed: ['dm'])", "context": {"from": "status:pending-ship", "to": "status:shipped", "role": "skill-lead"}}
+{"timestamp": "2026-05-08T19:19:04.747638", "severity": "error", "source": "tracker", "message": "Illegal transition status:pending -> status:shipped on #1"}
+{"timestamp": "2026-05-08T19:19:04.804945", "severity": "error", "source": "tracker", "message": "Unauthorized transition on #1: --role is required for transition status:approved -> status:in-progress", "context": {"from": "status:approved", "to": "status:in-progress", "role": null}}
+{"timestamp": "2026-05-08T19:19:05.914202", "severity": "error", "source": "tracker", "message": "Unauthorized transition on #42: role 'skill' is not authorized for status:pending-ship -> status:in-progress (allowed: ['pm', 'qa'])", "context": {"from": "status:pending-ship", "to": "status:in-progress", "role": "skill-lead"}}
+{"timestamp": "2026-05-08T19:19:05.966149", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #42: unmerged PR #99"}
+{"timestamp": "2026-05-08T19:19:06.520035", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #42: unmerged PR #99"}
+{"timestamp": "2026-05-08T19:19:06.576338", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #42: branch squidsquad/skill/42 has 3 unmerged commit(s)"}
+{"timestamp": "2026-05-08T19:19:08.161131", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #42: branch squidsquad/skill/42 has 2 unmerged commit(s)"}
