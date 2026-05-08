@@ -384,11 +384,22 @@ _ROLE_EVENT_TYPES = {
 
 
 def _filter_events_for_role(events, role):
-    """Filter events to those relevant to the given role (#5622).
+    """Filter events to those relevant to the given role (#5622, #5868).
 
-    If the role has a configured event type set, only matching events are kept.
-    If the role is not in _ROLE_EVENT_TYPES, all events pass through.
+    Reads event filters from config.md Event Reactions section if present.
+    Falls back to hardcoded _ROLE_EVENT_TYPES when section is absent.
+    If the role has no configured filter, all events pass through.
     """
+    # Try config-driven filters first (#5868 AC-5)
+    try:
+        from config import get_event_filters_for_role
+        config_filters = get_event_filters_for_role(role)
+        if config_filters is not None:
+            return [e for e in events if e.get("event_type") in config_filters]
+    except (ImportError, Exception):
+        pass  # Graceful fallback to hardcoded
+
+    # Hardcoded fallback (preserved exactly per AC-7)
     allowed = _ROLE_EVENT_TYPES.get(role)
     if not allowed:
         return events

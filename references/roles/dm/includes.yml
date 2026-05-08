@@ -5,6 +5,7 @@ includes:
   - common/tracker-protocol
   - common/capability-check
   - common/cycle-runner
+  - common/event-reactions
   - common/context-pressure
   - roles/dm/issue-triage
   - roles/dm/delivery-packaging
