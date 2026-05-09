@@ -1,5 +1,5 @@
 {
-  "last_scanned": "docs/sub-skill-guide.md",
+  "last_scanned": "CONTRIBUTING.md",
   "rotation_count": 17,
   "scan_history": [
     {"file": "README.md", "date": "2026-04-28", "findings": 2},
@@ -99,7 +99,8 @@
     {"file": "SKILL.md:sections-4-6", "date": "2026-05-09", "findings": 3, "fixes": ["removed designer_dir from Mermaid .squidsquad/ diagram", "removed designer team shape row", "removed role:designer from label taxonomy"]},
     {"file": "SKILL.md:sections-7-8", "date": "2026-05-09", "findings": 0},
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-09", "findings": 1, "fixes": ["removed Designer from agent roles table"]},
-    {"file": "docs/sub-skill-guide.md", "date": "2026-05-09", "findings": 0}
+    {"file": "docs/sub-skill-guide.md", "date": "2026-05-09", "findings": 0},
+    {"file": "CONTRIBUTING.md", "date": "2026-05-09", "findings": 0}
   ],
   "doc_inventory": {
     "README.md": {"last_scanned": "2026-05-07", "status": "current"},
