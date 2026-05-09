@@ -221,7 +221,7 @@ class TestParseAgentsV1:
         # dm because `**DM**: present`
         assert by_id["dm"]["role"] == "dm"
 
-    def test_multiple_dev_roles_mandatory_roles_always_present(self):
+    def test_mandatory_roles_always_present(self):
         """Fixed team: QA + DM always present regardless of config text (#6261)."""
         agents = config._parse_agents_v1(V1_NO_DM)
         by_id = {a["id"]: a for a in agents}
