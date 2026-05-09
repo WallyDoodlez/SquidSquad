@@ -27,7 +27,20 @@ Codify the fixed team (PM+QA+DM+workers) into the architecture. Merge tracker-pr
 - Update config.py to stop synthesizing QA from PM/QA legacy string
 - Verify event contracts still derive correctly after tracker-protocol moves from L2 include to L1 inline
 - All changes in one atomic commit to avoid mixed-state agents (per learning-atomic-migration-strategy)
-- tracker.py: add in-progress → pending-ship for dm-lead, scoped to DM-owned issues only
+- tracker.py: add in-progress → pending-ship to BOTH `LEGAL_TRANSITIONS` AND `ROLE_AUTHORITY` for dm-lead
+- tracker.py: add dm to `ROLE_AUTHORITY` for pending-ship → in-progress (DM merge conflict rollback)
+- installer-files.txt: remove deleted files (tracker-protocol.md, delivery-fallback.md) — `test_installer_wiring.py` will fail otherwise
+- test_compose.py: update 6 locations that reference tracker-protocol fixtures/markers
+- test_tracker_authority.py: update "combined PM/QA identity" comment
+- manifest.md: remove 5 stale tracker-protocol references (composition order tables + file inventory)
+- dm/issue-triage.md: DM bug fixes must route to pending-ship, not pending-test
+- common/task-pickup.md: create DM-specific override (`roles/dm/task-pickup.md`) that transitions to pending-ship
+- L4 project files: clean `.squidsquad/project/pm-instructions.md` (lines 19, 29) and `.squidsquad/project/dm-instructions.md` (line 34) of fallback language
+- PM SOUL.md line 147: remove "If DM absent: PM is fallback reboot authority"
+- boot_remote.py:128: update QA/DM detection to handle new config.md format
+- add_role.py:63: remove DM directory existence check
+- cycle_post.py:440: remove live `if not dm_dir.exists()` conditional in `_do_version_bump()`
+- delivery-packaging.md: add explicit merge-fail handler (comment on issue + transition to in-progress)
 
 ## Upgrade Path (required)
 
@@ -40,4 +53,3 @@ Codify the fixed team (PM+QA+DM+workers) into the architecture. Merge tracker-pr
 - Changing tracker-protocol content itself (it's a move, not a rewrite)
 - Removing PM's pending-test authority from tracker.py (kept as coordination backstop)
 - Adding new roles or changing the worker role system
-- Changes to tracker.py's LEGAL_TRANSITIONS beyond the DM exemption

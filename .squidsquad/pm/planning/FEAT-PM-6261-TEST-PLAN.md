@@ -286,6 +286,132 @@ Verify that tracker-protocol content is inlined into the L1 base agent definitio
 
 ---
 
+### TC-25: installer-files.txt updated — deleted files removed
+
+- **Precondition**: Access to `references/installer-files.txt`
+- **Steps**:
+  1. `grep "tracker-protocol" references/installer-files.txt`
+  2. `grep "delivery-fallback" references/installer-files.txt`
+- **Expected**: Both return no matches. Deleted files are no longer listed.
+- **Verification**: Both grep exit non-zero.
+
+---
+
+### TC-26: manifest.md tracker-protocol references removed
+
+- **Precondition**: Access to `references/sub-skills/manifest.md`
+- **Steps**:
+  1. `grep -c "tracker-protocol" references/sub-skills/manifest.md`
+- **Expected**: Returns 0. No stale references in composition order tables or file inventory.
+- **Verification**: grep returns 0.
+
+---
+
+### TC-27: tracker.py LEGAL_TRANSITIONS includes pending-ship from in-progress
+
+- **Precondition**: Access to `references/scripts/tracker.py`
+- **Steps**:
+  1. Read LEGAL_TRANSITIONS dict. Check if `"status:in-progress"` targets include `"status:pending-ship"`.
+- **Expected**: `"status:pending-ship"` is a legal target from `"status:in-progress"`.
+- **Verification**: `grep -A5 '"status:in-progress"' references/scripts/tracker.py | grep "pending-ship"` returns a match.
+
+---
+
+### TC-28: tracker.py ROLE_AUTHORITY — DM authorized for pending-ship → in-progress
+
+- **Precondition**: Access to `references/scripts/tracker.py`
+- **Steps**:
+  1. Read ROLE_AUTHORITY dict. Find the entry for `("status:pending-ship", "status:in-progress")`.
+  2. Check if `"dm"` is in the authorized set.
+- **Expected**: `"dm"` is authorized for `pending-ship → in-progress` (merge conflict rollback).
+- **Verification**: Entry contains `"dm"` in the set.
+
+---
+
+### TC-29: dm/issue-triage.md routes to pending-ship not pending-test
+
+- **Precondition**: Access to `references/sub-skills/roles/dm/issue-triage.md`
+- **Steps**:
+  1. `grep "pending-test" references/sub-skills/roles/dm/issue-triage.md`
+  2. `grep "pending-ship" references/sub-skills/roles/dm/issue-triage.md`
+- **Expected**: No `pending-test` references. At least one `pending-ship` reference.
+- **Verification**: First grep returns no matches, second returns matches.
+
+---
+
+### TC-30: DM-specific task-pickup overrides common task-pickup
+
+- **Precondition**: Access to `references/sub-skills/roles/dm/task-pickup.md` and `references/roles/dm/includes.yml`
+- **Steps**:
+  1. Verify `references/sub-skills/roles/dm/task-pickup.md` exists.
+  2. Verify it transitions to `pending-ship` not `pending-test`.
+  3. Verify DM's includes.yml references the DM-specific override (or compose resolves role-specific over common).
+- **Expected**: DM-specific task-pickup exists and transitions to `pending-ship`.
+- **Verification**: File exists, `grep "pending-ship" references/sub-skills/roles/dm/task-pickup.md` returns match, `grep "pending-test" references/sub-skills/roles/dm/task-pickup.md` returns no match.
+
+---
+
+### TC-31: L4 project files cleaned of fallback language
+
+- **Precondition**: Access to `.squidsquad/project/pm-instructions.md` and `.squidsquad/project/dm-instructions.md`
+- **Steps**:
+  1. `grep -i "QA fallback\|DM absent\|DM is optional\|fallback" .squidsquad/project/pm-instructions.md .squidsquad/project/dm-instructions.md`
+- **Expected**: No fallback language in L4 project files.
+- **Verification**: grep returns no matches.
+
+---
+
+### TC-32: PM SOUL.md DM-absent reboot fallback removed
+
+- **Precondition**: Access to `.squidsquad/pm/SOUL.md` or `references/roles/pm/SOUL.md`
+- **Steps**:
+  1. `grep -i "DM absent\|fallback reboot" .squidsquad/pm/SOUL.md`
+- **Expected**: No DM-absent fallback authority language.
+- **Verification**: grep returns no matches.
+
+---
+
+### TC-33: boot_remote.py handles new config.md format
+
+- **Precondition**: Access to `references/scripts/boot_remote.py`
+- **Steps**:
+  1. Read lines 125-135 of boot_remote.py. Check how it detects QA and DM.
+  2. Verify it works with separate PM/QA/DM entries (not combined PM/QA).
+- **Expected**: QA and DM detection works with new config.md format where PM and QA are separate entries.
+- **Verification**: Code no longer depends on `**PM/QA**: always present` format.
+
+---
+
+### TC-34: cycle_post.py dm_dir conditional removed
+
+- **Precondition**: Access to `references/scripts/cycle_post.py`
+- **Steps**:
+  1. `grep -n "dm_dir\|_dir_exists.*dm\|not.*dm.*exists" references/scripts/cycle_post.py`
+- **Expected**: No DM directory existence checks remain.
+- **Verification**: grep returns no matches.
+
+---
+
+### TC-35: delivery-packaging.md has explicit merge-fail handler
+
+- **Precondition**: Access to `references/sub-skills/roles/dm/delivery-packaging.md`
+- **Steps**:
+  1. Search for merge conflict/failure handling: `grep -i "conflict\|merge.*fail\|in-progress" references/sub-skills/roles/dm/delivery-packaging.md`
+- **Expected**: Explicit handler exists: on merge conflict, DM comments on issue and transitions to in-progress.
+- **Verification**: grep returns matches showing conflict handling with transition to in-progress.
+
+---
+
+### TC-36: test_compose.py updated for tracker-protocol removal
+
+- **Precondition**: Access to `tests/test_compose.py`
+- **Steps**:
+  1. `grep -c "tracker.protocol" tests/test_compose.py`
+- **Expected**: No stale references to tracker-protocol fixtures, markers, or assertions that expect it as a sub-skill.
+- **Verification**: grep returns 0.
+
+---
+
 ## Smoke Tests
 
 - [ ] `grep -r "{{include.*common/tracker-protocol}}" references/roles/` returns no matches
@@ -298,6 +424,12 @@ Verify that tracker-protocol content is inlined into the L1 base agent definitio
 - [ ] `grep -i "PM/QA combined\|combined PM/QA" references/scripts/config.py` returns no matches
 - [ ] `grep -i "isDraft\|is_draft" references/sub-skills/roles/dm/delivery-packaging.md` returns no matches
 - [ ] `grep -i "pending-test" references/sub-skills/roles/dm/delivery-packaging.md` returns no matches (DM routes to pending-ship, not pending-test)
+- [ ] `grep "tracker-protocol" references/installer-files.txt` returns no matches
+- [ ] `grep "delivery-fallback" references/installer-files.txt` returns no matches
+- [ ] `grep -c "tracker-protocol" references/sub-skills/manifest.md` returns 0
+- [ ] `grep "pending-test" references/sub-skills/roles/dm/issue-triage.md` returns no matches
+- [ ] `grep -i "fallback" .squidsquad/project/pm-instructions.md .squidsquad/project/dm-instructions.md` returns no matches
+- [ ] `grep "dm_dir" references/scripts/cycle_post.py` returns no matches
 - [ ] `python references/scripts/compose.py deploy-all` exits 0
 - [ ] After compose, `grep -i "fall back\|combined PM/QA\|delivery-fallback" .squidsquad/pm/CLAUDE.md` returns no matches
 - [ ] `grep -i "timestamp\|check-gh\|status transition" .squidsquad/pm/CLAUDE.md` returns matches (tracker-protocol content present in composed output)
