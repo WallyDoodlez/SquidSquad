@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.35.0] — 2026-05-09
+
+### Fixed
+- #6222 — Auto-merge no longer closes issues before delivery is complete, keeping shipped counters and labels accurate
+- #6254 — Removed a false-confidence test that always passed regardless of actual behavior
+- #6262 — Pipeline no longer picks up already-closed items as pending work
+
 ## [0.34.0] — 2026-05-08
 
 ### Added
