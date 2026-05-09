@@ -211,9 +211,6 @@ function downloadTarball(gitRoot, filePaths) {
     }
     const prefixDir = path.join(extractDir, entries[0]);
 
-    // Build allowlist set for fast lookup
-    const allowSet = new Set(filePaths.map((f) => f.replace(/\\/g, "/")));
-
     // Validate all manifest files exist in the tarball
     const missing = [];
     for (const filePath of filePaths) {
