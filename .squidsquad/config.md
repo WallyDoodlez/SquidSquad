@@ -1,6 +1,6 @@
 # SquidSquad Config
 
-- **SquidSquad Version**: 0.29.0
+- **SquidSquad Version**: 0.34.0
 - **Tracker**: github-issues
 - **Architecture Version**: 1
 
@@ -132,17 +132,17 @@
 ## Event Reactions
 
 ### dm
-- **emits**: git-commit, pr-create, status-transition, tracker-comment
-- **reacts-to**: agent-health, pr-merge, status-transition, verification-passed
+- **emits**: status-transition, tracker-comment
+- **reacts-to**: agent-health, pr-merged, status-transition, verification-failed, verification-passed
 
 ### pm
-- **emits**: status-transition, tracker-comment
-- **reacts-to**: agent-health, phase-change, pr-merge, status-transition, tracker-comment, verification-failed, verification-passed
+- **emits**: request-merge, status-transition, tracker-comment
+- **reacts-to**: agent-health, phase-change, pr-merged, status-transition, verification-failed, verification-passed
 
 ### qa
 - **emits**: status-transition, tracker-comment, verification-failed, verification-passed
-- **reacts-to**: agent-health, status-transition
+- **reacts-to**: agent-health, cycle-start, status-transition
 
 ### skill
 - **emits**: git-commit, pr-create, status-transition, tracker-comment
-- **reacts-to**: cycle-end, cycle-start, status-transition, tracker-comment, verification-failed
+- **reacts-to**: pr-merged, status-transition, tracker-comment, verification-failed
