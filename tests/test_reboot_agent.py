@@ -135,8 +135,8 @@ class TestStopSentinel:
 class TestRebootForce:
     """Force reboot — kills claude subprocess, wrapper respawns."""
 
-    def test_force_kills_claude_pid(self, patch_dirs, squid_dir, monkeypatch):
-        """Force kills .claude-pid (claude), not .pid (wrapper)."""
+    def test_force_kills_claude_and_respawns(self, patch_dirs, squid_dir, monkeypatch):
+        """Force kills claude and respawns via boot_remote (#6406)."""
         (squid_dir / "skill" / ".pid").write_text("12345", encoding="utf-8")
         (squid_dir / "skill" / ".claude-pid").write_text("67890", encoding="utf-8")
         alive_pids = {12345, 67890}
@@ -153,9 +153,8 @@ class TestRebootForce:
         result = reboot_agent.reboot("skill", force=True)
         assert result == 0
         assert 67890 in killed  # claude PID killed
-        assert 12345 not in killed  # wrapper PID NOT killed
-        assert spawned == []  # no _spawn_wrapper — wrapper handles respawn
-        assert (squid_dir / "skill" / ".restart").exists()
+        assert "skill" in spawned  # respawned via boot_remote
+        assert not (squid_dir / "skill" / ".restart").exists()
 
     def test_force_wrapper_alive_no_claude_pid_kills_wrapper(
         self, patch_dirs, squid_dir, monkeypatch
@@ -219,8 +218,8 @@ class TestRebootForce:
 class TestRebootWaitForIdle:
     """Normal reboot — writes sentinel, waits for idle, kills claude subprocess."""
 
-    def test_idle_kills_claude_pid(self, patch_dirs, squid_dir, monkeypatch):
-        """Kills .claude-pid when idle, wrapper handles respawn."""
+    def test_idle_kills_claude_and_respawns(self, patch_dirs, squid_dir, monkeypatch):
+        """Kills claude when idle and respawns via boot_remote (#6406)."""
         (squid_dir / "skill" / ".pid").write_text("12345", encoding="utf-8")
         (squid_dir / "skill" / ".claude-pid").write_text("67890", encoding="utf-8")
         (squid_dir / "skill" / "current-state").write_text("idle|", encoding="utf-8")
@@ -239,8 +238,7 @@ class TestRebootWaitForIdle:
         result = reboot_agent.reboot("skill", timeout=1)
         assert result == 0
         assert 67890 in killed  # claude PID killed
-        assert 12345 not in killed  # wrapper PID NOT killed
-        assert spawned == []  # no _spawn_wrapper call
+        assert "skill" in spawned  # respawned via boot_remote
 
     def test_timeout_cleans_sentinel_no_kill(self, patch_dirs, squid_dir, monkeypatch):
         (squid_dir / "skill" / ".pid").write_text("12345", encoding="utf-8")
@@ -264,29 +262,25 @@ class TestRebootWaitForIdle:
 # Sentinel written before waiting
 # ---------------------------------------------------------------------------
 
-class TestSentinelWritten:
-    """Restart sentinel is always written before killing claude."""
+class TestNoSentinelFiles:
+    """#6406: No .restart sentinel files written — kill+respawn only."""
 
-    def test_sentinel_content(self, patch_dirs, squid_dir, monkeypatch):
+    def test_no_sentinel_written(self, patch_dirs, squid_dir, monkeypatch):
         (squid_dir / "skill" / ".pid").write_text("12345", encoding="utf-8")
         (squid_dir / "skill" / ".claude-pid").write_text("67890", encoding="utf-8")
         (squid_dir / "skill" / "current-state").write_text("idle|", encoding="utf-8")
         alive_pids = {12345, 67890}
         monkeypatch.setattr(reboot_agent, "_is_process_alive",
                             lambda pid: pid in alive_pids)
-        sentinel_existed_at_kill = []
         def fake_kill(pid):
-            sentinel_existed_at_kill.append(
-                (squid_dir / "skill" / ".restart").exists()
-            )
             alive_pids.discard(pid)
         monkeypatch.setattr(reboot_agent, "_kill_process", fake_kill)
         monkeypatch.setattr(reboot_agent, "POLL_INTERVAL", 0.01)
         _stub_spawn(monkeypatch)
 
         reboot_agent.reboot("skill", timeout=1)
-        # Sentinel must exist BEFORE kill is called
-        assert sentinel_existed_at_kill == [True]
+        # No .restart sentinel should be created
+        assert not (squid_dir / "skill" / ".restart").exists()
 
 
 # ---------------------------------------------------------------------------
