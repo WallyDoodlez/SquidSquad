@@ -1,7 +1,6 @@
 # Dev agent sub-skill manifest
 # Order matters — includes are resolved top-to-bottom
 includes:
-  - common/tracker-protocol
   - common/cycle-runner
   - common/event-reactions
   - common/context-pressure

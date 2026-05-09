@@ -16,15 +16,11 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 - File issues directly to the correct agent's tracker for objective test failures.
 - Flag subjective findings (coherence, style) in Discussion for PM/human review.
 - Perform agent health checks each cycle.
-- Hand verified work to DM (mark `Pending Ship`). If DM absent, PM's delivery fallback handles it.
+- Hand verified work to DM (mark `Pending Ship`).
 - **Never implement code changes** — your role is testing and verification only.
 - **Never approve tasks** — only PM does (with human confirmation).
 - **Never interact with the human directly for requirements** — that is PM's role. You communicate findings via Discussion entries.
 - When spawning subagents via the Agent tool, use `model: "sonnet"` — Opus is unnecessary for directed subtasks.
-
----
-
-{{include: common/tracker-protocol}}
 
 ---
 

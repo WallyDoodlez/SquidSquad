@@ -27,12 +27,11 @@ Project sub-skills are owned by PM (via the L4 propagation flow: PM writes to `.
 
 Entry file with includes (the role's own `SOUL.md` sits alongside `CLAUDE.md` in the role directory and is copied verbatim to `.squidsquad/<role>/SOUL.md` at install time — it is NOT listed in the include order because it is not composed). **Source of truth**: `references/roles/dev/includes.yml`.
 
-1. `common/tracker-protocol` — GitHub Issues tracker operations
-2. `common/cycle-runner` — Cycle runner transport layer (pre/post cycle mechanical operations)
-3. `common/context-pressure` — Step 1b: context pressure check
-4. `common/resume-working-state` — Step 1c: resume from working state
-5. `common/interval-sync` — Step 1d: interval sync
-6. `roles/dev/triage-issues` — Step 2: deterministic work queue triage
+1. `common/cycle-runner` — Cycle runner transport layer (pre/post cycle mechanical operations)
+2. `common/context-pressure` — Step 1b: context pressure check
+3. `common/resume-working-state` — Step 1c: resume from working state
+4. `common/interval-sync` — Step 1d: interval sync
+5. `roles/dev/triage-issues` — Step 2: deterministic work queue triage
 7. `roles/dev/implement-tasks` — Step 2b: implement approved tasks
 8. `common/improvement-scan` — Quiet-cycle improvement scanning
 9. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
@@ -57,12 +56,11 @@ Optional (comms-layer, not yet included by default):
 
 Entry file with includes. PM's `SOUL.md` sits alongside its `CLAUDE.md` and is copied verbatim at install time. **Source of truth**: `references/roles/pm/includes.yml`.
 
-1. `common/tracker-protocol` — GitHub Issues tracker operations
-2. `common/cycle-runner` — Cycle runner transport layer
-3. `common/context-pressure` — Context pressure check
-4. `roles/pm/checkin` — Step 2: human check-in and input handling
-5. `roles/pm/testing-and-verification` — Steps 3-6c: QA handles verification (PM delegates)
-6. `roles/pm/delivery-fallback` — Delivery: DM handles all delivery (PM delegates)
+1. `common/cycle-runner` — Cycle runner transport layer
+2. `common/context-pressure` — Context pressure check
+3. `roles/pm/checkin` — Step 2: human check-in and input handling
+4. `roles/pm/testing-and-verification` — Steps 3-6c: QA handles verification (PM delegates)
+5. `roles/pm/delivery` — Delivery: DM handles all delivery (PM delegates)
 7. `roles/pm/pipeline-sentinel` — Step 6f: pipeline health (conflict, stall, PR sync)
 9. `roles/pm/own-domain-autofix` — Auto-fix own-domain mechanical issues
 10. `roles/pm/health-check` — Step 7: agent health check
@@ -88,12 +86,11 @@ Entry file with includes. PM's `SOUL.md` sits alongside its `CLAUDE.md` and is c
 
 Entry file with includes. **Source of truth**: `references/roles/qa/includes.yml`.
 
-1. `common/tracker-protocol` — GitHub Issues tracker operations
-2. `common/cycle-runner` — Cycle runner transport layer
-3. `common/context-pressure` — Context pressure check
-4. `roles/qa/verification` — Steps 2-6: E2E tests, verification, health check
-5. `common/improvement-scan-slim` — Improvement filing only (slim variant)
-6. `roles/qa/issue-filing` — QA Bug Filing Protocol
+1. `common/cycle-runner` — Cycle runner transport layer
+2. `common/context-pressure` — Context pressure check
+3. `roles/qa/verification` — Steps 2-6: E2E tests, verification, health check
+4. `common/improvement-scan-slim` — Improvement filing only (slim variant)
+5. `roles/qa/issue-filing` — QA Bug Filing Protocol
 7. `roles/qa/discussion-protocol` — Discussion entry format
 8. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
 9. `roles/qa/file-conventions` — QA file/directory conventions
@@ -106,13 +103,12 @@ Entry file with includes. **Source of truth**: `references/roles/qa/includes.yml
 
 Entry file with includes. **Source of truth**: `references/roles/dm/includes.yml`.
 
-1. `common/tracker-protocol` — GitHub Issues tracker operations
-2. `common/capability-check` — Startup capability verification
-3. `common/cycle-runner` — Cycle runner transport layer
-4. `common/context-pressure` — Context pressure check
-5. `roles/dm/issue-triage` — Triage bugs assigned to DM
-6. `roles/dm/delivery-packaging` — Delivery packaging
-7. `roles/dm/version-bumps` — Version bump check + sequence
+1. `common/capability-check` — Startup capability verification
+2. `common/cycle-runner` — Cycle runner transport layer
+3. `common/context-pressure` — Context pressure check
+4. `roles/dm/issue-triage` — Triage bugs assigned to DM
+5. `roles/dm/delivery-packaging` — Delivery packaging
+6. `roles/dm/version-bumps` — Version bump check + sequence
 8. `common/improvement-scan-slim` — Improvement filing only (slim variant)
 9. `roles/dm/discussion-protocol` — Discussion entry format
 10. `roles/dm/issue-filing` — DM bug/feature filing
@@ -182,7 +178,6 @@ references/sub-skills/
 │   ├── vault-protocol.md             (Vault operations — shared by all roles)
 │   ├── boot-remote-agents.md         (Boot stalled/missing agents — shared by all roles)
 │   ├── improvement-scan.md           (Quiet-cycle improvement scanning — shared by all roles)
-│   ├── tracker-protocol.md           (GitHub Issues tracker operations — shared by all roles)
 │   ├── iteration-log.md              (Step 4 — iteration log format + cleanup — shared by dev)
 │   ├── git-commit.md                 (Step 5 — commit/push + PR flow — shared by dev)
 │   ├── discussion-protocol.md        (Discussion entry format — shared by dev)

@@ -16,7 +16,7 @@ These instructions apply to the PM agent on this project.
 
 - **Pipeline sentinel**: check PR conflicts, stall detection, PR status sync, stuck-state detection every cycle.
 - **NEVER modify dev agent branches.** If a PR has merge conflicts, comment on the issue telling the dev agent to merge main and re-push. The dev agent owns their branch — conflict resolution is their responsibility, not PM's.
-- **QA fallback**: if QA agent is not installed, PM handles Steps 3-6 (testing + verification).
+- **QA handles all verification**: PM holds QA accountable but never verifies directly.
 - **Post-merge recompose**: when merged branches touch `references/`, run `compose.py deploy-all`.
 - **Agent lifecycle via `start_team.py`** — PM does not boot agents directly. Report stalled agents to human.
 
@@ -26,7 +26,7 @@ These instructions apply to the PM agent on this project.
 - **Re-research gate**: if CONTEXT.md locked decisions deviate heavily from RESEARCH.md, re-run research.
 - **Test promotion**: copy test `.py` files to `tests/` before marking pending-ship.
 - **`delivery:skip` check**: internal-only tasks skip delivery packaging.
-- **DM fallback version bump**: if DM absent, PM handles version bumps (minor bump, config + SKILL.md + CHANGELOG, tag, push, reset counter).
+- **DM handles all delivery**: DM owns version bumps, CHANGELOG, and delivery packaging.
 - **CQ specs required for instruction changes**: any task touching LLM-consumed instructions needs comprehension questions in TEST-PLAN.md.
 - **Comprehension testing standard**: spawn fresh agent, give only modified files, answers must come from files alone.
 

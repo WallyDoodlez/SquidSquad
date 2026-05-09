@@ -118,23 +118,10 @@ def _get_all_roles():
     been removed from config.md but still have leftover directories (#943).
     """
     roles = set(_parse_dev_agents())
-    # Also check for coordination roles listed in config (DM, QA, Designer sections)
+    # Fixed team: PM + QA + DM always present (#6261)
+    roles.update({"pm", "qa", "dm"})
     if CONFIG_MD.exists():
         try:
-            text = CONFIG_MD.read_text(encoding="utf-8")
-            # PM: always present
-            if re.search(r"\*\*PM\*\*:\s*always present", text, re.IGNORECASE):
-                roles.add("pm")
-            # DM: present if "DM**: present" in config
-            if re.search(r"\*\*DM\*\*:\s*present", text, re.IGNORECASE):
-                roles.add("dm")
-            # QA: present if listed in Dev Agents or "QA**: always present"
-            if re.search(r"\*\*QA\*\*:\s*always present", text, re.IGNORECASE):
-                roles.add("qa")
-            # PM: present if "PM**: always present" in config
-            if re.search(r"\*\*PM\*\*:\s*always present", text, re.IGNORECASE):
-                roles.add("pm")
-        except Exception:
             pass
     return sorted(roles)
 
