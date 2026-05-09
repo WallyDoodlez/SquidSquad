@@ -130,6 +130,28 @@ class TestCheckAuthority:
         )
         assert ok
 
+    # ---- DM skip-QA flow (#6261) ----
+    def test_dm_can_skip_qa_in_progress_to_pending_ship(self, stub_role_labels):
+        """DM skips QA — goes directly from in-progress to pending-ship."""
+        ok, reason = tracker._check_authority(
+            269, "status:in-progress", "status:pending-ship", "dm-lead"
+        )
+        assert ok, reason
+
+    def test_skill_cannot_skip_qa_in_progress_to_pending_ship(self, stub_role_labels):
+        """Non-DM roles cannot skip QA."""
+        ok, reason = tracker._check_authority(
+            1, "status:in-progress", "status:pending-ship", "skill-lead"
+        )
+        assert not ok
+
+    def test_dm_can_rollback_pending_ship_to_in_progress(self, stub_role_labels):
+        """DM merge conflict rollback (#6261)."""
+        ok, reason = tracker._check_authority(
+            269, "status:pending-ship", "status:in-progress", "dm-lead"
+        )
+        assert ok, reason
+
     # ---- PM intake flow ----
     def test_pm_can_approve_pending(self, stub_role_labels):
         ok, _ = tracker._check_authority(
@@ -151,10 +173,8 @@ class TestCheckAuthority:
         assert ok
 
     # ---- QA/PM verification flow ----
-    # Both QA and PM are authorized. PM is always authorized because the PM
-    # agent carries the combined "PM/QA" identity in deployments without a
-    # dedicated QA agent. Regression test for the #320 re-open where the
-    # original fix locked PM out of its own documented verification workflow.
+    # Both QA and PM are authorized for verification transitions.
+    # Fixed team architecture (#6261): PM + QA + DM always present.
     def test_qa_can_approve_pending_test(self, stub_role_labels):
         ok, _ = tracker._check_authority(
             1, "status:pending-test", "status:pending-ship", "qa-lead"
@@ -168,7 +188,7 @@ class TestCheckAuthority:
         assert ok
 
     def test_pm_can_approve_pending_test(self, stub_role_labels):
-        """PM/QA combined identity — regression for #320 re-open."""
+        """PM verification authority — regression for #320 re-open."""
         ok, _ = tracker._check_authority(
             1, "status:pending-test", "status:pending-ship", "pm-lead"
         )

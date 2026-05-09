@@ -411,12 +411,12 @@ class TestGetAllRoles:
             assert "qa" in roles
             assert "dm" in roles
 
-    @patch("boot_remote._parse_dev_agents", return_value=["skill", "qa"])
+    @patch("boot_remote._parse_dev_agents", return_value=["skill"])
     @patch("boot_remote._parse_local_config", return_value={"skill": Path("/tmp")})
-    def test_excludes_pm_when_not_in_config(self, mock_local, mock_devs):
-        with patch.object(boot_remote, "SQUIDSQUAD_DIR", Path("/nonexistent")), \
-             patch.object(boot_remote, "CONFIG_MD", Path("/nonexistent/config.md")):
-            roles = boot_remote._get_all_roles()
-            assert "pm" not in roles
-            assert "skill" in roles
-            assert "qa" in roles
+    def test_mandatory_roles_always_present(self, mock_local, mock_devs):
+        """Fixed team: PM + QA + DM always present regardless of config (#6261)."""
+        roles = boot_remote._get_all_roles()
+        assert "pm" in roles
+        assert "qa" in roles
+        assert "dm" in roles
+        assert "skill" in roles

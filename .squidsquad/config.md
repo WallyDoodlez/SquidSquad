@@ -1,6 +1,6 @@
 # SquidSquad Config
 
-- **SquidSquad Version**: 0.35.0
+- **SquidSquad Version**: 0.29.0
 - **Tracker**: github-issues
 - **Architecture Version**: 1
 
@@ -115,7 +115,7 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-- **Shipped Since Last Bump**: 4
+- **Shipped Since Last Bump**: 0
 
 ## Agent Effort
 
@@ -132,17 +132,17 @@
 ## Event Reactions
 
 ### dm
-- **emits**: git-commit, status-transition, tracker-comment
-- **reacts-to**: agent-health, status-transition, verification-passed
+- **emits**: request-merge, status-transition, tracker-comment
+- **reacts-to**: pr-merged, status-transition
 
 ### pm
-- **emits**: status-transition, tracker-comment
-- **reacts-to**: agent-health, phase-change, pr-merge, status-transition, tracker-comment, verification-failed, verification-passed
+- **emits**: pr-create, status-transition, tracker-comment
+- **reacts-to**: agent-health, compose-completed, pr-merge, status-transition, verification-failed, verification-passed
 
 ### qa
-- **emits**: agent-health, status-transition, tracker-comment, verification-failed, verification-passed
-- **reacts-to**: git-commit, status-transition
+- **emits**: request-merge, status-transition, tracker-comment, verification-failed, verification-passed
+- **reacts-to**: pr-create, pr-merged, status-transition
 
 ### skill
-- **emits**: git-commit, status-transition, tracker-comment
-- **reacts-to**: status-transition, tracker-comment, verification-failed
+- **emits**: pr-create, status-transition, tracker-comment
+- **reacts-to**: compose-completed, pr-merged, status-transition, tracker-comment, verification-failed

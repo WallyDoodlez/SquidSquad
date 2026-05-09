@@ -120,9 +120,6 @@ def _get_all_roles():
     roles = set(_parse_dev_agents())
     # Fixed team: PM + QA + DM always present (#6261)
     roles.update({"pm", "qa", "dm"})
-    if CONFIG_MD.exists():
-        try:
-            pass
     return sorted(roles)
 
 

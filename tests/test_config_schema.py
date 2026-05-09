@@ -221,25 +221,24 @@ class TestParseAgentsV1:
         # dm because `**DM**: present`
         assert by_id["dm"]["role"] == "dm"
 
-    def test_multiple_dev_roles_no_dm(self):
+    def test_multiple_dev_roles_mandatory_roles_always_present(self):
+        """Fixed team: QA + DM always present regardless of config text (#6261)."""
         agents = config._parse_agents_v1(V1_NO_DM)
         by_id = {a["id"]: a for a in agents}
-        assert set(by_id) == {"pm", "be", "fe", "qa"}
+        assert set(by_id) == {"pm", "be", "fe", "qa", "dm"}
         assert by_id["be"]["alias"] == "backend"
         assert by_id["fe"]["alias"] == "frontend"
         assert by_id["pm"]["alias"] == "peggy"
         assert by_id["be"]["test_command"] == "pytest tests/be"
         assert by_id["fe"]["test_command"] == "npm test"
-        assert "dm" not in by_id
 
     def test_no_dev_roles(self):
-        """A config with only infrastructure roles still returns pm + dm."""
+        """A config with only infrastructure roles still returns pm + qa + dm (#6261)."""
         agents = config._parse_agents_v1(V1_NO_DEV_ROLES)
         by_id = {a["id"]: a for a in agents}
         assert "pm" in by_id
         assert "dm" in by_id
-        # QA is NOT added when there are no dev roles
-        assert "qa" not in by_id
+        assert "qa" in by_id
 
     def test_get_agents_uses_v1_path(self):
         agents = config.get_agents(V1_MINIMAL)
