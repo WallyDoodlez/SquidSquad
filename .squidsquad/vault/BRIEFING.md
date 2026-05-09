@@ -5,9 +5,8 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Active Priorities
 
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — awaiting human greenlight
-- #6304 test_model_router.py timeout path coverage (pending-test, medium, role:skill) — PR #6310
-- #6261 test plan updated with DeepSeek review — 41 TCs + 3 CQs + 26 smoke tests
-- #6261 Fixed team architecture — PM+QA+DM+workers always present (planned, high, role:skill) — awaiting human approval
+- #6479 manifest.md inventory stale (open, role:skill) — post-#6261 cleanup
+- #6478 test_manifest.py test failure (open, role:skill) — post-#6261 cleanup
 - #6274 Generalize 'dev' to 'worker' across architecture (pending, medium, role:skill) — awaiting approval
 - #6056 Replace /loop with event-driven Monitor tool (pending, medium, role:skill)
 - #6087 L2: status line redesign (pending, medium, role:skill) — needs approval to plan
@@ -26,6 +25,8 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #5159 Status bar shows agent 'awaiting restart' state from harness intent API (pending, low)
 ## Recently Shipped
 
+- #6261 Fixed team architecture — PM+QA+DM+workers always present, tracker-protocol L1 (shipped) — 41/41 TCs, DeepSeek-reviewed
+- #6304 test_model_router.py timeout coverage (shipped)
 - #6287 test_compose.py runner exclusion fix (shipped)
 - #6275 Stale date command timestamp ref fix (shipped)
 - #6126 Harness owns PR merge + compose (shipped) — v0.35.0
