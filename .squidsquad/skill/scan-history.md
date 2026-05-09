@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-09 08:04
+
+- **Files scanned**: tests/test_reboot_agent.py
+- **Findings**: #6497 (test_reboot_agent excluded from run_tests.py + 2 TestGetClonePath str-vs-Path failures — medium)
+- **Items rejected by human**: none yet
+- **Notes**: Same class as #6287 (test_compose exclusion). _get_clone_path returns str for JSON serialization but tests assert against Path objects.
+
 ## Scan — 2026-05-09 07:34
 
 - **Files scanned**: references/roles/qa/includes.yml, references/roles/dm/includes.yml
