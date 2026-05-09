@@ -20,7 +20,6 @@ graph TD
     subgraph repo["Git Repository"]
         subgraph agents["Claude Code Agents"]
             RL["[Role] Lead"]
-            DE["Designer"]
             QA["QA"]
             PM["PM"]
             DM["DM"]
@@ -40,7 +39,6 @@ graph TD
     end
 
     RL --> squid
-    DE --> squid
     QA --> squid
     PM --> squid
     DM --> squid
@@ -52,12 +50,11 @@ graph TD
 
 ### Roles
 
-SquidSquad always has **PM**, **QA**, and **DM** agents. Dev agents are flexible — you define them at setup time. You can also add a **Designer** agent for projects that need design-to-code workflows.
+SquidSquad always has **PM**, **QA**, and **DM** agents. Dev agents are flexible — you define them at setup time.
 
 | Agent | Owns | Loop |
 |-------|------|------|
 | **[role] Lead** (one per dev role) | Code for that role, bugs and features via GitHub Issues | Ralph Loop (fix bugs → implement features → test → push) |
-| **Designer** (optional) | Design specs, tokens, component specs, `designer/` | Ralph Loop (review design requests → interactive design sessions → produce specs → hand off to dev) |
 | **QA** | Test results, `qa/qa-log.md`, bug verification, feature testing | Ralph Loop (E2E tests → verify bugs → test features → health checks → push) |
 | **PM** | Product backlog, human interaction, feature intake, backlog management | Ralph Loop (check human → feature intake → backlog management → push) |
 | **DM** | Delivery packaging, docs, CHANGELOG, version bumps, git tags | Ralph Loop (scan pending-ship → deliver docs → version bump → push) |
