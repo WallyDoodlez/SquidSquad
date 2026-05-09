@@ -585,7 +585,7 @@ def commit_state(role, message):
 def get_branch_name(role, number):
     """Get the branch name for a task (#5040).
 
-    Reads branch-pattern from config. Default: squidsquad/{role}/{number}.
+    Reads branch-pattern from config. Default: squidsquad/task/{number} (#6526).
     Pattern supports {role} and {number} placeholders.
     """
     try:
@@ -595,7 +595,7 @@ def get_branch_name(role, number):
     except (SystemExit, Exception):
         pattern = ""
     if not pattern:
-        pattern = "squidsquad/{role}/{number}"
+        pattern = "squidsquad/task/{number}"
     return pattern.format(role=role, number=number)
 
 

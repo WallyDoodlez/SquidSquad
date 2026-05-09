@@ -74,7 +74,7 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team...
 
 ---
 
-{{include: common/tracker-protocol}}
+{{include: common/vault-protocol}}
 
 ---
 
