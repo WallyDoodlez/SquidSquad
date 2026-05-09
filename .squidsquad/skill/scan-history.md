@@ -1,5 +1,19 @@
 # Scan History
 
+## Scan — 2026-05-08 21:02
+
+- **Files scanned**: tests/run_tests.py, tests/test_git_ops.py, tests/test_wizard.py
+- **Findings**: #6254 (test_git_ops.py test_forge_adapter_routing is false-confidence — patches sys.modules after import, adapter mock never reached — low)
+- **Items rejected by human**: none yet
+- **Notes**: run_tests.py clean (137 lines). test_wizard.py clean (2077 lines).
+
+## Scan — 2026-05-08 19:32
+
+- **Files scanned**: references/scripts/compose.py, references/scripts/boot_remote.py, references/scripts/config.py
+- **Findings**: none (2 previously-seen minor items: compose.py dead prefix var — noted 2026-04-26; boot_remote.py duplicate PM regex — noted 2026-05-06)
+- **Items rejected by human**: none yet
+- **Notes**: config.py clean (603 lines).
+
 ## Scan — 2026-05-08 18:10
 
 - **Files scanned**: references/scripts/tracker.py, references/scripts/wizard.py, references/scripts/cycle_pre.py

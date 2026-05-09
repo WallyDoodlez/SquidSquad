@@ -602,8 +602,8 @@ def _build_pm_input(role):
         except (json.JSONDecodeError, ValueError):
             pass
 
-    # Pending ship
-    result = _run_script("tracker.py", "list-by-labels", "status:pending-ship")
+    # Pending ship — use --state all to catch GitHub auto-closed issues (#6222)
+    result = _run_script("tracker.py", "list-by-labels", "status:pending-ship", "--state", "all")
     try:
         if result.returncode == 0 and result.stdout.strip():
             items = json.loads(result.stdout)
@@ -870,9 +870,9 @@ def _build_dm_input(role):
     except (json.JSONDecodeError, ValueError):
         pass
 
-    # Pending ship items
+    # Pending ship items — use --state all to catch GitHub auto-closed issues (#6222)
     pending_ship = []
-    result = _run_script("tracker.py", "list-by-labels", "status:pending-ship")
+    result = _run_script("tracker.py", "list-by-labels", "status:pending-ship", "--state", "all")
     try:
         if result.returncode == 0 and result.stdout.strip():
             items = json.loads(result.stdout)
