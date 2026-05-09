@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-09 02:04
+
+- **Files scanned**: tests/test_cycle_post.py, packages/cli/index.js
+- **Findings**: #6316 (index.js fetchRawFile shell injection via unescaped repoPath — low, defense-in-depth), #6317 (index.js dead allowSet variable — low)
+- **Items rejected by human**: none yet
+- **Notes**: test_cycle_post.py had 3 findings from subagent — dead __wrapped__ (low), untested _verify_remote_branch guard (medium), untested _do_stop_after_cycle_check fallback (medium). Deferred in favor of index.js findings which are more actionable. cycle_post test gaps noted for future scans.
+
 ## Scan — 2026-05-09 01:05
 
 - **Files scanned**: tests/test_model_router.py, references/roles/qa/instructions.md
