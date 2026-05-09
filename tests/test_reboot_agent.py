@@ -325,7 +325,8 @@ class TestGetClonePath:
 
     def test_defaults_to_repo_root(self, patch_dirs):
         path = reboot_agent._get_clone_path("skill")
-        assert path == boot_remote.REPO_ROOT
+        # _get_clone_path returns str (for JSON serialization)
+        assert path == str(boot_remote.REPO_ROOT)
 
     def test_reads_local_config(self, patch_dirs, squid_dir, monkeypatch, tmp_path):
         custom_path = tmp_path / "custom" / "clone"
@@ -338,7 +339,8 @@ class TestGetClonePath:
         fake_home.mkdir()
         monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
         path = reboot_agent._get_clone_path("skill")
-        assert path == custom_path
+        # _get_clone_path returns str (for JSON serialization)
+        assert path == str(custom_path)
 
 
 # ---------------------------------------------------------------------------
@@ -369,7 +371,8 @@ class TestRebootAll:
             rc = reboot_agent.main()
 
         assert rc == 0
-        assert rebooted_roles == ["pm", "skill"]
+        # Fixed team (#6261): PM + QA + DM always present + dev agents
+        assert rebooted_roles == ["dm", "pm", "qa", "skill"]
 
     def test_all_reads_config_md(self, patch_dirs, squid_dir, monkeypatch):
         """--all reads agents from config.md via boot_remote, not hardcoded list (#3078)."""
