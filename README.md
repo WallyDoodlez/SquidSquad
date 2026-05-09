@@ -7,7 +7,7 @@
 
 **Your autonomous AI team — no meetings, no message queues, just git.**
 
-SquidSquad is a [Claude Code](https://claude.ai/code) skill that spins up autonomous AI agents — PM and DM are always present, plus dev, designer, and QA agents matched to your project — that work on your codebase in parallel. No message queues. No orchestration servers. Just a shared `.squidsquad/` folder and git.
+SquidSquad is a [Claude Code](https://claude.ai/code) skill that spins up autonomous AI agents — PM, QA, and DM are always present, plus dev agents matched to your project — that work on your codebase in parallel. No message queues. No orchestration servers. Just a shared `.squidsquad/` folder and git.
 
 ---
 
@@ -92,8 +92,7 @@ The wizard proposes a team based on what you're building:
 
 | You describe | Preset | Team created |
 |-------------|--------|--------------|
-| "I'm building a web app" | `software-dev` | PM → Designer ↻ → Dev → QA → DM |
-| "I need UI mockups" | `design` | PM → Designer ↻ → QA → DM |
+| "I'm building a web app" | `software-dev` | PM → Dev → QA → DM |
 
 PM, QA, and DM are always installed. Dev agents can be split (`fe` + `be`) or combined (`fullstack`) — the wizard asks based on your project.
 
