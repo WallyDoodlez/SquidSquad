@@ -602,8 +602,8 @@ def _build_pm_input(role):
         except (json.JSONDecodeError, ValueError):
             pass
 
-    # Pending ship — use --state all to catch GitHub auto-closed issues (#6222)
-    result = _run_script("tracker.py", "list-by-labels", "status:pending-ship", "--state", "all")
+    # Pending ship — reverted to --state open (#6262: --state all included stale closed items)
+    result = _run_script("tracker.py", "list-by-labels", "status:pending-ship")
     try:
         if result.returncode == 0 and result.stdout.strip():
             items = json.loads(result.stdout)
