@@ -133,6 +133,13 @@ class TestCliIndexJs:
             "CLI must loop over manifest entries and fetchRawFile each one"
         )
 
+    def test_fetchRawFile_has_path_validation_guard(self, cli_js):
+        """#6316 — fetchRawFile must validate repoPath against shell metacharacters."""
+        assert "/^[\\w.\\/\\-]+$/" in cli_js, (
+            "fetchRawFile must have a regex guard rejecting shell metacharacters "
+            "before interpolating repoPath into shell commands"
+        )
+
     def test_writes_files_to_canonical_paths(self, cli_js):
         """Each fetched file must be written to a validated path in the target."""
         assert "assertWithinRoot(gitRoot, filePath)" in cli_js, (

@@ -140,6 +140,11 @@ function assertWithinRoot(root, filePath) {
 // --- File fetching ---
 
 function fetchRawFile(repoPath) {
+  // Defense-in-depth: validate repoPath against shell metacharacter injection (#6316)
+  if (!/^[\w.\/\-]+$/.test(repoPath)) {
+    fail(`Unsafe repoPath rejected: ${repoPath}`);
+    return null;
+  }
   const url = `${RAW_BASE}/${repoPath}`;
   try {
     const content = execSync(
