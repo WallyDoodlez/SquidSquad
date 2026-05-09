@@ -1,6 +1,6 @@
 {
-  "last_scanned": "CONTRIBUTING.md",
-  "rotation_count": 16,
+  "last_scanned": "CHANGELOG.md",
+  "rotation_count": 17,
   "scan_history": [
     {"file": "README.md", "date": "2026-04-28", "findings": 2},
     {"file": "SKILL.md:sections-1-3", "date": "2026-04-28", "findings": 3},
@@ -92,7 +92,8 @@
     {"file": "SKILL.md:sections-7-8", "date": "2026-05-09", "findings": 3, "fixes": ["corrected entry file name CLAUDE.md→instructions.md", "added QA to always-installed roles list", "added QA to /squidsquad-status agent enumeration"]},
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-09", "findings": 2, "fixes": ["added PR merge + auto-recomposition to harness.py description", "updated event bus diagram pr-merge→pr-merged"]},
     {"file": "docs/sub-skill-guide.md", "date": "2026-05-09", "findings": 2, "fixes": ["removed non-existent designer/ from roles directory tree", "corrected SOUL.md alongside reference: CLAUDE.md→instructions.md"]},
-    {"file": "CONTRIBUTING.md", "date": "2026-05-09", "findings": 0}
+    {"file": "CONTRIBUTING.md", "date": "2026-05-09", "findings": 0},
+    {"file": "CHANGELOG.md", "date": "2026-05-09", "findings": 0}
   ],
   "doc_inventory": {
     "README.md": {"last_scanned": "2026-05-07", "status": "current"},
