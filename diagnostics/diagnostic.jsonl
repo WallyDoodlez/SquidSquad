@@ -683,3 +683,5 @@
 {"timestamp": "2026-05-09T00:28:04.243117", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
 {"timestamp": "2026-05-09T00:28:04.322712", "severity": "error", "source": "git_ops", "message": "push failed: rejected"}
 {"timestamp": "2026-05-09T00:29:20.075695", "severity": "error", "source": "tracker", "message": "TC coverage gate blocked #6126: test plan found but no QA-RESULTS"}
+{"timestamp": "2026-05-09T00:33:20.836264", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #6126: branch squidsquad/task/6126 has 8 unmerged commit(s)"}
+{"timestamp": "2026-05-09T00:33:45.128056", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #6126: branch squidsquad/task/6126 has 8 unmerged commit(s)"}
