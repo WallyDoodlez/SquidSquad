@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-09 01:05
+
+- **Files scanned**: tests/test_model_router.py, references/roles/qa/instructions.md
+- **Findings**: #6304 (test_model_router.py missing coverage for exit code 3 timeout path — medium)
+- **Items rejected by human**: none yet
+- **Notes**: qa/instructions.md subagent reported --role qa vs qa-lead inconsistency in verification.md — verified invalid, tracker.py _canonicalize_role strips -lead suffix, both forms work. model_router.py also has test_missing_api_key_returns_2 false-confidence concern (passes for wrong reason) — deferred, lower priority than timeout gap.
+
 ## Scan — 2026-05-09 00:34
 
 - **Files scanned**: tests/test_compose.py, references/scripts/harness.py
