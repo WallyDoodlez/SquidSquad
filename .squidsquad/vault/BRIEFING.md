@@ -5,7 +5,8 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Active Priorities
 
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — awaiting human greenlight
-- #6126 Harness owns PR merge + compose (pending-test, high, role:skill) — PR merged, awaiting QA verification
+- #6126 Harness owns PR merge + compose (pending-ship, high, role:skill) — QA verified (19/19 TCs), DM delivering
+- #6275 Stale date command timestamp ref (pending-test, low, role:skill) — fix applied, awaiting QA
 - #6261 Fixed team architecture — PM+QA+DM+workers always present (planned, high, role:skill) — awaiting human approval
 - #6274 Generalize 'dev' to 'worker' across architecture (pending, medium, role:skill) — awaiting approval
 - #6056 Replace /loop with event-driven Monitor tool (pending, medium, role:skill)
