@@ -742,3 +742,4 @@
 {"timestamp": "2026-05-09T01:04:53.035326", "severity": "error", "source": "git_ops", "message": "push failed: rejected"}
 {"timestamp": "2026-05-09T01:06:04.709844", "severity": "error", "source": "git_ops", "message": "push failed: To https://github.com/WallyDoodlez/SquidSquad.git\n ! [rejected]          main -> main (fetch first)\nerror: failed to push some refs to 'https://github.com/WallyDoodlez/SquidSquad.git'\nhint: Updates we"}
 {"timestamp": "2026-05-09T01:07:53.793546", "severity": "error", "source": "git_ops", "message": "push failed: To https://github.com/WallyDoodlez/SquidSquad.git\n ! [rejected]          main -> main (fetch first)\nerror: failed to push some refs to 'https://github.com/WallyDoodlez/SquidSquad.git'\nhint: Updates we"}
+{"timestamp": "2026-05-09T01:31:28.563589", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #6275: branch squidsquad/task/6275 has 2 unmerged commit(s)"}
