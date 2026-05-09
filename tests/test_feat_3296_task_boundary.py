@@ -50,7 +50,7 @@ class TestTaskBegin:
         with patch("config.get_field", side_effect=_mock_config_enabled):
             git_ops.task_begin("skill", "9999")
 
-        mock_checkout.assert_called_once_with("squidsquad/skill/9999")
+        mock_checkout.assert_called_once_with("squidsquad/task/9999")
 
     @patch("git_ops._run_list")
     def test_checks_out_from_remote(self, mock_run_list):
@@ -77,7 +77,7 @@ class TestTaskBegin:
 
         checkout_calls = [c for c in calls if "checkout" in c and "-b" in c]
         assert len(checkout_calls) == 1
-        assert "origin/squidsquad/skill/9999" in checkout_calls[0]
+        assert "origin/squidsquad/task/9999" in checkout_calls[0]
 
     @patch("git_ops._run_list")
     def test_missing_branch_exits_nonzero(self, mock_run_list):
@@ -116,7 +116,7 @@ class TestTaskBegin:
             with pytest.raises(SystemExit):
                 git_ops.task_begin("qa", "3100")
 
-        assert any("squidsquad/qa/3100" in c for c in checked)
+        assert any("squidsquad/task/3100" in c for c in checked)
 
 
 class TestTaskEnd:
