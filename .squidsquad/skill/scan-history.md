@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-09 04:05
+
+- **Files scanned**: references/scripts/reboot_agent.py
+- **Findings**: #6406 (sentinel-based restart is dead code — thin_launcher.py doesn't watch .restart, non-force restarts silently fail — high)
+- **Items rejected by human**: none yet
+- **Notes**: Also found _spawn_wrapper unused clone_path param (medium) and race condition on .restart consumption (medium) — both consequences of the same root cause (Finding 1). Filed root cause only.
+
 ## Scan — 2026-05-09 02:04
 
 - **Files scanned**: tests/test_cycle_post.py, packages/cli/index.js
