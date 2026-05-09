@@ -36,7 +36,6 @@ references/
 │   ├── manifest.md          ← composition reference doc (documents include order)
 │   ├── common/              ← shared by multiple roles
 │   │   ├── pull-latest.md
-│   │   ├── tracker-protocol.md
 │   │   ├── vault-protocol.md
 │   │   ├── vault-remember.md
 │   │   └── ...
