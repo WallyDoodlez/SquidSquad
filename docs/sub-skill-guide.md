@@ -53,11 +53,10 @@ references/
     │   └── manifest.yaml
     ├── pm/
     ├── qa/
-    ├── dm/
-    └── designer/
+    └── dm/
 ```
 
-**Common** sub-skills are shared across multiple agent roles. **Role-specific** sub-skills belong to one role. **SOUL.md** files (one per role, alongside the role's CLAUDE.md) define each role's personality.
+**Common** sub-skills are shared across multiple agent roles. **Role-specific** sub-skills belong to one role. **SOUL.md** files (one per role, alongside the role's `instructions.md`) define each role's personality.
 
 ---
 

@@ -16,7 +16,7 @@ Verify that tracker-protocol content is inlined into the L1 base agent definitio
   2. Confirm the file contains the tracker-protocol content (timestamps, status transitions, discussion entries, creating issues, reading issues)
   3. Confirm the tracker-protocol content is inline — not delivered via an `{{include:}}` directive targeting `common/tracker-protocol`
 - **Expected**: The file contains tracker-protocol sections covering at minimum: timestamp commands, startup permission check, reading issues, creating issues, status transitions, and discussion entries. No `{{include: common/tracker-protocol}}` line appears in the file
-- **Verification**: `grep -i "{{include.*tracker-protocol}}" references/roles/instructions.md` returns no matches. `grep -i "timestamp\|status transition\|tracker" references/roles/instructions.md` returns at least 10 matches (content present)
+- **Verification**: `grep -i "{{include.*tracker-protocol}}" references/roles/instructions.md` returns no matches. `grep -i "check-gh\|create-issue\|list-issues\|list-tasks\|tracker.py transition" references/roles/instructions.md` returns at least 5 matches (unique tracker-protocol markers, not pre-existing L1 content)
 
 ---
 
@@ -162,8 +162,8 @@ Verify that tracker-protocol content is inlined into the L1 base agent definitio
   2. Find the PR merge step (the step where DM attempts to merge a PR)
   3. Locate the merge failure / conflict handling branch
   4. Confirm the on-conflict action is: comment on the issue + transition item back to `in-progress`
-- **Expected**: DM's delivery sub-skill includes an explicit merge-conflict handler that: (a) comments on the tracker issue describing the conflict, and (b) transitions the item from `pending-ship` back to `in-progress` using `tracker.py transition`. The comment should direct the dev agent to resolve the conflict
-- **Verification**: `grep -i "conflict\|merge.*fail\|in-progress" references/sub-skills/roles/dm/delivery-packaging.md` shows a conflict handler branch that references transitioning back to `in-progress`. The transition command shown uses `--role dm-lead`
+- **Expected**: DM's delivery sub-skill includes an explicit merge-conflict handler that: (a) comments on the tracker issue describing the conflict, and (b) transitions the item from `pending-ship` back to `in-progress` using `tracker.py transition`. The comment should direct the dev agent to resolve the conflict. The handler must contain an actual `tracker.py transition` command, not just a "skip this item" instruction
+- **Verification**: `grep "tracker.py transition.*pending-ship.*in-progress\|transition.*pending-ship.*in-progress" references/sub-skills/roles/dm/delivery-packaging.md` returns at least one match showing the actual transition command with `--role dm-lead`. A simple grep for "conflict" or "in-progress" is NOT sufficient (pre-existing content matches those tokens)
 
 ---
 
@@ -174,8 +174,8 @@ Verify that tracker-protocol content is inlined into the L1 base agent definitio
   1. Read the `_parse_agents_v1` function (around line 394) in `references/scripts/config.py`
   2. Check for the block `if "PM/QA" in agents_text` or equivalent that injects a synthetic QA entry
   3. Also check `update_agents_section` and the `config.md` writer for `**PM/QA**: always present` output
-- **Expected**: The `if "PM/QA" in agents_text` block is removed. `config.py` does not synthesize a QA entry from a combined PM/QA string. QA is always treated as a first-class, separately listed entry. If a legacy config.md contains `**PM/QA**: always present`, `config.py` either migrates it automatically or errors with a clear message — it does not silently emit a combined identity
-- **Verification**: `grep -n "PM/QA\|PM.QA combined\|synthesize.*QA" references/scripts/config.py` returns no matches for synthesis logic. If any `PM/QA` references remain, they must be in migration or error handling code only
+- **Expected**: The `if "PM/QA" in agents_text` block is removed. `config.py` does not synthesize a QA entry from a combined PM/QA string. QA is always treated as a first-class, separately listed entry. No migration code needed — there is no install base with legacy format.
+- **Verification**: `grep -n "PM/QA\|PM.QA combined\|synthesize.*QA" references/scripts/config.py` returns no matches. No legacy parsing or migration code remains.
 
 ---
 
@@ -328,14 +328,16 @@ Verify that tracker-protocol content is inlined into the L1 base agent definitio
 
 ---
 
-### TC-29: dm/issue-triage.md routes to pending-ship not pending-test
+### TC-29: dm/issue-triage.md uses two-step flow (open → in-progress → pending-ship)
 
 - **Precondition**: Access to `references/sub-skills/roles/dm/issue-triage.md`
 - **Steps**:
   1. `grep "pending-test" references/sub-skills/roles/dm/issue-triage.md`
   2. `grep "pending-ship" references/sub-skills/roles/dm/issue-triage.md`
-- **Expected**: No `pending-test` references. At least one `pending-ship` reference.
-- **Verification**: First grep returns no matches, second returns matches.
+  3. `grep "in-progress" references/sub-skills/roles/dm/issue-triage.md`
+  4. Verify the flow is two-step: first `open → in-progress`, then `in-progress → pending-ship` (NOT a single `open → pending-ship` which is illegal in LEGAL_TRANSITIONS)
+- **Expected**: No `pending-test` references. At least one `pending-ship` reference. At least one `in-progress` reference. The instructions direct DM to pick up the bug (→ in-progress) and then mark it done (→ pending-ship) as two separate transitions.
+- **Verification**: `grep "pending-test" ...` returns no matches. `grep "in-progress" ...` returns matches. `grep "pending-ship" ...` returns matches. No `open.*pending-ship` single-step transition appears.
 
 ---
 
@@ -377,18 +379,21 @@ Verify that tracker-protocol content is inlined into the L1 base agent definitio
 - **Steps**:
   1. Read lines 125-135 of boot_remote.py. Check how it detects QA and DM.
   2. Verify it works with separate PM/QA/DM entries (not combined PM/QA).
-- **Expected**: QA and DM detection works with new config.md format where PM and QA are separate entries.
-- **Verification**: Code no longer depends on `**PM/QA**: always present` format.
+  3. Verify the parsing regex or logic correctly matches the NEW format (`**PM**: always present`, `**QA**: always present` as separate lines)
+- **Expected**: QA and DM detection works with new config.md format where PM and QA are separate entries. The parsing logic matches separate `**PM**:` and `**QA**:` lines. No fallback to `_parse_dev_agents()` is needed for core roles.
+- **Verification**: `grep -n "PM/QA\|PM.QA" references/scripts/boot_remote.py` returns no matches. Run `python -c "from references.scripts.boot_remote import _parse_local_config; print(_parse_local_config())"` or equivalent to verify it correctly reads all 4 roles from the current config.md.
 
 ---
 
-### TC-34: cycle_post.py dm_dir conditional removed
+### TC-34: cycle_post.py PM fallback CHANGELOG/version-bump branch removed entirely
 
 - **Precondition**: Access to `references/scripts/cycle_post.py`
 - **Steps**:
   1. `grep -n "dm_dir\|_dir_exists.*dm\|not.*dm.*exists" references/scripts/cycle_post.py`
-- **Expected**: No DM directory existence checks remain.
-- **Verification**: grep returns no matches.
+  2. `grep -n "CHANGELOG\|version.bump\|_do_version_bump" references/scripts/cycle_post.py`
+  3. Verify the entire fallback block (previously ~lines 437-453) that had PM writing CHANGELOG when DM absent is removed — not just the conditional, but the dead code inside it
+- **Expected**: No DM directory existence checks remain. No PM-writes-CHANGELOG fallback code remains. The `_do_version_bump` function either no longer exists or no longer contains PM fallback logic. DM always handles delivery.
+- **Verification**: Both grep commands return no matches related to PM fallback delivery. If `_do_version_bump` still exists, it must not contain `dm_dir` checks.
 
 ---
 
@@ -409,6 +414,63 @@ Verify that tracker-protocol content is inlined into the L1 base agent definitio
   1. `grep -c "tracker.protocol" tests/test_compose.py`
 - **Expected**: No stale references to tracker-protocol fixtures, markers, or assertions that expect it as a sub-skill.
 - **Verification**: grep returns 0.
+
+---
+
+### TC-37: add_role.py DM directory existence check removed
+
+- **Precondition**: Access to `references/scripts/add_role.py`
+- **Steps**:
+  1. `grep -n "dm.*exists\|squidsquad.*dm.*isdir\|if.*dm" references/scripts/add_role.py`
+- **Expected**: No DM directory existence check at line 63 or elsewhere. DM is always present.
+- **Verification**: grep returns no matches for DM existence checks.
+
+---
+
+### TC-38: wizard.py writes separate PM and QA entries
+
+- **Precondition**: Access to `references/scripts/wizard.py`
+- **Steps**:
+  1. Read the `_render_agent()` or config.md writing section of wizard.py
+  2. Search for `PM/QA` combined output: `grep "PM/QA" references/scripts/wizard.py`
+  3. Verify PM and QA are written as separate entries
+- **Expected**: wizard.py writes `**PM**: always present` and `**QA**: always present` as separate lines. No combined `**PM/QA**: always present` output.
+- **Verification**: `grep "PM/QA" references/scripts/wizard.py` returns no matches. `grep -c "PM.*always present\|QA.*always present" references/scripts/wizard.py` returns at least 2 matches (separate entries).
+
+---
+
+### TC-39: config.py sync_agents() writes separate PM/QA entries
+
+- **Precondition**: Access to `references/scripts/config.py`
+- **Steps**:
+  1. Read the `sync_agents()` function
+  2. Search for combined PM/QA output: `grep "PM/QA" references/scripts/config.py`
+- **Expected**: `sync_agents()` writes PM and QA as separate entries, not combined `PM/QA`. No legacy combined format in any writer function.
+- **Verification**: `grep "PM/QA" references/scripts/config.py` returns no matches.
+
+---
+
+### TC-40: Event contracts stable after L1 promotion
+
+- **Precondition**: TC-16 completed (compose.py deploy-all succeeded)
+- **Steps**:
+  1. Run `python references/scripts/compose.py deploy-all` (if not already run)
+  2. Read composed CLAUDE.md for each role and check `emits` event lists
+  3. Verify all agents still emit `status-transition` events
+- **Expected**: Event contract derivation produces the same `emits` lists as before. All agents still emit `status-transition`. The tracker-protocol move from L2 to L1 does not alter the derived event contracts.
+- **Verification**: `grep -A3 "emits" .squidsquad/pm/CLAUDE.md .squidsquad/qa/CLAUDE.md .squidsquad/dm/CLAUDE.md` shows `status-transition` in each role's emits list.
+
+---
+
+### TC-41: At least one variant role composed output contains tracker-protocol
+
+- **Precondition**: TC-16 completed; at least one variant role exists (e.g., `dev-skill`)
+- **Steps**:
+  1. Identify a variant role: `ls references/roles/dev/variants/ 2>/dev/null || ls references/roles/*/variants/ 2>/dev/null`
+  2. Run compose for that variant (or verify it was included in deploy-all)
+  3. Check the variant's composed CLAUDE.md for tracker-protocol content
+- **Expected**: Variant roles inherit tracker-protocol from L1 (not from a per-role include). The composed output contains `check-gh`, `create-issue`, and `tracker.py transition` markers.
+- **Verification**: `grep -c "check-gh\|create-issue\|tracker.py transition" .squidsquad/skill/CLAUDE.md` returns at least 3 matches.
 
 ---
 
@@ -435,6 +497,10 @@ Verify that tracker-protocol content is inlined into the L1 base agent definitio
 - [ ] `grep -i "timestamp\|check-gh\|status transition" .squidsquad/pm/CLAUDE.md` returns matches (tracker-protocol content present in composed output)
 - [ ] `grep -i "timestamp\|check-gh\|status transition" .squidsquad/qa/CLAUDE.md` returns matches (tracker-protocol in QA too)
 - [ ] `grep -i "timestamp\|check-gh\|status transition" .squidsquad/dm/CLAUDE.md` returns matches (tracker-protocol in DM too)
+- [ ] `grep "PM/QA" references/scripts/wizard.py` returns no matches
+- [ ] `grep "PM/QA" references/scripts/config.py` returns no matches
+- [ ] `grep "dm.*exists\|dm.*isdir" references/scripts/add_role.py` returns no matches
+- [ ] `grep -c "check-gh\|create-issue" .squidsquad/skill/CLAUDE.md` returns at least 2 (variant has tracker-protocol)
 
 ---
 

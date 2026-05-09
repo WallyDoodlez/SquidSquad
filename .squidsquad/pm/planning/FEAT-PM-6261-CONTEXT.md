@@ -8,7 +8,7 @@ Codify the fixed team (PM+QA+DM+workers) into the architecture. Merge tracker-pr
 
 - **Fixed team**: PM + QA + DM + technical workers. Always present. No optional roles, no fallback logic.
 - **Tracker-protocol into L1**: Inline directly into `references/roles/instructions.md`. No separate file, no include directive. ~140 lines added to base.
-- **DM skips QA entirely**: DM goes in-progress → pending-ship directly. DM never needs QA verification.
+- **DM skips QA entirely**: DM goes in-progress → pending-ship directly. DM never needs QA verification. DM bug fixes use two-step flow: open → in-progress → pending-ship (NOT single-step open → pending-ship, which is illegal in LEGAL_TRANSITIONS).
 - **DM merge conflict → route back to dev**: On PR merge failure, DM transitions item back to in-progress and comments. Dev agent resolves the conflict.
 - **delivery-fallback.md deleted entirely**: No stubs, no redirects. Clean deletion.
 - **tracker-protocol.md deleted after merge**: Content moves to L1, old file removed in same commit.
@@ -18,8 +18,8 @@ Codify the fixed team (PM+QA+DM+workers) into the architecture. Merge tracker-pr
 
 - How to structure the tracker-protocol content within L1 (section ordering, markdown headers)
 - Whether to keep PM's pending-test authority or remove it (research recommends keeping as coordination backstop)
-- How config.py handles legacy PM/QA combined identity migration
-- Whether to add a migration step to wizard.py or rely on compose.py's mandatory-role check
+- ~~How config.py handles legacy PM/QA combined identity migration~~ — LOCKED: no migration needed, no install base. Delete legacy parsing.
+- ~~Whether to add a migration step to wizard.py~~ — LOCKED: just ensure wizard.py writes separate PM/QA entries. No migration.
 
 ## Side Effect Mitigations (required)
 
@@ -39,13 +39,13 @@ Codify the fixed team (PM+QA+DM+workers) into the architecture. Merge tracker-pr
 - PM SOUL.md line 147: remove "If DM absent: PM is fallback reboot authority"
 - boot_remote.py:128: update QA/DM detection to handle new config.md format
 - add_role.py:63: remove DM directory existence check
-- cycle_post.py:440: remove live `if not dm_dir.exists()` conditional in `_do_version_bump()`
+- cycle_post.py: remove the entire PM fallback CHANGELOG/version-bump branch (~lines 437-453), not just the conditional. Dead code with DM always present.
 - delivery-packaging.md: add explicit merge-fail handler (comment on issue + transition to in-progress)
 
 ## Upgrade Path (required)
 
 - Stop all agents → git pull → compose.py deploy-all → start via harness
-- Old config.md with "PM/QA" format: compose.py or config.py migration rewrites to separate entries
+- No config.md migration needed — no install base exists with legacy PM/QA format. Delete legacy parsing code.
 - Old composed CLAUDE.md with tracker-protocol include: compose.py will ERROR on deploy-all (old file deleted), forcing upgrade. Acceptable hard break.
 
 ## Out of Scope
