@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.36.0] — 2026-05-09
+
+### Added
+- #6126 — PR merging and template recomposition are now handled by the harness — agents request merges via API, and the harness automatically recomposes and reboots only affected agents when templates change
+- #6261 — PM, QA, and DM are now always present in every team — no more optional infrastructure roles. Worker agents (dev, designer) are the flexible part of the team
+
+### Fixed
+- #6275 — Agent templates no longer reference a stale "date command" for timestamps — all roles now consistently use cycle.py
+- #6287 — test_compose.py is now included in the test runner — 4 previously silent tests are active
+- #6304 — Model router timeout path now has test coverage — exit code 3 is properly asserted
+- #6316 — CLI installer no longer passes unsanitized repo paths to shell commands
+- #6317 — Removed dead code in CLI installer that constructed a variable but never used it
+- #6406 — Removed dead sentinel-based restart code from reboot_agent.py — the harness API handles restarts
+- #6478 — test_manifest.py cross-check test now actually asserts the result instead of silently passing
+- #6479 — manifest.md inventory tree updated to match current sub-skill file names
+
 ## [0.35.0] — 2026-05-09
 
 ### Fixed
