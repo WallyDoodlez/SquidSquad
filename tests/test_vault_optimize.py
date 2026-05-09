@@ -231,6 +231,33 @@ class TestDecay:
         assert "confidence: medium" in text
         assert "Confidence decayed by vault-optimize" in text
 
+    def test_decay_does_not_corrupt_body_content(self, patched_vault):
+        """#6514: Body containing 'confidence: high' must not be modified."""
+        old_date = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+        body_with_confidence = (
+            "This note discusses confidence: high as a concept.\n"
+            "Example: confidence: high means human-confirmed.\n"
+            "Also updated: 2020-01-01 is an example date."
+        )
+        note_path = patched_vault / "galaxy" / "decision-body-trap.md"
+        note_path.write_text(
+            _note(type_="decision", confidence="high",
+                  created=old_date, updated=old_date,
+                  body=body_with_confidence),
+            encoding="utf-8",
+        )
+        vault_optimize.decay(dry_run=False)
+        text = note_path.read_text(encoding="utf-8")
+        # Frontmatter should be decayed
+        fm_end = text.find("---", 3)
+        header = text[:fm_end]
+        body = text[fm_end + 3:]
+        assert "confidence: medium" in header
+        # Body must be preserved exactly — not rewritten
+        assert "confidence: high as a concept" in body
+        assert "confidence: high means human-confirmed" in body
+        assert "updated: 2020-01-01 is an example date" in body
+
 
 # ---------------------------------------------------------------------------
 # Consolidate tests
