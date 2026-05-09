@@ -870,9 +870,9 @@ def _build_dm_input(role):
     except (json.JSONDecodeError, ValueError):
         pass
 
-    # Pending ship items — use --state all to catch GitHub auto-closed issues (#6222)
+    # Pending ship items — reverted to --state open (#6262: --state all included stale closed items)
     pending_ship = []
-    result = _run_script("tracker.py", "list-by-labels", "status:pending-ship", "--state", "all")
+    result = _run_script("tracker.py", "list-by-labels", "status:pending-ship")
     try:
         if result.returncode == 0 and result.stdout.strip():
             items = json.loads(result.stdout)
