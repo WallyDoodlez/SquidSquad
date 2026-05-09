@@ -88,7 +88,7 @@ The **Behavior Layer** (L3) is the focal layer — it's where agents reason, dec
 
 **Key files:**
 - `references/roles/[role]/includes.yml` — which sub-skills each role includes, in composition order
-- `references/sub-skills/common/` — shared capabilities (tracker-protocol, vault-protocol, cycle-runner, etc.)
+- `references/sub-skills/common/` — shared capabilities (vault-protocol, cycle-runner, event-reactions, etc.)
 - `references/roles/[role]/` — role-specific capabilities (e.g., `roles/dm/`, `roles/pm/`)
 - `references/scripts/compose.py` — assembles sub-skills into a single CLAUDE.md per role
 
