@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-09 07:34
+
+- **Files scanned**: references/roles/qa/includes.yml, references/roles/dm/includes.yml
+- **Findings**: none
+- **Items rejected by human**: none yet
+- **Notes**: Verified tracker-protocol references cleaned on main. delivery-fallback ref in manifest.md pending fix via #6479 PR.
+
 ## Scan — 2026-05-09 06:36
 
 - **Files scanned**: tests/test_manifest.py
