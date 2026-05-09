@@ -340,9 +340,8 @@ def _parse_agents_v1(text):
     Returns a list of dicts shaped like the v2 output:
         [{"id": "fe", "alias": "fe", "role": "dev"}, ...]
 
-    Infrastructure roles (pm, dm, qa) are added based on the
-    `## Agents` section presence indicators (`**PM/QA**: always present`,
-    `**DM**: present`) and the `## Aliases` section.
+    Infrastructure roles (pm, qa, dm) are always present (#6261 fixed team).
+    Aliases are read from the `## Aliases` section.
     """
     sections = _parse_sections(text)
     agents_text = sections.get("Agents", "")
@@ -387,22 +386,11 @@ def _parse_agents_v1(text):
             entry["test_command"] = cmd
         result.append(entry)
 
-    # Collect IDs already emitted to prevent duplicates.
+    # Fixed team: QA + DM always present (#6261)
     seen_ids = {e["id"] for e in result}
-
-    # QA presence: any dev role or designer present -> QA is implied.
-    # In the legacy schema the explicit indicator is `**PM/QA**: always present`.
-    if "PM/QA" in agents_text:
-        # QA is conceptually present alongside PM in the PM/QA combined identity.
-        # Add it as a separate entry for forward compatibility with v2 readers.
-        # Skip if qa was already added as a dev role (misconfigured config.md).
-        if dev_roles and "qa" not in seen_ids:
-            result.append({"id": "qa", "alias": _alias("qa"), "role": "qa"})
-            seen_ids.add("qa")
-
-    # DM presence
-    if "DM**: present" in agents_text and "dm" not in seen_ids:
-        result.append({"id": "dm", "alias": _alias("dm"), "role": "dm"})
+    for mandatory_role in ("qa", "dm"):
+        if mandatory_role not in seen_ids:
+            result.append({"id": mandatory_role, "alias": _alias(mandatory_role), "role": mandatory_role})
 
     return result
 
@@ -499,35 +487,19 @@ def sync_agents():
     sqdir = REPO_ROOT / ".squidsquad"
     # Find all roles with CLAUDE.md
     dev_roles = []
-    has_dm = False
     for subdir in sorted(sqdir.iterdir()):
         if not subdir.is_dir():
             continue
         if (subdir / "CLAUDE.md").exists():
             name = subdir.name
-            if name == "pm":
-                continue  # PM is always listed separately
-            if name == "dm":
-                has_dm = True
+            # Fixed team roles are listed separately (#6261)
+            if name in ("pm", "qa", "dm"):
                 continue
             dev_roles.append(name)
 
     # Update config
     if dev_roles:
         set_field("dev-agents", ", ".join(dev_roles))
-
-    # Update DM presence
-    text = _read_config()
-    if has_dm and "**DM**:" not in text:
-        # Add DM line after PM/QA
-        text = text.replace(
-            "- **PM/QA**: always present",
-            "- **PM/QA**: always present\n- **DM**: present",
-        )
-        CONFIG_PATH.write_text(text, encoding="utf-8")
-    elif not has_dm and "**DM**: present" in text:
-        text = text.replace("\n- **DM**: present", "")
-        CONFIG_PATH.write_text(text, encoding="utf-8")
 
     # Report
     roles = dev_roles + ["pm"]

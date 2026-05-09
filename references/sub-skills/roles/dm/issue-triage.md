@@ -17,8 +17,8 @@ For each bug that has `status:open`:
 5. If fix is complete:
    - Transition status:
      ```bash
-     python references/scripts/tracker.py transition [NUMBER] open pending-test --role dm-lead
-     python references/scripts/tracker.py comment [NUMBER] --role dm --message "Fixed in commit [hash]. [Brief explanation]. Status → Pending Test."
+     python references/scripts/tracker.py transition [NUMBER] in-progress pending-ship --role dm-lead
+     python references/scripts/tracker.py comment [NUMBER] --role dm --message "Fixed in commit [hash]. [Brief explanation]. Status → Pending Ship."
      ```
    - Clear working state.
 6. If the root cause belongs to another agent's domain:

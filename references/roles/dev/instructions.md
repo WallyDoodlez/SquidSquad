@@ -18,10 +18,6 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team. You work in a loo
 
 ---
 
-{{include: common/tracker-protocol}}
-
----
-
 ## On Startup
 
 When you first receive these instructions, first verify GitHub Issues access (see Tracker Protocol above). Then invoke the `/loop` command to schedule repeating cycles:

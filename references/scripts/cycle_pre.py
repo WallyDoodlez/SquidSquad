@@ -434,11 +434,6 @@ def _read_config_flags():
     }
 
 
-def _dir_exists(role):
-    """Check if a role's directory exists."""
-    return (SQUID_DIR / role).is_dir()
-
-
 def _get_verifiable_roles():
     """Return all roles whose items QA/PM should verify (pending-test).
 
@@ -572,10 +567,6 @@ def _build_skill_input(role):
 
 def _build_pm_input(role):
     """Build cycle-input.json fields specific to the PM agent."""
-    # Check agent presence
-    qa_present = _dir_exists("qa")
-    dm_present = _dir_exists("dm")
-
     # Tracker queries
     tracker_data = {
         "pending_test_issues": [],
@@ -737,9 +728,6 @@ def _build_pm_input(role):
     _enrich_with_comments(recently_commented)
 
     return {
-        "qa_present": qa_present,
-        "dm_present": dm_present,
-        "e2e_test_result": None,  # PM runs E2E during creative phase if QA absent
         "tracker": tracker_data,
         "approved_items": approved_items,
         "human_blocked": human_blocked,

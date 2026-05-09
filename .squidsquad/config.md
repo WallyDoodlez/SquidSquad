@@ -132,17 +132,17 @@
 ## Event Reactions
 
 ### dm
-- **emits**: git-commit, status-transition, tracker-comment
-- **reacts-to**: pr-merged, status-transition, tracker-comment, verification-passed
+- **emits**: status-transition, tracker-comment
+- **reacts-to**: cycle-start, status-transition, verification-passed
 
 ### pm
 - **emits**: status-transition, tracker-comment
-- **reacts-to**: agent-health, status-transition, tracker-comment, verification-failed, verification-passed
+- **reacts-to**: agent-health, pr-merged, status-transition, tracker-comment, verification-failed, verification-passed
 
 ### qa
 - **emits**: status-transition, tracker-comment, verification-failed, verification-passed
-- **reacts-to**: agent-health, git-commit, status-transition
+- **reacts-to**: agent-health, status-transition, tracker-comment
 
 ### skill
-- **emits**: git-commit, pr-create, status-transition, tracker-comment
-- **reacts-to**: status-transition, tracker-comment, verification-failed
+- **emits**: git-commit, status-transition, tracker-comment
+- **reacts-to**: status-transition, tracker-comment, verification-failed, verification-passed

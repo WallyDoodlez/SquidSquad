@@ -162,7 +162,6 @@ references/sub-skills/common/pull-latest.md
 references/sub-skills/common/resume-working-state.md
 references/sub-skills/common/self-restart.md
 references/sub-skills/common/status-line.md
-references/sub-skills/common/tracker-protocol.md
 references/sub-skills/common/vault-optimize.md
 references/sub-skills/common/vault-protocol-slim.md
 references/sub-skills/common/vault-protocol.md
@@ -187,6 +186,7 @@ references/sub-skills/roles/dm/ios/domain-context.md
 references/sub-skills/roles/dm/issue-filing.md
 references/sub-skills/roles/dm/issue-triage.md
 references/sub-skills/roles/dm/iteration-log.md
+references/sub-skills/roles/dm/task-pickup.md
 references/sub-skills/roles/dm/prohibitions.md
 references/sub-skills/roles/dm/skill/domain-context.md
 references/sub-skills/roles/dm/status-line.md
@@ -196,7 +196,7 @@ references/sub-skills/project/shared-instructions.md
 references/sub-skills/project/shared-soul-directives.md
 references/sub-skills/roles/pm/android/domain-context.md
 references/sub-skills/roles/pm/checkin.md
-references/sub-skills/roles/pm/delivery-fallback.md
+references/sub-skills/roles/pm/delivery.md
 references/sub-skills/roles/pm/discussion-protocol.md
 references/sub-skills/roles/pm/file-conventions.md
 references/sub-skills/roles/pm/fullstack/domain-context.md

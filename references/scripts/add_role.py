@@ -59,9 +59,10 @@ def _get_configured_agents():
         from config import get_field
         agents_str = get_field("dev-agents")
         agents = [a.strip() for a in agents_str.split(",") if a.strip()]
-        agents.append("pm")
-        if (SQUIDSQUAD_DIR / "dm").exists():
-            agents.append("dm")
+        # Fixed team: PM + QA + DM always present (#6261)
+        for role in ("pm", "qa", "dm"):
+            if role not in agents:
+                agents.append(role)
         return agents
     except (ImportError, SystemExit):
         return ["pm"]

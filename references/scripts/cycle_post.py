@@ -434,23 +434,7 @@ def _do_version_bump(data, role):
         content = re.sub(r'version:\s*[\d.]+', f'version: {new_version}', content, count=1)
         skill_md.write_text(content, encoding="utf-8")
 
-    # Add CHANGELOG entry — skip when DM is present (#4125).
-    # DM writes richer CHANGELOG entries (Added/Fixed descriptions).
-    # When DM is absent, PM fallback writes the basic shipped list.
-    dm_dir = REPO_ROOT / ".squidsquad" / "dm"
-    changelog = REPO_ROOT / "CHANGELOG.md"
-    if changelog.exists() and not dm_dir.exists():
-        old_content = changelog.read_text(encoding="utf-8")
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        items_str = "\n".join(f"- #{n}" for n in items)
-        new_section = f"## [{new_version}] — {date_str}\n\n### Shipped\n{items_str}\n\n"
-        # Insert after first line (title)
-        lines = old_content.split("\n", 1)
-        if len(lines) > 1:
-            new_content = lines[0] + "\n\n" + new_section + lines[1]
-        else:
-            new_content = old_content + "\n\n" + new_section
-        changelog.write_text(new_content, encoding="utf-8")
+    # DM always handles CHANGELOG entries (#6261). No PM fallback.
 
     # Commit, tag, push — stage only version-bump files (not git add -A, #3494)
     bump_files = [".squidsquad/config.md", "CHANGELOG.md"]
