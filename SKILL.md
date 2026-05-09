@@ -275,11 +275,12 @@ When `PR Flow: yes` is set in `config.md`, dev agents create PRs instead of push
 
 ### Auto-Merge (optional)
 
-When `Auto Merge: yes` and `Branch Workflow: yes` are set in `config.md`, PM automatically squash-merges PRs for verified tasks — you don't need to merge them manually. After QA marks a task as `Pending Ship`, PM merges the PR before DM handles delivery.
+When `Auto Merge: yes` and `Branch Workflow: yes` are set in `config.md`, the harness automatically merges PRs for verified tasks — you don't need to merge them manually. Agents request merges via `POST /merge` on the harness API; the harness executes the merge, and if the PR touched template files (`references/`), automatically recomposes agent templates and reboots only the affected agents.
 
 - **Tasks only** — bug fix PRs always require manual human merge for safety.
 - **Per-task override**: add the `merge:manual` label to any task to skip auto-merge and require human review.
-- **Conflict handling**: if a merge conflict is detected, PM routes the task back to the dev agent to resolve. QA re-verifies after resolution, then PM retries the merge.
+- **Conflict handling**: if a merge conflict is detected, QA routes the task back to the dev agent to resolve. QA re-verifies after resolution, then the merge is retried.
+- **Auto-recomposition**: after a merge that touches `references/`, the harness runs `compose.py deploy-all` and reboots agents whose `CLAUDE.md` or `SOUL.md` changed. This eliminates missed recompositions.
 - When `Auto Merge: no` (default for new installs), all PRs require manual merge as before.
 
 ---

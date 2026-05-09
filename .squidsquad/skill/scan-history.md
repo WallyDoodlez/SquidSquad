@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-09 00:34
+
+- **Files scanned**: tests/test_compose.py, references/scripts/harness.py
+- **Findings**: #6287 (test_compose.py excluded from STATIC_TEST_MODULES in run_tests.py — 4 TestCollectAllRoles tests silently failing due to stale assertions post-#6055 MANDATORY_ROLES change — high)
+- **Items rejected by human**: none yet
+- **Notes**: harness.py 3 medium findings from subagent — race in deferred init, save_state lock gap, _reboot_affected_agents diff. After manual verification: _reboot_affected_agents finding invalid (compose writes without committing, so `git diff HEAD` is correct). Other two are real but lower priority than test_compose gap. Filed 1 of 2 max.
+
 ## Scan — 2026-05-09 00:04
 
 - **Files scanned**: CHANGELOG.md, tests/test_tracker_authority.py, references/scripts/model_router.py
