@@ -427,7 +427,8 @@ def _run_mechanical_reactions(events, role):
 
         # Reaction: pr-merged → log for agent awareness (PM handles transitions)
         # (#6126) Updated from pr-merge to pr-merged — harness emits this now
-        if event_type == "pr-merged" and role == "pm":
+        # Only react on successful merges — failed merges don't trigger pipeline steps
+        if event_type == "pr-merged" and role == "pm" and payload.get("success"):
             pr_number = payload.get("pr_number")
             issue_number = payload.get("issue_number")
             if pr_number and issue_number:
