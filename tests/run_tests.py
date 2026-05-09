@@ -52,6 +52,7 @@ STATIC_TEST_MODULES = [
     "test_event_config",
     "test_event_derivation",
     "test_compose",
+    "test_reboot_agent",
 ]
 
 
