@@ -90,17 +90,44 @@ def _read_claude_pid(clone_path, role):
         return None, False
 
 
+def _kill_and_respawn(role, clone_path, pid, pid_label):
+    """Kill a process and respawn the agent via boot_remote (#6406)."""
+    squid = clone_path / ".squidsquad"
+    _kill_process(pid)
+    for _ in range(10):
+        if not _is_process_alive(pid):
+            break
+        time.sleep(0.5)
+    if _is_process_alive(pid):
+        print(f"{role}: WARNING — {pid_label} PID {pid} still alive after kill",
+              file=sys.stderr)
+        return 1
+    # Clean up stale PID files
+    for f in [squid / role / ".pid", squid / role / ".claude-pid"]:
+        try:
+            f.unlink()
+        except OSError:
+            pass
+    print(f"{role}: {pid_label} killed — respawning...")
+    success, msg = _spawn_wrapper(role, clone_path)
+    if success:
+        print(f"{role}: respawned ({msg})")
+    else:
+        print(f"{role}: respawn failed — {msg}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def reboot(role, timeout=DEFAULT_TIMEOUT, force=False):
     """Reboot an agent safely. Reboot == ensure running.
 
-    Architecture: kill the claude subprocess (.claude-pid), NOT the wrapper
-    (.pid). The wrapper stays alive, detects claude exit, reads .restart
-    sentinel, and respawns claude automatically.
+    Architecture (#6406): kill the process and respawn via boot_remote.
+    thin_launcher.py does not watch sentinel files — always use kill+respawn.
+    The --force flag controls immediate kill vs wait-for-idle.
     """
     clone_path = Path(_get_clone_path(role))
     squid = clone_path / ".squidsquad"
     pid_file = squid / role / ".pid"
-    restart_file = squid / role / ".restart"
     stop_file = squid / role / ".stop"
 
     # Check .stop sentinel first — do not respawn stopped agents
@@ -108,19 +135,19 @@ def reboot(role, timeout=DEFAULT_TIMEOUT, force=False):
         print(f"{role}: explicitly stopped (.stop sentinel) — not respawning")
         return 0
 
-    # Check if wrapper is running
-    wrapper_pid = None
-    wrapper_alive = False
+    # Check if launcher is running
+    launcher_pid = None
+    launcher_alive = False
     if pid_file.exists():
         try:
-            wrapper_pid = int(pid_file.read_text(encoding="utf-8").strip())
-            wrapper_alive = _is_process_alive(wrapper_pid)
+            launcher_pid = int(pid_file.read_text(encoding="utf-8").strip())
+            launcher_alive = _is_process_alive(launcher_pid)
         except (ValueError, OSError):
             pass
 
-    # Wrapper not running → boot fresh
-    if not wrapper_alive:
-        reason = "no PID file" if not pid_file.exists() else f"wrapper PID {wrapper_pid} dead"
+    # Launcher not running → boot fresh
+    if not launcher_alive:
+        reason = "no PID file" if not pid_file.exists() else f"launcher PID {launcher_pid} dead"
         print(f"{role}: not running ({reason}) — booting...")
         success, msg = _spawn_wrapper(role, clone_path)
         if success:
@@ -130,90 +157,27 @@ def reboot(role, timeout=DEFAULT_TIMEOUT, force=False):
             return 1
         return 0
 
-    # Wrapper is alive — kill the claude subprocess, let wrapper respawn
+    # Launcher is alive — kill and respawn
     claude_pid, claude_alive = _read_claude_pid(clone_path, role)
 
     if not claude_alive:
-        if force:
-            # Force mode: kill the wrapper and respawn fresh — sentinel approach
-            # won't work if wrapper is stuck or not checking sentinels
-            print(f"{role}: wrapper alive but claude not running"
-                  f" — force-killing wrapper PID {wrapper_pid}")
-            _kill_process(wrapper_pid)
-            for _ in range(10):
-                if not _is_process_alive(wrapper_pid):
-                    break
-                time.sleep(0.5)
-            if _is_process_alive(wrapper_pid):
-                print(f"{role}: WARNING — wrapper PID {wrapper_pid}"
-                      " still alive after kill", file=sys.stderr)
-                return 1
-            # Clean up stale PID files so _spawn_wrapper doesn't reject
-            for f in [pid_file, squid / role / ".claude-pid"]:
-                try:
-                    f.unlink()
-                except OSError:
-                    pass
-            try:
-                restart_file.unlink()
-            except OSError:
-                pass
-            print(f"{role}: wrapper killed — respawning...")
-            success, msg = _spawn_wrapper(role, clone_path)
-            if success:
-                print(f"{role}: respawned ({msg})")
-            else:
-                print(f"{role}: respawn failed — {msg}", file=sys.stderr)
-                return 1
-            return 0
-        # Non-force: write sentinel so wrapper respawns on its next check
-        restart_file.write_text(
-            "reboot requested by reboot_agent.py", encoding="utf-8")
-        print(f"{role}: wrapper alive but claude not running"
-              " — restart sentinel written")
-        return 0
-
-    # Write restart sentinel BEFORE killing so wrapper sees it on claude exit
-    restart_file.write_text("reboot requested by reboot_agent.py", encoding="utf-8")
+        # Claude not running but launcher is — kill launcher and respawn
+        return _kill_and_respawn(role, clone_path, launcher_pid, "launcher")
 
     if force:
-        _kill_process(claude_pid)
-        for _ in range(10):
-            if not _is_process_alive(claude_pid):
-                break
-            time.sleep(0.5)
-        if _is_process_alive(claude_pid):
-            print(f"{role}: WARNING — claude PID {claude_pid} still alive after kill",
-                  file=sys.stderr)
-        else:
-            print(f"{role}: killed claude PID {claude_pid} — wrapper will respawn")
-        return 0
+        # Immediate kill — don't wait for idle
+        return _kill_and_respawn(role, clone_path, claude_pid, "claude")
 
-    # Wait for idle, then kill claude subprocess
+    # Wait for idle, then kill and respawn
     elapsed = 0
     while elapsed < timeout:
         state = _read_current_state(clone_path, role)
         if state.startswith("idle"):
-            _kill_process(claude_pid)
-            for _ in range(10):
-                if not _is_process_alive(claude_pid):
-                    break
-                time.sleep(0.5)
-            if _is_process_alive(claude_pid):
-                print(f"{role}: WARNING — claude PID {claude_pid} still alive after kill",
-                      file=sys.stderr)
-            else:
-                print(f"{role}: went idle after {elapsed}s, killed claude PID {claude_pid}"
-                      " — wrapper will respawn")
-            return 0
+            return _kill_and_respawn(role, clone_path, claude_pid, "claude")
         time.sleep(POLL_INTERVAL)
         elapsed += POLL_INTERVAL
 
-    # Timeout — clean up sentinel, do NOT kill
-    try:
-        restart_file.unlink()
-    except OSError:
-        pass
+    # Timeout — agent is busy, do NOT kill
     print(f"{role}: timeout waiting for idle ({timeout}s) — agent is busy, no kill",
           file=sys.stderr)
     return 1
