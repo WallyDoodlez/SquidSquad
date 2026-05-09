@@ -642,3 +642,6 @@
 {"timestamp": "2026-05-08T22:02:51.520692", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #42: unmerged PR #99"}
 {"timestamp": "2026-05-08T22:02:51.572046", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #42: branch squidsquad/skill/42 has 3 unmerged commit(s)"}
 {"timestamp": "2026-05-08T22:02:53.191401", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #42: branch squidsquad/skill/42 has 2 unmerged commit(s)"}
+{"timestamp": "2026-05-08T22:03:04.778431", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
+{"timestamp": "2026-05-08T22:03:05.326042", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
+{"timestamp": "2026-05-08T22:03:06.416090", "severity": "error", "source": "git_ops", "message": "push failed: rejected"}
