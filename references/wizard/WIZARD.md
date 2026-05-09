@@ -284,8 +284,8 @@ Render the resolved pipeline to the user in one line with ASCII
 arrows (Q-new20):
 
 - `software-dev` default: `PM → Designer ↻ → [Dev] → QA → DM`
-- `design`: `PM → Designer ↻ → DM`
-- Minimal fallback: `PM → DM`
+- `design`: `PM → Designer ↻ → QA → DM`
+- Minimal: `PM → QA → DM`
 
 The `↻` glyph indicates HITL iteration (designer), per CONTEXT. Put
 it directly after the role name, before the arrow.
@@ -668,11 +668,10 @@ Print exactly this (adjust the boot command per OS):
 
 > SquidSquad ready. To start your team, run:
 >
->     ./start-pm.sh         (Linux / macOS)
->     .\\start-pm.ps1       (Windows)
+>     ./start.sh            (Linux / macOS)
+>     .\\start.ps1          (Windows)
 >
-> Each agent runs in its own terminal. Start with PM, then add
-> specialists as needed.
+> The harness boots all agents (PM, QA, DM, workers) automatically.
 
 Then **exit the conversation**. You are ephemeral (Q-new21) — do NOT
 start the loop yourself, do NOT transition into PM, do NOT keep the

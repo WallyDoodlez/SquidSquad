@@ -213,7 +213,7 @@ references/sub-skills/
 │   ├── file-conventions.md           (PM file conventions)
 │   ├── status-line.md                (PM status line)
 │   ├── prohibitions.md               (PM "never do" rules)
-│   ├── iteration-log.md             (Step 8 — PM/QA iteration log)
+│   ├── iteration-log.md             (Step 8 — PM iteration log)
 │   ├── git-commit.md                (Step 9 — PM commit/push)
 │   ├── github-issues.md              (Step 7b — GitHub Issues ingestion)
 │   ├── pipeline-sentinel.md           (Step 6f — pipeline health, always runs)
