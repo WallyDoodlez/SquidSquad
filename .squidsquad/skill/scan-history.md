@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-08 23:32
+
+- **Files scanned**: tests/test_boot_remote.py, references/roles/dm/instructions.md
+- **Findings**: none (dm/delivery-packaging.md still has old pr-merge on main — fix pending in #6126 PR. test_boot_remote.py has redundant import json in test body — too minor to file)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-08 23:02
 
 - **Files scanned**: references/scripts/cycle_post.py, references/roles/pm/instructions.md, references/installer-files.txt
