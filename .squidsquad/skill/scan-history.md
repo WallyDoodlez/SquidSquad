@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-09 10:04
+
+- **Files scanned**: references/sub-skills/common/git-commit.md
+- **Findings**: #6526 (git_ops.py get_branch_name default pattern stale — low)
+- **Items rejected by human**: none yet
+- **Notes**: Subagent also found PR creation path ambiguity (manual vs cycle_post) and ownership check gap with unified branches — both template clarity issues, not code bugs.
+
 ## Scan — 2026-05-09 09:05
 
 - **Files scanned**: references/scripts/vault_optimize.py
