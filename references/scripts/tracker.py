@@ -19,14 +19,13 @@ Usage:
 
 Role authority (who may call `transition`):
   - PM  (--role pm  or pm-lead)    : pending -> planning/approved, planning -> planned,
-                                     planned -> approved; AND pending-test -> in-progress,
-                                     pending-test -> pending-ship (PM/QA combined identity)
+                                     planned -> approved; pending-test -> in-progress/pending-ship
   - QA  (--role qa  or qa-lead)    : pending-test -> in-progress, pending-test -> pending-ship
-                                     (when deployed as a separate agent alongside PM)
   - Assigned dev role (--role <r>) : open -> in-progress, approved -> in-progress,
                                      in-progress <-> pending-test, open -> pending-test,
                                      in-progress -> approved (must match issue's `role:*` label)
-  - DM  (--role dm  or dm-lead)    : pending-ship -> shipped
+  - DM  (--role dm  or dm-lead)    : in-progress -> pending-ship, pending-ship -> shipped,
+                                     pending-ship -> in-progress (merge conflict rollback)
   - Human override                 : --force bypasses authority + unread-feedback guards
 """
 

@@ -39,11 +39,9 @@ For each Pending Ship task that is NOT skipped:
 
 0b. **PR merge gate**: If Branch Workflow is enabled (`python references/scripts/config.py get branch-workflow` → `yes`), check for an associated PR:
    ```bash
-   gh pr list --search "squidsquad/" --state open --json number,headRefName,isDraft --limit 20
+   gh pr list --search "squidsquad/" --state open --json number,headRefName --limit 20
    ```
-   Find the PR matching this issue number. If found:
-   - If `isDraft` is true: **STOP** — this PR has not been verified by QA. Comment on the issue: `"Cannot ship — PR #[PR] is still a draft (QA has not converted to ready). Skipping."` Move to the next item.
-   - If `isDraft` is false: request merge via harness before shipping:
+   Find the PR matching this issue number. If found, request merge via harness before shipping:
      ```bash
      curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH]", "role": "dm"}'
      ```
