@@ -120,7 +120,7 @@ def _resolve_includes(entry_file: Path) -> str:
 def _load_manifest(role_name: str) -> list | None:
     """Load includes.yml for a role, with variant inheritance.
 
-    Returns a list of include paths (e.g. ['common/tracker-protocol', ...])
+    Returns a list of include paths (e.g. ['common/cycle-runner', ...])
     or None if no manifest exists.
 
     Supports two schemas:
