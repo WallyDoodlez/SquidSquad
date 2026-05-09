@@ -181,7 +181,6 @@ Each role is a different configuration of the behavior and soul layers, assemble
 | **PM** | Human check-in, feature intake, backlog, pipeline health | Process guardian, user-centric | Interactive |
 | **QA** | E2E tests, verification, regression testing | Skeptical tester, zero-tolerance for gaps | Autonomous |
 | **DM** | Delivery packaging, docs, CHANGELOG, version bumps | User-first communicator, last-mile owner | Autonomous |
-| **Designer** | Design specs, tokens, interactive design sessions | Visual thinker, design systems advocate | Autonomous + interactive |
 
 ---
 
