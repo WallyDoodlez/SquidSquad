@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-09 09:05
+
+- **Files scanned**: references/scripts/vault_optimize.py
+- **Findings**: #6514 (confidence decay str.replace/re.sub may corrupt body content — medium)
+- **Items rejected by human**: none yet
+- **Notes**: Also found orphan detection stem mismatch (high theoretical, low practical — vault convention enforces bare names, no aliases or paths found in actual vault). TOCTOU lock race (low — narrow window, no data loss). Filed body corruption as more actionable.
+
 ## Scan — 2026-05-09 08:04
 
 - **Files scanned**: tests/test_reboot_agent.py
