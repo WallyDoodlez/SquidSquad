@@ -560,6 +560,55 @@ class TestQuotaNotification:
         assert mock_diag.call_args[0][0]["action"] == "api-error"
 
 
+    @patch("model_router._read_config", return_value="## Model Routing\n- **Research Model**: gpt-5.2\n")
+    @patch("model_router._load_provider_manifest")
+    @patch("model_router._ensure_deps")
+    @patch("model_router._log_diagnostic")
+    @patch("model_router._load_adapter")
+    def test_timeout_error_returns_exit_code_3(
+        self, mock_adapter, mock_diag, mock_deps, mock_manifest, mock_config, capsys
+    ):
+        """Timeout errors return exit code 3 (distinct from quota/generic errors)."""
+        mock_manifest.return_value = ("openai", {
+            "name": "openai", "auth": {"env_var": "OPENAI_API_KEY"},
+            "api_base": "", "deps": [],
+        })
+        fake_module = MagicMock()
+        fake_module.call.side_effect = Exception("Request timed out after 120s")
+        mock_adapter.return_value = fake_module
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            with patch("model_router.assemble_prompt", return_value="test"):
+                code = model_router.route("research", "test-1", "", "/tmp/out", "ctx")
+        assert code == 3
+        captured = capsys.readouterr()
+        assert "timeout" in captured.err.lower()
+        mock_diag.assert_called_once()
+        assert mock_diag.call_args[0][0]["action"] == "timeout"
+
+    @patch("model_router._read_config", return_value="## Model Routing\n- **Research Model**: gpt-5.2\n")
+    @patch("model_router._load_provider_manifest")
+    @patch("model_router._ensure_deps")
+    @patch("model_router._log_diagnostic")
+    @patch("model_router._load_adapter")
+    def test_timeout_error_type_returns_exit_code_3(
+        self, mock_adapter, mock_diag, mock_deps, mock_manifest, mock_config, capsys
+    ):
+        """TimeoutError exception type also returns exit code 3."""
+        mock_manifest.return_value = ("openai", {
+            "name": "openai", "auth": {"env_var": "OPENAI_API_KEY"},
+            "api_base": "", "deps": [],
+        })
+        fake_module = MagicMock()
+        fake_module.call.side_effect = TimeoutError("connection timed out")
+        mock_adapter.return_value = fake_module
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            with patch("model_router.assemble_prompt", return_value="test"):
+                code = model_router.route("research", "test-1", "", "/tmp/out", "ctx")
+        assert code == 3
+        mock_diag.assert_called_once()
+        assert mock_diag.call_args[0][0]["action"] == "timeout"
+
+
 class TestNoShellTrue:
     def test_no_shell_true_in_source(self):
         """model_router.py must not use shell=True (security layer 3)."""
