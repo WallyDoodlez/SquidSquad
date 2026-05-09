@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-08 23:02
+
+- **Files scanned**: references/scripts/cycle_post.py, references/roles/pm/instructions.md, references/installer-files.txt
+- **Findings**: none (pm/instructions.md and installer-files.txt still reference post-merge-recompose on main — expected, fix pending in #6126 PR #6201)
+- **Items rejected by human**: none yet
+- **Notes**: cycle_post.py clean (769 lines). _do_restart_sentinel documented as deprecated — intentional backward compat.
+
 ## Scan — 2026-05-08 22:31
 
 - **Files scanned**: tests/test_cycle_pre.py, references/agent-instructions.md
