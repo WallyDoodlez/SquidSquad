@@ -510,30 +510,32 @@ class TestReadConfigValue:
 # ---------------------------------------------------------------------------
 
 class TestCollectAllRoles:
-    def test_includes_dev_agents_and_pm(self, tmp_path):
+    def test_includes_dev_agents_and_mandatory_roles(self, tmp_path):
         with patch.object(compose, "_read_config_value", return_value="skill,be"), \
              patch.object(compose, "REPO_ROOT", tmp_path):
             roles = compose._collect_all_roles()
-        assert roles == ["skill", "be", "pm"]
+        assert roles == ["skill", "be", "pm", "qa", "dm"]
 
-    def test_includes_dm_when_dir_exists(self, tmp_path):
-        (tmp_path / ".squidsquad" / "dm").mkdir(parents=True)
+    def test_mandatory_roles_not_duplicated_when_in_config(self, tmp_path):
+        with patch.object(compose, "_read_config_value", return_value="skill,dm"), \
+             patch.object(compose, "REPO_ROOT", tmp_path):
+            roles = compose._collect_all_roles()
+        assert roles == ["skill", "dm", "pm", "qa"]
+        assert roles.count("dm") == 1
+        assert roles.count("pm") == 1
+
+    def test_mandatory_roles_always_present(self, tmp_path):
         with patch.object(compose, "_read_config_value", return_value="skill"), \
              patch.object(compose, "REPO_ROOT", tmp_path):
             roles = compose._collect_all_roles()
-        assert roles == ["skill", "pm", "dm"]
-
-    def test_no_dm_when_dir_missing(self, tmp_path):
-        with patch.object(compose, "_read_config_value", return_value="skill"), \
-             patch.object(compose, "REPO_ROOT", tmp_path):
-            roles = compose._collect_all_roles()
-        assert "dm" not in roles
+        for mandatory in ("pm", "qa", "dm"):
+            assert mandatory in roles
 
     def test_empty_dev_agents(self, tmp_path):
         with patch.object(compose, "_read_config_value", return_value=""), \
              patch.object(compose, "REPO_ROOT", tmp_path):
             roles = compose._collect_all_roles()
-        assert roles == ["pm"]
+        assert roles == ["pm", "qa", "dm"]
 
     def test_strips_whitespace_from_agent_names(self, tmp_path):
         with patch.object(compose, "_read_config_value", return_value=" skill , be "), \
