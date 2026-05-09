@@ -877,3 +877,4 @@
 {"timestamp": "2026-05-09T03:32:16.453084", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
 {"timestamp": "2026-05-09T03:32:16.502732", "severity": "error", "source": "git_ops", "message": "push failed: rejected"}
 {"timestamp": "2026-05-09T03:32:21.470959", "severity": "error", "source": "git_ops", "message": "push failed: fatal: The upstream branch of your current branch does not match\nthe name of your current branch.  To push to the upstream branch\non the remote, use\n\n    git push origin HEAD:main\n\nTo push to the bran"}
+{"timestamp": "2026-05-09T03:32:36.144962", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #6304: branch squidsquad/task/6304 has 2 unmerged commit(s)"}
