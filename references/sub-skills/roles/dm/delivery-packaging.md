@@ -39,15 +39,18 @@ For each Pending Ship task that is NOT skipped:
 
 0b. **PR merge gate**: If Branch Workflow is enabled (`python references/scripts/config.py get branch-workflow` → `yes`), check for an associated PR:
    ```bash
-   gh pr list --search "squidsquad/" --state open --json number,headRefName,isDraft --limit 20
+   gh pr list --search "squidsquad/" --state open --json number,headRefName --limit 20
    ```
-   Find the PR matching this issue number. If found:
-   - If `isDraft` is true: **STOP** — this PR has not been verified by QA. Comment on the issue: `"Cannot ship — PR #[PR] is still a draft (QA has not converted to ready). Skipping."` Move to the next item.
-   - If `isDraft` is false: request merge via harness before shipping:
+   Find the PR matching this issue number. If found, request merge via harness before shipping:
      ```bash
      curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH]", "role": "dm"}'
      ```
-     The harness returns 202 immediately. Check for `pr-merged` event in your next cycle's `recent_events`. If merge fails (`success: false`), comment on the issue and skip this item.
+     The harness returns 202 immediately. Check for `pr-merged` event in your next cycle's `recent_events`. If merge fails (`success: false` in event payload):
+     ```bash
+     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR merge failed — merge conflict. Dev agent: resolve conflicts and re-push. Status → In Progress."
+     python references/scripts/tracker.py transition [NUMBER] pending-ship in-progress --role dm-lead
+     ```
+     Skip this item and move to the next.
 
 1. **Update user-facing docs**: Update `README.md` with user-story descriptions of the new functionality. Update any relevant sections of `SKILL.md` that describe user-facing behavior. Write in terms users understand — what's new, how to use it, what changed.
 2. **Write CHANGELOG entry**: Prepare a CHANGELOG entry for this task. Do NOT write it to `CHANGELOG.md` yet — it will be included in the next version bump. Instead, append a Discussion note with the CHANGELOG text:

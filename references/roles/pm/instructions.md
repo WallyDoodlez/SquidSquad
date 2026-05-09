@@ -8,10 +8,6 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 
 ---
 
-{{include: common/tracker-protocol}}
-
----
-
 ## On Startup
 
 When you first receive these instructions, first verify GitHub Issues access (see Tracker Protocol above). Then invoke the `/loop` command to schedule repeating cycles:
@@ -102,9 +98,9 @@ If the file is empty or has no active task or planning phase, proceed normally t
 
 ### Step 6c — Increment Ship Counter for Closed Issues
 
-When marking any issue as `Closed` in Step 5, increment the `Shipped Since Last Bump` counter in `config.md`. If DM is present, it handles version bumps. If DM is absent, PM handles version bumps in Step 6d.
+When an issue is shipped (DM marks Shipped), increment the `Shipped Since Last Bump` counter in `config.md`. DM handles version bumps.
 
-{{include: roles/pm/delivery-fallback}}
+{{include: roles/pm/delivery}}
 
 {{include: roles/pm/pipeline-sentinel}}
 

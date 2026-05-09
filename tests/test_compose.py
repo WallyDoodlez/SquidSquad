@@ -26,8 +26,8 @@ def compose_env(tmp_path):
     # Create common sub-skills
     common = sub_skills / "common"
     common.mkdir()
-    (common / "tracker-protocol.md").write_text(
-        "## Tracker Protocol\n\nUse tracker.py for all operations.",
+    (common / "context-pressure.md").write_text(
+        "## Context Pressure\n\nCheck context pressure each cycle.",
         encoding="utf-8",
     )
     (common / "pull-latest.md").write_text(
@@ -42,7 +42,7 @@ def compose_env(tmp_path):
     (dev_role / "instructions.md").write_text(
         "# Dev Agent\n\n"
         "{{runtime: souls/dev}}\n"
-        "{{include: common/tracker-protocol}}\n"
+        "{{include: common/context-pressure}}\n"
         "{{include: common/pull-latest}}\n"
         "Role: [ROLE]\n"
         "Test: [ROLE_TEST_CMD]\n"
@@ -58,7 +58,7 @@ def compose_env(tmp_path):
     pm_role.mkdir(parents=True)
     (pm_role / "instructions.md").write_text(
         "# PM Agent\n\n"
-        "{{include: common/tracker-protocol}}\n"
+        "{{include: common/context-pressure}}\n"
         "Active agents: [ACTIVE_AGENTS]\n"
         "E2E: [E2E_TEST_CMD]\n"
         "Interval: [INTERVAL]\n",
@@ -103,9 +103,9 @@ class TestResolveIncludes:
         entry = compose_env / "references" / "roles" / "dev" / "instructions.md"
         with patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
             result = compose._resolve_includes(entry)
-        assert "## Tracker Protocol" in result
-        assert "<!-- sub-skill: tracker-protocol -->" in result
-        assert "<!-- /sub-skill: tracker-protocol -->" in result
+        assert "## Context Pressure" in result
+        assert "<!-- sub-skill: context-pressure -->" in result
+        assert "<!-- /sub-skill: context-pressure -->" in result
 
     def test_missing_include(self, compose_env):
         entry = compose_env / "test-entry.md"
@@ -142,7 +142,7 @@ class TestResolveIncludes:
     def test_preserves_inline_content(self, compose_env):
         entry = compose_env / "inline-test.md"
         entry.write_text(
-            "# Header\n\nSome inline text.\n\n{{include: common/tracker-protocol}}\n\nMore inline.",
+            "# Header\n\nSome inline text.\n\n{{include: common/context-pressure}}\n\nMore inline.",
             encoding="utf-8",
         )
         with patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
@@ -150,7 +150,7 @@ class TestResolveIncludes:
         assert "# Header" in result
         assert "Some inline text." in result
         assert "More inline." in result
-        assert "## Tracker Protocol" in result
+        assert "## Context Pressure" in result
 
 
 # ---------------------------------------------------------------------------
@@ -257,7 +257,7 @@ class TestComposeRole:
              patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
             result = compose.compose_role("dev")
         assert "# Dev Agent" in result
-        assert "## Tracker Protocol" in result
+        assert "## Context Pressure" in result
         assert "### Step 1 — Pull Latest" in result
 
     def test_composes_pm_role(self, compose_env):
@@ -265,7 +265,7 @@ class TestComposeRole:
              patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
             result = compose.compose_role("pm")
         assert "# PM Agent" in result
-        assert "## Tracker Protocol" in result
+        assert "## Context Pressure" in result
 
     def test_unknown_role_falls_back_to_dev(self, compose_env):
         """Unknown roles fall back to dev (dev variant mechanism)."""
@@ -466,13 +466,13 @@ class TestLoadManifest:
     def test_loads_valid_manifest(self, compose_env):
         manifest_dir = compose_env / "references" / "roles" / "dev"
         (manifest_dir / "includes.yml").write_text(
-            "includes:\n  - common/tracker-protocol\n  - common/pull-latest\n",
+            "includes:\n  - common/context-pressure\n  - common/pull-latest\n",
             encoding="utf-8",
         )
         with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
              patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
             result = compose._load_manifest("dev")
-        assert result == ["common/tracker-protocol", "common/pull-latest"]
+        assert result == ["common/context-pressure", "common/pull-latest"]
 
     @pytest.mark.skipif(compose.yaml is None, reason="pyyaml not installed")
     def test_invalid_yaml_returns_none(self, compose_env):

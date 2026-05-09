@@ -1,30 +1,24 @@
 # Working State
 
-- **Task**: #6126
+- **Task**: #6261
 - **Status**: in-progress
-- **Started**: 2026-05-08 19:01
+- **Started**: 2026-05-09 02:33
+- **Last Processed Event ID**: 1af4cc69
 
 ## Completed Steps
-- Read issue body, RESEARCH.md, CONTEXT.md, TEST-PLAN.md
-- Consulted vault for relevant decisions
-- Picked up, transitioned to in-progress, checked out branch
+- AC-1: COMPLETE — tracker-protocol inlined into L1, source deleted, includes/manifest/installer cleaned
+- AC-2: MOSTLY COMPLETE — fallback logic stripped from PM/QA instructions, cycle_pre, cycle_post, boot_remote, add_role, status-line, L4 project files, delivery-fallback renamed to delivery
 
 ## Remaining Steps
-- AC-7: Update event_catalog.py (add request-merge, pr-merged, compose-completed)
-- AC-7: Update cycle_pre.py (_ROLE_EVENT_TYPES + mechanical reactions for pr-merged)
-- AC-8/AC-12: Remove _emit("pr-merge") from git_ops.py pr_merge()
-- AC-1/AC-2/AC-3/AC-4: Add POST /merge endpoint to harness.py
-- AC-9: Add reactive pull on pr-merged to cycle_pre.py
-- AC-10: Add harness reboot-affected-agents after compose
-- AC-5: Update QA verification.md (3 pr-merge CLI calls → POST /merge)
-- AC-5: Update DM delivery-packaging.md (1 pr-merge CLI call → POST /merge)
-- AC-6: Delete PM post-merge-recompose.md, remove from includes.yml + instructions.md
-- Write tests for harness merge endpoint
-- Run tests, self-review, external code review
-- Post sync check, transition to pending-test
+- AC-3: tracker.py LEGAL_TRANSITIONS + ROLE_AUTHORITY for DM skip-QA (in-progress → pending-ship for dm-lead, pending-ship → in-progress for dm)
+- AC-4: DM delivery-packaging.md merge-fail handler
+- AC-5: Config.py — remove legacy PM/QA combined string parsing
+- AC-6: Test updates (test_compose tracker-protocol fixtures, test_tracker_authority, test_installer_wiring)
+- AC-7: compose.py deploy-all validation, run full tests, self-review, atomic commit, PR
 
 ## Key Decisions
-- Async 202 Accepted pattern — merge runs in background thread
-- Auto-compose always-on, no config flag
-- git_ops.py pr-merge CLI preserved for manual/admin use
-- Harness reboots only affected agents after compose
+- Tracker-protocol content inlined into L1 with AC-3 state machine edges pre-applied
+- delivery-fallback.md → delivery.md (same content, no fallback name)
+- Entire PM CHANGELOG fallback branch removed from cycle_post.py
+- boot_remote.py: unconditional roles.update({"pm", "qa", "dm"}) replaces conditional regex
+- add_role.py: mandatory roles loop replaces DM dir check

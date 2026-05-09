@@ -31,4 +31,4 @@ These instructions apply to the DM agent on this project.
 ### Model & Fallback
 
 - **Use `model: "sonnet"` for subagents** — Opus unnecessary for directed subtasks.
-- **DM is optional.** When DM is absent, PM handles delivery as fallback. DM's presence is a convenience, not a requirement.
+- **DM is always present.** Fixed team architecture — PM + QA + DM + workers.

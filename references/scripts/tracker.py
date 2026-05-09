@@ -19,14 +19,13 @@ Usage:
 
 Role authority (who may call `transition`):
   - PM  (--role pm  or pm-lead)    : pending -> planning/approved, planning -> planned,
-                                     planned -> approved; AND pending-test -> in-progress,
-                                     pending-test -> pending-ship (PM/QA combined identity)
+                                     planned -> approved; pending-test -> in-progress/pending-ship
   - QA  (--role qa  or qa-lead)    : pending-test -> in-progress, pending-test -> pending-ship
-                                     (when deployed as a separate agent alongside PM)
   - Assigned dev role (--role <r>) : open -> in-progress, approved -> in-progress,
                                      in-progress <-> pending-test, open -> pending-test,
                                      in-progress -> approved (must match issue's `role:*` label)
-  - DM  (--role dm  or dm-lead)    : pending-ship -> shipped
+  - DM  (--role dm  or dm-lead)    : in-progress -> pending-ship, pending-ship -> shipped,
+                                     pending-ship -> in-progress (merge conflict rollback)
   - Human override                 : --force bypasses authority + unread-feedback guards
 """
 
@@ -122,6 +121,7 @@ LEGAL_TRANSITIONS = {
     "status:approved": {"status:in-progress"},
     "status:in-progress": {
         "status:pending-test",
+        "status:pending-ship",  # #6261: DM skips QA — goes directly to pending-ship
         "status:approved",
         # #6057: code review rejection path — dev sends task back to PM for re-planning
         "status:planning",
@@ -178,11 +178,9 @@ ROLE_AUTHORITY = {
     ("status:in-progress", "status:pending-test"): {"_assignee"},
     ("status:in-progress", "status:approved"): {"_assignee"},
     ("status:in-progress", "status:planning"): {"_assignee"},  # #6057 code review rejection
+    ("status:in-progress", "status:pending-ship"): {"dm"},  # #6261: DM skips QA
 
-    # QA/PM owns verification. PM is always authorized because the PM agent
-    # holds the combined PM/QA identity in deployments without a dedicated QA
-    # agent (see pm/CLAUDE.md "SquidSquad — PM/QA"). QA is also authorized
-    # when installed. Dev and DM roles remain locked out.
+    # QA/PM owns verification. PM and QA are both authorized.
     ("status:pending-test", "status:in-progress"): {"qa", "pm"},
     ("status:pending-test", "status:pending-ship"): {"qa", "pm"},
     # PR Flow: QA transitions to pending-human-review (not pending-ship) when PR Flow enabled
@@ -195,8 +193,8 @@ ROLE_AUTHORITY = {
     # DM owns delivery / shipping
     ("status:pending-ship", "status:shipped"): {"dm"},
 
-    # Backward: pending-ship→in-progress for merge conflicts (#1727)
-    ("status:pending-ship", "status:in-progress"): {"pm", "qa"},
+    # Backward: pending-ship→in-progress for merge conflicts (#1727, #6261)
+    ("status:pending-ship", "status:in-progress"): {"pm", "qa", "dm"},
 
     # --- #328 Phase E: authority for new pending-human-* transitions ---
 

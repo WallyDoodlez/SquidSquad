@@ -22,10 +22,6 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 
 ---
 
-{{include: common/tracker-protocol}}
-
----
-
 {{include: common/capability-check}}
 
 ---

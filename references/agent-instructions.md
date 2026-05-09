@@ -18,6 +18,7 @@ You are a SquidSquad agent. You work autonomously in cycles following the Ralph 
 - Discussion comments on the forge are append-only — never edit or delete previous comments.
 - Git is the audit trail. Never push without pulling first.
 - When spawning subagents via the Agent tool, evaluate the best model for the task — use lighter models for mechanical subtasks, reserve heavier models for complex reasoning.
+- When referencing issue or PR numbers, always include a short description (3-5 words) so readers without forge access understand the context. Example: `#5932 (code review loop)` not just `#5932`.
 
 ---
 
@@ -142,7 +143,7 @@ Legal flows and owning roles:
 - `planning` → `planned` — **PM**
 - `planned` → `approved` — **PM**
 - `approved` → `in-progress` — **assigned role**
-- `in-progress` → `pending-test` | `approved` | `pending-human-review` | `pending-human-setup` — **assigned role**
+- `in-progress` → `pending-test` | `approved` | `planning` | `pending-human-review` | `pending-human-setup` — **assigned role**
 - `pending-human-review` → `in-progress` | `pending-ship` — **assigned role** (HITL designer loop)
 - `pending-human-setup` → `in-progress` — **PM** (environment setup complete)
 - `pending-test` → `in-progress` | `pending-ship` — **PM or QA** (both authorized; QA handles verification when installed, PM falls back when QA absent)
@@ -257,7 +258,11 @@ Read the output:
 cat .squidsquad/[ROLE]/cycle-input.json
 ```
 
-The JSON contains everything you need: `role`, `cycle_number`, `timestamp`, `pull_result`, `context_pressure`, `working_state`, and role-specific fields (work queue, verification queue, etc.).
+The JSON contains everything you need: `role`, `cycle_number`, `timestamp`, `pull_result`, `context_pressure`, `working_state`, `recent_events`, `mechanical_reactions`, and role-specific fields (work queue, verification queue, etc.).
+
+`recent_events` (#5622): list of event bus events since your last processed cursor. Each event has `id`, `event_type`, `role`, `timestamp`, `payload`, `received_at`. Filtered to your role's relevant event types. Empty list if harness unreachable or no new events.
+
+`mechanical_reactions` (#5622): list of actions the mechanical layer took based on high-confidence event patterns (e.g., PR merge detected, rework needed). Informational — the reaction already executed; this tells you what happened.
 
 ### Phase 2 — Creative Work (Agent)
 
@@ -316,7 +321,7 @@ The script handles: status transitions, tracker comments, iteration logging, git
 - `human_input_processed`: summary of human input handled
 - `issues_filed`, `issues_verified`, `tasks_verified`, `tasks_shipped`
 - `external_issues_triaged`, `health_alerts`, `vault_writes`
-- `version_bump`: `{new_version, items_included}` — if DM absent
+- `version_bump`: `{new_version, items_included}` — deprecated (DM always present)
 
 **QA** cycle-output extras:
 - `e2e_log`: `{result, tests_run, failures}`
@@ -484,6 +489,50 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    - **Philosophy**: Does this violate any project philosophy, vault decisions, or established patterns?
    - **Personas**: Will this break workflows for any agent role (PM, QA, DM, human)? Think through each consumer of your change.
    If ANY of these checks reveal a concern — fix it before transitioning. Do not ship known concerns for QA to catch.
+9c. **External code review** — after self-review passes, run an external model review before marking pending-test. Self-review catches what you know; external review catches what you missed.
+
+   **Stage all changes first**:
+   ```bash
+   git add -A
+   ```
+
+   **Get changed files and run review**:
+   ```bash
+   CHANGED_FILES=$(git diff --name-only HEAD | paste -sd, -)
+   python references/scripts/model_router.py code-review \
+     --task-id "#[NUMBER]" \
+     --input-files "$CHANGED_FILES" \
+     --output-file ".squidsquad/[ROLE]/planning/CODE-REVIEW-[NUMBER].md" \
+     --context "Task: [title]. ACs: [acceptance criteria summary]. Project philosophy: [key constraints]."
+   ```
+
+   **If external model unavailable** (exit code 1 or 2): fall back to Claude via the Agent tool with the same review prompt (read the changed files, review against ACs and project philosophy, output structured findings).
+
+   **Process findings** — for each finding, choose one disposition:
+   - **Fix**: Apply the suggested fix. Re-run tests after fixing.
+   - **File-to-PM**: The finding reveals a design-level flaw (AC gap, philosophy violation, wrong approach). The review loop **exits immediately**. Transition to `planning`:
+     ```bash
+     python references/scripts/tracker.py create-issue --title "[finding summary]" --body "[evidence from review]" --role pm --severity medium --reporter [ROLE]-lead
+     python references/scripts/tracker.py transition [NUMBER] in-progress planning --role [ROLE]-lead
+     python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "External review found design-level flaw. Filed #[NEW]. Status → Planning for PM to re-plan."
+     ```
+     Stop here — do NOT proceed to pending-test.
+   - **Justified-ignore**: The finding is not applicable to this context. Document why in the PR comment. This is a valid, non-shameful outcome — not every finding is correct.
+
+   **Post dispositions as PR comment** (audit trail):
+   ```bash
+   gh pr comment [PR_NUMBER] --body "## External Code Review — Iteration [N]
+
+   [For each finding: finding summary + disposition (fix/file-to-pm/justified-ignore) + rationale]"
+   ```
+
+   **Re-run review** after applying fixes. Loop until:
+   - Clean review (zero findings) → exit loop immediately, proceed to step 10
+   - 5 iterations reached with remaining findings → proceed to step 10 with all findings noted in PR comment. QA decides whether to accept.
+   - File-to-PM disposition → exit loop, transition to planning (see above)
+
+   **Escalation**: If >50% of findings across 3+ iterations are justified-ignore, note in the PR comment: "High justified-ignore rate — review model or prompt may need tuning." This is a process signal for the human.
+
 10. If tests and smoke tests pass and changes exist:
    - Transition status:
      ```bash
@@ -967,6 +1016,7 @@ Maintain `.squidsquad/[ROLE]/working-state.md` to persist context across context
 - **Task**: [#NUMBER, or "none"]
 - **Status**: [in-progress / blocked / none]
 - **Started**: [YYYY-MM-DD HH:MM]
+- **Last Processed Event ID**: [8-char hex ID, or "none"]
 
 ## Completed Steps
 - [what has been done so far]
