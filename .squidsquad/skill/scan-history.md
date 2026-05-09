@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-09 00:02
+
+- **Files scanned**: references/sub-skills/manifest.md, references/scripts/health_check.py, references/scripts/model_router.py
+- **Findings**: none (manifest.md has 2 deleted PM sub-skills still in inventory listing — cosmetic, not filed. health_check.py and model_router.py both clean)
+- **Items rejected by human**: none yet
+- **Notes**: manifest.md last scanned 2026-04-08. model_router.py _ensure_yaml consolidated post-#5125 confirmed. health_check.py PID fallback solid.
+
 ## Scan — 2026-05-08 19:32
 
 - **Files scanned**: references/scripts/compose.py, references/scripts/boot_remote.py, references/scripts/config.py
