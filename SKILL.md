@@ -31,7 +31,6 @@ graph TD
             pm_dir["pm/\nCLAUDE.md, working-state.md\niterations/"]
             qa_dir["qa/ — QA agent"]
             dm_dir["dm/ — Delivery Manager"]
-            designer_dir["designer/ — when designer defined"]
             vault["vault/ — shared knowledge layer"]
         end
 
@@ -64,7 +63,6 @@ SquidSquad always has **PM**, **QA**, and **DM** agents. Dev agents are flexible
 | Shape | Dev agents | Use when |
 |-------|-----------|----------|
 | `fe, be` | FE Lead + BE Lead + QA + PM | Full-stack app with separate frontend and backend |
-| `fe, be, designer` | FE Lead + BE Lead + Designer + QA + PM | Full-stack with design-to-code workflow |
 | `be` | BE Lead + QA + PM | API-only, CLI tool, library, or skill repo |
 | `api, worker` | API Lead + Worker Lead + QA + PM | Backend split across services |
 | `web, ios, api` | Web + iOS + API + QA + PM | Multi-platform product |
@@ -123,7 +121,7 @@ SquidSquad uses GitHub Issues as its tracker. All bugs and features are GitHub I
 | Type | `type:issue`, `type:task` | What kind of item |
 | Priority | `priority:high`, `priority:medium`, `priority:low` | Triage ordering |
 | Status | `status:open`, `status:pending`, `status:planning`, `status:planned`, `status:approved`, `status:in-progress`, `status:pending-test`, `status:pending-human-review`, `status:pending-human-setup`, `status:pending-ship`, `status:shipped` | Workflow state |
-| Role | `role:skill`, `role:fe`, `role:be`, `role:pm`, `role:qa`, `role:dm`, `role:designer` | Which agent owns it |
+| Role | `role:skill`, `role:fe`, `role:be`, `role:pm`, `role:qa`, `role:dm` | Which agent owns it |
 | Severity (bugs) | `severity:high`, `severity:medium`, `severity:low` | Bug impact |
 | Special | `squidsquad`, `improvement-scan` | Metadata |
 
