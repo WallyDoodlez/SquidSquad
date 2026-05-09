@@ -1,3 +1,11 @@
+## Scan — 2026-05-09 00:10
+
+- **Files scanned**: references/roles/pm/includes.yml, references/roles/dev/instructions.md, references/roles/pm/SOUL.md
+- **Findings**:
+  - #6275 — Stale 'date command' timestamp reference in all 5 role templates, contradicts tracker-protocol (cycle.py). Filed as low-severity issue for skill.
+- **Auto-fixed**: BRIEFING.md version 0.34.0 → 0.35.0, added #6085/#6086 to shipped, added #6126/#6261/#6274 to active priorities
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-04-26 09:01
 
 - **Files scanned**: BRIEFING.md (staleness), cycle_pre.py (pull mechanism), sub-skills/cycle-runner.md, tracker comments on #3107/#3124 (stale checkout pattern)
