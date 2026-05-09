@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-08 22:31
+
+- **Files scanned**: tests/test_cycle_pre.py, references/agent-instructions.md
+- **Findings**: none
+- **Items rejected by human**: none yet
+- **Notes**: test_cycle_pre.py clean (1320 lines, no stale pr-merge refs). agent-instructions.md clean (generated file, consistent with current arch).
+
 ## Scan — 2026-05-08 21:02
 
 - **Files scanned**: tests/run_tests.py, tests/test_git_ops.py, tests/test_wizard.py
