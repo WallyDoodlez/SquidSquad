@@ -174,9 +174,8 @@ class TestIncludesYml:
 
         The manifest may use slim variants (e.g. vault-protocol-slim for
         vault-protocol) or omit sub-skills (e.g. vault-remember). Each
-        template include must either appear in the manifest directly, have
-        a slim variant present, or be intentionally excluded (removed by
-        the manifest for token savings).
+        template include must either appear in the manifest directly or
+        have a slim/role-specific variant present in the manifest.
         """
         import yaml
         for role in self.ROLES:
@@ -186,9 +185,9 @@ class TestIncludesYml:
             yml_set = set(data["includes"])
 
             tmpl_text = tmpl_path.read_text(encoding="utf-8")
-            tmpl_includes = re.findall(
+            tmpl_includes = set(re.findall(
                 r'\{\{include:\s*(.+?)\}\}', tmpl_text,
-            )
+            ))
 
             # Every manifest entry must resolve to a file
             for inc in data["includes"]:
@@ -196,6 +195,40 @@ class TestIncludesYml:
                 assert full.exists(), (
                     f"{role}: manifest references non-existent {inc}"
                 )
+
+            # Every template include should be covered by the manifest —
+            # either directly, via a slim variant, or intentionally excluded.
+            # The manifest is intentionally a subset of the template for
+            # token savings (slim variants replace full, some sub-skills omitted).
+            uncovered = set()
+            for inc in tmpl_includes:
+                if inc in yml_set:
+                    continue
+                base = inc.split("/")[-1]
+                # Slim variant (e.g., vault-protocol → vault-protocol-slim)
+                slim_match = any(y.endswith(f"{base}-slim") for y in yml_set)
+                # Role-specific override (e.g., common/X → roles/role/X)
+                role_override = any(
+                    y.endswith(f"/{base}") and y != inc for y in yml_set
+                )
+                if not slim_match and not role_override:
+                    uncovered.add(inc)
+
+            # Known intentional exclusions — manifest omits these for token
+            # savings or because the role doesn't need them. This list must
+            # be updated when includes.yml or templates change.
+            known_exclusions = {
+                "common/vault-optimize",
+                "common/vault-remember",
+                "common/improvement-scan",
+                "common/vault-protocol",
+            }
+            unexpected = uncovered - known_exclusions
+            assert not unexpected, (
+                f"{role}: template includes not covered by manifest "
+                f"(not direct, slim, role-specific, or known-excluded): "
+                f"{sorted(unexpected)}"
+            )
 
 
 class TestComposeManifestIntegration:
