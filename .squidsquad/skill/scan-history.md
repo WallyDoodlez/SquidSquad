@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-09 06:36
+
+- **Files scanned**: tests/test_manifest.py
+- **Findings**: #6478 (test_includes_yml_covers_template never asserts cross-check — high), #6479 (manifest.md inventory stale — low)
+- **Items rejected by human**: none yet
+- **Notes**: Also found dead _extract_inventory_paths (low) — not filed, too minor.
+
 ## Scan — 2026-05-09 06:04
 
 - **Files scanned**: references/sub-skills/common/cycle-runner.md
