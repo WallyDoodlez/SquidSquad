@@ -315,13 +315,13 @@ and act on structured results without parsing free text.
 The taxonomy the installer uses is **not** a hardcoded table. It lives in:
 
 - `references/roles/<role>/` — per-role directory containing `manifest.yaml`,
-  `SOUL.md`, and `CLAUDE.md` (the entry file for composition)
+  `SOUL.md`, and `instructions.md` (the entry file for composition)
 - `references/sub-skills/capabilities/<capability>/` — per-capability registry
   with `manifest.yaml`, `setup.md` (infrastructure walkthrough), and
   `sub-skill.md` (agent-facing usage composed into consuming role CLAUDE.md
   at runtime)
 - `references/presets/<preset>/` — preset manifests declaring
-  `role_install_order` (PM and DM are implicit and always installed)
+  `role_install_order` (PM, QA, and DM are implicit and always installed)
 
 Adding a new role, capability, or preset is a pure data change: drop in a new
 directory, run the validator, re-deploy. No wizard code change required.
@@ -453,7 +453,7 @@ When the user says `/squidsquad-status` (or "squad status", "show me the squad",
 **Instructions:**
 
 1. Read `.squidsquad/config.md` to get the list of dev agents and the loop interval.
-2. For each agent (dev agents + PM + DM if `.squidsquad/dm/` exists):
+2. For each agent (dev agents + PM + QA + DM):
    - Check health: read `.squidsquad/[role]/.health` if it exists. Values are `booting`, `dead`, `error|reason`, or an **epoch timestamp** (heartbeat — if less than 10s old, agent is alive; if stale, agent is dead). The harness writes the epoch every 5 seconds while the agent runs. Fall back to `git log --oneline --since="[2×interval] minutes ago" --grep="^[agent]:"` if no `.health` file — if commits found, show as `active`; if prior commits exist but none recent, show as `stalled`; else `unknown`.
    - Show last commit time: `git log --oneline --grep="^[agent]:" -1 --format="%ar"`
 3. For each dev agent, query GitHub Issues via `python references/scripts/tracker.py`:

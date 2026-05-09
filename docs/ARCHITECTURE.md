@@ -54,7 +54,7 @@ The **Behavior Layer** (L3) is the focal layer — it's where agents reason, dec
 **Purpose:** Control *when* things happen, in what order, and manage the agent's lifecycle. The conductor that sequences transport and behavior.
 
 **Key files:**
-- `references/scripts/harness.py` — FastAPI lifecycle manager, owns agent spawning, health monitoring, and crash recovery
+- `references/scripts/harness.py` — FastAPI lifecycle manager, owns agent spawning, health monitoring, crash recovery, PR merging, and auto-recomposition of agent templates
 - `references/scripts/thin_launcher.py` — lightweight agent launcher, spawned by harness into terminal windows
 - `/loop` command — schedules recurring cycle execution
 - `.harness-state.json` — persistent agent state for crash recovery
@@ -215,7 +215,7 @@ Agent A                    Git Repository                   Agent B
    │                            │◄──────────────── git pull ───┤
    │                            │                              │
    │        Event Bus (Harness)                                │
-   │   ├── emit(pr-merge) ─────────────────► read(pr-merge) ──┤
+   │   ├── emit(pr-merged) ────────────────► read(pr-merged) ─┤
    │   │   (milliseconds)                    (next cycle_pre)  │
 ```
 
