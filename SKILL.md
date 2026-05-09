@@ -198,6 +198,7 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
    → Write working state, implement task, update state as sub-steps complete
    → Update status labels to In Progress, then Pending Test
    → Clear working state on completion, append Discussion as Issue comment
+3b. Before marking Pending Test: run automated code review against changed files (configurable model in `config.md` under `Code Review Model`). Findings are dispositioned (fix, file to PM, or justified-ignore) and posted as PR comments. Design-level flaws send the task back to planning automatically.
 4. Run [role] test command (from config.md)
 5. If quiet cycle (no issues fixed, no tasks progressed):
    → If Improvement Scanning enabled and quiet cycle counter ≥ 3: scan target project for domain-specific improvements (max 2 per scan). Classify each finding as an **issue** (broken, wrong, or stale behavior — e.g. dead code, incorrect docs, failing edge cases) or **task** (new or enhanced capability — e.g. missing test coverage, performance optimization, UX improvement). File issues directly as GitHub Issues with `type:issue` + `status:open`; file tasks through PM with `type:task` + `status:pending` for human approval
