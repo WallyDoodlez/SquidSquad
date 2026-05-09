@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.34.0] — 2026-05-08
+
+### Added
+- #5932 — Dev agents now get automated code review before QA, catching design-level issues earlier and routing them back to planning automatically
+- #5868 — Agents now subscribe to specific event types via compose-time configuration — no manual event wiring needed
+- #6055 — PM, QA, and DM are now prevented from overstepping their roles, keeping the pipeline clean and predictable
+- #6057 — Tasks with design-level issues found during code review can now be sent back to planning instead of just failing QA
+- #6007 — QA findings are now automatically routed to the responsible agent based on role, not just filed generically
+- #6125 — All agent roles (PM, QA, DM) can now pick up and execute approved tasks — no more tasks sitting in the queue ignored
+- #6086 — Agents now include short descriptions when referencing issue or PR numbers, making discussions readable without opening every link
+- #6085 — Comprehensive event bus documentation with three-tier event model, role-based filtering diagrams, cascade protection, and port discovery
+
+### Fixed
+- #6000 — Harness now responds to Ctrl+C for graceful shutdown — one press finishes the current cycle, three force-exits
+- #6043 — Agent reboots no longer crash on Windows when clone paths are strings instead of Path objects
+- #6138 — Duplicate function definition in cycle_pre.py removed — no more silent shadowing
+
 ## [0.33.0] — 2026-05-06
 
 ### Added

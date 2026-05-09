@@ -1,7 +1,7 @@
 ---
 name: squidsquad
 description: "Orchestrates a multi-agent AI development team — handles setup, workflow coordination, role management, and autonomous dev cycles."
-version: 0.33.0
+version: 0.34.0
 license: AGPL-3.0
 ---
 
@@ -198,6 +198,7 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
    → Write working state, implement task, update state as sub-steps complete
    → Update status labels to In Progress, then Pending Test
    → Clear working state on completion, append Discussion as Issue comment
+3b. Before marking Pending Test: run automated code review against changed files (configurable model in `config.md` under `Code Review Model`). Findings are dispositioned (fix, file to PM, or justified-ignore) and posted as PR comments. Design-level flaws send the task back to planning automatically.
 4. Run [role] test command (from config.md)
 5. If quiet cycle (no issues fixed, no tasks progressed):
    → If Improvement Scanning enabled and quiet cycle counter ≥ 3: scan target project for domain-specific improvements (max 2 per scan). Classify each finding as an **issue** (broken, wrong, or stale behavior — e.g. dead code, incorrect docs, failing edge cases) or **task** (new or enhanced capability — e.g. missing test coverage, performance optimization, UX improvement). File issues directly as GitHub Issues with `type:issue` + `status:open`; file tasks through PM with `type:task` + `status:pending` for human approval
@@ -213,6 +214,7 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 1. git pull
 1b. Context pressure check — if above threshold, checkpoint state and continue (Claude Code compresses prior messages automatically)
 1c. Resume from working-state.md if active task exists
+1d. Task pickup — check for approved tasks assigned to PM, pick up and execute if found
 2. Non-blocking human check-in (print note, continue immediately)
    → If human has provided input: file bugs to tracker; for features, discuss first (predict intent, surface questions, invite refinement), then file and run Feature Intake Process
    → Await human approval before marking features Approved (approval only offered after planning completes)
@@ -230,6 +232,7 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 1. git pull
 1b. Context pressure check — if above threshold, checkpoint state and continue (Claude Code compresses prior messages automatically)
 1c. Resume from working-state.md if active task exists
+1d. Task pickup — check for approved tasks assigned to QA, pick up and execute if found
 2. Run full e2e test command (from config.md)
 3. Log results to qa/qa-log.md
 4. If tests fail: file bug as GitHub Issue with appropriate `role:` label via `gh issue create`
@@ -260,7 +263,7 @@ All agents follow these rules to minimize merge conflicts on shared tracker file
 
 When `PR Flow: yes` is set in `config.md`, dev agents create PRs instead of pushing directly to main:
 
-- **Branching convention**: configurable via the `Branch Pattern` field in `config.md`. Default: `squidsquad/{role}/{number}` (e.g. `squidsquad/skill/67`). Projects can use a unified pattern like `squidsquad/task/{number}` so PM, dev, and QA all share one branch per task — enabling single-PR holistic review of planning + code together.
+- **Branching convention**: configurable via the `Branch Pattern` field in `config.md`. Default: `squidsquad/task/{number}` (e.g. `squidsquad/task/67`) — all roles share one branch per task, enabling single-PR holistic review of planning + code together. Projects can also use role-scoped patterns like `squidsquad/{role}/{number}` for per-role branches.
 - **Task-level branch boundaries**: when Branch Workflow is enabled, agents automatically check out the correct feature branch before working on each task item (verification, shipping, bug fixes) and return to the working branch when done. This is handled by the transport layer (`task-begin` / `task-end`) — agents don't manage branches manually.
 - **Dev agent workflow**: when marking work as `Pending Test`, create a branch, push it, and open a **draft** PR via `gh pr create --draft`. QA converts it to ready (`gh pr ready`) after verification passes. This prevents premature merges before QA sign-off.
 - **PM and QA workflow**: each cycle, check open SquidSquad PRs via `gh pr list`. For each PR:

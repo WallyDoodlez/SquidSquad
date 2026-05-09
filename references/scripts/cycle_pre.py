@@ -217,45 +217,6 @@ def _validate_config_version():
         pass  # Non-fatal — don't block the cycle
 
 
-def _validate_config_version():
-    """Post-pull validation: fix config.md version if it regressed (#5136).
-
-    Compares config.md version against the latest git tag. If config.md
-    has an older version (branch merge overwrote it), auto-fix to the tag version.
-    """
-    try:
-        # Get latest version tag
-        result = _run(["git", "tag", "--sort=-v:refname", "-l", "v*"], check=False)
-        tags = result.stdout.strip().splitlines() if result.returncode == 0 else []
-        if not tags:
-            return
-        latest_tag = tags[0].lstrip("v")  # e.g. "0.31.0"
-
-        # Get config.md version
-        config_version = _config_get("version")
-        if not config_version:
-            return
-
-        # Compare — simple string comparison works for semver with same digit count
-        # Parse into tuples for proper comparison
-        def _parse_ver(v):
-            try:
-                return tuple(int(x) for x in v.split("."))
-            except (ValueError, AttributeError):
-                return (0,)
-
-        tag_ver = _parse_ver(latest_tag)
-        cfg_ver = _parse_ver(config_version)
-
-        if cfg_ver < tag_ver:
-            # Config version regressed — fix it
-            _run_script("config.py", "set", "version", latest_tag)
-            print(f"  [config] Version regressed ({config_version} < {latest_tag}) — "
-                  f"auto-fixed to {latest_tag} (#5136)")
-    except Exception:
-        pass  # Non-fatal — don't block the cycle
-
-
 def _read_context_pressure(role):
     """Read context pressure for a role."""
     pressure_file = SQUID_DIR / role / "context-pressure"
@@ -653,7 +614,7 @@ def _build_pm_input(role):
         except (json.JSONDecodeError, ValueError):
             pass
 
-    # Pending ship
+    # Pending ship — reverted to --state open (#6262: --state all included stale closed items)
     result = _run_script("tracker.py", "list-by-labels", "status:pending-ship")
     try:
         if result.returncode == 0 and result.stdout.strip():
@@ -921,7 +882,7 @@ def _build_dm_input(role):
     except (json.JSONDecodeError, ValueError):
         pass
 
-    # Pending ship items
+    # Pending ship items — reverted to --state open (#6262: --state all included stale closed items)
     pending_ship = []
     result = _run_script("tracker.py", "list-by-labels", "status:pending-ship")
     try:

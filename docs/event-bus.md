@@ -145,7 +145,7 @@ graph TD
     DM_FILTER --> DM_EVENTS["agent-health<br/>pr-merge<br/>status-transition<br/>verification-passed"]
 ```
 
-PM has the widest filter because it coordinates the whole pipeline — it needs to see health alerts, phase changes, PR merges, status transitions, tracker comments, and verification results. QA has a focused filter — agent health and status transitions tell it when work is ready for verification. Skill watches for cycle signals, comments mentioning it, and verification failures that mean rework. DM watches for status transitions (to catch pending-ship items), PR merges, and verification signals.
+PM has the widest filter because it coordinates the whole pipeline — it needs health alerts, phase changes, PR merges, status transitions, comments, and verification results. QA watches agent health and status transitions to know when work is ready for verification. Skill watches for cycle signals, comments mentioning it, and verification failures that mean rework. DM watches for status transitions (to catch pending-ship items), PR merges, health alerts, and verification signals.
 
 ---
 
@@ -232,6 +232,20 @@ If the agent crashes mid-cycle, the cursor hasn't advanced yet — events are sa
 
 ---
 
+## Cascade Protection
+
+Events can trigger actions that emit more events. Without safeguards, this could create infinite loops — QA emits a status change, PM reacts and emits a comment, which triggers skill to react, which emits another status change, and so on.
+
+Two mechanisms prevent this:
+
+1. **Self-event filter**: An agent never reacts to its own events. If QA emits a `status-transition`, QA's mechanical reaction phase skips it. Only other agents see it.
+
+2. **Cursor deduplication**: Events emitted during a cycle land *after* the cursor position. The emitting agent won't re-read them on its next cycle because the cursor has already advanced past them.
+
+Together, these guarantee that event chains always terminate. Agent A emits → Agent B reacts → Agent B emits → Agent A sees it next cycle (but doesn't re-trigger the original action because the cursor has moved).
+
+---
+
 ## What Happens When the Bus Is Down
 
 The event bus is **strictly optional**. Every interaction is wrapped in error handling that silently falls back:
@@ -260,6 +274,24 @@ L3  Behavior ★    ← decides what events MEAN
 L2  Orchestration ← timing & lifecycle
 L1  Transport     ← event bus lives here (emit/read)
 ```
+
+---
+
+## Port Discovery
+
+Each agent needs to know the harness port to emit and read events. The harness writes its port to `.squidsquad/.harness-port` at startup. Agents discover it by checking this file, walking up to 5 parent directories if needed (supporting per-agent clone isolation where agents run in separate git clones).
+
+If the port file doesn't exist (harness not running), all event operations silently no-op. No configuration required — it just works when the harness is running and gracefully disappears when it isn't.
+
+---
+
+## Future Work
+
+The event bus is actively evolving. Planned enhancements:
+
+- **Event-driven agent scheduling** (#6056) — replace timer-based `/loop` with harness-driven wake signals, so agents only cycle when there's work. Hybrid model: harness emits timer events, agents subscribe to relevant triggers. Significant token savings for quiet periods.
+- **Harness-owned PR merge + compose** (#6126) — centralize PR merge and template recomposition in the harness, enabling new event types like `request-merge` and `compose-completed`.
+- **Additional event types** (#5613) — richer payload data for existing events and new domain-specific signals.
 
 ---
 

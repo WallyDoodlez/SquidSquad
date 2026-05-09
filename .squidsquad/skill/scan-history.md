@@ -6,6 +6,39 @@
 - **Findings**: none (2 previously-seen minor items: compose.py dead `prefix` var in _resolve_includes_with_manifest — noted 2026-04-26 as too minor; boot_remote.py duplicate PM regex check lines 126+135 — noted 2026-05-06 as harmless dedup)
 - **Items rejected by human**: none yet
 - **Notes**: config.py clean (603 lines). All 3 files have test coverage.
+## Scan — 2026-05-08 23:32
+
+- **Files scanned**: tests/test_boot_remote.py, references/roles/dm/instructions.md
+- **Findings**: none (dm/delivery-packaging.md still has old pr-merge on main — fix pending in #6126 PR. test_boot_remote.py has redundant import json in test body — too minor to file)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-08 23:02
+
+- **Files scanned**: references/scripts/cycle_post.py, references/roles/pm/instructions.md, references/installer-files.txt
+- **Findings**: none (pm/instructions.md and installer-files.txt still reference post-merge-recompose on main — expected, fix pending in #6126 PR #6201)
+- **Items rejected by human**: none yet
+- **Notes**: cycle_post.py clean (769 lines). _do_restart_sentinel documented as deprecated — intentional backward compat.
+
+## Scan — 2026-05-08 22:31
+
+- **Files scanned**: tests/test_cycle_pre.py, references/agent-instructions.md
+- **Findings**: none
+- **Items rejected by human**: none yet
+- **Notes**: test_cycle_pre.py clean (1320 lines, no stale pr-merge refs). agent-instructions.md clean (generated file, consistent with current arch).
+
+## Scan — 2026-05-08 21:02
+
+- **Files scanned**: tests/run_tests.py, tests/test_git_ops.py, tests/test_wizard.py
+- **Findings**: #6254 (test_git_ops.py test_forge_adapter_routing is false-confidence — patches sys.modules after import, adapter mock never reached — low)
+- **Items rejected by human**: none yet
+- **Notes**: run_tests.py clean (137 lines). test_wizard.py clean (2077 lines).
+
+## Scan — 2026-05-08 19:32
+
+- **Files scanned**: references/scripts/compose.py, references/scripts/boot_remote.py, references/scripts/config.py
+- **Findings**: none (2 previously-seen minor items: compose.py dead prefix var — noted 2026-04-26; boot_remote.py duplicate PM regex — noted 2026-05-06)
+- **Items rejected by human**: none yet
+- **Notes**: config.py clean (603 lines).
 
 ## Scan — 2026-05-08 18:10
 
