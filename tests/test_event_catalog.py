@@ -38,14 +38,14 @@ class TestCatalogCompleteness:
         expected = {
             "cycle-start", "cycle-end", "git-pull", "git-push", "git-commit",
             "status-transition", "tracker-comment", "branch-checkout",
-            "pr-create", "pr-merge",
+            "pr-create", "pr-merge", "pr-merged", "compose-completed",
         }
         assert set(event_catalog.EMITTED.keys()) == expected
 
     def test_recognized_tier_has_expected_events(self):
         expected = {
             "verification-failed", "verification-passed",
-            "agent-health", "phase-change",
+            "agent-health", "phase-change", "request-merge",
         }
         assert set(event_catalog.RECOGNIZED.keys()) == expected
 

@@ -224,12 +224,13 @@ python references/scripts/git_ops.py task-end [role] [number]
    - **Check Auto Merge**: `python references/scripts/config.py get auto-merge`
    - **Check per-ticket override**: `python references/scripts/tracker.py get-labels [NUMBER]` — look for `review:human-required` label.
 
-   **If Auto Merge `yes` AND no `review:human-required` label** — merge directly:
+   **If Auto Merge `yes` AND no `review:human-required` label** — merge via harness:
      ```bash
      gh pr ready [PR_NUMBER]
-     python references/scripts/git_ops.py pr-merge [PR_NUMBER]
+     curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH]", "role": "qa"}'
      ```
-     - **Merge succeeds**: transition to pending-ship:
+     The harness returns 202 immediately. The `pr-merged` event appears in your next cycle's `recent_events`.
+     - **Merge succeeds** (check `pr-merged` event with `success: true`): transition to pending-ship:
        ```bash
        python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role qa-lead
        python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified — zero gaps. PR auto-merged. Status → Pending Ship."
@@ -253,7 +254,7 @@ python references/scripts/git_ops.py task-end [role] [number]
    For each PR with branch matching `squidsquad/*/[NUMBER]`:
    ```bash
    gh pr ready [PR_NUMBER] 2>/dev/null
-   python references/scripts/git_ops.py pr-merge [PR_NUMBER]
+   curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH]", "role": "qa"}'
    ```
    - **Merge succeeds**: proceed to pending-ship transition
    - **Merge conflict**: QA merges the working branch into the feature branch (code was already verified):
@@ -265,7 +266,7 @@ python references/scripts/git_ops.py task-end [role] [number]
      - **Merge succeeds (no code conflicts)**: push and retry merge
        ```bash
        git push origin [BRANCH_NAME]
-       python references/scripts/git_ops.py pr-merge [PR_NUMBER]
+       curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH_NAME]", "role": "qa"}'
        ```
        If merge now succeeds, proceed to pending-ship. Code was already verified — no re-verification needed.
      - **Merge has code conflicts** (not just .squidsquad/ state files): reject back to dev with specific conflicting files

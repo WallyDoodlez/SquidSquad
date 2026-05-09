@@ -26,6 +26,7 @@ import json
 import os
 import signal
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -996,6 +997,226 @@ async def shutdown():
     threading.Thread(target=_do_shutdown, daemon=True, name="shutdown").start()
 
     return {"status": "shutting_down", "message": "Shutdown initiated. Harness will exit shortly."}
+
+
+# ---------------------------------------------------------------------------
+# POST /merge — agent requests harness to merge a PR (#6126)
+# ---------------------------------------------------------------------------
+
+def _emit_event(event_type, role, payload=None, **extra):
+    """Emit an event into the harness event stream.
+
+    Used by harness-owned operations (merge, compose) to emit events
+    without going through the HTTP /events endpoint.
+    """
+    event = {
+        "id": os.urandom(4).hex(),
+        "event_type": event_type,
+        "role": role,
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "payload": payload or {},
+        "received_at": time.time(),
+    }
+    event.update(extra)
+    event_stream.append(event)
+    _log_event(event)
+
+
+def _get_pr_files(pr_number):
+    """Get the list of files changed in a PR via gh CLI."""
+    result = subprocess.run(
+        ["gh", "pr", "view", str(pr_number), "--json", "files"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        check=False, cwd=str(REPO_ROOT),
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        data = json.loads(result.stdout)
+        return [f.get("path", "") for f in data.get("files", [])]
+    except (json.JSONDecodeError, KeyError):
+        return None
+
+
+def _get_pr_branch(pr_number):
+    """Get the head branch name of a PR."""
+    result = subprocess.run(
+        ["gh", "pr", "view", str(pr_number), "--json", "headRefName"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        check=False, cwd=str(REPO_ROOT),
+    )
+    if result.returncode != 0:
+        return ""
+    try:
+        return json.loads(result.stdout).get("headRefName", "")
+    except (json.JSONDecodeError, KeyError):
+        return ""
+
+
+def _parse_issue_from_branch(branch):
+    """Extract issue number from branch name (e.g. squidsquad/skill/42 → 42)."""
+    parts = branch.split("/")
+    if len(parts) >= 2 and parts[-1].isdigit():
+        return int(parts[-1])
+    return None
+
+
+@app.post("/merge", status_code=202)
+async def merge_pr(request: Request):
+    """Merge a PR asynchronously. Returns 202 Accepted immediately.
+
+    Agents POST here instead of calling git_ops.py pr-merge directly.
+    Harness executes merge, checks for references/ changes, runs compose
+    if needed, and emits pr-merged + compose-completed events (#6126).
+
+    Request body: {"pr_number": int, "branch": str, "role": str}
+    """
+    body = await request.json()
+    pr_number = body.get("pr_number")
+    branch = body.get("branch", "")
+    role = body.get("role", "unknown")
+
+    if not pr_number:
+        raise HTTPException(status_code=400, detail="pr_number is required")
+
+    _log(f"Merge requested: PR #{pr_number} by {role}")
+
+    # Emit request-merge for audit trail
+    _emit_event("request-merge", role, payload={
+        "pr_number": str(pr_number),
+        "branch": branch,
+        "role": role,
+    })
+
+    def _do_merge():
+        """Background thread: merge PR, detect references/ changes, compose."""
+        try:
+            # Import git_ops for the merge function
+            import git_ops
+
+            # Get files changed before merge (for compose detection)
+            files_changed = _get_pr_files(pr_number) or []
+            if not branch:
+                actual_branch = _get_pr_branch(pr_number)
+            else:
+                actual_branch = branch
+            issue_number = _parse_issue_from_branch(actual_branch)
+
+            # Execute merge
+            success, message = git_ops.pr_merge(pr_number)
+
+            already_merged = message == "already merged"
+
+            # Emit pr-merged event
+            _emit_event("pr-merged", "harness", payload={
+                "pr_number": str(pr_number),
+                "branch": actual_branch,
+                "issue_number": str(issue_number) if issue_number else "",
+                "files_changed": files_changed,
+                "success": success,
+                "already_merged": already_merged,
+                "error": "" if success else message,
+                "requesting_role": role,
+            })
+
+            if not success:
+                _log(f"Merge failed for PR #{pr_number}: {message}")
+                return
+
+            if already_merged:
+                _log(f"PR #{pr_number} was already merged")
+                return
+
+            # Check if references/ files were changed
+            refs_changed = any(f.startswith("references/") for f in files_changed)
+
+            if refs_changed:
+                _log(f"PR #{pr_number} touched references/ — running compose...")
+                compose_result = subprocess.run(
+                    [sys.executable, str(SCRIPT_DIR / "compose.py"), "deploy-all"],
+                    capture_output=True, text=True, encoding="utf-8", errors="replace",
+                    check=False, cwd=str(REPO_ROOT),
+                )
+                compose_success = compose_result.returncode == 0
+                compose_error = "" if compose_success else compose_result.stderr.strip()[:500]
+
+                _emit_event("compose-completed", "harness", payload={
+                    "success": compose_success,
+                    "error": compose_error,
+                    "trigger_pr": str(pr_number),
+                })
+
+                if compose_success:
+                    _log(f"Compose completed successfully after PR #{pr_number}")
+                    # AC-10: Reboot affected agents after compose
+                    _reboot_affected_agents(pr_number, files_changed)
+                else:
+                    _log(f"WARNING: Compose failed after PR #{pr_number}: {compose_error[:100]}")
+            else:
+                _log(f"PR #{pr_number} merged — no references/ changes, skipping compose")
+
+        except Exception as e:
+            _log(f"ERROR in merge thread: {e}")
+            _emit_event("pr-merged", "harness", payload={
+                "pr_number": str(pr_number),
+                "branch": branch,
+                "issue_number": "",
+                "files_changed": [],
+                "success": False,
+                "error": str(e),
+                "requesting_role": role,
+            })
+
+    threading.Thread(target=_do_merge, daemon=True, name=f"merge-{pr_number}").start()
+
+    return {"status": "accepted", "message": f"Merge of PR #{pr_number} initiated."}
+
+
+def _reboot_affected_agents(pr_number, files_changed):
+    """Reboot agents whose CLAUDE.md or SOUL.md changed after compose (#6126 AC-10).
+
+    Checks which agents' composed output was updated and reboots only those.
+    """
+    affected_roles = set()
+    for f in files_changed:
+        # Check if the changed file is a role template or sub-skill
+        # that would affect composed output
+        if f.startswith("references/roles/") or f.startswith("references/sub-skills/"):
+            # All roles could be affected — check which composed files actually changed
+            break
+    else:
+        # No role templates or sub-skills changed — check composed output directly
+        return
+
+    # Check which composed CLAUDE.md/SOUL.md files were modified by compose
+    result = subprocess.run(
+        ["git", "diff", "--name-only", "HEAD"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        check=False, cwd=str(REPO_ROOT),
+    )
+    if result.returncode != 0:
+        return
+
+    for line in result.stdout.strip().splitlines():
+        line = line.strip()
+        # Match .squidsquad/<role>/CLAUDE.md or SOUL.md
+        if line.startswith(".squidsquad/") and (line.endswith("/CLAUDE.md") or line.endswith("/SOUL.md")):
+            parts = line.split("/")
+            if len(parts) >= 3:
+                role = parts[1]
+                affected_roles.add(role)
+
+    if not affected_roles:
+        _log(f"Compose after PR #{pr_number}: no agent templates changed — no reboots needed")
+        return
+
+    _log(f"Compose after PR #{pr_number}: rebooting affected agents: {', '.join(sorted(affected_roles))}")
+    for role in affected_roles:
+        agent = state.get_agent(role)
+        if agent and agent.intent == AgentState.INTENT_RUNNING:
+            agent.intent = AgentState.INTENT_RESTARTING
+            state.set_agent(role, agent)
+    state.save_state()
 
 
 # ---------------------------------------------------------------------------

@@ -9,7 +9,6 @@ includes:
   - roles/pm/checkin
   - roles/pm/testing-and-verification
   - roles/pm/delivery-fallback
-  - roles/pm/post-merge-recompose
   - roles/pm/pipeline-sentinel
   - roles/pm/own-domain-autofix
   - roles/pm/health-check

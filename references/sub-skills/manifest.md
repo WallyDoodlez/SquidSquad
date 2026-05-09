@@ -63,8 +63,7 @@ Entry file with includes. PM's `SOUL.md` sits alongside its `CLAUDE.md` and is c
 4. `roles/pm/checkin` — Step 2: human check-in and input handling
 5. `roles/pm/testing-and-verification` — Steps 3-6c: QA handles verification (PM delegates)
 6. `roles/pm/delivery-fallback` — Delivery: DM handles all delivery (PM delegates)
-7. `roles/pm/post-merge-recompose` — Step 6e: recompose after branch merge
-8. `roles/pm/pipeline-sentinel` — Step 6f: pipeline health (conflict, stall, PR sync)
+7. `roles/pm/pipeline-sentinel` — Step 6f: pipeline health (conflict, stall, PR sync)
 9. `roles/pm/own-domain-autofix` — Auto-fix own-domain mechanical issues
 10. `roles/pm/health-check` — Step 7: agent health check
 11. `roles/pm/github-issues` — Step 7b: GitHub Issues management
@@ -209,7 +208,6 @@ references/sub-skills/
 │   ├── checkin.md                  (Step 2 — human check-in and input handling)
 │   ├── testing-and-verification.md (Steps 3-6c — E2E, investigate, verify, ship counter)
 │   ├── health-check.md            (Step 7 — agent health check)
-│   ├── post-merge-recompose.md    (Step 6e — recompose after branch merge)
 │   ├── task-intake.md              (5-phase lifecycle + Open Artifacts)
 │   ├── task-approval.md            (Feature Approval Gate)
 │   ├── delivery-fallback.md           (Delivery — DM handles all delivery)
