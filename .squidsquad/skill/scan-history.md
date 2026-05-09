@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-09 06:04
+
+- **Files scanned**: references/sub-skills/common/cycle-runner.md
+- **Findings**: none
+- **Items rejected by human**: none yet
+- **Notes**: Subagent flagged PM version_bump field as risk, but cycle_post.py gates _do_version_bump with `if role == "dm"` — no double-bump possible. Doc is accurate.
+
 ## Scan — 2026-05-09 04:05
 
 - **Files scanned**: references/scripts/reboot_agent.py
