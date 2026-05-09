@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-09 00:04
+
+- **Files scanned**: CHANGELOG.md, tests/test_tracker_authority.py, references/scripts/model_router.py
+- **Findings**: none
+- **Items rejected by human**: none yet
+- **Notes**: CHANGELOG.md current at v0.35.0. test_tracker_authority.py comprehensive (1100+ lines, Phase E, PR/branch guards, event emission). model_router.py re-scanned, confirmed clean.
+
 ## Scan — 2026-05-09 00:02
 
 - **Files scanned**: references/sub-skills/manifest.md, references/scripts/health_check.py, references/scripts/model_router.py
