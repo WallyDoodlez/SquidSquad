@@ -98,6 +98,42 @@ class TestListByLabels:
         adapter.list_issues.assert_called_once()
         assert len(result) == 1
 
+    def test_state_parameter_passed_to_gh(self, monkeypatch):
+        """list_by_labels passes --state parameter to gh CLI (#6222)."""
+        calls = []
+
+        def fake_run(cmd, **kw):
+            calls.append(cmd)
+            return _mock_result(stdout="[]")
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list", fake_run)
+        tracker.list_by_labels("status:pending-ship", state="all")
+        assert any("--state" in cmd and "all" in cmd for cmd in calls)
+
+    def test_state_defaults_to_open(self, monkeypatch):
+        """list_by_labels defaults to --state open (#6222)."""
+        calls = []
+
+        def fake_run(cmd, **kw):
+            calls.append(cmd)
+            return _mock_result(stdout="[]")
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list", fake_run)
+        tracker.list_by_labels("status:pending-ship")
+        assert any("--state" in cmd and "open" in cmd for cmd in calls)
+
+    def test_state_parameter_passed_to_adapter(self, monkeypatch):
+        """list_by_labels passes state to forge adapter (#6222)."""
+        adapter = MagicMock()
+        adapter.list_issues.return_value = []
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: adapter)
+        tracker.list_by_labels("status:pending-ship", state="all")
+        adapter.list_issues.assert_called_once_with(
+            labels=["status:pending-ship"], state="all", limit=50
+        )
+
 
 class TestListAllOpen:
     def test_returns_issues(self, monkeypatch):

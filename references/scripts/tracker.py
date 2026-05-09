@@ -1230,9 +1230,9 @@ def main():
 
     elif cmd == "list-by-labels":
         if not pos:
-            print("Usage: tracker.py list-by-labels <labels>", file=sys.stderr)
+            print("Usage: tracker.py list-by-labels <labels> [--state open|closed|all]", file=sys.stderr)
             sys.exit(1)
-        list_by_labels(pos[0])
+        list_by_labels(pos[0], state=opts.get("state", "open"))
 
     elif cmd == "list-all-open":
         list_all_open()
