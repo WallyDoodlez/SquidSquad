@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-10 06:05
+
+- **Files scanned**: references/sub-skills/roles/pm/task-intake.md, references/sub-skills/roles/qa/git-commit.md, references/sub-skills/roles/qa/verification.md, tests/test_labels.py, tests/test_roles.py
+- **Findings**: #6683 (test_roles.py docstring claims sub-skills/roles/ retired — low), #6684 (test_labels.py role label check only covers skill — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-10 04:35
 
 - **Files scanned**: references/sub-skills/common/prohibitions.md, references/sub-skills/common/vault-remember.md, references/sub-skills/roles/dm/git-commit.md, references/sub-skills/roles/pm/github-issues.md, references/sub-skills/roles/pm/pipeline-sentinel.md
