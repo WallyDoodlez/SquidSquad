@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-10 14:35
+
+- **Files scanned**: CONTRIBUTING.md, deploy-6126.sh, start.bat, packages/cli/index.test.js, references/docs/harness-lifecycle-upgrade.md
+- **Findings**: #6805 (deploy-6126.sh stale one-time deploy script — low), #6806 (packages/cli/index.test.js unused t parameter — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-10 13:04
 
 - **Files scanned**: tests/test_tc_coverage.py, tests/test_vault_remember.py, tests/test_wizard_runbook.py, tests/comprehension/2183_spec.json, tests/comprehension/2195_spec.json
