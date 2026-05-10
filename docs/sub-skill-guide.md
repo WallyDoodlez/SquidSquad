@@ -159,15 +159,15 @@ After includes are resolved, placeholders are substituted with values from `conf
 
 | Placeholder | Used in | Substituted with |
 |-------------|---------|-----------------|
-| `[ROLE]` | Dev templates only | Role name (e.g. `skill`, `fe`) |
-| `[ROLE_UPPER]` | Dev templates only | Uppercase role (e.g. `SKILL`) |
+| `[ROLE]` | All templates | Role name (e.g. `skill`, `dm`) |
+| `[ROLE_UPPER]` | All templates | Uppercase role (e.g. `SKILL`, `DM`) |
 | `[ROLE_TEST_CMD]` | Dev templates only | Test command from config |
 | `[OTHER_ROLES]` | Dev templates only | Other dev role names |
 | `[INTERVAL]` | All templates | Loop interval in minutes |
 | `[ACTIVE_AGENTS]` | PM, DM templates | List of active dev agents |
 | `[E2E_TEST_CMD]` | PM templates | E2E test command |
 
-**Important**: In PM and DM templates, `[ROLE]` is NOT substituted — it's used as a variable meaning "any dev agent's role." This is why some common sub-skills (like `context-pressure.md`) are only shared with dev agents. PM and DM inline those behaviors with hardcoded paths.
+**Important**: `[ROLE]` and `[ROLE_UPPER]` are substituted for ALL roles (needed by shared sub-skills like `cycle-runner.md`). `[ROLE_TEST_CMD]` and `[OTHER_ROLES]` are dev-only — PM, QA, and DM do not use them.
 
 ---
 
@@ -266,9 +266,9 @@ cat .squidsquad/<role>/CLAUDE.md
 4. **Write budget**: Limits vault writes per cycle to prevent noise
 5. **Dedup check**: Avoids writing notes that duplicate existing vault content
 
-It's included by every role via the manifest:
+It's included by dev and PM roles via their `includes.yml`:
 ```
-7b. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
+  - common/vault-remember
 ```
 
 The sub-skill uses Python scripts for deterministic gates (`vault_remember.py`) rather than relying on the agent to self-regulate. This is a good pattern — use scripts for anything that needs to be reliable.
