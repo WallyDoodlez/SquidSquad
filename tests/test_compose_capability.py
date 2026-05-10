@@ -151,7 +151,6 @@ class TestCapabilityCheck:
     def test_any_of_with_one_available(self, tmp_path):
         """any_of exits 0 if at least one capability is available."""
         import capability_check
-        import yaml
 
         # Role with any_of
         role_dir = tmp_path / "roles" / "qa"
