@@ -1,6 +1,6 @@
 {
-  "last_scanned": "docs/sub-skill-guide.md",
-  "rotation_count": 30,
+  "last_scanned": "CONTRIBUTING.md",
+  "rotation_count": 31,
   "scan_history": [
     {"file": "README.md", "date": "2026-04-28", "findings": 2},
     {"file": "SKILL.md:sections-1-3", "date": "2026-04-28", "findings": 3},
@@ -115,7 +115,8 @@
     {"file": "SKILL.md:sections-4-6", "date": "2026-05-10", "findings": 1, "fixes": ["added QA to always-present roles in upgrade section compose description"]},
     {"file": "SKILL.md:sections-7-8", "date": "2026-05-10", "findings": 1, "fixes": ["added QA to /squidsquad-status example dashboard"]},
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-10", "findings": 0},
-    {"file": "docs/sub-skill-guide.md", "date": "2026-05-10", "findings": 1, "fixes": ["corrected tip: [ROLE] works for all roles, only [ROLE_TEST_CMD]/[OTHER_ROLES] are dev-only"]}
+    {"file": "docs/sub-skill-guide.md", "date": "2026-05-10", "findings": 1, "fixes": ["corrected tip: [ROLE] works for all roles, only [ROLE_TEST_CMD]/[OTHER_ROLES] are dev-only"]},
+    {"file": "CONTRIBUTING.md", "date": "2026-05-10", "findings": 0}
   ],
   "doc_inventory": {
     "README.md": {"last_scanned": "2026-05-07", "status": "current"},
