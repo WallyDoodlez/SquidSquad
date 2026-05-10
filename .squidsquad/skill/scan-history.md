@@ -1,5 +1,16 @@
 # Scan History
 
+## Scan — 2026-05-10 16:04
+
+- **Files scanned**: references/scripts/event_catalog.py, references/scripts/event_validator.py, references/scripts/repo_scan.py, references/scripts/run_comprehension_test.py, references/scripts/shared_fs.py
+- **Findings**: #6818 (shared_fs.py read-secret empty value false negative — medium), #6819 (run_comprehension_test.py unhandled TimeoutExpired — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-10 15:34
+
+- **Files scanned**: references/docs/label-taxonomy.md, references/roles/SOUL.md, references/roles/pm/skill/SOUL.md, references/roles/qa/skill/includes.yml, references/scripts/event_bus_reader.py
+- **Findings**: none
+
 ## Scan — 2026-05-10 14:35
 
 - **Files scanned**: CONTRIBUTING.md, deploy-6126.sh, start.bat, packages/cli/index.test.js, references/docs/harness-lifecycle-upgrade.md
