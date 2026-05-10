@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-10 12:04
+
+- **Files scanned**: tests/test_diagnostics.py, tests/test_feat328_coverage.py, tests/test_feat_3296_task_boundary.py, tests/test_forgejo_setup.py, tests/test_forge_adapter.py
+- **Findings**: #6772 (test_diagnostics.py unused capsys fixtures — low), #6773 (test_forge_adapter.py + test_forgejo_setup.py repeated urllib.error imports — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-10 11:04
 
 - **Files scanned**: references/sub-skills/roles/dm/version-bumps.md, references/sub-skills/roles/pm/soul-shepherd.md, references/sub-skills/roles/qa/iteration-log.md, tests/test_compose_capability.py, tests/test_config.py
