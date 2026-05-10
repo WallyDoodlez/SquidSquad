@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-10 02:51
+
+- **Files scanned**: tests/test_config_schema.py, tests/test_feat_1496_shared_fs_fallback.py, tests/test_harness.py, tests/test_installer_wiring.py, tests/test_model_router_live.py
+- **Findings**: #6598 (stale shared-FS fallback tests verify removed behavior — low), #6599 (test_no_hallucinated_functions uses grep subprocess — fails on Windows — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-09 10:04
 
 - **Files scanned**: references/sub-skills/common/git-commit.md
