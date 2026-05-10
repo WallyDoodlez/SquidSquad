@@ -60,8 +60,9 @@ class TestRoleEntryFiles:
     """Verify role entry files exist in the role directory registry.
 
     Q-new22 moved every role's SOUL.md + CLAUDE.md into its self-contained
-    directory at `references/roles/<role>/`. The legacy
-    `references/sub-skills/{souls,roles}/` layout has been retired.
+    directory at `references/roles/<role>/`. The legacy `references/sub-skills/souls/`
+    directory was retired. `references/sub-skills/roles/` remains active as the home
+    for per-role sub-skill markdown files used by compose.py.
     """
 
     def test_dev_entry_exists(self):
