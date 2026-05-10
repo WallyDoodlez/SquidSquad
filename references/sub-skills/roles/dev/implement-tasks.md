@@ -43,7 +43,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 
    **Get changed files and run review**:
    ```bash
-   CHANGED_FILES=$(git diff --name-only HEAD | paste -sd, -)
+   CHANGED_FILES=$(git diff --cached --name-only | paste -sd, -)
    python references/scripts/model_router.py code-review \
      --task-id "#[NUMBER]" \
      --input-files "$CHANGED_FILES" \
