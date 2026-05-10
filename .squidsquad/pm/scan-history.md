@@ -1,3 +1,10 @@
+## Scan — 2026-05-10 18:08
+
+- **Files scanned**: references/sub-skills/roles/pm/testing-and-verification.md, references/sub-skills/roles/qa/verification.md, references/sub-skills/roles/pm/pipeline-sentinel.md
+- **Findings**: none
+- **Auto-fixed**: none
+- **Items rejected by human**: none
+
 ## Scan — 2026-05-09 00:10
 
 - **Files scanned**: references/roles/pm/includes.yml, references/roles/dev/instructions.md, references/roles/pm/SOUL.md

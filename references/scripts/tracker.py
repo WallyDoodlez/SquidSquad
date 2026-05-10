@@ -577,9 +577,21 @@ def create_task(title, body, role, priority, reporter=None):
 
     # Strip existing prefix to avoid double TASK: TASK: or legacy FEAT: FEAT:
     clean_title = title.removeprefix("TASK:").removeprefix("TASK :").removeprefix("FEAT:").removeprefix("FEAT :").strip()
+    full_title = f"TASK: {clean_title}"
+    label_list = labels.split(",")
+
+    adapter = _get_forge_adapter()
+    if adapter:
+        result = adapter.create_issue(full_title, body, labels=label_list)
+        if not result:
+            print("ERROR: Failed to create task via forge adapter", file=sys.stderr)
+            return -1
+        print(json.dumps(result))
+        return result.get("number", -1)
+
     result = _run_list([
         "gh", "issue", "create",
-        "--title", f"TASK: {clean_title}",
+        "--title", full_title,
         "--body", body,
         "--label", labels,
     ])
@@ -1065,11 +1077,10 @@ def comment(number, role, message, _suppress_event=False):
     # Emit tracker-comment event (#4709) — suppressed for auto-comments from transition()
     if not _suppress_event:
         try:
-            import re as _re
             from event_bus import emit as _emit_event
             emit_role = role.split(" ")[0].replace("-lead", "")  # "skill-lead (Ralph)" → "skill"
             # Extract mentioned roles from **role**: bold patterns
-            mentioned = _re.findall(r'\*\*(\w+)\*\*:', message)
+            mentioned = re.findall(r'\*\*(\w+)\*\*:', message)
             preview = message[:120].replace("\n", " ")
             _emit_event("tracker-comment", emit_role, payload={
                 "issue_number": str(number),
