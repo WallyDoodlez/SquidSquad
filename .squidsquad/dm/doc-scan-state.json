@@ -1,6 +1,6 @@
 {
-  "last_scanned": "SKILL.md:sections-4-6",
-  "rotation_count": 27,
+  "last_scanned": "SKILL.md:sections-7-8",
+  "rotation_count": 28,
   "scan_history": [
     {"file": "README.md", "date": "2026-04-28", "findings": 2},
     {"file": "SKILL.md:sections-1-3", "date": "2026-04-28", "findings": 3},
@@ -112,7 +112,8 @@
     {"file": "CHANGELOG.md", "date": "2026-05-10", "findings": 0},
     {"file": "README.md", "date": "2026-05-10", "findings": 0},
     {"file": "SKILL.md:sections-1-3", "date": "2026-05-10", "findings": 0},
-    {"file": "SKILL.md:sections-4-6", "date": "2026-05-10", "findings": 1, "fixes": ["added QA to always-present roles in upgrade section compose description"]}
+    {"file": "SKILL.md:sections-4-6", "date": "2026-05-10", "findings": 1, "fixes": ["added QA to always-present roles in upgrade section compose description"]},
+    {"file": "SKILL.md:sections-7-8", "date": "2026-05-10", "findings": 1, "fixes": ["added QA to /squidsquad-status example dashboard"]}
   ],
   "doc_inventory": {
     "README.md": {"last_scanned": "2026-05-07", "status": "current"},
