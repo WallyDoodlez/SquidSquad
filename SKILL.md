@@ -348,7 +348,7 @@ Rebuild all agent CLAUDE.md files from the current sub-skill sources using the c
 
 Or directly via CLI: `python references/scripts/compose.py deploy-all`
 
-This regenerates `.squidsquad/[role]/CLAUDE.md` for every configured agent (dev agents from config + PM + DM if present). Placeholder substitution (`[ROLE]`, `[INTERVAL]`, `[ROLE_TEST_CMD]`, etc.) is handled automatically by compose.py.
+This regenerates `.squidsquad/[role]/CLAUDE.md` for every configured agent (dev agents from config + PM + QA + DM — all always present). Placeholder substitution (`[ROLE]`, `[INTERVAL]`, `[ROLE_TEST_CMD]`, etc.) is handled automatically by compose.py.
 
 **SOUL.md preservation**: `compose.py deploy_role` never overwrites an existing SOUL.md — it only writes SOUL.md when the file is missing. User customizations to SOUL.md are preserved across upgrades.
 
