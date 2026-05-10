@@ -239,6 +239,33 @@ class TestForgejoAdapterErrorHandling:
         result = adapter.list_issues()
         assert result == []
 
+    @patch("urllib.request.urlopen")
+    def test_http_204_returns_empty_dict(self, mock_urlopen):
+        """#6733: HTTP 204 No Content returns {} instead of None."""
+        mock_resp = MagicMock()
+        mock_resp.status = 204
+        mock_resp.read.return_value = b""
+        mock_resp.__enter__ = lambda s: mock_resp
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_resp
+        adapter = self._make_adapter()
+        result = adapter._api("DELETE", "/repos/test/test/issues/1/labels/5")
+        assert result == {}
+        assert result is not None
+
+    @patch("urllib.request.urlopen")
+    def test_empty_body_200_returns_empty_dict(self, mock_urlopen):
+        """Empty body on 200 returns {} instead of raising JSONDecodeError."""
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = b""
+        mock_resp.__enter__ = lambda s: mock_resp
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_resp
+        adapter = self._make_adapter()
+        result = adapter._api("POST", "/repos/test/test")
+        assert result == {}
+
 
 class TestBaseAdapter:
     def test_edit_labels_calls_both(self):
