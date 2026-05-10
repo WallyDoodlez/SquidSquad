@@ -298,7 +298,10 @@ class ForgejoAdapter(ForgeAdapter):
 
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
-                return json.loads(resp.read().decode("utf-8"))
+                if resp.status == 204:
+                    return {}
+                body = resp.read().decode("utf-8")
+                return json.loads(body) if body.strip() else {}
         except urllib.error.HTTPError as e:
             print(f"[forge] HTTP {e.code}: {e.read().decode('utf-8', errors='replace')}",
                   file=sys.stderr)
