@@ -466,6 +466,7 @@ Agent        Health     Last Commit
 ─────        ──────     ───────────
 skill        active     2 minutes ago
 pm           active     3 minutes ago
+qa           active     4 minutes ago
 dm           active     5 minutes ago
 
 Backlog
