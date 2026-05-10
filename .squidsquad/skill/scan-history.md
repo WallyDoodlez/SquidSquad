@@ -1,5 +1,17 @@
 # Scan History
 
+## Scan — 2026-05-10 09:04
+
+- **Files scanned**: references/prompts/research.md.j2, references/roles/instructions.md, references/scripts/forgejo_setup.py, references/scripts/forge_adapter.py, references/scripts/vault_check.py
+- **Findings**: #6733 (forge_adapter.py _api() fails on HTTP 204 No Content — medium), #6734 (forgejo_setup.py deprecated version: 3 — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-10 08:35
+
+- **Files scanned**: tests/test_state_bus.py, tests/test_vault_optimize.py, start.ps1, start.sh, references/presets/design/manifest.yaml
+- **Findings**: #6731 (test_state_bus.py subprocess imported inside with block — low), #6732 (design preset manifest no machine-readable deprecation — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-10 06:05
 
 - **Files scanned**: references/sub-skills/roles/pm/task-intake.md, references/sub-skills/roles/qa/git-commit.md, references/sub-skills/roles/qa/verification.md, tests/test_labels.py, tests/test_roles.py
