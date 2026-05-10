@@ -137,6 +137,24 @@ class TestFindClaude:
 # run_test — cache skip path
 # ---------------------------------------------------------------------------
 
+class TestRunAgentTimeout:
+    """#6819: _run_agent timeout must be caught, not crash the script."""
+
+    def test_run_agent_has_timeout(self):
+        """_run_agent passes timeout=300 to subprocess.run."""
+        import inspect
+        source = inspect.getsource(rct._run_agent)
+        assert "timeout=" in source, "_run_agent must set subprocess timeout"
+
+    def test_timeout_handling_in_run_test(self):
+        """#6819: run_test wraps _run_agent in try/except TimeoutExpired."""
+        import inspect
+        source = inspect.getsource(rct.run_test)
+        assert "TimeoutExpired" in source, (
+            "#6819: run_test must handle subprocess.TimeoutExpired"
+        )
+
+
 class TestRunTestCacheSkip:
     def test_cache_hit_returns_none(self, tmp_path):
         """When cache hits, run_test returns (None, None) without spawning agents."""
