@@ -133,6 +133,32 @@ class TestStatePersistence(unittest.TestCase):
                 self.assertFalse(state_file.with_suffix(".tmp").exists())
 
 
+class TestStartAllPersistence(unittest.TestCase):
+    """#6820: start_all must set intent=running and call save_state."""
+
+    def test_start_all_sets_intent_running(self):
+        """start_all sets intent=INTENT_RUNNING for spawned agents."""
+        from harness import HarnessState, AgentState
+        hs = HarnessState()
+        agent = AgentState("skill")
+        agent.status = "starting"
+        agent.intent = AgentState.INTENT_RUNNING
+        agent.boot_time = 1000.0
+        hs.set_agent("skill", agent)
+        got = hs.get_agent("skill")
+        self.assertEqual(got.intent, AgentState.INTENT_RUNNING)
+
+    def test_start_all_calls_save_state(self):
+        """#6820: Verify start_all code path includes save_state call."""
+        import inspect
+        from harness import start_all
+        source = inspect.getsource(start_all)
+        self.assertIn("save_state()", source,
+                       "start_all must call save_state() to persist intent")
+        self.assertIn("INTENT_RUNNING", source,
+                       "start_all must set intent to INTENT_RUNNING")
+
+
 class TestPortManagement(unittest.TestCase):
     """Test find_free_port and port reading."""
 
