@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-10 11:04
+
+- **Files scanned**: references/sub-skills/roles/dm/version-bumps.md, references/sub-skills/roles/pm/soul-shepherd.md, references/sub-skills/roles/qa/iteration-log.md, tests/test_compose_capability.py, tests/test_config.py
+- **Findings**: #6759 (test_compose_capability.py unused import yaml — low), #6760 (version-bumps.md git tag bypass — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-10 10:05
 
 - **Files scanned**: references/sub-skills/common/agent-lifecycle.md, references/sub-skills/common/issue-filing.md, references/sub-skills/common/vault-protocol.md, references/sub-skills/roles/dev/implement-tasks.md, references/sub-skills/roles/dev/triage-issues.md
