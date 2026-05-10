@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-10 10:05
+
+- **Files scanned**: references/sub-skills/common/agent-lifecycle.md, references/sub-skills/common/issue-filing.md, references/sub-skills/common/vault-protocol.md, references/sub-skills/roles/dev/implement-tasks.md, references/sub-skills/roles/dev/triage-issues.md
+- **Findings**: #6746 (implement-tasks.md git diff after git add returns empty — high), #6747 (triage-issues.md bug fix path skips review gate — medium)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-10 09:04
 
 - **Files scanned**: references/prompts/research.md.j2, references/roles/instructions.md, references/scripts/forgejo_setup.py, references/scripts/forge_adapter.py, references/scripts/vault_check.py
