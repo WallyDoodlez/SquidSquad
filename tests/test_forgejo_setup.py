@@ -109,6 +109,110 @@ class TestComposeTemplateExists:
         assert "forgejo" in content
 
 
+class TestDeploy:
+    """#6984: deploy() must have test coverage for all branches."""
+
+    @patch("subprocess.run")
+    def test_deploy_fails_when_docker_not_ready(self, mock_run):
+        mock_run.side_effect = FileNotFoundError
+        result = forgejo_setup.deploy()
+        assert result["ok"] is False
+
+    @patch("urllib.request.urlopen")
+    @patch("subprocess.run")
+    def test_deploy_fails_on_compose_error(self, mock_run, mock_urlopen, tmp_path):
+        # Docker check succeeds, compose fails
+        def run_side_effect(cmd, **kwargs):
+            if "compose" in cmd and "up" in cmd:
+                return MagicMock(returncode=1, stderr="compose error")
+            return MagicMock(returncode=0, stdout="Docker 24.0")
+
+        mock_run.side_effect = run_side_effect
+        with patch.object(forgejo_setup, "DEPLOY_DIR", tmp_path), \
+             patch.object(forgejo_setup, "COMPOSE_TEMPLATE", tmp_path / "nonexistent"), \
+             patch("socket.socket") as mock_socket:
+            mock_sock = MagicMock()
+            mock_sock.connect_ex.return_value = 1
+            mock_sock.__enter__ = lambda s: mock_sock
+            mock_sock.__exit__ = MagicMock(return_value=False)
+            mock_socket.return_value = mock_sock
+            result = forgejo_setup.deploy()
+        assert result["ok"] is False
+        assert "compose" in result["message"].lower()
+
+    @patch("urllib.request.urlopen")
+    @patch("subprocess.run")
+    def test_deploy_success(self, mock_run, mock_urlopen, tmp_path):
+        mock_run.return_value = MagicMock(returncode=0, stdout="Docker 24.0")
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.__enter__ = lambda s: mock_resp
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_resp
+        with patch.object(forgejo_setup, "DEPLOY_DIR", tmp_path), \
+             patch.object(forgejo_setup, "COMPOSE_TEMPLATE", tmp_path / "nonexistent"), \
+             patch("socket.socket") as mock_socket:
+            mock_sock = MagicMock()
+            mock_sock.connect_ex.return_value = 1
+            mock_sock.__enter__ = lambda s: mock_sock
+            mock_sock.__exit__ = MagicMock(return_value=False)
+            mock_socket.return_value = mock_sock
+            result = forgejo_setup.deploy()
+        assert result["ok"] is True
+        assert result["url"]
+
+
+class TestCreateRepo:
+    """#6983: create_repo() must have test coverage for all branches."""
+
+    @patch("urllib.request.urlopen")
+    def test_create_repo_success(self, mock_urlopen):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b'{"clone_url": "http://localhost:3000/squid/test.git"}'
+        mock_resp.__enter__ = lambda s: mock_resp
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_resp
+        result = forgejo_setup.create_repo("test", "token123")
+        assert result["ok"] is True
+        assert "test.git" in result["clone_url"]
+
+    @patch("urllib.request.urlopen")
+    def test_create_repo_already_exists(self, mock_urlopen):
+        import urllib.error
+        # First call (create) raises 409, second call (query) succeeds
+        error_resp = MagicMock()
+        error_resp.read.return_value = b'{"message": "repository already exists"}'
+        mock_urlopen.side_effect = [
+            urllib.error.HTTPError("url", 409, "Conflict", {}, error_resp),
+        ]
+        # Patch for the follow-up repo query
+        with patch("urllib.request.urlopen") as mock_url2:
+            mock_url2.side_effect = urllib.error.HTTPError(
+                "url", 409, "Conflict", {},
+                MagicMock(read=lambda: b'{"message": "repository already exists"}'),
+            )
+            result = forgejo_setup.create_repo("test", "token123")
+        assert result["ok"] is True
+        assert "already exists" in result["message"]
+
+    @patch("urllib.request.urlopen")
+    def test_create_repo_auth_failure(self, mock_urlopen):
+        import urllib.error
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            "url", 401, "Unauthorized", {},
+            MagicMock(read=lambda: b"Unauthorized"),
+        )
+        result = forgejo_setup.create_repo("test", "bad-token")
+        assert result["ok"] is False
+        assert "401" in result["message"]
+
+    @patch("urllib.request.urlopen")
+    def test_create_repo_connection_error(self, mock_urlopen):
+        mock_urlopen.side_effect = ConnectionError("refused")
+        result = forgejo_setup.create_repo("test", "token123")
+        assert result["ok"] is False
+
+
 class TestTeardown:
     @patch("subprocess.run")
     def test_teardown_no_deployment(self, mock_run):

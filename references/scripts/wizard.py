@@ -1062,7 +1062,6 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
         for cmd_file in ref_commands.glob("*.md"):
             dest = claude_commands / cmd_file.name
             if not dest.exists():  # don't overwrite user customizations
-                import shutil
                 shutil.copy2(cmd_file, dest)
 
     # 6. Save install spec for reproducibility and upgrade re-use (#13)
@@ -2029,8 +2028,16 @@ def generate_default_spec(scan_data=None, repo_info=None):
         },
     ]
 
+    # Read version dynamically from config.md or fallback
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        import config as _cfg
+        current_version = _cfg.get_field("version") or "0.36.0"
+    except (ImportError, SystemExit, Exception):
+        current_version = "0.36.0"
+
     return {
-        "squidsquad_version": "0.25.0",
+        "squidsquad_version": current_version,
         "project": {
             "name": project_name,
             "repo": project_repo,
