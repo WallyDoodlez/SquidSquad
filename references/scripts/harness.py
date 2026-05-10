@@ -423,7 +423,7 @@ async def lifespan(app: FastAPI):
             else:
                 _log(f"  {role}: OK — {clone_path}")
         if not all_ok:
-            _log("WARNING: Some clones are missing. Run compose.py to create them.")
+            _log("WARNING: Some clones are missing. Run add_role.py to create them.")
     except (SystemExit, Exception) as e:
         _log(f"WARNING: Could not verify clones: {e}")
 

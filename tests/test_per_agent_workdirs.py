@@ -309,14 +309,34 @@ class TestDetectRemoteUrl:
 # ---------------------------------------------------------------------------
 
 class TestBackwardCompat:
-    def test_default_generates_dot_paths(self, tmp_path):
-        """Without clone_paths param, all agents get '.' (single-repo fallback)."""
+    def test_default_pm_gets_dot_others_get_sibling(self, tmp_path):
+        """#6597: Without clone_paths, PM gets '.' and others get sibling paths."""
         ss = tmp_path / ".squidsquad"
         ss.mkdir()
         path = compose.generate_local_config(["pm", "skill"], target_root=tmp_path)
         content = path.read_text(encoding="utf-8")
         assert "- **pm**: ." in content
-        assert "- **skill**: ." in content
+        dir_name = tmp_path.name
+        assert f"- **skill**: ../{dir_name}-skill" in content
+
+    def test_deploy_all_preserves_existing_entries(self, tmp_path):
+        """#6597: deploy-all preserves existing .local-config entries."""
+        ss = tmp_path / ".squidsquad"
+        ss.mkdir()
+        # Write existing config with custom paths
+        existing = (
+            "- **pm**: .\n"
+            "- **skill**: ../my-custom-skill-clone\n"
+        )
+        (ss / ".local-config").write_text(existing, encoding="utf-8")
+        # Call without clone_paths — should preserve existing entries
+        path = compose.generate_local_config(["pm", "skill", "qa"], target_root=tmp_path)
+        content = path.read_text(encoding="utf-8")
+        assert "- **pm**: ." in content
+        assert "- **skill**: ../my-custom-skill-clone" in content
+        # New role qa gets sibling path
+        dir_name = tmp_path.name
+        assert f"- **qa**: ../{dir_name}-qa" in content
 
     def test_dot_resolves_to_repo_root(self, tmp_path):
         """'.' in .local-config resolves to REPO_ROOT in health_check."""
