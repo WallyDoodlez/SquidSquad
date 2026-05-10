@@ -309,14 +309,19 @@ class TestDetectRemoteUrl:
 # ---------------------------------------------------------------------------
 
 class TestBackwardCompat:
-    def test_default_generates_dot_paths(self, tmp_path):
-        """Without clone_paths param, all agents get '.' (single-repo fallback)."""
+    def test_default_generates_sibling_paths(self, tmp_path):
+        """Without clone_paths param, PM gets '.' and others get sibling dirs."""
         ss = tmp_path / ".squidsquad"
         ss.mkdir()
         path = compose.generate_local_config(["pm", "skill"], target_root=tmp_path)
         content = path.read_text(encoding="utf-8")
         assert "- **pm**: ." in content
-        assert "- **skill**: ." in content
+        # Non-PM agents get sibling clone paths, not "."
+        lines = {l.split("**: ")[0].split("**")[1]: l.split("**: ")[1]
+                 for l in content.splitlines() if l.startswith("- **")}
+        assert lines["pm"] == "."
+        assert lines["skill"].startswith("../")
+        assert lines["skill"] != "."
 
     def test_dot_resolves_to_repo_root(self, tmp_path):
         """'.' in .local-config resolves to REPO_ROOT in health_check."""
