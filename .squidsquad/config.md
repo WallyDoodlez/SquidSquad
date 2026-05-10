@@ -140,9 +140,9 @@
 - **reacts-to**: agent-health, pr-merged, status-transition, tracker-comment, verification-failed, verification-passed
 
 ### qa
-- **emits**: agent-health, request-merge, status-transition, tracker-comment, verification-failed, verification-passed
-- **reacts-to**: pr-create, pr-merged, status-transition
+- **emits**: request-merge, status-transition, tracker-comment, verification-failed, verification-passed
+- **reacts-to**: agent-health, pr-create, pr-merged, status-transition
 
 ### skill
-- **emits**: git-commit, pr-create, status-transition, tracker-comment
-- **reacts-to**: pr-merged, status-transition, tracker-comment, verification-failed, verification-passed
+- **emits**: pr-create, status-transition, tracker-comment
+- **reacts-to**: pr-merged, status-transition, verification-failed
