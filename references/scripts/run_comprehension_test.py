@@ -195,7 +195,11 @@ Answer every question. If you cannot find the answer in the listed files, say "N
 """
 
     print("Stage 1: Spawning test agent...")
-    test_result = _run_agent(claude_bin, test_prompt, REPO_ROOT)
+    try:
+        test_result = _run_agent(claude_bin, test_prompt, REPO_ROOT)
+    except subprocess.TimeoutExpired:
+        print("ERROR: test agent timed out after 300s", file=sys.stderr)
+        sys.exit(1)
     if test_result.returncode != 0:
         print(f"WARNING: test agent exited with code {test_result.returncode}", file=sys.stderr)
         if test_result.stderr:
@@ -235,7 +239,11 @@ Write ONLY the JSON array to the results file. No other text.
 """
 
     print("Stage 2: Spawning eval agent...")
-    eval_result = _run_agent(claude_bin, eval_prompt, REPO_ROOT)
+    try:
+        eval_result = _run_agent(claude_bin, eval_prompt, REPO_ROOT)
+    except subprocess.TimeoutExpired:
+        print("ERROR: eval agent timed out after 300s", file=sys.stderr)
+        sys.exit(1)
     if eval_result.returncode != 0:
         print(f"WARNING: eval agent exited with code {eval_result.returncode}", file=sys.stderr)
 

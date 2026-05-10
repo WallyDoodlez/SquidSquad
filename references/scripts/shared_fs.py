@@ -192,7 +192,7 @@ def main():
             print("Usage: shared_fs.py read-secret KEY", file=sys.stderr)
             return 2
         value = read_secret_or_env(args[1])
-        if value:
+        if value is not None:
             print(value)
         else:
             print(f"Secret '{args[1]}' not found", file=sys.stderr)

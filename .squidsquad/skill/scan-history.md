@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-10 18:02
+
+- **Files scanned**: references/scripts/tracker.py, references/scripts/cycle_pre.py
+- **Findings**: #6848 (tracker.py create_task missing forge adapter — medium), #6849 (tracker.py redundant import re in comment() — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-10 16:04
 
 - **Files scanned**: references/scripts/event_catalog.py, references/scripts/event_validator.py, references/scripts/repo_scan.py, references/scripts/run_comprehension_test.py, references/scripts/shared_fs.py
