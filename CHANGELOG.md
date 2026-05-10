@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.37.0] — 2026-05-10
+
+### Added
+- #6260 — DM delivery tasks now ship directly without QA verification — delivery-only work (docs, CHANGELOG, version bumps) skips the test step for faster releases
+
+### Fixed
+- #6497 — Reboot agent tests are now included in the test runner — previously excluded and silently failing
+- #6514 — Vault knowledge notes no longer get corrupted when confidence decay rewrites are applied
+- #6526 — Branch creation now uses the correct default pattern (`task/`) instead of a stale role-based pattern
+- #6573 — Post-architecture cleanup: stale references to removed roles and setup wizard gaps resolved
+- #6597 — Agent compose now correctly writes per-clone paths instead of `.` for all agents — isolated working directories work again
+- #6598 — Removed stale tests that verified behavior from a removed shared-filesystem fallback
+- #6599 — Test suite no longer fails on Windows due to grep subprocess usage — uses Python-native search
+- #6629 — Pipeline sentinel no longer runs stuck-task detection when branch workflow is disabled
+- #6630 — Pipeline sentinel now uses tracker.py commands instead of error-prone prose instructions
+- #6683 — Test docstring no longer falsely claims the role-specific sub-skills directory was retired
+- #6733 — Forgejo adapter no longer crashes on HTTP 204 No Content responses from DELETE operations
+- #6746 — Dev agent code review now correctly captures file diffs after staging — no more empty reviews
+- #6747 — Bug fix path now includes self-verification and external review steps — same quality gate as features
+- #6759 — Test file no longer fails with ImportError from an unused `yaml` import
+- #6760 — Version bump now uses the git_ops.py abstraction for tag/push — consistent with all other git operations
+- #6774 — DM now correctly triggers version bumps when the ship counter exceeds threshold
+- #6786 — Vault remember tests no longer have shadowed test classes that silently skip assertions
+- #6799 — Resolved merge conflict markers in compose.py that broke template composition
+
 ## [0.36.0] — 2026-05-09
 
 ### Added
