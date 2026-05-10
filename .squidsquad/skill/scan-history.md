@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-10 18:33
+
+- **Files scanned**: references/scripts/git_ops.py, references/scripts/wizard.py
+- **Findings**: #6976 (wizard.py generate_default_spec hardcodes stale version — medium), #6977 (wizard.py redundant import shutil — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-10 18:02
 
 - **Files scanned**: references/scripts/tracker.py, references/scripts/cycle_pre.py
