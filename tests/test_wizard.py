@@ -1990,6 +1990,21 @@ class TestGenerateDefaultSpec:
         spec = wizard.generate_default_spec(scan)
         assert spec["agents"][1]["test_command"] == "npx jest"
 
+    def test_version_not_hardcoded_0_25(self):
+        """#6976: squidsquad_version must not be hardcoded to 0.25.0."""
+        spec = wizard.generate_default_spec()
+        assert spec["squidsquad_version"] != "0.25.0", (
+            "#6976: version should be read dynamically, not hardcoded to 0.25.0"
+        )
+
+    def test_no_redundant_shutil_import(self):
+        """#6977: scaffold_install must not re-import shutil locally."""
+        import inspect
+        source = inspect.getsource(wizard.scaffold_install)
+        assert "import shutil" not in source, (
+            "#6977: scaffold_install should use module-level shutil import"
+        )
+
 
 # ---------------------------------------------------------------------------
 # apply_project_type (#4083)
