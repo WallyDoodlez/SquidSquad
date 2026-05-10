@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-10 04:04
+
+- **Files scanned**: tests/test_tracker.py, docs/event-bus.md, references/presets/software-dev/manifest.yaml, references/scripts/triage.py, references/scripts/providers/openai/adapter.py
+- **Findings**: #6627 (triage.py dead role-lead suffix check — low), #6628 (adapter.py no retry on transient API errors — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-10 02:51
 
 - **Files scanned**: tests/test_config_schema.py, tests/test_feat_1496_shared_fs_fallback.py, tests/test_harness.py, tests/test_installer_wiring.py, tests/test_model_router_live.py
