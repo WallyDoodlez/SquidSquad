@@ -180,3 +180,16 @@ class TestCLI:
             sys.argv = ["shared_fs.py", "init"]
             shared_fs.main()
         assert fake_home.exists()
+
+    def test_read_secret_empty_value_not_false_negative(self, tmp_path, capsys):
+        """#6818: read-secret CLI must return exit 0 for empty secret, not 'not found'."""
+        fake_home = tmp_path / ".squidsquad"
+        fake_home.mkdir()
+        secrets = fake_home / "secrets"
+        secrets.write_text("EMPTY_KEY=\n", encoding="utf-8")
+        with patch.object(shared_fs, "get_home", return_value=fake_home):
+            sys.argv = ["shared_fs.py", "read-secret", "EMPTY_KEY"]
+            result = shared_fs.main()
+        assert result is None or result == 0, (
+            f"#6818: read-secret returned {result} for empty secret — should be 0"
+        )
