@@ -55,6 +55,8 @@ STATIC_TEST_MODULES = [
     "test_reboot_agent",
     "test_feat_3296_task_boundary",
     "test_per_agent_workdirs",
+    "test_shared_fs",
+    "test_run_comprehension_test",
 ]
 
 
