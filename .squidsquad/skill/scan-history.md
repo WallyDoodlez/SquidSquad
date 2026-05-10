@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-10 04:35
+
+- **Files scanned**: references/sub-skills/common/prohibitions.md, references/sub-skills/common/vault-remember.md, references/sub-skills/roles/dm/git-commit.md, references/sub-skills/roles/pm/github-issues.md, references/sub-skills/roles/pm/pipeline-sentinel.md
+- **Findings**: #6629 (pipeline-sentinel Section 3 missing branch-workflow gate — low), #6630 (pipeline-sentinel Section 3 prose vs tracker.py commands — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-10 04:04
 
 - **Files scanned**: tests/test_tracker.py, docs/event-bus.md, references/presets/software-dev/manifest.yaml, references/scripts/triage.py, references/scripts/providers/openai/adapter.py
