@@ -3,12 +3,12 @@
 - **Task**: none
 - **Status**: none
 - **Last Processed Event ID**: bb4971bc
-- **Quiet Cycle Counter**: 2
+- **Quiet Cycle Counter**: 0
 
-## Session Context (checkpoint at cycle 713)
+## Session Context (checkpoint at cycle 714)
 - Version: v0.36.0
 - Shipped count: 4/10
-- Open issues blocking bump: 1
+- Open issues blocking bump: 0
 - Last ship: #6086 (cycle 699, 2026-05-08)
-- Doc scan: rotation 22, next: CONTRIBUTING.md
+- Doc scan: rotation 23, next: CHANGELOG.md
 - Pending approval: #5773 (document start.sh)
