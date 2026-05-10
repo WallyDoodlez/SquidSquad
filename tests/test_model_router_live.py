@@ -130,11 +130,16 @@ class TestTC38ResearchOutput:
         # Spot-check up to 5 function refs against the codebase
         bad = []
         for func in refs[:5]:
-            result = subprocess.run(
-                ["grep", "-r", f"def {func}", str(REPO_ROOT / "references")],
-                capture_output=True, text=True,
-            )
-            if result.returncode != 0:
+            pattern = f"def {func}"
+            found = False
+            for py_file in (REPO_ROOT / "references").rglob("*.py"):
+                try:
+                    if pattern in py_file.read_text(encoding="utf-8", errors="ignore"):
+                        found = True
+                        break
+                except OSError:
+                    continue
+            if not found:
                 bad.append(func)
         # Allow some misses (function may be in tests/ or other locations)
         assert len(bad) <= len(refs) // 2, f"Likely hallucinated functions: {bad}"
