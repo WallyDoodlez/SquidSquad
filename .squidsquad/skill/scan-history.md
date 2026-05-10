@@ -1,5 +1,35 @@
 # Scan History
 
+## Scan — 2026-05-10 14:35
+
+- **Files scanned**: CONTRIBUTING.md, deploy-6126.sh, start.bat, packages/cli/index.test.js, references/docs/harness-lifecycle-upgrade.md
+- **Findings**: #6805 (deploy-6126.sh stale one-time deploy script — low), #6806 (packages/cli/index.test.js unused t parameter — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-10 13:04
+
+- **Files scanned**: tests/test_tc_coverage.py, tests/test_vault_remember.py, tests/test_wizard_runbook.py, tests/comprehension/2183_spec.json, tests/comprehension/2195_spec.json
+- **Findings**: #6786 (test_vault_remember.py duplicate class definitions shadow tests — medium), #6787 (2183_spec.json missing reboot_agent.py source — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-10 12:04
+
+- **Files scanned**: tests/test_diagnostics.py, tests/test_feat328_coverage.py, tests/test_feat_3296_task_boundary.py, tests/test_forgejo_setup.py, tests/test_forge_adapter.py
+- **Findings**: #6772 (test_diagnostics.py unused capsys fixtures — low), #6773 (test_forge_adapter.py + test_forgejo_setup.py repeated urllib.error imports — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-10 11:04
+
+- **Files scanned**: references/sub-skills/roles/dm/version-bumps.md, references/sub-skills/roles/pm/soul-shepherd.md, references/sub-skills/roles/qa/iteration-log.md, tests/test_compose_capability.py, tests/test_config.py
+- **Findings**: #6759 (test_compose_capability.py unused import yaml — low), #6760 (version-bumps.md git tag bypass — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-10 10:05
+
+- **Files scanned**: references/sub-skills/common/agent-lifecycle.md, references/sub-skills/common/issue-filing.md, references/sub-skills/common/vault-protocol.md, references/sub-skills/roles/dev/implement-tasks.md, references/sub-skills/roles/dev/triage-issues.md
+- **Findings**: #6746 (implement-tasks.md git diff after git add returns empty — high), #6747 (triage-issues.md bug fix path skips review gate — medium)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-10 09:04
 
 - **Files scanned**: references/prompts/research.md.j2, references/roles/instructions.md, references/scripts/forgejo_setup.py, references/scripts/forge_adapter.py, references/scripts/vault_check.py

@@ -295,4 +295,4 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full contribution process.
 - **Test with `compose.py all`** — catch include errors before deploying.
 - **Check includes.yml** — if your sub-skill isn't in the role's `includes.yml`, it won't be composed. Update `manifest.md` too to keep the reference doc in sync.
 - **Use section markers** — they power the status bar and make debugging easier.
-- **Mind the `[ROLE]` ambiguity** — common sub-skills that reference `[ROLE]` paths only work in dev templates. PM and DM must inline those sections.
+- **Mind the dev-only placeholders** — `[ROLE_TEST_CMD]` and `[OTHER_ROLES]` are only substituted in dev templates. Common sub-skills using `[ROLE]` or `[ROLE_UPPER]` work for all roles.
