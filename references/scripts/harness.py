@@ -585,9 +585,11 @@ async def start_all():
             agent_state = state.get_agent(role) or AgentState(role)
             if result["action"] == "spawn":
                 agent_state.status = "starting"
+                agent_state.intent = AgentState.INTENT_RUNNING
                 agent_state.boot_time = time.time()
             state.set_agent(role, agent_state)
 
+    state.save_state()
     return {"results": results}
 
 
