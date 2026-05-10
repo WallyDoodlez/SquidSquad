@@ -309,19 +309,50 @@ class TestDetectRemoteUrl:
 # ---------------------------------------------------------------------------
 
 class TestBackwardCompat:
+<<<<<<< HEAD
     def test_default_generates_sibling_paths(self, tmp_path):
         """Without clone_paths param, PM gets '.' and others get sibling dirs."""
+=======
+    def test_default_pm_gets_dot_others_get_sibling(self, tmp_path):
+        """#6597: Without clone_paths, PM gets '.' and others get sibling paths."""
+>>>>>>> de73c13e2d22651c8e1ef1d805257fa278f06ffc
         ss = tmp_path / ".squidsquad"
         ss.mkdir()
-        path = compose.generate_local_config(["pm", "skill"], target_root=tmp_path)
+        with patch.object(compose, "_read_config_value", return_value=""):
+            path = compose.generate_local_config(["pm", "skill"], target_root=tmp_path)
         content = path.read_text(encoding="utf-8")
         assert "- **pm**: ." in content
+<<<<<<< HEAD
         # Non-PM agents get sibling clone paths, not "."
         lines = {l.split("**: ")[0].split("**")[1]: l.split("**: ")[1]
                  for l in content.splitlines() if l.startswith("- **")}
         assert lines["pm"] == "."
         assert lines["skill"].startswith("../")
         assert lines["skill"] != "."
+=======
+        dir_name = tmp_path.name
+        assert f"- **skill**: ../{dir_name}-skill" in content
+
+    def test_deploy_all_preserves_existing_entries(self, tmp_path):
+        """#6597: deploy-all preserves existing .local-config entries."""
+        ss = tmp_path / ".squidsquad"
+        ss.mkdir()
+        # Write existing config with custom paths
+        existing = (
+            "- **pm**: .\n"
+            "- **skill**: ../my-custom-skill-clone\n"
+        )
+        (ss / ".local-config").write_text(existing, encoding="utf-8")
+        # Call without clone_paths — should preserve existing entries
+        with patch.object(compose, "_read_config_value", return_value=""):
+            path = compose.generate_local_config(["pm", "skill", "qa"], target_root=tmp_path)
+        content = path.read_text(encoding="utf-8")
+        assert "- **pm**: ." in content
+        assert "- **skill**: ../my-custom-skill-clone" in content
+        # New role qa gets sibling path
+        dir_name = tmp_path.name
+        assert f"- **qa**: ../{dir_name}-qa" in content
+>>>>>>> de73c13e2d22651c8e1ef1d805257fa278f06ffc
 
     def test_dot_resolves_to_repo_root(self, tmp_path):
         """'.' in .local-config resolves to REPO_ROOT in health_check."""

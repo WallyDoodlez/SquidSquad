@@ -115,7 +115,7 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-- **Shipped Since Last Bump**: 8
+- **Shipped Since Last Bump**: 9
 
 ## Agent Effort
 
@@ -136,13 +136,13 @@
 - **reacts-to**: pr-merged, status-transition
 
 ### pm
-- **emits**: pr-create, status-transition, tracker-comment
-- **reacts-to**: agent-health, phase-change, pr-merged, status-transition, tracker-comment, verification-failed, verification-passed
+- **emits**: agent-health, pr-create, status-transition, tracker-comment
+- **reacts-to**: agent-health, compose-completed, phase-change, pr-merged, status-transition, tracker-comment, verification-failed, verification-passed
 
 ### qa
-- **emits**: request-merge, status-transition, tracker-comment, verification-failed, verification-passed
-- **reacts-to**: pr-create, pr-merged, status-transition
+- **emits**: agent-health, request-merge, status-transition, tracker-comment, verification-failed, verification-passed
+- **reacts-to**: git-commit, pr-merged, status-transition
 
 ### skill
-- **emits**: git-commit, status-transition, tracker-comment
-- **reacts-to**: cycle-end, cycle-start, status-transition, tracker-comment, verification-failed
+- **emits**: branch-checkout, git-commit, pr-create, status-transition, tracker-comment
+- **reacts-to**: pr-merged, status-transition, verification-failed

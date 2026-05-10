@@ -5,7 +5,6 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Active Priorities
 
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — awaiting human greenlight
-- #6597 compose deploy-all writes '.' for all clones (open, high, role:skill) — fix in working tree
 - #6274 Generalize 'dev' to 'worker' across architecture (pending, medium, role:skill) — awaiting approval
 - #6056 Replace /loop with event-driven Monitor tool (pending, medium, role:skill)
 - #6087 L2: status line redesign (pending, medium, role:skill) — needs approval to plan
@@ -24,6 +23,11 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #5159 Status bar shows agent 'awaiting restart' state from harness intent API (pending, low)
 ## Recently Shipped
 
+- #6597 Fix deploy-all clone isolation (shipped) — stale tracking ref root cause
+- #6599 Replace grep subprocess with pure-Python search (shipped)
+- #6598 Replace stale shared-FS tests (shipped)
+- #6629 Pipeline-sentinel branch-workflow gate (shipped)
+- #6630 Pipeline-sentinel tracker.py commands (shipped)
 - #6573 Fix post-#6261 stale references (shipped) — 10/10 fixes verified
 - #6261 Fixed team architecture — PM+QA+DM+workers always present, tracker-protocol L1 (shipped) — 41/41 TCs, DeepSeek-reviewed
 - #6304 test_model_router.py timeout coverage (shipped)

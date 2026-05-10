@@ -481,9 +481,20 @@ For each item, check time since last update. If stalled beyond **90 minutes** (3
 
 **3. PR Status Sync**
 
+If Branch Workflow is `no`, skip this section (no PR data from Section 1).
+
 For each open PR (from the conflict check query above):
-- **If merged**: find the tracker item, update to `Pending Ship` if not already. Comment: `"PR merged. Status → Pending Ship."`
-- **If closed without merge**: update to `In Progress`. Comment: `"PR closed without merge. Status → In Progress."`
+- **If merged**: find the tracker item and transition to `pending-ship` if not already (expected state: `pending-test`). Comment: `"PR merged. Status → Pending Ship."`
+  ```bash
+  python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role pm-lead
+  python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "PR merged. Status → Pending Ship."
+  ```
+  If the task is not at `pending-test` (e.g., already at `pending-ship` or `shipped`), skip the transition silently.
+- **If closed without merge**: transition back to `in-progress` (expected state: `pending-test`). Comment: `"PR closed without merge. Status → In Progress."`
+  ```bash
+  python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role pm-lead
+  python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "PR closed without merge. Status → In Progress."
+  ```
 
 **4. Stuck-State Detection (comprehensive)**
 
