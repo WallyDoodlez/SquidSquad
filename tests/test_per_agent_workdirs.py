@@ -313,7 +313,8 @@ class TestBackwardCompat:
         """#6597: Without clone_paths, PM gets '.' and others get sibling paths."""
         ss = tmp_path / ".squidsquad"
         ss.mkdir()
-        path = compose.generate_local_config(["pm", "skill"], target_root=tmp_path)
+        with patch.object(compose, "_read_config_value", return_value=""):
+            path = compose.generate_local_config(["pm", "skill"], target_root=tmp_path)
         content = path.read_text(encoding="utf-8")
         assert "- **pm**: ." in content
         dir_name = tmp_path.name
@@ -330,7 +331,8 @@ class TestBackwardCompat:
         )
         (ss / ".local-config").write_text(existing, encoding="utf-8")
         # Call without clone_paths — should preserve existing entries
-        path = compose.generate_local_config(["pm", "skill", "qa"], target_root=tmp_path)
+        with patch.object(compose, "_read_config_value", return_value=""):
+            path = compose.generate_local_config(["pm", "skill", "qa"], target_root=tmp_path)
         content = path.read_text(encoding="utf-8")
         assert "- **pm**: ." in content
         assert "- **skill**: ../my-custom-skill-clone" in content
