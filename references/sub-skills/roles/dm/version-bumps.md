@@ -30,8 +30,8 @@ After marking any item `Shipped`, check if a version bump is due:
    List all items shipped since the last bump (scan tracker Discussions for `Status → Shipped` entries since the previous version's date).
 6. Commit: `python references/scripts/git_ops.py commit-push dm "bump version to vX.Y.Z"`
 7. Check if tag exists: `git tag -l "vX.Y.Z"`. If it exists, skip tagging.
-8. Create tag: `git tag vX.Y.Z`
-9. Push tags: `git push --tags`
+8. Create tag: `git tag vX.Y.Z` (bare git — tagging is too infrequent to warrant a git_ops.py subcommand)
+9. Push tags: `git push --tags` (bare git — same rationale; step 6 already enforced branch via commit-push)
 10. Reset shipped count: `python references/scripts/config.py set shipped-since-bump 0`
 11. Log in iteration log: add `Version Bumped: X.Y.Z` field.
 
