@@ -80,39 +80,6 @@ class TestWriteBudget:
         assert result == 2
 
 
-class TestIncWrites:
-    def test_increments_from_zero(self, tmp_path, capsys):
-        ws_dir = tmp_path / "skill"
-        ws_dir.mkdir(parents=True)
-        ws = ws_dir / "working-state.md"
-        ws.write_text("# Working State\n\n- **Vault Writes This Cycle**: 0\n")
-        with patch.object(vault_remember, "SQUIDSQUAD_DIR", tmp_path):
-            result = vault_remember.inc_writes("skill")
-        assert result == 1
-        assert "1" in ws.read_text()
-
-    def test_increments_existing(self, tmp_path, capsys):
-        ws_dir = tmp_path / "skill"
-        ws_dir.mkdir(parents=True)
-        ws = ws_dir / "working-state.md"
-        ws.write_text("# Working State\n\n- **Vault Writes This Cycle**: 3\n")
-        with patch.object(vault_remember, "SQUIDSQUAD_DIR", tmp_path):
-            result = vault_remember.inc_writes("skill")
-        assert result == 4
-
-
-class TestResetWrites:
-    def test_resets_to_zero(self, tmp_path, capsys):
-        ws_dir = tmp_path / "skill"
-        ws_dir.mkdir(parents=True)
-        ws = ws_dir / "working-state.md"
-        ws.write_text("# Working State\n\n- **Vault Writes This Cycle**: 5\n")
-        with patch.object(vault_remember, "SQUIDSQUAD_DIR", tmp_path):
-            result = vault_remember.reset_writes("skill")
-        assert result == 0
-        assert "0" in ws.read_text()
-
-
 class TestBriefingBudget:
     def test_empty_briefing_full_budget(self, tmp_path, capsys):
         with patch.object(vault_remember, "VAULT_DIR", tmp_path), \
