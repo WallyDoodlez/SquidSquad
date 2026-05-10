@@ -198,6 +198,48 @@ class TestCreateTask:
         assert "status:pending" in label_arg
 
 
+    def test_create_task_forge_adapter_path(self, monkeypatch):
+        """#6848: create_task must use forge adapter when available."""
+        adapter_calls = []
+
+        class FakeAdapter:
+            def create_issue(self, title, body, labels=None):
+                adapter_calls.append({"title": title, "body": body, "labels": labels})
+                return {"number": 99, "url": "http://forge/issues/99"}
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: FakeAdapter())
+        number = tracker.create_task("new feat", "body text", "skill", "high", reporter="skill-lead")
+        assert number == 99
+        assert len(adapter_calls) == 1
+        assert "TASK:" in adapter_calls[0]["title"]
+        assert "type:task" in adapter_calls[0]["labels"]
+
+    def test_create_task_includes_reporter(self, monkeypatch):
+        """#6848: create_task should include reporter in body when provided."""
+        calls = []
+
+        def fake_run(cmd, **kw):
+            calls.append(cmd)
+            return _mock_result(stdout="https://github.com/org/repo/issues/51\n")
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list", fake_run)
+        tracker.create_task("feat", "body", "skill", "medium", reporter="skill-lead")
+        body_idx = calls[0].index("--body") + 1
+        assert "**Reported By**: skill-lead" in calls[0][body_idx]
+
+
+class TestCommentNoRedundantImport:
+    """#6849: comment() must use module-level re, not import re as _re."""
+
+    def test_no_local_re_import(self):
+        import inspect
+        source = inspect.getsource(tracker.comment)
+        assert "import re as _re" not in source, (
+            "#6849: comment() should use module-level re, not import re as _re"
+        )
+
+
 class TestComment:
     def test_adds_comment(self, monkeypatch):
         calls = []

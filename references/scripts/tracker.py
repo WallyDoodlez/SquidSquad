@@ -575,6 +575,10 @@ def create_task(title, body, role, priority, reporter=None):
     role_label = f"role:{role}"
     labels = f"type:task,{pri_label},{role_label},squidsquad,status:pending"
 
+    full_body = body
+    if reporter:
+        full_body = f"**Reported By**: {reporter}\n**Priority**: {priority.title()}\n\n{body}"
+
     # Strip existing prefix to avoid double TASK: TASK: or legacy FEAT: FEAT:
     clean_title = title.removeprefix("TASK:").removeprefix("TASK :").removeprefix("FEAT:").removeprefix("FEAT :").strip()
     full_title = f"TASK: {clean_title}"
@@ -582,7 +586,7 @@ def create_task(title, body, role, priority, reporter=None):
 
     adapter = _get_forge_adapter()
     if adapter:
-        result = adapter.create_issue(full_title, body, labels=label_list)
+        result = adapter.create_issue(full_title, full_body, labels=label_list)
         if not result:
             print("ERROR: Failed to create task via forge adapter", file=sys.stderr)
             return -1
@@ -592,7 +596,7 @@ def create_task(title, body, role, priority, reporter=None):
     result = _run_list([
         "gh", "issue", "create",
         "--title", full_title,
-        "--body", body,
+        "--body", full_body,
         "--label", labels,
     ])
     url = result.stdout.strip()
