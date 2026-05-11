@@ -3,12 +3,12 @@
 - **Task**: none
 - **Status**: none
 - **Last Processed Event ID**: 93414306
-- **Quiet Cycle Counter**: 2
+- **Quiet Cycle Counter**: 0
 
-## Session Context (checkpoint at cycle 748)
+## Session Context (checkpoint at cycle 749)
 - Version: v0.37.0
-- Shipped count: 0/10 (reset after version regression auto-fix)
-- Open issues blocking bump: 1
+- Shipped count: 1/10
+- Open issues blocking bump: 2
 - Last ship: #6799 (cycle 736, 2026-05-10)
-- Doc scan: rotation 33, next: SKILL.md:sections-1-3
+- Doc scan: rotation 34, next: SKILL.md:sections-4-6
 - Pending approval: #5773 (document start.sh)
