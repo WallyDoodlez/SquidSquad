@@ -143,6 +143,24 @@ class TestSanitizeConfig:
         assert "yes" in result
         assert "[REDACTED]" not in result
 
+    def test_redacts_plain_text_without_markdown_bold(self):
+        """#7518: lines without ** markers must still be redacted."""
+        config_text = "repo: https://github.com/user/private-repo\nname: MyApp\n"
+        with patch.object(diagnostics, "_read_config", return_value=config_text):
+            result = diagnostics._sanitize_config()
+        assert "[REDACTED]" in result
+        assert "private-repo" not in result
+        assert "MyApp" in result
+
+    def test_redacts_token_without_bold(self):
+        """#7518: token field without markdown bold must be redacted."""
+        config_text = "token: abc123secret\nversion: 0.37.0\n"
+        with patch.object(diagnostics, "_read_config", return_value=config_text):
+            result = diagnostics._sanitize_config()
+        assert "abc123secret" not in result
+        assert "[REDACTED]" in result
+        assert "0.37.0" in result
+
 
 class TestIsPublicRepo:
     def test_public_repo(self, capsys):
@@ -232,3 +250,16 @@ class TestGenerateReport:
             report = diagnostics.generate_report()
         assert '"ok"' in report
         assert "not json" not in report
+
+
+class TestLastFlagValidation:
+    """#7519: --last flag must reject non-integer arguments."""
+
+    def test_non_integer_last_exits_with_error(self):
+        """diagnostics.py read --last foo should exit 1, not crash."""
+        result = subprocess.run(
+            [sys.executable, str(SCRIPTS / "diagnostics.py"), "read", "--last", "foo"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+        assert result.returncode == 1
+        assert "integer" in result.stderr.lower() or "error" in result.stderr.lower()
