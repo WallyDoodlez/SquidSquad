@@ -169,8 +169,16 @@ def check_coverage(
 
     Returns exit code: 0 (pass), 1 (fail), 2 (blocked).
     """
-    plan_text = Path(test_plan_path).read_text(encoding="utf-8")
-    results_text = Path(qa_results_path).read_text(encoding="utf-8")
+    try:
+        plan_text = Path(test_plan_path).read_text(encoding="utf-8")
+    except OSError as e:
+        print(f"ERROR: Cannot read test plan: {e}", file=sys.stderr)
+        return 1
+    try:
+        results_text = Path(qa_results_path).read_text(encoding="utf-8")
+    except OSError as e:
+        print(f"ERROR: Cannot read QA results: {e}", file=sys.stderr)
+        return 1
 
     plan_ids = parse_tc_ids(plan_text)
     result_map = parse_tc_results(results_text)
