@@ -874,6 +874,46 @@ def load_install_spec(target_root):
     return json.loads(raw)
 
 
+def _write_l4_project_files(spec, project_dir, summary):
+    """Write structured L4 project files from scan data in the spec (#6581).
+
+    This is the mechanical half of the hybrid L4 writer. Writes stack details,
+    test commands, and detected config as structured markdown. The WIZARD.md
+    runbook adds qualitative content (conventions, patterns) afterward.
+
+    Respects overwrite guards: existing files are preserved and recorded in
+    summary["preserved"].
+    """
+    # Extract scan data from agents (test_command, stack are per-agent)
+    scan_data = {}
+    for agent in spec.get("agents", []):
+        if agent.get("test_command"):
+            scan_data["test_command"] = agent["test_command"]
+        if agent.get("stack"):
+            scan_data["stack"] = agent["stack"]
+
+    project_info = spec.get("project", {})
+
+    # shared-stack-details.md — detected tech stack and test commands
+    stack_file = project_dir / "shared-stack-details.md"
+    if stack_file.exists():
+        summary.setdefault("preserved", []).append(str(stack_file))
+    else:
+        stack = scan_data.get("stack", "Not detected")
+        test_cmd = scan_data.get("test_command", "Not detected")
+        name = project_info.get("name", "Unknown")
+        stack_file.write_text(
+            f"## Project Stack Details — {name}\n\n"
+            f"These details apply to all agents on this project.\n\n"
+            f"### Stack\n\n- **Detected stack**: {stack}\n\n"
+            f"### Test Command\n\n- **Test command**: `{test_cmd}`\n\n"
+            f"### Conventions\n\n"
+            f"_To be populated by the installer agent or human with "
+            f"project-specific conventions, patterns, and preferences._\n",
+            encoding="utf-8",
+        )
+
+
 def scaffold_install(spec, target_root, overwrite_existing=False):
     """Write a full `.squidsquad/` tree from an install spec.
 
@@ -953,9 +993,13 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
 
     # 1b. L4 project directory — create .squidsquad/project/ for project-local
     # L4 content. compose.py reads from here, not from references/sub-skills/project/.
-    # Start empty — PM/human populates later via L4 propagation flow.
     project_dir = squid / "project"
     project_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1c. L4 structured files — write mechanically-detected project data (#6581).
+    # These are the "structured" half of the hybrid L4 writer. The WIZARD.md
+    # runbook adds qualitative notes (conventions, patterns) after scaffold.
+    _write_l4_project_files(spec, project_dir, summary)
 
     # 2. Per-agent directories
     for agent in spec["agents"]:

@@ -2011,27 +2011,52 @@ class TestGenerateDefaultSpec:
 # ---------------------------------------------------------------------------
 
 class TestApplyProjectType:
-    def test_ios_sets_variant_on_core_roles(self):
+    """#6581: apply_project_type uses manifest domain_variants (primary)
+    with legacy PROJECT_TYPE_PRESETS fallback."""
+
+    def test_manifest_driven_per_role_variants(self):
+        """TC-1: Preset manifest domain_variants resolved per role."""
         spec = {
+            "preset": "software-dev",
             "agents": [
                 {"id": "pm", "role": "pm"},
                 {"id": "skill", "role": "dev"},
                 {"id": "qa", "role": "qa"},
                 {"id": "dm", "role": "dm"},
-            ]
+            ],
         }
-        result = wizard.apply_project_type(spec, "ios")
-        assert result == "ios"
-        assert spec["project_type"] == "ios"
+        result = wizard.apply_project_type(spec, "skill")
+        # Returns dict of {role: variant}
+        assert isinstance(result, dict)
+        assert result.get("dev") == "skill"
+        assert spec["project_type"] == "skill"
+        # All agents should have variants from the manifest
         for agent in spec["agents"]:
-            assert agent["variant"] == "ios"
+            assert "variant" in agent, f"{agent['id']} missing variant"
+
+    def test_all_roles_get_variant(self):
+        """TC-2: All roles receive domain variant — none skipped."""
+        spec = {
+            "preset": "software-dev",
+            "agents": [
+                {"id": "pm", "role": "pm"},
+                {"id": "skill", "role": "dev"},
+                {"id": "qa", "role": "qa"},
+                {"id": "dm", "role": "dm"},
+            ],
+        }
+        wizard.apply_project_type(spec, "skill")
+        for agent in spec["agents"]:
+            assert agent.get("variant") is not None, \
+                f"{agent['role']} has no variant"
 
     def test_custom_sets_no_variant(self):
+        """TC-5: custom project type — no domain variant."""
         spec = {
             "agents": [
                 {"id": "pm", "role": "pm"},
                 {"id": "skill", "role": "dev"},
-            ]
+            ],
         }
         result = wizard.apply_project_type(spec, "custom")
         assert result is None
@@ -2039,11 +2064,67 @@ class TestApplyProjectType:
         assert "variant" not in spec["agents"][0]
         assert "variant" not in spec["agents"][1]
 
+    def test_legacy_fallback_when_no_preset(self):
+        """Legacy PROJECT_TYPE_PRESETS fallback when no preset in spec."""
+        spec = {
+            "agents": [
+                {"id": "pm", "role": "pm"},
+                {"id": "skill", "role": "dev"},
+                {"id": "qa", "role": "qa"},
+                {"id": "dm", "role": "dm"},
+            ],
+        }
+        result = wizard.apply_project_type(spec, "ios")
+        assert isinstance(result, dict)
+        assert result.get("dev") == "ios"
+        for agent in spec["agents"]:
+            assert agent["variant"] == "ios"
+
     def test_all_project_types_valid(self):
         for ptype in wizard.PROJECT_TYPE_PRESETS:
             spec = {"agents": [{"id": "pm", "role": "pm"}]}
             wizard.apply_project_type(spec, ptype)
             assert spec["project_type"] == ptype
+
+
+class TestManifestResolution:
+    """#6581: load_preset_manifest and resolve_domain_variants."""
+
+    def test_load_software_dev_manifest(self):
+        """Manifest loads and contains expected fields."""
+        manifest = wizard.load_preset_manifest("software-dev")
+        assert manifest is not None
+        assert manifest["id"] == "software-dev"
+        assert "domain_variants" in manifest
+
+    def test_resolve_domain_variants_software_dev(self):
+        """domain_variants returns per-role mapping."""
+        variants = wizard.resolve_domain_variants("software-dev")
+        assert variants.get("dev") == "skill"
+        assert variants.get("pm") == "skill"
+        assert variants.get("qa") == "skill"
+        assert variants.get("dm") == "skill"
+
+    def test_resolve_nonexistent_preset(self):
+        """Missing preset returns empty dict."""
+        variants = wizard.resolve_domain_variants("nonexistent-preset-xyz")
+        assert variants == {}
+
+    def test_resolve_design_preset_no_variants(self):
+        """TC-6: Design preset has no domain_variants."""
+        variants = wizard.resolve_domain_variants("design")
+        assert variants == {}
+
+    def test_generate_default_spec_uses_manifest(self):
+        """TC-7: generate_default_spec derives variants from manifest."""
+        spec = wizard.generate_default_spec()
+        assert spec["preset"] == "software-dev"
+        # Dev agent should have variant from manifest
+        dev_agents = [a for a in spec["agents"] if a["role"] == "dev"]
+        assert len(dev_agents) == 1
+        manifest = wizard.load_preset_manifest("software-dev")
+        expected_variant = manifest["domain_variants"]["dev"]
+        assert dev_agents[0].get("variant") == expected_variant
 
 
 # ---------------------------------------------------------------------------
