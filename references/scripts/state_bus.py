@@ -243,10 +243,14 @@ def commit_and_push(message, role="unknown"):
     if not result.stdout.strip():
         return True  # Nothing to commit
 
-    # Commit
-    _run([
+    # Commit — check return code to avoid pushing nothing (#7589)
+    commit_result = _run([
         "git", "commit", "-m", f"{role}: {message}",
     ], cwd=cwd, check=False)
+    if commit_result.returncode != 0:
+        print(f"WARNING: State commit failed: {commit_result.stderr.strip()[:200]}",
+              file=sys.stderr)
+        return False
 
     # Push with retry (up to 3 attempts for concurrent conflicts)
     for attempt in range(3):
