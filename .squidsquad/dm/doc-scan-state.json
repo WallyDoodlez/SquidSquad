@@ -1,8 +1,11 @@
 {
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   "last_scanned": "SKILL.md:sections-1-3",
   "rotation_count": 34,
 =======
+=======
+>>>>>>> Stashed changes
   "last_scanned": "docs/sub-skill-guide.md",
   "rotation_count": 18,
 >>>>>>> Stashed changes
@@ -113,6 +116,7 @@
     {"file": "SKILL.md:sections-7-8", "date": "2026-05-09", "findings": 0},
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-09", "findings": 0},
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     {"file": "docs/sub-skill-guide.md", "date": "2026-05-10", "findings": 3, "fixes": ["corrected [ROLE]/[ROLE_UPPER] placeholder scope: Dev-only → All templates", "corrected placeholder note: [ROLE] not substituted for PM/DM → substituted for all roles", "corrected vault-remember inclusion: every role → dev and PM only"]},
     {"file": "CONTRIBUTING.md", "date": "2026-05-10", "findings": 0},
     {"file": "CHANGELOG.md", "date": "2026-05-10", "findings": 0},
@@ -126,6 +130,9 @@
     {"file": "CHANGELOG.md", "date": "2026-05-10", "findings": 0},
     {"file": "README.md", "date": "2026-05-10", "findings": 0},
     {"file": "SKILL.md:sections-1-3", "date": "2026-05-10", "findings": 0}
+=======
+    {"file": "docs/sub-skill-guide.md", "date": "2026-05-09", "findings": 2, "fixes": ["removed stale tracker-protocol.md from directory tree", "updated example include from tracker-protocol to vault-protocol"]}
+>>>>>>> Stashed changes
 =======
     {"file": "docs/sub-skill-guide.md", "date": "2026-05-09", "findings": 2, "fixes": ["removed stale tracker-protocol.md from directory tree", "updated example include from tracker-protocol to vault-protocol"]}
 >>>>>>> Stashed changes
