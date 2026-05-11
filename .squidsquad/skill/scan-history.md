@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-11 10:02
+
+- **Files scanned**: references/scripts/soul_adaptation.py, references/scripts/state_bus.py, references/scripts/manifest.py
+- **Findings**: #7589 (state_bus.py commit_and_push ignores failed commit — medium), #7590 (manifest.py redundant yaml import + bare except — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-11 08:32
 
 - **Files scanned**: references/scripts/thin_launcher.py, references/scripts/vault_check.py, references/scripts/diagnostics.py
