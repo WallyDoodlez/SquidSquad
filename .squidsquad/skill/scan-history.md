@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-11 17:32
+
+- **Files scanned**: references/scripts/add_role.py, references/scripts/vault_remember.py, references/scripts/forgejo_setup.py
+- **Findings**: #7624 (vault_remember.py decay_scan unhandled read_text — medium), #7625 (forgejo_setup.py unreachable return 0 — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-11 16:32
 
 - **Files scanned**: references/scripts/capability_check.py, references/scripts/comms_adapter.py, references/scripts/tc_coverage.py
