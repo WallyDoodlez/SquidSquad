@@ -5,6 +5,11 @@
 - **Files scanned**: references/scripts/config.py, references/scripts/boot_remote.py
 - **Findings**: #7285 (config.py sync_agents undefined has_dm NameError — medium), #7286 (boot_remote.py AppleScript quoting unsafe — low)
 - **Items rejected by human**: none yet
+## Scan — 2026-05-10 22:04
+
+- **Files scanned**: references/sub-skills/project/pm-soul-directives.md, references/sub-skills/project/qa-instructions.md, references/sub-skills/project/qa-soul-directives.md, references/sub-skills/project/setup-upgrade-gate.md, references/sub-skills/project/shared-instructions.md
+- **Findings**: none (all minimal seed templates)
+
 ## Scan — 2026-05-10 21:09
 
 - **Files scanned**: references/sub-skills/project/dev-instructions.md, references/sub-skills/project/dev-soul-directives.md, references/sub-skills/project/dm-instructions.md, references/sub-skills/project/dm-soul-directives.md, references/sub-skills/project/pm-instructions.md
