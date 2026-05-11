@@ -301,7 +301,10 @@ def decay_scan():
         if md.name == ".gitkeep" or md.name == "BRIEFING.md":
             continue
 
-        text = md.read_text(encoding="utf-8")
+        try:
+            text = md.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue  # Skip unreadable files gracefully (#7624)
         if not text.startswith("---"):
             continue
 
