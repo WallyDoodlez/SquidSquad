@@ -23,9 +23,12 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #5159 Status bar shows agent 'awaiting restart' state from harness intent API (pending, low)
 ## Recently Shipped
 
-- #6573 Fix post-6261 stale references (shipped) — 10/10 fixes verified
-- #6479 manifest.md inventory stale (shipped) — post-#6261 cleanup
-- #6478 test_manifest.py test failure (shipped) — post-#6261 cleanup
+- #6597 Fix deploy-all clone isolation (shipped) — stale tracking ref root cause
+- #6599 Replace grep subprocess with pure-Python search (shipped)
+- #6598 Replace stale shared-FS tests (shipped)
+- #6629 Pipeline-sentinel branch-workflow gate (shipped)
+- #6630 Pipeline-sentinel tracker.py commands (shipped)
+- #6573 Fix post-#6261 stale references (shipped) — 10/10 fixes verified
 - #6261 Fixed team architecture — PM+QA+DM+workers always present, tracker-protocol L1 (shipped) — 41/41 TCs, DeepSeek-reviewed
 - #6304 test_model_router.py timeout coverage (shipped)
 - #6287 test_compose.py runner exclusion fix (shipped)
