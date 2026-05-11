@@ -110,12 +110,14 @@ def _is_config_enabled():
 def _acquire_lock():
     """Acquire optimize lock atomically. Returns True if acquired."""
     try:
-        # Check for stale lock first
-        if LOCK_FILE.exists():
+        # Check for stale lock first — single stat() avoids TOCTOU (#7618)
+        try:
             mtime = LOCK_FILE.stat().st_mtime
             if time.time() - mtime < LOCK_TTL:
                 return False
             LOCK_FILE.unlink(missing_ok=True)
+        except FileNotFoundError:
+            pass  # No lock file — proceed to create
         # Atomic create — O_CREAT | O_EXCL fails if file already exists
         fd = os.open(str(LOCK_FILE), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         os.write(fd, str(os.getpid()).encode())

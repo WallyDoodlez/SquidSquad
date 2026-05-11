@@ -219,3 +219,15 @@ class TestCommandsWithHarness:
              }):
             result = squidsquad_cli.cmd_restart("nonexistent")
         assert result == 1
+
+
+class TestApiCallErrorDetails:
+    """#7619: _api_call must include error details in URLError message."""
+
+    def test_error_message_includes_exception(self):
+        """The error output should contain the actual exception string."""
+        import inspect
+        source = inspect.getsource(squidsquad_cli._api_call)
+        # The URLError handler must use the exception variable (e or str(e))
+        assert "str(e)" in source or "{e}" in source, \
+            "_api_call URLError handler must include error details (#7619)"
