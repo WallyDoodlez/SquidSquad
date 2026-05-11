@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-11 00:32
+
+- **Files scanned**: references/scripts/cycle_post.py, references/scripts/triage.py, references/scripts/harness.py
+- **Findings**: #7440 (cycle_post.py dead no-op str.replace — low), #7441 (harness.py save_state race condition — medium)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-10 22:03
 
 - **Files scanned**: references/scripts/config.py, references/scripts/boot_remote.py
