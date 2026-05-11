@@ -3,9 +3,10 @@
 import json
 import os
 import sys
+import tempfile
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -420,3 +421,174 @@ class TestGetAllRoles:
         assert "qa" in roles
         assert "dm" in roles
         assert "skill" in roles
+
+
+# ---------------------------------------------------------------------------
+# #7286: _spawn_macos uses temp .sh file to avoid AppleScript quoting issues
+# ---------------------------------------------------------------------------
+
+class TestSpawnMacosTempFile:
+    """Verify _spawn_macos writes a temp .sh file instead of inlining commands."""
+
+    @patch("boot_remote.subprocess.Popen")
+    @patch("boot_remote.os.chmod")
+    def test_creates_temp_sh_file(self, mock_chmod, mock_popen, tmp_path):
+        """_spawn_macos writes the shell command to a temp .sh file."""
+        script = tmp_path / "thin_launcher.py"
+        script.write_text("# placeholder")
+        ok, msg = boot_remote._spawn_macos(tmp_path, "skill", script, "thin")
+        assert ok is True
+        assert "osascript" in msg
+
+        # Popen should have been called with osascript
+        mock_popen.assert_called_once()
+        args = mock_popen.call_args[0][0]
+        assert args[0] == "osascript"
+        assert args[1] == "-e"
+
+        # The AppleScript should reference a temp .sh file, not inline the path
+        apple_script = args[2]
+        assert "squidsquad-boot-" in apple_script
+        assert ".sh" in apple_script
+
+        # chmod should have been called with 0o700
+        mock_chmod.assert_called_once()
+        chmod_args = mock_chmod.call_args[0]
+        assert chmod_args[1] == 0o700
+
+    @patch("boot_remote.subprocess.Popen")
+    @patch("boot_remote.os.chmod")
+    def test_temp_file_contains_correct_command_thin(self, mock_chmod, mock_popen, tmp_path):
+        """Temp .sh file contains cd + python command for thin launcher."""
+        script = tmp_path / "thin_launcher.py"
+        script.write_text("# placeholder")
+
+        # Capture the temp file before it's cleaned up by intercepting Popen
+        written_files = []
+        original_named = tempfile.NamedTemporaryFile
+
+        def capture_tempfile(*args, **kwargs):
+            result = original_named(*args, **kwargs)
+            written_files.append(result.name)
+            return result
+
+        with patch("boot_remote.tempfile.NamedTemporaryFile", side_effect=capture_tempfile):
+            ok, _ = boot_remote._spawn_macos(tmp_path, "skill", script, "thin")
+
+        assert ok is True
+        assert len(written_files) == 1
+        content = Path(written_files[0]).read_text()
+        assert "#!/bin/bash" in content
+        assert "python" in content
+        assert "skill" in content
+        assert "rm -f" in content  # self-cleanup line
+
+        # Clean up the temp file
+        Path(written_files[0]).unlink(missing_ok=True)
+
+    @patch("boot_remote.subprocess.Popen")
+    @patch("boot_remote.os.chmod")
+    def test_temp_file_contains_correct_command_legacy(self, mock_chmod, mock_popen, tmp_path):
+        """Temp .sh file contains cd + bash command for legacy wrapper."""
+        script = tmp_path / "start.sh"
+        script.write_text("# placeholder")
+
+        written_files = []
+        original_named = tempfile.NamedTemporaryFile
+
+        def capture_tempfile(*args, **kwargs):
+            result = original_named(*args, **kwargs)
+            written_files.append(result.name)
+            return result
+
+        with patch("boot_remote.tempfile.NamedTemporaryFile", side_effect=capture_tempfile):
+            ok, _ = boot_remote._spawn_macos(tmp_path, "skill", script, "legacy")
+
+        assert ok is True
+        content = Path(written_files[0]).read_text()
+        assert "bash" in content
+        assert "python" not in content or "thin" not in content
+
+        Path(written_files[0]).unlink(missing_ok=True)
+
+    @patch("boot_remote.subprocess.Popen")
+    @patch("boot_remote.os.chmod")
+    def test_special_chars_in_path_safe(self, mock_chmod, mock_popen, tmp_path):
+        """Paths with single quotes and spaces are safely written to temp file."""
+        # Double quotes are invalid in Windows paths, so test with single quotes
+        # and spaces — these would still break AppleScript string interpolation.
+        special_dir = tmp_path / "it's a test dir"
+        special_dir.mkdir(parents=True)
+        script = special_dir / "thin_launcher.py"
+        script.write_text("# placeholder")
+
+        written_files = []
+        original_named = tempfile.NamedTemporaryFile
+
+        def capture_tempfile(*args, **kwargs):
+            result = original_named(*args, **kwargs)
+            written_files.append(result.name)
+            return result
+
+        with patch("boot_remote.tempfile.NamedTemporaryFile", side_effect=capture_tempfile):
+            ok, msg = boot_remote._spawn_macos(special_dir, "skill", script, "thin")
+
+        assert ok is True
+
+        # The AppleScript should NOT contain the special-char path directly —
+        # it should only reference the safe temp file path
+        apple_args = mock_popen.call_args[0][0]
+        apple_script = apple_args[2]
+        assert "it's" not in apple_script
+
+        # The temp file contents should have the path (shell-quoted by shlex)
+        content = Path(written_files[0]).read_text()
+        # shlex.quote escapes single quotes, so check for the directory
+        # name components that survive quoting
+        assert "test dir" in content
+
+        Path(written_files[0]).unlink(missing_ok=True)
+
+    @pytest.mark.skipif(sys.platform == "win32",
+                        reason="Double quotes invalid in Windows paths")
+    @patch("boot_remote.subprocess.Popen")
+    @patch("boot_remote.os.chmod")
+    def test_double_quotes_in_path_safe(self, mock_chmod, mock_popen, tmp_path):
+        """Paths with double quotes don't leak into AppleScript string."""
+        special_dir = tmp_path / 'it"s a test'
+        special_dir.mkdir(parents=True)
+        script = special_dir / "thin_launcher.py"
+        script.write_text("# placeholder")
+
+        written_files = []
+        original_named = tempfile.NamedTemporaryFile
+
+        def capture_tempfile(*args, **kwargs):
+            result = original_named(*args, **kwargs)
+            written_files.append(result.name)
+            return result
+
+        with patch("boot_remote.tempfile.NamedTemporaryFile", side_effect=capture_tempfile):
+            ok, msg = boot_remote._spawn_macos(special_dir, "skill", script, "thin")
+
+        assert ok is True
+
+        # AppleScript must not contain the double quote from the path
+        apple_args = mock_popen.call_args[0][0]
+        apple_script = apple_args[2]
+        # The only double quotes should be AppleScript string delimiters
+        # and the safe temp file path
+        assert 'it"s' not in apple_script
+
+        Path(written_files[0]).unlink(missing_ok=True)
+
+    def test_spawn_failure_returns_false(self, tmp_path):
+        """When subprocess.Popen raises, _spawn_macos returns (False, error)."""
+        script = tmp_path / "thin_launcher.py"
+        script.write_text("# placeholder")
+
+        with patch("boot_remote.subprocess.Popen", side_effect=OSError("no osascript")):
+            ok, msg = boot_remote._spawn_macos(tmp_path, "skill", script, "thin")
+
+        assert ok is False
+        assert "macOS spawn failed" in msg
