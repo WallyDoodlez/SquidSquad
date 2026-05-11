@@ -1016,6 +1016,65 @@ class TestScaffoldInstallValidation:
         assert "WARNING" in stderr or "repo scan" in stderr.lower() or stderr == ""
 
 
+# ---------------------------------------------------------------------------
+# #6581: L4 project file writing in scaffold_install
+# ---------------------------------------------------------------------------
+
+class TestScaffoldL4Files:
+    """TC-3, TC-8: L4 project files written by scaffold_install."""
+
+    def test_l4_stack_details_created(self, tmp_path):
+        """TC-3: scaffold_install writes shared-stack-details.md."""
+        spec = _design_preset_spec()
+        # Add a dev agent with stack and test_command
+        spec["agents"].append({
+            "id": "skill", "alias": "skill", "role": "dev",
+            "variant": "skill", "stack": "Python + pytest",
+            "test_command": "pytest",
+        })
+        wizard.scaffold_install(spec, tmp_path)
+        l4_file = tmp_path / ".squidsquad" / "project" / "shared-stack-details.md"
+        assert l4_file.exists(), "shared-stack-details.md should be created"
+        content = l4_file.read_text(encoding="utf-8")
+        assert "Python + pytest" in content
+        assert "pytest" in content
+
+    def test_l4_overwrite_guard_preserves_existing(self, tmp_path):
+        """TC-8: existing L4 files not overwritten on re-run."""
+        spec = _design_preset_spec()
+        spec["agents"].append({
+            "id": "skill", "alias": "skill", "role": "dev",
+            "variant": "skill", "stack": "original",
+            "test_command": "original-test",
+        })
+        wizard.scaffold_install(spec, tmp_path)
+        l4_file = tmp_path / ".squidsquad" / "project" / "shared-stack-details.md"
+        original_content = l4_file.read_text(encoding="utf-8")
+        assert "original" in original_content
+
+        # Modify spec and re-run — L4 file should be preserved
+        spec["agents"][-1]["stack"] = "changed"
+        summary = wizard.scaffold_install(spec, tmp_path, overwrite_existing=True)
+        preserved_content = l4_file.read_text(encoding="utf-8")
+        assert preserved_content == original_content
+        assert any("shared-stack-details" in p for p in summary.get("preserved", []))
+
+    def test_l4_project_dir_always_created(self, tmp_path):
+        """TC-11 partial: .squidsquad/project/ exists even with no scan data."""
+        spec = _design_preset_spec()
+        wizard.scaffold_install(spec, tmp_path)
+        assert (tmp_path / ".squidsquad" / "project").is_dir()
+
+    def test_generate_default_spec_smoke(self):
+        """TC-11: generate_default_spec returns valid spec with preset."""
+        spec = wizard.generate_default_spec()
+        assert spec["preset"] == "software-dev"
+        assert len(spec["agents"]) >= 1
+        dev_agents = [a for a in spec["agents"] if a["role"] == "dev"]
+        assert len(dev_agents) == 1
+        assert dev_agents[0].get("variant") is not None
+
+
 # ===========================================================================
 # Step 7 — label inventory + ensure_labels + migrate_label
 # ===========================================================================
