@@ -710,3 +710,39 @@ class TestVerifyRemoteBranch:
                  "branch-pattern": "squidsquad/task/{number}",
              }.get(f, "")):
             assert cycle_post._verify_remote_branch(100) is None
+
+
+class TestAdvanceEventCursorInsertion:
+    """#7440: cursor insertion works after dead no-op removal."""
+
+    def test_inserts_cursor_after_status_line(self, squid_dir, patch_dirs, monkeypatch):
+        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        ws = squid_dir / "skill" / "working-state.md"
+        ws.write_text("# Working State\n\n- **Task**: #100\n- **Status**: in-progress\n\n## Completed Steps\n", encoding="utf-8")
+        (squid_dir / "skill" / "cycle-input.json").write_text(json.dumps({"recent_events": [{"id": "abc12345"}]}), encoding="utf-8")
+        cycle_post._advance_event_cursor({}, "skill")
+        result = ws.read_text(encoding="utf-8")
+        assert "- **Last Processed Event ID**: abc12345" in result
+
+    def test_inserts_cursor_after_started_line(self, squid_dir, patch_dirs, monkeypatch):
+        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        ws = squid_dir / "skill" / "working-state.md"
+        ws.write_text("# Working State\n\n- **Task**: #100\n- **Status**: in-progress\n- **Started**: 2026-05-11 01:00\n\n## Completed Steps\n", encoding="utf-8")
+        (squid_dir / "skill" / "cycle-input.json").write_text(json.dumps({"recent_events": [{"id": "def67890"}]}), encoding="utf-8")
+        cycle_post._advance_event_cursor({}, "skill")
+        result = ws.read_text(encoding="utf-8")
+        assert "- **Last Processed Event ID**: def67890" in result
+        lines = result.splitlines()
+        started_idx = next(i for i, l in enumerate(lines) if "**Started**" in l)
+        cursor_idx = next(i for i, l in enumerate(lines) if "Event ID" in l)
+        assert cursor_idx == started_idx + 1
+
+    def test_replaces_existing_cursor(self, squid_dir, patch_dirs, monkeypatch):
+        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        ws = squid_dir / "skill" / "working-state.md"
+        ws.write_text("# Working State\n\n- **Task**: none\n- **Status**: none\n- **Last Processed Event ID**: old11111\n", encoding="utf-8")
+        (squid_dir / "skill" / "cycle-input.json").write_text(json.dumps({"recent_events": [{"id": "new22222"}]}), encoding="utf-8")
+        cycle_post._advance_event_cursor({}, "skill")
+        result = ws.read_text(encoding="utf-8")
+        assert "new22222" in result
+        assert "old11111" not in result
