@@ -395,11 +395,10 @@ def _load_kind(base_dir, kind_dir, validator):
                 is_variant = False
                 if inc_yml.exists():
                     try:
-                        import yaml as _y
-                        _d = _y.safe_load(inc_yml.read_text(encoding="utf-8"))
+                        _d = yaml.safe_load(inc_yml.read_text(encoding="utf-8"))
                         if isinstance(_d, dict) and "base_role" in _d:
                             is_variant = True
-                    except Exception:
+                    except (yaml.YAMLError, OSError):
                         pass
                 if not is_layer_source and not is_variant:
                     issues.append(Issue(

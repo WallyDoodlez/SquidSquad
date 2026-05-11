@@ -485,3 +485,23 @@ class TestIssueFormatting:
     def test_severity_default_is_error(self):
         i = manifest.Issue("x", "", "y")
         assert i.severity == "error"
+
+
+# ---------------------------------------------------------------------------
+# #7590: _load_kind uses module-level yaml import, not redundant inner import
+# ---------------------------------------------------------------------------
+
+class TestLoadKindYamlImport:
+    """#7590: includes.yml parsing uses module-level yaml, catches YAMLError."""
+
+    def test_malformed_includes_yml_does_not_crash(self, tmp_path):
+        """Malformed includes.yml should be caught by yaml.YAMLError, not Exception."""
+        role_dir = tmp_path / "roles" / "testrole"
+        role_dir.mkdir(parents=True)
+        (role_dir / "instructions.md").write_text("# test")
+        (role_dir / "includes.yml").write_text(": invalid: yaml: {{{\n")
+        # Should not raise — malformed YAML caught gracefully
+        _, issues = manifest._load_kind(tmp_path, "roles", lambda m: [])
+        # The malformed includes.yml means it's not detected as a variant,
+        # so it may report a missing manifest issue — that's expected behavior
+        assert isinstance(issues, list)
