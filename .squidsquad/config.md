@@ -136,7 +136,7 @@
 - **reacts-to**: pr-merged, status-transition
 
 ### pm
-- **emits**: pr-create, status-transition, tracker-comment
+- **emits**: status-transition, tracker-comment
 - **reacts-to**: agent-health, pr-merged, status-transition, tracker-comment, verification-failed, verification-passed
 
 ### qa
@@ -145,4 +145,4 @@
 
 ### skill
 - **emits**: pr-create, status-transition, tracker-comment
-- **reacts-to**: pr-merged, status-transition, verification-failed
+- **reacts-to**: pr-merged, status-transition, tracker-comment, verification-failed
