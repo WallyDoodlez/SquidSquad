@@ -235,7 +235,6 @@ def _resolve_includes_with_manifest(entry_file: Path, manifest: list) -> str:
                 # Check for a variant in the manifest that shares the
                 # same base name (e.g. vault-protocol-slim for vault-protocol)
                 base = include_path.rsplit("/", 1)[-1] if "/" in include_path else include_path
-                prefix = include_path.rsplit("/", 1)[0] + "/" if "/" in include_path else ""
                 found = False
                 for m in manifest:
                     m_base = m.rsplit("/", 1)[-1] if "/" in m else m
@@ -512,7 +511,6 @@ def _extract_code_blocks(text: str) -> list[tuple[int, int, str]]:
 
     Returns list of (start, end, content) tuples.
     """
-    import re
     blocks = []
     for m in re.finditer(r'(```[^\n]*\n.*?\n```)', text, re.DOTALL):
         blocks.append((m.start(), m.end(), m.group(0)))
@@ -521,7 +519,6 @@ def _extract_code_blocks(text: str) -> list[tuple[int, int, str]]:
 
 def _extract_markers(text: str) -> list[str]:
     """Extract all HTML comment markers for preservation check."""
-    import re
     return re.findall(r'<!--.*?-->', text)
 
 
@@ -533,7 +530,6 @@ def _generate_cqs_from_sources(layer_sources: dict[str, str]) -> list[dict]:
 
     Returns list of {question, source_heading, layer} dicts.
     """
-    import re
     cqs = []
     for layer_name, content in layer_sources.items():
         headings = re.findall(r'^#{2,3}\s+(.+)$', content, re.MULTILINE)
