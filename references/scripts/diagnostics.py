@@ -105,12 +105,13 @@ def _sanitize_config():
     except SystemExit:
         return "(config not found)"
 
-    # Redact potential sensitive values
+    # Redact potential sensitive values — any line with a sensitive keyword
+    # and a colon is treated as a key-value pair and redacted (#7518).
     lines = []
     for line in text.splitlines():
         lower = line.lower()
         if any(k in lower for k in ["repo", "path", "email", "token", "secret", "key"]):
-            if "**" in line and ":" in line:
+            if ":" in line:
                 field = line.split(":", 1)[0]
                 lines.append(f"{field}: [REDACTED]")
                 continue
@@ -220,7 +221,12 @@ def main():
         if "--last" in rest:
             idx = rest.index("--last")
             if idx + 1 < len(rest):
-                last = int(rest[idx + 1])
+                try:
+                    last = int(rest[idx + 1])
+                except ValueError:
+                    print(f"ERROR: --last requires an integer, got: {rest[idx + 1]!r}",
+                          file=sys.stderr)
+                    sys.exit(1)
         read_entries(last)
 
     elif cmd == "rotate":
