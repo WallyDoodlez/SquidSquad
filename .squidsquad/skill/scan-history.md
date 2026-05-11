@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-11 12:32
+
+- **Files scanned**: references/scripts/cycle.py, references/scripts/health_check.py, references/scripts/event_bus.py
+- **Findings**: #7610 (cycle.py inc_counter double output — medium), #7611 (health_check.py alive branch wrong pid reader — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-11 10:02
 
 - **Files scanned**: references/scripts/soul_adaptation.py, references/scripts/state_bus.py, references/scripts/manifest.py
