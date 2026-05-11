@@ -477,6 +477,12 @@ def commit_code(role, branch, message):
     for f in code_files:
         _run_list(["git", "add", f], check=False)
 
+    # Safety: unstage config.md if it was staged by compose or other tools (#7491).
+    # compose.py deploy writes event contracts to config.md, contaminating feature
+    # branches. Explicitly revert it to the working branch version.
+    _run_list(["git", "checkout", _get_working_branch(), "--",
+               ".squidsquad/config.md"], check=False)
+
     # Commit
     alias = _get_alias(role)
     full_msg = f"{role}: {message}\n\nCo-Authored-By: {alias} <noreply@squidsquad>"
@@ -679,6 +685,11 @@ def task_end(role, number):
         return
 
     working = _get_working_branch()
+
+    # Safety: revert config.md to working branch version before leaving (#7491).
+    # compose.py deploy may have contaminated config.md with event contract diffs.
+    _run_list(["git", "checkout", working, "--",
+               ".squidsquad/config.md"], check=False)
 
     # Warn about uncommitted changes
     status = _run("git status --porcelain", check=False)

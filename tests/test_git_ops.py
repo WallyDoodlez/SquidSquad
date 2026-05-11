@@ -512,8 +512,9 @@ class TestCommitCode:
         # rev-parse --verify (branch exists)
         mock_run_list.side_effect = [
             _mock_result(returncode=0),  # branch exists
-            _mock_result(),  # git checkout
+            _mock_result(),  # git checkout branch
             _mock_result(),  # git add (code file)
+            _mock_result(),  # git checkout config.md revert (#7491)
             _mock_result(),  # git push -u
             _mock_result(),  # git checkout main
         ]
@@ -527,6 +528,37 @@ class TestCommitCode:
         add_calls = [c for c in mock_run_list.call_args_list if c[0][0][0:2] == ["git", "add"]]
         assert len(add_calls) == 1
         assert add_calls[0][0][0][2] == "references/scripts/git_ops.py"
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    @patch("subprocess.run")
+    def test_reverts_config_md_before_commit(self, mock_subproc, mock_run, mock_run_list):
+        """#7491: commit_code reverts config.md to working branch version."""
+        mock_run.side_effect = [
+            _mock_result(stdout=" M references/scripts/harness.py\n"),
+            _mock_result(stdout="squidsquad/task/7491\n"),
+            _mock_result(stdout="main\n"),
+        ]
+        mock_run_list.side_effect = [
+            _mock_result(returncode=0),  # branch exists
+            _mock_result(),  # git checkout branch
+            _mock_result(),  # git add (code file)
+            _mock_result(),  # git checkout config.md revert
+            _mock_result(),  # git push -u
+            _mock_result(),  # git checkout main
+        ]
+        mock_subproc.return_value = _mock_result(stdout="1 file changed")
+
+        git_ops.commit_code("skill", "squidsquad/task/7491", "test fix")
+
+        # Find the config.md revert call
+        checkout_calls = [
+            c for c in mock_run_list.call_args_list
+            if len(c[0][0]) >= 4 and c[0][0][1] == "checkout"
+            and ".squidsquad/config.md" in c[0][0]
+        ]
+        assert len(checkout_calls) == 1, \
+            "commit_code must revert config.md to working branch (#7491)"
 
     @patch("git_ops._run")
     def test_no_code_changes_returns_false(self, mock_run):
@@ -672,6 +704,7 @@ class TestCommitCodePushFailure:
         mock_subproc.return_value = _mock_result()  # git commit succeeds
         mock_run_list.side_effect = [
             _mock_result(),  # git add
+            _mock_result(),  # git checkout config.md revert (#7491)
             _mock_result(returncode=1, stderr="push rejected"),  # push FAILS
         ]
         result = git_ops.commit_code("skill", "squidsquad/task/100", "test")
@@ -694,6 +727,7 @@ class TestCommitCodePushFailure:
         mock_subproc.return_value = _mock_result()  # commit
         mock_run_list.side_effect = [
             _mock_result(),  # git add
+            _mock_result(),  # git checkout config.md revert (#7491)
             _mock_result(),  # push succeeds
         ]
         result = git_ops.commit_code("skill", "squidsquad/task/100", "test")
@@ -722,6 +756,7 @@ class TestCommitCodeUsesWorkingBranch:
             _mock_result(returncode=0),  # rev-parse (branch exists)
             _mock_result(),  # git checkout
             _mock_result(),  # git add
+            _mock_result(),  # git checkout config.md revert (#7491)
             _mock_result(),  # git push -u
         ]
         mock_subproc.return_value = _mock_result(stdout="1 file changed")
