@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-11 15:33
+
+- **Files scanned**: references/scripts/reboot_agent.py, references/scripts/squidsquad_cli.py, references/scripts/vault_optimize.py
+- **Findings**: #7618 (vault_optimize.py _acquire_lock TOCTOU — medium), #7619 (squidsquad_cli.py _api_call swallows error — medium)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-11 14:02
 
 - **Files scanned**: references/scripts/forge_adapter.py, references/scripts/scan_index.py, references/scripts/vault_entity.py
