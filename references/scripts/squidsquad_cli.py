@@ -111,7 +111,8 @@ def _api_call(port: int, method: str, path: str) -> dict:
         print(f"Error: {e.code} — {detail}", file=sys.stderr)
         sys.exit(1)
     except (urllib.error.URLError, OSError, TimeoutError) as e:
-        print("Harness not running. Start with: squidsquad start", file=sys.stderr)
+        print(f"Harness not running or unreachable: {e}. Start with: squidsquad start",
+              file=sys.stderr)
         sys.exit(1)
 
 
