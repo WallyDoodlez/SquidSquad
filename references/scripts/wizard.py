@@ -54,12 +54,14 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 SQUIDSQUAD_DIR = REPO_ROOT / ".squidsquad"
+PRESETS_DIR = REPO_ROOT / "references" / "presets"
 
 # Re-run detection — actions the installer agent can take
 RERUN_ACTIONS = ("abort", "regenerate", "full-rebuild")
 
-# Project type → L3 variant mapping. Each preset applies the same variant
-# to all 4 core roles (dev, pm, qa, dm). "custom" = no L3 (base L1+L2 only).
+# Legacy project type → L3 variant mapping. Retained for backward compat
+# with project types not yet backed by a preset manifest (e.g. ios, android).
+# New code should use load_preset_manifest() + domain_variants instead (#6581).
 PROJECT_TYPE_PRESETS = {
     "ios": "ios",
     "android": "android",
@@ -71,6 +73,34 @@ PROJECT_TYPE_PRESETS = {
     "skill": "skill",
     "custom": None,                 # no L3 preset
 }
+
+
+def load_preset_manifest(preset_id):
+    """Load a preset manifest YAML and return as dict.
+
+    Returns None if the preset directory or manifest.yaml doesn't exist,
+    or if yaml parsing fails.
+    """
+    manifest_path = PRESETS_DIR / preset_id / "manifest.yaml"
+    if not manifest_path.exists():
+        return None
+    try:
+        import yaml
+        return yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def resolve_domain_variants(preset_id):
+    """Resolve per-role domain variants from a preset manifest.
+
+    Returns a dict mapping role → variant (e.g. {"dev": "skill", "pm": "skill"}).
+    Returns empty dict if the preset has no domain_variants or doesn't exist.
+    """
+    manifest = load_preset_manifest(preset_id)
+    if manifest is None:
+        return {}
+    return manifest.get("domain_variants", {}) or {}
 
 # Human-readable labels for project type selection
 PROJECT_TYPE_LABELS = {
@@ -511,29 +541,45 @@ _AGENT_NESTED_FIELD_ORDER = [
 def apply_project_type(spec, project_type):
     """Apply a project type preset to an install spec.
 
-    Sets the L3 variant for all core roles (dev, pm, qa, dm) based on the
-    selected project type. Designer keeps its own variant. "custom" = no
-    variant (L1+L2 only).
+    Reads the preset manifest's domain_variants field to assign per-role
+    L3 variants. Falls back to legacy PROJECT_TYPE_PRESETS for project
+    types not backed by a manifest. "custom" = no variant (L1+L2 only).
 
     Args:
         spec: the install spec dict (mutated in place).
-        project_type: key from PROJECT_TYPE_PRESETS.
+        project_type: key from PROJECT_TYPE_PRESETS or a preset ID.
 
     Returns:
-        The variant name applied (or None for custom).
+        Dict of {role: variant} applied (or None for custom/no variants).
     """
-    variant = PROJECT_TYPE_PRESETS.get(project_type)
-    if variant is None:
-        spec["project_type"] = project_type
+    spec["project_type"] = project_type
+
+    if project_type == "custom":
         return None
 
-    spec["project_type"] = project_type
+    # Try manifest-driven resolution first (#6581)
+    preset_id = spec.get("preset", "")
+    domain_variants = resolve_domain_variants(preset_id) if preset_id else {}
+
+    if domain_variants:
+        # Manifest is the single authority for domain-to-agent mappings
+        for agent in spec.get("agents", []):
+            role = agent.get("role", "")
+            variant = domain_variants.get(role)
+            if variant:
+                agent["variant"] = variant
+        return domain_variants
+
+    # Legacy fallback: uniform variant from PROJECT_TYPE_PRESETS
+    variant = PROJECT_TYPE_PRESETS.get(project_type)
+    if variant is None:
+        return None
+
     for agent in spec.get("agents", []):
         role = agent.get("role", "")
-        # Apply variant to core roles only
         if role in ("dev", "pm", "qa", "dm"):
             agent["variant"] = variant
-    return variant
+    return {role: variant for role in ("dev", "pm", "qa", "dm")}
 
 
 def build_config_md(spec):
@@ -2015,14 +2061,21 @@ def generate_default_spec(scan_data=None, repo_info=None):
         stack_parts.extend(l for l in langs[:3] if l not in stack_parts)
     stack = " + ".join(stack_parts) if stack_parts else "general"
 
-    # Default agents
+    # Resolve domain variants from the default preset manifest (#6581)
+    default_preset = "software-dev"
+    domain_variants = resolve_domain_variants(default_preset)
+
+    # Default agents — variants from manifest, not hardcoded
+    dev_variant = domain_variants.get("dev")
+    pm_variant = domain_variants.get("pm")
     agents = [
-        {"id": "pm", "alias": "pm", "role": "pm"},
+        {"id": "pm", "alias": "pm", "role": "pm",
+         **({"variant": pm_variant} if pm_variant else {})},
         {
             "id": "skill",
             "alias": "skill",
             "role": "dev",
-            "variant": "skill",
+            **({"variant": dev_variant} if dev_variant else {}),
             "stack": stack,
             "test_command": test_command,
         },
@@ -2042,7 +2095,7 @@ def generate_default_spec(scan_data=None, repo_info=None):
             "name": project_name,
             "repo": project_repo,
         },
-        "preset": "software-dev",
+        "preset": default_preset,
         "agents": agents,
         "tools": {},
         "loop": {
