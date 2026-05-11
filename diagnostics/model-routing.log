@@ -444,3 +444,6 @@
 {"timestamp": 1778364212.7634826, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
 {"timestamp": 1778364212.7634826, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
 {"timestamp": 1778364212.7634826, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778477027.5786264, "task_type": "research", "task_id": "FEAT-PM-6581", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 11836, "elapsed_seconds": 329.8}
+{"timestamp": 1778477241.9277053, "task_type": "research", "task_id": "FEAT-PM-6581", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 13071, "elapsed_seconds": 334.6}
+{"timestamp": 1778477895.0960383, "task_type": "test-plan", "task_id": "FEAT-PM-6581", "model": "claude", "action": "delegate-to-agent-tool"}
