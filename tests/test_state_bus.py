@@ -266,3 +266,40 @@ class TestCLI:
         sys.argv = ["state_bus.py", "badcmd"]
         code = state_bus.main()
         assert code == 2
+
+
+# ---------------------------------------------------------------------------
+# #7589: commit_and_push must detect failed git commit
+# ---------------------------------------------------------------------------
+
+class TestCommitAndPushFailedCommit:
+    """#7589: commit_and_push returns False when git commit fails."""
+
+    @patch("state_bus._worktree_exists", return_value=True)
+    @patch("state_bus._read_branch_config", return_value=("main", "squid-squad"))
+    @patch("state_bus._run")
+    def test_returns_false_on_commit_failure(self, mock_run, mock_config, mock_wt):
+        """Failed git commit should return False, not proceed to push."""
+        mock_run.side_effect = [
+            MagicMock(stdout="", returncode=0),     # git add -A
+            MagicMock(stdout=" M file.md\n", returncode=0),  # git status --porcelain
+            MagicMock(stdout="", stderr="error: hook rejected", returncode=1),  # git commit FAILS
+        ]
+        result = state_bus.commit_and_push("test msg", role="skill")
+        assert result is False
+        # Push should NOT have been called (only 3 _run calls, not 4+)
+        assert mock_run.call_count == 3
+
+    @patch("state_bus._worktree_exists", return_value=True)
+    @patch("state_bus._read_branch_config", return_value=("main", "squid-squad"))
+    @patch("state_bus._run")
+    def test_returns_true_on_commit_success(self, mock_run, mock_config, mock_wt):
+        """Successful commit + push returns True."""
+        mock_run.side_effect = [
+            MagicMock(stdout="", returncode=0),     # git add -A
+            MagicMock(stdout=" M file.md\n", returncode=0),  # git status --porcelain
+            MagicMock(stdout="", stderr="", returncode=0),  # git commit succeeds
+            MagicMock(stdout="", returncode=0),     # git push succeeds
+        ]
+        result = state_bus.commit_and_push("test msg", role="skill")
+        assert result is True
