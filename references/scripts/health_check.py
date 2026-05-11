@@ -370,8 +370,9 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
             return result
 
         elif health_status == "alive":
-            # Legacy format: PID cross-check
-            pid = _read_pid_file(squid)
+            # Legacy format: PID cross-check — use _read_any_pid to support
+            # thin-launcher agents that write .claude-pid only (#7611)
+            pid = _read_any_pid(squid)
             pid_alive = _is_process_alive(pid)
             result["pid"] = pid
 

@@ -470,3 +470,26 @@ class TestReadClaudePidFile:
         squid = tmp_path / ".squidsquad" / "skill"
         squid.mkdir(parents=True)
         assert health_check._read_any_pid(squid) is None
+
+
+class TestAliveBranchUsesAnyPid:
+    """#7611: alive health branch must use _read_any_pid, not _read_pid_file."""
+
+    def test_alive_branch_reads_claude_pid(self):
+        """The alive branch source must call _read_any_pid, not _read_pid_file."""
+        import inspect
+        source = inspect.getsource(health_check.check_agent_health)
+        # Find the "alive" branch and verify it uses _read_any_pid
+        lines = source.splitlines()
+        in_alive = False
+        uses_any_pid = False
+        for line in lines:
+            if '"alive"' in line or "'alive'" in line:
+                in_alive = True
+            elif in_alive and "_read_any_pid" in line:
+                uses_any_pid = True
+                break
+            elif in_alive and ("elif" in line or "else:" in line):
+                break  # Left the alive branch
+        assert uses_any_pid, \
+            "alive branch must use _read_any_pid for thin-launcher compat (#7611)"
