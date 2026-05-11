@@ -844,3 +844,33 @@ class TestNoDeprecatedMktemp:
         assert lines == [], (
             f"compose.py still uses deprecated tempfile.mktemp(): {lines}"
         )
+
+
+class TestNoDeadPrefixVariable:
+    """#7062: _resolve_includes_with_manifest must not have dead prefix variable."""
+
+    def test_no_dead_prefix_in_resolve_includes(self):
+        import inspect
+        source = inspect.getsource(compose._resolve_includes_with_manifest)
+        assert "prefix = " not in source, (
+            "#7062: dead prefix variable should be removed from _resolve_includes_with_manifest"
+        )
+
+
+class TestNoRedundantReImport:
+    """#7063: compose.py functions must not re-import re locally."""
+
+    def test_no_local_re_import_in_extract_code_blocks(self):
+        import inspect
+        source = inspect.getsource(compose._extract_code_blocks)
+        assert "import re" not in source
+
+    def test_no_local_re_import_in_extract_markers(self):
+        import inspect
+        source = inspect.getsource(compose._extract_markers)
+        assert "import re" not in source
+
+    def test_no_local_re_import_in_generate_cqs(self):
+        import inspect
+        source = inspect.getsource(compose._generate_cqs_from_sources)
+        assert "import re" not in source
