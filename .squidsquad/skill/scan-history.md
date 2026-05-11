@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-10 20:04
+
+- **Files scanned**: tests/run_tests.py, references/sub-skills/manifest.md
+- **Findings**: #7085 (run_tests.py STATIC_TEST_MODULES missing 43 test files — medium), #7086 (manifest.md stale file inventory — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-10 19:33
 
 - **Files scanned**: references/scripts/compose.py
