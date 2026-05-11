@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-11 14:02
+
+- **Files scanned**: references/scripts/forge_adapter.py, references/scripts/scan_index.py, references/scripts/vault_entity.py
+- **Findings**: #7614 (scan_index.py redundant db open/close — medium), #7615 (vault_entity.py proper-name defaults to person — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-11 12:32
 
 - **Files scanned**: references/scripts/cycle.py, references/scripts/health_check.py, references/scripts/event_bus.py
