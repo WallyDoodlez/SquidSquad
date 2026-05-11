@@ -286,6 +286,8 @@ class HarnessState:
         """Persist per-agent PIDs and intents to .harness-state.json (#4966).
 
         Called on spawn, death, intent change. Enables crash recovery.
+        Snapshot and disk write are under one lock to prevent concurrent
+        callers from clobbering each other's state (#7441).
         """
         with self._lock:
             state_data = {
@@ -303,12 +305,12 @@ class HarnessState:
                     for role, a in self.agents.items()
                 },
             }
-        try:
-            tmp = HARNESS_STATE_FILE.with_suffix(".tmp")
-            tmp.write_text(json.dumps(state_data, indent=2), encoding="utf-8")
-            tmp.replace(HARNESS_STATE_FILE)
-        except OSError as e:
-            _log(f"WARNING: Could not write state file: {e}")
+            try:
+                tmp = HARNESS_STATE_FILE.with_suffix(".tmp")
+                tmp.write_text(json.dumps(state_data, indent=2), encoding="utf-8")
+                tmp.replace(HARNESS_STATE_FILE)
+            except OSError as e:
+                _log(f"WARNING: Could not write state file: {e}")
 
     def load_state(self):
         """Load state from .harness-state.json for crash recovery (#4966).
