@@ -306,3 +306,47 @@ class TestFieldMapCoverage:
             f"FIELD_MAP['{key}'] → section='{section}', field='{field}' "
             f"not found in SAMPLE_CONFIG. Update the fixture."
         )
+
+
+# ---------------------------------------------------------------------------
+# #7285: sync_agents regression test
+# ---------------------------------------------------------------------------
+
+
+class TestSyncAgents:
+    """Regression test for sync_agents() — must not raise NameError (#7285)."""
+
+    def test_sync_agents_no_name_error(self, tmp_path):
+        """sync_agents() must not reference undefined variables."""
+        sqdir = tmp_path / ".squidsquad"
+        # Create skill + pm + dm + qa with CLAUDE.md
+        for role in ("skill", "pm", "dm", "qa"):
+            (sqdir / role).mkdir(parents=True)
+            (sqdir / role / "CLAUDE.md").write_text("# test", encoding="utf-8")
+        # Create config.md
+        (sqdir / "config.md").write_text(SAMPLE_CONFIG, encoding="utf-8")
+
+        with patch.object(config, "REPO_ROOT", tmp_path), \
+             patch.object(config, "CONFIG_PATH", sqdir / "config.md"):
+            roles = config.sync_agents()
+
+        assert "skill" in roles
+        assert "pm" in roles
+        assert "dm" in roles
+        assert "qa" in roles
+
+    def test_sync_agents_without_dm(self, tmp_path):
+        """sync_agents() handles missing DM gracefully."""
+        sqdir = tmp_path / ".squidsquad"
+        for role in ("skill", "pm"):
+            (sqdir / role).mkdir(parents=True)
+            (sqdir / role / "CLAUDE.md").write_text("# test", encoding="utf-8")
+        (sqdir / "config.md").write_text(SAMPLE_CONFIG, encoding="utf-8")
+
+        with patch.object(config, "REPO_ROOT", tmp_path), \
+             patch.object(config, "CONFIG_PATH", sqdir / "config.md"):
+            roles = config.sync_agents()
+
+        assert "skill" in roles
+        assert "pm" in roles
+        assert "dm" not in roles
