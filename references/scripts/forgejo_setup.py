@@ -380,8 +380,6 @@ def main():
         print(f"Unknown command: {cmd}", file=sys.stderr)
         return 2
 
-    return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())
