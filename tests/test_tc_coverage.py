@@ -372,3 +372,25 @@ class TestAutoDiscovery:
 
         tp, qr = tc_coverage._discover_files(9999)
         assert tp is None
+
+
+class TestCheckCoverageFileErrors:
+    """#7622: check_coverage must handle unreadable files gracefully."""
+
+    def test_missing_test_plan_returns_1(self, tmp_path):
+        """Missing test plan file returns exit code 1, not unhandled exception."""
+        result = tc_coverage.check_coverage(
+            str(tmp_path / "nonexistent-plan.md"),
+            str(tmp_path / "nonexistent-results.md"),
+        )
+        assert result == 1
+
+    def test_missing_qa_results_returns_1(self, tmp_path):
+        """Missing QA results file returns exit code 1."""
+        plan = tmp_path / "plan.md"
+        plan.write_text("### TC-1: Test\n- **Result**: PASS\n")
+        result = tc_coverage.check_coverage(
+            str(plan),
+            str(tmp_path / "nonexistent-results.md"),
+        )
+        assert result == 1
