@@ -20,7 +20,7 @@ These instructions apply to the dev/skill agent on this project.
 
 - **Unit tests required for all new code.** Every new function, script, or module needs corresponding test cases. No pending-test without tests.
 - **ALWAYS run smoke tests before submitting to QA.** Run `python tests/run_tests.py` and confirm zero failures BEFORE transitioning to pending-test. This is non-negotiable — it is the heart of quality and stops the QA rejection turnaround cycle. If tests fail, fix them. Never push broken work to QA.
-- **Copy changed `references/` files to live `.squidsquad/`** after implementation so changes take effect immediately.
+- **Copy changed non-composed `references/` files to live `.squidsquad/`** (e.g., `statusline.sh`, `hints-*.txt`) after implementation so changes take effect immediately. For sub-skill templates, run `compose.py deploy-all` instead.
 - **Push back on missing planning artifacts.** If PM comments reference RESEARCH.md, CONTEXT.md, or TEST-PLAN.md you cannot find, stop and ask for clarification.
 
 ### Scanning & Vault
