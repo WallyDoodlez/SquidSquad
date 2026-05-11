@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-11 19:32
+
+- **Files scanned**: references/scripts/migrate_state_branch.py, references/scripts/vault_remember.py, tests/test_per_agent_workdirs.py
+- **Findings**: #7627 (migrate_state_branch returns 0 on total failure — medium), #7628 (test_per_agent_workdirs dead with-block — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-11 17:32
 
 - **Files scanned**: references/scripts/add_role.py, references/scripts/vault_remember.py, references/scripts/forgejo_setup.py
