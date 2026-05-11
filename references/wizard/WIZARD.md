@@ -638,6 +638,23 @@ this writes the full `.squidsquad/` tree:
 Parse the JSON summary. If `failed` is non-empty, stop and show the
 user the errors — they can re-run the wizard after fixing them.
 
+### 7.3b — Enrich L4 project files (#6581)
+
+`scaffold_install` wrote structured L4 files to `.squidsquad/project/`
+with mechanically-detected data (stack, test command). Now add
+qualitative project context:
+
+1. Read `.squidsquad/project/shared-stack-details.md` (if it exists).
+2. Under the `### Conventions` section, add project-specific notes:
+   - Coding conventions observed in the repo (naming, formatting, patterns)
+   - Domain vocabulary or terminology
+   - Key architectural patterns (monorepo, microservices, MVC, etc.)
+3. Do NOT overwrite the `### Stack` or `### Test Command` sections —
+   those were populated mechanically by `scaffold_install`.
+
+This is the "qualitative" half of the hybrid L4 writer. The structured
+data comes from `scaffold_install`; you add the human-readable context.
+
 ### 7.4 — Ensure GitHub labels
 
 Run `python references/scripts/wizard.py ensure-labels`. This creates

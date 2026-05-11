@@ -1016,6 +1016,65 @@ class TestScaffoldInstallValidation:
         assert "WARNING" in stderr or "repo scan" in stderr.lower() or stderr == ""
 
 
+# ---------------------------------------------------------------------------
+# #6581: L4 project file writing in scaffold_install
+# ---------------------------------------------------------------------------
+
+class TestScaffoldL4Files:
+    """TC-3, TC-8: L4 project files written by scaffold_install."""
+
+    def test_l4_stack_details_created(self, tmp_path):
+        """TC-3: scaffold_install writes shared-stack-details.md."""
+        spec = _design_preset_spec()
+        # Add a dev agent with stack and test_command
+        spec["agents"].append({
+            "id": "skill", "alias": "skill", "role": "dev",
+            "variant": "skill", "stack": "Python + pytest",
+            "test_command": "pytest",
+        })
+        wizard.scaffold_install(spec, tmp_path)
+        l4_file = tmp_path / ".squidsquad" / "project" / "shared-stack-details.md"
+        assert l4_file.exists(), "shared-stack-details.md should be created"
+        content = l4_file.read_text(encoding="utf-8")
+        assert "Python + pytest" in content
+        assert "pytest" in content
+
+    def test_l4_overwrite_guard_preserves_existing(self, tmp_path):
+        """TC-8: existing L4 files not overwritten on re-run."""
+        spec = _design_preset_spec()
+        spec["agents"].append({
+            "id": "skill", "alias": "skill", "role": "dev",
+            "variant": "skill", "stack": "original",
+            "test_command": "original-test",
+        })
+        wizard.scaffold_install(spec, tmp_path)
+        l4_file = tmp_path / ".squidsquad" / "project" / "shared-stack-details.md"
+        original_content = l4_file.read_text(encoding="utf-8")
+        assert "original" in original_content
+
+        # Modify spec and re-run — L4 file should be preserved
+        spec["agents"][-1]["stack"] = "changed"
+        summary = wizard.scaffold_install(spec, tmp_path, overwrite_existing=True)
+        preserved_content = l4_file.read_text(encoding="utf-8")
+        assert preserved_content == original_content
+        assert any("shared-stack-details" in p for p in summary.get("preserved", []))
+
+    def test_l4_project_dir_always_created(self, tmp_path):
+        """TC-11 partial: .squidsquad/project/ exists even with no scan data."""
+        spec = _design_preset_spec()
+        wizard.scaffold_install(spec, tmp_path)
+        assert (tmp_path / ".squidsquad" / "project").is_dir()
+
+    def test_generate_default_spec_smoke(self):
+        """TC-11: generate_default_spec returns valid spec with preset."""
+        spec = wizard.generate_default_spec()
+        assert spec["preset"] == "software-dev"
+        assert len(spec["agents"]) >= 1
+        dev_agents = [a for a in spec["agents"] if a["role"] == "dev"]
+        assert len(dev_agents) == 1
+        assert dev_agents[0].get("variant") is not None
+
+
 # ===========================================================================
 # Step 7 — label inventory + ensure_labels + migrate_label
 # ===========================================================================
@@ -2011,27 +2070,52 @@ class TestGenerateDefaultSpec:
 # ---------------------------------------------------------------------------
 
 class TestApplyProjectType:
-    def test_ios_sets_variant_on_core_roles(self):
+    """#6581: apply_project_type uses manifest domain_variants (primary)
+    with legacy PROJECT_TYPE_PRESETS fallback."""
+
+    def test_manifest_driven_per_role_variants(self):
+        """TC-1: Preset manifest domain_variants resolved per role."""
         spec = {
+            "preset": "software-dev",
             "agents": [
                 {"id": "pm", "role": "pm"},
                 {"id": "skill", "role": "dev"},
                 {"id": "qa", "role": "qa"},
                 {"id": "dm", "role": "dm"},
-            ]
+            ],
         }
-        result = wizard.apply_project_type(spec, "ios")
-        assert result == "ios"
-        assert spec["project_type"] == "ios"
+        result = wizard.apply_project_type(spec, "skill")
+        # Returns dict of {role: variant}
+        assert isinstance(result, dict)
+        assert result.get("dev") == "skill"
+        assert spec["project_type"] == "skill"
+        # All agents should have variants from the manifest
         for agent in spec["agents"]:
-            assert agent["variant"] == "ios"
+            assert "variant" in agent, f"{agent['id']} missing variant"
+
+    def test_all_roles_get_variant(self):
+        """TC-2: All roles receive domain variant — none skipped."""
+        spec = {
+            "preset": "software-dev",
+            "agents": [
+                {"id": "pm", "role": "pm"},
+                {"id": "skill", "role": "dev"},
+                {"id": "qa", "role": "qa"},
+                {"id": "dm", "role": "dm"},
+            ],
+        }
+        wizard.apply_project_type(spec, "skill")
+        for agent in spec["agents"]:
+            assert agent.get("variant") is not None, \
+                f"{agent['role']} has no variant"
 
     def test_custom_sets_no_variant(self):
+        """TC-5: custom project type — no domain variant."""
         spec = {
             "agents": [
                 {"id": "pm", "role": "pm"},
                 {"id": "skill", "role": "dev"},
-            ]
+            ],
         }
         result = wizard.apply_project_type(spec, "custom")
         assert result is None
@@ -2039,11 +2123,67 @@ class TestApplyProjectType:
         assert "variant" not in spec["agents"][0]
         assert "variant" not in spec["agents"][1]
 
+    def test_legacy_fallback_when_no_preset(self):
+        """Legacy PROJECT_TYPE_PRESETS fallback when no preset in spec."""
+        spec = {
+            "agents": [
+                {"id": "pm", "role": "pm"},
+                {"id": "skill", "role": "dev"},
+                {"id": "qa", "role": "qa"},
+                {"id": "dm", "role": "dm"},
+            ],
+        }
+        result = wizard.apply_project_type(spec, "ios")
+        assert isinstance(result, dict)
+        assert result.get("dev") == "ios"
+        for agent in spec["agents"]:
+            assert agent["variant"] == "ios"
+
     def test_all_project_types_valid(self):
         for ptype in wizard.PROJECT_TYPE_PRESETS:
             spec = {"agents": [{"id": "pm", "role": "pm"}]}
             wizard.apply_project_type(spec, ptype)
             assert spec["project_type"] == ptype
+
+
+class TestManifestResolution:
+    """#6581: load_preset_manifest and resolve_domain_variants."""
+
+    def test_load_software_dev_manifest(self):
+        """Manifest loads and contains expected fields."""
+        manifest = wizard.load_preset_manifest("software-dev")
+        assert manifest is not None
+        assert manifest["id"] == "software-dev"
+        assert "domain_variants" in manifest
+
+    def test_resolve_domain_variants_software_dev(self):
+        """domain_variants returns per-role mapping."""
+        variants = wizard.resolve_domain_variants("software-dev")
+        assert variants.get("dev") == "skill"
+        assert variants.get("pm") == "skill"
+        assert variants.get("qa") == "skill"
+        assert variants.get("dm") == "skill"
+
+    def test_resolve_nonexistent_preset(self):
+        """Missing preset returns empty dict."""
+        variants = wizard.resolve_domain_variants("nonexistent-preset-xyz")
+        assert variants == {}
+
+    def test_resolve_design_preset_no_variants(self):
+        """TC-6: Design preset has no domain_variants."""
+        variants = wizard.resolve_domain_variants("design")
+        assert variants == {}
+
+    def test_generate_default_spec_uses_manifest(self):
+        """TC-7: generate_default_spec derives variants from manifest."""
+        spec = wizard.generate_default_spec()
+        assert spec["preset"] == "software-dev"
+        # Dev agent should have variant from manifest
+        dev_agents = [a for a in spec["agents"] if a["role"] == "dev"]
+        assert len(dev_agents) == 1
+        manifest = wizard.load_preset_manifest("software-dev")
+        expected_variant = manifest["domain_variants"]["dev"]
+        assert dev_agents[0].get("variant") == expected_variant
 
 
 # ---------------------------------------------------------------------------

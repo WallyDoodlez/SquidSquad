@@ -17,6 +17,15 @@ description: >
   Includes an engineering specialist in one or more variants
   (backend, frontend, fullstack), and a verifier.
 
+# Default L3 domain variants per role. The wizard reads this to assign
+# variants during setup. "custom" presets omit this field (L1+L2 only).
+# This is the single authority for domain-to-agent mappings (#6581).
+domain_variants:
+  dev: skill
+  pm: skill
+  qa: skill
+  dm: skill
+
 # Order in which each specialist role's install-time questions are asked.
 # The wizard walks this list in order. Infrastructure roles
 # (pm, dm, qa) are not listed — they are always installed.
