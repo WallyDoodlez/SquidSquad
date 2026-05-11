@@ -213,8 +213,6 @@ references/sub-skills/
 │   ├── file-conventions.md           (PM file conventions)
 │   ├── status-line.md                (PM status line)
 │   ├── prohibitions.md               (PM "never do" rules)
-│   ├── iteration-log.md             (Step 8 — PM iteration log)
-│   ├── git-commit.md                (Step 9 — PM commit/push)
 │   ├── github-issues.md              (Step 7b — GitHub Issues ingestion)
 │   ├── pipeline-sentinel.md           (Step 6f — pipeline health, always runs)
 │   ├── soul-shepherd.md              (Soul shepherd — character signal detection per task)
@@ -227,8 +225,8 @@ references/sub-skills/
 │   ├── file-conventions.md           (QA file conventions)
 │   ├── status-line.md                (QA status line)
 │   ├── prohibitions.md               (QA "never do" rules)
-│   ├── iteration-log.md             (Step 7 — QA iteration log)
-│   └── git-commit.md                (Step 8 — QA commit/push)
+│   ├── iteration-log.md             (LEGACY — replaced by cycle_post.py)
+│   └── git-commit.md                (LEGACY — replaced by cycle_post.py)
 └── roles/dm/
     ├── issue-triage.md                (Step 1e — triage bugs assigned to DM)
     ├── delivery-packaging.md          (Steps 2-2c — scan, skip, deliver)
@@ -240,6 +238,6 @@ references/sub-skills/
     ├── file-conventions.md           (DM file conventions)
     ├── status-line.md                (DM status line)
     ├── prohibitions.md               (DM "never do" rules)
-    ├── iteration-log.md             (Step 4 — DM iteration log)
-    └── git-commit.md                (Step 5 — DM commit/push)
+    ├── iteration-log.md             (LEGACY — replaced by cycle_post.py)
+    └── git-commit.md                (LEGACY — replaced by cycle_post.py)
 ```
