@@ -217,7 +217,8 @@ references/sub-skills/
 │   ├── pipeline-sentinel.md           (Step 6f — pipeline health, always runs)
 │   ├── soul-shepherd.md              (Soul shepherd — character signal detection per task)
 │   ├── vault-synthesis.md            (Vault synthesis — cross-agent posture emergence)
-│   └── improvement-scan.md           (PM-specific improvement scan — process/workflow focus)
+│   ├── improvement-scan.md           (PM-specific improvement scan — process/workflow focus)
+│   └── own-domain-autofix.md         (PM auto-fixes issues in own domain)
 ├── roles/qa/
 │   ├── verification.md               (Steps 2-6 — E2E, bugs, verify, health check)
 │   ├── discussion-protocol.md        (Discussion — qa alias)
