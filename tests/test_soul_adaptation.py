@@ -131,3 +131,95 @@ class TestGetAdaptations:
 
     def test_no_file(self, patch_dirs):
         assert soul_adaptation.get_adaptations("skill") == []
+
+
+# ---------------------------------------------------------------------------
+# #7098: main() CLI entry point test coverage
+# ---------------------------------------------------------------------------
+
+
+class TestMainCLI:
+    """Tests for main() covering all 6 branches."""
+
+    def test_no_args_prints_help(self, monkeypatch, capsys):
+        monkeypatch.setattr(sys, "argv", ["soul_adaptation.py"])
+        rc = soul_adaptation.main()
+        assert rc == 2
+
+    def test_unknown_command(self, monkeypatch, capsys):
+        monkeypatch.setattr(sys, "argv", ["soul_adaptation.py", "bogus"])
+        rc = soul_adaptation.main()
+        assert rc == 2
+        assert "Unknown command" in capsys.readouterr().err
+
+    def test_render_missing_role(self, monkeypatch, capsys):
+        monkeypatch.setattr(sys, "argv", ["soul_adaptation.py", "render"])
+        rc = soul_adaptation.main()
+        assert rc == 2
+        assert "Usage" in capsys.readouterr().err
+
+    def test_render_success(self, patch_dirs, squid_dir, monkeypatch, capsys):
+        soul_path = squid_dir / "skill" / "SOUL.md"
+        soul_path.write_text("## Soul\n\nContent.\n", encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", ["soul_adaptation.py", "render", "skill"])
+        rc = soul_adaptation.main()
+        assert rc == 0
+        assert "Rendered" in capsys.readouterr().out
+
+    def test_render_missing_soul_file(self, patch_dirs, monkeypatch, capsys):
+        """render returns 1 when SOUL.md doesn't exist for the role."""
+        monkeypatch.setattr(sys, "argv", ["soul_adaptation.py", "render", "nonexistent"])
+        rc = soul_adaptation.main()
+        assert rc == 1
+
+    def test_check_cap_missing_role(self, monkeypatch, capsys):
+        monkeypatch.setattr(sys, "argv", ["soul_adaptation.py", "check-cap"])
+        rc = soul_adaptation.main()
+        assert rc == 2
+        assert "Usage" in capsys.readouterr().err
+
+    def test_check_cap_success(self, patch_dirs, monkeypatch, capsys):
+        monkeypatch.setattr(sys, "argv", ["soul_adaptation.py", "check-cap", "skill"])
+        rc = soul_adaptation.main()
+        assert rc == 0
+        out = capsys.readouterr().out
+        data = json.loads(out)
+        assert data["role"] == "skill"
+        assert "lines" in data
+        assert "cap" in data
+
+    def test_list_missing_role(self, monkeypatch, capsys):
+        monkeypatch.setattr(sys, "argv", ["soul_adaptation.py", "list"])
+        rc = soul_adaptation.main()
+        assert rc == 2
+        assert "Usage" in capsys.readouterr().err
+
+    def test_list_success(self, patch_dirs, monkeypatch, capsys):
+        soul_adaptation.add_adaptation("skill", "tech-stack", "Python")
+        monkeypatch.setattr(sys, "argv", ["soul_adaptation.py", "list", "skill"])
+        rc = soul_adaptation.main()
+        assert rc == 0
+        out = capsys.readouterr().out
+        entries = json.loads(out)
+        assert len(entries) == 1
+        assert entries[0]["category"] == "tech-stack"
+
+    def test_add_success(self, patch_dirs, monkeypatch, capsys):
+        monkeypatch.setattr(sys, "argv", [
+            "soul_adaptation.py", "add", "skill",
+            "--category", "tech-stack", "--signal", "Uses Rust",
+        ])
+        rc = soul_adaptation.main()
+        assert rc == 0
+        assert "Added" in capsys.readouterr().out
+
+    def test_add_with_task(self, patch_dirs, monkeypatch, capsys):
+        monkeypatch.setattr(sys, "argv", [
+            "soul_adaptation.py", "add", "skill",
+            "--category", "domain-vocabulary", "--signal", "Fintech APIs",
+            "--task", "42",
+        ])
+        rc = soul_adaptation.main()
+        assert rc == 0
+        entries = soul_adaptation.get_adaptations("skill")
+        assert entries[0]["source_task"] == "42"
