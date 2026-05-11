@@ -132,6 +132,26 @@ class TestStatePersistence(unittest.TestCase):
                 self.assertTrue(state_file.exists())
                 self.assertFalse(state_file.with_suffix(".tmp").exists())
 
+    def test_save_state_holds_lock_during_write(self):
+        """#7441: Disk write must happen inside the lock to prevent races."""
+        import inspect
+        from harness import HarnessState
+        source = inspect.getsource(HarnessState.save_state)
+        lines = source.splitlines()
+        in_lock = False
+        write_inside_lock = False
+        for line in lines:
+            stripped = line.lstrip()
+            indent = len(line) - len(stripped)
+            if "with self._lock" in stripped:
+                in_lock = True
+                lock_indent = indent
+            elif in_lock and "write_text" in stripped:
+                write_inside_lock = indent > lock_indent
+                break
+        self.assertTrue(write_inside_lock,
+                        "save_state must hold lock during disk write (#7441)")
+
 
 class TestStartAllPersistence(unittest.TestCase):
     """#6820: start_all must set intent=running and call save_state."""
