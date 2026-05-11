@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-11 08:32
+
+- **Files scanned**: references/scripts/thin_launcher.py, references/scripts/vault_check.py, references/scripts/diagnostics.py
+- **Findings**: #7518 (diagnostics.py sanitize_config skips redaction without markdown bold — medium), #7519 (diagnostics.py --last crashes on non-integer — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-11 00:32
 
 - **Files scanned**: references/scripts/cycle_post.py, references/scripts/triage.py, references/scripts/harness.py
