@@ -100,6 +100,16 @@ class TestCounters:
             result = cycle.inc_counter("skill")
         assert result == 3
 
+    def test_inc_counter_single_output_line(self, tmp_path, capsys):
+        """#7610: inc_counter must emit exactly one line (new value only)."""
+        self._setup_working_state(tmp_path, "skill", counter=5)
+        with self._patch(tmp_path):
+            cycle.inc_counter("skill")
+        output = capsys.readouterr().out.strip()
+        lines = [l for l in output.splitlines() if l.strip()]
+        assert len(lines) == 1, f"Expected 1 line, got {len(lines)}: {lines}"
+        assert lines[0] == "6"
+
     def test_reset_counter(self, tmp_path, capsys):
         self._setup_working_state(tmp_path, "skill", counter=5)
         with self._patch(tmp_path):
