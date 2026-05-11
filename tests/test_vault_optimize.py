@@ -433,3 +433,16 @@ class TestHelpers:
         assert "logic" in kw
         # Short words excluded
         assert "and" not in kw
+
+
+class TestAcquireLockToctou:
+    """#7618: _acquire_lock must handle lock file disappearing between checks."""
+
+    def test_no_toctou_exists_stat(self):
+        """Source should not have exists() + stat() pattern — use stat() directly."""
+        import inspect
+        source = inspect.getsource(vault_optimize._acquire_lock)
+        # The TOCTOU pattern is: LOCK_FILE.exists() followed by LOCK_FILE.stat()
+        # After fix, exists() should not appear before stat()
+        assert "LOCK_FILE.exists()" not in source, \
+            "_acquire_lock should use stat() directly, not exists() + stat() (#7618)"

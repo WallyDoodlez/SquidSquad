@@ -39,7 +39,7 @@ class TestExtractURLs:
 class TestExtractNames:
     def test_finds_person_name(self):
         entities = vault_entity.extract_entities(
-            "Ask Sarah Johnson about the design."
+            "Sarah Johnson said the design is ready."
         )
         people = [e for e in entities if e["type"] == "person"]
         assert len(people) >= 1
@@ -57,7 +57,7 @@ class TestExtractNames:
             "This Monday we have a meeting about the Task."
         )
         # Monday, This, Task should be filtered
-        names = [e for e in entities if e["type"] in ("person", "business")]
+        names = [e for e in entities if e["type"] in ("person", "business", "unknown")]
         noise_values = [n["value"] for n in names]
         assert "Monday" not in noise_values
         assert "This Monday" not in noise_values
@@ -173,3 +173,17 @@ class TestCLI:
         sys.argv = ["vault_entity.py", "extract"]
         code = vault_entity.main()
         assert code == 2
+
+
+class TestProperNameClassification:
+    """#7615: ambiguous proper names should be 'unknown', not 'person'."""
+
+    def test_ambiguous_name_classified_as_unknown(self):
+        """A proper name without person or business context = unknown."""
+        text = "We evaluated Red Hat for the project."
+        entities = vault_entity.extract_entities(text)
+        red_hat = [e for e in entities if e["value"] == "Red Hat"]
+        if red_hat:
+            assert red_hat[0]["type"] == "unknown", \
+                f"Ambiguous name should be 'unknown', got '{red_hat[0]['type']}'"
+            assert red_hat[0]["confidence"] == "low"

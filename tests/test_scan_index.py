@@ -595,3 +595,15 @@ class TestWalkSourceFiles:
         files = scan_index._walk_source_files(tmp_path)
         assert "visible.py" in files
         assert ".hidden" not in files
+
+
+class TestSuggestTargetsDbOpen:
+    """#7614: suggest_targets opens DB once after churn refresh, not twice."""
+
+    def test_no_redundant_db_open(self):
+        """Source code should have exactly one _get_db call in suggest_targets."""
+        import inspect
+        source = inspect.getsource(scan_index.suggest_targets)
+        count = source.count("_get_db(")
+        assert count == 1, \
+            f"suggest_targets should call _get_db once, found {count} calls (#7614)"
