@@ -1,10 +1,33 @@
 # Scan History
 
+## Scan — 2026-05-11 00:32
+
+- **Files scanned**: references/scripts/cycle_post.py, references/scripts/triage.py, references/scripts/harness.py
+- **Findings**: #7440 (cycle_post.py dead no-op str.replace — low), #7441 (harness.py save_state race condition — medium)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-10 22:03
 
 - **Files scanned**: references/scripts/config.py, references/scripts/boot_remote.py
 - **Findings**: #7285 (config.py sync_agents undefined has_dm NameError — medium), #7286 (boot_remote.py AppleScript quoting unsafe — low)
 - **Items rejected by human**: none yet
+## Scan — 2026-05-10 22:04
+
+- **Files scanned**: references/sub-skills/project/pm-soul-directives.md, references/sub-skills/project/qa-instructions.md, references/sub-skills/project/qa-soul-directives.md, references/sub-skills/project/setup-upgrade-gate.md, references/sub-skills/project/shared-instructions.md
+- **Findings**: none (all minimal seed templates)
+
+## Scan — 2026-05-10 21:09
+
+- **Files scanned**: references/sub-skills/project/dev-instructions.md, references/sub-skills/project/dev-soul-directives.md, references/sub-skills/project/dm-instructions.md, references/sub-skills/project/dm-soul-directives.md, references/sub-skills/project/pm-instructions.md
+- **Findings**: #7191 (dev-instructions.md unscoped copy references instruction — low), #7192 (dm-soul-directives.md BRIEFING.md path unqualified — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-10 20:05
+
+- **Files scanned**: references/scripts/start_team.py, references/scripts/providers/deepseek/manifest.yaml, references/sub-skills/common/event-reactions.md, references/sub-skills/common/file-conventions.md, references/sub-skills/common/working-state.md
+- **Findings**: #7087 (start_team.py dead _is_agent_idle function — low)
+- **Items rejected by human**: none yet
+- **Notes**: DeepSeek model name finding rejected — scan agent applied stale knowledge (Aug 2025) to May 2026 project; deepseek-v4-pro is valid.
 
 ## Scan — 2026-05-10 19:33
 

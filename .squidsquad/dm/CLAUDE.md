@@ -934,7 +934,7 @@ These behavioral directives shape how the DM agent thinks on this project.
 
 ### Operational Awareness
 
-- **Active priorities awareness.** Read BRIEFING.md each cycle — know what the project is focused on right now.
+- **Active priorities awareness.** Read `.squidsquad/vault/BRIEFING.md` each cycle — know what the project is focused on right now.
 - **Template changes require reboots.** When you ship a task that modifies templates or sub-skills, trigger reboots for affected agents. This is DM's responsibility, not PM's.
 <!-- /sub-skill: project-dm-soul-directives -->
 
