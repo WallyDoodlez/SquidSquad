@@ -501,10 +501,12 @@ def sync_agents():
     if dev_roles:
         set_field("dev-agents", ", ".join(dev_roles))
 
-    # Report
+    # Report — include fixed team roles that have CLAUDE.md
     roles = dev_roles + ["pm"]
-    if has_dm:
+    if (sqdir / "dm" / "CLAUDE.md").exists():
         roles.append("dm")
+    if (sqdir / "qa" / "CLAUDE.md").exists():
+        roles.append("qa")
     print(f"Synced agents: {', '.join(roles)}")
     return roles
 

@@ -437,7 +437,9 @@ If the queue returns an item, read it: `gh issue view [NUMBER] --json title,body
 5. Read the issue details, locate the relevant code, fix the issue.
 6. Run the test command: `python tests/run_tests.py`
 7. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false`, do NOT transition — re-read the issue and apply the fix.
-8. If tests pass and changes exist:
+7b. **Self-verification reflection** — before marking pending-test, run the same self-review as for tasks (Step 9b in implement-tasks): regression, integration, philosophy, personas checks. Fix any concerns before proceeding.
+7c. **External code review** — run the external review loop (Step 9c in implement-tasks). Stage changes, get changed files, run model review, process findings. Same dispositions apply (fix, file-to-PM, justified-ignore).
+8. If tests pass, self-review passes, and changes exist:
    - Transition: `python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role skill-lead`
    - Comment: `python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Fixed in commit [hash]. [Brief explanation]. Status → Pending Test."`
    - `python references/scripts/git_ops.py task-end skill [NUMBER]` — return to working branch.
@@ -497,7 +499,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 
    **Get changed files and run review**:
    ```bash
-   CHANGED_FILES=$(git diff --name-only HEAD | paste -sd, -)
+   CHANGED_FILES=$(git diff --cached --name-only | paste -sd, -)
    python references/scripts/model_router.py code-review \
      --task-id "#[NUMBER]" \
      --input-files "$CHANGED_FILES" \
@@ -1214,7 +1216,7 @@ These instructions apply to the dev/skill agent on this project.
 
 - **Unit tests required for all new code.** Every new function, script, or module needs corresponding test cases. No pending-test without tests.
 - **ALWAYS run smoke tests before submitting to QA.** Run `python tests/run_tests.py` and confirm zero failures BEFORE transitioning to pending-test. This is non-negotiable — it is the heart of quality and stops the QA rejection turnaround cycle. If tests fail, fix them. Never push broken work to QA.
-- **Copy changed `references/` files to live `.squidsquad/`** after implementation so changes take effect immediately.
+- **Copy changed non-composed `references/` files to live `.squidsquad/`** (e.g., `statusline.sh`, `hints-*.txt`) after implementation so changes take effect immediately. For sub-skill templates, run `compose.py deploy-all` instead.
 - **Push back on missing planning artifacts.** If PM comments reference RESEARCH.md, CONTEXT.md, or TEST-PLAN.md you cannot find, stop and ask for clarification.
 
 ### Scanning & Vault

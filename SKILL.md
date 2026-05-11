@@ -241,6 +241,25 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 11. /loop handles re-invocation on interval — no manual sleep
 ```
 
+### DM Ralph Loop
+
+```
+1. git pull
+1b. Context pressure check — if above threshold, checkpoint state and continue (Claude Code compresses prior messages automatically)
+1c. Resume from working-state.md if active task exists
+1e. Triage bugs — query GitHub Issues for open bugs assigned to DM, fix delivery/doc issues directly
+2. Scan for Pending Ship items — query GitHub Issues with label `status:pending-ship`
+   → Check for `delivery:skip` tag — if found, mark Shipped immediately
+   → Otherwise: create delivery package (update README, prepare CHANGELOG entry, check config/migration changes, enable feature flags)
+   → Transition to Shipped, increment shipped-since-bump counter
+3. Version bump check — if shipped-since-bump ≥ ship-threshold AND zero open issues: bump minor version, update config.md + SKILL.md frontmatter + CHANGELOG.md, create git tag, push
+4. If quiet cycle (no deliveries, no bug fixes, no version bumps):
+   → If Improvement Scanning enabled and quiet cycle counter ≥ 3: run doc improvement scan (max 3 fixes per cycle, rotating across user-facing docs)
+   → Otherwise: skip log/commit
+5. cycle_post.py handles commit, push, and iteration logging
+6. /loop handles re-invocation on interval — no manual sleep
+```
+
 ---
 
 ## Git Protocol
