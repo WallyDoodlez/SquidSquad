@@ -231,3 +231,29 @@ class TestResetWrites:
         assert "Vault Writes This Cycle**: 0" in content, (
             "reset_writes must create the field when absent (#4919)"
         )
+
+
+class TestDecayScanErrorHandling:
+    """#7624: decay_scan must handle unreadable vault files gracefully."""
+
+    def test_unreadable_file_does_not_abort_scan(self, tmp_path):
+        """A single unreadable .md file should not crash the entire scan."""
+        vault = tmp_path / "vault"
+        galaxy = vault / "galaxy"
+        galaxy.mkdir(parents=True)
+
+        # Write a valid note
+        good = galaxy / "decision-good.md"
+        good.write_text(
+            "---\ntype: decision\nupdated: 2020-01-01\nconfidence: high\n---\nGood note.\n",
+            encoding="utf-8",
+        )
+
+        # Write a binary/corrupt file that will fail read_text
+        bad = galaxy / "decision-corrupt.md"
+        bad.write_bytes(b"\x80\x81\x82\xff\xfe")
+
+        with patch.object(vault_remember, "VAULT_DIR", vault):
+            # Should not raise — corrupt file skipped
+            results = vault_remember.decay_scan()
+        assert isinstance(results, list)
