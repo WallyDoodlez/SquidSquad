@@ -27,6 +27,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -440,7 +441,13 @@ def _spawn_windows(clone_root, role, script_path, script_type):
 
 
 def _spawn_macos(clone_root, role, script_path, script_type):
-    """Spawn on macOS using Terminal.app via osascript."""
+    """Spawn on macOS using Terminal.app via osascript.
+
+    Writes the shell command to a temporary .sh file so that AppleScript
+    never interpolates path characters (quotes, backslashes).  The temp
+    file self-deletes after execution.
+    """
+    tmp_path = None
     try:
         quoted_root = shlex.quote(str(clone_root))
         quoted_script = shlex.quote(str(script_path))
@@ -448,9 +455,25 @@ def _spawn_macos(clone_root, role, script_path, script_type):
             run_cmd = f"cd {quoted_root} && python {quoted_script} {role}"
         else:
             run_cmd = f"cd {quoted_root} && bash {quoted_script}"
+
+        # Write to a temp .sh file to avoid AppleScript string interpolation
+        # issues with paths containing quotes, backslashes, or special chars.
+        tmp = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".sh", prefix="squidsquad-boot-",
+            delete=False,
+        )
+        tmp_path = tmp.name
+        tmp.write("#!/bin/bash\n")
+        tmp.write(run_cmd + "\n")
+        tmp.write(f"rm -f {shlex.quote(tmp_path)}\n")  # self-cleanup
+        tmp.close()
+        os.chmod(tmp_path, 0o700)
+
+        # Temp path is safe (alphanumeric + hyphens from tempfile module),
+        # so no AppleScript escaping needed.
         apple_script = (
             f'tell application "Terminal" to do script '
-            f'"{run_cmd}"'
+            f'"bash {tmp_path}"'
         )
         subprocess.Popen(
             ["osascript", "-e", apple_script],
@@ -459,6 +482,12 @@ def _spawn_macos(clone_root, role, script_path, script_type):
         launcher = "thin launcher" if script_type == "thin" else "Terminal.app"
         return True, f"spawned via {launcher} (osascript)"
     except Exception as e:
+        # Clean up temp file on failure — self-cleanup rm only runs on success.
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
         return False, f"macOS spawn failed: {e}"
 
 
