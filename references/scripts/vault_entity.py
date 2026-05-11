@@ -104,19 +104,22 @@ def extract_entities(text):
         name = match.group(1)
         if name not in seen and not _is_noise_name(name):
             seen.add(name)
-            # Heuristic: if followed by role-like words, it's a person
+            # Heuristic: check name itself and trailing context for type signals
+            name_lower = name.lower()
             after = text[match.end():match.end() + 30].lower()
-            if any(w in after for w in [" said", " asked", " from ", " at ", "'s "]):
-                entity_type = "person"
+            if any(w in name_lower for w in [" corp", " inc", " ltd", " llc", " co"]):
+                entity_type = "business"  # business suffix in name itself
             elif any(w in after for w in [" corp", " inc", " ltd", " llc", " co"]):
-                entity_type = "business"
+                entity_type = "business"  # business suffix after name
+            elif any(w in after for w in [" said", " asked", " from ", " at ", "'s "]):
+                entity_type = "person"
             else:
-                entity_type = "person"  # default for proper names
+                entity_type = "unknown"  # ambiguous — could be person, place, or brand (#7615)
             entities.append({
                 "type": entity_type,
                 "value": name,
                 "context": _get_context(text, match.start(), match.end()),
-                "confidence": "medium",
+                "confidence": "low" if entity_type == "unknown" else "medium",
             })
 
     # Projects
