@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-11 16:32
+
+- **Files scanned**: references/scripts/capability_check.py, references/scripts/comms_adapter.py, references/scripts/tc_coverage.py
+- **Findings**: #7622 (tc_coverage.py check_coverage unhandled read_text — medium)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-11 15:33
 
 - **Files scanned**: references/scripts/reboot_agent.py, references/scripts/squidsquad_cli.py, references/scripts/vault_optimize.py
