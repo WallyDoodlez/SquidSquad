@@ -173,16 +173,20 @@ def _walk_source_files(root=None):
 def suggest_targets(role, count=5, db_path=None):
     """Return top N files to scan, ranked by composite score."""
     resolved_db_path = db_path or DB_PATH
+
+    # Lazy churn refresh (if stale > 24h) — uses its own connection.
+    # Gracefully handle corrupt DB during refresh (#7614).
+    try:
+        _maybe_refresh_churn(resolved_db_path)
+    except (sqlite3.DatabaseError, sqlite3.OperationalError):
+        pass  # Churn refresh failed — proceed with stale data
+
+    # Open DB once after churn refresh (#7614)
     try:
         conn = _get_db(resolved_db_path)
     except (sqlite3.DatabaseError, sqlite3.OperationalError) as e:
         print(f"WARNING: DB error ({e}), returning empty list", file=sys.stderr)
         return []
-
-    # Lazy churn refresh (if stale > 24h) — uses its own connection
-    conn.close()
-    _maybe_refresh_churn(resolved_db_path)
-    conn = _get_db(resolved_db_path)
 
     # Get all source files on disk
     root = REPO_ROOT if db_path is None else db_path.parent.parent
