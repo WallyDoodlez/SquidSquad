@@ -1,3 +1,10 @@
+## Scan — 2026-05-12 08:34
+
+- **Files scanned**: references/sub-skills/common/cycle-runner.md, references/sub-skills/common/event-reactions.md, references/sub-skills/common/task-pickup.md, .squidsquad/vault/BRIEFING.md
+- **Findings**: BRIEFING.md version stale (0.37.0→0.38.0), Recently Shipped missing v0.38.0 items. event-reactions.md documents 4 unimplemented event types (tracked by #5613).
+- **Auto-fixed**: BRIEFING.md version updated to 0.38.0, Recently Shipped trimmed and updated with v0.38.0 items
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-10 18:08
 
 - **Files scanned**: references/sub-skills/roles/pm/testing-and-verification.md, references/sub-skills/roles/qa/verification.md, references/sub-skills/roles/pm/pipeline-sentinel.md

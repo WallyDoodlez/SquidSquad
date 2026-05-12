@@ -23,48 +23,22 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #5159 Status bar shows agent 'awaiting restart' state from harness intent API (pending, low)
 ## Recently Shipped
 
-- #6597 Fix deploy-all clone isolation (shipped) — stale tracking ref root cause
-- #6599 Replace grep subprocess with pure-Python search (shipped)
-- #6598 Replace stale shared-FS tests (shipped)
-- #6629 Pipeline-sentinel branch-workflow gate (shipped)
-- #6630 Pipeline-sentinel tracker.py commands (shipped)
-- #6573 Fix post-#6261 stale references (shipped) — 10/10 fixes verified
-- #6261 Fixed team architecture — PM+QA+DM+workers always present, tracker-protocol L1 (shipped) — 41/41 TCs, DeepSeek-reviewed
-- #6304 test_model_router.py timeout coverage (shipped)
-- #6287 test_compose.py runner exclusion fix (shipped)
-- #6275 Stale date command timestamp ref fix (shipped)
-- #6126 Harness owns PR merge + compose (shipped) — v0.35.0
-- #6085 Event bus architecture docs (shipped)
-- #6086 L1: issue/PR context descriptions (shipped)
-- #6055 Enforce role separation — PM/QA/DM mandatory (shipped)
-- #5932 L2 external code review loop (shipped)
-- #6057 State machine in-progress → planning (shipped)
-- #5868 Event consumption sub-skill (shipped)
-- #6000 Harness Ctrl+C fix (shipped)
-- #6007 QA L2 finding routing (shipped)
-- #5888 /squidsquad-compose skill (shipped)
-- #5915 WindowsPath JSON serialization fix (shipped) — v0.33.0
-
-- #5856 tracker.py status-transition events — bus now has real coordination signals (shipped)
-- #5622 EPIC Harness Phase 3: Agent communication bus — agents read events (shipped)
-- #4709 EPIC Harness Phase 2: Event bus emission infrastructure (shipped)
-- #5774 start.sh/start.ps1 installer manifest fix (shipped)
-- #5782 git_ops.py unknown role in events (shipped)
-- #5573 PM agent uses --effort max (config-driven per-agent effort)
-- #5572 L2 Dev/QA vault consultation before work
-- #5571 L2 PM vault mandatory in research
-- #5570 L1 Soul situational awareness + vault-first
-- #5569 L1 Improvement scan knowledge capture
-- #5557 Composed CLAUDE.md edit prohibition + compose.py guard
-- #5556 Stale rebase refs cleaned from source templates
-- #5534 config.md counter clobber fix
-- #5533 SKILL.md stale rebase refs
-- #5526 _verify_remote_branch wildcard pattern
-- #5469 .gitattributes merge strategies + .gitignore volatile files
-- #5445 rebase→merge for conflict resolution (no force-push)
-- #5444 Branch workflow reliability (push verify, origin-based branching)
-- #5435 run_tests.py static suite fix
-- #5429 health_check.py PID fallback for stale heartbeats
+- #6581 Wizard reframing — L3 picks agents, L4 records project specifics (shipped) — v0.38.0
+- #7491 compose/sync config.md contamination fix (shipped) — root cause of 10+ QA rejections
+- #7285 config.py sync_agents() NameError fix (shipped)
+- #7441 harness.py save_state race condition fix (shipped)
+- #7440 cycle_post.py dead no-op str.replace (shipped)
+- #7191 dev-instructions.md unscoped copy references (shipped)
+- #7286 boot_remote.py AppleScript quoting fix (shipped)
+- #7589 state_bus.py silent git commit failure (shipped)
+- #7590 manifest.py redundant yaml import (shipped)
+- #7618 vault_optimize.py lock TOCTOU (shipped)
+- #7619 squidsquad_cli.py URLError swallowed (shipped)
+- #7622 tc_coverage.py OSError handling (shipped)
+- #7624 vault_remember.py decay_scan error handling (shipped)
+- #7625 forgejo_setup.py dead code (shipped)
+- #6597 deploy-all clone isolation fix (shipped)
+- #6261 Fixed team architecture — PM+QA+DM+workers always present (shipped)
 - #5423 harness.py INTENT_STOPPED constant
 
 ## Core Architecture
@@ -104,4 +78,4 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Team State
 
 - Active agents: pm, qa, skill, dm
-- Current version: 0.37.0
+- Current version: 0.38.0
