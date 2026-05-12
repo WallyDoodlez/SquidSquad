@@ -1,3 +1,10 @@
+## Scan — 2026-05-12 10:03
+
+- **Files scanned**: references/sub-skills/roles/dev/implement-tasks.md, references/roles/qa/instructions.md, .squidsquad/project/dev-instructions.md
+- **Findings**: implement-tasks.md step 8 references old monolith name agent-instructions.md — filed #7631
+- **Auto-fixed**: none (source template, filed to skill)
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-12 09:02
 
 - **Files scanned**: references/sub-skills/roles/dm/delivery-packaging.md, references/roles/dm/instructions.md, references/roles/instructions.md (L1 base)
