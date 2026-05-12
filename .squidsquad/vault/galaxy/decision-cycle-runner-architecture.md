@@ -2,7 +2,7 @@
 type: decision
 tags: [architecture, cycle, automation, context-savings]
 created: 2026-04-22
-updated: 2026-04-22
+updated: 2026-05-12
 owner: skill-lead
 status: active
 confidence: high
@@ -32,8 +32,9 @@ Human proposed separating the Ralph Loop into a mechanical shell (Python scripts
 
 ## Status
 
-Pending PM approval as #2057. Not yet implemented.
+Shipped as #2057. cycle_pre.py / cycle_post.py are live and used by all agents since v0.33.0+. Next evolution: #7630 (event-driven architecture) proposes moving all mechanical operations into the harness, with agents reacting to events instead of running cycles.
 
 ## Changelog
 
 - 2026-04-22 — Created by skill-lead. Human proposed during discussion about branch-switching bugs.
+- 2026-05-12 — Updated by pm. Status corrected: #2057 shipped, cycle runner is live. Added reference to #7630 successor.
