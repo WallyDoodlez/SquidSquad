@@ -4,23 +4,16 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
+- #7630 EPIC: Event-driven agent architecture — harness owns cycle, agents react to events (pending, high, role:skill) — supersedes #6056, #5775, #5613
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — awaiting human greenlight
-- #6274 Generalize 'dev' to 'worker' across architecture (pending, medium, role:skill) — awaiting approval
-- #6056 Replace /loop with event-driven Monitor tool (pending, medium, role:skill)
-- #6087 L2: status line redesign (pending, medium, role:skill) — needs approval to plan
+- #6574 Zero-prereq install — gh repo creation + local forge fallback (pending, medium, role:skill)
 - #5855 Vault is static decision log, not living memory (pending, high, role:skill)
-- #3963 EPIC: Web dashboard — Harness Phase 4 (pending, high, role:skill) — depends on #5622
+- #3963 EPIC: Web dashboard — Harness Phase 4 (pending, high, role:skill)
+- #6274 Generalize 'dev' to 'worker' across architecture (pending, medium, role:skill)
+- #6087 L2: status line redesign (pending, medium, role:skill)
 - #5783 L3: bug investigation boundary — PM symptoms, dev RCA (pending, medium, role:skill)
-- #5775 Move pipeline sentinel from PM cycle to harness TUI (pending, medium, role:skill)
-- #5773 Document start.sh as boot entry point (pending, medium, role:dm)
 - #5620 L3 PM stuck-rebase recovery (pending, high, role:skill)
-- #5613 Phase 3+ event types (pending, low, role:skill)
-
-## Pending Tasks (filed this session, awaiting approval)
-
-- #5170 L4 dev customization: DeepSeek code review before pending-test (pending, medium)
-- #5171 Harness loads config.md and serves configuration via REST endpoint (pending, medium)
-- #5159 Status bar shows agent 'awaiting restart' state from harness intent API (pending, low)
+- #5773 Document start.sh as boot entry point (pending, medium, role:dm)
 ## Recently Shipped
 
 - #6581 Wizard reframing — L3 picks agents, L4 records project specifics (shipped) — v0.38.0

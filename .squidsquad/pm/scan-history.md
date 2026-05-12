@@ -1,3 +1,10 @@
+## Scan — 2026-05-12 12:32
+
+- **Files scanned**: .squidsquad/vault/BRIEFING.md Active Priorities section
+- **Findings**: 3 superseded items (#6056, #5775, #5613 → all absorbed by #7630), stale #5622 dependency on #3963, removed old Pending Tasks section
+- **Auto-fixed**: rewrote Active Priorities — added #7630, #6574, removed superseded items, updated #3963 constraint
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-12 12:02
 
 - **Files scanned**: references/roles/*/includes.yml (all 4 roles) cross-referenced with manifest.md composition order
