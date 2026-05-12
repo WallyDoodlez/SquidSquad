@@ -2,7 +2,7 @@
 type: area
 tags: [human, preferences, profile]
 created: 2026-04-05
-updated: 2026-04-26
+updated: 2026-05-12
 owner: pm
 status: active
 confidence: medium
@@ -31,6 +31,7 @@ Profile of the human collaborator. Captures preferences, values, communication s
 - Repository: SquidSquad autonomous agent framework
 - Context pressure threshold: 70% (human considers 80% too high — agents degrade before hitting 80%)
 - Prefers direct/mechanical checks over indirect state files — "just use PID, it's more direct." OS-level truth (process exists?) beats application-level files (.health) that can go stale. Applies broadly: prefer the most direct verification method available.
+- Cyclic/mechanical agent work must be programmatic, not LLM-interpreted prose — "any kind of cyclic work needs to be programmed deterministically." LLMs reliably drop steps when context compresses. Agents should react to events, not run multi-step cycles. Drives #7630 (event-driven architecture).
 
 ## Product Vision
 
@@ -66,3 +67,4 @@ _Wikilinks to related notes: [[code-conventions]]_
 - 2026-04-18 — Updated by pm. Added preference for direct/mechanical checks over indirect state files (from #1301 discussion).
 - 2026-04-18 — Updated by pm. Added Product Vision section: general-purpose skill for all teams, self-healing systems, prefer existing OSS over custom builds.
 - 2026-04-26 — Updated by skill-lead. Added Design Philosophy section: source-agnostic vault reflection (human directive), inter-agent conversation system as prerequisite.
+- 2026-05-12 — Updated by pm. Added deterministic-cycle preference: mechanical agent work must be programmatic, not LLM prose. Drives #7630.

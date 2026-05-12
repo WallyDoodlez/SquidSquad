@@ -1,3 +1,10 @@
+## Scan — 2026-05-12 13:32
+
+- **Files scanned**: .squidsquad/vault/areas/human-profile.md
+- **Findings**: missing deterministic-cycle preference from this session ("any kind of cyclic work needs to be programmed deterministically")
+- **Auto-fixed**: added preference to Technical Preferences section, appended changelog
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-12 13:02
 
 - **Files scanned**: .squidsquad/vault/BRIEFING.md (Recent Decisions, Constraints & Blockers sections)
