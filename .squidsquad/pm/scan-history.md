@@ -1,3 +1,10 @@
+## Scan — 2026-05-12 12:02
+
+- **Files scanned**: references/roles/*/includes.yml (all 4 roles) cross-referenced with manifest.md composition order
+- **Findings**: manifest.md composition order out of sync with includes.yml — missing event-reactions, task-pickup, dm/doc-improvement-loop, dm/task-pickup. DM still lists removed improvement-scan-slim. Added to #7631.
+- **Auto-fixed**: none (documentation, added to existing skill issue)
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-12 11:32
 
 - **Files scanned**: references/sub-skills/manifest.md (full inventory, composition order, placeholder table)
