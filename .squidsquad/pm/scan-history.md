@@ -1,3 +1,10 @@
+## Scan — 2026-05-12 09:02
+
+- **Files scanned**: references/sub-skills/roles/dm/delivery-packaging.md, references/roles/dm/instructions.md, references/roles/instructions.md (L1 base)
+- **Findings**: none — DM delivery flow clean, L1 base consistent, harness port matches config
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-12 08:34
 
 - **Files scanned**: references/sub-skills/common/cycle-runner.md, references/sub-skills/common/event-reactions.md, references/sub-skills/common/task-pickup.md, .squidsquad/vault/BRIEFING.md
