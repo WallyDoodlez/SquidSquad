@@ -62,11 +62,11 @@ SquidSquad always has **PM**, **QA**, and **DM** agents. Dev agents are flexible
 
 | Shape | Dev agents | Use when |
 |-------|-----------|----------|
-| `fe, be` | FE Lead + BE Lead + QA + PM | Full-stack app with separate frontend and backend |
-| `be` | BE Lead + QA + PM | API-only, CLI tool, library, or skill repo |
-| `api, worker` | API Lead + Worker Lead + QA + PM | Backend split across services |
-| `web, ios, api` | Web + iOS + API + QA + PM | Multi-platform product |
-| _(any names)_ | Whatever you define + QA + PM | Custom team topology |
+| `fe, be` | FE Lead + BE Lead + PM + QA + DM | Full-stack app with separate frontend and backend |
+| `be` | BE Lead + PM + QA + DM | API-only, CLI tool, library, or skill repo |
+| `api, worker` | API Lead + Worker Lead + PM + QA + DM | Backend split across services |
+| `web, ios, api` | Web + iOS + API + PM + QA + DM | Multi-platform product |
+| _(any names)_ | Whatever you define + PM + QA + DM | Custom team topology |
 
 ---
 
