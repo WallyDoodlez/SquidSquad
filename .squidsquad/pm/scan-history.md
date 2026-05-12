@@ -1,3 +1,10 @@
+## Scan — 2026-05-12 13:02
+
+- **Files scanned**: .squidsquad/vault/BRIEFING.md (Recent Decisions, Constraints & Blockers sections)
+- **Findings**: Recent Decisions missing #7491 and #6581 decisions. Constraints section stale — old shipped items listed as active constraints.
+- **Auto-fixed**: added 3 recent decisions (#7491, #6581, #7630 philosophy), added deterministic-cycle human preference, rewrote Constraints section
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-12 12:32
 
 - **Files scanned**: .squidsquad/vault/BRIEFING.md Active Priorities section

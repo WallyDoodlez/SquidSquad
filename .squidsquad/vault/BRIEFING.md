@@ -55,18 +55,22 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - PM agent uses --effort max for extended thinking (#5573)
 - Harness owns all agent lifecycle — REST API intent (v0.33.0)
 - Compose is its own skill (/squidsquad-compose) — single entry point (#5888)
+- git_ops.py commit_code/task_end reverts config.md to prevent branch contamination (#7491)
+- Wizard reframing: preset manifest owns domain variants, hybrid L4 writer, all roles get domain variant (#6581)
+- Cyclic/mechanical agent work must be programmatic, not LLM-interpreted prose — drives #7630
 
 ## Human Preferences
 
 - Never ship with failed TCs. Documents live on forge, not chat. Git = audit trail.
 - PM should not intervene in code or branch management
 - Dev agent disagreements with external code review escalate to human
+- Mechanical cycle operations should be deterministic code, not LLM prose interpretation
 - See `[[human-profile]]` for full preferences
 
 ## Constraints & Blockers
 
-- #4966 shipped — upgrade sequence needed (stop → clean sentinels → recompose → start via harness)
-- Harness Phase 2 + 3 shipped — event bus bidirectional (emit + read) is live
+- Event-driven architecture (#7630) is the next major architectural shift — all mechanical cycle steps move to harness
+- Large pending backlog (~40 tasks) awaiting human approval — pipeline idle when no work is approved
 
 ## Team State
 
