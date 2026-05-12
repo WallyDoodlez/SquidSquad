@@ -190,12 +190,12 @@ Features flow through the behavior layer with human approval gates at key transi
 
 ```
 Pending → Planning → Planned → Approved → In Progress → Pending Test → Pending Ship → Shipped
-   │         │          │          │           │              │              │            │
-   │     PM runs     Human      Human       Dev builds    QA verifies    DM delivers   Done
-   │     research    reviews    approves       it           it            docs+changelog
-   │     + planning   plan     execution
-   │
-  You or PM
+   │         │          │          │           │    │           │              │            │
+   │     PM runs     Human      Human       Dev  HITL loop   QA verifies    DM delivers   Done
+   │     research    reviews    approves    builds  ↓↑          it            docs+changelog
+   │     + planning   plan     execution     it  Pending
+   │                                             Human Review
+  You or PM                                    / Human Setup
   files it
 ```
 
