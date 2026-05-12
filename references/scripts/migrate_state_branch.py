@@ -135,6 +135,9 @@ def migrate(dry_run=False):
         )
 
     print(f"\nMigrated {migrated}/{len(state_files)} files to state branch.")
+    if migrated == 0 and len(state_files) > 0:
+        print("ERROR: All migrations failed.", file=sys.stderr)
+        return 1
     return 0
 
 
