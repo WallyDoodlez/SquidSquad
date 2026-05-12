@@ -153,21 +153,8 @@ class TestRelativePathResolution:
         )
         (ss / ".local-config").write_text(config_text, encoding="utf-8")
 
-        # Use a non-existent shared clones dir to force .local-config fallback
-        fake_shared = tmp_path / "nonexistent_shared_clones"
-        with patch.object(health_check, "REPO_ROOT", repo), \
-             patch.object(health_check, "LOCAL_CONFIG", ss / ".local-config"), \
-             patch.object(health_check, "SQUIDSQUAD_DIR", ss), \
-             patch("health_check.Path") as MockPath:
-            # Make Path.home() return a dir without .squidsquad/clones/
-            MockPath.home.return_value = fake_shared
-            # But let all other Path() calls work normally
-            MockPath.side_effect = Path
-            # Directly test by mocking the shared clones check
-            pass
-
-        # Simpler approach: just test the .local-config parsing branch directly
-        # by ensuring shared_clones dir doesn't exist
+        # Test the .local-config parsing branch by ensuring shared_clones
+        # dir doesn't exist (#7628: removed dead with-block)
         with patch.object(health_check, "REPO_ROOT", repo), \
              patch.object(health_check, "LOCAL_CONFIG", ss / ".local-config"), \
              patch.object(health_check, "SQUIDSQUAD_DIR", ss), \
