@@ -1,5 +1,5 @@
 {
-  "last_scanned": "CHANGELOG.md",
+  "last_scanned": "README.md",
   "rotation_count": 35,
   "scan_history": [
     {"file": "README.md", "date": "2026-04-28", "findings": 2},
@@ -125,7 +125,8 @@
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-12", "findings": 1, "fixes": ["added HITL states (pending-human-review/setup) to feature lifecycle diagram"]},
     {"file": "docs/sub-skill-guide.md", "date": "2026-05-12", "findings": 0},
     {"file": "CONTRIBUTING.md", "date": "2026-05-12", "findings": 0},
-    {"file": "CHANGELOG.md", "date": "2026-05-12", "findings": 0}
+    {"file": "CHANGELOG.md", "date": "2026-05-12", "findings": 0},
+    {"file": "README.md", "date": "2026-05-12", "findings": 0}
   ],
   "doc_inventory": {
     "README.md": {"last_scanned": "2026-05-07", "status": "current"},
