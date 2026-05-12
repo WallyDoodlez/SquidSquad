@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.38.0] — 2026-05-12
+
+### Added
+- #6581 — Setup wizard now uses preset-driven agent selection — pick a team shape and the wizard handles the rest
+
+### Fixed
+- #7491 — Feature branches no longer accidentally modify config.md — eliminates repeated QA rejections from collateral damage
+- #7441 — Harness state file no longer has a write-after-unlock race condition — concurrent agent operations are safer
+- #7285 — Agent sync no longer crashes with a NameError when DM is present — config.py works correctly with the fixed team architecture
+- #7286 — macOS agent spawning now handles repo paths with special characters (quotes, backslashes) without silent failure
+- #7589 — State bus now properly reports failed git commits instead of silently continuing
+- #7627 — State branch migration now returns a failure exit code when all migrations fail — CI catches real problems
+- #7624 — Vault knowledge decay scan no longer aborts entirely when a single note file is unreadable
+- #7622 — Test coverage checker no longer crashes on unreadable files — gracefully skips and continues
+- #7619 — CLI error messages now include the actual error details instead of a generic "unreachable" message
+- #7618 — Vault optimizer lock acquisition no longer has a time-of-check/time-of-use race condition
+- #7610 — Cycle counter increments no longer produce duplicate output from a side effect in the getter
+- #7611 — Health check now reads the correct PID file when checking agent liveness
+- #7518 — Diagnostics config redaction now works on all config line formats, not just markdown bold lines
+- #7519 — Diagnostics `--last` flag no longer crashes when given a non-integer argument
+- #7440 — Event cursor advancement in cycle_post now actually updates the cursor instead of silently no-op'ing
+- #7191 — Agent instructions now correctly scope file-copy operations to non-composed files only — prevents bypassing compose.py
+- #7192 — DM soul directives now use the correct qualified path for BRIEFING.md
+- #7615 — Vault entity classifier no longer defaults all unknown entities to "person" — uses appropriate fallback categories
+- #7614 — Scan index no longer opens and closes its database redundantly when suggesting targets
+- #7590 — Manifest loader no longer has a redundant yaml import or a bare except that swallows errors
+- #7625 — Removed unreachable dead code in forgejo_setup.py
+- #7628 — Removed dead with-block in test_per_agent_workdirs.py health check test
+- #7098 — soul_adaptation.py CLI entry point now has full test coverage (6 branches)
+- #6983 — forgejo_setup.py create_repo() now has full test coverage (4 branches)
+- #6984 — forgejo_setup.py deploy() now has full test coverage (5 branches)
+- #7085 — Test runner now discovers all 43 previously missing test modules
+- #7086 — Manifest file inventory no longer lists deleted legacy sub-skills
+- #7063 — Removed redundant import in compose.py code block extraction
+- #7062 — Removed dead variable in compose.py include resolution
+- #6977 — Removed redundant shutil import in wizard.py
+- #6976 — Setup wizard no longer hardcodes stale version 0.25.0 in default spec
+- #6849 — Removed shadowed regex import in tracker.py
+- #6848 — Task creation now works correctly with the Forgejo forge adapter
+- #6820 — Harness lifecycle endpoints now accept and persist the intent field
+- #6819 — Comprehension test runner no longer crashes on subprocess timeout — handles gracefully
+- #6818 — Secret reader now correctly distinguishes between empty secrets and missing secrets
+- #6805 — Removed stale one-time deploy script from a previous migration
+
 ## [0.37.0] — 2026-05-10
 
 ### Added
