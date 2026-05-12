@@ -1,3 +1,10 @@
+## Scan — 2026-05-12 11:32
+
+- **Files scanned**: references/sub-skills/manifest.md (full inventory, composition order, placeholder table)
+- **Findings**: manifest.md line 11 references agent-instructions.md as compose output (stale) — added to #7631
+- **Auto-fixed**: none (source template, added to existing skill issue)
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-12 11:02
 
 - **Files scanned**: .squidsquad/vault/galaxy/ (all 22 notes — bulk staleness check for pending/TODO markers and closed-issue references)
