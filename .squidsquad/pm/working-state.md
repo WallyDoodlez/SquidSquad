@@ -2,7 +2,6 @@
 
 - **Task**: #7630 (EPIC: Event-driven agent architecture)
 - **Status**: in-progress
-- **Phase**: test-planning FEAT-PM-7630
 - **Started**: 2026-05-12 18:31
 
 ## Completed Steps
@@ -13,12 +12,16 @@
 - Phase 2 approval gate passed
 - DeepSeek gap review completed (GAP-REVIEW.md)
 - Phase 2B: Re-research with updated scope (RESEARCH.md v2 written)
-- Bug filed: #7637 (stale stopping intent on manual reboot)
+- Phase 3: Test plan (46 items — Claude + DeepSeek cross-referenced)
+- Phase 3B: Draft PR #7692 created with all planning artifacts
+- PRD created (DeepSeek-generated, PM-corrected for locked decisions)
+- Filed #7690 (setup flow update), #7691 (statusline redesign)
+- Closed #510, #5159 (superseded by #7630)
+- Bug filed: #7637 (stale stopping intent — skill picked up, at pending-test)
 
 ## Remaining Steps
-- Phase 3: Test planning (TEST-PLAN.md — DeepSeek + Claude cross-reference in progress)
-- Phase 3B: Draft PR for planning review
-- Human approval for execution
+- Human reviews PR #7692 and approves for execution
+- Task breakdown from PRD into implementable sub-tasks for skill
 
 ## Key Decisions
 - Wake model: Persistent session + Monitor tool (Claude Code upgraded)
