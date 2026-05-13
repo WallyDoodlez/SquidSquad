@@ -600,10 +600,19 @@ class TestWalkSourceFiles:
 class TestSuggestTargetsDbOpen:
     """#7614: suggest_targets opens DB once after churn refresh, not twice."""
 
-    def test_no_redundant_db_open(self):
-        """Source code should have exactly one _get_db call in suggest_targets."""
-        import inspect
-        source = inspect.getsource(scan_index.suggest_targets)
-        count = source.count("_get_db(")
-        assert count == 1, \
-            f"suggest_targets should call _get_db once, found {count} calls (#7614)"
+    def test_no_redundant_db_open(self, tmp_path):
+        """suggest_targets calls _get_db exactly once at runtime (#7614, #7636)."""
+        from unittest.mock import patch, MagicMock
+        import sqlite3
+
+        # Create a minimal DB so suggest_targets can run
+        db_path = tmp_path / "scan.db"
+        conn = scan_index._get_db(db_path)
+        conn.close()
+
+        with patch.object(scan_index, "_get_db", wraps=scan_index._get_db) as mock_get_db, \
+             patch.object(scan_index, "_maybe_refresh_churn"):
+            scan_index.suggest_targets("skill", count=3, db_path=db_path)
+
+        assert mock_get_db.call_count == 1, \
+            f"suggest_targets should call _get_db once, called {mock_get_db.call_count} times (#7614)"
