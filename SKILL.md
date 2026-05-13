@@ -95,7 +95,7 @@ When you invoke SquidSquad, it creates the following inside your project root. O
 │   ├── iterations/             ← iter-N.md logs per cycle
 │   └── migrations/             ← historical migration logs (markdown tracker era)
 ├── qa/                         ← QA (same structure as [role]/, plus qa-log.md)
-└── vault/                      ← shared memory layer (all agents R/W)
+└── vault/                      ← shared memory layer (PM and dev agents R/W, QA and DM read-only)
     ├── BRIEFING.md             ← daily context briefing read by all agents at boot
     ├── projects/               ← active project context, goals, constraints
     ├── areas/                  ← ongoing concerns: conventions, preferences, values
