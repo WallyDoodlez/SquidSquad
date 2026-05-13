@@ -164,7 +164,7 @@ After includes are resolved, placeholders are substituted with values from `conf
 | `[ROLE_TEST_CMD]` | Dev templates only | Test command from config |
 | `[OTHER_ROLES]` | Dev templates only | Other dev role names |
 | `[INTERVAL]` | All templates | Loop interval in minutes |
-| `[ACTIVE_AGENTS]` | PM, DM templates | List of active dev agents |
+| `[ACTIVE_AGENTS]` | PM, QA, DM templates | List of active dev agents |
 | `[E2E_TEST_CMD]` | PM templates | E2E test command |
 
 **Important**: `[ROLE]` and `[ROLE_UPPER]` are substituted for ALL roles (needed by shared sub-skills like `cycle-runner.md`). `[ROLE_TEST_CMD]` and `[OTHER_ROLES]` are dev-only — PM, QA, and DM do not use them.
