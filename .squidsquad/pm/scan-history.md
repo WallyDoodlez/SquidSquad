@@ -1,3 +1,10 @@
+## Scan — 2026-05-12 20:32
+
+- **Files scanned**: .squidsquad/project/shared-instructions.md, .squidsquad/project/dev-instructions.md
+- **Findings**: shared-instructions.md referenced deprecated sentinel files (.stop-after-cycle, .stop, .pid) and old wrapper heartbeat pattern — replaced by harness intent API (#4966)
+- **Auto-fixed**: rewrote Agent Infrastructure section to reference harness PID monitoring + intent state machine
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-12 14:01
 
 - **Files scanned**: .squidsquad/config.md (full config consistency check)
