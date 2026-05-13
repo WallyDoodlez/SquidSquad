@@ -135,7 +135,9 @@
     {"file": "CONTRIBUTING.md", "date": "2026-05-12", "findings": 0},
     {"file": "CHANGELOG.md", "date": "2026-05-12", "findings": 0},
     {"file": "README.md", "date": "2026-05-12", "findings": 0},
-    {"file": "SKILL.md:sections-1-3", "date": "2026-05-12", "findings": 1, "fixes": ["corrected vault access: 'all agents R/W' → 'PM and dev R/W, QA and DM read-only'"]}
+    {"file": "SKILL.md:sections-1-3", "date": "2026-05-12", "findings": 1, "fixes": ["corrected vault access: 'all agents R/W' → 'PM and dev R/W, QA and DM read-only'"]},
+    {"file": "SKILL.md:sections-4-6", "date": "2026-05-12", "findings": 0},
+    {"file": "SKILL.md:sections-7-8", "date": "2026-05-13", "findings": 0}
   ],
   "doc_inventory": {
     "README.md": {"last_scanned": "2026-05-07", "status": "current"},
