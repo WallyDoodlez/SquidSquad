@@ -110,51 +110,41 @@
 
 ### 2.1 Current Architecture (Cycle-Based)
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        HARNESS (harness.py)                         │
-│  Owns: PID monitoring, intent state machine, auto-reboot            │
-│  Does NOT own: cycle logic, work detection, git operations          │
-└──────────┬────────────────────────────────────────────┬─────────────┘
-           │ spawn via thin_launcher                    │ health poll
-           │ (PID written to .claude-pid)               │ every 5s
-           ▼                                            ▼
-┌──────────────────────┐                    ┌──────────────────────┐
-│   AGENT TERMINAL     │                    │   AGENT TERMINAL     │
-│   (thin_launcher.py) │                    │   (thin_launcher.py) │
-│                      │                    │                      │
-│  /loop [N]m {        │                    │  /loop [N]m {        │
-│    cycle_pre.py ────►│ writes             │    cycle_pre.py ────►│
-│    (mechanical)      │ cycle-input.json   │    (mechanical)      │
-│                      │                    │                      │
-│    CREATIVE WORK ◄───│ reads              │    CREATIVE WORK ◄───│
-│    (agent reasons)   │ cycle-input.json   │    (agent reasons)   │
-│                      │                    │                      │
-│    cycle_post.py ───►│ commits, pushes,   │    cycle_post.py ───►│
-│    (mechanical)      │ transitions, logs  │    (mechanical)      │
-│  }                    │                    │  }                    │
-│                      │                    │                      │
-│  Agent decides:       │                    │  Agent decides:       │
-│  "Is there work?"     │                    │  "Is there work?"     │
-│  "What should I do?"  │                    │  "What should I do?"  │
-│  "Am I done?"         │                    │  "Am I done?"         │
-└──────────────────────┘                    └──────────────────────┘
+```mermaid
+graph TB
+    subgraph HARNESS["HARNESS (harness.py)"]
+        H_PID[PID Monitoring<br/>every 5s]
+        H_INTENT[Intent State Machine<br/>running/stopping/restarting]
+        H_REBOOT[Auto-reboot<br/>dead agents]
+    end
 
-     CYCLE FLOW (per agent, every N minutes):
-     
-     /loop triggers
-        │
-        ▼
-     cycle_pre.py          ← polls tracker, reads events, builds queue
-        │
-        ▼
-     Agent creative work   ← reads cycle-input.json, decides what to do
-        │
-        ▼
-     cycle_post.py         ← commits, pushes, transitions, logs
-        │
-        ▼
-     /loop waits N minutes, repeats
+    subgraph AGENT_A["AGENT TERMINAL (persistent /loop session)"]
+        direction TB
+        LOOP["/loop [N]m triggers"] --> PRE["cycle_pre.py<br/>(mechanical)<br/>polls tracker, reads events"]
+        PRE --> WORK["CREATIVE WORK<br/>(agent reasons, decides)"]
+        WORK --> POST["cycle_post.py<br/>(mechanical)<br/>commits, pushes, transitions"]
+        POST --> LOOP
+    end
+
+    HARNESS -->|spawn via<br/>thin_launcher| AGENT_A
+    H_PID -->|health poll| AGENT_A
+
+    style HARNESS fill:#2d2d2d,stroke:#666,color:#fff
+    style AGENT_A fill:#1a3a1a,stroke:#4a4,color:#fff
+    style WORK fill:#4a4a00,stroke:#aa0,color:#fff
+    style PRE fill:#333,stroke:#666,color:#ccc
+    style POST fill:#333,stroke:#666,color:#ccc
+```
+
+**Cycle flow** — agent self-loops via `/loop`, deciding what to do each cycle:
+
+```mermaid
+graph LR
+    A["/loop fires"] --> B["cycle_pre.py<br/>polls tracker, builds queue"]
+    B --> C["Agent creative work<br/>reads cycle-input.json"]
+    C --> D["cycle_post.py<br/>commits, pushes, logs"]
+    D --> E["Wait N minutes"]
+    E --> A
 ```
 
 **Component ownership in current architecture:**
@@ -173,91 +163,83 @@
 
 ### 2.2 Target Architecture (Event-Driven)
 
+```mermaid
+graph TB
+    subgraph HARNESS["HARNESS (harness.py)"]
+        subgraph MONITORS["Continuous Monitors"]
+            GIT[git-watcher<br/>poll origin]
+            TRACKER[tracker-watcher<br/>poll GitHub Issues]
+            HEALTH[health-watcher<br/>PID + context pressure]
+        end
+        subgraph LIFECYCLE["Event Lifecycle Manager"]
+            DISPATCH[dispatch]
+            TIMEOUT[timeout detection]
+            CLOSURE[closure processing]
+            STORE[(event-store<br/>disk-persisted)]
+        end
+        subgraph AGENT_MGR["Agent Lifecycle Manager"]
+            INBOX[write to event-inbox/]
+            REEMIT[re-emit on timeout]
+            DIAGNOSE[crash diagnosis]
+        end
+        GIT --> DISPATCH
+        TRACKER --> DISPATCH
+        HEALTH --> DISPATCH
+        DISPATCH --> STORE
+        DISPATCH --> INBOX
+        TIMEOUT --> REEMIT
+        CLOSURE --> STORE
+    end
+
+    subgraph AGENT_A["AGENT (persistent session)"]
+        MONITOR_A["Monitor tool watches<br/>event-inbox/"] --> READ_A["Read event .json"]
+        READ_A --> CREATIVE_A["CREATIVE WORK<br/>(reasoning, code, tests)"]
+        CREATIVE_A --> CLOSE_A["POST /events/{id}/complete<br/>(closure callback)"]
+        CLOSE_A --> MONITOR_A
+    end
+
+    INBOX -->|"write .json<br/>to inbox"| MONITOR_A
+    CLOSE_A -->|"HTTP API"| CLOSURE
+
+    style HARNESS fill:#2d2d2d,stroke:#666,color:#fff
+    style MONITORS fill:#1a1a3a,stroke:#44a,color:#fff
+    style LIFECYCLE fill:#3a1a1a,stroke:#a44,color:#fff
+    style AGENT_MGR fill:#1a3a1a,stroke:#4a4,color:#fff
+    style AGENT_A fill:#1a3a1a,stroke:#4a4,color:#fff
+    style CREATIVE_A fill:#4a4a00,stroke:#aa0,color:#fff
+    style STORE fill:#3a3a00,stroke:#aa0,color:#fff
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                           HARNESS (harness.py)                           │
-│                                                                          │
-│  ┌─────────────────────┐  ┌──────────────────┐  ┌───────────────────┐  │
-│  │  Continuous Monitors │  │  Event Lifecycle  │  │  Agent Lifecycle   │  │
-│  │                     │  │  Manager          │  │  Manager           │  │
-│  │  git-watcher ───────┼──┤                   │  │                    │  │
-│  │  (poll origin)      │  │  dispatch ────────┼──┼──► write to inbox  │  │
-│  │                     │  │  timeout ─────────┼──┼──► re-emit         │  │
-│  │  tracker-watcher ───┼──┤  closure ◄────────┼──┼── POST /events/    │  │
-│  │  (poll gh issues)   │  │  crash-diagnose ──┼──┼── {id}/complete    │  │
-│  │                     │  │                   │  │                    │  │
-│  │  health-watcher ────┼──┤  event-store ─────┼──┼── .event-state.json │  │
-│  │  (PID + context)    │  │  (disk persisted) │  │                    │  │
-│  └─────────────────────┘  └──────────────────┘  └───────────────────┘  │
-│                                                                          │
-│  Harness OWNS: work detection, event dispatch, git operations,           │
-│                health, status transitions, context pressure              │
-└──────────┬───────────────────────────────────────────────┬──────────────┘
-           │ spawn once via thin_launcher                  │ HTTP API
-           │ (persistent session — stays alive)            │
-           ▼                                               ▼
-┌──────────────────────┐                    ┌──────────────────────┐
-│   AGENT TERMINAL     │                    │   AGENT TERMINAL     │
-│   (persistent session│                    │   (persistent session│
-│    — stays alive)    │                    │    — stays alive)    │
-│                      │                    │                      │
-│  Boot → Monitor tool │                    │  Boot → Monitor tool │
-│  watches event-inbox/│                    │  watches event-inbox/│
-│                      │                    │                      │
-│  ┌─ EVENT ARRIVES ──┐│                    │  ┌─ EVENT ARRIVES ──┐│
-│  │ Monitor detects   ││                    │  │ Monitor detects   ││
-│  │ new .json in inbox││                    │  │ new .json in inbox││
-│  │                   ││                    │  │                   ││
-│  │ CREATIVE WORK     ││                    │  │ CREATIVE WORK     ││
-│  │ (only reasoning)  ││                    │  │ (only reasoning)  ││
-│  │                   ││                    │  │                   ││
-│  │ POST /events/     ││                    │  │ POST /events/     ││
-│  │   {id}/complete   ││                    │  │   {id}/complete   ││
-│  │ (closure callback)││                    │  │ (closure callback)││
-│  │                   ││                    │  │                   ││
-│  │ Resume watching   ││                    │  │ Resume watching   ││
-│  └───────────────────┘│                    │  └───────────────────┘│
-│                      │                    │                      │
-│  Agent ONLY does:     │                    │  Agent ONLY does:     │
-│  Creative reasoning   │                    │  Creative reasoning   │
-│  Code writing         │                    │  Code writing         │
-│  Decision making      │                    │  Decision making      │
-└──────────────────────┘                    └──────────────────────┘
 
-     EVENT FLOW (persistent session + Monitor tool):
+**Event flow** — harness detects work, dispatches to agent, agent closes via API:
 
-     Continuous monitor detects work
-        │
-        ▼
-     Event created in event-store (disk-persisted)
-        │
-        ▼
-     Dispatcher: which agents need this event?
-        │
-        ├──► Agent A: harness writes event .json to agent's event-inbox/
-        │       │
-        │       ▼
-        │    Monitor tool detects new file (sub-second)
-        │       │
-        │       ▼
-        │    Agent reads event, does creative work
-        │       │
-        │       ▼
-        │    Agent calls POST /events/{id}/complete (closure callback)
-        │       │
-        │       ▼
-        │    Agent resumes watching event-inbox/ for next event
-        │
-        ├──► Agent B: (same flow, independent)
-        │
-        ▼
-     All consumers closed → event marked "closed" in event-store
+```mermaid
+graph LR
+    A["Monitor detects<br/>change"] --> B["Event created<br/>(disk-persisted)"]
+    B --> C["Dispatch to<br/>consumer agents"]
+    C --> D["Write .json to<br/>agent event-inbox/"]
+    D --> E["Monitor tool<br/>detects file"]
+    E --> F["Agent does<br/>creative work"]
+    F --> G["POST /events/{id}/complete"]
+    G --> H["Harness processes<br/>transitions, commits"]
+    H --> I["Event closed"]
+```
 
-     FAILURE PATHS:
-     - Timeout (no closure in N minutes) → re-emit with incremented retry count
-     - Agent crash → harness detects via PID, respawns, agent resumes from working-state
-     - Max retries exceeded → harness files bug against agent, event marked "failed"
-     - Monitor tool disconnect → agent reconnects; disk-persisted events survive gap
+**Failure paths:**
+
+```mermaid
+graph TD
+    EVENT["Event dispatched"] --> HAPPY["Agent processes<br/>& closes"]
+    EVENT --> TIMEOUT["No closure<br/>in N minutes"]
+    EVENT --> CRASH["Agent PID<br/>dies"]
+
+    TIMEOUT --> REEMIT["Re-emit<br/>retry_count++"]
+    REEMIT -->|"retry < max"| EVENT
+    REEMIT -->|"retry >= max"| BUG["File bug<br/>event = failed"]
+
+    CRASH --> DIAGNOSE["Harness detects<br/>via PID check"]
+    DIAGNOSE --> RESPAWN["Respawn agent"]
+    RESPAWN --> RESUME["Agent reads<br/>working-state.md"]
+    RESUME --> HAPPY
 ```
 
 ### 2.3 Architecture Comparison Table
@@ -281,62 +263,27 @@
 
 ### 3.1 Event Lifecycle Diagram
 
-```
-                    ┌──────────┐
-                    │  Monitor  │  (git-watcher, tracker-watcher, health-watcher)
-                    │  detects  │
-                    │  change   │
-                    └─────┬─────┘
-                          │
-                          ▼
-                  ┌───────────────┐
-                  │ EVENT CREATED │  written to event-store (disk)
-                  │ status: pending│  consumers list determined by event type
-                  └───────┬───────┘
-                          │
-                          ▼
-                  ┌───────────────┐
-                  │  DISPATCHED   │  harness writes wake-event.json
-                  │ status: in-   │  kills agent, respawns with event
-                  │   flight      │  timer starts for timeout
-                  └───────┬───────┘
-                          │
-            ┌─────────────┼─────────────┐
-            ▼             ▼             ▼
-    ┌─────────────┐ ┌──────────┐ ┌──────────────┐
-    │ AGENT WAKES │ │ TIMEOUT  │ │ AGENT CRASH  │
-    │ processes   │ │ (N min)  │ │ (PID dead)   │
-    │ event       │ │          │ │              │
-    └──────┬──────┘ └────┬─────┘ └──────┬───────┘
-           │             │              │
-           ▼             ▼              ▼
-    ┌─────────────┐ ┌──────────┐ ┌──────────────┐
-    │ POST /events│ │ RE-EMIT  │ │ DIAGNOSE     │
-    │ /{id}/      │ │ increment│ │ harness      │
-    │ complete    │ │ retry    │ │ respawns     │
-    └──────┬──────┘ │ count    │ │ agent reads  │
-           │        └────┬─────┘ │ working-state│
-           │             │       │ resumes       │
-           │             ▼       └──────┬───────┘
-           │      ┌──────────┐          │
-           │      │ retry <  │──yes─────┼──► back to DISPATCHED
-           │      │ max?     │          │
-           │      └────┬─────┘          │
-           │           │ no             │
-           │           ▼                │
-           │    ┌──────────────┐        │
-           │    │ FILE BUG     │        │
-           │    │ against agent│        │
-           │    │ status:      │        │
-           │    │   failed     │        │
-           │    └──────────────┘        │
-           │                            │
-           ▼                            │
-    ┌───────────────┐                   │
-    │ EVENT CLOSED  │ ◄─────────────────┘
-    │ status: closed│  (after successful
-    │ audit complete│   creative work)
-    └───────────────┘
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: Monitor detects change
+    PENDING --> IN_FLIGHT: Harness writes .json to event-inbox
+
+    IN_FLIGHT --> CLOSED: Agent calls POST /events/{id}/complete
+    IN_FLIGHT --> TIMEOUT: No closure in N minutes
+    IN_FLIGHT --> CRASH: Agent PID dies
+
+    TIMEOUT --> IN_FLIGHT: Re-emit (retry < max)
+    TIMEOUT --> FAILED: retry >= max → file bug
+
+    CRASH --> DIAGNOSE: Harness detects via PID check
+    DIAGNOSE --> IN_FLIGHT: Respawn agent, resume from working-state
+
+    CLOSED --> [*]
+    FAILED --> [*]
+
+    note right of PENDING: Written to disk-persisted event-store\nConsumers determined by event type
+    note right of IN_FLIGHT: Timer starts for timeout\nMonitor tool detects file (sub-second)
+    note right of CLOSED: Harness processes closure callback\n(transitions, commits, logs)
 ```
 
 ### 3.2 Event Types Table
