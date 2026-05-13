@@ -1001,8 +1001,7 @@ These instructions apply to ALL agents on this project.
 
 ### Agent Infrastructure
 
-- **Heartbeat `.health` files**: Wrapper writes current epoch every 5 seconds. >10s old = agent dead.
-- **Sentinel files**: `.stop-after-cycle` (graceful restart), `.stop` (permanent stop), `.pid` (singleton lock).
+- **Harness manages agent lifecycle**: PID monitoring (primary), `.health` file (legacy fallback). Intent state machine via REST API (#4966).
 - **Agent lifecycle via `start_team.py`**: Agents do not manage their own or other agents' processes.
 - **Context pressure restart via `cycle_post.py`**: Mechanical detection, agents don't set `restart_needed`.
 
