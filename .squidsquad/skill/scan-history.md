@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-12 20:39
+
+- **Files scanned**: tests/test_config_functions.py, tests/test_cycle.py, tests/test_scan_index.py, tests/test_shared_fs.py, tests/test_soul_adaptation.py
+- **Findings**: #7635 (test_cycle.py dead capsys fixtures — low), #7636 (test_scan_index.py fragile source inspection — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-11 19:32
 
 - **Files scanned**: references/scripts/migrate_state_branch.py, references/scripts/vault_remember.py, tests/test_per_agent_workdirs.py
