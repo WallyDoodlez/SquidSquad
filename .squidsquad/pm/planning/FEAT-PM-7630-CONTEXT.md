@@ -92,6 +92,19 @@ Before prototyping the wake mechanism, validate:
 - **Config**: New `event-driven: yes/no` flag. New `scan-idle-timeout: 10` (minutes). New `wake-mechanism: monitor` (future: could support `spawn` fallback).
 - **Template migration**: All cycle prose stripped from instructions.md and sub-skills. Replaced with event handler descriptions: "when woken by event X, do Y, close event via API."
 
+### 7. Event reactions follow L1-L4 layered structure
+Event reactions are NOT a flat single sub-skill. They follow the existing L1-L4 compose layers:
+- **L1 (universal)**: `common/event-driven-workflow.md` + `common/event-reactions.md` (stripped to universal-only: stop-requested, idempotency, catch-all)
+- **L2 (role-specific)**: `roles/{role}/event-reactions.md` — each role gets its own reaction table (PM, Technical Worker, Verifier, DM)
+- **L3 (behavioral adaptation)**: Separate mechanism from SOUL.md. Soul is personality only. Behavioral tuning (event-sensitivity, reaction-latency, scan-priority) uses config or dedicated behavior files.
+- **L4 (human overrides)**: config.md fields for muting events, tuning timeouts, setting escalation thresholds
+
+### 8. Harness filters mechanical events before delivery
+18 of 32 event types are purely mechanical (git ops, cycle bookkeeping, work lifecycle). The harness filters these out — agents only see the 14 events requiring creative judgment. This saves agent context and prevents LLMs from "noting" events that need no action.
+
+### 9. Role terminology in PRD
+PRD uses generic role terminology: PM, Technical Worker (dev/skill), Verifier (QA), DM. Event-reaction sub-skills are per-role regardless of what the technical worker role is named.
+
 ## Out of Scope
 
 - **External model routing changes** — model_router.py is unaffected by event-driven architecture

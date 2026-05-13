@@ -376,24 +376,32 @@
 
 ### 3.3 Event-Reaction Matrix
 
-| Event Type | PM Action | QA Action | Skill Action | DM Action |
-|---|---|---|---|---|
-| **pr-merged** | Transition issue to next status; verify PR linked correctly | Check if verification of merged PR is needed | Pull latest; check if merged code affects active work | Check if delivery package needs update |
-| **compose-completed** | Note template change in BRIEFING | Verify compose didn't break tests | Check own CLAUDE.md/SOUL.md for changes | Check DM templates for changes |
-| **status-transition** | Check pipeline state; detect stalls | If pending-test → verify | If own task moved → note; if blocked → check unblock | If pending-ship → prepare delivery |
-| **tracker-comment** | Read if mentions PM or own items | Read if mentions QA or verification | Read if mentions own task | Read if mentions DM or delivery |
-| **verification-failed** | Note rework count; check for systemic issues | Note for tracking | Fix gaps; re-submit | — |
-| **verification-passed** | Note for shipping tracking | — | Note completion | Queue for delivery |
-| **agent-health** | Investigate stalled/dead agents; file bugs | Note if blocks verification | — | Note if blocks delivery |
-| **new-commits** | — | — | Pull latest; check impact | Pull latest; check impact |
-| **new-issue** | Triage: route, approve, or question | Check if assigned to QA | Check if assigned to self | Check if assigned to DM |
-| **issue-updated** | Check context; detect human input | Check if affects verification queue | Check if own task updated | Check if affects delivery |
-| **context-pressure** | — | — | Checkpoint working state; finish work | Checkpoint; finish work |
-| **pr-conflict** | Note for tracking | — | Resolve conflict via merge | — |
-| **scan-needed** | — | — | Run improvement scan | — |
-| **stop-request** | Finish work; exit cleanly | Finish work; exit cleanly | Finish work; exit cleanly | Finish work; exit cleanly |
-| **restart-request** | Finish work; exit for restart | Finish work; exit for restart | Finish work; exit for restart | Finish work; exit for restart |
-| **agent-diagnose** | Investigate crash; reassign if needed | — | — | — |
+**Role terminology**: PM (project manager), Technical Worker (dev/skill — the agent that implements), Verifier (QA — the agent that tests), DM (delivery manager).
+
+**Reaction layer model (L1-L4)**:
+- **L1 (Universal)**: Reactions ALL roles share — defined in `common/event-driven-workflow.md`. Only `stop-requested` and idempotency rules.
+- **L2 (Role-specific)**: Per-role reactions — defined in `roles/{role}/event-reactions.md` sub-skills.
+- **L3 (Behavioral adaptation)**: Project-tunable reaction parameters — separate mechanism from SOUL.md (soul is personality only). Categories: `event-sensitivity`, `reaction-latency`, `scan-priority`.
+- **L4 (Human overrides)**: Config.md fields for muting events, timeout tuning, grace periods.
+
+**Harness filtering**: 18 mechanical-only events (git ops, cycle bookkeeping, work lifecycle) are filtered by the harness and never delivered to agents. Only the 14 events below require creative agent judgment.
+
+| Event Type | PM Action | Verifier Action | Technical Worker Action | DM Action | Layer |
+|---|---|---|---|---|---|
+| **status-transition** | Check pipeline state; detect stalls | If pending-test → queue verification | If own task moved → adapt | If pending-ship → prepare delivery | L2 |
+| **tracker-comment** | Scan for human input; route to correct agent | Read verification feedback | Read if on own task; respond | Read delivery notes; apply | L2 |
+| **pr-merged** | Pipeline sentinel — check state invalidation | Update verification queue (retesting?) | Pull latest; check for conflicts with in-progress work | Check if merged PR has pending-ship items | L2 |
+| **verification-failed** | Route failure to correct worker; note in sentinel | Record in verification log; track re-submission | Read feedback; fix all gaps; re-submit | Await re-verification — do not ship | L2 |
+| **verification-passed** | Update sentinel; route to DM | Record pass; hand off to DM | Clear working state; move to next task | Pick up for delivery packaging | L2 |
+| **agent-health** | Investigate unhealthy agents; restart/reassign | Note in health log | Adapt if dependent agents unhealthy | Defer shipments if Verifier unhealthy | L2 |
+| **phase-change** | Track lifecycle; detect stuck phases | If triggers verification, queue it | If affects own task, adapt | If triggers delivery, prepare | L2 |
+| **compose-completed** | Verify deploy reached all roles | Re-read CLAUDE.md | Re-read CLAUDE.md | Check if changed user-facing docs | L2 |
+| **scan-due** | Run improvement scan; file findings | — | — | — | L2 (PM only) |
+| **human-input-received** | Process per checkin protocol | Check if references verification | Check if references own work | Check if references delivery | L2 |
+| **vault-reflect** | Run vault reflection pipeline | Check for new patterns affecting verification | Check for new decisions affecting implementation | Check for new learnings affecting delivery | L2 |
+| **pipeline-stalled** | Diagnose; unstick; file root-cause bug | Check if stall affects verification | Check if stall affects own work | Check if stall affects delivery | L2 |
+| **stop-requested** | Checkpoint working-state; exit cleanly | Checkpoint working-state; exit cleanly | Checkpoint working-state; exit cleanly | Checkpoint working-state; exit cleanly | **L1** (universal) |
+| **work-available** | Read event; do PM creative work | Read event; do verification work | Read event; do implementation work | Read event; do delivery work | L2 |
 
 ## Harness API Reference
 
@@ -668,9 +676,55 @@ If you detect a `stop-requested` event in your inbox:
 <!-- /sub-skill: event-driven-workflow -->
 ```
 
-**Rewritten sub-skill: `common/event-reactions.md`**
+**Rewritten sub-skill: `common/event-reactions.md`** (L1 — universal only)
 
-Update to reference wake-event.json instead of cycle-input.json recent_events. Remove references to mechanical_reactions (harness handles). Keep the event type → action guidance table.
+Stripped to L1 content only (~25 lines). Contains ONLY:
+- `stop-requested` universal reaction (checkpoint → exit) — all roles identical
+- `event-reemitted` idempotency rule (check if already processed)
+- Catch-all for unknown events: "log event ID, note in working state, proceed"
+- Statement: "You will only see events requiring your judgment. Mechanical events are filtered by the harness."
+
+All role-specific reactions MOVE to L2 sub-skills (see below).
+
+**NEW L2 sub-skills: `roles/{role}/event-reactions.md`** (× 4 files)
+
+Each role gets its own event-reaction sub-skill with reactions from the matrix in Section 3.3:
+- `references/sub-skills/roles/pm/event-reactions.md` — PM reactions (pipeline sentinel, triage, investigation)
+- `references/sub-skills/roles/dev/event-reactions.md` — Technical Worker reactions (implementation, conflict resolution)
+- `references/sub-skills/roles/qa/event-reactions.md` — Verifier reactions (verification queue, health log)
+- `references/sub-skills/roles/dm/event-reactions.md` — DM reactions (delivery packaging, shipment tracking)
+
+**L3 — Behavioral Adaptation (separate from SOUL.md)**
+
+SOUL.md is personality only. Event-reaction behavioral tuning uses a SEPARATE mechanism:
+- New script or config section for behavioral adaptation (NOT `soul_adaptation.py`)
+- Categories: `event-sensitivity` (reactive ↔ proactive), `reaction-latency` (response urgency), `scan-priority` (which events trigger scans)
+- Storage: `config.md` section or dedicated `behavior-adaptation.md` per role
+- PM writes behavioral tuning entries that shape how agents interpret their L2 event reactions
+- Example: "event-sensitivity: high → PM investigates pipeline-stalled within 5 minutes"
+
+**L4 — Human Overrides (config.md)**
+
+Human can override any L2/L3 reaction via config.md fields:
+- `Muted Event Types`: comma-separated list of event types to suppress
+- `Stop Grace Period`: seconds before forced kill on stop-requested
+- `Max Event Retries`: max re-emissions before filing bug
+- `Scan Idle Timeout`: minutes of idle before scan-due emitted
+- Event-reaction preferences in `human-profile.md`: escalation threshold, auto-unstick policy, notification preferences
+
+**Includes.yml changes (all roles):**
+
+Each role's `includes.yml` changes:
+- REMOVE: `common/event-reactions` (old flat L1 file)
+- ADD: `roles/{role}/event-reactions` (new L2 role-specific file)
+- KEEP: `common/event-driven-workflow` (L1 mechanism — how to watch inbox, close events)
+
+**Harness event filtering:**
+
+18 mechanical-only events are filtered by the harness before delivery to agents:
+`cycle-start`, `cycle-end`, `git-pull`, `git-push`, `git-commit`, `branch-checkout`, `pr-create`, `pr-merge` (deprecated), `request-merge`, `work-started`, `work-completed`, `agent-idle`, `agent-stopping`, `agent-stopped`, `event-timeout`, `event-reemitted`, `work-failed`, `templates-updated`
+
+Agents only see the 14 events requiring creative judgment (see Section 3.3).
 
 **Role instructions.md changes (all 4 roles):**
 
@@ -678,11 +732,12 @@ Update to reference wake-event.json instead of cycle-input.json recent_events. R
 - **REMOVE**: "## The Ralph Loop" section header and "Each invocation executes one cycle..." prose
 - **REMOVE**: `/loop [INTERVAL]m execute one Ralph Loop cycle`
 - **REMOVE**: "Print the cycle-complete marker. This cycle is finished — /loop will trigger the next one."
-- **REPLACE WITH**: "When the harness boots you, read your wake-event.json and follow the Event-Driven Workflow."
-- **ADD**: Event driver configuration note: "The harness monitors GitHub, git, and agent health. It wakes you when there's work. You do not need to poll or self-schedule."
+- **REPLACE WITH**: "When the harness boots you, use the Monitor tool to watch your event-inbox. Process events as they arrive and close them via the harness API."
+- **ADD**: "The harness monitors GitHub, git, and agent health. It delivers events to your inbox when there's work. You do not poll or self-schedule."
 
 **Role SOUL.md changes:**
 - Remove Ralph Loop references ("You follow the Ralph Loop" → "You react to events dispatched by the harness")
+- NO event-reaction behavioral tuning in SOUL.md — soul is personality only
 
 ### 5.4 Config Changes
 
