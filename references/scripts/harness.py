@@ -185,6 +185,7 @@ class HarnessState:
                 # Direct PID check (#4966) — primary health detection
                 pid = agent.claude_pid
                 alive = False
+                pid_changed = False
                 if pid:
                     alive = boot_remote._is_process_alive(pid)
 
@@ -194,6 +195,8 @@ class HarnessState:
                     if file_pid and file_alive:
                         pid = file_pid
                         alive = True
+                        if agent.claude_pid != pid:
+                            pid_changed = True
                         agent.claude_pid = pid
                         state_changed = True
 
@@ -219,6 +222,16 @@ class HarnessState:
                     if agent.intent == AgentState.INTENT_RESTARTING:
                         agent.intent = AgentState.INTENT_RUNNING
                         state_changed = True
+                    elif agent.intent in (
+                        AgentState.INTENT_STOPPING,
+                        AgentState.INTENT_STOPPED,
+                    ) and pid_changed:
+                        # New PID appeared while intent was stale — manual reboot (#7637).
+                        # Only reset when PID changed to avoid undoing an in-flight stop.
+                        old_intent = agent.intent
+                        agent.intent = AgentState.INTENT_RUNNING
+                        state_changed = True
+                        _log(f"{role}: alive with new PID (stale intent={old_intent}), reset to running (#7637)")
                 elif agent.status != "starting":
                     # Check if explicitly stopped
                     stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"

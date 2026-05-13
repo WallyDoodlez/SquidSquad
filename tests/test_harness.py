@@ -645,5 +645,90 @@ class TestIntentLifecycle(unittest.TestCase):
             self.assertEqual(hs.get_agent("skill").intent, AgentState.INTENT_RUNNING)
 
 
+class TestManualRebootClearsStoppingIntent(unittest.TestCase):
+    """#7637: Harness must clear stopping/stopped intent when agent is alive."""
+
+    def test_alive_agent_with_stopping_intent_resets_to_running(self):
+        """Agent stopped via harness, manually rebooted → intent resets to running."""
+        import tempfile
+        from harness import HarnessState, AgentState
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            # Agent is alive (use current process PID)
+            (role_dir / ".claude-pid").write_text(str(os.getpid()), encoding="utf-8")
+
+            hs = HarnessState()
+            agent = AgentState("skill", tmpdir)
+            agent.status = "stopped"
+            agent.intent = AgentState.INTENT_STOPPING
+            agent.claude_pid = None  # PID cleared when agent died
+            hs.set_agent("skill", agent)
+
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
+                hs.update_health()
+
+            got = hs.get_agent("skill")
+            self.assertEqual(got.status, "running")
+            self.assertEqual(got.intent, AgentState.INTENT_RUNNING,
+                             "Alive agent with stopping intent must reset to running (#7637)")
+
+    def test_alive_agent_with_stopped_intent_resets_to_running(self):
+        """Agent fully stopped (intent=stopped), manually rebooted → intent resets."""
+        import tempfile
+        from harness import HarnessState, AgentState
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            (role_dir / ".claude-pid").write_text(str(os.getpid()), encoding="utf-8")
+
+            hs = HarnessState()
+            agent = AgentState("skill", tmpdir)
+            agent.status = "stopped"
+            agent.intent = AgentState.INTENT_STOPPED
+            agent.claude_pid = None
+            hs.set_agent("skill", agent)
+
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
+                hs.update_health()
+
+            got = hs.get_agent("skill")
+            self.assertEqual(got.status, "running")
+            self.assertEqual(got.intent, AgentState.INTENT_RUNNING,
+                             "Alive agent with stopped intent must reset to running (#7637)")
+
+    def test_same_pid_stopping_intent_not_cleared(self):
+        """Agent told to stop but still alive (same PID) → intent stays stopping (#7637)."""
+        import tempfile
+        from harness import HarnessState, AgentState
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+
+            hs = HarnessState()
+            agent = AgentState("skill", tmpdir)
+            agent.status = "running"
+            agent.intent = AgentState.INTENT_STOPPING
+            agent.claude_pid = os.getpid()  # Same PID — stop is in-flight
+            hs.set_agent("skill", agent)
+
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
+                hs.update_health()
+
+            got = hs.get_agent("skill")
+            self.assertEqual(got.status, "running")
+            self.assertEqual(got.intent, AgentState.INTENT_STOPPING,
+                             "Same PID still alive — stopping intent must NOT be cleared (#7637)")
+
+
 if __name__ == "__main__":
     unittest.main()
