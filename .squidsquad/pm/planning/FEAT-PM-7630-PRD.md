@@ -294,15 +294,16 @@ The event model uses 5 event types, all at L1 (universal). Previous versions of 
 
 | Event Type | Direction | Payload | Trigger | Agent Reaction |
 |---|---|---|---|---|
-| **assigned-to** | agent/human → harness → target agent | `{role, issue_or_pr}` | Work handoff — one agent/human passes responsibility to another | Read the issue/PR from the forge, act per your role |
-| **stop-requested** | agent/human/harness → target agent | `{source, target}` | Graceful shutdown — source can be another agent, human (Ctrl+C), or harness | Finish current event atomically, checkpoint working-state, stop Monitor, emit `stopped` |
-| **stopped** | agent → harness | `{role}` | Agent confirms clean shutdown | Harness tracks; when all agents report `stopped`, harness can exit. If reboot requested: harness kills PID and restarts agent |
-| **shipped** | DM → harness → all agents | `{issue_or_pr}` | DM marks delivery complete | Read, update status line |
-| **version-bump** | DM → harness → all agents | `{version}` | DM cuts a new version | Read, update status line |
+| **assigned-to** | agent/human → harness → target agent | `{role, issue_or_pr}` | Work handoff — one agent/human passes responsibility to another | Read the issue/PR from the forge, act per your role. Emit `ack` when done. |
+| **stop-requested** | agent/human/harness → target agent | `{source, target}` | Graceful shutdown — source can be another agent, human (Ctrl+C), or harness | Finish current event atomically, checkpoint working-state, stop Monitor, emit `ack`. |
+| **shipped** | DM → harness → all agents | `{issue_or_pr}` | DM marks delivery complete | Read, update status line. Emit `ack`. |
+| **version-bump** | DM → harness → all agents | `{version}` | DM cuts a new version | Read, update status line. Emit `ack`. |
+| **ack** | agent → harness | `{event_id}` | Agent confirms it handled an event | Harness marks event as handled. If acking `stop-requested`: harness treats as shutdown confirmation — when all agents ack, harness can exit. If reboot requested: harness kills PID and restarts agent. No ack within timeout: harness re-emits or investigates. |
 
 **Design principles:**
 - **Forge is the source of truth.** `assigned-to` carries only {role, issue/pr number}. All context — comments, status, history, findings — lives in the GitHub Issue or PR. The agent reads the forge when it receives the event.
 - **Events are atomic.** When an agent is processing an event, it completes the entire unit of work before picking up the next event. Monitor notifications queue behind the current event.
+- **Every event gets an `ack`.** Universal closure mechanism. Agent emits `ack {event_id}` after handling any event. Harness uses `ack` for lifecycle tracking (timeout detection, re-emission, shutdown coordination). An `ack` of `stop-requested` = agent stopped. No separate `stopped` event needed.
 - **No L2/L3 event-reaction sub-skills needed.** Roles already know how to handle issues from their existing role instructions. The event model does not add event-specific per-role guidance.
 - **All events are L1 (universal).** Every agent handles these identically at the event protocol level. Role-specific behavior comes from the role's existing instructions, not from event-reaction files.
 
@@ -325,20 +326,26 @@ These defaults are defined at L1 (universal, ships with SquidSquad core). Projec
 **Example 1: QA finds gaps in dev's work**
 1. QA verifies #123, finds 3 gaps, comments on the issue with findings
 2. QA tells harness: fire `assigned-to` for `skill` on `#123`
-3. Harness emits `assigned-to {role: "skill", issue_or_pr: 123}`
+3. Harness emits `assigned-to {role: "skill", issue_or_pr: 123}` with event_id `evt-abc`
 4. Dev's Monitor picks it up, dev reads #123, sees QA's comments, fixes gaps
+5. Dev emits `ack {event_id: "evt-abc"}` — harness marks event handled
 
 **Example 2: Human requests agent stop via Ctrl+C**
 1. Human presses Ctrl+C at harness terminal
-2. Harness emits `stop-requested {source: "human", target: "skill"}` (and for each other agent)
+2. Harness emits `stop-requested {source: "human", target: "skill"}` with event_id `evt-def` (and for each other agent)
 3. Skill agent finishes current event atomically, checkpoints working-state, stops Monitor
-4. Skill agent emits `stopped {role: "skill"}`
-5. Harness receives `stopped` from all agents, exits cleanly
+4. Skill agent emits `ack {event_id: "evt-def"}` — harness recognizes this as shutdown confirmation
+5. Harness receives `ack` from all agents for their `stop-requested` events, exits cleanly
 
 **Example 3: DM ships a task**
-1. DM completes delivery for #456, emits `shipped {issue_or_pr: 456}`
+1. DM completes delivery for #456, emits `shipped {issue_or_pr: 456}` with event_id `evt-ghi`
 2. Harness relays to all agents
-3. All agents update status line to reflect the shipment
+3. All agents update status line, each emits `ack {event_id: "evt-ghi"}`
+
+**Example 4: Ack timeout — agent unresponsive**
+1. Harness emits `assigned-to {role: "skill", issue_or_pr: 789}` with event_id `evt-jkl`
+2. No `ack` received within timeout
+3. Harness re-emits the event (retry) or investigates (agent may be dead/stuck)
 
 ## Harness API Reference
 
@@ -365,7 +372,7 @@ These defaults are defined at L1 (universal, ships with SquidSquad core). Projec
 
 | Method | Path | Description | Request | Response |
 |---|---|---|---|---|
-| POST | `/events/{id}/complete` | Agent signals event processed successfully | `{role, summary?, status_transitions?, tracker_comments?}` | `{status: "ok", remaining_consumers: N}` or `{status: "closed"}` |
+| POST | `/events/{id}/complete` | **REPLACED by `ack` event** — agent emits `ack {event_id}` via `POST /events` instead of a dedicated endpoint. Harness processes the ack event like any other. | — | — |
 | GET | `/events/{id}` | Get single event state | None | `{id, event_type, status, consumers, consumer_status: {role: "pending"\|"closed"}, retry_count, created_at, dispatched_at, closed_at}` |
 | POST | `/events/replay` | Replay events from disk after crash | None | `{replayed: N, failed: M}` |
 | GET | `/monitors` | Get status of continuous monitors | None | `{git_watcher: {status, last_check, last_change}, tracker_watcher: {...}, health_watcher: {...}}` |
