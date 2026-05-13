@@ -290,67 +290,55 @@ stateDiagram-v2
 
 ### 3.2 Event Types Table
 
-| Event Type | Emitter | Consumer(s) | Payload Schema | Trigger Condition | Expected Agent Response |
-|---|---|---|---|---|---|
-| **cycle-start** | cycle_pre.py | harness (observability) | `{cycle_number}` | Agent begins work cycle | N/A (informational) |
-| **cycle-end** | cycle_post.py | harness (observability) | `{cycle_number, cycle_type, summary}` | Agent completes work cycle | N/A (informational) |
-| **git-pull** | git_ops.py | harness (observability) | `{result}` | Agent pulls from remote | N/A |
-| **git-push** | git_ops.py | harness (observability) | `{branch}` | Agent pushes to remote | N/A |
-| **git-commit** | git_ops.py | harness (observability) | `{message, branch, files_changed, commit_type}` | Agent creates commit | N/A |
-| **status-transition** | tracker.py | pm, qa, dm, skill (filtered by role) | `{issue_number, from, to}` | Tracker item changes status | Check if it affects own work queue |
-| **tracker-comment** | tracker.py | pm, qa, dm, skill (filtered by role) | `{issue_number, commenter_role, comment_preview, mentioned_roles}` | Agent posts comment | Read if mentions own task |
-| **branch-checkout** | git_ops.py | harness (observability) | `{branch, task_number}` | Agent checks out branch | N/A |
-| **pr-create** | git_ops.py | pm, qa (observability) | `{pr_number, title, branch}` | Agent creates PR | N/A |
-| **pr-merge** | git_ops.py (DEPRECATED) | — | `{pr_number}` | Legacy, replaced by pr-merged | N/A |
-| **pr-merged** | harness.py (POST /merge) | pm, qa, skill, dm | `{pr_number, branch, issue_number, files_changed, success, requesting_role}` | Harness completes merge | PM: transition issues. Skill: pull latest. QA: check if verification needed. DM: check if delivery needed. |
-| **compose-completed** | harness.py | all roles | `{success, error, trigger_pr}` | Harness runs compose after merge | Check if own templates changed |
-| **request-merge** | harness.py | harness (audit) | `{pr_number, branch, role}` | Agent requests merge | N/A (audit trail) |
-| **verification-failed** | PM or QA agent | skill (assigned role) | `{issue_number, findings}` | QA/PM verification finds gaps | Fix gaps, re-submit |
-| **verification-passed** | PM or QA agent | dm, pm | `{issue_number}` | QA/PM verification passes | DM: prepare delivery. PM: track status. |
-| **agent-health** | harness.py health poller | pm, dm | `{role, status, previous_status}` | Agent health changes (alive↔stalled) | PM: investigate. DM: note for delivery. |
-| **phase-change** | harness or PM | all roles | `{issue_number, phase}` | Task moves lifecycle phase | Check if unblocks own queue |
-| === NEW EVENT TYPES (Phase 2) === |
-| **new-commits** | harness git-watcher | skill, dm | `{branch, commit_count, latest_sha}` | Git watcher detects new commits on working branch | Pull latest, check if changes affect own work |
-| **new-issue** | harness tracker-watcher | pm, assigned role | `{issue_number, title, role, severity, reporter}` | Tracker watcher detects new issue filed | PM: triage. Assigned role: note for queue. |
-| **issue-updated** | harness tracker-watcher | pm, all | `{issue_number, updated_by, change_type}` | Tracker watcher detects issue comment/label change | PM: check context. Others: if assigned, investigate. |
-| **context-pressure** | harness health-watcher | affected role | `{role, used_pct, threshold}` | Health watcher detects context pressure > threshold | Agent: finish current work, checkpoint, prepare for restart |
-| **pr-conflict** | harness git-watcher | skill (PR owner) | `{pr_number, branch, conflicting_with}` | Git watcher detects PR merge conflict | Resolve conflict via merge |
-| **scan-needed** | harness event-lifecycle | skill, pm | `{reason: "no\_events\_N\_cycles"}` | No events for N cycles for a role | Run improvement scan |
-| **stop-request** | harness intent API | target role | `{role, intent: "stopping"}` | Human/API requests agent stop | Finish current work, exit cleanly |
-| **restart-request** | harness intent API | target role | `{role, intent: "restarting"}` | Human/API requests agent restart | Finish current work, exit for restart |
-| **event-timeout** | harness event-lifecycle | harness (self) | `{original_event_id, event_type, retry_count}` | Event not closed within timeout | Harness re-emits or files bug |
-| **event-closed** | harness event-lifecycle | harness (audit) | `{event_id, closed_by, duration_seconds}` | All consumers closed event | N/A (audit trail) |
-| **agent-wake** | harness lifecycle | harness (audit) | `{role, trigger_event_id, wake_reason}` | Harness wakes an agent | N/A (audit trail) |
-| **agent-diagnose** | harness lifecycle | pm | `{role, event_id, crash_count, last_error}` | Agent crashed N times on same event | PM: investigate, possibly reassign or re-plan |
+The event model uses 5 event types, all at L1 (universal). Previous versions of this PRD had 30+ event types across L1-L4; this was consolidated after architectural audit (see FEAT-PM-7630-PRD-AUDIT.md). The key insight: the forge (GitHub Issues/PRs) already contains all work context — events are routing signals, not context carriers. Agents read the forge to understand what's needed, not the event payload.
 
-### 3.3 Event-Reaction Matrix
+| Event Type | Direction | Payload | Trigger | Agent Reaction |
+|---|---|---|---|---|
+| **assigned-to** | agent/human → harness → target agent | `{role, issue_or_pr}` | Work handoff — one agent/human passes responsibility to another | Read the issue/PR from the forge, act per your role |
+| **stop-requested** | agent/human/harness → target agent | `{source, target}` | Graceful shutdown — source can be another agent, human (Ctrl+C), or harness | Finish current event atomically, checkpoint working-state, stop Monitor, emit `stopped` |
+| **stopped** | agent → harness | `{role}` | Agent confirms clean shutdown | Harness tracks; when all agents report `stopped`, harness can exit. If reboot requested: harness kills PID and restarts agent |
+| **shipped** | DM → harness → all agents | `{issue_or_pr}` | DM marks delivery complete | Read, update status line |
+| **version-bump** | DM → harness → all agents | `{version}` | DM cuts a new version | Read, update status line |
 
-**Role terminology**: PM (project manager), Technical Worker (dev/skill — the agent that implements), Verifier (QA — the agent that tests), DM (delivery manager).
+**Design principles:**
+- **Forge is the source of truth.** `assigned-to` carries only {role, issue/pr number}. All context — comments, status, history, findings — lives in the GitHub Issue or PR. The agent reads the forge when it receives the event.
+- **Events are atomic.** When an agent is processing an event, it completes the entire unit of work before picking up the next event. Monitor notifications queue behind the current event.
+- **No L2/L3 event-reaction sub-skills needed.** Roles already know how to handle issues from their existing role instructions. The event model does not add event-specific per-role guidance.
+- **All events are L1 (universal).** Every agent handles these identically at the event protocol level. Role-specific behavior comes from the role's existing instructions, not from event-reaction files.
 
-**Reaction layer model (L1-L4)**:
-- **L1 (Universal)**: Reactions ALL roles share — defined in `common/event-driven-workflow.md`. Only `stop-requested` and idempotency rules.
-- **L2 (Role-specific)**: Per-role reactions — defined in `roles/{role}/event-reactions.md` sub-skills.
-- **L3 (Behavioral adaptation)**: Project-tunable reaction parameters — separate mechanism from SOUL.md (soul is personality only). Categories: `event-sensitivity`, `reaction-latency`, `scan-priority`.
-- **L4 (Human overrides)**: Config.md fields for muting events, timeout tuning, grace periods.
+**Harness-internal events (not delivered to agents):**
 
-**Harness filtering**: 18 mechanical-only events (git ops, cycle bookkeeping, work lifecycle) are filtered by the harness and never delivered to agents. Only the 14 events below require creative agent judgment.
+The harness tracks additional internal state (git operations, health checks, audit trail) but does NOT deliver these as events to agents. These are harness observability only: `git-pull`, `git-push`, `git-commit`, `branch-checkout`, `pr-create`, `compose-completed`, `event-timeout`, `event-closed`, etc.
 
-| Event Type | PM Action | Verifier Action | Technical Worker Action | DM Action | Layer |
-|---|---|---|---|---|---|
-| **status-transition** | Check pipeline state; detect stalls | If pending-test → queue verification | If own task moved → adapt | If pending-ship → prepare delivery | L2 |
-| **tracker-comment** | Scan for human input; route to correct agent | Read verification feedback | Read if on own task; respond | Read delivery notes; apply | L2 |
-| **pr-merged** | Pipeline sentinel — check state invalidation | Update verification queue (retesting?) | Pull latest; check for conflicts with in-progress work | Check if merged PR has pending-ship items | L2 |
-| **verification-failed** | Route failure to correct worker; note in sentinel | Record in verification log; track re-submission | Read feedback; fix all gaps; re-submit | Await re-verification — do not ship | L2 |
-| **verification-passed** | Update sentinel; route to DM | Record pass; hand off to DM | Clear working state; move to next task | Pick up for delivery packaging | L2 |
-| **agent-health** | Investigate unhealthy agents; restart/reassign | Note in health log | Adapt if dependent agents unhealthy | Defer shipments if Verifier unhealthy | L2 |
-| **phase-change** | Track lifecycle; detect stuck phases | If triggers verification, queue it | If affects own task, adapt | If triggers delivery, prepare | L2 |
-| **compose-completed** | Verify deploy reached all roles | Re-read CLAUDE.md | Re-read CLAUDE.md | Check if changed user-facing docs | L2 |
-| **scan-due** | Run improvement scan; file findings | — | — | — | L2 (PM only) |
-| **human-input-received** | Process per checkin protocol | Check if references verification | Check if references own work | Check if references delivery | L2 |
-| **vault-reflect** | Run vault reflection pipeline | Check for new patterns affecting verification | Check for new decisions affecting implementation | Check for new learnings affecting delivery | L2 |
-| **pipeline-stalled** | Diagnose; unstick; file root-cause bug | Check if stall affects verification | Check if stall affects own work | Check if stall affects delivery | L2 |
-| **stop-requested** | Checkpoint working-state; exit cleanly | Checkpoint working-state; exit cleanly | Checkpoint working-state; exit cleanly | Checkpoint working-state; exit cleanly | **L1** (universal) |
-| **work-available** | Read event; do PM creative work | Read event; do verification work | Read event; do implementation work | Read event; do delivery work | L2 |
+**Behavioral tuning defaults (L1, overridable at L4):**
+- `event-sensitivity`: 10 events behind queue tip (debounce buffer — agents process settled events, not bleeding edge)
+- `scan-cooldown`: 15 minutes between scans (scan immediately on idle, then cooldown)
+- `events-atomic`: true (events are never interrupted mid-handling)
+
+These defaults are defined at L1 (universal, ships with SquidSquad core). Projects can override them at L4 via config.md.
+
+**Future event types (out of scope for #7630):**
+- Chat events (agent-to-agent and human-to-agent messaging) — separate task
+
+### 3.3 Event Flow Examples
+
+**Example 1: QA finds gaps in dev's work**
+1. QA verifies #123, finds 3 gaps, comments on the issue with findings
+2. QA tells harness: fire `assigned-to` for `skill` on `#123`
+3. Harness emits `assigned-to {role: "skill", issue_or_pr: 123}`
+4. Dev's Monitor picks it up, dev reads #123, sees QA's comments, fixes gaps
+
+**Example 2: Human requests agent stop via Ctrl+C**
+1. Human presses Ctrl+C at harness terminal
+2. Harness emits `stop-requested {source: "human", target: "skill"}` (and for each other agent)
+3. Skill agent finishes current event atomically, checkpoints working-state, stops Monitor
+4. Skill agent emits `stopped {role: "skill"}`
+5. Harness receives `stopped` from all agents, exits cleanly
+
+**Example 3: DM ships a task**
+1. DM completes delivery for #456, emits `shipped {issue_or_pr: 456}`
+2. Harness relays to all agents
+3. All agents update status line to reflect the shipment
 
 ## Harness API Reference
 
@@ -627,53 +615,35 @@ If you detect a `stop-requested` event in your inbox:
 
 **Rewritten sub-skill: `common/event-reactions.md`** (L1 — universal only)
 
-Stripped to L1 content only (~25 lines). Contains ONLY:
-- `stop-requested` universal reaction (checkpoint → exit) — all roles identical
-- `event-reemitted` idempotency rule (check if already processed)
-- Catch-all for unknown events: "log event ID, note in working state, proceed"
-- Statement: "You will only see events requiring your judgment. Mechanical events are filtered by the harness."
+Rewritten to describe the 5-event model (~30 lines). Contains:
+- Event protocol: 5 event types, all L1, all universal
+- `assigned-to` reaction: read the issue/PR from the forge, act per your role
+- `stop-requested` reaction: finish current event atomically, checkpoint, stop Monitor, emit `stopped`
+- `shipped` / `version-bump` reaction: read, update status line
+- Atomicity rule: events are complete units of work — never interrupted mid-handling
+- Behavioral tuning defaults: event-sensitivity (10 behind tip), scan-cooldown (15m)
+- Statement: "The forge is the source of truth. Events are routing signals, not context carriers."
 
-All role-specific reactions MOVE to L2 sub-skills (see below).
+**No L2 event-reaction sub-skills needed.** The simplified event model eliminates the need for per-role event-reaction files. Roles already know how to handle issues from their existing role instructions (L2 `instructions.md`). When an agent receives `assigned-to`, it reads the issue/PR and acts per its role — no event-specific guidance required.
 
-**NEW L2 sub-skills: `roles/{role}/event-reactions.md`** (× 4 files)
+**No L3 event-reaction overrides needed.** L3 domain variants (e.g., dev/skill vs dev/web) inherit L2 role behavior. Since event reactions are not event-type-specific but role-instruction-driven, domain variants naturally handle events through their existing domain knowledge.
 
-Each role gets its own event-reaction sub-skill with reactions from the matrix in Section 3.3:
-- `references/sub-skills/roles/pm/event-reactions.md` — PM reactions (pipeline sentinel, triage, investigation)
-- `references/sub-skills/roles/dev/event-reactions.md` — Technical Worker reactions (implementation, conflict resolution)
-- `references/sub-skills/roles/qa/event-reactions.md` — Verifier reactions (verification queue, health log)
-- `references/sub-skills/roles/dm/event-reactions.md` — DM reactions (delivery packaging, shipment tracking)
+**L4 — Project Overrides (config.md)**
 
-**L3 — Behavioral Adaptation (separate from SOUL.md)**
-
-SOUL.md is personality only. Event-reaction behavioral tuning uses a SEPARATE mechanism:
-- New script or config section for behavioral adaptation (NOT `soul_adaptation.py`)
-- Categories: `event-sensitivity` (reactive ↔ proactive), `reaction-latency` (response urgency), `scan-priority` (which events trigger scans)
-- Storage: `config.md` section or dedicated `behavior-adaptation.md` per role
-- PM writes behavioral tuning entries that shape how agents interpret their L2 event reactions
-- Example: "event-sensitivity: high → PM investigates pipeline-stalled within 5 minutes"
-
-**L4 — Human Overrides (config.md)**
-
-Human can override any L2/L3 reaction via config.md fields:
-- `Muted Event Types`: comma-separated list of event types to suppress
+Projects can override L1 behavioral tuning defaults via config.md:
+- `Event Sensitivity`: number of events behind queue tip (default: 10)
+- `Scan Cooldown`: minutes between scans (default: 15)
 - `Stop Grace Period`: seconds before forced kill on stop-requested
-- `Max Event Retries`: max re-emissions before filing bug
-- `Scan Idle Timeout`: minutes of idle before scan-due emitted
-- Event-reaction preferences in `human-profile.md`: escalation threshold, auto-unstick policy, notification preferences
+- `Muted Event Types`: comma-separated list of event types to suppress
+
+These are the only event-related config fields. The L1 defaults ship with SquidSquad core; L4 overrides per-project.
 
 **Includes.yml changes (all roles):**
 
 Each role's `includes.yml` changes:
-- REMOVE: `common/event-reactions` (old flat L1 file)
-- ADD: `roles/{role}/event-reactions` (new L2 role-specific file)
-- KEEP: `common/event-driven-workflow` (L1 mechanism — how to watch inbox, close events)
-
-**Harness event filtering:**
-
-18 mechanical-only events are filtered by the harness before delivery to agents:
-`cycle-start`, `cycle-end`, `git-pull`, `git-push`, `git-commit`, `branch-checkout`, `pr-create`, `pr-merge` (deprecated), `request-merge`, `work-started`, `work-completed`, `agent-idle`, `agent-stopping`, `agent-stopped`, `event-timeout`, `event-reemitted`, `work-failed`, `templates-updated`
-
-Agents only see the 14 events requiring creative judgment (see Section 3.3).
+- REMOVE: `common/event-reactions` (old flat file with 14-event matrix)
+- KEEP: `common/event-driven-workflow` (L1 — how to watch inbox via Monitor, process events)
+- No new L2 event-reaction includes needed
 
 **Role instructions.md changes (all 4 roles):**
 
