@@ -42,6 +42,41 @@ Harness tracks `last_event_completed[role]` timestamp per role. After 10 minutes
 ### 6. Terminal cleanup — Harness closes on clean stop
 When an agent exits with `intent=stopping`, the harness issues a platform-appropriate terminal window close (Windows: `taskkill /PID`, Unix: `kill` the terminal process). Only on intentional stop — not on crash or context-pressure restart. Requires tracking the terminal PID separately from the agent PID at spawn time, stored in `.harness-state.json`.
 
+### 11. Unclosed-event handling — cursor advances, no reemit; agent remediation via harness
+Events are single-shot. If an event is not closed within its hard timeout, the harness marks it terminal (`timed-out`), advances the cursor, and never reemits. The need re-surfaces naturally from upstream signals (next scan-due timer, next PR comment, next tracker nudge).
+
+**Per-event-class timeouts** (soft → log warning; hard → terminate event + diagnose agent):
+- `scan-due`: soft 5 min, hard 10 min
+- `verification-needed`: soft 15 min, hard 30 min
+- `implementation`: soft 60 min, hard 120 min
+- `comment` / `quick-task`: soft 2 min, hard 5 min
+
+**Hard-timeout diagnosis matrix → harness action on the agent** (not on the event):
+
+| PID alive | Ctx pressure | Wake delivered | Verdict | Harness action |
+|-----------|--------------|----------------|---------|----------------|
+| no | — | — | crashed | respawn (existing behavior) |
+| yes | ≥ threshold | yes | wedged on context | `intent=restarting` (graceful) |
+| yes | — | no | wake plumbing broken | `intent=restarting` (graceful) |
+| yes | < threshold | yes | working legitimately / hung in tool | alert human; do not auto-kill |
+
+**Late closure handling**: If a restarted/old agent eventually POSTs to a closed event, harness returns 410 Gone. Agent logs and moves on — no side effects re-applied.
+
+### 12. Idempotency — markers for crash recovery only
+Since events do not reemit on timeout, idempotency is downgraded to crash-recovery scope. Still required because two-phase closure (Decision #13) can leave an event in `received` state across a crash:
+- **Tracker comments**: include hidden `<!-- event_id:abc123 -->` HTML marker; tracker.py skips if marker already present
+- **Commit trailers**: include `Event-Id: abc123` in commit message; git_ops checks before re-applying
+- **API result cache**: harness keeps last N closure results keyed by event_id for ~24h to short-circuit retried POSTs
+
+### 13. Closure atomicity — two-phase received→closed
+Closure is two-phase to survive crashes mid-handling:
+1. Agent POSTs `/events/{id}/complete` with payload
+2. Harness persists `state=received` + payload with `fsync` (durable checkpoint)
+3. Harness executes side effects (transitions, comments, commit, push)
+4. Harness persists `state=closed` with `fsync`
+
+On crash recovery, harness scans for `received`-state events and replays side effects (idempotency markers from Decision #12 prevent duplicates). Agent retries the POST on any non-2xx response with exponential backoff (3 attempts, then logs locally and proceeds — the timeout path will eventually catch it).
+
 ## Dev Discretion (dev agent can choose)
 
 - Event bus storage format (file-per-event vs. append-only log vs. SQLite) — whatever is most reliable on Windows
@@ -82,8 +117,8 @@ Before prototyping the wake mechanism, validate:
 
 ### Event Crash Recovery
 
-- **Closure crash window**: If harness crashes between processing the closure callback and persisting "event closed" state, events replay on restart causing duplicate work. Need atomicity strategy: either persist "closed" before executing side effects (at-most-once), or make all side effects idempotent (at-least-once).
-- **Agent crash mid-event**: Health polling (5s) detects dead agent. Must distinguish "crashed mid-event" from "working on long task." Timeout per event type: short tasks (scan, comment) = 5 min, long tasks (implementation) = 60 min.
+- **Closure crash window**: Resolved by Decision #13 (two-phase closure with fsync). Replay-from-`received` + idempotency markers (Decision #12) yield at-least-once side effects with safe deduplication.
+- **Agent crash mid-event**: Health polling (5s) detects dead agent. Per-event-class timeouts (Decision #11) distinguish "crashed mid-event" from "working on long task" via the diagnosis matrix.
 
 ## Upgrade Path (required)
 
