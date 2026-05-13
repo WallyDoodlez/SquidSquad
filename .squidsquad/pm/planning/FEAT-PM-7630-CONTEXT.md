@@ -1,0 +1,78 @@
+# FEAT-PM-7630 Context — Event-Driven Agent Architecture
+
+## Scope
+
+Transform SquidSquad from a cycle-based polling model to a pure event-driven architecture. The harness owns all mechanical operations and emits events. Agents are persistent sessions that sit idle until the Monitor tool detects an event, then execute exactly one creative task and close the event via API callback. No cycles, no /loop, no cycle_pre/cycle_post — agents are stateless creative workers within a persistent session.
+
+### What this delivers
+- Harness continuous monitors replace all agent cycle steps (pipeline sentinel, health check, BRIEFING staleness, scan triggers, etc.)
+- Event bus becomes the sole agent activation mechanism
+- Monitor tool (Claude Code v2.1.98+) replaces /loop as the wake mechanism
+- Event closure API with mandatory acknowledgment and diagnostic detection of unclosed events
+- Agent templates shrink by ~60% (all cycle prose removed)
+- Per-event tracking replaces per-cycle tracking (event ID = tracking unit)
+
+### What this supersedes
+- #6056 (Replace /loop with Monitor tool) — absorbed into wake mechanism
+- #5775 (Move pipeline sentinel to harness) — absorbed into Phase 1
+- #5613 (Phase 3+ event types) — absorbed into new event types
+- The entire cycle-runner sub-skill concept
+
+## Locked Decisions (human decided)
+
+### 1. Wake model — Persistent session + Monitor tool
+Agents stay alive between work items. The Monitor tool (Claude Code v2.1.98+) watches the event bus for work events. When an event arrives, the agent wakes immediately (sub-second), reads the event context, does creative work, and closes the event via API callback. Human will upgrade Claude Code to v2.1.98+ before prototyping; validate Monitor tool exists and works before committing.
+
+### 2. Stop signal — Event bus stop event
+Harness emits `intent:stop-requested` on the event bus. The Monitor tool (already watching for events) detects it. Agent reads the event, checkpoints working-state.md, and exits cleanly. Unified channel — wake and stop use the same event bus.
+
+### 3. Kill cycles entirely — pure event-driven
+No /loop, no cycle_pre.py, no cycle_post.py, no cycle-input.json, no cycle-output.json, no cycle counters, no iteration logs in the current format. The cycle concept is replaced entirely by event-driven processing. Event ID is the tracking unit. Per-event log entries replace per-cycle iteration logs.
+
+**Rationale**: The cycle was invented because agents had no wake mechanism. /loop was the answer to "how do agents check for work?" With the Monitor tool + event bus, agents react to work in real-time. The cycle becomes a polling wrapper around an event system — which is the exact pattern #7630 eliminates. All mechanical operations cycles provided (health, git pull, tracker queries, pipeline sentinel) move to harness continuous monitors.
+
+### 4. Output contract — Event closure via harness API callback
+Every event emitted by the harness has a unique event ID. When the agent finishes processing an event, it MUST call `POST /events/{event_id}/complete` with a structured result payload (status transitions, tracker comments, commit message, summary). The harness processes the result (executes transitions, commits, pushes) and marks the event closed.
+
+**Unclosed events = diagnostic signal**: If an event remains unclosed beyond a timeout, the harness knows something is wrong — agent crash, context pressure exceeded, stuck in creative work. The harness can diagnose (check PID, context pressure), take action (respawn, re-emit, alert human), and report the failure. No silent failures.
+
+### 5. Scan trigger — scan-due event on 10-minute idle timeout
+Harness tracks `last_event_completed[role]` timestamp per role. After 10 minutes with no completed events, harness emits a `scan-due` event. PM wakes, runs improvement scan, closes the event with findings. Deterministic — harness enforces it regardless of agent prose. Issue gate: harness checks for open issues assigned to the role before emitting (skip scan if role has active bugs).
+
+### 6. Terminal cleanup — Harness closes on clean stop
+When an agent exits with `intent=stopping`, the harness issues a platform-appropriate terminal window close (Windows: `taskkill /PID`, Unix: `kill` the terminal process). Only on intentional stop — not on crash or context-pressure restart. Requires tracking the terminal PID separately from the agent PID at spawn time, stored in `.harness-state.json`.
+
+## Dev Discretion (dev agent can choose)
+
+- Event bus storage format (file-per-event vs. append-only log vs. SQLite) — whatever is most reliable on Windows
+- Monitor tool invocation pattern (exact API call syntax, polling interval if any)
+- Event closure API endpoint design (`POST /events/{id}/complete` is the concept; exact path, payload schema, error handling is dev's call)
+- Harness continuous monitor implementation (thread per monitor vs. async loop vs. scheduled executor)
+- How to handle event re-emission on agent crash (idempotency strategy for transitions/comments)
+- Migration path for cycle_pre/cycle_post code into harness (refactor in place vs. rewrite)
+- Per-event log format and storage (replaces iteration logs)
+
+## Side Effect Mitigations (required)
+
+- **Event idempotency**: Status transitions called via the closure callback must be idempotent. If an event is re-emitted (after crash recovery), processing it twice must not create duplicate tracker comments or invalid state transitions. tracker.py already validates from→to transitions; comments need dedup by event_id.
+- **Working-state continuity**: With persistent sessions and event-driven work, working-state.md must be checkpointed after each event completion so crash recovery can resume. The closure callback should include working state update.
+- **Context pressure management**: Harness must monitor context pressure files and trigger restarts independently. Agent no longer checks this (no cycle step for it). Harness reads `.squidsquad/<role>/context-pressure` and sets `intent=restarting` when exceeded.
+- **Git operations**: Harness owns git pull (before delivering work-context) and git commit/push (after processing closure callback). Agent never runs git operations directly in the event-driven model.
+- **Concurrent event handling**: Agent processes one event at a time. Harness must not emit a second event to the same role while the first is unclosed (queue events per role).
+- **Graceful degradation during upgrade**: Feature is gated behind `event-driven: yes` config. Existing cycle model preserved when `event-driven: no`. Both models cannot run simultaneously for the same role.
+
+## Upgrade Path (required)
+
+- **Pre-public**: No migration needed. Feature gated behind config flag.
+- **Claude Code upgrade**: Human must upgrade to v2.1.98+ before prototyping. Validate Monitor tool API.
+- **Config**: New `event-driven: yes/no` flag. New `scan-idle-timeout: 10` (minutes). New `wake-mechanism: monitor` (future: could support `spawn` fallback).
+- **Template migration**: All cycle prose stripped from instructions.md and sub-skills. Replaced with event handler descriptions: "when woken by event X, do Y, close event via API."
+
+## Out of Scope
+
+- **External model routing changes** — model_router.py is unaffected by event-driven architecture
+- **Tracker protocol changes** — GitHub Issues remains the tracker, labels/transitions unchanged
+- **Vault protocol changes** — vault reading/writing stays the same, only the trigger mechanism changes (harness emits vault-reflect event instead of agent checking a counter)
+- **Soul shepherd changes** — character signal detection remains agent creative work, triggered by events
+- **Branch workflow changes** — feature branches, PR lifecycle managed by harness (already partially true)
+- **Stateless spawn model** — decided against; using persistent session + Monitor tool instead
