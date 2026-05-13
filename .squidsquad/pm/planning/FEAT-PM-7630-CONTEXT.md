@@ -61,6 +61,30 @@ When an agent exits with `intent=stopping`, the harness issues a platform-approp
 - **Concurrent event handling**: Agent processes one event at a time. Harness must not emit a second event to the same role while the first is unclosed (queue events per role).
 - **Graceful degradation during upgrade**: Feature is gated behind `event-driven: yes` config. Existing cycle model preserved when `event-driven: no`. Both models cannot run simultaneously for the same role.
 
+## Requirements from Gap Review (DeepSeek analysis)
+
+### Phase 2 Prerequisites (must be done before event-driven waking works)
+
+- **Event bus disk persistence**: EventStream is currently an in-memory deque (1000 events, lost on harness restart). Since events are the sole activation mechanism, they MUST survive restarts. Dev chooses storage format (file-per-event, append-only log, SQLite).
+- **Clone event bus discovery fix**: `event_bus_reader.py _discover_port()` walks parent directories to find `.harness-port`. Clone isolation uses sibling directories (e.g., `../SquidSquad-skill/`), not nested ones. The walk never finds the port — agents in clones silently receive zero events. This is a latent bug today that becomes fatal with event-driven architecture.
+- **Per-role in-flight event queue**: Harness must track which events have been dispatched but not yet closed, per role. Must not emit a second event to the same role while one is unclosed.
+- **Harness thread safety**: `_update_agent_from_event` and `update_health` both mutate AgentState fields outside the lock. Must be made thread-safe before event volume increases.
+
+### Monitor Tool Validation Checklist (human upgraded Claude Code)
+
+Before prototyping the wake mechanism, validate:
+- [ ] Monitor tool exists and is callable from agent sessions
+- [ ] Monitor can watch custom shell command stdout (for event bus polling)
+- [ ] Monitor timeout behavior: what is the max timeout? Does it auto-reconnect?
+- [ ] Multiple Monitor subscriptions per session: can one session watch for both work events and stop events?
+- [ ] Windows file watching behavior: does Monitor use inotify/ReadDirectoryChanges or polling?
+- [ ] Latency: what is the actual wake latency from event emission to agent awareness?
+
+### Event Crash Recovery
+
+- **Closure crash window**: If harness crashes between processing the closure callback and persisting "event closed" state, events replay on restart causing duplicate work. Need atomicity strategy: either persist "closed" before executing side effects (at-most-once), or make all side effects idempotent (at-least-once).
+- **Agent crash mid-event**: Health polling (5s) detects dead agent. Must distinguish "crashed mid-event" from "working on long task." Timeout per event type: short tasks (scan, comment) = 5 min, long tasks (implementation) = 60 min.
+
 ## Upgrade Path (required)
 
 - **Pre-public**: No migration needed. Feature gated behind config flag.
