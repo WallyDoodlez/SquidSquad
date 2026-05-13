@@ -20,8 +20,8 @@ Transform SquidSquad from a cycle-based polling model to a pure event-driven arc
 
 ## Locked Decisions (human decided)
 
-### 1. Wake model — Persistent session + Monitor tool
-Agents stay alive between work items. The Monitor tool (Claude Code v2.1.98+) watches the event bus for work events. When an event arrives, the agent wakes immediately (sub-second), reads the event context, does creative work, and closes the event via API callback. Human will upgrade Claude Code to v2.1.98+ before prototyping; validate Monitor tool exists and works before committing.
+### 1. Wake model — Persistent session + Monitor tool + poll script
+Agents stay alive between work items. A lightweight poll script (`event_poll.py`, ~30 lines) queries `GET /events?since=<cursor>&role=<role>` from the harness API at configurable interval. The Monitor tool (Claude Code v2.1.98+) watches the poll script's stdout. When new events arrive, the script outputs them and the Monitor tool wakes the agent. No file-based event inbox — the harness is a pure HTTP server and does not write to agent filesystems. The poll script reads `.harness-port` locally for discovery (works for clones). Human will upgrade Claude Code to v2.1.98+ before prototyping; validate Monitor tool exists and works before committing.
 
 ### 2. Stop signal — Event bus stop event
 Harness emits `intent:stop-requested` on the event bus. The Monitor tool (already watching for events) detects it. Agent reads the event, checkpoints working-state.md, and exits cleanly. Unified channel — wake and stop use the same event bus.
@@ -101,6 +101,9 @@ Event reactions are NOT a flat single sub-skill. They follow the existing L1-L4 
 
 ### 8. Harness filters mechanical events before delivery
 18 of 32 event types are purely mechanical (git ops, cycle bookkeeping, work lifecycle). The harness filters these out — agents only see the 14 events requiring creative judgment. This saves agent context and prevents LLMs from "noting" events that need no action.
+
+### 10. No file-based event delivery — poll script + HTTP API only
+The harness does NOT write files to agent filesystems (no `event-inbox/`, no `wake-event.json`). Event delivery is API-only: agents run a poll script that queries `GET /events` from the harness. This eliminates file coordination, clone path management, file cleanup, and TOCTOU races on Windows. The harness remains a pure HTTP server.
 
 ### 9. Role terminology in PRD
 PRD uses generic role terminology: PM, Technical Worker (dev/skill), Verifier (QA), DM. Event-reaction sub-skills are per-role regardless of what the technical worker role is named.

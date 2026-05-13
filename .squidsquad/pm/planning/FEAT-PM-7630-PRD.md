@@ -25,8 +25,9 @@
   - **event_catalog.py** (references/scripts/event_catalog.py, ~218 lines): Add new event types (event-timeout, event-closed, monitor-error, agent-wake, agent-diagnose)
   - **cycle_pre.py** (references/scripts/cycle_pre.py, ~1060 lines): Remove polling logic; become thin event-dispatcher (read latest events, filter, react mechanically, write cycle-input.json only when work exists)
   - **cycle_post.py** (references/scripts/cycle_post.py, ~747 lines): Add POST /events/{id}/complete call; keep commit/push but remove stop-after-cycle check (harness handles intent)
-  - **thin_launcher.py** (references/scripts/thin_launcher.py, ~118 lines): Add `--event` flag to pass wake-event payload to agent at boot
-  - **boot_remote.py** (references/scripts/boot_remote.py, ~653 lines): Pass event payload through to thin_launcher on wake
+  - **thin_launcher.py** (references/scripts/thin_launcher.py, ~118 lines): Boot prompt changes for event-driven mode; agent uses poll script + Monitor tool
+  - **boot_remote.py** (references/scripts/boot_remote.py, ~653 lines): Return terminal PID for cleanup; no event payload passing needed
+  - **event_poll.py** (references/scripts/event_poll.py, ~30 lines): **NEW** — lightweight poll script querying `GET /events?since=<cursor>&role=<role>`, outputs new events to stdout for Monitor tool
   - **config.py** (references/scripts/config.py, ~575 lines): New config section `## Event Driven` with new FIELD_MAP entries
   - **tracker.py** (references/scripts/tracker.py): No functional changes needed — already emits events
   - **cycle.py** (references/scripts/cycle.py, ~287 lines): No changes — still used for timestamps/status-bar/iteration-log
@@ -56,7 +57,7 @@
 - **Risk 1**: Race condition on event closure when multiple agents consume same event — Severity: H — Mitigation: Event closure is idempotent (POST /events/{id}/complete is safe to call multiple times). Each agent closes independently. The event is "done" only when all registered consumers have closed. Track consumers in event payload.
 - **Risk 2**: Agent terminal sits idle for long periods — human observes blank terminal and thinks agent is dead — Severity: M — Mitigation: Status bar must show "idle — waiting for events" with a pulse animation. The harness console shows which agents are waiting and why.
 - **Risk 3**: If harness crashes while events are in-flight, event state is lost (in-memory only) — Severity: H — Mitigation: Phase 1.5 adds disk persistence (.squidsquad/.event-state.json). On crash recovery, harness replays open events.
-- **Risk 4**: Monitor tool is the sole wake mechanism — if it has limitations (1-hour timeout, single subscription, Windows quirks), the entire architecture degrades — Severity: H — Mitigation: Validate Monitor tool API before prototyping Phase 2. Harness writes events to a per-role inbox directory (`.squidsquad/<role>/event-inbox/`). Monitor tool watches the inbox for new `.json` files. Agent reads the event file, processes it, and calls the closure API. If Monitor tool is insufficient, fall back to stateless spawn (PHASE2-PREP Option A).
+- **Risk 4**: Monitor tool is the sole wake mechanism — if it has limitations (1-hour timeout, single subscription, Windows quirks), the entire architecture degrades — Severity: H — Mitigation: Validate Monitor tool API before prototyping Phase 2. Agent runs `event_poll.py` (queries harness `GET /events` API), Monitor tool watches script stdout. No file-based delivery. If Monitor tool is insufficient, fall back to stateless spawn (PHASE2-PREP Option A).
 
 ## Edge Cases
 
@@ -64,7 +65,7 @@
 - **Event storm (many events arrive simultaneously)**: Per-role in-flight queue caps at 50 events. After cap, oldest unprocessed events are dropped with a counter increment. Agent receives first event, processes, closes it, then immediately receives next. No starvation.
 - **Agent crashes mid-work**: Harness detects death via PID check. On respawn, agent reads working-state.md and resumes. The in-flight event remains open until agent explicitly closes it. After 3 crash cycles on same event, harness escalates to PM.
 - **Event timeout**: If an event is dispatched but not closed within N minutes (configurable), harness re-emits it. Re-emission count tracked. After 3 re-emissions, harness files a bug against the agent (self-healing tier 2).
-- **Clone isolation**: Agent clones may not share filesystem with harness. The harness must write wake-event.json to the correct clone path (resolved via .local-config). Event closure uses HTTP API (already works across clones).
+- **Clone isolation**: Agent clones may not share filesystem with harness. The poll script reads `.harness-port` locally and queries the harness HTTP API directly — no filesystem coordination between harness and clones needed. Event closure also uses the HTTP API.
 - **Multi-agent wake**: A single event (e.g., pr-merged) may need to wake pm (to transition issues) AND skill (to pull latest). Harness emits one event with consumers=["pm","skill"]. Both agents wake and close independently.
 
 ## Integration Risks
@@ -86,13 +87,13 @@
 - **New files**: 
   - `.squidsquad/.event-state.json` — disk-persisted event state (in-flight events, closed cursors, retry counts)
   - `references/sub-skills/common/event-driven-workflow.md` — new sub-skill replacing cycle-runner.md
-  - `.squidsquad/<role>/wake-event.json` — transient file written by harness when waking agent (gitignored)
+  - `references/scripts/event_poll.py` — poll script for Monitor tool (queries harness API, outputs events to stdout)
 
 - **Template changes**:
   - **Removed sub-skills**: `common/cycle-runner`, `common/context-pressure` (moves to harness), `common/interval-sync` (no more /loop), `common/self-restart` (harness handles), `common/boot-remote-agents` (harness owns boot)
   - **Added sub-skills**: `common/event-driven-workflow` — how agents receive events, process them, and close them
   - **Rewritten sub-skills**: `common/event-reactions` — updated for event-driven model (no more "cycle-input.json recent_events")
-  - **Role instructions.md**: Remove all Ralph Loop references, /loop invocation, cycle numbering. Replace with "When the harness wakes you, read wake-event.json and process the event."
+  - **Role instructions.md**: Remove all Ralph Loop references, /loop invocation, cycle numbering. Replace with "Use the Monitor tool with event_poll.py to watch for events from the harness."
   - **agent-instructions.md**: Regenerated via compose.py deploy-all
   - **All role SOUL.md files**: Remove Ralph Loop references
 
@@ -178,7 +179,7 @@ graph TB
             STORE[(event-store<br/>disk-persisted)]
         end
         subgraph AGENT_MGR["Agent Lifecycle Manager"]
-            INBOX[write to event-inbox/]
+            API_SERVE["GET /events API<br/>(serves events to poll script)"]
             REEMIT[re-emit on timeout]
             DIAGNOSE[crash diagnosis]
         end
@@ -186,19 +187,20 @@ graph TB
         TRACKER --> DISPATCH
         HEALTH --> DISPATCH
         DISPATCH --> STORE
-        DISPATCH --> INBOX
+        DISPATCH --> API_SERVE
         TIMEOUT --> REEMIT
         CLOSURE --> STORE
     end
 
     subgraph AGENT_A["AGENT (persistent session)"]
-        MONITOR_A["Monitor tool watches<br/>event-inbox/"] --> READ_A["Read event .json"]
+        POLL["event_poll.py<br/>queries GET /events"] --> MONITOR_A["Monitor tool<br/>detects stdout"]
+        MONITOR_A --> READ_A["Agent reads<br/>event payload"]
         READ_A --> CREATIVE_A["CREATIVE WORK<br/>(reasoning, code, tests)"]
         CREATIVE_A --> CLOSE_A["POST /events/{id}/complete<br/>(closure callback)"]
-        CLOSE_A --> MONITOR_A
+        CLOSE_A --> POLL
     end
 
-    INBOX -->|"write .json<br/>to inbox"| MONITOR_A
+    API_SERVE -->|"HTTP response"| POLL
     CLOSE_A -->|"HTTP API"| CLOSURE
 
     style HARNESS fill:#2d2d2d,stroke:#666,color:#fff
@@ -216,8 +218,8 @@ graph TB
 graph LR
     A["Monitor detects<br/>change"] --> B["Event created<br/>(disk-persisted)"]
     B --> C["Dispatch to<br/>consumer agents"]
-    C --> D["Write .json to<br/>agent event-inbox/"]
-    D --> E["Monitor tool<br/>detects file"]
+    C --> D["event_poll.py queries<br/>GET /events"]
+    D --> E["Monitor tool<br/>detects stdout"]
     E --> F["Agent does<br/>creative work"]
     F --> G["POST /events/{id}/complete"]
     G --> H["Harness processes<br/>transitions, commits"]
@@ -246,7 +248,7 @@ graph TD
 
 | Concern | Current (Cycle-Based) | Target (Event-Driven) |
 |---------|----------------------|----------------------|
-| **Activation** | `/loop` cron-like re-invocation every N minutes | Harness monitors detect work → writes event to agent's `event-inbox/` → Monitor tool detects file → agent wakes (persistent session) |
+| **Activation** | `/loop` cron-like re-invocation every N minutes | Harness monitors detect work → poll script queries `GET /events` → Monitor tool detects stdout → agent wakes (persistent session) |
 | **Health** | harness.py PID poll every 5s | Same + context-pressure monitor triggers proactive restart |
 | **Git pull** | cycle_pre.py per cycle (agent-initiated) | Harness git-watcher detects new commits → emits event → agent pulls on wake |
 | **Git commit/push** | cycle_post.py per cycle (agent-initiated) | Agent commits after creative work, harness pushes on event closure |
@@ -266,7 +268,7 @@ graph TD
 ```mermaid
 stateDiagram-v2
     [*] --> PENDING: Monitor detects change
-    PENDING --> IN_FLIGHT: Harness writes .json to event-inbox
+    PENDING --> IN_FLIGHT: Poll script detects via GET /events
 
     IN_FLIGHT --> CLOSED: Agent calls POST /events/{id}/complete
     IN_FLIGHT --> TIMEOUT: No closure in N minutes
@@ -466,7 +468,7 @@ stateDiagram-v2
 **Event lifecycle management (new class, ~150 lines):**
 
 9. **EventLifecycleManager** class:
-   - `dispatch(event, consumers)` — writes wake-event.json per consumer, respawns agents
+   - `dispatch(event, consumers)` — marks event as in-flight per consumer, serves via GET /events API
    - `close(event_id, role)` — marks consumer closed
    - `timeout_scan()` — background thread checks for timed-out events, re-emits or files bugs
    - `persist()` / `load()` — disk persistence to `.squidsquad/.event-state.json`
@@ -497,7 +499,7 @@ stateDiagram-v2
   - Tracker queries → harness tracker-watcher continuous monitor
   - Event bus read → harness event lifecycle manager (IS the event system)
   - Mechanical reactions → harness processes inline on event receipt
-  - Role-specific context building → harness writes relevant context into the event payload in `event-inbox/`
+  - Role-specific context building → harness includes relevant context in event payload served via `GET /events` API
 - **File disposition**: Retained in codebase for `event-driven: no` backward compat. Not called by agents when event-driven mode is active.
 
 **cycle_post.py** (references/scripts/cycle_post.py):
@@ -523,13 +525,12 @@ stateDiagram-v2
 - **Add**: `ack(event_id, role)` function (~15 lines): Calls POST /events/{id}/complete. Thin wrapper for agent use.
 
 **thin_launcher.py** (references/scripts/thin_launcher.py):
-- **Modify**: Boot prompt (line 86): Change from `"Boot. Begin your first Ralph Loop cycle now."` to event-driven orientation: `"Boot. Use the Monitor tool to watch .squidsquad/<role>/event-inbox/ for event files. Process each event and close it via the harness API."` Must be conditional on `event-driven` config flag.
+- **Modify**: Boot prompt (line 86): Change from `"Boot. Begin your first Ralph Loop cycle now."` to event-driven orientation: `"Boot. Run event_poll.py with Monitor tool to watch for events from the harness. Process each event and close it via the API."` Must be conditional on `event-driven` config flag.
 - **Add**: Read `event-driven` config flag to decide which boot prompt to emit.
 - **Add**: Return terminal PID to harness for terminal cleanup on stop (Locked Decision #6).
 
 **boot_remote.py** (references/scripts/boot_remote.py):
 - **Modify**: `_spawn_windows` (line 395), `_spawn_macos`, `_spawn_linux` must return terminal PID alongside agent PID for terminal cleanup.
-- **Add**: Create `event-inbox/` directory in agent clone at boot if it doesn't exist.
 - **Modify**: `_find_boot_script()` (line 346): Always use thin launcher (legacy wrappers fully deprecated).
 
 **config.py** (references/scripts/config.py):
@@ -570,19 +571,20 @@ delivers events to your inbox. You use the Monitor tool to watch for new events.
 
 ### Startup
 
-On boot, use the Monitor tool to watch `.squidsquad/[ROLE]/event-inbox/` for new
-`.json` files. When a file appears, process it. When no files exist, sit idle —
-the harness will deliver work when it exists.
+On boot, use the Monitor tool to watch the output of `event_poll.py`:
+```bash
+Monitor: python references/scripts/event_poll.py [ROLE]
+```
+The poll script queries `GET /events?since=<cursor>&role=[ROLE]` from the harness
+API. When new events arrive, it outputs them as JSON to stdout. The Monitor tool
+detects the output and wakes you. When no events exist, sit idle.
 
-Print: `[🦑 HH:MM:SS] Idle — watching event-inbox for events...`
+Print: `[🦑 HH:MM:SS] Idle — polling harness for events...`
 
 ### Processing an Event
 
-1. Read the event file from `event-inbox/`:
-   ```bash
-   cat .squidsquad/[ROLE]/event-inbox/<event_id>.json
-   ```
-   The file contains: `event_id`, `event_type`, `payload`, and `work_context`
+1. Read the event from the Monitor tool output (JSON on stdout):
+   The event contains: `event_id`, `event_type`, `payload`, and `work_context`
    (pre-computed by harness — equivalent to what cycle-input.json provided).
 
 2. Do your creative work based on the event type and payload.
@@ -600,7 +602,7 @@ Print: `[🦑 HH:MM:SS] Idle — watching event-inbox for events...`
    The harness processes the closure: executes transitions, posts comments,
    commits and pushes your changes, and logs the event.
 
-4. Resume watching `event-inbox/` for the next event.
+4. Resume watching the poll script output for the next event.
 
 ### Stop Events
 
@@ -679,7 +681,7 @@ Agents only see the 14 events requiring creative judgment (see Section 3.3).
 - **REMOVE**: "## The Ralph Loop" section header and "Each invocation executes one cycle..." prose
 - **REMOVE**: `/loop [INTERVAL]m execute one Ralph Loop cycle`
 - **REMOVE**: "Print the cycle-complete marker. This cycle is finished — /loop will trigger the next one."
-- **REPLACE WITH**: "When the harness boots you, use the Monitor tool to watch your event-inbox. Process events as they arrive and close them via the harness API."
+- **REPLACE WITH**: "When the harness boots you, use the Monitor tool with event_poll.py to watch for events. Process events as they arrive and close them via the harness API."
 - **ADD**: "The harness monitors GitHub, git, and agent health. It delivers events to your inbox when there's work. You do not poll or self-schedule."
 
 **Role SOUL.md changes:**
@@ -850,7 +852,7 @@ All new behavior gated behind `config.md → Event Driven → Enabled: yes`. Whe
 
 ## Open Questions
 
-- **Q1**: RESOLVED — Wake mechanism is persistent session + Monitor tool (Locked Decision #1). Harness writes event files to `event-inbox/`, Monitor tool detects new files, agent wakes within the same session. No kill/respawn overhead. Validate Monitor tool API before Phase 2 implementation.
+- **Q1**: RESOLVED — Wake mechanism is persistent session + Monitor tool + poll script (Locked Decision #1). Poll script queries harness `GET /events` API, Monitor tool watches script stdout, agent wakes within the same session. No file-based delivery, no kill/respawn. Validate Monitor tool API before Phase 2 implementation.
 - **Q2**: Should continuous monitors live in harness.py or as separate processes? — **Why**: A monitor crash in a thread takes down the harness (daemon threads share fate). Separate processes (microservices) would be more resilient but add complexity. The vault decision [[decision-watchdog-supervisor]] may provide guidance.
 - **Q3**: How do we handle the "no events for hours" scenario for the human operator? — **Why**: Currently, the human sees cycle markers scrolling in agent terminals. With event-driven, terminals sit idle. Need a clear visual indicator that the system is healthy but waiting. Proposed: harness console dashboard showing all agent states and last event time.
 - **Q4**: Do we keep cycle_number for iteration logs, or switch to event_id-based logging? — **Why**: "Cycle" concept goes away. But iteration logs are valuable audit trail. Proposed: keep iteration logs but number them sequentially per wake, not per cycle. Include triggering event_id in log metadata.
