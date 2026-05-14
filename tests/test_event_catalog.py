@@ -32,25 +32,36 @@ class TestTierClassification:
 
 
 class TestCatalogCompleteness:
-    """Verify the catalog matches actual emit() calls in scripts."""
+    """Verify catalog structure and core events (#7801: no hardcoded full sets)."""
 
-    def test_emitted_tier_has_expected_events(self):
-        expected = {
-            "cycle-start", "cycle-end", "git-pull", "git-push", "git-commit",
-            "status-transition", "tracker-comment", "branch-checkout",
-            "pr-create", "pr-merge", "pr-merged", "compose-completed",
-        }
-        assert set(event_catalog.EMITTED.keys()) == expected
+    # Core events that must always exist — stable subset, not exhaustive.
+    CORE_EMITTED = {
+        "cycle-start", "cycle-end", "git-pull", "git-push", "git-commit",
+        "status-transition", "tracker-comment", "pr-create",
+    }
+    CORE_RECOGNIZED = {
+        "verification-failed", "verification-passed", "request-merge",
+    }
 
-    def test_recognized_tier_has_core_events(self):
-        """RECOGNIZED must contain core events (subset check, not exact — #7801)."""
-        core = {
-            "verification-failed", "verification-passed", "request-merge",
+    def test_emitted_tier_contains_core_events(self):
+        actual = set(event_catalog.EMITTED.keys())
+        missing = self.CORE_EMITTED - actual
+        assert not missing, f"Core emitted events missing from catalog: {missing}"
+
+    def test_recognized_tier_contains_core_events(self):
+        """RECOGNIZED must contain core + L1 event-driven events (#7630)."""
+        core = self.CORE_RECOGNIZED | {
             "assigned-to", "stop-requested", "shipped", "version-bump", "ack",
         }
         actual = set(event_catalog.RECOGNIZED.keys())
         missing = core - actual
         assert not missing, f"Core recognized events missing: {missing}"
+
+    def test_emitted_tier_is_non_empty(self):
+        assert len(event_catalog.EMITTED) >= len(self.CORE_EMITTED)
+
+    def test_recognized_tier_is_non_empty(self):
+        assert len(event_catalog.RECOGNIZED) >= len(self.CORE_RECOGNIZED)
 
     def test_all_event_types_is_union(self):
         all_types = event_catalog.all_event_types()
