@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-14 15:04
+
+- **Files scanned**: tests/test_start_team.py, tests/test_thin_launcher.py, tests/test_vault_check.py, tests/test_vault_entity.py, tests/test_vault_synthesis.py
+- **Findings**: #7866 (dead test body + tautological if-guarded assertions in test_vault_entity.py — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-14 13:34
 
 - **Files scanned**: tests/test_feat_3645_auto_merge.py, tests/test_own_domain_autofix.py, tests/test_repo_scan.py, tests/test_run_comprehension_test.py, tests/test_squidsquad_cli.py
