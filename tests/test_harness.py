@@ -730,5 +730,133 @@ class TestManualRebootClearsStoppingIntent(unittest.TestCase):
                              "Same PID still alive — stopping intent must NOT be cleared (#7637)")
 
 
+class TestEventLifecycleManager(unittest.TestCase):
+    """#7630 P-1/P-3: EventLifecycleManager disk persistence and in-flight tracking."""
+
+    def test_persist_and_load_round_trip(self):
+        """Event state (events + in_flight + dispatched) survives harness restart."""
+        import tempfile
+        from harness import EventStream, EventLifecycleManager
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".event-state.json"
+            with patch("harness.EVENT_STATE_FILE", state_file):
+                stream = EventStream()
+                mgr = EventLifecycleManager(stream)
+
+                event = {"id": "abc12345", "event_type": "test", "role": "skill"}
+                mgr.append(event)
+                mgr.dispatch("abc12345", "skill", event)
+
+                self.assertTrue(state_file.exists())
+
+                # Load into new manager
+                stream2 = EventStream()
+                mgr2 = EventLifecycleManager(stream2)
+                mgr2.load()
+
+                events = stream2.get_all()
+                self.assertEqual(len(events), 1)
+                self.assertEqual(events[0]["id"], "abc12345")
+                # In-flight state also restored
+                self.assertEqual(mgr2.get_in_flight("skill"), ["abc12345"])
+
+    def test_in_flight_tracking(self):
+        """Dispatch/ack lifecycle tracks per-role in-flight events."""
+        from harness import EventStream, EventLifecycleManager
+
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
+            stream = EventStream()
+            mgr = EventLifecycleManager(stream)
+
+            mgr.dispatch("evt1", "skill", {"id": "evt1"})
+            self.assertEqual(mgr.get_in_flight("skill"), ["evt1"])
+
+            result = mgr.ack("evt1", "skill")
+            self.assertTrue(result)
+            self.assertEqual(mgr.get_in_flight("skill"), [])
+
+    def test_ack_unknown_event_returns_false(self):
+        """Acking an event not in-flight returns False."""
+        from harness import EventStream, EventLifecycleManager
+
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
+            stream = EventStream()
+            mgr = EventLifecycleManager(stream)
+
+            result = mgr.ack("nonexistent", "skill")
+            self.assertFalse(result)
+
+    def test_in_flight_cap(self):
+        """Per-role in-flight queue respects cap. Dropped events excluded from _dispatched."""
+        from harness import EventStream, EventLifecycleManager
+
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
+            stream = EventStream()
+            mgr = EventLifecycleManager(stream, max_in_flight=2)
+
+            mgr.dispatch("evt1", "skill", {"id": "evt1"})
+            mgr.dispatch("evt2", "skill", {"id": "evt2"})
+            mgr.dispatch("evt3", "skill", {"id": "evt3"})  # should be dropped
+
+            self.assertEqual(len(mgr.get_in_flight("skill")), 2)
+            self.assertNotIn("evt3", mgr._dispatched)
+
+    def test_load_is_idempotent(self):
+        """Calling load() twice does not duplicate events (#7630 CRITICAL-2)."""
+        import tempfile
+        from harness import EventStream, EventLifecycleManager
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".event-state.json"
+            with patch("harness.EVENT_STATE_FILE", state_file):
+                stream = EventStream()
+                mgr = EventLifecycleManager(stream)
+                mgr.append({"id": "x1", "event_type": "test", "role": "skill"})
+
+                stream2 = EventStream()
+                mgr2 = EventLifecycleManager(stream2)
+                mgr2.load()
+                mgr2.load()  # second call should be no-op
+
+                self.assertEqual(len(stream2.get_all()), 1)
+
+
+class TestTerminalPidInAgentState(unittest.TestCase):
+    """#7630 P-6: terminal_pid in AgentState."""
+
+    def test_terminal_pid_in_slots(self):
+        from harness import AgentState
+        s = AgentState("skill")
+        self.assertIsNone(s.terminal_pid)
+
+    def test_terminal_pid_in_to_dict(self):
+        from harness import AgentState
+        s = AgentState("skill")
+        s.terminal_pid = 12345
+        d = s.to_dict()
+        self.assertEqual(d["terminal_pid"], 12345)
+
+    def test_terminal_pid_persisted_in_state(self):
+        """terminal_pid round-trips through save/load."""
+        import tempfile
+        from harness import HarnessState, AgentState
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".harness-state.json"
+            with patch("harness.HARNESS_STATE_FILE", state_file):
+                hs = HarnessState()
+                agent = AgentState("skill")
+                agent.terminal_pid = 99999
+                hs.set_agent("skill", agent)
+                hs.save_state()
+
+                hs2 = HarnessState()
+                with patch("harness._log"):
+                    hs2.load_state()
+                loaded = hs2.get_agent("skill")
+                self.assertEqual(loaded.terminal_pid, 99999)
+
+
 if __name__ == "__main__":
     unittest.main()

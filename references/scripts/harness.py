@@ -271,7 +271,12 @@ class HarnessState:
         for role in reboot_roles:
             _log(f"Auto-rebooting {role} (was running, intent={self.agents[role].intent})")
             try:
-                boot_remote.boot_agent(role)
+                result = boot_remote.boot_agent(role)
+                if result.get("success") and result.get("terminal_pid"):
+                    with self._lock:
+                        agent = self.agents.get(role)
+                        if agent:
+                            agent.terminal_pid = result["terminal_pid"]
                 self.save_state()
             except Exception as e:
                 _log(f"Auto-reboot of {role} failed: {e}")
@@ -401,9 +406,111 @@ class EventStream:
             return len(self._events)
 
 
+EVENT_STATE_FILE = SQUIDSQUAD_DIR / ".event-state.json"
+
+
+class EventLifecycleManager:
+    """Manages event dispatch, per-role queues, and disk persistence (#7630 P-1/P-3).
+
+    Wraps EventStream with:
+    - Disk persistence: events survive harness restarts
+    - Per-role in-flight tracking: one event at a time per role
+    - Dispatch/ack lifecycle for future event-driven mode
+    """
+
+    def __init__(self, stream: EventStream, max_in_flight: int = 50):
+        self._stream = stream
+        self._lock = threading.Lock()
+        self._in_flight: dict[str, list[str]] = {}  # role → [event_ids]
+        self._max_in_flight = max_in_flight
+        self._dispatched: dict[str, dict] = {}  # event_id → event dict
+        self._loaded = False
+
+    def append(self, event: dict):
+        """Store event in stream and persist to disk."""
+        self._stream.append(event)
+        self._persist()
+
+    def dispatch(self, event_id: str, role: str, event: dict):
+        """Mark an event as dispatched to a role (in-flight tracking)."""
+        with self._lock:
+            if role not in self._in_flight:
+                self._in_flight[role] = []
+            if len(self._in_flight[role]) < self._max_in_flight:
+                self._in_flight[role].append(event_id)
+                self._dispatched[event_id] = event
+        self._persist()
+
+    def ack(self, event_id: str, role: str) -> bool:
+        """Acknowledge event completion. Returns True if event was in-flight."""
+        found = False
+        with self._lock:
+            if role in self._in_flight and event_id in self._in_flight[role]:
+                self._in_flight[role].remove(event_id)
+                self._dispatched.pop(event_id, None)
+                found = True
+        if found:
+            self._persist()
+        return found
+
+    def get_in_flight(self, role: str) -> list[str]:
+        """Get list of in-flight event IDs for a role."""
+        with self._lock:
+            return list(self._in_flight.get(role, []))
+
+    def _persist(self):
+        """Write event state to disk atomically.
+
+        Persist last 200 events for crash recovery; full 1000 are in-memory only.
+        Lock ordering: self._lock → EventStream._lock (via get_recent).
+        """
+        # Snapshot stream data outside our lock to avoid cross-lock ordering issues
+        recent_events = list(self._stream.get_recent(200))
+        with self._lock:
+            data = {
+                "events": recent_events,
+                "in_flight": {r: list(ids) for r, ids in self._in_flight.items()},
+                "dispatched": {eid: ev for eid, ev in self._dispatched.items()},
+            }
+        try:
+            tmp = EVENT_STATE_FILE.with_suffix(".tmp")
+            tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            tmp.replace(EVENT_STATE_FILE)
+        except OSError:
+            pass  # Best-effort — don't crash harness on persist failure
+
+    def load(self):
+        """Restore event state from disk on harness restart. Idempotent."""
+        if self._loaded:
+            return
+        if not EVENT_STATE_FILE.exists():
+            self._loaded = True
+            return
+        try:
+            raw = EVENT_STATE_FILE.read_text(encoding="utf-8")
+            data = json.loads(raw)
+        except (json.JSONDecodeError, OSError):
+            self._loaded = True
+            return
+
+        with self._lock:
+            for event in data.get("events", []):
+                self._stream.append(event)
+            self._in_flight = {
+                r: list(ids) for r, ids in data.get("in_flight", {}).items()
+            }
+            self._dispatched = data.get("dispatched", {})
+        self._loaded = True
+
+    @property
+    def stream(self) -> EventStream:
+        return self._stream
+
+
 # Global state
 state = HarnessState()
 event_stream = EventStream()
+event_lifecycle = EventLifecycleManager(event_stream)
 
 
 # ---------------------------------------------------------------------------
@@ -484,6 +591,8 @@ async def lifespan(app: FastAPI):
 
         _log("Loading saved state...")
         state.load_state()
+        event_lifecycle.load()
+        _log(f"Event state loaded: {len(event_stream)} events in stream")
 
         # Skip initial update_health() — it's slow on Windows (tasklist per agent).
         # The health poller will pick up state within HEALTH_POLL_INTERVAL seconds.
@@ -501,6 +610,7 @@ async def lifespan(app: FastAPI):
                     if result["action"] == "spawn":
                         agent_state.status = "starting"
                         agent_state.boot_time = time.time()
+                        agent_state.terminal_pid = result.get("terminal_pid")
                     state.set_agent(role, agent_state)
             state.save_state()
         except Exception as e:
@@ -606,6 +716,7 @@ async def start_all():
                 agent_state.status = "starting"
                 agent_state.intent = AgentState.INTENT_RUNNING
                 agent_state.boot_time = time.time()
+                agent_state.terminal_pid = result.get("terminal_pid")
             state.set_agent(role, agent_state)
 
     state.save_state()
@@ -683,6 +794,7 @@ async def start_agent(role: str):
         agent_state.status = "starting"
         agent_state.intent = AgentState.INTENT_RUNNING
         agent_state.boot_time = time.time()
+        agent_state.terminal_pid = result.get("terminal_pid")
         state.set_agent(role, agent_state)
         state.save_state()
 
@@ -752,26 +864,27 @@ async def get_agent_config(role: str):
 # ---------------------------------------------------------------------------
 
 def _update_agent_from_event(event: dict):
-    """Update AgentState fields from a received event."""
+    """Update AgentState fields from a received event (#7630 P-4 thread safety)."""
     role = event.get("role")
     event_type = event.get("event_type")
     payload = event.get("payload", {})
     cycle_number = event.get("cycle_number")
 
-    agent = state.get_agent(role)
-    if agent is None:
-        agent = AgentState(role)
-        state.set_agent(role, agent)
+    with state._lock:
+        agent = state.agents.get(role)
+        if agent is None:
+            agent = AgentState(role)
+            state.agents[role] = agent
 
-    if event_type == "cycle-start":
-        if cycle_number is not None:
-            agent.current_cycle = cycle_number
-        agent.last_cycle_start = event.get("timestamp")
-    elif event_type == "cycle-end":
-        agent.last_cycle_end = event.get("timestamp")
-        agent.last_cycle_type = payload.get("cycle_type")
-    elif event_type == "phase-change":
-        agent.current_phase = payload.get("phase")
+        if event_type == "cycle-start":
+            if cycle_number is not None:
+                agent.current_cycle = cycle_number
+            agent.last_cycle_start = event.get("timestamp")
+        elif event_type == "cycle-end":
+            agent.last_cycle_end = event.get("timestamp")
+            agent.last_cycle_type = payload.get("cycle_type")
+        elif event_type == "phase-change":
+            agent.current_phase = payload.get("phase")
 
 
 def _log_event(event: dict):
@@ -846,8 +959,8 @@ async def receive_event(request: Request):
     import time as _time
     body["received_at"] = _time.time()
 
-    # Store in stream
-    event_stream.append(body)
+    # Store in stream (with disk persistence via lifecycle manager)
+    event_lifecycle.append(body)
 
     # Update AgentState from event
     _update_agent_from_event(body)
@@ -889,6 +1002,13 @@ async def get_events(
     events = events[-limit:] if len(events) > limit else events
 
     return {"events": events, "total": len(event_stream)}
+
+
+@app.get("/events/in-flight/{role}")
+async def get_in_flight_events(role: str):
+    """Get in-flight event IDs for a role (#7630 P-3)."""
+    _validate_role(role)
+    return {"role": role, "in_flight": event_lifecycle.get_in_flight(role)}
 
 
 @app.post("/agents/{role}/stop")
@@ -1039,7 +1159,7 @@ def _emit_event(event_type, role, payload=None, **extra):
         "received_at": time.time(),
     }
     event.update(extra)
-    event_stream.append(event)
+    event_lifecycle.append(event)
     _log_event(event)
 
 
