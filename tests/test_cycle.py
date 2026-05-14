@@ -81,11 +81,15 @@ class TestCounters:
         with self._patch(tmp_path):
             result = cycle.get_counter("skill")
         assert result == 3
+        output = capsys.readouterr().out.strip()
+        assert output == "3", f"get_counter should print counter value, got: {output!r}"
 
     def test_get_counter_missing_file(self, tmp_path, capsys):
         with self._patch(tmp_path):
             result = cycle.get_counter("skill")
         assert result == 0
+        output = capsys.readouterr().out.strip()
+        assert output == "0", f"get_counter should print 0 for missing file, got: {output!r}"
 
     def test_set_counter(self, tmp_path):
         ws = self._setup_working_state(tmp_path, "skill", counter=2)
@@ -99,6 +103,8 @@ class TestCounters:
         with self._patch(tmp_path):
             result = cycle.inc_counter("skill")
         assert result == 3
+        output = capsys.readouterr().out.strip()
+        assert output == "3", f"inc_counter should print new value, got: {output!r}"
 
     def test_inc_counter_single_output_line(self, tmp_path, capsys):
         """#7610: inc_counter must emit exactly one line (new value only)."""
@@ -115,6 +121,8 @@ class TestCounters:
         with self._patch(tmp_path):
             result = cycle.reset_counter("skill")
         assert result == 0
+        output = capsys.readouterr().out.strip()
+        assert output == "0", f"reset_counter should print 0, got: {output!r}"
 
 
 class TestLogIteration:
