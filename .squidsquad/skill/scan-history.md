@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-14 10:37
+
+- **Files scanned**: references/sub-skills/roles/pm/prohibitions.md, references/sub-skills/roles/pm/testing-and-verification.md, tests/test_comprehension_2183.py, tests/test_comprehension_2195.py, tests/test_deterministic_qa_framework.py
+- **Findings**: #7793 (PM and QA both increment ship counter — medium), #7794 (stale tracker files ref in prohibitions — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-14 09:37
 
 - **Files scanned**: references/sub-skills/project/shared-soul-directives.md, references/sub-skills/roles/dm/iteration-log.md, references/sub-skills/roles/pm/discussion-protocol.md, references/sub-skills/roles/pm/file-conventions.md, references/sub-skills/roles/pm/health-check.md
