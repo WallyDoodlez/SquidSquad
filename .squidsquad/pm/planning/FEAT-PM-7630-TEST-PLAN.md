@@ -1,6 +1,6 @@
 # FEAT-PM-7630 Test Plan — Event-Driven Agent Architecture
 
-> This plan supersedes the earlier draft. 58 test cases across 13 categories, 12 smoke checks, 10 regression risks, 12 comprehension questions.
+> This plan supersedes the earlier draft. 50 test cases across 11 categories, 9 smoke checks, 9 regression risks, 12 comprehension questions.
 
 ## Test Cases
 
@@ -11,7 +11,7 @@
 ---
 
 ### TC-1: assigned-to — happy path delivery to target agent
-- **Precondition**: Harness running with `event-driven: yes`. Agent (skill) is alive, idle, Monitor tool watching `event_poll.py` output. GitHub Issue #123 exists.
+- **Precondition**: Harness running. Agent (skill) is alive, idle, Monitor tool watching `event_poll.py` output. GitHub Issue #123 exists.
 - **Steps**:
   1. POST to harness: `{"event_type": "assigned-to", "role": "skill", "payload": {"role": "skill", "issue_or_pr": 123}}`
   2. Observe `event_poll.py` stdout from skill agent's Monitor subscription.
@@ -126,7 +126,7 @@
 ---
 
 ### TC-11: external activity detector — new GitHub issue triggers assigned-to for PM
-- **Precondition**: `event-driven: yes`. External activity detector running. GitHub repo configured. PM agent alive.
+- **Precondition**: External activity detector running. GitHub repo configured. PM agent alive.
 - **Steps**:
   1. Create a new GitHub Issue without the `squidsquad` label (simulating human-filed issue).
   2. Wait for `event-poll-interval` seconds (default 30s).
@@ -221,91 +221,11 @@
 
 ---
 
-### Category 5: Config Gating (event-driven yes/no)
+### Category 5: Event Atomicity
 
 ---
 
-### TC-20: event-driven: no — harness does not start detector or event-driven features
-- **Precondition**: `config.md → Event Driven → Enabled: no` (default).
-- **Steps**:
-  1. Start harness.
-  2. Inspect running state.
-- **Expected**: External activity detector thread does NOT start. Event-driven-workflow sub-skill is NOT included in agent templates. `thin_launcher.py` uses cycle-based boot prompt (Ralph Loop). Harness ack processing is a no-op for forward-compat.
-- **Verification**: `GET /monitors` returns 404 or empty. Agent CLAUDE.md contains `cycle-runner` sub-skill, not `event-driven-workflow`. Boot prompt in `thin_launcher.py` references `/loop`.
-
----
-
-### TC-21: event-driven: yes — harness starts detector, agents boot in event-driven mode
-- **Precondition**: `config.md → Event Driven → Enabled: yes`. Run `compose.py deploy-all`.
-- **Steps**:
-  1. Start harness.
-  2. Boot agents.
-  3. Inspect agent CLAUDE.md and boot behavior.
-- **Expected**: Detector thread starts. Agent CLAUDE.md contains `event-driven-workflow` sub-skill, not `cycle-runner`. Boot prompt references Monitor tool + `event_poll.py`. Agents do not invoke `/loop`.
-- **Verification**: `GET /monitors` → `github_detector: {status: running}`. `grep event-driven-workflow .squidsquad/skill/CLAUDE.md` → match. `grep /loop .squidsquad/skill/CLAUDE.md` → no match.
-
----
-
-### TC-22: config.py reads all 7 new Event Driven fields correctly
-- **Precondition**: `config.md` has the `## Event Driven` section with all 7 fields populated.
-- **Steps**:
-  1. Run `python references/scripts/config.py get <field>` for each of the 7 fields: `event-driven`, `event-timeout-minutes`, `event-max-retries`, `event-poll-interval`, `event-queue-cap`, `event-sensitivity`, `scan-cooldown`.
-- **Expected**: Each command exits 0 and returns the configured value.
-- **Verification**: All 7 commands succeed. No `KeyError` or `None` returned for any field.
-
----
-
-### TC-23: config.md missing Event Driven section — graceful default to no
-- **Precondition**: `config.md` has no `## Event Driven` section (pre-upgrade config).
-- **Steps**:
-  1. Run `python references/scripts/config.py get event-driven`.
-- **Expected**: Returns `"no"` (default). Does not crash. Harness treats as `event-driven: no`.
-- **Verification**: Exit code 0. Output is `no`. Harness falls back to cycle-based mode without error.
-
----
-
-### Category 6: Backward Compatibility (event-driven: no falls back to /loop cycles)
-
----
-
-### TC-24: event-driven: no — agents self-loop via /loop unchanged
-- **Precondition**: `event-driven: no`. Existing config from before #7630.
-- **Steps**:
-  1. Start harness.
-  2. Boot agents.
-  3. Observe agent cycle behavior.
-- **Expected**: Agents boot with Ralph Loop prompt. `/loop` invoked at startup. `cycle_pre.py` and `cycle_post.py` run each cycle. No `event_poll.py` involved. Full cycle-based behavior identical to pre-#7630.
-- **Verification**: Iteration logs written per cycle. `cycle_pre.py` and `cycle_post.py` called each cycle. Agent CLAUDE.md contains `cycle-runner` sub-skill.
-
----
-
-### TC-25: cycle_pre.py and cycle_post.py still exist and execute without error in event-driven: no mode
-- **Precondition**: Post-#7630 codebase with `event-driven: no`.
-- **Steps**:
-  1. Run: `python references/scripts/cycle_pre.py skill`
-  2. Run: `python references/scripts/cycle_post.py skill`
-- **Expected**: Both scripts run successfully. No errors. Behavior identical to pre-#7630.
-- **Verification**: Exit code 0. `cycle-input.json` created by `cycle_pre.py`. Iteration log written by `cycle_post.py`.
-
----
-
-### TC-26: rollback — flip event-driven: no and recompose restores cycle-based templates
-- **Precondition**: `event-driven: yes` was active. Now rolling back.
-- **Steps**:
-  1. Set `config.md → Event Driven → Enabled: no`.
-  2. Run `python references/scripts/compose.py deploy-all`.
-  3. Restart harness.
-  4. Boot agents.
-- **Expected**: Agents boot with cycle-based CLAUDE.md. `cycle-runner` sub-skill present, `event-driven-workflow` absent. `/loop` invoked. Detector thread not started.
-- **Verification**: `grep cycle-runner .squidsquad/skill/CLAUDE.md` → match. `grep event-driven-workflow .squidsquad/skill/CLAUDE.md` → no match. Agents begin cycling normally.
-
----
-
-### Category 7: Event Atomicity
-
----
-
-### TC-27: second event queued while first is in-flight — no simultaneous dispatch
+### TC-20: second event queued while first is in-flight — no simultaneous dispatch
 - **Precondition**: Agent processing an `assigned-to` event (long work in progress). Second `assigned-to` event dispatched for same role.
 - **Steps**:
   1. Dispatch first event to skill. Confirm agent is actively working.
@@ -316,7 +236,7 @@
 
 ---
 
-### TC-28: Monitor tool queues notifications behind current work naturally
+### TC-21: Monitor tool queues notifications behind current work naturally
 - **Precondition**: Agent woken by Monitor tool for event A. While processing event A, event B arrives and `event_poll.py` outputs it to stdout.
 - **Steps**:
   1. Agent starts processing event A.
@@ -327,7 +247,7 @@
 
 ---
 
-### TC-29: stop-requested does not interrupt a running event mid-work
+### TC-22: stop-requested does not interrupt a running event mid-work
 - **Precondition**: Agent processing `assigned-to` for Issue #789. `stop-requested` arrives.
 - **Steps**:
   1. Agent working on Issue #789.
@@ -338,35 +258,11 @@
 
 ---
 
-### Category 8: Event Sensitivity (Debounce Buffer of 5)
+### Category 6: Scan Cooldown (15 Minutes Between Scans)
 
 ---
 
-### TC-30: event sensitivity — agent processes events 5 behind queue tip
-- **Precondition**: `event-sensitivity: 5` (default). Agent idle. 10 events dispatched rapidly.
-- **Steps**:
-  1. Dispatch 10 `assigned-to` events in rapid succession.
-  2. Observe which events agent receives first.
-- **Expected**: Agent processes events starting 5 behind the current queue tip — processes settled events, not bleeding-edge. The most recent 5 remain buffered until the queue settles. This prevents reacting to a burst before it is complete.
-- **Verification**: If 10 events arrive, agent's first delivery is from events 1-5 range, with the latest 5 buffered. `GET /events/in-flight/skill` shows queued events with pending status.
-
----
-
-### TC-31: event sensitivity — L4 override via config.md to 0 (no buffer)
-- **Precondition**: `config.md → Event Driven → Event Sensitivity: 0`.
-- **Steps**:
-  1. Dispatch 3 events rapidly.
-  2. Observe delivery timing.
-- **Expected**: With sensitivity = 0, agent receives events immediately at queue tip. No 5-event buffer delay.
-- **Verification**: `python references/scripts/config.py get event-sensitivity` returns `0`. Events delivered immediately.
-
----
-
-### Category 9: Scan Cooldown (15 Minutes Between Scans)
-
----
-
-### TC-32: scan cooldown — 15-minute gap enforced between scans
+### TC-23: scan cooldown — 15-minute gap enforced between scans
 - **Precondition**: `scan-cooldown: 15` (default). Agent just completed an improvement scan.
 - **Steps**:
   1. Agent completes scan. Scan timestamp recorded.
@@ -378,7 +274,7 @@
 
 ---
 
-### TC-33: scan cooldown — issue gate blocks scan even when cooldown elapsed
+### TC-24: scan cooldown — issue gate blocks scan even when cooldown elapsed
 - **Precondition**: `scan-cooldown: 15`. Open issues assigned to pm. 15 minutes elapsed.
 - **Steps**:
   1. Confirm open issue exists for pm role.
@@ -389,7 +285,7 @@
 
 ---
 
-### TC-34: scan cooldown — L4 override via config.md
+### TC-25: scan cooldown — L4 override via config.md
 - **Precondition**: `config.md → Event Driven → Scan Cooldown Minutes: 5`.
 - **Steps**:
   1. Agent completes scan.
@@ -400,11 +296,11 @@
 
 ---
 
-### Category 10: Edge Cases
+### Category 7: Edge Cases
 
 ---
 
-### TC-35: event storm — queue cap enforced at 50, drop counter incremented
+### TC-26: event storm — queue cap enforced at 50, drop counter incremented
 - **Precondition**: `event-queue-cap: 50` (default). Agent idle.
 - **Steps**:
   1. Dispatch 60 events to skill in rapid succession.
@@ -414,7 +310,7 @@
 
 ---
 
-### TC-36: agent crash mid-event — harness detects via ack timeout, reboots, re-emits
+### TC-27: agent crash mid-event — harness detects via ack timeout, reboots, re-emits
 - **Precondition**: `event-timeout-minutes: 2`, `event-max-retries: 3`. Event dispatched to skill.
 - **Steps**:
   1. Kill skill agent PID mid-processing (simulate crash).
@@ -424,7 +320,7 @@
 
 ---
 
-### TC-37: no events for long period — agent sits idle, visual indicator shown
+### TC-28: no events for long period — agent sits idle, visual indicator shown
 - **Precondition**: Agent running in event-driven mode. No events for 2 hours.
 - **Steps**:
   1. Let system idle for extended period with no GitHub activity.
@@ -434,7 +330,7 @@
 
 ---
 
-### TC-38: multi-agent broadcast — shipped ack is independent per agent, no blocking
+### TC-29: multi-agent broadcast — shipped ack is independent per agent, no blocking
 - **Precondition**: 3 agents alive (pm, skill, qa). `shipped` event broadcast.
 - **Steps**:
   1. Emit `shipped {issue_or_pr: 789}`.
@@ -445,19 +341,19 @@
 
 ---
 
-### TC-39: multi-agent broadcast — version-bump ack is independent per agent
-- **Precondition**: Same as TC-38 but with `version-bump` event.
-- **Steps**: Same pattern as TC-38 with `version-bump {version: "2.0.0"}`.
+### TC-30: multi-agent broadcast — version-bump ack is independent per agent
+- **Precondition**: Same as TC-29 but with `version-bump` event.
+- **Steps**: Same pattern as TC-29 with `version-bump {version: "2.0.0"}`.
 - **Expected**: Same independent-ack behavior. Each agent's status line updated independently.
-- **Verification**: Same as TC-38.
+- **Verification**: Same as TC-29.
 
 ---
 
-### Category 11: Disk Persistence and Crash Recovery
+### Category 8: Disk Persistence and Crash Recovery
 
 ---
 
-### TC-40: disk persistence — in-flight events survive harness crash and restart
+### TC-31: disk persistence — in-flight events survive harness crash and restart
 - **Precondition**: Event dispatched to skill (status: `in-flight`). Harness crashes (kill -9 harness PID).
 - **Steps**:
   1. Dispatch event. Confirm `in-flight` in `.squidsquad/.event-state.json`.
@@ -468,7 +364,7 @@
 
 ---
 
-### TC-41: disk persistence — event-state.json written atomically on every state change
+### TC-32: disk persistence — event-state.json written atomically on every state change
 - **Precondition**: Harness running, event-driven mode.
 - **Steps**:
   1. Dispatch event. Check `.squidsquad/.event-state.json`.
@@ -478,7 +374,7 @@
 
 ---
 
-### TC-42: crash recovery — POST /events/replay replays in-flight events
+### TC-33: crash recovery — POST /events/replay replays in-flight events
 - **Precondition**: Two events in `.event-state.json` with `status: in-flight` from a previous harness run.
 - **Steps**:
   1. Start fresh harness with the pre-populated `.event-state.json`.
@@ -488,7 +384,7 @@
 
 ---
 
-### TC-43: crash recovery — two-phase received→closed survives mid-closure crash
+### TC-34: crash recovery — two-phase received→closed survives mid-closure crash
 - **Precondition**: Agent POSTs ack. Harness persists state but crashes before executing git operations.
 - **Steps**:
   1. Simulate harness crash after persisting ack state but before executing git commit/push side effects.
@@ -499,7 +395,7 @@
 
 ---
 
-### TC-44: harness state — agents.*.in_flight_events persisted and restored on restart
+### TC-35: harness state — agents.*.in_flight_events persisted and restored on restart
 - **Precondition**: Skill agent has `in_flight_events: ["evt-abc"]`. Harness restarts.
 - **Steps**:
   1. Confirm `in_flight_events` in `.harness-state.json`.
@@ -510,53 +406,52 @@
 
 ---
 
-### Category 12: Upgrade Path
+### Category 9: Upgrade Path
 
 ---
 
-### TC-45: Phase 1.5 prerequisites active regardless of event-driven config gate
-- **Precondition**: Fresh install of #7630 changes with `event-driven: no`.
+### TC-36: Phase 1.5 prerequisites active on install
+- **Precondition**: Fresh install of #7630 changes.
 - **Steps**:
   1. Start harness.
   2. Verify P-1 through P-4 behavior.
-- **Expected**: P-1 (disk persistence), P-2 (clone discovery fix), P-3 (per-role queue), P-4 (thread safety) all active regardless of `event-driven` flag. Infrastructure improvements are not gated.
+- **Expected**: P-1 (disk persistence), P-2 (clone discovery fix), P-3 (per-role queue), P-4 (thread safety) all active. Infrastructure improvements are unconditional.
 - **Verification**: `.squidsquad/.event-state.json` created on harness start. `event_bus.py._discover_port()` works from clone directories. `GET /agents/skill` shows `in_flight_events` field exists. No race conditions under concurrent load.
 
 ---
 
-### TC-46: compose.py deploy-all produces correct templates per config gate
-- **Precondition**: Starting with `event-driven: no`.
+### TC-37: compose.py deploy-all produces correct event-driven templates
+- **Precondition**: Fresh install of #7630.
 - **Steps**:
-  1. `python references/scripts/compose.py deploy-all` with `event-driven: no`. Inspect `.squidsquad/skill/CLAUDE.md`.
-  2. Set `event-driven: yes`. Re-run compose. Inspect again.
-- **Expected**: Step 1: CLAUDE.md contains `cycle-runner`, no `event-driven-workflow`. Step 2: CLAUDE.md contains `event-driven-workflow`, no `cycle-runner`. No residual references from either mode after recompose.
-- **Verification**: `grep -c cycle-runner .squidsquad/skill/CLAUDE.md` → 0 after step 2. `grep -c event-driven-workflow .squidsquad/skill/CLAUDE.md` → 1+ after step 2.
+  1. `python references/scripts/compose.py deploy-all`. Inspect `.squidsquad/skill/CLAUDE.md`.
+- **Expected**: CLAUDE.md contains `event-driven-workflow` sub-skill. Monitor tool boot prompt references `event_poll.py`. No `/loop` invocation.
+- **Verification**: `grep event-driven-workflow .squidsquad/skill/CLAUDE.md` → match. `grep /loop .squidsquad/skill/CLAUDE.md` → no match.
 
 ---
 
-### TC-47: upgrade from cycle-based to event-driven — stop-recompose-restart sequence
-- **Precondition**: Agents running in cycle-based mode. Upgrading to event-driven mode.
+### TC-38: upgrade sequence — stop-recompose-restart completes cleanly
+- **Precondition**: Agents running. Upgrading to #7630.
 - **Steps**:
   1. `python references/scripts/start_team.py --stop --all`
-  2. Set `event-driven: yes` in config.md.
+  2. Apply #7630 changes.
   3. `python references/scripts/compose.py deploy-all`
   4. Clean stale sentinel files from clone directories.
   5. Start harness.
-- **Expected**: All steps complete without error. No lingering `/loop` sessions. Agents boot in event-driven mode. No mix of cycle-based and event-driven agents.
-- **Verification**: `GET /agents` → all agents `status: idle` (not cycling). Agent terminals show Monitor tool boot, not `/loop` boot.
+- **Expected**: All steps complete without error. No lingering `/loop` sessions. Agents boot in event-driven mode.
+- **Verification**: `GET /agents` → all agents `status: idle` (not cycling). Agent terminals show Monitor tool boot.
 
 ---
 
-### TC-48: pre-upgrade config.md (no Event Driven section) handled gracefully
+### TC-39: pre-upgrade config.md (no Event Driven section) handled gracefully
 - **Precondition**: `config.md` from before #7630 (no `## Event Driven` section).
 - **Steps**:
   1. Run post-#7630 harness with pre-#7630 config.md.
-- **Expected**: Harness starts without error. All new config fields default gracefully (`event-driven: no`, `event-timeout-minutes: 10`, etc.). No crash or missing key error.
-- **Verification**: Harness exit code 0. `python references/scripts/config.py get event-driven` → `no`. All 7 new fields return defaults.
+- **Expected**: Harness starts without error. All new config fields default gracefully (`event-timeout-minutes: 10`, etc.). No crash or missing key error.
+- **Verification**: Harness exit code 0. `python references/scripts/config.py get event-timeout-minutes` → default value. All 5 new fields return defaults.
 
 ---
 
-### TC-49: event_catalog.py — 5 L1 event types present in RECOGNIZED tier
+### TC-40: event_catalog.py — 5 L1 event types present in RECOGNIZED tier
 - **Precondition**: Post-#7630 `event_catalog.py`.
 - **Steps**:
   1. Import `RECOGNIZED` from `event_catalog`.
@@ -566,12 +461,21 @@
 
 ---
 
-### Category 13: Regression Tests for Existing Functionality
+### TC-41: config.py reads all 5 Event Driven fields correctly
+- **Precondition**: `config.md` has the `## Event Driven` section with all 5 fields populated.
+- **Steps**:
+  1. Run `python references/scripts/config.py get <field>` for each of the 5 fields: `event-timeout-minutes`, `event-max-retries`, `event-poll-interval`, `event-queue-cap`, `scan-cooldown`.
+- **Expected**: Each command exits 0 and returns the configured value.
+- **Verification**: All 5 commands succeed. No `KeyError` or `None` returned for any field.
 
 ---
 
-### TC-50: existing POST /events endpoint still works for non-ack events
-- **Precondition**: Post-#7630 harness running. Existing agent scripts emitting cycle events in backward-compat mode.
+### Category 10: Regression Tests for Existing Functionality
+
+---
+
+### TC-42: existing POST /events endpoint still works for non-ack events
+- **Precondition**: Post-#7630 harness running. Existing agent scripts emitting events.
 - **Steps**:
   1. POST a `cycle-start` event: `{"event_type": "cycle-start", "role": "skill"}`.
 - **Expected**: Harness accepts the event. Returns `{status: "ok"}`. Existing event emission from `event_bus.py emit()` is unchanged.
@@ -579,7 +483,7 @@
 
 ---
 
-### TC-51: existing GET /events filtering still works correctly
+### TC-43: existing GET /events filtering still works correctly
 - **Precondition**: Multiple events for multiple roles in harness.
 - **Steps**:
   1. `GET /events?role=skill` — should return only skill events.
@@ -590,17 +494,16 @@
 
 ---
 
-### TC-52: thin_launcher.py boot prompt conditional on event-driven flag
+### TC-44: thin_launcher.py boot prompt uses event-driven mode
 - **Precondition**: Post-#7630 `thin_launcher.py`.
 - **Steps**:
-  1. With `event-driven: no`, inspect boot prompt.
-  2. With `event-driven: yes`, inspect boot prompt.
-- **Expected**: `event-driven: no` → boot prompt contains Ralph Loop invocation (`/loop`). `event-driven: yes` → boot prompt contains `event_poll.py` and Monitor tool reference, no `/loop`.
-- **Verification**: Read `thin_launcher.py` prompt generation logic. Confirm conditional branch on `event-driven` config flag.
+  1. Inspect boot prompt generated by `thin_launcher.py`.
+- **Expected**: Boot prompt contains `event_poll.py` and Monitor tool reference. No `/loop` invocation.
+- **Verification**: Read `thin_launcher.py` prompt generation logic. Confirm Monitor tool + `event_poll.py` references present.
 
 ---
 
-### TC-53: boot_remote.py returns terminal PID alongside agent PID
+### TC-45: boot_remote.py returns terminal PID alongside agent PID
 - **Precondition**: Post-#7630 `boot_remote.py`.
 - **Steps**:
   1. Boot a skill agent via `boot_remote.py`.
@@ -610,7 +513,7 @@
 
 ---
 
-### TC-54: event_bus.py ack() function — fire-and-forget POST to /events
+### TC-46: event_bus.py ack() function — fire-and-forget POST to /events
 - **Precondition**: Harness running.
 - **Steps**:
   1. Call `python references/scripts/event_bus.py ack evt-abc skill`.
@@ -620,7 +523,7 @@
 
 ---
 
-### TC-55: event_validator.py — validates all 5 new L1 event types correctly
+### TC-47: event_validator.py — validates all 5 new L1 event types correctly
 - **Precondition**: Post-#7630 `event_validator.py` and `event_catalog.py`.
 - **Steps**:
   1. Validate each of the 5 event types with correct payloads.
@@ -630,8 +533,8 @@
 
 ---
 
-### TC-56: thread safety — concurrent event dispatch and ack do not corrupt state
-- **Precondition**: Harness running with `event-driven: yes`. Multiple agents.
+### TC-48: thread safety — concurrent event dispatch and ack do not corrupt state
+- **Precondition**: Harness running. Multiple agents.
 - **Steps**:
   1. Dispatch 5 events concurrently (different roles).
   2. All agents ack concurrently.
@@ -641,7 +544,7 @@
 
 ---
 
-### TC-57: per-role event queue — each role's queue is independent
+### TC-49: per-role event queue — each role's queue is independent
 - **Precondition**: Three roles (pm, skill, qa). Events dispatched to all simultaneously.
 - **Steps**:
   1. Dispatch 10 events to pm, 5 to skill, 2 to qa simultaneously.
@@ -650,7 +553,11 @@
 
 ---
 
-### TC-58: clone isolation — event_bus.py and event_poll.py discover harness from clone directory
+### Category 11: Clone Isolation
+
+---
+
+### TC-50: clone isolation — event_bus.py and event_poll.py discover harness from clone directory
 - **Precondition**: Agent running in sibling clone directory (e.g., `SquidSquad-skill/`). Harness distributes `.harness-port` to clone's `.squidsquad/` at boot.
 - **Steps**:
   1. From clone directory, run `python references/scripts/event_bus.py emit cycle-start skill`.
@@ -664,33 +571,29 @@
 
 These must pass within 5 minutes of deploying #7630 changes before investing in full TC runs:
 
-- [ ] `python references/scripts/config.py get event-driven` returns a value without error (no crash)
 - [ ] `python references/scripts/event_poll.py --help` or running with no harness exits cleanly (no Python traceback on stdout)
 - [ ] `python -c "from event_catalog import RECOGNIZED; assert 'assigned-to' in RECOGNIZED"` passes
 - [ ] `python -c "from event_catalog import RECOGNIZED; assert 'ack' in RECOGNIZED"` passes
 - [ ] `python -c "from event_catalog import RECOGNIZED; assert 'stop-requested' in RECOGNIZED"` passes
 - [ ] `GET /events` returns 200 with `{events: [], total: 0}` on fresh harness
 - [ ] `GET /events/in-flight/skill` returns 200 with empty list on fresh harness
-- [ ] `GET /monitors` returns 200 (or 404 with clear message when `event-driven: no`)
+- [ ] `GET /monitors` returns 200 with detector running
 - [ ] `.squidsquad/.event-state.json` created on harness start (may be `{}` initially)
-- [ ] `compose.py deploy-all` with `event-driven: no` produces CLAUDE.md containing `cycle-runner`
-- [ ] `compose.py deploy-all` with `event-driven: yes` produces CLAUDE.md containing `event-driven-workflow`
 - [ ] Existing `POST /events` still returns `{status: "ok"}` for a non-ack event (regression check)
 
 ---
 
 ## Regression Risks
 
-- **cycle_pre.py / cycle_post.py called by agents in event-driven mode**: If compose accidentally includes both `cycle-runner` and `event-driven-workflow`, agents may run both models simultaneously. Watch for agents invoking `cycle_pre.py` when `event-driven: yes` is set.
 - **POST /events/{id}/complete referenced in old agent templates**: If any residual CLAUDE.md contains the old endpoint, agents will 404 on closure attempts. Verify no old endpoint references after compose with `grep -r "events.*complete" .squidsquad/*/CLAUDE.md`.
 - **event_bus.py emit() regresses after ack() addition**: The new `ack()` function shares infrastructure with `emit()`. A refactor could break emit for existing callers. Run existing event bus tests after adding `ack()`.
 - **`.harness-state.json` schema change breaks existing harness reads**: New fields (`in_flight_events`, `last_wake_at`, `idle_since`, `event_state`) must not break `load_state()` on configs with the old schema. Validate graceful migration — old fields preserved, new fields added with defaults.
 - **event_catalog.py RECOGNIZED additions break derivation (#5868)**: Event contract derivation depends on the catalog. Adding 5 new types must not confuse the derivation logic for existing harness-internal types.
 - **Thread contention under load**: `EventLifecycleManager` lock must not deadlock with existing `HarnessState._lock` and `EventStream._lock`. Multi-lock acquisition paths must maintain consistent lock ordering.
-- **thin_launcher.py boot prompt regression**: If the conditional is wrong, all agents may get event-driven prompt even when `event-driven: no`, or cycle prompt when `event-driven: yes`. Test both branches explicitly (TC-52).
 - **Monitor tool stdout parsing spuriously triggered**: If `event_poll.py` emits any non-event output (debug logs, empty lines, error tracebacks) to stdout, Monitor tool may misinterpret it as an event trigger. The script's stdout must be clean event JSON only — errors go to stderr.
-- **Ack processing in POST /events swallows non-ack events**: Adding ack logic to the existing `receive_event` handler must branch cleanly. Existing non-ack events must still be processed as before. Verify with TC-50.
+- **Ack processing in POST /events swallows non-ack events**: Adding ack logic to the existing `receive_event` handler must branch cleanly. Existing non-ack events must still be processed as before. Verify with TC-42.
 - **Windows ProactorEventLoop conflicts with new threads**: Per known project risk, asyncio pipe exceptions are cosmetic now but adding `EventLifecycleManager` threads and the external activity detector thread may surface new Windows-specific failures when the harness web UI (issue #3963) is added.
+- **Pre-upgrade config.md missing new fields causes KeyError**: Any access to the 5 new Event Driven config fields must default gracefully on pre-upgrade configs. Verify with TC-39.
 
 ---
 
@@ -734,9 +637,9 @@ These questions are answered by a fresh agent reading only the modified files. T
 - **Files**: Harness documentation or composed agent instructions referencing the detector
 - **Expected**: Filters by `squidsquad` label (issues/PRs) and agent commit prefix pattern (`skill:`, `pm:`, `qa:`, `dm:`). Activity matching either filter is ignored. Activity without these markers triggers `assigned-to` for PM. This prevents event loops from SquidSquad's own GitHub activity.
 
-### CQ-10: If event-driven mode is not enabled, what happens on agent boot?
-- **Files**: `references/scripts/thin_launcher.py`, agent CLAUDE.md composed with `event-driven: no`
-- **Expected**: Agent boots with cycle-based prompt. `/loop` is invoked. `cycle_pre.py` and `cycle_post.py` run each cycle. `event-driven-workflow` sub-skill is not included. Full backward compatibility with pre-#7630 behavior.
+### CQ-10: What are the 5 configurable Event Driven fields in config.md?
+- **Files**: `references/scripts/config.py`, `config.md`
+- **Expected**: `event-timeout-minutes`, `event-max-retries`, `event-poll-interval`, `event-queue-cap`, `scan-cooldown`. These are the only 5 valid fields in the `## Event Driven` section. There is no `event-driven` toggle and no `event-sensitivity` field.
 
 ### CQ-11: What does the ack of a stop-requested event signal to the harness?
 - **Files**: `references/sub-skills/common/event-reactions.md`
