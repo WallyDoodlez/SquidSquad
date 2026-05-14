@@ -7,16 +7,14 @@
 
 ## Completed Steps
 - Phase 1 complete (P-1 through P-6)
-- Phase 2 complete (2-1 through 2-9): timeout scanner, external activity detector, 5 L1 events, ack processing, event_poll.py
-- Code reviews: Phase 1 (3 criticals), Phase 2 round 1 (4 criticals), Phase 2 round 2 (5 criticals) — all fixed
+- Phase 2 complete (2-1 through 2-9)
+- Phase 3 partial: 3-1 (event-driven-workflow.md), 3-5 (config.py FIELD_MAP)
 
 ## Remaining Steps
-- Phase 3: Template migration (event-driven-workflow.md, includes.yml, config, role instructions)
-- Phase 4: Cleanup (remove cycle-runner, legacy sub-skills)
+- Phase 3: 3-2 (includes.yml mass update — 24 files), 3-3 (role instructions+SOUL.md — 8 files), 3-4 (config.md Event Driven section — delivery-time), 3-6 (compose verification)
+- Phase 4: Cleanup
 
 ## Key Decisions
-- L1 events added alongside existing RECOGNIZED (backward compat during phases)
-- Epoch-based timestamp comparison in activity detector (not ISO string)
-- Dedup emitted issues by number with bounded set (500 cap)
-- dispatch_times/retry_counts persisted for crash recovery
-- All _log() calls outside locks to prevent deadlock with print()
+- event-driven-workflow.md covers: Monitor tool wake, 5 event types, processing flow, atomicity, scan cooldown
+- Config.md Event Driven section added at delivery time (branch workflow prevents direct config.md edit)
+- Config field map test failures expected until config.md is updated
