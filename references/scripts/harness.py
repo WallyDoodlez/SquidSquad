@@ -970,10 +970,11 @@ async def receive_event(request: Request):
             if acked:
                 _log(f"Event {ack_event_id} acked by {role}")
             # If ack references stop-requested, treat as shutdown confirmation
-            if ack_event_id and body.get("payload", {}).get("result") == "stop-confirmed":
+            if body.get("payload", {}).get("result") == "stop-confirmed":
                 agent = state.get_agent(role)
                 if agent:
                     agent.intent = AgentState.INTENT_STOPPING
+                    state.save_state()
 
     # Update AgentState from event
     _update_agent_from_event(body)

@@ -97,4 +97,6 @@ def ack(event_id, role):
 
     Fire-and-forget like emit(). If harness is unreachable, silently drops.
     """
+    if not event_id:
+        return
     emit("ack", role, payload={"event_id": event_id})

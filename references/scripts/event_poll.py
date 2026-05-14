@@ -17,6 +17,7 @@ import json
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -69,9 +70,10 @@ def poll(role, limit=50):
         return None
 
     cursor = _read_cursor(role)
-    url = f"http://127.0.0.1:{port}/events?role={role}&limit={limit}"
+    params = {"role": role, "limit": limit}
     if cursor:
-        url += f"&since={cursor}"
+        params["since"] = cursor
+    url = f"http://127.0.0.1:{port}/events?{urllib.parse.urlencode(params)}"
 
     try:
         req = urllib.request.Request(url, method="GET")

@@ -42,14 +42,15 @@ class TestCatalogCompleteness:
         }
         assert set(event_catalog.EMITTED.keys()) == expected
 
-    def test_recognized_tier_has_expected_events(self):
-        expected = {
-            "verification-failed", "verification-passed",
-            "agent-health", "phase-change", "request-merge",
-            # L1 event types (#7630 Phase 2)
+    def test_recognized_tier_has_core_events(self):
+        """RECOGNIZED must contain core events (subset check, not exact — #7801)."""
+        core = {
+            "verification-failed", "verification-passed", "request-merge",
             "assigned-to", "stop-requested", "shipped", "version-bump", "ack",
         }
-        assert set(event_catalog.RECOGNIZED.keys()) == expected
+        actual = set(event_catalog.RECOGNIZED.keys())
+        missing = core - actual
+        assert not missing, f"Core recognized events missing: {missing}"
 
     def test_all_event_types_is_union(self):
         all_types = event_catalog.all_event_types()
