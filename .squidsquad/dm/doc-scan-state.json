@@ -155,7 +155,8 @@
     {"file": "SKILL.md:sections-4-6", "date": "2026-05-13", "findings": 0},
     {"file": "SKILL.md:sections-7-8", "date": "2026-05-14", "findings": 0},
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-14", "findings": 0},
-    {"file": "docs/sub-skill-guide.md", "date": "2026-05-14", "findings": 0}
+    {"file": "docs/sub-skill-guide.md", "date": "2026-05-14", "findings": 0},
+    {"file": "CONTRIBUTING.md", "date": "2026-05-14", "findings": 0}
   ],
   "doc_inventory": {
     "README.md": {"last_scanned": "2026-05-07", "status": "current"},
