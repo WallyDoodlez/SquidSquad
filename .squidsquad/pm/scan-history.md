@@ -1,3 +1,10 @@
+## Scan — 2026-05-14 19:34
+
+- **Files scanned**: references/sub-skills/roles/pm/pipeline-sentinel.md, references/sub-skills/roles/pm/soul-shepherd.md
+- **Findings**: none — both well-structured, noise-capped sentinel thresholds are intentional
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-14 19:03
 
 - **Files scanned**: references/sub-skills/common/discussion-protocol.md, references/sub-skills/common/vault-remember.md
