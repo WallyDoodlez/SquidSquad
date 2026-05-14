@@ -251,7 +251,7 @@ def main():
         reset_counter(pos[0])
     elif cmd == "log-iteration":
         if len(pos) < 2:
-            print("Usage: cycle.py log-iteration <role> <n> --issues ... --tasks ...", file=sys.stderr)
+            print("Usage: cycle.py log-iteration <role> <n> [--quiet] [--work <w>] [--notes <n>]", file=sys.stderr)
             sys.exit(1)
         try:
             iter_n = int(pos[1])

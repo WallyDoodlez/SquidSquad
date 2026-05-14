@@ -187,3 +187,20 @@ class TestCleanupIterations:
              patch.object(cycle, "_state_path", lambda rel: tmp_path / rel):
             removed = cycle.cleanup_iterations("skill")
         assert removed == 0
+
+
+class TestLogIterationUsageMessage:
+    """#7706: log-iteration error message must match documented interface."""
+
+    def test_error_message_matches_docstring(self):
+        """CLI error message for log-iteration should advertise --work/--notes, not --issues/--tasks."""
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, str(SCRIPTS / "cycle.py"), "log-iteration"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+        assert result.returncode == 1
+        assert "--work" in result.stderr, \
+            f"Error message should mention --work, got: {result.stderr!r}"
+        assert "--issues" not in result.stderr, \
+            f"Error message should NOT mention --issues (legacy), got: {result.stderr!r}"
