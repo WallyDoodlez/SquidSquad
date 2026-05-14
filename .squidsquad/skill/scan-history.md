@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-14 13:34
+
+- **Files scanned**: tests/test_feat_3645_auto_merge.py, tests/test_own_domain_autofix.py, tests/test_repo_scan.py, tests/test_run_comprehension_test.py, tests/test_squidsquad_cli.py
+- **Findings**: #7842 (fragile getsource in CLI error test — low), #7843 (mock patches wrong namespace — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-14 12:34
 
 - **Files scanned**: tests/test_feat_1075_vault_candidates.py, tests/test_feat_1228_pipeline_sentinel.py, tests/test_feat_1328_blocked_skip.py, tests/test_feat_1363_label_sync.py, tests/test_feat_3494_version_bump.py
