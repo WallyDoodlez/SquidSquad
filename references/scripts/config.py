@@ -88,6 +88,12 @@ FIELD_MAP = {
     "branch-pattern": ("Git Branches", "Branch Pattern"),
     "harness-enabled": ("Harness", "Enabled"),
     "harness-port": ("Harness", "Port"),
+    # Event-driven architecture (#7630 Phase 3)
+    "event-timeout-minutes": ("Event Driven", "Timeout Minutes"),
+    "event-max-retries": ("Event Driven", "Max Retries"),
+    "event-poll-interval": ("Event Driven", "Poll Interval"),
+    "event-queue-cap": ("Event Driven", "Queue Cap"),
+    "scan-cooldown": ("Event Driven", "Scan Cooldown"),
     "effort-pm": ("Agent Effort", "pm"),
     "effort-skill": ("Agent Effort", "skill"),
     "effort-qa": ("Agent Effort", "qa"),
