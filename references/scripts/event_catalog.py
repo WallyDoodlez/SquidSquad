@@ -114,6 +114,32 @@ RECOGNIZED = {
         "planned_source": "harness.py (logged on POST /merge)",
         "payload_fields": ["pr_number", "branch", "role"],
     },
+    # L1 event types for event-driven architecture (#7630 Phase 2)
+    "assigned-to": {
+        "description": "Work item assigned to a role — agent should wake and process",
+        "planned_source": "harness.py EventLifecycleManager",
+        "payload_fields": ["issue_number", "title", "event_context"],
+    },
+    "stop-requested": {
+        "description": "Harness requests agent to checkpoint and exit cleanly",
+        "planned_source": "harness.py intent API",
+        "payload_fields": ["reason"],
+    },
+    "shipped": {
+        "description": "Item shipped — agent may need to update state or celebrate",
+        "planned_source": "harness.py (on tracker transition to shipped)",
+        "payload_fields": ["issue_number", "title", "version"],
+    },
+    "version-bump": {
+        "description": "Version bump completed — agents should note new version",
+        "planned_source": "harness.py (after DM version bump)",
+        "payload_fields": ["old_version", "new_version", "items_included"],
+    },
+    "ack": {
+        "description": "Agent acknowledges event completion — closes the event lifecycle",
+        "planned_source": "event_bus.py ack()",
+        "payload_fields": ["event_id", "result"],
+    },
 }
 
 

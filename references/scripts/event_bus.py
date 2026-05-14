@@ -90,3 +90,11 @@ def emit(event_type, role, payload=None, cycle_number=None):
     except Exception:
         # Silent no-op — fire-and-forget contract
         pass
+
+
+def ack(event_id, role):
+    """Acknowledge event completion — posts ack event to harness (#7630 2-6).
+
+    Fire-and-forget like emit(). If harness is unreachable, silently drops.
+    """
+    emit("ack", role, payload={"event_id": event_id})

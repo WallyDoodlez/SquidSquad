@@ -164,3 +164,15 @@ class TestGenerateId:
         a = event_bus._generate_id("cycle-start", "skill", "2026-05-01T18:00:00", {})
         b = event_bus._generate_id("cycle-end", "skill", "2026-05-01T18:00:00", {})
         assert a != b
+
+
+class TestAck:
+    """#7630 2-6: ack() function delegates to emit() with ack event type."""
+
+    def test_ack_calls_emit(self):
+        """ack() emits an ack event with the event_id in payload."""
+        with patch.object(event_bus, "emit") as mock_emit:
+            event_bus.ack("evt123", "skill")
+        mock_emit.assert_called_once_with(
+            "ack", "skill", payload={"event_id": "evt123"}
+        )

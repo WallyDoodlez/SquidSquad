@@ -962,6 +962,19 @@ async def receive_event(request: Request):
     # Store in stream (with disk persistence via lifecycle manager)
     event_lifecycle.append(body)
 
+    # Ack processing (#7630 2-2): if event is an ack, process the lifecycle closure
+    if event_type == "ack":
+        ack_event_id = body.get("payload", {}).get("event_id")
+        if ack_event_id and role:
+            acked = event_lifecycle.ack(ack_event_id, role)
+            if acked:
+                _log(f"Event {ack_event_id} acked by {role}")
+            # If ack references stop-requested, treat as shutdown confirmation
+            if ack_event_id and body.get("payload", {}).get("result") == "stop-confirmed":
+                agent = state.get_agent(role)
+                if agent:
+                    agent.intent = AgentState.INTENT_STOPPING
+
     # Update AgentState from event
     _update_agent_from_event(body)
 
@@ -1009,6 +1022,25 @@ async def get_in_flight_events(role: str):
     """Get in-flight event IDs for a role (#7630 P-3)."""
     _validate_role(role)
     return {"role": role, "in_flight": event_lifecycle.get_in_flight(role)}
+
+
+@app.get("/events/lifecycle")
+async def get_event_lifecycle():
+    """Event lifecycle overview — stream size, in-flight per role, persistence state (#7630 2-7)."""
+    in_flight = {}
+    try:
+        roles = boot_remote._get_all_roles()
+        for role in roles:
+            ids = event_lifecycle.get_in_flight(role)
+            if ids:
+                in_flight[role] = ids
+    except (SystemExit, Exception):
+        pass
+    return {
+        "stream_size": len(event_stream),
+        "in_flight": in_flight,
+        "persisted": EVENT_STATE_FILE.exists(),
+    }
 
 
 @app.post("/agents/{role}/stop")

@@ -46,6 +46,8 @@ class TestCatalogCompleteness:
         expected = {
             "verification-failed", "verification-passed",
             "agent-health", "phase-change", "request-merge",
+            # L1 event types (#7630 Phase 2)
+            "assigned-to", "stop-requested", "shipped", "version-bump", "ack",
         }
         assert set(event_catalog.RECOGNIZED.keys()) == expected
 
