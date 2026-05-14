@@ -1,0 +1,16 @@
+{
+  "events": [
+    {
+      "id": "ebde4291",
+      "event_type": "test-event",
+      "role": "test-role",
+      "timestamp": "2026-05-14T17:31:50",
+      "payload": {
+        "key": "value"
+      },
+      "received_at": 1778794310.5930612
+    }
+  ],
+  "in_flight": {},
+  "dispatched": {}
+}
