@@ -94,11 +94,8 @@ class TestExtractPreferences:
             "Never use tabs for indentation."
         )
         prefs = [e for e in entities if e["type"] == "preference"]
-        # "never use" is not in markers but "don't" is... let me check
-        # Actually "never use" is not a marker. Let me check what IS.
-        # The markers include "always use", "never use" is NOT listed.
-        # But "do not" is. This test may fail.
-        # Let me just test what the code actually does.
+        assert len(prefs) >= 1, "Expected 'never use' to match PREFERENCE_MARKERS"
+        assert any("tabs" in p["value"].lower() for p in prefs)
 
     def test_finds_convention(self):
         entities = vault_entity.extract_entities(
@@ -136,21 +133,24 @@ class TestEntityConfidence:
         urls = [e for e in entities if e["type"] == "url"]
         assert urls[0]["confidence"] == "high"
 
-    def test_names_are_medium_confidence(self):
+    def test_names_without_person_signal_are_low_confidence(self):
         entities = vault_entity.extract_entities("Talk to John Smith about it.")
-        names = [e for e in entities if e["type"] == "person"]
-        if names:
-            assert names[0]["confidence"] == "medium"
+        names = [e for e in entities if e["value"] == "John Smith"]
+        assert names, "Expected entity for 'John Smith'"
+        # Without trailing person signals (said/asked/from/at), classified as unknown
+        assert names[0]["type"] == "unknown"
+        assert names[0]["confidence"] == "low"
 
 
 class TestEntityContext:
     def test_includes_surrounding_text(self):
+        # Proper name pattern requires 2+ capitalized words; "from" triggers person type
         entities = vault_entity.extract_entities(
-            "The team lead Sarah mentioned that we should use React."
+            "The feedback from Sarah Chen at the design review was helpful."
         )
-        people = [e for e in entities if e["type"] == "person"]
-        if people:
-            assert len(people[0]["context"]) > 0
+        people = [e for e in entities if e["value"] == "Sarah Chen"]
+        assert people, "Expected entity for 'Sarah Chen' (2-word proper name with person signal)"
+        assert len(people[0]["context"]) > 0
 
 
 class TestCLI:
