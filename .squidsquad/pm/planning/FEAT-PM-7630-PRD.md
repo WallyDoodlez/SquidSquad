@@ -32,7 +32,7 @@
   - **tracker.py** (references/scripts/tracker.py): No functional changes needed — already emits events (harness-internal observability)
   - **cycle.py** (references/scripts/cycle.py, ~287 lines): No changes — still used for timestamps/status-bar/iteration-log
   - **compose.py** (references/scripts/compose.py): Template changes auto-propagate via compose
-  - **Agent templates**: cycle-runner.md → replaced by event-driven-workflow.md; event-reactions.md → updated for 5-event model; self-restart.md → removed (harness handles via ack timeout); interval-sync.md → removed; all role instructions.md files → updated
+  - **Agent templates**: cycle-runner.md → replaced by event-driven-workflow.md; event-reactions.md → deleted (replaced by event-driven-workflow.md); self-restart.md → removed (harness handles via ack timeout); interval-sync.md → removed; all role instructions.md files → updated
   - **Sub-skill manifest**: cycle-runner.md removed from all includes.yml; event-driven-workflow.md added
   - **Tests**: ~15 test files need updates (test_cycle_pre, test_cycle_post, test_event_bus, test_event_bus_reader, test_harness, test_feat_6126, test_start_team, test_thin_launcher, test_event_config, test_event_validator, test_event_derivation, test_event_catalog)
 
@@ -85,7 +85,7 @@
   - `event-max-retries` (Event Driven → Max Retries): integer — default "3". Max re-emission attempts before declaring agent dead and rebooting.
   - `event-poll-interval` (Event Driven → Poll Interval Seconds): integer — default "30". How often the external activity detector polls GitHub.
   - `event-queue-cap` (Event Driven → Queue Cap): integer — default "50". Max events per agent in-flight queue.
-  - `event-sensitivity` (Event Driven → Event Sensitivity): integer — default "5". Events behind queue tip (debounce buffer — agents process settled events, not bleeding edge).
+
   - `scan-cooldown` (Event Driven → Scan Cooldown Minutes): integer — default "15". Minutes between self-initiated improvement scans.
 
 - **New files**: 
@@ -96,7 +96,7 @@
 - **Template changes**:
   - **Removed sub-skills**: `common/cycle-runner`, `common/context-pressure` (moves to harness), `common/interval-sync` (no more /loop), `common/self-restart` (harness handles via ack timeout), `common/boot-remote-agents` (harness owns boot)
   - **Added sub-skills**: `common/event-driven-workflow` — how agents receive events, process them, and ack them
-  - **Rewritten sub-skills**: `common/event-reactions` — updated for 5-event model (no more "cycle-input.json recent_events")
+  - **Deleted sub-skills**: `common/event-reactions` — deleted entirely, replaced by `common/event-driven-workflow`
   - **Role instructions.md**: Remove all Ralph Loop references, /loop invocation, cycle numbering. Replace with "Use the Monitor tool with event_poll.py to watch for events from the harness."
   - **agent-instructions.md**: Regenerated via compose.py deploy-all
   - **All role SOUL.md files**: Remove Ralph Loop references
@@ -321,7 +321,6 @@ The harness tracks additional internal state (git operations, health checks, aud
 The harness monitors GitHub for issues, PRs, and commits NOT created by SquidSquad agents (filtered by squidsquad label or agent commit prefix). When external activity is detected, the harness emits `assigned-to` for the PM agent to triage. The detector must NOT react to SquidSquad's own changes. This is harness-internal — no new event types are exposed to agents.
 
 **Behavioral tuning defaults (L1, overridable at L4 via config.md):**
-- `event-sensitivity`: 5 events behind queue tip (debounce buffer — agents process settled events, not bleeding edge)
 - `scan-cooldown`: 15 minutes between scans (scan immediately on idle, then cooldown)
 - `events-atomic`: true (events are never interrupted mid-handling)
 
@@ -548,12 +547,10 @@ These defaults are defined at L1 (universal, ships with SquidSquad core). Projec
 **config.py** (references/scripts/config.py):
 - **Add FIELD_MAP entries** (after line 95):
   ```python
-  "event-driven": ("Event Driven", "Enabled"),
   "event-timeout-minutes": ("Event Driven", "Timeout Minutes"),
   "event-max-retries": ("Event Driven", "Max Retries"),
   "event-poll-interval": ("Event Driven", "Poll Interval Seconds"),
   "event-queue-cap": ("Event Driven", "Queue Cap"),
-  "event-sensitivity": ("Event Driven", "Event Sensitivity"),
   "scan-cooldown": ("Event Driven", "Scan Cooldown Minutes"),
   ```
 
@@ -635,17 +632,9 @@ Print: `[🦑 HH:MM:SS] Idle — polling harness for events...`
 <!-- /sub-skill: event-driven-workflow -->
 ```
 
-**Rewritten sub-skill: `common/event-reactions.md`** (L1 — universal only)
+**Deleted sub-skill: `common/event-reactions.md`**
 
-Rewritten to describe the 5-event model (~30 lines). Contains:
-- Event protocol: 5 event types, all L1, all universal
-- `assigned-to` reaction: read the issue/PR from the forge, act per your role
-- `stop-requested` reaction: finish current event atomically, checkpoint, stop Monitor, emit `ack`
-- `shipped` / `version-bump` reaction: read, update status line, emit `ack`
-- Atomicity rule: events are complete units of work — never interrupted mid-handling
-- Behavioral tuning defaults: event-sensitivity (5 behind tip), scan-cooldown (15 min)
-- Statement: "The forge is the source of truth. Events are routing signals, not context carriers."
-- Ack rule: every event gets an ack. Ack is independent — no coordination with other agents.
+Deleted entirely — replaced by `common/event-driven-workflow.md`. The old event-reactions.md described per-event-type reaction tables. With the 5-event model, all event guidance lives in event-driven-workflow.md.
 
 **No L2 event-reaction sub-skills needed.** The simplified 5-event model eliminates the need for per-role event-reaction files. Roles already know how to handle issues from their existing role instructions (L2 `instructions.md`). When an agent receives `assigned-to`, it reads the issue/PR and acts per its role — no event-specific guidance required.
 
@@ -654,9 +643,7 @@ Rewritten to describe the 5-event model (~30 lines). Contains:
 **L4 — Project Overrides (config.md)**
 
 Projects can override L1 behavioral tuning defaults via config.md:
-- `Event Sensitivity`: number of events behind queue tip (default: 5)
 - `Scan Cooldown`: minutes between scans (default: 15)
-- `Stop Grace Period`: seconds before forced kill on stop-requested
 - `Timeout Minutes`: minutes before ack timeout (default: 10)
 - `Max Retries`: re-emission attempts before declaring agent dead (default: 3)
 
@@ -689,23 +676,19 @@ Each role's `includes.yml` changes:
 ```markdown
 ## Event Driven
 
-- **Enabled**: no
 - **Timeout Minutes**: 10
 - **Max Retries**: 3
 - **Poll Interval Seconds**: 30
 - **Queue Cap**: 50
-- **Event Sensitivity**: 5
 - **Scan Cooldown Minutes**: 15
 ```
 
 **FIELD_MAP additions** (config.py, after line 95):
 ```python
-"event-driven": ("Event Driven", "Enabled"),
 "event-timeout-minutes": ("Event Driven", "Timeout Minutes"),
 "event-max-retries": ("Event Driven", "Max Retries"),
 "event-poll-interval": ("Event Driven", "Poll Interval Seconds"),
 "event-queue-cap": ("Event Driven", "Queue Cap"),
-"event-sensitivity": ("Event Driven", "Event Sensitivity"),
 "scan-cooldown": ("Event Driven", "Scan Cooldown Minutes"),
 ```
 
@@ -801,7 +784,7 @@ All new behavior gated behind `config.md → Event Driven → Enabled: yes`. Whe
 ### Phase 3: Template Migration (Estimated: M)
 **Deliverables**:
 - New sub-skill: event-driven-workflow.md
-- Rewritten sub-skill: event-reactions.md (5-event model)
+- Deleted sub-skill: event-reactions.md (replaced by event-driven-workflow.md)
 - Updated role instructions.md (all 4 roles + base)
 - Updated role SOUL.md files
 - Updated includes.yml manifests (all roles)

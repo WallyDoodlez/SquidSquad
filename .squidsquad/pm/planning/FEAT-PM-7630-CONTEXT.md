@@ -77,7 +77,6 @@ Harness monitors GitHub for issues, PRs, and commits NOT created by SquidSquad a
 
 ### 10. Behavioral tuning defaults at L1, overridable at L4
 Tuning defaults ship with SquidSquad core (L1). Projects override via config.md (L4):
-- `event-sensitivity`: 5 events behind queue tip (debounce buffer)
 - `scan-cooldown`: 15 minutes between self-initiated scans, scan immediately on idle
 - `events-atomic`: true (events never interrupted mid-handling)
 
