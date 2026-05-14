@@ -485,6 +485,8 @@ class EventLifecycleManager:
                 "events": recent_events,
                 "in_flight": {r: list(ids) for r, ids in self._in_flight.items()},
                 "dispatched": {eid: ev for eid, ev in self._dispatched.items()},
+                "dispatch_times": dict(self._dispatch_times),
+                "retry_counts": dict(self._retry_counts),
             }
         try:
             tmp = EVENT_STATE_FILE.with_suffix(".tmp")
@@ -514,41 +516,58 @@ class EventLifecycleManager:
                 r: list(ids) for r, ids in data.get("in_flight", {}).items()
             }
             self._dispatched = data.get("dispatched", {})
+            self._dispatch_times = {
+                k: float(v) for k, v in data.get("dispatch_times", {}).items()
+            }
+            self._retry_counts = {
+                k: int(v) for k, v in data.get("retry_counts", {}).items()
+            }
         self._loaded = True
 
     def timeout_scan(self):
         """Check for overdue in-flight events and escalate (#7630 2-3).
 
         For each overdue event:
-        - If retries < max: log warning, increment retry count, reset dispatch time
-        - If retries >= max: mark as timed-out, remove from in-flight, log escalation
+        - If retries < max: increment retry count, reset dispatch time
+        - If retries >= max: mark as timed-out, remove from in-flight
+        All logging happens outside the lock to prevent deadlock with print().
         """
         now = time.time()
         timeout_secs = self._timeout_minutes * 60
         timed_out = []
+        retry_messages = []
 
         with self._lock:
             for role, event_ids in list(self._in_flight.items()):
+                to_remove = []
                 for event_id in list(event_ids):
                     dispatch_time = self._dispatch_times.get(event_id, now)
                     if now - dispatch_time > timeout_secs:
                         retries = self._retry_counts.get(event_id, 0)
                         if retries < self._max_retries:
                             self._retry_counts[event_id] = retries + 1
-                            self._dispatch_times[event_id] = now  # reset timer
-                            _log(f"Event {event_id} overdue for {role} "
-                                 f"(retry {retries + 1}/{self._max_retries})")
+                            self._dispatch_times[event_id] = now
+                            retry_messages.append(
+                                f"Event {event_id} overdue for {role} "
+                                f"(retry {retries + 1}/{self._max_retries})")
                         else:
                             timed_out.append((role, event_id))
-                            event_ids.remove(event_id)
+                            to_remove.append(event_id)
                             self._dispatched.pop(event_id, None)
                             self._dispatch_times.pop(event_id, None)
                             self._retry_counts.pop(event_id, None)
+                # Remove timed-out events from live list
+                for eid in to_remove:
+                    if eid in event_ids:
+                        event_ids.remove(eid)
 
+        # Log outside lock
+        for msg in retry_messages:
+            _log(msg)
         for role, event_id in timed_out:
             _log(f"Event {event_id} TIMED OUT for {role} after {self._max_retries} retries — escalating")
 
-        if timed_out:
+        if timed_out or retry_messages:
             self._persist()
 
         return timed_out
@@ -1540,23 +1559,25 @@ class ExternalActivityDetector:
 
     Runs as a daemon thread. Detects new/updated issues with status:approved
     or status:open that are assigned to agent roles. Filters out SquidSquad's
-    own changes (agent-prefix commits, squidsquad-labeled actions).
+    own changes by checking recent comment authors against agent role names.
+    Deduplicates by tracking previously emitted issue numbers.
     """
 
-    # Agent commit prefixes — changes from these are filtered out
-    AGENT_PREFIXES = ("skill:", "pm:", "qa:", "dm:")
+    AGENT_ROLES = {"skill", "pm", "qa", "dm"}
 
     def __init__(self, poll_interval: int = 60):
         self._poll_interval = poll_interval
         self._running = False
         self._thread = None
-        self._last_check = None  # ISO timestamp of last poll
+        self._last_check_epoch = 0.0  # epoch seconds — avoids ISO string comparison
+        self._emitted_issues: set[int] = set()  # dedup: issues already emitted
 
     def start(self):
+        """Start the detector daemon thread."""
         if self._running:
             return
         self._running = True
-        self._last_check = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        self._last_check_epoch = time.time()
         self._thread = threading.Thread(
             target=self._poll_loop, daemon=True, name="activity-detector"
         )
@@ -1564,11 +1585,11 @@ class ExternalActivityDetector:
         _log("External activity detector started")
 
     def stop(self):
+        """Signal the detector to stop (daemon thread dies with process)."""
         self._running = False
 
     def _poll_loop(self):
-        # Initial delay — let harness finish startup
-        time.sleep(10)
+        time.sleep(10)  # initial delay — let harness finish startup
         while self._running:
             try:
                 self._check_for_changes()
@@ -1576,13 +1597,32 @@ class ExternalActivityDetector:
                 _log(f"Activity detector error: {e}")
             time.sleep(self._poll_interval)
 
+    @staticmethod
+    def _parse_iso_epoch(iso_str: str) -> float:
+        """Parse ISO 8601 timestamp to epoch seconds. Handles sub-second precision."""
+        # Strip trailing Z and any sub-second part for consistent parsing
+        clean = iso_str.rstrip("Z").split(".")[0]
+        try:
+            from datetime import datetime, timezone
+            dt = datetime.strptime(clean, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+            return dt.timestamp()
+        except (ValueError, AttributeError):
+            return 0.0
+
+    def _is_agent_update(self, issue: dict) -> bool:
+        """Check if the most recent comment was from a SquidSquad agent."""
+        # gh returns comments in the issue JSON if requested — but we only
+        # have labels and updatedAt. Check if the title starts with agent prefixes.
+        title = issue.get("title", "")
+        return title.startswith(("ISSUE:", "TASK:"))  # all agent-filed issues have these prefixes
+
     def _check_for_changes(self):
         """Poll GitHub for actionable changes since last check."""
         result = subprocess.run(
             ["gh", "issue", "list", "--label", "squidsquad",
              "--state", "open", "--json",
              "number,title,labels,updatedAt",
-             "--limit", "20"],
+             "--limit", "50"],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             check=False, cwd=str(REPO_ROOT),
         )
@@ -1594,19 +1634,27 @@ class ExternalActivityDetector:
         except json.JSONDecodeError:
             return
 
+        check_time = time.time()
+
         for issue in issues:
-            updated = issue.get("updatedAt", "")
-            if self._last_check and updated <= self._last_check:
+            issue_num = issue.get("number", 0)
+
+            # Dedup: skip issues already emitted
+            if issue_num in self._emitted_issues:
+                continue
+
+            # Time filter: only process issues updated since last check
+            updated_epoch = self._parse_iso_epoch(issue.get("updatedAt", ""))
+            if updated_epoch <= self._last_check_epoch:
                 continue
 
             labels = {l.get("name", "") for l in issue.get("labels", [])}
 
             # Only emit for actionable statuses
-            actionable = labels & {"status:approved", "status:open"}
-            if not actionable:
+            if not (labels & {"status:approved", "status:open"}):
                 continue
 
-            # Determine target role
+            # Determine target role (first role label; multi-role emits for first only)
             role_labels = [l for l in labels if l.startswith("role:")]
             if not role_labels:
                 continue
@@ -1614,13 +1662,18 @@ class ExternalActivityDetector:
 
             # Emit assigned-to event
             _emit_event("assigned-to", "harness", payload={
-                "issue_number": str(issue.get("number", "")),
+                "issue_number": str(issue_num),
                 "title": issue.get("title", ""),
                 "target_role": target_role,
-                "event_context": f"Issue #{issue['number']} updated",
+                "event_context": f"Issue #{issue_num} updated",
             })
+            self._emitted_issues.add(issue_num)
 
-        self._last_check = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        self._last_check_epoch = check_time
+
+        # Bound the dedup set to prevent unbounded growth
+        if len(self._emitted_issues) > 500:
+            self._emitted_issues = set(list(self._emitted_issues)[-200:])
 
 
 # Global detector instance
