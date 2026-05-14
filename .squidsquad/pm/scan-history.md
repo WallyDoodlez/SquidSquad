@@ -1,3 +1,10 @@
+## Scan — 2026-05-14 17:05
+
+- **Files scanned**: references/sub-skills/common/self-restart.md, references/wizard/WIZARD.md
+- **Findings**: none
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-12 20:32
 
 - **Files scanned**: .squidsquad/project/shared-instructions.md, .squidsquad/project/dev-instructions.md
