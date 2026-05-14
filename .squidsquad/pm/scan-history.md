@@ -1,3 +1,10 @@
+## Scan — 2026-05-14 18:34
+
+- **Files scanned**: references/sub-skills/common/agent-lifecycle.md, references/sub-skills/common/context-pressure.md
+- **Findings**: none — both current and consistent with harness architecture
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-14 17:05
 
 - **Files scanned**: references/sub-skills/common/self-restart.md, references/wizard/WIZARD.md
