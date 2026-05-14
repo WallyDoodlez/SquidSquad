@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-14 12:34
+
+- **Files scanned**: tests/test_feat_1075_vault_candidates.py, tests/test_feat_1228_pipeline_sentinel.py, tests/test_feat_1328_blocked_skip.py, tests/test_feat_1363_label_sync.py, tests/test_feat_3494_version_bump.py
+- **Findings**: #7829 (tautological fake_run in skip-test — low), #7830 (redundant inspect.getsource — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-14 11:04
 
 - **Files scanned**: tests/test_dm_verify_before_block.py, tests/test_event_bus_reader.py, tests/test_event_catalog.py, tests/test_event_validator.py, tests/test_feat_1074_auto_merge.py
