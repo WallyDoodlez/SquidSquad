@@ -100,7 +100,7 @@
 - **QA Execution Model**: claude
 - **Comprehension Model**: claude
 - **Improvement Scan Model**: claude
-- **Code Review Model**: claude
+- **Code Review Model**: deepseek-v4-pro
 - **Fallback Model**: claude
 - **API Timeout Seconds**: 120
 
