@@ -100,6 +100,7 @@
 - **QA Execution Model**: claude
 - **Comprehension Model**: claude
 - **Improvement Scan Model**: claude
+- **Code Review Model**: claude
 - **Fallback Model**: claude
 - **API Timeout Seconds**: 120
 
