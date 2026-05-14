@@ -1,15 +1,16 @@
 # Working State
 
-- **Task**: none
-- **Status**: none
-- **Last Processed Event ID**: af90e492
+- **Task**: #7878
+- **Status**: in-progress
+- **Started**: 2026-05-14 16:31
+- **Last Processed Event ID**: 1bc34735
 - **Quiet Cycle Counter**: 0
 
-## Session Context (checkpoint at cycle 800)
-- Version: v0.38.0
-- Shipped count: 0/10
-- Open issues blocking bump: 1
-- Last ship: #7628 (cycle 757, 2026-05-12)
-- Doc scan: rotation 36, next: SKILL.md:sections-4-6
-- Pending approval: #5773 (document start.sh)
-- Note: #7637 routed back to dev — PR #7663 merge conflict unresolved
+## Completed Steps
+- Read bug details
+
+## Remaining Steps
+- Read EVENT-BUS-ARCHITECTURE.md
+- Fix Finding 1: replace pr-merge → pr-merged, update emitter to harness.py
+- Fix Finding 2: add compose-completed to Event Type Catalogue and role filter sets
+- Transition to pending-ship
