@@ -1,5 +1,41 @@
 # Scan History
 
+## Scan — 2026-05-14 16:34
+
+- **Files scanned**: references/commands/squidsquad-compose.md, references/commands/squidsquad-upgrade.md, references/docs/vault-reference.md, references/prompts/code-review.md.j2
+- **Findings**: #7879 (upgrade commit stages .claude/ with unrelated user changes — medium)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-14 16:04
+
+- **Files scanned**: tests/comprehension/1428_spec.json, tests/comprehension/2181_spec.json, tests/comprehension/361_spec.json, docs/EVENT-BUS-ARCHITECTURE.md, docs/diagrams/layer-stack.html
+- **Findings**: #7878 (EVENT-BUS-ARCHITECTURE.md stale pr-merge refs + missing compose-completed — low, filed to DM)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-14 15:04
+
+- **Files scanned**: tests/test_start_team.py, tests/test_thin_launcher.py, tests/test_vault_check.py, tests/test_vault_entity.py, tests/test_vault_synthesis.py
+- **Findings**: #7866 (dead test body + tautological if-guarded assertions in test_vault_entity.py — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-14 13:34
+
+- **Files scanned**: tests/test_feat_3645_auto_merge.py, tests/test_own_domain_autofix.py, tests/test_repo_scan.py, tests/test_run_comprehension_test.py, tests/test_squidsquad_cli.py
+- **Findings**: #7842 (fragile getsource in CLI error test — low), #7843 (mock patches wrong namespace — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-14 12:34
+
+- **Files scanned**: tests/test_feat_1075_vault_candidates.py, tests/test_feat_1228_pipeline_sentinel.py, tests/test_feat_1328_blocked_skip.py, tests/test_feat_1363_label_sync.py, tests/test_feat_3494_version_bump.py
+- **Findings**: #7829 (tautological fake_run in skip-test — low), #7830 (redundant inspect.getsource — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-14 11:04
+
+- **Files scanned**: tests/test_dm_verify_before_block.py, tests/test_event_bus_reader.py, tests/test_event_catalog.py, tests/test_event_validator.py, tests/test_feat_1074_auto_merge.py
+- **Findings**: #7800 (bare return silently passes instead of pytest.skip — low), #7801 (hardcoded event sets drift — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-14 10:37
 
 - **Files scanned**: references/sub-skills/roles/pm/prohibitions.md, references/sub-skills/roles/pm/testing-and-verification.md, tests/test_comprehension_2183.py, tests/test_comprehension_2195.py, tests/test_deterministic_qa_framework.py
