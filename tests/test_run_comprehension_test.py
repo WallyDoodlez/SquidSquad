@@ -122,12 +122,12 @@ class TestFindClaude:
         assert result is None or isinstance(result, str)
 
     def test_finds_claude_on_path(self):
-        with patch("shutil.which", return_value="/usr/bin/claude"):
+        with patch.object(rct.shutil, "which", return_value="/usr/bin/claude"):
             result = rct._find_claude()
         assert result == "/usr/bin/claude"
 
     def test_returns_none_when_not_found(self):
-        with patch("shutil.which", return_value=None), \
+        with patch.object(rct.shutil, "which", return_value=None), \
              patch.dict("os.environ", {"APPDATA": "/nonexistent"}, clear=False):
             result = rct._find_claude()
         assert result is None
