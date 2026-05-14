@@ -1,1149 +1,747 @@
 # FEAT-PM-7630 Test Plan — Event-Driven Agent Architecture
 
-> Cross-referenced from Claude and DeepSeek test plans — 46 test cases total (32 TCs + 10 smoke checks + 4 CQs).
+> This plan supersedes the earlier draft. 58 test cases across 13 categories, 12 smoke checks, 10 regression risks, 12 comprehension questions.
 
-## Overview
-
-This test plan covers the 4-phase EPIC that replaces SquidSquad's cycle-based polling model with a pure event-driven architecture. Phases are tested in dependency order. Phase 1.5 prerequisites gate all Phase 2 testing. Phase 3 template migration gates Phase 4 validation.
-
-**Scope**: harness.py event infrastructure, Monitor tool wake mechanism, event closure API, template migration across all roles, regression of cycle model fallback, race condition mitigations, Windows-specific process and file behavior, failure modes.
-
-**Zero-gap gate**: Any TC failure sends the work back to dev. No "noted for follow-up" exceptions.
+## Test Cases
 
 ---
 
-## 1. Prerequisites — Phase 1.5 Infrastructure
+### Category 1: Happy Path — 5 Event Types
 
-### TC-P1: Event Bus Disk Persistence Survives Harness Restart
+---
 
-- **Precondition**: Harness running with `event-driven: yes`. At least one event emitted and stored (e.g., `scan-due` for pm role). Event visible via `GET /events`. Event bus has a disk-persistent storage backend (dev-chosen format: file-per-event, append-only log, or SQLite per CONTEXT.md dev discretion). `EventStream` in harness.py backed by persistent store rather than the current pure in-memory deque (harness.py line 352: `maxlen=1000`).
+### TC-1: assigned-to — happy path delivery to target agent
+- **Precondition**: Harness running with `event-driven: yes`. Agent (skill) is alive, idle, Monitor tool watching `event_poll.py` output. GitHub Issue #123 exists.
 - **Steps**:
-  1. Record the event ID from `GET /events`.
-  2. Hard-kill the harness process (`taskkill /F /PID <harness_pid>` on Windows, `kill -9` on Unix).
-  3. Confirm harness is dead: `tasklist /FI "PID eq <harness_pid>"` (Windows) or `kill -0 <harness_pid>` (Unix) — should report not found.
-  4. Restart harness: `python references/scripts/harness.py`.
-  5. Wait for harness to finish `deferred_init` (watch for "Auto-starting all agents..." and "Port file distributed" log lines).
-  6. Query `GET /events` again.
-- **Expected**: The previously stored event is still present with the same ID and payload. No data loss from kill-and-restart. Event status preserved (if `dispatched` before kill, it should appear as `dispatched` or `abandoned` after restart — never absent).
-- **Verification**:
-  ```bash
-  # Before restart: capture event ID
-  EVENT_ID=$(curl -s http://localhost:<PORT>/events | python -c "import sys,json; evts=json.load(sys.stdin); print(evts[0]['id'] if evts else 'NO_EVENTS')")
-  echo "Captured event ID: $EVENT_ID"
-  # ... kill and restart harness ...
-  # After restart: verify same ID present
-  curl -s http://localhost:<PORT>/events | python -c "
-  import sys, json
-  evts = json.load(sys.stdin)
-  target = next((e for e in evts if e['id'] == '$EVENT_ID'), None)
-  print('PASS' if target is not None else 'FAIL: event lost on restart')
-  print('Payload:', target.get('payload') if target else 'N/A')
-  "
-  ```
+  1. POST to harness: `{"event_type": "assigned-to", "role": "skill", "payload": {"role": "skill", "issue_or_pr": 123}}`
+  2. Observe `event_poll.py` stdout from skill agent's Monitor subscription.
+  3. Observe skill agent reads Issue #123 from GitHub.
+  4. Wait for skill agent to complete work and POST `ack` event.
+- **Expected**: Monitor tool wakes agent. Agent reads the forge (not just the payload). Agent completes work and emits `ack {event_id}`. Harness marks event `acked` in `.squidsquad/.event-state.json`. No second event dispatched to skill before ack received.
+- **Verification**: `GET /events/{event_id}` → `status: acked`. `.squidsquad/.event-state.json` shows `acked_at` timestamp. `GET /events/in-flight/skill` → empty list.
 
 ---
 
-### TC-P2: Clone Event Bus Discovery Works for Sibling Directories
-
-- **Precondition**: Primary repo at known path (e.g., `D:\Dev\Dev\SquidSquad`). A clone exists as a sibling directory (e.g., `D:\Dev\Dev\SquidSquad-skill`). Harness running in the primary repo. `deferred_init` has completed and distributed `.harness-port` into the clone's `.squidsquad/` directory.
+### TC-2: stop-requested — graceful agent shutdown
+- **Precondition**: Harness running. Skill agent alive, idle. No events in flight.
 - **Steps**:
-  1. Verify harness distributed the port file: `cat <clone_root>/.squidsquad/.harness-port` — should contain the port number.
-  2. From within the clone directory, invoke `EventBusReader._discover_port()` directly:
-     ```python
-     import sys; sys.path.insert(0, '<primary_repo>/references/scripts')
-     from event_bus_reader import EventBusReader
-     r = EventBusReader(role='skill')
-     print(r._discover_port())
-     ```
-  3. Using the discovered port, query `GET /events`.
-- **Expected**: Port is discovered (non-None). `GET /events` returns 200 OK with a JSON list. Agent in clone can successfully reach the harness event bus. No silent `[]` return from `event_bus_reader.query()` fallthrough.
-- **Verification**:
-  ```bash
-  # From clone directory
-  python -c "
-  import sys, json, urllib.request
-  from pathlib import Path
-
-  squid_dir = Path('.').resolve() / '.squidsquad'
-  port_file = squid_dir / '.harness-port'
-  port = None
-  if port_file.exists():
-      port = int(port_file.read_text(encoding='utf-8').strip())
-  else:
-      current = Path('.').resolve().parent
-      for _ in range(5):
-          candidate = current / '.squidsquad' / '.harness-port'
-          if candidate.exists():
-              port = int(candidate.read_text(encoding='utf-8').strip())
-              break
-          parent = current.parent
-          if parent == current: break
-          current = parent
-
-  print('Port discovered:', port)
-  assert port is not None, 'FAIL: port not found for sibling clone'
-  url = f'http://127.0.0.1:{port}/events?limit=1'
-  resp = urllib.request.urlopen(url, timeout=2)
-  data = json.loads(resp.read().decode('utf-8'))
-  print(f'Response OK')
-  print('PASS')
-  "
-  ```
-- **Regression signal**: If `_discover_port` returns `None`, the harness port distribution during `deferred_init` did not land in the clone's `.squidsquad/` directory, or the parent-walk fix for sibling clones is missing.
+  1. POST stop: `{"event_type": "stop-requested", "role": "skill", "payload": {"source": "human", "target": "skill"}}`
+  2. Observe agent behavior.
+  3. Wait for ack.
+- **Expected**: Agent receives event, checkpoints `working-state.md`, stops Monitor tool, emits `ack {event_id}`. Harness processes ack on `stop-requested` as shutdown confirmation. Agent process exits. Harness does NOT reboot the agent (intent = stopping).
+- **Verification**: `GET /agents/skill` → `status: stopped`, `intent: stopping`. `.squidsquad/skill/working-state.md` updated with checkpoint. Harness does not reboot within 30 seconds.
 
 ---
 
-### TC-P3: Per-Role In-Flight Event Queue Prevents Double-Dispatch
-
-- **Precondition**: Harness running with `event-driven: yes`. Per-role in-flight tracking exists — `in_flight_events` dict in `.harness-state.json`. One event dispatched to the `pm` role but not yet closed (simulate by having the agent not respond, or by injecting state directly).
+### TC-3: stop-requested — agent finishes current event atomically before stopping
+- **Precondition**: Skill agent actively processing an `assigned-to` event for Issue #123.
 - **Steps**:
-  1. Emit an event targeted at the `pm` role. Confirm it enters `in_flight_events["pm"]` in `.harness-state.json`.
-  2. Attempt to emit a second event to `pm` — trigger the idle-check timer or POST another event via API.
-  3. Inspect the event bus and harness state.
-- **Expected**: The second event is NOT dispatched while the first is unclosed. It is either queued internally (visible as `pending` per role) or emission is skipped with a log message. Only one event per role is in-flight at any time. `in_flight_events["pm"]` contains exactly one event ID.
-- **Verification**:
-  ```bash
-  python -c "
-  import json
-  state = json.load(open('.squidsquad/.harness-state.json'))
-  in_flight = state.get('in_flight_events', {})
-  print('In-flight events:', in_flight)
-  assert isinstance(in_flight, dict), 'FAIL: in_flight_events not present or not dict'
-  "
-  curl -s http://localhost:<PORT>/events | python -c "
-  import sys, json
-  evts = json.load(sys.stdin)
-  pm_evts = [e for e in evts if e.get('role') == 'pm' and e.get('status') == 'dispatched']
-  print('PM in-flight count:', len(pm_evts))
-  print('PASS' if len(pm_evts) <= 1 else f'FAIL: {len(pm_evts)} dispatched events for pm — double dispatch')
-  "
-  ```
+  1. While agent is mid-work, POST `stop-requested` for skill.
+  2. Observe whether agent interrupts work or completes it.
+- **Expected**: Agent completes the current `assigned-to` event fully before processing `stop-requested`. Event atomicity is preserved — no partial outputs. After completing the first event and emitting its ack, agent then processes `stop-requested` and acks it.
+- **Verification**: Issue #123 has complete, non-partial output. Both events in `.event-state.json` show `acked`. Agent exits after both acks.
 
 ---
 
-### TC-P4: Harness Thread Safety Under Concurrent Event and Health Polling
-
-- **Precondition**: Harness running. Multiple roles active. Health polling thread running at 5-second interval (harness.py: `HEALTH_POLL_INTERVAL = 5`). Event receiver endpoint active. `_update_agent_from_event` and `update_health` are thread-safe after fix (previously both mutated `AgentState` fields outside the lock).
+### TC-4: shipped — broadcast to all agents
+- **Precondition**: Harness running. All agents (pm, skill, qa) alive and idle.
 - **Steps**:
-  1. Send 20 rapid `POST /events` requests concurrently using `concurrent.futures.ThreadPoolExecutor`.
-  2. Simultaneously, trigger 5 health poll calls to `GET /agents/{role}/health` from a separate thread.
-  3. Let all calls complete.
-  4. Check harness process for exceptions or corrupted state.
-- **Expected**: No `RuntimeError` about dictionary size change during iteration. No corrupted `AgentState` fields. All 20 events stored correctly. Health responses return valid data. Harness alive and responsive after test.
-- **Verification**:
-  ```bash
-  python -c "
-  import concurrent.futures, requests, time
-
-  BASE = 'http://localhost:<PORT>'
-
-  def post_event(i):
-      r = requests.post(f'{BASE}/events', json={
-          'event_type': 'test-thread', 'role': 'pm',
-          'payload': {'seq': i, 'ts': time.time()}
-      }, timeout=5)
-      return r.status_code
-
-  def poll_health():
-      r = requests.get(f'{BASE}/agents/pm/health', timeout=5)
-      return r.status_code, r.json().get('status')
-
-  with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-      post_futs = [ex.submit(post_event, i) for i in range(20)]
-      health_futs = [ex.submit(poll_health) for _ in range(5)]
-      concurrent.futures.wait(post_futs + health_futs, timeout=30)
-
-  post_codes = [f.result() for f in post_futs]
-  health_results = [f.result() for f in health_futs]
-
-  post_fails = [c for c in post_codes if c >= 500]
-  health_fails = [(c, s) for c, s in health_results if c >= 500]
-
-  evts = requests.get(f'{BASE}/events').json()
-  test_evts = [e for e in evts if e.get('event_type') == 'test-thread']
-
-  print(f'POST failures: {len(post_fails)}/{len(post_codes)}')
-  print(f'Health failures: {len(health_fails)}/{len(health_results)}')
-  print(f'Test events stored: {len(test_evts)}')
-
-  if not post_fails and not health_fails and len(test_evts) >= 20:
-      print('PASS')
-  else:
-      print('FAIL')
-  "
-  # Also inspect harness logs/stdout for RuntimeError or lock contention
-  ```
+  1. Harness emits `shipped {issue_or_pr: 456}` (simulating DM delivery announcement).
+  2. Observe all agents receive and respond.
+- **Expected**: Event dispatched to all agents. Each agent independently updates their status line and emits `ack {event_id}`. Harness does NOT wait for all agents to ack before marking complete — each ack is processed independently. `acked_by` list in `.event-state.json` grows as each agent acks.
+- **Verification**: `GET /events/{event_id}` → `acked_by` includes all three roles. Each role's ack has distinct `acked_at` timestamp. Harness never blocks waiting for all acks simultaneously.
 
 ---
 
-## 2. Phase 2 — Event Wake and Closure
-
-### TC-2-01: Happy Path — Full Event Lifecycle (Emit → Wake → Work → Close)
-
-- **Precondition**: `event-driven: yes` in config.md. Claude Code upgraded to v2.1.98+. Monitor tool validated per CONTEXT.md checklist (lines 76-81). Harness running. PM agent running with event-driven template (no `/loop`). Agent is idle, Monitor tool watching event bus. `POST /events/{id}/complete` endpoint implemented.
+### TC-5: version-bump — broadcast to all agents
+- **Precondition**: Harness running. All agents alive and idle.
 - **Steps**:
-  1. Trigger an event emission — either wait 10 minutes for `scan-due`, or manually emit via:
-     ```json
-     {"event_type": "scan-due", "role": "pm", "payload": {"reason": "idle-timeout", "scan_targets": ["vault", "pipeline"]}}
-     ```
-  2. Observe that Monitor tool detects the event and the agent session wakes (visible in terminal or agent log).
-  3. Agent reads event context from the payload.
-  4. Agent performs creative work (e.g., improvement scan for `scan-due` type).
-  5. Agent posts `POST /events/{event_id}/complete` with a valid result payload (see TC-2-02 for schema).
-  6. Harness processes the closure callback: executes status transitions, tracker comments, git commit/push.
-  7. Harness marks the event `closed`.
-- **Expected**: Event transitions from `dispatched` → `closed`. Harness executes all side effects from the closure payload. Agent returns to idle. `in_flight_events["pm"]` is cleared.
-- **Verification**:
-  ```bash
-  EVENT_ID="<from_emission>"
-  curl -s http://localhost:<PORT>/events | python -c "
-  import sys, json
-  evts = json.load(sys.stdin)
-  target = next((e for e in evts if e['id'] == '$EVENT_ID'), None)
-  print('Event status:', target['status'] if target else 'NOT FOUND')
-  assert target is not None, 'FAIL: event not found in bus'
-  assert target['status'] == 'closed', f'FAIL: status is {target.get(\"status\")}'
-  print('PASS')
-  "
-  git log --oneline -3
-  python -c "
-  import json
-  s = json.load(open('.squidsquad/.harness-state.json'))
-  in_flight = s.get('in_flight_events', {})
-  pm_flight = in_flight.get('pm')
-  assert pm_flight is None or pm_flight == [], f'FAIL: pm still has in-flight events: {pm_flight}'
-  print('PASS')
-  "
-  ```
+  1. Harness emits `version-bump {version: "1.5.0"}`.
+  2. Observe all agents.
+- **Expected**: Each agent reads the payload, updates their status line, emits `ack`. Same independent-ack behavior as TC-4.
+- **Verification**: `GET /events/{event_id}` → `acked_by` includes all roles. Status lines show updated version reference in agent terminals.
 
 ---
 
-### TC-2-02: Event Closure API — Full Payload Contract
-
-- **Precondition**: Harness running with `event-driven: yes`. A `work-available` event dispatched to the `pm` role (event_id known). `POST /events/{id}/complete` endpoint implemented. Closure payload schema preserves all role-specific extras from cycle-runner.md (code_commit, pr_actions, vault_writes, issues_filed, etc.).
+### TC-6: ack — replaces POST /events/{id}/complete, universal closure
+- **Precondition**: Agent has received an `assigned-to` event with `event_id: evt-abc`.
 - **Steps**:
-  1. POST to `POST /events/{event_id}/complete` with a full structured payload including role-specific extras:
-     ```json
-     {
-       "status": "completed",
-       "status_transitions": [
-         {"number": 123, "from": "in-progress", "to": "pending-test"}
-       ],
-       "tracker_comments": [
-         {"number": 123, "message": "Work done via event closure API. Status → Pending Test."}
-       ],
-       "commit_message": "pm: #123 — task complete via event closure",
-       "summary": "Completed improvement scan. Filed 1 task.",
-       "working_state_update": "# Working State\n\n- **Task**: none\n",
-       "role_extras": {
-         "pm": {
-           "human_input_processed": "No new human input",
-           "issues_filed": 1,
-           "issues_verified": 0,
-           "tasks_verified": 0,
-           "tasks_shipped": 0,
-           "external_issues_triaged": 0,
-           "health_alerts": 0,
-           "vault_writes": 2
-         }
-       }
-     }
-     ```
-  2. Check the HTTP response.
-  3. Verify each field was acted upon by the harness.
-- **Expected**: 200 OK with closed event record (`status: "closed"`). Tracker transition `#123 in-progress → pending-test` executed. Tracker comment posted. Git commit created. `working-state.md` updated. Role-specific extras recorded.
-- **Verification**:
-  ```bash
-  # Check tracker transition
-  python references/scripts/tracker.py get-labels 123
-  # Check comment posted
-  gh issue view 123 --json comments --jq '.comments[-1].body'
-  # Check git commit
-  git log --oneline -1
-  # Check working state
-  cat .squidsquad/pm/working-state.md
-  ```
+  1. Agent runs: `python references/scripts/event_bus.py ack evt-abc skill`
+  2. Observe harness handling.
+- **Expected**: POST to harness `/events` with `event_type: ack, payload: {event_id: evt-abc}`. Harness looks up `evt-abc`, marks it `acked` by `skill`. No separate `stopped` event emitted. The `ack` is the sole closure mechanism. `POST /events/{id}/complete` endpoint does not exist (endpoint was removed).
+- **Verification**: `GET /events/evt-abc` → `status: acked`. No `stopped` event appears in event stream. HTTP 404 on `POST /events/evt-abc/complete` confirms endpoint removal.
 
 ---
 
-### TC-2-03: Unclosed Event Detected After Timeout — Harness Diagnoses and Acts
+### Category 2: Ack Timeout and Retry Flow (Health Monitoring)
 
-- **Precondition**: `event-driven: yes`. Event-type-specific timeouts configured: short tasks (`scan-due`, comment) = 5 min, long tasks (implementation) = 60 min per CONTEXT.md. A `scan-due` event dispatched to `pm`. Agent does NOT post closure (simulate: block agent or kill it before closure POST).
+---
+
+### TC-7: ack timeout — event re-emitted on first timeout
+- **Precondition**: `event-timeout-minutes: 1` (set low for testing). Skill agent alive but unresponsive (simulate by blocking ack script).
 - **Steps**:
-  1. Dispatch a `scan-due` event to pm. Record the dispatch timestamp.
-  2. Verify the event enters `in_flight_events["pm"]` with dispatch timestamp.
-  3. Wait for the configured timeout (5 minutes for `scan-due`, or use a shorter test-only override if harness supports one).
-  4. Observe harness behavior at timeout.
-- **Expected**: Harness detects the unclosed event and logs a diagnostic (event type, role, elapsed time). Harness action: if agent PID is alive → re-emit event or log warning; if agent PID is dead → mark event `abandoned` and trigger auto-reboot; if ambiguous → alert human. No silent hang.
-- **Verification**:
-  ```bash
-  grep -i "timeout\|unclosed\|abandoned\|event-timeout" .squidsquad/harness.log 2>/dev/null || echo "Check harness stdout for timeout messages"
-
-  curl -s http://localhost:<PORT>/events | python -c "
-  import sys, json
-  evts = json.load(sys.stdin)
-  t = next((e for e in evts if e['id'] == '<EVENT_ID>'), None)
-  if t is None:
-      print('FAIL: event not found')
-  elif t.get('status') in ('abandoned', 'reemitted', 'timed-out'):
-      print('PASS: event status =', t.get('status'))
-  elif t.get('status') == 'dispatched':
-      print('FAIL: event still dispatched after timeout — no diagnosis performed')
-  else:
-      print('UNEXPECTED:', t.get('status'))
-  "
-  ```
+  1. Dispatch `assigned-to` to skill.
+  2. Prevent agent from emitting ack.
+  3. Wait for timeout + 30 seconds.
+- **Expected**: After 1 minute, harness detects no ack. Re-emits the event to skill (`retry_count: 1`). `GET /events/{id}` shows `retry_count: 1`, `status: in-flight`.
+- **Verification**: `.squidsquad/.event-state.json` shows `retry_count: 1`. Event appears again in `GET /events?role=skill&since=<cursor>`. Event `status` is still `in-flight`, not `acked` or `timed-out`.
 
 ---
 
-### TC-2-04: Agent Crash Mid-Event — Harness Detects via PID and Re-Emits
-
-- **Precondition**: `event-driven: yes`. Agent running with a dispatched event in-flight. Agent PID tracked in `.harness-state.json` (field `claude_pid`).
+### TC-8: ack timeout — max retries reached → agent declared dead → kill PID → reboot → re-emit
+- **Precondition**: `event-timeout-minutes: 1`, `event-max-retries: 3`. Agent persistently fails to ack.
 - **Steps**:
-  1. Dispatch a `work-available` event to `pm`. Confirm it appears in `in_flight_events["pm"]`.
-  2. Hard-kill the agent: `taskkill /F /PID <claude_pid>` (Windows) or `kill -9 <claude_pid>` (Unix).
-  3. Wait one health poll cycle (5 seconds).
-  4. Observe harness behavior: check logs, agent status, event bus.
-- **Expected**: Harness detects agent death via PID check within 5 seconds. Agent `status` transitions to `stalled` or `stopped`. Agent `intent` set to `restarting` (auto-reboot). Harness re-emits the in-flight event (new event with same payload, or original event status set to `reemitted`). New agent instance starts and receives the re-emitted event.
-- **Verification**:
-  ```bash
-  curl -s http://localhost:<PORT>/agents/pm | python -c "
-  import sys, json
-  a = json.load(sys.stdin)
-  print('Status:', a.get('status'))
-  print('Intent:', a.get('intent'))
-  assert a.get('status') in ('stalled', 'stopped', 'starting'), f'FAIL: unexpected status {a.get(\"status\")}'
-  "
-  curl -s http://localhost:<PORT>/events | python -c "
-  import sys, json
-  evts = json.load(sys.stdin)
-  reemitted = [e for e in evts if e.get('status') == 'reemitted' or (e.get('payload', {}).get('original_event_id') == '<EVENT_ID>')]
-  print('Re-emission candidates:', len(reemitted))
-  assert len(reemitted) >= 1, 'FAIL: no re-emitted event found'
-  print('PASS')
-  "
-  ```
+  1. Dispatch event to skill.
+  2. Block ack indefinitely.
+  3. Wait for 3 retry cycles.
+- **Expected**: After 3 retries, harness declares skill agent dead. Harness kills PID via OS (verified via OS check). Harness reboots skill agent via thin_launcher. Event is re-emitted to the rebooted agent. If reboots also fail repeatedly, harness escalates to PM.
+- **Verification**: `GET /agents/skill` shows `status: rebooting` then `running`. Original PID no longer alive (OS check). New PID present in `GET /agents/skill`. Event re-emitted in event stream. `.event-state.json` shows `retry_count: 3` then a new dispatch record.
 
 ---
 
-### TC-2-05: Harness Crash During Closure Processing — Event Replays Without Duplicates
-
-- **Precondition**: `event-driven: yes`. Agent has just posted `POST /events/{event_id}/complete`. Harness is mid-processing the closure callback. The atomicity contract (at-most-once or at-least-once with idempotency per CONTEXT.md) is implemented.
+### TC-9: ack timeout — PID alive and active → retry without killing
+- **Precondition**: Agent is processing a legitimately long task (> `event-timeout-minutes`) but PID is alive and CPU-active with context pressure below threshold.
 - **Steps**:
-  1. Dispatch an event, have agent complete work and POST closure.
-  2. Immediately hard-kill the harness after it receives the closure POST but before it finishes persisting `status: closed` to disk. (Requires a test hook — e.g., a flag `.delay-closure` that makes harness pause after receiving the POST.)
-  3. Restart the harness.
-  4. Observe what harness does with the event on restart.
-- **Expected (at-most-once model)**: Event was persisted as `closed` before side effects, so harness skips side effects on replay. OR event was not persisted → replays but all side effects are idempotent (no duplicate tracker comments, no duplicate git commits).
-- **Expected (at-least-once model)**: Harness replays the unclosed event. Side effects execute again but are idempotent (comments dedup by event_id per GAP-7, git commits idempotent if same tree). Zero duplicates visible.
-- **Verification**:
-  ```bash
-  # Check for duplicate tracker comments
-  gh issue view 123 --json comments --jq '[.comments[] | select(.body | contains("event closure"))] | length'
-  # Expected: 1 (not 2)
-
-  # Check git log for duplicate commits
-  git log --oneline | grep "<commit_message>" | wc -l
-  # Expected: 1
-
-  # Check event status after restart
-  curl -s http://localhost:<PORT>/events | python -c "
-  import sys, json
-  evts = json.load(sys.stdin)
-  t = next((e for e in evts if e['id'] == '<EVENT_ID>'), None)
-  print('Status:', t['status'] if t else 'NOT FOUND')
-  "
-  ```
+  1. Dispatch event requiring work that takes longer than the timeout.
+  2. Wait past timeout.
+  3. Observe harness behavior.
+- **Expected**: Harness checks PID via OS before declaring dead. PID alive + context pressure below threshold + wake was delivered → harness retries (re-emits) but does NOT kill the agent. Agent eventually acks and event closes normally.
+- **Verification**: Agent PID survives past timeout. Event shows `retry_count >= 1` but agent is not killed. Agent eventually acks.
 
 ---
 
-### TC-2-06: scan-due Event Emitted After 10-Minute Idle with Issue Gate
-
-- **Precondition**: `event-driven: yes`. `scan-idle-timeout: 10` in config.md. PM role has `last_event_completed["pm"]` older than 10 minutes (set in harness state or simply wait). No open issues assigned to PM role (issue gate clear). Harness idle-check thread active.
+### TC-10: ack loss recovery — disk outbox fallback
+- **Precondition**: Agent sends ack but harness is temporarily unreachable (simulated network blip).
 - **Steps**:
-  1. Verify no open issues for pm: `python references/scripts/tracker.py list-issues pm --status open` → empty.
-  2. Confirm `last_event_completed["pm"]` is older than 10 minutes (inspect `.harness-state.json`).
-  3. Wait for the harness idle-check thread to fire (within 30 seconds of the 10-minute mark, or trigger manually if harness has a test endpoint).
-  4. Inspect the event bus for a new `scan-due` event.
-- **Expected**: Harness emits a `scan-due` event to `pm`. Event appears in `GET /events` with `event_type: "scan-due"` and `role: "pm"`. Payload includes scan targets, quiet-cycle context, and last scan timestamp.
-- **Variation (issue gate active)**: Create an open issue assigned to pm. Reset `last_event_completed` to older than 10 minutes. Expected: harness does NOT emit `scan-due` — issue gate suppressed it.
-- **Verification**:
-  ```bash
-  curl -s http://localhost:<PORT>/events | python -c "
-  import sys, json
-  evts = json.load(sys.stdin)
-  scans = [e for e in evts if e.get('event_type') == 'scan-due' and e.get('role') == 'pm']
-  print('scan-due events for pm:', len(scans))
-  assert len(scans) >= 1, 'FAIL: no scan-due event emitted'
-  for s in scans:
-      print('  Payload:', s.get('payload'))
-  print('PASS')
-  "
-
-  # Issue gate test:
-  python references/scripts/tracker.py create-issue \
-    --title "Test gate issue for TC-2-06" --body "Temporary — delete after test" \
-    --role pm --severity low --reporter pm-lead
-  # Reset last_event_completed timestamp in .harness-state.json to an old value
-  # Wait for idle-check interval
-  # Confirm no new scan-due events (count unchanged from above)
-  ```
+  1. Agent processes event, calls `event_bus.py ack`.
+  2. Harness endpoint is down for 30 seconds.
+  3. Harness comes back up.
+- **Expected**: `event_bus.py` detects unreachable harness, appends ack to `.squidsquad/.event-outbox.json`. On harness reconnect, outbox is drained and ack is delivered. Duplicate acks (if event retried in the meantime) are handled idempotently — duplicate acks are safe.
+- **Verification**: `.squidsquad/.event-outbox.json` contains pending ack while harness is down. After harness recovers, `GET /events/{id}` → `status: acked`. No double-processing side effects from the duplicate ack.
 
 ---
 
-### TC-2-07: stop-requested Event — Agent Detects, Checkpoints, Exits Cleanly
+### Category 3: External Activity Detector (Including Own-Change Filtering)
 
-- **Precondition**: `event-driven: yes`. PM agent running (idle or mid-work). Monitor tool watching event bus. `stop-requested` event type exists in event_catalog.py.
+---
+
+### TC-11: external activity detector — new GitHub issue triggers assigned-to for PM
+- **Precondition**: `event-driven: yes`. External activity detector running. GitHub repo configured. PM agent alive.
 - **Steps**:
-  1. Trigger graceful stop: `python references/scripts/start_team.py --stop pm` (or `POST /agents/pm/stop`).
-  2. Harness sets agent `intent=stopping` and emits `stop-requested` event on the event bus.
-  3. Monitor tool detects the `stop-requested` event (same channel as work events — unified stop channel, no sentinel file).
-  4. Agent reads the event, checkpoints `working-state.md`, and exits cleanly.
-- **Expected**: `working-state.md` updated with a non-empty checkpoint. Agent PID no longer alive. Harness transitions agent `intent` to `stopped`. No orphaned Claude Code process.
-- **Verification**:
-  ```bash
-  cat .squidsquad/pm/working-state.md
-  stat .squidsquad/pm/working-state.md  # check mtime is recent
-
-  python -c "
-  import json, os
-  state = json.load(open('.squidsquad/.harness-state.json'))
-  pm = state.get('agents', {}).get('pm', {})
-  pid = pm.get('claude_pid')
-  print('Agent PID:', pid)
-  try:
-      os.kill(pid, 0)
-      print('FAIL: process still alive')
-  except ProcessLookupError:
-      print('PASS: process exited')
-  except PermissionError:
-      print('WARNING: PermissionError — use tasklist /FI as secondary check')
-  "
-
-  curl -s http://localhost:<PORT>/agents/pm | python -c "
-  import sys, json
-  a = json.load(sys.stdin)
-  print('Intent:', a.get('intent'))
-  assert a.get('intent') == 'stopped', f'FAIL: intent is {a.get(\"intent\")}'
-  print('PASS')
-  "
-  ```
+  1. Create a new GitHub Issue without the `squidsquad` label (simulating human-filed issue).
+  2. Wait for `event-poll-interval` seconds (default 30s).
+- **Expected**: Detector polls GitHub, detects new issue without `squidsquad` label. Harness emits `assigned-to {role: "pm", issue_or_pr: <number>}`. PM agent receives event, reads the issue from GitHub, triages it.
+- **Verification**: `GET /events?role=pm&event_type=assigned-to` shows event with new issue number. PM comments on the issue within one poll interval. `GET /monitors` → `github_detector: {status: running, last_activity: <recent>}`.
 
 ---
 
-### TC-2-08: Terminal Window Closed on Clean Stop (Windows)
-
-- **Precondition**: Windows platform. `event-driven: yes`. PM agent spawned via `boot_remote.py` `_spawn_windows`. `terminal_pid` captured at spawn and stored in `.harness-state.json` (new field `terminal_pid` in `AgentState` — separate from `claude_pid`). Harness has platform-specific terminal close logic.
+### TC-12: external activity detector — filters SquidSquad agent commits (own changes)
+- **Precondition**: Detector running. SquidSquad agents committing with standard role prefix.
 - **Steps**:
-  1. Boot a pm agent and confirm `terminal_pid` is populated in `.harness-state.json`.
-     ```bash
-     python -c "import json; s=json.load(open('.squidsquad/.harness-state.json')); print(s['agents']['pm'].get('terminal_pid'))"
-     ```
-  2. Issue a graceful stop: `python references/scripts/start_team.py --stop pm`.
-  3. Wait for TC-2-07 to pass (agent intent transitions to `stopped`).
-  4. Observe the terminal window.
-- **Expected**: Terminal window closes — not just the Claude process, but the terminal window itself. `terminal_pid` process no longer alive. No zombie terminal windows remaining.
-- **Verification**:
-  ```bash
-  python -c "
-  import json, os, sys, subprocess
-  state = json.load(open('.squidsquad/.harness-state.json'))
-  pm = state.get('agents', {}).get('pm', {})
-  term_pid = pm.get('terminal_pid')
-  if term_pid is None:
-      print('FAIL: terminal_pid not tracked in state file')
-      sys.exit(1)
-  try:
-      os.kill(term_pid, 0)
-      print('FAIL: terminal process still alive, PID', term_pid)
-  except (ProcessLookupError, PermissionError):
-      result = subprocess.run(
-          ['tasklist', '/FI', f'PID eq {term_pid}'],
-          capture_output=True, text=True
-      )
-      if 'No tasks are running' in result.stdout or 'INFO: No tasks' in result.stdout:
-          print('PASS: terminal window closed, PID', term_pid, 'gone')
-      else:
-          print('WARNING: tasklist output:', result.stdout[:200])
-  "
-  ```
-- **Note on Windows feasibility**: `_spawn_windows` currently uses `wt.exe new-tab` or `cmd /c start` — neither reliably returns the terminal window PID. The `subprocess.Popen` PID may be the `wt.exe` invoker, not the terminal tab. This TC may need revision once the dev agent designs the actual terminal PID capture mechanism. The TC verifies end-state (window closed), not the specific capture method.
+  1. Skill agent commits: `skill: cycle 42 — implement feature`.
+  2. Wait for detector poll cycle.
+- **Expected**: No `assigned-to` event emitted. Detector filters out commits with agent prefix pattern (`skill:`, `pm:`, `qa:`, `dm:`).
+- **Verification**: No new `assigned-to` events in `GET /events?role=pm` after the agent commit. `GET /monitors` shows `last_check` advanced but `last_activity` unchanged.
 
 ---
 
-## 3. Phase 3 — Template Migration
-
-### TC-3-01: Agents Boot Without /loop Command
-
-- **Precondition**: `event-driven: yes`. All templates migrated (Phase 3 complete). `compose.py deploy-all` run successfully. Fresh agent session started (no prior context). Monitor tool validated (or stateless spawn chosen as fallback).
+### TC-13: external activity detector — filters SquidSquad-labeled issues and PRs
+- **Precondition**: Detector running.
 - **Steps**:
-  1. Boot a pm agent: `python references/scripts/start_team.py --role pm`.
-  2. Observe startup behavior in the agent terminal.
-  3. Wait 30 seconds for any `/loop` invocation that might occur.
-- **Expected**: Agent boots and enters idle state without invoking `/loop`. No `/loop` command appears in the session. Agent waits for events via Monitor tool. Terminal shows event-driven orientation message (replacing the previous "Boot. Begin your first Ralph Loop cycle now." from `thin_launcher.py`).
-- **Verification**:
-  - Review agent terminal output: no `/loop 30m` or `/loop` invocation present.
-  - Agent startup prompt must NOT contain "Boot. Begin your first Ralph Loop cycle now."
-  - Agent is alive (PID in `.harness-state.json`) with health status `running`.
-  ```bash
-  curl -s http://localhost:<PORT>/agents/pm | python -c "
-  import sys, json
-  a = json.load(sys.stdin)
-  print('Status:', a.get('status'))
-  print('Intent:', a.get('intent'))
-  assert a.get('status') == 'running', f'FAIL: status is {a.get(\"status\")}'
-  print('PASS')
-  "
-  ```
+  1. PM agent opens a GitHub Issue with the `squidsquad` label.
+  2. SquidSquad agent opens a PR with `squidsquad` label.
+  3. Wait for detector poll cycle.
+- **Expected**: Neither the issue nor the PR triggers an `assigned-to` event. Detector ignores all items bearing the `squidsquad` label.
+- **Verification**: No new events in stream after agent-created activity. Confirmed via `GET /events?since=<before-activity>&event_type=assigned-to`.
 
 ---
 
-### TC-3-02: Agent Templates Contain No Cycle Step Prose
-
-- **Precondition**: Phase 3 template migration complete. `compose.py deploy-all` run. All `.squidsquad/*/CLAUDE.md` files regenerated. Source templates in `references/roles/` and `references/sub-skills/` updated.
+### TC-14: external activity detector — cursor-based polling prevents duplicate events on restart
+- **Precondition**: Detector has already processed Issue #500. Harness restarts.
 - **Steps**:
-  1. Search composed CLAUDE.md files for cycle-specific prose patterns.
-  2. Search source template files for removed patterns.
-- **Expected**: None of the following patterns appear in any role's composed output:
-  - `/loop` invocation
-  - `cycle_pre.py` references
-  - `cycle_post.py` references
-  - `cycle-input.json` read instructions
-  - `cycle-output.json` write instructions
-  - Ralph Loop phase descriptions ("Phase 1 — Pre-Cycle", "Phase 2 — Creative Work", "Phase 3 — Post-Cycle")
-  - `iter-N.md` iteration log references
-  - `current-state` file write instructions (cycle-based)
-  - `cycle_number` field references
-  - `quiet-cycle` concept (cycle-count-based quiet detection)
-- **Verification**:
-  ```bash
-  for pattern in "/loop" "cycle_pre" "cycle_post" "cycle-input.json" "cycle-output.json" "Ralph Loop" "cycle_number" "quiet.cycle" "iter-N.md"; do
-    echo "--- Checking '$pattern' ---"
-    matches=$(grep -rli "$pattern" .squidsquad/*/CLAUDE.md 2>/dev/null)
-    if [ -n "$matches" ]; then
-      echo "FAIL: '$pattern' found in: $matches"
-    else
-      echo "PASS: '$pattern' not found in composed output"
-    fi
-  done
-  ```
+  1. Record cursor (last-seen GitHub `updatedAt`) before restart.
+  2. Restart harness.
+  3. Wait for first poll cycle.
+- **Expected**: Detector resumes from saved cursor. Issue #500 is NOT re-emitted. Only activity after the cursor triggers new events.
+- **Verification**: No duplicate `assigned-to` events for previously processed issues. Cursor stored in `.squidsquad/.event-state.json` under detector state key.
 
 ---
 
-### TC-3-03: compose deploy-all Produces Valid CLAUDE.md Without Cycle Sub-Skills
-
-- **Precondition**: Phase 3 source changes complete. Cycle-related includes removed from all `includes.yml` files (`common/cycle-runner`, `common/context-pressure`, `common/self-restart`, `common/interval-sync`). New `event-driven-workflow.md` sub-skill created at `references/sub-skills/common/event-driven-workflow.md`.
+### TC-15: external activity detector — GitHub API rate limiting handled gracefully
+- **Precondition**: Detector configured. Rate limit exhausted or simulated 429 response.
 - **Steps**:
-  1. Run `python references/scripts/compose.py deploy-all`.
-  2. Check exit code — must be 0.
-  3. Verify each role's composed CLAUDE.md exists and is non-empty.
-  4. Verify removed includes are absent from composed files.
-  5. Verify `event-driven-workflow.md` content appears in composed files.
-- **Expected**: `compose.py deploy-all` exits 0. All role CLAUDE.md files updated. None contain content from `common/cycle-runner`, `common/context-pressure`, `common/self-restart`, or `common/interval-sync`. All contain `event-driven-workflow` content. No compose errors about missing includes.
-- **Verification**:
-  ```bash
-  python references/scripts/compose.py deploy-all
-  echo "compose exit code: $?"
-
-  for role in pm qa dev dm skill; do
-    claude_md=".squidsquad/$role/CLAUDE.md"
-    if [ -f "$claude_md" ]; then
-      if grep -q "event-driven" "$claude_md" 2>/dev/null; then
-        echo "PASS: $role has event-driven-workflow content"
-      else
-        echo "FAIL: $role missing event-driven-workflow content"
-      fi
-    else
-      echo "FAIL: $claude_md does not exist"
-    fi
-  done
-
-  for removed in "cycle-runner.md" "context-pressure.md" "self-restart.md" "interval-sync.md"; do
-    echo "--- Checking '$removed' ---"
-    if grep -rq "$removed" .squidsquad/*/CLAUDE.md 2>/dev/null; then
-      echo "FAIL: '$removed' still present in composed output"
-    else
-      echo "PASS: '$removed' absent from all composed output"
-    fi
-  done
-  ```
+  1. Simulate 429/403 response from GitHub API.
+  2. Observe detector behavior.
+- **Expected**: Detector backs off gracefully. Does not crash harness. Logs warning. Resumes polling after backoff window. No duplicate events on resume.
+- **Verification**: Harness still running. `GET /monitors` shows `status: rate-limited` or equivalent. Events resume after backoff.
 
 ---
 
-## 4. Regression Tests
+### Category 4: Monitor Tool Wake Mechanism (event_poll.py + Monitor)
 
-### TC-R01: event-driven: no Preserves Full Cycle Model Unchanged
+---
 
-- **Precondition**: `event-driven: no` in config.md (default). All #7630 code changes present but gated behind the flag. `cycle_pre.py` and `cycle_post.py` still present at `references/scripts/`.
+### TC-16: event_poll.py — outputs events to stdout when harness has pending events
+- **Precondition**: Harness running. No pending events for role `skill`.
 - **Steps**:
-  1. Verify config: `python references/scripts/config.py get event-driven` → should output `no` or empty.
-  2. Run `compose.py deploy-all` — should produce cycle-model CLAUDE.md files (with `/loop`, cycle-runner, etc.).
-  3. Boot a pm agent: `python references/scripts/start_team.py --role pm`.
-  4. Confirm agent invokes `/loop [INTERVAL]m` at startup.
-  5. Wait for one complete cycle (cycle_pre → creative work → cycle_post).
-  6. Verify `cycle-input.json` written.
-  7. Verify `cycle-output.json` consumed.
-  8. Verify iteration log written (`iter-N.md` in `.squidsquad/pm/iterations/`).
-  9. Verify git commit produced.
-- **Expected**: Full existing cycle model functions without degradation. No event-driven behavior activates. No errors related to missing event-driven infrastructure. `/loop` works as before.
-- **Verification**:
-  ```bash
-  python references/scripts/config.py get event-driven
-  # Expected: no (or empty)
-
-  ls -la .squidsquad/pm/cycle-input.json
-  ls -la .squidsquad/pm/cycle-output.json
-  ls -la .squidsquad/pm/iterations/
-  git log --oneline -1  # should show cycle commit
-
-  curl -s http://localhost:<PORT>/agents/pm | python -c "
-  import sys, json
-  a = json.load(sys.stdin)
-  print('Status:', a.get('status'))
-  assert a.get('status') == 'running', f'FAIL: status={a.get(\"status\")}'
-  print('PASS: cycle model functioning')
-  "
-  ```
+  1. Run: `python references/scripts/event_poll.py skill`
+  2. In a second terminal, dispatch an `assigned-to` event to skill.
+  3. Wait for next poll interval.
+- **Expected**: `event_poll.py` outputs nothing when no events exist. When event arrives, script outputs JSON event payload to stdout within one poll interval. Script reads `.harness-port` from local `.squidsquad/` directory for discovery.
+- **Verification**: stdout shows JSON: `{"event_id": "...", "event_type": "assigned-to", "payload": {...}}`. No errors when harness is reachable.
 
 ---
 
-### TC-R02: Mixed-Mode Warning on Harness Startup
-
-- **Precondition**: `event-driven: yes` for pm role. `event-driven: no` (or not set) for skill role. Harness configured to detect mismatched intent/config across roles.
+### TC-17: Monitor tool — detects event_poll.py stdout and wakes agent
+- **Precondition**: Agent session running with `Monitor: python references/scripts/event_poll.py skill`.
 - **Steps**:
-  1. Set config so one role is event-driven and another is cycle-based (exact mechanism depends on implementation — per CONTEXT.md: "Both models cannot run simultaneously for the same role").
-  2. Start harness: `python references/scripts/harness.py`.
-  3. Check harness startup output (stdout) and logs.
-- **Expected**: Harness prints a visible warning that roles are running in mixed mode. Warning identifies which roles are in which mode. Harness still starts (warning only, no abort). Both roles function in their respective modes.
-- **Verification**:
-  ```bash
-  python references/scripts/harness.py 2>&1 | grep -i "mixed\|warning\|event-driven.*no\|cycle.*event"
-  # At least one warning line expected. Empty output = FAIL.
-  ```
+  1. Dispatch event to skill.
+  2. Observe agent terminal.
+- **Expected**: Monitor tool detects `event_poll.py` stdout within sub-second to a few seconds. Agent wakes and reads the event payload. Agent does not need to poll manually — Monitor tool handles passive detection.
+- **Verification**: Agent begins responding to event without manual invocation. Latency from event dispatch to agent awareness is measurable and sub-minute.
 
 ---
 
-### TC-R03: Existing Tracker Transitions Work Through Closure API
-
-- **Precondition**: `event-driven: yes`. A real GitHub Issue at a known status (e.g., `#42` at `in-progress`). Closure API fully implemented. `tracker.py transition()` interface unchanged.
+### TC-18: event_poll.py — cursor tracking prevents duplicate event delivery
+- **Precondition**: Agent has already processed event `evt-abc`. Cursor saved.
 - **Steps**:
-  1. POST to `POST /events/{event_id}/complete` with a tracker transition payload:
-     ```json
-     {
-       "status_transitions": [
-         {"number": 42, "from": "in-progress", "to": "pending-test"}
-       ],
-       "tracker_comments": [
-         {"number": 42, "message": "Verified via event closure API. Status → Pending Test."}
-       ],
-       "commit_message": "pm: regression TC-R03 — closure API transition test",
-       "summary": "Regression test for tracker transitions via closure API"
-     }
-     ```
-  2. Harness processes closure and calls `tracker.py transition 42 in-progress pending-test --role pm-lead`.
-  3. Verify the transition and comment.
-- **Expected**: Issue `#42` transitions from `in-progress` to `pending-test` exactly as if `tracker.py transition` was called directly. Comment posted with correct content. No behavioral difference from direct `tracker.py` calls — closure API is a pass-through to the same tracker functions.
-- **Verification**:
-  ```bash
-  python references/scripts/tracker.py get-labels 42
-  # Expected: status:pending-test label present
-
-  gh issue view 42 --json labels --jq '[.labels[].name] | sort'
-  gh issue view 42 --json comments --jq '.comments[-1].body'
-  # Expected: contains "Verified via event closure API"
-
-  # Revert after test
-  python references/scripts/tracker.py transition 42 pending-test in-progress --role pm-lead
-  ```
+  1. Poll again with saved cursor: `python references/scripts/event_poll.py skill`.
+  2. No new events since `evt-abc`.
+- **Expected**: Script passes `since=<cursor>` to `GET /events`. Returns empty. Does not re-output already-seen events.
+- **Verification**: stdout is empty. Script exits with 0. No duplicate events trigger agent wake.
 
 ---
 
-## 5. Race Conditions
-
-### TC-RC01: Startup Race — Agents Don't POST Before Server Ready
-
-- **Precondition**: `event-driven: yes`. Fresh harness start. Agents configured to auto-boot via `deferred_init`. Fix in place: either server accepts connections before agents are spawned (reordered in lifespan), or agent closure POST includes retry logic with backoff.
+### TC-19: event_poll.py — harness unreachable handled without spurious stdout
+- **Precondition**: Harness not running. `.harness-port` exists from previous run.
 - **Steps**:
-  1. Start harness with timing instrumentation.
-  2. Monitor for any `POST /events/{id}/complete` or `POST /events` calls made before the harness FastAPI server is fully accepting connections (before `yield` in the lifespan).
-  3. Observe agent behavior on startup.
-- **Expected**: No agent POST attempts before server is ready. Either agent spawn is delayed until after server `yield`, or closure POST retries with backoff on connection-refused/503. No events lost due to startup timing.
-- **Verification**:
-  ```bash
-  python -c "
-  import subprocess, time, requests, threading
-
-  t0 = time.time()
-  proc = subprocess.Popen(
-      ['python', 'references/scripts/harness.py'],
-      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-  )
-
-  lines = []
-  def reader():
-      for line in proc.stdout:
-          lines.append(line)
-  threading.Thread(target=reader, daemon=True).start()
-
-  ready_at = None
-  for i in range(60):
-      try:
-          r = requests.get('http://localhost:<PORT>/status', timeout=0.5)
-          if r.status_code == 200:
-              ready_at = time.time()
-              print(f'Server ready at t+{ready_at - t0:.2f}s')
-              break
-      except Exception:
-          pass
-      time.sleep(0.25)
-
-  time.sleep(5)
-
-  early_errors = [l for l in lines if 'connection refused' in l.lower() or '503' in l]
-  if early_errors:
-      print('FAIL: early connection errors detected')
-      for l in early_errors[:5]:
-          print(f'  {l.strip()}')
-  elif ready_at:
-      print('PASS: server ready before agent activity')
-  else:
-      print('FAIL: server did not become ready')
-
-  proc.terminate()
-  "
-  ```
+  1. Run `python references/scripts/event_poll.py skill` with harness stopped.
+- **Expected**: Script handles connection failure gracefully. Does not crash. Returns empty stdout or a non-JSON error to stderr (not stdout). No Python traceback on stdout that Monitor tool could misinterpret as an event.
+- **Verification**: stdout is empty or clean (no traceback). Script exits with non-zero code. Monitor tool not spuriously triggered.
 
 ---
 
-### TC-RC02: Event ID Uniqueness Under High Volume
+### Category 5: Config Gating (event-driven yes/no)
 
-- **Precondition**: Harness running. Event emission working. The two ID generation schemes in `event_bus.py` and `harness.py` have been unified to one scheme with sufficient entropy (at least 12 hex chars).
+---
+
+### TC-20: event-driven: no — harness does not start detector or event-driven features
+- **Precondition**: `config.md → Event Driven → Enabled: no` (default).
 - **Steps**:
-  1. Emit 1,000 events rapidly via concurrent `POST /events` calls.
-  2. Retrieve all events via `GET /events`.
-  3. Check for duplicate event IDs.
-- **Expected**: All 1,000 events have unique IDs. No collisions. The unified scheme produces no duplicates at this volume.
-- **Verification**:
-  ```bash
-  python -c "
-  import concurrent.futures, requests
-
-  BASE = 'http://localhost:<PORT>'
-
-  def emit(i):
-      try:
-          r = requests.post(f'{BASE}/events', json={
-              'event_type': 'test-collision', 'role': 'pm',
-              'payload': {'seq': i}
-          }, timeout=5)
-          return r.json().get('id')
-      except Exception:
-          return None
-
-  with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
-      ids = list(ex.map(emit, range(1000)))
-
-  ids = [i for i in ids if i]
-  unique = len(set(ids))
-  print(f'Emitted: {len(ids)}, Unique IDs: {unique}')
-  if unique == len(ids):
-      print('PASS')
-  else:
-      print(f'FAIL: {len(ids) - unique} collisions detected')
-      from collections import Counter
-      dupes = [id for id, cnt in Counter(ids).items() if cnt > 1]
-      print(f'Duplicate IDs (first 5): {dupes[:5]}')
-  "
-  ```
+  1. Start harness.
+  2. Inspect running state.
+- **Expected**: External activity detector thread does NOT start. Event-driven-workflow sub-skill is NOT included in agent templates. `thin_launcher.py` uses cycle-based boot prompt (Ralph Loop). Harness ack processing is a no-op for forward-compat.
+- **Verification**: `GET /monitors` returns 404 or empty. Agent CLAUDE.md contains `cycle-runner` sub-skill, not `event-driven-workflow`. Boot prompt in `thin_launcher.py` references `/loop`.
 
 ---
 
-### TC-RC03: Shutdown — In-Flight Events Marked Abandoned
-
-- **Precondition**: `event-driven: yes`. At least one event in-flight (dispatched, not closed) for the pm role. `in_flight_events["pm"]` populated in harness state.
+### TC-21: event-driven: yes — harness starts detector, agents boot in event-driven mode
+- **Precondition**: `config.md → Event Driven → Enabled: yes`. Run `compose.py deploy-all`.
 - **Steps**:
-  1. Dispatch an event to pm. Confirm it is in-flight (agent does not close it).
-  2. Trigger harness shutdown via Ctrl+C or `POST /shutdown`.
-  3. Wait for harness to fully shut down. Observe shutdown log output.
-  4. Restart harness.
-  5. Inspect event status in the restored event bus.
-- **Expected**: On shutdown, harness marks all in-flight events as `abandoned` before exiting (or during `load_state` on restart). On restart, harness does NOT automatically re-emit `abandoned` events — they are stale and require human or harness logic decision. No silent event loss — the event remains visible with `abandoned` status.
-- **Verification**:
-  ```bash
-  # After restart
-  curl -s http://localhost:<PORT>/events | python -c "
-  import sys, json
-  evts = json.load(sys.stdin)
-  abandoned = [e for e in evts if e.get('status') == 'abandoned']
-  print('Abandoned events:', len(abandoned))
-  for a in abandoned:
-      print(f'  ID: {a[\"id\"]}, type: {a.get(\"event_type\")}, role: {a.get(\"role\")}')
-  print('PASS' if abandoned else 'WARNING: no abandoned events — event may have been silently lost')
-  "
-
-  # Verify no auto-replay of abandoned events (no new dispatched events)
-  curl -s http://localhost:<PORT>/events | python -c "
-  import sys, json
-  evts = json.load(sys.stdin)
-  dispatched = [e for e in evts if e.get('status') == 'dispatched' and e.get('role') == 'pm']
-  print(f'Dispatched events for pm after restart: {len(dispatched)}')
-  # If auto-replay is NOT the design, should be 0
-  "
-  ```
+  1. Start harness.
+  2. Boot agents.
+  3. Inspect agent CLAUDE.md and boot behavior.
+- **Expected**: Detector thread starts. Agent CLAUDE.md contains `event-driven-workflow` sub-skill, not `cycle-runner`. Boot prompt references Monitor tool + `event_poll.py`. Agents do not invoke `/loop`.
+- **Verification**: `GET /monitors` → `github_detector: {status: running}`. `grep event-driven-workflow .squidsquad/skill/CLAUDE.md` → match. `grep /loop .squidsquad/skill/CLAUDE.md` → no match.
 
 ---
 
-### TC-RC04: Compose-Completed Before Reboot — Agent Reads Correct Templates
-
-- **Precondition**: `event-driven: yes`. Harness has compose-completed event logic where it emits `compose-completed` before rebooting affected agents. An agent is alive when `compose deploy-all` runs.
+### TC-22: config.py reads all 7 new Event Driven fields correctly
+- **Precondition**: `config.md` has the `## Event Driven` section with all 7 fields populated.
 - **Steps**:
-  1. Start a pm agent and let it reach idle state (Monitor tool watching).
-  2. Trigger `compose.py deploy-all` (which emits `compose-completed` and then triggers `_reboot_affected_agents`).
-  3. Observe whether the agent wakes on `compose-completed` before it is rebooted.
-  4. If agent wakes on `compose-completed` before reboot, check which CLAUDE.md it reads.
-- **Expected**: Agent either: (a) does not wake on `compose-completed` (harness reboots it before the Monitor tool sees the event), or (b) if it wakes, it reads the newly composed CLAUDE.md (not a stale version). No scenario where the agent wakes, reads old templates, processes work with stale instructions, and then is rebooted discarding that work.
-- **Verification**:
-  ```bash
-  # Check compose-completed event timing vs. reboot timing in harness logs
-  grep -E "compose-completed|reboot|restarting" .squidsquad/harness.log 2>/dev/null || echo "Check harness stdout"
-  # Expected: reboot signal occurs BEFORE or CONCURRENT WITH compose-completed event delivery
-  # Also verify agent reads fresh CLAUDE.md after reboot
-  curl -s http://localhost:<PORT>/agents/pm | python -c "
-  import sys, json
-  a = json.load(sys.stdin)
-  print('Status after compose+reboot:', a.get('status'))
-  print('Intent:', a.get('intent'))
-  "
-  ```
+  1. Run `python references/scripts/config.py get <field>` for each of the 7 fields: `event-driven`, `event-timeout-minutes`, `event-max-retries`, `event-poll-interval`, `event-queue-cap`, `event-sensitivity`, `scan-cooldown`.
+- **Expected**: Each command exits 0 and returns the configured value.
+- **Verification**: All 7 commands succeed. No `KeyError` or `None` returned for any field.
 
 ---
 
-## 6. Windows-Specific Tests
-
-### TC-WIN01: File Locking on Context-Pressure Reads — No PermissionError
-
-- **Precondition**: Windows platform. Harness running. An agent (or `statusline.sh`) actively writing context-pressure files via atomic `.tmp` → `mv` pattern. Harness reading context-pressure via `Path.read_text()`.
+### TC-23: config.md missing Event Driven section — graceful default to no
+- **Precondition**: `config.md` has no `## Event Driven` section (pre-upgrade config).
 - **Steps**:
-  1. Simulate high-frequency context-pressure writes: a loop that rapidly writes to `.squidsquad/pm/context-pressure` via atomic `.tmp` → `mv`.
-  2. Simultaneously, repeatedly query `GET /agents/pm/health` from harness.
-  3. Run for 60 seconds.
-  4. Check harness output for `PermissionError`, `OSError`, or file-read failures.
-- **Expected**: No file locking exceptions. Harness reads either old or new data but never crashes. If a `PermissionError` occurs, the harness `try/except OSError` block handles it gracefully (returns `context_pressure: None`).
-- **Verification**:
-  ```bash
-  # In one terminal: rapid context-pressure writes
-  python -c "
-  import time
-  from pathlib import Path
-  ctx_file = Path('.squidsquad/pm/context-pressure')
-  for i in range(300):
-      tmp = ctx_file.with_suffix('.tmp')
-      tmp.write_text(str(30 + (i % 40)), encoding='utf-8')
-      tmp.replace(ctx_file)
-      time.sleep(0.2)
-  "
-
-  # In another terminal: rapid health reads
-  for i in $(seq 1 60); do
-    curl -s http://localhost:<PORT>/agents/pm/health | python -c "import sys,json; print(json.load(sys.stdin).get('context_pressure'))"
-    sleep 1
-  done
-
-  # Check harness stdout for tracebacks or OSError
-  # Expected: no PermissionError, no crashes
-  ```
+  1. Run `python references/scripts/config.py get event-driven`.
+- **Expected**: Returns `"no"` (default). Does not crash. Harness treats as `event-driven: no`.
+- **Verification**: Exit code 0. Output is `no`. Harness falls back to cycle-based mode without error.
 
 ---
 
-### TC-WIN02: PID Reuse — Harness Detects Agent Death Despite Fast PID Recycle
+### Category 6: Backward Compatibility (event-driven: no falls back to /loop cycles)
 
-- **Precondition**: Windows platform. Harness running with health polling at 5-second intervals. Agent PID tracked in `.harness-state.json`. Process start time or process name also stored for disambiguation (per RESEARCH.md Windows-Specific Risks).
+---
+
+### TC-24: event-driven: no — agents self-loop via /loop unchanged
+- **Precondition**: `event-driven: no`. Existing config from before #7630.
 - **Steps**:
-  1. Boot an agent and record its PID and process start time.
-  2. Kill the agent (`taskkill /F /PID <pid>`).
-  3. Simulate PID reuse (difficult to orchestrate naturally — test harness checks harness behavior when PID is alive but process name does not match expected agent process).
-  4. Wait one health poll cycle (5 seconds).
-  5. Check harness detection.
-- **Expected**: Harness detects the original agent is dead even if PID is reused. Uses a secondary factor (process name via `tasklist /FI "PID eq <pid>" /FO CSV`, or process start time comparison) to disambiguate. If PID is alive but process name does not match expected (e.g., not `claude` or `node`), harness marks agent `stalled` and triggers reboot.
-- **Verification**:
-  ```bash
-  python -c "
-  import json, subprocess, os, time
-
-  state = json.load(open('.squidsquad/.harness-state.json'))
-  pid = state.get('agents', {}).get('pm', {}).get('claude_pid')
-  print(f'Agent PID: {pid}')
-
-  subprocess.run(['taskkill', '/F', '/PID', str(pid)], capture_output=True)
-
-  time.sleep(7)
-
-  state2 = json.load(open('.squidsquad/.harness-state.json'))
-  pm2 = state2.get('agents', {}).get('pm', {})
-  status = pm2.get('status')
-  intent = pm2.get('intent')
-  print(f'After kill — status: {status}, intent: {intent}')
-  assert status != 'running', f'FAIL: agent still marked running after kill'
-  print('PASS' if status != 'running' else 'FAIL')
-  "
-  ```
+  1. Start harness.
+  2. Boot agents.
+  3. Observe agent cycle behavior.
+- **Expected**: Agents boot with Ralph Loop prompt. `/loop` invoked at startup. `cycle_pre.py` and `cycle_post.py` run each cycle. No `event_poll.py` involved. Full cycle-based behavior identical to pre-#7630.
+- **Verification**: Iteration logs written per cycle. `cycle_pre.py` and `cycle_post.py` called each cycle. Agent CLAUDE.md contains `cycle-runner` sub-skill.
 
 ---
 
-### TC-WIN03: Terminal PID Tracking — PID Captured at Spawn
-
-- **Precondition**: Windows platform. `boot_remote.py` `_spawn_windows` modified to capture and return the terminal PID alongside the agent PID. `boot_remote.boot_agent()` returns `terminal_pid` in result dict. Harness stores `terminal_pid` in `.harness-state.json` for the pm agent.
+### TC-25: cycle_pre.py and cycle_post.py still exist and execute without error in event-driven: no mode
+- **Precondition**: Post-#7630 codebase with `event-driven: no`.
 - **Steps**:
-  1. Boot a pm agent: `python references/scripts/start_team.py --role pm`.
-  2. Immediately check `.harness-state.json` for `terminal_pid` in the pm agent entry.
-  3. Verify `terminal_pid` is non-None and corresponds to a real process.
-  4. On Windows, verify via `tasklist /FI "PID eq <terminal_pid>"` that the process is a terminal host (`conhost.exe`, `WindowsTerminal.exe`, or `wt.exe`).
-- **Expected**: `terminal_pid` is captured and stored at spawn time. It is different from `claude_pid`. The terminal PID corresponds to the actual window the agent runs in.
-- **Verification**:
-  ```bash
-  python -c "
-  import json, subprocess
-
-  state = json.load(open('.squidsquad/.harness-state.json'))
-  pm = state.get('agents', {}).get('pm', {})
-  claude_pid = pm.get('claude_pid')
-  term_pid = pm.get('terminal_pid')
-
-  print(f'Claude PID: {claude_pid}')
-  print(f'Terminal PID: {term_pid}')
-
-  assert term_pid is not None, 'FAIL: terminal_pid not captured'
-  assert term_pid != claude_pid, f'FAIL: terminal_pid == claude_pid ({term_pid}) — must be different'
-
-  result = subprocess.run(
-      ['tasklist', '/FI', f'PID eq {term_pid}'],
-      capture_output=True, text=True
-  )
-  print('tasklist output:')
-  print(result.stdout[:300])
-  print('PASS' if term_pid and term_pid != claude_pid else 'FAIL')
-  "
-  ```
+  1. Run: `python references/scripts/cycle_pre.py skill`
+  2. Run: `python references/scripts/cycle_post.py skill`
+- **Expected**: Both scripts run successfully. No errors. Behavior identical to pre-#7630.
+- **Verification**: Exit code 0. `cycle-input.json` created by `cycle_pre.py`. Iteration log written by `cycle_post.py`.
 
 ---
 
-### TC-WIN04: Detached Process Stop Signal — stop-requested Event Works Without OS Signal
-
-- **Precondition**: Windows platform. Agent spawned with `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP` flags (boot_remote.py). The harness cannot send SIGTERM or Ctrl+C to the agent — stop MUST be cooperative (event bus `stop-requested`) per CONTEXT.md Locked Decision #2.
+### TC-26: rollback — flip event-driven: no and recompose restores cycle-based templates
+- **Precondition**: `event-driven: yes` was active. Now rolling back.
 - **Steps**:
-  1. Boot a pm agent (detached process). Confirm agent is alive and processing events.
-  2. Initiate graceful stop: `POST /agents/pm/stop` or `start_team.py --stop pm`.
-  3. Harness emits `stop-requested` event on event bus.
-  4. Monitor tool detects the stop event (same channel as work events).
-  5. Wait for agent to exit (up to 30 seconds for checkpoint + exit).
-- **Expected**: Agent detects `stop-requested` event via Monitor tool, checkpoints and exits cleanly — no OS signal needed. Harness detects exit via PID check. No `taskkill /F` needed for a clean stop.
-- **Verification**:
-  ```bash
-  curl -s -X POST http://localhost:<PORT>/agents/pm/stop
-
-  sleep 35
-
-  python -c "
-  import json, os
-  state = json.load(open('.squidsquad/.harness-state.json'))
-  pm = state.get('agents', {}).get('pm', {})
-  pid = pm.get('claude_pid')
-  print(f'Agent PID: {pid}, Intent: {pm.get(\"intent\")}')
-  try:
-      os.kill(pid, 0)
-      print('FAIL: agent still alive')
-  except (ProcessLookupError, PermissionError, TypeError):
-      print('PASS: agent exited cleanly')
-  "
-
-  curl -s http://localhost:<PORT>/events | python -c "
-  import sys, json
-  evts = json.load(sys.stdin)
-  stop_evts = [e for e in evts if e.get('event_type') == 'stop-requested' and e.get('role') == 'pm']
-  print(f'stop-requested events found: {len(stop_evts)}')
-  "
-  ```
+  1. Set `config.md → Event Driven → Enabled: no`.
+  2. Run `python references/scripts/compose.py deploy-all`.
+  3. Restart harness.
+  4. Boot agents.
+- **Expected**: Agents boot with cycle-based CLAUDE.md. `cycle-runner` sub-skill present, `event-driven-workflow` absent. `/loop` invoked. Detector thread not started.
+- **Verification**: `grep cycle-runner .squidsquad/skill/CLAUDE.md` → match. `grep event-driven-workflow .squidsquad/skill/CLAUDE.md` → no match. Agents begin cycling normally.
 
 ---
 
-## 7. Failure Modes
+### Category 7: Event Atomicity
 
-### TC-FM01: Monitor Tool Disconnect/Reconnect — Events Not Lost
+---
 
-- **Precondition**: `event-driven: yes`. Persistent session + Monitor tool wake model. Agent running with Monitor tool watching event bus. Disk-persistent event bus (TC-P1 passes) so events survive reconnection gaps.
+### TC-27: second event queued while first is in-flight — no simultaneous dispatch
+- **Precondition**: Agent processing an `assigned-to` event (long work in progress). Second `assigned-to` event dispatched for same role.
 - **Steps**:
-  1. Simulate Monitor tool disconnection — temporarily block network access to harness port from agent, or wait for Monitor tool timeout to expire.
-  2. During the disconnection gap, emit 3 events to the agent's role via `POST /events`.
-  3. Restore Monitor tool connection (or unblock network).
-  4. Agent's Monitor tool reconnects. Agent queries `GET /events?since=<last_processed_event_id>`.
-- **Expected**: All 3 events emitted during the disconnection gap are delivered to the agent on reconnect. No events silently lost. Disk-persistent event bus retains them. Agent processes them in order.
-- **Verification**:
-  ```bash
-  curl -s "http://localhost:<PORT>/events?event_type=test-disconnect" | python -c "
-  import sys, json
-  evts = json.load(sys.stdin)
-  closed = [e for e in evts if e.get('status') == 'closed']
-  print(f'Events closed after reconnection: {len(closed)}')
-  assert len(closed) >= 3, f'FAIL: only {len(closed)}/3 events processed'
-  print('PASS')
-  "
-  ```
+  1. Dispatch first event to skill. Confirm agent is actively working.
+  2. While agent works, dispatch a second `assigned-to` event to skill.
+  3. Observe harness and agent behavior.
+- **Expected**: Harness queues the second event (per-role in-flight queue). Agent is NOT interrupted mid-work. Agent finishes first event, acks it, THEN Monitor tool delivers the second event.
+- **Verification**: `GET /events/in-flight/skill` shows second event as `pending` while first is `in-flight`. Second event transitions to `in-flight` only after first is `acked`.
 
 ---
 
-### TC-FM02: Git Push Failure in Closure — Push Failure Reflected in Event Status
-
-- **Precondition**: `event-driven: yes`. A git remote temporarily unreachable (simulate by setting remote URL to a non-existent endpoint). An event dispatched to an agent that would normally produce a commit+push.
+### TC-28: Monitor tool queues notifications behind current work naturally
+- **Precondition**: Agent woken by Monitor tool for event A. While processing event A, event B arrives and `event_poll.py` outputs it to stdout.
 - **Steps**:
-  1. Configure remote to cause push failure: `git remote set-url origin http://127.0.0.1:1/fake`.
-  2. Dispatch a `work-available` event to pm.
-  3. Agent does work, posts closure with `commit_message`.
-  4. Harness processes closure — attempts `git push`, push fails.
-  5. Observe harness behavior.
-- **Expected**: Harness logs the push failure. Event closure is either: (a) marked `closed-with-errors` (commit succeeded locally but push failed), or (b) event remains `dispatched` with error note and is retried. Harness does NOT silently mark event `closed` if push failed — the closure API contract requires commit AND push before event is truly closed per CONTEXT.md ("Harness owns git commit/push"). Error handling from `cycle_post.py _do_commit_push` must be replicated in the harness closure handler.
-- **Verification**:
-  ```bash
-  curl -s http://localhost:<PORT>/events | python -c "
-  import sys, json
-  evts = json.load(sys.stdin)
-  t = next((e for e in evts if e['id'] == '<EVENT_ID>'), None)
-  print('Event status:', t.get('status'))
-  if t.get('status') == 'closed':
-      print('FAIL: event closed but push failed — harness did not detect push failure')
-  elif t.get('status') in ('dispatched', 'error', 'closed-with-errors'):
-      print('PASS: push failure captured in event status')
-  "
-  # Restore remote after test
-  git remote set-url origin <original_url>
-  ```
+  1. Agent starts processing event A.
+  2. Dispatch event B while A is in progress.
+  3. Observe agent behavior.
+- **Expected**: Monitor tool queues the event B notification. Agent does not interrupt event A processing. After acking event A, agent processes the queued Monitor notification for event B.
+- **Verification**: Logs show event A completed before event B processing begins. No interleaved partial work output.
 
 ---
 
-### TC-FM03: Event Bus Overflow — Old Events Evicted Gracefully
-
-- **Precondition**: Harness running. Event bus with a bounded size (1000 events if still using in-memory deque, or configurable limit if disk-persistent). Volume high enough to approach the limit.
+### TC-29: stop-requested does not interrupt a running event mid-work
+- **Precondition**: Agent processing `assigned-to` for Issue #789. `stop-requested` arrives.
 - **Steps**:
-  1. Emit 1,200 events rapidly via `POST /events`.
-  2. Query `GET /events` and check total event count.
-  3. Verify: with disk persistence, all 1,200 events stored. With in-memory deque (maxlen=1000), oldest 200 are evicted.
-  4. Query `GET /events?since=<old_event_id>` using an ID that would have been evicted.
-- **Expected**: Event bus handles overflow gracefully. No crash, no corruption. Evicted-cursor handling: returns oldest available events with a warning rather than empty response or 500 error. With disk persistence, the deque cap should be removed or significantly raised.
-- **Verification**:
-  ```bash
-  python -c "
-  import requests
-  BASE = 'http://localhost:<PORT>'
-  for i in range(1200):
-      requests.post(f'{BASE}/events', json={
-          'event_type': 'test-overflow', 'role': 'pm',
-          'payload': {'seq': i}
-      }, timeout=2)
-      if i % 100 == 0: print(f'Emitted {i}...')
-  print('Done emitting')
-  "
-
-  python -c "
-  import requests
-  evts = requests.get('http://localhost:<PORT>/events?limit=2000', timeout=2).json()
-  test_evts = [e for e in evts if e.get('event_type') == 'test-overflow']
-  print(f'Test events stored: {len(test_evts)}')
-  if len(test_evts) == 1200:
-      print('PASS: all events retained (disk persistence active)')
-  elif len(test_evts) == 1000:
-      print('PASS: deque bounded at 1000 — oldest 200 evicted as expected')
-  else:
-      print(f'UNEXPECTED: {len(test_evts)} events')
-  "
-
-  # Test evicted cursor handling
-  FIRST_EVENT_ID="<id_of_first_emitted_event>"
-  curl -s "http://localhost:<PORT>/events?since=$FIRST_EVENT_ID&limit=5" | python -c "
-  import sys, json
-  evts = json.load(sys.stdin)
-  print(f'Events returned with evicted cursor: {len(evts)}')
-  print('PASS' if len(evts) > 0 else 'FAIL: empty response on evicted cursor — should return oldest available')
-  "
-  ```
+  1. Agent working on Issue #789.
+  2. `stop-requested` broadcast arrives mid-work.
+  3. Observe ordering.
+- **Expected**: Agent completes Issue #789 work first. Then processes `stop-requested` (checkpoint, ack, exit). Both acks emitted in correct order.
+- **Verification**: `.event-state.json` shows `assigned-to` acked before `stop-requested` acked. Issue #789 has complete, non-partial output.
 
 ---
 
-## 8. Smoke Tests
-
-Quick go/no-go checks before full TC execution. All must pass before investing in deep TC runs.
-
-- [ ] Harness starts without error: `python references/scripts/harness.py` runs stably with no traceback.
-- [ ] `GET /health` returns 200 OK within 2 seconds of harness start.
-- [ ] `GET /events` returns 200 OK with a JSON list (empty list is acceptable).
-- [ ] `POST /events` with a minimal payload returns 200 OK and a valid event ID.
-- [ ] `.harness-state.json` exists and contains `in_flight_events` and `last_event_completed` fields after harness starts.
-- [ ] `compose.py deploy-all` exits 0 with `event-driven: yes` config.
-- [ ] Composed `pm/CLAUDE.md` does NOT contain `/loop` after deploy-all.
-- [ ] Composed `pm/CLAUDE.md` DOES contain `event-driven-workflow` content after deploy-all.
-- [ ] `event_bus_reader.py` `_discover_port()` returns non-None when called from within a sibling clone (requires TC-P2 environment).
-- [ ] `start_team.py --stop pm` completes within 30 seconds with no hanging process.
+### Category 8: Event Sensitivity (Debounce Buffer of 5)
 
 ---
 
-## 9. Regression Risks
-
-These are known risks that cannot be fully covered by test cases but must be monitored during QA:
-
-- **cycle_pre/cycle_post scripts accidentally removed**: `references/scripts/cycle_pre.py` and `references/scripts/cycle_post.py` must remain present even after template migration. If removed, agents running with `event-driven: no` will break with `FileNotFoundError`. TC-R01 covers behavior; add a file-existence check to smoke tests.
-- **compose.py deploy-all race**: If `compose deploy-all` runs while an agent is mid-cycle reading its `CLAUDE.md`, the agent may read a partially-written file. The existing atomic write pattern (`.tmp` → `mv`) in compose output must be preserved. Not easily automated — requires manual race-condition-injection testing.
-- **tracker.py comment dedup by event_id (GAP-7)**: Without the `event_id` parameter on `tracker.comment()`, re-emitted events will post duplicate comments. TC-2-05 verifies at-most-once/idempotent behavior. If comments appear duplicated, GAP-7 is not fixed.
-- **context-pressure path for clone agents (GAP-8)**: harness.py `GET /agents/{role}/health` reads context-pressure from the primary repo's path. For clone agents, `statusline.sh` writes to the clone's path. Harness reads the wrong file, potentially missing context pressure spikes. TC-WIN01 may inadvertently catch this if testing with a clone agent.
-- **Event bus overflow at 1000 events**: If disk persistence is implemented but the in-memory deque cap is not removed or raised, high-volume scenarios still lose events. TC-FM03 covers this.
-- **statusline.sh cycle-timer display**: `statusline.sh` uses `current-state` file mtime and `iter-N.md` files for cycle display. After Phase 3, these files are not updated. Status bar may show stale/broken cycle timer. Known degraded-display risk — `statusline.sh` redesign is out of scope for this EPIC per CONTEXT.md.
-- **health_check.py legacy fallback**: `harness.py update_health()` calls `health_check.check_agent_health()` as fallback. Under `event-driven: yes`, this must not produce false-positive health signals. TC-R01 should verify `health_check.py` fallback does not activate in event-driven mode.
-- **Per-event log format migration**: Historical `iter-N.md` files in `.squidsquad/<role>/iterations/` must coexist with new per-event log format. No migration path defined in this EPIC — discovery risk during QA.
-- **Human input as event source**: `human-input-received` event type is not currently in `event_catalog.py` RECOGNIZED tier. If human input mid-event is not handled, it will be silently ignored or dropped. Flag for dev to confirm human input routing.
+### TC-30: event sensitivity — agent processes events 5 behind queue tip
+- **Precondition**: `event-sensitivity: 5` (default). Agent idle. 10 events dispatched rapidly.
+- **Steps**:
+  1. Dispatch 10 `assigned-to` events in rapid succession.
+  2. Observe which events agent receives first.
+- **Expected**: Agent processes events starting 5 behind the current queue tip — processes settled events, not bleeding-edge. The most recent 5 remain buffered until the queue settles. This prevents reacting to a burst before it is complete.
+- **Verification**: If 10 events arrive, agent's first delivery is from events 1-5 range, with the latest 5 buffered. `GET /events/in-flight/skill` shows queued events with pending status.
 
 ---
 
-## 10. Comprehension Questions
-
-These verify that a fresh agent, given only the migrated template files, can correctly derive the event-driven workflow. QA spawns a fresh subagent, provides only the listed files, and scores answers against expected derivations. No prior context or conversation memory permitted.
-
-### CQ-1: How Does an Agent Wait for Work in Event-Driven Mode?
-
-- **Files to provide**:
-  - `.squidsquad/pm/CLAUDE.md` (composed output, post-migration — no `/loop`, no cycle prose)
-  - `references/sub-skills/common/event-driven-workflow.md`
-  - `references/sub-skills/common/agent-lifecycle.md` (rewritten for persistent session)
-- **Question to ask fresh agent**: "You are a PM agent that has just booted. There is no `/loop` command and no `cycle_pre.py` to run. How do you wait for work to arrive? What tool or mechanism keeps you active between work items?"
-- **Expected derivation**: Agent must answer that the Monitor tool (Claude Code v2.1.98+) watches the event bus for incoming events. The agent does not poll manually, does not sleep, and does not invoke `/loop`. The Monitor tool wakes the agent when an event with the agent's role arrives. The agent sits in an idle/persistent session state between events.
-- **Pass criteria**: Answer mentions Monitor tool, event bus watching, and passive idle state. Must NOT mention `/loop`, `cycle_pre`, or manual polling.
+### TC-31: event sensitivity — L4 override via config.md to 0 (no buffer)
+- **Precondition**: `config.md → Event Driven → Event Sensitivity: 0`.
+- **Steps**:
+  1. Dispatch 3 events rapidly.
+  2. Observe delivery timing.
+- **Expected**: With sensitivity = 0, agent receives events immediately at queue tip. No 5-event buffer delay.
+- **Verification**: `python references/scripts/config.py get event-sensitivity` returns `0`. Events delivered immediately.
 
 ---
 
-### CQ-2: What Must an Agent Do After Completing Event Work?
-
-- **Files to provide**:
-  - `.squidsquad/pm/CLAUDE.md` (composed output, post-migration)
-  - `references/sub-skills/common/event-driven-workflow.md`
-- **Question to ask fresh agent**: "You have just finished the creative work for an event (e.g., an improvement scan triggered by a `scan-due` event). The work is done. What must you do next? What happens if you skip this step?"
-- **Expected derivation**: Agent must answer that it is required to call `POST /events/{event_id}/complete` with a structured result payload (including status transitions, tracker comments, commit message, summary). Skipping this call leaves the event unclosed, which the harness detects as a diagnostic signal — the harness may diagnose a crash, re-emit the event, or alert the human. The harness (not the agent) executes git commits, pushes, and tracker transitions after receiving the closure.
-- **Pass criteria**: Answer mentions the POST closure call with event_id, structured payload, and consequence of not closing. Must NOT say the agent commits or pushes directly.
+### Category 9: Scan Cooldown (15 Minutes Between Scans)
 
 ---
 
-### CQ-3: What Happens If a stop-requested Event Arrives?
-
-- **Files to provide**:
-  - `.squidsquad/pm/CLAUDE.md` (composed output, post-migration)
-  - `references/sub-skills/common/event-driven-workflow.md`
-  - `references/sub-skills/common/agent-lifecycle.md` (rewritten)
-- **Question to ask fresh agent**: "While you are idle (or mid-work), a `stop-requested` event arrives on the event bus and the Monitor tool wakes you with it. What do you do? In what order?"
-- **Expected derivation**: Agent must answer: (1) checkpoint current working state to `working-state.md`, (2) if mid-event, attempt to post a partial closure or note the interruption, (3) exit the session cleanly. Agent must NOT attempt to ignore the event, defer it, or continue working. The `stop-requested` event is the unified stop channel — the same Monitor tool that delivers work events also delivers the stop signal.
-- **Pass criteria**: Answer includes checkpointing working state and clean exit. Must NOT say the agent polls a sentinel file or waits for `/loop` to end — the stop arrives via event bus, not via cycle end.
+### TC-32: scan cooldown — 15-minute gap enforced between scans
+- **Precondition**: `scan-cooldown: 15` (default). Agent just completed an improvement scan.
+- **Steps**:
+  1. Agent completes scan. Scan timestamp recorded.
+  2. System goes idle. Wait 14 minutes.
+  3. Observe: no scan at 14 minutes.
+  4. Wait 1 more minute (15 total). Observe.
+- **Expected**: No scan triggered at 14 minutes. Scan triggered at 15-minute mark. First scan after boot happens immediately on idle (no initial cooldown — scan immediately on idle is the specified default).
+- **Verification**: Scan log or event shows scan at 15-minute boundary, not before. First-ever scan happens immediately on going idle.
 
 ---
 
-### CQ-4: How Does the Agent Know Which Event to Process Next?
+### TC-33: scan cooldown — issue gate blocks scan even when cooldown elapsed
+- **Precondition**: `scan-cooldown: 15`. Open issues assigned to pm. 15 minutes elapsed.
+- **Steps**:
+  1. Confirm open issue exists for pm role.
+  2. Wait 15 minutes with no events.
+  3. Observe whether scan fires.
+- **Expected**: Scan does NOT fire while open issues exist for the role. Issues take priority over scans.
+- **Verification**: No scan event in event stream. `GET /events?role=pm&event_type=scan-due` → empty. Open issue persists unblocked.
 
-- **Files to provide**:
-  - `.squidsquad/pm/CLAUDE.md` (composed output, post-migration)
-  - `references/sub-skills/common/event-driven-workflow.md`
-- **Question to ask fresh agent**: "Multiple events may arrive for your role over time. How do you know which event to process now? Can you work on two events at once? What ensures you don't miss events?"
-- **Expected derivation**: Agent must answer that the harness dispatches exactly one event at a time per role (per-role in-flight queue — TC-P3). The Monitor tool detects the event, the agent reads its payload and processes it. Agent must NOT work on two events simultaneously — it processes one, closes it, then waits for the next dispatch. The harness queues subsequent events and delivers them one at a time.
-- **Pass criteria**: Answer mentions single-event processing, harness queueing, and sequential dispatch. Must NOT say the agent picks from a list of events or processes events concurrently.
+---
+
+### TC-34: scan cooldown — L4 override via config.md
+- **Precondition**: `config.md → Event Driven → Scan Cooldown Minutes: 5`.
+- **Steps**:
+  1. Agent completes scan.
+  2. Wait 5 minutes idle.
+  3. Observe next scan trigger.
+- **Expected**: Scan fires after 5 minutes, not 15.
+- **Verification**: `python references/scripts/config.py get scan-cooldown` returns `5`. Scan event at ~5-minute mark.
+
+---
+
+### Category 10: Edge Cases
+
+---
+
+### TC-35: event storm — queue cap enforced at 50, drop counter incremented
+- **Precondition**: `event-queue-cap: 50` (default). Agent idle.
+- **Steps**:
+  1. Dispatch 60 events to skill in rapid succession.
+  2. Observe queue behavior.
+- **Expected**: First 50 events queued. Events 51-60 dropped. Drop counter incremented (observable in harness metrics). No crash. No silent loss — counter tracks dropped events. Agent processes all 50 queued events in order.
+- **Verification**: `GET /events/in-flight/skill` shows max 50 entries. Harness log or counter shows 10 dropped. Agent eventually acks all 50 queued events.
+
+---
+
+### TC-36: agent crash mid-event — harness detects via ack timeout, reboots, re-emits
+- **Precondition**: `event-timeout-minutes: 2`, `event-max-retries: 3`. Event dispatched to skill.
+- **Steps**:
+  1. Kill skill agent PID mid-processing (simulate crash).
+  2. Wait for timeout.
+- **Expected**: Harness detects no ack within timeout. PID is dead → diagnosis: crashed → respawn. Harness reboots skill. Event re-emitted to rebooted agent. Rebooted agent reads `working-state.md` and picks up from checkpoint.
+- **Verification**: New PID for skill in `GET /agents/skill`. Event re-appears in event stream with `retry_count: 1`. Event eventually acked by rebooted agent.
+
+---
+
+### TC-37: no events for long period — agent sits idle, visual indicator shown
+- **Precondition**: Agent running in event-driven mode. No events for 2 hours.
+- **Steps**:
+  1. Let system idle for extended period with no GitHub activity.
+  2. Observe agent terminal and harness console.
+- **Expected**: Agent prints idle indicator. Harness console shows all agents as `idle` with timestamps. No cycle logs written. Monitor tool continues watching. Agent process alive throughout. No false-positive death declarations from harness.
+- **Verification**: `GET /agents/skill` → `status: idle`, `idle_since: <timestamp>`. `GET /agents/skill/health` → `alive: true`. No error events in event stream.
+
+---
+
+### TC-38: multi-agent broadcast — shipped ack is independent per agent, no blocking
+- **Precondition**: 3 agents alive (pm, skill, qa). `shipped` event broadcast.
+- **Steps**:
+  1. Emit `shipped {issue_or_pr: 789}`.
+  2. One agent (qa) is slow to ack (simulate 30-second delay).
+  3. Other agents (pm, skill) ack immediately.
+- **Expected**: pm and skill acks processed immediately. Harness does NOT wait for qa to ack before processing pm/skill acks. qa acks 30 seconds later and it is processed. No harness timeout or re-emit due to slow qa ack. Each ack is independent.
+- **Verification**: `GET /events/{id}` shows `acked_by: [pm, skill]` after 5 seconds. `acked_by: [pm, skill, qa]` after 35 seconds. No harness timeout triggered for pm/skill while qa is slow.
+
+---
+
+### TC-39: multi-agent broadcast — version-bump ack is independent per agent
+- **Precondition**: Same as TC-38 but with `version-bump` event.
+- **Steps**: Same pattern as TC-38 with `version-bump {version: "2.0.0"}`.
+- **Expected**: Same independent-ack behavior. Each agent's status line updated independently.
+- **Verification**: Same as TC-38.
+
+---
+
+### Category 11: Disk Persistence and Crash Recovery
+
+---
+
+### TC-40: disk persistence — in-flight events survive harness crash and restart
+- **Precondition**: Event dispatched to skill (status: `in-flight`). Harness crashes (kill -9 harness PID).
+- **Steps**:
+  1. Dispatch event. Confirm `in-flight` in `.squidsquad/.event-state.json`.
+  2. Kill harness process.
+  3. Restart harness.
+- **Expected**: Harness reads `.event-state.json` on boot. Finds event in `in-flight` state. Replays it to the skill agent. Event is NOT lost.
+- **Verification**: After restart, `GET /events/{id}` still exists with same ID. `POST /events/replay` (or auto-replay on boot) re-emits the event. Skill agent receives event and acks it.
+
+---
+
+### TC-41: disk persistence — event-state.json written atomically on every state change
+- **Precondition**: Harness running, event-driven mode.
+- **Steps**:
+  1. Dispatch event. Check `.squidsquad/.event-state.json`.
+  2. Agent acks. Check file again.
+- **Expected**: File updated on dispatch (`status: in-flight`) and on ack receipt (`status: acked`, `acked_at` populated). Each update is atomic (tmp + rename pattern). File is valid JSON after each write.
+- **Verification**: File stat timestamps advance on each state change. `python -m json.tool .squidsquad/.event-state.json` → valid JSON after each write.
+
+---
+
+### TC-42: crash recovery — POST /events/replay replays in-flight events
+- **Precondition**: Two events in `.event-state.json` with `status: in-flight` from a previous harness run.
+- **Steps**:
+  1. Start fresh harness with the pre-populated `.event-state.json`.
+  2. Call `POST /events/replay`.
+- **Expected**: Response: `{replayed: 2, failed: 0}`. Both events re-queued for delivery. Skill agent (if alive) receives both events.
+- **Verification**: `GET /events?role=skill` shows both events available for poll. Both eventually acked.
+
+---
+
+### TC-43: crash recovery — two-phase received→closed survives mid-closure crash
+- **Precondition**: Agent POSTs ack. Harness persists state but crashes before executing git operations.
+- **Steps**:
+  1. Simulate harness crash after persisting ack state but before executing git commit/push side effects.
+  2. Restart harness.
+  3. Harness scans for events in intermediate state.
+- **Expected**: Harness replays side effects (git commit/push) from persisted state. Idempotency markers (HTML comment in tracker: `<!-- event_id:abc123 -->`, `Event-Id` git commit trailer) prevent duplicates. Event transitions to fully closed after replay.
+- **Verification**: Tracker comment not duplicated. Git commit not duplicated (check `Event-Id` trailer in log). Event state transitions to `closed`.
+
+---
+
+### TC-44: harness state — agents.*.in_flight_events persisted and restored on restart
+- **Precondition**: Skill agent has `in_flight_events: ["evt-abc"]`. Harness restarts.
+- **Steps**:
+  1. Confirm `in_flight_events` in `.harness-state.json`.
+  2. Kill and restart harness.
+  3. Read restored state.
+- **Expected**: `GET /agents/skill` after restart shows `in_flight_events: ["evt-abc"]` restored. Harness knows the event is in-flight and resumes monitoring for ack.
+- **Verification**: `.harness-state.json` contains `in_flight_events` under skill. After restart, `GET /events/in-flight/skill` returns `evt-abc`.
+
+---
+
+### Category 12: Upgrade Path
+
+---
+
+### TC-45: Phase 1.5 prerequisites active regardless of event-driven config gate
+- **Precondition**: Fresh install of #7630 changes with `event-driven: no`.
+- **Steps**:
+  1. Start harness.
+  2. Verify P-1 through P-4 behavior.
+- **Expected**: P-1 (disk persistence), P-2 (clone discovery fix), P-3 (per-role queue), P-4 (thread safety) all active regardless of `event-driven` flag. Infrastructure improvements are not gated.
+- **Verification**: `.squidsquad/.event-state.json` created on harness start. `event_bus.py._discover_port()` works from clone directories. `GET /agents/skill` shows `in_flight_events` field exists. No race conditions under concurrent load.
+
+---
+
+### TC-46: compose.py deploy-all produces correct templates per config gate
+- **Precondition**: Starting with `event-driven: no`.
+- **Steps**:
+  1. `python references/scripts/compose.py deploy-all` with `event-driven: no`. Inspect `.squidsquad/skill/CLAUDE.md`.
+  2. Set `event-driven: yes`. Re-run compose. Inspect again.
+- **Expected**: Step 1: CLAUDE.md contains `cycle-runner`, no `event-driven-workflow`. Step 2: CLAUDE.md contains `event-driven-workflow`, no `cycle-runner`. No residual references from either mode after recompose.
+- **Verification**: `grep -c cycle-runner .squidsquad/skill/CLAUDE.md` → 0 after step 2. `grep -c event-driven-workflow .squidsquad/skill/CLAUDE.md` → 1+ after step 2.
+
+---
+
+### TC-47: upgrade from cycle-based to event-driven — stop-recompose-restart sequence
+- **Precondition**: Agents running in cycle-based mode. Upgrading to event-driven mode.
+- **Steps**:
+  1. `python references/scripts/start_team.py --stop --all`
+  2. Set `event-driven: yes` in config.md.
+  3. `python references/scripts/compose.py deploy-all`
+  4. Clean stale sentinel files from clone directories.
+  5. Start harness.
+- **Expected**: All steps complete without error. No lingering `/loop` sessions. Agents boot in event-driven mode. No mix of cycle-based and event-driven agents.
+- **Verification**: `GET /agents` → all agents `status: idle` (not cycling). Agent terminals show Monitor tool boot, not `/loop` boot.
+
+---
+
+### TC-48: pre-upgrade config.md (no Event Driven section) handled gracefully
+- **Precondition**: `config.md` from before #7630 (no `## Event Driven` section).
+- **Steps**:
+  1. Run post-#7630 harness with pre-#7630 config.md.
+- **Expected**: Harness starts without error. All new config fields default gracefully (`event-driven: no`, `event-timeout-minutes: 10`, etc.). No crash or missing key error.
+- **Verification**: Harness exit code 0. `python references/scripts/config.py get event-driven` → `no`. All 7 new fields return defaults.
+
+---
+
+### TC-49: event_catalog.py — 5 L1 event types present in RECOGNIZED tier
+- **Precondition**: Post-#7630 `event_catalog.py`.
+- **Steps**:
+  1. Import `RECOGNIZED` from `event_catalog`.
+  2. Check for all 5 event types.
+- **Expected**: `assigned-to`, `stop-requested`, `shipped`, `version-bump`, `ack` all present in `RECOGNIZED` with descriptions and sources.
+- **Verification**: `python -c "from event_catalog import RECOGNIZED; print(list(RECOGNIZED.keys()))"` → includes all 5. No `KeyError` on any of the 5.
+
+---
+
+### Category 13: Regression Tests for Existing Functionality
+
+---
+
+### TC-50: existing POST /events endpoint still works for non-ack events
+- **Precondition**: Post-#7630 harness running. Existing agent scripts emitting cycle events in backward-compat mode.
+- **Steps**:
+  1. POST a `cycle-start` event: `{"event_type": "cycle-start", "role": "skill"}`.
+- **Expected**: Harness accepts the event. Returns `{status: "ok"}`. Existing event emission from `event_bus.py emit()` is unchanged.
+- **Verification**: HTTP 200. Event appears in `GET /events`. No regression in existing event bus usage.
+
+---
+
+### TC-51: existing GET /events filtering still works correctly
+- **Precondition**: Multiple events for multiple roles in harness.
+- **Steps**:
+  1. `GET /events?role=skill` — should return only skill events.
+  2. `GET /events?event_type=assigned-to` — should return only that type.
+  3. `GET /events?since=<cursor>` — should return only events after cursor.
+- **Expected**: All existing filter params work as before. No regression.
+- **Verification**: Response counts match expected filtered results. No cross-role contamination.
+
+---
+
+### TC-52: thin_launcher.py boot prompt conditional on event-driven flag
+- **Precondition**: Post-#7630 `thin_launcher.py`.
+- **Steps**:
+  1. With `event-driven: no`, inspect boot prompt.
+  2. With `event-driven: yes`, inspect boot prompt.
+- **Expected**: `event-driven: no` → boot prompt contains Ralph Loop invocation (`/loop`). `event-driven: yes` → boot prompt contains `event_poll.py` and Monitor tool reference, no `/loop`.
+- **Verification**: Read `thin_launcher.py` prompt generation logic. Confirm conditional branch on `event-driven` config flag.
+
+---
+
+### TC-53: boot_remote.py returns terminal PID alongside agent PID
+- **Precondition**: Post-#7630 `boot_remote.py`.
+- **Steps**:
+  1. Boot a skill agent via `boot_remote.py`.
+  2. Inspect returned data.
+- **Expected**: `_spawn_windows` (and Unix variants) return both `agent_pid` and `terminal_pid`. Harness stores `terminal_pid` in `.harness-state.json`.
+- **Verification**: `.harness-state.json` contains `terminal_pid` field for the skill agent. Both PIDs are valid OS process IDs and are distinct from each other.
+
+---
+
+### TC-54: event_bus.py ack() function — fire-and-forget POST to /events
+- **Precondition**: Harness running.
+- **Steps**:
+  1. Call `python references/scripts/event_bus.py ack evt-abc skill`.
+  2. Check harness received it.
+- **Expected**: `ack()` POSTs `{event_type: "ack", role: "skill", payload: {event_id: "evt-abc"}}` to harness `/events`. Returns without waiting for harness to process side effects.
+- **Verification**: `GET /events?event_type=ack&role=skill` shows the ack event. HTTP round-trip completes quickly.
+
+---
+
+### TC-55: event_validator.py — validates all 5 new L1 event types correctly
+- **Precondition**: Post-#7630 `event_validator.py` and `event_catalog.py`.
+- **Steps**:
+  1. Validate each of the 5 event types with correct payloads.
+  2. Validate each with missing required payload fields.
+- **Expected**: Valid events pass. Invalid events (missing `issue_or_pr` in `assigned-to`, missing `event_id` in `ack`, etc.) return validation errors.
+- **Verification**: `python -c "from event_validator import validate; validate('assigned-to', {'role': 'skill', 'issue_or_pr': 123})"` → no error. Missing field → validation error raised.
+
+---
+
+### TC-56: thread safety — concurrent event dispatch and ack do not corrupt state
+- **Precondition**: Harness running with `event-driven: yes`. Multiple agents.
+- **Steps**:
+  1. Dispatch 5 events concurrently (different roles).
+  2. All agents ack concurrently.
+  3. Inspect `.event-state.json` for consistency.
+- **Expected**: No race conditions. All events tracked correctly. No lost acks. `.event-state.json` valid JSON after concurrent writes. No `RuntimeError` about dictionary size change.
+- **Verification**: `python -m json.tool .squidsquad/.event-state.json` → valid JSON. All 5 events show `status: acked`. Harness logs show no lock exceptions.
+
+---
+
+### TC-57: per-role event queue — each role's queue is independent
+- **Precondition**: Three roles (pm, skill, qa). Events dispatched to all simultaneously.
+- **Steps**:
+  1. Dispatch 10 events to pm, 5 to skill, 2 to qa simultaneously.
+- **Expected**: Each role has its own independent queue. pm queue has 10, skill has 5, qa has 2. Skill processing does not block pm queue. No cross-role contamination.
+- **Verification**: `GET /events/in-flight/pm` → up to 10 entries. `GET /events/in-flight/skill` → up to 5 entries. Queues drain independently.
+
+---
+
+### TC-58: clone isolation — event_bus.py and event_poll.py discover harness from clone directory
+- **Precondition**: Agent running in sibling clone directory (e.g., `SquidSquad-skill/`). Harness distributes `.harness-port` to clone's `.squidsquad/` at boot.
+- **Steps**:
+  1. From clone directory, run `python references/scripts/event_bus.py emit cycle-start skill`.
+  2. From clone directory, run `python references/scripts/event_poll.py skill`.
+- **Expected**: Both scripts find `.harness-port` in the clone's local `.squidsquad/` directory. No parent-directory walk needed. Both succeed.
+- **Verification**: Both scripts emit/receive without error from clone path. No `FileNotFoundError` for `.harness-port`. Event appears in harness event stream.
+
+---
+
+## Smoke Tests
+
+These must pass within 5 minutes of deploying #7630 changes before investing in full TC runs:
+
+- [ ] `python references/scripts/config.py get event-driven` returns a value without error (no crash)
+- [ ] `python references/scripts/event_poll.py --help` or running with no harness exits cleanly (no Python traceback on stdout)
+- [ ] `python -c "from event_catalog import RECOGNIZED; assert 'assigned-to' in RECOGNIZED"` passes
+- [ ] `python -c "from event_catalog import RECOGNIZED; assert 'ack' in RECOGNIZED"` passes
+- [ ] `python -c "from event_catalog import RECOGNIZED; assert 'stop-requested' in RECOGNIZED"` passes
+- [ ] `GET /events` returns 200 with `{events: [], total: 0}` on fresh harness
+- [ ] `GET /events/in-flight/skill` returns 200 with empty list on fresh harness
+- [ ] `GET /monitors` returns 200 (or 404 with clear message when `event-driven: no`)
+- [ ] `.squidsquad/.event-state.json` created on harness start (may be `{}` initially)
+- [ ] `compose.py deploy-all` with `event-driven: no` produces CLAUDE.md containing `cycle-runner`
+- [ ] `compose.py deploy-all` with `event-driven: yes` produces CLAUDE.md containing `event-driven-workflow`
+- [ ] Existing `POST /events` still returns `{status: "ok"}` for a non-ack event (regression check)
+
+---
+
+## Regression Risks
+
+- **cycle_pre.py / cycle_post.py called by agents in event-driven mode**: If compose accidentally includes both `cycle-runner` and `event-driven-workflow`, agents may run both models simultaneously. Watch for agents invoking `cycle_pre.py` when `event-driven: yes` is set.
+- **POST /events/{id}/complete referenced in old agent templates**: If any residual CLAUDE.md contains the old endpoint, agents will 404 on closure attempts. Verify no old endpoint references after compose with `grep -r "events.*complete" .squidsquad/*/CLAUDE.md`.
+- **event_bus.py emit() regresses after ack() addition**: The new `ack()` function shares infrastructure with `emit()`. A refactor could break emit for existing callers. Run existing event bus tests after adding `ack()`.
+- **`.harness-state.json` schema change breaks existing harness reads**: New fields (`in_flight_events`, `last_wake_at`, `idle_since`, `event_state`) must not break `load_state()` on configs with the old schema. Validate graceful migration — old fields preserved, new fields added with defaults.
+- **event_catalog.py RECOGNIZED additions break derivation (#5868)**: Event contract derivation depends on the catalog. Adding 5 new types must not confuse the derivation logic for existing harness-internal types.
+- **Thread contention under load**: `EventLifecycleManager` lock must not deadlock with existing `HarnessState._lock` and `EventStream._lock`. Multi-lock acquisition paths must maintain consistent lock ordering.
+- **thin_launcher.py boot prompt regression**: If the conditional is wrong, all agents may get event-driven prompt even when `event-driven: no`, or cycle prompt when `event-driven: yes`. Test both branches explicitly (TC-52).
+- **Monitor tool stdout parsing spuriously triggered**: If `event_poll.py` emits any non-event output (debug logs, empty lines, error tracebacks) to stdout, Monitor tool may misinterpret it as an event trigger. The script's stdout must be clean event JSON only — errors go to stderr.
+- **Ack processing in POST /events swallows non-ack events**: Adding ack logic to the existing `receive_event` handler must branch cleanly. Existing non-ack events must still be processed as before. Verify with TC-50.
+- **Windows ProactorEventLoop conflicts with new threads**: Per known project risk, asyncio pipe exceptions are cosmetic now but adding `EventLifecycleManager` threads and the external activity detector thread may surface new Windows-specific failures when the harness web UI (issue #3963) is added.
+
+---
+
+## Comprehension Questions
+
+These questions are answered by a fresh agent reading only the modified files. They validate that the instructions are self-contained and unambiguous. QA spawns a fresh subagent, provides only the listed files, and scores answers against expected derivations. No prior context or conversation memory permitted.
+
+### CQ-1: What is the agent's wake mechanism in event-driven mode?
+- **Files**: `references/sub-skills/common/event-driven-workflow.md`
+- **Expected**: Agent uses the Monitor tool watching `event_poll.py` stdout. `event_poll.py` queries `GET /events?since=<cursor>&role=<role>` from the harness. When new events arrive, the script outputs them to stdout and Monitor tool wakes the agent within the same persistent session. No `/loop`, no manual polling, no kill/respawn.
+
+### CQ-2: How does an agent close (complete) an event?
+- **Files**: `references/sub-skills/common/event-driven-workflow.md`
+- **Expected**: Agent runs `python references/scripts/event_bus.py ack <event_id> <role>`. This POSTs an `ack` event to the harness `/events` endpoint with the `event_id` being acknowledged. No separate endpoint exists for event closure. Ack is the universal closure mechanism.
+
+### CQ-3: What does an agent do when it receives a stop-requested event?
+- **Files**: `references/sub-skills/common/event-driven-workflow.md`, `references/sub-skills/common/event-reactions.md`
+- **Expected**: Finish current event atomically (do not interrupt mid-handling). Checkpoint working state to `.squidsquad/<role>/working-state.md`. Stop the Monitor tool. Emit `ack` for the `stop-requested` event. Agent process exits. Does NOT reboot. Does NOT continue cycling.
+
+### CQ-4: What is the source of truth for an assigned-to event's work context?
+- **Files**: `references/sub-skills/common/event-reactions.md`, `references/sub-skills/common/event-driven-workflow.md`
+- **Expected**: The forge (GitHub Issues/PRs). The `assigned-to` payload only contains `{role, issue_or_pr}`. All context — comments, status, history, findings — lives in the GitHub Issue or PR. Agent reads the forge when it receives the event, not the event payload. Events are routing signals, not context carriers.
+
+### CQ-5: What are the 5 event types and their payloads?
+- **Files**: `references/sub-skills/common/event-reactions.md`
+- **Expected**: `assigned-to {role, issue_or_pr}`, `stop-requested {source, target}`, `shipped {issue_or_pr}`, `version-bump {version}`, `ack {event_id}`. All L1 universal. No L2/L3 event-reaction sub-skills needed because roles already know how to handle issues from their existing role instructions.
+
+### CQ-6: Can an agent be interrupted mid-event to handle a higher-priority event?
+- **Files**: `references/sub-skills/common/event-reactions.md`, `references/sub-skills/common/event-driven-workflow.md`
+- **Expected**: No. Events are atomic — an agent completes the entire unit of work before picking up the next event. Monitor tool notifications naturally queue behind the current event. No interruption, even for stop-requested (which waits for the current event to finish).
+
+### CQ-7: What happens if the agent does not ack an event within the timeout?
+- **Files**: `references/sub-skills/common/event-driven-workflow.md`
+- **Expected**: Harness re-emits the event (retry_count increments). After `event-max-retries` retries (default 3), harness declares the agent dead, kills the PID, reboots the agent, and re-emits the event to the rebooted agent. If reboots also fail, harness escalates to PM.
+
+### CQ-8: What scan cooldown applies between improvement scans?
+- **Files**: `references/sub-skills/common/event-reactions.md`
+- **Expected**: 15 minutes (default, L1). Overridable via `config.md → Event Driven → Scan Cooldown Minutes`. First scan after going idle happens immediately (no initial cooldown). Subsequent scans are separated by the cooldown. Issue gate: scan does not fire if open issues exist for the role.
+
+### CQ-9: How does the external activity detector decide what is "not SquidSquad's own work"?
+- **Files**: Harness documentation or composed agent instructions referencing the detector
+- **Expected**: Filters by `squidsquad` label (issues/PRs) and agent commit prefix pattern (`skill:`, `pm:`, `qa:`, `dm:`). Activity matching either filter is ignored. Activity without these markers triggers `assigned-to` for PM. This prevents event loops from SquidSquad's own GitHub activity.
+
+### CQ-10: If event-driven mode is not enabled, what happens on agent boot?
+- **Files**: `references/scripts/thin_launcher.py`, agent CLAUDE.md composed with `event-driven: no`
+- **Expected**: Agent boots with cycle-based prompt. `/loop` is invoked. `cycle_pre.py` and `cycle_post.py` run each cycle. `event-driven-workflow` sub-skill is not included. Full backward compatibility with pre-#7630 behavior.
+
+### CQ-11: What does the ack of a stop-requested event signal to the harness?
+- **Files**: `references/sub-skills/common/event-reactions.md`
+- **Expected**: Harness treats the `ack` of a `stop-requested` as shutdown confirmation. Agent stopped as requested. Harness does NOT reboot the agent (intent = stopping). No separate `stopped` event is needed — `ack` is the universal closure mechanism that also serves as stop confirmation.
+
+### CQ-12: How does an agent in a clone directory discover the harness port?
+- **Files**: `references/scripts/event_bus.py`, `references/scripts/event_bus_reader.py`
+- **Expected**: Agent reads `.harness-port` from the clone's local `.squidsquad/` directory. Harness distributes this file to each clone at boot (deferred init). No parent-directory walk needed. The direct path always works for clone agents.
