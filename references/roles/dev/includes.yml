@@ -2,6 +2,7 @@
 # Order matters — includes are resolved top-to-bottom
 includes:
   - common/cycle-runner
+  - common/event-driven-workflow
   - common/event-reactions
   - common/context-pressure
   - common/resume-working-state

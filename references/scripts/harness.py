@@ -443,7 +443,11 @@ class EventLifecycleManager:
         self._persist()
 
     def dispatch(self, event_id: str, role: str, event: dict):
-        """Mark an event as dispatched to a role (in-flight tracking)."""
+        """Mark an event as dispatched to a role (in-flight tracking).
+
+        NOTE: Not yet wired into POST /events — Phase 4 plumbing. Currently
+        dormant; will be activated when event-driven mode replaces the loop.
+        """
         with self._lock:
             if role not in self._in_flight:
                 self._in_flight[role] = []
@@ -477,10 +481,10 @@ class EventLifecycleManager:
 
         Persist last 200 events for crash recovery; full 1000 are in-memory only.
         Lock ordering: self._lock → EventStream._lock (via get_recent).
+        Entire snapshot+write is inside self._lock to prevent concurrent .tmp clobber.
         """
-        # Snapshot stream data outside our lock to avoid cross-lock ordering issues
-        recent_events = list(self._stream.get_recent(200))
         with self._lock:
+            recent_events = list(self._stream.get_recent(200))
             data = {
                 "events": recent_events,
                 "in_flight": {r: list(ids) for r, ids in self._in_flight.items()},
@@ -488,12 +492,12 @@ class EventLifecycleManager:
                 "dispatch_times": dict(self._dispatch_times),
                 "retry_counts": dict(self._retry_counts),
             }
-        try:
-            tmp = EVENT_STATE_FILE.with_suffix(".tmp")
-            tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-            tmp.replace(EVENT_STATE_FILE)
-        except OSError:
-            pass  # Best-effort — don't crash harness on persist failure
+            try:
+                tmp = EVENT_STATE_FILE.with_suffix(".tmp")
+                tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+                tmp.replace(EVENT_STATE_FILE)
+            except OSError:
+                pass  # Best-effort — don't crash harness on persist failure
 
     def load(self):
         """Restore event state from disk on harness restart. Idempotent."""
@@ -509,9 +513,10 @@ class EventLifecycleManager:
             self._loaded = True
             return
 
+        # Restore in-flight/dispatch state under lock, then load events outside
+        # to maintain consistent lock ordering: self._lock → EventStream._lock
+        events_to_load = data.get("events", [])
         with self._lock:
-            for event in data.get("events", []):
-                self._stream.append(event)
             self._in_flight = {
                 r: list(ids) for r, ids in data.get("in_flight", {}).items()
             }
@@ -522,6 +527,9 @@ class EventLifecycleManager:
             self._retry_counts = {
                 k: int(v) for k, v in data.get("retry_counts", {}).items()
             }
+        # Append events outside self._lock (acquires EventStream._lock)
+        for event in events_to_load:
+            self._stream.append(event)
         self._loaded = True
 
     def timeout_scan(self):
@@ -1064,10 +1072,11 @@ async def receive_event(request: Request):
                 _log(f"Event {ack_event_id} acked by {role}")
             # If ack references stop-requested, treat as shutdown confirmation
             if body.get("payload", {}).get("result") == "stop-confirmed":
-                agent = state.get_agent(role)
-                if agent:
-                    agent.intent = AgentState.INTENT_STOPPING
-                    state.save_state()
+                with state._lock:
+                    agent = state._agents.get(role)
+                    if agent:
+                        agent.intent = AgentState.INTENT_STOPPING
+                state.save_state()
 
     # Update AgentState from event
     _update_agent_from_event(body)
@@ -1570,7 +1579,7 @@ class ExternalActivityDetector:
         self._running = False
         self._thread = None
         self._last_check_epoch = 0.0  # epoch seconds — avoids ISO string comparison
-        self._emitted_issues: set[int] = set()  # dedup: issues already emitted
+        self._emitted_issues: dict[int, None] = {}  # ordered dedup: issues already emitted
 
     def start(self):
         """Start the detector daemon thread."""
@@ -1640,7 +1649,7 @@ class ExternalActivityDetector:
             issue_num = issue.get("number", 0)
 
             # Dedup: skip issues already emitted
-            if issue_num in self._emitted_issues:
+            if issue_num in self._emitted_issues:  # O(1) dict lookup
                 continue
 
             # Time filter: only process issues updated since last check
@@ -1667,13 +1676,14 @@ class ExternalActivityDetector:
                 "target_role": target_role,
                 "event_context": f"Issue #{issue_num} updated",
             })
-            self._emitted_issues.add(issue_num)
+            self._emitted_issues[issue_num] = None
 
         self._last_check_epoch = check_time
 
-        # Bound the dedup set to prevent unbounded growth
-        if len(self._emitted_issues) > 500:
-            self._emitted_issues = set(list(self._emitted_issues)[-200:])
+        # Bound the dedup dict to prevent unbounded growth — evict oldest first
+        while len(self._emitted_issues) > 500:
+            oldest = next(iter(self._emitted_issues))
+            del self._emitted_issues[oldest]
 
 
 # Global detector instance

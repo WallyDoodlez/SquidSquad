@@ -111,7 +111,12 @@ def main():
     while True:
         events = poll(role)
         if events is None:
-            sys.exit(2)
+            if wait is None:
+                sys.exit(2)
+            # Harness temporarily unreachable in loop mode — retry
+            print(f"ERROR: harness unreachable (retrying in {wait}s)", file=sys.stderr)
+            time.sleep(wait)
+            continue
 
         for event in events:
             print(json.dumps(event), flush=True)

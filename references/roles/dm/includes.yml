@@ -4,6 +4,7 @@
 includes:
   - common/capability-check
   - common/cycle-runner
+  - common/event-driven-workflow
   - common/event-reactions
   - common/context-pressure
   - roles/dm/task-pickup
