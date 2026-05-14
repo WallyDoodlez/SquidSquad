@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-14 16:34
+
+- **Files scanned**: references/commands/squidsquad-compose.md, references/commands/squidsquad-upgrade.md, references/docs/vault-reference.md, references/prompts/code-review.md.j2
+- **Findings**: #7879 (upgrade commit stages .claude/ with unrelated user changes — medium)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-14 16:04
 
 - **Files scanned**: tests/comprehension/1428_spec.json, tests/comprehension/2181_spec.json, tests/comprehension/361_spec.json, docs/EVENT-BUS-ARCHITECTURE.md, docs/diagrams/layer-stack.html
