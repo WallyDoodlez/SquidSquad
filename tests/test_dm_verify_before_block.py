@@ -6,6 +6,8 @@ and the deployed CLAUDE.md template.
 
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -29,7 +31,7 @@ class TestDmVerifyBeforeBlock:
         """Deployed DM CLAUDE.md must contain the verification instruction."""
         path = REPO_ROOT / ".squidsquad" / "dm" / "CLAUDE.md"
         if not path.exists():
-            return  # DM not installed
+            pytest.skip("DM not installed")
         content = path.read_text(encoding="utf-8")
         assert "pending-human-setup" in content
         assert "verify" in content.lower()
