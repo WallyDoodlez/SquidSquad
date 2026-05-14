@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-14 09:37
+
+- **Files scanned**: references/sub-skills/project/shared-soul-directives.md, references/sub-skills/roles/dm/iteration-log.md, references/sub-skills/roles/pm/discussion-protocol.md, references/sub-skills/roles/pm/file-conventions.md, references/sub-skills/roles/pm/health-check.md
+- **Findings**: #7706 (cycle.py log-iteration error message wrong flags — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-12 20:39
 
 - **Files scanned**: tests/test_config_functions.py, tests/test_cycle.py, tests/test_scan_index.py, tests/test_shared_fs.py, tests/test_soul_adaptation.py
