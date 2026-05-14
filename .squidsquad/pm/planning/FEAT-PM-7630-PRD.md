@@ -23,9 +23,9 @@
   - **event_bus.py** (references/scripts/event_bus.py, ~104 lines): Add `ack(event_id, role)` function; add disk outbox fallback
   - **event_bus_reader.py** (references/scripts/event_bus_reader.py, ~90 lines): No functional changes needed — query already supports filtering
   - **event_catalog.py** (references/scripts/event_catalog.py, ~218 lines): Add 5 L1 event types to RECOGNIZED: assigned-to, stop-requested, shipped, version-bump, ack
-  - **cycle_pre.py** (references/scripts/cycle_pre.py, ~1060 lines): Absorbed into harness for event-driven mode. Retained for backward compat.
-  - **cycle_post.py** (references/scripts/cycle_post.py, ~747 lines): Absorbed into harness for event-driven mode. Retained for backward compat.
-  - **thin_launcher.py** (references/scripts/thin_launcher.py, ~118 lines): Boot prompt changes for event-driven mode; conditional on `event-driven` config flag
+  - **cycle_pre.py** (references/scripts/cycle_pre.py, ~1060 lines): Absorbed into harness for event-driven mode. Retained during development phases. Removed in Phase 4.
+  - **cycle_post.py** (references/scripts/cycle_post.py, ~747 lines): Absorbed into harness for event-driven mode. Retained during development phases. Removed in Phase 4.
+  - **thin_launcher.py** (references/scripts/thin_launcher.py, ~118 lines): Boot prompt changes for event-driven mode
   - **boot_remote.py** (references/scripts/boot_remote.py, ~653 lines): Return terminal PID for cleanup; no event payload passing needed
   - **event_poll.py** (references/scripts/event_poll.py, ~30 lines): **NEW** — lightweight HTTP poll script querying `GET /events?since=<cursor>&role=<role>`, outputs new events to stdout for Monitor tool
   - **config.py** (references/scripts/config.py, ~575 lines): New config section `## Event Driven` with new FIELD_MAP entries
@@ -75,17 +75,15 @@
 - **Compose/deploy integration**: Changing sub-skills and includes.yml requires compose.py deploy-all. Event contract derivation (#5868) must work with new event types. Must add new types to event_catalog.py RECOGNIZED tier before compose runs.
 - **Harness merge (#6126)**: Harness already owns PR merge + compose. The event-driven model extends this — harness merge emits shipped or assigned-to, which wakes relevant agents. No conflict; it's the same pattern.
 - **Tracker authority**: tracker.py already emits status-transition events. These are harness-internal (observability only). The harness external activity detector detects new issues/comments on GitHub and emits assigned-to for PM to triage.
-- **Config.md versioning**: New config section "## Event Driven" must be added to config.md. The upgrade path must handle existing configs that lack this section (graceful default: event-driven = "no", full backward compat).
+- **Config.md versioning**: New config section "## Event Driven" must be added to config.md. The upgrade path must handle existing configs that lack this section (graceful default: all features enabled with sensible defaults).
 
 ## Upgrade & Migration
 
 - **New config values**:
-  - `event-driven` (Event Driven → Enabled): "yes" | "no" — default "no" during Phase 2-3 development, flipped to "yes" at Phase 3. Gates entire event-driven mode.
   - `event-timeout-minutes` (Event Driven → Timeout Minutes): integer — default "10". How long before an unacknowledged event times out and re-emits.
   - `event-max-retries` (Event Driven → Max Retries): integer — default "3". Max re-emission attempts before declaring agent dead and rebooting.
   - `event-poll-interval` (Event Driven → Poll Interval Seconds): integer — default "30". How often the external activity detector polls GitHub.
   - `event-queue-cap` (Event Driven → Queue Cap): integer — default "50". Max events per agent in-flight queue.
-
   - `scan-cooldown` (Event Driven → Scan Cooldown Minutes): integer — default "15". Minutes between self-initiated improvement scans.
 
 - **New files**: 
@@ -106,10 +104,7 @@
   2. Pull latest code containing #7630 changes
   3. Run `python references/scripts/compose.py deploy-all` — regenerates all CLAUDE.md + SOUL.md
   4. Clean stale sentinel files from clone directories
-  5. Start harness (`python references/scripts/harness.py`) — auto-spawns agents in idle mode if `event-driven: yes`
-  6. If rollback needed: set `event-driven: no` in config.md, revert compose, restart harness
-
-- **Graceful degradation**: If `event-driven` is "no" or absent, harness falls back to current behavior — agents boot and self-loop via `/loop`. The event-driven-workflow sub-skill is not included when the config gate is off. Full backward compatibility for one version.
+  5. Start harness (`python references/scripts/harness.py`) — auto-spawns agents in event-driven idle mode
 
 ## Architecture Diagrams
 
@@ -510,7 +505,7 @@ These defaults are defined at L1 (universal, ships with SquidSquad core). Projec
   - Tracker queries → replaced by harness external activity detector
   - Event bus read → harness event lifecycle manager (IS the event system)
   - Mechanical reactions → harness processes inline on event receipt
-- **File disposition**: Retained in codebase for `event-driven: no` backward compat. Not called by agents when event-driven mode is active.
+- **File disposition**: Retained during development phases. Removed in Phase 4.
 
 **cycle_post.py** (references/scripts/cycle_post.py):
 - **ABSORBED INTO HARNESS** — per Locked Decision, cycle_post.py is eliminated in event-driven mode. Its operations move to:
@@ -522,7 +517,7 @@ These defaults are defined at L1 (universal, ships with SquidSquad core). Projec
   - Working state update → agent writes directly; harness commits
   - Stop-after-cycle check → replaced by `stop-requested` event on event bus
   - Event cursor advancement → replaced by event lifecycle manager (acked events)
-- **File disposition**: Retained in codebase for `event-driven: no` backward compat. Not called by agents when event-driven mode is active.
+- **File disposition**: Retained during development phases. Removed in Phase 4.
 
 **event_bus.py** (references/scripts/event_bus.py):
 - **Add**: `ack(event_id, role)` function (~20 lines): POST ack event to `/events`. Fire-and-forget like `emit()`. The ack is an event with event_type="ack" and payload containing the event_id being acknowledged.
@@ -536,8 +531,7 @@ These defaults are defined at L1 (universal, ships with SquidSquad core). Projec
 - **No functional changes**. The `query()` function already supports role and event_type filtering. Agents use it through event_poll.py. The ack function lives in event_bus.py (write side).
 
 **thin_launcher.py** (references/scripts/thin_launcher.py):
-- **Modify**: Boot prompt (line 86): Change from `"Boot. Begin your first Ralph Loop cycle now."` to event-driven orientation: `"Boot. Run event_poll.py with Monitor tool to watch for events from the harness. Process each event and emit ack via POST /events when done."` Must be conditional on `event-driven` config flag.
-- **Add**: Read `event-driven` config flag to decide which boot prompt to emit.
+- **Modify**: Boot prompt (line 86): Change from `"Boot. Begin your first Ralph Loop cycle now."` to event-driven orientation: `"Boot. Run event_poll.py with Monitor tool to watch for events from the harness. Process each event and emit ack via POST /events when done."`
 - **Add**: Return terminal PID to harness for terminal cleanup on stop/re boot.
 
 **boot_remote.py** (references/scripts/boot_remote.py):
@@ -721,28 +715,12 @@ These infrastructure items MUST ship before event-driven wake can work:
 ### Migration Steps (Ordered)
 
 1. **Ship Phase 1.5 prerequisites** — disk persistence, clone fix, per-role queue, thread safety
-2. **Ship harness changes** — ack processing in POST /events, EventLifecycleManager, external activity detector. All behind `event-driven` config gate (default "no").
+2. **Ship harness changes** — ack processing in POST /events, EventLifecycleManager, external activity detector. All backward compatible.
 3. **Ship script changes** — event_bus.py ack() function, event_poll.py, event_catalog.py updates. All backward compatible.
-4. **Ship template changes** — event-driven-workflow.md sub-skill, updated role instructions, removed cycle-runner. Behind config gate: compose.py checks `event-driven` and includes appropriate sub-skills.
-5. **Flip config gate** — set `event-driven: yes` in config.md. Run `compose.py deploy-all`. Restart harness. Agents now boot in event-driven mode.
+4. **Ship template changes** — event-driven-workflow.md sub-skill, updated role instructions, removed cycle-runner. Compose generates event-driven CLAUDE.md.
+5. **Deploy** — run `compose.py deploy-all`. Restart harness. Agents now boot in event-driven mode.
 6. **Observe** — monitor for one version. Fix issues.
 7. **Cleanup Phase 4** — remove `/loop` references, remove legacy cycle-runner.md, remove context-pressure sub-skill, remove interval-sync sub-skill.
-
-### Rollback Procedure
-
-1. Set `event-driven: no` in config.md
-2. Run `python references/scripts/compose.py deploy-all` (regenerates CLAUDE.md with cycle-runner)
-3. Restart harness (`Ctrl+C` then `python references/scripts/harness.py`)
-4. Agents boot in cycle-based mode with `/loop`
-
-### Config Gating
-
-All new behavior gated behind `config.md → Event Driven → Enabled: yes`. When "no" (default during Phase 2-3 development):
-- Harness external activity detector does not start
-- Event-driven-workflow sub-skill excluded from compose
-- cycle-runner sub-skill included normally
-- Agents self-loop via `/loop`
-- Ack processing is no-op (for forward compat)
 
 ## Phasing Plan
 
@@ -789,12 +767,10 @@ All new behavior gated behind `config.md → Event Driven → Enabled: yes`. Whe
 - Updated role SOUL.md files
 - Updated includes.yml manifests (all roles)
 - Config.md new "Event Driven" section
-- Config gating (event-driven flag)
 
 **Success criteria**:
-- When event-driven = "yes", compose produces event-driven CLAUDE.md
-- When event-driven = "no", compose produces cycle-based CLAUDE.md (unchanged)
-- All comprehension tests pass against both modes
+- Compose produces event-driven CLAUDE.md with correct sub-skills
+- All comprehension tests pass
 - Event contract derivation (#5868) works with new 5 event types
 
 **Dependencies**: Phase 2 complete (event infrastructure works)
@@ -827,7 +803,7 @@ All new behavior gated behind `config.md → Event Driven → Enabled: yes`. Whe
 | External activity detector hits GitHub API rate limits | M | L | Poll interval 30-60s configurable. Use conditional requests (ETag/If-None-Match). Cache last-seen timestamps. | Skill |
 | External activity detector reacts to SquidSquad's own changes → event loop | H | L | Filter by squidsquad label and agent commit prefix. Must NOT react to own changes. Test with real SquidSquad activity. | Skill |
 | Agent idle terminal looks "dead" to human observer | M | H | Status bar shows "idle — waiting for events" with timestamp. Harness console shows all agent states. Health endpoint confirms alive. | PM |
-| Template migration breaks existing installs | H | L | Config gating (event-driven). Full backward compat. Dual-mode compose. Upgrade doc. | Skill |
+| Template migration breaks existing installs | H | L | Phased rollout with backward-compatible script changes before template changes. Upgrade doc. | Skill |
 | Harness resource usage with continuous detector thread | L | M | Single daemon thread with sleep intervals. Overhead <2% CPU on idle. | Skill |
 | Ack loss — agent acks but harness doesn't receive (network blip) | M | L | event_bus.py ack() is fire-and-forget with disk outbox fallback (.event-outbox.json). Harness timeout + re-emit handles the case where ack is truly lost. Idempotent: duplicate acks are safe. | Skill |
 
@@ -840,12 +816,12 @@ All new behavior gated behind `config.md → Event Driven → Enabled: yes`. Whe
 
 ## Recommendation
 
-**Feasible with caveats**. The infrastructure is 70% built (event bus, harness lifecycle, cursor-based consumption). The remaining 30% simplifies significantly from the original PRD: 5 events instead of 30+, ack-based closure via existing POST /events instead of a dedicated endpoint, ack-based health monitoring instead of separate PID poller, and monitors that translate to assigned-to instead of emitting their own event types. The biggest unknown is Monitor tool validation (Locked Decision prerequisite). The config gating strategy provides safe rollout and rollback.
+**Feasible with caveats**. The infrastructure is 70% built (event bus, harness lifecycle, cursor-based consumption). The remaining 30% simplifies significantly from the original PRD: 5 events instead of 30+, ack-based closure via existing POST /events instead of a dedicated endpoint, ack-based health monitoring instead of separate PID poller, and monitors that translate to assigned-to instead of emitting their own event types. The biggest unknown is Monitor tool validation (Locked Decision prerequisite). The phased rollout strategy provides safe incremental delivery.
 
 ## Vault Candidates
 
 - **Type**: pattern — **Ack-based health monitoring via event timeout** — **Why**: Using event acknowledgment timeouts instead of PID polling is a novel architectural pattern. If harness sends event and gets no ack within timeout → retry → after N retries → declare dead → kill PID → reboot. Replaces separate health watcher threads. Embodies [[decision-pid-primary-liveness]] in event-driven form. Reusable for any event-driven agent system.
 - **Type**: decision — **Monitors translate external signals to assigned-to, never emit own event types** — **Why**: The architectural choice to have git watcher and GitHub watcher emit assigned-to for PM rather than their own event types (new-commits, new-issue, etc.) keeps the agent-facing event model at exactly 5 types. PM triages all external signals. This is a fundamental architectural constraint worth capturing.
-- **Type**: learning — **Config gating for phased architectural migration** — **Why**: The strategy of gating the entire event-driven mode behind a single config flag (`event-driven`) while maintaining backward compatibility through compose.py dual-mode is a reusable migration pattern for any future architectural overhauls.
+- **Type**: learning — **Phased architectural migration** — **Why**: The strategy of shipping backward-compatible script changes before template changes, observing for one version, then cleaning up in a dedicated Phase 4 is a reusable migration pattern for any future architectural overhauls.
 - **Type**: learning — **Clone isolation + event bus discovery** — **Why**: The parent-dir walk for `.harness-port` discovery is fragile across clone isolation boundaries. The fix (harness distributes port file to all clones at boot) is a pattern worth capturing for any future cross-clone communication.
 - **Type**: pattern — **Event timeout + re-emit + escalate + reboot flow** — **Why**: The three-tier event failure handling (ack timeout → re-emit → max-retries → declare dead + kill PID + reboot → re-emit to rebooted agent) embodies the two-tier self-healing philosophy from [[decision-self-healing-sentinel]] in a new domain (event processing rather than pipeline state). Escalation from retry to kill/reboot is a reusable pattern.

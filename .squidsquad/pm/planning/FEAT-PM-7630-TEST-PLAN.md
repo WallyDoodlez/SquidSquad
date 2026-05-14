@@ -390,8 +390,8 @@
   1. Simulate harness crash after persisting ack state but before executing git commit/push side effects.
   2. Restart harness.
   3. Harness scans for events in intermediate state.
-- **Expected**: Harness replays side effects (git commit/push) from persisted state. Idempotency markers (HTML comment in tracker: `<!-- event_id:abc123 -->`, `Event-Id` git commit trailer) prevent duplicates. Event transitions to fully closed after replay.
-- **Verification**: Tracker comment not duplicated. Git commit not duplicated (check `Event-Id` trailer in log). Event state transitions to `closed`.
+- **Expected**: Harness replays side effects (git commit/push) from persisted state. Ack is idempotent — emitting ack for the same event_id multiple times is safe; harness processes the first and ignores duplicates. Event transitions to fully closed after replay.
+- **Verification**: Tracker comment not duplicated. Git commit not duplicated. Event state transitions to `closed`.
 
 ---
 
@@ -610,19 +610,19 @@ These questions are answered by a fresh agent reading only the modified files. T
 - **Expected**: Agent runs `python references/scripts/event_bus.py ack <event_id> <role>`. This POSTs an `ack` event to the harness `/events` endpoint with the `event_id` being acknowledged. No separate endpoint exists for event closure. Ack is the universal closure mechanism.
 
 ### CQ-3: What does an agent do when it receives a stop-requested event?
-- **Files**: `references/sub-skills/common/event-driven-workflow.md`, `references/sub-skills/common/event-reactions.md`
+- **Files**: `references/sub-skills/common/event-driven-workflow.md`
 - **Expected**: Finish current event atomically (do not interrupt mid-handling). Checkpoint working state to `.squidsquad/<role>/working-state.md`. Stop the Monitor tool. Emit `ack` for the `stop-requested` event. Agent process exits. Does NOT reboot. Does NOT continue cycling.
 
 ### CQ-4: What is the source of truth for an assigned-to event's work context?
-- **Files**: `references/sub-skills/common/event-reactions.md`, `references/sub-skills/common/event-driven-workflow.md`
+- **Files**: `references/sub-skills/common/event-driven-workflow.md`
 - **Expected**: The forge (GitHub Issues/PRs). The `assigned-to` payload only contains `{role, issue_or_pr}`. All context — comments, status, history, findings — lives in the GitHub Issue or PR. Agent reads the forge when it receives the event, not the event payload. Events are routing signals, not context carriers.
 
 ### CQ-5: What are the 5 event types and their payloads?
-- **Files**: `references/sub-skills/common/event-reactions.md`
+- **Files**: `references/sub-skills/common/event-driven-workflow.md`
 - **Expected**: `assigned-to {role, issue_or_pr}`, `stop-requested {source, target}`, `shipped {issue_or_pr}`, `version-bump {version}`, `ack {event_id}`. All L1 universal. No L2/L3 event-reaction sub-skills needed because roles already know how to handle issues from their existing role instructions.
 
 ### CQ-6: Can an agent be interrupted mid-event to handle a higher-priority event?
-- **Files**: `references/sub-skills/common/event-reactions.md`, `references/sub-skills/common/event-driven-workflow.md`
+- **Files**: `references/sub-skills/common/event-driven-workflow.md`
 - **Expected**: No. Events are atomic — an agent completes the entire unit of work before picking up the next event. Monitor tool notifications naturally queue behind the current event. No interruption, even for stop-requested (which waits for the current event to finish).
 
 ### CQ-7: What happens if the agent does not ack an event within the timeout?
@@ -630,7 +630,7 @@ These questions are answered by a fresh agent reading only the modified files. T
 - **Expected**: Harness re-emits the event (retry_count increments). After `event-max-retries` retries (default 3), harness declares the agent dead, kills the PID, reboots the agent, and re-emits the event to the rebooted agent. If reboots also fail, harness escalates to PM.
 
 ### CQ-8: What scan cooldown applies between improvement scans?
-- **Files**: `references/sub-skills/common/event-reactions.md`
+- **Files**: `references/sub-skills/common/event-driven-workflow.md`
 - **Expected**: 15 minutes (default, L1). Overridable via `config.md → Event Driven → Scan Cooldown Minutes`. First scan after going idle happens immediately (no initial cooldown). Subsequent scans are separated by the cooldown. Issue gate: scan does not fire if open issues exist for the role.
 
 ### CQ-9: How does the external activity detector decide what is "not SquidSquad's own work"?
@@ -642,7 +642,7 @@ These questions are answered by a fresh agent reading only the modified files. T
 - **Expected**: `event-timeout-minutes`, `event-max-retries`, `event-poll-interval`, `event-queue-cap`, `scan-cooldown`. These are the only 5 valid fields in the `## Event Driven` section. There is no `event-driven` toggle and no `event-sensitivity` field.
 
 ### CQ-11: What does the ack of a stop-requested event signal to the harness?
-- **Files**: `references/sub-skills/common/event-reactions.md`
+- **Files**: `references/sub-skills/common/event-driven-workflow.md`
 - **Expected**: Harness treats the `ack` of a `stop-requested` as shutdown confirmation. Agent stopped as requested. Harness does NOT reboot the agent (intent = stopping). No separate `stopped` event is needed — `ack` is the universal closure mechanism that also serves as stop confirmation.
 
 ### CQ-12: How does an agent in a clone directory discover the harness port?
