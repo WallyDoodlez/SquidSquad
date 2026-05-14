@@ -59,7 +59,7 @@
 - **Risk 2**: Ack timeout false-positive — agent is working on a long task, doesn't ack within timeout, harness declares agent dead and kills PID — Severity: H — Mitigation: Timeout must be generous (configurable, default 10 min). Agent should send interim ack for long-running work. Harness checks PID via OS before killing.
 - **Risk 3**: Agent terminal sits idle for long periods — human observes blank terminal and thinks agent is dead — Severity: M — Mitigation: Status bar must show "idle — waiting for events" with a pulse animation. The harness console shows which agents are waiting and why.
 - **Risk 4**: If harness crashes while events are in-flight, event state is lost (in-memory only) — Severity: H — Mitigation: Phase 1.5 adds disk persistence (.squidsquad/.event-state.json). On crash recovery, harness replays open events.
-- **Risk 5**: External activity detector reacts to SquidSquad's own GitHub changes → event loop — Severity: H — Mitigation: Filter by squidsquad label and agent commit prefix. Must NOT react to SquidSquad's own changes (Locked Decision 6).
+- **Risk 5**: External activity detector reacts to SquidSquad's own GitHub changes → event loop — Severity: H — Mitigation: Filter by squidsquad label and agent commit prefix. Must NOT react to SquidSquad's own changes (Locked Decision 9).
 
 ## Edge Cases
 
