@@ -858,5 +858,45 @@ class TestTerminalPidInAgentState(unittest.TestCase):
                 self.assertEqual(loaded.terminal_pid, 99999)
 
 
+class TestTimeoutScanner(unittest.TestCase):
+    """#7630 2-3: EventLifecycleManager timeout detection."""
+
+    def test_overdue_event_detected(self):
+        """Events past timeout are detected by timeout_scan."""
+        from harness import EventStream, EventLifecycleManager
+
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")), \
+             patch("harness._log"):
+            stream = EventStream()
+            mgr = EventLifecycleManager(stream, timeout_minutes=0)  # 0 = immediate timeout
+
+            mgr.dispatch("evt1", "skill", {"id": "evt1"})
+            # Backdate dispatch time to force timeout
+            mgr._dispatch_times["evt1"] = time.time() - 1
+
+            timed_out = mgr.timeout_scan()
+            # First scan: retry (not yet at max retries)
+            self.assertEqual(len(timed_out), 0)  # retried, not timed out
+            self.assertEqual(mgr._retry_counts.get("evt1"), 1)
+
+    def test_max_retries_causes_timeout(self):
+        """After max retries, event is removed from in-flight."""
+        from harness import EventStream, EventLifecycleManager
+
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")), \
+             patch("harness._log"):
+            stream = EventStream()
+            mgr = EventLifecycleManager(stream, timeout_minutes=0, max_retries=1)
+
+            mgr.dispatch("evt1", "skill", {"id": "evt1"})
+            mgr._dispatch_times["evt1"] = time.time() - 1
+            mgr._retry_counts["evt1"] = 1  # Already at max
+
+            timed_out = mgr.timeout_scan()
+            self.assertEqual(len(timed_out), 1)
+            self.assertEqual(timed_out[0], ("skill", "evt1"))
+            self.assertEqual(mgr.get_in_flight("skill"), [])
+
+
 if __name__ == "__main__":
     unittest.main()

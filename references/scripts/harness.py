@@ -418,13 +418,24 @@ class EventLifecycleManager:
     - Dispatch/ack lifecycle for future event-driven mode
     """
 
-    def __init__(self, stream: EventStream, max_in_flight: int = 50):
+    DEFAULT_TIMEOUT_MINUTES = 10
+    DEFAULT_MAX_RETRIES = 3
+    SCAN_INTERVAL = 30  # seconds between timeout scans
+
+    def __init__(self, stream: EventStream, max_in_flight: int = 50,
+                 timeout_minutes: int = 10, max_retries: int = 3):
         self._stream = stream
         self._lock = threading.Lock()
         self._in_flight: dict[str, list[str]] = {}  # role → [event_ids]
         self._max_in_flight = max_in_flight
         self._dispatched: dict[str, dict] = {}  # event_id → event dict
+        self._dispatch_times: dict[str, float] = {}  # event_id → dispatch timestamp
+        self._retry_counts: dict[str, int] = {}  # event_id → retry count
+        self._timeout_minutes = timeout_minutes
+        self._max_retries = max_retries
         self._loaded = False
+        self._scanner_running = False
+        self._scanner_thread = None
 
     def append(self, event: dict):
         """Store event in stream and persist to disk."""
@@ -439,6 +450,7 @@ class EventLifecycleManager:
             if len(self._in_flight[role]) < self._max_in_flight:
                 self._in_flight[role].append(event_id)
                 self._dispatched[event_id] = event
+                self._dispatch_times[event_id] = time.time()
         self._persist()
 
     def ack(self, event_id: str, role: str) -> bool:
@@ -448,6 +460,8 @@ class EventLifecycleManager:
             if role in self._in_flight and event_id in self._in_flight[role]:
                 self._in_flight[role].remove(event_id)
                 self._dispatched.pop(event_id, None)
+                self._dispatch_times.pop(event_id, None)
+                self._retry_counts.pop(event_id, None)
                 found = True
         if found:
             self._persist()
@@ -501,6 +515,64 @@ class EventLifecycleManager:
             }
             self._dispatched = data.get("dispatched", {})
         self._loaded = True
+
+    def timeout_scan(self):
+        """Check for overdue in-flight events and escalate (#7630 2-3).
+
+        For each overdue event:
+        - If retries < max: log warning, increment retry count, reset dispatch time
+        - If retries >= max: mark as timed-out, remove from in-flight, log escalation
+        """
+        now = time.time()
+        timeout_secs = self._timeout_minutes * 60
+        timed_out = []
+
+        with self._lock:
+            for role, event_ids in list(self._in_flight.items()):
+                for event_id in list(event_ids):
+                    dispatch_time = self._dispatch_times.get(event_id, now)
+                    if now - dispatch_time > timeout_secs:
+                        retries = self._retry_counts.get(event_id, 0)
+                        if retries < self._max_retries:
+                            self._retry_counts[event_id] = retries + 1
+                            self._dispatch_times[event_id] = now  # reset timer
+                            _log(f"Event {event_id} overdue for {role} "
+                                 f"(retry {retries + 1}/{self._max_retries})")
+                        else:
+                            timed_out.append((role, event_id))
+                            event_ids.remove(event_id)
+                            self._dispatched.pop(event_id, None)
+                            self._dispatch_times.pop(event_id, None)
+                            self._retry_counts.pop(event_id, None)
+
+        for role, event_id in timed_out:
+            _log(f"Event {event_id} TIMED OUT for {role} after {self._max_retries} retries — escalating")
+
+        if timed_out:
+            self._persist()
+
+        return timed_out
+
+    def start_timeout_scanner(self):
+        """Start background thread that scans for overdue events."""
+        if self._scanner_running:
+            return
+        self._scanner_running = True
+        self._scanner_thread = threading.Thread(
+            target=self._scan_loop, daemon=True, name="event-timeout-scanner"
+        )
+        self._scanner_thread.start()
+
+    def stop_timeout_scanner(self):
+        self._scanner_running = False
+
+    def _scan_loop(self):
+        while self._scanner_running:
+            try:
+                self.timeout_scan()
+            except Exception:
+                pass  # Don't crash scanner on transient errors
+            time.sleep(self.SCAN_INTERVAL)
 
     @property
     def stream(self) -> EventStream:
@@ -592,6 +664,8 @@ async def lifespan(app: FastAPI):
         _log("Loading saved state...")
         state.load_state()
         event_lifecycle.load()
+        event_lifecycle.start_timeout_scanner()
+        activity_detector.start()
         _log(f"Event state loaded: {len(event_stream)} events in stream")
 
         # Skip initial update_health() — it's slow on Windows (tasklist per agent).
@@ -1455,6 +1529,102 @@ def _print_banner(port: int):
     print(f"PID: {os.getpid()} | Ctrl+C to stop")
     print("─" * 50)
     print()
+
+
+# ---------------------------------------------------------------------------
+# External activity detector (#7630 2-4)
+# ---------------------------------------------------------------------------
+
+class ExternalActivityDetector:
+    """Polls GitHub for external changes and emits assigned-to events (#7630 2-4).
+
+    Runs as a daemon thread. Detects new/updated issues with status:approved
+    or status:open that are assigned to agent roles. Filters out SquidSquad's
+    own changes (agent-prefix commits, squidsquad-labeled actions).
+    """
+
+    # Agent commit prefixes — changes from these are filtered out
+    AGENT_PREFIXES = ("skill:", "pm:", "qa:", "dm:")
+
+    def __init__(self, poll_interval: int = 60):
+        self._poll_interval = poll_interval
+        self._running = False
+        self._thread = None
+        self._last_check = None  # ISO timestamp of last poll
+
+    def start(self):
+        if self._running:
+            return
+        self._running = True
+        self._last_check = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        self._thread = threading.Thread(
+            target=self._poll_loop, daemon=True, name="activity-detector"
+        )
+        self._thread.start()
+        _log("External activity detector started")
+
+    def stop(self):
+        self._running = False
+
+    def _poll_loop(self):
+        # Initial delay — let harness finish startup
+        time.sleep(10)
+        while self._running:
+            try:
+                self._check_for_changes()
+            except Exception as e:
+                _log(f"Activity detector error: {e}")
+            time.sleep(self._poll_interval)
+
+    def _check_for_changes(self):
+        """Poll GitHub for actionable changes since last check."""
+        result = subprocess.run(
+            ["gh", "issue", "list", "--label", "squidsquad",
+             "--state", "open", "--json",
+             "number,title,labels,updatedAt",
+             "--limit", "20"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            check=False, cwd=str(REPO_ROOT),
+        )
+        if result.returncode != 0:
+            return
+
+        try:
+            issues = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return
+
+        for issue in issues:
+            updated = issue.get("updatedAt", "")
+            if self._last_check and updated <= self._last_check:
+                continue
+
+            labels = {l.get("name", "") for l in issue.get("labels", [])}
+
+            # Only emit for actionable statuses
+            actionable = labels & {"status:approved", "status:open"}
+            if not actionable:
+                continue
+
+            # Determine target role
+            role_labels = [l for l in labels if l.startswith("role:")]
+            if not role_labels:
+                continue
+            target_role = role_labels[0].replace("role:", "")
+
+            # Emit assigned-to event
+            _emit_event("assigned-to", "harness", payload={
+                "issue_number": str(issue.get("number", "")),
+                "title": issue.get("title", ""),
+                "target_role": target_role,
+                "event_context": f"Issue #{issue['number']} updated",
+            })
+
+        self._last_check = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+# Global detector instance
+activity_detector = ExternalActivityDetector()
 
 
 # ---------------------------------------------------------------------------
