@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-14 16:04
+
+- **Files scanned**: tests/comprehension/1428_spec.json, tests/comprehension/2181_spec.json, tests/comprehension/361_spec.json, docs/EVENT-BUS-ARCHITECTURE.md, docs/diagrams/layer-stack.html
+- **Findings**: #7878 (EVENT-BUS-ARCHITECTURE.md stale pr-merge refs + missing compose-completed — low, filed to DM)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-14 15:04
 
 - **Files scanned**: tests/test_start_team.py, tests/test_thin_launcher.py, tests/test_vault_check.py, tests/test_vault_entity.py, tests/test_vault_synthesis.py
