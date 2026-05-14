@@ -18,13 +18,6 @@ import cycle_post
 class TestVersionBumpStaging:
     """Version bump must not use git add -A."""
 
-    def test_source_code_no_git_add_dash_A(self):
-        """The _do_version_bump function must not contain 'git add -A'."""
-        import inspect
-        source = inspect.getsource(cycle_post._do_version_bump)
-        assert "add\", \"-A\"" not in source, \
-            "_do_version_bump still uses git add -A (should use explicit file paths)"
-
     def test_stages_explicit_files(self, tmp_path, monkeypatch):
         """Version bump stages only config.md, CHANGELOG.md, and SKILL.md."""
         monkeypatch.setattr(cycle_post, "REPO_ROOT", tmp_path)
@@ -118,14 +111,19 @@ class TestVersionBumpNoStagedChanges:
         changelog = tmp_path / "CHANGELOG.md"
         changelog.write_text("# Changelog\n", encoding="utf-8")
 
+        # Commands that must NOT be reached when nothing is staged
+        forbidden = {"commit", "push"}
         run_calls = []
         def fake_run(cmd, check=False):
             run_calls.append(cmd)
             result = MagicMock()
             result.stdout = ""
-            # git diff --cached --quiet returns 0 when nothing staged
             if cmd[:4] == ["git", "diff", "--cached", "--quiet"]:
-                result.returncode = 0
+                result.returncode = 0  # nothing staged
+            elif len(cmd) >= 2 and cmd[0] == "git" and cmd[1] in forbidden:
+                raise AssertionError(f"Forbidden git command reached: {cmd}")
+            elif len(cmd) >= 2 and cmd[:2] == ["git", "tag"] and "-l" not in cmd:
+                raise AssertionError(f"Forbidden git tag command reached: {cmd}")
             else:
                 result.returncode = 0
             return result
@@ -133,15 +131,8 @@ class TestVersionBumpNoStagedChanges:
         monkeypatch.setattr(cycle_post, "_run_script", lambda *a: None)
 
         data = {"version_bump": {"new_version": "0.28.0", "items_included": []}}
+        # If the guard is missing, fake_run raises AssertionError on commit/tag/push
         cycle_post._do_version_bump(data, "dm")
-
-        # Should NOT have commit, tag, or push calls
-        commit_calls = [c for c in run_calls if c[:2] == ["git", "commit"]]
-        tag_calls = [c for c in run_calls if c[:2] == ["git", "tag"] and "-l" not in c]
-        push_calls = [c for c in run_calls if c[:2] == ["git", "push"]]
-        assert len(commit_calls) == 0, f"Unexpected commit: {commit_calls}"
-        assert len(tag_calls) == 0, f"Unexpected tag: {tag_calls}"
-        assert len(push_calls) == 0, f"Unexpected push: {push_calls}"
 
     def test_proceeds_when_staged_changes_exist(self, tmp_path, monkeypatch):
         """If git diff --cached --quiet returns 1 (has changes), proceed normally."""
