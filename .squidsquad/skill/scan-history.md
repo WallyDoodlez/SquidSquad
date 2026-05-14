@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-14 11:04
+
+- **Files scanned**: tests/test_dm_verify_before_block.py, tests/test_event_bus_reader.py, tests/test_event_catalog.py, tests/test_event_validator.py, tests/test_feat_1074_auto_merge.py
+- **Findings**: #7800 (bare return silently passes instead of pytest.skip — low), #7801 (hardcoded event sets drift — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-14 10:37
 
 - **Files scanned**: references/sub-skills/roles/pm/prohibitions.md, references/sub-skills/roles/pm/testing-and-verification.md, tests/test_comprehension_2183.py, tests/test_comprehension_2195.py, tests/test_deterministic_qa_framework.py
