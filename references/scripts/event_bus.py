@@ -26,32 +26,20 @@ _TIMEOUT = 0.5
 
 
 def _discover_port():
-    """Discover harness port via .harness-port file with parent-dir walk.
+    """Discover harness port via .harness-port file (#7630 P-2).
+
+    Reads directly from local .squidsquad/.harness-port. The harness
+    distributes the port file to all clone directories at boot
+    (harness.py lifespan), so parent-dir walk is unnecessary.
 
     Returns port number or None if not discoverable.
     """
-    # Direct path first
     port_file = SQUID_DIR / ".harness-port"
     if port_file.exists():
         try:
             return int(port_file.read_text(encoding="utf-8").strip())
         except (ValueError, OSError):
             pass
-
-    # Parent-dir walk (clone isolation — agent clone may be a child of primary repo)
-    current = REPO_ROOT.parent
-    for _ in range(5):
-        candidate = current / ".squidsquad" / ".harness-port"
-        if candidate.exists():
-            try:
-                return int(candidate.read_text(encoding="utf-8").strip())
-            except (ValueError, OSError):
-                pass
-        parent = current.parent
-        if parent == current:
-            break
-        current = parent
-
     return None
 
 

@@ -69,7 +69,7 @@ class AgentState:
     """In-memory state for a single agent."""
 
     __slots__ = ("role", "status", "intent", "last_health_check", "boot_time",
-                 "clone_path", "claude_pid",
+                 "clone_path", "claude_pid", "terminal_pid",
                  "current_cycle", "current_phase", "last_cycle_start",
                  "last_cycle_end", "last_cycle_type")
 
@@ -91,6 +91,7 @@ class AgentState:
         self.boot_time = None
         self.clone_path = clone_path
         self.claude_pid = None  # PID of claude process (#4966)
+        self.terminal_pid = None  # PID of terminal window (#7630 P-6)
         # Phase 2 event-derived state (#4709)
         self.current_cycle = None
         self.current_phase = None
@@ -107,6 +108,7 @@ class AgentState:
             "last_health_check": self.last_health_check,
             "clone_path": self.clone_path,
             "claude_pid": self.claude_pid,
+            "terminal_pid": self.terminal_pid,
             "current_cycle": self.current_cycle,
             "current_phase": self.current_phase,
             "last_cycle_start": self.last_cycle_start,
@@ -314,6 +316,7 @@ class HarnessState:
                         "boot_time": a.boot_time,
                         "clone_path": a.clone_path,
                         "claude_pid": a.claude_pid,
+                        "terminal_pid": a.terminal_pid,
                     }
                     for role, a in self.agents.items()
                 },
@@ -350,6 +353,7 @@ class HarnessState:
                 agent.intent = agent_data.get("intent", AgentState.INTENT_RUNNING)
                 agent.boot_time = agent_data.get("boot_time")
                 agent.claude_pid = agent_data.get("claude_pid")
+                agent.terminal_pid = agent_data.get("terminal_pid")
 
         _log(f"Restored state for {len(state_data.get('agents', {}))} agents from state file")
 
