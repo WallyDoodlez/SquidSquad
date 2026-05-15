@@ -161,6 +161,32 @@ class TestSanitizeConfig:
         assert "[REDACTED]" in result
         assert "0.37.0" in result
 
+    def test_redacts_url_field(self):
+        """#8235 regression: url fields must be redacted."""
+        config_text = "clone-url: https://github.com/user/private\nversion: 0.38.0\n"
+        with patch.object(diagnostics, "_read_config", return_value=config_text):
+            result = diagnostics._sanitize_config()
+        assert "private" not in result
+        assert "[REDACTED]" in result
+        assert "0.38.0" in result
+
+    def test_redacts_webhook_field(self):
+        """#8235 regression: webhook fields must be redacted."""
+        config_text = "webhook: https://hooks.slack.com/secret123\nname: app\n"
+        with patch.object(diagnostics, "_read_config", return_value=config_text):
+            result = diagnostics._sanitize_config()
+        assert "secret123" not in result
+        assert "[REDACTED]" in result
+
+    def test_redacts_password_field(self):
+        """#8235 regression: password fields must be redacted."""
+        config_text = "password: hunter2\ninterval: 30\n"
+        with patch.object(diagnostics, "_read_config", return_value=config_text):
+            result = diagnostics._sanitize_config()
+        assert "hunter2" not in result
+        assert "[REDACTED]" in result
+        assert "30" in result
+
 
 class TestIsPublicRepo:
     def test_public_repo(self, capsys):
