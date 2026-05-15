@@ -62,16 +62,20 @@ HEALTH_EMOJI = {
 
 
 def _read_interval():
-    """Read the iteration interval from config.md. Default 30."""
-    if not CONFIG_MD.exists():
-        return 30
+    """Read the iteration interval from config.md. Default 30.
+
+    Uses config.py get_field (section-aware via FIELD_MAP) to avoid
+    matching unrelated 'Minutes' occurrences in other config sections.
+    """
     try:
-        text = CONFIG_MD.read_text(encoding="utf-8")
-        # Works for both v1 ("Minutes": N) and v2 ("Interval Minutes": N)
-        m = re.search(r"Minutes\b.*?(\d+)", text)
-        return int(m.group(1)) if m else 30
-    except Exception:
-        return 30
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from config import get_field
+        val = get_field("interval")
+        if val:
+            return int(val)
+    except (ImportError, ValueError, TypeError):
+        pass
+    return 30
 
 
 def _parse_local_config():
