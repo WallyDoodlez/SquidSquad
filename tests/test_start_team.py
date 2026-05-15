@@ -137,3 +137,9 @@ class TestHarnessAPI:
              patch.object(start_team.boot_remote, "_needs_boot", return_value=(False, "running", "/path")):
             start_team.cmd_reboot(["skill"])
             mock_api.assert_called_once_with("POST", "/agents/skill/restart")
+
+    def test_no_bare_exception_in_kill_block(self):
+        """#8234 regression: kill block must not catch bare Exception."""
+        import inspect
+        source = inspect.getsource(start_team.cmd_reboot)
+        assert "(ImportError, Exception)" not in source
