@@ -1,6 +1,6 @@
 # SquidSquad Architecture
 
-SquidSquad turns a single git repository into a multi-agent development environment. Each agent is a separate Claude Code CLI instance that loops autonomously, reading and writing to a shared `.squidsquad/` folder. Git is the only communication channel — no message queues, no orchestration servers, no databases.
+SquidSquad turns a single git repository into a multi-agent development environment. Each agent is a separate Claude Code CLI instance that loops autonomously, reading and writing to a shared `.squidsquad/` folder. Agents coordinate through git (the durable audit trail) and a lightweight in-process event bus on the harness (for real-time signals). No external databases, no persistent queues — just files, Issue labels, and ephemeral events.
 
 This document describes the six-layer architecture that makes it work.
 
