@@ -476,6 +476,29 @@ class TestBuildConfigMdStructure:
         assert "**Default Model**: gpt-5.2" in text
         assert "**Research Model**: claude" in text
 
+    def test_code_review_model_present(self):
+        """#7948 regression: Code Review Model line must appear in output."""
+        text = wizard.build_config_md(_minimal_spec())
+        assert "**Code Review Model**: claude" in text
+
+    def test_all_model_routing_entries(self):
+        """All Model Routing entries are present in build_config_md output."""
+        text = wizard.build_config_md(_minimal_spec())
+        expected_entries = [
+            "**Default Model**: claude",
+            "**Research Model**: claude",
+            "**Discussion Prep Model**: claude",
+            "**Test Plan Model**: claude",
+            "**QA Execution Model**: claude",
+            "**Comprehension Model**: claude",
+            "**Improvement Scan Model**: claude",
+            "**Code Review Model**: claude",
+            "**Fallback Model**: claude",
+            "**API Timeout Seconds**: 120",
+        ]
+        for entry in expected_entries:
+            assert entry in text, f"Missing Model Routing entry: {entry}"
+
 
 class TestBuildConfigMdAgentBlock:
     """Agent entries must match Q-new17 shape exactly."""
