@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-15 11:33
+
+- **Files scanned**: references/scripts/compose.py, references/scripts/boot_remote.py, references/scripts/soul_adaptation.py
+- **Findings**: #8159 (compose.py redundant imports in agent_compose — low), #8160 (boot_remote.py corrupt .claude-pid silent fallthrough — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-15 09:03
 
 - **Files scanned**: references/scripts/cycle_pre.py, references/scripts/config.py, references/scripts/health_check.py
