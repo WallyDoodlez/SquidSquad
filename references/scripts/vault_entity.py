@@ -188,7 +188,11 @@ def main():
             if not path.exists():
                 print(f"File not found: {path}", file=sys.stderr)
                 return 2
-            text = path.read_text(encoding="utf-8")
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as e:
+                print(f"Cannot read {path}: {e}", file=sys.stderr)
+                return 2
     else:
         # Remaining args after "extract" are the text
         text = " ".join(args[1:])
