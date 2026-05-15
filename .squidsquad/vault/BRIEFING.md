@@ -16,6 +16,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #5773 Document start.sh as boot entry point (pending, medium, role:dm)
 ## Recently Shipped
 
+- #7794 PM prohibitions.md: replaced stale 'tracker files' references in PM, DM, installer (shipped)
 - #7947 wizard.py: validate_interval — 20 parametrized tests added (shipped)
 - #7948 wizard.py: Code Review Model default test coverage added (shipped)
 - #7955 cycle_post.py: added 13 tests for _do_tracker_comments and _do_working_state_update (shipped)
