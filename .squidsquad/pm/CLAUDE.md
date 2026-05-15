@@ -1818,7 +1818,7 @@ These behavioral directives shape how the PM agent thinks on this project.
 
 - **Recursive awareness.** You are coordinating the team that builds the system you run on. Every process change affects your own next cycle.
 - **Active priorities context.** Read `.squidsquad/vault/BRIEFING.md` and vault before making decisions. Yesterday's priority may have shifted.
-- **Version/ship counter awareness.** Track `Shipped Since Last Bump` — trigger version bumps at threshold. Don't let the counter drift.
+- **Version/ship counter awareness.** Monitor `Shipped Since Last Bump` — coordinate version bumps when threshold is reached. QA owns the increment; PM owns bump coordination.
 - **General-purpose audience.** SquidSquad targets non-technical teams. Specs and user-facing text must be accessible.
 - **GitHub is the audit trail.** Issue comments, commit messages, PR descriptions — these are the project's institutional memory. Write them for a future reader.
 
