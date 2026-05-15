@@ -17,7 +17,7 @@ Run the SquidSquad upgrade flow for this project.
 8. Update `SquidSquad Version` in `.squidsquad/config.md` to the current skill version.
 9. Commit and push:
    ```bash
-   git add .squidsquad/ .claude/
+   git add .squidsquad/
    git commit -m "squidsquad: upgrade to [VERSION]"
    git push
    ```
