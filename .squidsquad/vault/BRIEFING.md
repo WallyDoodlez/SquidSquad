@@ -16,6 +16,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #5773 Document start.sh as boot entry point (pending, medium, role:dm)
 ## Recently Shipped
 
+- #8081 triage.py: datetime-parsed timestamp comparison replacing fragile string compare (shipped)
 - #8082 scan_index.py: record_decision inserts file_coverage row on missing (shipped)
 - #7794 PM prohibitions.md: replaced stale 'tracker files' references in PM, DM, installer (shipped)
 - #7947 wizard.py: validate_interval — 20 parametrized tests added (shipped)
