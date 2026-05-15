@@ -137,11 +137,11 @@
 
 ### pm
 - **emits**: pr-create, status-transition, tracker-comment
-- **reacts-to**: agent-health, pr-merge, pr-merged, status-transition, tracker-comment, verification-failed, verification-passed
+- **reacts-to**: agent-health, pr-merged, status-transition, tracker-comment, verification-failed, verification-passed
 
 ### qa
 - **emits**: request-merge, status-transition, tracker-comment, verification-failed, verification-passed
-- **reacts-to**: agent-health, pr-merged, status-transition
+- **reacts-to**: pr-create, pr-merged, status-transition, tracker-comment
 
 ### skill
 - **emits**: pr-create, status-transition, tracker-comment
