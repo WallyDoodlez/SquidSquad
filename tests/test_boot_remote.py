@@ -182,6 +182,21 @@ class TestNeedsBoot:
         assert "dead" in reason
 
 
+    @patch("boot_remote._get_clone_path")
+    def test_corrupt_claude_pid_warns_stderr(self, mock_clone, tmp_path, capsys):
+        """#8160 regression: corrupt .claude-pid must warn, not silently pass."""
+        mock_clone.return_value = tmp_path
+        pid_dir = tmp_path / ".squidsquad" / "skill"
+        pid_dir.mkdir(parents=True)
+        (pid_dir / ".claude-pid").write_text("not-a-number", encoding="utf-8")
+        needs, reason, _ = boot_remote._needs_boot("skill")
+        # Should fall through to "no PID file" (legacy .pid also missing)
+        assert needs is True
+        captured = capsys.readouterr()
+        assert "WARNING" in captured.err
+        assert "corrupt" in captured.err or ".claude-pid" in captured.err
+
+
 class TestBootAgentSkip:
     @patch("boot_remote._needs_boot", return_value=(False, "alive (PID 123)", "/tmp"))
     def test_alive_agent_skipped(self, mock_needs):
