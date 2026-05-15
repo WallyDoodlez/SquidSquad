@@ -1,3 +1,10 @@
+## Scan — 2026-05-15 01:04
+
+- **Files scanned**: references/sub-skills/common/task-pickup.md, references/sub-skills/common/working-state.md
+- **Findings**: working-state.md clear state example dropped Last Processed Event ID — would cause event re-processing after task completion
+- **Auto-fixed**: updated clear instruction to preserve event ID
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-14 23:34
 
 - **Files scanned**: references/sub-skills/common/cycle-runner.md, references/sub-skills/common/prohibitions.md
