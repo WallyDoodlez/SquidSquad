@@ -20,7 +20,6 @@ Exit codes:
 
 import io
 import json
-import os
 import platform
 import shutil
 import subprocess
