@@ -402,7 +402,7 @@ This is idempotent — it creates any missing GitHub Issue labels and skips exis
 Update `SquidSquad Version` in `.squidsquad/config.md` to the current skill version.
 
 ```bash
-git add .squidsquad/ .claude/
+git add .squidsquad/
 git commit -m "squidsquad: upgrade to [VERSION]"
 git push
 ```

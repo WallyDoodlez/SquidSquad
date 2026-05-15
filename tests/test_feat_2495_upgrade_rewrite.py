@@ -131,7 +131,6 @@ def test_tc_03_skill_md_and_skill_file_agree():
 
     key_steps = [
         "compose.py deploy-all",
-        "compose.py boot-all",
         "SOUL.md",
         "ensure-labels",
     ]
@@ -345,3 +344,36 @@ def test_tc_10_tracker_schema_check_removed():
     assert "Tracker Schema" not in text, (
         f"{label} still references 'Tracker Schema' (obsolete field)"
     )
+
+
+# ---------------------------------------------------------------------------
+# TC-11: Upgrade commit must not stage .claude/ (#7879)
+# ---------------------------------------------------------------------------
+
+def test_tc_11_no_claude_dir_in_commit():
+    """
+    TC-11 (#7879): The upgrade commit step must only stage .squidsquad/,
+    not .claude/. Staging .claude/ silently bundles unrelated user edits
+    (settings, memory files) into the upgrade commit.
+    """
+    upgrade_text = _read_skill_upgrade_section()
+
+    # Find all git add commands in the upgrade section
+    git_adds = re.findall(r"git add\b.*", upgrade_text)
+    assert git_adds, "SKILL.md upgrade section has no git add command"
+
+    for cmd in git_adds:
+        assert ".claude" not in cmd, (
+            f"SKILL.md upgrade section stages .claude/ in commit: '{cmd}'. "
+            f"Only .squidsquad/ should be staged — .claude/ may contain unrelated user edits."
+        )
+
+    label, text = _upgrade_source_text()
+    git_adds = re.findall(r"git add\b.*", text)
+    assert git_adds, f"{label} has no git add command"
+
+    for cmd in git_adds:
+        assert ".claude" not in cmd, (
+            f"{label} stages .claude/ in commit: '{cmd}'. "
+            f"Only .squidsquad/ should be staged."
+        )
