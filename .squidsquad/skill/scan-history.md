@@ -1,5 +1,23 @@
 # Scan History
 
+## Scan — 2026-05-15 18:32
+
+- **Files scanned**: references/scripts/triage.py, references/scripts/event_bus.py, tests/test_triage.py, tests/test_event_bus.py, tests/test_feat_2495_upgrade_rewrite.py
+- **Findings**: #8307 (triage.py: dead code in find_qa_rejected own-comment check)
+- **Items rejected by human**: none
+
+## Scan — 2026-05-15 17:33
+
+- **Files scanned**: references/scripts/tracker.py, references/scripts/git_ops.py, references/scripts/squidsquad_cli.py
+- **Findings**: #8268 (tracker.py get_state returns OPEN for missing state — low), #8269 (squidsquad_cli.py unused import os — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-15 16:03
+
+- **Files scanned**: references/scripts/start_team.py, references/scripts/thin_launcher.py, references/scripts/diagnostics.py
+- **Findings**: #8234 (start_team.py bare except swallows all errors — low), #8235 (diagnostics.py missing redaction keywords — medium)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-15 14:33
 
 - **Files scanned**: references/scripts/vault_check.py, references/scripts/vault_entity.py, references/scripts/tc_coverage.py
