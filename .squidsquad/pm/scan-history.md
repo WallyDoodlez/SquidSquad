@@ -1,3 +1,10 @@
+## Scan — 2026-05-15 02:04
+
+- **Files scanned**: references/sub-skills/common/iteration-log.md, references/sub-skills/common/pull-latest.md
+- **Findings**: none — pull-latest.md has minor legacy "tracker file" term but harmless
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-15 01:34
 
 - **Files scanned**: references/sub-skills/common/issue-filing.md, references/sub-skills/common/git-commit.md
