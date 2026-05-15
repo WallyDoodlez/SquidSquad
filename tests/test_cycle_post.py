@@ -746,3 +746,170 @@ class TestAdvanceEventCursorInsertion:
         result = ws.read_text(encoding="utf-8")
         assert "new22222" in result
         assert "old11111" not in result
+
+
+# ---------------------------------------------------------------------------
+# _do_tracker_comments (#7955)
+# ---------------------------------------------------------------------------
+
+class TestDoTrackerComments:
+    """Tests for _do_tracker_comments — posts comments via tracker.py."""
+
+    def test_posts_valid_comments(self, monkeypatch):
+        """Each comment in tracker_comments is posted via _run_script."""
+        calls = []
+
+        def fake_run_script(script, *args, **kwargs):
+            calls.append((script, list(args)))
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+
+        data = {
+            "tracker_comments": [
+                {"number": 100, "message": "Picking up."},
+                {"number": 200, "message": "Fixed."},
+            ]
+        }
+        cycle_post._do_tracker_comments(data, "skill")
+
+        assert len(calls) == 2
+        assert calls[0] == ("tracker.py", ["comment", "100", "--role", "skill-lead", "--message", "Picking up."])
+        assert calls[1] == ("tracker.py", ["comment", "200", "--role", "skill-lead", "--message", "Fixed."])
+
+    def test_empty_comments_list(self, monkeypatch):
+        """Empty tracker_comments list results in zero _run_script calls."""
+        calls = []
+        monkeypatch.setattr(cycle_post, "_run_script", lambda *a, **kw: calls.append(1) or MagicMock(returncode=0))
+
+        cycle_post._do_tracker_comments({"tracker_comments": []}, "skill")
+        assert len(calls) == 0
+
+    def test_missing_tracker_comments_key(self, monkeypatch):
+        """Missing tracker_comments key is treated as empty list."""
+        calls = []
+        monkeypatch.setattr(cycle_post, "_run_script", lambda *a, **kw: calls.append(1) or MagicMock(returncode=0))
+
+        cycle_post._do_tracker_comments({}, "pm")
+        assert len(calls) == 0
+
+    def test_skips_comment_without_number(self, monkeypatch):
+        """Comments missing 'number' are skipped."""
+        calls = []
+        monkeypatch.setattr(cycle_post, "_run_script", lambda *a, **kw: calls.append(1) or MagicMock(returncode=0))
+
+        data = {"tracker_comments": [{"message": "orphaned comment"}]}
+        cycle_post._do_tracker_comments(data, "skill")
+        assert len(calls) == 0
+
+    def test_skips_comment_without_message(self, monkeypatch):
+        """Comments missing 'message' are skipped."""
+        calls = []
+        monkeypatch.setattr(cycle_post, "_run_script", lambda *a, **kw: calls.append(1) or MagicMock(returncode=0))
+
+        data = {"tracker_comments": [{"number": 100}]}
+        cycle_post._do_tracker_comments(data, "skill")
+        assert len(calls) == 0
+
+    def test_continues_on_failure(self, monkeypatch, capsys):
+        """A failed comment does not stop subsequent comments."""
+        calls = []
+
+        def fake_run_script(script, *args, **kwargs):
+            calls.append(list(args))
+            if len(calls) == 1:
+                return MagicMock(returncode=1, stderr="network error")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+
+        data = {
+            "tracker_comments": [
+                {"number": 100, "message": "First"},
+                {"number": 200, "message": "Second"},
+            ]
+        }
+        cycle_post._do_tracker_comments(data, "qa")
+        assert len(calls) == 2  # Both attempted despite first failure
+
+    def test_role_suffix(self, monkeypatch):
+        """Role label is constructed as '{role}-lead'."""
+        calls = []
+
+        def fake_run_script(script, *args, **kwargs):
+            calls.append(list(args))
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+
+        cycle_post._do_tracker_comments(
+            {"tracker_comments": [{"number": 42, "message": "test"}]}, "pm"
+        )
+        assert "--role" in calls[0]
+        role_idx = calls[0].index("--role")
+        assert calls[0][role_idx + 1] == "pm-lead"
+
+
+# ---------------------------------------------------------------------------
+# _do_working_state_update (#7955)
+# ---------------------------------------------------------------------------
+
+class TestDoWorkingStateUpdate:
+    """Tests for _do_working_state_update — writes working-state.md."""
+
+    def test_writes_update_content(self, squid_dir, patch_dirs, monkeypatch):
+        """Non-empty update is written to working-state.md."""
+        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+
+        update_text = "# Working State\n\n- **Task**: #42\n- **Status**: in-progress\n"
+        cycle_post._do_working_state_update({"working_state_update": update_text}, "skill")
+
+        ws = squid_dir / "skill" / "working-state.md"
+        assert ws.exists()
+        assert ws.read_text(encoding="utf-8") == update_text
+
+    def test_none_update_is_noop(self, squid_dir, patch_dirs, monkeypatch):
+        """None working_state_update does not write or create file."""
+        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        ws = squid_dir / "skill" / "working-state.md"
+
+        cycle_post._do_working_state_update({"working_state_update": None}, "skill")
+        assert not ws.exists()
+
+    def test_missing_key_is_noop(self, squid_dir, patch_dirs, monkeypatch):
+        """Missing working_state_update key does not write or create file."""
+        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        ws = squid_dir / "skill" / "working-state.md"
+
+        cycle_post._do_working_state_update({}, "skill")
+        assert not ws.exists()
+
+    def test_empty_string_is_noop(self, squid_dir, patch_dirs, monkeypatch):
+        """Empty string working_state_update is treated as falsy — no write."""
+        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        ws = squid_dir / "skill" / "working-state.md"
+
+        cycle_post._do_working_state_update({"working_state_update": ""}, "skill")
+        assert not ws.exists()
+
+    def test_overwrites_existing_file(self, squid_dir, patch_dirs, monkeypatch):
+        """Existing working-state.md is overwritten with new content."""
+        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        ws = squid_dir / "skill" / "working-state.md"
+        ws.write_text("old content", encoding="utf-8")
+
+        new_content = "# Working State\n\n- **Task**: none\n- **Status**: none\n"
+        cycle_post._do_working_state_update({"working_state_update": new_content}, "skill")
+        assert ws.read_text(encoding="utf-8") == new_content
+
+    def test_creates_parent_directories(self, squid_dir, patch_dirs, monkeypatch):
+        """Parent directories are created if they don't exist."""
+        new_role_dir = squid_dir / "newrole"
+        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+
+        cycle_post._do_working_state_update(
+            {"working_state_update": "content"}, "newrole"
+        )
+        ws = squid_dir / "newrole" / "working-state.md"
+        assert ws.exists()
+        assert ws.read_text(encoding="utf-8") == "content"
