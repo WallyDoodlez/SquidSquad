@@ -186,6 +186,68 @@ class TestValidateRerunAction:
 
 
 # ===========================================================================
+# validate_interval (#7947, TC-49..TC-52)
+# ===========================================================================
+
+
+class TestValidateInterval:
+    """Tests for validate_interval — Ralph Loop interval validation."""
+
+    @pytest.mark.parametrize("value,expected_minutes", [
+        ("10", 10),
+        ("1", 1),
+        ("30", 30),
+        ("120", 120),
+        (" 15 ", 15),  # whitespace trimmed
+    ])
+    def test_valid_integers(self, value, expected_minutes):
+        result = wizard.validate_interval(value)
+        assert result["ok"] is True
+        assert result["minutes"] == expected_minutes
+        assert result["reason"] is None
+
+    @pytest.mark.parametrize("value", [
+        "", "  ", None,
+    ])
+    def test_empty_input_returns_default(self, value):
+        result = wizard.validate_interval(value)
+        assert result["ok"] is True
+        assert result["minutes"] == 10  # default
+
+    def test_empty_input_custom_default(self):
+        result = wizard.validate_interval("", default=30)
+        assert result["ok"] is True
+        assert result["minutes"] == 30
+
+    @pytest.mark.parametrize("value", [
+        "10.5", "3.0", "1,5", "0.1",
+    ])
+    def test_float_rejected(self, value):
+        result = wizard.validate_interval(value)
+        assert result["ok"] is False
+        assert result["minutes"] is None
+        assert "whole number" in result["reason"]
+
+    @pytest.mark.parametrize("value", [
+        "0", "-1", "-100",
+    ])
+    def test_zero_and_negative_rejected(self, value):
+        result = wizard.validate_interval(value)
+        assert result["ok"] is False
+        assert result["minutes"] is None
+        assert "at least 1" in result["reason"]
+
+    @pytest.mark.parametrize("value", [
+        "abc", "ten", "!@#", "5m",
+    ])
+    def test_non_numeric_rejected(self, value):
+        result = wizard.validate_interval(value)
+        assert result["ok"] is False
+        assert result["minutes"] is None
+        assert "not a number" in result["reason"]
+
+
+# ===========================================================================
 # Step 1 — project name validation
 # ===========================================================================
 
