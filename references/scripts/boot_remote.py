@@ -314,8 +314,8 @@ def _needs_boot(role):
                 return False, f"alive (PID {pid})", str(clone_path)
             else:
                 return True, f"dead (PID {pid})", str(clone_path)
-        except (ValueError, OSError):
-            pass
+        except (ValueError, OSError) as e:
+            print(f"WARNING: corrupt .claude-pid for {role}: {e}", file=sys.stderr)
 
     # Fallback: legacy .pid file
     pid = _read_pid_file(clone_path, role)
