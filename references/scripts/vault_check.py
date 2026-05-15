@@ -55,8 +55,12 @@ def _get_all_notes():
 
 
 def _extract_wikilinks(text):
-    """Extract all [[wikilink]] references from text body."""
-    return re.findall(r'\[\[([^\]]+)\]\]', text)
+    """Extract all [[wikilink]] references from text body.
+
+    Strips pipe-alias syntax: [[note|alias]] → note (#8200).
+    """
+    raw = re.findall(r'\[\[([^\]]+)\]\]', text)
+    return [link.split("|")[0].strip() for link in raw]
 
 
 def check_structure():

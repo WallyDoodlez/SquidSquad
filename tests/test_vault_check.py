@@ -50,6 +50,24 @@ class TestExtractWikilinks:
         links = vault_check._extract_wikilinks(text)
         assert links == ["valid-link"]
 
+    def test_pipe_alias_stripped(self):
+        """#8200 regression: [[note|alias]] must return 'note', not 'note|alias'."""
+        text = "See [[decision-foo|Foo Decision]] for context."
+        links = vault_check._extract_wikilinks(text)
+        assert links == ["decision-foo"]
+
+    def test_pipe_alias_with_spaces(self):
+        """Pipe alias with whitespace around the pipe."""
+        text = "[[note-name | Display Name]]"
+        links = vault_check._extract_wikilinks(text)
+        assert links == ["note-name"]
+
+    def test_mixed_bare_and_aliased(self):
+        """Mix of bare wikilinks and aliased ones."""
+        text = "[[bare-link]] and [[aliased|Pretty Name]]"
+        links = vault_check._extract_wikilinks(text)
+        assert links == ["bare-link", "aliased"]
+
 
 class TestCheckStructure:
     def test_valid_structure(self, tmp_path):
