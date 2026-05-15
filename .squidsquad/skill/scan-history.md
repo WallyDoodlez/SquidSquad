@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-15 14:33
+
+- **Files scanned**: references/scripts/vault_check.py, references/scripts/vault_entity.py, references/scripts/tc_coverage.py
+- **Findings**: #8200 (vault_check.py wikilink pipe-alias not stripped — low), #8201 (vault_entity.py unhandled --file read error — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-15 13:33
 
 - **Files scanned**: references/scripts/event_bus.py, references/scripts/event_bus_reader.py, references/scripts/event_catalog.py
