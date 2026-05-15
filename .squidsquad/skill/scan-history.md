@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-15 07:34
+
+- **Files scanned**: references/scripts/triage.py, references/scripts/scan_index.py, references/scripts/vault_remember.py
+- **Findings**: #8081 (triage.py string-based timestamp comparison fragile — low), #8082 (scan_index.py record_decision silent no-op on missing file_coverage row — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-14 16:34
 
 - **Files scanned**: references/commands/squidsquad-compose.md, references/commands/squidsquad-upgrade.md, references/docs/vault-reference.md, references/prompts/code-review.md.j2
