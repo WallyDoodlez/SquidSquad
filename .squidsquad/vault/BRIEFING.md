@@ -4,7 +4,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #7630 EPIC: Event-driven agent architecture — harness owns cycle, agents react to events (pending-human-setup, high, role:skill) — Phases 1-3 done, Phase 4 blocked on Monitor tool (not yet shipped); supersedes #6056, #5775, #5613
+- #7630 EPIC: Event-driven agent architecture — harness owns cycle, agents react to events (in-progress, high, role:skill) — Phases 1-3 done, Phase 4 unblocked (Monitor tool confirmed available v2.1.140); supersedes #6056, #5775, #5613
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — awaiting human greenlight
 - #6574 Zero-prereq install — gh repo creation + local forge fallback (pending, medium, role:skill)
 - #5855 Vault is static decision log, not living memory (pending, high, role:skill)
@@ -16,6 +16,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #5773 Document start.sh as boot entry point (pending, medium, role:dm)
 ## Recently Shipped
 
+- #8081 triage.py: datetime-parsed timestamp comparison replacing fragile string compare (shipped)
 - #8082 scan_index.py: record_decision inserts file_coverage row on missing (shipped)
 - #7794 PM prohibitions.md: replaced stale 'tracker files' references in PM, DM, installer (shipped)
 - #7947 wizard.py: validate_interval — 20 parametrized tests added (shipped)
