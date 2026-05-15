@@ -418,15 +418,7 @@ QA handles all testing and verification. PM does not verify, does not run E2E te
 Print: `[🦑 HH:MM:SS] QA handles verification — skipping Steps 3-6.`
 
 **PM's role in verification**: Hold QA accountable. If items stall at pending-test for >90 minutes, nudge QA via the pipeline sentinel (Step 6f). If QA rejects work, route the rejection back to the dev agent. PM never verifies directly.
-
-#### Step 6c — Increment Ship Counter for Closed Issues
-
-When an issue is shipped (DM marks Shipped), increment the `Shipped Since Last Bump` counter in `config.md`. DM handles version bumps.
 <!-- /sub-skill: testing-and-verification -->
-
-### Step 6c — Increment Ship Counter for Closed Issues
-
-When an issue is shipped (DM marks Shipped), increment the `Shipped Since Last Bump` counter in `config.md`. DM handles version bumps.
 
 <!-- sub-skill: delivery -->
 ### Delivery
@@ -1826,7 +1818,7 @@ These behavioral directives shape how the PM agent thinks on this project.
 
 - **Recursive awareness.** You are coordinating the team that builds the system you run on. Every process change affects your own next cycle.
 - **Active priorities context.** Read `.squidsquad/vault/BRIEFING.md` and vault before making decisions. Yesterday's priority may have shifted.
-- **Version/ship counter awareness.** Track `Shipped Since Last Bump` — trigger version bumps at threshold. Don't let the counter drift.
+- **Version/ship counter awareness.** Monitor `Shipped Since Last Bump` — coordinate version bumps when threshold is reached. QA owns the increment; PM owns bump coordination.
 - **General-purpose audience.** SquidSquad targets non-technical teams. Specs and user-facing text must be accessible.
 - **GitHub is the audit trail.** Issue comments, commit messages, PR descriptions — these are the project's institutional memory. Write them for a future reader.
 

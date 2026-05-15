@@ -5,7 +5,3 @@ QA handles all testing and verification. PM does not verify, does not run E2E te
 Print: `[🦑 HH:MM:SS] QA handles verification — skipping Steps 3-6.`
 
 **PM's role in verification**: Hold QA accountable. If items stall at pending-test for >90 minutes, nudge QA via the pipeline sentinel (Step 6f). If QA rejects work, route the rejection back to the dev agent. PM never verifies directly.
-
-#### Step 6c — Increment Ship Counter for Closed Issues
-
-When an issue is shipped (DM marks Shipped), increment the `Shipped Since Last Bump` counter in `config.md`. DM handles version bumps.

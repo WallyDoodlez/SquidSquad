@@ -96,10 +96,6 @@ If the file is empty or has no active task or planning phase, proceed normally t
 
 {{include: roles/pm/testing-and-verification}}
 
-### Step 6c — Increment Ship Counter for Closed Issues
-
-When an issue is shipped (DM marks Shipped), increment the `Shipped Since Last Bump` counter in `config.md`. DM handles version bumps.
-
 {{include: roles/pm/delivery}}
 
 {{include: roles/pm/pipeline-sentinel}}

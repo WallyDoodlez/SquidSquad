@@ -12,31 +12,34 @@ QA_VERIFICATION = REPO / "references/sub-skills/roles/qa/verification.md"
 
 
 class TestPMVerificationBlockedCheck:
-    """PM verification (Steps 5-6) skips blocked:human-action items."""
+    """PM delegates verification to QA — no direct verification steps."""
 
     @pytest.fixture
     def content(self):
         return PM_VERIFICATION.read_text(encoding="utf-8")
 
-    def test_step5_has_blocked_check(self, content):
-        """Step 5 (verify fixed issues) checks blocked:human-action before verifying."""
-        # Find Step 5 section and verify the blocked check appears before
-        # the first verification action
-        step5_start = content.index("Step 5")
-        step6_start = content.index("Step 6")
-        step5_text = content[step5_start:step6_start]
-        assert "blocked:human-action" in step5_text
+    def test_pm_does_not_verify_directly(self, content):
+        """PM template explicitly states QA handles verification."""
+        assert "QA handles all testing and verification" in content
 
-    def test_step6_has_blocked_check(self, content):
-        """Step 6 (verify pending test tasks) checks blocked:human-action before verifying."""
-        step6_start = content.index("Step 6 — Verify Pending Test Tasks")
-        step6c_start = content.index("Step 6c")
-        step6_text = content[step6_start:step6c_start]
-        assert "blocked:human-action" in step6_text
+    def test_pm_has_no_verification_steps(self, content):
+        """PM should not contain Step 5/6 verification sections."""
+        assert "Step 5" not in content
+        assert "Step 6 — Verify" not in content
 
-    def test_blocked_check_says_skip(self, content):
-        """Blocked check instructs to skip, not transition status."""
-        assert "skip it" in content.lower() or "Skip it" in content
+
+class TestShipCounterOwnership:
+    """Regression test for #7793 — only QA increments the ship counter."""
+
+    def test_qa_owns_ship_counter(self):
+        """QA verification.md is the authoritative owner of ship counter increment."""
+        content = QA_VERIFICATION.read_text(encoding="utf-8")
+        assert "Shipped Since Last Bump" in content
+
+    def test_pm_does_not_own_ship_counter(self):
+        """PM must never increment the ship counter (QA owns it)."""
+        content = PM_VERIFICATION.read_text(encoding="utf-8")
+        assert "Shipped Since Last Bump" not in content
 
 
 class TestQAVerificationBlockedCheck:
