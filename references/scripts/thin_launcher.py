@@ -83,6 +83,10 @@ def main():
                 "--name", f"squidsquad-{role}",
                 "--effort", effort,
                 "--dangerously-skip-permissions",
+                # #8308: suppress user/account MCP plugins so built-in deferred
+                # tools (Monitor, etc.) aren't crowded out. If an agent needs an
+                # MCP server, add --mcp-config <file> alongside this flag.
+                "--strict-mcp-config",
                 "Boot. Begin your first Ralph Loop cycle now.",
             ],
             cwd=clone_path,
