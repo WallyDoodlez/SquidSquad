@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-15 17:33
+
+- **Files scanned**: references/scripts/tracker.py, references/scripts/git_ops.py, references/scripts/squidsquad_cli.py
+- **Findings**: #8268 (tracker.py get_state returns OPEN for missing state — low), #8269 (squidsquad_cli.py unused import os — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-15 16:03
 
 - **Files scanned**: references/scripts/start_team.py, references/scripts/thin_launcher.py, references/scripts/diagnostics.py
