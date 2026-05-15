@@ -729,9 +729,6 @@ def agent_compose(deterministic_output: str, role_name: str,
         return deterministic_output
 
     try:
-        import subprocess
-        import json
-
         # Extract code blocks and markers for preservation verification
         original_markers = _extract_markers(deterministic_output)
         original_code_blocks = _extract_code_blocks(deterministic_output)
