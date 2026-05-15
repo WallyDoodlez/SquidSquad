@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-15 16:03
+
+- **Files scanned**: references/scripts/start_team.py, references/scripts/thin_launcher.py, references/scripts/diagnostics.py
+- **Findings**: #8234 (start_team.py bare except swallows all errors — low), #8235 (diagnostics.py missing redaction keywords — medium)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-15 14:33
 
 - **Files scanned**: references/scripts/vault_check.py, references/scripts/vault_entity.py, references/scripts/tc_coverage.py
