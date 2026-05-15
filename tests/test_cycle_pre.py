@@ -1317,3 +1317,46 @@ class TestConfigVersionValidation:
         monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "")
 
         cycle_pre._validate_config_version()  # Should not raise
+
+
+# ---------------------------------------------------------------------------
+# _config_get_int (#8115)
+# ---------------------------------------------------------------------------
+
+class TestConfigGetInt:
+    """Tests for _config_get_int — safe int parsing from config values."""
+
+    def test_valid_integer(self, monkeypatch):
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "42")
+        assert cycle_pre._config_get_int("ship-threshold", 10) == 42
+
+    def test_empty_returns_default(self, monkeypatch):
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "")
+        assert cycle_pre._config_get_int("ship-threshold", 10) == 10
+
+    def test_none_like_returns_default(self, monkeypatch):
+        """_config_get returns '' on failure, never None, but guard anyway."""
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "")
+        assert cycle_pre._config_get_int("interval", 30) == 30
+
+    def test_non_numeric_returns_default(self, monkeypatch):
+        """#8115 regression: '10 items' must not crash."""
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "10 items")
+        assert cycle_pre._config_get_int("ship-threshold", 10) == 10
+
+    def test_float_string_returns_default(self, monkeypatch):
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "10.5")
+        assert cycle_pre._config_get_int("interval", 30) == 30
+
+    def test_whitespace_only_returns_default(self, monkeypatch):
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "   ")
+        assert cycle_pre._config_get_int("shipped-since-bump", 0) == 0
+
+    def test_zero_is_valid(self, monkeypatch):
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "0")
+        assert cycle_pre._config_get_int("shipped-since-bump", 5) == 0
+
+    def test_negative_is_valid(self, monkeypatch):
+        """Negative values are technically valid integers."""
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "-1")
+        assert cycle_pre._config_get_int("ship-threshold", 10) == -1
