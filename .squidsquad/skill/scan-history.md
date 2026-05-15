@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-15 18:32
+
+- **Files scanned**: references/scripts/triage.py, references/scripts/event_bus.py, tests/test_triage.py, tests/test_event_bus.py, tests/test_feat_2495_upgrade_rewrite.py
+- **Findings**: #8307 (triage.py: dead code in find_qa_rejected own-comment check)
+- **Items rejected by human**: none
+
 ## Scan — 2026-05-15 17:33
 
 - **Files scanned**: references/scripts/tracker.py, references/scripts/git_ops.py, references/scripts/squidsquad_cli.py
