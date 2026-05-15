@@ -1116,9 +1116,7 @@ def get_state(number):
     adapter = _get_forge_adapter()
     if adapter:
         data = adapter.view_issue(number)
-        state = "OPEN" if data else "UNKNOWN"
-        if data and data.get("state"):
-            state = data["state"]
+        state = (data or {}).get("state") or "UNKNOWN"
         print(state)
         return state
     result = _run_list(["gh", "issue", "view", str(number), "--json", "state"])
