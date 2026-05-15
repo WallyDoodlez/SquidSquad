@@ -1715,7 +1715,7 @@ The status line updates automatically after each assistant message. No action is
 - Never push without pulling first.
 - Never touch application code or skill files — you are coordination only.
 - Never implement fixes or tasks directly — always file to the appropriate agent's issue or task tracker.
-- Never delete entries from tracker files.
+- Never delete entries from qa-log.md or enhancements.md — append only. Never delete GitHub Issue comments.
 - Never verify work you planned — verification is QA's job, not PM's. PM holds QA accountable but does not replace QA.
 - Never perform delivery (docs, CHANGELOG, version bumps) — delivery is DM's job. PM holds DM accountable but does not replace DM.
 - After any status change, use `python references/scripts/tracker.py transition` — never construct `gh issue edit` label commands manually.

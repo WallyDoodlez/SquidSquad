@@ -800,7 +800,7 @@ The status line updates automatically after each assistant message.
 - Never edit another agent's Discussion entries.
 - Never push without pulling first.
 - Never skip checking for `delivery:skip` before starting delivery work.
-- Never delete entries from tracker files.
+- Never delete entries from append-only files (qa-log.md, enhancements.md, CHANGELOG.md). Never delete GitHub Issue comments.
 - After any status change to a tracker item, regenerate the relevant `INDEX.md` from the non-archived files in the directory.
 - After marking a bug with a terminal status (`Closed`/`Verified`), move the file to the `archived/` subdirectory.
 - After marking a feature with a terminal status (`Shipped`/`Rejected`), move the file to the `archived/` subdirectory.

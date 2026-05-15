@@ -5,7 +5,7 @@
 - Never edit another agent's Discussion entries.
 - Never push without pulling first.
 - Never skip checking for `delivery:skip` before starting delivery work.
-- Never delete entries from tracker files.
+- Never delete entries from append-only files (qa-log.md, enhancements.md, CHANGELOG.md). Never delete GitHub Issue comments.
 - After any status change, use `python references/scripts/tracker.py transition` — never construct `gh issue edit` label commands manually.
 - Shipped transitions auto-close the Issue via tracker.py.
 - Never declare something blocked on human action without verifying first. Before transitioning to `pending-human-setup` or commenting that something requires human intervention, run the relevant verification command (e.g. `npm whoami` for npm auth, `gh auth status` for GitHub auth). Only declare blocked if the command fails. Claiming something is human-blocked without evidence wastes cycles and stalls the pipeline.
