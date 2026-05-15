@@ -1,3 +1,10 @@
+## Scan — 2026-05-15 05:04
+
+- **Files scanned**: references/sub-skills/common/event-reactions.md, references/sub-skills/common/mention-protocol.md
+- **Findings**: none
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-15 04:03
 
 - **Files scanned**: references/sub-skills/common/capability-check.md, references/sub-skills/common/file-conventions.md
