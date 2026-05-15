@@ -1,3 +1,10 @@
+## Scan — 2026-05-15 01:34
+
+- **Files scanned**: references/sub-skills/common/issue-filing.md, references/sub-skills/common/git-commit.md
+- **Findings**: none — both consistent with vault decisions and tracker protocol
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-15 01:04
 
 - **Files scanned**: references/sub-skills/common/task-pickup.md, references/sub-skills/common/working-state.md
