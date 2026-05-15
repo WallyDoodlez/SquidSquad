@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-15 13:33
+
+- **Files scanned**: references/scripts/event_bus.py, references/scripts/event_bus_reader.py, references/scripts/event_catalog.py
+- **Findings**: #8193 (unused import sys in event_bus.py and event_bus_reader.py — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-15 11:33
 
 - **Files scanned**: references/scripts/compose.py, references/scripts/boot_remote.py, references/scripts/soul_adaptation.py
