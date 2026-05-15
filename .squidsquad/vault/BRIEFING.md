@@ -16,6 +16,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #5773 Document start.sh as boot entry point (pending, medium, role:dm)
 ## Recently Shipped
 
+- #7890 config.md missing Code Review Model field — model_router code-review fix (shipped)
 - #6581 Wizard reframing — L3 picks agents, L4 records project specifics (shipped) — v0.38.0
 - #7491 compose/sync config.md contamination fix (shipped) — root cause of 10+ QA rejections
 - #7285 config.py sync_agents() NameError fix (shipped)
