@@ -12,6 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "references" / "scripts"))
 import event_bus
+import event_bus_reader
 
 
 class _EventCollector(BaseHTTPRequestHandler):
@@ -164,3 +165,17 @@ class TestGenerateId:
         a = event_bus._generate_id("cycle-start", "skill", "2026-05-01T18:00:00", {})
         b = event_bus._generate_id("cycle-end", "skill", "2026-05-01T18:00:00", {})
         assert a != b
+
+
+class TestNoUnusedImports:
+    """#8193 regression: event bus modules must not have unused imports."""
+
+    def test_event_bus_no_unused_sys(self):
+        import inspect
+        source = inspect.getsource(event_bus)
+        assert "import sys" not in source
+
+    def test_event_bus_reader_no_unused_sys(self):
+        import inspect
+        source = inspect.getsource(event_bus_reader)
+        assert "import sys" not in source
