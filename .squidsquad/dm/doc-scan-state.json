@@ -1,5 +1,5 @@
 {
-  "last_scanned": "README.md",
+  "last_scanned": "SKILL.md:sections-1-3",
   "rotation_count": 42,
   "scan_history": [
     {"file": "README.md", "date": "2026-04-28", "findings": 2},
@@ -174,7 +174,8 @@
     {"file": "docs/sub-skill-guide.md", "date": "2026-05-15", "findings": 0},
     {"file": "CONTRIBUTING.md", "date": "2026-05-15", "findings": 0},
     {"file": "CHANGELOG.md", "date": "2026-05-15", "findings": 0},
-    {"file": "README.md", "date": "2026-05-15", "findings": 0}
+    {"file": "README.md", "date": "2026-05-15", "findings": 0},
+    {"file": "SKILL.md:sections-1-3", "date": "2026-05-15", "findings": 0}
   ],
   "doc_inventory": {
     "README.md": {"last_scanned": "2026-05-07", "status": "current"},
