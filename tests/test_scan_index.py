@@ -341,6 +341,58 @@ class TestRecordDecision:
         result = scan_index.record_decision(9999, True, db_path=db)
         assert result is False
 
+    def test_accept_creates_coverage_row_if_missing(self, db):
+        """#8082 regression: accepted decision inserts file_coverage if no row exists."""
+        conn = scan_index._get_db(db)
+        sid = conn.execute(
+            "INSERT INTO scans (role, scanned_at, file_path) VALUES ('skill', '2026-01-01 00:00:00', 'orphan.py')"
+        ).lastrowid
+        conn.execute(
+            "INSERT INTO findings (scan_id, file_path, finding_type, description, github_issue_number) VALUES (?, 'orphan.py', 'issue', 'no coverage row', 300)",
+            (sid,),
+        )
+        # Intentionally no file_coverage row for orphan.py
+        conn.commit()
+        conn.close()
+
+        result = scan_index.record_decision(300, True, db_path=db)
+        assert result is True
+
+        conn = scan_index._get_db(db)
+        cov = conn.execute(
+            "SELECT accepted_finding_count, rejected_finding_count FROM file_coverage WHERE file_path='orphan.py'"
+        ).fetchone()
+        assert cov is not None, "file_coverage row should be created on accept"
+        assert cov["accepted_finding_count"] == 1
+        assert cov["rejected_finding_count"] == 0
+        conn.close()
+
+    def test_reject_creates_coverage_row_if_missing(self, db):
+        """#8082 regression: rejected decision inserts file_coverage if no row exists."""
+        conn = scan_index._get_db(db)
+        sid = conn.execute(
+            "INSERT INTO scans (role, scanned_at, file_path) VALUES ('skill', '2026-01-01 00:00:00', 'orphan2.py')"
+        ).lastrowid
+        conn.execute(
+            "INSERT INTO findings (scan_id, file_path, finding_type, description, github_issue_number) VALUES (?, 'orphan2.py', 'issue', 'no coverage row', 400)",
+            (sid,),
+        )
+        # Intentionally no file_coverage row for orphan2.py
+        conn.commit()
+        conn.close()
+
+        result = scan_index.record_decision(400, False, db_path=db)
+        assert result is True
+
+        conn = scan_index._get_db(db)
+        cov = conn.execute(
+            "SELECT accepted_finding_count, rejected_finding_count FROM file_coverage WHERE file_path='orphan2.py'"
+        ).fetchone()
+        assert cov is not None, "file_coverage row should be created on reject"
+        assert cov["rejected_finding_count"] == 1
+        assert cov["accepted_finding_count"] == 0
+        conn.close()
+
 
 # ---------------------------------------------------------------------------
 # refresh-churn

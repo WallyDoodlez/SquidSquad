@@ -394,15 +394,26 @@ def record_decision(issue_number, accepted, db_path=None):
     # Update file_coverage counters
     fp = row["file_path"]
     if accepted:
-        conn.execute(
+        cur = conn.execute(
             "UPDATE file_coverage SET accepted_finding_count = accepted_finding_count + 1 WHERE file_path=?",
             (fp,),
         )
+        if cur.rowcount == 0:
+            conn.execute(
+                "INSERT INTO file_coverage (file_path, accepted_finding_count) VALUES (?, 1)",
+                (fp,),
+            )
     else:
-        conn.execute(
+        cur = conn.execute(
             "UPDATE file_coverage SET rejected_finding_count = rejected_finding_count + 1 WHERE file_path=?",
             (fp,),
         )
+        if cur.rowcount == 0:
+            conn.execute(
+                "INSERT INTO file_coverage (file_path, rejected_finding_count) VALUES (?, 1)",
+                (fp,),
+            )
+
         # Also record in rejections table
         finding = conn.execute(
             "SELECT description FROM findings WHERE github_issue_number=?",
