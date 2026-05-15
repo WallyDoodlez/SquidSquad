@@ -1,3 +1,10 @@
+## Scan — 2026-05-14 23:34
+
+- **Files scanned**: references/sub-skills/common/cycle-runner.md, references/sub-skills/common/prohibitions.md
+- **Findings**: none — both current, consistent with harness architecture and tracker protocol
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-14 19:34
 
 - **Files scanned**: references/sub-skills/roles/pm/pipeline-sentinel.md, references/sub-skills/roles/pm/soul-shepherd.md
