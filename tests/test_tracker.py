@@ -289,6 +289,36 @@ class TestGetState:
         state = tracker.get_state(42)
         assert state == "CLOSED"
 
+    def test_adapter_returns_state(self, monkeypatch):
+        adapter = MagicMock()
+        adapter.view_issue.return_value = {"state": "CLOSED"}
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: adapter)
+        state = tracker.get_state(42)
+        assert state == "CLOSED"
+
+    def test_adapter_missing_state_returns_unknown(self, monkeypatch):
+        """Regression: #8268 — missing state field should return UNKNOWN, not OPEN."""
+        adapter = MagicMock()
+        adapter.view_issue.return_value = {"title": "some issue"}
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: adapter)
+        state = tracker.get_state(42)
+        assert state == "UNKNOWN"
+
+    def test_adapter_empty_state_returns_unknown(self, monkeypatch):
+        """Empty string state treated as UNKNOWN (#8268)."""
+        adapter = MagicMock()
+        adapter.view_issue.return_value = {"state": ""}
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: adapter)
+        state = tracker.get_state(42)
+        assert state == "UNKNOWN"
+
+    def test_adapter_no_data_returns_unknown(self, monkeypatch):
+        adapter = MagicMock()
+        adapter.view_issue.return_value = None
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: adapter)
+        state = tracker.get_state(42)
+        assert state == "UNKNOWN"
+
 
 class TestCloseIssue:
     def test_calls_close(self, monkeypatch):
