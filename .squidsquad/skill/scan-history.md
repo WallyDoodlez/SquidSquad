@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-15 09:03
+
+- **Files scanned**: references/scripts/cycle_pre.py, references/scripts/config.py, references/scripts/health_check.py
+- **Findings**: #8115 (cycle_pre.py unhandled ValueError on ship-threshold int() — low), #8116 (health_check.py _read_interval regex unscoped — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-15 07:34
 
 - **Files scanned**: references/scripts/triage.py, references/scripts/scan_index.py, references/scripts/vault_remember.py
