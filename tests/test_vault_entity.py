@@ -187,3 +187,29 @@ class TestProperNameClassification:
             assert red_hat[0]["type"] == "unknown", \
                 f"Ambiguous name should be 'unknown', got '{red_hat[0]['type']}'"
             assert red_hat[0]["confidence"] == "low"
+
+
+class TestMainFileArg:
+    """Tests for --file argument handling in main()."""
+
+    def test_unreadable_file_returns_2(self, tmp_path, monkeypatch):
+        """#8201 regression: unreadable file must return 2, not crash."""
+        bad_file = tmp_path / "bad.bin"
+        bad_file.write_bytes(b'\x80\x81\x82\xff\xfe' * 100)
+        monkeypatch.setattr(sys, "argv", ["vault_entity.py", "extract", "--file", str(bad_file)])
+        result = vault_entity.main()
+        assert result == 2
+
+    def test_missing_file_returns_2(self, monkeypatch):
+        """Missing file returns 2."""
+        monkeypatch.setattr(sys, "argv", ["vault_entity.py", "extract", "--file", "/nonexistent/path.md"])
+        result = vault_entity.main()
+        assert result == 2
+
+    def test_valid_file_succeeds(self, tmp_path, monkeypatch):
+        """Valid file with extractable content returns 0."""
+        good_file = tmp_path / "test.md"
+        good_file.write_text("Check out https://example.com for details.", encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", ["vault_entity.py", "extract", "--file", str(good_file)])
+        result = vault_entity.main()
+        assert result == 0
