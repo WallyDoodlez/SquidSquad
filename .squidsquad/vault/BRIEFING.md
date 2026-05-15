@@ -16,6 +16,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #5773 Document start.sh as boot entry point (pending, medium, role:dm)
 ## Recently Shipped
 
+- #7955 cycle_post.py: added 13 tests for _do_tracker_comments and _do_working_state_update (shipped)
 - #7793 PM/QA ship counter double-counting — QA now owns counter authoritatively (shipped)
 - #7879 squidsquad-upgrade.md: removed .claude/ from upgrade commit staging (shipped)
 - #7890 config.md missing Code Review Model field — model_router code-review fix (shipped)
