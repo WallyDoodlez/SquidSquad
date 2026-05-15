@@ -13,7 +13,8 @@ graph TB
     subgraph emitters["Event Emitters (Mechanical Scripts)"]
         CP["cycle_pre.py<br/>cycle-start"]
         CPO["cycle_post.py<br/>cycle-end"]
-        GO["git_ops.py<br/>git-pull, git-push, git-commit<br/>pr-create, pr-merge, branch-checkout"]
+        GO["git_ops.py<br/>git-pull, git-push, git-commit<br/>pr-create, branch-checkout"]
+        HA["harness.py<br/>pr-merged, compose-completed"]
         TR["tracker.py<br/>status-transition, tracker-comment"]
     end
 
@@ -36,6 +37,7 @@ graph TB
     CP -->|POST /events| API
     CPO -->|POST /events| API
     GO -->|POST /events| API
+    HA -->|POST /events| API
     TR -->|POST /events| API
 
     API --> ES
@@ -90,7 +92,8 @@ sequenceDiagram
 | `git-push` | git_ops.py | `{branch}` | After git push |
 | `git-commit` | git_ops.py | `{message, branch, files_changed, commit_type}` | After commit |
 | `pr-create` | git_ops.py | `{pr_number, title, branch}` | After PR created |
-| `pr-merge` | git_ops.py | `{pr_number}` | After PR merged |
+| `pr-merged` | harness.py | `{pr_number, branch, issue_number, files_changed, success, error}` | After PR merged by harness |
+| `compose-completed` | harness.py | `{roles_affected, trigger}` | After harness recomposes agent templates post-merge |
 | `branch-checkout` | git_ops.py | `{branch, task_number}` | After branch switch |
 | `status-transition` | tracker.py | `{issue_number, from, to}` | After status change |
 | `tracker-comment` | tracker.py | `{issue_number, commenter_role, comment_preview, mentioned_roles}` | After comment posted |
@@ -140,10 +143,10 @@ Each role only sees events relevant to its responsibilities:
 graph TD
     ALL["All Events in EventStream"]
 
-    ALL --> PM["PM sees:<br/>pr-merge, verification-failed<br/>verification-passed, cycle-start<br/>cycle-end, status-transition<br/>agent-health"]
-    ALL --> QA["QA sees:<br/>pr-merge, status-transition<br/>cycle-end, verification-failed"]
-    ALL --> SKILL["Skill sees:<br/>pr-merge, verification-failed<br/>status-transition"]
-    ALL --> DM["DM sees:<br/>status-transition<br/>verification-passed, pr-merge"]
+    ALL --> PM["PM sees:<br/>pr-merged, compose-completed<br/>verification-failed, verification-passed<br/>cycle-start, cycle-end<br/>status-transition, agent-health"]
+    ALL --> QA["QA sees:<br/>pr-merged, compose-completed<br/>status-transition, cycle-end<br/>verification-failed"]
+    ALL --> SKILL["Skill sees:<br/>pr-merged, compose-completed<br/>verification-failed, status-transition"]
+    ALL --> DM["DM sees:<br/>status-transition, pr-merged<br/>verification-passed, compose-completed"]
 
     style PM fill:#4a9eff
     style QA fill:#ff9f43
@@ -163,7 +166,7 @@ flowchart TD
     SF -->|Yes| SKIP["Skip (cascade protection)"]
     SF -->|No| TYPE{"Event type?"}
 
-    TYPE -->|pr-merge + PM| R1["Reaction: pr-merge-detected<br/>PM checks issue status"]
+    TYPE -->|pr-merged + PM| R1["Reaction: pr-merge-detected<br/>PM checks issue status"]
     TYPE -->|verification-failed + dev| R2["Reaction: rework-needed<br/>Dev prioritizes fix"]
     TYPE -->|other| PASS["No reaction<br/>Pass to creative phase"]
 

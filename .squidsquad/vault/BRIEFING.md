@@ -4,7 +4,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #7630 EPIC: Event-driven agent architecture — harness owns cycle, agents react to events (approved, high, role:skill) — supersedes #6056, #5775, #5613
+- #7630 EPIC: Event-driven agent architecture — harness owns cycle, agents react to events (pending-human-setup, high, role:skill) — Phases 1-3 done, Phase 4 blocked on Monitor tool (not yet shipped); supersedes #6056, #5775, #5613
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — awaiting human greenlight
 - #6574 Zero-prereq install — gh repo creation + local forge fallback (pending, medium, role:skill)
 - #5855 Vault is static decision log, not living memory (pending, high, role:skill)
@@ -16,6 +16,8 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #5773 Document start.sh as boot entry point (pending, medium, role:dm)
 ## Recently Shipped
 
+- #7879 squidsquad-upgrade.md: removed .claude/ from upgrade commit staging (shipped)
+- #7890 config.md missing Code Review Model field — model_router code-review fix (shipped)
 - #6581 Wizard reframing — L3 picks agents, L4 records project specifics (shipped) — v0.38.0
 - #7491 compose/sync config.md contamination fix (shipped) — root cause of 10+ QA rejections
 - #7285 config.py sync_agents() NameError fix (shipped)

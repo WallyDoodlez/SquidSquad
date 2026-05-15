@@ -1,3 +1,73 @@
+## Scan — 2026-05-15 04:03
+
+- **Files scanned**: references/sub-skills/common/capability-check.md, references/sub-skills/common/file-conventions.md
+- **Findings**: none
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-15 02:33
+
+- **Files scanned**: references/sub-skills/common/resume-working-state.md, references/sub-skills/common/status-line.md
+- **Findings**: none
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-15 02:04
+
+- **Files scanned**: references/sub-skills/common/iteration-log.md, references/sub-skills/common/pull-latest.md
+- **Findings**: none — pull-latest.md has minor legacy "tracker file" term but harmless
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-15 01:34
+
+- **Files scanned**: references/sub-skills/common/issue-filing.md, references/sub-skills/common/git-commit.md
+- **Findings**: none — both consistent with vault decisions and tracker protocol
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-15 01:04
+
+- **Files scanned**: references/sub-skills/common/task-pickup.md, references/sub-skills/common/working-state.md
+- **Findings**: working-state.md clear state example dropped Last Processed Event ID — would cause event re-processing after task completion
+- **Auto-fixed**: updated clear instruction to preserve event ID
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-14 23:34
+
+- **Files scanned**: references/sub-skills/common/cycle-runner.md, references/sub-skills/common/prohibitions.md
+- **Findings**: none — both current, consistent with harness architecture and tracker protocol
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-14 19:34
+
+- **Files scanned**: references/sub-skills/roles/pm/pipeline-sentinel.md, references/sub-skills/roles/pm/soul-shepherd.md
+- **Findings**: none — both well-structured, noise-capped sentinel thresholds are intentional
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-14 19:03
+
+- **Files scanned**: references/sub-skills/common/discussion-protocol.md, references/sub-skills/common/vault-remember.md
+- **Findings**: none
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-14 18:34
+
+- **Files scanned**: references/sub-skills/common/agent-lifecycle.md, references/sub-skills/common/context-pressure.md
+- **Findings**: none — both current and consistent with harness architecture
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-14 17:05
+
+- **Files scanned**: references/sub-skills/common/self-restart.md, references/wizard/WIZARD.md
+- **Findings**: none
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-12 20:32
 
 - **Files scanned**: .squidsquad/project/shared-instructions.md, .squidsquad/project/dev-instructions.md
