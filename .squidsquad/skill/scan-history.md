@@ -1,5 +1,23 @@
 # Scan History
 
+## Scan — 2026-05-15 11:33
+
+- **Files scanned**: references/scripts/compose.py, references/scripts/boot_remote.py, references/scripts/soul_adaptation.py
+- **Findings**: #8159 (compose.py redundant imports in agent_compose — low), #8160 (boot_remote.py corrupt .claude-pid silent fallthrough — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-15 09:03
+
+- **Files scanned**: references/scripts/cycle_pre.py, references/scripts/config.py, references/scripts/health_check.py
+- **Findings**: #8115 (cycle_pre.py unhandled ValueError on ship-threshold int() — low), #8116 (health_check.py _read_interval regex unscoped — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-15 07:34
+
+- **Files scanned**: references/scripts/triage.py, references/scripts/scan_index.py, references/scripts/vault_remember.py
+- **Findings**: #8081 (triage.py string-based timestamp comparison fragile — low), #8082 (scan_index.py record_decision silent no-op on missing file_coverage row — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-14 16:34
 
 - **Files scanned**: references/commands/squidsquad-compose.md, references/commands/squidsquad-upgrade.md, references/docs/vault-reference.md, references/prompts/code-review.md.j2
