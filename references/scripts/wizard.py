@@ -742,6 +742,7 @@ def build_config_md(spec):
     lines.append("- **QA Execution Model**: claude")
     lines.append("- **Comprehension Model**: claude")
     lines.append("- **Improvement Scan Model**: claude")
+    lines.append("- **Code Review Model**: claude")
     lines.append("- **Fallback Model**: claude")
     lines.append("- **API Timeout Seconds**: 120")
     lines.append("")

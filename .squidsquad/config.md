@@ -100,7 +100,6 @@
 - **QA Execution Model**: claude
 - **Comprehension Model**: claude
 - **Improvement Scan Model**: claude
-- **Code Review Model**: deepseek-v4-pro
 - **Fallback Model**: claude
 - **API Timeout Seconds**: 120
 
@@ -116,7 +115,7 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-- **Shipped Since Last Bump**: 2
+- **Shipped Since Last Bump**: 1
 
 ## Agent Effort
 
