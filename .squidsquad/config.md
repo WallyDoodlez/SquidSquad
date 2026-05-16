@@ -133,16 +133,16 @@
 
 ### dm
 - **emits**: request-merge, status-transition, tracker-comment
-- **reacts-to**: agent-health, pr-merged, status-transition
+- **reacts-to**: pr-merged, status-transition
 
 ### pm
 - **emits**: status-transition, tracker-comment
-- **reacts-to**: agent-health, status-transition, verification-failed, verification-passed
+- **reacts-to**: agent-health, pr-merged, status-transition, tracker-comment, verification-failed, verification-passed
 
 ### qa
 - **emits**: request-merge, status-transition, tracker-comment, verification-failed, verification-passed
-- **reacts-to**: agent-health, pr-merged, status-transition
+- **reacts-to**: agent-health, git-commit, pr-create, pr-merged, status-transition
 
 ### skill
 - **emits**: git-commit, pr-create, status-transition, tracker-comment
-- **reacts-to**: pr-merged, status-transition, verification-failed
+- **reacts-to**: phase-change, tracker-comment, verification-failed

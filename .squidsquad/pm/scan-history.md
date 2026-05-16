@@ -1,3 +1,10 @@
+## Scan — 2026-05-16 07:32
+
+- **Files scanned**: references/sub-skills/common/vault-optimize.md, references/sub-skills/common/improvement-scan-slim.md
+- **Findings**: none — vault-optimize consistent with config, slim scan version matches full
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 07:02
 
 - **Files scanned**: references/sub-skills/common/improvement-scan.md
