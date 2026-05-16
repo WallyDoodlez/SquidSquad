@@ -215,8 +215,9 @@ class TestCreateRepo:
 
 class TestTeardown:
     @patch("subprocess.run")
-    def test_teardown_no_deployment(self, mock_run):
-        with patch.object(forgejo_setup, "DEPLOY_DIR", Path("/nonexistent")):
+    def test_teardown_no_deployment(self, mock_run, tmp_path):
+        no_deploy = tmp_path / "no_such_deploy_dir"
+        with patch.object(forgejo_setup, "DEPLOY_DIR", no_deploy):
             result = forgejo_setup.teardown()
         assert result["ok"] is True
         assert "no" in result["message"].lower()
