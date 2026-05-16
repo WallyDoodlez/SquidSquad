@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-15 22:02
+
+- **Files scanned**: references/scripts/health_check.py, references/scripts/state_bus.py
+- **Findings**: #8350 (state_bus.py: unused import os)
+- **Items rejected by human**: none
+
 ## Scan — 2026-05-15 21:03
 
 - **Files scanned**: references/scripts/config.py, references/scripts/cycle_pre.py

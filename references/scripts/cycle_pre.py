@@ -436,12 +436,13 @@ def _run_mechanical_reactions(events, role):
 
 def _read_config_flags():
     """Read common config flags."""
+    _YES = ("yes", "true", "1")
     return {
-        "branch_workflow": _config_get("branch-workflow").lower() == "yes",
-        "pr_flow": _config_get("pr-flow").lower() == "yes",
-        "improvement_scanning": _config_get("improvement-scanning").lower() == "yes",
-        "vault_remember": _config_get("vault-remember").lower() == "yes",
-        "vault_optimize": _config_get("vault-optimize").lower() == "yes",
+        "branch_workflow": _config_get("branch-workflow").lower() in _YES,
+        "pr_flow": _config_get("pr-flow").lower() in _YES,
+        "improvement_scanning": _config_get("improvement-scanning").lower() in _YES,
+        "vault_remember": _config_get("vault-remember").lower() in _YES,
+        "vault_optimize": _config_get("vault-optimize").lower() in _YES,
     }
 
 
