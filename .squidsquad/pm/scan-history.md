@@ -1,3 +1,10 @@
+## Scan — 2026-05-16 04:32
+
+- **Files scanned**: references/sub-skills/common/context-pressure.md, references/sub-skills/common/cycle-runner.md
+- **Findings**: context-pressure.md had stale "set a flag" wording (cycle_post handles this mechanically now)
+- **Auto-fixed**: Updated context-pressure.md step 4 to reference cycle_post.py exit-42 mechanism
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 04:02
 
 - **Files scanned**: references/sub-skills/common/agent-lifecycle.md, references/sub-skills/common/self-restart.md
