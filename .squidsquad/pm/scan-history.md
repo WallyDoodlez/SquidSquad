@@ -1,3 +1,10 @@
+## Scan — 2026-05-16 06:32
+
+- **Files scanned**: references/sub-skills/common/vault-protocol.md, references/sub-skills/common/chat-etiquette.md
+- **Findings**: none — vault-protocol comprehensive and consistent, chat-etiquette references real adapter
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 06:02
 
 - **Files scanned**: references/sub-skills/common/vault-remember.md, references/sub-skills/common/boot-remote-agents.md
