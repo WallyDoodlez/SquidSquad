@@ -1,5 +1,53 @@
 # Scan History
 
+## Scan — 2026-05-16 09:03
+
+- **Files scanned**: references/scripts/run_comprehension_test.py, references/scripts/migrate_state_branch.py
+- **Findings**: #8568 (run_comprehension_test.py: unused import tempfile), #8569 (run_comprehension_test.py: empty eval results treated as all-pass)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-16 08:32
+
+- **Files scanned**: references/scripts/capability_check.py, references/scripts/forge_adapter.py
+- **Findings**: none
+- **Items rejected by human**: n/a
+
+## Scan — 2026-05-16 08:02
+
+- **Files scanned**: references/scripts/soul_adaptation.py, references/scripts/shared_fs.py
+- **Findings**: none
+- **Items rejected by human**: n/a
+
+## Scan — 2026-05-16 07:32
+
+- **Files scanned**: references/scripts/repo_scan.py, references/scripts/comms_adapter.py
+- **Findings**: none
+- **Items rejected by human**: n/a
+
+## Scan — 2026-05-16 06:33
+
+- **Files scanned**: references/scripts/boot_remote.py, references/scripts/manifest.py
+- **Findings**: #8561 (boot_remote.py: _parse_local_config regex rejects hyphenated role names)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-16 05:34
+
+- **Files scanned**: references/scripts/wizard.py
+- **Findings**: #8547 (wizard.py: duplicate check=False kwarg crashes cmd_setup_yes — medium), #8548 (wizard.py: load_install_spec uncaught JSONDecodeError — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-16 04:03
+
+- **Files scanned**: references/scripts/harness.py
+- **Findings**: #8525 (harness.py: redundant import time as _time), #8526 (harness.py: type mismatch clone_root vs REPO_ROOT)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-16 02:33
+
+- **Files scanned**: references/scripts/vault_remember.py, references/scripts/compose.py, references/scripts/cycle.py
+- **Findings**: #8483 (cycle.py: unused imports io and json), #8484 (cycle.py: set_counter missing upsert logic)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-16 00:32
 
 - **Files scanned**: references/scripts/scan_index.py, references/scripts/vault_optimize.py, references/scripts/event_validator.py
