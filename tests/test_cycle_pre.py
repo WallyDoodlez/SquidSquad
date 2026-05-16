@@ -277,6 +277,23 @@ class TestReadConfigFlags:
         assert result["vault_remember"] is False
         assert result["vault_optimize"] is True
 
+    def test_accepts_true_and_1_as_truthy(self, monkeypatch):
+        """#8343 regression: 'true' and '1' must be accepted, not just 'yes'."""
+        flags = {
+            "branch-workflow": "true",
+            "pr-flow": "1",
+            "improvement-scanning": "True",
+            "vault-remember": "YES",
+            "vault-optimize": "no",
+        }
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: flags.get(f, ""))
+        result = cycle_pre._read_config_flags()
+        assert result["branch_workflow"] is True
+        assert result["pr_flow"] is True
+        assert result["improvement_scanning"] is True
+        assert result["vault_remember"] is True
+        assert result["vault_optimize"] is False
+
 
 # ---------------------------------------------------------------------------
 # Skill Input Builder
