@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-16 10:33
+
+- **Files scanned**: references/roles/dev/ios/instructions.md, references/roles/dev/android/instructions.md, references/roles/dev/fullstack/instructions.md
+- **Findings**: #8576 (incorrect article and iOS capitalization in variant templates)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-16 09:03
 
 - **Files scanned**: references/scripts/run_comprehension_test.py, references/scripts/migrate_state_branch.py
