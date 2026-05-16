@@ -1,8 +1,8 @@
 ## Scan — 2026-05-16 19:17
 
-- **Files scanned**: references/scripts/thin_launcher.py, references/scripts/tc_coverage.py
-- **Findings**: thin_launcher.py had unresolved merge conflict markers (<<<<<<< HEAD) committed to main — would cause SyntaxError on next agent restart
-- **Auto-fixed**: Resolved merge conflict in thin_launcher.py — kept HEAD version with --strict-mcp-config
+- **Files scanned**: references/sub-skills/roles/dm/version-bumps.md, references/sub-skills/roles/dm/delivery-packaging.md, references/sub-skills/common/vault-remember.md, references/sub-skills/common/vault-optimize.md
+- **Findings**: version-bumps.md line 4 had stale markdown tracker format reference (`**Status**: Open` or `**Status**: Investigating`) — replaced with GitHub Issues terminology
+- **Auto-fixed**: Updated version-bumps.md bump gate check to reference `type:issue, state:open` instead of old tracker format
 - **Items rejected by human**: (none)
 
 ## Scan — 2026-05-16 14:31
