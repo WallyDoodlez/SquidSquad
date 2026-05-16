@@ -83,9 +83,11 @@ def main():
         # --mcp-config is variadic (<configs...>), so it must be followed by
         # another flag — otherwise it swallows the trailing prompt as a second
         # config path. Place it first; --append-system-prompt terminates it.
+        # --strict-mcp-config is required: without it, account-level plugins
+        # still load and crowd out built-in deferred tools (#7630).
         cmd = ["claude"]
         if mcp_config.exists():
-            cmd.extend(["--mcp-config", str(mcp_config)])
+            cmd.extend(["--mcp-config", str(mcp_config), "--strict-mcp-config"])
         cmd.extend([
             "--append-system-prompt", f"SQUIDSQUAD_ROLE={role}",
             "--name", f"squidsquad-{role}",
