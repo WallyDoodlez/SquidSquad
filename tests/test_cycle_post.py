@@ -913,3 +913,171 @@ class TestDoWorkingStateUpdate:
         ws = squid_dir / "newrole" / "working-state.md"
         assert ws.exists()
         assert ws.read_text(encoding="utf-8") == "content"
+
+
+# ---------------------------------------------------------------------------
+# #8453: State-branch commit paths in _do_commit_push
+# ---------------------------------------------------------------------------
+
+class TestStateCommitAfterCodeCommit:
+    """#8453: Branch workflow state commit path coverage."""
+
+    def test_state_commit_runs_after_code_commit(self, monkeypatch):
+        """After code commit on feature branch, commit-state runs on working branch."""
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(("run", cmd))
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = "main\n"
+            r.stderr = ""
+            return r
+
+        def fake_run_script(script, *args, **kwargs):
+            calls.append(("script", script, args))
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "main")
+        monkeypatch.setattr(cycle_post, "_worktree_exists", lambda: False)
+
+        data = {
+            "cycle_type": "active",
+            "cycle_number": 100,
+            "commit_message": "test commit",
+            "state_commit_message": "state update for cycle 100",
+            "config": {"branch_workflow": True},
+            "code_commit": {
+                "branch": "squidsquad/task/42",
+                "message": "implement feature",
+            },
+        }
+        cycle_post._do_commit_push(data, "skill")
+
+        # Verify commit-state was called with state_commit_message
+        state_calls = [c for c in calls
+                       if c[0] == "script" and "commit-state" in c[2]]
+        assert len(state_calls) >= 1, (
+            f"Expected commit-state call, got: {[c for c in calls if c[0] == 'script']}"
+        )
+        # Verify the state message was used
+        state_call = state_calls[0]
+        assert "state update for cycle 100" in state_call[2]
+
+    def test_state_commit_fallback_on_failure(self, monkeypatch):
+        """When commit-state fails, falls back to commit-push."""
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(("run", cmd))
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = "main\n"
+            r.stderr = ""
+            return r
+
+        def fake_run_script(script, *args, **kwargs):
+            calls.append(("script", script, args))
+            r = MagicMock(stdout="", stderr="")
+            # commit-state fails
+            if "commit-state" in args:
+                r.returncode = 1
+            else:
+                r.returncode = 0
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "main")
+        monkeypatch.setattr(cycle_post, "_worktree_exists", lambda: False)
+
+        data = {
+            "cycle_type": "active",
+            "cycle_number": 100,
+            "commit_message": "test commit",
+            "config": {"branch_workflow": True},
+            "code_commit": {
+                "branch": "squidsquad/task/42",
+                "message": "implement feature",
+            },
+        }
+        cycle_post._do_commit_push(data, "skill")
+
+        # After commit-state fails, commit-push should be called as fallback
+        fallback_calls = [c for c in calls
+                          if c[0] == "script" and "commit-push" in c[2]]
+        assert len(fallback_calls) >= 1, (
+            f"Expected commit-push fallback, got: {[c for c in calls if c[0] == 'script']}"
+        )
+
+    def test_worktree_state_commit_runs_at_end(self, monkeypatch):
+        """When worktree exists, _state_commit is called after main commit."""
+        state_commit_calls = []
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = "main\n"
+            r.stderr = ""
+            return r
+
+        def fake_state_commit(msg, role="unknown"):
+            state_commit_calls.append((msg, role))
+            return True
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "_run_script",
+                            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
+        monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "main")
+        monkeypatch.setattr(cycle_post, "_worktree_exists", lambda: True)
+        monkeypatch.setattr(cycle_post, "_state_commit", fake_state_commit)
+
+        data = {
+            "cycle_type": "active",
+            "cycle_number": 200,
+            "commit_message": "test",
+            "config": {"branch_workflow": True},
+            "code_commit": {
+                "branch": "squidsquad/task/99",
+                "message": "fix bug",
+            },
+        }
+        cycle_post._do_commit_push(data, "skill")
+
+        assert len(state_commit_calls) == 1
+        assert "cycle 200 state" in state_commit_calls[0][0]
+        assert state_commit_calls[0][1] == "skill"
+
+    def test_worktree_state_commit_with_default_path(self, monkeypatch):
+        """Worktree commit runs for non-branch-workflow roles too."""
+        state_commit_calls = []
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = "main\n"
+            r.stderr = ""
+            return r
+
+        def fake_state_commit(msg, role="unknown"):
+            state_commit_calls.append((msg, role))
+            return True
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "_run_script",
+                            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
+        monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "main")
+        monkeypatch.setattr(cycle_post, "_worktree_exists", lambda: True)
+        monkeypatch.setattr(cycle_post, "_state_commit", fake_state_commit)
+
+        data = {
+            "cycle_type": "active",
+            "cycle_number": 300,
+            "commit_message": "pm cycle",
+        }
+        cycle_post._do_commit_push(data, "pm")
+
+        assert len(state_commit_calls) == 1
+        assert "cycle 300 state" in state_commit_calls[0][0]
