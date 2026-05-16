@@ -1,3 +1,24 @@
+## Scan — 2026-05-16 09:02
+
+- **Files scanned**: references/sub-skills/roles/pm/health-check.md, references/sub-skills/roles/pm/delivery.md
+- **Findings**: none — both clean, consistent with harness lifecycle and PM boundaries
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 08:32
+
+- **Files scanned**: references/sub-skills/roles/pm/soul-shepherd.md, references/sub-skills/roles/pm/vault-synthesis.md
+- **Findings**: none — both consistent with PM CLAUDE.md
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 08:02
+
+- **Files scanned**: references/sub-skills/roles/pm/task-approval.md, references/sub-skills/roles/pm/own-domain-autofix.md
+- **Findings**: none — both consistent with PM CLAUDE.md and tracker protocol
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 07:32
 
 - **Files scanned**: references/sub-skills/common/vault-optimize.md, references/sub-skills/common/improvement-scan-slim.md
