@@ -16,8 +16,6 @@ Usage:
     python scripts/cycle.py --help
 """
 
-import io
-import json
 import re
 import sys
 from datetime import datetime
