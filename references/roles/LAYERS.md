@@ -68,6 +68,6 @@ PM can push behavioral sub-skills to ALL agents without a dev cycle:
 
 1. Write sub-skills to `references/sub-skills/project/*.md` (standard sub-skill format with `<!-- sub-skill: name -->` markers)
 2. Run `python references/scripts/compose.py deploy-all`
-3. Reboot affected agents (`python references/scripts/reboot_agent.py --all`)
+3. Reboot affected agents (`python references/scripts/start_team.py --reboot --all`)
 
 Project sub-skills are auto-included in every agent's CLAUDE.md during assembly — same composition mechanism as all other sub-skills. PM owns this directory directly — no task filing, no QA verification needed. Use for project-wide rules, constraints, or behavioral adjustments that apply to the entire team.
