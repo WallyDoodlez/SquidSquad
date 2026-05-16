@@ -1,3 +1,10 @@
+## Scan — 2026-05-16 09:02
+
+- **Files scanned**: references/sub-skills/roles/pm/health-check.md, references/sub-skills/roles/pm/delivery.md
+- **Findings**: none — both clean, consistent with harness lifecycle and PM boundaries
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 08:32
 
 - **Files scanned**: references/sub-skills/roles/pm/soul-shepherd.md, references/sub-skills/roles/pm/vault-synthesis.md
