@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-16 08:32
+
+- **Files scanned**: references/scripts/capability_check.py, references/scripts/forge_adapter.py
+- **Findings**: none
+- **Items rejected by human**: n/a
+
 ## Scan — 2026-05-16 08:02
 
 - **Files scanned**: references/scripts/soul_adaptation.py, references/scripts/shared_fs.py
