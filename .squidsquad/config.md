@@ -145,4 +145,4 @@
 
 ### skill
 - **emits**: branch-checkout, pr-create, status-transition, tracker-comment
-- **reacts-to**: pr-merged, status-transition, tracker-comment, verification-failed
+- **reacts-to**: pr-merged, status-transition, tracker-comment, verification-failed, verification-passed
