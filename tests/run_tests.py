@@ -75,6 +75,7 @@ STATIC_TEST_MODULES = [
     "test_feat_3494_version_bump",
     "test_feat_3499_pm_orphans",
     "test_feat_3644_openai_json_warn",
+    "test_openai_adapter",
     # "test_feat_3645_auto_merge",  # 3 pre-existing failures
     # "test_feat_3663_pr_conflict_check",  # 4 pre-existing failures (rebase→merge)
     "test_feat_6126_harness_merge",
