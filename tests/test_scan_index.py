@@ -563,6 +563,68 @@ class TestCompositeScoring:
         # Should return the file (it's the only one)
         assert "fresh.py" in targets or len(targets) == 0  # empty if no files found
 
+    def test_no_decisions_redistributes_acceptance_weight(self, db, tmp_path):
+        """#8435: Files without decisions should not have acceptance_rate=0 penalty.
+
+        When no decisions exist, the WEIGHT_ACCEPTANCE component should be
+        redistributed among the other weights, not treated as 0.
+        """
+        # Create two files
+        (tmp_path / "a.py").write_text("# a\n")
+        (tmp_path / "b.py").write_text("# b\n")
+
+        conn = scan_index._get_db(db)
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Both files scanned, one has an accepted decision
+        conn.execute(
+            "INSERT INTO file_coverage (file_path, last_scanned_at, finding_count, "
+            "accepted_finding_count, rejected_finding_count) VALUES (?, ?, 2, 2, 0)",
+            ("a.py", now),
+        )
+        conn.execute(
+            "INSERT INTO file_coverage (file_path, last_scanned_at, finding_count, "
+            "accepted_finding_count, rejected_finding_count) VALUES (?, ?, 2, 0, 0)",
+            ("b.py", now),
+        )
+        conn.commit()
+        conn.close()
+
+        with patch.object(scan_index, "REPO_ROOT", tmp_path):
+            targets = scan_index.suggest_targets("skill", count=2, db_path=db)
+
+        # Both should be returned (no crash, no zero-division)
+        assert len(targets) == 2
+
+    def test_acceptance_rate_uses_decision_counts(self, db, tmp_path):
+        """#8435: acceptance_rate should use accepted/(accepted+rejected),
+        not accepted/finding_count."""
+        (tmp_path / "high.py").write_text("# high acceptance\n")
+        (tmp_path / "low.py").write_text("# low acceptance\n")
+
+        conn = scan_index._get_db(db)
+        old = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
+
+        # Both files: same coverage gap and churn, but different acceptance rates
+        conn.execute(
+            "INSERT INTO file_coverage (file_path, last_scanned_at, finding_count, "
+            "accepted_finding_count, rejected_finding_count) VALUES (?, ?, 5, 4, 1)",
+            ("high.py", old),
+        )
+        conn.execute(
+            "INSERT INTO file_coverage (file_path, last_scanned_at, finding_count, "
+            "accepted_finding_count, rejected_finding_count) VALUES (?, ?, 5, 1, 4)",
+            ("low.py", old),
+        )
+        conn.commit()
+        conn.close()
+
+        with patch.object(scan_index, "REPO_ROOT", tmp_path):
+            targets = scan_index.suggest_targets("skill", count=2, db_path=db)
+
+        # high.py should rank higher (4/5=0.8 acceptance vs 1/5=0.2)
+        assert targets[0] == "high.py"
+
 
 # ---------------------------------------------------------------------------
 # CLI (smoke tests)
