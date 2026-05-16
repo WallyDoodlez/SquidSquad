@@ -1,3 +1,10 @@
+## Scan — 2026-05-16 06:02
+
+- **Files scanned**: references/sub-skills/common/vault-remember.md, references/sub-skills/common/boot-remote-agents.md
+- **Findings**: none — both clean, consistent with harness lifecycle and vault protocol
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 05:32
 
 - **Files scanned**: references/sub-skills/common/prohibitions.md, references/sub-skills/common/working-state.md
