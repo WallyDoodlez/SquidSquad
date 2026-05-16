@@ -75,16 +75,24 @@ def main():
     effort = _get_effort_level(role)
     print(f"[thin-launcher] Starting claude for {role} in {clone_path} (effort={effort})")
 
+    # Use minimal MCP config so account-level plugins (Meta Ads, etc.)
+    # don't crowd out built-in deferred tools like Monitor (#7630).
+    mcp_config = Path(clone_path) / ".squidsquad" / "mcp-agents.json"
+
     try:
+        cmd = [
+            "claude",
+            "--append-system-prompt", f"SQUIDSQUAD_ROLE={role}",
+            "--name", f"squidsquad-{role}",
+            "--effort", effort,
+            "--dangerously-skip-permissions",
+        ]
+        if mcp_config.exists():
+            cmd.extend(["--mcp-config", str(mcp_config)])
+        cmd.append("Boot. Begin your first Ralph Loop cycle now.")
+
         proc = subprocess.Popen(
-            [
-                "claude",
-                "--append-system-prompt", f"SQUIDSQUAD_ROLE={role}",
-                "--name", f"squidsquad-{role}",
-                "--effort", effort,
-                "--dangerously-skip-permissions",
-                "Boot. Begin your first Ralph Loop cycle now.",
-            ],
+            cmd,
             cwd=clone_path,
             env=env,
         )
