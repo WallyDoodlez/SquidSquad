@@ -2057,6 +2057,14 @@ class TestInstallSpec:
         loaded = wizard.load_install_spec(tmp_path)
         assert loaded["squidsquad_version"] == "0.26.0"
 
+    def test_load_invalid_json_raises_valueerror(self, tmp_path):
+        """#8548: Corrupt JSON raises ValueError, not JSONDecodeError."""
+        spec_dir = tmp_path / ".squidsquad"
+        spec_dir.mkdir(parents=True)
+        (spec_dir / ".install-spec.json").write_text("not valid json{{", encoding="utf-8")
+        with pytest.raises(ValueError, match="invalid JSON"):
+            wizard.load_install_spec(tmp_path)
+
 
 # ---------------------------------------------------------------------------
 # Scan Summary (#13)
