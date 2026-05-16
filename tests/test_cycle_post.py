@@ -520,6 +520,244 @@ class TestVersionBumpChangelogSkip:
 
 
 # ---------------------------------------------------------------------------
+# #8452: _do_version_bump happy path tests
+# ---------------------------------------------------------------------------
+
+class TestVersionBumpHappyPath:
+    """#8452: Full behavioral coverage for _do_version_bump."""
+
+    def test_no_op_when_no_version_bump(self, monkeypatch):
+        """No action when version_bump key is absent or empty."""
+        calls = []
+        monkeypatch.setattr(cycle_post, "_run_script",
+                            lambda *a, **kw: calls.append(a))
+
+        cycle_post._do_version_bump({}, "dm")
+        cycle_post._do_version_bump({"version_bump": {}}, "dm")
+        cycle_post._do_version_bump({"version_bump": {"new_version": ""}}, "dm")
+
+        assert len(calls) == 0
+
+    def test_calls_config_set_version(self, monkeypatch):
+        """config.py set version is called with new version."""
+        script_calls = []
+
+        def fake_run_script(script, *args, **kwargs):
+            script_calls.append((script, args))
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 1  # diff --cached --quiet returns 1 = changes staged
+            r.stdout = ""
+            r.stderr = ""
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "REPO_ROOT", Path("/fake"))
+
+        data = {"version_bump": {"new_version": "1.2.3"}}
+        cycle_post._do_version_bump(data, "dm")
+
+        config_calls = [c for c in script_calls
+                        if c[0] == "config.py" and "version" in c[1]]
+        assert len(config_calls) >= 1
+        assert "1.2.3" in config_calls[0][1]
+
+    def test_updates_skill_md_version(self, monkeypatch, tmp_path):
+        """SKILL.md frontmatter version is updated via regex."""
+        skill_md = tmp_path / "SKILL.md"
+        skill_md.write_text("---\nname: SquidSquad\nversion: 0.37.0\n---\n# Content\n",
+                            encoding="utf-8")
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0  # diff --cached --quiet returns 0 = no staged changes
+            r.stdout = ""
+            r.stderr = ""
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run_script",
+                            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "REPO_ROOT", tmp_path)
+
+        data = {"version_bump": {"new_version": "0.38.0"}}
+        cycle_post._do_version_bump(data, "dm")
+
+        content = skill_md.read_text(encoding="utf-8")
+        assert "version: 0.38.0" in content
+        assert "version: 0.37.0" not in content
+
+    def test_staged_diff_guard_skips_empty_commit(self, monkeypatch, capsys):
+        """When no staged changes, commit/tag/push is skipped (#5126)."""
+        run_calls = []
+
+        def fake_run(cmd, **kwargs):
+            run_calls.append(cmd)
+            r = MagicMock()
+            r.stdout = ""
+            r.stderr = ""
+            # diff --cached --quiet returns 0 = nothing staged
+            r.returncode = 0
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run_script",
+                            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "REPO_ROOT", Path("/fake"))
+
+        data = {"version_bump": {"new_version": "2.0.0"}}
+        cycle_post._do_version_bump(data, "dm")
+
+        # Should NOT have commit, tag, or push calls
+        commit_calls = [c for c in run_calls if "commit" in c and "-m" in c]
+        tag_calls = [c for c in run_calls if "tag" in c and "v2.0.0" in c]
+        push_calls = [c for c in run_calls if c == ["git", "push"]]
+        assert len(commit_calls) == 0
+        assert len(tag_calls) == 0
+        assert len(push_calls) == 0
+
+        captured = capsys.readouterr()
+        assert "skipping commit/tag/push" in captured.out.lower()
+
+    def test_commit_tag_push_sequence(self, monkeypatch):
+        """Full commit/tag/push sequence runs when changes are staged."""
+        run_calls = []
+
+        def fake_run(cmd, **kwargs):
+            run_calls.append(cmd)
+            r = MagicMock()
+            r.stdout = ""
+            r.stderr = ""
+            if cmd == ["git", "diff", "--cached", "--quiet"]:
+                r.returncode = 1  # changes staged
+            elif cmd == ["git", "tag", "-l", "v1.0.0"]:
+                r.stdout = ""  # tag doesn't exist
+                r.returncode = 0
+            else:
+                r.returncode = 0
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run_script",
+                            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "REPO_ROOT", Path("/fake"))
+
+        data = {"version_bump": {"new_version": "1.0.0"}}
+        cycle_post._do_version_bump(data, "dm")
+
+        # Verify commit
+        commit_calls = [c for c in run_calls
+                        if len(c) >= 3 and c[0] == "git" and c[1] == "commit"]
+        assert len(commit_calls) == 1
+        assert "v1.0.0" in commit_calls[0][-1]
+
+        # Verify tag created
+        tag_create_calls = [c for c in run_calls
+                           if c == ["git", "tag", "v1.0.0"]]
+        assert len(tag_create_calls) == 1
+
+        # Verify push + push --tags
+        assert ["git", "push"] in run_calls
+        assert ["git", "push", "--tags"] in run_calls
+
+    def test_skips_tag_when_already_exists(self, monkeypatch):
+        """Tag creation is skipped when tag already exists."""
+        run_calls = []
+
+        def fake_run(cmd, **kwargs):
+            run_calls.append(cmd)
+            r = MagicMock()
+            r.stdout = ""
+            r.stderr = ""
+            if cmd == ["git", "diff", "--cached", "--quiet"]:
+                r.returncode = 1  # changes staged
+            elif cmd == ["git", "tag", "-l", "v2.0.0"]:
+                r.stdout = "v2.0.0\n"  # tag exists
+                r.returncode = 0
+            else:
+                r.returncode = 0
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run_script",
+                            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "REPO_ROOT", Path("/fake"))
+
+        data = {"version_bump": {"new_version": "2.0.0"}}
+        cycle_post._do_version_bump(data, "dm")
+
+        # Tag create should NOT be called
+        tag_create_calls = [c for c in run_calls
+                           if c == ["git", "tag", "v2.0.0"]]
+        assert len(tag_create_calls) == 0
+
+    def test_resets_shipped_since_bump_counter(self, monkeypatch):
+        """After bump, shipped-since-bump counter is reset to 0."""
+        script_calls = []
+
+        def fake_run_script(script, *args, **kwargs):
+            script_calls.append((script, args))
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.stdout = ""
+            r.stderr = ""
+            if cmd == ["git", "diff", "--cached", "--quiet"]:
+                r.returncode = 1
+            elif "tag" in cmd and "-l" in cmd:
+                r.stdout = ""
+            else:
+                r.returncode = 0
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "REPO_ROOT", Path("/fake"))
+
+        data = {"version_bump": {"new_version": "3.0.0"}}
+        cycle_post._do_version_bump(data, "dm")
+
+        # Verify shipped-since-bump reset
+        reset_calls = [c for c in script_calls
+                       if c[0] == "config.py" and "shipped-since-bump" in c[1]]
+        assert len(reset_calls) == 1
+        assert "0" in reset_calls[0][1]
+
+    def test_stages_only_bump_files(self, monkeypatch):
+        """Only version-bump files are staged, not git add -A (#3494)."""
+        run_calls = []
+
+        def fake_run(cmd, **kwargs):
+            run_calls.append(cmd)
+            r = MagicMock()
+            r.stdout = ""
+            r.stderr = ""
+            r.returncode = 0 if cmd != ["git", "diff", "--cached", "--quiet"] else 1
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run_script",
+                            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "REPO_ROOT", Path("/fake"))
+
+        data = {"version_bump": {"new_version": "4.0.0"}}
+        cycle_post._do_version_bump(data, "dm")
+
+        # Find git add calls
+        add_calls = [c for c in run_calls if c[0] == "git" and c[1] == "add"]
+        assert len(add_calls) == 1
+        staged_files = add_calls[0][3:]  # after ["git", "add", "--"]
+        assert ".squidsquad/config.md" in staged_files
+        assert "CHANGELOG.md" in staged_files
+        # No -A flag
+        assert "-A" not in add_calls[0]
+
+
+# ---------------------------------------------------------------------------
 # Branch push fallback — regression #4837
 # ---------------------------------------------------------------------------
 
