@@ -1377,3 +1377,95 @@ class TestConfigGetInt:
         """Negative values are technically valid integers."""
         monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "-1")
         assert cycle_pre._config_get_int("ship-threshold", 10) == -1
+
+
+# ---------------------------------------------------------------------------
+# _filter_events_for_role — #8489
+# ---------------------------------------------------------------------------
+
+class TestFilterEventsForRole:
+    """#8489: _filter_events_for_role test coverage."""
+
+    SAMPLE_EVENTS = [
+        {"event_type": "status-transition", "payload": "a"},
+        {"event_type": "pr-merged", "payload": "b"},
+        {"event_type": "cycle-start", "payload": "c"},
+        {"event_type": "verification-failed", "payload": "d"},
+    ]
+
+    def test_config_driven_filter(self, monkeypatch):
+        """Config-driven filter returns only matching event_types."""
+        # Simulate config module providing filters
+        fake_config = MagicMock()
+        fake_config.get_event_filters_for_role = lambda role: {"status-transition", "pr-merged"}
+        monkeypatch.setitem(sys.modules, "config", fake_config)
+
+        result = cycle_pre._filter_events_for_role(self.SAMPLE_EVENTS, "skill")
+        types = {e["event_type"] for e in result}
+        assert types == {"status-transition", "pr-merged"}
+
+    def test_hardcoded_fallback_when_config_absent(self, monkeypatch):
+        """Falls back to _ROLE_EVENT_TYPES when config import fails."""
+        # Force ImportError for config module
+        real_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
+
+        def fail_config(name, *args, **kwargs):
+            if name == "config":
+                raise ImportError("no config")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr("builtins.__import__", fail_config)
+
+        result = cycle_pre._filter_events_for_role(self.SAMPLE_EVENTS, "skill")
+        # skill hardcoded types: pr-merged, compose-completed, verification-failed, status-transition
+        types = {e["event_type"] for e in result}
+        assert "status-transition" in types
+        assert "pr-merged" in types
+        assert "cycle-start" not in types  # Not in skill's hardcoded set
+
+    def test_no_filter_passthrough_for_unknown_role(self, monkeypatch):
+        """Unknown roles not in _ROLE_EVENT_TYPES get all events."""
+        def fail_config(name, *args, **kwargs):
+            if name == "config":
+                raise ImportError("no config")
+            return __import__(name, *args, **kwargs)
+
+        monkeypatch.setattr("builtins.__import__", fail_config)
+
+        result = cycle_pre._filter_events_for_role(self.SAMPLE_EVENTS, "unknown-role")
+        assert len(result) == len(self.SAMPLE_EVENTS)
+
+    def test_config_returns_none_falls_to_hardcoded(self, monkeypatch):
+        """When config.get_event_filters_for_role returns None, use hardcoded."""
+        fake_config = MagicMock()
+        fake_config.get_event_filters_for_role = lambda role: None
+        monkeypatch.setitem(sys.modules, "config", fake_config)
+
+        result = cycle_pre._filter_events_for_role(self.SAMPLE_EVENTS, "pm")
+        types = {e["event_type"] for e in result}
+        # PM hardcoded: pr-merged, compose-completed, verification-failed, verification-passed,
+        # cycle-start, cycle-end, status-transition, agent-health
+        assert "cycle-start" in types
+        assert "status-transition" in types
+
+    def test_empty_events_returns_empty(self, monkeypatch):
+        """Empty event list returns empty regardless of filter."""
+        fake_config = MagicMock()
+        fake_config.get_event_filters_for_role = lambda role: {"status-transition"}
+        monkeypatch.setitem(sys.modules, "config", fake_config)
+
+        result = cycle_pre._filter_events_for_role([], "skill")
+        assert result == []
+
+    def test_config_exception_falls_to_hardcoded(self, monkeypatch):
+        """Generic exception from config is caught, falls to hardcoded."""
+        fake_config = MagicMock()
+        fake_config.get_event_filters_for_role = MagicMock(side_effect=RuntimeError("bad config"))
+        monkeypatch.setitem(sys.modules, "config", fake_config)
+
+        result = cycle_pre._filter_events_for_role(self.SAMPLE_EVENTS, "dm")
+        types = {e["event_type"] for e in result}
+        # DM hardcoded: status-transition, verification-passed, pr-merged, compose-completed
+        assert "status-transition" in types
+        assert "pr-merged" in types
+        assert "cycle-start" not in types
