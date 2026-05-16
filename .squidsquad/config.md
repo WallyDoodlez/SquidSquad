@@ -141,8 +141,8 @@
 
 ### qa
 - **emits**: request-merge, status-transition, tracker-comment, verification-failed, verification-passed
-- **reacts-to**: agent-health, pr-merged, status-transition
+- **reacts-to**: pr-create, pr-merged, status-transition
 
 ### skill
-- **emits**: branch-checkout, pr-create, status-transition, tracker-comment
+- **emits**: pr-create, status-transition, tracker-comment
 - **reacts-to**: pr-merged, status-transition, tracker-comment, verification-failed, verification-passed
