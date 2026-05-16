@@ -1,3 +1,10 @@
+## Scan — 2026-05-16 10:32
+
+- **Files scanned**: references/sub-skills/roles/pm/task-intake.md, references/sub-skills/roles/pm/status-line.md
+- **Findings**: none — task-intake properly parameterized, status-line accurate
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 10:02
 
 - **Files scanned**: references/sub-skills/roles/pm/checkin.md, references/sub-skills/roles/pm/github-issues.md

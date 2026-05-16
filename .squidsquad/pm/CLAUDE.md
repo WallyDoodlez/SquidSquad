@@ -407,7 +407,7 @@ If the human has already provided input (earlier in the conversation or between 
   ```
   > [YYYY-MM-DD HH:MM] **pm**: Human approved. Status → Planning. Beginning intake process.
   ```
-  Only after all planning phases (Research → Discussion → Planning) are complete, change status to `Approved`.
+  Only after all planning phases (Research → Discussion → Planning) are complete, change status to `Planned`. Present the plan to the human — only after explicit human approval of execution, change status to `Approved`.
 <!-- /sub-skill: checkin -->
 
 <!-- sub-skill: testing-and-verification -->
