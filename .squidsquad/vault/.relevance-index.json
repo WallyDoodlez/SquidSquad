@@ -8,8 +8,8 @@
   "areas/code-conventions.md": {
     "confidence": 6,
     "links": 3,
-    "recency": 9,
-    "score": 5.7
+    "recency": 8,
+    "score": 5.4
   },
   "areas/human-profile.md": {
     "confidence": 6,
@@ -26,14 +26,14 @@
   "galaxy/decision-clone-isolation-architecture.md": {
     "confidence": 10,
     "links": 1,
-    "recency": 10,
-    "score": 6.4
+    "recency": 9,
+    "score": 6.1
   },
   "galaxy/decision-comprehension-test-pipeline.md": {
     "confidence": 10,
     "links": 0,
-    "recency": 10,
-    "score": 6.0
+    "recency": 9,
+    "score": 5.7
   },
   "galaxy/decision-cycle-runner-architecture.md": {
     "confidence": 10,
@@ -56,14 +56,14 @@
   "galaxy/decision-improvement-loop-philosophy.md": {
     "confidence": 10,
     "links": 0,
-    "recency": 10,
-    "score": 6.0
+    "recency": 9,
+    "score": 5.7
   },
   "galaxy/decision-local-config-priority.md": {
     "confidence": 10,
     "links": 0,
-    "recency": 10,
-    "score": 6.0
+    "recency": 9,
+    "score": 5.7
   },
   "galaxy/decision-pid-primary-liveness.md": {
     "confidence": 10,
@@ -74,8 +74,8 @@
   "galaxy/decision-reboot-kills-child.md": {
     "confidence": 10,
     "links": 0,
-    "recency": 10,
-    "score": 6.0
+    "recency": 9,
+    "score": 5.7
   },
   "galaxy/decision-self-healing-sentinel.md": {
     "confidence": 10,
@@ -92,32 +92,32 @@
   "galaxy/decision-vault-remember-source-agnostic.md": {
     "confidence": 10,
     "links": 2,
-    "recency": 10,
-    "score": 6.8
+    "recency": 9,
+    "score": 6.5
   },
   "galaxy/decision-watchdog-supervisor.md": {
     "confidence": 10,
     "links": 1,
-    "recency": 10,
-    "score": 6.4
+    "recency": 9,
+    "score": 6.1
   },
   "galaxy/learning-atomic-migration-strategy.md": {
     "confidence": 6,
     "links": 1,
-    "recency": 9,
-    "score": 4.9
+    "recency": 8,
+    "score": 4.6
   },
   "galaxy/learning-commit-code-state-exclusion.md": {
     "confidence": 10,
     "links": 1,
-    "recency": 10,
-    "score": 6.4
+    "recency": 9,
+    "score": 6.1
   },
   "galaxy/learning-create-test-environments.md": {
     "confidence": 10,
     "links": 0,
-    "recency": 10,
-    "score": 6.0
+    "recency": 9,
+    "score": 5.7
   },
   "galaxy/learning-powershell-start-job-cwd.md": {
     "confidence": 10,
@@ -128,8 +128,8 @@
   "galaxy/learning-qa-branch-merge-workaround.md": {
     "confidence": 6,
     "links": 0,
-    "recency": 10,
-    "score": 4.8
+    "recency": 9,
+    "score": 4.5
   },
   "galaxy/pattern-deterministic-scripts-over-prose.md": {
     "confidence": 10,
@@ -152,14 +152,14 @@
   "projects/agent-communication-layer.md": {
     "confidence": 10,
     "links": 0,
-    "recency": 10,
-    "score": 6.0
+    "recency": 9,
+    "score": 5.7
   },
   "projects/squidsquad.md": {
     "confidence": 6,
     "links": 4,
-    "recency": 9,
-    "score": 6.1
+    "recency": 8,
+    "score": 5.8
   },
   "resources/cli-anything-research.md": {
     "confidence": 6,
