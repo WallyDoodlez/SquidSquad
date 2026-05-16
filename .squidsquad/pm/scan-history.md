@@ -1,3 +1,10 @@
+## Scan — 2026-05-16 05:02
+
+- **Files scanned**: references/sub-skills/common/discussion-protocol.md, references/sub-skills/common/task-pickup.md
+- **Findings**: none — both clean, consistent with tracker protocol and git_ops workflow
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 04:32
 
 - **Files scanned**: references/sub-skills/common/context-pressure.md, references/sub-skills/common/cycle-runner.md
