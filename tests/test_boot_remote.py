@@ -99,6 +99,21 @@ class TestParseLocalConfigMandatory:
         assert "pm" not in result
         assert "dm" not in result
 
+    def test_hyphenated_role_names(self, tmp_path):
+        """#8561: Hyphenated role names like dev-ios must be parsed correctly."""
+        config = tmp_path / ".local-config"
+        config.write_text(
+            "- **dev-ios**: ../project-dev-ios\n"
+            "- **pm-skill**: ../project-pm-skill\n"
+            "- **skill**: .\n"
+        )
+        with patch.object(boot_remote, "LOCAL_CONFIG", config), \
+             patch.object(boot_remote, "REPO_ROOT", tmp_path):
+            result = boot_remote._parse_local_config()
+        assert "dev-ios" in result
+        assert "pm-skill" in result
+        assert "skill" in result
+
 
 class TestGetClonePath:
     """Regression tests for _get_clone_path() JSON serialization (#5915)."""
