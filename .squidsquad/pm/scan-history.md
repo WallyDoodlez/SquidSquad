@@ -1,3 +1,10 @@
+## Scan — 2026-05-16 09:32
+
+- **Files scanned**: references/sub-skills/roles/pm/pipeline-sentinel.md, references/sub-skills/roles/pm/testing-and-verification.md
+- **Findings**: none — pipeline-sentinel matches composed behavior, verification correctly delegated to QA
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 09:02
 
 - **Files scanned**: references/sub-skills/roles/pm/health-check.md, references/sub-skills/roles/pm/delivery.md
