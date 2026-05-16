@@ -137,7 +137,7 @@ def find_qa_rejected(role: str) -> list[dict]:
         last_own_at = None
         for c in comments:
             cr = _parse_comment_role(c["body"])
-            if cr and (cr == role or cr == f"{role}-lead"):
+            if cr and cr == role:
                 last_own_at = c["createdAt"]
 
         # Find the latest QA/PM feedback comment

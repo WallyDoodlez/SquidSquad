@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-15 20:03
+
+- **Files scanned**: references/scripts/cycle_post.py, references/scripts/model_router.py
+- **Findings**: #8336 (cycle_post.py: redundant import re inside two functions)
+- **Items rejected by human**: none
+
 ## Scan — 2026-05-15 18:32
 
 - **Files scanned**: references/scripts/triage.py, references/scripts/event_bus.py, tests/test_triage.py, tests/test_event_bus.py, tests/test_feat_2495_upgrade_rewrite.py
