@@ -1,3 +1,10 @@
+## Scan — 2026-05-16 19:17
+
+- **Files scanned**: references/scripts/thin_launcher.py, references/scripts/tc_coverage.py
+- **Findings**: thin_launcher.py had unresolved merge conflict markers (<<<<<<< HEAD) committed to main — would cause SyntaxError on next agent restart
+- **Auto-fixed**: Resolved merge conflict in thin_launcher.py — kept HEAD version with --strict-mcp-config
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 14:31
 
 - **Files scanned**: references/sub-skills/common/boot-remote-agents.md, references/sub-skills/common/context-pressure.md
