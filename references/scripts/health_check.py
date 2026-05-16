@@ -104,7 +104,7 @@ def _parse_local_config():
     try:
         text = LOCAL_CONFIG.read_text(encoding="utf-8")
         for line in text.splitlines():
-            m = re.match(r"-\s*\*\*(\w+)\*\*:\s*(.+)", line)
+            m = re.match(r"-\s*\*\*([\w-]+)\*\*:\s*(.+)", line)
             if m:
                 role = m.group(1).strip()
                 raw_path = Path(m.group(2).strip())
