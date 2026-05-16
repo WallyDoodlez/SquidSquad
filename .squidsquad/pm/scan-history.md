@@ -1,3 +1,10 @@
+## Scan — 2026-05-16 05:32
+
+- **Files scanned**: references/sub-skills/common/prohibitions.md, references/sub-skills/common/working-state.md
+- **Findings**: PM violated "never gh issue close directly" on #8477 in cycle 1468 — fixed stale labels
+- **Auto-fixed**: Added status:shipped label to #8477, removed status:open
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 05:02
 
 - **Files scanned**: references/sub-skills/common/discussion-protocol.md, references/sub-skills/common/task-pickup.md
