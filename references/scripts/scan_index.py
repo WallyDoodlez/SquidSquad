@@ -252,17 +252,27 @@ def suggest_targets(role, count=5, db_path=None):
         cross_count = cross_role_counts.get(f, 0)
         cross_score = min(cross_count / max_cross, 1.0)
 
-        # Acceptance rate
-        finding_count = cov.get("finding_count", 0)
+        # Acceptance rate — only meaningful when decisions exist
         accepted = cov.get("accepted_finding_count", 0)
-        acceptance_rate = accepted / finding_count if finding_count > 0 else 0.0
+        rejected = cov.get("rejected_finding_count", 0)
+        has_decisions = (accepted + rejected) > 0
 
-        score = (
-            WEIGHT_COVERAGE_GAP * coverage_score
-            + WEIGHT_CHURN * churn_score
-            + WEIGHT_CROSS_ROLE * cross_score
-            + WEIGHT_ACCEPTANCE * acceptance_rate
-        )
+        if has_decisions:
+            acceptance_rate = accepted / (accepted + rejected)
+            score = (
+                WEIGHT_COVERAGE_GAP * coverage_score
+                + WEIGHT_CHURN * churn_score
+                + WEIGHT_CROSS_ROLE * cross_score
+                + WEIGHT_ACCEPTANCE * acceptance_rate
+            )
+        else:
+            # No decision history — redistribute acceptance weight
+            other = WEIGHT_COVERAGE_GAP + WEIGHT_CHURN + WEIGHT_CROSS_ROLE
+            score = (
+                (WEIGHT_COVERAGE_GAP / other) * coverage_score
+                + (WEIGHT_CHURN / other) * churn_score
+                + (WEIGHT_CROSS_ROLE / other) * cross_score
+            )
 
         scored.append((f, score))
 

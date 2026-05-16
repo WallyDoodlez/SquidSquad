@@ -251,18 +251,20 @@ class TestGenerateReport:
         assert "Recent Diagnostics" in report
         assert '"warning"' in report
 
-    def test_report_no_log_file(self, capsys):
+    def test_report_no_log_file(self, tmp_path, capsys):
+        no_log = tmp_path / "no_such_log.jsonl"
         with patch.object(diagnostics, "get_field", return_value="1.0.0"), \
              patch.object(diagnostics, "_sanitize_config", return_value="cfg"), \
-             patch.object(diagnostics, "LOG_FILE", Path("/nonexistent")):
+             patch.object(diagnostics, "LOG_FILE", no_log):
             report = diagnostics.generate_report()
         assert "Recent Diagnostics" not in report
         assert "Issue Report" in report
 
-    def test_report_version_unknown_on_error(self, capsys):
+    def test_report_version_unknown_on_error(self, tmp_path, capsys):
+        no_log = tmp_path / "no_such_log.jsonl"
         with patch.object(diagnostics, "get_field", side_effect=SystemExit(1)), \
              patch.object(diagnostics, "_sanitize_config", return_value="cfg"), \
-             patch.object(diagnostics, "LOG_FILE", Path("/nonexistent")):
+             patch.object(diagnostics, "LOG_FILE", no_log):
             report = diagnostics.generate_report()
         assert "unknown" in report
 

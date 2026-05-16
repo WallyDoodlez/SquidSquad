@@ -97,16 +97,19 @@ def get_counter(role):
 
 
 def set_counter(role, value):
-    """Set quiet cycle counter in working-state.md."""
+    """Set quiet cycle counter in working-state.md (upserts if field absent)."""
     ws_path = _get_working_state_path(role)
     if not ws_path.exists():
         return
     text = ws_path.read_text(encoding="utf-8")
-    new_text = re.sub(
-        r'(Quiet Cycle Counter\*\*:\s*)\d+',
-        rf'\g<1>{value}',
-        text,
-    )
+    if re.search(r'Quiet Cycle Counter\*\*:\s*\d+', text):
+        new_text = re.sub(
+            r'(Quiet Cycle Counter\*\*:\s*)\d+',
+            rf'\g<1>{value}',
+            text,
+        )
+    else:
+        new_text = text.rstrip("\n") + f"\n- **Quiet Cycle Counter**: {value}\n"
     ws_path.write_text(new_text, encoding="utf-8")
     return value
 
