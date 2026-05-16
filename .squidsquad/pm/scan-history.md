@@ -1,3 +1,10 @@
+## Scan — 2026-05-16 08:32
+
+- **Files scanned**: references/sub-skills/roles/pm/soul-shepherd.md, references/sub-skills/roles/pm/vault-synthesis.md
+- **Findings**: none — both consistent with PM CLAUDE.md
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 08:02
 
 - **Files scanned**: references/sub-skills/roles/pm/task-approval.md, references/sub-skills/roles/pm/own-domain-autofix.md
