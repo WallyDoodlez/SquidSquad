@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-16 09:03
+
+- **Files scanned**: references/scripts/run_comprehension_test.py, references/scripts/migrate_state_branch.py
+- **Findings**: #8568 (run_comprehension_test.py: unused import tempfile), #8569 (run_comprehension_test.py: empty eval results treated as all-pass)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-16 08:32
 
 - **Files scanned**: references/scripts/capability_check.py, references/scripts/forge_adapter.py
