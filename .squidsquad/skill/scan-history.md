@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-16 05:34
+
+- **Files scanned**: references/scripts/wizard.py
+- **Findings**: #8547 (wizard.py: duplicate check=False kwarg crashes cmd_setup_yes — medium), #8548 (wizard.py: load_install_spec uncaught JSONDecodeError — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-16 04:03
 
 - **Files scanned**: references/scripts/harness.py
