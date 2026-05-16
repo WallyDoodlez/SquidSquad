@@ -168,3 +168,71 @@ class TestRunTestCacheSkip:
             results, out_dir = rct.run_test(str(spec))
         assert results is None
         assert out_dir is None
+
+
+# ---------------------------------------------------------------------------
+# Empty results guard — #8569
+# ---------------------------------------------------------------------------
+
+class TestEmptyResultsGuard:
+    """#8569: Empty eval results must be treated as failure, not vacuous pass."""
+
+    def test_empty_results_returns_empty_list(self, tmp_path):
+        """run_test returns empty list (not None) when eval produces no results."""
+        from unittest.mock import MagicMock
+
+        spec = tmp_path / "spec.json"
+        spec.write_text(json.dumps({
+            "files": [],
+            "questions": [{"id": "Q1", "question": "test?", "expected": "yes"}],
+        }), encoding="utf-8")
+
+        # Mock agents: test agent writes answers, eval agent writes empty []
+        out_dir = tmp_path / "output"
+        out_dir.mkdir()
+        answers = out_dir / "answers.md"
+        answers.write_text("### Q-Q1\nsome answer\n", encoding="utf-8")
+        results_file = out_dir / "results.json"
+        results_file.write_text("[]", encoding="utf-8")
+
+        fake_result = MagicMock(returncode=0, stdout="", stderr="")
+        with patch.object(rct, "_check_cache", return_value=False), \
+             patch.object(rct, "_find_claude", return_value="/usr/bin/claude"), \
+             patch.object(rct, "_run_agent", return_value=fake_result), \
+             patch.object(rct, "REPO_ROOT", tmp_path):
+            results, _ = rct.run_test(str(spec), output_dir=str(out_dir))
+
+        assert results == []
+
+    def test_empty_results_not_cached(self, tmp_path):
+        """Empty results must NOT update the cache (would mask broken eval)."""
+        from unittest.mock import MagicMock
+
+        spec = tmp_path / "spec.json"
+        spec.write_text(json.dumps({
+            "files": [],
+            "questions": [{"id": "Q1", "question": "test?", "expected": "yes"}],
+        }), encoding="utf-8")
+
+        out_dir = tmp_path / "output"
+        out_dir.mkdir()
+        (out_dir / "answers.md").write_text("### Q-Q1\nanswer\n", encoding="utf-8")
+        (out_dir / "results.json").write_text("[]", encoding="utf-8")
+
+        cache_dir = tmp_path / ".cache"
+        fake_result = MagicMock(returncode=0, stdout="", stderr="")
+        with patch.object(rct, "_check_cache", return_value=False), \
+             patch.object(rct, "_find_claude", return_value="/usr/bin/claude"), \
+             patch.object(rct, "_run_agent", return_value=fake_result), \
+             patch.object(rct, "CACHE_DIR", cache_dir), \
+             patch.object(rct, "REPO_ROOT", tmp_path):
+            rct.run_test(str(spec), output_dir=str(out_dir))
+
+        # Cache should NOT have been written
+        assert not (cache_dir / "spec.hash").exists()
+
+    def test_no_unused_tempfile_import(self):
+        """#8568: tempfile import must be removed."""
+        import inspect
+        source = inspect.getsource(rct)
+        assert "import tempfile" not in source
