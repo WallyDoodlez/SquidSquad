@@ -1469,3 +1469,85 @@ class TestFilterEventsForRole:
         assert "status-transition" in types
         assert "pr-merged" in types
         assert "cycle-start" not in types
+
+
+# ---------------------------------------------------------------------------
+# _run_mechanical_reactions — #8532
+# ---------------------------------------------------------------------------
+
+class TestRunMechanicalReactions:
+    """#8532: _run_mechanical_reactions test coverage."""
+
+    def test_empty_events_returns_empty(self):
+        """Empty event list returns empty reactions."""
+        assert cycle_pre._run_mechanical_reactions([], "skill") == []
+
+    def test_self_emitted_events_skipped(self):
+        """Events emitted by the same role are skipped."""
+        events = [
+            {"event_type": "pr-merged", "role": "pm",
+             "payload": {"success": True, "pr_number": "10", "issue_number": "5"},
+             "id": "abc"},
+        ]
+        result = cycle_pre._run_mechanical_reactions(events, "pm")
+        # PM emitted + PM consuming → skipped (self-emitted)
+        assert len(result) == 0
+
+    def test_pr_merged_pm_produces_merge_detected(self):
+        """pr-merged + PM role + success produces pr-merge-detected reaction."""
+        events = [
+            {"event_type": "pr-merged", "role": "harness",
+             "payload": {"success": True, "pr_number": "42", "issue_number": "100"},
+             "id": "evt1"},
+        ]
+        result = cycle_pre._run_mechanical_reactions(events, "pm")
+        merge_detected = [r for r in result if r["type"] == "pr-merge-detected"]
+        assert len(merge_detected) == 1
+        assert merge_detected[0]["pr_number"] == "42"
+        assert merge_detected[0]["issue_number"] == "100"
+
+    def test_pr_merged_non_pm_produces_reactive_pull(self):
+        """pr-merged + non-PM role + success produces reactive-pull-needed."""
+        events = [
+            {"event_type": "pr-merged", "role": "harness",
+             "payload": {"success": True, "pr_number": "42", "issue_number": "100"},
+             "id": "evt2"},
+        ]
+        result = cycle_pre._run_mechanical_reactions(events, "skill")
+        pull_needed = [r for r in result if r["type"] == "reactive-pull-needed"]
+        assert len(pull_needed) == 1
+        assert pull_needed[0]["pr_number"] == "42"
+
+    def test_pr_merged_failed_no_reaction(self):
+        """Failed merge (success=False) produces no reactions."""
+        events = [
+            {"event_type": "pr-merged", "role": "harness",
+             "payload": {"success": False, "pr_number": "42", "issue_number": "100"},
+             "id": "evt3"},
+        ]
+        result = cycle_pre._run_mechanical_reactions(events, "pm")
+        assert len(result) == 0
+
+    def test_verification_failed_dev_produces_rework(self):
+        """verification-failed + dev role produces rework-needed reaction."""
+        events = [
+            {"event_type": "verification-failed", "role": "qa",
+             "payload": {"issue_number": "55", "reason": "AC-2 not met"},
+             "id": "evt4"},
+        ]
+        result = cycle_pre._run_mechanical_reactions(events, "skill")
+        rework = [r for r in result if r["type"] == "rework-needed"]
+        assert len(rework) == 1
+        assert rework[0]["issue_number"] == "55"
+        assert rework[0]["reason"] == "AC-2 not met"
+
+    def test_verification_failed_non_dev_no_reaction(self):
+        """verification-failed for non-dev role (pm) produces no rework reaction."""
+        events = [
+            {"event_type": "verification-failed", "role": "qa",
+             "payload": {"issue_number": "55"},
+             "id": "evt5"},
+        ]
+        result = cycle_pre._run_mechanical_reactions(events, "pm")
+        rework = [r for r in result if r["type"] == "rework-needed"]
+        assert len(rework) == 0
