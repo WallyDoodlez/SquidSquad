@@ -3,6 +3,7 @@
 ## [0.39.0] — 2026-05-16
 
 ### Fixed
+- #8547 — Setup wizard no longer crashes from a duplicate keyword argument when running non-interactive setup
 - #8435 — Improvement scanner now correctly scores unreviewed files instead of always rating them zero
 - #8235 — Diagnostics reports now redact URLs, clone paths, webhooks, and passwords — no more accidental credential leaks in reports
 - #8200 — Vault wikilinks with pipe-alias syntax (e.g. `[[note|display]]`) now resolve correctly
