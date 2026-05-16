@@ -98,6 +98,31 @@ class TestCounters:
         text = ws.read_text()
         assert "Quiet Cycle Counter**: 5" in text
 
+    def test_set_counter_upserts_when_field_absent(self, tmp_path):
+        """#8484: set_counter creates the field if it doesn't exist."""
+        role_dir = tmp_path / "skill"
+        role_dir.mkdir(parents=True, exist_ok=True)
+        ws = role_dir / "working-state.md"
+        ws.write_text("# Working State\n\n- **Task**: none\n- **Status**: none\n")
+        with self._patch(tmp_path):
+            cycle.set_counter("skill", 3)
+        text = ws.read_text()
+        assert "- **Quiet Cycle Counter**: 3\n" in text
+        assert text.count("Quiet Cycle Counter") == 1
+
+    def test_inc_counter_upserts_when_field_absent(self, tmp_path, capsys):
+        """#8484: inc_counter persists when field starts absent."""
+        role_dir = tmp_path / "skill"
+        role_dir.mkdir(parents=True, exist_ok=True)
+        ws = role_dir / "working-state.md"
+        ws.write_text("# Working State\n\n- **Task**: none\n- **Status**: none\n")
+        with self._patch(tmp_path):
+            result = cycle.inc_counter("skill")
+        assert result == 1
+        text = ws.read_text()
+        assert "- **Quiet Cycle Counter**: 1\n" in text
+        assert capsys.readouterr().out.strip() == "1"
+
     def test_inc_counter(self, tmp_path, capsys):
         self._setup_working_state(tmp_path, "skill", counter=2)
         with self._patch(tmp_path):
