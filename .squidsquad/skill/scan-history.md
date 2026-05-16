@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-15 22:52
+
+- **Files scanned**: references/sub-skills/roles/dm/prohibitions.md, references/prompts/discussion-prep.md.j2, references/prompts/improvement-scan.md.j2, references/roles/LAYERS.md, references/roles/dev/android/instructions.md
+- **Findings**: #8381 (LAYERS.md references deprecated reboot_agent.py instead of start_team.py)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-15 22:02
 
 - **Files scanned**: references/scripts/health_check.py, references/scripts/state_bus.py
