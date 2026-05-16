@@ -2314,3 +2314,43 @@ class TestPreflight:
             result = wizard.preflight(tmp_path)
         assert result["ok"] is True
         assert len(result["checks"]) == 3
+
+
+# ---------------------------------------------------------------------------
+# cmd_setup_yes — #8547 regression
+# ---------------------------------------------------------------------------
+
+class TestCmdSetupYes:
+    """#8547: _run() must not receive duplicate check=False kwarg."""
+
+    def test_no_duplicate_check_kwarg(self, tmp_path):
+        """Regression: _run call in cmd_setup_yes must not pass check=False."""
+        from unittest.mock import patch, MagicMock
+        import inspect
+        source = inspect.getsource(wizard.cmd_setup_yes)
+        assert "check=False" not in source, (
+            "_run() already hardcodes check=False — passing it again "
+            "causes TypeError: got multiple values for keyword argument 'check'"
+        )
+
+    def test_run_not_called_with_check_kwarg(self, tmp_path):
+        """_run() is never called with check= kwarg from cmd_setup_yes."""
+        from unittest.mock import patch, MagicMock, call
+        calls = []
+
+        def tracking_run(cmd, **kwargs):
+            calls.append(kwargs)
+            return MagicMock(returncode=1, stdout="", stderr="")
+
+        # Patch enough to get past the gh repo view call without full execution
+        with patch.object(wizard, "_run", side_effect=tracking_run):
+            try:
+                wizard.cmd_setup_yes([str(tmp_path)])
+            except (SystemExit, Exception):
+                pass  # May fail later in setup — we only care about the _run call
+
+        # Verify no call passed check= kwarg
+        for kw in calls:
+            assert "check" not in kw, (
+                f"_run called with check={kw['check']} — this causes TypeError"
+            )

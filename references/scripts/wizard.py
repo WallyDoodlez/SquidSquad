@@ -2257,7 +2257,7 @@ def cmd_setup_yes(args):
 
     # 2. Load repo info
     repo_info = {}
-    result = _run(["gh", "repo", "view", "--json", "name,url"], check=False)
+    result = _run(["gh", "repo", "view", "--json", "name,url"])
     if result.returncode == 0:
         try:
             data = json.loads(result.stdout)
