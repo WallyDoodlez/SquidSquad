@@ -872,7 +872,10 @@ def load_install_spec(target_root):
     if not spec_path.exists():
         return None
     raw = spec_path.read_text(encoding="utf-8")
-    return json.loads(raw)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"invalid JSON in {spec_path}: {e}") from e
 
 
 def _write_l4_project_files(spec, project_dir, summary):
