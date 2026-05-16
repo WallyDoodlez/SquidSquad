@@ -23,7 +23,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -265,6 +264,11 @@ Write ONLY the JSON array to the results file. No other text.
         print(f"  Content: {raw[:500]}", file=sys.stderr)
         sys.exit(1)
 
+    if not results:
+        print("ERROR: eval agent produced empty results — treating as failure",
+              file=sys.stderr)
+        return [], output_dir
+
     # Summary
     passed = sum(1 for r in results if r.get("pass"))
     total = len(results)
@@ -302,8 +306,8 @@ def main():
     if results is None:
         sys.exit(0)
 
-    # Exit code based on results
-    all_pass = all(r.get("pass") for r in results)
+    # Exit code based on results — empty results = failure
+    all_pass = results and all(r.get("pass") for r in results)
     if not all_pass:
         sys.exit(1)
 
