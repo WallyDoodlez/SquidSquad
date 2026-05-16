@@ -80,16 +80,19 @@ def main():
     mcp_config = Path(clone_path) / ".squidsquad" / "mcp-agents.json"
 
     try:
-        cmd = [
-            "claude",
+        # --mcp-config is variadic (<configs...>), so it must be followed by
+        # another flag — otherwise it swallows the trailing prompt as a second
+        # config path. Place it first; --append-system-prompt terminates it.
+        cmd = ["claude"]
+        if mcp_config.exists():
+            cmd.extend(["--mcp-config", str(mcp_config)])
+        cmd.extend([
             "--append-system-prompt", f"SQUIDSQUAD_ROLE={role}",
             "--name", f"squidsquad-{role}",
             "--effort", effort,
             "--dangerously-skip-permissions",
-        ]
-        if mcp_config.exists():
-            cmd.extend(["--mcp-config", str(mcp_config)])
-        cmd.append("Boot. Begin your first Ralph Loop cycle now.")
+            "Boot. Begin your first Ralph Loop cycle now.",
+        ])
 
         proc = subprocess.Popen(
             cmd,
