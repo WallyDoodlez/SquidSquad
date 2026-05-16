@@ -1039,3 +1039,54 @@ class TestTaskBegin:
              patch("config.get_field", side_effect=custom_config):
             git_ops.task_begin("skill", "5040")
         mock_checkout.assert_called_once_with("squidsquad/task/5040")
+
+
+# ---------------------------------------------------------------------------
+# get_branch_name() — #8533
+# ---------------------------------------------------------------------------
+
+class TestGetBranchName:
+    """#8533: get_branch_name test coverage."""
+
+    def test_default_pattern(self):
+        """Default pattern produces squidsquad/task/{number}."""
+        fake_config = MagicMock()
+        fake_config.get_field = MagicMock(return_value="")
+        with patch.dict("sys.modules", {"config": fake_config}):
+            result = git_ops.get_branch_name("skill", "42")
+        assert result == "squidsquad/task/42"
+
+    def test_custom_pattern_with_role(self):
+        """Custom pattern with {role} placeholder substitutes correctly."""
+        fake_config = MagicMock()
+        fake_config.get_field = MagicMock(return_value="squidsquad/{role}/{number}")
+        with patch.dict("sys.modules", {"config": fake_config}):
+            result = git_ops.get_branch_name("skill", "99")
+        assert result == "squidsquad/skill/99"
+
+    def test_custom_pattern_number_only(self):
+        """Pattern with only {number} placeholder works."""
+        fake_config = MagicMock()
+        fake_config.get_field = MagicMock(return_value="feature/{number}")
+        with patch.dict("sys.modules", {"config": fake_config}):
+            result = git_ops.get_branch_name("pm", "123")
+        assert result == "feature/123"
+
+    def test_graceful_fallback_on_import_error(self):
+        """Falls back to default when config import fails."""
+        def fail_import(name, *args, **kwargs):
+            if name == "config":
+                raise ImportError("no config")
+            return __import__(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=fail_import):
+            result = git_ops.get_branch_name("skill", "55")
+        assert result == "squidsquad/task/55"
+
+    def test_graceful_fallback_on_system_exit(self):
+        """Falls back to default when config.get_field raises SystemExit."""
+        fake_config = MagicMock()
+        fake_config.get_field = MagicMock(side_effect=SystemExit(1))
+        with patch.dict("sys.modules", {"config": fake_config}):
+            result = git_ops.get_branch_name("skill", "77")
+        assert result == "squidsquad/task/77"
