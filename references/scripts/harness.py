@@ -466,7 +466,7 @@ async def lifespan(app: FastAPI):
             clone_paths = boot_remote._parse_local_config()
             for role, clone_root in clone_paths.items():
                 clone_squid = Path(clone_root) / ".squidsquad"
-                if clone_squid.is_dir() and clone_root != REPO_ROOT:
+                if clone_squid.is_dir() and Path(clone_root).resolve() != REPO_ROOT.resolve():
                     clone_port_file = clone_squid / ".harness-port"
                     try:
                         clone_tmp = clone_port_file.with_suffix(".tmp")
@@ -839,8 +839,7 @@ async def receive_event(request: Request):
         raise HTTPException(status_code=400, detail="event_type and role are required")
 
     # Stamp received_at for ordering (#5622)
-    import time as _time
-    body["received_at"] = _time.time()
+    body["received_at"] = time.time()
 
     # Store in stream
     event_stream.append(body)
