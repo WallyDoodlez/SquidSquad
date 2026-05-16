@@ -1,3 +1,10 @@
+## Scan — 2026-05-16 14:31
+
+- **Files scanned**: references/sub-skills/common/boot-remote-agents.md, references/sub-skills/common/context-pressure.md
+- **Findings**: none — both clean, exit-42 respawn gap tracked in #7693
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 14:02
 
 - **Files scanned**: references/sub-skills/common/agent-lifecycle.md, references/sub-skills/common/self-restart.md
