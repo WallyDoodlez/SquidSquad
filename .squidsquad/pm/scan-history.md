@@ -1,3 +1,10 @@
+## Scan — 2026-05-16 04:02
+
+- **Files scanned**: references/sub-skills/common/agent-lifecycle.md, references/sub-skills/common/self-restart.md
+- **Findings**: none — both clean, consistent with architecture, no contradictions
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-15 08:33
 
 - **Files scanned**: references/sub-skills/common/consensus-protocol.md, references/sub-skills/common/interval-sync.md
