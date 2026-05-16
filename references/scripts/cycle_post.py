@@ -430,7 +430,6 @@ def _do_version_bump(data, role):
     skill_md = REPO_ROOT / "SKILL.md"
     if skill_md.exists():
         content = skill_md.read_text(encoding="utf-8")
-        import re
         content = re.sub(r'version:\s*[\d.]+', f'version: {new_version}', content, count=1)
         skill_md.write_text(content, encoding="utf-8")
 
@@ -621,7 +620,6 @@ def _advance_event_cursor(data, role):
     # Replace existing cursor line or add it
     cursor_line = f"- **Last Processed Event ID**: {last_event_id}"
     if "- **Last Processed Event ID**:" in content:
-        import re
         content = re.sub(
             r"- \*\*Last Processed Event ID\*\*:.*",
             cursor_line,
