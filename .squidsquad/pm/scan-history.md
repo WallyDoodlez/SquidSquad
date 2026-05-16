@@ -1,3 +1,10 @@
+## Scan — 2026-05-16 13:59
+
+- **Files scanned**: references/sub-skills/common/event-reactions.md, references/sub-skills/common/cycle-runner.md
+- **Findings**: none — both clean and consistent with composed CLAUDE.md
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 11:02
 
 - **Files scanned**: references/sub-skills/roles/pm/discussion-protocol.md, references/sub-skills/roles/pm/issue-filing.md
