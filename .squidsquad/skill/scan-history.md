@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-16 04:03
+
+- **Files scanned**: references/scripts/harness.py
+- **Findings**: #8525 (harness.py: redundant import time as _time), #8526 (harness.py: type mismatch clone_root vs REPO_ROOT)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-16 02:33
 
 - **Files scanned**: references/scripts/vault_remember.py, references/scripts/compose.py, references/scripts/cycle.py
