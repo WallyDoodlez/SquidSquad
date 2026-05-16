@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-16 02:33
+
+- **Files scanned**: references/scripts/vault_remember.py, references/scripts/compose.py, references/scripts/cycle.py
+- **Findings**: #8483 (cycle.py: unused imports io and json), #8484 (cycle.py: set_counter missing upsert logic)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-16 00:32
 
 - **Files scanned**: references/scripts/scan_index.py, references/scripts/vault_optimize.py, references/scripts/event_validator.py
