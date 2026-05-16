@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-16 00:32
+
+- **Files scanned**: references/scripts/scan_index.py, references/scripts/vault_optimize.py, references/scripts/event_validator.py
+- **Findings**: #8435 (scan_index.py: acceptance_rate scoring always 0 for unreviewed files)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-15 22:52
 
 - **Files scanned**: references/sub-skills/roles/dm/prohibitions.md, references/prompts/discussion-prep.md.j2, references/prompts/improvement-scan.md.j2, references/roles/LAYERS.md, references/roles/dev/android/instructions.md
