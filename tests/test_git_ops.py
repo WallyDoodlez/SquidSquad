@@ -1044,6 +1044,7 @@ class TestGitignoreVolatileFiles:
 
     VOLATILE_PATTERNS = [
         ".squidsquad/.backlog-cache",
+        ".squidsquad/.event-state.json",
         ".squidsquad/*/.claude-pid",
         ".squidsquad/*/.health",
         ".squidsquad/*/.booting",
@@ -1069,7 +1070,8 @@ class TestGitignoreVolatileFiles:
             cwd=str(Path(__file__).resolve().parent.parent),
         )
         tracked = result.stdout.strip().splitlines()
-        volatile_names = [".backlog-cache", ".claude-pid", ".health", ".booting",
+        volatile_names = [".backlog-cache", ".event-state.json",
+                          ".claude-pid", ".health", ".booting",
                           "scan-index.db", "scheduled_tasks.lock"]
         for name in volatile_names:
             matches = [f for f in tracked if name in f]
