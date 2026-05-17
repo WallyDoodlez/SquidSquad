@@ -12,6 +12,8 @@
 .squidsquad/.local-config
 .squidsquad/.backlog-cache
 .squidsquad/.backlog-cache.tmp
+.squidsquad/.event-state.json
+.squidsquad/.event-state.json.tmp
 .squidsquad/diagnostics/*.jsonl
 .squidsquad/*/cycle-input.json
 .squidsquad/*/cycle-output.json
