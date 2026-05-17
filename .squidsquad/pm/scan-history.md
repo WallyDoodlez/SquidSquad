@@ -1,3 +1,10 @@
+## Scan — 2026-05-16 22:38
+
+- **Files scanned**: references/sub-skills/roles/pm/pipeline-sentinel.md, references/sub-skills/roles/pm/health-check.md, references/sub-skills/roles/pm/soul-shepherd.md, .squidsquad/vault/areas/human-profile.md
+- **Findings**: pipeline-sentinel.md section 4b uses invalid git flag `--limit 5` (should be `-n 5`); section 3 PR Status Sync logically unreachable (queries open PRs then checks "if merged") but mitigated by event bus
+- **Auto-fixed**: Corrected `--limit 5` to `-n 5` in pipeline-sentinel.md section 4b
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 21:03
 
 - **Files scanned**: references/sub-skills/roles/qa/discussion-protocol.md, references/sub-skills/roles/qa/file-conventions.md, references/sub-skills/roles/qa/iteration-log.md, references/sub-skills/roles/dm/discussion-protocol.md

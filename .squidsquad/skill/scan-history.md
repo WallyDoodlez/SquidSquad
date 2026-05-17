@@ -1,5 +1,28 @@
 # Scan History
 
+## Scan — 2026-05-16 23:04
+
+- **Files scanned**: references/scripts/cycle_post.py, references/scripts/thin_launcher.py, references/scripts/git_ops.py
+- **Findings**: #8653 — task_begin fails on index with unresolved merge conflicts from pull
+
+## Scan — 2026-05-16 19:15
+
+- **Files scanned**: references/roles/dm/android/instructions.md, references/roles/dm/ios/instructions.md, references/roles/pm/android/instructions.md, references/roles/pm/ios/instructions.md, references/roles/qa/android/instructions.md
+- **Findings**: none
+- **Items rejected by human**: n/a
+
+## Scan — 2026-05-16 19:10
+
+- **Files scanned**: references/scripts/thin_launcher.py, references/scripts/triage.py, references/scripts/cycle_post.py
+- **Findings**: none
+- **Items rejected by human**: n/a
+
+## Scan — 2026-05-16 10:33
+
+- **Files scanned**: references/roles/dev/ios/instructions.md, references/roles/dev/android/instructions.md, references/roles/dev/fullstack/instructions.md
+- **Findings**: #8576 (incorrect article and iOS capitalization in variant templates)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-16 09:03
 
 - **Files scanned**: references/scripts/run_comprehension_test.py, references/scripts/migrate_state_branch.py

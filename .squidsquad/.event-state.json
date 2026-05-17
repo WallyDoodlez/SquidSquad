@@ -1,6 +1,7 @@
 {
   "events": [
     {
+<<<<<<< HEAD
       "id": "cap0",
       "event_type": "test",
       "payload": {}
@@ -44,5 +45,39 @@
     "cap0": 1778985625.8639987,
     "cap1": 1778985625.8639987
   },
+=======
+<<<<<<< Updated upstream
+      "id": "caa86213",
+      "event_type": "test-event",
+      "role": "test-role",
+      "timestamp": "2026-05-14T19:12:10",
+      "payload": {
+        "key": "value"
+      },
+      "received_at": 1778800330.512299
+=======
+      "id": "old1",
+      "event_type": "assigned-to",
+      "role": "harness",
+      "payload": {
+        "target_role": "skill"
+      }
+    },
+    {
+      "id": "new1",
+      "event_type": "assigned-to",
+      "role": "harness",
+      "payload": {
+        "target_role": "skill"
+      }
+>>>>>>> Stashed changes
+    }
+  ],
+  "in_flight": {
+    "skill": []
+  },
+  "dispatched": {},
+  "dispatch_times": {},
+>>>>>>> 81beaf61bb822ce707b3d9160497bd41f0bd99a2
   "retry_counts": {}
 }
