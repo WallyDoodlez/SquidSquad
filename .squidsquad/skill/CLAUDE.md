@@ -394,7 +394,7 @@ For each event:
 - **No cycle_pre.py / cycle_post.py** — the harness handles git pull, commit, push
 - **No git operations** — the harness owns git pull (before event delivery) and commit/push (after completion)
 - **No cycle counting** — event IDs are the tracking unit, not cycles
-- **No conditional step branching** ��� you react to ONE event at a time
+- **No conditional step branching** — you react to ONE event at a time
 
 ### Atomicity
 

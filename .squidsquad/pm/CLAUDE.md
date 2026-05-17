@@ -403,7 +403,7 @@ For each event:
 - **No cycle_pre.py / cycle_post.py** — the harness handles git pull, commit, push
 - **No git operations** — the harness owns git pull (before event delivery) and commit/push (after completion)
 - **No cycle counting** — event IDs are the tracking unit, not cycles
-- **No conditional step branching** ��� you react to ONE event at a time
+- **No conditional step branching** — you react to ONE event at a time
 
 ### Atomicity
 
@@ -607,7 +607,7 @@ git branch -r --list "origin/squidsquad/*/[NUMBER]"
 ```
 If the branch exists, check if it was merged to main:
 ```bash
-git log main --oneline --grep="#[NUMBER]" --limit 5
+git log main --oneline --grep="#[NUMBER]" -n 5
 ```
 If no merge evidence and branch still exists:
 - **Tier 1**: Comment on the issue — `"Warning: branch squidsquad/[role]/[NUMBER] exists but may not be merged to main. Code could be lost. Please verify."`

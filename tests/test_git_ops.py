@@ -621,6 +621,183 @@ class TestCommitState:
 
 
 # ---------------------------------------------------------------------------
+# commit_role_scoped() — #8691
+# ---------------------------------------------------------------------------
+
+
+class TestRoleOwnedPatterns:
+    """Per-role commit-domain allowlists."""
+
+    def test_common_patterns_present_for_every_role(self):
+        for role in ("pm", "qa", "dm", "skill"):
+            pats = git_ops._role_owned_patterns(role)
+            assert f".squidsquad/{role}/" in pats
+            assert ".squidsquad/.backlog-cache" in pats
+            assert ".squidsquad/.event-state.json" in pats
+            assert ".squidsquad/vault/" in pats
+
+    def test_pm_extras(self):
+        pats = git_ops._role_owned_patterns("pm")
+        assert ".squidsquad/config.md" in pats
+        assert ".squidsquad/project/" in pats
+
+    def test_dm_extras(self):
+        pats = git_ops._role_owned_patterns("dm")
+        assert "README.md" in pats
+        assert "CHANGELOG.md" in pats
+        assert "docs/" in pats
+
+    def test_qa_has_no_extras_beyond_common(self):
+        pats = git_ops._role_owned_patterns("qa")
+        # QA must NOT pick up config or delivery docs
+        assert ".squidsquad/config.md" not in pats
+        assert "README.md" not in pats
+
+
+class TestPathMatches:
+    def test_prefix_match(self):
+        assert git_ops._path_matches(".squidsquad/pm/working-state.md", [".squidsquad/pm/"])
+        assert git_ops._path_matches("docs/foo/bar.md", ["docs/"])
+
+    def test_exact_match(self):
+        assert git_ops._path_matches("README.md", ["README.md"])
+        assert not git_ops._path_matches("README.md.bak", ["README.md"])
+
+    def test_no_match(self):
+        assert not git_ops._path_matches("references/scripts/foo.py", [".squidsquad/pm/"])
+
+
+class TestCommitRoleScoped:
+    """#8691: cycle commits must not bundle foreign files."""
+
+    @patch("git_ops.push", return_value=True)
+    @patch("git_ops.commit", return_value=True)
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_pm_stages_only_own_files_skips_foreign(
+        self, mock_run, mock_run_list, mock_commit, mock_push, capsys
+    ):
+        """The exact scenario from the bug report: PM commit + foreign code/tests."""
+        mock_run.return_value = _mock_result(stdout=(
+            " M .squidsquad/pm/working-state.md\n"
+            " M .squidsquad/.backlog-cache\n"
+            " M .squidsquad/skill/CLAUDE.md\n"
+            " M references/scripts/thin_launcher.py\n"
+            " M tests/test_thin_launcher.py\n"
+        ))
+        mock_run_list.return_value = _mock_result()
+
+        result = git_ops.commit_role_scoped("pm", "cycle 1494")
+        assert result is True
+
+        add_calls = [c for c in mock_run_list.call_args_list
+                     if c[0][0][:2] == ["git", "add"]]
+        staged = [c[0][0][-1] for c in add_calls]
+        assert ".squidsquad/pm/working-state.md" in staged
+        assert ".squidsquad/.backlog-cache" in staged
+        assert ".squidsquad/skill/CLAUDE.md" not in staged
+        assert "references/scripts/thin_launcher.py" not in staged
+        assert "tests/test_thin_launcher.py" not in staged
+
+        err = capsys.readouterr().err
+        assert "outside 'pm' domain" in err
+        assert "references/scripts/thin_launcher.py" in err
+        assert ".squidsquad/skill/CLAUDE.md" in err
+
+    @patch("git_ops.push", return_value=True)
+    @patch("git_ops.commit", return_value=True)
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_dm_can_stage_readme_and_changelog(
+        self, mock_run, mock_run_list, mock_commit, mock_push
+    ):
+        mock_run.return_value = _mock_result(stdout=(
+            " M README.md\n"
+            " M CHANGELOG.md\n"
+            " M docs/release-notes.md\n"
+            " M .squidsquad/dm/working-state.md\n"
+        ))
+        mock_run_list.return_value = _mock_result()
+
+        result = git_ops.commit_role_scoped("dm", "delivery cycle")
+        assert result is True
+
+        staged = [c[0][0][-1] for c in mock_run_list.call_args_list
+                  if c[0][0][:2] == ["git", "add"]]
+        assert "README.md" in staged
+        assert "CHANGELOG.md" in staged
+        assert "docs/release-notes.md" in staged
+        assert ".squidsquad/dm/working-state.md" in staged
+
+    @patch("git_ops.commit", return_value=True)
+    @patch("git_ops.push", return_value=True)
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_qa_cannot_stage_config_md(
+        self, mock_run, mock_run_list, mock_push, mock_commit, capsys
+    ):
+        """QA must not pick up PM-domain config.md changes."""
+        mock_run.return_value = _mock_result(stdout=(
+            " M .squidsquad/qa/working-state.md\n"
+            " M .squidsquad/config.md\n"
+        ))
+        mock_run_list.return_value = _mock_result()
+
+        git_ops.commit_role_scoped("qa", "qa cycle")
+
+        staged = [c[0][0][-1] for c in mock_run_list.call_args_list
+                  if c[0][0][:2] == ["git", "add"]]
+        assert ".squidsquad/qa/working-state.md" in staged
+        assert ".squidsquad/config.md" not in staged
+        assert ".squidsquad/config.md" in capsys.readouterr().err
+
+    @patch("git_ops._run")
+    def test_returns_false_when_no_own_files(self, mock_run, capsys):
+        """Only foreign files → nothing to commit, push not attempted."""
+        mock_run.return_value = _mock_result(stdout=" M references/scripts/foo.py\n")
+        with patch("git_ops.commit") as mock_commit, \
+             patch("git_ops.push") as mock_push:
+            result = git_ops.commit_role_scoped("pm", "msg")
+        assert result is False
+        mock_commit.assert_not_called()
+        mock_push.assert_not_called()
+
+    @patch("git_ops._run")
+    def test_empty_status_returns_false(self, mock_run):
+        mock_run.return_value = _mock_result(stdout="")
+        assert git_ops.commit_role_scoped("pm", "msg") is False
+
+    @patch("git_ops.push", return_value=True)
+    @patch("git_ops.commit", return_value=False)
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_commit_failure_short_circuits_push(
+        self, mock_run, mock_run_list, mock_commit, mock_push
+    ):
+        mock_run.return_value = _mock_result(stdout=" M .squidsquad/pm/foo.md\n")
+        mock_run_list.return_value = _mock_result()
+        assert git_ops.commit_role_scoped("pm", "msg") is False
+        mock_push.assert_not_called()
+
+    @patch("git_ops.push", return_value=True)
+    @patch("git_ops.commit", return_value=True)
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_warning_truncates_long_foreign_list(
+        self, mock_run, mock_run_list, mock_commit, mock_push, capsys
+    ):
+        # 25 foreign files; warning should mention "... and 5 more"
+        lines = [" M .squidsquad/pm/own.md"]
+        lines += [f" M references/scripts/foreign_{i}.py" for i in range(25)]
+        mock_run.return_value = _mock_result(stdout="\n".join(lines) + "\n")
+        mock_run_list.return_value = _mock_result()
+
+        git_ops.commit_role_scoped("pm", "msg")
+        err = capsys.readouterr().err
+        assert "and 5 more" in err
+
+
+# ---------------------------------------------------------------------------
 # branch_exists() / branch_delete() / current_branch()
 # ---------------------------------------------------------------------------
 
@@ -947,10 +1124,11 @@ def _task_begin_config(field):
 class TestTaskBegin:
     """task_begin should create branch if missing, not error out."""
 
+    @patch("git_ops._auto_resolve_state_conflicts", return_value=([], []))
     @patch("git_ops._get_working_branch", return_value="main")
     @patch("git_ops._safe_checkout", return_value=True)
     @patch("git_ops._run_list")
-    def test_checks_out_existing_local_branch(self, mock_run_list, mock_checkout, mock_gwb):
+    def test_checks_out_existing_local_branch(self, mock_run_list, mock_checkout, mock_gwb, mock_resolve):
         """Existing local branch is checked out normally."""
         # rev-parse succeeds (branch exists locally)
         mock_run_list.return_value = _mock_result(returncode=0)
@@ -959,9 +1137,10 @@ class TestTaskBegin:
             git_ops.task_begin("skill", "100")
         mock_checkout.assert_called_once_with("squidsquad/skill/100")
 
+    @patch("git_ops._auto_resolve_state_conflicts", return_value=([], []))
     @patch("git_ops._get_working_branch", return_value="main")
     @patch("git_ops._run_list")
-    def test_creates_branch_when_missing(self, mock_run_list, mock_gwb):
+    def test_creates_branch_when_missing(self, mock_run_list, mock_gwb, mock_resolve):
         """Branch not found locally or on remote — creates from origin/main (#5444)."""
         mock_run_list.side_effect = [
             _mock_result(returncode=1),  # rev-parse local — not found
@@ -978,9 +1157,10 @@ class TestTaskBegin:
         create_call = mock_run_list.call_args_list[5]
         assert create_call[0][0] == ["git", "checkout", "-b", "squidsquad/skill/200", "origin/main"]
 
+    @patch("git_ops._auto_resolve_state_conflicts", return_value=([], []))
     @patch("git_ops._get_working_branch", return_value="main")
     @patch("git_ops._run_list")
-    def test_checks_out_remote_branch(self, mock_run_list, mock_gwb):
+    def test_checks_out_remote_branch(self, mock_run_list, mock_gwb, mock_resolve):
         """Branch exists on remote only — checks out and tracks."""
         mock_run_list.side_effect = [
             _mock_result(returncode=1),  # rev-parse local — not found
@@ -994,9 +1174,10 @@ class TestTaskBegin:
         checkout_call = mock_run_list.call_args_list[3]
         assert "origin/squidsquad/skill/300" in checkout_call[0][0]
 
+    @patch("git_ops._auto_resolve_state_conflicts", return_value=([], []))
     @patch("git_ops._get_working_branch", return_value="main")
     @patch("git_ops._run_list")
-    def test_fetches_before_remote_check(self, mock_run_list, mock_gwb):
+    def test_fetches_before_remote_check(self, mock_run_list, mock_gwb, mock_resolve):
         """Regression #5013: task-begin must fetch before checking remote refs."""
         mock_run_list.side_effect = [
             _mock_result(returncode=1),  # rev-parse local — not found
@@ -1021,10 +1202,11 @@ class TestTaskBegin:
             git_ops.task_begin("skill", "400")
         mock_run_list.assert_not_called()
 
+    @patch("git_ops._auto_resolve_state_conflicts", return_value=([], []))
     @patch("git_ops._get_working_branch", return_value="main")
     @patch("git_ops._safe_checkout", return_value=True)
     @patch("git_ops._run_list")
-    def test_uses_configured_branch_pattern(self, mock_run_list, mock_checkout, mock_gwb):
+    def test_uses_configured_branch_pattern(self, mock_run_list, mock_checkout, mock_gwb, mock_resolve):
         """Regression #5040: task-begin uses branch-pattern from config."""
         mock_run_list.return_value = _mock_result(returncode=0)
 
@@ -1039,6 +1221,156 @@ class TestTaskBegin:
              patch("config.get_field", side_effect=custom_config):
             git_ops.task_begin("skill", "5040")
         mock_checkout.assert_called_once_with("squidsquad/task/5040")
+
+
+# ---------------------------------------------------------------------------
+# _auto_resolve_state_conflicts() — #8653
+# ---------------------------------------------------------------------------
+
+
+def _ls_files_output(*paths):
+    """Build mock `git ls-files --unmerged` output with one stage line per path."""
+    return "\n".join(f"100644 0000000000000000000000000000000000000000 2\t{p}" for p in paths)
+
+
+class TestAutoResolveStateConflicts:
+    """#8653: auto-resolve unmerged state files; bail on code conflicts."""
+
+    @patch("git_ops._run_list")
+    def test_no_unmerged_returns_empty(self, mock_run_list):
+        """Clean index — both lists are empty, no checkout/add calls."""
+        mock_run_list.return_value = _mock_result(returncode=0, stdout="")
+        resolved, unresolved = git_ops._auto_resolve_state_conflicts()
+        assert resolved == []
+        assert unresolved == []
+        assert mock_run_list.call_count == 1  # only ls-files
+
+    @patch("git_ops._run_list")
+    def test_state_file_resolved_with_theirs(self, mock_run_list):
+        """A .squidsquad/ state file is resolved via checkout --theirs + add."""
+        mock_run_list.side_effect = [
+            _mock_result(returncode=0, stdout=_ls_files_output(".squidsquad/.backlog-cache")),
+            _mock_result(returncode=0),  # checkout --theirs
+            _mock_result(returncode=0),  # git add
+        ]
+        resolved, unresolved = git_ops._auto_resolve_state_conflicts()
+        assert resolved == [".squidsquad/.backlog-cache"]
+        assert unresolved == []
+        # Verify --theirs is used and `--` separator is present (avoids ambiguity)
+        checkout_args = mock_run_list.call_args_list[1][0][0]
+        assert "--theirs" in checkout_args
+        assert "--" in checkout_args
+        assert checkout_args[-1] == ".squidsquad/.backlog-cache"
+
+    @patch("git_ops._run_list")
+    def test_claude_state_file_resolved(self, mock_run_list):
+        """A .claude/ state file is also treated as state and resolved."""
+        mock_run_list.side_effect = [
+            _mock_result(returncode=0, stdout=_ls_files_output(".claude/scheduled_tasks.lock")),
+            _mock_result(returncode=0),
+            _mock_result(returncode=0),
+        ]
+        resolved, unresolved = git_ops._auto_resolve_state_conflicts()
+        assert resolved == [".claude/scheduled_tasks.lock"]
+        assert unresolved == []
+
+    @patch("git_ops._run_list")
+    def test_code_file_left_unresolved(self, mock_run_list):
+        """Non-state code files are reported as unresolved, never auto-resolved."""
+        mock_run_list.return_value = _mock_result(
+            returncode=0, stdout=_ls_files_output("references/scripts/git_ops.py")
+        )
+        resolved, unresolved = git_ops._auto_resolve_state_conflicts()
+        assert resolved == []
+        assert unresolved == ["references/scripts/git_ops.py"]
+        # Only ls-files should have been called — no checkout/add attempt
+        assert mock_run_list.call_count == 1
+
+    @patch("git_ops._run_list")
+    def test_mixed_state_and_code(self, mock_run_list):
+        """State files resolve; code file is reported separately."""
+        mock_run_list.side_effect = [
+            _mock_result(returncode=0, stdout=_ls_files_output(
+                ".squidsquad/.event-state.json",
+                "references/scripts/harness.py",
+            )),
+            _mock_result(returncode=0),  # checkout --theirs state
+            _mock_result(returncode=0),  # git add state
+        ]
+        resolved, unresolved = git_ops._auto_resolve_state_conflicts()
+        assert resolved == [".squidsquad/.event-state.json"]
+        assert unresolved == ["references/scripts/harness.py"]
+
+    @patch("git_ops._run_list")
+    def test_deduplicates_multi_stage_entries(self, mock_run_list):
+        """ls-files emits one line per stage; we resolve each path once."""
+        # Two stages (2 + 3) for the same path
+        stages = "\n".join([
+            "100644 aaa 2\t.squidsquad/.backlog-cache",
+            "100644 bbb 3\t.squidsquad/.backlog-cache",
+        ])
+        mock_run_list.side_effect = [
+            _mock_result(returncode=0, stdout=stages),
+            _mock_result(returncode=0),
+            _mock_result(returncode=0),
+        ]
+        resolved, unresolved = git_ops._auto_resolve_state_conflicts()
+        assert resolved == [".squidsquad/.backlog-cache"]
+        # ls-files + 1 checkout + 1 add — not 2 of each
+        assert mock_run_list.call_count == 3
+
+    @patch("git_ops._run_list")
+    def test_checkout_failure_falls_to_unresolved(self, mock_run_list):
+        """If checkout --theirs fails, the path lands in unresolved (no silent loss)."""
+        mock_run_list.side_effect = [
+            _mock_result(returncode=0, stdout=_ls_files_output(".squidsquad/state.json")),
+            _mock_result(returncode=1),  # checkout failed
+            _mock_result(returncode=0),  # add (irrelevant after checkout failure, but called)
+        ]
+        resolved, unresolved = git_ops._auto_resolve_state_conflicts()
+        assert resolved == []
+        assert unresolved == [".squidsquad/state.json"]
+
+
+class TestTaskBeginConflictHandling:
+    """#8653: task_begin auto-resolves state conflicts and bails on code conflicts."""
+
+    @patch("git_ops._get_working_branch", return_value="main")
+    @patch("git_ops._safe_checkout", return_value=True)
+    @patch("git_ops._run_list")
+    @patch("git_ops._auto_resolve_state_conflicts")
+    def test_auto_resolves_state_then_proceeds(
+        self, mock_resolve, mock_run_list, mock_checkout, mock_gwb, capsys
+    ):
+        """State files were unmerged; task_begin reports and continues."""
+        mock_resolve.return_value = ([".squidsquad/.backlog-cache"], [])
+        mock_run_list.return_value = _mock_result(returncode=0)  # local rev-parse ok
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", side_effect=_task_begin_config):
+            git_ops.task_begin("skill", "100")
+        out = capsys.readouterr().out
+        assert "auto-resolved" in out
+        assert ".squidsquad/.backlog-cache" in out
+        mock_checkout.assert_called_once()
+
+    @patch("git_ops._get_working_branch", return_value="main")
+    @patch("git_ops._run_list")
+    @patch("git_ops._auto_resolve_state_conflicts")
+    def test_bails_when_code_conflict_present(
+        self, mock_resolve, mock_run_list, mock_gwb, capsys
+    ):
+        """Code conflicts cause task_begin to exit(1) with a clear message."""
+        mock_resolve.return_value = ([], ["references/scripts/harness.py"])
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", side_effect=_task_begin_config):
+            with pytest.raises(SystemExit) as exc:
+                git_ops.task_begin("skill", "100")
+            assert exc.value.code == 1
+        err = capsys.readouterr().err
+        assert "unresolved conflicts" in err
+        assert "references/scripts/harness.py" in err
+        # Should not have attempted any git operations beyond the resolve probe
+        mock_run_list.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

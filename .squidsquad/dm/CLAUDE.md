@@ -422,7 +422,7 @@ For each event:
 - **No cycle_pre.py / cycle_post.py** — the harness handles git pull, commit, push
 - **No git operations** — the harness owns git pull (before event delivery) and commit/push (after completion)
 - **No cycle counting** — event IDs are the tracking unit, not cycles
-- **No conditional step branching** ��� you react to ONE event at a time
+- **No conditional step branching** — you react to ONE event at a time
 
 ### Atomicity
 
@@ -599,7 +599,7 @@ After marking any item `Shipped`, check if a version bump is due:
 1. Read `Ship Threshold`: `python references/scripts/config.py get ship-threshold`
 2. Read `Shipped Since Last Bump`: `python references/scripts/config.py get shipped-since-bump`
 3. If counter < threshold: no bump needed, continue.
-4. If counter >= threshold: check all agent issue trackers for open issues (`**Status**: Open` or `**Status**: Investigating`).
+4. If counter >= threshold: check for open issues (type:issue, state:open) across all roles.
    - If open issues exist: defer the bump. Print: `[🦑 HH:MM:SS] Version bump deferred — [N] open issues remain.` Counter stays at current value.
    - If zero open issues: **perform the bump**.
 
