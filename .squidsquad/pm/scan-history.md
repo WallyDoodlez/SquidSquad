@@ -1,3 +1,10 @@
+## Scan — 2026-05-16 20:24
+
+- **Files scanned**: references/sub-skills/roles/qa/verification.md, references/sub-skills/roles/qa/prohibitions.md, references/sub-skills/roles/dm/task-pickup.md
+- **Findings**: verification.md Step 4 item 6 text said "Transition to shipped (auto-closes)" but command does pending-test → pending-ship
+- **Auto-fixed**: Corrected text to "Transition to pending-ship" matching the actual command
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 19:17
 
 - **Files scanned**: references/sub-skills/roles/dm/version-bumps.md, references/sub-skills/roles/dm/delivery-packaging.md, references/sub-skills/common/vault-remember.md, references/sub-skills/common/vault-optimize.md
