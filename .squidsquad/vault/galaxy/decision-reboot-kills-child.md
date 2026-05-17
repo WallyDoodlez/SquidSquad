@@ -5,7 +5,7 @@ created: 2026-04-27
 updated: 2026-04-27
 owner: skill
 status: active
-confidence: high
+confidence: medium
 source: conversation
 links: [decision-watchdog-supervisor]
 ---
@@ -35,3 +35,4 @@ The wrapper already has the respawn logic (check `.restart` sentinel after claud
 ### Changelog
 
 - 2026-04-27 — Created by skill. Documented #3495 fix: reboot kills child (claude), not parent (wrapper).
+- 2026-05-16 — Updated by pm. Note: wrapper-based lifecycle partially superseded by harness intent API (#4966). Harness uses thin_launcher.py (no wrapper loop). `.claude-pid` remains as fallback for health monitoring. `.restart` sentinel deprecated in favor of intent state machine (running/stopping/restarting/stopped). Full deprecation tracked in #4792.

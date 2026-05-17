@@ -1,3 +1,31 @@
+## Scan — 2026-05-16 21:03
+
+- **Files scanned**: references/sub-skills/roles/qa/discussion-protocol.md, references/sub-skills/roles/qa/file-conventions.md, references/sub-skills/roles/qa/iteration-log.md, references/sub-skills/roles/dm/discussion-protocol.md
+- **Findings**: none — all clean, discussion protocol consistent across roles
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 20:33
+
+- **Files scanned**: .squidsquad/vault/galaxy/decision-cycle-runner-architecture.md, .squidsquad/vault/galaxy/decision-reboot-kills-child.md, .squidsquad/vault/galaxy/decision-self-healing-sentinel.md, references/sub-skills/roles/dm/doc-improvement-loop.md
+- **Findings**: decision-reboot-kills-child describes wrapper architecture superseded by harness #4966
+- **Auto-fixed**: Downgraded confidence to medium, added changelog noting harness supersession and #4792 tracking full deprecation
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 20:24
+
+- **Files scanned**: references/sub-skills/roles/qa/verification.md, references/sub-skills/roles/qa/prohibitions.md, references/sub-skills/roles/dm/task-pickup.md
+- **Findings**: verification.md Step 4 item 6 text said "Transition to shipped (auto-closes)" but command does pending-test → pending-ship
+- **Auto-fixed**: Corrected text to "Transition to pending-ship" matching the actual command
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 19:17
+
+- **Files scanned**: references/sub-skills/roles/dm/version-bumps.md, references/sub-skills/roles/dm/delivery-packaging.md, references/sub-skills/common/vault-remember.md, references/sub-skills/common/vault-optimize.md
+- **Findings**: version-bumps.md line 4 had stale markdown tracker format reference (`**Status**: Open` or `**Status**: Investigating`) — replaced with GitHub Issues terminology
+- **Auto-fixed**: Updated version-bumps.md bump gate check to reference `type:issue, state:open` instead of old tracker format
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 14:31
 
 - **Files scanned**: references/sub-skills/common/boot-remote-agents.md, references/sub-skills/common/context-pressure.md
