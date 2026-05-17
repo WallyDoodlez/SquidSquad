@@ -44,9 +44,9 @@ Verbatim from CONTEXT.md §5.4 (plus measurable refinements in brackets):
    `{"status": "unknown", "message": "No health data yet"}` per
    `harness.py:656`) → status line renders `events-mode, awaiting boot`.
 4. **A4** — Status line refresh does not impose a measurable CPU/API load.
-   *[Measurable: at the default 2–5s cadence, the panel makes ≤1 HTTP call
-   per refresh per panel and consumes <5% CPU on the harness host during a
-   30s sample.]*
+   *[Measurable: at the hard-coded 5s cadence (PM Gap 4; no config knob in
+   v1), the panel makes ≤1 HTTP call per refresh per panel and consumes
+   <5% CPU on the harness host during a 30s sample (6 refresh cycles).]*
 5. **A5** — Status line panel runs its own delayed refresh loop independent
    of agent cycles (CONTEXT.md §5.4 deliverable 2; §2 "Status line queries
    harness HTTP API — own delayed refresh loop, not file-tail").
@@ -181,14 +181,14 @@ Verbatim from CONTEXT.md §5.4 (plus measurable refinements in brackets):
 - **Verification**: assert panel process terminates without unhandled exception on SIGTERM — **exit code 0 or 143 acceptable** (review F8: graceful SIGTERM trapping is not declared in any AC, so default OS exit 143 = 128+15 is acceptable); assert presence of degraded marker in stdout capture; assert no unhandled traceback in captured stderr.
 
 ### TC-I5 — Refresh latency: state change visible within 2× interval (A4, A5)
-- **Precondition**: Refresh interval = 3s. Agent state changes (e.g.
-  `current_phase` flips from `idle|` to `verifying|...`).
+- **Precondition**: Refresh interval = 5s (hard-coded, per PM Gap 4). Agent
+  state changes (e.g. `current_phase` flips from `idle|` to `verifying|...`).
 - **Steps**: Trigger the state change, then sample panel output every
-  500ms for up to 6s.
-- **Expected**: The new phase appears in the panel within 6s (= 2 ×
-  interval).
-- **Verification**: assert observed propagation delay ≤ 2 × configured
-  interval.
+  500ms for up to 12s.
+- **Expected**: The new phase appears in the panel within 10s (= 2 ×
+  hard-coded 5s interval).
+- **Verification**: assert observed propagation delay ≤ 10s (2 × the
+  hard-coded 5s interval).
 
 ---
 
@@ -298,12 +298,13 @@ shared-base-URL contract must be enforceable at the point #8704 lands.
 - **Verification**: log assertion or in-process introspection.
 
 ### TC-T3 — Shared refresh cadence (A8)
-- **Precondition**: Single TUI process with cadence configured to 4s.
+- **Precondition**: Single TUI process with the hard-coded 5s cadence (PM Gap 4).
 - **Steps**: Record HTTP request timestamps for `/agents` (status panel)
   and `/human/queue` (human-queue panel, #8704) over 40s.
-- **Expected**: Both panels fire on the shared 4s schedule. Drift is
-  bounded (no panel polls faster than the configured cadence; the
-  scheduler does not race the panels against each other).
+- **Expected**: Both panels fire on the shared 5s schedule (≈ 8 cycles
+  per panel over the 40s window). Drift is bounded (no panel polls
+  faster than 5s; the scheduler does not race the panels against
+  each other).
 
 ### TC-T4 — State changes propagate to both panels with decoupled latency bounds (A8, review F7)
 - **Precondition**: An agent transitions an issue to a `pending-human-*`
