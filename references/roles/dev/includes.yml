@@ -3,6 +3,7 @@
 includes:
   - common/cycle-runner
   - common/event-reactions
+  - common/event-driven-workflow
   - common/context-pressure
   - common/resume-working-state
   - common/interval-sync
