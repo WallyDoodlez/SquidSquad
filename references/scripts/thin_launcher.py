@@ -20,6 +20,7 @@ Exit codes:
 """
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -80,8 +81,16 @@ def main():
     # If mcp-agents.json exists, also pass --mcp-config for future per-agent servers.
     mcp_config = Path(clone_path) / ".squidsquad" / "mcp-agents.json"
 
+    # Resolve claude executable. shutil.which honors PATHEXT, so it finds
+    # .cmd/.ps1 shims from npm installs on Windows (which CreateProcessW
+    # alone cannot resolve from a bare "claude" arg).
+    claude_exe = shutil.which("claude")
+    if claude_exe is None:
+        print("[thin-launcher] ERROR: 'claude' not found on PATH", file=sys.stderr)
+        return 1
+
     try:
-        cmd = ["claude", "--strict-mcp-config"]
+        cmd = [claude_exe, "--strict-mcp-config"]
         if mcp_config.exists():
             cmd.extend(["--mcp-config", str(mcp_config)])
         cmd.extend([
@@ -98,7 +107,7 @@ def main():
             env=env,
         )
     except FileNotFoundError:
-        print("[thin-launcher] ERROR: 'claude' not found on PATH", file=sys.stderr)
+        print(f"[thin-launcher] ERROR: failed to execute '{claude_exe}'", file=sys.stderr)
         return 1
 
     # Write PID for harness monitoring
