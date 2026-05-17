@@ -1,7 +1,7 @@
 # Phase 5 Planning — Event-Driven Architecture CONTEXT
 
 **Bundle**: #8694 (lead) / #8695 / #8697 / #8700 / #8701 / #8704
-**Hard prereq**: #8692 (singleton enforcement) — only true blocker
+**Hard prereqs**: #8692 (singleton enforcement) + #4792 (harness sole-authority lifecycle) — both block any per-role flip
 **Folded**: #8696 → #8694 (boot sequence is part of event-mode L1 base agent definition); #8699 → #8697 (event-driven-workflow source migration absorbed)
 **Phase 6 cleanup**: #8698, #8702
 **Process directive (active)**: #8703
@@ -684,10 +684,10 @@ endpoints; **neither reads agent-side files** (in events mode).
 
 ---
 
-## 6. Hard Prerequisite
+## 6. Hard Prerequisites
 
-The only true hard prerequisite for any per-role flip of
-`event-driven: yes` is **#8692**.
+The hard prerequisites for any per-role flip of `event-driven: yes` are
+**#8692 AND #4792 (rescoped)**. Both must ship before flipping any role.
 
 ### 6.1 #8692 — Singleton Enforcement at Agent Startup (BLOCKER)
 
@@ -701,7 +701,33 @@ duplicate forge actions, corrupt cursors.
 **Plan in parallel; gate approval/execution of any per-role events flip
 on #8692 being shipped first.**
 
-### 6.2 (#8699 — absorbed by #8697)
+### 6.2 #4792 — Harness Sole-Authority Lifecycle (BLOCKER)
+
+The harness must be the SOLE gatekeeper of agent process lifecycle
+before any role flips to event mode. Today's state is split-brain:
+the harness has HTTP API endpoints (POST /agents/{role}/start|stop|restart,
+POST /shutdown) but parallel control paths still exist via sentinel
+files (`.stop`, `.stop-after-cycle`) referenced in 7 scripts (`harness.py`,
+`boot_remote.py`, `health_check.py`, `cycle_pre.py`, `cycle_post.py`,
+`start_team.py`, `reboot_agent.py`). A stale sentinel file silently
+overrides harness intent — the same root cause as the "2 PMs in same
+clone" incident from this session.
+
+**Scope of #4792 (rescoped from "deprecate sentinel files" to
+"harness sole-authority lifecycle"):**
+
+- Remove ALL sentinel-file reads/writes from the 7 scripts
+- All start/stop/restart operations go through the harness HTTP API
+- `boot_remote.py` may continue as a helper invoked BY the harness
+  internally, but is NOT an operator-facing entrypoint
+- Wrapper scripts check harness PID before each task/cycle; dead PID
+  triggers clean exit
+- Remove agent-lifecycle sentinel docs from all role CLAUDE.md files
+  (via the compose stack — fragment edits)
+
+**Plan in parallel; gate per-role events flip on #4792 shipping.**
+
+### 6.3 (#8699 — absorbed by #8697)
 
 The `event-driven-workflow` block migration (formerly tracked as #8699)
 is folded into #8697's scope. It is **not** a separate prerequisite. See
@@ -709,20 +735,23 @@ is folded into #8697's scope. It is **not** a separate prerequisite. See
 fragment lives under `common-events/` and is composed normally; #8699
 closes automatically.
 
-### 6.3 Pre-Flip Checklist (per role)
+### 6.4 Pre-Flip Checklist (per role)
 
 Before flipping any role's `event-driven: yes` in `config.md`:
 
 1. #8692 (singleton enforcement) is shipped.
-2. #8697 (compose dual-mode) is shipped — events-mode tree exists for
+2. #4792 (harness sole-authority lifecycle) is shipped — no sentinel
+   files remain in any of the 7 scripts; harness API is the sole
+   lifecycle control path; PID-based liveness verified.
+3. #8697 (compose dual-mode) is shipped — events-mode tree exists for
    this role with no /loop residue in any fragment body.
-3. L4 audit (under #8697) has confirmed no /loop-specific language
+4. L4 audit (under #8697) has confirmed no /loop-specific language
    remains in `.squidsquad/project/` files that apply to this role.
-4. #8694 fragments (event-mode L1 base, including boot sequence and
+5. #8694 fragments (event-mode L1 base, including boot sequence and
    `event_poll.py`) are in place for this role.
-5. #8695 (`bootup_complete` flag) is deployed so the TUI/operators can
+6. #8695 (`bootup_complete` flag) is deployed so the TUI/operators can
    see boot status.
-6. `compose.py deploy <role>` produces a CLAUDE.md with zero /loop
+7. `compose.py deploy <role>` produces a CLAUDE.md with zero /loop
    language and the events-mode boot sequence at L1.
 
 ---
@@ -775,9 +804,11 @@ don't churn while the architecture is mid-flip).
 
 ```
                     ┌────────────────────────────────────────┐
-                    │  Hard prerequisite                     │
+                    │  Hard prerequisites                    │
                     │                                        │
                     │   #8692 — singleton enforcement        │
+                    │   #4792 — harness sole-authority       │
+                    │           lifecycle (rescoped)         │
                     └────────────────┬───────────────────────┘
                                      │
                                      │ must SHIP
