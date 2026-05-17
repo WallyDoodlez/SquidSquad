@@ -1,14 +1,24 @@
 # TEST-PLAN-8704 — Harness TUI Surfaces Human-Assigned Work
 
+## Revision Log
+
+- **2026-05-17** — Revised per deepseek R1 review (2 errors + 3 warnings) + 4 PM-locked gap resolutions.
+  - **PM Gap 1 (LOCKED) — TUI process model**: TUI runs as a SEPARATE PROCESS consuming harness HTTP. NOT in-process inside `harness.py`. Matches `statusline.sh` pattern. Section 6 and SM-1/SM-2 explicitly note the separate-process precondition.
+  - F1 (error, all 6 required fields not verified): added TC-U1b — explicit field-completeness assertion for `number`, `title`, `role`, `status`, `priority`, `age` (transition timestamp), with type checks.
+  - F2 (error, AC12 backward compat zero coverage): added SM-4 manual smoke covering Discussion-comment / email-on-mention coexistence; clarified that this AC is verified by manual smoke at ship-review.
+  - F3 (warning, designer-as-worker conditional): TC-I4 unconditionally verifies designer-role transitions surface identically — added to seeded fixture, not gated on whether designer is in active config.
+  - F4 (warning, panel verification via manual capture): specified that panels are driven headlessly via mocked HTTP (httpretty/responses or equivalent) and panel rendered output is captured via stdout for assertion.
+  - F5 (warning, zero-gap gate vs manual smoke): clarified scope — manual smoke tests are EXEMPT from the automated zero-gap gate and run once by a human at ship-review time.
+
 ## Overview
 
 Phase 5 task that adds a new harness HTTP endpoint plus a TUI panel surfacing any issue in a `pending-human-*` status, so humans can see and act on assigned work without polling the forge. HITL is treated as ordinary role assignment — any agent may transition an item to `pending-human-*`, and the queue shows everything regardless of which role transitioned it (CONTEXT.md §3.8, §5.6, §11 "HITL transition").
 
 The endpoint and panel are co-resident with #8700's status-line panel in the same harness-served TUI process, sharing the harness HTTP base URL and a single delayed refresh cadence (CONTEXT.md §5.7).
 
-**Zero-gap gate**: any TC failure routes the task back to dev. No "noted for follow-up" exceptions.
+**Zero-gap gate**: any **automated** TC failure (unit, integration, negative, TUI integration in §3–§6) routes the task back to dev. No "noted for follow-up" exceptions for automated tests. **Manual smoke tests in §7 are EXEMPT from the automated gate** (review F5) — they are executed once by a human at ship-review time. A manual smoke failure still blocks ship but is a human-judgment call, not an automated gate.
 
-**Co-ship**: ships together with #8700 (shared TUI architecture). Hard prereq: #8692 singleton enforcement (CONTEXT.md §6.1).
+**Co-ship**: ships together with #8700 (shared TUI architecture). The TUI runs as a **separate process** consuming harness HTTP endpoints (PM Gap 1 / CONTEXT §5.7) — not in-process inside `harness.py`. Hard prereq: #8692 singleton enforcement (CONTEXT.md §6.1).
 
 ---
 
@@ -35,11 +45,11 @@ Verbatim from CONTEXT.md §5.6 plus measurable refinements:
 
 | Section | Category                       | Count |
 |---------|--------------------------------|-------|
-| §3      | Unit — endpoint + panel format | 6     |
+| §3      | Unit — endpoint + panel format | 7     |
 | §4      | Integration — end-to-end       | 5     |
 | §5      | Negative                       | 4     |
 | §6      | TUI cross-task (#8700)         | 3     |
-| §7      | Manual smoke                   | 3     |
+| §7      | Manual smoke (gate-exempt)     | 4     |
 
 ---
 
@@ -51,6 +61,19 @@ Verbatim from CONTEXT.md §5.6 plus measurable refinements:
 - **Steps**: `curl -s http://localhost:<PORT>/human/queue` and parse JSON.
 - **Expected**: Response contains exactly the two `pending-human-*` items; the control item is absent.
 - **Verification**: `python -c "import json,urllib.request; d=json.load(urllib.request.urlopen('http://localhost:<PORT>/human/queue')); nums=sorted(i['number'] for i in d); assert nums==[<rev>,<setup>], nums; print('PASS')"`
+
+### TC-U1b: Each item exposes all 6 required fields with correct types (AC3, review F1)
+
+- **Precondition**: Same as TC-U1, with seeded items having known title text, role attribution, priority labels, and transition timestamps.
+- **Steps**: Query `/human/queue` and inspect each returned item.
+- **Expected**: For each item in the response, all 6 required fields are present with non-null values and correct types:
+  - `number` — int
+  - `title` — string, matches seed data
+  - `role` — string, matches the role that transitioned the item (`skill` / `qa` / `dm` / `designer` / etc.)
+  - `status` — string, exactly the `pending-human-*` label on the issue
+  - `priority` — string, one of `high` / `medium` / `low`
+  - `age` (or `transitioned_at`, per implementation key choice) — ISO-8601 string representing the transition timestamp (parseable via `datetime.fromisoformat`)
+- **Verification**: programmatic assertion `all(k in item and item[k] is not None for k in REQUIRED_KEYS)` for each item; for at least one seeded item, assert each field's value matches seed data exactly.
 
 ### TC-U2: Items ordered by priority then age
 
@@ -93,24 +116,24 @@ Verbatim from CONTEXT.md §5.6 plus measurable refinements:
 
 ### TC-I1: End-to-end agent transition → endpoint → TUI panel
 
-- **Precondition**: Harness + tracker live. A test issue exists at `status:in-progress` assigned to one role (e.g., `skill`).
+- **Precondition**: Harness + tracker live. A test issue exists at `status:in-progress` assigned to one role (e.g., `skill`). TUI panel started as a **separate process** (PM Gap 1) consuming the harness HTTP. Panel rendered output is captured via **stdout capture** (the panel must support a test mode that prints panel state to stdout on each refresh, or use `httpretty`/`responses`-equivalent HTTP mocking with a headless render harness; review F4).
 - **Steps**:
   1. Have the role transition the issue to `pending-human-review` via `tracker.py transition`.
-  2. Wait one refresh interval (≤5s per CONTEXT.md §5.7 cadence).
+  2. Wait one refresh interval (5s hard-coded per PM Gap 4 / CONTEXT.md §5.7).
   3. Query `GET /human/queue`.
-  4. Inspect TUI human-queue panel content.
-- **Expected**: Item appears in both the endpoint response and the TUI panel within the refresh interval. Role-that-transitioned is shown as `skill`.
-- **Verification**: Issue number present in JSON response; panel screenshot (or text capture) lists the issue with role `skill` and a transition timestamp.
+  4. Capture panel stdout for the next refresh tick.
+- **Expected**: Item appears in both the endpoint response and the captured panel stdout within the refresh interval. Role-that-transitioned is shown as `skill`.
+- **Verification** (programmatic, review F4): assert issue number present in JSON response; assert captured panel stdout contains the issue number, the role `skill`, and a parseable transition timestamp. No screenshot inspection — assertions run via string match on captured stdout.
 
 ### TC-I2: Human resolves via forge → next refresh removes from queue
 
-- **Precondition**: TC-I1 item is visible in the queue.
+- **Precondition**: TC-I1 item is visible in the queue. Panel stdout capture from TC-I1 is active.
 - **Steps**:
   1. Human acts via forge: transition the item from `pending-human-review` → `in-progress` (or `pending-ship`).
-  2. Wait one refresh interval + cache window (max ~15s).
-  3. Re-query endpoint; re-inspect TUI panel.
+  2. Wait one refresh interval + cache window (max ~15s: 5s refresh + 10s cache TTL).
+  3. Re-query endpoint; capture next panel stdout tick.
 - **Expected**: Item is gone from both surfaces. No stale entry.
-- **Verification**: Item number absent in JSON; panel no longer renders it.
+- **Verification** (programmatic): assert item number absent in JSON response; assert captured panel stdout (next refresh tick after cache TTL) does not contain the issue number.
 
 ### TC-I3: Multiple agents transitioning multiple items all appear
 
@@ -119,12 +142,12 @@ Verbatim from CONTEXT.md §5.6 plus measurable refinements:
 - **Expected**: All three items appear in a single queue response; correct role attribution per item; ordering by priority/age (AC2).
 - **Verification**: JSON contains all three issue numbers; per-item `role` field matches the transitioning role.
 
-### TC-I4: Items from different roles all surface — no role filtering
+### TC-I4: Items from different roles all surface — no role filtering (review F3)
 
-- **Precondition**: Active dev agents in `config.md` include at minimum `skill`, `qa`. Seed one `pending-human-*` issue per active role.
+- **Precondition**: Seed one `pending-human-*` issue per role for **all of `skill`, `qa`, `dm`, AND `designer`** — even if `designer` is not active in the current `config.md`, the test fixture seeds an issue with `role:designer` label and a `pending-human-*` transition attributed to designer. This makes the designer-as-worker positive case unconditional rather than gated on the live config (CONTEXT.md §3.8 — designer is just another worker; AC7 / AC9).
 - **Steps**: Query endpoint.
-- **Expected**: Every seeded item is present. No role is silently filtered out. Designer role items appear if a `designer` agent transitioned one (CONTEXT.md §3.8 — designer is just another worker).
-- **Verification**: For each active role with a seeded item, the item appears in the response.
+- **Expected**: Every seeded item is present, including the designer-attributed one. No role is silently filtered out. The designer item's `role` field is `designer`, surfaced identically to `skill`/`qa`/`dm` items — no role-specific code paths.
+- **Verification**: assert all four seeded items appear in the response; assert the designer item's `role` field equals `designer`; assert no role-specific handling code branches on `role == "designer"` in `harness.py` (grep negative — see also AC9).
 
 ### TC-I5: Both pending-human-review AND pending-human-setup appear
 
@@ -171,10 +194,10 @@ Verbatim from CONTEXT.md §5.6 plus measurable refinements:
 
 ### TC-T1: Status-line panel + human-queue panel coexist in same TUI process
 
-- **Precondition**: TUI launched; both #8700 status line and #8704 human-queue panels enabled.
+- **Precondition**: TUI launched **as a separate process from `harness.py`** (PM Gap 1 / CONTEXT.md §5.7) consuming the harness HTTP. Both #8700 status line and #8704 human-queue panels enabled.
 - **Steps**: Start the TUI; observe both panels render.
-- **Expected**: A single process hosts both panels. No second TUI / no second display surface (CONTEXT.md §5.7 "one TUI process").
-- **Verification**: Process listing shows one TUI binary; both panels visible in the same terminal.
+- **Expected**: A single TUI process (separate from `harness.py`) hosts both panels. No second TUI / no second display surface (CONTEXT.md §5.7 "one TUI process").
+- **Verification**: Process listing shows two distinct processes — `harness.py` and the TUI — and the TUI process owns both panel render loops in a single PID.
 
 ### TC-T2: Shared refresh loop drives both panels at the same cadence
 
@@ -194,9 +217,10 @@ Verbatim from CONTEXT.md §5.6 plus measurable refinements:
 
 ## 7. Manual Smoke Tests
 
-- **SM-1**: File a fresh issue, transition it to `pending-human-review`. Observe it appears in the TUI human-queue panel within one refresh interval. Confirm the badge count increments.
+- **SM-1**: File a fresh issue, transition it to `pending-human-review`. Observe it appears in the TUI human-queue panel within one refresh interval. Confirm the badge count increments. **Precondition: TUI started as a separate process** (PM Gap 1).
 - **SM-2**: Resolve the SM-1 item from the forge (transition out of `pending-human-*`). Observe it disappears from the TUI panel within one refresh interval. Badge count decrements.
 - **SM-3**: File three items with mixed priorities (`high`, `medium`, `low`) and stagger their transition timestamps. Observe TUI panel orders them by priority then age (oldest first within each bucket).
+- **SM-4** (AC12 backward compatibility, review F2): transition an issue to `pending-human-review` and verify both notification surfaces continue to function alongside the new queue: (a) item appears in `/human/queue` and the TUI panel; (b) the assignee or mentioned user receives an email notification from GitHub (visual check in the user's inbox or GitHub notification feed); (c) a Discussion comment posted on the issue is visible via `gh issue view` and email-on-mention fires for any `@user` mentions. If automated verification of email delivery is impractical, this manual smoke at minimum confirms the Discussion-comment pathway is unaffected. This test is exempt from the automated zero-gap gate (human runs once at ship-review per the gate clarification above).
 
 ---
 

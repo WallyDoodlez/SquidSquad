@@ -5,6 +5,14 @@
 **Scope source**: `.squidsquad/pm/planning/CONTEXT.md` §5.2
 **Date**: 2026-05-17
 
+## Revision Log
+
+- **2026-05-17** — Revised per deepseek R1 review (1 error + 3 warnings) + 4 PM-locked gap resolutions.
+  - F1 (error, overbroad regex sentinels in TC-N6): replaced regex sentinels with a comment-stripping pre-filter applied to all negative-test source greps; restricted patterns to attribute-access forms.
+  - F2 (warning, TC-I1 ambiguity): pre-seed the agent in harness state before step 1 so `GET /agents/{role}` always returns a `to_dict()` response containing `bootup_complete: false`.
+  - F3 (warning, missing/empty `role` field): added TC-N8 covering `POST /events` with no role.
+  - F4 (warning, exact-substring grep matches): TC-N1 verification uses the same comment-stripping pre-filter as F1.
+
 ---
 
 ## Scope Reconciliation Note
@@ -85,6 +93,7 @@ Receiving `bootup-complete`:
 | AC-6                 | Integration   | §4      |
 | AC-7                 | Integration   | §4      |
 | AC-8                 | Negative      | §5      |
+| Robustness (missing role) | Negative | §5 TC-N8 |
 | All                  | Manual smoke  | §6      |
 
 ---
@@ -177,13 +186,13 @@ Target file: `tests/test_bootup_complete_integration.py` (new). Uses FastAPI
 `TestClient` against `harness.py:app`.
 
 ### TC-I1: Full cycle — POST `/events` then GET `/agents/{role}` reflects flag
-- **Precondition**: Harness app started via TestClient. Role `skill` configured.
+- **Precondition**: Harness app started via TestClient. Role `skill` configured. **Agent state pre-seeded so `state.agents["skill"]` exists before step 1** — e.g., POST an initial `cycle-start` event for the role (or directly construct the `AgentState` via test fixture) so `GET /agents/skill` always returns a `to_dict()` response containing the `bootup_complete` key. This removes the prior ambiguity where an absent agent returned `{"role": "skill", "status": "unknown", "message": "No health data yet"}` with no `bootup_complete` key (review F2).
 - **Steps**:
-  1. `GET /agents/skill` — assert `bootup_complete: false` (or agent absent).
+  1. `GET /agents/skill` — assert response is a full `to_dict()` payload containing `"bootup_complete": false`.
   2. `POST /events` with body `{"event_type": "bootup-complete", "role": "skill",
      "payload": {"listener_active": true}, "timestamp": "2026-05-17T10:00:00Z"}`.
   3. `GET /agents/skill`.
-- **Expected**: Step 3 response JSON contains `"bootup_complete": true`.
+- **Expected**: Step 1 response JSON contains `"bootup_complete": false`. Step 3 response JSON contains `"bootup_complete": true`.
 - **Verification**: assertion on response JSON.
 
 ### TC-I2: Per-role independence
@@ -240,20 +249,29 @@ Target file: `tests/test_bootup_complete_thin_harness.py` (new).
   2. Inspect `harness.state` (or `HarnessState`) attributes via `dir()` /
      `vars()`.
   3. Inspect `AgentState.__slots__`.
-  4. `grep` the source of `harness.py` for `_pending_dispatch`, `pending_dispatch`,
-     `dispatch_queue`, `event_hold`, `holding_buffer`.
+  4. Grep the source of `harness.py` for the forbidden tokens — but apply a **comment-stripping pre-filter** before matching (review F4). The pre-filter removes Python `#` line comments and `"""..."""` / `'''...'''` triple-quoted string literals before the token search. This prevents false positives on negative-form documentation (`# No _pending_dispatch — thin harness`).
 - **Expected**:
   - No attribute on `HarnessState` or `AgentState` named `_pending_dispatch`,
     `pending_dispatch`, `dispatch_queue`, `event_hold`, `holding_buffer`, or
     any variant.
-  - No matching identifier in `harness.py` source.
+  - After comment stripping, no matching identifier in `harness.py` source.
 - **Verification**:
-  ```
-  import harness, inspect
-  src = inspect.getsource(harness)
+  ```python
+  import ast, inspect, re, harness
+
+  def _strip_py_comments_and_docstrings(src: str) -> str:
+      # Strip `#` line comments
+      src = re.sub(r'(?m)#.*$', '', src)
+      # Strip triple-quoted strings (docstrings / module-level prose)
+      src = re.sub(r'""".*?"""', '', src, flags=re.DOTALL)
+      src = re.sub(r"'''.*?'''", '', src, flags=re.DOTALL)
+      return src
+
+  raw = inspect.getsource(harness)
+  src = _strip_py_comments_and_docstrings(raw)
   for token in ("_pending_dispatch", "pending_dispatch", "dispatch_queue",
                 "event_hold", "holding_buffer"):
-      assert token not in src, f"Thin-harness violation: {token} found"
+      assert token not in src, f"Thin-harness violation: {token} found in active code"
   ```
 
 ### TC-N2: Receiving `bootup-complete` emits NO outbound events
@@ -307,14 +325,19 @@ Target file: `tests/test_bootup_complete_thin_harness.py` (new).
 - **Verification**: scan event types in response; assert none in the forbidden
   set.
 
-### TC-N6: No source contains dispatch-gating instruction comments
+### TC-N6: No source contains dispatch-gating implementation patterns
 - **Precondition**: Source tree present.
-- **Steps**: grep `harness.py` and `event_catalog.py` for phrases that would
-  indicate gating: `"queue.*until.*bootup"`, `"hold.*event"`, `"dispatch.*gate"`,
-  `"before.*bootup-complete"`.
-- **Expected**: No matches.
-- **Verification**: regex assertion. (Soft sentinel — if a future implementer
-  tries to reintroduce gating they will see the test fail.)
+- **Steps**: Apply the **same comment-stripping pre-filter** as TC-N1 to `harness.py` and `event_catalog.py`, then grep the stripped source for **attribute-access / assignment patterns** that would indicate gating implementation rather than mere documentation (review F1). Concretely, search for:
+  - `self._pending_dispatch`
+  - `state._pending_dispatch`
+  - `_pending_dispatch[` (subscript access)
+  - `_pending_dispatch\s*=` (assignment)
+  - `def\s+_hold_event`
+  - `def\s+_queue_pending`
+  - `def\s+_flush_pending`
+  - `dispatch_gate\s*=\s*True`
+- **Expected**: No matches in the stripped source.
+- **Verification**: regex assertion against the comment-stripped source. (Soft sentinel — if a future implementer tries to reintroduce gating they will see the test fail. The tightened patterns are immune to negative-form documentation like `# No dispatch gate — informational only`.)
 
 ### TC-N7: `bootup_complete: false` does NOT suppress `GET /events`
 - **Precondition**: Agent `skill` has never emitted `bootup-complete`
@@ -324,6 +347,15 @@ Target file: `tests/test_bootup_complete_thin_harness.py` (new).
 - **Expected**: Events are returned normally. The flag does not control event
   visibility or delivery in either direction.
 - **Verification**: response JSON contains the posted events.
+
+### TC-N8: `POST /events` with missing or empty `role` does NOT create `AgentState(None)` (review F3)
+- **Precondition**: TestClient running. Record the set of agent keys present in `state.agents` before the test (call it `pre_keys`).
+- **Steps**:
+  1. Sub-case (a): POST `/events` with body `{"event_type": "bootup-complete", "payload": {"listener_active": true}, "timestamp": "2026-05-17T10:00:00Z"}` — **no `role` field at all**.
+  2. Sub-case (b): POST `/events` with body `{"event_type": "bootup-complete", "role": "", "payload": {"listener_active": true}, "timestamp": "..."}` — empty-string role.
+  3. After each POST: `GET /agents` and `GET /status`; capture the set of agent keys (`post_keys`).
+- **Expected**: Either (i) the POST returns 400 with a clear validation error, OR (ii) the POST returns 200 and the event is logged + discarded with **no `AgentState(None)` or `AgentState("")` creation**. In both interpretations: `post_keys == pre_keys` (no new agent appears in `state.agents`), and neither `GET /agents` nor `GET /status` shows a nameless / empty-named entry.
+- **Verification**: assert `post_keys == pre_keys`; assert no response item has `role in (None, "")`. Document which behavior (400 vs accept-and-discard) the implementation chose so QA can lock the expected assertion path.
 
 ---
 

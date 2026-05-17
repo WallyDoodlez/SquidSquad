@@ -6,6 +6,28 @@
 **Scope source**: `CONTEXT.md` §5.5 (lines 588–625), §2 "Task-cycle replaces time-cycle" (lines 103–106), §11 glossary "Task-cycle" (line 948)
 **Touched files**: `references/scripts/cycle_pre.py`, `references/scripts/cycle_post.py`, possibly `references/scripts/cycle.py` (helpers), test additions in `tests/`
 
+## Revision Log
+
+- **2026-05-17** — Revised per deepseek R1 review (1 error + 6 warnings) + 4 PM-locked gap resolutions.
+  - **PM Gap 2 (LOCKED) — `cycle_post.py:49` validator mode-gated**: loop mode keeps `REQUIRED_FIELDS = {"role", "cycle_number", "cycle_type"}`. Event mode uses `{"role", "task_id", "cycle_type"}` (or equivalent — exact event-mode field names TBD by implementer; minimum: cycle_number NOT required, task identifier IS required). OQ5 moved to scope expansion / covered by new UT-10.
+  - **PM Gap 3 (LOCKED) — `cycle_post.py:587-644` `_advance_event_cursor` REMOVED**: `event_poll.py` is the single owner of cursor state per CONTEXT §2 "per-event atomic advancement." Loop mode has no event-cursor concept. OQ6 moved to scope expansion / covered by new NT-5 (negative grep).
+  - F1 (warning, UT-9 "bonus" label): promoted to standard unit test; "bonus" designation removed (AC-5 is mandatory).
+  - F2 (warning, no test that `_get_cycle_number` is gated): added explicit mock-call assertion to UT-1.
+  - F3 (warning, NT-2 file-absence weak): strengthened to assert `_write_status_bar()` is never called (zero invocations) in addition to file-absence check.
+  - F4 (warning, no cursor-behavior test): closed by Gap 3 + new NT-5 (negative grep for `_advance_event_cursor` source).
+  - F5 (warning, IT-5 parallel git race): rephrased to sequential execution within the same test.
+  - F6 (error/planning gap, validator): closed by Gap 2 + new UT-10.
+  - F7 (warning, PV-3 backward compat): added note that tests may require trivial config-mock removal after Phase 6 /loop deletion; core assertions stay intact.
+
+## Scope Expansion (newly locked, per PM gap resolutions)
+
+The original Phase 2 CONTEXT.md left two cycle_post.py items as open questions (the validator's `REQUIRED_FIELDS` and `_advance_event_cursor`). The PM has now locked both:
+
+- **`_validate_output()` (`cycle_post.py:109–133`, REQUIRED_FIELDS at line 49) is mode-gated.** Loop mode keeps existing required fields. Event mode swaps `cycle_number` for a task identifier (exact key TBD by implementer; minimum constraint: `cycle_number` not required, task identifier required, validation rejects clearly when missing).
+- **`_advance_event_cursor()` (`cycle_post.py:587–644`) is removed entirely.** `event_poll.py` is the single owner of cursor state per CONTEXT §2; loop mode has no event-cursor concept. Tests assert the function no longer exists in `cycle_post.py` source.
+
+Both items are now in #8701 scope. Tests UT-10 (validator) and NT-5 (cursor removal) cover them.
+
 ---
 
 ## Section 1 — Acceptance Criteria
@@ -30,9 +52,9 @@ Sourced from `CONTEXT.md` §5.5 "Acceptance" (lines 618–624) and "Deliverables
 
 | Category | Section | Approx Count | Covers |
 | --- | --- | --- | --- |
-| Unit (script-internal logic) | §3 | 8 | AC-1, AC-3, AC-4, AC-5, AC-6, AC-7, AC-9 |
+| Unit (script-internal logic) | §3 | 10 | AC-1, AC-3, AC-4, AC-5, AC-6, AC-7, AC-9; PM Gap 2 validator |
 | Integration (cross-script + git/forge) | §4 | 5 | AC-2, AC-3, AC-4, AC-9, AC-10 |
-| Negative (event-mode does NOT do X) | §5 | 4 | AC-2 (regression), AC-7, AC-8 |
+| Negative (event-mode does NOT do X) | §5 | 5 | AC-2 (regression), AC-7, AC-8; PM Gap 3 cursor removal |
 | Migration / backward compat | §6 | 3 | AC-2, AC-10 |
 | Manual smoke | §7 | 3 | AC-3, AC-4, AC-6, AC-10 |
 | Gating | §8 | — | AC-11 |
@@ -45,10 +67,10 @@ Sourced from `CONTEXT.md` §5.5 "Acceptance" (lines 618–624) and "Deliverables
 All unit tests live under `tests/` (per `CONTEXT.md` §5.5 lines 612–616). Use `pytest` style. Mock `subprocess.run`, `tracker.py`, `health_check.py`, and `gh` shell-outs to keep tests deterministic. Stub `config.py get event-driven <role>` to flip modes.
 
 ### UT-1 — `cycle_pre` event-mode skips cycle-counter increment
-- **Pre**: role config `event-driven: yes`. Existing `.squidsquad/<role>/iterations/` contains `iter-5.md` (current `_get_cycle_number()` at `cycle_pre.py:329–342` would return 6).
+- **Pre**: role config `event-driven: yes`. Existing `.squidsquad/<role>/iterations/` contains `iter-5.md` (current `_get_cycle_number()` at `cycle_pre.py:329–342` would return 6). **Spy / mock `_get_cycle_number` so any call is recorded (review F2).**
 - **Steps**: invoke `cycle_pre.py <role> --task <id>`.
-- **Expected**: `cycle-input.json` written. No `cycle_number` field is incremented (either omitted or fixed at 0 / null — implementation discretion per `CONTEXT.md` §5.5 line 602: "No cycle counter"). No new `iter-N.md` file is created.
-- **Verification**: assert `cycle-input.json` content + assert `iter-6.md` does NOT exist after invocation.
+- **Expected**: `cycle-input.json` written. `_get_cycle_number()` is **never called** (zero invocations recorded — assert the code path is gated, not just that the output is benign). No `cycle_number` field appears in the output JSON (omitted entirely is preferred; null or 0 are acceptable per OQ2 but the spy-based assertion is the load-bearing check). No new `iter-N.md` file is created.
+- **Verification**: assert `_get_cycle_number` spy invocation count is `0`; assert `cycle-input.json` does not contain a populated `cycle_number` field; assert `iter-6.md` does NOT exist after invocation.
 
 ### UT-2 — `cycle_pre` event-mode skips cross-agent health check
 - **Pre**: role config `event-driven: yes`. Mock `_run_script("health_check.py", "--json")` and assert it is NOT called.
@@ -92,11 +114,19 @@ All unit tests live under `tests/` (per `CONTEXT.md` §5.5 lines 612–616). Use
 - **Expected**: identical side effects to today: `iter-N.md` written, status transitions called, tracker comments posted, `git commit/push` invoked, status bar cleared to `idle|`.
 - **Verification**: assert all `tracker.py` calls match expected sequence; assert `iter-N.md` exists; assert `current-state` reads `idle|`.
 
-### UT-9 (bonus) — `event-driven: yes` + missing `--task` arg → clean error
+### UT-9 — `event-driven: yes` + missing `--task` arg → clean error (mandatory, review F1)
 - **Pre**: role config `event-driven: yes`. No `--task` supplied.
 - **Steps**: invoke `cycle_pre.py <role>`.
 - **Expected**: exit code non-zero (likely 1 or 2 — distinct from 42), stderr contains "task id required" or equivalent. No `cycle-input.json` written.
-- **Verification**: capture stderr, capture return code, assert no file produced. AC-5.
+- **Verification**: capture stderr, capture return code, assert no file produced. AC-5. *(Promoted from "bonus" — this is the only test covering AC-5, which is a mandatory acceptance criterion.)*
+
+### UT-10 — `_validate_output()` is mode-gated (review F6 + PM Gap 2)
+- **Pre**: `_validate_output()` (`cycle_post.py:109–133`) updated to dispatch on the role's `event-driven` flag. Loop mode keeps `REQUIRED_FIELDS = {"role", "cycle_number", "cycle_type"}`. Event mode uses `{"role", "task_id", "cycle_type"}` (or equivalent task-identifier key — exact name TBD by implementer; the test's task-identifier field name is configured to match the implementer's choice).
+- **Sub-cases**:
+  - **UT-10a (event-mode pass)**: `cycle-output.json` contains `{"role": "skill", "task_id": "100", "cycle_type": "active"}` (NO `cycle_number`). Config: `event-driven: yes`. Invoke `cycle_post.py skill`. Expect validation passes; the script proceeds past the validator (no early exit on field-missing error).
+  - **UT-10b (loop-mode reject)**: `cycle-output.json` contains `{"role": "skill", "cycle_type": "active"}` (NO `cycle_number`, NO `task_id`). Config: `event-driven: no`. Invoke. Expect validation fails clearly — stderr names `cycle_number` as the missing field, script exits non-zero before any side effects.
+  - **UT-10c (event-mode reject — no task identifier)**: `cycle-output.json` contains `{"role": "skill", "cycle_type": "active"}` (NO task identifier of any kind). Config: `event-driven: yes`. Invoke. Expect validation fails clearly — stderr names the missing task identifier field, script exits non-zero before any side effects.
+- **Verification**: capture stderr and return codes for each sub-case; assert per-sub-case expectations above.
 
 ---
 
@@ -128,9 +158,9 @@ Integration tests exercise the full `cycle_pre → creative work → cycle_post`
 - **Expected**: produced artifacts (`iter-N.md`, `cycle-input.json` shape, status transitions list, commit message format, status-bar transitions) match baseline byte-for-byte except for timestamp drift.
 - **Verification**: directory diff vs baseline, ignoring timestamp lines.
 
-### IT-5 — Mixed-mode coexistence (AC-10)
+### IT-5 — Mixed-mode coexistence (AC-10, review F5)
 - **Pre**: role `skill` is `event-driven: yes`; role `pm` is `event-driven: no`. Same repo, same scripts.
-- **Steps**: in parallel, run `cycle_pre.py skill --task 200` and `cycle_pre.py pm` (no task).
+- **Steps**: **sequentially** within the same test, run `cycle_pre.py skill --task 200`, then run `cycle_pre.py pm` (no task). Sequential execution avoids git lock contention and shared `.squidsquad/` write races; the verification only asserts per-role outputs which are identical under sequential vs parallel execution. If true parallel coexistence is desired in the future, the test must add explicit isolation (separate git worktrees or temp repos).
 - **Expected**: `skill` follows the task-cycle path, `pm` follows the time-cycle path. Each writes its own `cycle-input.json` correctly. No global state interferes.
 - **Verification**: assert `.squidsquad/skill/cycle-input.json` has `task_id: "200"` and no `cycle_number`; assert `.squidsquad/pm/cycle-input.json` has the loop-mode shape with a numeric `cycle_number`.
 
@@ -146,11 +176,11 @@ Each test asserts that something the loop mode does is **not** done in event mod
 - **Expected**: no file is created in `.squidsquad/<role>/iterations/` matching `iter-*.md`. No counter file on disk is incremented. No `cycle_number` field in any output JSON (or it is null / 0 by design).
 - **Verification**: directory diff; grep counter files.
 
-### NT-2 — Event mode: no current-state file write
-- **Pre**: `event-driven: yes`. Pre-existing `.squidsquad/<role>/current-state` deleted.
+### NT-2 — Event mode: no current-state file write (review F3)
+- **Pre**: `event-driven: yes`. Pre-existing `.squidsquad/<role>/current-state` deleted. **Spy / mock `_write_status_bar()` (at `cycle_pre.py:90–99` and `cycle_post.py:92–101`) so every invocation is recorded.**
 - **Steps**: run a full task cycle.
-- **Expected**: `.squidsquad/<role>/current-state` file is NOT recreated. (Calls to `_write_status_bar()` at `cycle_pre.py:90–99` and `cycle_post.py:92–101` become no-ops in event mode.) AC-8.
-- **Verification**: assert file absence after cycle.
+- **Expected**: (a) `_write_status_bar()` invocation count across the entire `cycle_pre → cycle_post` run is **zero** — the function is gated, not merely a no-op; (b) `.squidsquad/<role>/current-state` file is NOT recreated. (Both assertions required — file-absence alone is insufficient because an intermediate write could be cleared by a later step and the test would still pass.) AC-8.
+- **Verification**: assert spy invocation count == 0; assert file absence after cycle.
 
 ### NT-3 — Event mode: no cross-agent health check
 - **Pre**: `event-driven: yes`. Patch `subprocess.run` to record every command invoked.
@@ -163,6 +193,12 @@ Each test asserts that something the loop mode does is **not** done in event mod
 - **Steps**: invoke full pipeline.
 - **Expected**: the produced log file matches `task-300-*.md` (or chosen task-keyed convention). No file matches `iter-*.md` for this cycle. AC-4.
 - **Verification**: glob assertions.
+
+### NT-5 — `_advance_event_cursor` is removed from `cycle_post.py` (PM Gap 3, review F4)
+- **Pre**: `cycle_post.py` updated to remove the `_advance_event_cursor` function (lines 587–644 in pre-change code). `event_poll.py` is the single owner of cursor advancement per CONTEXT §2 "Cursor advancement = per-event, atomic."
+- **Steps**: `git grep -n '_advance_event_cursor' references/scripts/cycle_post.py` (or equivalent Grep of the source).
+- **Expected**: zero matches. The function definition AND any call sites must be gone from `cycle_post.py`. (Calls in `event_poll.py` or other event-stream readers remain valid; this test asserts only that `cycle_post.py` no longer participates in cursor advancement.)
+- **Verification**: assert grep output is empty. Loop mode has no event-cursor concept; event mode delegates cursor advancement entirely to `event_poll.py`.
 
 ---
 
@@ -236,7 +272,8 @@ Per `CONTEXT.md` §5.5, §6.1, §6.3:
 - Confirms AC-10 (dual-mode counters don't conflict).
 
 ### PV-3 — Phase 6 cleanup readiness
-- When #8698 ships (`CONTEXT.md` §7.1 lines 728–739), the /loop branches in both scripts can be deleted. The unit tests in this plan that target event mode (UT-1 through UT-6, UT-9; IT-1, IT-2, IT-3, IT-5; NT-1 through NT-4) **must continue to pass** after that deletion. The loop-mode regression tests (UT-7, UT-8, IT-4, MT-1, MT-2, MT-3 loop arm) are expected to be removed alongside the /loop code by #8698.
+- When #8698 ships (`CONTEXT.md` §7.1 lines 728–739), the /loop branches in both scripts can be deleted. The unit tests in this plan that target event mode (UT-1 through UT-6, UT-9, UT-10a/c; IT-1, IT-2, IT-3, IT-5; NT-1 through NT-5) **must continue to pass** after that deletion. The loop-mode regression tests (UT-7, UT-8, UT-10b, IT-4, MT-1, MT-2, MT-3 loop arm) are expected to be removed alongside the /loop code by #8698.
+- **Note (review F7)**: tests may require trivial config-mock removal after Phase 6 /loop deletion — the post-Phase-6 scripts become single-mode (events-only) and may stop reading the `event-driven` flag entirely; the `event-driven: yes` mock then becomes a no-op. The **core assertions** (no cycle counter, task-keyed log, validator accepts event-mode shape, `_advance_event_cursor` absent, no `_write_status_bar` calls, etc.) **remain intact and must continue to pass**.
 - Confirms #8701's events-mode behavior survives the cleanup gate.
 
 ---
@@ -249,8 +286,8 @@ These gaps were not explicitly closed by `CONTEXT.md` §5.5 and may need a Phase
 2. **`cycle_number` field semantics in event-mode `cycle-input.json`**: explicit absence vs `null` vs `0` is not specified. UT-1 / NT-1 assertions assume any of those is acceptable; pick one before authoring.
 3. **Task id transport**: how does the per-task `cycle_pre.py` invocation receive the task id? CLI flag (`--task <id>`), env var (`SQUIDSQUAD_TASK_ID`), or read from a sentinel file? `CONTEXT.md` §5.5 line 595 says "Inputs: task id" but doesn't specify mechanism. **Recommended**: CLI flag for testability. Lock before unit-test authoring.
 4. **Status-line fallback during the gap between #8701 and #8700**: if #8701 ships first, does event-mode `cycle_pre`/`cycle_post` still write `current-state` for the file-based status line, or skip it (relying on #8700's HTTP path that may not exist yet)? AC-8 is binary today; may need a transition mode. **Recommended**: ship #8700 first or in the same train; otherwise add a config flag `status-line: file | http` that the scripts honor.
-5. **`cycle-output.json` shape change**: does event-mode `cycle-output.json` add a `task_id` field at top level, or reuse the existing `status_transitions[0].number`? Either is implementation discretion; `cycle_post.py:49` validates `REQUIRED_FIELDS = {"role", "cycle_number", "cycle_type"}` which conflicts with AC-1's "no cycle counter". The validator must be relaxed for event mode.
-6. **Event bus cursor advancement** (`cycle_post.py:587–644`): in event mode, the cursor still advances at `cycle_post` time. Is this correct for per-task semantics, or does the cursor advance differently (e.g., one-per-event via `event_poll.py`)? `CONTEXT.md` §2 lines 58–65 says "Cursor advancement = per-event, atomic" which suggests `cycle_post.py` should NOT batch-advance in event mode — the `event_poll.py` loop owns advancement. Confirm with #8694 author.
+5. **~~`cycle-output.json` shape change~~ — CLOSED (PM Gap 2)**: `_validate_output()` is mode-gated. Loop mode keeps `REQUIRED_FIELDS = {"role", "cycle_number", "cycle_type"}`. Event mode uses `{"role", "task_id", "cycle_type"}` (or equivalent task-identifier — exact event-mode field names TBD by implementer; minimum: `cycle_number` NOT required, task identifier IS required). Covered by **UT-10** (§3). Scope expansion noted at top of this plan.
+6. **~~Event bus cursor advancement~~ — CLOSED (PM Gap 3)**: `_advance_event_cursor` is REMOVED from `cycle_post.py`. `event_poll.py` is the single owner of cursor state per CONTEXT §2. Covered by **NT-5** negative grep (§5). Scope expansion noted at top of this plan.
 7. **DM end-of-task wait** (`CONTEXT.md` §2 lines 89–94, §9 diagram line 794–795): DM's "task" spans a full PR-merge wait. Does the per-task `cycle_pre`/`cycle_post` invocation block for the wait, or is the wait inside the creative phase between the two scripts? Likely the latter, but #8701 implementation may need to handle longer-running cycles. Flag for dev agent.
 
 ---

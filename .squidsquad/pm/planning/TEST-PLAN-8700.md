@@ -7,6 +7,22 @@
 **Co-ship dependencies**: #8695 (`bootup_complete` flag on `AgentState`), #8704 (TUI architecture is shared)
 **Source**: `.squidsquad/pm/planning/CONTEXT.md` §5.4, §5.7, §6.3, §11 glossary "TUI"
 
+## Revision Log
+
+- **2026-05-17** — Revised per deepseek R1 review (2 errors + 8 warnings) + 4 PM-locked gap resolutions.
+  - **PM Gap 1 (LOCKED) — TUI process model**: TUI runs as a **separate process** consuming harness HTTP endpoints (CONTEXT §5.7 updated). Open Question 6 closed. TC-I4 precondition restated: "stop harness; start panel as a separate process; observe panel startup-degraded handling."
+  - **PM Gap 4 (LOCKED) — Status line refresh interval**: hard-coded 5s default, no config knob in v1. Open Question 5 removed (resolved). TC-U4 precondition updated to "hard-coded 5s interval; assert 6 requests in 30s ± 1."
+  - F1 (error, TC-N2 contradiction): split verification — (a) panel does NOT independently check `current-state` mtime or emit stale warning for events-mode roles when source frozen; (b) `bootup_complete` and `status` fields update via harness AgentState (don't depend on file); `current_phase` staleness when source frozen is expected, not a bug.
+  - F2 (error, TUI process model — closed by Gap 1 above).
+  - F3 (warning, HTTP error response coverage): added TC-N5 — 500/502/404/malformed JSON / shape mismatch handling.
+  - F4 (warning, refresh independence from agent activity): TC-U4 explicitly runs against a mock harness with zero agent activity.
+  - F5 (warning, TC-N4 tracer scope): expanded to cover `/tmp`, `~/.cache`, repo root outside `.squidsquad/`; `context-pressure` writes locked to NOT preserved.
+  - F6 (warning, TC-U4 counts only `/agents`): middleware now counts ALL HTTP requests to the mock harness across all endpoints.
+  - F7 (warning, TC-T4 conflated propagation paths): assertions decoupled per panel; human-queue panel honours the 5–10s cache TTL on top of refresh cadence.
+  - F8 (warning, SIGTERM exit code): changed verification to "no unhandled exception, exit 0 or 143 acceptable" since graceful SIGTERM is not in any AC.
+  - F9 (warning, mode detection edge cases): noted dependency on `compose.py`'s existing `_read_config_value()` tests; no separate edge-case fixtures needed if reused.
+  - F10 (warning, refresh interval source — closed by Gap 4 above).
+
 ---
 
 ## 1. Acceptance Criteria
@@ -41,7 +57,7 @@ Verbatim from CONTEXT.md §5.4 (plus measurable refinements in brackets):
    state, `bootup_complete` flag, health (CONTEXT.md §5.4 final bullet).
 8. **A8** — Status line panel and #8704 human-queue panel share the harness
    API base URL (resolved from `.squidsquad/.harness-port`) and the same
-   refresh cadence (CONTEXT.md §5.7).
+   refresh cadence (**hard-coded 5s in v1 per PM Gap 4 / CONTEXT.md §5.7**).
 9. **A9** — Once #8698 ships, the file-based rendering path is removed
    (CONTEXT.md §5.4 deliverable 6, §7.1). *Verified by a Phase 6 follow-up,
    not gated on this task's ship.*
@@ -59,7 +75,7 @@ Verbatim from CONTEXT.md §5.4 (plus measurable refinements in brackets):
 | ------- | ---------------------- | ----- | ---------- |
 | 3       | Unit                   | 5     | A1, A3, A5, A6, A2 |
 | 4       | Integration            | 5     | A1, A2, A3, A4, A5, A7 |
-| 5       | Negative / isolation   | 4     | A1 |
+| 5       | Negative / isolation   | 5     | A1, robustness |
 | 6       | Manual smoke           | 3     | A1, A2, A3, A6 |
 | 7       | TUI cross-task (#8704) | 4     | A8 |
 | 8       | Gating conditions      | n/a   | (process) |
@@ -94,14 +110,13 @@ Verbatim from CONTEXT.md §5.4 (plus measurable refinements in brackets):
 - **Steps**: Call the mode-detection helper for each.
 - **Expected**: Both return the loop-mode rendering branch.
 - **Verification**: `pytest tests/test_statusline_mode.py::test_events_flag_no_or_absent`.
+- **Note** (review F9): edge cases (whitespace padding, trailing whitespace, case variations, key under wrong role section) are covered by `compose.py`'s existing `_read_config_value()` tests. If the panel reuses that function (recommended per A6), no additional edge-case fixtures are needed here. If the panel reimplements rather than reuses, add equivalent edge-case tests as TC-U2b/TC-U3b.
 
-### TC-U4 — Refresh loop respects configured interval (A4, A5)
-- **Precondition**: Status line panel configured with refresh interval = 3s.
-- **Steps**: Run the refresh loop for 30s against a mock harness with a
-  request-counting middleware.
-- **Expected**: Total request count to `/agents` (or `/status`) is between
-  9 and 11 (one per refresh ± boundary).
-- **Verification**: `pytest tests/test_statusline_refresh.py::test_refresh_cadence`.
+### TC-U4 — Refresh loop respects hard-coded 5s interval (A4, A5)
+- **Precondition**: TUI starts with the **hard-coded 5s interval — no config knob in v1** (PM Gap 4 locked). Mock harness has **zero agent activity, zero events, zero state changes** during the test window (review F4 — ensures the refresh loop is independent of agent cycles, not coupled to event callbacks).
+- **Steps**: Run the refresh loop for 30s against a mock harness with a **request-counting middleware that counts ALL HTTP requests across all endpoints** (review F6 — not just `/agents` or `/status`).
+- **Expected**: Total HTTP request count to the mock harness is **6 ± 1** (30s / 5s = 6 refreshes). If the panel composes from `/agents` + per-agent calls, the total would exceed 6 and the test must fail (A4 hard constraint: ≤1 HTTP call per refresh per panel).
+- **Verification**: `pytest tests/test_statusline_refresh.py::test_refresh_cadence`. Assert middleware total-request counter is in `[5, 7]` and assert no events were emitted on the mock harness during the test window.
 
 ### TC-U5 — File-based fallback path still functions for /loop roles (A2)
 - **Precondition**: Role has `event-driven: no` in fixture `config.md`;
@@ -154,9 +169,8 @@ Verbatim from CONTEXT.md §5.4 (plus measurable refinements in brackets):
 - **Verification**: stdout contains the marker text in every refresh
   frame for `dm`.
 
-### TC-I4 — Harness unreachable: degraded indicator, no crash (A4 negative slice)
-- **Precondition**: Role `skill` flipped to `event-driven: yes`. Stop the
-  harness before the panel starts.
+### TC-I4 — Harness unreachable: degraded indicator, no crash (A4 negative slice, PM Gap 1 locked)
+- **Precondition**: Role `skill` flipped to `event-driven: yes`. **Stop the harness; start the panel as a separate process** (PM Gap 1 — TUI is a separate process consuming harness HTTP per CONTEXT §5.7, NOT in-process inside `harness.py`). The separate-process model makes this test viable: stopping the harness does not stop the TUI.
 - **Steps**: Run the panel for 15s. Verify the panel does not raise an
   uncaught exception, log spew is bounded, and CPU stays below the A4
   threshold despite connection-refused errors.
@@ -164,8 +178,7 @@ Verbatim from CONTEXT.md §5.4 (plus measurable refinements in brackets):
   TBD by the implementer — at minimum, distinguishable from healthy and
   from `events-mode, awaiting boot`). Panel process is still alive at
   end of test.
-- **Verification**: assert exit code 0 on SIGTERM; assert presence of
-  degraded marker; assert no unhandled traceback in captured stderr.
+- **Verification**: assert panel process terminates without unhandled exception on SIGTERM — **exit code 0 or 143 acceptable** (review F8: graceful SIGTERM trapping is not declared in any AC, so default OS exit 143 = 128+15 is acceptable); assert presence of degraded marker in stdout capture; assert no unhandled traceback in captured stderr.
 
 ### TC-I5 — Refresh latency: state change visible within 2× interval (A4, A5)
 - **Precondition**: Refresh interval = 3s. Agent state changes (e.g.
@@ -190,18 +203,16 @@ Verbatim from CONTEXT.md §5.4 (plus measurable refinements in brackets):
   the role's own `config.md` is permitted (mode detection).
 - **Verification**: trace log filter on the prohibited paths returns empty.
 
-### TC-N2 — Panel does NOT depend on `cycle_pre` / `cycle_post` writing state files (A1)
+### TC-N2 — Panel does NOT independently check `current-state` mtime for events-mode roles (A1, review F1)
 - **Precondition**: Same as TC-N1, plus block writes by simulating
   `cycle_pre.py`/`cycle_post.py` not running (no recent `current-state`
-  mtime updates for the events-mode role).
+  mtime updates for the events-mode role). Source `current-state` file is frozen.
 - **Steps**: Run panel for 30s.
-- **Expected**: Panel rendering for the events-mode role remains correct
-  and current — sourced from `GET /agents/{role}` only. No "stale" health
-  warning derived from `current-state` mtime should fire for events-mode
-  roles. (`statusline.sh` lines 91–119 mtime logic is bypassed in events
-  mode.)
-- **Verification**: assert phase/task fields update when the harness
-  state updates, even though `current-state` mtime is frozen.
+- **Expected** (two distinct assertions):
+  - **(a) No stale-warning regression**: the panel does NOT independently check `current-state` mtime or emit a "stale" warning for events-mode roles, even when the source file is frozen. `statusline.sh` lines 91–119 mtime logic is bypassed in events mode.
+  - **(b) Harness-driven fields update**: the panel's `bootup_complete` and `status` fields DO update via harness `AgentState` changes (those don't depend on `current-state` file reads). When the harness's in-memory `bootup_complete` or `status` for the role changes, the next refresh reflects the change.
+  - **Note**: `current_phase` staleness when the source `current-state` file is frozen is **expected** (per `harness.py:710-712`, `current_phase` is file-derived) and **not a panel bug**. The test does NOT assert that `current_phase` updates — only that `bootup_complete` and `status` do.
+- **Verification**: (a) trace log shows no read of agent-side `current-state` files by the panel process; (b) flip `state.agents[<role>].bootup_complete` via test harness; assert next panel refresh reflects the new value while `current_phase` remains stale (unchanged).
 
 ### TC-N3 — Panel does NOT poll the forge directly (A1)
 - **Precondition**: Network-egress filter or `gh` shim that records calls.
@@ -212,19 +223,23 @@ Verbatim from CONTEXT.md §5.4 (plus measurable refinements in brackets):
   rendering.)
 - **Verification**: shim invocation count is 0; egress filter log empty.
 
-### TC-N4 — Panel does NOT write any files (A1)
-- **Precondition**: Run panel under a writable-path tracer.
+### TC-N4 — Panel does NOT write any files (A1, review F5)
+- **Precondition**: Run panel under a writable-path tracer covering **`.squidsquad/`, `/tmp` (or platform equivalent), `~/.cache`, and the repo root outside `.squidsquad/`**. Tracer scope is explicit to prevent the panel from writing temp/cache/debug files outside `.squidsquad/` and still passing this test.
 - **Steps**: Run for 60s spanning multiple refreshes and a harness
   reconnect.
-- **Expected**: Zero writes to `.squidsquad/` (no `.tmp + mv` activity,
-  no log file appends from the panel itself — logging is to stderr only).
-- **Verification**: trace log shows no write/create events under
-  `.squidsquad/`. *Note*: today's `statusline.sh` writes
-  `.squidsquad/<role>/context-pressure` (line 72) — this side-effect
-  should NOT be reproduced in the new panel since the harness owns
-  context-pressure exposure via `GET /agents/{role}/health`. Confirm
-  with implementer; if retained for back-compat, document the exception
-  here.
+- **Expected**: Zero writes to ALL traced paths (no `.tmp + mv` activity, no log file appends from the panel itself — logging is to stderr only). **`context-pressure` writes are LOCKED to NOT preserved** (review F5): today's `statusline.sh` writes `.squidsquad/<role>/context-pressure` (line 72) — the new panel MUST NOT reproduce this side-effect. The harness owns context-pressure exposure via `GET /agents/{role}/health`. No implementer carve-out is permitted.
+- **Verification**: trace log shows no write/create events under any traced path. Assertion is unconditional.
+
+### TC-N5 — Panel handles harness HTTP error responses without crashing (review F3)
+- **Precondition**: Mock harness reachable on the configured port but configured to return error responses for each sub-case.
+- **Steps**: For each sub-case, run the panel for 15s against the mock and capture stdout/stderr:
+  - (a) Mock returns HTTP 500 Internal Server Error on `/agents`.
+  - (b) Mock returns HTTP 404 on `/agents` (endpoint missing).
+  - (c) Mock returns HTTP 200 with a JSON body that does NOT contain the expected `agents` key (e.g. `{}` or `{"unexpected": []}`).
+  - (d) Mock returns HTTP 200 with valid shape, but per-agent records are missing expected fields (e.g. `status` present but `bootup_complete` absent).
+  - (e) Mock returns malformed JSON (e.g. `<html>` or truncated body).
+- **Expected**: In every sub-case the panel (1) does NOT crash, (2) renders a degraded indicator distinguishable from healthy, (3) continues to refresh on the next cadence tick, (4) for sub-case (d), renders whichever fields ARE present and treats missing fields as unknown/absent.
+- **Verification**: assert process alive at end of each sub-case; assert no unhandled traceback in stderr; assert degraded marker in stdout for (a), (b), (c), (e); for (d) assert available fields render and missing fields show an unknown indicator (not crash).
 
 ---
 
@@ -290,15 +305,15 @@ shared-base-URL contract must be enforceable at the point #8704 lands.
   bounded (no panel polls faster than the configured cadence; the
   scheduler does not race the panels against each other).
 
-### TC-T4 — State changes propagate to both panels consistently (A8)
+### TC-T4 — State changes propagate to both panels with decoupled latency bounds (A8, review F7)
 - **Precondition**: An agent transitions an issue to a `pending-human-*`
   status (which causes both the status-panel's agent-state and the
-  human-queue panel's queue to change).
-- **Steps**: Trigger the transition; sample both panel outputs.
-- **Expected**: Both panels reflect the change within ≤ 2 × the
-  configured refresh interval. The agent's status panel shows the new
-  phase and the human-queue panel shows the new pending-human item in
-  the same render window or adjacent windows.
+  human-queue panel's queue to change). Note: `GET /human/queue` is cached briefly (5–10s per CONTEXT §5.6) — the human-queue panel's propagation latency therefore differs from the status panel's.
+- **Steps**: Trigger the transition; sample both panel outputs at fine granularity for at least 20s.
+- **Expected** (decoupled per panel):
+  - **Status panel** reflects the agent's phase change within **≤ 2 × refresh interval** (= ≤ 10s at the locked 5s cadence).
+  - **Human-queue panel** reflects the new pending-human item within **≤ 2 × refresh interval + `/human/queue` cache TTL** (= ≤ 10s + 10s = ≤ 20s worst case).
+  - The previous "same render window or adjacent windows" expectation is removed — the cache TTL makes that assertion infeasible without cache invalidation on state transitions (which is not required by the AC).
 
 ---
 
@@ -368,22 +383,9 @@ shared-base-URL contract must be enforceable at the point #8704 lands.
 3. **Degraded indicator string** — TC-I4 references a "degraded indicator"
    but the concrete glyph/text is not specified in CONTEXT.md. Defer to
    implementer; capture the chosen marker in the test for assertion.
-4. **`context-pressure` writes** — today's `statusline.sh` writes
-   `.squidsquad/<role>/context-pressure` (line 72). CONTEXT.md does not
-   address whether the new panel preserves this behaviour. TC-N4 flags it.
-   Recommend: do NOT preserve; expose via `GET /agents/{role}/health`
-   instead (harness already reads it at `harness.py:716-721`).
-5. **Refresh interval source** — CONTEXT.md §5.4 says "2–5 second
-   refresh loop" and §5.7 says "refresh cadence (2–5 seconds)". Is the
-   cadence configurable via `config.md` (e.g. a new key under a `## TUI`
-   section) or hard-coded with a default? Defer to implementer; if
-   configurable, add a unit test covering the read path analogous to
-   TC-U4.
-6. **TUI panel host process** — CONTEXT.md §5.7 says "harness-served TUI"
-   but does not specify whether the TUI runs *inside* the `harness.py`
-   process or as a separate process consuming harness HTTP. Recommend
-   separate process for fault isolation; this plan's tests assume that
-   model. Flag for implementer confirmation.
+4. **`context-pressure` writes — LOCKED**: the new panel MUST NOT write `.squidsquad/<role>/context-pressure`. Harness owns context-pressure exposure via `GET /agents/{role}/health`. TC-N4 asserts this unconditionally.
+5. **~~Refresh interval source~~ — CLOSED (PM Gap 4)**: hard-coded 5s default, no config knob in v1. TC-U4 asserts 6 requests in 30s ± 1.
+6. **~~TUI panel host process~~ — CLOSED (PM Gap 1)**: TUI runs as a separate process consuming harness HTTP endpoints, NOT in-process inside `harness.py`. CONTEXT §5.7 updated. TC-I4 and §7 cross-task tests rely on this model.
 
 ---
 

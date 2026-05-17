@@ -5,6 +5,17 @@
 **Hard prereq**: #8692 (singleton enforcement) for any per-role flip; #8697 itself has no hard code prereq
 **Date**: 2026-05-17
 **Author**: pm-lead (planning subagent)
+
+## Revision Log
+
+- **2026-05-17** — Revised per deepseek R1 review (1 error + 4 warnings + 2 info) + 4 PM-locked gap resolutions.
+  - F1 (error, AC-4-M contradictory clause): removed the "reintroduction of the event-driven-workflow block — but ONLY if the role is flipped to `yes`" clause; added a separate AC-4b-M for the events-mode comparison.
+  - F2 (warning, fingerprint token inconsistency `forge-read` vs `forge-read pattern`): standardised on the bare token `forge-read` in both AC-1-M and AC-2-M.
+  - F3 (warning, hollow TC-N-1): TC-N-1 redefined with concrete steps + preconditions for the end-to-end lint check at deploy time.
+  - F4 (warning, classification completeness only at P1): added P0 automated coverage check that the union of `includes-loop.yml` and `includes-events.yml` covers the legacy `includes.yml` superset; PV-4 stays at P1 for correctness review.
+  - F5 (error, cross-manifest fallback regression untested): added TC-N-8 — `includes-events.yml` references a missing fragment under `event-driven: yes`; compose MUST fail loudly, never silently fall back to loop.
+  - F6 (info, L4 split open question framing): reframed §6.5 and §12.1 — L4 split is an implementation scope decision, not a PM relock (already permitted by CONTEXT §5.3).
+  - F7 (info, L4 boundary detection ambiguity): mandated that #8697 adds an explicit L4 marker (`<!-- L4: project instructions -->`) and TC-U-7 detection is defined exclusively in terms of that marker.
 **References**:
 - `.squidsquad/pm/planning/CONTEXT.md` §4 (Mode Separation Strategy), §5.3 (#8697 spec), §6.3 (pre-flip checklist), §11 (glossary)
 - `.squidsquad/pm/planning/RESEARCH-compose-boot.md` (compose architecture, includes.yml schema, hand-injected block survey)
@@ -26,15 +37,19 @@ Verbatim from CONTEXT.md §5.3 plus measurable refinements (suffixed `-M`):
 - **AC-6**: L4 project instruction files contain no /loop-specific language, or are explicitly split into mode-specific variants.
 
 **Measurable refinements**:
-- **AC-1-M**: Compose output for `event-driven: no` contains zero substring matches for the literal markers `<!-- sub-skill: event-driven-workflow -->`, `event_poll.py`, `Last Processed Event ID`, `bootup-complete`, `forge-read pattern`. Contains at least one of `cycle_pre.py`, `/loop`, `cycle-runner`.
+- **AC-1-M**: Compose output for `event-driven: no` contains zero substring matches for the literal markers `<!-- sub-skill: event-driven-workflow -->`, `event_poll.py`, `Last Processed Event ID`, `bootup-complete`, `forge-read`. Contains at least one of `cycle_pre.py`, `/loop`, `cycle-runner`. *(Token `forge-read` used uniformly with AC-2-M per review F2 — covers both bare `forge-read` and `forge-read pattern` forms.)*
 - **AC-2-M**: Compose output for `event-driven: yes` contains zero substring matches for `/loop 30m`, `cycle_pre.py`, `cycle_post.py`, `cycle-runner`. Contains at least one of `event_poll.py`, `Last Processed Event ID`, `forge-read`, `bootup-complete`.
 - **AC-3-M**: Recursive grep over every file under `references/sub-skills/common-loop/`, `references/sub-skills/common-events/`, and `references/sub-skills/roles/<role>/{loop,events}/` for the regex `event-driven:\s*(yes|no)` returns zero matches in fragment bodies. (Manifests are the only place the gate value appears.)
-- **AC-4-M**: Byte-identical diff (after newline-normalization) between the current deployed `.squidsquad/<role>/CLAUDE.md` (PRE-#8697, but rendered from the new compose stack with `event-driven: no`) and the new compose output. Allowable diffs: ordering changes that the manifest explicitly carries forward, and reintroduction of the event-driven-workflow block — but ONLY if the role is flipped to `yes`.
+- **AC-4-M** (loop-mode regression): Byte-identical diff (after newline-normalization) between the current deployed `.squidsquad/<role>/CLAUDE.md` (PRE-#8697) and the new compose output **rendered with `event-driven: no`**. Allowable diffs: ordering changes that the manifest explicitly carries forward. *(Review F1: the prior "reintroduction of the event-driven-workflow block ONLY if flipped to yes" clause was logically contradictory and has been removed. The events-mode comparison lives in AC-4b-M below.)*
+- **AC-4b-M** (events-mode comparison vs pre-#8697): Diff between the current deployed `.squidsquad/<role>/CLAUDE.md` (PRE-#8697) and the new compose output **rendered with `event-driven: yes`**. The ONLY allowable diff is the addition of the event-driven-workflow content sourced from a real fragment and wrapped in standard `<!-- sub-skill: ... -->` markers (no hand-injected residue), plus the full L1–L3 swap to events-mode fragments. Loop-mode artefacts (`cycle_pre.py`, `cycle_post.py`, `cycle-runner`, `/loop 30m`) must be absent.
 - **AC-5-M**: `git log --diff-filter=A` shows new file(s) under `references/sub-skills/common-events/` containing the migrated event-driven-workflow content; `git grep` for any unique token of that content (e.g., `Last Processed Event ID`) returns at least one source file under `references/`.
 - **AC-6-M**: Recursive grep over `.squidsquad/project/*.md` for the regex `/loop\b|cycle_pre|cycle_post|between cycles|next cycle|cycle counter|iter-\d+\.md` returns zero matches OR every match resides in a file whose name carries an explicit mode suffix (e.g., `pm-loop-instructions.md` / `pm-events-instructions.md`). The audit decision per hit is logged in `.squidsquad/pm/planning/L4-AUDIT-8697.md` (one row per hit: file, line, action = remove / generalize / split).
 
 **Backward-compat shim AC**:
 - **AC-7**: A role with only legacy `includes.yml` (no `-loop`/`-events` variant) still composes successfully under `event-driven: no`, emitting a one-line deprecation warning on stderr. This shim is documented as Phase 6 removal in #8698.
+
+**Classification coverage AC (P0, review F4)**:
+- **AC-8**: For each of the four roles (pm, qa, skill, dm), the **union of entries** in the new `includes-loop.yml` and `includes-events.yml` must cover the **superset of entries** in the legacy `includes.yml` (no fragment dropped silently during the classification pass). This is an automated coverage check at ship time, distinct from PV-4's per-entry correctness review which remains a P1 human review.
 
 ---
 
@@ -49,8 +64,9 @@ Verbatim from CONTEXT.md §5.3 plus measurable refinements (suffixed `-M`):
 | Integration — per-role end-to-end compose | §4.1–§4.2 | P0 | dev (skill) | AC-1, AC-2 |
 | Integration — flip round-trip | §4.3–§4.4 | P0 | dev (skill) | AC-4 |
 | Migration — #8699 closure | §5 | P0 | dev (skill) | AC-5 |
+| Classification coverage check | §5 TC-M-5 | P0 | dev (skill) | AC-8 |
 | L4 audit | §6 | P0 | pm | AC-6 |
-| Negative tests | §7 | P0 | dev (skill) | AC-3, AC-7 |
+| Negative tests | §7 | P0 | dev (skill) | AC-3, AC-7, AC-8 |
 | Comprehension (CQ) — agent instruction surface | §8 | P0 | pm | required (touches agent instructions) |
 | Manual smoke | §9 | P1 | pm + dev | pre-flip checklist |
 | Gating | §10 | n/a | pm | release gate |
@@ -108,10 +124,10 @@ must continue to pass.
 
 ### 3.7 TC-U-7: L4 layer composed identically across modes
 
-- **Precondition**: Same role, both modes. L4 directory `.squidsquad/project/` contains the same file set in both runs.
-- **Steps**: Compose role under `event-driven: no` capturing L4 region. Compose under `event-driven: yes` capturing L4 region. (L4 region = content between the last `<!-- /sub-skill: ... -->` of L1–L3 and EOF, OR the explicit L4 marker if one is added.)
-- **Expected**: Byte-identical L4 region between the two outputs.
-- **Verification**: `assert L4_loop == L4_events`.
+- **Precondition**: Same role, both modes. L4 directory `.squidsquad/project/` contains the same file set in both runs. **#8697 implementation MUST add an explicit L4 marker** of the form `<!-- L4: project instructions -->` immediately before the first L4 file's content in the composed output (review F7). The marker is a hard contract; all L4 boundary detection in this plan uses it exclusively.
+- **Steps**: Compose role under `event-driven: no` capturing the L4 region (content from `<!-- L4: project instructions -->` to EOF). Compose under `event-driven: yes` capturing the L4 region the same way.
+- **Expected**: Byte-identical L4 region between the two outputs. The L4 marker is present in both outputs at exactly one location.
+- **Verification**: `assert L4_loop == L4_events`; assert the marker appears exactly once in each composed CLAUDE.md.
 
 ### 3.8 TC-U-8: missing fragment listed in manifest errors clearly
 
@@ -211,6 +227,13 @@ For each role ∈ {pm, qa, skill, dm}:
 - **Expected**: At least one source file matches under `references/sub-skills/common-events/` (or a sibling per-role events tree, but the canonical content should live in `common-events/`).
 - **Verification**: `assert len(matches) >= 1 and any("common-events" in p for p in matches)`.
 
+### 5.5 TC-M-5: classification coverage — union covers legacy superset (P0 automated, review F4)
+
+- **Precondition**: For each of the four roles (pm, qa, skill, dm): the pre-#8697 legacy `includes.yml` is preserved as a baseline (either checked in or captured from the prior commit). New manifests `includes-loop.yml` and `includes-events.yml` exist.
+- **Steps**: Parse all three manifests' `includes:` lists for the role. Compute `legacy_set`, `loop_set`, `events_set`. Compute `union = loop_set ∪ events_set`.
+- **Expected**: `legacy_set ⊆ union` — every entry in the legacy manifest appears in at least one of the new manifests. Entries in BOTH new manifests are mode-agnostic (truly shared); entries in only one are mode-specific. No fragment was dropped silently during the classification pass.
+- **Verification**: For each role: `assert legacy_set.issubset(union)`, else fail naming the missing fragment(s). This is an automated coverage gate that complements the human review in PV-4 (which checks per-entry correctness of which mode an entry was assigned to).
+
 ---
 
 ## 6. L4 Audit (pre-flip checklist enforcement)
@@ -256,14 +279,16 @@ The audit emits each hit with file + line + 30 chars of surrounding context and 
 - **Expected**: Zero findings OR every finding has been resolved per `L4-AUDIT-8697.md` (either removed, generalized, or split into mode-specific variants `*-loop-*.md` / `*-events-*.md`).
 - **Verification**: Audit JSON shows clean OR audit log shows resolution.
 
-### 6.5 Mode-specific L4 split convention
+### 6.5 Mode-specific L4 split convention (already permitted by CONTEXT §5.3, review F6)
 
 If any L4 file cannot be cleanly generalized, the implementation splits it:
 - `shared-loop-instructions.md` (consumed only when `event-driven: no`)
 - `shared-events-instructions.md` (consumed only when `event-driven: yes`)
 - Unsuffixed `shared-instructions.md` remains mode-agnostic.
 
-`compose.py` L4 filtering (currently `compose.py:318–340`) is extended to honor a mode suffix in the file name. **Note**: extending L4 filtering is a scope expansion versus the "L4 is mode-agnostic" line in §2 / §4.3 of CONTEXT.md. The default approach (#8697 baseline) is to clean L4 so no split is needed. The split mechanism is a fallback only — usage of the split MUST be flagged in CONTEXT.md as a deviation and signed off by the human. **Open question** (escalate at planning review): is the L4 split mechanism in scope for #8697, or deferred to a follow-up if needed?
+`compose.py` L4 filtering (currently `compose.py:318–340`) is extended to honor a mode suffix in the file name. **CONTEXT.md §5.3 explicitly permits mode-specific L4 variants** ("L4 project instruction files contain no /loop-specific language, or are explicitly split into mode-specific variants"); the architecture already contemplates the split. The default approach (#8697 baseline) is to clean L4 so no split is needed; the split mechanism is a fallback.
+
+**Implementation scope decision (not PM relock):** should `compose.py`'s L4 layer include mode-suffix filtering in #8697, or should #8697 clean L4 files so no split is needed and defer the filtering code to a follow-up that first requires a split? Either path is consistent with CONTEXT.md. See §12.1.
 
 ---
 
@@ -271,9 +296,12 @@ If any L4 file cannot be cleanly generalized, the implementation splits it:
 
 **Test file**: `tests/test_compose_dual_mode_negative.py`
 
-### 7.1 TC-N-1: fragment with mode-conditional logic is rejected
+### 7.1 TC-N-1: fragment with mode-conditional logic is rejected at deploy time (review F3)
 
-Already covered in TC-U-5 — repeated here for completeness. The fragment lint MUST be wired into `compose.py deploy` so the failure surfaces at deploy time, not just at unit-test time.
+- **Precondition**: tmp role directory with a freshly-authored fragment file (under `references/sub-skills/common-events/` or `references/sub-skills/roles/<role>/events/`) containing the literal string `event-driven: yes` in a non-frontmatter, non-code-block context (e.g., a sentence that reads "If event-driven: yes, branch to X."). `includes-events.yml` references this fragment. Config returns `event-driven: yes`.
+- **Steps**: Run `python references/scripts/compose.py deploy <role>`.
+- **Expected**: Compose exits non-zero (`SystemExit`) with stderr naming (a) the offending fragment file path and (b) the matched line/token. No partial CLAUDE.md is written.
+- **Verification**: `pytest.raises(SystemExit)`; capture stderr; assert it contains the fragment file path. Confirms the lint is wired into `compose.py deploy` (deploy-time), not just exercised by the standalone lint unit test TC-U-5.
 
 ### 7.2 TC-N-2: missing `includes-events.yml` errors when config says `yes`
 
@@ -310,6 +338,13 @@ Already covered in TC-U-5 — repeated here for completeness. The fragment lint 
 - **Precondition**: `includes-events.yml` with `includes: []`.
 - **Expected**: Compose succeeds, output contains L1 + L2 + L4 only (no L3 sub-skill includes). Sanity warning to stderr is acceptable but not required.
 - **Verification**: Output is non-empty, contains L4 content, contains zero `<!-- sub-skill: -->` blocks beyond the entry template's own inline sub-skill content.
+
+### 7.8 TC-N-8: cross-manifest fallback regression — missing fragment under events mode (review F5)
+
+- **Precondition**: Role has BOTH `includes-loop.yml` AND `includes-events.yml`. `includes-events.yml` references a fragment file that does NOT exist on disk. Config returns `event-driven: yes`.
+- **Steps**: Run `python references/scripts/compose.py deploy <role>`.
+- **Expected**: Compose exits non-zero (`SystemExit`) with stderr naming (a) the missing fragment path and (b) the events manifest. The deploy MUST NOT silently fall back to `includes-loop.yml`. No partial CLAUDE.md is written.
+- **Verification**: `pytest.raises(SystemExit)`; assert stderr contains both the missing fragment path and `includes-events.yml`; assert `.squidsquad/<role>/CLAUDE.md` is unmodified (mtime or content equal to prior state). Distinct from TC-U-8 (generic missing-fragment detection) and TC-N-2 (entire events manifest missing): this test specifically prevents mode-selection bypass when the events manifest exists but is internally broken.
 
 ---
 
@@ -470,7 +505,7 @@ These are PM-run smoke checks, not automated. Each runs once per role during the
 ## 10. Gating Conditions
 
 **Hard prerequisites for #8697 SHIP**:
-- All P0 tests in §§3–8 PASS.
+- All P0 tests in §§3–8 PASS — including TC-M-5 classification coverage check (AC-8).
 - Human review of `tests/output/diff-8697-<role>.txt` (per TC-M-3) signs off the intentional diff between current deployed CLAUDE.md and new compose output for each of the four roles.
 - L4 audit (§6) is clean for `.squidsquad/project/` OR the audit log `L4-AUDIT-8697.md` shows each finding resolved.
 - Standard plan-checker + human approval (per Phase 5 process).
@@ -528,7 +563,7 @@ Generate a classification report `tests/output/classification-8697.md` (one row 
 
 Carried forward to planning review:
 
-1. **L4 split mechanism in scope?** §6.5 introduces an L4 mode-suffix split (`shared-loop-instructions.md` / `shared-events-instructions.md`) as a fallback. CONTEXT.md §4.3 says L4 is mode-agnostic. Lock: is the split mechanism part of #8697, or strictly out of scope (clean L4 only, no fallback)?
+1. **L4 split mechanism scope decision (implementation, not architecture)** — CONTEXT §5.3 already permits mode-specific L4 variants; this is not a PM relock. The engineering question is: should `compose.py`'s L4 layer include mode-suffix filtering in #8697 now, or should #8697 clean L4 files so no split is needed and defer the filtering code to a follow-up that first requires a split? Either path is consistent with CONTEXT.md.
 2. **Fragment lint scope** (TC-U-5). The lint rule "no `event-driven:` runtime branch in fragment bodies" needs a concrete regex. Suggested: reject any unquoted, non-code-block occurrence of `event-driven:\s*(yes|no)` outside of frontmatter. Lock at implementation.
 3. **TC-M-3 human review automation**. The intentional diff between current deployed and new compose output is reviewed by the human. Should it also be captured as a frozen snapshot test (assert byte-equal to a checked-in expected diff) for future regression detection?
 

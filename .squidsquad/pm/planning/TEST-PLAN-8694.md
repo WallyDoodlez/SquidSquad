@@ -6,6 +6,17 @@
 **Inputs**: `CONTEXT.md` §3, §5.1, §11 · `RESEARCH-harness-events.md` · `tracker.py:437-510` · `run_comprehension_test.py`
 **Bundle siblings**: #8692 (singleton, prereq), #8695, #8697, #8700, #8701, #8704
 
+## Revision Log
+
+- **2026-05-17** — Revised per deepseek R1 review (7 findings) + 4 PM-locked gap resolutions (TUI separate process, mode-gated validator, `_advance_event_cursor` removal, hard-coded 5s status-line refresh).
+  - F1 (error, dead "4.x" ref): added §4.8 IT-StopRequested integration test for `stop-requested` mid-task; traceability matrix repointed.
+  - F2 (warning, Case B gap): added §4.8b IT-CaseB for idle + event arrival.
+  - F3 (warning, duplicate grep guard): removed duplicate; consolidated into §6.6.
+  - F4 (warning, gap scenarios): added §4.9 IT-CursorGapInStream and §4.10 IT-CursorLongLag.
+  - F5 (warning, M-2.1 boot ambiguity): M-2.1 restated with explicit idle-boot precondition and verified branch.
+  - F6 (error, CQ asymmetry): removed `pr-merge-wait.md` from CQ spec `files`; Q5/Q6 answerable from `l1-base.md` + `comment-handling.md`; per-role events fragment locking noted under open questions.
+  - F7 (error, Probe A automatic reconnect): rephrased per CONTEXT §11 degraded-mode glossary (manual-recovery scenario).
+
 This plan describes what must be testable for the #8694 deliverable bundle:
 
 - `references/scripts/event_poll.py` (new executable)
@@ -29,7 +40,8 @@ Verbatim from `CONTEXT.md` §5.1, each followed by a measurable refinement (M-#)
 
 > "Agent boots and works correctly with the harness fully down — completes forge scan, enters retry loop, operates in degraded mode against the forge directly, does not crash or hang."
 
-- **M-2.1** — With `127.0.0.1:<harness-port>` refusing connections, a fresh agent session must (a) load `working-state.md`, (b) call `tracker.py work-queue <role>` exactly once before any harness call, (c) emit no uncaught exception, (d) attempt `POST /events` for `bootup-complete` and observe failure, (e) schedule a retry with backoff bounded by 5 minutes (§3.1 step 5).
+- **M-2.1** — **Precondition: working-state.md pre-seeded to idle (no in-progress task, no scan `Status: running`).** With `127.0.0.1:<harness-port>` refusing connections, a fresh agent session must (a) load `working-state.md`, (b) call `tracker.py work-queue <role>` exactly once before any harness call, (c) emit no uncaught exception, (d) attempt `POST /events` for `bootup-complete` and observe failure, (e) schedule a retry with backoff bounded by 5 minutes (§3.1 step 5).
+  - **Boot-with-in-progress variant (measurable refinement):** if working-state shows an in-progress tracker task, the agent boots → calls `tracker.py get-state <number>` to verify against forge BEFORE starting work. If forge state has changed (different role assigned, status != in-progress, etc.), the boot drops the task and falls through to fresh `work_queue()`. In this branch, `work_queue()` is NOT necessarily invoked first — the forge verification call is.
 - **M-2.2** — While the harness stays down, the agent picks up the top forge item and runs the task end-to-end (writing a status transition via `tracker.py`).
 - **M-2.3** — When the harness comes back, the next retry of `bootup-complete` succeeds (HTTP 200) and `event_poll.py` enters the listening loop within one retry interval.
 
@@ -138,7 +150,7 @@ Under `tests/test_comprehension_8694.py`:
 ### 3.7 Compose round-trip (AC-6)
 
 - **`test_event_mode_compose_includes_l1_base`** — Set `event-driven: yes` in a test config, run `compose.py deploy <role>` in a tmpdir, assert the produced CLAUDE.md contains the boot sequence header (e.g. `## Boot Sequence (Event Mode)`) AND no `l1-boot.md` was emitted as a standalone fragment.
-- **`test_no_mode_conditional_strings_in_event_fragments`** — Recursive grep guard (AC-5).
+- *(Mode-conditional grep guard is owned exclusively by §6.6 — see `test_no_mode_conditional_in_event_fragments`. Removed duplicate from this section per review F3.)*
 
 ---
 
@@ -196,6 +208,36 @@ Add under `tests/integration/test_event_mode_e2e.py` (skip with `@pytest.mark.in
 1. **Non-DM**: Add a comment to a non-active issue. Assert agent does NOT wake; only reads the comment when it next picks the issue up.
 2. **DM**: Place DM in PR-merge wait. Add a comment to that issue during the wait. Assert DM does NOT enter a sub-loop, completes the merge wait, and only re-reads comments at task completion (end of merge wait).
 
+### 4.8 `stop-requested` mid-task (CONTEXT §3.5) — IT-StopRequested
+
+1. Spawn agent on a tracker task; let it begin work and write `Status: in-progress` to working-state.
+2. Mid-task: POST `stop-requested` event to the harness.
+3. Assert the agent reads the event at cursor+1, advances the cursor atomically, but does NOT act on it (atomicity rule). The current task continues to run.
+4. Allow the task to reach its boundary (completion or natural stopping point).
+5. Assert at task boundary: agent **checkpoints `working-state.md`** (preserves cursor + final state) and **exits cleanly** (no dangling work, no half-written outputs).
+6. Restart the agent. Assert the boot path (§3.1) loads the checkpointed working-state and proceeds correctly.
+
+### 4.8b Idle + event arrival (CONTEXT §3.2 Case B) — IT-CaseB
+
+1. Drive the agent into idle: ensure `work_queue()` returns empty so the agent enters the improvement-scan cool-down loop. Verify `working-state.md ## Improvement Scan` shows `Status: idle`, `Next scan after: <future ts>`.
+2. While the agent is sleeping with timeout = remaining cool-down, POST a `status-transition` event to the harness for an item now assigned to this role.
+3. Assert: cool-down sleep is cancelled before `Next scan after`, the agent reads the event at cursor+1, runs `work_queue()` against the forge, picks up the next item (or stays idle if empty), and advances the cursor atomically.
+4. Verify cursor is monotonically advanced and the agent does NOT skip events between the prior cursor and the wake-causing event.
+
+### 4.9 In-stream gap (CONTEXT §2 first gap scenario) — IT-CursorGapInStream
+
+1. Start harness; emit a sequence of events with ids `[1, 2, 3, 5, 6]` (intentional gap at 4 — small missing range within the retained window; the deque has NOT rolled).
+2. Pre-set agent `Last Processed Event ID` to `2`.
+3. Boot agent; let `event_poll.py` poll forward.
+4. Assert: (a) agent logs a **warning** naming the missing event id (`4`), (b) cursor is advanced past the gap (eventually reaches `6`), (c) agent does NOT crash, (d) forge-read on next decision recovers any state that the missing event would have implied.
+
+### 4.10 Long cursor lag (CONTEXT §2 second gap scenario) — IT-CursorLongLag
+
+1. Pre-seed agent `Last Processed Event ID` to a cursor that is far behind the current head, but still within the retained window (e.g., 24h+ of idle accumulation; deque has NOT rolled).
+2. Accumulate 50+ events in the harness deque ahead of the cursor.
+3. Boot agent.
+4. Assert: agent **skims events sequentially** (does not jump-to-latest), cursor advances **incrementally** event-by-event (per-event atomic `.tmp` + `mv` write observed), no event is silently dropped, agent eventually reaches the current head, and forge-read on next decision absorbs any state that mattered.
+
 ---
 
 ## 5. Comprehension Test Specs (AC-1, AC-4)
@@ -222,6 +264,8 @@ The pipeline spawns a fresh Claude that may only `Read` the listed files, writes
 ### 5.2 `tests/comprehension/8694_spec.json` (complete, drop-in)
 
 > Note: file paths use the illustrative naming from `CONTEXT.md` §5.1. Implementation can rename per #8697; the spec must then be updated to match shipped paths.
+>
+> **Per-role fragments deliberately omitted (review F6):** the CQ spec validates the role-agnostic event-mode L1 base contract. Per-role events fragments (skill / pm / qa / dm) for role-specific behavior on top of the common contract are not yet locked (see §10 open questions) and are excluded from this spec to avoid asymmetric coverage. Questions Q5 (DM end-of-task) and Q6 (comment-driven route-back) are answerable from `l1-base.md` and `comment-handling.md` alone — the DM exception is documented in `comment-handling.md` as the role-agnostic contract.
 
 ```json
 {
@@ -232,8 +276,7 @@ The pipeline spawns a fresh Claude that may only `Read` the listed files, writes
     "references/sub-skills/common-events/cursor-management.md",
     "references/sub-skills/common-events/forge-read-pattern.md",
     "references/sub-skills/common-events/idle-cooldown-loop.md",
-    "references/sub-skills/common-events/comment-handling.md",
-    "references/sub-skills/roles/dm/events/pr-merge-wait.md"
+    "references/sub-skills/common-events/comment-handling.md"
   ],
   "questions": [
     {
@@ -437,10 +480,11 @@ Before flipping `event-driven: yes` for any role:
 
 ### 9.2 Failure-mode probes
 
-- **Probe A — Harness kill mid-operation**: stop the harness while a role is mid-task. Confirm:
-  - Agent does NOT pivot to forge-direct (negative test 6.3 in production).
-  - `event_poll.py` retries with capped backoff (verifiable from stderr log, retries ≤ 5 min apart).
-  - When harness restarts, agent reconnects via `event_poll.py` and the next event flows through.
+- **Probe A — Harness kill mid-operation** (per CONTEXT §11 "Degraded mode" glossary: mid-operation harness failure is a **manual-recovery** scenario, not auto-reconnect): stop the harness while a role is mid-task. Confirm:
+  - (a) Agent does NOT pivot to forge-direct (negative test 6.3 in production).
+  - (b) `event_poll.py` retries with capped 5-minute backoff (verifiable from stderr log).
+  - (c) Agent completes or checkpoints its current task and logs state to the forge.
+  - (d) After harness restart **AND agent restart (if needed)**, the agent boots via the L1 failsafe (§3.1) and recovers state from the forge. Automatic reconnection is **not** guaranteed by the architecture; this probe verifies the documented manual-recovery boundary.
 - **Probe B — Forced eviction gap**: pre-seed cursor before oldest retained event. Confirm agent logs eviction details, advances to oldest available id, does NOT crash.
 - **Probe C — Mid-task SIGKILL on agent**: working-state preserves cursor + in-progress fields. Restart agent. Confirm forge-verify path runs and the task resumes (or drops correctly).
 - **Probe D — Improvement-scan crash**: kill agent mid-scan. Confirm fresh boot restarts the scan idempotently and does not double-write `Last completed`.
@@ -463,7 +507,7 @@ These are forwarded to the human/PM rather than answered here.
 2. **`event_poll.py` invocation surface.** CONTEXT §5.1 says "instructions to invoke `event_poll.py` are composed into the event-mode L1 base." Should the invocation be (a) a direct bash command shown in the fragment, (b) wrapped by `cycle_pre.py`/`cycle_post.py` in events mode (overlapping with #8701), or (c) a thin wrapper script that handles re-launching? Not specified in CONTEXT. Recommend dev raises this in #8694's Discussion before implementing.
 3. **`--once` vs long-running.** CONTEXT §5.1 specifies cursor-based polling with stdout JSON-lines but does not lock whether `event_poll.py` exits after first batch (`--once`) or stays resident. Unit test 3.4 references both options. Suggest PM/dev align before writing the script's flag surface.
 4. **Cool-down config key.** CONTEXT §2/§3.6 says the cool-down value is read from `config.md` at scan-completion time but does not name the key. Recommend `improvement-scan-cooldown: 30m` (or numeric minutes); confirm with #8697 author since `_read_config_value()` is shared.
-5. **Per-role events-mode fragment depth.** §5.1 lists `roles/{pm,skill,qa,dm}/events/*.md` but only DM has a specific deliverable (`pr-merge-wait.md`). Whether PM/QA/skill need their own role-specific events fragments at all (or can rely on `common-events/`) is not locked. Likely PM-decision before dev pickup.
+5. **Per-role events-mode fragment depth.** §5.1 lists `roles/{pm,skill,qa,dm}/events/*.md` but only DM has a specific deliverable (`pr-merge-wait.md`). Whether PM/QA/skill need their own role-specific events fragments at all (or can rely on `common-events/`) **is not yet locked — deferred to implementation**. Per review F6, the CQ spec (§5.2) excludes per-role fragments to keep coverage symmetric across roles; Q5/Q6 must be answerable from the role-agnostic `l1-base.md` + `comment-handling.md`. When per-role fragments are locked, the spec's `files` list may be extended symmetrically across all four roles.
 6. **`event_poll.py` retry semantics on partial JSON.** What happens if the harness returns malformed JSON mid-stream (network truncation)? CONTEXT does not specify. Conservative default: log and retry from current cursor; do not advance. Flag for dev to confirm.
 
 ---
@@ -473,14 +517,16 @@ These are forwarded to the human/PM rather than answered here.
 | CONTEXT.md citation | Section here |
 |---------------------|--------------|
 | §3.1 (Case A — Boot) | AC-2, 4.5, 4.2, 6.5, CQ Q1, Q10 |
-| §3.2 (Case B — Idle/event) | 4.1, CQ Q4 |
+| §3.2 (Case B — Idle/event) | 4.8b (IT-CaseB), CQ Q4 |
 | §3.3 (Case C — After completion) | 4.1 (step 6), §7 smoke 1 |
 | §3.4 (Case D — Mid-task event) | 6.1, 6.2, CQ Q2 |
-| §3.5 (Case E — Special events) | CQ Q3 (unknown), 4.x stop-requested (manual) |
+| §3.5 (Case E — Special events: stop-requested) | 4.8 (IT-StopRequested), CQ Q3 (unknown) |
 | §3.6 (Idle cooldown loop) | 4.3, §7 smokes 3-4, CQ Q4, Q7 |
 | §3.7 (Comments + DM exception) | 4.7, CQ Q5, Q6 |
 | §5.1 deliverables (transition-on-handoff) | 4.6, CQ Q8 |
 | §2 (cursor atomic write) | 3.5, 6.4, CQ Q9 |
+| §2 (in-stream gap) | 4.9 (IT-CursorGapInStream) |
+| §2 (long cursor lag) | 4.10 (IT-CursorLongLag) |
 | §2 (eviction gap) | 4.4, §9.2 Probe B |
 | §11 (degraded mode boot-only) | 6.3, §9.2 Probe A |
 | §5.1 (event_poll.py spec) | 3.1-3.5, 4.1 |
