@@ -8,9 +8,10 @@
       "lift_when": "event-driven mode live; PM files post-Phase-5 doc realignment task"
     }
   ],
-  "last_scanned": "SKILL.md:sections-4-6",
+  "last_scanned": "SKILL.md:sections-7-8",
   "rotation_count": 44,
   "scan_history": [
+    {"file": "SKILL.md:sections-7-8", "date": "2026-05-17", "findings": 0, "note": "scoped scan under #8703 directive — sec 7 (Upgrade Instructions) verified non-arch refs intact (compose.py deploy-all, wizard.py ensure-labels, .install-spec.json optional path); sec 8 (Schema Changelog Historical) — verified legacy bugs/features/ dirs still present in .squidsquad/skill/, tracker.py reference accurate"},
     {"file": "SKILL.md:sections-4-6", "date": "2026-05-17", "findings": 0, "note": "scoped scan under #8703 directive — sec 4 (Ralph Loop) fully deferred; sec 5-6 verified non-arch refs: references/wizard/WIZARD.md, manifest.py, roles/dm/{manifest.yaml,SOUL.md,instructions.md}, sub-skills/capabilities/local_delivery/{setup.md,sub-skill.md}, presets/software-dev, state branch squid-squad. Deferred to post-Phase-5: SKILL.md line 270 says transitions via 'gh issue edit --add-label' but current guidance is tracker.py — that's how-an-agent-operates copy"},
     {"file": "SKILL.md:sections-1-3", "date": "2026-05-17", "findings": 0, "note": "scoped scan under #8703 directive — verified version frontmatter, dm/ structure, vault/ subdirs, label taxonomy; deferred /loop-architecture review"},
     {"file": "README.md", "date": "2026-05-17", "findings": 1, "fixes": ["clarified Code Review Model lives under Model Routing section, not its own section"]},
