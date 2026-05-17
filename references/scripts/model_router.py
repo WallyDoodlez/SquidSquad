@@ -305,10 +305,14 @@ def _tool_read(args):
         if not p.is_file():
             return f"ERROR: Not a file: {file_path}"
 
-        content = p.read_text(encoding="utf-8", errors="replace")
-        if len(content) > MAX_FILE_READ_BYTES:
-            content = content[:MAX_FILE_READ_BYTES] + \
-                f"\n\n[TRUNCATED — file exceeds {MAX_FILE_READ_BYTES} bytes]"
+        # Check file size before reading to avoid loading oversized files into memory
+        file_size = p.stat().st_size
+        if file_size > MAX_FILE_READ_BYTES:
+            with p.open("r", encoding="utf-8", errors="replace") as f:
+                content = f.read(MAX_FILE_READ_BYTES)
+            content += f"\n\n[TRUNCATED — file exceeds {MAX_FILE_READ_BYTES} bytes]"
+        else:
+            content = p.read_text(encoding="utf-8", errors="replace")
 
         # Add line numbers
         lines = content.splitlines()
