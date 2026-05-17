@@ -4,7 +4,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #7630 EPIC: Event-driven agent architecture — harness owns cycle, agents react to events (pending-test, high, role:skill) — Phases 1-3 done, Phase 4 code submitted. Monitor tool confirmed available via --strict-mcp-config (DM verified 2026-05-16). DM posted dual-mode wake design. QA actively verifying. Supersedes #6056, #5775, #5613
+- #7630 EPIC: Event-driven agent architecture — harness owns cycle, agents react to events (in-progress, high, role:skill) — QA verified zero gaps (55 tests pass). PR #8620 has merge conflict — routed back to skill for resolution. Once conflict resolved, needs DM to ship. Supersedes #6056, #5775, #5613
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — awaiting human greenlight
 - #6574 Zero-prereq install — gh repo creation + local forge fallback (pending, medium, role:skill)
 - #5855 Vault is static decision log, not living memory (pending, high, role:skill)
@@ -78,7 +78,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Constraints & Blockers
 
-- Event-driven architecture (#7630) Phase 4 at pending-test — Monitor tool confirmed available (DM verified via --strict-mcp-config). QA verifying implementation
+- Event-driven architecture (#7630) PR #8620 merge conflict — skill resolving, then DM ships. DM currently stalled (PID dead)
 - Large pending backlog (~40 tasks) awaiting human approval — pipeline idle when no work is approved
 
 ## Team State
