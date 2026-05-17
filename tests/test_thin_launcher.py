@@ -141,3 +141,137 @@ class TestThinLauncherBoot:
         path, script_type = boot_remote._find_boot_script(str(tmp_path), "skill")
         assert script_type == "thin"
         assert "thin_launcher" in str(path)
+
+
+# ---------------------------------------------------------------------------
+# Singleton enforcement (#8692)
+# ---------------------------------------------------------------------------
+
+class TestIsProcessAlive:
+    """Cross-platform PID liveness."""
+
+    def test_invalid_pid_is_not_alive(self):
+        assert thin_launcher._is_process_alive(None) is False
+        assert thin_launcher._is_process_alive(0) is False
+        assert thin_launcher._is_process_alive(-1) is False
+
+    def test_own_pid_is_alive(self):
+        assert thin_launcher._is_process_alive(os.getpid()) is True
+
+    def test_unlikely_pid_is_not_alive(self):
+        # 2**31 - 1 is well above any reasonable PID and below the max
+        # Windows/Linux PID. tasklist / os.kill should both report not-found.
+        assert thin_launcher._is_process_alive(2_147_483_646) is False
+
+
+class TestCheckSingleton:
+    """Read .claude-pid and report whether another agent is alive."""
+
+    def test_no_pid_file_returns_none(self, tmp_path):
+        (tmp_path / ".squidsquad" / "skill").mkdir(parents=True)
+        assert thin_launcher._check_singleton(str(tmp_path), "skill") is None
+
+    def test_corrupt_pid_file_returns_none(self, tmp_path):
+        d = tmp_path / ".squidsquad" / "skill"
+        d.mkdir(parents=True)
+        (d / ".claude-pid").write_text("not-a-pid", encoding="utf-8")
+        assert thin_launcher._check_singleton(str(tmp_path), "skill") is None
+
+    def test_stale_pid_returns_none(self, tmp_path):
+        d = tmp_path / ".squidsquad" / "skill"
+        d.mkdir(parents=True)
+        (d / ".claude-pid").write_text("2147483646", encoding="utf-8")
+        with patch("thin_launcher._is_process_alive", return_value=False):
+            assert thin_launcher._check_singleton(str(tmp_path), "skill") is None
+
+    def test_alive_pid_returns_pid(self, tmp_path):
+        d = tmp_path / ".squidsquad" / "skill"
+        d.mkdir(parents=True)
+        (d / ".claude-pid").write_text("12345", encoding="utf-8")
+        with patch("thin_launcher._is_process_alive", return_value=True):
+            assert thin_launcher._check_singleton(str(tmp_path), "skill") == 12345
+
+    def test_own_pid_treated_as_stale(self, tmp_path):
+        """Defensive: if our own PID is in the file (shouldn't happen) it's stale."""
+        d = tmp_path / ".squidsquad" / "skill"
+        d.mkdir(parents=True)
+        (d / ".claude-pid").write_text(str(os.getpid()), encoding="utf-8")
+        assert thin_launcher._check_singleton(str(tmp_path), "skill") is None
+
+
+class TestSingletonEnforcement:
+    """main() refuses to boot when another live agent of the same role exists."""
+
+    def test_refuses_when_live_pid_exists(self, tmp_path, capsys):
+        d = tmp_path / ".squidsquad" / "skill"
+        d.mkdir(parents=True)
+        (d / ".claude-pid").write_text("12345", encoding="utf-8")
+
+        with patch("thin_launcher.os.getcwd", return_value=str(tmp_path)), \
+             patch("thin_launcher._is_process_alive", return_value=True), \
+             patch("thin_launcher.subprocess.Popen") as mock_popen, \
+             patch("sys.argv", ["thin_launcher.py", "skill"]):
+            rc = thin_launcher.main()
+
+        assert rc == 3
+        mock_popen.assert_not_called()
+        err = capsys.readouterr().err
+        assert "REFUSED" in err
+        assert "12345" in err
+        assert "skill" in err
+
+    def test_force_flag_overrides_singleton(self, tmp_path):
+        """--force allows boot even when a live PID is recorded."""
+        d = tmp_path / ".squidsquad" / "skill"
+        d.mkdir(parents=True)
+        (d / ".claude-pid").write_text("12345", encoding="utf-8")
+
+        proc = MagicMock()
+        proc.pid = 99999
+        proc.wait.return_value = 0
+
+        with patch("thin_launcher.os.getcwd", return_value=str(tmp_path)), \
+             patch("thin_launcher._is_process_alive", return_value=True), \
+             patch("thin_launcher.subprocess.Popen", return_value=proc), \
+             patch("thin_launcher._get_effort_level", return_value="high"), \
+             patch("sys.argv", ["thin_launcher.py", "skill", "--force"]):
+            rc = thin_launcher.main()
+
+        assert rc == 0
+
+    def test_proceeds_when_pid_is_stale(self, tmp_path):
+        """Stale .claude-pid does not block boot."""
+        d = tmp_path / ".squidsquad" / "skill"
+        d.mkdir(parents=True)
+        (d / ".claude-pid").write_text("12345", encoding="utf-8")
+
+        proc = MagicMock()
+        proc.pid = 99999
+        proc.wait.return_value = 0
+
+        with patch("thin_launcher.os.getcwd", return_value=str(tmp_path)), \
+             patch("thin_launcher._is_process_alive", return_value=False), \
+             patch("thin_launcher.subprocess.Popen", return_value=proc) as mock_popen, \
+             patch("thin_launcher._get_effort_level", return_value="high"), \
+             patch("sys.argv", ["thin_launcher.py", "skill"]):
+            rc = thin_launcher.main()
+
+        assert rc == 0
+        # Boot actually launched claude (singleton check passed despite stale PID).
+        mock_popen.assert_called_once()
+
+    def test_proceeds_when_no_pid_file(self, tmp_path):
+        """No .claude-pid file → fresh boot proceeds normally."""
+        (tmp_path / ".squidsquad" / "skill").mkdir(parents=True)
+
+        proc = MagicMock()
+        proc.pid = 99999
+        proc.wait.return_value = 0
+
+        with patch("thin_launcher.os.getcwd", return_value=str(tmp_path)), \
+             patch("thin_launcher.subprocess.Popen", return_value=proc), \
+             patch("thin_launcher._get_effort_level", return_value="high"), \
+             patch("sys.argv", ["thin_launcher.py", "skill"]):
+            rc = thin_launcher.main()
+
+        assert rc == 0
