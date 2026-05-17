@@ -1,4 +1,13 @@
 {
+  "active_directives": [
+    {
+      "id": "#8703",
+      "rule": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships",
+      "applies_to": ["README architecture sections", "SKILL.md cycle/loop descriptions", "docs/ARCHITECTURE.md loop mechanics", "vault notes on cycle/loop", "references/ architecture docs"],
+      "still_allowed": ["per-item CHANGELOG entries", "per-issue Discussion comments", "shipping summaries", "bug-fix doc in code/tests", "non-architectural fixes (typos, dead links, config field names)"],
+      "lift_when": "event-driven mode live; PM files post-Phase-5 doc realignment task"
+    }
+  ],
   "last_scanned": "README.md",
   "rotation_count": 44,
   "scan_history": [
