@@ -67,6 +67,8 @@ FIELD_MAP = {
     "auto-merge": ("Auto Merge", "Enabled"),
     "branch-workflow": ("Branch Workflow", "Enabled"),
     "mandatory-human-approval": ("Mandatory Human Approval", "Enabled"),
+    "event-driven": ("Event Driven", "Enabled"),
+    "scan-idle-timeout": ("Event Driven", "Scan Idle Timeout"),
     "diagnostics": ("Diagnostics", "Enabled"),
     "upstream-reporting": ("Diagnostics", "Upstream Reporting"),
     "default-model": ("Model Routing", "Default Model"),
@@ -88,6 +90,12 @@ FIELD_MAP = {
     "branch-pattern": ("Git Branches", "Branch Pattern"),
     "harness-enabled": ("Harness", "Enabled"),
     "harness-port": ("Harness", "Port"),
+    # Event-driven architecture (#7630 Phase 3)
+    "event-timeout-minutes": ("Event Driven", "Timeout Minutes"),
+    "event-max-retries": ("Event Driven", "Max Retries"),
+    "event-poll-interval": ("Event Driven", "Poll Interval"),
+    "event-queue-cap": ("Event Driven", "Queue Cap"),
+    "scan-cooldown": ("Event Driven", "Scan Cooldown"),
     "effort-pm": ("Agent Effort", "pm"),
     "effort-skill": ("Agent Effort", "skill"),
     "effort-qa": ("Agent Effort", "qa"),
@@ -143,6 +151,12 @@ def _parse_all(text):
     return result
 
 
+# Fields that default to a value when absent from config.md (rather than exiting)
+_FIELD_DEFAULTS = {
+    "event-driven": "no",
+}
+
+
 def get_field(field):
     """Get a config field by short name or full name."""
     text = _read_config()
@@ -153,6 +167,8 @@ def get_field(field):
     else:
         val = _parse_field_in_text(text, field)
     if val is None:
+        if field in _FIELD_DEFAULTS:
+            return _FIELD_DEFAULTS[field]
         print(f"ERROR: Field '{field}' not found in config.md", file=sys.stderr)
         sys.exit(1)
     return val

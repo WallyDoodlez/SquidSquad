@@ -49,9 +49,13 @@ class TestCatalogCompleteness:
         assert not missing, f"Core emitted events missing from catalog: {missing}"
 
     def test_recognized_tier_contains_core_events(self):
+        """RECOGNIZED must contain core + L1 event-driven events (#7630)."""
+        core = self.CORE_RECOGNIZED | {
+            "assigned-to", "stop-requested", "shipped", "version-bump", "ack",
+        }
         actual = set(event_catalog.RECOGNIZED.keys())
-        missing = self.CORE_RECOGNIZED - actual
-        assert not missing, f"Core recognized events missing from catalog: {missing}"
+        missing = core - actual
+        assert not missing, f"Core recognized events missing: {missing}"
 
     def test_emitted_tier_is_non_empty(self):
         assert len(event_catalog.EMITTED) >= len(self.CORE_EMITTED)

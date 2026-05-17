@@ -379,7 +379,7 @@ def _find_boot_script(clone_root, role):
 
 
 def _spawn_terminal(clone_root, role, boot_script, script_type):
-    """Spawn a new terminal window running the boot script. Returns (success, message)."""
+    """Spawn a new terminal window running the boot script. Returns (success, message, terminal_pid)."""
     os_type = _detect_os()
     clone_root = Path(clone_root)
     script_path = str(boot_script)
@@ -393,7 +393,7 @@ def _spawn_terminal(clone_root, role, boot_script, script_type):
 
 
 def _spawn_windows(clone_root, role, script_path, script_type):
-    """Spawn on Windows using wt.exe or fallback."""
+    """Spawn on Windows using wt.exe or fallback. Returns (success, message, terminal_pid)."""
     wt = shutil.which("wt")
     if wt:
         try:
@@ -409,15 +409,16 @@ def _spawn_windows(clone_root, role, script_path, script_type):
                 cmd = [wt, "new-tab", "--title", f"squidsquad-{role}",
                        "-d", str(clone_root),
                        "bash", script_path]
-            subprocess.Popen(
+            proc = subprocess.Popen(
                 cmd,
                 creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
                 cwd=str(clone_root),
             )
             launcher = "thin launcher" if script_type == "thin" else "wt.exe"
-            return True, f"spawned via {launcher} (Windows Terminal)"
+            # wt.exe exits after creating the tab — proc.pid is short-lived (#7630 P-5)
+            return True, f"spawned via {launcher} (Windows Terminal)", proc.pid
         except Exception as e:
-            return False, f"wt.exe spawn failed: {e}"
+            return False, f"wt.exe spawn failed: {e}", None
 
     # Fallback: cmd /c start
     try:
@@ -430,23 +431,18 @@ def _spawn_windows(clone_root, role, script_path, script_type):
         else:
             cmd = ["cmd", "/c", "start", f"squidsquad-{role}",
                    "bash", script_path]
-        subprocess.Popen(
+        proc = subprocess.Popen(
             cmd,
             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
             cwd=str(clone_root),
         )
-        return True, "spawned via cmd /c start (fallback)"
+        return True, "spawned via cmd /c start (fallback)", proc.pid
     except Exception as e:
-        return False, f"Windows fallback spawn failed: {e}"
+        return False, f"Windows fallback spawn failed: {e}", None
 
 
 def _spawn_macos(clone_root, role, script_path, script_type):
-    """Spawn on macOS using Terminal.app via osascript.
-
-    Writes the shell command to a temporary .sh file so that AppleScript
-    never interpolates path characters (quotes, backslashes).  The temp
-    file self-deletes after execution.
-    """
+    """Spawn on macOS using Terminal.app via osascript. Returns (success, message, terminal_pid)."""
     tmp_path = None
     try:
         quoted_root = shlex.quote(str(clone_root))
@@ -456,8 +452,6 @@ def _spawn_macos(clone_root, role, script_path, script_type):
         else:
             run_cmd = f"cd {quoted_root} && bash {quoted_script}"
 
-        # Write to a temp .sh file to avoid AppleScript string interpolation
-        # issues with paths containing quotes, backslashes, or special chars.
         tmp = tempfile.NamedTemporaryFile(
             mode="w", suffix=".sh", prefix="squidsquad-boot-",
             delete=False,
@@ -465,34 +459,32 @@ def _spawn_macos(clone_root, role, script_path, script_type):
         tmp_path = tmp.name
         tmp.write("#!/bin/bash\n")
         tmp.write(run_cmd + "\n")
-        tmp.write(f"rm -f {shlex.quote(tmp_path)}\n")  # self-cleanup
+        tmp.write(f"rm -f {shlex.quote(tmp_path)}\n")
         tmp.close()
         os.chmod(tmp_path, 0o700)
 
-        # Temp path is safe (alphanumeric + hyphens from tempfile module),
-        # so no AppleScript escaping needed.
         apple_script = (
             f'tell application "Terminal" to do script '
             f'"bash {tmp_path}"'
         )
-        subprocess.Popen(
+        proc = subprocess.Popen(
             ["osascript", "-e", apple_script],
             cwd=str(clone_root),
         )
         launcher = "thin launcher" if script_type == "thin" else "Terminal.app"
-        return True, f"spawned via {launcher} (osascript)"
+        # osascript PID — indirect reference to Terminal.app (#7630 P-5)
+        return True, f"spawned via {launcher} (osascript)", proc.pid
     except Exception as e:
-        # Clean up temp file on failure — self-cleanup rm only runs on success.
         if tmp_path:
             try:
                 os.unlink(tmp_path)
             except OSError:
                 pass
-        return False, f"macOS spawn failed: {e}"
+        return False, f"macOS spawn failed: {e}", None
 
 
 def _spawn_linux(clone_root, role, script_path, script_type):
-    """Spawn on Linux using tmux."""
+    """Spawn on Linux using tmux. Returns (success, message, terminal_pid)."""
     tmux = shutil.which("tmux")
     if tmux:
         try:
@@ -507,19 +499,20 @@ def _spawn_linux(clone_root, role, script_path, script_type):
                 run_cmd = f"cd {quoted_root} && python {quoted_script} {role}"
             else:
                 run_cmd = f"cd {quoted_root} && bash {quoted_script}"
-            subprocess.Popen(
+            proc = subprocess.Popen(
                 [tmux, "new-session", "-d", "-s", session_name, run_cmd],
                 cwd=str(clone_root),
             )
             launcher = "thin launcher" if script_type == "thin" else "tmux"
-            return True, f"spawned via {launcher} (tmux session '{session_name}')"
+            # tmux new-session exits after creating the detached session — proc.pid is short-lived (#7630 P-5)
+            return True, f"spawned via {launcher} (tmux session '{session_name}')", proc.pid
         except Exception as e:
-            return False, f"tmux spawn failed: {e}"
+            return False, f"tmux spawn failed: {e}", None
 
     return False, (
         f"No terminal available. Manual boot:\n"
         f"  cd {clone_root} && python {script_path} {role}"
-    )
+    ), None
 
 
 # ---------------------------------------------------------------------------
@@ -572,10 +565,11 @@ def boot_agent(role, dry_run=False):
         return result
 
     # Spawn
-    success, msg = _spawn_terminal(clone_path, role, boot_script, script_type)
+    success, msg, terminal_pid = _spawn_terminal(clone_path, role, boot_script, script_type)
     result["action"] = "spawn"
     result["success"] = success
     result["message"] = msg
+    result["terminal_pid"] = terminal_pid
 
     # Clear sentinel on failure (on success, thin_launcher clears it)
     if not success:

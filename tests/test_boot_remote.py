@@ -361,7 +361,7 @@ class TestNeedsBootWithSentinel:
 
 
 class TestBootAgentLock:
-    @patch("boot_remote._spawn_terminal", return_value=(True, "spawned"))
+    @patch("boot_remote._spawn_terminal", return_value=(True, "spawned", 12345))
     @patch("boot_remote._find_boot_script", return_value=(Path("/tmp/start.sh"), "sh"))
     @patch("boot_remote._needs_boot", return_value=(True, "dead", "/tmp/clone"))
     def test_writes_sentinel_before_spawn(self, mock_needs, mock_script, mock_spawn, tmp_path):
@@ -374,7 +374,7 @@ class TestBootAgentLock:
         mock_write.assert_called_once()
         mock_clear.assert_not_called()  # Cleared by wrapper, not boot_remote on success
 
-    @patch("boot_remote._spawn_terminal", return_value=(False, "failed"))
+    @patch("boot_remote._spawn_terminal", return_value=(False, "failed", None))
     @patch("boot_remote._find_boot_script", return_value=(Path("/tmp/start.sh"), "sh"))
     @patch("boot_remote._needs_boot", return_value=(True, "dead", "/tmp/clone"))
     def test_clears_sentinel_on_spawn_failure(self, mock_needs, mock_script, mock_spawn, tmp_path):
@@ -383,6 +383,7 @@ class TestBootAgentLock:
              patch("boot_remote._clear_booting_sentinel") as mock_clear:
             result = boot_remote.boot_agent("skill")
         assert result["success"] is False
+        assert result.get("terminal_pid") is None
         mock_clear.assert_called_once()
 
     @patch("boot_remote._find_boot_script", return_value=(Path("/tmp/start.sh"), "sh"))
@@ -415,7 +416,7 @@ class TestCleanStaleRestart:
 
 
 class TestBootAgentCleansRestart:
-    @patch("boot_remote._spawn_terminal", return_value=(True, "spawned"))
+    @patch("boot_remote._spawn_terminal", return_value=(True, "spawned", 12345))
     @patch("boot_remote._find_boot_script", return_value=(Path("/tmp/start.sh"), "sh"))
     @patch("boot_remote._needs_boot", return_value=(True, "dead", "/tmp/clone"))
     @patch("boot_remote._write_booting_sentinel", return_value=True)
@@ -466,7 +467,7 @@ class TestSpawnMacosTempFile:
         """_spawn_macos writes the shell command to a temp .sh file."""
         script = tmp_path / "thin_launcher.py"
         script.write_text("# placeholder")
-        ok, msg = boot_remote._spawn_macos(tmp_path, "skill", script, "thin")
+        ok, msg, _pid = boot_remote._spawn_macos(tmp_path, "skill", script, "thin")
         assert ok is True
         assert "osascript" in msg
 
@@ -503,7 +504,7 @@ class TestSpawnMacosTempFile:
             return result
 
         with patch("boot_remote.tempfile.NamedTemporaryFile", side_effect=capture_tempfile):
-            ok, _ = boot_remote._spawn_macos(tmp_path, "skill", script, "thin")
+            ok, _, _pid = boot_remote._spawn_macos(tmp_path, "skill", script, "thin")
 
         assert ok is True
         assert len(written_files) == 1
@@ -532,7 +533,7 @@ class TestSpawnMacosTempFile:
             return result
 
         with patch("boot_remote.tempfile.NamedTemporaryFile", side_effect=capture_tempfile):
-            ok, _ = boot_remote._spawn_macos(tmp_path, "skill", script, "legacy")
+            ok, _, _pid = boot_remote._spawn_macos(tmp_path, "skill", script, "legacy")
 
         assert ok is True
         content = Path(written_files[0]).read_text()
@@ -561,7 +562,7 @@ class TestSpawnMacosTempFile:
             return result
 
         with patch("boot_remote.tempfile.NamedTemporaryFile", side_effect=capture_tempfile):
-            ok, msg = boot_remote._spawn_macos(special_dir, "skill", script, "thin")
+            ok, msg, _pid = boot_remote._spawn_macos(special_dir, "skill", script, "thin")
 
         assert ok is True
 
@@ -599,7 +600,7 @@ class TestSpawnMacosTempFile:
             return result
 
         with patch("boot_remote.tempfile.NamedTemporaryFile", side_effect=capture_tempfile):
-            ok, msg = boot_remote._spawn_macos(special_dir, "skill", script, "thin")
+            ok, msg, _pid = boot_remote._spawn_macos(special_dir, "skill", script, "thin")
 
         assert ok is True
 
@@ -618,7 +619,7 @@ class TestSpawnMacosTempFile:
         script.write_text("# placeholder")
 
         with patch("boot_remote.subprocess.Popen", side_effect=OSError("no osascript")):
-            ok, msg = boot_remote._spawn_macos(tmp_path, "skill", script, "thin")
+            ok, msg, _pid = boot_remote._spawn_macos(tmp_path, "skill", script, "thin")
 
         assert ok is False
         assert "macOS spawn failed" in msg

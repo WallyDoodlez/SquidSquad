@@ -1,0 +1,40 @@
+{
+  "monitor_tool_available": true,
+  "invocation_succeeded": true,
+  "notifications_received": 4,
+  "events_observed": [
+    {
+      "id": "c0ba7fb2",
+      "seq": 1,
+      "type": "smoke-test-event",
+      "ts": "2026-05-13T05:10:10+00:00",
+      "payload": "event #1 of 4"
+    },
+    {
+      "id": "0821d02d",
+      "seq": 2,
+      "type": "smoke-test-event",
+      "ts": "2026-05-13T05:10:12+00:00",
+      "payload": "event #2 of 4"
+    },
+    {
+      "id": "cfa5f7a0",
+      "seq": 3,
+      "type": "smoke-test-event",
+      "ts": "2026-05-13T05:10:14+00:00",
+      "payload": "event #3 of 4"
+    },
+    {
+      "id": "f388cc22",
+      "seq": 4,
+      "type": "smoke-test-event",
+      "ts": "2026-05-13T05:10:16+00:00",
+      "payload": "event #4 of 4"
+    }
+  ],
+  "latency_assessment": "Precise 2-second intervals between events: event 1→2 (+2s), event 2→3 (+2s), event 3→4 (+2s). No jitter or dropped events observed.",
+  "wake_behavior": "Async interrupt via task notifications. Each event delivered immediately as a separate task notification, not batch-polled. No polling required.",
+  "errors": null,
+  "raw_tool_result_summary": "Monitor started successfully (task bmabzeegu), streamed all 4 JSON events as notifications, completed within 15s timeout. All events delivered with precise timing.",
+  "conclusion": "Monitor tool works excellently for event-driven wake. Delivers async notifications in real-time, maintains event ordering, captures exact timestamps, and no polling overhead. Suitable for production event-driven workflows."
+}

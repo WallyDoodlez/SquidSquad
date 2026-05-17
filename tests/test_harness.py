@@ -730,5 +730,525 @@ class TestManualRebootClearsStoppingIntent(unittest.TestCase):
                              "Same PID still alive — stopping intent must NOT be cleared (#7637)")
 
 
+class TestEventLifecycleManager(unittest.TestCase):
+    """#7630 P-1/P-3: EventLifecycleManager disk persistence and in-flight tracking."""
+
+    def test_persist_and_load_round_trip(self):
+        """Event state (events + in_flight + dispatched) survives harness restart."""
+        import tempfile
+        from harness import EventStream, EventLifecycleManager
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".event-state.json"
+            with patch("harness.EVENT_STATE_FILE", state_file):
+                stream = EventStream()
+                mgr = EventLifecycleManager(stream)
+
+                event = {"id": "abc12345", "event_type": "test", "role": "skill"}
+                mgr.append(event)
+                mgr.dispatch("abc12345", "skill", event)
+
+                self.assertTrue(state_file.exists())
+
+                # Load into new manager
+                stream2 = EventStream()
+                mgr2 = EventLifecycleManager(stream2)
+                mgr2.load()
+
+                events = stream2.get_all()
+                self.assertEqual(len(events), 1)
+                self.assertEqual(events[0]["id"], "abc12345")
+                # In-flight state also restored
+                self.assertEqual(mgr2.get_in_flight("skill"), ["abc12345"])
+
+    def test_in_flight_tracking(self):
+        """Dispatch/ack lifecycle tracks per-role in-flight events."""
+        from harness import EventStream, EventLifecycleManager
+
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
+            stream = EventStream()
+            mgr = EventLifecycleManager(stream)
+
+            mgr.dispatch("evt1", "skill", {"id": "evt1"})
+            self.assertEqual(mgr.get_in_flight("skill"), ["evt1"])
+
+            result = mgr.ack("evt1", "skill")
+            self.assertTrue(result)
+            self.assertEqual(mgr.get_in_flight("skill"), [])
+
+    def test_ack_unknown_event_returns_false(self):
+        """Acking an event not in-flight returns False."""
+        from harness import EventStream, EventLifecycleManager
+
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
+            stream = EventStream()
+            mgr = EventLifecycleManager(stream)
+
+            result = mgr.ack("nonexistent", "skill")
+            self.assertFalse(result)
+
+    def test_in_flight_cap(self):
+        """Per-role in-flight queue respects cap. Dropped events excluded from _dispatched."""
+        from harness import EventStream, EventLifecycleManager
+
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
+            stream = EventStream()
+            mgr = EventLifecycleManager(stream, max_in_flight=2)
+
+            mgr.dispatch("evt1", "skill", {"id": "evt1"})
+            mgr.dispatch("evt2", "skill", {"id": "evt2"})
+            mgr.dispatch("evt3", "skill", {"id": "evt3"})  # should be dropped
+
+            self.assertEqual(len(mgr.get_in_flight("skill")), 2)
+            self.assertNotIn("evt3", mgr._dispatched)
+
+    def test_load_is_idempotent(self):
+        """Calling load() twice does not duplicate events (#7630 CRITICAL-2)."""
+        import tempfile
+        from harness import EventStream, EventLifecycleManager
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".event-state.json"
+            with patch("harness.EVENT_STATE_FILE", state_file):
+                stream = EventStream()
+                mgr = EventLifecycleManager(stream)
+                mgr.append({"id": "x1", "event_type": "test", "role": "skill"})
+
+                stream2 = EventStream()
+                mgr2 = EventLifecycleManager(stream2)
+                mgr2.load()
+                mgr2.load()  # second call should be no-op
+
+                self.assertEqual(len(stream2.get_all()), 1)
+
+
+class TestTerminalPidInAgentState(unittest.TestCase):
+    """#7630 P-6: terminal_pid in AgentState."""
+
+    def test_terminal_pid_in_slots(self):
+        from harness import AgentState
+        s = AgentState("skill")
+        self.assertIsNone(s.terminal_pid)
+
+    def test_terminal_pid_in_to_dict(self):
+        from harness import AgentState
+        s = AgentState("skill")
+        s.terminal_pid = 12345
+        d = s.to_dict()
+        self.assertEqual(d["terminal_pid"], 12345)
+
+    def test_terminal_pid_persisted_in_state(self):
+        """terminal_pid round-trips through save/load."""
+        import tempfile
+        from harness import HarnessState, AgentState
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".harness-state.json"
+            with patch("harness.HARNESS_STATE_FILE", state_file):
+                hs = HarnessState()
+                agent = AgentState("skill")
+                agent.terminal_pid = 99999
+                hs.set_agent("skill", agent)
+                hs.save_state()
+
+                hs2 = HarnessState()
+                with patch("harness._log"):
+                    hs2.load_state()
+                loaded = hs2.get_agent("skill")
+                self.assertEqual(loaded.terminal_pid, 99999)
+
+
+class TestTimeoutScanner(unittest.TestCase):
+    """#7630 2-3: EventLifecycleManager timeout detection."""
+
+    def test_overdue_event_detected(self):
+        """Events past timeout are detected by timeout_scan."""
+        from harness import EventStream, EventLifecycleManager
+
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")), \
+             patch("harness._log"):
+            stream = EventStream()
+            mgr = EventLifecycleManager(stream, timeout_minutes=0)  # 0 = immediate timeout
+
+            mgr.dispatch("evt1", "skill", {"id": "evt1"})
+            # Backdate dispatch time to force timeout
+            mgr._dispatch_times["evt1"] = time.time() - 1
+
+            timed_out = mgr.timeout_scan()
+            # First scan: retry (not yet at max retries)
+            self.assertEqual(len(timed_out), 0)  # retried, not timed out
+            self.assertEqual(mgr._retry_counts.get("evt1"), 1)
+
+    def test_max_retries_causes_timeout(self):
+        """After max retries, event is removed from in-flight."""
+        from harness import EventStream, EventLifecycleManager
+
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")), \
+             patch("harness._log"):
+            stream = EventStream()
+            mgr = EventLifecycleManager(stream, timeout_minutes=0, max_retries=1)
+
+            mgr.dispatch("evt1", "skill", {"id": "evt1"})
+            mgr._dispatch_times["evt1"] = time.time() - 1
+            mgr._retry_counts["evt1"] = 1  # Already at max
+
+            timed_out = mgr.timeout_scan()
+            self.assertEqual(len(timed_out), 1)
+            self.assertEqual(timed_out[0], ("skill", "evt1"))
+            self.assertEqual(mgr.get_in_flight("skill"), [])
+
+
+class TestEventDrivenPhase4(unittest.TestCase):
+    """#7630 Phase 4: Event-driven wake prototype — config, endpoints, poll."""
+
+    def test_config_event_driven_field(self):
+        """config.py can read event-driven field from config.md."""
+        from config import get_field
+        # Should return "yes" or "no" — defaults to "no" if section absent
+        val = get_field("event-driven")
+        self.assertIn(val.lower(), ("yes", "no"))
+
+    def test_config_scan_idle_timeout_field(self):
+        """config.py can read scan-idle-timeout field."""
+        from config import get_field
+        try:
+            val = get_field("scan-idle-timeout")
+            self.assertTrue(int(val) > 0)
+        except SystemExit:
+            pass
+
+    def test_event_poll_target_mode_url(self):
+        """event_poll.py in target mode queries /events/for/<role>."""
+        import event_poll
+
+        with patch.object(event_poll, "_discover_port", return_value=7373), \
+             patch.object(event_poll, "_read_cursor", return_value="abc123"), \
+             patch("urllib.request.urlopen") as mock_urlopen:
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = b'{"events": []}'
+            mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            mock_urlopen.return_value = mock_resp
+
+            result = event_poll.poll("skill", target_mode=True)
+
+            # Verify the URL used /events/for/skill
+            call_args = mock_urlopen.call_args
+            req = call_args[0][0]
+            self.assertIn("/events/for/skill", req.full_url)
+            self.assertEqual(result, [])
+
+    def test_event_poll_legacy_mode_url(self):
+        """event_poll.py in legacy mode queries /events with role param."""
+        import event_poll
+
+        with patch.object(event_poll, "_discover_port", return_value=7373), \
+             patch.object(event_poll, "_read_cursor", return_value=""), \
+             patch("urllib.request.urlopen") as mock_urlopen:
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = b'{"events": [{"id": "x1"}]}'
+            mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            mock_urlopen.return_value = mock_resp
+
+            with patch.object(event_poll, "_write_cursor") as mock_write:
+                result = event_poll.poll("skill", target_mode=False)
+
+            # Verify legacy URL uses /events?role=skill
+            call_args = mock_urlopen.call_args
+            req = call_args[0][0]
+            self.assertIn("/events?", req.full_url)
+            self.assertIn("role=skill", req.full_url)
+            self.assertNotIn("/events/for/", req.full_url)
+
+    def test_execute_transition_calls_tracker(self):
+        """_execute_transition calls tracker.py with correct args."""
+        from harness import _execute_transition
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stderr="")
+            _execute_transition({
+                "number": 123,
+                "from": "in-progress",
+                "to": "pending-test",
+                "role": "skill-lead",
+            })
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            self.assertIn("tracker.py", args[1])
+            self.assertIn("transition", args)
+            self.assertIn("123", args)
+            self.assertIn("in-progress", args)
+            self.assertIn("pending-test", args)
+
+    def test_execute_transition_raises_on_failure(self):
+        """_execute_transition raises RuntimeError on non-zero exit."""
+        from harness import _execute_transition
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stderr="not allowed")
+            with self.assertRaises(RuntimeError):
+                _execute_transition({"number": 1, "from": "a", "to": "b"})
+
+    def test_execute_comment_calls_tracker(self):
+        """_execute_comment calls tracker.py comment with correct args."""
+        from harness import _execute_comment
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stderr="")
+            _execute_comment({
+                "number": 456,
+                "role": "pm-lead",
+                "message": "Test comment",
+            })
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            self.assertIn("comment", args)
+            self.assertIn("456", args)
+
+    def test_execute_comment_raises_on_incomplete(self):
+        """_execute_comment raises ValueError if required fields missing."""
+        from harness import _execute_comment
+
+        with self.assertRaises(ValueError):
+            _execute_comment({"number": 1})  # missing message
+
+    def test_execute_comment_rejects_oversized_message(self):
+        """_execute_comment raises ValueError for messages > 4096 chars."""
+        from harness import _execute_comment
+
+        with self.assertRaises(ValueError):
+            _execute_comment({"number": 1, "message": "x" * 4097})
+
+    def test_execute_comment_rejects_null_bytes(self):
+        """_execute_comment raises ValueError for messages with null bytes."""
+        from harness import _execute_comment
+
+        with self.assertRaises(ValueError):
+            _execute_comment({"number": 1, "message": "hello\x00world"})
+
+    def test_dispatch_skips_already_dispatched(self):
+        """dispatch() skips events that are already in _dispatched."""
+        from harness import EventStream, EventLifecycleManager
+
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
+            stream = EventStream()
+            mgr = EventLifecycleManager(stream)
+
+            mgr.dispatch("evt1", "skill", {"id": "evt1"})
+            self.assertEqual(mgr.get_in_flight("skill"), ["evt1"])
+
+            # Dispatch same event again — should not duplicate
+            mgr.dispatch("evt1", "skill", {"id": "evt1"})
+            self.assertEqual(mgr.get_in_flight("skill"), ["evt1"])
+
+
+class TestGetEventsForRole(unittest.TestCase):
+    """#7630 Phase 4: GET /events/for/{role} endpoint tests."""
+
+    @classmethod
+    def setUpClass(cls):
+        from fastapi.testclient import TestClient
+        from harness import app, event_stream, event_lifecycle
+
+        cls.client = TestClient(app, raise_server_exceptions=False)
+        cls.event_stream = event_stream
+        cls.event_lifecycle = event_lifecycle
+
+    def setUp(self):
+        """Clear event stream between tests."""
+        with self.event_stream._lock:
+            self.event_stream._events.clear()
+        with self.event_lifecycle._lock:
+            self.event_lifecycle._in_flight.clear()
+            self.event_lifecycle._dispatched.clear()
+            self.event_lifecycle._dispatch_times.clear()
+
+    def test_filters_by_target_role(self):
+        """GET /events/for/skill returns only events targeted at skill."""
+        from harness import event_stream
+
+        # Add events for different roles
+        event_stream.append({
+            "id": "e1", "event_type": "assigned-to", "role": "harness",
+            "payload": {"target_role": "skill", "issue_number": "1"},
+        })
+        event_stream.append({
+            "id": "e2", "event_type": "assigned-to", "role": "harness",
+            "payload": {"target_role": "pm", "issue_number": "2"},
+        })
+
+        with patch("harness._validate_role"):
+            resp = self.client.get("/events/for/skill")
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(len(data["events"]), 1)
+        self.assertEqual(data["events"][0]["id"], "e1")
+
+    def test_marks_dispatched(self):
+        """GET /events/for/skill marks returned events as dispatched."""
+        from harness import event_stream, event_lifecycle
+
+        event_stream.append({
+            "id": "e3", "event_type": "assigned-to", "role": "harness",
+            "payload": {"target_role": "skill", "issue_number": "3"},
+        })
+
+        with patch("harness._validate_role"):
+            self.client.get("/events/for/skill")
+
+        self.assertIn("e3", event_lifecycle.get_in_flight("skill"))
+
+    def test_since_cursor_filters_events(self):
+        """GET /events/for/skill?since=X returns only events after cursor."""
+        from harness import event_stream
+
+        event_stream.append({
+            "id": "old1", "event_type": "assigned-to", "role": "harness",
+            "payload": {"target_role": "skill"},
+        })
+        event_stream.append({
+            "id": "new1", "event_type": "assigned-to", "role": "harness",
+            "payload": {"target_role": "skill"},
+        })
+
+        with patch("harness._validate_role"):
+            resp = self.client.get("/events/for/skill?since=old1")
+
+        data = resp.json()
+        ids = [e["id"] for e in data["events"]]
+        self.assertNotIn("old1", ids)
+        self.assertIn("new1", ids)
+
+    def test_does_not_redispatch_already_dispatched(self):
+        """GET /events/for/skill does not re-dispatch already dispatched events."""
+        from harness import event_stream, event_lifecycle
+
+        event_stream.append({
+            "id": "e4", "event_type": "assigned-to", "role": "harness",
+            "payload": {"target_role": "skill"},
+        })
+
+        # Pre-dispatch the event
+        event_lifecycle.dispatch("e4", "skill", {"id": "e4"})
+
+        with patch("harness._validate_role"):
+            self.client.get("/events/for/skill")
+
+        # Should still be dispatched exactly once (not duplicated in in_flight)
+        self.assertEqual(event_lifecycle.get_in_flight("skill").count("e4"), 1)
+
+
+class TestCompleteEventEndpoint(unittest.TestCase):
+    """#7630 Phase 4: POST /events/{event_id}/complete endpoint tests."""
+
+    @classmethod
+    def setUpClass(cls):
+        from fastapi.testclient import TestClient
+        from harness import app, event_stream, event_lifecycle
+
+        cls.client = TestClient(app, raise_server_exceptions=False)
+        cls.event_stream = event_stream
+        cls.event_lifecycle = event_lifecycle
+
+    def setUp(self):
+        """Clear lifecycle state between tests."""
+        with self.event_lifecycle._lock:
+            self.event_lifecycle._in_flight.clear()
+            self.event_lifecycle._dispatched.clear()
+            self.event_lifecycle._dispatch_times.clear()
+
+    def test_complete_acks_in_flight_event(self):
+        """POST /events/evt1/complete acks an in-flight event."""
+        self.event_lifecycle.dispatch("evt1", "skill", {"id": "evt1"})
+        self.assertIn("evt1", self.event_lifecycle.get_in_flight("skill"))
+
+        resp = self.client.post("/events/evt1/complete", json={
+            "role": "skill",
+            "status": "success",
+            "summary": "Done",
+        })
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "ok")
+        self.assertNotIn("evt1", self.event_lifecycle.get_in_flight("skill"))
+
+    def test_complete_returns_410_for_unknown_event(self):
+        """POST /events/unknown/complete returns 410 when event not in-flight."""
+        resp = self.client.post("/events/unknown-id/complete", json={
+            "role": "skill",
+            "status": "success",
+            "summary": "Done",
+        })
+
+        self.assertEqual(resp.status_code, 410)
+        data = resp.json()
+        self.assertEqual(data["status"], "gone")
+
+    def test_complete_executes_transitions(self):
+        """POST /events/evt2/complete executes status transitions."""
+        self.event_lifecycle.dispatch("evt2", "skill", {"id": "evt2"})
+
+        with patch("harness._execute_transition") as mock_trans:
+            resp = self.client.post("/events/evt2/complete", json={
+                "role": "skill",
+                "status": "success",
+                "summary": "Fixed",
+                "transitions": [
+                    {"number": 123, "from": "in-progress", "to": "pending-test", "role": "skill-lead"}
+                ],
+            })
+
+        self.assertEqual(resp.status_code, 200)
+        mock_trans.assert_called_once()
+
+    def test_complete_executes_comments(self):
+        """POST /events/evt3/complete executes tracker comments."""
+        self.event_lifecycle.dispatch("evt3", "skill", {"id": "evt3"})
+
+        with patch("harness._execute_comment") as mock_comment:
+            resp = self.client.post("/events/evt3/complete", json={
+                "role": "skill",
+                "status": "success",
+                "summary": "Commented",
+                "comments": [
+                    {"number": 123, "role": "skill-lead", "message": "Done."}
+                ],
+            })
+
+        self.assertEqual(resp.status_code, 200)
+        mock_comment.assert_called_once()
+
+    def test_complete_reports_partial_on_side_effect_failure(self):
+        """POST /events/evt4/complete returns partial on transition errors."""
+        self.event_lifecycle.dispatch("evt4", "skill", {"id": "evt4"})
+
+        with patch("harness._execute_transition", side_effect=RuntimeError("tracker fail")):
+            resp = self.client.post("/events/evt4/complete", json={
+                "role": "skill",
+                "status": "success",
+                "summary": "Partial",
+                "transitions": [
+                    {"number": 1, "from": "a", "to": "b"}
+                ],
+            })
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "partial")
+        self.assertTrue(len(data["errors"]) > 0)
+
+    def test_complete_requires_role(self):
+        """POST /events/evt5/complete returns 400 without role."""
+        resp = self.client.post("/events/evt5/complete", json={
+            "status": "success",
+            "summary": "No role",
+        })
+
+        self.assertEqual(resp.status_code, 400)
+
+
 if __name__ == "__main__":
     unittest.main()

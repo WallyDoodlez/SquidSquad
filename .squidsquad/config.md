@@ -100,7 +100,6 @@
 - **QA Execution Model**: claude
 - **Comprehension Model**: claude
 - **Improvement Scan Model**: claude
-- **Code Review Model**: deepseek-v4-pro
 - **Fallback Model**: claude
 - **API Timeout Seconds**: 120
 
@@ -116,7 +115,7 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-- **Shipped Since Last Bump**: 10
+- **Shipped Since Last Bump**: 1
 
 ## Agent Effort
 
@@ -132,22 +131,18 @@
 
 ## Event Reactions
 
-### dev
-- **emits**: git-commit, request-merge, status-transition, tracker-comment
-- **reacts-to**: assigned-to, phase-change, stop-requested, verification-failed
-
 ### dm
-- **emits**: request-merge, status-transition, tracker-comment, version-bump
-- **reacts-to**: assigned-to, pr-merged, status-transition, stop-requested
+- **emits**: request-merge, status-transition, tracker-comment
+- **reacts-to**: pr-merged, status-transition
 
 ### pm
 - **emits**: status-transition, tracker-comment
-- **reacts-to**: agent-health, assigned-to, pr-merged, status-transition, stop-requested, verification-failed, verification-passed
+- **reacts-to**: agent-health, pr-create, pr-merged, status-transition, tracker-comment, verification-failed, verification-passed
 
 ### qa
-- **emits**: status-transition, tracker-comment, verification-failed, verification-passed
-- **reacts-to**: assigned-to, pr-create, pr-merged, status-transition, stop-requested
+- **emits**: request-merge, status-transition, tracker-comment, verification-failed, verification-passed
+- **reacts-to**: agent-health, git-commit, pr-create, pr-merged, status-transition
 
 ### skill
-- **emits**: git-commit, pr-create, status-transition, tracker-comment
-- **reacts-to**: assigned-to, status-transition, stop-requested
+- **emits**: pr-create, status-transition, tracker-comment
+- **reacts-to**: pr-merged, status-transition, tracker-comment, verification-failed, verification-passed

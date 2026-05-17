@@ -1,83 +1,18 @@
 {
   "events": [
     {
-<<<<<<< HEAD
-      "id": "cap0",
-      "event_type": "test",
-      "payload": {}
-    },
-    {
-      "id": "cap1",
-      "event_type": "test",
-      "payload": {}
-    },
-    {
-      "id": "cap2",
-      "event_type": "test",
-      "payload": {}
-    },
-    {
-      "id": "cap3",
-      "event_type": "test",
-      "payload": {}
-    },
-    {
-      "id": "cap4",
-      "event_type": "test",
-      "payload": {}
-    }
-  ],
-  "in_flight": {
-    "skill": [
-      "cap0",
-      "cap1"
-    ]
-  },
-  "dispatched": {
-    "cap0": {
-      "id": "cap0"
-    },
-    "cap1": {
-      "id": "cap1"
-    }
-  },
-  "dispatch_times": {
-    "cap0": 1778985625.8639987,
-    "cap1": 1778985625.8639987
-  },
-=======
-<<<<<<< Updated upstream
-      "id": "caa86213",
+      "id": "16b7b7d1",
       "event_type": "test-event",
       "role": "test-role",
-      "timestamp": "2026-05-14T19:12:10",
+      "timestamp": "2026-05-16T21:46:28",
       "payload": {
         "key": "value"
       },
-      "received_at": 1778800330.512299
-=======
-      "id": "old1",
-      "event_type": "assigned-to",
-      "role": "harness",
-      "payload": {
-        "target_role": "skill"
-      }
-    },
-    {
-      "id": "new1",
-      "event_type": "assigned-to",
-      "role": "harness",
-      "payload": {
-        "target_role": "skill"
-      }
->>>>>>> Stashed changes
+      "received_at": 1778982388.6619062
     }
   ],
-  "in_flight": {
-    "skill": []
-  },
+  "in_flight": {},
   "dispatched": {},
   "dispatch_times": {},
->>>>>>> 81beaf61bb822ce707b3d9160497bd41f0bd99a2
   "retry_counts": {}
 }

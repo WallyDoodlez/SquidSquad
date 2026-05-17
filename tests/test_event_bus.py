@@ -167,6 +167,18 @@ class TestGenerateId:
         assert a != b
 
 
+class TestAck:
+    """#7630 2-6: ack() function delegates to emit() with ack event type."""
+
+    def test_ack_calls_emit(self):
+        """ack() emits an ack event with the event_id in payload."""
+        with patch.object(event_bus, "emit") as mock_emit:
+            event_bus.ack("evt123", "skill")
+        mock_emit.assert_called_once_with(
+            "ack", "skill", payload={"event_id": "evt123"}
+        )
+
+
 class TestNoUnusedImports:
     """#8193 regression: event bus modules must not have unused imports."""
 
