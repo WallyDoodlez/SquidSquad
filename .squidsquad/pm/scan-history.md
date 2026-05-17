@@ -1,3 +1,10 @@
+## Scan — 2026-05-16 20:33
+
+- **Files scanned**: .squidsquad/vault/galaxy/decision-cycle-runner-architecture.md, .squidsquad/vault/galaxy/decision-reboot-kills-child.md, .squidsquad/vault/galaxy/decision-self-healing-sentinel.md, references/sub-skills/roles/dm/doc-improvement-loop.md
+- **Findings**: decision-reboot-kills-child describes wrapper architecture superseded by harness #4966
+- **Auto-fixed**: Downgraded confidence to medium, added changelog noting harness supersession and #4792 tracking full deprecation
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 20:24
 
 - **Files scanned**: references/sub-skills/roles/qa/verification.md, references/sub-skills/roles/qa/prohibitions.md, references/sub-skills/roles/dm/task-pickup.md
