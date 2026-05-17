@@ -198,6 +198,27 @@ class TestToolRead:
         assert "ERROR" in result
         assert "not found" in result.lower()
 
+    def test_large_file_bounded_read(self, tmp_path):
+        """#8584: Large files use bounded read instead of loading entirely."""
+        large_file = tmp_path / "huge.txt"
+        # Write a file larger than MAX_FILE_READ_BYTES
+        large_file.write_text("A" * (model_router.MAX_FILE_READ_BYTES + 50000))
+        with patch.object(model_router, "REPO_ROOT", tmp_path):
+            result = model_router._tool_read({"file_path": str(large_file)})
+        assert "TRUNCATED" in result
+        # Content returned should be bounded (not the full 550KB)
+        assert len(result) < model_router.MAX_FILE_READ_BYTES + 500
+
+    def test_normal_file_full_read(self, tmp_path):
+        """Normal-sized files are read in full."""
+        normal_file = tmp_path / "small.txt"
+        normal_file.write_text("line1\nline2\nline3")
+        with patch.object(model_router, "REPO_ROOT", tmp_path):
+            result = model_router._tool_read({"file_path": str(normal_file)})
+        assert "line1" in result
+        assert "line3" in result
+        assert "TRUNCATED" not in result
+
 
 class TestToolGlob:
     def test_finds_python_files(self):
