@@ -403,7 +403,7 @@ For each event:
 - **No cycle_pre.py / cycle_post.py** — the harness handles git pull, commit, push
 - **No git operations** — the harness owns git pull (before event delivery) and commit/push (after completion)
 - **No cycle counting** — event IDs are the tracking unit, not cycles
-- **No conditional step branching** ��� you react to ONE event at a time
+- **No conditional step branching** — you react to ONE event at a time
 
 ### Atomicity
 
@@ -571,7 +571,7 @@ For each issue:
      # If a PR number is found:
      gh pr ready [PR_NUMBER]
      ```
-   - Transition to shipped (auto-closes):
+   - Transition to pending-ship:
      ```bash
      python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role qa-lead
      python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified. Status → Pending Ship."
