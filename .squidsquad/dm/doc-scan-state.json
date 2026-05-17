@@ -8,9 +8,10 @@
       "lift_when": "event-driven mode live; PM files post-Phase-5 doc realignment task"
     }
   ],
-  "last_scanned": "CONTRIBUTING.md",
-  "rotation_count": 44,
+  "last_scanned": "CHANGELOG.md",
+  "rotation_count": 45,
   "scan_history": [
+    {"file": "CHANGELOG.md", "date": "2026-05-17", "findings": 0, "note": "Verified 0.39.0 section entries align with shipped items. Post-bump ships (#7630, #8664, #8703, #8584) queued for next bump (0.40.0). Rotation 44 complete; advancing rotation_count to 45"},
     {"file": "CONTRIBUTING.md", "date": "2026-05-17", "findings": 0, "note": "verified all refs intact — .github/ISSUE_TEMPLATE/{issue-report.yml,task-request.yml}, requirements-dev.txt, tests/run_tests.py with 'static' mode, SKILL.md/docs/sub-skill-guide.md links, references/scripts/ path, commit prefix pattern. No /loop architecture content"},
     {"file": "docs/sub-skill-guide.md", "date": "2026-05-17", "findings": 0, "note": "scoped scan under #8703 directive — verified all path refs intact (git_ops.py, vault_remember.py, tests/run_tests.py, compose.py all/deploy/deploy-all, references/sub-skills/{common,roles,manifest.md}, references/roles/dm/{includes.yml,instructions.md}). Deferred to post-Phase-5: directory tree (lines 33-56) omits sub-skills/capabilities/ and sub-skills/project/ subdirs — that's tutorial-onboarding copy"},
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-17", "findings": 0, "skipped": true, "note": "skipped under #8703 — entire doc is architecture content (six layers, runtime interaction, design decisions). Resume scan after Phase 5 ships and directive lifts"},
