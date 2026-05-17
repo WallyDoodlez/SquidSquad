@@ -1,7 +1,8 @@
 {
-  "last_scanned": "CHANGELOG.md",
-  "rotation_count": 43,
+  "last_scanned": "README.md",
+  "rotation_count": 44,
   "scan_history": [
+    {"file": "README.md", "date": "2026-05-17", "findings": 1, "fixes": ["clarified Code Review Model lives under Model Routing section, not its own section"]},
     {"file": "README.md", "date": "2026-04-28", "findings": 2},
     {"file": "SKILL.md:sections-1-3", "date": "2026-04-28", "findings": 3},
     {"file": "SKILL.md:sections-4-6", "date": "2026-04-28", "findings": 3},
