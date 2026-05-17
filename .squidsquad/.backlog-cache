@@ -1,10 +1,2 @@
-<<<<<<< Updated upstream
-<<<<<<< HEAD
-=======
-qa:bugs=0:feats=0:pship=0
->>>>>>> 98e65c090fd1fe5f8533f239935f30c364535651
 skill:bugs=1:feats=1:pship=0
-=======
-skill:bugs=1:feats=0:pship=0
->>>>>>> Stashed changes
 pm:planning=
