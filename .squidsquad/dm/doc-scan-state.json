@@ -8,9 +8,10 @@
       "lift_when": "event-driven mode live; PM files post-Phase-5 doc realignment task"
     }
   ],
-  "last_scanned": "docs/ARCHITECTURE.md",
+  "last_scanned": "docs/sub-skill-guide.md",
   "rotation_count": 44,
   "scan_history": [
+    {"file": "docs/sub-skill-guide.md", "date": "2026-05-17", "findings": 0, "note": "scoped scan under #8703 directive — verified all path refs intact (git_ops.py, vault_remember.py, tests/run_tests.py, compose.py all/deploy/deploy-all, references/sub-skills/{common,roles,manifest.md}, references/roles/dm/{includes.yml,instructions.md}). Deferred to post-Phase-5: directory tree (lines 33-56) omits sub-skills/capabilities/ and sub-skills/project/ subdirs — that's tutorial-onboarding copy"},
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-17", "findings": 0, "skipped": true, "note": "skipped under #8703 — entire doc is architecture content (six layers, runtime interaction, design decisions). Resume scan after Phase 5 ships and directive lifts"},
     {"file": "SKILL.md:sections-7-8", "date": "2026-05-17", "findings": 0, "note": "scoped scan under #8703 directive — sec 7 (Upgrade Instructions) verified non-arch refs intact (compose.py deploy-all, wizard.py ensure-labels, .install-spec.json optional path); sec 8 (Schema Changelog Historical) — verified legacy bugs/features/ dirs still present in .squidsquad/skill/, tracker.py reference accurate"},
     {"file": "SKILL.md:sections-4-6", "date": "2026-05-17", "findings": 0, "note": "scoped scan under #8703 directive — sec 4 (Ralph Loop) fully deferred; sec 5-6 verified non-arch refs: references/wizard/WIZARD.md, manifest.py, roles/dm/{manifest.yaml,SOUL.md,instructions.md}, sub-skills/capabilities/local_delivery/{setup.md,sub-skill.md}, presets/software-dev, state branch squid-squad. Deferred to post-Phase-5: SKILL.md line 270 says transitions via 'gh issue edit --add-label' but current guidance is tracker.py — that's how-an-agent-operates copy"},
