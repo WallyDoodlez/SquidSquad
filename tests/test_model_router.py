@@ -243,6 +243,66 @@ class TestPromptAssembly:
         assert "Test context" in prompt
 
 
+class TestReadInputFilesSecurity:
+    """#8583: _read_input_files must apply security layers."""
+
+    def test_skips_sensitive_file(self, tmp_path):
+        """Sensitive files (.env) are excluded from external model input."""
+        env_file = tmp_path / ".env"
+        env_file.write_text("SECRET_KEY=abc123")
+        with patch.object(model_router, "REPO_ROOT", tmp_path):
+            result = model_router._read_input_files(str(env_file))
+        assert "SECRET_KEY" not in result
+        assert "SKIPPED" in result
+        assert "Sensitive file" in result
+
+    def test_skips_path_outside_sandbox(self):
+        """Files outside the repo are excluded."""
+        outside_path = str(model_router.REPO_ROOT.parent / "etc" / "passwd")
+        result = model_router._read_input_files(outside_path)
+        assert "SKIPPED" in result
+        assert "outside repository" in result
+
+    def test_truncates_large_file(self, tmp_path):
+        """Files exceeding MAX_FILE_READ_BYTES are truncated."""
+        big_file = tmp_path / "big.py"
+        big_file.write_text("x" * (model_router.MAX_FILE_READ_BYTES + 100))
+        with patch.object(model_router, "REPO_ROOT", tmp_path):
+            result = model_router._read_input_files(str(big_file))
+        assert "TRUNCATED" in result
+        assert len(result) < model_router.MAX_FILE_READ_BYTES + 500
+
+    def test_reads_normal_file(self, tmp_path):
+        """Normal files within sandbox are read correctly."""
+        normal_file = tmp_path / "code.py"
+        normal_file.write_text("def hello(): pass")
+        with patch.object(model_router, "REPO_ROOT", tmp_path):
+            result = model_router._read_input_files(str(normal_file))
+        assert "def hello(): pass" in result
+
+    def test_multiple_files_mixed(self, tmp_path):
+        """Multiple files: sensitive ones skipped, normal ones read."""
+        good_file = tmp_path / "ok.py"
+        good_file.write_text("good content")
+        bad_file = tmp_path / ".env"
+        bad_file.write_text("SECRET=leak")
+        input_str = f"{good_file},{bad_file}"
+        with patch.object(model_router, "REPO_ROOT", tmp_path):
+            result = model_router._read_input_files(input_str)
+        assert "good content" in result
+        assert "SECRET" not in result
+        assert "SKIPPED" in result
+
+    def test_key_file_skipped(self, tmp_path):
+        """Key files (.key, .pem) are excluded."""
+        key_file = tmp_path / "server.key"
+        key_file.write_text("-----BEGIN RSA PRIVATE KEY-----")
+        with patch.object(model_router, "REPO_ROOT", tmp_path):
+            result = model_router._read_input_files(str(key_file))
+        assert "RSA PRIVATE KEY" not in result
+        assert "SKIPPED" in result
+
+
 # ---------------------------------------------------------------------------
 # Route logic
 # ---------------------------------------------------------------------------

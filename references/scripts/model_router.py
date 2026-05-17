@@ -550,7 +550,11 @@ def _load_prompt_template(task_type):
 
 
 def _read_input_files(input_files_str):
-    """Read input files and return combined content."""
+    """Read input files and return combined content.
+
+    Applies the same security layers as _tool_read: sandbox check,
+    sensitive file check, and size truncation.
+    """
     if not input_files_str:
         return ""
 
@@ -560,8 +564,20 @@ def _read_input_files(input_files_str):
         if not fpath:
             continue
         full_path = Path(fpath) if os.path.isabs(fpath) else REPO_ROOT / fpath
+        full_path_str = str(full_path)
+
+        if not _is_path_in_sandbox(full_path_str):
+            parts.append(f"### File: {fpath}\n\nSKIPPED: Path outside repository boundary.")
+            continue
+        if _is_sensitive_file(full_path_str):
+            parts.append(f"### File: {fpath}\n\nSKIPPED: Sensitive file excluded from external model input.")
+            continue
+
         try:
             content = full_path.read_text(encoding="utf-8", errors="replace")
+            if len(content) > MAX_FILE_READ_BYTES:
+                content = content[:MAX_FILE_READ_BYTES] + \
+                    f"\n\n[TRUNCATED — file exceeds {MAX_FILE_READ_BYTES} bytes]"
             parts.append(f"### File: {fpath}\n\n{content}")
         except Exception as e:
             parts.append(f"### File: {fpath}\n\nERROR reading file: {e}")
