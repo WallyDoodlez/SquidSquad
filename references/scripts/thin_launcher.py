@@ -75,15 +75,13 @@ def main():
     effort = _get_effort_level(role)
     print(f"[thin-launcher] Starting claude for {role} in {clone_path} (effort={effort})")
 
-    # Use minimal MCP config so account-level plugins (Meta Ads, etc.)
-    # don't crowd out built-in deferred tools like Monitor (#7630).
+    # Suppress account-level MCP plugins so built-in deferred tools (Monitor)
+    # are always available (#7630). --strict-mcp-config alone = no external MCP.
+    # If mcp-agents.json exists, also pass --mcp-config for future per-agent servers.
     mcp_config = Path(clone_path) / ".squidsquad" / "mcp-agents.json"
 
     try:
-        # --mcp-config is variadic (<configs...>), so it must be followed by
-        # another flag — otherwise it swallows the trailing prompt as a second
-        # config path. Place it first; --append-system-prompt terminates it.
-        cmd = ["claude"]
+        cmd = ["claude", "--strict-mcp-config"]
         if mcp_config.exists():
             cmd.extend(["--mcp-config", str(mcp_config)])
         cmd.extend([

@@ -1,5 +1,10 @@
 # Scan History
 
+## Scan — 2026-05-16 23:04
+
+- **Files scanned**: references/scripts/cycle_post.py, references/scripts/thin_launcher.py, references/scripts/git_ops.py
+- **Findings**: #8653 — task_begin fails on index with unresolved merge conflicts from pull
+
 ## Scan — 2026-05-16 19:15
 
 - **Files scanned**: references/roles/dm/android/instructions.md, references/roles/dm/ios/instructions.md, references/roles/pm/android/instructions.md, references/roles/pm/ios/instructions.md, references/roles/qa/android/instructions.md

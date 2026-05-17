@@ -1,5 +1,5 @@
 {
-  "last_scanned": "docs/sub-skill-guide.md",
+  "last_scanned": "CHANGELOG.md",
   "rotation_count": 43,
   "scan_history": [
     {"file": "README.md", "date": "2026-04-28", "findings": 2},
@@ -186,7 +186,9 @@
     {"file": "SKILL.md:sections-4-6", "date": "2026-05-16", "findings": 1, "fixes": ["auto-merge: corrected 'tasks only' to 'all verified items' — bugs are auto-merged too"]},
     {"file": "SKILL.md:sections-7-8", "date": "2026-05-16", "findings": 0},
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-16", "findings": 0},
-    {"file": "docs/sub-skill-guide.md", "date": "2026-05-16", "findings": 0}
+    {"file": "docs/sub-skill-guide.md", "date": "2026-05-16", "findings": 0},
+    {"file": "CONTRIBUTING.md", "date": "2026-05-16", "findings": 1, "fixes": ["added missing pip install step and safe test command for contributors"]},
+    {"file": "CHANGELOG.md", "date": "2026-05-16", "findings": 0}
   ],
   "doc_inventory": {
     "README.md": {"last_scanned": "2026-05-07", "status": "current"},
@@ -194,7 +196,7 @@
     "SKILL.md": {"last_scanned": "2026-05-06", "status": "current"},
     "docs/ARCHITECTURE.md": {"last_scanned": "2026-05-07", "status": "current"},
     "docs/sub-skill-guide.md": {"last_scanned": "2026-05-06", "status": "current"},
-    "CONTRIBUTING.md": {"last_scanned": "2026-05-06", "status": "current"},
+    "CONTRIBUTING.md": {"last_scanned": "2026-05-16", "status": "current"},
     "CHANGELOG.md": {"last_scanned": "2026-05-07", "status": "current"}
   },
   "rejected_findings": [],
