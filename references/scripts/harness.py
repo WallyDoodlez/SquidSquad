@@ -1275,7 +1275,9 @@ async def stop_agent(role: str):
 
 @app.post("/agents/{role}/restart")
 async def restart_agent(role: str):
-    """Graceful restart — set intent=restarting (#4966). Harness reboots on death."""
+    """Restart agent. If idle, kill immediately and let auto-reboot fire (#8689).
+    If mid-cycle, just set intent=restarting and let the agent exit cleanly at
+    its next cycle boundary (#4966 graceful-restart behavior preserved)."""
     _validate_role(role)
 
     _log(f"Restarting {role}...")
@@ -1289,18 +1291,58 @@ async def restart_agent(role: str):
 
     # Remove .stop sentinel if present (allow re-start after previous stop)
     clone_path = boot_remote._get_clone_path(role)
-    stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"
+    clone_path_p = Path(clone_path)
+    stop_file = clone_path_p / ".squidsquad" / role / ".stop"
     try:
         stop_file.unlink(missing_ok=True)
     except OSError:
         pass
 
-    _log(f"  {role}: restart requested (intent=restarting)")
+    # #8689: if the agent is idle between cycles, kill the claude process
+    # right now so the auto-reboot path (running periodic health-poll already
+    # watches for is_dead + intent=restarting) fires within seconds instead
+    # of waiting up to a full /loop interval (e.g. 30 minutes). For active
+    # cycles, fall back to the graceful queued behavior.
+    current_state = ""
+    state_file = clone_path_p / ".squidsquad" / role / "current-state"
+    try:
+        current_state = state_file.read_text(encoding="utf-8").strip()
+    except (FileNotFoundError, OSError):
+        pass
 
+    immediate = current_state.startswith("idle")
+    killed_pid = None
+    if immediate:
+        claude_pid, alive = reboot_agent._read_claude_pid(clone_path_p, role)
+        if alive and claude_pid:
+            _log(f"  {role}: idle — killing PID {claude_pid} for immediate reboot")
+            try:
+                reboot_agent._kill_process(claude_pid)
+                killed_pid = claude_pid
+            except Exception as e:
+                _log(f"  {role}: WARNING — kill failed: {e}")
+                immediate = False
+        else:
+            # Already dead — the auto-reboot loop will pick it up next tick.
+            immediate = False
+
+    if immediate:
+        _log(f"  {role}: restart requested (idle path — killed PID {killed_pid})")
+        return {
+            "role": role,
+            "action": "restart",
+            "success": True,
+            "immediate": True,
+            "killed_pid": killed_pid,
+            "message": "Restart requested — agent was idle, killed and will be auto-rebooted",
+        }
+
+    _log(f"  {role}: restart requested (intent=restarting)")
     return {
         "role": role,
         "action": "restart",
         "success": True,
+        "immediate": False,
         "message": "Restart requested — agent will exit after current cycle and reboot",
     }
 
