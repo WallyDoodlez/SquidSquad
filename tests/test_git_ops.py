@@ -621,6 +621,183 @@ class TestCommitState:
 
 
 # ---------------------------------------------------------------------------
+# commit_role_scoped() — #8691
+# ---------------------------------------------------------------------------
+
+
+class TestRoleOwnedPatterns:
+    """Per-role commit-domain allowlists."""
+
+    def test_common_patterns_present_for_every_role(self):
+        for role in ("pm", "qa", "dm", "skill"):
+            pats = git_ops._role_owned_patterns(role)
+            assert f".squidsquad/{role}/" in pats
+            assert ".squidsquad/.backlog-cache" in pats
+            assert ".squidsquad/.event-state.json" in pats
+            assert ".squidsquad/vault/" in pats
+
+    def test_pm_extras(self):
+        pats = git_ops._role_owned_patterns("pm")
+        assert ".squidsquad/config.md" in pats
+        assert ".squidsquad/project/" in pats
+
+    def test_dm_extras(self):
+        pats = git_ops._role_owned_patterns("dm")
+        assert "README.md" in pats
+        assert "CHANGELOG.md" in pats
+        assert "docs/" in pats
+
+    def test_qa_has_no_extras_beyond_common(self):
+        pats = git_ops._role_owned_patterns("qa")
+        # QA must NOT pick up config or delivery docs
+        assert ".squidsquad/config.md" not in pats
+        assert "README.md" not in pats
+
+
+class TestPathMatches:
+    def test_prefix_match(self):
+        assert git_ops._path_matches(".squidsquad/pm/working-state.md", [".squidsquad/pm/"])
+        assert git_ops._path_matches("docs/foo/bar.md", ["docs/"])
+
+    def test_exact_match(self):
+        assert git_ops._path_matches("README.md", ["README.md"])
+        assert not git_ops._path_matches("README.md.bak", ["README.md"])
+
+    def test_no_match(self):
+        assert not git_ops._path_matches("references/scripts/foo.py", [".squidsquad/pm/"])
+
+
+class TestCommitRoleScoped:
+    """#8691: cycle commits must not bundle foreign files."""
+
+    @patch("git_ops.push", return_value=True)
+    @patch("git_ops.commit", return_value=True)
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_pm_stages_only_own_files_skips_foreign(
+        self, mock_run, mock_run_list, mock_commit, mock_push, capsys
+    ):
+        """The exact scenario from the bug report: PM commit + foreign code/tests."""
+        mock_run.return_value = _mock_result(stdout=(
+            " M .squidsquad/pm/working-state.md\n"
+            " M .squidsquad/.backlog-cache\n"
+            " M .squidsquad/skill/CLAUDE.md\n"
+            " M references/scripts/thin_launcher.py\n"
+            " M tests/test_thin_launcher.py\n"
+        ))
+        mock_run_list.return_value = _mock_result()
+
+        result = git_ops.commit_role_scoped("pm", "cycle 1494")
+        assert result is True
+
+        add_calls = [c for c in mock_run_list.call_args_list
+                     if c[0][0][:2] == ["git", "add"]]
+        staged = [c[0][0][-1] for c in add_calls]
+        assert ".squidsquad/pm/working-state.md" in staged
+        assert ".squidsquad/.backlog-cache" in staged
+        assert ".squidsquad/skill/CLAUDE.md" not in staged
+        assert "references/scripts/thin_launcher.py" not in staged
+        assert "tests/test_thin_launcher.py" not in staged
+
+        err = capsys.readouterr().err
+        assert "outside 'pm' domain" in err
+        assert "references/scripts/thin_launcher.py" in err
+        assert ".squidsquad/skill/CLAUDE.md" in err
+
+    @patch("git_ops.push", return_value=True)
+    @patch("git_ops.commit", return_value=True)
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_dm_can_stage_readme_and_changelog(
+        self, mock_run, mock_run_list, mock_commit, mock_push
+    ):
+        mock_run.return_value = _mock_result(stdout=(
+            " M README.md\n"
+            " M CHANGELOG.md\n"
+            " M docs/release-notes.md\n"
+            " M .squidsquad/dm/working-state.md\n"
+        ))
+        mock_run_list.return_value = _mock_result()
+
+        result = git_ops.commit_role_scoped("dm", "delivery cycle")
+        assert result is True
+
+        staged = [c[0][0][-1] for c in mock_run_list.call_args_list
+                  if c[0][0][:2] == ["git", "add"]]
+        assert "README.md" in staged
+        assert "CHANGELOG.md" in staged
+        assert "docs/release-notes.md" in staged
+        assert ".squidsquad/dm/working-state.md" in staged
+
+    @patch("git_ops.commit", return_value=True)
+    @patch("git_ops.push", return_value=True)
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_qa_cannot_stage_config_md(
+        self, mock_run, mock_run_list, mock_push, mock_commit, capsys
+    ):
+        """QA must not pick up PM-domain config.md changes."""
+        mock_run.return_value = _mock_result(stdout=(
+            " M .squidsquad/qa/working-state.md\n"
+            " M .squidsquad/config.md\n"
+        ))
+        mock_run_list.return_value = _mock_result()
+
+        git_ops.commit_role_scoped("qa", "qa cycle")
+
+        staged = [c[0][0][-1] for c in mock_run_list.call_args_list
+                  if c[0][0][:2] == ["git", "add"]]
+        assert ".squidsquad/qa/working-state.md" in staged
+        assert ".squidsquad/config.md" not in staged
+        assert ".squidsquad/config.md" in capsys.readouterr().err
+
+    @patch("git_ops._run")
+    def test_returns_false_when_no_own_files(self, mock_run, capsys):
+        """Only foreign files → nothing to commit, push not attempted."""
+        mock_run.return_value = _mock_result(stdout=" M references/scripts/foo.py\n")
+        with patch("git_ops.commit") as mock_commit, \
+             patch("git_ops.push") as mock_push:
+            result = git_ops.commit_role_scoped("pm", "msg")
+        assert result is False
+        mock_commit.assert_not_called()
+        mock_push.assert_not_called()
+
+    @patch("git_ops._run")
+    def test_empty_status_returns_false(self, mock_run):
+        mock_run.return_value = _mock_result(stdout="")
+        assert git_ops.commit_role_scoped("pm", "msg") is False
+
+    @patch("git_ops.push", return_value=True)
+    @patch("git_ops.commit", return_value=False)
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_commit_failure_short_circuits_push(
+        self, mock_run, mock_run_list, mock_commit, mock_push
+    ):
+        mock_run.return_value = _mock_result(stdout=" M .squidsquad/pm/foo.md\n")
+        mock_run_list.return_value = _mock_result()
+        assert git_ops.commit_role_scoped("pm", "msg") is False
+        mock_push.assert_not_called()
+
+    @patch("git_ops.push", return_value=True)
+    @patch("git_ops.commit", return_value=True)
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_warning_truncates_long_foreign_list(
+        self, mock_run, mock_run_list, mock_commit, mock_push, capsys
+    ):
+        # 25 foreign files; warning should mention "... and 5 more"
+        lines = [" M .squidsquad/pm/own.md"]
+        lines += [f" M references/scripts/foreign_{i}.py" for i in range(25)]
+        mock_run.return_value = _mock_result(stdout="\n".join(lines) + "\n")
+        mock_run_list.return_value = _mock_result()
+
+        git_ops.commit_role_scoped("pm", "msg")
+        err = capsys.readouterr().err
+        assert "and 5 more" in err
+
+
+# ---------------------------------------------------------------------------
 # branch_exists() / branch_delete() / current_branch()
 # ---------------------------------------------------------------------------
 

@@ -398,12 +398,14 @@ def _do_commit_push(data, role):
         if current_branch != working:
             _run(["git", "checkout", working], check=False)
 
-        _run_script("git_ops.py", "commit-push", role, commit_msg)
+        # #8691: scope commit to QA's domain so foreign uncommitted files
+        # (other agents' work in the same clone) don't get bundled in.
+        _run_script("git_ops.py", "commit-role-scoped", role, commit_msg)
         print(f"  Committed and pushed (QA → main)")
 
     else:
-        # Default: commit-push on current branch (main)
-        _run_script("git_ops.py", "commit-push", role, commit_msg)
+        # #8691: PM/DM/other roles also commit only their own domain.
+        _run_script("git_ops.py", "commit-role-scoped", role, commit_msg)
         print(f"  Committed and pushed")
 
     # Commit state files to state branch if worktree exists (#3664)
