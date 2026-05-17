@@ -1,7 +1,8 @@
 # Phase 5 Planning — Event-Driven Architecture CONTEXT
 
-**Bundle**: #8694 / #8695 / #8696 / #8697 / #8700 / #8701 / #8704
-**Hard prereqs**: #8692 (singleton enforcement), #8699 (event-driven-workflow source fragment)
+**Bundle**: #8694 (lead) / #8695 / #8697 / #8700 / #8701 / #8704
+**Hard prereq**: #8692 (singleton enforcement) — only true blocker
+**Folded**: #8696 → #8694 (boot sequence is part of event-mode L1 base agent definition); #8699 → #8697 (event-driven-workflow source migration absorbed)
 **Phase 6 cleanup**: #8698, #8702
 **Process directive (active)**: #8703
 **Date**: 2026-05-17
@@ -25,14 +26,21 @@ falls out naturally: replaying any event yields the correct action because the
 action is computed from current forge state, not historical event payload.
 
 Two completely separate L1–L4 fragment sets are composed (one for /loop, one
-for events) so neither flow contains conditional logic. A new L1 boot sub-skill
-provides a tracker-driven failsafe that survives a totally dead event bus. A
-`bootup-complete` event gates harness-side dispatch queuing per role. The
-cycle_pre/cycle_post scripts switch from time-cycle to task-cycle granularity
-when event-driven mode is active. Two prerequisites — singleton enforcement
-(#8692) and migrating the orphaned `event-driven-workflow` block into a real
-source fragment (#8699) — must ship before any per-role flip of
-`event-driven: yes`.
+for events) so neither flow contains conditional logic. The event-mode L1 base
+agent definition includes a tracker-driven boot sequence as a failsafe that
+survives a totally dead event bus. The `bootup-complete` event is **informational
+only** — the harness exposes a `bootup_complete: bool` flag on `AgentState` via
+`GET /agents/{role}` so operators/TUI can see boot status, but the harness does
+no queuing or gating of any kind. The cycle_pre/cycle_post scripts switch from
+time-cycle to task-cycle granularity when event-driven mode is active. The only
+hard prerequisite is singleton enforcement (#8692); the orphaned
+`event-driven-workflow` source migration is folded into #8697.
+
+**Architectural principle**: all agent instructions live in CLAUDE.md composed
+from L1–L4 layers. No instruction sources outside the compose stack. Data files
+(working-state.md, config.md) are state/config that instructions reference, not
+instructions themselves. Pre-flight human checklists live in planning docs, not
+agent instructions.
 
 ---
 
@@ -58,19 +66,31 @@ source fragment (#8699) — must ship before any per-role flip of
   tasks) runs to completion. Mid-task events are read and cursor-advanced
   but not acted on until the current task ends.
 - **Idle == improvement-scan cool-down loop** — empty `work_queue()` → run
-  improvement-scan as an atomic task → write cool-down expiry to
-  `working-state.md` → listen with timeout = remaining cool-down.
+  improvement-scan as an atomic task → compute `Next scan after: <ts>` from
+  config-supplied cooldown → write that timestamp to `working-state.md` →
+  listen with timeout = remaining cool-down.
 - **Cool-down default = 30 minutes universal across roles**, overridable
-  per-role in `config.md` (no overrides until empirical observation warrants).
+  per-role in `config.md`. The cool-down value is **read from `config.md` at
+  scan-completion time** (not stored in working-state.md). Config changes
+  take effect on the next scan boundary.
 - **Cool-down storage** = `.squidsquad/<role>/working-state.md` under
-  `## Improvement Scan` (fields: `Last completed: <ts>`, `Cool-down: 30m`).
+  `## Improvement Scan` (fields: `Status: idle | running`, `Last completed: <ts>`,
+  `Next scan after: <ts>`). The `Cool-down` value itself is NOT stored in
+  working-state.md — it lives in `config.md`.
+- **Improvement-scan crash recovery** — `Status: running` is written when a
+  scan begins, `Status: idle` + `Last completed: <ts>` + `Next scan after: <ts>`
+  on completion. On boot, if working-state shows `Status: running` for the
+  improvement scan, the agent skips forge verification and restarts the scan.
+  Improvement scans are **idempotent** — a fresh scan subsumes a partial one.
 - **Comments are not standalone triggers** — most are informational.
   Comments are read by the *next agent picking up the work* when they
   interact with the issue.
 - **DM exception for comments** — DM's task includes waiting for PR
-  merges; comments may land during the wait. DM re-reads comments at
-  task completion before next pickup, so reassignment / route-back /
-  follow-up guidance from comments is honored.
+  merges; comments may land during the wait. The "task" for a PR merge
+  spans the full wait. DM re-reads issue comments **at task completion**
+  (= end of PR-merge wait) before the next pickup. Comments arriving
+  during the wait are honored when the wait ends. **There is no sub-loop
+  during the wait.**
 - **Urgent inter-agent signaling rides status transitions or labels** —
   not bare comments. Example: PM halting an in-progress agent transitions
   `in-progress → planning` (which IS an event).
@@ -84,42 +104,77 @@ source fragment (#8699) — must ship before any per-role flip of
   cycle counter. No cross-agent health check in `cycle_pre` (harness owns
   liveness; agents don't poll each other).
 - **Status line queries harness HTTP API** — own delayed refresh loop,
-  not file-tail. Tracked in #8700.
+  not file-tail. Tracked in #8700. Mode detection reads
+  `event-driven: yes/no` from `.squidsquad/config.md` per role (same
+  mechanism `compose.py` uses).
 - **Two completely separate L1–L4 fragment sets** — one per wake mode.
   No mode-conditional logic inside any fragment. `compose.py` picks one
   manifest + one fragment set based on role's `event-driven: yes/no` in
   `config.md`. Failsafe isolation: Phase 6 cleanup deletes the /loop
   directory wholesale.
-- **L1 boot is tracker-driven failsafe**, not /loop-derived. Survives a
-  total event-bus failure because the path is forge-scan based.
-- **`bootup-complete` event gates outbound dispatch** — harness must NOT
-  push `assigned-to` / `status-transition` events to a role until that
-  role has emitted `bootup-complete`. Pre-bootup events queue per-role
-  and flush on receipt. (Backed by `RESEARCH-harness-events.md` §"Path to
-  Add bootup-complete".)
-- **Event stream gap behavior** — log warning, advance cursor past the
-  gap, continue. Forge-read makes this safe.
-- **Long cursor lag (24h+)** — skim-then-advance for audit fidelity, not
-  jump-to-latest.
+- **L1 boot is part of event-mode's L1 base agent definition** —
+  tracker-driven failsafe baked into the event-mode L1 base fragment,
+  not a standalone fragment file. The boot path is forge-scan based and
+  survives a total event-bus failure (the agent enters a retry loop and
+  operates in degraded mode against the forge until the harness becomes
+  reachable). Loop-mode boot remains the existing /loop tracker-driven
+  pickup path.
+- **`bootup-complete` event is informational only** — harness sets a
+  per-role `bootup_complete: bool` flag on `AgentState`, exposed via
+  `GET /agents/{role}`. **No queuing, no gating, no `_pending_dispatch`,
+  no per-role event holding.** The harness remains a pure broadcast
+  pipe. Operators and the TUI use the flag to know if an agent has
+  finished its boot sequence.
+- **Agent-side event-listening mechanism** — `references/scripts/event_poll.py`
+  (new in #8694) reads the harness event stream from a cursor. The
+  *instructions* to invoke it during normal operation are composed into
+  the event-mode L1 base fragment per the L1–L4-only principle (no
+  separate instruction file outside the compose stack).
+- **Event stream gap behavior — three scenarios**:
+  - **In-stream gap** (small missing range within the retained window):
+    log warning, advance cursor past the gap, continue. Forge-read makes
+    this safe.
+  - **Long cursor lag (24h+)** — skim-then-advance for audit fidelity,
+    not jump-to-latest.
+  - **Eviction gap** (cursor predates oldest retained event in the
+    `maxlen=1000` deque): `GET /events?since=<cursor>` returns no events
+    at the cursor position because they've been evicted. Log eviction
+    details (oldest available event id, count of evicted events).
+    Advance cursor to the oldest-available event id and skim forward
+    from there. Forge current state subsumes the lost information.
 
 ---
 
 ## 3. Workflow Specification (events mode)
 
-### 3.1 Boot — L1 Failsafe (Case A; covered by #8696)
+### 3.1 Boot — L1 Failsafe (Case A; owned by #8694 as part of event-mode L1 base)
 
-1. Read `.squidsquad/<role>/working-state.md` → cursor + in-progress task.
-2. Verify in-progress against forge — still my role? still
-   `status:in-progress`? Yes → resume. No → drop, scan.
+1. Read `.squidsquad/<role>/working-state.md` → cursor + in-progress task +
+   improvement-scan `Status` field.
+2. Branch on what working-state shows:
+   - **In-progress tracker task** → verify against forge — still my role?
+     still `status:in-progress`? Yes → resume. No → drop, scan.
+   - **Improvement-scan `Status: running`** (not a tracker item) → skip
+     forge verification; restart the scan. Improvement scans are
+     idempotent — a fresh scan subsumes a partial one.
+   - **Idle / nothing in progress** → run `work_queue()` against forge
+     and either pick up the next item or fall into the improvement-scan
+     cool-down loop.
 3. Skim events from cursor forward (informational; forge already has
-   current state). Skim-then-advance, never jump-to-latest.
+   current state). Skim-then-advance, never jump-to-latest. Handle gap
+   scenarios per §2 (in-stream gap / long lag / eviction gap).
 4. Advance cursor to latest event id.
-5. Emit `bootup-complete` event (POST `/events` with `event_type=bootup-complete`,
-   `role=<role>`, payload `{"monitor_active": true}`).
-6. Begin listening on event stream.
-
-L1 boot is **failsafe**, not primary. If the event bus is fine, the
-harness flushes any queued dispatch immediately after step 5.
+5. **Check harness reachability**:
+   - **Reachable** → emit `bootup-complete` event (POST `/events` with
+     `event_type=bootup-complete`, `role=<role>`, payload
+     `{"listener_active": true}`). Enter event-listening loop via
+     `event_poll.py`.
+   - **Unreachable** → operate in **degraded mode**: work directly from
+     the forge using `work_queue()`. Retry `bootup-complete` emission
+     with exponential backoff capped at 5 minutes. When the harness
+     becomes reachable, emit `bootup-complete` and enter the listening
+     loop. `bootup-complete` emission is **best-effort, not blocking**
+     — the agent never hangs waiting for the harness.
 
 ### 3.2 Idle, event arrives (Case B)
 
@@ -149,7 +204,7 @@ the next `assigned-to`.)
 4. On task completion, re-scan forge — current forge state absorbs
    all mid-task events.
 
-### 3.5 Special events
+### 3.5 Special events (Case E)
 
 - **`stop-requested`** — honored ONLY at task boundary. Mid-task: read,
   advance, ignore. At boundary: checkpoint `working-state.md`
@@ -162,28 +217,37 @@ the next `assigned-to`.)
 
 - When `work_queue()` returns empty → enter improvement-scan as an
   atomic task.
-- After scan completes → write to `working-state.md` under
+- On scan start: write `Status: running` to `working-state.md` under
+  `## Improvement Scan`.
+- On scan completion: read cool-down value from `config.md` (default
+  30m), compute `Next scan after: <now + cooldown>`, and write under
   `## Improvement Scan`:
   ```
+  Status: idle
   Last completed: <YYYY-MM-DD HH:MM>
-  Cool-down: 30m
+  Next scan after: <YYYY-MM-DD HH:MM>
   ```
-- Listen on event stream with timeout = remaining cool-down.
+- Listen on event stream with timeout = remaining cool-down (= `Next scan
+  after` − now).
 - Timeout fires first → run next improvement-scan.
 - Task-relevant event arrives during sleep → cancel wait, re-scan
   `work_queue()`.
 - Event arrives during inflight scan → finish scan first (atomicity
   rule), then process.
-- Default = **30m universal across roles**, configurable per role in
-  `config.md` (no per-role overrides shipped initially).
+- Default cool-down = **30m universal across roles**, configurable
+  per role in `config.md` (no per-role overrides shipped initially).
 
 ### 3.7 Comment handling
 
 - Comments are NOT standalone event triggers.
 - Comments are absorbed by the next agent that picks up the issue.
-- **DM exception**: DM rereads comments at task completion (PR-merge
-  wait can be long; comment-driven guidance like reassign / route back /
-  file follow-up must be honored).
+- **DM exception**: DM re-reads issue comments **at task completion**
+  before the next pickup. The "task" for a PR merge spans the full
+  wait — comments arriving during the wait are honored when the wait
+  ends. **No sub-loop during the wait.** Urgent reassignment / route-back
+  / follow-up guidance via comments alone is therefore delayed until
+  the wait completes; senders requiring faster reaction must ride a
+  status transition or label change.
 - Urgent agent-to-agent signaling MUST ride a status transition or
   label change. Bare comments will not wake anyone.
 
@@ -244,7 +308,9 @@ trees" — the naming convention is implementation discretion.
 - NO mode-conditional logic inside any fragment. Fragments are pure;
   the manifest + tree pairing carries the mode.
 - L4 project instructions (`.squidsquad/project/`) are mode-agnostic
-  and continue to flow through the existing Layer 4 mechanism.
+  and continue to flow through the existing Layer 4 mechanism. **L4
+  files must be audited for /loop-specific language before any per-role
+  flip to events mode** — see §6 pre-flip checklist.
 
 ### 4.4 Phase 6 cleanup characteristic
 
@@ -257,33 +323,63 @@ isolation property. See #8698.
 
 ## 5. Per-Task Specifications
 
-### 5.1 #8694 — Agent Event Reactions + Cursor Management (lead)
+### 5.1 #8694 — Event-Mode L1 Base Agent Definition (lead)
 
-**Scope**: The full set of *agent-side* event-mode instructions:
-event-reactions, cursor management, forge-read pattern, idle ==
-improvement-cooldown loop, comment-handling rule, DM PR-merge edge case,
-explicit transition-on-design-handoff rule.
+**Scope**: The complete event-mode L1 base agent definition. Owns the
+entire event-mode agent contract:
+
+- **Boot sequence (Case A)** — tracker-driven failsafe, harness-reachability
+  branching, exponential-backoff retry on harness unreachable, degraded-mode
+  operation, eviction-gap handling.
+- **All event reactions (Cases B–E)** — idle/event, after-completion,
+  mid-task event, special events.
+- **Cursor management** — atomic `.tmp` + `mv` advance per event.
+- **Forge-read pattern** — every decision consults the forge before acting.
+- **Idle = improvement-scan cool-down loop** — including `Status: running`
+  crash-recovery semantics and `Next scan after` storage.
+- **Comment handling rule** — including the DM end-of-task re-read exception.
+- **Agent-side event-listening mechanism** — `event_poll.py` script
+  (executable) plus the instructions to use it (composed into event-mode L1
+  base, per L1–L4-only principle; no separate instruction file outside the
+  compose stack).
+- **Improvement-scan crash recovery** — `Status: running` field, fresh-scan
+  idempotency.
+- **Eviction-gap handling** — third gap scenario beyond in-stream gap and
+  long lag.
+
+The boot sequence is part of the event-mode L1 base fragment — there is **no
+standalone `l1-boot.md` fragment file**. All agent instructions must live in
+CLAUDE.md composed from L1–L4 layers (the locked architectural principle).
 
 **Deliverables**:
+- New executable script: `references/scripts/event_poll.py`.
+  - Cursor-based polling of the harness event stream (`GET /events?since=<cursor>`).
+  - Configurable wait/timeout.
+  - Stdout JSON-lines streaming.
+  - Retry on transient harness errors with exponential backoff.
 - Content under `references/sub-skills/common-events/` and per-role
   `references/sub-skills/roles/<role>/events/` describing:
-  - The 5 workflow cases (boot / idle-event-arrives / after-completion /
-    mid-task-event / special events) verbatim from §3.
+  - The event-mode L1 base agent definition (boot sequence + event
+    reactions verbatim from §3).
   - Cursor format and atomic update protocol (write `.tmp`, `mv`).
-  - Forge-read protocol — every decision consults the forge before
-    acting.
-  - Idle = improvement-scan cool-down loop with explicit
-    `working-state.md` schema.
-  - Comment-handling rule and DM PR-merge re-read exception.
+  - Forge-read protocol.
+  - Idle = improvement-scan cool-down loop with explicit `working-state.md`
+    schema including `Status: idle | running`, `Last completed`, and
+    `Next scan after` fields.
+  - Comment-handling rule and DM end-of-task re-read exception (explicitly
+    no sub-loop during the wait).
   - **Transition-on-handoff rule**: when an agent assigns work to a
-    different role (including humans), the assignment MUST be a
-    status transition so it appears on the event stream. Bare comments
-    do not wake the recipient.
+    different role (including humans), the assignment MUST be a status
+    transition so it appears on the event stream. Bare comments do not
+    wake the recipient.
+  - **How to invoke `event_poll.py`** as the agent's listening mechanism.
 - Updates to per-role events fragments (skill / pm / qa / dm) for
   role-specific behavior on top of the common contract.
 
 **Files touched (illustrative — final naming defers to #8697)**:
-- `references/sub-skills/common-events/event-reactions.md` (new)
+- `references/scripts/event_poll.py` (new)
+- `references/sub-skills/common-events/l1-base.md` (new — contains the
+  full event-mode L1 base agent definition including boot sequence)
 - `references/sub-skills/common-events/cursor-management.md` (new)
 - `references/sub-skills/common-events/forge-read-pattern.md` (new)
 - `references/sub-skills/common-events/idle-cooldown-loop.md` (new)
@@ -292,124 +388,82 @@ explicit transition-on-design-handoff rule.
 - `references/sub-skills/roles/pm/events/*.md` (per-role events)
 - `references/sub-skills/roles/skill/events/*.md`
 - `references/sub-skills/roles/qa/events/*.md`
-- `references/roles/<role>/includes-events.yml` (manifest entries
-  pointing at the above)
+- `references/roles/<role>/includes-events.yml` (manifest entries pointing
+  at the above)
 
 **Acceptance**:
 - CQ spec (`tests/comprehension/8694_spec.json`) covers: how the agent
   reacts to a mid-task event; how the agent handles an unknown event;
   what fires when `work_queue()` returns empty; what DM does after a PR
   merges while it was waiting; what an agent does if a comment on its
-  issue requests a route-back.
+  issue requests a route-back; what the agent does on boot when
+  working-state shows an improvement-scan with `Status: running`.
+- **Failsafe acceptance criterion**: "agent boots and works correctly
+  with the harness fully down — completes forge scan, enters retry
+  loop, operates in degraded mode against the forge directly, does
+  not crash or hang."
+- `event_poll.py` unit/integration tests cover cursor-based polling,
+  timeout behavior, and retry on transient harness errors.
 - Comprehension test passes with a fresh agent given only the new
   fragments.
 - No mode-conditional language inside any fragment ("if event-driven
   is yes, ..." is banned in fragment bodies).
+- No agent instructions live outside the L1–L4 compose stack. No
+  standalone `l1-boot.md` fragment.
 - Heavy instruction-design task — primary content surface for Phase 5.
 
 ---
 
-### 5.2 #8695 — `bootup-complete` Event + Dispatch Gate
+### 5.2 #8695 — `bootup-complete` Event (Informational Only)
 
-**Scope**: Small harness add. Define and recognize the
-`bootup-complete` event from agents; gate outbound dispatch on receipt;
-queue pre-boot events per-role and flush on receipt.
+**Scope**: Minimal harness add. Define and recognize the
+`bootup-complete` event from agents and expose a per-role
+`bootup_complete: bool` flag on `AgentState`. **No dispatch gate,
+no per-role queue, no event holding.** The harness remains a pure
+broadcast pipe; this change is observability only.
 
-**Deliverables** (from `RESEARCH-harness-events.md` §"Path to Add
-bootup-complete"):
+**Deliverables**:
 - `references/scripts/event_catalog.py`: add `bootup-complete` to
-  `EMITTED` dict, source `"agent boot"`, payload_fields
-  `["monitor_active"]`.
+  the agent-emitted event list, source `"agent boot"`, payload_fields
+  `["listener_active"]`.
 - `references/scripts/harness.py`:
   - Add `bootup_complete: bool = False` to `AgentState.__slots__` and
     `__init__`.
   - Reset to `False` on each spawn (`start_agent`, `_deferred_init`,
     PID change in `update_health`).
   - In `_update_agent_from_event()` (~line 750): when
-    `event_type == "bootup-complete"`, set `bootup_complete = True` and
-    flush `_pending_dispatch[role]`.
-  - Add `_pending_dispatch: dict[str, list[dict]]` to `HarnessState`
-    (or inline on `AgentState`).
-  - New helper `_flush_dispatch_queue(role)`.
-  - When outbound dispatch occurs (future code path or any code path
-    that emits `assigned-to`/`status-transition` toward an agent):
-    if `bootup_complete is False`, queue in `_pending_dispatch[role]`
-    and log `"queued-but-not-dispatched for {role} — waiting for
-    bootup-complete"`.
-  - `AgentState.to_dict()` already serializes fields; add
-    `"bootup_complete": self.bootup_complete` (~line 101–115).
+    `event_type == "bootup-complete"`, set `bootup_complete = True`.
+    **No queue flushing. No `_pending_dispatch[role]`.**
+  - `AgentState.to_dict()`: include `"bootup_complete": self.bootup_complete`.
 - POST `/events` already accepts agent-originated events
   (`harness.py:827`). No endpoint change required.
 - GET `/agents/{role}` already returns full `AgentState.to_dict()`.
-  No endpoint change required.
+  No endpoint change required — the new field rides through automatically.
 
 **Files touched**:
 - `references/scripts/event_catalog.py`
 - `references/scripts/harness.py`
-- L1 boot fragment (#8696) emits `bootup-complete` — see §5.3.
 
 **Acceptance**:
-- Unit test: spawning an agent resets `bootup_complete` to False.
-- Unit test: posting a `bootup-complete` event flips the flag and
-  flushes pending dispatch.
-- Integration test: a pre-boot dispatch is queued and delivered after
-  `bootup-complete`.
-- `GET /agents/{role}` returns `bootup_complete` in JSON.
+- Unit test: spawning an agent resets `bootup_complete` to `False`.
+- Unit test: posting a `bootup-complete` event flips the flag.
+- Integration test: `GET /agents/{role}` returns `bootup_complete: true`
+  after the role emits the event.
+- Negative test: harness emits **no per-role dispatching of any kind**
+  during the test (verify nothing is queued, held, or routed per-role).
 
-**Note**: Because the harness in this architecture does NOT do
-outbound dispatch logic itself, the "dispatch gate" is primarily a
-guard for any *external* sources of harness-originated events (e.g.
-`pr-merged`, `compose-completed` via `_emit_event()` already in
-`harness.py`). The gate ensures these don't fire toward a role that
-hasn't booted yet.
+**Note**: The bootup-complete event is informational only. Operators
+and the TUI consume the flag to know if a role has finished its boot
+sequence. There is no harness-side gating, queuing, or dispatching of
+any events of any type.
 
 ---
 
-### 5.3 #8696 — L1 Boot Instructions (Tracker-Driven Failsafe)
-
-**Scope**: New sub-skill that slots at position 1 in
-`includes-events.yml` for every role. Implements Case A (§3.1). Tracker-
-driven, not /loop-driven — survives total event-bus failure.
-
-**Deliverables**:
-- New fragment `references/sub-skills/common-events/l1-boot.md` (final
-  path subject to #8697 directory layout). Contents per
-  `RESEARCH-compose-boot.md` §"Path to L1 Boot Sub-Skill" with these
-  locked-decision adjustments:
-  - Step 1: resume check via `working-state.md` AND verify the
-    in-progress task against the forge (still my role? still
-    `status:in-progress`?).
-  - Step 2: tracker scan via `python references/scripts/tracker.py
-    work-queue <role>`, skip `design:needed` / `design:in-progress`.
-  - Step 3: skim events from cursor forward (informational), advance
-    cursor to latest.
-  - Step 4: emit `bootup-complete` event (per #8695).
-  - Step 5: enter event-listening (Monitor or equivalent).
-- Slot at position 1 of every role's `includes-events.yml`.
-
-**Files touched**:
-- `references/sub-skills/common-events/l1-boot.md` (new)
-- `references/roles/pm/includes-events.yml`
-- `references/roles/skill/includes-events.yml`
-- `references/roles/qa/includes-events.yml`
-- `references/roles/dm/includes-events.yml`
-
-**Acceptance**:
-- CQ spec (`tests/comprehension/8696_spec.json`) covers: agent boots
-  with non-empty `working-state.md` (resumes), agent boots with empty
-  `working-state.md` (scans tracker), agent boots when event bus is
-  unreachable (still scans tracker — failsafe property), agent emits
-  `bootup-complete` once and only once per boot.
-- L1 boot fragment contains no /loop-mode language.
-
----
-
-### 5.4 #8697 — `compose.py` Dual-Mode (separate L1–L4 sets per wake mode)
+### 5.3 #8697 — `compose.py` Dual-Mode (separate L1–L4 sets per wake mode)
 
 **Scope**: Code refactor. Establish the two-fragment-set architecture
-described in §4. Includes migration of the orphaned
-`event-driven-workflow` block into a real source fragment (#8699
-prereq folded in here).
+described in §4. **Absorbs #8699** (event-driven-workflow source
+migration) as a deliverable.
 
 **Deliverables**:
 - `references/scripts/compose.py`:
@@ -432,24 +486,32 @@ prereq folded in here).
   references/sub-skills/roles/<role>/       (truly shared per-role)
   ```
 - Two manifests per role: `includes-loop.yml`, `includes-events.yml`.
-- Migration of `event-driven-workflow` block: extract from currently
-  hand-injected content in deployed CLAUDE.mds (line ranges per
-  `RESEARCH-compose-boot.md`: PM 344–425, skill ~328–416, QA 344–425,
-  DM 363–444) into real fragments under `common-events/`. **This
-  resolves #8699 and is folded into #8697 scope.**
+- **Migration of `event-driven-workflow` block** (closes #8699): extract
+  from currently hand-injected content in deployed CLAUDE.mds (line
+  ranges per `RESEARCH-compose-boot.md`: PM 344–425, skill ~328–416,
+  QA 344–425, DM 363–444) into real fragments under `common-events/`.
 - Initial classification pass: for the four existing role manifests
   (PM 31 entries, others similar), classify each entry as `loop`,
   `events`, or `both`. "Both" entries appear in BOTH new manifests.
+- **L4 audit (pre-flip checklist enforcement)**: audit all L4 project
+  instruction files (`.squidsquad/project/pm-instructions.md`,
+  `dev-instructions.md`, `shared-instructions.md`) for /loop-specific
+  language. Remove or generalize cycle/loop references. Any L4 file
+  that cannot be cleanly generalized must be split into mode-specific
+  variants. Track this audit as a deliverable; it is also listed in §6
+  as a pre-flip checklist item.
 
 **Files touched**:
 - `references/scripts/compose.py`
 - New: `references/sub-skills/common-events/*.md` (event-driven-workflow
-  migration source)
+  migration source — closes #8699)
 - New: `references/sub-skills/common-loop/*.md` (cycle-runner and
   /loop-only fragments)
 - New: `references/roles/<role>/includes-events.yml` (4 files)
 - Renamed: `references/roles/<role>/includes.yml` →
   `references/roles/<role>/includes-loop.yml` (4 files, kept until #8698)
+- Edited: `.squidsquad/project/pm-instructions.md`,
+  `dev-instructions.md`, `shared-instructions.md` (L4 audit results)
 - Test: `tests/comprehension/8697_spec.json` (CQ for dual-mode
   composition).
 
@@ -464,42 +526,52 @@ prereq folded in here).
 - Existing roles compose identically to today when `event-driven: no`
   (regression check against current deployed output).
 - `event-driven-workflow` block is composed from a real source
-  fragment, not hand-injected.
+  fragment, not hand-injected. #8699 closes here.
+- L4 project instruction files contain no /loop-specific language, or
+  are explicitly split into mode-specific variants.
 
 ---
 
-### 5.5 #8700 — Status Line Refactor (harness HTTP API source)
+### 5.4 #8700 — Status Line Refactor (harness HTTP API source)
 
 **Scope**: Switch status line data source from local files to harness
-HTTP API. Run its own delayed refresh loop.
+HTTP API. Run its own delayed refresh loop. Renders as a panel within
+the harness-served TUI (see §5.6).
 
 **Deliverables**:
-- Status line script reads `GET /status` (or `GET /agents`) from
-  harness on a 2–5 second refresh loop.
-- **Backward compat**: detect per-role wake mode. For `/loop` roles
-  during transition, fall back to file-based rendering. Once #8698
-  ships and `/loop` mode is gone, remove the file-based path.
+- Status line panel reads `GET /status` (or `GET /agents`) from
+  the harness on a 2–5 second refresh loop.
+- **Mode detection**: reads `event-driven: yes/no` from
+  `.squidsquad/config.md` per role (same mechanism `compose.py` uses
+  via `_read_config_value()`). Uses HTTP API rendering for
+  `event-driven: yes` roles; falls back to file-based rendering for
+  `event-driven: no` roles during the transition.
+- **Edge case**: config says `yes` but no harness data for the role yet
+  (e.g. the agent hasn't booted) → render `events-mode, awaiting boot`.
+- Once #8698 ships and `/loop` mode is gone, remove the file-based path.
 - Display fields per agent: current task id, phase / current state,
-  bootup_complete flag, health.
+  `bootup_complete` flag, health.
 
 **Files touched**:
 - Status line script(s) (location per current codebase — likely a
-  `statusline.py` or similar in `references/scripts/`)
+  `statusline.py` or similar in `references/scripts/`).
 - Possibly `harness.py` if a new aggregate endpoint is preferred over
   composing from `/agents` + per-agent calls.
 
 **Acceptance**:
-- Status line updates without scanning local agent files when harness
-  is reachable.
-- Status line falls back gracefully (file-based) when role is still
+- Status line updates without scanning local agent files when the
+  harness is reachable and a role's config is `event-driven: yes`.
+- Status line falls back gracefully (file-based) when a role is still
   in /loop mode.
+- Edge case: config `event-driven: yes` + no harness data renders
+  `events-mode, awaiting boot`.
 - Status line refresh does not impose a measurable CPU/API load
   (2–5s cadence).
 - CQ spec deferred — primarily a code task, not instruction-design.
 
 ---
 
-### 5.6 #8701 — `cycle_pre` / `cycle_post` Task-Level Refactor
+### 5.5 #8701 — `cycle_pre` / `cycle_post` Task-Level Refactor
 
 **Scope**: Code refactor. In events mode, `cycle_pre.py` and
 `cycle_post.py` become per-task operations rather than 30-minute ticks.
@@ -539,11 +611,12 @@ HTTP API. Run its own delayed refresh loop.
 
 ---
 
-### 5.7 #8704 — Harness TUI Surfaces Human-Assigned Work
+### 5.6 #8704 — Harness TUI Surfaces Human-Assigned Work
 
 **Scope**: New harness endpoint + TUI/UI panel for `pending-human-*`
 items. Prominent surfacing (badge count, dedicated panel). Works for
-any agent's pending-human transitions, not just designer.
+any agent's pending-human transitions, not just designer. Renders as
+a panel within the same harness-served TUI as #8700.
 
 **Deliverables**:
 - `references/scripts/harness.py`: new endpoint, e.g.
@@ -551,7 +624,7 @@ any agent's pending-human transitions, not just designer.
   `status:pending-human-*` label. Implementation: shell out to
   `tracker.py` or `gh issue list` with appropriate filters; cache
   briefly (5–10s) to avoid hammering the forge.
-- TUI / status surface: reads `GET /human/queue` on a delayed refresh
+- TUI human-queue panel: reads `GET /human/queue` on a delayed refresh
   loop (matches #8700 cadence). Renders:
   - Badge count of pending-human-* items.
   - Dedicated panel listing items: number, title, role that
@@ -561,7 +634,7 @@ any agent's pending-human transitions, not just designer.
 
 **Files touched**:
 - `references/scripts/harness.py`
-- TUI / status display script(s).
+- TUI display script(s).
 - Possibly `references/scripts/tracker.py` if a new query is needed.
 
 **Acceptance**:
@@ -572,9 +645,25 @@ any agent's pending-human transitions, not just designer.
 
 ---
 
-## 6. Hard Prerequisites
+### 5.7 TUI / Status Surface Architecture (cross-cutting)
 
-These MUST ship before any per-role flip of `event-driven: yes`.
+The status line (#8700) and the human-queue panel (#8704) are **panels
+within the same harness-served TUI**. They share:
+
+- The harness API base URL (resolved from `.squidsquad/.harness-port`).
+- The refresh cadence (2–5 seconds).
+- The same display surface (one TUI process).
+
+Single integration point. #8700 ships the status-line panel first;
+#8704 adds the human-queue panel later. Both consume harness HTTP
+endpoints; **neither reads agent-side files** (in events mode).
+
+---
+
+## 6. Hard Prerequisite
+
+The only true hard prerequisite for any per-role flip of
+`event-driven: yes` is **#8692**.
 
 ### 6.1 #8692 — Singleton Enforcement at Agent Startup (BLOCKER)
 
@@ -585,29 +674,42 @@ pollution incident that triggered this whole planning effort
 the failure mode is worse: both sessions process the same event,
 duplicate forge actions, corrupt cursors.
 
-**Plan in parallel; gate approval/execution of any other Phase 5
-task on #8692 being shipped first.**
+**Plan in parallel; gate approval/execution of any per-role events flip
+on #8692 being shipped first.**
 
-### 6.2 #8699 — `event-driven-workflow` Source Fragment Missing (BLOCKER)
+### 6.2 (#8699 — absorbed by #8697)
 
-The `event-driven-workflow` block was hand-injected into deployed
-CLAUDE.mds in commit `a3b108f2`. It has no source in
-`references/sub-skills/` and no entry in any `includes.yml`. The next
-`compose.py deploy` wipes it.
+The `event-driven-workflow` block migration (formerly tracked as #8699)
+is folded into #8697's scope. It is **not** a separate prerequisite. See
+§5.3 deliverables — when #8697 ships, the canonical `event-driven-workflow`
+fragment lives under `common-events/` and is composed normally; #8699
+closes automatically.
 
-**Resolution**: fold the migration of this content into a proper
-source fragment into #8697 scope (see §5.4). #8699 closes when #8697's
-new `common-events/` tree contains the canonical
-`event-driven-workflow` fragment(s) and `compose.py deploy` correctly
-emits it.
+### 6.3 Pre-Flip Checklist (per role)
+
+Before flipping any role's `event-driven: yes` in `config.md`:
+
+1. #8692 (singleton enforcement) is shipped.
+2. #8697 (compose dual-mode) is shipped — events-mode tree exists for
+   this role with no /loop residue in any fragment body.
+3. L4 audit (under #8697) has confirmed no /loop-specific language
+   remains in `.squidsquad/project/` files that apply to this role.
+4. #8694 fragments (event-mode L1 base, including boot sequence and
+   `event_poll.py`) are in place for this role.
+5. #8695 (`bootup_complete` flag) is deployed so the TUI/operators can
+   see boot status.
+6. `compose.py deploy <role>` produces a CLAUDE.md with zero /loop
+   language and the events-mode boot sequence at L1.
 
 ---
 
 ## 7. Phase 6 Cleanup (dormant — pending event-mode fully on)
 
-These tasks sit at `status:pending` until every role has
-`event-driven: yes` and event-driven operation has been observed
-stable for a tunable soak period.
+These tasks sit at `status:pending` until **the PM, after reviewing
+event-driven-mode operation across all roles, judges the system is
+stable**. There is no fixed soak duration; the PM signs off at a
+Phase 5 completion review point. The decision *point* is locked; the
+duration is intentionally flexible.
 
 ### 7.1 #8698 — Remove /loop Materials
 
@@ -617,8 +719,9 @@ stable for a tunable soak period.
 - Remove /loop branches from `cycle_pre.py` and `cycle_post.py`
   (becomes single-mode, events-only).
 - Remove status-line file-based fallback path (#8700).
-- **Non-goal**: do NOT remove the L1 boot failsafe (#8696). L1 boot is
-  tracker-scan based, not /loop-based; it stays.
+- **Non-goal**: do NOT remove the L1 failsafe boot sequence (now part
+  of event-mode L1 base, owned by #8694). It stays because it is
+  tracker-scan based, not /loop-based.
 
 ### 7.2 #8702 — Documentation Realignment
 
@@ -648,48 +751,53 @@ don't churn while the architecture is mid-flip).
 
 ```
                     ┌────────────────────────────────────────┐
-                    │  Hard prerequisites — parallel start   │
+                    │  Hard prerequisite                     │
                     │                                        │
                     │   #8692 — singleton enforcement        │
-                    │   #8699 — event-driven-workflow source │
-                    │     (folded into #8697 scope)          │
                     └────────────────┬───────────────────────┘
                                      │
-                                     │ both must SHIP
+                                     │ must SHIP
                                      ▼
                     ┌────────────────────────────────────────┐
                     │  #8697 — compose.py dual-mode          │
                     │  (establishes two fragment trees,      │
                     │   migrates event-driven-workflow,      │
-                    │   closes #8699)                        │
+                    │   closes #8699,                        │
+                    │   audits L4 for /loop residue)         │
                     └────────────────┬───────────────────────┘
                                      │
                                      ▼
        ┌─────────────────────────────┴─────────────────────────────┐
        │                                                           │
        ▼                                                           ▼
-┌────────────────┐    ┌────────────────┐    ┌─────────────────────┐
-│ #8694          │    │ #8695          │    │ #8696               │
-│ agent event    │    │ bootup-complete│    │ L1 boot failsafe    │
-│ reactions +    │    │ event + gate   │    │ tracker-driven      │
-│ cursor mgmt    │    │                │    │ position 1 in       │
-│                │    │                │    │ includes-events.yml │
-└────────┬───────┘    └────────┬───────┘    └──────────┬──────────┘
-         │                     │                       │
-         ▼                     ▼                       ▼
+┌────────────────────┐                              ┌─────────────────────┐
+│ #8694 (lead)       │                              │ #8695               │
+│ event-mode L1 base │                              │ bootup_complete     │
+│ — boot + reactions │                              │ informational flag  │
+│   + cursor mgmt    │                              │ on AgentState       │
+│   + event_poll.py  │                              │ (no gate/queue)     │
+│   + idle cooldown  │                              │                     │
+│   + DM end-of-task │                              │                     │
+│   + eviction gap   │                              │                     │
+└────────┬───────────┘                              └──────────┬──────────┘
+         │                                                     │
+         ▼                                                     ▼
 ┌────────────────┐    ┌────────────────┐    ┌─────────────────────┐
 │ #8701          │    │ #8700          │    │ #8704               │
 │ cycle_pre/post │    │ status line    │    │ TUI human queue     │
-│ task-level     │    │ HTTP API       │    │                     │
+│ task-level     │    │ HTTP API panel │    │ panel               │
 └────────┬───────┘    └────────┬───────┘    └──────────┬──────────┘
          │                     │                       │
          └─────────────────────┼───────────────────────┘
                                │
-                               │ All shipped + per-role flip
+                               │ All shipped + per-role pre-flip
+                               │ checklist (§6.3) complete + flip
                                │ event-driven: yes in config.md
                                ▼
                   ┌──────────────────────────────┐
-                  │ Soak period (stability obs.) │
+                  │ PM stability review          │
+                  │ (no fixed soak duration —    │
+                  │  PM judgment call)           │
                   └──────────────┬───────────────┘
                                  │
                                  ▼
@@ -703,37 +811,60 @@ don't churn while the architecture is mid-flip).
 Notes on sequencing:
 - #8697 is the spine. Until it ships, all other event-mode tasks
   cannot deploy their fragments cleanly (no events-mode tree exists).
-- #8694, #8695, #8696 can be authored in parallel with #8697 but their
-  fragment content lands under the #8697 tree.
+- #8694, #8695 can be authored in parallel with #8697 but their
+  fragment/code content lands under the #8697 tree.
 - #8700, #8701, #8704 are independent code refactors and can run in
   parallel with each other once #8697 lands.
 - #8703 is active immediately and lifts when #8702 begins.
+- #8696 has been folded into #8694 (closed not-planned). The L1 boot
+  sequence is part of #8694's event-mode L1 base agent definition.
+- #8699 is resolved internally as a #8697 deliverable.
 
 ---
 
-## 10. Open Questions for Human Review
+## 10. Open Questions / Closing Notes
 
-Most discussion points are already locked. The remaining items:
+Most discussion points are locked. The remaining genuinely open items
+and explicit closures of prior open questions:
 
-1. **Cool-down per-role overrides** — leave `config.md` schema empty
-   until empirical observation warrants tuning. Confirm: no role-specific
-   overrides ship in v1?
-2. **Exact directory naming for the two fragment sets** —
+### Genuinely open
+1. **Exact directory naming for the two fragment sets** —
    `common-loop` vs `common/loop/`, etc. Deferred to #8697
-   implementation. Confirm: PM does not need to lock the name now?
-3. **`design:*` label retirement** — retain as metadata indefinitely
-   vs. retire entirely. Deferred to #8698 Phase 6 cleanup. Confirm:
-   no decision needed in this bundle?
-4. **Initial fragment classification pass** (loop / events / both for
+   implementation. PM does not need to lock the name now.
+2. **`design:*` label retirement** — retain as metadata indefinitely
+   vs. retire entirely. Deferred to #8698 Phase 6 cleanup.
+3. **Initial fragment classification pass** (loop / events / both for
    the existing ~31 entries per role manifest) — does this happen
    inside #8697 or as a separate sub-task? Recommend folding into
    #8697; flag if human prefers a dedicated task.
-5. **Soak period before Phase 6** — how long does event-driven operation
-   need to be stable before #8698 / #8702 are picked up? Not locked.
 
-If any of these need to be locked before TEST-PLAN authoring begins,
-flag them; otherwise downstream planners can write tests that don't
-depend on the answers.
+### Explicitly closed by this Phase 2
+
+- **Cool-down per-role overrides** — closed. The locked decision at §2
+  is the policy: 30m universal default, overridable in `config.md` but
+  no overrides ship initially. No separate open question.
+- **Soak period before Phase 6** — closed by **PM judgment call**. No
+  fixed duration; PM signs off at a Phase 5 completion review point.
+  See §7.
+- **RESEARCH-harness-events.md open questions 1–4 + 7** — moot under
+  the thin-harness no-dispatch architecture (the harness does not
+  observe tracker state or emit `assigned-to`).
+- **RESEARCH open question 5** (singleton enforcement interaction) —
+  resolved by #8692 being the sole hard prerequisite.
+- **RESEARCH open question 6** (bootstrap timeout during harness
+  restart) — locked: with the dispatch gate dropped (Finding 1
+  resolution), a 60-second watchdog clearing a bootup gate is no
+  longer applicable. The agent's degraded-mode retry loop (§3.1 step 5)
+  with 5-minute backoff cap handles harness-down scenarios. Operators
+  see `bootup_complete: false` longer than expected as a soft signal.
+- **RESEARCH open question 8** (coordination with config flip) —
+  locked: per-role flip happens AFTER `compose.py deploy` for that role
+  AND AFTER #8692 singleton enforcement ships. See §6.3 pre-flip
+  checklist.
+
+If any of the genuinely open items need to be locked before TEST-PLAN
+authoring begins, flag them; otherwise downstream planners can write
+tests that don't depend on the answers.
 
 ---
 
@@ -743,7 +874,7 @@ depend on the answers.
   via `references/scripts/tracker.py`.
 - **Thin harness** — the FastAPI process (`harness.py`) operating as a
   pure broadcast event bus: no tracker observation, no dispatch logic,
-  no per-role queue knowledge.
+  no per-role queue knowledge, no event gating.
 - **Event bus** — the in-memory `EventStream` (deque, maxlen=1000) in
   `harness.py:364`. No disk persistence today.
 - **Cursor** — per-agent `Last Processed Event ID` stored in
@@ -754,16 +885,47 @@ depend on the answers.
   of trusting event payload.
 - **Cool-down loop** — when `work_queue()` is empty, agent runs
   improvement-scan as an atomic task, then listens on the event stream
-  with a timeout equal to remaining cool-down (default 30m universal).
-- **L1 boot** — the tracker-driven failsafe boot sequence (#8696)
-  that runs once per session before event listening. Survives total
-  event-bus failure because it queries the forge directly.
+  with a timeout equal to remaining cool-down (default 30m universal,
+  value read from `config.md` at scan-completion time).
+- **Event-mode L1 base** — the event-mode L1 base agent definition
+  fragment (owned by #8694) that contains the boot sequence, event
+  reactions, cursor management, forge-read pattern, idle cooldown loop,
+  comment handling, and event-listening invocation. There is no
+  standalone `l1-boot.md` — the boot sequence lives inside this fragment.
+- **L1 boot (event mode)** — the tracker-driven failsafe boot sequence
+  (§3.1) that runs once per session before event listening. Survives
+  total event-bus failure: the agent enters a retry loop and operates
+  in degraded mode against the forge directly until the harness is
+  reachable.
+- **Degraded mode** — operating directly from the forge via
+  `work_queue()` when the harness is unreachable. The agent retries
+  `bootup-complete` emission with exponential backoff capped at 5
+  minutes, and works through forge items in the meantime.
 - **`bootup-complete` event** — emitted by an agent at the end of L1
-  boot. Harness sets per-role `bootup_complete = True` and flushes
-  any queued outbound dispatch for that role.
+  boot. **Informational only.** The harness sets per-role
+  `bootup_complete = True` on `AgentState` and exposes it via
+  `GET /agents/{role}`. No queuing, no gating, no dispatching.
+- **`listener_active`** — boolean field in the `bootup-complete` event
+  payload indicating the agent's event-stream reader (`event_poll.py`
+  invocation) is running and ready to receive events. Mechanism-agnostic
+  (replaces the older Monitor-specific `monitor_active` field).
+- **`event_poll.py`** — agent-side event-stream reader script delivered
+  by #8694. Cursor-based polling of `GET /events?since=<cursor>` with
+  stdout JSON-lines streaming, configurable timeout, and retry on
+  transient harness errors. Invoked by agents per instructions composed
+  into the event-mode L1 base fragment.
 - **Atomicity rule** — every task (tracker work AND improvement-scan)
   runs to completion. Mid-task events are read + cursor-advanced
   but not acted on.
+- **Improvement-scan crash recovery** — working-state's
+  `## Improvement Scan` section carries a `Status: idle | running` field.
+  `running` written at scan start, `idle` + `Last completed` +
+  `Next scan after` written at scan completion. On boot, `Status: running`
+  → restart the scan (improvement scans are idempotent).
+- **Eviction gap** — third gap scenario: the cursor predates the oldest
+  retained event in the harness's `maxlen=1000` deque. Agent logs
+  eviction details, advances cursor to oldest-available event id, and
+  skims forward. Forge current state subsumes the lost events.
 - **Task-cycle** — `cycle_pre`/`cycle_post` invocation per task in
   events mode (replaces the /loop time-cycle).
 - **HITL transition** — handoff to a human modeled as a status
@@ -773,11 +935,17 @@ depend on the answers.
   two manifests per role; `compose.py` picks one set based on role's
   `event-driven: yes/no` flag. No mode-conditional logic inside any
   fragment.
-- **`event-driven-workflow` fragment** — currently hand-injected into
+- **`event-driven-workflow` fragment** — formerly hand-injected into
   deployed CLAUDE.mds (commit `a3b108f2`) with no source backing.
   Migration into `common-events/` is folded into #8697 (closing #8699).
 - **`includes-loop.yml` / `includes-events.yml`** — per-role manifests
   authoritative for fragment ordering within their mode.
+- **Pre-flip checklist** — the per-role sequence in §6.3 that must
+  complete before flipping `event-driven: yes` for that role.
+- **TUI** — single harness-served terminal UI. Hosts the status-line
+  panel (#8700) and the human-queue panel (#8704). Both panels consume
+  harness HTTP endpoints; neither reads agent-side files in events mode.
 - **Phase 6 cleanup** — post-rollout deletion of /loop materials
-  (#8698) and documentation realignment (#8702). Gated on stable
-  events-mode operation across all roles.
+  (#8698) and documentation realignment (#8702). Gated on PM stability
+  judgment after events-mode operation across all roles (no fixed soak
+  duration).
