@@ -161,6 +161,32 @@ class TestSanitizeConfig:
         assert "[REDACTED]" in result
         assert "0.37.0" in result
 
+    def test_redacts_url_field(self):
+        """#8235 regression: url fields must be redacted."""
+        config_text = "clone-url: https://github.com/user/private\nversion: 0.38.0\n"
+        with patch.object(diagnostics, "_read_config", return_value=config_text):
+            result = diagnostics._sanitize_config()
+        assert "private" not in result
+        assert "[REDACTED]" in result
+        assert "0.38.0" in result
+
+    def test_redacts_webhook_field(self):
+        """#8235 regression: webhook fields must be redacted."""
+        config_text = "webhook: https://hooks.slack.com/secret123\nname: app\n"
+        with patch.object(diagnostics, "_read_config", return_value=config_text):
+            result = diagnostics._sanitize_config()
+        assert "secret123" not in result
+        assert "[REDACTED]" in result
+
+    def test_redacts_password_field(self):
+        """#8235 regression: password fields must be redacted."""
+        config_text = "password: hunter2\ninterval: 30\n"
+        with patch.object(diagnostics, "_read_config", return_value=config_text):
+            result = diagnostics._sanitize_config()
+        assert "hunter2" not in result
+        assert "[REDACTED]" in result
+        assert "30" in result
+
 
 class TestIsPublicRepo:
     def test_public_repo(self, capsys):
@@ -225,18 +251,20 @@ class TestGenerateReport:
         assert "Recent Diagnostics" in report
         assert '"warning"' in report
 
-    def test_report_no_log_file(self, capsys):
+    def test_report_no_log_file(self, tmp_path, capsys):
+        no_log = tmp_path / "no_such_log.jsonl"
         with patch.object(diagnostics, "get_field", return_value="1.0.0"), \
              patch.object(diagnostics, "_sanitize_config", return_value="cfg"), \
-             patch.object(diagnostics, "LOG_FILE", Path("/nonexistent")):
+             patch.object(diagnostics, "LOG_FILE", no_log):
             report = diagnostics.generate_report()
         assert "Recent Diagnostics" not in report
         assert "Issue Report" in report
 
-    def test_report_version_unknown_on_error(self, capsys):
+    def test_report_version_unknown_on_error(self, tmp_path, capsys):
+        no_log = tmp_path / "no_such_log.jsonl"
         with patch.object(diagnostics, "get_field", side_effect=SystemExit(1)), \
              patch.object(diagnostics, "_sanitize_config", return_value="cfg"), \
-             patch.object(diagnostics, "LOG_FILE", Path("/nonexistent")):
+             patch.object(diagnostics, "LOG_FILE", no_log):
             report = diagnostics.generate_report()
         assert "unknown" in report
 

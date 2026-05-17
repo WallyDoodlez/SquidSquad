@@ -106,7 +106,7 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team...
 Unlike `{{include:}}` which compiles content into the template at build time, `{{runtime:}}` emits a "read at session start" instruction that tells the agent to load its personality from `.squidsquad/<role>/SOUL.md` at boot. This is used for content that should be editable without redeploying templates — most notably SOUL.md personality files.
 
 - The `souls/<role>` argument is a symbolic marker name (used for section-marker generation); it is not resolved to a file during composition.
-- The actual SOUL.md template lives alongside the role's entry file at `references/roles/<role>/SOUL.md` and is copied to `.squidsquad/<role>/SOUL.md` during `compose.py deploy` (only if no local SOUL.md already exists — agent customisations are preserved).
+- SOUL.md is **assembled** from Layer 1 base (`references/roles/SOUL.md`) + role-specific SOUL (`references/roles/<role>/SOUL.md`) during `compose.py deploy` (only if no local SOUL.md already exists — agent customisations are preserved).
 - Changes to `.squidsquad/<role>/SOUL.md` take effect on next agent boot without recomposing.
 - Typically used at the top of an entry file: `{{runtime: souls/dev}}`.
 
@@ -120,8 +120,8 @@ references/agent-instructions.md         (all includes resolved, section markers
         │
         ▼  compose.py deploy <role>
 .squidsquad/<role>/CLAUDE.md             (placeholders substituted with config values)
-                                          + .squidsquad/<role>/SOUL.md (copied from
-                                            references/roles/<role>/SOUL.md if missing)
+                                          + .squidsquad/<role>/SOUL.md (assembled from
+                                            Layer 1 base + role SOUL.md if missing)
 ```
 
 Run composition:

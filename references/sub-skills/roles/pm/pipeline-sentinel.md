@@ -93,7 +93,7 @@ git branch -r --list "origin/squidsquad/*/[NUMBER]"
 ```
 If the branch exists, check if it was merged to main:
 ```bash
-git log main --oneline --grep="#[NUMBER]" --limit 5
+git log main --oneline --grep="#[NUMBER]" -n 5
 ```
 If no merge evidence and branch still exists:
 - **Tier 1**: Comment on the issue — `"Warning: branch squidsquad/[role]/[NUMBER] exists but may not be merged to main. Code could be lost. Please verify."`

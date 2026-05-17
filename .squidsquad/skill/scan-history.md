@@ -1,5 +1,154 @@
 # Scan History
 
+## Scan — 2026-05-16 23:04
+
+- **Files scanned**: references/scripts/cycle_post.py, references/scripts/thin_launcher.py, references/scripts/git_ops.py
+- **Findings**: #8653 — task_begin fails on index with unresolved merge conflicts from pull
+
+## Scan — 2026-05-16 19:15
+
+- **Files scanned**: references/roles/dm/android/instructions.md, references/roles/dm/ios/instructions.md, references/roles/pm/android/instructions.md, references/roles/pm/ios/instructions.md, references/roles/qa/android/instructions.md
+- **Findings**: none
+- **Items rejected by human**: n/a
+
+## Scan — 2026-05-16 19:10
+
+- **Files scanned**: references/scripts/thin_launcher.py, references/scripts/triage.py, references/scripts/cycle_post.py
+- **Findings**: none
+- **Items rejected by human**: n/a
+
+## Scan — 2026-05-16 10:33
+
+- **Files scanned**: references/roles/dev/ios/instructions.md, references/roles/dev/android/instructions.md, references/roles/dev/fullstack/instructions.md
+- **Findings**: #8576 (incorrect article and iOS capitalization in variant templates)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-16 09:03
+
+- **Files scanned**: references/scripts/run_comprehension_test.py, references/scripts/migrate_state_branch.py
+- **Findings**: #8568 (run_comprehension_test.py: unused import tempfile), #8569 (run_comprehension_test.py: empty eval results treated as all-pass)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-16 08:32
+
+- **Files scanned**: references/scripts/capability_check.py, references/scripts/forge_adapter.py
+- **Findings**: none
+- **Items rejected by human**: n/a
+
+## Scan — 2026-05-16 08:02
+
+- **Files scanned**: references/scripts/soul_adaptation.py, references/scripts/shared_fs.py
+- **Findings**: none
+- **Items rejected by human**: n/a
+
+## Scan — 2026-05-16 07:32
+
+- **Files scanned**: references/scripts/repo_scan.py, references/scripts/comms_adapter.py
+- **Findings**: none
+- **Items rejected by human**: n/a
+
+## Scan — 2026-05-16 06:33
+
+- **Files scanned**: references/scripts/boot_remote.py, references/scripts/manifest.py
+- **Findings**: #8561 (boot_remote.py: _parse_local_config regex rejects hyphenated role names)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-16 05:34
+
+- **Files scanned**: references/scripts/wizard.py
+- **Findings**: #8547 (wizard.py: duplicate check=False kwarg crashes cmd_setup_yes — medium), #8548 (wizard.py: load_install_spec uncaught JSONDecodeError — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-16 04:03
+
+- **Files scanned**: references/scripts/harness.py
+- **Findings**: #8525 (harness.py: redundant import time as _time), #8526 (harness.py: type mismatch clone_root vs REPO_ROOT)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-16 02:33
+
+- **Files scanned**: references/scripts/vault_remember.py, references/scripts/compose.py, references/scripts/cycle.py
+- **Findings**: #8483 (cycle.py: unused imports io and json), #8484 (cycle.py: set_counter missing upsert logic)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-16 00:32
+
+- **Files scanned**: references/scripts/scan_index.py, references/scripts/vault_optimize.py, references/scripts/event_validator.py
+- **Findings**: #8435 (scan_index.py: acceptance_rate scoring always 0 for unreviewed files)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-15 22:52
+
+- **Files scanned**: references/sub-skills/roles/dm/prohibitions.md, references/prompts/discussion-prep.md.j2, references/prompts/improvement-scan.md.j2, references/roles/LAYERS.md, references/roles/dev/android/instructions.md
+- **Findings**: #8381 (LAYERS.md references deprecated reboot_agent.py instead of start_team.py)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-15 22:02
+
+- **Files scanned**: references/scripts/health_check.py, references/scripts/state_bus.py
+- **Findings**: #8350 (state_bus.py: unused import os)
+- **Items rejected by human**: none
+
+## Scan — 2026-05-15 21:03
+
+- **Files scanned**: references/scripts/config.py, references/scripts/cycle_pre.py
+- **Findings**: #8343 (cycle_pre.py: inconsistent boolean config parsing across functions)
+- **Items rejected by human**: none
+
+## Scan — 2026-05-15 20:03
+
+- **Files scanned**: references/scripts/cycle_post.py, references/scripts/model_router.py
+- **Findings**: #8336 (cycle_post.py: redundant import re inside two functions)
+- **Items rejected by human**: none
+
+## Scan — 2026-05-15 18:32
+
+- **Files scanned**: references/scripts/triage.py, references/scripts/event_bus.py, tests/test_triage.py, tests/test_event_bus.py, tests/test_feat_2495_upgrade_rewrite.py
+- **Findings**: #8307 (triage.py: dead code in find_qa_rejected own-comment check)
+- **Items rejected by human**: none
+
+## Scan — 2026-05-15 17:33
+
+- **Files scanned**: references/scripts/tracker.py, references/scripts/git_ops.py, references/scripts/squidsquad_cli.py
+- **Findings**: #8268 (tracker.py get_state returns OPEN for missing state — low), #8269 (squidsquad_cli.py unused import os — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-15 16:03
+
+- **Files scanned**: references/scripts/start_team.py, references/scripts/thin_launcher.py, references/scripts/diagnostics.py
+- **Findings**: #8234 (start_team.py bare except swallows all errors — low), #8235 (diagnostics.py missing redaction keywords — medium)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-15 14:33
+
+- **Files scanned**: references/scripts/vault_check.py, references/scripts/vault_entity.py, references/scripts/tc_coverage.py
+- **Findings**: #8200 (vault_check.py wikilink pipe-alias not stripped — low), #8201 (vault_entity.py unhandled --file read error — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-15 13:33
+
+- **Files scanned**: references/scripts/event_bus.py, references/scripts/event_bus_reader.py, references/scripts/event_catalog.py
+- **Findings**: #8193 (unused import sys in event_bus.py and event_bus_reader.py — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-15 11:33
+
+- **Files scanned**: references/scripts/compose.py, references/scripts/boot_remote.py, references/scripts/soul_adaptation.py
+- **Findings**: #8159 (compose.py redundant imports in agent_compose — low), #8160 (boot_remote.py corrupt .claude-pid silent fallthrough — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-15 09:03
+
+- **Files scanned**: references/scripts/cycle_pre.py, references/scripts/config.py, references/scripts/health_check.py
+- **Findings**: #8115 (cycle_pre.py unhandled ValueError on ship-threshold int() — low), #8116 (health_check.py _read_interval regex unscoped — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-15 07:34
+
+- **Files scanned**: references/scripts/triage.py, references/scripts/scan_index.py, references/scripts/vault_remember.py
+- **Findings**: #8081 (triage.py string-based timestamp comparison fragile — low), #8082 (scan_index.py record_decision silent no-op on missing file_coverage row — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-14 16:34
 
 - **Files scanned**: references/commands/squidsquad-compose.md, references/commands/squidsquad-upgrade.md, references/docs/vault-reference.md, references/prompts/code-review.md.j2

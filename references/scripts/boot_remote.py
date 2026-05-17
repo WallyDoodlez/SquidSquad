@@ -70,7 +70,7 @@ def _parse_local_config():
     try:
         text = LOCAL_CONFIG.read_text(encoding="utf-8")
         for line in text.splitlines():
-            m = re.match(r"-\s*\*\*(\w+)\*\*:\s*(.+)", line)
+            m = re.match(r"-\s*\*\*([\w-]+)\*\*:\s*(.+)", line)
             if m:
                 role = m.group(1).strip()
                 raw_path = Path(m.group(2).strip())
@@ -314,8 +314,8 @@ def _needs_boot(role):
                 return False, f"alive (PID {pid})", str(clone_path)
             else:
                 return True, f"dead (PID {pid})", str(clone_path)
-        except (ValueError, OSError):
-            pass
+        except (ValueError, OSError) as e:
+            print(f"WARNING: corrupt .claude-pid for {role}: {e}", file=sys.stderr)
 
     # Fallback: legacy .pid file
     pid = _read_pid_file(clone_path, role)

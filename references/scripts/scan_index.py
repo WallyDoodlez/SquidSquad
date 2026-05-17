@@ -252,17 +252,27 @@ def suggest_targets(role, count=5, db_path=None):
         cross_count = cross_role_counts.get(f, 0)
         cross_score = min(cross_count / max_cross, 1.0)
 
-        # Acceptance rate
-        finding_count = cov.get("finding_count", 0)
+        # Acceptance rate — only meaningful when decisions exist
         accepted = cov.get("accepted_finding_count", 0)
-        acceptance_rate = accepted / finding_count if finding_count > 0 else 0.0
+        rejected = cov.get("rejected_finding_count", 0)
+        has_decisions = (accepted + rejected) > 0
 
-        score = (
-            WEIGHT_COVERAGE_GAP * coverage_score
-            + WEIGHT_CHURN * churn_score
-            + WEIGHT_CROSS_ROLE * cross_score
-            + WEIGHT_ACCEPTANCE * acceptance_rate
-        )
+        if has_decisions:
+            acceptance_rate = accepted / (accepted + rejected)
+            score = (
+                WEIGHT_COVERAGE_GAP * coverage_score
+                + WEIGHT_CHURN * churn_score
+                + WEIGHT_CROSS_ROLE * cross_score
+                + WEIGHT_ACCEPTANCE * acceptance_rate
+            )
+        else:
+            # No decision history — redistribute acceptance weight
+            other = WEIGHT_COVERAGE_GAP + WEIGHT_CHURN + WEIGHT_CROSS_ROLE
+            score = (
+                (WEIGHT_COVERAGE_GAP / other) * coverage_score
+                + (WEIGHT_CHURN / other) * churn_score
+                + (WEIGHT_CROSS_ROLE / other) * cross_score
+            )
 
         scored.append((f, score))
 
@@ -394,15 +404,26 @@ def record_decision(issue_number, accepted, db_path=None):
     # Update file_coverage counters
     fp = row["file_path"]
     if accepted:
-        conn.execute(
+        cur = conn.execute(
             "UPDATE file_coverage SET accepted_finding_count = accepted_finding_count + 1 WHERE file_path=?",
             (fp,),
         )
+        if cur.rowcount == 0:
+            conn.execute(
+                "INSERT INTO file_coverage (file_path, accepted_finding_count) VALUES (?, 1)",
+                (fp,),
+            )
     else:
-        conn.execute(
+        cur = conn.execute(
             "UPDATE file_coverage SET rejected_finding_count = rejected_finding_count + 1 WHERE file_path=?",
             (fp,),
         )
+        if cur.rowcount == 0:
+            conn.execute(
+                "INSERT INTO file_coverage (file_path, rejected_finding_count) VALUES (?, 1)",
+                (fp,),
+            )
+
         # Also record in rejections table
         finding = conn.execute(
             "SELECT description FROM findings WHERE github_issue_number=?",

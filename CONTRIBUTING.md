@@ -38,8 +38,11 @@ Feature requests are triaged by the maintainer. Approved features enter the back
 
 1. Clone the repo
 2. Ensure you have Python 3.x, `gh` CLI (authenticated), and Claude Code CLI installed
-3. Run tests: `python tests/run_tests.py`
-4. Read [SKILL.md](./SKILL.md) to understand the architecture
+3. Install dev dependencies: `pip install -r requirements-dev.txt`
+4. Run tests: `python tests/run_tests.py static` (safe, no side effects)
+5. Read [SKILL.md](./SKILL.md) to understand the architecture
+
+> **Note**: `python tests/run_tests.py` without arguments also runs integration tests that interact with GitHub Issues. Use `static` for local development.
 
 ## What lives in this repo
 

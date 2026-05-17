@@ -87,20 +87,25 @@ class TestParseLocalConfigMandatory:
 
 
 class TestReadInterval:
-    def test_reads_from_config(self, tmp_path):
-        config = tmp_path / "config.md"
-        config.write_text("## Iteration Interval\n\n- **Minutes**: 45\n")
-        with patch.object(health_check, "CONFIG_MD", config):
+    def test_reads_from_config(self):
+        with patch("config.get_field", return_value="45"):
             assert health_check._read_interval() == 45
 
-    def test_missing_config_returns_default(self, tmp_path):
-        with patch.object(health_check, "CONFIG_MD", tmp_path / "missing"):
+    def test_missing_config_returns_default(self):
+        with patch("config.get_field", return_value=None):
             assert health_check._read_interval() == 30
 
-    def test_no_minutes_field_returns_default(self, tmp_path):
-        config = tmp_path / "config.md"
-        config.write_text("## Some Section\n\n- **Foo**: bar\n")
-        with patch.object(health_check, "CONFIG_MD", config):
+    def test_import_error_returns_default(self):
+        with patch("config.get_field", side_effect=ImportError):
+            assert health_check._read_interval() == 30
+
+    def test_non_numeric_returns_default(self):
+        """#8116 regression: malformed config value must not crash."""
+        with patch("config.get_field", return_value="10 items"):
+            assert health_check._read_interval() == 30
+
+    def test_empty_string_returns_default(self):
+        with patch("config.get_field", return_value=""):
             assert health_check._read_interval() == 30
 
 

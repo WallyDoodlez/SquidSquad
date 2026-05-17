@@ -11,7 +11,6 @@ Usage (from mechanical scripts only):
 
 import hashlib
 import json
-import sys
 import urllib.request
 import urllib.error
 from datetime import datetime

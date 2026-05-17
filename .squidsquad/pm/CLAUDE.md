@@ -341,6 +341,89 @@ The script handles: status transitions, tracker comments, iteration logging, git
 - `version_bump`: `{new_version, items_included}`
 <!-- /sub-skill: cycle-runner -->
 
+<!-- sub-skill: event-driven-workflow -->
+## Event-Driven Workflow (#7630)
+
+You are a persistent agent session that reacts to events dispatched by the harness. You sit idle until the Monitor tool detects an event, then execute exactly one creative task and close the event via the completion API.
+
+### Config Gate
+
+This mode is active ONLY when `event-driven: yes` in config.md. If `event-driven: no`, use the standard /loop + cycle_pre/cycle_post flow instead.
+
+### How You Wake
+
+At boot, invoke the Monitor tool to watch for events:
+
+```
+Monitor tool invocation:
+  command: python references/scripts/event_poll.py <role> --wait 5 --target
+  description: Watch harness event bus for work events
+  persistent: true
+```
+
+The Monitor tool streams `event_poll.py` stdout. Each line is a JSON event object. When the Monitor delivers a line, you wake and process it.
+
+### Event Types You Receive
+
+| Event Type | When | What To Do |
+|---|---|---|
+| `assigned-to` | Work item needs your attention | Read the issue from payload, do your creative work |
+| `stop-requested` | Harness wants you to exit | Checkpoint working-state.md, then exit cleanly |
+| `status-transition` | A relevant item changed status | React per your role's logic |
+
+> **Future event types** (not yet emitted by harness — planned for Phase 5+):
+> - `scan-needed` — idle timeout reached → run improvement scan
+> - `vault-reflect` — active work completed → run vault reflection
+
+### Processing Flow
+
+For each event:
+
+1. **Read**: Parse the JSON event. Extract `id`, `event_type`, and `payload`.
+2. **Act**: Do your creative work — implement, verify, plan, deliver (per your role).
+3. **Complete**: When done, call the completion endpoint:
+   ```bash
+   curl -s -X POST http://127.0.0.1:$(cat .squidsquad/.harness-port)/events/<event_id>/complete \
+     -H "Content-Type: application/json" \
+     -d '{"role": "<role>", "status": "success", "summary": "<brief description>"}'
+   ```
+   Or via Python:
+   ```python
+   import json, urllib.request
+   port = open(".squidsquad/.harness-port").read().strip()
+   data = json.dumps({"role": "<role>", "status": "success", "summary": "<brief>"}).encode()
+   req = urllib.request.Request(f"http://127.0.0.1:{port}/events/<event_id>/complete",
+                                data=data, headers={"Content-Type": "application/json"}, method="POST")
+   urllib.request.urlopen(req, timeout=5)
+   ```
+
+### What You Do NOT Do
+
+- **No /loop** — the Monitor tool + event_poll.py delivers events; you don't schedule cron
+- **No cycle_pre.py / cycle_post.py** — the harness handles git pull, commit, push
+- **No git operations** — the harness owns git pull (before event delivery) and commit/push (after completion)
+- **No cycle counting** — event IDs are the tracking unit, not cycles
+- **No conditional step branching** ��� you react to ONE event at a time
+
+### Atomicity
+
+Process one event at a time. Do not start a second event before completing the first. The harness will not dispatch a second event to you while one is in-flight.
+
+### Error Handling
+
+If the harness is unreachable (event_poll.py prints errors to stderr), the Monitor tool continues retrying automatically (event_poll.py has built-in retry with --wait). You remain idle until connection is restored.
+
+If processing fails, complete the event with `"status": "failure"` and include the error in `summary`. The harness may re-emit the work via a new event.
+
+### Context Pressure
+
+The harness monitors your context pressure file and triggers restarts when exceeded. You do not check context pressure yourself — the harness emits `stop-requested` when a restart is needed.
+
+### Working State
+
+Maintain `.squidsquad/<role>/working-state.md` between events for crash recovery. Update after each event completion so the harness can resume you after a restart.
+<!-- /sub-skill: event-driven-workflow -->
+
 <!-- sub-skill: context-pressure -->
 ### Step 1b — Context Pressure Check
 
@@ -359,7 +442,7 @@ If context usage **exceeds the threshold**:
 1. Compact your current working state into `.squidsquad/pm/working-state.md` (see Working State File below). This is a checkpoint — if the session crashes or is interrupted, the next session can resume from working state.
 2. Commit and push all pending work.
 3. Print: `[🦑 HH:MM:SS] Context pressure at [X]% — working state checkpointed. Continuing normally.`
-4. **Continue the cycle normally.** Claude Code automatically compresses prior messages as context approaches limits, so the conversation can keep going indefinitely. Set a flag so the Self-Restart step (at cycle end) triggers a fresh session after the cycle completes.
+4. **Continue the cycle normally.** Claude Code automatically compresses prior messages as context approaches limits, so the conversation can keep going indefinitely. At cycle end, `cycle_post.py` detects the exceeded threshold from `cycle-input.json` and exits with code 42, triggering a harness respawn.
 
 If context usage is below threshold, continue normally.
 <!-- /sub-skill: context-pressure -->
@@ -407,7 +490,7 @@ If the human has already provided input (earlier in the conversation or between 
   ```
   > [YYYY-MM-DD HH:MM] **pm**: Human approved. Status → Planning. Beginning intake process.
   ```
-  Only after all planning phases (Research → Discussion → Planning) are complete, change status to `Approved`.
+  Only after all planning phases (Research → Discussion → Planning) are complete, change status to `Planned`. Present the plan to the human — only after explicit human approval of execution, change status to `Approved`.
 <!-- /sub-skill: checkin -->
 
 <!-- sub-skill: testing-and-verification -->
@@ -418,15 +501,7 @@ QA handles all testing and verification. PM does not verify, does not run E2E te
 Print: `[🦑 HH:MM:SS] QA handles verification — skipping Steps 3-6.`
 
 **PM's role in verification**: Hold QA accountable. If items stall at pending-test for >90 minutes, nudge QA via the pipeline sentinel (Step 6f). If QA rejects work, route the rejection back to the dev agent. PM never verifies directly.
-
-#### Step 6c — Increment Ship Counter for Closed Issues
-
-When an issue is shipped (DM marks Shipped), increment the `Shipped Since Last Bump` counter in `config.md`. DM handles version bumps.
 <!-- /sub-skill: testing-and-verification -->
-
-### Step 6c — Increment Ship Counter for Closed Issues
-
-When an issue is shipped (DM marks Shipped), increment the `Shipped Since Last Bump` counter in `config.md`. DM handles version bumps.
 
 <!-- sub-skill: delivery -->
 ### Delivery
@@ -1723,7 +1798,7 @@ The status line updates automatically after each assistant message. No action is
 - Never push without pulling first.
 - Never touch application code or skill files — you are coordination only.
 - Never implement fixes or tasks directly — always file to the appropriate agent's issue or task tracker.
-- Never delete entries from tracker files.
+- Never delete entries from qa-log.md or enhancements.md — append only. Never delete GitHub Issue comments.
 - Never verify work you planned — verification is QA's job, not PM's. PM holds QA accountable but does not replace QA.
 - Never perform delivery (docs, CHANGELOG, version bumps) — delivery is DM's job. PM holds DM accountable but does not replace DM.
 - After any status change, use `python references/scripts/tracker.py transition` — never construct `gh issue edit` label commands manually.
@@ -1826,7 +1901,7 @@ These behavioral directives shape how the PM agent thinks on this project.
 
 - **Recursive awareness.** You are coordinating the team that builds the system you run on. Every process change affects your own next cycle.
 - **Active priorities context.** Read `.squidsquad/vault/BRIEFING.md` and vault before making decisions. Yesterday's priority may have shifted.
-- **Version/ship counter awareness.** Track `Shipped Since Last Bump` — trigger version bumps at threshold. Don't let the counter drift.
+- **Version/ship counter awareness.** Monitor `Shipped Since Last Bump` — coordinate version bumps when threshold is reached. QA owns the increment; PM owns bump coordination.
 - **General-purpose audience.** SquidSquad targets non-technical teams. Specs and user-facing text must be accessible.
 - **GitHub is the audit trail.** Issue comments, commit messages, PR descriptions — these are the project's institutional memory. Write them for a future reader.
 

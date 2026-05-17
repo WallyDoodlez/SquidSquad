@@ -76,6 +76,17 @@ def _config_get(field):
     return result.stdout.strip()
 
 
+def _config_get_int(field, default=0):
+    """Get a config field as int with safe fallback on malformed values (#8115)."""
+    raw = _config_get(field)
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except (ValueError, TypeError):
+        return default
+
+
 def _write_status_bar(role, phase, description):
     """Write status bar state atomically."""
     state_file = SQUID_DIR / role / "current-state"
@@ -425,12 +436,13 @@ def _run_mechanical_reactions(events, role):
 
 def _read_config_flags():
     """Read common config flags."""
+    _YES = ("yes", "true", "1")
     return {
-        "branch_workflow": _config_get("branch-workflow").lower() == "yes",
-        "pr_flow": _config_get("pr-flow").lower() == "yes",
-        "improvement_scanning": _config_get("improvement-scanning").lower() == "yes",
-        "vault_remember": _config_get("vault-remember").lower() == "yes",
-        "vault_optimize": _config_get("vault-optimize").lower() == "yes",
+        "branch_workflow": _config_get("branch-workflow").lower() in _YES,
+        "pr_flow": _config_get("pr-flow").lower() in _YES,
+        "improvement_scanning": _config_get("improvement-scanning").lower() in _YES,
+        "vault_remember": _config_get("vault-remember").lower() in _YES,
+        "vault_optimize": _config_get("vault-optimize").lower() in _YES,
     }
 
 
@@ -658,8 +670,8 @@ def _build_pm_input(role):
                 merged_branches.append(line.strip())
 
     config = _read_config_flags()
-    config["ship_threshold"] = int(_config_get("ship-threshold") or "10")
-    config["shipped_since_bump"] = int(_config_get("shipped-since-bump") or "0")
+    config["ship_threshold"] = _config_get_int("ship-threshold", 10)
+    config["shipped_since_bump"] = _config_get_int("shipped-since-bump", 0)
     # Boot detection — DEPRECATED (#3807). PM no longer auto-boots agents.
     # Wrapper handles all respawning via .stop-after-cycle sentinel.
     # Field kept as empty list for backward compat until all agents redeployed.
@@ -711,7 +723,7 @@ def _build_pm_input(role):
                         now = datetime.now(updated_dt.tzinfo) if updated_dt.tzinfo else datetime.now()
                         delta = (now - updated_dt).total_seconds()
                         # Items updated within 2x iteration interval (default 60 min)
-                        interval = int(_config_get("interval") or "30")
+                        interval = _config_get_int("interval", 30)
                         if delta <= interval * 2 * 60:
                             recently_commented.append(item)
                     except (ValueError, TypeError):
@@ -827,7 +839,7 @@ def _build_qa_input(role):
         pass
 
     config = _read_config_flags()
-    config["iteration_interval"] = int(_config_get("interval") or "30")
+    config["iteration_interval"] = _config_get_int("interval", 30)
 
     # E2E test result (run if configured)
     e2e_result = {"result": "skipped", "tests_run": 0, "failures": []}
@@ -905,8 +917,8 @@ def _build_dm_input(role):
     _enrich_with_comments(bugs)
 
     # Version bump info
-    ship_threshold = int(_config_get("ship-threshold") or "10")
-    shipped_since_bump = int(_config_get("shipped-since-bump") or "0")
+    ship_threshold = _config_get_int("ship-threshold", 10)
+    shipped_since_bump = _config_get_int("shipped-since-bump", 0)
     current_version = _config_get("version") or "0.0.0"
 
     # Count open issues across all roles

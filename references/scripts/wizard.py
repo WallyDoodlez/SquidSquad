@@ -742,6 +742,7 @@ def build_config_md(spec):
     lines.append("- **QA Execution Model**: claude")
     lines.append("- **Comprehension Model**: claude")
     lines.append("- **Improvement Scan Model**: claude")
+    lines.append("- **Code Review Model**: claude")
     lines.append("- **Fallback Model**: claude")
     lines.append("- **API Timeout Seconds**: 120")
     lines.append("")
@@ -871,7 +872,10 @@ def load_install_spec(target_root):
     if not spec_path.exists():
         return None
     raw = spec_path.read_text(encoding="utf-8")
-    return json.loads(raw)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"invalid JSON in {spec_path}: {e}") from e
 
 
 def _write_l4_project_files(spec, project_dir, summary):
@@ -2256,7 +2260,7 @@ def cmd_setup_yes(args):
 
     # 2. Load repo info
     repo_info = {}
-    result = _run(["gh", "repo", "view", "--json", "name,url"], check=False)
+    result = _run(["gh", "repo", "view", "--json", "name,url"])
     if result.returncode == 0:
         try:
             data = json.loads(result.stdout)

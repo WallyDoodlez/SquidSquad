@@ -4,7 +4,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #7630 EPIC: Event-driven agent architecture — harness owns cycle, agents react to events (in-progress, high, role:skill) — supersedes #6056, #5775, #5613
+- #7630 EPIC: Event-driven agent architecture — harness owns cycle, agents react to events (in-progress, high, role:skill) — QA verified zero gaps (55 tests pass). PR #8620 has merge conflict — routed back to skill for resolution. Once conflict resolved, needs DM to ship. Supersedes #6056, #5775, #5613
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — awaiting human greenlight
 - #6574 Zero-prereq install — gh repo creation + local forge fallback (pending, medium, role:skill)
 - #5855 Vault is static decision log, not living memory (pending, high, role:skill)
@@ -16,6 +16,15 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - #5773 Document start.sh as boot entry point (pending, medium, role:dm)
 ## Recently Shipped
 
+- #8081 triage.py: datetime-parsed timestamp comparison replacing fragile string compare (shipped)
+- #8082 scan_index.py: record_decision inserts file_coverage row on missing (shipped)
+- #7794 PM prohibitions.md: replaced stale 'tracker files' references in PM, DM, installer (shipped)
+- #7947 wizard.py: validate_interval — 20 parametrized tests added (shipped)
+- #7948 wizard.py: Code Review Model default test coverage added (shipped)
+- #7955 cycle_post.py: added 13 tests for _do_tracker_comments and _do_working_state_update (shipped)
+- #7793 PM/QA ship counter double-counting — QA now owns counter authoritatively (shipped)
+- #7879 squidsquad-upgrade.md: removed .claude/ from upgrade commit staging (shipped)
+- #7890 config.md missing Code Review Model field — model_router code-review fix (shipped)
 - #6581 Wizard reframing — L3 picks agents, L4 records project specifics (shipped) — v0.38.0
 - #7491 compose/sync config.md contamination fix (shipped) — root cause of 10+ QA rejections
 - #7285 config.py sync_agents() NameError fix (shipped)
@@ -69,10 +78,10 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Constraints & Blockers
 
-- Event-driven architecture (#7630) is the next major architectural shift — all mechanical cycle steps move to harness
+- Event-driven architecture (#7630) PR #8620 merge conflict — skill resolving, then DM ships. DM currently stalled (PID dead)
 - Large pending backlog (~40 tasks) awaiting human approval — pipeline idle when no work is approved
 
 ## Team State
 
-- Active agents: pm, qa, skill, dm
-- Current version: 0.38.0
+- Active agents: qa, skill
+- Current version: 0.39.0

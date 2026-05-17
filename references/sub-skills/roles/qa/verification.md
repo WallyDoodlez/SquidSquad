@@ -107,7 +107,7 @@ For each issue:
      # If a PR number is found:
      gh pr ready [PR_NUMBER]
      ```
-   - Transition to shipped (auto-closes):
+   - Transition to pending-ship:
      ```bash
      python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role qa-lead
      python references/scripts/tracker.py comment [NUMBER] --role qa --message "Verified. Status → Pending Ship."

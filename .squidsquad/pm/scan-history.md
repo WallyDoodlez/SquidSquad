@@ -1,3 +1,234 @@
+## Scan — 2026-05-16 22:38
+
+- **Files scanned**: references/sub-skills/roles/pm/pipeline-sentinel.md, references/sub-skills/roles/pm/health-check.md, references/sub-skills/roles/pm/soul-shepherd.md, .squidsquad/vault/areas/human-profile.md
+- **Findings**: pipeline-sentinel.md section 4b uses invalid git flag `--limit 5` (should be `-n 5`); section 3 PR Status Sync logically unreachable (queries open PRs then checks "if merged") but mitigated by event bus
+- **Auto-fixed**: Corrected `--limit 5` to `-n 5` in pipeline-sentinel.md section 4b
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 21:03
+
+- **Files scanned**: references/sub-skills/roles/qa/discussion-protocol.md, references/sub-skills/roles/qa/file-conventions.md, references/sub-skills/roles/qa/iteration-log.md, references/sub-skills/roles/dm/discussion-protocol.md
+- **Findings**: none — all clean, discussion protocol consistent across roles
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 20:33
+
+- **Files scanned**: .squidsquad/vault/galaxy/decision-cycle-runner-architecture.md, .squidsquad/vault/galaxy/decision-reboot-kills-child.md, .squidsquad/vault/galaxy/decision-self-healing-sentinel.md, references/sub-skills/roles/dm/doc-improvement-loop.md
+- **Findings**: decision-reboot-kills-child describes wrapper architecture superseded by harness #4966
+- **Auto-fixed**: Downgraded confidence to medium, added changelog noting harness supersession and #4792 tracking full deprecation
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 20:24
+
+- **Files scanned**: references/sub-skills/roles/qa/verification.md, references/sub-skills/roles/qa/prohibitions.md, references/sub-skills/roles/dm/task-pickup.md
+- **Findings**: verification.md Step 4 item 6 text said "Transition to shipped (auto-closes)" but command does pending-test → pending-ship
+- **Auto-fixed**: Corrected text to "Transition to pending-ship" matching the actual command
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 19:17
+
+- **Files scanned**: references/sub-skills/roles/dm/version-bumps.md, references/sub-skills/roles/dm/delivery-packaging.md, references/sub-skills/common/vault-remember.md, references/sub-skills/common/vault-optimize.md
+- **Findings**: version-bumps.md line 4 had stale markdown tracker format reference (`**Status**: Open` or `**Status**: Investigating`) — replaced with GitHub Issues terminology
+- **Auto-fixed**: Updated version-bumps.md bump gate check to reference `type:issue, state:open` instead of old tracker format
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 14:31
+
+- **Files scanned**: references/sub-skills/common/boot-remote-agents.md, references/sub-skills/common/context-pressure.md
+- **Findings**: none — both clean, exit-42 respawn gap tracked in #7693
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 14:02
+
+- **Files scanned**: references/sub-skills/common/agent-lifecycle.md, references/sub-skills/common/self-restart.md
+- **Findings**: none — both correct, self-restart exit-42 issue already tracked in #7693
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 13:59
+
+- **Files scanned**: references/sub-skills/common/event-reactions.md, references/sub-skills/common/cycle-runner.md
+- **Findings**: none — both clean and consistent with composed CLAUDE.md
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 11:02
+
+- **Files scanned**: references/sub-skills/roles/pm/discussion-protocol.md, references/sub-skills/roles/pm/issue-filing.md
+- **Findings**: none — both concise and correct
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 10:32
+
+- **Files scanned**: references/sub-skills/roles/pm/task-intake.md, references/sub-skills/roles/pm/status-line.md
+- **Findings**: none — task-intake properly parameterized, status-line accurate
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 10:02
+
+- **Files scanned**: references/sub-skills/roles/pm/checkin.md, references/sub-skills/roles/pm/github-issues.md
+- **Findings**: checkin.md skipped Planned state in approval flow (contradicted task-approval.md)
+- **Auto-fixed**: Updated checkin.md to include Planned → human approval → Approved flow
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 09:32
+
+- **Files scanned**: references/sub-skills/roles/pm/pipeline-sentinel.md, references/sub-skills/roles/pm/testing-and-verification.md
+- **Findings**: none — pipeline-sentinel matches composed behavior, verification correctly delegated to QA
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 09:02
+
+- **Files scanned**: references/sub-skills/roles/pm/health-check.md, references/sub-skills/roles/pm/delivery.md
+- **Findings**: none — both clean, consistent with harness lifecycle and PM boundaries
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 08:32
+
+- **Files scanned**: references/sub-skills/roles/pm/soul-shepherd.md, references/sub-skills/roles/pm/vault-synthesis.md
+- **Findings**: none — both consistent with PM CLAUDE.md
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 08:02
+
+- **Files scanned**: references/sub-skills/roles/pm/task-approval.md, references/sub-skills/roles/pm/own-domain-autofix.md
+- **Findings**: none — both consistent with PM CLAUDE.md and tracker protocol
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 07:32
+
+- **Files scanned**: references/sub-skills/common/vault-optimize.md, references/sub-skills/common/improvement-scan-slim.md
+- **Findings**: none — vault-optimize consistent with config, slim scan version matches full
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 07:02
+
+- **Files scanned**: references/sub-skills/common/improvement-scan.md
+- **Findings**: Step 5 vs Rules contradiction — "file directly" vs "report to PM via Discussion"
+- **Auto-fixed**: Updated Rules to match actual behavior (agents file directly with improvement-scan label)
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 06:32
+
+- **Files scanned**: references/sub-skills/common/vault-protocol.md, references/sub-skills/common/chat-etiquette.md
+- **Findings**: none — vault-protocol comprehensive and consistent, chat-etiquette references real adapter
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 06:02
+
+- **Files scanned**: references/sub-skills/common/vault-remember.md, references/sub-skills/common/boot-remote-agents.md
+- **Findings**: none — both clean, consistent with harness lifecycle and vault protocol
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 05:32
+
+- **Files scanned**: references/sub-skills/common/prohibitions.md, references/sub-skills/common/working-state.md
+- **Findings**: PM violated "never gh issue close directly" on #8477 in cycle 1468 — fixed stale labels
+- **Auto-fixed**: Added status:shipped label to #8477, removed status:open
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 05:02
+
+- **Files scanned**: references/sub-skills/common/discussion-protocol.md, references/sub-skills/common/task-pickup.md
+- **Findings**: none — both clean, consistent with tracker protocol and git_ops workflow
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 04:32
+
+- **Files scanned**: references/sub-skills/common/context-pressure.md, references/sub-skills/common/cycle-runner.md
+- **Findings**: context-pressure.md had stale "set a flag" wording (cycle_post handles this mechanically now)
+- **Auto-fixed**: Updated context-pressure.md step 4 to reference cycle_post.py exit-42 mechanism
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-16 04:02
+
+- **Files scanned**: references/sub-skills/common/agent-lifecycle.md, references/sub-skills/common/self-restart.md
+- **Findings**: none — both clean, consistent with architecture, no contradictions
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-15 08:33
+
+- **Files scanned**: references/sub-skills/common/consensus-protocol.md, references/sub-skills/common/interval-sync.md
+- **Findings**: none
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-15 05:04
+
+- **Files scanned**: references/sub-skills/common/event-reactions.md, references/sub-skills/common/mention-protocol.md
+- **Findings**: none
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-15 04:03
+
+- **Files scanned**: references/sub-skills/common/capability-check.md, references/sub-skills/common/file-conventions.md
+- **Findings**: none
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-15 02:33
+
+- **Files scanned**: references/sub-skills/common/resume-working-state.md, references/sub-skills/common/status-line.md
+- **Findings**: none
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-15 02:04
+
+- **Files scanned**: references/sub-skills/common/iteration-log.md, references/sub-skills/common/pull-latest.md
+- **Findings**: none — pull-latest.md has minor legacy "tracker file" term but harmless
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-15 01:34
+
+- **Files scanned**: references/sub-skills/common/issue-filing.md, references/sub-skills/common/git-commit.md
+- **Findings**: none — both consistent with vault decisions and tracker protocol
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-15 01:04
+
+- **Files scanned**: references/sub-skills/common/task-pickup.md, references/sub-skills/common/working-state.md
+- **Findings**: working-state.md clear state example dropped Last Processed Event ID — would cause event re-processing after task completion
+- **Auto-fixed**: updated clear instruction to preserve event ID
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-14 23:34
+
+- **Files scanned**: references/sub-skills/common/cycle-runner.md, references/sub-skills/common/prohibitions.md
+- **Findings**: none — both current, consistent with harness architecture and tracker protocol
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-14 19:34
+
+- **Files scanned**: references/sub-skills/roles/pm/pipeline-sentinel.md, references/sub-skills/roles/pm/soul-shepherd.md
+- **Findings**: none — both well-structured, noise-capped sentinel thresholds are intentional
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-05-14 19:03
+
+- **Files scanned**: references/sub-skills/common/discussion-protocol.md, references/sub-skills/common/vault-remember.md
+- **Findings**: none
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-14 18:34
 
 - **Files scanned**: references/sub-skills/common/agent-lifecycle.md, references/sub-skills/common/context-pressure.md

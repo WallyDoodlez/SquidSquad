@@ -149,7 +149,7 @@ def cmd_reboot(roles, force=False):
                 if alive and claude_pid:
                     reboot_agent._kill_process(claude_pid)
                     print(f"  [{role}] Killed PID {claude_pid}")
-            except (ImportError, Exception) as e:
+            except (ImportError, OSError, ProcessLookupError) as e:
                 print(f"  [{role}] Kill failed: {e}")
             time.sleep(2)
             r = boot_remote.boot_agent(role)

@@ -1,5 +1,51 @@
 # Changelog
 
+## [0.39.0] — 2026-05-16
+
+### Fixed
+- #8547 — Setup wizard no longer crashes from a duplicate keyword argument when running non-interactive setup
+- #8435 — Improvement scanner now correctly scores unreviewed files instead of always rating them zero
+- #8235 — Diagnostics reports now redact URLs, clone paths, webhooks, and passwords — no more accidental credential leaks in reports
+- #8200 — Vault wikilinks with pipe-alias syntax (e.g. `[[note|display]]`) now resolve correctly
+- #8201 — Vault entity classifier no longer crashes when given an unreadable file
+- #8160 — Agents no longer spuriously reboot when a PID file is corrupt — reads the file safely instead of crashing
+- #8116 — Health check interval now reads the correct config field instead of matching unrelated lines
+- #8115 — Cycle startup no longer crashes on malformed ship-threshold config — handles gracefully
+- #8082 — Scan index now correctly tracks decision counts for newly added files
+- #8081 — QA rejection timestamp comparison now uses proper date parsing instead of fragile string comparison
+- #7890 — Code review model config field now exists by default — code review no longer silently fails on fresh installs
+- #7879 — Upgrade commits no longer accidentally stage unrelated user files from .claude/
+- #7878 — Event bus architecture docs now reference correct event names and include all event types
+- #7794 — PM instructions no longer reference deprecated tracker file concepts
+- #7793 — Ship counter is now owned exclusively by QA — eliminates double-counting between PM and QA
+- #7627 — State branch migration now correctly reports failure when all migrations fail
+- #7624 — Vault knowledge decay scan no longer aborts entirely when a single note is unreadable
+- #7622 — Test coverage checker gracefully skips unreadable files instead of crashing
+- #7619 — CLI error messages now include actual error details instead of generic "unreachable"
+- #7618 — Vault optimizer lock no longer has a race condition between checking and acquiring
+- #7589 — State bus now reports failed git commits instead of silently continuing
+- #7491 — Feature branches no longer contaminate config.md — eliminates repeated QA rejections
+- #8477 — PM agent now correctly begins its Ralph Loop when started by the harness
+- #8401 — Test teardown no longer falsely reports failure for nonexistent deploy directories
+- #8400 — Test diagnostics no longer leak real data through mocked log file paths
+
+### Added
+- #8533 — git_ops.py branch name resolution now has full test coverage
+- #8453 — cycle_post.py state-branch commit paths now have full test coverage
+- #8452 — Version bump pipeline (config, SKILL.md rewrite, commit, tag, push, reset) now fully tested
+- #8393 — OpenAI adapter tool-use loop now has behavioral tests
+- #8392 — Event reactions config writer now has full test coverage
+- #7955 — cycle_post.py tracker comments and working state updates now have full test coverage
+- #7948 — Wizard code review model defaults now verified by tests
+- #7947 — Wizard interval validation now has full test coverage (20 parametrized tests)
+
+### Removed
+- #8193 — Removed unused sys imports from event bus modules
+- #8159 — Removed redundant subprocess/json imports from compose.py
+- #7625 — Removed unreachable dead code in forgejo_setup.py
+- #7590 — Removed redundant yaml import and bare except in manifest loader
+- #7628 — Removed dead with-block in health check test
+
 ## [0.38.0] — 2026-05-12
 
 ### Added

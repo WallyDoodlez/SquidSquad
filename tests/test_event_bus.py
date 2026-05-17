@@ -12,6 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "references" / "scripts"))
 import event_bus
+import event_bus_reader
 
 
 class _EventCollector(BaseHTTPRequestHandler):
@@ -176,3 +177,17 @@ class TestAck:
         mock_emit.assert_called_once_with(
             "ack", "skill", payload={"event_id": "evt123"}
         )
+
+
+class TestNoUnusedImports:
+    """#8193 regression: event bus modules must not have unused imports."""
+
+    def test_event_bus_no_unused_sys(self):
+        import inspect
+        source = inspect.getsource(event_bus)
+        assert "import sys" not in source
+
+    def test_event_bus_reader_no_unused_sys(self):
+        import inspect
+        source = inspect.getsource(event_bus_reader)
+        assert "import sys" not in source

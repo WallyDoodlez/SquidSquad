@@ -1,7 +1,7 @@
 ---
 name: squidsquad
 description: "Orchestrates a multi-agent AI development team — handles setup, workflow coordination, role management, and autonomous dev cycles."
-version: 0.38.0
+version: 0.39.0
 license: AGPL-3.0
 ---
 
@@ -291,7 +291,7 @@ When `PR Flow: yes` is set in `config.md`, dev agents create PRs instead of push
 
 When `Auto Merge: yes` and `Branch Workflow: yes` are set in `config.md`, the harness automatically merges PRs for verified tasks — you don't need to merge them manually. Agents request merges via `POST /merge` on the harness API; the harness executes the merge, and if the PR touched template files (`references/`), automatically recomposes agent templates and reboots only the affected agents.
 
-- **Tasks only** — bug fix PRs always require manual human merge for safety.
+- **All verified items** — both bug fixes and tasks are auto-merged after QA verification passes.
 - **Per-task override**: add the `merge:manual` label to any task to skip auto-merge and require human review.
 - **Conflict handling**: if a merge conflict is detected, QA routes the task back to the dev agent to resolve. QA re-verifies after resolution, then the merge is retried.
 - **Auto-recomposition**: after a merge that touches `references/`, the harness runs `compose.py deploy-all` and reboots agents whose `CLAUDE.md` or `SOUL.md` changed. This eliminates missed recompositions.
@@ -402,7 +402,7 @@ This is idempotent — it creates any missing GitHub Issue labels and skips exis
 Update `SquidSquad Version` in `.squidsquad/config.md` to the current skill version.
 
 ```bash
-git add .squidsquad/ .claude/
+git add .squidsquad/
 git commit -m "squidsquad: upgrade to [VERSION]"
 git push
 ```

@@ -186,6 +186,68 @@ class TestValidateRerunAction:
 
 
 # ===========================================================================
+# validate_interval (#7947, TC-49..TC-52)
+# ===========================================================================
+
+
+class TestValidateInterval:
+    """Tests for validate_interval — Ralph Loop interval validation."""
+
+    @pytest.mark.parametrize("value,expected_minutes", [
+        ("10", 10),
+        ("1", 1),
+        ("30", 30),
+        ("120", 120),
+        (" 15 ", 15),  # whitespace trimmed
+    ])
+    def test_valid_integers(self, value, expected_minutes):
+        result = wizard.validate_interval(value)
+        assert result["ok"] is True
+        assert result["minutes"] == expected_minutes
+        assert result["reason"] is None
+
+    @pytest.mark.parametrize("value", [
+        "", "  ", None,
+    ])
+    def test_empty_input_returns_default(self, value):
+        result = wizard.validate_interval(value)
+        assert result["ok"] is True
+        assert result["minutes"] == 10  # default
+
+    def test_empty_input_custom_default(self):
+        result = wizard.validate_interval("", default=30)
+        assert result["ok"] is True
+        assert result["minutes"] == 30
+
+    @pytest.mark.parametrize("value", [
+        "10.5", "3.0", "1,5", "0.1",
+    ])
+    def test_float_rejected(self, value):
+        result = wizard.validate_interval(value)
+        assert result["ok"] is False
+        assert result["minutes"] is None
+        assert "whole number" in result["reason"]
+
+    @pytest.mark.parametrize("value", [
+        "0", "-1", "-100",
+    ])
+    def test_zero_and_negative_rejected(self, value):
+        result = wizard.validate_interval(value)
+        assert result["ok"] is False
+        assert result["minutes"] is None
+        assert "at least 1" in result["reason"]
+
+    @pytest.mark.parametrize("value", [
+        "abc", "ten", "!@#", "5m",
+    ])
+    def test_non_numeric_rejected(self, value):
+        result = wizard.validate_interval(value)
+        assert result["ok"] is False
+        assert result["minutes"] is None
+        assert "not a number" in result["reason"]
+
+
+# ===========================================================================
 # Step 1 — project name validation
 # ===========================================================================
 
@@ -475,6 +537,29 @@ class TestBuildConfigMdStructure:
         text = wizard.build_config_md(spec)
         assert "**Default Model**: gpt-5.2" in text
         assert "**Research Model**: claude" in text
+
+    def test_code_review_model_present(self):
+        """#7948 regression: Code Review Model line must appear in output."""
+        text = wizard.build_config_md(_minimal_spec())
+        assert "**Code Review Model**: claude" in text
+
+    def test_all_model_routing_entries(self):
+        """All Model Routing entries are present in build_config_md output."""
+        text = wizard.build_config_md(_minimal_spec())
+        expected_entries = [
+            "**Default Model**: claude",
+            "**Research Model**: claude",
+            "**Discussion Prep Model**: claude",
+            "**Test Plan Model**: claude",
+            "**QA Execution Model**: claude",
+            "**Comprehension Model**: claude",
+            "**Improvement Scan Model**: claude",
+            "**Code Review Model**: claude",
+            "**Fallback Model**: claude",
+            "**API Timeout Seconds**: 120",
+        ]
+        for entry in expected_entries:
+            assert entry in text, f"Missing Model Routing entry: {entry}"
 
 
 class TestBuildConfigMdAgentBlock:
@@ -1972,6 +2057,14 @@ class TestInstallSpec:
         loaded = wizard.load_install_spec(tmp_path)
         assert loaded["squidsquad_version"] == "0.26.0"
 
+    def test_load_invalid_json_raises_valueerror(self, tmp_path):
+        """#8548: Corrupt JSON raises ValueError, not JSONDecodeError."""
+        spec_dir = tmp_path / ".squidsquad"
+        spec_dir.mkdir(parents=True)
+        (spec_dir / ".install-spec.json").write_text("not valid json{{", encoding="utf-8")
+        with pytest.raises(ValueError, match="invalid JSON"):
+            wizard.load_install_spec(tmp_path)
+
 
 # ---------------------------------------------------------------------------
 # Scan Summary (#13)
@@ -2229,3 +2322,43 @@ class TestPreflight:
             result = wizard.preflight(tmp_path)
         assert result["ok"] is True
         assert len(result["checks"]) == 3
+
+
+# ---------------------------------------------------------------------------
+# cmd_setup_yes — #8547 regression
+# ---------------------------------------------------------------------------
+
+class TestCmdSetupYes:
+    """#8547: _run() must not receive duplicate check=False kwarg."""
+
+    def test_no_duplicate_check_kwarg(self, tmp_path):
+        """Regression: _run call in cmd_setup_yes must not pass check=False."""
+        from unittest.mock import patch, MagicMock
+        import inspect
+        source = inspect.getsource(wizard.cmd_setup_yes)
+        assert "check=False" not in source, (
+            "_run() already hardcodes check=False — passing it again "
+            "causes TypeError: got multiple values for keyword argument 'check'"
+        )
+
+    def test_run_not_called_with_check_kwarg(self, tmp_path):
+        """_run() is never called with check= kwarg from cmd_setup_yes."""
+        from unittest.mock import patch, MagicMock, call
+        calls = []
+
+        def tracking_run(cmd, **kwargs):
+            calls.append(kwargs)
+            return MagicMock(returncode=1, stdout="", stderr="")
+
+        # Patch enough to get past the gh repo view call without full execution
+        with patch.object(wizard, "_run", side_effect=tracking_run):
+            try:
+                wizard.cmd_setup_yes([str(tmp_path)])
+            except (SystemExit, Exception):
+                pass  # May fail later in setup — we only care about the _run call
+
+        # Verify no call passed check= kwarg
+        for kw in calls:
+            assert "check" not in kw, (
+                f"_run called with check={kw['check']} — this causes TypeError"
+            )

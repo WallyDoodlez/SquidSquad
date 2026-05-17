@@ -110,7 +110,7 @@ def _sanitize_config():
     lines = []
     for line in text.splitlines():
         lower = line.lower()
-        if any(k in lower for k in ["repo", "path", "email", "token", "secret", "key"]):
+        if any(k in lower for k in ["repo", "path", "email", "token", "secret", "key", "url", "clone", "webhook", "password"]):
             if ":" in line:
                 field = line.split(":", 1)[0]
                 lines.append(f"{field}: [REDACTED]")

@@ -21,12 +21,33 @@ Exit codes:
 import json
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Roles whose comments count as "QA feedback" that needs rework
 QA_FEEDBACK_ROLES = {"pm", "qa"}
+
+
+def _parse_timestamp(ts):
+    """Parse a GitHub ISO 8601 timestamp to a datetime for safe comparison.
+
+    Handles both 'Z' suffix and '+00:00' offset formats.
+    Returns None if parsing fails.
+    """
+    if not ts:
+        return None
+    try:
+        # Python 3.11+ fromisoformat handles 'Z' directly
+        return datetime.fromisoformat(ts)
+    except ValueError:
+        pass
+    # Fallback: strip Z and parse as naive UTC
+    try:
+        return datetime.strptime(ts.rstrip("Z"), "%Y-%m-%dT%H:%M:%S")
+    except (ValueError, AttributeError):
+        return None
 
 
 def _gh(*args: str) -> str:
@@ -116,7 +137,7 @@ def find_qa_rejected(role: str) -> list[dict]:
         last_own_at = None
         for c in comments:
             cr = _parse_comment_role(c["body"])
-            if cr and (cr == role or cr == f"{role}-lead"):
+            if cr and cr == role:
                 last_own_at = c["createdAt"]
 
         # Find the latest QA/PM feedback comment
@@ -131,7 +152,9 @@ def find_qa_rejected(role: str) -> list[dict]:
 
         # Check if feedback is newer than our last comment
         feedback_at = last_feedback["createdAt"]
-        if last_own_at and feedback_at <= last_own_at:
+        feedback_dt = _parse_timestamp(feedback_at)
+        own_dt = _parse_timestamp(last_own_at)
+        if own_dt and feedback_dt and feedback_dt <= own_dt:
             continue  # We already responded
 
         # Extract a summary (first 200 chars of the feedback body)

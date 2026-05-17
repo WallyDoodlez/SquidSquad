@@ -277,6 +277,23 @@ class TestReadConfigFlags:
         assert result["vault_remember"] is False
         assert result["vault_optimize"] is True
 
+    def test_accepts_true_and_1_as_truthy(self, monkeypatch):
+        """#8343 regression: 'true' and '1' must be accepted, not just 'yes'."""
+        flags = {
+            "branch-workflow": "true",
+            "pr-flow": "1",
+            "improvement-scanning": "True",
+            "vault-remember": "YES",
+            "vault-optimize": "no",
+        }
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: flags.get(f, ""))
+        result = cycle_pre._read_config_flags()
+        assert result["branch_workflow"] is True
+        assert result["pr_flow"] is True
+        assert result["improvement_scanning"] is True
+        assert result["vault_remember"] is True
+        assert result["vault_optimize"] is False
+
 
 # ---------------------------------------------------------------------------
 # Skill Input Builder
@@ -1317,3 +1334,220 @@ class TestConfigVersionValidation:
         monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "")
 
         cycle_pre._validate_config_version()  # Should not raise
+
+
+# ---------------------------------------------------------------------------
+# _config_get_int (#8115)
+# ---------------------------------------------------------------------------
+
+class TestConfigGetInt:
+    """Tests for _config_get_int — safe int parsing from config values."""
+
+    def test_valid_integer(self, monkeypatch):
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "42")
+        assert cycle_pre._config_get_int("ship-threshold", 10) == 42
+
+    def test_empty_returns_default(self, monkeypatch):
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "")
+        assert cycle_pre._config_get_int("ship-threshold", 10) == 10
+
+    def test_none_like_returns_default(self, monkeypatch):
+        """_config_get returns '' on failure, never None, but guard anyway."""
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "")
+        assert cycle_pre._config_get_int("interval", 30) == 30
+
+    def test_non_numeric_returns_default(self, monkeypatch):
+        """#8115 regression: '10 items' must not crash."""
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "10 items")
+        assert cycle_pre._config_get_int("ship-threshold", 10) == 10
+
+    def test_float_string_returns_default(self, monkeypatch):
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "10.5")
+        assert cycle_pre._config_get_int("interval", 30) == 30
+
+    def test_whitespace_only_returns_default(self, monkeypatch):
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "   ")
+        assert cycle_pre._config_get_int("shipped-since-bump", 0) == 0
+
+    def test_zero_is_valid(self, monkeypatch):
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "0")
+        assert cycle_pre._config_get_int("shipped-since-bump", 5) == 0
+
+    def test_negative_is_valid(self, monkeypatch):
+        """Negative values are technically valid integers."""
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "-1")
+        assert cycle_pre._config_get_int("ship-threshold", 10) == -1
+
+
+# ---------------------------------------------------------------------------
+# _filter_events_for_role — #8489
+# ---------------------------------------------------------------------------
+
+class TestFilterEventsForRole:
+    """#8489: _filter_events_for_role test coverage."""
+
+    SAMPLE_EVENTS = [
+        {"event_type": "status-transition", "payload": "a"},
+        {"event_type": "pr-merged", "payload": "b"},
+        {"event_type": "cycle-start", "payload": "c"},
+        {"event_type": "verification-failed", "payload": "d"},
+    ]
+
+    def test_config_driven_filter(self, monkeypatch):
+        """Config-driven filter returns only matching event_types."""
+        # Simulate config module providing filters
+        fake_config = MagicMock()
+        fake_config.get_event_filters_for_role = lambda role: {"status-transition", "pr-merged"}
+        monkeypatch.setitem(sys.modules, "config", fake_config)
+
+        result = cycle_pre._filter_events_for_role(self.SAMPLE_EVENTS, "skill")
+        types = {e["event_type"] for e in result}
+        assert types == {"status-transition", "pr-merged"}
+
+    def test_hardcoded_fallback_when_config_absent(self, monkeypatch):
+        """Falls back to _ROLE_EVENT_TYPES when config import fails."""
+        # Force ImportError for config module
+        real_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
+
+        def fail_config(name, *args, **kwargs):
+            if name == "config":
+                raise ImportError("no config")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr("builtins.__import__", fail_config)
+
+        result = cycle_pre._filter_events_for_role(self.SAMPLE_EVENTS, "skill")
+        # skill hardcoded types: pr-merged, compose-completed, verification-failed, status-transition
+        types = {e["event_type"] for e in result}
+        assert "status-transition" in types
+        assert "pr-merged" in types
+        assert "cycle-start" not in types  # Not in skill's hardcoded set
+
+    def test_no_filter_passthrough_for_unknown_role(self, monkeypatch):
+        """Unknown roles not in _ROLE_EVENT_TYPES get all events."""
+        def fail_config(name, *args, **kwargs):
+            if name == "config":
+                raise ImportError("no config")
+            return __import__(name, *args, **kwargs)
+
+        monkeypatch.setattr("builtins.__import__", fail_config)
+
+        result = cycle_pre._filter_events_for_role(self.SAMPLE_EVENTS, "unknown-role")
+        assert len(result) == len(self.SAMPLE_EVENTS)
+
+    def test_config_returns_none_falls_to_hardcoded(self, monkeypatch):
+        """When config.get_event_filters_for_role returns None, use hardcoded."""
+        fake_config = MagicMock()
+        fake_config.get_event_filters_for_role = lambda role: None
+        monkeypatch.setitem(sys.modules, "config", fake_config)
+
+        result = cycle_pre._filter_events_for_role(self.SAMPLE_EVENTS, "pm")
+        types = {e["event_type"] for e in result}
+        # PM hardcoded: pr-merged, compose-completed, verification-failed, verification-passed,
+        # cycle-start, cycle-end, status-transition, agent-health
+        assert "cycle-start" in types
+        assert "status-transition" in types
+
+    def test_empty_events_returns_empty(self, monkeypatch):
+        """Empty event list returns empty regardless of filter."""
+        fake_config = MagicMock()
+        fake_config.get_event_filters_for_role = lambda role: {"status-transition"}
+        monkeypatch.setitem(sys.modules, "config", fake_config)
+
+        result = cycle_pre._filter_events_for_role([], "skill")
+        assert result == []
+
+    def test_config_exception_falls_to_hardcoded(self, monkeypatch):
+        """Generic exception from config is caught, falls to hardcoded."""
+        fake_config = MagicMock()
+        fake_config.get_event_filters_for_role = MagicMock(side_effect=RuntimeError("bad config"))
+        monkeypatch.setitem(sys.modules, "config", fake_config)
+
+        result = cycle_pre._filter_events_for_role(self.SAMPLE_EVENTS, "dm")
+        types = {e["event_type"] for e in result}
+        # DM hardcoded: status-transition, verification-passed, pr-merged, compose-completed
+        assert "status-transition" in types
+        assert "pr-merged" in types
+        assert "cycle-start" not in types
+
+
+# ---------------------------------------------------------------------------
+# _run_mechanical_reactions — #8532
+# ---------------------------------------------------------------------------
+
+class TestRunMechanicalReactions:
+    """#8532: _run_mechanical_reactions test coverage."""
+
+    def test_empty_events_returns_empty(self):
+        """Empty event list returns empty reactions."""
+        assert cycle_pre._run_mechanical_reactions([], "skill") == []
+
+    def test_self_emitted_events_skipped(self):
+        """Events emitted by the same role are skipped."""
+        events = [
+            {"event_type": "pr-merged", "role": "pm",
+             "payload": {"success": True, "pr_number": "10", "issue_number": "5"},
+             "id": "abc"},
+        ]
+        result = cycle_pre._run_mechanical_reactions(events, "pm")
+        # PM emitted + PM consuming → skipped (self-emitted)
+        assert len(result) == 0
+
+    def test_pr_merged_pm_produces_merge_detected(self):
+        """pr-merged + PM role + success produces pr-merge-detected reaction."""
+        events = [
+            {"event_type": "pr-merged", "role": "harness",
+             "payload": {"success": True, "pr_number": "42", "issue_number": "100"},
+             "id": "evt1"},
+        ]
+        result = cycle_pre._run_mechanical_reactions(events, "pm")
+        merge_detected = [r for r in result if r["type"] == "pr-merge-detected"]
+        assert len(merge_detected) == 1
+        assert merge_detected[0]["pr_number"] == "42"
+        assert merge_detected[0]["issue_number"] == "100"
+
+    def test_pr_merged_non_pm_produces_reactive_pull(self):
+        """pr-merged + non-PM role + success produces reactive-pull-needed."""
+        events = [
+            {"event_type": "pr-merged", "role": "harness",
+             "payload": {"success": True, "pr_number": "42", "issue_number": "100"},
+             "id": "evt2"},
+        ]
+        result = cycle_pre._run_mechanical_reactions(events, "skill")
+        pull_needed = [r for r in result if r["type"] == "reactive-pull-needed"]
+        assert len(pull_needed) == 1
+        assert pull_needed[0]["pr_number"] == "42"
+
+    def test_pr_merged_failed_no_reaction(self):
+        """Failed merge (success=False) produces no reactions."""
+        events = [
+            {"event_type": "pr-merged", "role": "harness",
+             "payload": {"success": False, "pr_number": "42", "issue_number": "100"},
+             "id": "evt3"},
+        ]
+        result = cycle_pre._run_mechanical_reactions(events, "pm")
+        assert len(result) == 0
+
+    def test_verification_failed_dev_produces_rework(self):
+        """verification-failed + dev role produces rework-needed reaction."""
+        events = [
+            {"event_type": "verification-failed", "role": "qa",
+             "payload": {"issue_number": "55", "reason": "AC-2 not met"},
+             "id": "evt4"},
+        ]
+        result = cycle_pre._run_mechanical_reactions(events, "skill")
+        rework = [r for r in result if r["type"] == "rework-needed"]
+        assert len(rework) == 1
+        assert rework[0]["issue_number"] == "55"
+        assert rework[0]["reason"] == "AC-2 not met"
+
+    def test_verification_failed_non_dev_no_reaction(self):
+        """verification-failed for non-dev role (pm) produces no rework reaction."""
+        events = [
+            {"event_type": "verification-failed", "role": "qa",
+             "payload": {"issue_number": "55"},
+             "id": "evt5"},
+        ]
+        result = cycle_pre._run_mechanical_reactions(events, "pm")
+        rework = [r for r in result if r["type"] == "rework-needed"]
+        assert len(rework) == 0

@@ -84,7 +84,7 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 
 ### Rules
 
-- **PM is the single coordination point** — agents don't file directly to trackers. Report to PM via Discussion.
+- **File directly to tracker** — agents file scan findings as issues/tasks with the `improvement-scan` label. PM reviews through the normal pipeline.
 - **Default Low priority** — all scan items are Low priority. Human bumps if valuable.
 - **Max 2 items per scan** — prevents noise. Quality over quantity.
 - **Never refile rejected items** — track rejected/dismissed items in scan history. If human says "not worth it," don't suggest it again.

@@ -874,3 +874,10 @@ class TestNoRedundantReImport:
         import inspect
         source = inspect.getsource(compose._generate_cqs_from_sources)
         assert "import re" not in source
+
+    def test_no_local_import_in_agent_compose(self):
+        """#8159 regression: agent_compose must not re-import subprocess/json."""
+        import inspect
+        source = inspect.getsource(compose.agent_compose)
+        assert "import subprocess" not in source
+        assert "import json" not in source

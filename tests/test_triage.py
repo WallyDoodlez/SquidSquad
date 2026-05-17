@@ -101,6 +101,30 @@ class TestTriageLiveSmoke:
         assert result == []
 
 
+class TestOwnCommentDetection:
+    """#8307: own-comment matching uses normalized role from _parse_comment_role."""
+
+    def test_lead_suffix_comment_recognized_as_own(self):
+        """A '**skill-lead**:' comment is recognized as role 'skill' own comment."""
+        from unittest.mock import patch
+
+        def mock_gh(*args):
+            if args[0] == "issue" and args[1] == "list":
+                return json.dumps([{"number": 100, "title": "Test"}])
+            if args[0] == "issue" and args[1] == "view":
+                return json.dumps({"comments": [
+                    {"body": "**qa**: Needs rework.", "createdAt": "2026-05-15T08:00:00Z"},
+                    {"body": "**skill-lead**: Fixed.", "createdAt": "2026-05-15T09:00:00Z"},
+                ]})
+            return ""
+
+        with patch.object(triage, "_gh", side_effect=mock_gh):
+            result = triage.find_qa_rejected("skill")
+
+        # skill-lead comment is newer than qa comment — feedback is addressed
+        assert result == []
+
+
 class TestFindQaRejectedErrorIsolation:
     """#4051 regression: single-issue gh failure must not abort the scan."""
 
@@ -134,3 +158,51 @@ class TestFindQaRejectedErrorIsolation:
         assert isinstance(result, list)
         # 9992 had no feedback, so result is empty — but crucially no crash
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# _parse_timestamp (#8081)
+# ---------------------------------------------------------------------------
+
+class TestParseTimestamp:
+    """Tests for _parse_timestamp — safe ISO 8601 comparison."""
+
+    def test_z_suffix(self):
+        dt = triage._parse_timestamp("2026-05-15T08:00:00Z")
+        assert dt is not None
+        assert dt.hour == 8
+
+    def test_offset_format(self):
+        dt = triage._parse_timestamp("2026-05-15T08:00:00+00:00")
+        assert dt is not None
+        assert dt.hour == 8
+
+    def test_no_timezone(self):
+        dt = triage._parse_timestamp("2026-05-15T08:00:00")
+        assert dt is not None
+        assert dt.hour == 8
+
+    def test_none_returns_none(self):
+        assert triage._parse_timestamp(None) is None
+
+    def test_empty_string_returns_none(self):
+        assert triage._parse_timestamp("") is None
+
+    def test_garbage_returns_none(self):
+        assert triage._parse_timestamp("not-a-date") is None
+
+    def test_z_and_offset_compare_equal(self):
+        """#8081 regression: Z and +00:00 must compare as same time."""
+        dt_z = triage._parse_timestamp("2026-05-15T08:00:00Z")
+        dt_offset = triage._parse_timestamp("2026-05-15T08:00:00+00:00")
+        # Both should be non-None and represent the same point in time
+        assert dt_z is not None
+        assert dt_offset is not None
+        # Strip tzinfo for naive comparison (both are UTC)
+        assert dt_z.replace(tzinfo=None) == dt_offset.replace(tzinfo=None)
+
+    def test_ordering_works(self):
+        """Parsed timestamps support < > comparison."""
+        earlier = triage._parse_timestamp("2026-05-15T07:00:00Z")
+        later = triage._parse_timestamp("2026-05-15T09:00:00Z")
+        assert earlier < later

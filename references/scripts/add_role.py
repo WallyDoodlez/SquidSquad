@@ -88,7 +88,7 @@ def _parse_local_config(config_path=None):
         return {}
     result = {}
     for line in path.read_text(encoding="utf-8").splitlines():
-        m = re.match(r"-\s*\*\*(\w+)\*\*:\s*(.+)", line)
+        m = re.match(r"-\s*\*\*([\w-]+)\*\*:\s*(.+)", line)
         if m:
             result[m.group(1).strip()] = m.group(2).strip()
     return result

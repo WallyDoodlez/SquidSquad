@@ -520,6 +520,244 @@ class TestVersionBumpChangelogSkip:
 
 
 # ---------------------------------------------------------------------------
+# #8452: _do_version_bump happy path tests
+# ---------------------------------------------------------------------------
+
+class TestVersionBumpHappyPath:
+    """#8452: Full behavioral coverage for _do_version_bump."""
+
+    def test_no_op_when_no_version_bump(self, monkeypatch):
+        """No action when version_bump key is absent or empty."""
+        calls = []
+        monkeypatch.setattr(cycle_post, "_run_script",
+                            lambda *a, **kw: calls.append(a))
+
+        cycle_post._do_version_bump({}, "dm")
+        cycle_post._do_version_bump({"version_bump": {}}, "dm")
+        cycle_post._do_version_bump({"version_bump": {"new_version": ""}}, "dm")
+
+        assert len(calls) == 0
+
+    def test_calls_config_set_version(self, monkeypatch):
+        """config.py set version is called with new version."""
+        script_calls = []
+
+        def fake_run_script(script, *args, **kwargs):
+            script_calls.append((script, args))
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 1  # diff --cached --quiet returns 1 = changes staged
+            r.stdout = ""
+            r.stderr = ""
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "REPO_ROOT", Path("/fake"))
+
+        data = {"version_bump": {"new_version": "1.2.3"}}
+        cycle_post._do_version_bump(data, "dm")
+
+        config_calls = [c for c in script_calls
+                        if c[0] == "config.py" and "version" in c[1]]
+        assert len(config_calls) >= 1
+        assert "1.2.3" in config_calls[0][1]
+
+    def test_updates_skill_md_version(self, monkeypatch, tmp_path):
+        """SKILL.md frontmatter version is updated via regex."""
+        skill_md = tmp_path / "SKILL.md"
+        skill_md.write_text("---\nname: SquidSquad\nversion: 0.37.0\n---\n# Content\n",
+                            encoding="utf-8")
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0  # diff --cached --quiet returns 0 = no staged changes
+            r.stdout = ""
+            r.stderr = ""
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run_script",
+                            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "REPO_ROOT", tmp_path)
+
+        data = {"version_bump": {"new_version": "0.38.0"}}
+        cycle_post._do_version_bump(data, "dm")
+
+        content = skill_md.read_text(encoding="utf-8")
+        assert "version: 0.38.0" in content
+        assert "version: 0.37.0" not in content
+
+    def test_staged_diff_guard_skips_empty_commit(self, monkeypatch, capsys):
+        """When no staged changes, commit/tag/push is skipped (#5126)."""
+        run_calls = []
+
+        def fake_run(cmd, **kwargs):
+            run_calls.append(cmd)
+            r = MagicMock()
+            r.stdout = ""
+            r.stderr = ""
+            # diff --cached --quiet returns 0 = nothing staged
+            r.returncode = 0
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run_script",
+                            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "REPO_ROOT", Path("/fake"))
+
+        data = {"version_bump": {"new_version": "2.0.0"}}
+        cycle_post._do_version_bump(data, "dm")
+
+        # Should NOT have commit, tag, or push calls
+        commit_calls = [c for c in run_calls if "commit" in c and "-m" in c]
+        tag_calls = [c for c in run_calls if "tag" in c and "v2.0.0" in c]
+        push_calls = [c for c in run_calls if c == ["git", "push"]]
+        assert len(commit_calls) == 0
+        assert len(tag_calls) == 0
+        assert len(push_calls) == 0
+
+        captured = capsys.readouterr()
+        assert "skipping commit/tag/push" in captured.out.lower()
+
+    def test_commit_tag_push_sequence(self, monkeypatch):
+        """Full commit/tag/push sequence runs when changes are staged."""
+        run_calls = []
+
+        def fake_run(cmd, **kwargs):
+            run_calls.append(cmd)
+            r = MagicMock()
+            r.stdout = ""
+            r.stderr = ""
+            if cmd == ["git", "diff", "--cached", "--quiet"]:
+                r.returncode = 1  # changes staged
+            elif cmd == ["git", "tag", "-l", "v1.0.0"]:
+                r.stdout = ""  # tag doesn't exist
+                r.returncode = 0
+            else:
+                r.returncode = 0
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run_script",
+                            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "REPO_ROOT", Path("/fake"))
+
+        data = {"version_bump": {"new_version": "1.0.0"}}
+        cycle_post._do_version_bump(data, "dm")
+
+        # Verify commit
+        commit_calls = [c for c in run_calls
+                        if len(c) >= 3 and c[0] == "git" and c[1] == "commit"]
+        assert len(commit_calls) == 1
+        assert "v1.0.0" in commit_calls[0][-1]
+
+        # Verify tag created
+        tag_create_calls = [c for c in run_calls
+                           if c == ["git", "tag", "v1.0.0"]]
+        assert len(tag_create_calls) == 1
+
+        # Verify push + push --tags
+        assert ["git", "push"] in run_calls
+        assert ["git", "push", "--tags"] in run_calls
+
+    def test_skips_tag_when_already_exists(self, monkeypatch):
+        """Tag creation is skipped when tag already exists."""
+        run_calls = []
+
+        def fake_run(cmd, **kwargs):
+            run_calls.append(cmd)
+            r = MagicMock()
+            r.stdout = ""
+            r.stderr = ""
+            if cmd == ["git", "diff", "--cached", "--quiet"]:
+                r.returncode = 1  # changes staged
+            elif cmd == ["git", "tag", "-l", "v2.0.0"]:
+                r.stdout = "v2.0.0\n"  # tag exists
+                r.returncode = 0
+            else:
+                r.returncode = 0
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run_script",
+                            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "REPO_ROOT", Path("/fake"))
+
+        data = {"version_bump": {"new_version": "2.0.0"}}
+        cycle_post._do_version_bump(data, "dm")
+
+        # Tag create should NOT be called
+        tag_create_calls = [c for c in run_calls
+                           if c == ["git", "tag", "v2.0.0"]]
+        assert len(tag_create_calls) == 0
+
+    def test_resets_shipped_since_bump_counter(self, monkeypatch):
+        """After bump, shipped-since-bump counter is reset to 0."""
+        script_calls = []
+
+        def fake_run_script(script, *args, **kwargs):
+            script_calls.append((script, args))
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.stdout = ""
+            r.stderr = ""
+            if cmd == ["git", "diff", "--cached", "--quiet"]:
+                r.returncode = 1
+            elif "tag" in cmd and "-l" in cmd:
+                r.stdout = ""
+            else:
+                r.returncode = 0
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "REPO_ROOT", Path("/fake"))
+
+        data = {"version_bump": {"new_version": "3.0.0"}}
+        cycle_post._do_version_bump(data, "dm")
+
+        # Verify shipped-since-bump reset
+        reset_calls = [c for c in script_calls
+                       if c[0] == "config.py" and "shipped-since-bump" in c[1]]
+        assert len(reset_calls) == 1
+        assert "0" in reset_calls[0][1]
+
+    def test_stages_only_bump_files(self, monkeypatch):
+        """Only version-bump files are staged, not git add -A (#3494)."""
+        run_calls = []
+
+        def fake_run(cmd, **kwargs):
+            run_calls.append(cmd)
+            r = MagicMock()
+            r.stdout = ""
+            r.stderr = ""
+            r.returncode = 0 if cmd != ["git", "diff", "--cached", "--quiet"] else 1
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run_script",
+                            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "REPO_ROOT", Path("/fake"))
+
+        data = {"version_bump": {"new_version": "4.0.0"}}
+        cycle_post._do_version_bump(data, "dm")
+
+        # Find git add calls
+        add_calls = [c for c in run_calls if c[0] == "git" and c[1] == "add"]
+        assert len(add_calls) == 1
+        staged_files = add_calls[0][3:]  # after ["git", "add", "--"]
+        assert ".squidsquad/config.md" in staged_files
+        assert "CHANGELOG.md" in staged_files
+        # No -A flag
+        assert "-A" not in add_calls[0]
+
+
+# ---------------------------------------------------------------------------
 # Branch push fallback — regression #4837
 # ---------------------------------------------------------------------------
 
@@ -746,3 +984,338 @@ class TestAdvanceEventCursorInsertion:
         result = ws.read_text(encoding="utf-8")
         assert "new22222" in result
         assert "old11111" not in result
+
+
+# ---------------------------------------------------------------------------
+# _do_tracker_comments (#7955)
+# ---------------------------------------------------------------------------
+
+class TestDoTrackerComments:
+    """Tests for _do_tracker_comments — posts comments via tracker.py."""
+
+    def test_posts_valid_comments(self, monkeypatch):
+        """Each comment in tracker_comments is posted via _run_script."""
+        calls = []
+
+        def fake_run_script(script, *args, **kwargs):
+            calls.append((script, list(args)))
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+
+        data = {
+            "tracker_comments": [
+                {"number": 100, "message": "Picking up."},
+                {"number": 200, "message": "Fixed."},
+            ]
+        }
+        cycle_post._do_tracker_comments(data, "skill")
+
+        assert len(calls) == 2
+        assert calls[0] == ("tracker.py", ["comment", "100", "--role", "skill-lead", "--message", "Picking up."])
+        assert calls[1] == ("tracker.py", ["comment", "200", "--role", "skill-lead", "--message", "Fixed."])
+
+    def test_empty_comments_list(self, monkeypatch):
+        """Empty tracker_comments list results in zero _run_script calls."""
+        calls = []
+        monkeypatch.setattr(cycle_post, "_run_script", lambda *a, **kw: calls.append(1) or MagicMock(returncode=0))
+
+        cycle_post._do_tracker_comments({"tracker_comments": []}, "skill")
+        assert len(calls) == 0
+
+    def test_missing_tracker_comments_key(self, monkeypatch):
+        """Missing tracker_comments key is treated as empty list."""
+        calls = []
+        monkeypatch.setattr(cycle_post, "_run_script", lambda *a, **kw: calls.append(1) or MagicMock(returncode=0))
+
+        cycle_post._do_tracker_comments({}, "pm")
+        assert len(calls) == 0
+
+    def test_skips_comment_without_number(self, monkeypatch):
+        """Comments missing 'number' are skipped."""
+        calls = []
+        monkeypatch.setattr(cycle_post, "_run_script", lambda *a, **kw: calls.append(1) or MagicMock(returncode=0))
+
+        data = {"tracker_comments": [{"message": "orphaned comment"}]}
+        cycle_post._do_tracker_comments(data, "skill")
+        assert len(calls) == 0
+
+    def test_skips_comment_without_message(self, monkeypatch):
+        """Comments missing 'message' are skipped."""
+        calls = []
+        monkeypatch.setattr(cycle_post, "_run_script", lambda *a, **kw: calls.append(1) or MagicMock(returncode=0))
+
+        data = {"tracker_comments": [{"number": 100}]}
+        cycle_post._do_tracker_comments(data, "skill")
+        assert len(calls) == 0
+
+    def test_continues_on_failure(self, monkeypatch, capsys):
+        """A failed comment does not stop subsequent comments."""
+        calls = []
+
+        def fake_run_script(script, *args, **kwargs):
+            calls.append(list(args))
+            if len(calls) == 1:
+                return MagicMock(returncode=1, stderr="network error")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+
+        data = {
+            "tracker_comments": [
+                {"number": 100, "message": "First"},
+                {"number": 200, "message": "Second"},
+            ]
+        }
+        cycle_post._do_tracker_comments(data, "qa")
+        assert len(calls) == 2  # Both attempted despite first failure
+
+    def test_role_suffix(self, monkeypatch):
+        """Role label is constructed as '{role}-lead'."""
+        calls = []
+
+        def fake_run_script(script, *args, **kwargs):
+            calls.append(list(args))
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+
+        cycle_post._do_tracker_comments(
+            {"tracker_comments": [{"number": 42, "message": "test"}]}, "pm"
+        )
+        assert "--role" in calls[0]
+        role_idx = calls[0].index("--role")
+        assert calls[0][role_idx + 1] == "pm-lead"
+
+
+# ---------------------------------------------------------------------------
+# _do_working_state_update (#7955)
+# ---------------------------------------------------------------------------
+
+class TestDoWorkingStateUpdate:
+    """Tests for _do_working_state_update — writes working-state.md."""
+
+    def test_writes_update_content(self, squid_dir, patch_dirs, monkeypatch):
+        """Non-empty update is written to working-state.md."""
+        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+
+        update_text = "# Working State\n\n- **Task**: #42\n- **Status**: in-progress\n"
+        cycle_post._do_working_state_update({"working_state_update": update_text}, "skill")
+
+        ws = squid_dir / "skill" / "working-state.md"
+        assert ws.exists()
+        assert ws.read_text(encoding="utf-8") == update_text
+
+    def test_none_update_is_noop(self, squid_dir, patch_dirs, monkeypatch):
+        """None working_state_update does not write or create file."""
+        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        ws = squid_dir / "skill" / "working-state.md"
+
+        cycle_post._do_working_state_update({"working_state_update": None}, "skill")
+        assert not ws.exists()
+
+    def test_missing_key_is_noop(self, squid_dir, patch_dirs, monkeypatch):
+        """Missing working_state_update key does not write or create file."""
+        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        ws = squid_dir / "skill" / "working-state.md"
+
+        cycle_post._do_working_state_update({}, "skill")
+        assert not ws.exists()
+
+    def test_empty_string_is_noop(self, squid_dir, patch_dirs, monkeypatch):
+        """Empty string working_state_update is treated as falsy — no write."""
+        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        ws = squid_dir / "skill" / "working-state.md"
+
+        cycle_post._do_working_state_update({"working_state_update": ""}, "skill")
+        assert not ws.exists()
+
+    def test_overwrites_existing_file(self, squid_dir, patch_dirs, monkeypatch):
+        """Existing working-state.md is overwritten with new content."""
+        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        ws = squid_dir / "skill" / "working-state.md"
+        ws.write_text("old content", encoding="utf-8")
+
+        new_content = "# Working State\n\n- **Task**: none\n- **Status**: none\n"
+        cycle_post._do_working_state_update({"working_state_update": new_content}, "skill")
+        assert ws.read_text(encoding="utf-8") == new_content
+
+    def test_creates_parent_directories(self, squid_dir, patch_dirs, monkeypatch):
+        """Parent directories are created if they don't exist."""
+        new_role_dir = squid_dir / "newrole"
+        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+
+        cycle_post._do_working_state_update(
+            {"working_state_update": "content"}, "newrole"
+        )
+        ws = squid_dir / "newrole" / "working-state.md"
+        assert ws.exists()
+        assert ws.read_text(encoding="utf-8") == "content"
+
+
+# ---------------------------------------------------------------------------
+# #8453: State-branch commit paths in _do_commit_push
+# ---------------------------------------------------------------------------
+
+class TestStateCommitAfterCodeCommit:
+    """#8453: Branch workflow state commit path coverage."""
+
+    def test_state_commit_runs_after_code_commit(self, monkeypatch):
+        """After code commit on feature branch, commit-state runs on working branch."""
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(("run", cmd))
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = "main\n"
+            r.stderr = ""
+            return r
+
+        def fake_run_script(script, *args, **kwargs):
+            calls.append(("script", script, args))
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "main")
+        monkeypatch.setattr(cycle_post, "_worktree_exists", lambda: False)
+
+        data = {
+            "cycle_type": "active",
+            "cycle_number": 100,
+            "commit_message": "test commit",
+            "state_commit_message": "state update for cycle 100",
+            "config": {"branch_workflow": True},
+            "code_commit": {
+                "branch": "squidsquad/task/42",
+                "message": "implement feature",
+            },
+        }
+        cycle_post._do_commit_push(data, "skill")
+
+        # Verify commit-state was called with state_commit_message
+        state_calls = [c for c in calls
+                       if c[0] == "script" and "commit-state" in c[2]]
+        assert len(state_calls) >= 1, (
+            f"Expected commit-state call, got: {[c for c in calls if c[0] == 'script']}"
+        )
+        # Verify the state message was used
+        state_call = state_calls[0]
+        assert "state update for cycle 100" in state_call[2]
+
+    def test_state_commit_fallback_on_failure(self, monkeypatch):
+        """When commit-state fails, falls back to commit-push."""
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(("run", cmd))
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = "main\n"
+            r.stderr = ""
+            return r
+
+        def fake_run_script(script, *args, **kwargs):
+            calls.append(("script", script, args))
+            r = MagicMock(stdout="", stderr="")
+            # commit-state fails
+            if "commit-state" in args:
+                r.returncode = 1
+            else:
+                r.returncode = 0
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "main")
+        monkeypatch.setattr(cycle_post, "_worktree_exists", lambda: False)
+
+        data = {
+            "cycle_type": "active",
+            "cycle_number": 100,
+            "commit_message": "test commit",
+            "config": {"branch_workflow": True},
+            "code_commit": {
+                "branch": "squidsquad/task/42",
+                "message": "implement feature",
+            },
+        }
+        cycle_post._do_commit_push(data, "skill")
+
+        # After commit-state fails, commit-push should be called as fallback
+        fallback_calls = [c for c in calls
+                          if c[0] == "script" and "commit-push" in c[2]]
+        assert len(fallback_calls) >= 1, (
+            f"Expected commit-push fallback, got: {[c for c in calls if c[0] == 'script']}"
+        )
+
+    def test_worktree_state_commit_runs_at_end(self, monkeypatch):
+        """When worktree exists, _state_commit is called after main commit."""
+        state_commit_calls = []
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = "main\n"
+            r.stderr = ""
+            return r
+
+        def fake_state_commit(msg, role="unknown"):
+            state_commit_calls.append((msg, role))
+            return True
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "_run_script",
+                            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
+        monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "main")
+        monkeypatch.setattr(cycle_post, "_worktree_exists", lambda: True)
+        monkeypatch.setattr(cycle_post, "_state_commit", fake_state_commit)
+
+        data = {
+            "cycle_type": "active",
+            "cycle_number": 200,
+            "commit_message": "test",
+            "config": {"branch_workflow": True},
+            "code_commit": {
+                "branch": "squidsquad/task/99",
+                "message": "fix bug",
+            },
+        }
+        cycle_post._do_commit_push(data, "skill")
+
+        assert len(state_commit_calls) == 1
+        assert "cycle 200 state" in state_commit_calls[0][0]
+        assert state_commit_calls[0][1] == "skill"
+
+    def test_worktree_state_commit_with_default_path(self, monkeypatch):
+        """Worktree commit runs for non-branch-workflow roles too."""
+        state_commit_calls = []
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = "main\n"
+            r.stderr = ""
+            return r
+
+        def fake_state_commit(msg, role="unknown"):
+            state_commit_calls.append((msg, role))
+            return True
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "_run_script",
+                            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
+        monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "main")
+        monkeypatch.setattr(cycle_post, "_worktree_exists", lambda: True)
+        monkeypatch.setattr(cycle_post, "_state_commit", fake_state_commit)
+
+        data = {
+            "cycle_type": "active",
+            "cycle_number": 300,
+            "commit_message": "pm cycle",
+        }
+        cycle_post._do_commit_push(data, "pm")
+
+        assert len(state_commit_calls) == 1
+        assert "cycle 300 state" in state_commit_calls[0][0]
