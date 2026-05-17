@@ -1,6 +1,7 @@
 {
   "events": [
     {
+<<<<<<< Updated upstream
       "id": "caa86213",
       "event_type": "test-event",
       "role": "test-role",
@@ -9,9 +10,27 @@
         "key": "value"
       },
       "received_at": 1778800330.512299
+=======
+      "id": "old1",
+      "event_type": "assigned-to",
+      "role": "harness",
+      "payload": {
+        "target_role": "skill"
+      }
+    },
+    {
+      "id": "new1",
+      "event_type": "assigned-to",
+      "role": "harness",
+      "payload": {
+        "target_role": "skill"
+      }
+>>>>>>> Stashed changes
     }
   ],
-  "in_flight": {},
+  "in_flight": {
+    "skill": []
+  },
   "dispatched": {},
   "dispatch_times": {},
   "retry_counts": {}
