@@ -25,8 +25,9 @@ role-queue knowledge. Every agent sees every event; agents themselves run
 falls out naturally: replaying any event yields the correct action because the
 action is computed from current forge state, not historical event payload.
 
-Two completely separate L1–L4 fragment sets are composed (one for /loop, one
-for events) so neither flow contains conditional logic. The event-mode L1 base
+Two completely separate L1–L3 fragment sets are composed (one for /loop, one
+for events) with mode-agnostic L4 project instructions that have been audited
+for /loop contamination. Neither L1–L3 set contains mode-conditional logic. The event-mode L1 base
 agent definition includes a tracker-driven boot sequence as a failsafe that
 survives a totally dead event bus. The `bootup-complete` event is **informational
 only** — the harness exposes a `bootup_complete: bool` flag on `AgentState` via
@@ -107,11 +108,14 @@ agent instructions.
   not file-tail. Tracked in #8700. Mode detection reads
   `event-driven: yes/no` from `.squidsquad/config.md` per role (same
   mechanism `compose.py` uses).
-- **Two completely separate L1–L4 fragment sets** — one per wake mode.
-  No mode-conditional logic inside any fragment. `compose.py` picks one
-  manifest + one fragment set based on role's `event-driven: yes/no` in
-  `config.md`. Failsafe isolation: Phase 6 cleanup deletes the /loop
-  directory wholesale.
+- **Two completely separate L1–L3 fragment sets, mode-agnostic L4** —
+  one L1–L3 set per wake mode. No mode-conditional logic inside any
+  L1–L3 fragment. L4 project instructions are shared across modes and
+  audited for /loop contamination before any flip. `compose.py` picks
+  one L1–L3 manifest + fragment set based on the role's
+  `event-driven: yes/no` in `config.md`, then layers shared L4 on top.
+  Failsafe isolation: Phase 6 cleanup deletes the /loop L1–L3 tree
+  wholesale; L4 only needs the /loop-language audit removed.
 - **L1 boot is part of event-mode's L1 base agent definition** —
   tracker-driven failsafe baked into the event-mode L1 base fragment,
   not a standalone fragment file. The boot path is forge-scan based and
@@ -356,7 +360,17 @@ CLAUDE.md composed from L1–L4 layers (the locked architectural principle).
   - Cursor-based polling of the harness event stream (`GET /events?since=<cursor>`).
   - Configurable wait/timeout.
   - Stdout JSON-lines streaming.
-  - Retry on transient harness errors with exponential backoff.
+  - Retry on transient harness errors with exponential backoff using the
+    **same 5-minute cap as the boot-time retry loop** (§3.1 step 5) for
+    a single consistent retry policy across boot and runtime.
+  - **Mid-operation harness failure is a manual-recovery scenario** —
+    if the harness becomes unreachable AFTER `bootup-complete` has been
+    emitted, the agent keeps retrying at the capped backoff but does
+    NOT pivot to forge-direct work. The operator manually restarts the
+    harness; the agent resumes via the event stream on reconnect.
+    Rationale: agents log everything and report progress to the forge,
+    so state is recoverable; adding a runtime degraded-mode adds
+    complexity the failsafe boot path already handles after a restart.
 - Content under `references/sub-skills/common-events/` and per-role
   `references/sub-skills/roles/<role>/events/` describing:
   - The event-mode L1 base agent definition (boot sequence + event
@@ -459,7 +473,7 @@ any events of any type.
 
 ---
 
-### 5.3 #8697 — `compose.py` Dual-Mode (separate L1–L4 sets per wake mode)
+### 5.3 #8697 — `compose.py` Dual-Mode (separate L1–L3 sets per wake mode, shared L4)
 
 **Scope**: Code refactor. Establish the two-fragment-set architecture
 described in §4. **Absorbs #8699** (event-driven-workflow source
@@ -897,10 +911,15 @@ tests that don't depend on the answers.
   total event-bus failure: the agent enters a retry loop and operates
   in degraded mode against the forge directly until the harness is
   reachable.
-- **Degraded mode** — operating directly from the forge via
-  `work_queue()` when the harness is unreachable. The agent retries
-  `bootup-complete` emission with exponential backoff capped at 5
-  minutes, and works through forge items in the meantime.
+- **Degraded mode** — **boot-time only.** Operating directly from the
+  forge via `work_queue()` when the harness is unreachable AT BOOT.
+  The agent retries `bootup-complete` emission with exponential
+  backoff capped at 5 minutes, and works through forge items in the
+  meantime. Mid-operation harness failure (after `bootup-complete`)
+  does NOT trigger degraded mode — the agent simply retries
+  `event_poll.py` at the same 5-minute cap until the harness returns,
+  relying on the L1 failsafe boot path if the operator restarts the
+  agent.
 - **`bootup-complete` event** — emitted by an agent at the end of L1
   boot. **Informational only.** The harness sets per-role
   `bootup_complete = True` on `AgentState` and exposes it via
@@ -931,9 +950,11 @@ tests that don't depend on the answers.
 - **HITL transition** — handoff to a human modeled as a status
   transition to a `pending-human-*` label, surfaced by the harness TUI
   (#8704).
-- **Mode separation** — two completely separate L1–L4 fragment trees +
-  two manifests per role; `compose.py` picks one set based on role's
-  `event-driven: yes/no` flag. No mode-conditional logic inside any
+- **Mode separation** — two completely separate L1–L3 fragment trees +
+  two manifests per role, with shared mode-agnostic L4 project
+  instructions (audited for /loop contamination). `compose.py` picks
+  one L1–L3 set based on the role's `event-driven: yes/no` flag and
+  layers shared L4 on top. No mode-conditional logic inside any L1–L3
   fragment.
 - **`event-driven-workflow` fragment** — formerly hand-injected into
   deployed CLAUDE.mds (commit `a3b108f2`) with no source backing.
