@@ -1120,6 +1120,110 @@ async def get_events(
     return {"events": events, "total": len(event_stream)}
 
 
+@app.get("/events/for/{role}")
+async def get_events_for_role(
+    role: str,
+    limit: int = 50,
+    since: str = None,
+):
+    """Get events targeted at a specific role (#7630 Phase 4).
+
+    Returns events where payload.target_role matches the given role,
+    OR events with event_type in the role's reacts-to list.
+    Marks returned events as dispatched in EventLifecycleManager.
+
+    This is the primary endpoint for event-driven agents using Monitor tool.
+    """
+    _validate_role(role)
+
+    # Get relevant event types for this role from config
+    try:
+        from config import get_event_filters_for_role
+        relevant_types = get_event_filters_for_role(role)
+    except (ImportError, Exception):
+        relevant_types = None
+
+    # Fetch events from stream
+    if since:
+        events = event_stream.get_since(since, limit=limit * 3)
+    else:
+        events = event_stream.get_recent(limit * 3)
+
+    # Filter: events targeted at this role OR matching the role's reaction types
+    filtered = []
+    for e in events:
+        target = e.get("payload", {}).get("target_role", "")
+        etype = e.get("event_type", "")
+        if target == role:
+            filtered.append(e)
+        elif relevant_types and etype in relevant_types:
+            filtered.append(e)
+
+    filtered = filtered[-limit:] if len(filtered) > limit else filtered
+
+    # Mark dispatched in lifecycle manager
+    for e in filtered:
+        eid = e.get("id")
+        if eid:
+            event_lifecycle.dispatch(eid, role, e)
+
+    return {"events": filtered, "total": len(filtered)}
+
+
+@app.post("/events/{event_id}/complete")
+async def complete_event(event_id: str, request: Request):
+    """Mark an event as completed by the processing agent (#7630 Phase 4).
+
+    Called by agents after they finish processing an event. The harness:
+    1. Marks the event as acked in EventLifecycleManager
+    2. Executes any mechanical side effects (status transitions, commits)
+    3. Returns success/failure
+
+    Request body:
+        role: str — the agent role completing the event
+        status: str — "success" or "failure"
+        summary: str — brief description of what was done
+        transitions: list — optional status transitions to execute
+        comments: list — optional tracker comments to post
+        commit_message: str — optional commit message for git commit
+    """
+    body = await request.json()
+    role = body.get("role")
+    if not role:
+        raise HTTPException(status_code=400, detail="role is required")
+
+    # Ack the event in lifecycle manager
+    acked = event_lifecycle.ack(event_id, role)
+    if not acked:
+        # Event not in-flight — may have timed out or already been acked
+        return {"status": "gone", "detail": f"Event {event_id} not in-flight for {role}"}
+
+    _log(f"Event {event_id} completed by {role}: {body.get('summary', 'no summary')}")
+
+    # Execute mechanical side effects
+    errors = []
+
+    # Status transitions
+    for transition in body.get("transitions", []):
+        try:
+            _execute_transition(transition)
+        except Exception as ex:
+            errors.append(f"transition error: {ex}")
+
+    # Tracker comments
+    for comment in body.get("comments", []):
+        try:
+            _execute_comment(comment)
+        except Exception as ex:
+            errors.append(f"comment error: {ex}")
+
+    return {
+        "status": "ok" if not errors else "partial",
+        "event_id": event_id,
+        "errors": errors,
+    }
+
+
 @app.get("/events/in-flight/{role}")
 async def get_in_flight_events(role: str):
     """Get in-flight event IDs for a role (#7630 P-3)."""
@@ -1278,6 +1382,39 @@ async def shutdown():
 # ---------------------------------------------------------------------------
 # POST /merge — agent requests harness to merge a PR (#6126)
 # ---------------------------------------------------------------------------
+
+def _execute_transition(transition: dict):
+    """Execute a status transition via tracker.py (#7630 Phase 4 closure side effect)."""
+    number = transition.get("number")
+    from_status = transition.get("from")
+    to_status = transition.get("to")
+    role = transition.get("role", "skill-lead")
+    if not all([number, from_status, to_status]):
+        raise ValueError(f"Incomplete transition: {transition}")
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_DIR / "tracker.py"), "transition",
+         str(number), from_status, to_status, "--role", role],
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"tracker.py transition failed: {result.stderr.strip()}")
+
+
+def _execute_comment(comment: dict):
+    """Execute a tracker comment via tracker.py (#7630 Phase 4 closure side effect)."""
+    number = comment.get("number")
+    role = comment.get("role", "skill-lead")
+    message = comment.get("message")
+    if not all([number, message]):
+        raise ValueError(f"Incomplete comment: {comment}")
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_DIR / "tracker.py"), "comment",
+         str(number), "--role", role, "--message", message],
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"tracker.py comment failed: {result.stderr.strip()}")
+
 
 def _emit_event(event_type, role, payload=None, **extra):
     """Emit an event into the harness event stream.

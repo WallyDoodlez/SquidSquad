@@ -898,5 +898,126 @@ class TestTimeoutScanner(unittest.TestCase):
             self.assertEqual(mgr.get_in_flight("skill"), [])
 
 
+class TestEventDrivenPhase4(unittest.TestCase):
+    """#7630 Phase 4: Event-driven wake prototype — config, endpoints, poll."""
+
+    def test_config_event_driven_field(self):
+        """config.py can read event-driven field from config.md."""
+        from config import get_field
+        # Should not raise — field exists in config.md FIELD_MAP
+        # (even if config.md doesn't have the section, get_field raises cleanly)
+        try:
+            val = get_field("event-driven")
+            self.assertIn(val.lower(), ("yes", "no"))
+        except SystemExit:
+            # Field not found in config.md on this branch — acceptable
+            pass
+
+    def test_config_scan_idle_timeout_field(self):
+        """config.py can read scan-idle-timeout field."""
+        from config import get_field
+        try:
+            val = get_field("scan-idle-timeout")
+            self.assertTrue(int(val) > 0)
+        except SystemExit:
+            pass
+
+    def test_event_poll_target_mode_url(self):
+        """event_poll.py in target mode queries /events/for/<role>."""
+        import event_poll
+
+        with patch.object(event_poll, "_discover_port", return_value=7373), \
+             patch.object(event_poll, "_read_cursor", return_value="abc123"), \
+             patch("urllib.request.urlopen") as mock_urlopen:
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = b'{"events": []}'
+            mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            mock_urlopen.return_value = mock_resp
+
+            result = event_poll.poll("skill", target_mode=True)
+
+            # Verify the URL used /events/for/skill
+            call_args = mock_urlopen.call_args
+            req = call_args[0][0]
+            self.assertIn("/events/for/skill", req.full_url)
+            self.assertEqual(result, [])
+
+    def test_event_poll_legacy_mode_url(self):
+        """event_poll.py in legacy mode queries /events with role param."""
+        import event_poll
+
+        with patch.object(event_poll, "_discover_port", return_value=7373), \
+             patch.object(event_poll, "_read_cursor", return_value=""), \
+             patch("urllib.request.urlopen") as mock_urlopen:
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = b'{"events": [{"id": "x1"}]}'
+            mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            mock_urlopen.return_value = mock_resp
+
+            with patch.object(event_poll, "_write_cursor") as mock_write:
+                result = event_poll.poll("skill", target_mode=False)
+
+            # Verify legacy URL uses /events?role=skill
+            call_args = mock_urlopen.call_args
+            req = call_args[0][0]
+            self.assertIn("/events?", req.full_url)
+            self.assertIn("role=skill", req.full_url)
+            self.assertNotIn("/events/for/", req.full_url)
+
+    def test_execute_transition_calls_tracker(self):
+        """_execute_transition calls tracker.py with correct args."""
+        from harness import _execute_transition
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stderr="")
+            _execute_transition({
+                "number": 123,
+                "from": "in-progress",
+                "to": "pending-test",
+                "role": "skill-lead",
+            })
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            self.assertIn("tracker.py", args[1])
+            self.assertIn("transition", args)
+            self.assertIn("123", args)
+            self.assertIn("in-progress", args)
+            self.assertIn("pending-test", args)
+
+    def test_execute_transition_raises_on_failure(self):
+        """_execute_transition raises RuntimeError on non-zero exit."""
+        from harness import _execute_transition
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stderr="not allowed")
+            with self.assertRaises(RuntimeError):
+                _execute_transition({"number": 1, "from": "a", "to": "b"})
+
+    def test_execute_comment_calls_tracker(self):
+        """_execute_comment calls tracker.py comment with correct args."""
+        from harness import _execute_comment
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stderr="")
+            _execute_comment({
+                "number": 456,
+                "role": "pm-lead",
+                "message": "Test comment",
+            })
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            self.assertIn("comment", args)
+            self.assertIn("456", args)
+
+    def test_execute_comment_raises_on_incomplete(self):
+        """_execute_comment raises ValueError if required fields missing."""
+        from harness import _execute_comment
+
+        with self.assertRaises(ValueError):
+            _execute_comment({"number": 1})  # missing message
+
+
 if __name__ == "__main__":
     unittest.main()

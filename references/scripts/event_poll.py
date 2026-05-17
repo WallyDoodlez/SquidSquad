@@ -62,18 +62,35 @@ def _write_cursor(role, cursor):
         pass
 
 
-def poll(role, limit=50):
-    """Poll for new events. Returns list of event dicts."""
+def poll(role, limit=50, target_mode=False):
+    """Poll for new events. Returns list of event dicts.
+
+    Args:
+        role: The agent role to poll for.
+        limit: Max events to return.
+        target_mode: If True, use /events/for/<role> endpoint (events targeted
+                     AT this role). If False, use /events with role filter
+                     (events emitted BY this role — legacy behavior).
+    """
     port = _discover_port()
     if port is None:
         print("ERROR: harness port not found", file=sys.stderr)
         return None
 
     cursor = _read_cursor(role)
-    params = {"role": role, "limit": limit}
-    if cursor:
-        params["since"] = cursor
-    url = f"http://127.0.0.1:{port}/events?{urllib.parse.urlencode(params)}"
+
+    if target_mode:
+        # Event-driven mode: get events targeted at this role
+        params = {"limit": limit}
+        if cursor:
+            params["since"] = cursor
+        url = f"http://127.0.0.1:{port}/events/for/{urllib.parse.quote(role)}?{urllib.parse.urlencode(params)}"
+    else:
+        # Legacy mode: get events emitted by this role
+        params = {"role": role, "limit": limit}
+        if cursor:
+            params["since"] = cursor
+        url = f"http://127.0.0.1:{port}/events?{urllib.parse.urlencode(params)}"
 
     try:
         req = urllib.request.Request(url, method="GET")
@@ -94,11 +111,13 @@ def poll(role, limit=50):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: event_poll.py <role> [--wait <seconds>]", file=sys.stderr)
+        print("Usage: event_poll.py <role> [--wait <seconds>] [--target]", file=sys.stderr)
         sys.exit(2)
 
     role = sys.argv[1]
     wait = None
+    target_mode = "--target" in sys.argv
+
     if "--wait" in sys.argv:
         idx = sys.argv.index("--wait")
         if idx + 1 < len(sys.argv):
@@ -109,7 +128,7 @@ def main():
                 sys.exit(2)
 
     while True:
-        events = poll(role)
+        events = poll(role, target_mode=target_mode)
         if events is None:
             if wait is None:
                 sys.exit(2)

@@ -67,6 +67,8 @@ FIELD_MAP = {
     "auto-merge": ("Auto Merge", "Enabled"),
     "branch-workflow": ("Branch Workflow", "Enabled"),
     "mandatory-human-approval": ("Mandatory Human Approval", "Enabled"),
+    "event-driven": ("Event Driven", "Enabled"),
+    "scan-idle-timeout": ("Event Driven", "Scan Idle Timeout"),
     "diagnostics": ("Diagnostics", "Enabled"),
     "upstream-reporting": ("Diagnostics", "Upstream Reporting"),
     "default-model": ("Model Routing", "Default Model"),
