@@ -33,8 +33,9 @@ survives a totally dead event bus. The `bootup-complete` event is **informationa
 only** — the harness exposes a `bootup_complete: bool` flag on `AgentState` via
 `GET /agents/{role}` so operators/TUI can see boot status, but the harness does
 no queuing or gating of any kind. The cycle_pre/cycle_post scripts switch from
-time-cycle to task-cycle granularity when event-driven mode is active. The only
-hard prerequisite is singleton enforcement (#8692); the orphaned
+time-cycle to task-cycle granularity when event-driven mode is active. The two
+hard prerequisites are singleton enforcement (#8692) and harness sole-authority
+lifecycle (#4792); both must ship before any per-role flip. The orphaned
 `event-driven-workflow` source migration is folded into #8697.
 
 **Architectural principle**: all agent instructions live in CLAUDE.md composed
@@ -699,7 +700,7 @@ the failure mode is worse: both sessions process the same event,
 duplicate forge actions, corrupt cursors.
 
 **Plan in parallel; gate approval/execution of any per-role events flip
-on #8692 being shipped first.**
+on #8692 shipping.**
 
 ### 6.2 #4792 — Harness Sole-Authority Lifecycle (BLOCKER)
 
@@ -846,7 +847,7 @@ don't churn while the architecture is mid-flip).
          └─────────────────────┼───────────────────────┘
                                │
                                │ All shipped + per-role pre-flip
-                               │ checklist (§6.3) complete + flip
+                               │ checklist (§6.4) complete + flip
                                │ event-driven: yes in config.md
                                ▼
                   ┌──────────────────────────────┐
@@ -905,7 +906,8 @@ and explicit closures of prior open questions:
   the thin-harness no-dispatch architecture (the harness does not
   observe tracker state or emit `assigned-to`).
 - **RESEARCH open question 5** (singleton enforcement interaction) —
-  resolved by #8692 being the sole hard prerequisite.
+  resolved by #8692 and #4792 covering both singleton enforcement and
+  harness sole-authority lifecycle (the two hard prerequisites).
 - **RESEARCH open question 6** (bootstrap timeout during harness
   restart) — locked: with the dispatch gate dropped (Finding 1
   resolution), a 60-second watchdog clearing a bootup gate is no
@@ -914,7 +916,8 @@ and explicit closures of prior open questions:
   see `bootup_complete: false` longer than expected as a soft signal.
 - **RESEARCH open question 8** (coordination with config flip) —
   locked: per-role flip happens AFTER `compose.py deploy` for that role
-  AND AFTER #8692 singleton enforcement ships. See §6.3 pre-flip
+  AND AFTER #8692 singleton enforcement AND #4792 harness sole-authority
+  lifecycle ship. See §6.4 pre-flip
   checklist.
 
 If any of the genuinely open items need to be locked before TEST-PLAN
@@ -1002,7 +1005,7 @@ tests that don't depend on the answers.
   Migration into `common-events/` is folded into #8697 (closing #8699).
 - **`includes-loop.yml` / `includes-events.yml`** — per-role manifests
   authoritative for fragment ordering within their mode.
-- **Pre-flip checklist** — the per-role sequence in §6.3 that must
+- **Pre-flip checklist** — the per-role sequence in §6.4 that must
   complete before flipping `event-driven: yes` for that role.
 - **TUI** — single harness-served terminal UI. Hosts the status-line
   panel (#8700) and the human-queue panel (#8704). Both panels consume
