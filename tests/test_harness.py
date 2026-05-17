@@ -495,6 +495,114 @@ class TestEndpointsViaTestClient(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn("results", resp.json())
 
+    # #8689 — idle agents should be killed immediately on restart, not wait for
+    # the next /loop tick (potentially 30+ minutes).
+    def test_restart_kills_immediately_when_idle(self):
+        """Idle current-state → restart kills the claude PID and reports immediate=True."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            (role_dir / "current-state").write_text("idle|", encoding="utf-8")
+            killed = []
+
+            def _fake_kill(pid):
+                killed.append(pid)
+
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.reboot_agent._read_claude_pid", return_value=(12345, True)), \
+                 patch("harness.reboot_agent._kill_process", side_effect=_fake_kill):
+                resp = self.client.post("/agents/skill/restart")
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertTrue(data["success"])
+            self.assertTrue(data["immediate"])
+            self.assertEqual(data["killed_pid"], 12345)
+            self.assertEqual(killed, [12345])
+
+    def test_restart_falls_back_to_queued_when_busy(self):
+        """Non-idle current-state → restart only sets intent, no kill."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            (role_dir / "current-state").write_text(
+                "implementing|dev-agent — 🔨 #999...", encoding="utf-8"
+            )
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.reboot_agent._read_claude_pid", return_value=(12345, True)), \
+                 patch("harness.reboot_agent._kill_process") as mock_kill:
+                resp = self.client.post("/agents/skill/restart")
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertTrue(data["success"])
+            self.assertFalse(data["immediate"])
+            mock_kill.assert_not_called()
+
+    def test_restart_queued_when_idle_but_no_claude_pid(self):
+        """Idle but no live claude PID → fall back to queued (auto-reboot loop handles it)."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            (role_dir / "current-state").write_text("idle|", encoding="utf-8")
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.reboot_agent._read_claude_pid", return_value=(None, False)), \
+                 patch("harness.reboot_agent._kill_process") as mock_kill:
+                resp = self.client.post("/agents/skill/restart")
+            self.assertEqual(resp.status_code, 200)
+            self.assertFalse(resp.json()["immediate"])
+            mock_kill.assert_not_called()
+
+    def test_restart_queued_when_no_current_state_file(self):
+        """Missing current-state file → safe default is queued restart."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.reboot_agent._kill_process") as mock_kill:
+                resp = self.client.post("/agents/skill/restart")
+            self.assertEqual(resp.status_code, 200)
+            self.assertFalse(resp.json()["immediate"])
+            mock_kill.assert_not_called()
+
+    def test_restart_still_sets_intent_on_immediate_path(self):
+        """Immediate kill path must still set intent=restarting so auto-reboot fires."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            (role_dir / "current-state").write_text("idle|", encoding="utf-8")
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.reboot_agent._read_claude_pid", return_value=(12345, True)), \
+                 patch("harness.reboot_agent._kill_process"):
+                resp = self.client.post("/agents/skill/restart")
+            self.assertEqual(resp.status_code, 200)
+            from harness import state as harness_state, AgentState
+            agent = harness_state.get_agent("skill")
+            self.assertEqual(agent.intent, AgentState.INTENT_RESTARTING)
+
+    def test_restart_kill_failure_falls_back_to_queued(self):
+        """If kill raises, response reports immediate=False (queued fallback)."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            (role_dir / "current-state").write_text("idle|", encoding="utf-8")
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.reboot_agent._read_claude_pid", return_value=(12345, True)), \
+                 patch("harness.reboot_agent._kill_process", side_effect=OSError("denied")):
+                resp = self.client.post("/agents/skill/restart")
+            self.assertEqual(resp.status_code, 200)
+            self.assertFalse(resp.json()["immediate"])
+
 
 # ---------------------------------------------------------------------------
 # Intent-based lifecycle — regression #4949
