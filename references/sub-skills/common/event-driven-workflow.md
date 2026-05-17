@@ -26,9 +26,11 @@ The Monitor tool streams `event_poll.py` stdout. Each line is a JSON event objec
 |---|---|---|
 | `assigned-to` | Work item needs your attention | Read the issue from payload, do your creative work |
 | `stop-requested` | Harness wants you to exit | Checkpoint working-state.md, then exit cleanly |
-| `scan-needed` | Idle timeout reached | Run improvement scan |
-| `vault-reflect` | Harness detected active work completed | Run vault reflection |
 | `status-transition` | A relevant item changed status | React per your role's logic |
+
+> **Future event types** (not yet emitted by harness — planned for Phase 5+):
+> - `scan-needed` — idle timeout reached → run improvement scan
+> - `vault-reflect` — active work completed → run vault reflection
 
 ### Processing Flow
 

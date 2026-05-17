@@ -117,8 +117,8 @@ RECOGNIZED = {
     # L1 event types for event-driven architecture (#7630 Phase 2)
     "assigned-to": {
         "description": "Work item assigned to a role — agent should wake and process",
-        "planned_source": "harness.py EventLifecycleManager",
-        "payload_fields": ["issue_number", "title", "event_context"],
+        "planned_source": "harness.py ExternalActivityDetector",
+        "payload_fields": ["issue_number", "title", "target_role", "event_context"],
     },
     "stop-requested": {
         "description": "Harness requests agent to checkpoint and exit cleanly",

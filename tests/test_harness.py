@@ -904,14 +904,9 @@ class TestEventDrivenPhase4(unittest.TestCase):
     def test_config_event_driven_field(self):
         """config.py can read event-driven field from config.md."""
         from config import get_field
-        # Should not raise — field exists in config.md FIELD_MAP
-        # (even if config.md doesn't have the section, get_field raises cleanly)
-        try:
-            val = get_field("event-driven")
-            self.assertIn(val.lower(), ("yes", "no"))
-        except SystemExit:
-            # Field not found in config.md on this branch — acceptable
-            pass
+        # Should return "yes" or "no" — defaults to "no" if section absent
+        val = get_field("event-driven")
+        self.assertIn(val.lower(), ("yes", "no"))
 
     def test_config_scan_idle_timeout_field(self):
         """config.py can read scan-idle-timeout field."""
@@ -1017,6 +1012,242 @@ class TestEventDrivenPhase4(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             _execute_comment({"number": 1})  # missing message
+
+    def test_execute_comment_rejects_oversized_message(self):
+        """_execute_comment raises ValueError for messages > 4096 chars."""
+        from harness import _execute_comment
+
+        with self.assertRaises(ValueError):
+            _execute_comment({"number": 1, "message": "x" * 4097})
+
+    def test_execute_comment_rejects_null_bytes(self):
+        """_execute_comment raises ValueError for messages with null bytes."""
+        from harness import _execute_comment
+
+        with self.assertRaises(ValueError):
+            _execute_comment({"number": 1, "message": "hello\x00world"})
+
+    def test_dispatch_skips_already_dispatched(self):
+        """dispatch() skips events that are already in _dispatched."""
+        from harness import EventStream, EventLifecycleManager
+
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
+            stream = EventStream()
+            mgr = EventLifecycleManager(stream)
+
+            mgr.dispatch("evt1", "skill", {"id": "evt1"})
+            self.assertEqual(mgr.get_in_flight("skill"), ["evt1"])
+
+            # Dispatch same event again — should not duplicate
+            mgr.dispatch("evt1", "skill", {"id": "evt1"})
+            self.assertEqual(mgr.get_in_flight("skill"), ["evt1"])
+
+
+class TestGetEventsForRole(unittest.TestCase):
+    """#7630 Phase 4: GET /events/for/{role} endpoint tests."""
+
+    @classmethod
+    def setUpClass(cls):
+        from fastapi.testclient import TestClient
+        from harness import app, event_stream, event_lifecycle
+
+        cls.client = TestClient(app, raise_server_exceptions=False)
+        cls.event_stream = event_stream
+        cls.event_lifecycle = event_lifecycle
+
+    def setUp(self):
+        """Clear event stream between tests."""
+        with self.event_stream._lock:
+            self.event_stream._events.clear()
+        with self.event_lifecycle._lock:
+            self.event_lifecycle._in_flight.clear()
+            self.event_lifecycle._dispatched.clear()
+            self.event_lifecycle._dispatch_times.clear()
+
+    def test_filters_by_target_role(self):
+        """GET /events/for/skill returns only events targeted at skill."""
+        from harness import event_stream
+
+        # Add events for different roles
+        event_stream.append({
+            "id": "e1", "event_type": "assigned-to", "role": "harness",
+            "payload": {"target_role": "skill", "issue_number": "1"},
+        })
+        event_stream.append({
+            "id": "e2", "event_type": "assigned-to", "role": "harness",
+            "payload": {"target_role": "pm", "issue_number": "2"},
+        })
+
+        with patch("harness._validate_role"):
+            resp = self.client.get("/events/for/skill")
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(len(data["events"]), 1)
+        self.assertEqual(data["events"][0]["id"], "e1")
+
+    def test_marks_dispatched(self):
+        """GET /events/for/skill marks returned events as dispatched."""
+        from harness import event_stream, event_lifecycle
+
+        event_stream.append({
+            "id": "e3", "event_type": "assigned-to", "role": "harness",
+            "payload": {"target_role": "skill", "issue_number": "3"},
+        })
+
+        with patch("harness._validate_role"):
+            self.client.get("/events/for/skill")
+
+        self.assertIn("e3", event_lifecycle.get_in_flight("skill"))
+
+    def test_since_cursor_filters_events(self):
+        """GET /events/for/skill?since=X returns only events after cursor."""
+        from harness import event_stream
+
+        event_stream.append({
+            "id": "old1", "event_type": "assigned-to", "role": "harness",
+            "payload": {"target_role": "skill"},
+        })
+        event_stream.append({
+            "id": "new1", "event_type": "assigned-to", "role": "harness",
+            "payload": {"target_role": "skill"},
+        })
+
+        with patch("harness._validate_role"):
+            resp = self.client.get("/events/for/skill?since=old1")
+
+        data = resp.json()
+        ids = [e["id"] for e in data["events"]]
+        self.assertNotIn("old1", ids)
+        self.assertIn("new1", ids)
+
+    def test_does_not_redispatch_already_dispatched(self):
+        """GET /events/for/skill does not re-dispatch already dispatched events."""
+        from harness import event_stream, event_lifecycle
+
+        event_stream.append({
+            "id": "e4", "event_type": "assigned-to", "role": "harness",
+            "payload": {"target_role": "skill"},
+        })
+
+        # Pre-dispatch the event
+        event_lifecycle.dispatch("e4", "skill", {"id": "e4"})
+
+        with patch("harness._validate_role"):
+            self.client.get("/events/for/skill")
+
+        # Should still be dispatched exactly once (not duplicated in in_flight)
+        self.assertEqual(event_lifecycle.get_in_flight("skill").count("e4"), 1)
+
+
+class TestCompleteEventEndpoint(unittest.TestCase):
+    """#7630 Phase 4: POST /events/{event_id}/complete endpoint tests."""
+
+    @classmethod
+    def setUpClass(cls):
+        from fastapi.testclient import TestClient
+        from harness import app, event_stream, event_lifecycle
+
+        cls.client = TestClient(app, raise_server_exceptions=False)
+        cls.event_stream = event_stream
+        cls.event_lifecycle = event_lifecycle
+
+    def setUp(self):
+        """Clear lifecycle state between tests."""
+        with self.event_lifecycle._lock:
+            self.event_lifecycle._in_flight.clear()
+            self.event_lifecycle._dispatched.clear()
+            self.event_lifecycle._dispatch_times.clear()
+
+    def test_complete_acks_in_flight_event(self):
+        """POST /events/evt1/complete acks an in-flight event."""
+        self.event_lifecycle.dispatch("evt1", "skill", {"id": "evt1"})
+        self.assertIn("evt1", self.event_lifecycle.get_in_flight("skill"))
+
+        resp = self.client.post("/events/evt1/complete", json={
+            "role": "skill",
+            "status": "success",
+            "summary": "Done",
+        })
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "ok")
+        self.assertNotIn("evt1", self.event_lifecycle.get_in_flight("skill"))
+
+    def test_complete_returns_410_for_unknown_event(self):
+        """POST /events/unknown/complete returns 410 when event not in-flight."""
+        resp = self.client.post("/events/unknown-id/complete", json={
+            "role": "skill",
+            "status": "success",
+            "summary": "Done",
+        })
+
+        self.assertEqual(resp.status_code, 410)
+        data = resp.json()
+        self.assertEqual(data["status"], "gone")
+
+    def test_complete_executes_transitions(self):
+        """POST /events/evt2/complete executes status transitions."""
+        self.event_lifecycle.dispatch("evt2", "skill", {"id": "evt2"})
+
+        with patch("harness._execute_transition") as mock_trans:
+            resp = self.client.post("/events/evt2/complete", json={
+                "role": "skill",
+                "status": "success",
+                "summary": "Fixed",
+                "transitions": [
+                    {"number": 123, "from": "in-progress", "to": "pending-test", "role": "skill-lead"}
+                ],
+            })
+
+        self.assertEqual(resp.status_code, 200)
+        mock_trans.assert_called_once()
+
+    def test_complete_executes_comments(self):
+        """POST /events/evt3/complete executes tracker comments."""
+        self.event_lifecycle.dispatch("evt3", "skill", {"id": "evt3"})
+
+        with patch("harness._execute_comment") as mock_comment:
+            resp = self.client.post("/events/evt3/complete", json={
+                "role": "skill",
+                "status": "success",
+                "summary": "Commented",
+                "comments": [
+                    {"number": 123, "role": "skill-lead", "message": "Done."}
+                ],
+            })
+
+        self.assertEqual(resp.status_code, 200)
+        mock_comment.assert_called_once()
+
+    def test_complete_reports_partial_on_side_effect_failure(self):
+        """POST /events/evt4/complete returns partial on transition errors."""
+        self.event_lifecycle.dispatch("evt4", "skill", {"id": "evt4"})
+
+        with patch("harness._execute_transition", side_effect=RuntimeError("tracker fail")):
+            resp = self.client.post("/events/evt4/complete", json={
+                "role": "skill",
+                "status": "success",
+                "summary": "Partial",
+                "transitions": [
+                    {"number": 1, "from": "a", "to": "b"}
+                ],
+            })
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "partial")
+        self.assertTrue(len(data["errors"]) > 0)
+
+    def test_complete_requires_role(self):
+        """POST /events/evt5/complete returns 400 without role."""
+        resp = self.client.post("/events/evt5/complete", json={
+            "status": "success",
+            "summary": "No role",
+        })
+
+        self.assertEqual(resp.status_code, 400)
 
 
 if __name__ == "__main__":

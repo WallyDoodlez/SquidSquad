@@ -451,6 +451,9 @@ class EventLifecycleManager:
         with self._lock:
             if role not in self._in_flight:
                 self._in_flight[role] = []
+            # Skip if already dispatched (prevents re-dispatch on cursor loss)
+            if event_id in self._dispatched:
+                return
             if len(self._in_flight[role]) < self._max_in_flight:
                 self._in_flight[role].append(event_id)
                 self._dispatched[event_id] = event
@@ -1073,7 +1076,7 @@ async def receive_event(request: Request):
             # If ack references stop-requested, treat as shutdown confirmation
             if body.get("payload", {}).get("result") == "stop-confirmed":
                 with state._lock:
-                    agent = state._agents.get(role)
+                    agent = state.agents.get(role)
                     if agent:
                         agent.intent = AgentState.INTENT_STOPPING
                 state.save_state()
@@ -1196,7 +1199,11 @@ async def complete_event(event_id: str, request: Request):
     acked = event_lifecycle.ack(event_id, role)
     if not acked:
         # Event not in-flight — may have timed out or already been acked
-        return {"status": "gone", "detail": f"Event {event_id} not in-flight for {role}"}
+        from starlette.responses import JSONResponse
+        return JSONResponse(
+            status_code=410,
+            content={"status": "gone", "detail": f"Event {event_id} not in-flight for {role}"},
+        )
 
     _log(f"Event {event_id} completed by {role}: {body.get('summary', 'no summary')}")
 
@@ -1407,6 +1414,9 @@ def _execute_comment(comment: dict):
     message = comment.get("message")
     if not all([number, message]):
         raise ValueError(f"Incomplete comment: {comment}")
+    # Length guard: reject oversized or null-byte messages
+    if len(message) > 4096 or "\x00" in message:
+        raise ValueError(f"Message too long or contains null bytes (len={len(message)})")
     result = subprocess.run(
         [sys.executable, str(SCRIPT_DIR / "tracker.py"), "comment",
          str(number), "--role", role, "--message", message],
@@ -1789,6 +1799,10 @@ class ExternalActivityDetector:
             if issue_num in self._emitted_issues:  # O(1) dict lookup
                 continue
 
+            # Skip agent-filed issues to prevent self-triggering loops
+            if self._is_agent_update(issue):
+                continue
+
             # Time filter: only process issues updated since last check
             updated_epoch = self._parse_iso_epoch(issue.get("updatedAt", ""))
             if updated_epoch <= self._last_check_epoch:
@@ -1800,8 +1814,8 @@ class ExternalActivityDetector:
             if not (labels & {"status:approved", "status:open"}):
                 continue
 
-            # Determine target role (first role label; multi-role emits for first only)
-            role_labels = [l for l in labels if l.startswith("role:")]
+            # Determine target role (first role label sorted; multi-role emits for first only)
+            role_labels = sorted(l for l in labels if l.startswith("role:"))
             if not role_labels:
                 continue
             target_role = role_labels[0].replace("role:", "")

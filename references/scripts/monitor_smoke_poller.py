@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Smoke-test poller for the Claude Code Monitor tool.
 
 Emits N JSON event lines on stdout, one per `interval` seconds, then exits.

@@ -151,6 +151,12 @@ def _parse_all(text):
     return result
 
 
+# Fields that default to a value when absent from config.md (rather than exiting)
+_FIELD_DEFAULTS = {
+    "event-driven": "no",
+}
+
+
 def get_field(field):
     """Get a config field by short name or full name."""
     text = _read_config()
@@ -161,6 +167,8 @@ def get_field(field):
     else:
         val = _parse_field_in_text(text, field)
     if val is None:
+        if field in _FIELD_DEFAULTS:
+            return _FIELD_DEFAULTS[field]
         print(f"ERROR: Field '{field}' not found in config.md", file=sys.stderr)
         sys.exit(1)
     return val
