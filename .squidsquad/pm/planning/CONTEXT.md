@@ -104,7 +104,7 @@ agent instructions.
   run *per task*, not on a 30-minute tick. Task id + timestamp replaces
   cycle counter. No cross-agent health check in `cycle_pre` (harness owns
   liveness; agents don't poll each other).
-- **Status line queries harness HTTP API** — own delayed refresh loop,
+- **Status line queries harness HTTP API** — separate-process delayed refresh loop (hard-coded 5s in v1),
   not file-tail. Tracked in #8700. Mode detection reads
   `event-driven: yes/no` from `.squidsquad/config.md` per role (same
   mechanism `compose.py` uses).
@@ -665,8 +665,18 @@ The status line (#8700) and the human-queue panel (#8704) are **panels
 within the same harness-served TUI**. They share:
 
 - The harness API base URL (resolved from `.squidsquad/.harness-port`).
-- The refresh cadence (2–5 seconds).
+- The refresh cadence (**hard-coded default 5 seconds, no config knob in v1**).
 - The same display surface (one TUI process).
+
+**TUI process model — locked:** the TUI runs as a **separate process**
+consuming harness HTTP endpoints, NOT in-process inside `harness.py`.
+"Harness-served" means "consumes harness HTTP API," not "runs inside
+the harness process." This matches the existing `statusline.sh`
+pattern (separate script invoked by Claude Code's statusline hook)
+and gives fault isolation: a harness crash does not kill the TUI, and
+a TUI crash does not kill the harness. The TUI is launched
+independently by the operator (or by a thin launcher) and points at
+the harness via the port file.
 
 Single integration point. #8700 ships the status-line panel first;
 #8704 adds the human-queue panel later. Both consume harness HTTP
