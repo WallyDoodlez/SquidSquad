@@ -402,6 +402,43 @@ def _is_state_file(path):
     return any(path.startswith(p) for p in STATE_PREFIXES)
 
 
+def _auto_resolve_state_conflicts():
+    """Auto-resolve unmerged state files (#8653).
+
+    cycle_pre's pull can leave unresolved conflicts in ephemeral state files
+    (e.g. .squidsquad/.backlog-cache, .squidsquad/.event-state.json). Those
+    files are runtime state — the next cycle rewrites them — so picking either
+    side is safe. We use --theirs (the incoming branch's version) so the
+    resolution matches what's already on the remote.
+
+    Code files outside .squidsquad/ and .claude/ are left untouched and
+    reported as unresolved so the caller can fail fast.
+
+    Returns (resolved_paths, unresolved_paths).
+    """
+    result = _run_list(["git", "ls-files", "--unmerged"], check=False)
+    if result.returncode != 0 or not result.stdout.strip():
+        return [], []
+    paths = set()
+    for line in result.stdout.splitlines():
+        if "\t" not in line:
+            continue
+        paths.add(line.split("\t", 1)[1].strip())
+    resolved = []
+    unresolved = []
+    for path in sorted(paths):
+        if _is_state_file(path):
+            r1 = _run_list(["git", "checkout", "--theirs", "--", path], check=False)
+            r2 = _run_list(["git", "add", "--", path], check=False)
+            if r1.returncode == 0 and r2.returncode == 0:
+                resolved.append(path)
+            else:
+                unresolved.append(path)
+        else:
+            unresolved.append(path)
+    return resolved, unresolved
+
+
 def _safe_checkout(target_branch):
     """Switch to target branch, stashing unstaged changes if needed.
 
@@ -520,6 +557,95 @@ def commit_code(role, branch, message):
     return True
 
 
+def _role_owned_patterns(role):
+    """Path patterns this role is allowed to stage in its cycle commit (#8691).
+
+    Patterns ending in '/' match by prefix; bare paths match exactly. The
+    skill role is intentionally absent — skill's code/tests go through the
+    branch+PR workflow via commit_code, and its state files go through
+    commit_state (which is broader, allowing cross-role CLAUDE.md updates
+    from compose.py deploy).
+    """
+    common = [
+        f".squidsquad/{role}/",
+        ".squidsquad/.backlog-cache",
+        ".squidsquad/.event-state.json",
+        ".squidsquad/vault/",
+    ]
+    role_specific = {
+        "pm": [".squidsquad/config.md", ".squidsquad/project/"],
+        "dm": ["README.md", "CHANGELOG.md", "docs/"],
+        # qa: nothing beyond common
+    }
+    return common + role_specific.get(role, [])
+
+
+def _path_matches(path, patterns):
+    """True if `path` matches any pattern. '/' suffix → prefix match; else exact."""
+    for pat in patterns:
+        if pat.endswith("/"):
+            if path.startswith(pat):
+                return True
+        elif path == pat:
+            return True
+    return False
+
+
+def commit_role_scoped(role, message):
+    """Stage and commit only files in the role's commit domain (#8691).
+
+    A single clone can have multiple agents and parallel processes writing
+    files. A naive `git add -A` (the old commit_push path) bundles whatever
+    happens to be uncommitted into the role's commit — even foreign code
+    files or other roles' state. This pollutes the audit trail.
+
+    This function uses an explicit per-role allowlist (see
+    `_role_owned_patterns`). Foreign files are left in the working tree and
+    surfaced as a stderr warning so the investigator can route them.
+
+    Returns True if a commit (and push) succeeded, False otherwise.
+    """
+    result = _run("git status --porcelain", check=False)
+    if not result.stdout.strip():
+        print("Nothing to commit")
+        return False
+
+    lines = [l for l in result.stdout.splitlines() if l.strip()]
+    own_files = []
+    foreign_files = []
+    patterns = _role_owned_patterns(role)
+    for line in lines:
+        path = line[3:].strip().strip('"')
+        if " -> " in path:
+            path = path.split(" -> ")[1]
+        if _path_matches(path, patterns):
+            own_files.append(path)
+        else:
+            foreign_files.append(path)
+
+    if foreign_files:
+        print(
+            f"WARNING: cycle commit skipped {len(foreign_files)} file(s) outside "
+            f"'{role}' domain (left in working tree for the owning role to handle):",
+            file=sys.stderr,
+        )
+        for f in foreign_files[:20]:
+            print(f"  {f}", file=sys.stderr)
+        if len(foreign_files) > 20:
+            print(f"  ... and {len(foreign_files) - 20} more", file=sys.stderr)
+
+    if not own_files:
+        print("No role-domain changes to commit")
+        return False
+
+    for f in own_files:
+        _run_list(["git", "add", "--", f], check=False)
+
+    if not commit(role, message):
+        return False
+    return push(role=role)
+
+
 def commit_state(role, message):
     """Stage and commit only .squidsquad/ files to the working branch.
 
@@ -621,6 +747,21 @@ def task_begin(role, number):
             return
     except Exception:
         return  # Can't read config — treat as disabled
+
+    # Auto-resolve unmerged state files from pull conflicts (#8653). Code
+    # conflicts still require manual resolution — fail fast in that case so
+    # the agent surfaces the real problem instead of an opaque checkout error.
+    resolved, unresolved = _auto_resolve_state_conflicts()
+    if resolved:
+        print(f"task-begin: auto-resolved state file conflict(s): {', '.join(resolved)}")
+    if unresolved:
+        print(
+            "ERROR: task-begin found unresolved conflicts in non-state files:\n  "
+            + "\n  ".join(unresolved),
+            file=sys.stderr,
+        )
+        print("Resolve manually (e.g. `git checkout --ours/theirs <file> && git add <file>`) before retrying task-begin.", file=sys.stderr)
+        sys.exit(1)
 
     branch = get_branch_name(role, number)
     working = _get_working_branch()
@@ -789,6 +930,11 @@ def main():
             print("Usage: git_ops.py commit-state <role> <message>", file=sys.stderr)
             sys.exit(1)
         commit_state(rest[0], " ".join(rest[1:]))
+    elif cmd == "commit-role-scoped":
+        if len(rest) < 2:
+            print("Usage: git_ops.py commit-role-scoped <role> <message>", file=sys.stderr)
+            sys.exit(1)
+        commit_role_scoped(rest[0], " ".join(rest[1:]))
     elif cmd == "branch-exists":
         if not rest:
             print("Usage: git_ops.py branch-exists <name>", file=sys.stderr)

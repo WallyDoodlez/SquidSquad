@@ -1,4 +1,3 @@
-<!-- sub-skill: event-driven-workflow -->
 ## Event-Driven Workflow (#7630)
 
 You are a persistent agent session that reacts to events dispatched by the harness. You sit idle until the Monitor tool detects an event, then execute exactly one creative task and close the event via the completion API.
@@ -60,7 +59,7 @@ For each event:
 - **No cycle_pre.py / cycle_post.py** — the harness handles git pull, commit, push
 - **No git operations** — the harness owns git pull (before event delivery) and commit/push (after completion)
 - **No cycle counting** — event IDs are the tracking unit, not cycles
-- **No conditional step branching** ��� you react to ONE event at a time
+- **No conditional step branching** — you react to ONE event at a time
 
 ### Atomicity
 
@@ -79,4 +78,3 @@ The harness monitors your context pressure file and triggers restarts when excee
 ### Working State
 
 Maintain `.squidsquad/<role>/working-state.md` between events for crash recovery. Update after each event completion so the harness can resume you after a restart.
-<!-- /sub-skill: event-driven-workflow -->

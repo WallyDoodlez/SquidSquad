@@ -6,6 +6,7 @@ includes:
   - common/cycle-runner
   - common/event-driven-workflow
   - common/event-reactions
+  - common/event-driven-workflow
   - common/context-pressure
   - roles/dm/task-pickup
   - roles/dm/issue-triage
