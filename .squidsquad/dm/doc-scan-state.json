@@ -8,9 +8,10 @@
       "lift_when": "event-driven mode live; PM files post-Phase-5 doc realignment task"
     }
   ],
-  "last_scanned": "SKILL.md:sections-4-6",
+  "last_scanned": "SKILL.md:sections-7-8",
   "rotation_count": 45,
   "scan_history": [
+    {"file": "SKILL.md:sections-7-8", "date": "2026-05-17", "findings": 0, "note": "Rotation 45. SKILL.md unchanged since cycle 8fc396ca. Sec 7 (Upgrade) + Sec 8 (Schema Changelog Historical) already verified in rotation 44 — no re-scan needed"},
     {"file": "SKILL.md:sections-4-6", "date": "2026-05-17", "findings": 0, "note": "Rotation 45. SKILL.md unchanged since cycle 8fc396ca. Sec 4 (Ralph Loop) fully deferred under #8703; sec 5-6 already verified in rotation 44 — no re-scan needed"},
     {"file": "SKILL.md:sections-1-3", "date": "2026-05-17", "findings": 0, "note": "Rotation 45. SKILL.md unchanged since cycle 8fc396ca (rotation 44 sec 4-6 scan). No new drift. /loop architecture review remains deferred under #8703"},
     {"file": "README.md", "date": "2026-05-17", "findings": 0, "note": "Rotation 45 start. File unchanged since cycle 988 fix (Code Review Model config-location clarification). No new drift; all references still valid"},
