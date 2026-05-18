@@ -260,7 +260,7 @@ These run against a live harness on a scratch repo (uses the project's existing 
 ### 4.4 Stop-the-team (Q5 — both endpoints preserved)
 
 - **Steps**: `POST /agents/all/stop`. Wait `(longest_cycle_remaining + 60s)`.
-- **Assertions**: All 4 roles transition cleanly to STOPPED. Each used the self-quit path (no force-kills logged unless one was stuck). `.harness-state.json` reflects all intents=stopped.
+- **Assertions**: All 4 roles reach a terminated state. Each used the self-quit path (no force-kills logged unless one was stuck). `.harness-state.json` reflects all roles at `intent=STOPPING, status=stopped` (status is the post-termination marker; intent stays STOPPING per Q10 until cleared).
 
 ### 4.5 `start_team.py` shim — old "boot --all" still works (AC-8)
 
@@ -522,7 +522,7 @@ CQ spec at `tests/comprehension/4792_spec.json`. Files listed are the composed a
 These are the eyes-on sanity checks the human runs post-ship before flipping production teams.
 
 - **TC-10.1 — Full operator flow** (covers AC-7, AC-8, AC-13):
-  Bring up the full team via `squidsquad_cli start --all`. Confirm all 4 agents enter cycle 1. `squidsquad_cli stop pm`. Watch PM's terminal: cycle_post prints exit 42 (or equivalent log), agent invokes `/quit`, claude session exits, terminal closes. Harness logs `pm intent=stopped`. Restart PM via `squidsquad_cli restart pm`. Verify cycle 1 resumes.
+  Bring up the full team via `squidsquad_cli start --all`. Confirm all 4 agents enter cycle 1. `squidsquad_cli stop pm`. Watch PM's terminal: cycle_post prints exit 42 (or equivalent log), agent invokes `/quit`, claude session exits, terminal closes. Harness logs `pm status=stopped` (with `intent=STOPPING` retained per Q10). Restart PM via `squidsquad_cli restart pm`. Verify cycle 1 resumes.
 
 - **TC-10.2 — Force-kill flow** (covers AC-5):
   Stage a stuck agent — open the skill terminal, run a `time.sleep(300)` in a tool call. `squidsquad_cli stop skill`. Watch harness log; ~60s later, force-kill fires; skill terminal closes. Harness logs `force-kill role=skill pid=<N> elapsed=60s`.
