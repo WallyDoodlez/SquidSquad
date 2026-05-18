@@ -400,6 +400,200 @@ class TestIntentSetAt(unittest.TestCase):
         self.assertEqual(state.get_agent("pm").intent_set_at, 8888.0)
 
 
+class TestForceKillSafetyNet(unittest.TestCase):
+    """#4792 Phase 1 / Q7: when intent is STOPPING/RESTARTING for longer
+    than FORCE_KILL_TIMEOUT_SECONDS and the claude PID is still alive,
+    update_health must kill the PID. CONTEXT-4792.md §3.3."""
+
+    def _set_up_state(self, intent, elapsed_seconds, pid=12345):
+        """Configure HarnessState with one agent in the given intent for
+        `elapsed_seconds`. Returns (state, agent, fake_now)."""
+        from harness import HarnessState, AgentState
+        hs = HarnessState()
+        agent = AgentState("skill", "/clone")
+        agent.intent = intent
+        agent.intent_set_at = 1000.0
+        agent.claude_pid = pid
+        agent.status = "running"
+        hs.set_agent("skill", agent)
+        fake_now = 1000.0 + elapsed_seconds
+        return hs, agent, fake_now
+
+    def _patch_environment(self, fake_now, pid_alive=True):
+        """Patch boot_remote and time so update_health runs deterministically."""
+        return [
+            patch("harness.boot_remote._get_all_roles",
+                  return_value=["skill"]),
+            patch("harness.boot_remote._get_clone_path",
+                  return_value="/clone"),
+            patch("harness.boot_remote._is_process_alive",
+                  return_value=pid_alive),
+            patch("harness.time.time", return_value=fake_now),
+            patch("harness._log"),
+        ]
+
+    def _run_health(self, hs, patches):
+        for p in patches:
+            p.start()
+        try:
+            hs.update_health()
+        finally:
+            for p in patches:
+                p.stop()
+
+    def test_stopping_with_alive_pid_past_timeout_force_kills(self):
+        from harness import AgentState, FORCE_KILL_TIMEOUT_SECONDS
+        hs, agent, fake_now = self._set_up_state(
+            AgentState.INTENT_STOPPING,
+            elapsed_seconds=FORCE_KILL_TIMEOUT_SECONDS + 5,
+        )
+        patches = self._patch_environment(fake_now, pid_alive=True)
+        with patch("harness.reboot_agent._kill_process") as kill:
+            for p in patches:
+                p.start()
+            try:
+                hs.update_health()
+            finally:
+                for p in patches:
+                    p.stop()
+        kill.assert_called_once_with(12345)
+
+    def test_restarting_with_alive_pid_past_timeout_force_kills(self):
+        from harness import AgentState, FORCE_KILL_TIMEOUT_SECONDS
+        hs, agent, fake_now = self._set_up_state(
+            AgentState.INTENT_RESTARTING,
+            elapsed_seconds=FORCE_KILL_TIMEOUT_SECONDS + 1,
+        )
+        patches = self._patch_environment(fake_now, pid_alive=True)
+        with patch("harness.reboot_agent._kill_process") as kill:
+            for p in patches:
+                p.start()
+            try:
+                hs.update_health()
+            finally:
+                for p in patches:
+                    p.stop()
+        kill.assert_called_once_with(12345)
+
+    def test_stopping_within_timeout_does_not_force_kill(self):
+        """Cooperative window — the safety net must NOT fire before the
+        timeout elapses."""
+        from harness import AgentState, FORCE_KILL_TIMEOUT_SECONDS
+        hs, agent, fake_now = self._set_up_state(
+            AgentState.INTENT_STOPPING,
+            elapsed_seconds=FORCE_KILL_TIMEOUT_SECONDS - 5,
+        )
+        patches = self._patch_environment(fake_now, pid_alive=True)
+        with patch("harness.reboot_agent._kill_process") as kill:
+            for p in patches:
+                p.start()
+            try:
+                hs.update_health()
+            finally:
+                for p in patches:
+                    p.stop()
+        kill.assert_not_called()
+
+    def test_running_intent_never_force_kills(self):
+        """Even with a stale intent_set_at, intent=RUNNING must never trigger
+        a kill — the safety net is scoped to STOPPING/RESTARTING."""
+        from harness import AgentState, FORCE_KILL_TIMEOUT_SECONDS
+        hs, agent, fake_now = self._set_up_state(
+            AgentState.INTENT_RUNNING,
+            elapsed_seconds=FORCE_KILL_TIMEOUT_SECONDS + 100,
+        )
+        # RUNNING agents have intent_set_at=None per the data-model rule,
+        # but the safety net must defend against a misplaced value too.
+        patches = self._patch_environment(fake_now, pid_alive=True)
+        with patch("harness.reboot_agent._kill_process") as kill:
+            for p in patches:
+                p.start()
+            try:
+                hs.update_health()
+            finally:
+                for p in patches:
+                    p.stop()
+        kill.assert_not_called()
+
+    def test_no_intent_set_at_does_not_force_kill(self):
+        """A missing intent_set_at on STOPPING/RESTARTING must NOT fire the
+        kill — the clock is not yet started. (Could happen briefly during
+        a state-file write race; treat conservatively.)"""
+        from harness import AgentState
+        hs, agent, fake_now = self._set_up_state(
+            AgentState.INTENT_STOPPING, elapsed_seconds=0,
+        )
+        agent.intent_set_at = None
+        patches = self._patch_environment(fake_now, pid_alive=True)
+        with patch("harness.reboot_agent._kill_process") as kill:
+            for p in patches:
+                p.start()
+            try:
+                hs.update_health()
+            finally:
+                for p in patches:
+                    p.stop()
+        kill.assert_not_called()
+
+    def test_dead_pid_does_not_force_kill(self):
+        """If the claude PID is already dead, no kill is needed."""
+        from harness import AgentState, FORCE_KILL_TIMEOUT_SECONDS
+        hs, agent, fake_now = self._set_up_state(
+            AgentState.INTENT_STOPPING,
+            elapsed_seconds=FORCE_KILL_TIMEOUT_SECONDS + 10,
+        )
+        patches = self._patch_environment(fake_now, pid_alive=False)
+        with patch("harness.reboot_agent._kill_process") as kill:
+            for p in patches:
+                p.start()
+            try:
+                hs.update_health()
+            finally:
+                for p in patches:
+                    p.stop()
+        kill.assert_not_called()
+
+    def test_force_kill_clears_intent_set_at(self):
+        """After firing, intent_set_at must be cleared so the kill is not
+        re-logged every 5s while the OS reaps the process."""
+        from harness import AgentState, FORCE_KILL_TIMEOUT_SECONDS
+        hs, agent, fake_now = self._set_up_state(
+            AgentState.INTENT_STOPPING,
+            elapsed_seconds=FORCE_KILL_TIMEOUT_SECONDS + 5,
+        )
+        patches = self._patch_environment(fake_now, pid_alive=True)
+        with patch("harness.reboot_agent._kill_process"):
+            for p in patches:
+                p.start()
+            try:
+                hs.update_health()
+            finally:
+                for p in patches:
+                    p.stop()
+        self.assertIsNone(hs.get_agent("skill").intent_set_at)
+
+    def test_force_kill_swallows_kill_exceptions(self):
+        """If _kill_process raises (already-dead, permission, etc.), the
+        safety net must NOT propagate — the OS will reap on the next poll."""
+        from harness import AgentState, FORCE_KILL_TIMEOUT_SECONDS
+        hs, agent, fake_now = self._set_up_state(
+            AgentState.INTENT_STOPPING,
+            elapsed_seconds=FORCE_KILL_TIMEOUT_SECONDS + 5,
+        )
+        patches = self._patch_environment(fake_now, pid_alive=True)
+        with patch("harness.reboot_agent._kill_process",
+                   side_effect=OSError("boom")):
+            for p in patches:
+                p.start()
+            try:
+                hs.update_health()  # must not raise
+            finally:
+                for p in patches:
+                    p.stop()
+        # intent_set_at is still cleared on best-effort attempt
+        self.assertIsNone(hs.get_agent("skill").intent_set_at)
+
+
 class TestIntentSetAtRepeatRequestIsIdempotent(unittest.TestCase):
     """#4792 Phase 1 iter-4: repeated stop/restart requests on an already
     -STOPPING/-RESTARTING agent must NOT reset intent_set_at — that would
@@ -471,12 +665,13 @@ class TestIntentSetAtClearing(unittest.TestCase):
         import inspect
         from harness import HarnessState
         src = inspect.getsource(HarnessState.update_health)
-        # Find the RESTARTING-becomes-RUNNING block; assert the clear is there.
-        # The block sets intent_set_at = None immediately after the intent
-        # reassignment, before state_changed = True.
-        idx = src.find("INTENT_RESTARTING")
-        assert idx != -1, "expected RESTARTING handling in update_health"
-        block = src[idx:idx + 400]
+        # Find the specific assignment `agent.intent = AgentState.INTENT_RUNNING`
+        # in the alive-branch RESTARTING handler (NOT the tuple membership
+        # check in the force-kill safety net).
+        marker = "agent.intent = AgentState.INTENT_RUNNING"
+        idx = src.find(marker)
+        assert idx != -1, f"expected '{marker}' in update_health"
+        block = src[idx:idx + 200]
         assert "intent_set_at = None" in block, (
             "RESTARTING→RUNNING transition must clear intent_set_at"
         )

@@ -42,6 +42,12 @@ HARNESS_PORT_FILE = SQUIDSQUAD_DIR / ".harness-port"
 
 DEFAULT_PORT = 7373
 HEALTH_POLL_INTERVAL = 5  # seconds
+# #4792 Phase 1 (Q7): seconds after intent flip to STOPPING/RESTARTING before
+# the harness force-kills the claude PID. The cooperative path (cycle_post
+# exit 42 → /quit → process exits) typically wins in under 5s; this safety
+# net catches the case where the agent never reaches a cycle boundary or
+# /quit hangs (CONTEXT-4792.md §3.3 Q7).
+FORCE_KILL_TIMEOUT_SECONDS = 60
 HARNESS_STATE_FILE = SQUIDSQUAD_DIR / ".harness-state.json"
 
 import boot_remote
@@ -231,6 +237,41 @@ class HarnessState:
                         # (stop intent moved to harness state).
                     except Exception:
                         pass
+
+                # #4792 Phase 1 (Q7) — 60s force-kill safety net.
+                # If the agent has been STOPPING/RESTARTING for longer than
+                # the timeout AND the claude PID is still alive, the
+                # cooperative shutdown path (cycle_post exit 42 → /quit) has
+                # not completed; kill the PID directly so the operator's
+                # intent eventually wins. CONTEXT-4792.md §3.3. Idempotent:
+                # the kill races against the cooperative exit and we re-check
+                # on the next poll either way.
+                if alive and pid and agent.intent in (
+                    AgentState.INTENT_STOPPING, AgentState.INTENT_RESTARTING,
+                ) and agent.intent_set_at is not None and (
+                    time.time() - agent.intent_set_at
+                    > FORCE_KILL_TIMEOUT_SECONDS
+                ):
+                    elapsed = time.time() - agent.intent_set_at
+                    _log(
+                        f"{role}: force-kill safety net firing "
+                        f"(intent={agent.intent}, elapsed={elapsed:.1f}s, "
+                        f"timeout={FORCE_KILL_TIMEOUT_SECONDS}s) — killing "
+                        f"claude PID {pid}"
+                    )
+                    try:
+                        reboot_agent._kill_process(pid)
+                    except Exception as e:
+                        _log(
+                            f"{role}: force-kill of PID {pid} raised "
+                            f"{type(e).__name__}: {e}"
+                        )
+                    # Clear intent_set_at so we don't re-log the kill every
+                    # 5s while the OS reaps the process. The next poll cycle
+                    # will see the dead PID and run the normal STOPPING →
+                    # STOPPED / auto-reboot paths below.
+                    agent.intent_set_at = None
+                    state_changed = True
 
                 # Update status
                 if alive:
