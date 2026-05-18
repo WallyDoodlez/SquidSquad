@@ -1065,6 +1065,12 @@ async def receive_event(request: Request):
     # Store in stream (with disk persistence via lifecycle manager)
     event_lifecycle.append(body)
 
+    # Tracker handoff dispatch (#8694): when an agent transitions a tracker
+    # item, re-evaluate affected role queues and emit assigned-to for the new
+    # top item — no /loop polling delay between consecutive work items.
+    if event_type == "status-transition":
+        handoff_dispatcher.on_transition(body.get("payload", {}), role)
+
     # Ack processing (#7630 2-2): if event is an ack, process the lifecycle closure
     if event_type == "ack":
         ack_event_id = body.get("payload", {}).get("event_id")
@@ -1880,6 +1886,114 @@ class ExternalActivityDetector:
 
 # Global detector instance
 activity_detector = ExternalActivityDetector()
+
+
+class TrackerHandoffDispatcher:
+    """Dispatches assigned-to events on tracker transitions (#8694).
+
+    Hook: `POST /events` calls `on_transition()` for every `status-transition`
+    event received. We re-evaluate the affected role queue(s) and emit an
+    `assigned-to` event for the new top item, with per-role dedup so the same
+    queue-head isn't re-emitted repeatedly.
+
+    No /complete API — the transition IS the completion signal.
+    """
+
+    AGENT_ROLES = ExternalActivityDetector.AGENT_ROLES
+
+    def __init__(self):
+        # Per-role last-emitted top issue number (None = no item known)
+        self._last_top: dict[str, int | None] = {}
+        self._lock = threading.Lock()
+
+    def on_transition(self, payload, actor_role):
+        """Called from POST /events for each status-transition event.
+
+        Runs the actual GitHub-poking work in a background thread so the
+        HTTP handler doesn't block on `gh` subprocess calls.
+        """
+        thread = threading.Thread(
+            target=self._do_dispatch,
+            args=(payload or {}, actor_role),
+            daemon=True,
+            name="handoff-dispatch",
+        )
+        thread.start()
+
+    def _do_dispatch(self, payload, actor_role):
+        try:
+            roles_to_check = set()
+            if actor_role and actor_role in self.AGENT_ROLES:
+                roles_to_check.add(actor_role)
+            issue_num = payload.get("issue_number")
+            if issue_num:
+                issue_role = self._get_issue_role(issue_num)
+                if issue_role and issue_role in self.AGENT_ROLES:
+                    roles_to_check.add(issue_role)
+            for role in roles_to_check:
+                self._dispatch_next(role)
+        except Exception as e:
+            _log(f"Handoff dispatcher error: {e}")
+
+    def _dispatch_next(self, role):
+        """Compute role's current top item and emit assigned-to if it changed."""
+        queue = self._get_work_queue(role)
+        if not queue:
+            with self._lock:
+                self._last_top[role] = None
+            return
+        top = queue[0]
+        issue_num = top.get("number")
+        with self._lock:
+            if self._last_top.get(role) == issue_num:
+                return  # queue head unchanged — no-op
+            self._last_top[role] = issue_num
+
+        _emit_event("assigned-to", "harness", payload={
+            "issue_number": str(issue_num),
+            "title": top.get("title", ""),
+            "target_role": role,
+            "event_context": f"Next work for {role} after tracker handoff",
+        })
+        # Also tell the external poller it doesn't need to re-emit this one.
+        activity_detector._emitted_issues[issue_num] = None
+
+    def _get_work_queue(self, role):
+        """Return tracker.py work-queue output as a list of dicts."""
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "tracker.py"), "work-queue", role],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            check=False, cwd=str(REPO_ROOT),
+        )
+        if result.returncode != 0:
+            return []
+        try:
+            return json.loads(result.stdout) or []
+        except json.JSONDecodeError:
+            return []
+
+    def _get_issue_role(self, issue_num):
+        """Return the role label on an issue (e.g. 'skill'), or None."""
+        result = subprocess.run(
+            ["gh", "issue", "view", str(issue_num), "--json", "labels"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            check=False, cwd=str(REPO_ROOT),
+        )
+        if result.returncode != 0:
+            return None
+        try:
+            data = json.loads(result.stdout) or {}
+            for lbl in data.get("labels", []):
+                name = lbl.get("name", "")
+                if name.startswith("role:"):
+                    return name[len("role:"):]
+        except json.JSONDecodeError:
+            pass
+        return None
+
+
+# Global dispatcher instance
+handoff_dispatcher = TrackerHandoffDispatcher()
 
 
 # ---------------------------------------------------------------------------

@@ -1358,5 +1358,144 @@ class TestCompleteEventEndpoint(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
 
 
+# ---------------------------------------------------------------------------
+# TrackerHandoffDispatcher — #8694
+# ---------------------------------------------------------------------------
+
+class TestTrackerHandoffDispatcher(unittest.TestCase):
+    """#8694: harness emits assigned-to on tracker transitions, no /complete API."""
+
+    def setUp(self):
+        from harness import TrackerHandoffDispatcher
+        self.dispatcher = TrackerHandoffDispatcher()
+
+    def test_dispatches_for_actor_role(self):
+        """Actor role's transition → re-evaluates that role's queue."""
+        from harness import activity_detector
+        activity_detector._emitted_issues.clear()
+        with patch.object(self.dispatcher, "_get_work_queue",
+                          return_value=[{"number": 42, "title": "next task"}]), \
+             patch.object(self.dispatcher, "_get_issue_role", return_value=None), \
+             patch("harness._emit_event") as mock_emit:
+            self.dispatcher._do_dispatch(
+                {"issue_number": "10", "from": "in-progress", "to": "pending-test"},
+                actor_role="skill",
+            )
+        mock_emit.assert_called_once()
+        args, kwargs = mock_emit.call_args
+        self.assertEqual(args[0], "assigned-to")
+        self.assertEqual(args[1], "harness")
+        self.assertEqual(kwargs["payload"]["target_role"], "skill")
+        self.assertEqual(kwargs["payload"]["issue_number"], "42")
+
+    def test_skips_non_agent_actor(self):
+        """Transition from a non-agent role (e.g. external) → no dispatch."""
+        with patch.object(self.dispatcher, "_get_work_queue") as mock_queue, \
+             patch.object(self.dispatcher, "_get_issue_role", return_value=None), \
+             patch("harness._emit_event") as mock_emit:
+            self.dispatcher._do_dispatch({"issue_number": "10"}, actor_role="external")
+        mock_queue.assert_not_called()
+        mock_emit.assert_not_called()
+
+    def test_dispatches_for_issue_role_if_different(self):
+        """Re-evaluate the queue for the issue's role label too, not just actor."""
+        with patch.object(self.dispatcher, "_get_work_queue",
+                          return_value=[{"number": 7, "title": "verify"}]) as mock_queue, \
+             patch.object(self.dispatcher, "_get_issue_role", return_value="qa"), \
+             patch("harness._emit_event"):
+            self.dispatcher._do_dispatch({"issue_number": "10"}, actor_role="pm")
+        called_roles = {c[0][0] for c in mock_queue.call_args_list}
+        self.assertEqual(called_roles, {"pm", "qa"})
+
+    def test_dedup_skips_same_top_twice(self):
+        """Same queue head on two consecutive transitions → emit once."""
+        from harness import activity_detector
+        activity_detector._emitted_issues.clear()
+        with patch.object(self.dispatcher, "_get_work_queue",
+                          return_value=[{"number": 42, "title": "same"}]), \
+             patch.object(self.dispatcher, "_get_issue_role", return_value=None), \
+             patch("harness._emit_event") as mock_emit:
+            self.dispatcher._do_dispatch({"issue_number": "10"}, actor_role="skill")
+            self.dispatcher._do_dispatch({"issue_number": "11"}, actor_role="skill")
+        self.assertEqual(mock_emit.call_count, 1)
+
+    def test_empty_queue_clears_last_top_and_emits_nothing(self):
+        """No items for role → no assigned-to event, last_top cleared."""
+        self.dispatcher._last_top["skill"] = 99
+        with patch.object(self.dispatcher, "_get_work_queue", return_value=[]), \
+             patch.object(self.dispatcher, "_get_issue_role", return_value=None), \
+             patch("harness._emit_event") as mock_emit:
+            self.dispatcher._do_dispatch({"issue_number": "10"}, actor_role="skill")
+        mock_emit.assert_not_called()
+        self.assertIsNone(self.dispatcher._last_top.get("skill"))
+
+    def test_different_top_after_dedup_re_emits(self):
+        """After top changes, the new top is emitted."""
+        from harness import activity_detector
+        activity_detector._emitted_issues.clear()
+        with patch.object(self.dispatcher, "_get_issue_role", return_value=None), \
+             patch("harness._emit_event") as mock_emit:
+            with patch.object(self.dispatcher, "_get_work_queue",
+                              return_value=[{"number": 42, "title": "A"}]):
+                self.dispatcher._do_dispatch({"issue_number": "1"}, actor_role="skill")
+            with patch.object(self.dispatcher, "_get_work_queue",
+                              return_value=[{"number": 43, "title": "B"}]):
+                self.dispatcher._do_dispatch({"issue_number": "2"}, actor_role="skill")
+        self.assertEqual(mock_emit.call_count, 2)
+        _, kwargs = mock_emit.call_args_list[1]
+        self.assertEqual(kwargs["payload"]["issue_number"], "43")
+
+    def test_emission_marks_external_detector_dedup(self):
+        """Emitted issue is added to ExternalActivityDetector dedup."""
+        from harness import activity_detector
+        activity_detector._emitted_issues.clear()
+        with patch.object(self.dispatcher, "_get_work_queue",
+                          return_value=[{"number": 99, "title": "X"}]), \
+             patch.object(self.dispatcher, "_get_issue_role", return_value=None), \
+             patch("harness._emit_event"):
+            self.dispatcher._do_dispatch({"issue_number": "1"}, actor_role="skill")
+        self.assertIn(99, activity_detector._emitted_issues)
+
+    def test_on_transition_runs_in_background_thread(self):
+        """on_transition spawns a daemon thread — handler is non-blocking."""
+        with patch.object(self.dispatcher, "_do_dispatch") as mock_dispatch:
+            self.dispatcher.on_transition({"issue_number": "1"}, "skill")
+            import time as _t
+            _t.sleep(0.05)
+        mock_dispatch.assert_called_once()
+
+    def test_post_events_status_transition_triggers_dispatcher(self):
+        """POST /events with status-transition calls dispatcher.on_transition."""
+        from fastapi.testclient import TestClient
+        from harness import app
+        client = TestClient(app)
+        with patch("harness.handoff_dispatcher.on_transition") as mock_on:
+            resp = client.post("/events", json={
+                "event_type": "status-transition",
+                "role": "skill",
+                "payload": {"issue_number": "55", "from": "in-progress", "to": "pending-test"},
+                "timestamp": "2026-05-18T00:00:00",
+            })
+        self.assertEqual(resp.status_code, 200)
+        mock_on.assert_called_once()
+        args, _ = mock_on.call_args
+        self.assertEqual(args[0]["issue_number"], "55")
+        self.assertEqual(args[1], "skill")
+
+    def test_post_events_non_transition_skips_dispatcher(self):
+        """Non-status-transition events do NOT trigger the dispatcher."""
+        from fastapi.testclient import TestClient
+        from harness import app
+        client = TestClient(app)
+        with patch("harness.handoff_dispatcher.on_transition") as mock_on:
+            client.post("/events", json={
+                "event_type": "cycle-start",
+                "role": "skill",
+                "payload": {"cycle_number": 1},
+                "timestamp": "2026-05-18T00:00:00",
+            })
+        mock_on.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
