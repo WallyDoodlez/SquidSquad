@@ -603,24 +603,6 @@ def _do_version_bump(data, role):
     print(f"  Version v{new_version} tagged and pushed")
 
 
-def _do_restart_sentinel(data, role):
-    """Write self-restart sentinel if needed.
-
-    DEPRECATED: Agents should no longer set restart_needed. Context pressure
-    restarts are handled by _do_stop_after_cycle_check() and the harness
-    intent API (#4966). This function is kept for one version of backward
-    compatibility only.
-    """
-    if not data.get("restart_needed"):
-        return False
-
-    reason = data.get("restart_reason", "unknown")
-    sentinel = SQUID_DIR / role / ".restart"
-    sentinel.write_text(reason, encoding="utf-8")
-    print(f"  Restart sentinel written (deprecated): {reason}")
-    return True
-
-
 def _discover_harness_port():
     """Discover harness port — default 7373 + parent-dir walk for .harness-port (#4966).
 

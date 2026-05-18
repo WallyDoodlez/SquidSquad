@@ -294,20 +294,19 @@ class TestIterationLog:
 # Restart Sentinel
 # ---------------------------------------------------------------------------
 
-class TestRestartSentinel:
-    def test_writes_sentinel(self, patch_dirs, squid_dir):
-        data = {"restart_needed": True, "restart_reason": "context pressure at 85%"}
-        result = cycle_post._do_restart_sentinel(data, "pm")
-        assert result is True
-        sentinel = squid_dir / "pm" / ".restart"
-        assert sentinel.exists()
-        assert "context pressure" in sentinel.read_text(encoding="utf-8")
+class TestRestartSentinelRemoved:
+    """#8918 (Audit B F2): _do_restart_sentinel deleted. Harness intent API
+    (#4966) is the sole restart authority per CONTEXT-4792.md §5.6 and
+    DECISIONS-4792.md Q16. The function wrote a `.restart` file that
+    contradicted the harness sole-authority principle."""
 
-    def test_no_sentinel_when_not_needed(self, patch_dirs, squid_dir):
-        data = {"restart_needed": False}
-        result = cycle_post._do_restart_sentinel(data, "pm")
-        assert result is False
-        assert not (squid_dir / "pm" / ".restart").exists()
+    def test_function_attribute_is_absent(self):
+        assert not hasattr(cycle_post, "_do_restart_sentinel")
+
+    def test_source_contains_no_reference(self):
+        from pathlib import Path
+        src = Path(cycle_post.__file__).read_text(encoding="utf-8")
+        assert "_do_restart_sentinel" not in src
 
 
 # ---------------------------------------------------------------------------
@@ -449,13 +448,9 @@ class TestStopAfterCycleCheck:
             result = cycle_post._do_stop_after_cycle_check(data, "skill")
         assert result is False
 
-    def test_legacy_restart_sentinel_still_works(self, patch_dirs, squid_dir):
-        """Backward compat: restart_needed still writes .restart."""
-        data = {"restart_needed": True, "restart_reason": "context pressure at 80%"}
-        result = cycle_post._do_restart_sentinel(data, "skill")
-        assert result is True
-        sentinel = squid_dir / "skill" / ".restart"
-        assert sentinel.exists()
+    # test_legacy_restart_sentinel_still_works removed in #8918 — the
+    # underlying function _do_restart_sentinel was deleted. Harness intent
+    # API (#4966) is the sole restart authority.
 
 
 class TestPortDiscovery:
