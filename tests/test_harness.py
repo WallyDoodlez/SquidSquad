@@ -1497,5 +1497,375 @@ class TestTrackerHandoffDispatcher(unittest.TestCase):
         mock_on.assert_not_called()
 
 
+# ---------------------------------------------------------------------------
+# Bootup-complete gating — #8695
+# ---------------------------------------------------------------------------
+
+class TestBootupCompleteGating(unittest.TestCase):
+    """#8695: harness gates event dispatch on per-agent bootup-complete."""
+
+    def setUp(self):
+        from harness import state
+        # Snapshot then clear agents in-place so other modules that captured
+        # `state` at import time still see the same object.
+        self._restore_agents = dict(state.agents)
+        state.agents.clear()
+        from fastapi.testclient import TestClient
+        from harness import app
+        self.client = TestClient(app)
+
+    def tearDown(self):
+        from harness import state
+        state.agents.clear()
+        state.agents.update(self._restore_agents)
+
+    def test_default_bootup_complete_is_false(self):
+        from harness import AgentState
+        agent = AgentState("skill")
+        self.assertFalse(agent.bootup_complete)
+
+    def test_to_dict_includes_bootup_complete(self):
+        from harness import AgentState
+        agent = AgentState("skill")
+        agent.bootup_complete = True
+        self.assertTrue(agent.to_dict()["bootup_complete"])
+
+    def test_events_for_role_gated_before_bootup(self):
+        """/events/for/<role> returns empty + 'gated' marker when not bootup-complete."""
+        from harness import AgentState, state
+        agent = AgentState("skill")
+        agent.bootup_complete = False
+        state.set_agent("skill", agent)
+        with patch("harness._validate_role"):
+            resp = self.client.get("/events/for/skill")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["events"], [])
+        self.assertEqual(data["total"], 0)
+        self.assertEqual(data.get("gated"), "bootup-incomplete")
+
+    def test_events_for_role_flows_after_bootup(self):
+        """After bootup-complete, events flow normally."""
+        from harness import AgentState, state, event_stream
+        agent = AgentState("skill")
+        agent.bootup_complete = True
+        state.set_agent("skill", agent)
+        event_stream.append({
+            "id": "e_unique_1", "event_type": "assigned-to", "role": "harness",
+            "payload": {"target_role": "skill", "issue_number": "1"},
+        })
+        with patch("harness._validate_role"):
+            resp = self.client.get("/events/for/skill")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertNotIn("gated", data)
+        self.assertGreaterEqual(data["total"], 1)
+
+    def test_bootup_complete_event_sets_flag(self):
+        """POST /events with event_type=bootup-complete sets agent.bootup_complete=True."""
+        from harness import state
+        resp = self.client.post("/events", json={
+            "event_type": "bootup-complete",
+            "role": "skill",
+            "payload": {},
+            "timestamp": "2026-05-18T00:00:00",
+        })
+        self.assertEqual(resp.status_code, 200)
+        agent = state.get_agent("skill")
+        self.assertIsNotNone(agent)
+        self.assertTrue(agent.bootup_complete)
+
+    def test_bootup_complete_unlocks_dispatch(self):
+        """Events accumulate while gated; first poll after bootup-complete returns them."""
+        from harness import AgentState, state, event_stream
+        agent = AgentState("skill")
+        agent.bootup_complete = False
+        state.set_agent("skill", agent)
+
+        event_stream.append({
+            "id": "e_unlock_1", "event_type": "assigned-to", "role": "harness",
+            "payload": {"target_role": "skill", "issue_number": "1"},
+        })
+
+        with patch("harness._validate_role"):
+            r1 = self.client.get("/events/for/skill")
+        self.assertEqual(r1.json()["total"], 0)
+        self.assertEqual(r1.json().get("gated"), "bootup-incomplete")
+
+        self.client.post("/events", json={
+            "event_type": "bootup-complete", "role": "skill",
+            "payload": {}, "timestamp": "2026-05-18T00:00:00",
+        })
+
+        with patch("harness._validate_role"):
+            r2 = self.client.get("/events/for/skill")
+        self.assertEqual(r2.status_code, 200)
+        self.assertGreaterEqual(r2.json()["total"], 1)
+        self.assertNotIn("gated", r2.json())
+
+    def test_no_agent_state_does_not_gate(self):
+        """If no AgentState exists for a role, do not gate (backwards compat)."""
+        from harness import event_stream
+        event_stream.append({
+            "id": "e_nogate_1", "event_type": "assigned-to", "role": "harness",
+            "payload": {"target_role": "skill", "issue_number": "1"},
+        })
+        with patch("harness._validate_role"):
+            resp = self.client.get("/events/for/skill")
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn("gated", resp.json())
+
+    def test_start_clears_bootup_complete(self):
+        """POST /agents/<role>/start resets bootup_complete=False on fresh spawn."""
+        from harness import AgentState, state
+        prev = AgentState("skill")
+        prev.bootup_complete = True
+        prev.status = "stopped"
+        state.set_agent("skill", prev)
+        with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+             patch("harness.boot_remote.boot_agent",
+                   return_value={"role": "skill", "action": "spawn", "success": True,
+                                  "message": "ok", "terminal_pid": 1}):
+            self.client.post("/agents/skill/start")
+        self.assertFalse(state.get_agent("skill").bootup_complete)
+
+    def test_restart_clears_bootup_complete(self):
+        """POST /agents/<role>/restart resets bootup_complete=False."""
+        import tempfile
+        from harness import AgentState, state
+        prev = AgentState("skill")
+        prev.bootup_complete = True
+        state.set_agent("skill", prev)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            (Path(tmpdir) / ".squidsquad" / "skill").mkdir(parents=True)
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir):
+                self.client.post("/agents/skill/restart")
+        self.assertFalse(state.get_agent("skill").bootup_complete)
+
+
+class TestEventBusBootupComplete(unittest.TestCase):
+    """#8695: event_bus.bootup_complete() helper."""
+
+    def test_emits_bootup_complete_event(self):
+        import event_bus
+        with patch.object(event_bus, "emit") as mock_emit:
+            event_bus.bootup_complete("skill")
+        mock_emit.assert_called_once_with("bootup-complete", "skill", payload={})
+
+    def test_no_op_without_role(self):
+        import event_bus
+        with patch.object(event_bus, "emit") as mock_emit:
+            event_bus.bootup_complete("")
+            event_bus.bootup_complete(None)
+        mock_emit.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Review fixes — #8695 + #8694 post-DeepSeek
+# ---------------------------------------------------------------------------
+
+class TestReviewFixes(unittest.TestCase):
+    """DeepSeek review fixes for #8694 and #8695."""
+
+    # ---- #8695 review fixes ------------------------------------------------
+
+    def test_save_state_persists_bootup_complete(self):
+        """#8695 R1: save_state writes bootup_complete to the state file."""
+        import tempfile
+        from harness import HarnessState, AgentState
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".harness-state.json"
+            with patch("harness.HARNESS_STATE_FILE", state_file):
+                hs = HarnessState()
+                agent = AgentState("skill")
+                agent.bootup_complete = True
+                hs.set_agent("skill", agent)
+                hs.save_state()
+                data = json.loads(state_file.read_text(encoding="utf-8"))
+                self.assertTrue(data["agents"]["skill"]["bootup_complete"])
+
+    def test_load_state_restores_bootup_complete(self):
+        """#8695 R1: load_state restores bootup_complete so already-running
+        agents don't get gated forever after a harness restart."""
+        import tempfile
+        from harness import HarnessState, AgentState
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".harness-state.json"
+            state_file.write_text(json.dumps({
+                "agents": {"skill": {
+                    "intent": "running", "clone_path": "",
+                    "bootup_complete": True,
+                }}
+            }), encoding="utf-8")
+            with patch("harness.HARNESS_STATE_FILE", state_file):
+                hs = HarnessState()
+                with patch("harness._log"):
+                    hs.load_state()
+                self.assertTrue(hs.get_agent("skill").bootup_complete)
+
+    def test_load_state_defaults_bootup_complete_false_for_old_files(self):
+        """#8695 R1: state files predating this change → bootup_complete=False."""
+        import tempfile
+        from harness import HarnessState
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".harness-state.json"
+            state_file.write_text(json.dumps({
+                "agents": {"skill": {"intent": "running", "clone_path": ""}}
+            }), encoding="utf-8")
+            with patch("harness.HARNESS_STATE_FILE", state_file):
+                hs = HarnessState()
+                with patch("harness._log"):
+                    hs.load_state()
+                self.assertFalse(hs.get_agent("skill").bootup_complete)
+
+    def test_reboot_affected_agents_clears_bootup_complete(self):
+        """#8695 R2: compose-driven restart resets bootup_complete=False."""
+        from harness import HarnessState, AgentState
+        hs = HarnessState()
+        agent = AgentState("skill")
+        agent.intent = AgentState.INTENT_RUNNING
+        agent.bootup_complete = True
+        hs.set_agent("skill", agent)
+        import harness
+        prev_state = harness.state
+        harness.state = hs
+        # Fake git-diff output so the function decides skill's CLAUDE.md changed
+        fake_git_diff = MagicMock()
+        fake_git_diff.returncode = 0
+        fake_git_diff.stdout = ".squidsquad/skill/CLAUDE.md\n"
+        try:
+            with patch("harness._log"), \
+                 patch("harness.subprocess.run", return_value=fake_git_diff), \
+                 patch.object(hs, "save_state"):
+                harness._reboot_affected_agents(123, ["references/sub-skills/common/x.md"])
+        finally:
+            harness.state = prev_state
+        self.assertFalse(hs.get_agent("skill").bootup_complete)
+
+    # ---- #8694 review fixes ------------------------------------------------
+
+    def test_external_detector_mark_emitted_is_thread_safe(self):
+        """#8694 R1: mark_emitted holds _emitted_lock; concurrent writes don't crash."""
+        from harness import ExternalActivityDetector
+        det = ExternalActivityDetector()
+        import threading as _t
+        errors = []
+
+        def hammer(start):
+            try:
+                for i in range(200):
+                    det.mark_emitted(start + i)
+            except Exception as e:
+                errors.append(e)
+
+        threads = [_t.Thread(target=hammer, args=(i * 1000,)) for i in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(errors, [])
+        # Bounded at 500 entries
+        self.assertLessEqual(len(det._emitted_issues), 500)
+
+    def test_external_detector_eviction_bounds_at_500(self):
+        """#8694 R1: oldest entries evict when count exceeds 500."""
+        from harness import ExternalActivityDetector
+        det = ExternalActivityDetector()
+        for n in range(600):
+            det.mark_emitted(n)
+        self.assertLessEqual(len(det._emitted_issues), 500)
+        # The newest entries are retained
+        self.assertTrue(det.is_emitted(599))
+
+    def test_dispatcher_skips_when_external_detector_already_emitted(self):
+        """#8694 R2: bidirectional cross-dedup — dispatcher checks before emitting."""
+        from harness import TrackerHandoffDispatcher, activity_detector
+        activity_detector._emitted_issues.clear()
+        # External poller already emitted #77
+        activity_detector.mark_emitted(77)
+        d = TrackerHandoffDispatcher()
+        with patch.object(d, "_get_work_queue",
+                          return_value=[{"number": 77, "title": "dup"}]), \
+             patch.object(d, "_get_issue_role", return_value=None), \
+             patch("harness._emit_event") as mock_emit:
+            d._do_dispatch({"issue_number": "1"}, actor_role="skill")
+        mock_emit.assert_not_called()
+
+    def test_dispatcher_handles_non_dict_payload(self):
+        """#8694 R3: a malformed (non-dict) payload doesn't crash on_transition."""
+        from harness import TrackerHandoffDispatcher
+        d = TrackerHandoffDispatcher()
+        # Pass a string payload — would crash with `.get` if not guarded
+        with patch.object(d, "_do_dispatch") as mock_dispatch:
+            d.on_transition("not-a-dict", "skill")
+            import time as _t
+            _t.sleep(0.05)
+        # _do_dispatch should have been called with an empty dict, not the string
+        args, _ = mock_dispatch.call_args
+        self.assertEqual(args[0], {})
+        self.assertEqual(args[1], "skill")
+
+    def test_dispatcher_serializes_per_role(self):
+        """#8694 R4: per-role lock prevents concurrent `gh issue list` calls.
+
+        Two concurrent transitions for the same role: with the per-role lock,
+        the second `_get_work_queue` call cannot overlap the first.
+        """
+        from harness import TrackerHandoffDispatcher, activity_detector
+        activity_detector._emitted_issues.clear()
+        d = TrackerHandoffDispatcher()
+        overlap = {"max_concurrent": 0, "current": 0}
+        import threading as _th
+        counter_lock = _th.Lock()
+        import time as _t
+
+        def slow_queue(role):
+            with counter_lock:
+                overlap["current"] += 1
+                overlap["max_concurrent"] = max(overlap["max_concurrent"], overlap["current"])
+            _t.sleep(0.05)
+            with counter_lock:
+                overlap["current"] -= 1
+            return [{"number": 5, "title": "same"}]
+
+        with patch.object(d, "_get_work_queue", side_effect=slow_queue), \
+             patch.object(d, "_get_issue_role", return_value=None), \
+             patch("harness._emit_event"):
+            d.on_transition({"issue_number": "1"}, "skill")
+            d.on_transition({"issue_number": "2"}, "skill")
+            _t.sleep(0.25)
+        # Per-role lock means at most one _get_work_queue executes at a time.
+        self.assertEqual(overlap["max_concurrent"], 1)
+
+    def test_dispatcher_does_not_serialize_across_roles(self):
+        """#8694 R4: different roles dispatch concurrently — per-role lock only."""
+        from harness import TrackerHandoffDispatcher, activity_detector
+        activity_detector._emitted_issues.clear()
+        d = TrackerHandoffDispatcher()
+        overlap = {"max_concurrent": 0, "current": 0}
+        import threading as _th
+        counter_lock = _th.Lock()
+        import time as _t
+
+        def slow_queue(role):
+            with counter_lock:
+                overlap["current"] += 1
+                overlap["max_concurrent"] = max(overlap["max_concurrent"], overlap["current"])
+            _t.sleep(0.05)
+            with counter_lock:
+                overlap["current"] -= 1
+            return [{"number": 5, "title": role}]
+
+        with patch.object(d, "_get_work_queue", side_effect=slow_queue), \
+             patch.object(d, "_get_issue_role", return_value=None), \
+             patch("harness._emit_event"):
+            d.on_transition({"issue_number": "1"}, "skill")
+            d.on_transition({"issue_number": "2"}, "pm")
+            _t.sleep(0.25)
+        # Different roles should be allowed to overlap.
+        self.assertGreaterEqual(overlap["max_concurrent"], 2)
+
+
 if __name__ == "__main__":
     unittest.main()
