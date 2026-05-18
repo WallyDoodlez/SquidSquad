@@ -124,21 +124,7 @@ class TestManifestIntegrity:
         # any current role manifest. It's a sub-skill that may be wired in
         # for future event-driven needs; explicitly tolerate its
         # un-referenced state rather than block the build.
-        #
-        # #8915 cycle 1136: the L1 event-mode base fragments under
-        # common-events/ ship as content in this PR; manifest wiring +
-        # 8697 fixture regeneration is a separate follow-up cycle.
-        known_unused = {
-            "common/event-reactions.md",
-            "common-events/l1-base.md",
-            "common-events/cursor-management.md",
-            "common-events/forge-read-pattern.md",
-            "common-events/idle-cooldown-loop.md",
-            "common-events/comment-handling.md",
-            # Cycle 1139 — DM per-role PR-merge wait fragment; awaits
-            # manifest wiring in the same follow-up cycle as the L1 base.
-            "roles/dm/events/pr-merge-wait.md",
-        }
+        known_unused = {"common/event-reactions.md"}
         orphans = all_md - referenced - known_unused
         assert not orphans, f"Sub-skill files not referenced in manifest: {orphans}"
 
@@ -166,20 +152,29 @@ class TestIncludesYml:
         request.cls.sub_skills_dir = REFERENCES_DIR / "sub-skills"
 
     def test_includes_yml_exists_per_role(self):
-        """TC-A1: Each role directory has an includes.yml."""
+        """TC-A1: Each role directory has both includes.yml AND
+        includes-events.yml (#8697 dual-mode)."""
         for role in self.ROLES:
-            path = self.roles_dir / role / "includes.yml"
-            assert path.exists(), f"Missing includes.yml for {role}"
+            for fname in ("includes.yml", "includes-events.yml"):
+                path = self.roles_dir / role / fname
+                assert path.exists(), f"Missing {fname} for {role}"
 
     def test_includes_yml_valid_yaml(self):
         """TC-X6: All manifests are valid YAML with expected structure."""
         import yaml
         for role in self.ROLES:
-            path = self.roles_dir / role / "includes.yml"
-            data = yaml.safe_load(path.read_text(encoding="utf-8"))
-            assert isinstance(data, dict), f"{role}: not a dict"
-            assert "includes" in data, f"{role}: missing 'includes' key"
-            assert isinstance(data["includes"], list), f"{role}: 'includes' not a list"
+            for fname in ("includes.yml", "includes-events.yml"):
+                path = self.roles_dir / role / fname
+                if not path.exists():
+                    continue
+                data = yaml.safe_load(path.read_text(encoding="utf-8"))
+                assert isinstance(data, dict), f"{role}/{fname}: not a dict"
+                assert "includes" in data, (
+                    f"{role}/{fname}: missing 'includes' key"
+                )
+                assert isinstance(data["includes"], list), (
+                    f"{role}/{fname}: 'includes' not a list"
+                )
 
     def test_includes_yml_paths_exist(self):
         """All sub-skill paths in includes.yml resolve to actual files."""
@@ -310,7 +305,19 @@ class TestComposeManifestIntegration:
         # Strip events-only sub-skill blocks from the inline rendering so
         # the comparison is apples-to-apples with the polling manifest.
         import re
-        events_only_names = ("event-driven-workflow",)
+        events_only_names = (
+            "event-driven-workflow",
+            # #8915: the 5 event-mode L1 base fragments + DM's per-role
+            # pr-merge-wait fragment are only present in includes-events.yml,
+            # not includes.yml. The inline path will render them; the polling
+            # manifest path filters them out.
+            "l1-base",
+            "cursor-management",
+            "forge-read-pattern",
+            "idle-cooldown-loop",
+            "comment-handling",
+            "pr-merge-wait",
+        )
         for name in events_only_names:
             inline_result = re.sub(
                 rf"<!-- sub-skill: {re.escape(name)} -->.*?<!-- /sub-skill: {re.escape(name)} -->\n?",

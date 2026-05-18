@@ -1,13 +1,22 @@
 # DM agent sub-skill manifest (event-driven mode — #8697)
-# Uses slim variants for vault-protocol and improvement-scan (read-only role)
+# Uses slim variants for vault-protocol and improvement-scan (read-only role).
+# #8915 wired in the 5 common event-mode L1 base fragments + the DM-specific
+# pr-merge-wait fragment after the legacy event-driven-workflow orientation
+# page.
 # Order matters — includes are resolved top-to-bottom
 includes:
   - common/capability-check
   - common-events/event-driven-workflow
+  - common-events/l1-base
+  - common-events/cursor-management
+  - common-events/forge-read-pattern
+  - common-events/idle-cooldown-loop
+  - common-events/comment-handling
   - common/context-pressure
   - roles/dm/task-pickup
   - roles/dm/issue-triage
   - roles/dm/delivery-packaging
+  - roles/dm/events/pr-merge-wait
   - roles/dm/version-bumps
   - roles/dm/doc-improvement-loop
   - roles/dm/discussion-protocol
