@@ -102,13 +102,13 @@ def ack(event_id, role):
 
 
 def bootup_complete(role):
-    """Signal that the agent has finished initial boot (#8695).
+    """Signal that the agent has finished initial boot (#8695 / #8914).
 
     Event-driven agents call this after: L1 init done, working-state.md read,
-    initial backlog scan complete, Monitor subscription active. Until the
-    harness sees this event, it returns no events from /events/for/<role> for
-    this role — preventing the race where an `assigned-to` arrives during boot
-    and is dropped because the agent isn't subscribed yet.
+    initial backlog scan complete, Monitor subscription active. The harness
+    records the signal on `AgentState.bootup_complete` and exposes it via
+    `GET /agents/{role}` for operator / TUI consumption. Informational only —
+    no per-role gating, queuing, or dispatch (CONTEXT.md §5.2).
 
     Fire-and-forget like emit(). Safe to call multiple times.
     """
