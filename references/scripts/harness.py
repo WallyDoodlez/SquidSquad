@@ -219,9 +219,9 @@ class HarnessState:
                         legacy_health = health_report.get("health", "unknown")
                         if legacy_health == "healthy":
                             alive = True
-                        elif legacy_health == "stopped":
-                            # Check .stop sentinel
-                            agent.status = "stopped"
+                        # #4792: removed the elif `legacy_health == "stopped"`
+                        # branch — health_check.py no longer returns "stopped"
+                        # (stop intent moved to harness state).
                     except Exception:
                         pass
 
@@ -242,9 +242,11 @@ class HarnessState:
                         state_changed = True
                         _log(f"{role}: alive with new PID (stale intent={old_intent}), reset to running (#7637)")
                 elif agent.status != "starting":
-                    # Check if explicitly stopped
-                    stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"
-                    if stop_file.exists():
+                    # #4792: stop is now expressed via intent (INTENT_STOPPING
+                    # → INTENT_STOPPED), not a sentinel file.
+                    if agent.intent in (
+                        AgentState.INTENT_STOPPING, AgentState.INTENT_STOPPED
+                    ):
                         agent.status = "stopped"
                     elif prev_status == "running":
                         agent.status = "stalled"
@@ -1348,14 +1350,9 @@ async def restart_agent(role: str):
     state.set_agent(role, agent_state)
     state.save_state()
 
-    # Remove .stop sentinel if present (allow re-start after previous stop)
+    # #4792: stop is now expressed via harness intent — no sentinel to clean.
     clone_path = boot_remote._get_clone_path(role)
     clone_path_p = Path(clone_path)
-    stop_file = clone_path_p / ".squidsquad" / role / ".stop"
-    try:
-        stop_file.unlink(missing_ok=True)
-    except OSError:
-        pass
 
     # #8689: if the agent is idle between cycles, kill the claude process
     # right now so the auto-reboot path (running periodic health-poll already

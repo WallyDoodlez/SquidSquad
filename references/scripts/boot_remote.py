@@ -178,10 +178,10 @@ def _is_process_alive(pid):
         return False
 
 
-def _has_stop_sentinel(clone_path, role):
-    """Check if .squidsquad/{role}/.stop exists."""
-    stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"
-    return stop_file.exists()
+# _has_stop_sentinel was removed in #4792. Agent lifecycle is now controlled
+# entirely by harness state (intent=running/stopping/restarting/stopped); the
+# `.stop` file caused split-brain when removing it in the primary repo didn't
+# affect clones, and when stale sentinels silently overrode harness intent.
 
 
 # Max age of .booting sentinel before it's considered stale (seconds)
@@ -291,15 +291,13 @@ def _read_health_file(clone_path, role):
 def _needs_boot(role):
     """Determine if an agent needs booting.
 
-    Checks (in order): .stop sentinel, .booting lock, .claude-pid, .pid.
+    Checks (in order): .booting lock, .claude-pid, .pid.
     Returns (needs_boot, reason, clone_path).
+
+    #4792: .stop sentinel check removed — stop intent now lives in harness
+    state. Auto-reboot honors `intent` (`stopping`/`stopped` blocks reboot).
     """
     clone_path = _get_clone_path(role)
-
-    # .stop sentinel — agent was explicitly stopped (harness fallback)
-    stop_file = Path(clone_path) / ".squidsquad" / role / ".stop"
-    if stop_file.exists():
-        return False, ".stop sentinel present", str(clone_path)
 
     # .booting sentinel — another boot is already in progress
     if _has_booting_sentinel(clone_path, role):

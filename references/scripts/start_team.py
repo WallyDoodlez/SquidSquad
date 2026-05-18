@@ -67,32 +67,10 @@ def _harness_api(method, path, timeout=5):
         return False, None
 
 
-# ---------------------------------------------------------------------------
-# Sentinel operations (fallback when harness unreachable)
-# ---------------------------------------------------------------------------
-
-def _write_stop(role):
-    """Write .stop sentinel to permanently stop an agent."""
-    role_dir = SQUIDSQUAD_DIR / role
-    if not role_dir.exists():
-        role_dir.mkdir(parents=True, exist_ok=True)
-    sentinel = role_dir / ".stop"
-    sentinel.write_text("stopped by start_team.py", encoding="utf-8")
-
-
-def _remove_stop(role):
-    """Remove .stop sentinel to allow agent to run."""
-    sentinel = SQUIDSQUAD_DIR / role / ".stop"
-    if sentinel.exists():
-        sentinel.unlink()
-
-
-def _clean_stale_sentinels(role):
-    """Clean stale .restart sentinels from previous system (migration)."""
-    restart = SQUIDSQUAD_DIR / role / ".restart"
-    if restart.exists():
-        restart.unlink()
-        print(f"  [{role}] Cleaned stale .restart sentinel")
+# Sentinel-file lifecycle removed in #4792. Stop/restart now flow exclusively
+# through the harness API (POST /agents/<role>/stop|restart). If the harness
+# is unreachable, those commands fail loudly rather than writing a stale
+# `.stop` file that survived the harness restart and caused split-brain.
 
 
 def _is_agent_idle(role):
@@ -115,8 +93,6 @@ def cmd_boot(roles):
     """Boot agents that are not running."""
     results = []
     for role in roles:
-        _clean_stale_sentinels(role)
-        _remove_stop(role)
         r = boot_remote.boot_agent(role)
         results.append(r)
         status = "OK" if r["success"] else "FAIL"
@@ -127,8 +103,6 @@ def cmd_boot(roles):
 def cmd_reboot(roles, force=False):
     """Gracefully reboot agents via harness API (#4966)."""
     for role in roles:
-        _clean_stale_sentinels(role)
-
         # Check if agent is running
         needs_boot, reason, _ = boot_remote._needs_boot(role)
         if needs_boot:
@@ -167,16 +141,24 @@ def cmd_reboot(roles, force=False):
 
 
 def cmd_stop(roles):
-    """Stop agents via harness API (#4966)."""
+    """Stop agents via harness API (#4966).
+
+    #4792: no more `.stop` sentinel fallback. If the harness is unreachable,
+    the stop command fails — preferable to writing a stale sentinel that
+    survives the harness restart and silently overrides next boot.
+    """
+    all_ok = True
     for role in roles:
-        # Use harness API to set intent=stopping (#4966)
         ok, resp = _harness_api("POST", f"/agents/{role}/stop")
         if ok:
             print(f"  [{role}] Harness: stop requested (intent=stopping)")
         else:
-            print(f"  [{role}] Harness unreachable — writing .stop sentinel as fallback")
-            _write_stop(role)
-    return True
+            print(
+                f"  [{role}] Harness unreachable — cannot stop agent. "
+                f"Start the harness first, then re-run this command."
+            )
+            all_ok = False
+    return all_ok
 
 
 # ---------------------------------------------------------------------------

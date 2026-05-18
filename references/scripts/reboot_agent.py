@@ -128,12 +128,13 @@ def reboot(role, timeout=DEFAULT_TIMEOUT, force=False):
     clone_path = Path(_get_clone_path(role))
     squid = clone_path / ".squidsquad"
     pid_file = squid / role / ".pid"
-    stop_file = squid / role / ".stop"
 
-    # Check .stop sentinel first — do not respawn stopped agents
-    if stop_file.exists():
-        print(f"{role}: explicitly stopped (.stop sentinel) — not respawning")
-        return 0
+    # #4792: previously checked `.stop` sentinel here to decline reboots of
+    # explicitly-stopped agents. That check now lives in harness state
+    # (intent=stopping/stopped). reboot_agent.py is a local utility and does
+    # not coordinate with harness intent — operators should use the harness
+    # API (POST /agents/<role>/stop) to stop, then reboot_agent will succeed
+    # only when intent is back to running (next /start or /restart resets it).
 
     # Check if launcher is running
     launcher_pid = None
