@@ -31,6 +31,84 @@ ROLES_DIR = REPO_ROOT / "references" / "roles"
 OUTPUT_FILE = REPO_ROOT / "references" / "agent-instructions.md"
 
 
+def _parse_frontmatter(content: str) -> tuple[dict, str]:
+    """Parse optional YAML frontmatter from a fragment (#8697).
+
+    A fragment may begin with `---` ... `---` containing keys like
+    `applies-to: [event-driven]`. Returns (meta, body_without_frontmatter).
+    If no frontmatter, returns ({}, content).
+    """
+    lines = content.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}, content
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            fm_text = "\n".join(lines[1:i])
+            body = "\n".join(lines[i + 1:])
+            if yaml is not None:
+                try:
+                    meta = yaml.safe_load(fm_text) or {}
+                except Exception:
+                    meta = {}
+            else:
+                # Minimal manual parser sufficient for `applies-to: [a, b]`.
+                meta = {}
+                for fm_line in fm_text.splitlines():
+                    if ":" not in fm_line:
+                        continue
+                    k, _, v = fm_line.partition(":")
+                    v = v.strip()
+                    if v.startswith("[") and v.endswith("]"):
+                        v = [x.strip() for x in v[1:-1].split(",") if x.strip()]
+                    meta[k.strip()] = v
+            return meta if isinstance(meta, dict) else {}, body
+    return {}, content
+
+
+def _get_wake_mode(role_name: str) -> str:
+    """Determine a role's wake mode from config.md (#8697).
+
+    Lookup precedence: `event-driven-<role>` → `event-driven` → default `polling`.
+    Values normalize to `event-driven` (yes/true/1) or `polling`.
+    """
+    sys.path.insert(0, str(SCRIPT_DIR))
+    try:
+        from config import get_field
+    except Exception:
+        return "polling"
+    for field in (f"event-driven-{role_name}", "event-driven"):
+        try:
+            v = (get_field(field) or "").strip().lower()
+        except (Exception, SystemExit):
+            # config.get_field calls sys.exit(1) on missing field — treat as
+            # "field absent" and try the next one in the precedence chain.
+            v = ""
+        if v in ("yes", "true", "1", "event-driven"):
+            return "event-driven"
+        if v in ("no", "false", "0", "polling"):
+            return "polling"
+    return "polling"
+
+
+def _fragment_applies_to(meta: dict, mode: str) -> bool:
+    """True if a fragment with the given frontmatter should be included for mode.
+
+    `applies-to` may be a list or a single string. Accepted values:
+    `event-driven`, `polling`, `both`. Missing/unrecognized → include (back-compat).
+    """
+    raw = meta.get("applies-to")
+    if raw is None:
+        return True
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list):
+        return True
+    normalized = {str(x).strip().lower() for x in raw}
+    if "both" in normalized:
+        return True
+    return mode in normalized
+
+
 def _strip_outer_markers(content: str, name: str) -> str:
     """Strip matching sub-skill open/close markers from the first/last lines.
 
@@ -76,8 +154,14 @@ def _resolve_runtime(runtime_path: str) -> list[str]:
     ]
 
 
-def _resolve_includes(entry_file: Path) -> str:
-    """Resolve all {{include: path}} directives in an entry file."""
+def _resolve_includes(entry_file: Path, wake_mode: str = "polling") -> str:
+    """Resolve all {{include: path}} directives in an entry file.
+
+    Manifest-less fallback path (used when no includes.yml exists or pyyaml
+    is unavailable). Mirrors the manifest path's mode-aware filtering and
+    frontmatter stripping so output is consistent regardless of which path
+    composes the file (#8697 review fix).
+    """
     text = entry_file.read_text(encoding="utf-8")
     lines = text.splitlines()
     result = []
@@ -97,8 +181,14 @@ def _resolve_includes(entry_file: Path) -> str:
                 result.append(f"<!-- ERROR: Missing include: {include_path} -->")
                 continue
             sub_skill_name = full_path.stem
-            content = full_path.read_text(encoding="utf-8").rstrip()
-            content = _strip_outer_markers(content, sub_skill_name)
+            raw = full_path.read_text(encoding="utf-8").rstrip()
+            # #8697 review fix: also parse frontmatter on the fallback path
+            # so (a) ` --- ` delimiters don't leak into output and (b)
+            # event-driven-only fragments aren't included in polling mode.
+            meta, body = _parse_frontmatter(raw)
+            if not _fragment_applies_to(meta, wake_mode):
+                continue
+            content = _strip_outer_markers(body, sub_skill_name)
             result.append(f"<!-- sub-skill: {sub_skill_name} -->")
             result.append(content)
             result.append(f"<!-- /sub-skill: {sub_skill_name} -->")
@@ -206,12 +296,16 @@ def _load_manifest(role_name: str) -> list | None:
     return includes
 
 
-def _resolve_includes_with_manifest(entry_file: Path, manifest: list) -> str:
+def _resolve_includes_with_manifest(entry_file: Path, manifest: list, wake_mode: str = "polling") -> str:
     """Resolve includes using manifest order, preserving inline content.
 
     The manifest declares which sub-skills to include. The entry file's
     {{include:}} directives are replaced with manifest-resolved content.
     Inline (non-include) content is preserved in its original position.
+
+    Fragments with `applies-to:` frontmatter that excludes `wake_mode` are
+    skipped (#8697). Fragments without frontmatter are included regardless
+    (backwards compatible).
     """
     text = entry_file.read_text(encoding="utf-8")
     lines = text.splitlines()
@@ -252,8 +346,12 @@ def _resolve_includes_with_manifest(entry_file: Path, manifest: list) -> str:
                 result.append(f"<!-- ERROR: Missing include: {resolved_path} -->")
                 continue
             sub_skill_name = full_path.stem
-            content = full_path.read_text(encoding="utf-8").rstrip()
-            content = _strip_outer_markers(content, sub_skill_name)
+            raw = full_path.read_text(encoding="utf-8").rstrip()
+            # #8697: respect applies-to frontmatter for dual-mode composition.
+            meta, body = _parse_frontmatter(raw)
+            if not _fragment_applies_to(meta, wake_mode):
+                continue
+            content = _strip_outer_markers(body, sub_skill_name)
             result.append(f"<!-- sub-skill: {sub_skill_name} -->")
             result.append(content)
             result.append(f"<!-- /sub-skill: {sub_skill_name} -->")
@@ -365,10 +463,11 @@ def compose_role(role_name: str) -> str:
     try:
         # Step 2: Resolve includes
         manifest = _load_manifest(role_name)
+        wake_mode = _get_wake_mode(role_name)
         if manifest is not None:
-            composed = _resolve_includes_with_manifest(tmp, manifest)
+            composed = _resolve_includes_with_manifest(tmp, manifest, wake_mode)
         else:
-            composed = _resolve_includes(tmp)
+            composed = _resolve_includes(tmp, wake_mode)
     finally:
         tmp.unlink(missing_ok=True)
 

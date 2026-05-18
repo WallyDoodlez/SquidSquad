@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -881,3 +881,171 @@ class TestNoRedundantReImport:
         source = inspect.getsource(compose.agent_compose)
         assert "import subprocess" not in source
         assert "import json" not in source
+
+
+# ---------------------------------------------------------------------------
+# Dual-mode composition — #8697
+# ---------------------------------------------------------------------------
+
+class TestParseFrontmatter:
+    def test_no_frontmatter_returns_empty_meta(self):
+        meta, body = compose._parse_frontmatter("just content\nmore content")
+        assert meta == {}
+        assert body == "just content\nmore content"
+
+    def test_yaml_style_frontmatter(self):
+        text = "---\napplies-to: [event-driven, polling]\n---\nbody"
+        meta, body = compose._parse_frontmatter(text)
+        assert meta.get("applies-to") == ["event-driven", "polling"]
+        assert body == "body"
+
+    def test_single_value_applies_to(self):
+        text = "---\napplies-to: [event-driven]\n---\nbody"
+        meta, body = compose._parse_frontmatter(text)
+        assert meta.get("applies-to") == ["event-driven"]
+
+    def test_missing_closing_delimiter_returns_empty(self):
+        text = "---\napplies-to: [foo]\nbody-without-end"
+        meta, body = compose._parse_frontmatter(text)
+        assert meta == {}
+        assert body == text
+
+
+class TestGetWakeMode:
+    def test_defaults_to_polling(self):
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", return_value=""):
+            assert compose._get_wake_mode("skill") == "polling"
+
+    def test_global_event_driven_yes(self):
+        with patch.dict("sys.modules", {"config": MagicMock()}):
+            def fake(field):
+                return "yes" if field == "event-driven" else ""
+            with patch("config.get_field", side_effect=fake):
+                assert compose._get_wake_mode("skill") == "event-driven"
+
+    def test_role_specific_overrides_global(self):
+        with patch.dict("sys.modules", {"config": MagicMock()}):
+            def fake(field):
+                return {"event-driven-pm": "yes", "event-driven": "no"}.get(field, "")
+            with patch("config.get_field", side_effect=fake):
+                assert compose._get_wake_mode("pm") == "event-driven"
+                assert compose._get_wake_mode("skill") == "polling"
+
+    def test_role_polling_explicit(self):
+        with patch.dict("sys.modules", {"config": MagicMock()}):
+            def fake(field):
+                return "no" if field == "event-driven-skill" else ""
+            with patch("config.get_field", side_effect=fake):
+                assert compose._get_wake_mode("skill") == "polling"
+
+
+class TestFragmentAppliesTo:
+    def test_no_meta_always_applies(self):
+        assert compose._fragment_applies_to({}, "polling")
+        assert compose._fragment_applies_to({}, "event-driven")
+
+    def test_explicit_match(self):
+        assert compose._fragment_applies_to({"applies-to": ["event-driven"]}, "event-driven")
+        assert not compose._fragment_applies_to({"applies-to": ["event-driven"]}, "polling")
+
+    def test_both_keyword_matches_anything(self):
+        assert compose._fragment_applies_to({"applies-to": ["both"]}, "polling")
+        assert compose._fragment_applies_to({"applies-to": ["both"]}, "event-driven")
+
+    def test_string_value_normalizes_to_list(self):
+        assert compose._fragment_applies_to({"applies-to": "event-driven"}, "event-driven")
+        assert not compose._fragment_applies_to({"applies-to": "event-driven"}, "polling")
+
+    def test_unrecognized_value_defaults_to_include(self):
+        assert compose._fragment_applies_to({"applies-to": 42}, "polling")
+
+
+class TestResolveIncludesWakeMode:
+    def test_polling_mode_skips_event_driven_only_fragment(self, tmp_path):
+        sub_skills = tmp_path / "sub-skills" / "common"
+        sub_skills.mkdir(parents=True)
+        (sub_skills / "event-only.md").write_text(
+            "---\napplies-to: [event-driven]\n---\nEVENT ONLY CONTENT\n",
+            encoding="utf-8",
+        )
+        (sub_skills / "always.md").write_text("ALWAYS CONTENT\n", encoding="utf-8")
+        entry = tmp_path / "entry.md"
+        entry.write_text(
+            "{{include: common/event-only}}\n{{include: common/always}}\n",
+            encoding="utf-8",
+        )
+        with patch.object(compose, "SUB_SKILLS_DIR", tmp_path / "sub-skills"):
+            polling_out = compose._resolve_includes_with_manifest(
+                entry, ["common/event-only", "common/always"], wake_mode="polling"
+            )
+            event_out = compose._resolve_includes_with_manifest(
+                entry, ["common/event-only", "common/always"], wake_mode="event-driven"
+            )
+        assert "EVENT ONLY CONTENT" not in polling_out
+        assert "ALWAYS CONTENT" in polling_out
+        assert "EVENT ONLY CONTENT" in event_out
+        assert "ALWAYS CONTENT" in event_out
+
+    def test_skipped_fragment_emits_no_wrapper_markers(self, tmp_path):
+        sub_skills = tmp_path / "sub-skills" / "common"
+        sub_skills.mkdir(parents=True)
+        (sub_skills / "event-only.md").write_text(
+            "---\napplies-to: [event-driven]\n---\nEVENT CONTENT\n",
+            encoding="utf-8",
+        )
+        entry = tmp_path / "entry.md"
+        entry.write_text("{{include: common/event-only}}\n", encoding="utf-8")
+        with patch.object(compose, "SUB_SKILLS_DIR", tmp_path / "sub-skills"):
+            polling = compose._resolve_includes_with_manifest(
+                entry, ["common/event-only"], wake_mode="polling"
+            )
+        assert "<!-- sub-skill: event-only -->" not in polling
+        assert "<!-- /sub-skill: event-only -->" not in polling
+
+
+class TestEventDrivenWorkflowFrontmatter:
+    """The canonical event-driven-workflow fragment must carry the right tag."""
+
+    def test_event_driven_workflow_marked_event_driven_only(self):
+        path = Path(__file__).resolve().parent.parent / "references" / "sub-skills" / "common" / "event-driven-workflow.md"
+        raw = path.read_text(encoding="utf-8")
+        meta, _ = compose._parse_frontmatter(raw)
+        assert meta.get("applies-to") == ["event-driven"]
+
+
+class TestResolveIncludesFallbackWakeMode:
+    """#8697 review fix R1: the manifest-less fallback path must also parse
+    frontmatter and respect wake_mode, so output is identical regardless of
+    which composition path runs."""
+
+    def test_fallback_strips_frontmatter(self, tmp_path):
+        sub_skills = tmp_path / "sub-skills" / "common"
+        sub_skills.mkdir(parents=True)
+        (sub_skills / "tagged.md").write_text(
+            "---\napplies-to: [both]\n---\nTAGGED CONTENT\n",
+            encoding="utf-8",
+        )
+        entry = tmp_path / "entry.md"
+        entry.write_text("{{include: common/tagged}}\n", encoding="utf-8")
+        with patch.object(compose, "SUB_SKILLS_DIR", tmp_path / "sub-skills"):
+            out = compose._resolve_includes(entry, wake_mode="polling")
+        assert "TAGGED CONTENT" in out
+        # Frontmatter delimiters must NOT leak into output
+        assert "---" not in out
+        assert "applies-to" not in out
+
+    def test_fallback_filters_by_wake_mode(self, tmp_path):
+        sub_skills = tmp_path / "sub-skills" / "common"
+        sub_skills.mkdir(parents=True)
+        (sub_skills / "event-only.md").write_text(
+            "---\napplies-to: [event-driven]\n---\nEVENT ONLY\n",
+            encoding="utf-8",
+        )
+        entry = tmp_path / "entry.md"
+        entry.write_text("{{include: common/event-only}}\n", encoding="utf-8")
+        with patch.object(compose, "SUB_SKILLS_DIR", tmp_path / "sub-skills"):
+            polling = compose._resolve_includes(entry, wake_mode="polling")
+            event = compose._resolve_includes(entry, wake_mode="event-driven")
+        assert "EVENT ONLY" not in polling
+        assert "EVENT ONLY" in event

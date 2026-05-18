@@ -1,3 +1,6 @@
+---
+applies-to: [event-driven]
+---
 ## Event-Driven Workflow (#7630)
 
 You are a persistent agent session that reacts to events dispatched by the harness. You sit idle until the Monitor tool detects an event, then execute exactly one creative task and close the event via the completion API.
