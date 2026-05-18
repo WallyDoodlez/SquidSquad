@@ -71,7 +71,7 @@ class AgentState:
     __slots__ = ("role", "status", "intent", "last_health_check", "boot_time",
                  "clone_path", "claude_pid", "terminal_pid",
                  "current_cycle", "current_phase", "last_cycle_start",
-                 "last_cycle_end", "last_cycle_type")
+                 "last_cycle_end", "last_cycle_type", "bootup_complete")
 
     # Intent values:
     #   "running"    — agent should be alive; auto-reboot on death (#4949)
@@ -98,6 +98,12 @@ class AgentState:
         self.last_cycle_start = None
         self.last_cycle_end = None
         self.last_cycle_type = None
+        # #8695: bootup-complete gating. False until the agent emits
+        # `bootup-complete`. While False, get_events_for_role returns no events
+        # so the harness never dispatches assigned-to / status-transition into
+        # a still-booting agent (events accumulate in the stream and drain on
+        # the agent's first poll after bootup-complete).
+        self.bootup_complete = False
 
     def to_dict(self):
         return {
@@ -114,6 +120,7 @@ class AgentState:
             "last_cycle_start": self.last_cycle_start,
             "last_cycle_end": self.last_cycle_end,
             "last_cycle_type": self.last_cycle_type,
+            "bootup_complete": self.bootup_complete,
         }
 
 
@@ -255,6 +262,9 @@ class HarnessState:
                     reboot_roles.append(role)
                     agent.status = "starting"
                     agent.claude_pid = None  # Clear stale PID
+                    # #8695: the replacement process needs to re-emit
+                    # bootup-complete before we'll dispatch events to it.
+                    agent.bootup_complete = False
                     state_changed = True
 
                 # Stopping intent fulfilled — agent died as requested (#4966)
@@ -322,6 +332,11 @@ class HarnessState:
                         "clone_path": a.clone_path,
                         "claude_pid": a.claude_pid,
                         "terminal_pid": a.terminal_pid,
+                        # #8695: must survive harness crash recovery — otherwise
+                        # already-running agents stay gated forever after a
+                        # harness restart, since boot_remote skips already-alive
+                        # agents and the agent has no way to know we restarted.
+                        "bootup_complete": a.bootup_complete,
                     }
                     for role, a in self.agents.items()
                 },
@@ -359,6 +374,9 @@ class HarnessState:
                 agent.boot_time = agent_data.get("boot_time")
                 agent.claude_pid = agent_data.get("claude_pid")
                 agent.terminal_pid = agent_data.get("terminal_pid")
+                # #8695: restore so already-running agents stay ungated after
+                # a harness restart. Defaults to False for older state files.
+                agent.bootup_complete = agent_data.get("bootup_complete", False)
 
         _log(f"Restored state for {len(state_data.get('agents', {}))} agents from state file")
 
@@ -899,6 +917,9 @@ async def start_agent(role: str):
         agent_state.intent = AgentState.INTENT_RUNNING
         agent_state.boot_time = time.time()
         agent_state.terminal_pid = result.get("terminal_pid")
+        # #8695: spawning a fresh agent → bootup-complete must be re-asserted
+        # by the new process before we'll dispatch any events to it.
+        agent_state.bootup_complete = False
         state.set_agent(role, agent_state)
         state.save_state()
 
@@ -1071,6 +1092,23 @@ async def receive_event(request: Request):
     if event_type == "status-transition":
         handoff_dispatcher.on_transition(body.get("payload", {}), role)
 
+    # Bootup gating (#8695): agent signals it's ready to receive dispatches.
+    # Until this fires, get_events_for_role returns nothing for this role —
+    # events accumulate in the stream and drain on the agent's first poll
+    # after bootup-complete, so nothing is lost.
+    if event_type == "bootup-complete" and role:
+        # Mutate under state._lock to avoid racing with the health poller's
+        # auto-reboot path (which sets bootup_complete=False under the same
+        # lock when it detects death).
+        with state._lock:
+            agent = state.agents.get(role)
+            if agent is None:
+                agent = AgentState(role)
+                state.agents[role] = agent
+            agent.bootup_complete = True
+        state.save_state()
+        _log(f"{role}: bootup-complete — event dispatch unlocked")
+
     # Ack processing (#7630 2-2): if event is an ack, process the lifecycle closure
     if event_type == "ack":
         ack_event_id = body.get("payload", {}).get("event_id")
@@ -1143,6 +1181,18 @@ async def get_events_for_role(
     This is the primary endpoint for event-driven agents using Monitor tool.
     """
     _validate_role(role)
+
+    # #8695: Bootup-complete gating. While the agent has not yet emitted
+    # `bootup-complete`, return an empty list so the harness never dispatches
+    # work into a still-booting agent. Events remain in the stream and will be
+    # delivered on the next poll after bootup-complete arrives.
+    agent_for_gate = state.get_agent(role)
+    if agent_for_gate is not None and not agent_for_gate.bootup_complete:
+        return {
+            "events": [],
+            "total": 0,
+            "gated": "bootup-incomplete",
+        }
 
     # Get relevant event types for this role from config
     try:
@@ -1292,6 +1342,9 @@ async def restart_agent(role: str):
     # cycle_post.py queries GET /agents/{role} and reads intent (#4966)
     agent_state = state.get_agent(role) or AgentState(role)
     agent_state.intent = AgentState.INTENT_RESTARTING
+    # #8695: restart will respawn the process → new boot must re-assert
+    # bootup-complete before events flow again.
+    agent_state.bootup_complete = False
     state.set_agent(role, agent_state)
     state.save_state()
 
@@ -1685,6 +1738,10 @@ def _reboot_affected_agents(pr_number, files_changed):
         agent = state.get_agent(role)
         if agent and agent.intent == AgentState.INTENT_RUNNING:
             agent.intent = AgentState.INTENT_RESTARTING
+            # #8695: match the other three restart paths — close the window
+            # where events would still dispatch after we've marked the agent
+            # for restart but before its process actually dies.
+            agent.bootup_complete = False
             state.set_agent(role, agent)
     state.save_state()
 
@@ -1774,6 +1831,23 @@ class ExternalActivityDetector:
         self._thread = None
         self._last_check_epoch = 0.0  # epoch seconds — avoids ISO string comparison
         self._emitted_issues: dict[int, None] = {}  # ordered dedup: issues already emitted
+        # #8694: shared lock for _emitted_issues — TrackerHandoffDispatcher
+        # writes here from a separate thread (cross-dedup); without this the
+        # compound eviction (next(iter) + del) can race with concurrent writes.
+        self._emitted_lock = threading.Lock()
+
+    def is_emitted(self, issue_num):
+        """Thread-safe membership check on _emitted_issues."""
+        with self._emitted_lock:
+            return issue_num in self._emitted_issues
+
+    def mark_emitted(self, issue_num):
+        """Thread-safe insert + bounded eviction on _emitted_issues (#8694)."""
+        with self._emitted_lock:
+            self._emitted_issues[issue_num] = None
+            while len(self._emitted_issues) > 500:
+                oldest = next(iter(self._emitted_issues))
+                del self._emitted_issues[oldest]
 
     def start(self):
         """Start the detector daemon thread."""
@@ -1842,8 +1916,8 @@ class ExternalActivityDetector:
         for issue in issues:
             issue_num = issue.get("number", 0)
 
-            # Dedup: skip issues already emitted
-            if issue_num in self._emitted_issues:  # O(1) dict lookup
+            # Dedup: skip issues already emitted (thread-safe via #8694)
+            if self.is_emitted(issue_num):
                 continue
 
             # Skip agent-filed issues to prevent self-triggering loops
@@ -1874,14 +1948,10 @@ class ExternalActivityDetector:
                 "target_role": target_role,
                 "event_context": f"Issue #{issue_num} updated",
             })
-            self._emitted_issues[issue_num] = None
+            self.mark_emitted(issue_num)
 
         self._last_check_epoch = check_time
-
-        # Bound the dedup dict to prevent unbounded growth — evict oldest first
-        while len(self._emitted_issues) > 500:
-            oldest = next(iter(self._emitted_issues))
-            del self._emitted_issues[oldest]
+        # Eviction now happens inside mark_emitted() under _emitted_lock.
 
 
 # Global detector instance
@@ -1905,6 +1975,19 @@ class TrackerHandoffDispatcher:
         # Per-role last-emitted top issue number (None = no item known)
         self._last_top: dict[str, int | None] = {}
         self._lock = threading.Lock()
+        # Per-role serialization lock: only one dispatch runs per role at a
+        # time, so rapid-fire transitions on the same issue don't spawn N
+        # concurrent `gh issue list` subprocesses (#8694 follow-up).
+        self._role_locks: dict[str, threading.Lock] = {}
+        self._role_locks_guard = threading.Lock()
+
+    def _role_lock(self, role):
+        with self._role_locks_guard:
+            lock = self._role_locks.get(role)
+            if lock is None:
+                lock = threading.Lock()
+                self._role_locks[role] = lock
+            return lock
 
     def on_transition(self, payload, actor_role):
         """Called from POST /events for each status-transition event.
@@ -1912,9 +1995,13 @@ class TrackerHandoffDispatcher:
         Runs the actual GitHub-poking work in a background thread so the
         HTTP handler doesn't block on `gh` subprocess calls.
         """
+        # #8694 follow-up: defensive — a truthy non-dict payload (string, int,
+        # bool) would `AttributeError` inside `_do_dispatch`. The `or {}` only
+        # caught falsy non-dicts; switch to isinstance.
+        safe_payload = payload if isinstance(payload, dict) else {}
         thread = threading.Thread(
             target=self._do_dispatch,
-            args=(payload or {}, actor_role),
+            args=(safe_payload, actor_role),
             daemon=True,
             name="handoff-dispatch",
         )
@@ -1936,27 +2023,37 @@ class TrackerHandoffDispatcher:
             _log(f"Handoff dispatcher error: {e}")
 
     def _dispatch_next(self, role):
-        """Compute role's current top item and emit assigned-to if it changed."""
-        queue = self._get_work_queue(role)
-        if not queue:
-            with self._lock:
-                self._last_top[role] = None
-            return
-        top = queue[0]
-        issue_num = top.get("number")
-        with self._lock:
-            if self._last_top.get(role) == issue_num:
-                return  # queue head unchanged — no-op
-            self._last_top[role] = issue_num
+        """Compute role's current top item and emit assigned-to if it changed.
 
-        _emit_event("assigned-to", "harness", payload={
-            "issue_number": str(issue_num),
-            "title": top.get("title", ""),
-            "target_role": role,
-            "event_context": f"Next work for {role} after tracker handoff",
-        })
-        # Also tell the external poller it doesn't need to re-emit this one.
-        activity_detector._emitted_issues[issue_num] = None
+        Serialized per-role: concurrent transitions for the same role queue
+        up rather than each running their own `gh issue list` subprocess.
+        """
+        with self._role_lock(role):
+            queue = self._get_work_queue(role)
+            if not queue:
+                with self._lock:
+                    self._last_top[role] = None
+                return
+            top = queue[0]
+            issue_num = top.get("number")
+            with self._lock:
+                if self._last_top.get(role) == issue_num:
+                    return  # queue head unchanged — no-op
+                self._last_top[role] = issue_num
+
+            # Bidirectional cross-dedup with the external poller: skip if the
+            # 60s poller already emitted this issue (#8694 follow-up).
+            if issue_num is not None and activity_detector.is_emitted(issue_num):
+                return
+
+            _emit_event("assigned-to", "harness", payload={
+                "issue_number": str(issue_num),
+                "title": top.get("title", ""),
+                "target_role": role,
+                "event_context": f"Next work for {role} after tracker handoff",
+            })
+            if issue_num is not None:
+                activity_detector.mark_emitted(issue_num)
 
     def _get_work_queue(self, role):
         """Return tracker.py work-queue output as a list of dicts."""

@@ -99,3 +99,19 @@ def ack(event_id, role):
     if not event_id:
         return
     emit("ack", role, payload={"event_id": event_id})
+
+
+def bootup_complete(role):
+    """Signal that the agent has finished initial boot (#8695).
+
+    Event-driven agents call this after: L1 init done, working-state.md read,
+    initial backlog scan complete, Monitor subscription active. Until the
+    harness sees this event, it returns no events from /events/for/<role> for
+    this role — preventing the race where an `assigned-to` arrives during boot
+    and is dropped because the agent isn't subscribed yet.
+
+    Fire-and-forget like emit(). Safe to call multiple times.
+    """
+    if not role:
+        return
+    emit("bootup-complete", role, payload={})
