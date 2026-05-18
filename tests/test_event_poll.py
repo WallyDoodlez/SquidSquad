@@ -643,3 +643,81 @@ class TestWaitValidation:
             event_poll.main(["skill", "--wait", "-1"])
         assert exc.value.code == 2
         assert "must be positive" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# AC-3 M-3.2 — end-to-end integration via stub harness
+# ---------------------------------------------------------------------------
+
+
+class TestEndToEndStubHarness:
+    """TEST-PLAN-8694.md M-3.2: with a stub harness emitting 3 events,
+    event_poll.py <role> writes exactly 3 JSON lines and the cursor
+    advances per-event atomically against working-state.md."""
+
+    def test_three_events_three_lines_and_cursor_advances_atomically(
+        self, monkeypatch, tmp_path, capsys, no_sleep,
+    ):
+        # Real working-state.md in a tmpdir; real atomic writes; stubbed
+        # urlopen returns a 3-event batch.
+        squid = tmp_path / ".squidsquad"
+        (squid / "skill").mkdir(parents=True)
+        ws = squid / "skill" / "working-state.md"
+        ws.write_text(
+            "# Working State\n\n"
+            "- **Task**: none\n"
+            "- **Last Processed Event ID**: seed\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(event_poll, "SQUID_DIR", squid)
+        monkeypatch.setattr(event_poll, "_discover_port", lambda: 9999)
+
+        # Observe os.replace calls so we can confirm atomic writes.
+        replace_calls = []
+        real_replace = Path.replace
+
+        def _spy_replace(self, target):
+            replace_calls.append((str(self), str(target)))
+            return real_replace(self, target)
+
+        monkeypatch.setattr(Path, "replace", _spy_replace)
+
+        events = [
+            {"id": "e1", "event_type": "noop", "n": 1},
+            {"id": "e2", "event_type": "noop", "n": 2},
+            {"id": "e3", "event_type": "noop", "n": 3},
+        ]
+        fake, calls = _make_urlopen([events])
+        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
+
+        result = event_poll.poll("skill", sleep=no_sleep)
+
+        assert result == events, "poll() should return the 3-event batch"
+
+        captured = capsys.readouterr()
+        lines = [ln for ln in captured.out.split("\n") if ln]
+        assert len(lines) == 3, f"expected 3 stdout lines, got {lines!r}"
+        for line, event in zip(lines, events):
+            assert json.loads(line) == event
+
+        # Cursor advanced per event, not per batch: 3 atomic .tmp → mv writes.
+        ws_replaces = [(s, d) for s, d in replace_calls
+                       if d.endswith("working-state.md")
+                       and s.endswith("working-state.md.tmp")]
+        assert len(ws_replaces) == 3, (
+            f"expected 3 atomic cursor writes, got {len(ws_replaces)}: "
+            f"{ws_replaces!r}"
+        )
+
+        # Final on-disk cursor reflects the last event in the batch.
+        final_text = ws.read_text(encoding="utf-8")
+        assert "Last Processed Event ID**: e3" in final_text
+        assert "seed" not in final_text  # the original cursor was replaced
+
+        # Other working-state fields were preserved by the R-M-W cycle.
+        assert "- **Task**: none" in final_text
+        assert "# Working State" in final_text
+
+        # Request URL used the seed cursor on the single fetch.
+        assert "since=seed" in calls["urls"][0]
+        assert "role=skill" in calls["urls"][0]
