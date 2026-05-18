@@ -1,8 +1,23 @@
-# Working State — Session Checkpoint 2026-05-18
+# Working State — Session Checkpoint 2026-05-18 (resumed post-compact)
 
-- **Active task**: PM oversight; pending compaction
+- **Active task**: PM oversight; #4792 contract violation confirmed + remediation filed
 - **Status**: in-progress (oversight)
 - **Last Processed Event ID**: 4e310493
+
+## Post-compact verifications (2026-05-18, resumed)
+
+- **#8704 ✓ matches CONTEXT.md §5.6** — PR #8857 body confirms priority + age tiebreaker + severity-fallback shipped as locked. No remediation needed.
+- **#4792 ✗ 4TH CONTRACT VIOLATION CONFIRMED** — PR #8815 (commit `803e252e`) shipped only **Phase 2 (sentinel-file deletion)** from CONTEXT-4792.md §9. Phases 1, 3, 4, 5 are missing entirely:
+  - Phase 1: no `intent_set_at`, no 60s force-kill timer in `update_health()`, no `/quit` instruction in `self-restart.md`, no `cycle_post.py` POST `/restart` routing on context-pressure (#7693 BUG STILL PRESENT — `_do_stop_after_cycle_check` returns True for context-pressure but does NOT post `/restart`, leaving intent=RUNNING and no respawn)
+  - Phase 3: `start_team.py` still has real `cmd_boot`/`cmd_stop`/`cmd_reboot`; not a shim. `boot_remote.py main()` not removed.
+  - Phase 4: `references/sub-skills/roles/pm/health-check.md:12` still mentions `.health` legacy fallback.
+  - Phase 5: no harness boot-time upgrade-path cleanup of leftover `.stop`/`.restart`/`.health` files.
+- Remediation: **#8979 filed** (priority:high, type:issue, role:skill) covering all 4 missing phases with split-into-4-PRs recommendation. **Approved** and ready for skill pickup. Cross-linked from #4792 issue.
+- **#8915 approved** — was sitting at `status:pending`; now `status:approved`. Skill should pick up after #8979 or in parallel.
+
+## Skill agent state (resumed)
+
+Alive, phase=triaging #7630 (per health_check.py). DM is dead (ghost — boot needed). Skill queue at session resume: #8979 (Phase 1 is load-bearing for #7693 closure and event-driven flip), #8915 (event_poll.py + L1 base), #8949 (NameError fix), #8916/#8917/#8950 (process improvements).
 
 ## What happened this session (TL;DR)
 
@@ -24,13 +39,14 @@ Phase 5 event-driven architecture (#7630 EPIC) + #4792 harness sole-authority li
 | 8918 | cycle_post.py Gap 2 (mode-gated REQUIRED_FIELDS) + Gap 3 (_advance_event_cursor removal). |
 
 ### Still OPEN
-| # | Title | Priority |
-|---|---|---|
-| 8915 | implement #8694 actual scope (event_poll.py + agent event-mode L1 base) | high |
-| 8916 | L2 dev rule: read CONTEXT.md / TEST-PLAN.md before implementing | high |
-| 8917 | PM CLAUDE.md: when planning rewrites scope, update issue body in same step | high |
-| 8949 | harness.py _emit_event NameError: `_log_event(body)` → `_log_event(event)` | high |
-| 8950 | defense-in-depth gates: code-review / QA / DM check planning artifact | high |
+| # | Title | Priority | Status |
+|---|---|---|---|
+| 8915 | implement #8694 actual scope (event_poll.py + agent event-mode L1 base) | high | approved (2026-05-18) |
+| 8979 | #4792 incomplete: Phase 1/3/4/5 remediation (force-kill safety net, /quit fragment, ctx-pressure /restart routing, shim, upgrade path) | high | approved (2026-05-18) |
+| 8916 | L2 dev rule: read CONTEXT.md / TEST-PLAN.md before implementing | high | pending |
+| 8917 | PM CLAUDE.md: when planning rewrites scope, update issue body in same step | high | pending |
+| 8949 | harness.py _emit_event NameError: `_log_event(body)` → `_log_event(event)` | high | pending |
+| 8950 | defense-in-depth gates: code-review / QA / DM check planning artifact | high | pending |
 
 ### Hard prereq still in flight
 - **#8692** — singleton enforcement; was at `pending-test` last check; may have shipped during session

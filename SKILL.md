@@ -267,7 +267,7 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 All agents follow these rules to minimize merge conflicts on shared tracker files:
 
 - Always `git pull` before starting any work.
-- GitHub Issue comments are **append-only**: never edit or delete existing comments — only add new comments. Status transitions via label changes (`gh issue edit --add-label / --remove-label`). Closed issues are terminal.
+- GitHub Issue comments are **append-only**: never edit or delete existing comments — only add new comments. Status transitions must go through `python references/scripts/tracker.py transition <number> <from> <to> --role <role>`, which enforces legal transitions and role authority; agents never construct `gh issue edit --add-label / --remove-label` commands manually. Closed issues are terminal.
 - Discussion comments on Issues are append-only: always add a new comment, never edit previous ones.
 - Push after completing each work unit (bug fix, feature, test run).
 - **Commit prefix convention**: every commit message must start with the agent's role name followed by a colon (e.g. `skill: fix bug`, `fe: add button`, `pm: verify features`). This prefix is used by the status line and PM health checks to detect agent activity via `git log --grep`.
