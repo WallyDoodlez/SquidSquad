@@ -1,11 +1,11 @@
 {
-  "active_directives": [
+  "active_directives": [],
+  "lifted_directives": [
     {
       "id": "#8703",
-      "rule": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships",
-      "applies_to": ["README architecture sections", "SKILL.md cycle/loop descriptions", "docs/ARCHITECTURE.md loop mechanics", "vault notes on cycle/loop", "references/ architecture docs"],
-      "still_allowed": ["per-item CHANGELOG entries", "per-issue Discussion comments", "shipping summaries", "bug-fix doc in code/tests", "non-architectural fixes (typos, dead links, config field names)"],
-      "lift_when": "event-driven mode live; PM files post-Phase-5 doc realignment task"
+      "lifted_at": "2026-05-18 06:20",
+      "lifted_because": "Phase 5 bundle complete — #8694, #8695, #8696, #8697, #8700, #8814 all shipped. Event-driven mode is live. Resuming /loop architecture doc updates next rotation",
+      "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
   "last_scanned": "docs/ARCHITECTURE.md",
