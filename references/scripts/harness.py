@@ -1377,7 +1377,19 @@ async def restart_agent(role: str):
             _log(f"  {role}: idle — killing PID {claude_pid} for immediate reboot")
             try:
                 reboot_agent._kill_process(claude_pid)
-                killed_pid = claude_pid
+                # #8689 retro-review R2: SIGINT on Unix is catchable — verify
+                # the process actually died before claiming immediate=True.
+                # Mirror the pattern in reboot_agent._kill_and_respawn (10 *
+                # 0.5s = 5s budget).
+                for _ in range(10):
+                    if not reboot_agent._is_process_alive(claude_pid):
+                        break
+                    time.sleep(0.5)
+                if reboot_agent._is_process_alive(claude_pid):
+                    _log(f"  {role}: WARNING — PID {claude_pid} still alive after kill; falling back to queued restart")
+                    immediate = False
+                else:
+                    killed_pid = claude_pid
             except Exception as e:
                 _log(f"  {role}: WARNING — kill failed: {e}")
                 immediate = False
@@ -1402,6 +1414,9 @@ async def restart_agent(role: str):
         "action": "restart",
         "success": True,
         "immediate": False,
+        # #8689 retro-review R1: keep response shape consistent across both
+        # paths so clients don't get a KeyError on `killed_pid`.
+        "killed_pid": None,
         "message": "Restart requested — agent will exit after current cycle and reboot",
     }
 

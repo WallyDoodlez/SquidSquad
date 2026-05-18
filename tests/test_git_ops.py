@@ -1069,12 +1069,20 @@ class TestGitignoreVolatileFiles:
             capture_output=True, text=True, encoding="utf-8",
             cwd=str(Path(__file__).resolve().parent.parent),
         )
+        # #8664 retro-review R1: fail loud if git itself failed — otherwise the
+        # test silently passes on an empty `tracked` list.
+        assert result.returncode == 0, (
+            f"git ls-files failed (rc={result.returncode}): "
+            f"{(result.stderr or '').strip()}"
+        )
         tracked = result.stdout.strip().splitlines()
-        volatile_names = [".backlog-cache", ".event-state.json",
-                          ".claude-pid", ".health", ".booting",
-                          "scan-index.db", "scheduled_tasks.lock"]
+        # #8664 retro-review R3: derive basenames from VOLATILE_PATTERNS so the
+        # two tests cannot drift out of sync.
+        volatile_names = [p.rsplit("/", 1)[-1] for p in self.VOLATILE_PATTERNS]
+        # #8664 retro-review R2: anchor match to path end so `.health-check` or
+        # `.claude-pid-old` aren't false-positive flagged as the volatile files.
         for name in volatile_names:
-            matches = [f for f in tracked if name in f]
+            matches = [f for f in tracked if f.endswith("/" + name) or f == name]
             assert matches == [], (
                 f"Volatile file(s) still tracked in git index: {matches}"
             )

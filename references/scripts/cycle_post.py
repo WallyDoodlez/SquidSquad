@@ -403,8 +403,17 @@ def _do_commit_push(data, role):
         _run_script("git_ops.py", "commit-role-scoped", role, commit_msg)
         print(f"  Committed and pushed (QA → main)")
 
+    elif role == "skill":
+        # #8691 retro-review R1: when branch_workflow is OFF (or code_commit is
+        # missing) skill falls here. Skill's code lives outside the role's
+        # commit-role-scoped allowlist (which is intentionally state-only), so
+        # using it here would silently drop skill code changes. Fall back to
+        # commit-push for full coverage in that legacy single-branch flow.
+        _run_script("git_ops.py", "commit-push", role, commit_msg)
+        print(f"  Committed and pushed")
+
     else:
-        # #8691: PM/DM/other roles also commit only their own domain.
+        # #8691: PM/DM/other roles commit only their own domain.
         _run_script("git_ops.py", "commit-role-scoped", role, commit_msg)
         print(f"  Committed and pushed")
 

@@ -417,7 +417,17 @@ def _auto_resolve_state_conflicts():
     Returns (resolved_paths, unresolved_paths).
     """
     result = _run_list(["git", "ls-files", "--unmerged"], check=False)
-    if result.returncode != 0 or not result.stdout.strip():
+    # #8653 retro-review R1: distinguish "git failed" from "no unmerged files"
+    # — silently treating the former as the latter would let task_begin
+    # proceed past real corruption.
+    if result.returncode != 0:
+        print(
+            f"WARNING: git ls-files --unmerged failed (rc={result.returncode}): "
+            f"{(result.stderr or '').strip()[:200]}",
+            file=sys.stderr,
+        )
+        return [], []
+    if not result.stdout.strip():
         return [], []
     paths = set()
     for line in result.stdout.splitlines():
@@ -428,11 +438,24 @@ def _auto_resolve_state_conflicts():
     unresolved = []
     for path in sorted(paths):
         if _is_state_file(path):
+            # #8653 retro-review R2: only `git add` after checkout succeeds —
+            # otherwise we could stage raw conflict markers into the index.
             r1 = _run_list(["git", "checkout", "--theirs", "--", path], check=False)
+            if r1.returncode != 0:
+                unresolved.append(path)
+                continue
             r2 = _run_list(["git", "add", "--", path], check=False)
-            if r1.returncode == 0 and r2.returncode == 0:
+            if r2.returncode == 0:
                 resolved.append(path)
             else:
+                # #8653 retro-review R3: checkout wrote --theirs to the working
+                # tree but add failed — surface explicitly so the caller's
+                # follow-up message can guide the user to just `git add`.
+                print(
+                    f"WARNING: {path} content resolved (--theirs in working tree) "
+                    f"but `git add` failed — index still holds the conflict.",
+                    file=sys.stderr,
+                )
                 unresolved.append(path)
         else:
             unresolved.append(path)
@@ -613,8 +636,12 @@ def commit_role_scoped(role, message):
     lines = [l for l in result.stdout.splitlines() if l.strip()]
     own_files = []
     foreign_files = []
+    foreign_staged = []  # subset of foreign_files that are already in the index
     patterns = _role_owned_patterns(role)
     for line in lines:
+        # git status --porcelain: XY<space>filename
+        # X = index status, Y = worktree status. A non-space X means staged.
+        index_status = line[0] if line else " "
         path = line[3:].strip().strip('"')
         if " -> " in path:
             path = path.split(" -> ")[1]
@@ -622,6 +649,17 @@ def commit_role_scoped(role, message):
             own_files.append(path)
         else:
             foreign_files.append(path)
+            # #8691 retro-review R2: if a foreign file is already STAGED, it
+            # would be silently included by the upcoming `git commit`. Track
+            # them so we can unstage before committing.
+            if index_status not in (" ", "?"):
+                foreign_staged.append(path)
+
+    if foreign_staged:
+        # Unstage so the commit doesn't pick them up. Working-tree content is
+        # untouched, matching the function's "left in working tree" contract.
+        for f in foreign_staged:
+            _run_list(["git", "reset", "HEAD", "--", f], check=False)
 
     if foreign_files:
         print(
@@ -633,6 +671,11 @@ def commit_role_scoped(role, message):
             print(f"  {f}", file=sys.stderr)
         if len(foreign_files) > 20:
             print(f"  ... and {len(foreign_files) - 20} more", file=sys.stderr)
+        if foreign_staged:
+            print(
+                f"  ({len(foreign_staged)} were pre-staged — unstaged before commit)",
+                file=sys.stderr,
+            )
 
     if not own_files:
         print("No role-domain changes to commit")

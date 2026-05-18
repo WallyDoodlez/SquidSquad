@@ -3,8 +3,6 @@
 includes:
   - common/cycle-runner
   - common/event-driven-workflow
-  - common/event-reactions
-  - common/event-driven-workflow
   - common/context-pressure
   - common/task-pickup
   - roles/pm/checkin
