@@ -638,12 +638,15 @@ a panel within the same harness-served TUI as #8700.
   `GET /human/queue`, returning all open issues with a
   `status:pending-human-*` label. Implementation: shell out to
   `tracker.py` or `gh issue list` with appropriate filters; cache
-  briefly (5–10s) to avoid hammering the forge.
+  briefly (5–10s) to avoid hammering the forge. **Items returned
+  ordered by priority (high → medium → low) then age (oldest first
+  within tier)** per TEST-PLAN-8704 AC.
 - TUI human-queue panel: reads `GET /human/queue` on a delayed refresh
   loop (matches #8700 cadence). Renders:
   - Badge count of pending-human-* items.
   - Dedicated panel listing items: number, title, role that
-    transitioned to human, transition timestamp.
+    transitioned to human, transition timestamp, priority. Sorted by
+    priority then age as returned by the endpoint.
 - HITL is role-agnostic — works for skill, qa, dm, designer, any role
   that emits a pending-human-* transition.
 
@@ -748,11 +751,21 @@ Before flipping any role's `event-driven: yes` in `config.md`:
    this role with no /loop residue in any fragment body.
 4. L4 audit (under #8697) has confirmed no /loop-specific language
    remains in `.squidsquad/project/` files that apply to this role.
-5. #8694 fragments (event-mode L1 base, including boot sequence and
-   `event_poll.py`) are in place for this role.
-6. #8695 (`bootup_complete` flag) is deployed so the TUI/operators can
-   see boot status.
-7. `compose.py deploy <role>` produces a CLAUDE.md with zero /loop
+5. **Post-incident re-verification (added 2026-05-18):** all Phase 5
+   shipped tickets that contradicted CONTEXT.md (#8694 via PR #8790,
+   #8695 via PR #8801, #8701 via PR #8868) have been remediated per
+   #8914, #8915, #8918. Specifically:
+   a. `grep -c 'TrackerHandoffDispatcher\|ExternalActivityDetector.*assigned-to' references/scripts/harness.py` returns 0.
+   b. `GET /events/for/<role>` no longer has the `gated: 'bootup-incomplete'` branch.
+   c. `cycle_post.py` `REQUIRED_FIELDS` is mode-gated; `_advance_event_cursor` and `_do_restart_sentinel` are deleted.
+   d. `event_poll.py` exists at `references/scripts/event_poll.py` (delivered by #8915).
+6. #8694 fragments (event-mode L1 base, including boot sequence and
+   `event_poll.py`) are in place for this role — **verified per item 5
+   above, not by the existence of the original closed #8694**.
+7. #8695 (`bootup_complete` informational flag, no gating) is deployed
+   so the TUI/operators can see boot status — **verified per item 5b
+   above, not by the existence of the original closed #8695**.
+8. `compose.py deploy <role>` produces a CLAUDE.md with zero /loop
    language and the events-mode boot sequence at L1.
 
 ---
