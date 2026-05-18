@@ -39,11 +39,13 @@ references/
 │   │   ├── vault-protocol.md
 │   │   ├── vault-remember.md
 │   │   └── ...
-│   └── roles/               ← role-specific behaviors
-│       ├── pm/              ← PM-only behaviors
-│       ├── qa/              ← QA-only behaviors
-│       ├── dm/              ← DM-only behaviors
-│       └── dev/             ← Dev-only behaviors
+│   ├── roles/               ← role-specific behaviors
+│   │   ├── pm/              ← PM-only behaviors
+│   │   ├── qa/              ← QA-only behaviors
+│   │   ├── dm/              ← DM-only behaviors
+│   │   └── dev/             ← Dev-only behaviors
+│   ├── capabilities/        ← optional add-on behaviors (figma, local_delivery, etc.) with {manifest.yaml, setup.md, sub-skill.md}
+│   └── project/             ← per-project overrides (shared + per-role instructions/soul-directives)
 │
 └── roles/                   ← one self-contained directory per role
     ├── dev/

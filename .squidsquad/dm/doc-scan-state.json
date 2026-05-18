@@ -8,9 +8,10 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "docs/ARCHITECTURE.md",
+  "last_scanned": "docs/sub-skill-guide.md",
   "rotation_count": 45,
   "scan_history": [
+    {"file": "docs/sub-skill-guide.md", "date": "2026-05-18", "findings": 1, "fixes": ["added sub-skills/capabilities/ and sub-skills/project/ subdirs to the directory tree (deferred from rotation 44 cycle 1005, now applied since #8703 lifted)"]},
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-18", "findings": 0, "skipped": true, "note": "Rotation 45 — still skipped under #8703 directive (Phase 5 follow-ups #8697 #8700 still OPEN). Will resume once directive lifts"},
     {"file": "SKILL.md:sections-7-8", "date": "2026-05-17", "findings": 0, "note": "Rotation 45. SKILL.md unchanged since cycle 8fc396ca. Sec 7 (Upgrade) + Sec 8 (Schema Changelog Historical) already verified in rotation 44 — no re-scan needed"},
     {"file": "SKILL.md:sections-4-6", "date": "2026-05-17", "findings": 0, "note": "Rotation 45. SKILL.md unchanged since cycle 8fc396ca. Sec 4 (Ralph Loop) fully deferred under #8703; sec 5-6 already verified in rotation 44 — no re-scan needed"},
