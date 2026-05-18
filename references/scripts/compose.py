@@ -45,9 +45,10 @@ def _get_wake_mode(role_name: str) -> str:
     for field in (f"event-driven-{role_name}", "event-driven"):
         try:
             v = (get_field(field) or "").strip().lower()
-        except (Exception, SystemExit):
+        except SystemExit:
             # config.get_field calls sys.exit(1) on missing field — treat as
             # "field absent" and try the next one in the precedence chain.
+            # Other exceptions propagate so real bugs surface (#8697 R2).
             v = ""
         if v in ("yes", "true", "1", "event-driven"):
             return "event-driven"
@@ -104,11 +105,15 @@ def _resolve_runtime(runtime_path: str) -> list[str]:
 def _resolve_includes(entry_file: Path, wake_mode: str = "polling") -> str:
     """Resolve all {{include: path}} directives in an entry file.
 
-    Manifest-less fallback path (used when no includes.yml exists or pyyaml
-    is unavailable). Mirrors the manifest path's mode-aware filtering and
-    frontmatter stripping so output is consistent regardless of which path
-    composes the file (#8697 review fix).
+    Manifest-less fallback path used when no includes.yml exists or pyyaml
+    is unavailable. This path does NOT perform mode-aware filtering — every
+    `{{include:}}` directive in the template is rendered. Mode filtering
+    requires the manifest to know which fragments are mode-specific
+    (#8697 design). `wake_mode` is accepted for API symmetry with
+    `_resolve_includes_with_manifest` but currently has no effect here.
     """
+    # `wake_mode` is intentionally unused; see docstring.
+    del wake_mode  # silence "unused" linters; keeps the signature stable
     text = entry_file.read_text(encoding="utf-8")
     lines = text.splitlines()
     result = []
