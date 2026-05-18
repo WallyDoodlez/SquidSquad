@@ -124,7 +124,18 @@ class TestManifestIntegrity:
         # any current role manifest. It's a sub-skill that may be wired in
         # for future event-driven needs; explicitly tolerate its
         # un-referenced state rather than block the build.
-        known_unused = {"common/event-reactions.md"}
+        #
+        # #8915 cycle 1136: the L1 event-mode base fragments under
+        # common-events/ ship as content in this PR; manifest wiring +
+        # 8697 fixture regeneration is a separate follow-up cycle.
+        known_unused = {
+            "common/event-reactions.md",
+            "common-events/l1-base.md",
+            "common-events/cursor-management.md",
+            "common-events/forge-read-pattern.md",
+            "common-events/idle-cooldown-loop.md",
+            "common-events/comment-handling.md",
+        }
         orphans = all_md - referenced - known_unused
         assert not orphans, f"Sub-skill files not referenced in manifest: {orphans}"
 
