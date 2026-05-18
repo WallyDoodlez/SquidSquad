@@ -1030,7 +1030,9 @@ class TestEventDrivenPhase4(unittest.TestCase):
         import event_poll
 
         with patch.object(event_poll, "_discover_port", return_value=7373), \
-             patch.object(event_poll, "_read_cursor", return_value="abc123"), \
+             patch.object(event_poll, "_read_cursor_from_working_state",
+                          return_value="abc123"), \
+             patch.object(event_poll, "_write_cursor_atomic"), \
              patch("urllib.request.urlopen") as mock_urlopen:
             mock_resp = MagicMock()
             mock_resp.read.return_value = b'{"events": []}'
@@ -1038,7 +1040,8 @@ class TestEventDrivenPhase4(unittest.TestCase):
             mock_resp.__exit__ = MagicMock(return_value=False)
             mock_urlopen.return_value = mock_resp
 
-            result = event_poll.poll("skill", target_mode=True)
+            result = event_poll.poll("skill", target_mode=True,
+                                     sleep=lambda _: None)
 
             # Verify the URL used /events/for/skill
             call_args = mock_urlopen.call_args
@@ -1051,7 +1054,9 @@ class TestEventDrivenPhase4(unittest.TestCase):
         import event_poll
 
         with patch.object(event_poll, "_discover_port", return_value=7373), \
-             patch.object(event_poll, "_read_cursor", return_value=""), \
+             patch.object(event_poll, "_read_cursor_from_working_state",
+                          return_value=""), \
+             patch.object(event_poll, "_write_cursor_atomic"), \
              patch("urllib.request.urlopen") as mock_urlopen:
             mock_resp = MagicMock()
             mock_resp.read.return_value = b'{"events": [{"id": "x1"}]}'
@@ -1059,8 +1064,8 @@ class TestEventDrivenPhase4(unittest.TestCase):
             mock_resp.__exit__ = MagicMock(return_value=False)
             mock_urlopen.return_value = mock_resp
 
-            with patch.object(event_poll, "_write_cursor") as mock_write:
-                result = event_poll.poll("skill", target_mode=False)
+            result = event_poll.poll("skill", target_mode=False,
+                                     sleep=lambda _: None)
 
             # Verify legacy URL uses /events?role=skill
             call_args = mock_urlopen.call_args
