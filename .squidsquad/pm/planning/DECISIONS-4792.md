@@ -50,9 +50,11 @@ hang detection if needed.
 **Primary mechanism:** Agent self-quits via `/quit` after `cycle_post.py`
 exits 42. Instruction-level fix added to L1–L4 fragments.
 
-**Safety net:** Harness force-kill timeout — if intent=STOPPING AND
-`.claude-pid` alive AND >60s since intent set, harness force-kills the
-claude PID.
+**Safety net:** Harness force-kill timeout — if **intent ∈ {STOPPING, RESTARTING}**
+AND `.claude-pid` alive AND >60s since intent set, harness force-kills the
+claude PID. (Scope extended to RESTARTING per PM lock 2026-05-18 after
+deepseek R1 review of CONTEXT-4792.md flagged the ambiguity. Same
+stuck-agent failure mode applies to both intents; no reason to differentiate.)
 
 Parity with event mode (both modes terminate via agent self-quit).
 **This fix closes #7693.** Sole authority preserved (harness only
