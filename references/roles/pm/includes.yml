@@ -1,6 +1,7 @@
 # PM agent sub-skill manifest (polling / /loop mode — #8697)
 # Order matters — includes are resolved top-to-bottom
 includes:
+  - roles/pm/ralph-loop-overview
   - common/cycle-runner
   - common/context-pressure
   - common/task-pickup

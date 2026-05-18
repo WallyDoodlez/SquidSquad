@@ -3,6 +3,7 @@
 # Order matters — includes are resolved top-to-bottom
 includes:
   - common/capability-check
+  - roles/dm/ralph-loop-overview
   - common/cycle-runner
   - common/context-pressure
   - roles/dm/task-pickup

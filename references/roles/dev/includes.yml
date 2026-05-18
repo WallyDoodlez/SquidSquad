@@ -3,6 +3,7 @@
 # instead when the role's wake mode is `event-driven`.
 # Order matters — includes are resolved top-to-bottom
 includes:
+  - roles/dev/ralph-loop-overview
   - common/cycle-runner
   - common/context-pressure
   - common/resume-working-state

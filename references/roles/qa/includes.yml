@@ -2,6 +2,7 @@
 # Uses slim variants for vault-protocol and improvement-scan (read-only role)
 # Order matters — includes are resolved top-to-bottom
 includes:
+  - roles/qa/ralph-loop-overview
   - common/cycle-runner
   - common/context-pressure
   - common/task-pickup

@@ -1,0 +1,46 @@
+{
+  "issue": 8697,
+  "title": "compose.py dual-mode CLAUDE.md generation — comprehension test agent identifies the wake path under both modes",
+  "files": [
+    "tests/comprehension/8697_fixtures/skill_polling_CLAUDE.md",
+    "tests/comprehension/8697_fixtures/skill_events_CLAUDE.md",
+    "tests/comprehension/8697_fixtures/pm_polling_CLAUDE.md",
+    "tests/comprehension/8697_fixtures/pm_events_CLAUDE.md",
+    "tests/comprehension/8697_fixtures/qa_polling_CLAUDE.md",
+    "tests/comprehension/8697_fixtures/qa_events_CLAUDE.md",
+    "tests/comprehension/8697_fixtures/dm_polling_CLAUDE.md",
+    "tests/comprehension/8697_fixtures/dm_events_CLAUDE.md"
+  ],
+  "questions": [
+    {
+      "id": "1",
+      "question": "Read tests/comprehension/8697_fixtures/skill_polling_CLAUDE.md. What is the skill agent's wake mechanism in this configuration, and what is the FIRST thing the agent should do at startup?",
+      "expected": "Wake mechanism is polling via `/loop`. At startup the agent should verify GitHub Issues access (gh CLI), then read the interval from `.squidsquad/config.md` and invoke `/loop [INTERVAL]m execute one Ralph Loop cycle` to schedule repeating cycles. Each cycle is mechanical pre-cycle → creative work → mechanical post-cycle (cycle_pre.py / cycle_post.py)."
+    },
+    {
+      "id": "2",
+      "question": "Read tests/comprehension/8697_fixtures/skill_events_CLAUDE.md. What is the skill agent's wake mechanism in THIS configuration, and how does the agent receive work?",
+      "expected": "Wake mechanism is event-driven. The agent invokes the Monitor tool at boot to watch the harness event bus (event_poll.py). Work arrives as `assigned-to` events; the agent processes one event at a time and signals completion via the harness completion endpoint (POST /events/<event_id>/complete). The agent does NOT invoke `/loop` and does NOT run cycle_pre.py/cycle_post.py — the harness owns those operations in event-driven mode."
+    },
+    {
+      "id": "3",
+      "question": "Compare tests/comprehension/8697_fixtures/pm_polling_CLAUDE.md against tests/comprehension/8697_fixtures/pm_events_CLAUDE.md. What sections differ between them, and what stays the same?",
+      "expected": "Differs: the polling file contains the `On Startup` /loop section, the `Ralph Loop` overview with cycle-based step markers, and the polling status-bar phase list. The events file replaces that with the `Event-Driven Workflow` section describing Monitor tool setup, event types (assigned-to, stop-requested, status-transition), the read→act→complete processing flow, and explicit `What You Do NOT Do` items (no /loop, no cycle_pre/cycle_post). Stays the same: PM's domain responsibilities (oversight, verification, routing), tracker protocol, sub-skills like task-pickup, checkin, verification, vault, prohibitions — everything that is wake-mode-agnostic."
+    },
+    {
+      "id": "4",
+      "question": "In events mode (per skill_events_CLAUDE.md), if an agent receives an assigned-to event for issue #42, what is the agent's processing flow?",
+      "expected": "1. Read the event payload (id, event_type, target_role, issue_number). 2. Act on it — do the role-specific creative work for that item (implement, verify, plan, deliver). 3. Complete the event by POSTing to http://127.0.0.1:<harness-port>/events/<event_id>/complete with role + status + summary. Process one event at a time; do not start another until the current one is completed."
+    },
+    {
+      "id": "5",
+      "question": "Read both qa_polling_CLAUDE.md and qa_events_CLAUDE.md. Does the QA agent's verification responsibility differ between the two modes? Why or why not?",
+      "expected": "The verification responsibility itself does not differ between modes — QA verifies pending-test items against acceptance criteria in both. What differs is only how QA *wakes up* to do that verification: in polling mode QA wakes via /loop ticks and pulls work from the queue at cycle start; in events mode QA wakes via Monitor events when the harness dispatches assigned-to. The actual verification sub-skill, test commands, file conventions, prohibitions, and discussion protocol are mode-agnostic and identical between the two composed outputs."
+    },
+    {
+      "id": "6",
+      "question": "Read dm_events_CLAUDE.md. If an operator flipped `event-driven: yes` in config.md for DM, and a feature reaches pending-ship status, how does DM learn about it?",
+      "expected": "DM learns via an `assigned-to` event (or `status-transition` event) dispatched by the harness when the item transitions into DM's role queue. DM's Monitor tool delivers the event; DM reads the event payload, picks up the item, performs the delivery (CHANGELOG, README, version bump per role responsibilities), and completes the event when done. DM does NOT poll the tracker on a /loop schedule in this mode."
+    }
+  ]
+}
