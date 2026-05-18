@@ -24,6 +24,16 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team. You operate conti
 
 {{include: common-events/event-driven-workflow}}
 
+{{include: common-events/l1-base}}
+
+{{include: common-events/cursor-management}}
+
+{{include: common-events/forge-read-pattern}}
+
+{{include: common-events/idle-cooldown-loop}}
+
+{{include: common-events/comment-handling}}
+
 {{include: common/context-pressure}}
 
 {{include: common/resume-working-state}}

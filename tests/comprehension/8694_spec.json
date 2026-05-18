@@ -1,0 +1,73 @@
+{
+  "issue": 8694,
+  "title": "Event-mode L1 base agent definition — comprehension test against the 5 common-events fragments",
+  "files": [
+    "references/sub-skills/common-events/l1-base.md",
+    "references/sub-skills/common-events/cursor-management.md",
+    "references/sub-skills/common-events/forge-read-pattern.md",
+    "references/sub-skills/common-events/idle-cooldown-loop.md",
+    "references/sub-skills/common-events/comment-handling.md"
+  ],
+  "questions": [
+    {
+      "id": "1-mid-task-event",
+      "question": "An event arrives on the stream while the agent is mid-task. What does the agent do with it?",
+      "expected": "Per Case D in l1-base.md, the agent reads the event but does NOT act on it — the current task runs atomically to completion. On task completion the agent falls through to Case C (transition the item, clear the Task field, run work_queue()) and the forge-read in Case C absorbs all mid-task events. The cursor advances automatically as event_poll.py emits the event line; the agent does not perform a separate cursor write."
+    },
+    {
+      "id": "2-unknown-event",
+      "question": "An event with an unrecognized `event_type` arrives. What does the agent do?",
+      "expected": "Per Case E in l1-base.md: log a warning to stderr and do not block. The cursor advances automatically (event_poll.py persists it as the line is emitted) — there is no separate cursor-advance step for the agent. No forge read or work pickup is triggered by an unknown event type."
+    },
+    {
+      "id": "3-empty-work-queue",
+      "question": "The agent runs work_queue() and gets an empty result. What does it do next?",
+      "expected": "Enter the improvement-scan cool-down loop (per l1-base.md boot step 2 idle branch and idle-cooldown-loop.md). Specifically: if `Next scan after` is missing or in the past, run the next improvement scan; otherwise wait via the persistent Monitor — after each empty poll, if now >= Next scan after, run the scan. Exception: if the harness is unreachable (degraded mode), do NOT enter the cool-down loop; instead sleep a short fixed interval (e.g. 60s) and retry work_queue() — the cool-down loop requires the Monitor, which requires the harness."
+    },
+    {
+      "id": "4-dm-pr-merge-comments",
+      "question": "DM is waiting on a PR to merge. A comment arrives on the issue during the wait. When does DM react to it?",
+      "expected": "Per comment-handling.md DM exception: comments are not standalone event triggers and there is NO sub-loop during the PR-merge wait. DM re-reads issue comments at task completion (when the merge resolves or the wait ends), before the next pickup. Comments arriving during the wait are honored once the wait ends — reaction window is `the moment the current wait ends`, not real-time."
+    },
+    {
+      "id": "5-comment-route-back",
+      "question": "A comment on an in-progress issue asks the agent to hand the work back to a different role. Does the comment wake the recipient? What MUST the sender do for the recipient to react?",
+      "expected": "Per comment-handling.md: a bare comment does NOT wake any agent — comments are not standalone event triggers. For the recipient to react, the sender MUST ride a status transition or label change (e.g. transition to `planning`, or to `pending-human-review`). The transition-on-handoff rule states: when assigning work to a different role (including humans), the assignment must be a status transition so it appears on the event stream. PM nudge comments are advisory; they are absorbed at the next pickup but do not wake anyone in real time."
+    },
+    {
+      "id": "6-scan-running-on-boot",
+      "question": "On boot, working-state.md shows the improvement-scan `Status: running`. What does the agent do?",
+      "expected": "Per l1-base.md boot step 2 (improvement-scan branch): skip forge verification, restart the scan from scratch (improvement scans are idempotent — a fresh scan subsumes a partial one), and when the scan completes run work_queue() before re-entering the cool-down loop. The post-scan work_queue() is essential because a task may have arrived during the crashed-out window. If a task is returned, exit the cool-down loop and pick up the item directly (transition to in-progress, update the Task field, begin work)."
+    },
+    {
+      "id": "7-cursor-eviction-gap",
+      "question": "The agent boots with a cursor predating the oldest event the harness still retains. What happens?",
+      "expected": "Per cursor-management.md eviction-gap rule: `GET /events?since=<old>` returns the oldest available id and an eviction-count hint. The agent logs an eviction warning naming the oldest available id and the count of evicted events, advances the cursor to that oldest available id (NOT the latest observed — eviction-gap is the exception called out in l1-base.md step 4), and proceeds to a forge-read for current state. The agent does NOT crash, and the forge is authoritative regardless."
+    },
+    {
+      "id": "8-harness-unreachable-boot",
+      "question": "On boot the harness is unreachable. Can the agent still work? Describe the operational path.",
+      "expected": "Yes — per l1-base.md step 3 unreachable branch: the agent operates in degraded mode, working directly from the forge via work_queue() and tracker.py. While in degraded mode, if work_queue() returns empty the agent sleeps a short fixed interval (e.g. 60s) and retries; if it returns work the agent picks up the top item directly (transition to in-progress, update Task field, begin work) and on completion follows Case C, then continues the degraded-mode rules. The cool-down loop is NOT entered (it requires the Monitor). Before each work_queue() call the agent attempts to POST bootup-complete with exponential backoff capped at 5 minutes; on success it exits degraded mode by skimming events forward, advancing the cursor, and entering the listening loop. bootup-complete is best-effort, not blocking."
+    },
+    {
+      "id": "9-forge-vs-event-payload",
+      "question": "An event payload says an issue is now assigned to this agent's role. The agent reads the forge and the forge says the issue is assigned to a different role. Which does the agent trust, and why?",
+      "expected": "The agent trusts the forge per forge-read-pattern.md: the forge is the source of truth; the event stream is a wake-up signal. Events can be stale, duplicated, or out-of-order, while the forge is consistent. The agent acts on what the forge says, not on what the event payload said. If the forge says the issue is now assigned to a different role, the agent drops the item locally — no forge transition needed because the forge already reflects the change."
+    },
+    {
+      "id": "10-cursor-ownership",
+      "question": "Who writes the `- **Last Processed Event ID**:` line in working-state.md during normal operation, and what protocol is used? What about other fields?",
+      "expected": "During the event-listening loop, event_poll.py is the sole writer of the cursor line; the agent is the sole writer of every other field (the Task line, the ## Improvement Scan block, etc.). Both writers use the `.tmp` + `mv` (or `os.replace`) atomic-rename protocol so a reader never sees a half-written file, and each writer's read-modify-write cycle preserves the other writer's lines verbatim. The ownership discipline — not the .tmp+mv alone — is what prevents lost updates across concurrent R-M-W cycles. During boot (before the listening loop starts) the agent may also write the cursor; once the listening loop is active only event_poll.py writes it."
+    },
+    {
+      "id": "11-case-precedence-stop-requested",
+      "question": "The agent is idle (no in-progress task) when a `stop-requested` event arrives. Does the agent pick up new work (Case B) or exit (Case E)?",
+      "expected": "Exit. Per l1-base.md case-precedence rule: when an event arrives, evaluate Case E (special events) first regardless of current state; only if the event is not special, fall through to the state-based case. `stop-requested` at a task boundary (idle counts as a boundary) means checkpoint working-state.md (preserve the cursor) and exit cleanly. The agent does NOT run work_queue() or pick up new work in this scenario."
+    },
+    {
+      "id": "12-scan-completion-cooldown-vs-pickup",
+      "question": "An improvement scan just completed. What is the very next thing the agent does, and under what circumstances does it return to the cool-down wait?",
+      "expected": "Per idle-cooldown-loop.md step 4a: immediately after writing the scan-completion fields (Status idle, Last completed, Next scan after), the agent runs work_queue(). If work_queue() returns a task, the agent exits the cool-down loop and picks up the item directly (transition to in-progress, update Task field, begin work). Only if work_queue() is empty does the agent return to step 5 (wait via the Monitor — after each empty poll, if now >= Next scan after, run the next scan). The post-scan work_queue() is required because tasks may have arrived during the scan."
+    }
+  ]
+}

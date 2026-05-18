@@ -4,14 +4,22 @@
 # global `event-driven: yes`).
 #
 # Per PM directive: parallel manifests, no mode-conditional logic inside
-# fragments. Phase 1 scaffolding — only event-driven-workflow is in
-# common-events/ today; subsequent phases will populate the rest of the
-# mode-specific fragments (mode selector, cycle-runner-events analogue,
-# etc.) so that Phase 6 (#8698) can remove polling by deleting common/ +
+# fragments. Phase 6 (#8698) can remove polling by deleting common/ +
 # includes.yml only.
+#
+# #8915: the event-mode L1 base lives in common-events/l1-base and is
+# accompanied by four supporting fragments (cursor management, forge-read
+# pattern, idle cool-down loop, comment handling). event-driven-workflow
+# is now an orientation/redirect page kept first for backward-compat with
+# any downstream that still expects that section header.
 # Order matters — includes are resolved top-to-bottom
 includes:
   - common-events/event-driven-workflow
+  - common-events/l1-base
+  - common-events/cursor-management
+  - common-events/forge-read-pattern
+  - common-events/idle-cooldown-loop
+  - common-events/comment-handling
   - common/context-pressure
   - common/resume-working-state
   - roles/dev/triage-issues
