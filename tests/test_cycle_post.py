@@ -86,6 +86,73 @@ class TestValidateOutput:
         assert cycle_post._validate_output(data) == []
 
 
+class TestValidateOutputModeGated:
+    """#8918 (UT-10): _validate_output picks REQUIRED_FIELDS by role wake mode.
+
+    Loop mode keeps {role, cycle_number, cycle_type}. Event mode swaps in
+    `task` (the task IS the cycle in event mode) so a cycle-output without
+    cycle_number but with task passes, and one without either fails clearly.
+    """
+
+    def test_event_mode_passes_with_task(self, monkeypatch):
+        """UT-10a: event-mode role + task identifier present → validation passes."""
+        monkeypatch.setattr(
+            cycle_post, "_get_role_wake_mode", lambda r: "event-driven",
+        )
+        data = {"role": "skill", "task": "100", "cycle_type": "active"}
+        assert cycle_post._validate_output(data, "skill") == []
+
+    def test_loop_mode_rejects_missing_cycle_number(self, monkeypatch):
+        """UT-10b: loop-mode role without cycle_number → validation fails on it."""
+        monkeypatch.setattr(
+            cycle_post, "_get_role_wake_mode", lambda r: "polling",
+        )
+        data = {"role": "skill", "cycle_type": "active"}
+        errors = cycle_post._validate_output(data, "skill")
+        assert any("cycle_number" in e for e in errors), errors
+        # And task is NOT required in loop mode — error list mentions only
+        # cycle_number, not task.
+        assert not any("task" in e for e in errors), errors
+
+    def test_event_mode_rejects_missing_task(self, monkeypatch):
+        """UT-10c: event-mode role with no task identifier → validation fails on it."""
+        monkeypatch.setattr(
+            cycle_post, "_get_role_wake_mode", lambda r: "event-driven",
+        )
+        data = {"role": "skill", "cycle_type": "active"}
+        errors = cycle_post._validate_output(data, "skill")
+        assert any("task" in e for e in errors), errors
+        # cycle_number is NOT required in event mode, so it must NOT appear.
+        assert not any("cycle_number" in e for e in errors), errors
+
+    def test_default_role_none_uses_loop_required(self):
+        """Existing callers that pass no role keep the pre-refactor behavior:
+        validate against LOOP_REQUIRED_FIELDS. Preserves backwards compat for
+        tests that don't yet thread a role through."""
+        data = {"role": "skill", "cycle_type": "active"}
+        errors = cycle_post._validate_output(data)
+        assert any("cycle_number" in e for e in errors)
+
+
+class TestAdvanceEventCursorRemoved:
+    """#8918 NT-5: _advance_event_cursor is gone from cycle_post.py source."""
+
+    def test_function_attribute_is_absent(self):
+        assert not hasattr(cycle_post, "_advance_event_cursor"), (
+            "cycle_post.py must not own cursor advancement — event_poll.py "
+            "is the sole owner per CONTEXT.md §2"
+        )
+
+    def test_source_contains_no_reference(self):
+        """Negative grep: even comments mentioning the function are gone so
+        nothing in cycle_post.py participates in cursor advancement."""
+        from pathlib import Path
+        src = Path(cycle_post.__file__).read_text(encoding="utf-8")
+        assert "_advance_event_cursor" not in src, (
+            "cycle_post.py source still mentions _advance_event_cursor"
+        )
+
+
 # ---------------------------------------------------------------------------
 # Missing / Invalid Output File
 # ---------------------------------------------------------------------------
@@ -950,40 +1017,11 @@ class TestVerifyRemoteBranch:
             assert cycle_post._verify_remote_branch(100) is None
 
 
-class TestAdvanceEventCursorInsertion:
-    """#7440: cursor insertion works after dead no-op removal."""
-
-    def test_inserts_cursor_after_status_line(self, squid_dir, patch_dirs, monkeypatch):
-        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
-        ws = squid_dir / "skill" / "working-state.md"
-        ws.write_text("# Working State\n\n- **Task**: #100\n- **Status**: in-progress\n\n## Completed Steps\n", encoding="utf-8")
-        (squid_dir / "skill" / "cycle-input.json").write_text(json.dumps({"recent_events": [{"id": "abc12345"}]}), encoding="utf-8")
-        cycle_post._advance_event_cursor({}, "skill")
-        result = ws.read_text(encoding="utf-8")
-        assert "- **Last Processed Event ID**: abc12345" in result
-
-    def test_inserts_cursor_after_started_line(self, squid_dir, patch_dirs, monkeypatch):
-        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
-        ws = squid_dir / "skill" / "working-state.md"
-        ws.write_text("# Working State\n\n- **Task**: #100\n- **Status**: in-progress\n- **Started**: 2026-05-11 01:00\n\n## Completed Steps\n", encoding="utf-8")
-        (squid_dir / "skill" / "cycle-input.json").write_text(json.dumps({"recent_events": [{"id": "def67890"}]}), encoding="utf-8")
-        cycle_post._advance_event_cursor({}, "skill")
-        result = ws.read_text(encoding="utf-8")
-        assert "- **Last Processed Event ID**: def67890" in result
-        lines = result.splitlines()
-        started_idx = next(i for i, l in enumerate(lines) if "**Started**" in l)
-        cursor_idx = next(i for i, l in enumerate(lines) if "Event ID" in l)
-        assert cursor_idx == started_idx + 1
-
-    def test_replaces_existing_cursor(self, squid_dir, patch_dirs, monkeypatch):
-        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
-        ws = squid_dir / "skill" / "working-state.md"
-        ws.write_text("# Working State\n\n- **Task**: none\n- **Status**: none\n- **Last Processed Event ID**: old11111\n", encoding="utf-8")
-        (squid_dir / "skill" / "cycle-input.json").write_text(json.dumps({"recent_events": [{"id": "new22222"}]}), encoding="utf-8")
-        cycle_post._advance_event_cursor({}, "skill")
-        result = ws.read_text(encoding="utf-8")
-        assert "new22222" in result
-        assert "old11111" not in result
+# TestAdvanceEventCursorInsertion removed in #8918. cycle_post no longer
+# advances the event cursor — event_poll.py is the sole owner per
+# CONTEXT.md §2 "per-event atomic advancement." The new
+# TestAdvanceEventCursorRemoved class above asserts the function and its
+# source references are gone.
 
 
 # ---------------------------------------------------------------------------

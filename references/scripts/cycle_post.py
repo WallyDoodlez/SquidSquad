@@ -45,8 +45,11 @@ except ImportError:
     def _worktree_exists():
         return False
 
-# Required top-level fields in cycle-output.json
-REQUIRED_FIELDS = {"role", "cycle_number", "cycle_type"}
+# Required top-level fields in cycle-output.json. Mode-gated (#8918): event
+# mode replaces `cycle_number` with `task` — the task IS the cycle in event
+# mode (DECISIONS-4792.md Q7 + CONTEXT.md §5.5 + TEST-PLAN-8701 §3.2 UT-10).
+LOOP_REQUIRED_FIELDS = {"role", "cycle_number", "cycle_type"}
+EVENT_REQUIRED_FIELDS = {"role", "task", "cycle_type"}
 VALID_CYCLE_TYPES = {"active", "quiet", "suppressed"}
 
 # ---------------------------------------------------------------------------
@@ -71,6 +74,38 @@ def _config_get(field):
         return get_field(field) or ""
     except Exception:
         return ""
+
+
+def _get_role_wake_mode(role):
+    """Return "event-driven" or "polling" for the given role (#8918).
+
+    Lookup precedence: `event-driven-<role>` → `event-driven` → default
+    `polling`. Mirrors compose._get_wake_mode (same precedence rules) — kept
+    local here to avoid pulling in compose.py just for one read at post-cycle
+    time.
+    """
+    import contextlib
+    import io
+    script_dir_str = str(SCRIPT_DIR)
+    if script_dir_str not in sys.path:
+        sys.path.insert(0, script_dir_str)
+    try:
+        from config import get_field
+    except Exception:
+        return "polling"
+    for field in (f"event-driven-{role}", "event-driven"):
+        try:
+            with contextlib.redirect_stderr(io.StringIO()):
+                v = (get_field(field) or "").strip().lower()
+        except BaseException:
+            # config.get_field exits(1) on missing field; tolerate that and
+            # disk-level TOCTOU on config.md the same way compose.py does.
+            v = ""
+        if v in ("yes", "true", "1", "event-driven"):
+            return "event-driven"
+        if v in ("no", "false", "0", "polling"):
+            return "polling"
+    return "polling"
 
 
 def _get_working_branch():
@@ -106,14 +141,26 @@ def _write_status_bar(role, phase, description):
 # ---------------------------------------------------------------------------
 
 
-def _validate_output(data):
-    """Validate cycle-output.json structure. Returns list of errors."""
+def _validate_output(data, role=None):
+    """Validate cycle-output.json structure. Returns list of errors.
+
+    Mode-gated (#8918): event-driven roles use ``EVENT_REQUIRED_FIELDS``
+    (``task`` replaces ``cycle_number``); loop-mode roles use
+    ``LOOP_REQUIRED_FIELDS``. The role argument is optional so existing test
+    fixtures that build `data` directly still validate against the loop set —
+    callers that need event-mode validation pass the role so wake mode is
+    looked up via ``_get_role_wake_mode``.
+    """
     errors = []
 
     if not isinstance(data, dict):
         return ["cycle-output.json must be a JSON object"]
 
-    for field in REQUIRED_FIELDS:
+    if role is not None and _get_role_wake_mode(role) == "event-driven":
+        required = EVENT_REQUIRED_FIELDS
+    else:
+        required = LOOP_REQUIRED_FIELDS
+    for field in required:
         if field not in data:
             errors.append(f"Missing required field: {field}")
 
@@ -677,66 +724,6 @@ def _do_working_state_update(data, role):
     ws_path.write_text(update, encoding="utf-8")
 
 
-def _advance_event_cursor(data, role):
-    """Advance the event bus cursor in working-state.md after successful cycle (#5622).
-
-    Only advances if recent_events were present in cycle-input.json.
-    Cursor advances AFTER creative phase (crash safety — if agent crashes,
-    events are re-read next cycle).
-    """
-    # Read cycle-input.json to get the events that were processed
-    input_path = SQUID_DIR / role / "cycle-input.json"
-    if not input_path.exists():
-        return
-
-    try:
-        input_data = json.loads(input_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return
-
-    recent_events = input_data.get("recent_events", [])
-    if not recent_events:
-        return
-
-    # The last event's ID becomes the new cursor
-    last_event_id = recent_events[-1].get("id")
-    if not last_event_id:
-        return
-
-    # Update working-state.md with the new cursor
-    ws_path = _state_path(f"{role}/working-state.md")
-    if not ws_path.exists():
-        return
-
-    content = ws_path.read_text(encoding="utf-8")
-
-    # Replace existing cursor line or add it
-    cursor_line = f"- **Last Processed Event ID**: {last_event_id}"
-    if "- **Last Processed Event ID**:" in content:
-        content = re.sub(
-            r"- \*\*Last Processed Event ID\*\*:.*",
-            cursor_line,
-            content,
-        )
-    else:
-        # Add after the last header field (Status or Started)
-        lines = content.splitlines()
-        insert_idx = None
-        for i, line in enumerate(lines):
-            if line.strip().startswith("- **Status**:"):
-                insert_idx = i + 1
-            elif line.strip().startswith("- **Started**:"):
-                insert_idx = i + 1
-        if insert_idx is not None:
-            lines.insert(insert_idx, cursor_line)
-            content = "\n".join(lines) + "\n"
-        else:
-            # Fallback: append after first blank line
-            content = content.rstrip() + f"\n{cursor_line}\n"
-
-    ws_path.write_text(content, encoding="utf-8")
-
-
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -765,8 +752,8 @@ def main():
         print(f"[🦑 {ts}] ERROR: Invalid JSON in cycle-output.json: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Validate
-    errors = _validate_output(data)
+    # Validate (mode-gated — event-driven roles use EVENT_REQUIRED_FIELDS, #8918)
+    errors = _validate_output(data, role)
     if errors:
         print(f"[🦑 {ts}] ERROR: Invalid cycle-output.json:", file=sys.stderr)
         for err in errors:
@@ -788,9 +775,6 @@ def main():
 
     # 4. Working state update
     _do_working_state_update(data, role)
-
-    # 4b. Advance event bus cursor (#5622)
-    _advance_event_cursor(data, role)
 
     # 5. Iteration log
     _do_iteration_log(data, role)
