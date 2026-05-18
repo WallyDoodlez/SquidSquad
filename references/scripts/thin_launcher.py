@@ -45,8 +45,9 @@ def _get_effort_level(role):
 def _is_process_alive(pid):
     """Check if a process with the given PID is still running. Cross-platform.
 
-    Mirrors boot_remote._is_process_alive — kept local to avoid importing
-    the much larger boot_remote module at launcher startup.
+    Canonical version lives in ``process_utils.is_process_alive`` — kept
+    local here to avoid importing extra modules at launcher startup
+    (#8891). If you change the semantics there, mirror the change here.
     """
     if pid is None or pid <= 0:
         return False
