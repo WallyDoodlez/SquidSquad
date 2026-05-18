@@ -884,31 +884,8 @@ class TestNoRedundantReImport:
 
 
 # ---------------------------------------------------------------------------
-# Dual-mode composition — #8697
+# Dual-mode composition — #8697 (parallel-manifest design per PM directive)
 # ---------------------------------------------------------------------------
-
-class TestParseFrontmatter:
-    def test_no_frontmatter_returns_empty_meta(self):
-        meta, body = compose._parse_frontmatter("just content\nmore content")
-        assert meta == {}
-        assert body == "just content\nmore content"
-
-    def test_yaml_style_frontmatter(self):
-        text = "---\napplies-to: [event-driven, polling]\n---\nbody"
-        meta, body = compose._parse_frontmatter(text)
-        assert meta.get("applies-to") == ["event-driven", "polling"]
-        assert body == "body"
-
-    def test_single_value_applies_to(self):
-        text = "---\napplies-to: [event-driven]\n---\nbody"
-        meta, body = compose._parse_frontmatter(text)
-        assert meta.get("applies-to") == ["event-driven"]
-
-    def test_missing_closing_delimiter_returns_empty(self):
-        text = "---\napplies-to: [foo]\nbody-without-end"
-        meta, body = compose._parse_frontmatter(text)
-        assert meta == {}
-        assert body == text
 
 
 class TestGetWakeMode:
@@ -940,112 +917,79 @@ class TestGetWakeMode:
                 assert compose._get_wake_mode("skill") == "polling"
 
 
-class TestFragmentAppliesTo:
-    def test_no_meta_always_applies(self):
-        assert compose._fragment_applies_to({}, "polling")
-        assert compose._fragment_applies_to({}, "event-driven")
+class TestLoadManifestSelectsByWakeMode:
+    """#8697: _load_manifest picks includes.yml or includes-events.yml based on mode."""
 
-    def test_explicit_match(self):
-        assert compose._fragment_applies_to({"applies-to": ["event-driven"]}, "event-driven")
-        assert not compose._fragment_applies_to({"applies-to": ["event-driven"]}, "polling")
+    def test_polling_loads_includes_yml(self):
+        manifest = compose._load_manifest("dev", wake_mode="polling")
+        assert manifest is not None
+        assert "common/cycle-runner" in manifest
+        # event-driven-workflow lives in common-events/ now
+        assert "common-events/event-driven-workflow" not in manifest
 
-    def test_both_keyword_matches_anything(self):
-        assert compose._fragment_applies_to({"applies-to": ["both"]}, "polling")
-        assert compose._fragment_applies_to({"applies-to": ["both"]}, "event-driven")
+    def test_event_driven_loads_includes_events_yml(self):
+        manifest = compose._load_manifest("dev", wake_mode="event-driven")
+        assert manifest is not None
+        assert "common-events/event-driven-workflow" in manifest
+        # cycle-runner is polling-only, should NOT appear in events manifest
+        assert "common/cycle-runner" not in manifest
 
-    def test_string_value_normalizes_to_list(self):
-        assert compose._fragment_applies_to({"applies-to": "event-driven"}, "event-driven")
-        assert not compose._fragment_applies_to({"applies-to": "event-driven"}, "polling")
-
-    def test_unrecognized_value_defaults_to_include(self):
-        assert compose._fragment_applies_to({"applies-to": 42}, "polling")
-
-
-class TestResolveIncludesWakeMode:
-    def test_polling_mode_skips_event_driven_only_fragment(self, tmp_path):
+    def test_event_driven_falls_back_to_includes_yml_when_events_absent(self, tmp_path):
+        """If a role has no includes-events.yml, fall back to includes.yml so
+        agents in event-driven mode still get *something*."""
+        role_dir = tmp_path / "roles" / "fakerole"
+        role_dir.mkdir(parents=True)
         sub_skills = tmp_path / "sub-skills" / "common"
         sub_skills.mkdir(parents=True)
-        (sub_skills / "event-only.md").write_text(
-            "---\napplies-to: [event-driven]\n---\nEVENT ONLY CONTENT\n",
-            encoding="utf-8",
+        (sub_skills / "frag.md").write_text("x", encoding="utf-8")
+        (role_dir / "includes.yml").write_text(
+            "includes:\n  - common/frag\n", encoding="utf-8"
         )
-        (sub_skills / "always.md").write_text("ALWAYS CONTENT\n", encoding="utf-8")
-        entry = tmp_path / "entry.md"
-        entry.write_text(
-            "{{include: common/event-only}}\n{{include: common/always}}\n",
-            encoding="utf-8",
-        )
-        with patch.object(compose, "SUB_SKILLS_DIR", tmp_path / "sub-skills"):
-            polling_out = compose._resolve_includes_with_manifest(
-                entry, ["common/event-only", "common/always"], wake_mode="polling"
+        with patch.object(compose, "ROLES_DIR", tmp_path / "roles"), \
+             patch.object(compose, "SUB_SKILLS_DIR", tmp_path / "sub-skills"), \
+             patch.object(compose, "_resolve_variant", return_value=None), \
+             patch.object(compose, "_list_known_role_identities", return_value=["fakerole"]):
+            manifest = compose._load_manifest("fakerole", wake_mode="event-driven")
+        assert manifest == ["common/frag"]
+
+    def test_all_four_roles_have_both_manifests(self):
+        """Every shipped role must define both manifests so mode-flipping works."""
+        for role in ("dev", "pm", "qa", "dm"):
+            poll = compose._load_manifest(role, wake_mode="polling")
+            event = compose._load_manifest(role, wake_mode="event-driven")
+            assert poll is not None, f"{role}: missing includes.yml"
+            assert event is not None, f"{role}: missing includes-events.yml"
+            # Both must reference at least one common-events/ or common/ entry
+            assert any("common-events/" in p for p in event), (
+                f"{role}: includes-events.yml has no common-events/ entries"
             )
-            event_out = compose._resolve_includes_with_manifest(
-                entry, ["common/event-only", "common/always"], wake_mode="event-driven"
-            )
-        assert "EVENT ONLY CONTENT" not in polling_out
-        assert "ALWAYS CONTENT" in polling_out
-        assert "EVENT ONLY CONTENT" in event_out
-        assert "ALWAYS CONTENT" in event_out
 
-    def test_skipped_fragment_emits_no_wrapper_markers(self, tmp_path):
-        sub_skills = tmp_path / "sub-skills" / "common"
-        sub_skills.mkdir(parents=True)
-        (sub_skills / "event-only.md").write_text(
-            "---\napplies-to: [event-driven]\n---\nEVENT CONTENT\n",
-            encoding="utf-8",
+
+class TestEventDrivenWorkflowLocation:
+    """The event-driven-workflow fragment lives under common-events/ (#8697)."""
+
+    def test_event_driven_workflow_in_common_events(self):
+        path = (Path(__file__).resolve().parent.parent
+                / "references" / "sub-skills" / "common-events"
+                / "event-driven-workflow.md")
+        assert path.exists(), "common-events/event-driven-workflow.md missing"
+
+    def test_no_event_driven_workflow_in_common(self):
+        path = (Path(__file__).resolve().parent.parent
+                / "references" / "sub-skills" / "common"
+                / "event-driven-workflow.md")
+        assert not path.exists(), (
+            "common/event-driven-workflow.md should have been moved to "
+            "common-events/ (no mode-conditional logic inside fragments)"
         )
-        entry = tmp_path / "entry.md"
-        entry.write_text("{{include: common/event-only}}\n", encoding="utf-8")
-        with patch.object(compose, "SUB_SKILLS_DIR", tmp_path / "sub-skills"):
-            polling = compose._resolve_includes_with_manifest(
-                entry, ["common/event-only"], wake_mode="polling"
-            )
-        assert "<!-- sub-skill: event-only -->" not in polling
-        assert "<!-- /sub-skill: event-only -->" not in polling
 
-
-class TestEventDrivenWorkflowFrontmatter:
-    """The canonical event-driven-workflow fragment must carry the right tag."""
-
-    def test_event_driven_workflow_marked_event_driven_only(self):
-        path = Path(__file__).resolve().parent.parent / "references" / "sub-skills" / "common" / "event-driven-workflow.md"
-        raw = path.read_text(encoding="utf-8")
-        meta, _ = compose._parse_frontmatter(raw)
-        assert meta.get("applies-to") == ["event-driven"]
-
-
-class TestResolveIncludesFallbackWakeMode:
-    """#8697 review fix R1: the manifest-less fallback path must also parse
-    frontmatter and respect wake_mode, so output is identical regardless of
-    which composition path runs."""
-
-    def test_fallback_strips_frontmatter(self, tmp_path):
-        sub_skills = tmp_path / "sub-skills" / "common"
-        sub_skills.mkdir(parents=True)
-        (sub_skills / "tagged.md").write_text(
-            "---\napplies-to: [both]\n---\nTAGGED CONTENT\n",
-            encoding="utf-8",
+    def test_event_driven_workflow_has_no_frontmatter(self):
+        """Per PM directive: no mode-conditional logic inside fragments."""
+        path = (Path(__file__).resolve().parent.parent
+                / "references" / "sub-skills" / "common-events"
+                / "event-driven-workflow.md")
+        first_line = path.read_text(encoding="utf-8").splitlines()[0]
+        assert first_line != "---", (
+            "event-driven-workflow.md should not have YAML frontmatter — "
+            "mode selection happens at the manifest level"
         )
-        entry = tmp_path / "entry.md"
-        entry.write_text("{{include: common/tagged}}\n", encoding="utf-8")
-        with patch.object(compose, "SUB_SKILLS_DIR", tmp_path / "sub-skills"):
-            out = compose._resolve_includes(entry, wake_mode="polling")
-        assert "TAGGED CONTENT" in out
-        # Frontmatter delimiters must NOT leak into output
-        assert "---" not in out
-        assert "applies-to" not in out
-
-    def test_fallback_filters_by_wake_mode(self, tmp_path):
-        sub_skills = tmp_path / "sub-skills" / "common"
-        sub_skills.mkdir(parents=True)
-        (sub_skills / "event-only.md").write_text(
-            "---\napplies-to: [event-driven]\n---\nEVENT ONLY\n",
-            encoding="utf-8",
-        )
-        entry = tmp_path / "entry.md"
-        entry.write_text("{{include: common/event-only}}\n", encoding="utf-8")
-        with patch.object(compose, "SUB_SKILLS_DIR", tmp_path / "sub-skills"):
-            polling = compose._resolve_includes(entry, wake_mode="polling")
-            event = compose._resolve_includes(entry, wake_mode="event-driven")
-        assert "EVENT ONLY" not in polling
-        assert "EVENT ONLY" in event

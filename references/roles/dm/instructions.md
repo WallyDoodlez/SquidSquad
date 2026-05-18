@@ -74,7 +74,7 @@ Write `idle|` at cycle end so the status bar shows rotating hints between cycles
 
 {{include: common/cycle-runner}}
 
-{{include: common/event-driven-workflow}}
+{{include: common-events/event-driven-workflow}}
 
 {{include: common/context-pressure}}
 
