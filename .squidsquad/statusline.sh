@@ -96,24 +96,33 @@ if [ ! -f "$CYCLE_TIMESTAMP_FILE" ]; then
   fi
 fi
 
-TIMER_STR="🔄 ${INTERVAL}m"
+# #8700: in event-driven mode there are no /loop ticks, so the cycle
+# countdown is meaningless. Show 📡 events instead of a misleading overdue
+# counter. WAKE_MODE comes from statusline_data.py which reads config.md.
+WAKE_MODE=$(timeout 1 python references/scripts/statusline_data.py mode "$ROLE" 2>/dev/null) || WAKE_MODE="polling"
 NOW=$(date +%s)
-if [ -n "$CYCLE_TIMESTAMP_FILE" ] && [ -f "$CYCLE_TIMESTAMP_FILE" ]; then
-  if stat --version >/dev/null 2>&1; then
-    LAST_MOD=$(stat -c %Y "$CYCLE_TIMESTAMP_FILE" 2>/dev/null)
-  else
-    LAST_MOD=$(stat -f %m "$CYCLE_TIMESTAMP_FILE" 2>/dev/null)
-  fi
-  if [ -n "$LAST_MOD" ]; then
-    ELAPSED=$(( (NOW - LAST_MOD) / 60 ))
-    REMAINING=$(( INTERVAL - ELAPSED ))
-    if [ "$REMAINING" -le 0 ]; then
-      OVERDUE=$(( ELAPSED - INTERVAL ))
-      TIMER_STR="⏰ +${OVERDUE}m"
-    elif [ "$REMAINING" -le 1 ]; then
-      TIMER_STR="🔜 <1m"
+
+if [ "$WAKE_MODE" = "event-driven" ]; then
+  TIMER_STR="📡 events"
+else
+  TIMER_STR="🔄 ${INTERVAL}m"
+  if [ -n "$CYCLE_TIMESTAMP_FILE" ] && [ -f "$CYCLE_TIMESTAMP_FILE" ]; then
+    if stat --version >/dev/null 2>&1; then
+      LAST_MOD=$(stat -c %Y "$CYCLE_TIMESTAMP_FILE" 2>/dev/null)
     else
-      TIMER_STR="🔄 ${REMAINING}m"
+      LAST_MOD=$(stat -f %m "$CYCLE_TIMESTAMP_FILE" 2>/dev/null)
+    fi
+    if [ -n "$LAST_MOD" ]; then
+      ELAPSED=$(( (NOW - LAST_MOD) / 60 ))
+      REMAINING=$(( INTERVAL - ELAPSED ))
+      if [ "$REMAINING" -le 0 ]; then
+        OVERDUE=$(( ELAPSED - INTERVAL ))
+        TIMER_STR="⏰ +${OVERDUE}m"
+      elif [ "$REMAINING" -le 1 ]; then
+        TIMER_STR="🔜 <1m"
+      else
+        TIMER_STR="🔄 ${REMAINING}m"
+      fi
     fi
   fi
 fi
@@ -167,12 +176,15 @@ else
   ROLE_LABEL="$ROLE"
 fi
 
-# --- Read current-state file for line 2 ---
-STATE_FILE="$SQDIR/$ROLE/current-state"
+# --- Read role state for line 2 (#8700) ---
+# Source: statusline_data.py phase <role>
+#   - event-driven mode: queries harness API (GET /agents/<role>/health)
+#   - polling mode: reads .squidsquad/<role>/current-state
+#   - either way, prints `phase|description` (or empty)
+STATE_LINE=$(timeout 2 python references/scripts/statusline_data.py phase "$ROLE" 2>/dev/null) || STATE_LINE=""
 CURRENT_PHASE=""
 CURRENT_DESC=""
-if [ -f "$STATE_FILE" ]; then
-  STATE_LINE=$(head -1 "$STATE_FILE" 2>/dev/null)
+if [ -n "$STATE_LINE" ]; then
   CURRENT_PHASE=$(echo "$STATE_LINE" | cut -d'|' -f1)
   CURRENT_DESC=$(echo "$STATE_LINE" | cut -d'|' -f2-)
 fi
