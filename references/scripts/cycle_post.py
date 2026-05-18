@@ -67,12 +67,18 @@ def _run(cmd, check=False):
 
 
 def _config_get(field):
-    """Read a field from config.md. Returns empty string on failure."""
+    """Read a field from config.md. Returns empty string on failure.
+
+    Catches BaseException (not just Exception) because `config.get_field`
+    calls `sys.exit(1)` on a missing field, which raises SystemExit — a
+    BaseException, not an Exception. Without this, an absent config field
+    would abort cycle_post.
+    """
     try:
         sys.path.insert(0, str(SCRIPT_DIR))
         from config import get_field
         return get_field(field) or ""
-    except Exception:
+    except BaseException:
         return ""
 
 
@@ -198,7 +204,10 @@ def _verify_remote_branch(number, role="skill"):
             return True  # Branch workflow off — no branch expected
         pattern = get_field("branch-pattern") or "squidsquad/task/{number}"
         branch = pattern.replace("{number}", str(number)).replace("{role}", role)
-    except Exception:
+    except BaseException:
+        # config.get_field calls sys.exit(1) on missing fields → SystemExit.
+        # Catch BaseException so a missing optional config does not abort
+        # cycle_post; treat as "can't determine, return None".
         return None  # Can't read config
 
     result = _run(["git", "ls-remote", "--heads", "origin", branch], check=False)
@@ -606,7 +615,12 @@ def _do_version_bump(data, role):
 def _discover_harness_port():
     """Discover harness port — default 7373 + parent-dir walk for .harness-port (#4966).
 
-    Returns port number or None if harness is not discoverable.
+    Always returns an int. Resolution order: this repo's `.squidsquad/`,
+    then a 5-level parent-directory walk for an inherited `.harness-port`,
+    finally falls back to the default port 7373. The downstream callers
+    still defensively check `if port is None` to keep the call shape
+    consistent with other harness HTTP helpers in case this function
+    grows a None-returning failure mode in the future.
     """
     # First try: read .harness-port from this repo's .squidsquad/
     port_file = SQUID_DIR / ".harness-port"
@@ -656,6 +670,40 @@ def _query_harness_intent(role):
         return None
 
 
+def _post_harness_restart(role):
+    """POST /agents/{role}/restart so the harness flips intent to RESTARTING
+    BEFORE this process exits with code 42 (#4792 Phase 1, CONTEXT-4792.md §5.1).
+
+    Without this, a context-pressure exit leaves intent=RUNNING; the harness
+    sees a dead process with intent=RUNNING and auto-reboots via #4949, which
+    bypasses the RESTARTING flow that the force-kill safety net (Q7) expects.
+    By flipping intent here, we route through the proper RESTARTING state so
+    `intent_set_at` is recorded and the safety net is armed for the new
+    process.
+
+    Returns True on success, False on any failure. Best-effort: a failure
+    here does NOT block the exit — the harness's auto-reboot fallback still
+    respawns the agent, just without the proper RESTARTING bookkeeping.
+    """
+    port = _discover_harness_port()
+    if port is None:
+        return False
+
+    url = f"http://127.0.0.1:{port}/agents/{role}/restart"
+    try:
+        req = urllib.request.Request(url, method="POST", data=b"")
+        with urllib.request.urlopen(req, timeout=5):
+            return True
+    except (urllib.error.URLError, OSError, TimeoutError):
+        # Best-effort: the agent will exit 42 regardless and the harness's
+        # #4949 fallback will respawn. Match the rest of cycle_post which
+        # routes warnings to stderr.
+        print(f"  WARNING: POST /agents/{role}/restart failed — "
+              f"falling back to auto-reboot path (intent stays RUNNING)",
+              file=sys.stderr)
+        return False
+
+
 def _do_stop_after_cycle_check(data, role):
     """Check harness intent API and context pressure (#4966).
 
@@ -673,7 +721,9 @@ def _do_stop_after_cycle_check(data, role):
         print(f"  Harness intent={intent}. Agent will exit for {'stop' if intent == 'stopping' else 'restart'}.")
         return True
 
-    # 2. Check context pressure from cycle-input.json
+    # 2. Check context pressure — primary source is cycle-output (data),
+    #    fallback to reading cycle-input.json directly if the agent didn't
+    #    pass it through.
     ctx = data.get("context_pressure", {})
     if not ctx:
         # Try reading from cycle-input.json directly
@@ -690,6 +740,16 @@ def _do_stop_after_cycle_check(data, role):
 
     if exceeded:
         print(f"  Context pressure at {used_pct}% — agent will exit for restart.")
+        # #4792 Phase 1 / CONTEXT-4792.md §5.1: route through the harness
+        # RESTARTING flow BEFORE the exit. The intent branch above already
+        # returned early for "stopping"/"restarting", so reaching this point
+        # implies intent is "running" or None (harness unreachable). The
+        # guard below is defensive — it protects against a future refactor
+        # of the intent branch that might no longer short-circuit. Match
+        # the existing _query_harness_intent / _discover_harness_port
+        # tolerance of "None means harness unreachable" semantics.
+        if intent not in ("stopping", "restarting"):
+            _post_harness_restart(role)
         return True
 
     return False
