@@ -1008,14 +1008,18 @@ class TestEndpointsViaTestClient(unittest.TestCase):
         self.assertEqual(agent.intent, AgentState.INTENT_STOPPING)
 
     def test_post_agent_restart(self):
-        """POST /agents/{role}/restart calls reboot."""
+        """POST /agents/{role}/restart returns 200 + success=True.
+
+        #4792 Phase 2: reboot_agent.reboot() was deleted — the endpoint
+        flips intent and triggers respawn through the harness state
+        machine instead of calling a separate reboot helper. No mock
+        for reboot_agent.reboot is needed."""
         import tempfile
         with tempfile.TemporaryDirectory() as tmpdir:
             role_dir = Path(tmpdir) / ".squidsquad" / "skill"
             role_dir.mkdir(parents=True)
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
-                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
-                 patch("harness.reboot_agent.reboot", return_value=0):
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir):
                 resp = self.client.post("/agents/skill/restart")
             self.assertEqual(resp.status_code, 200)
             data = resp.json()

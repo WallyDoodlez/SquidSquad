@@ -40,23 +40,21 @@ class TestRemovedLegacySentinelHelpers:
         )
 
     def test_source_has_no_legacy_sentinel_reads(self):
+        """Source-grep across all literal-quote forms (`'.pid'`, `\".pid\"`)
+        so a reintroduction in any quoting style fails the guard.
+        `.claude-pid` is the only `pid`-bearing literal allowed."""
         from pathlib import Path
         src = Path(boot_remote.__file__).read_text(encoding="utf-8")
-        # `.pid` (with the leading dot, isolated) must not be read; the
-        # `.claude-pid` reference is allowed because it is a different file
-        # and contains the substring. Search for `\".pid\"` token patterns.
-        assert '/ ".pid"' not in src and "'.pid'" not in src, (
-            "boot_remote must not read the legacy `.pid` file"
-        )
-        assert '/ ".health"' not in src and "'.health'" not in src, (
-            "boot_remote must not read the legacy `.health` file"
-        )
-        assert '/ ".restart"' not in src and "'.restart'" not in src, (
-            "boot_remote must not read or unlink the legacy `.restart` file"
-        )
-        assert '/ ".stop"' not in src and "'.stop'" not in src, (
-            "boot_remote must not read the legacy `.stop` file"
-        )
+        # Allow the `.claude-pid` literal which contains `.pid` as a
+        # substring but is a different file.
+        scrubbed = src.replace(".claude-pid", "")
+        for name in (".pid", ".health", ".restart", ".stop"):
+            for quote in ("'", '"'):
+                token = f"{quote}{name}{quote}"
+                assert token not in scrubbed, (
+                    f"boot_remote must not reference legacy `{name}` "
+                    f"(found {token!r}); CONTEXT-4792.md §5.2"
+                )
 
 
 class TestParseLocalConfigMandatory:

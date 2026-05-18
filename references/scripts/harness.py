@@ -160,19 +160,9 @@ class HarnessState:
         with self._lock:
             return [a.to_dict() for a in self.agents.values()]
 
-    def _read_claude_pid(self, clone_path, role):
-        """Read claude PID from .claude-pid file and check if alive (#4966).
-
-        Returns (pid, alive) or (None, False).
-        """
-        pid_file = Path(clone_path) / ".squidsquad" / role / ".claude-pid"
-        if not pid_file.exists():
-            return None, False
-        try:
-            pid = int(pid_file.read_text(encoding="utf-8").strip())
-        except (ValueError, OSError):
-            return None, False
-        return pid, boot_remote._is_process_alive(pid)
+    # #4792 Phase 2: the per-class `_read_claude_pid` was a near-duplicate
+    # of `reboot_agent._read_claude_pid`. All three call sites (this class
+    # + two restart endpoints) now share the module-level helper.
 
     def update_health(self):
         """Check agent health via direct PID monitoring (#4966).
@@ -213,7 +203,7 @@ class HarnessState:
 
                 # If no stored PID or PID stale, try reading .claude-pid file
                 if not alive:
-                    file_pid, file_alive = self._read_claude_pid(clone_path, role)
+                    file_pid, file_alive = reboot_agent._read_claude_pid(clone_path, role)
                     if file_pid and file_alive:
                         pid = file_pid
                         alive = True
