@@ -103,9 +103,9 @@ Each unit test names its target file:lines for traceability.
   - **Action**: Call `update_health()`.
   - **Assert**: `_kill_process(<pid>)` called exactly once; log line emitted with `intent=RESTARTING elapsed=<s>s`; on the NEXT `update_health` poll (simulate with a second call after the PID is reaped), `boot_remote.boot_agent(role)` is invoked (respawn via the existing intent gate). This test enforces the PM lock that extended the force-kill safety net to RESTARTING — the prior draft asserted the opposite and was corrected after the deepseek R1 review.
 
-- **TC-3.1.3b — Force-kill does NOT fire when intent ∈ {RUNNING, IDLE}**
-  - **Setup**: `intent=RUNNING` (and a parallel case with `intent=IDLE`), `intent_set_at = now() - 120s`, alive PID. (`STOPPED` is a status not an intent; intent values are RUNNING / STOPPING / RESTARTING / IDLE per `.harness-state.json` schema.)
-  - **Assert**: `_kill_process` not called. The force-kill safety net is scoped to STOPPING and RESTARTING only.
+- **TC-3.1.3b — Force-kill does NOT fire for intents outside {STOPPING, RESTARTING}**
+  - **Setup**: `intent=RUNNING`, `intent_set_at = now() - 120s`, alive PID. (`stopped` is a post-termination status, not an intent — the intent stays `STOPPING` per Q10 until cleared.)
+  - **Assert**: `_kill_process` not called. The force-kill safety net is scoped to STOPPING and RESTARTING only; all other intents (RUNNING, and any future additions) are excluded. Verifies the scope-based exclusion.
 
 - **TC-3.1.4 — Legacy-sentinel cleanup on boot** (AC-10)
   - **Target**: Harness lifespan startup (RESEARCH §A `harness.py:705-721`).
@@ -216,7 +216,7 @@ These run against a live harness on a scratch repo (uses the project's existing 
   - **No force-kill log line emitted within the first 60s after `intent_set_at`** (graceful path used). If the test framework cannot guarantee step 1's short-cycle precondition, the alternative assertion is: "the agent terminated cleanly AND the harness log records `/quit` invocation evidence before any force-kill log line" — i.e., termination via the graceful path regardless of whether force-kill subsequently fired.
   - **AC-6 behavioral check**: the captured terminal transcript or harness log contains evidence of `/quit` invocation (e.g., a `[claude] /quit` echo, an assistant-message slash-command line, or a harness `agent <r> session exited cleanly via /quit` log line) recorded before the claude session's exit timestamp.
   - No `.stop` file created at any point (filesystem watcher).
-  - `.harness-state.json` updated to `intent=stopped`.
+  - `.harness-state.json` reflects `intent=STOPPING, status=stopped` (status is the post-termination marker; intent stays STOPPING per Q10 until cleared).
 
 ### 4.2 Force-kill safety net — agent stuck (STOPPING case) (AC-5)
 
@@ -293,9 +293,9 @@ This is the **gating integration test for #7693 closure** per AC-16. It MUST pas
   2. Force context pressure on the agent: write a value above the configured threshold (e.g. `95`) to `<clone>/.squidsquad/pm/context-pressure`.
   3. Wait for the agent's `cycle_post.py` to run at its next cycle boundary. Capture its exit code.
   4. **Happy path**: agent's claude session reads exit 42 from bash tool output and invokes `/quit` within 5s. Record `claude_exit_time = now()`. Skip to step 6.
-  5. **Degraded path** (only if step 4 does not occur): wait up to 60s from `cycle_post` exit time. The §3.3 force-kill timer does NOT apply here because intent stays RUNNING during a context-pressure restart (context-pressure does not flip intent to STOPPING or RESTARTING — it is an agent-side termination signal). If the agent fails to terminate within 60s, mark the test FAILED — this indicates the Q7 self-quit instruction did not take effect and #7693 cannot be closed.
+  5. **Degraded path** (only if step 4 does not occur): the §3.3 force-kill timer DOES apply because `cycle_post.py` POSTed `/agents/{role}/restart` before exiting 42 (per the context-pressure routing in DECISIONS Q7 / CONTEXT §8.1), so `intent=RESTARTING` is in force-kill scope. Wait for the force-kill to fire within 60s of `intent_set_at`. If the agent still fails to terminate within 65s of `cycle_post` exit time (60s force-kill window + 5s grace), mark the test FAILED — this indicates BOTH the Q7 self-quit instruction AND the RESTARTING force-kill safety net failed, and #7693 cannot be closed.
   6. Verify `.claude-pid` is cleared and the PID is dead.
-  7. Verify harness `update_health` (within 5s after PID death) observes the dead PID with `intent=RUNNING` and invokes `boot_remote.boot_agent("pm")`.
+  7. Verify harness `update_health` (within 5s after PID death) observes the dead PID with `intent=RESTARTING` and invokes `boot_remote.boot_agent("pm")`.
   8. Verify a new `.claude-pid` is written and the agent enters its next cycle.
 
 - **Assertions** (all must hold for the test to PASS and #7693 to close):
@@ -558,7 +558,7 @@ These are the eyes-on sanity checks the human runs post-ship before flipping pro
   1. `cycle_post.py` exits 42.
   2. Agent invokes `/quit`.
   3. claude session exits, `.claude-pid` cleared.
-  4. Harness observes dead PID within 5s, sees intent=running, respawns via `boot_remote.boot_agent`.
+  4. Harness observes dead PID within 5s, sees `intent=RESTARTING` (set by `cycle_post.py`'s pre-exit POST to `/agents/{role}/restart` per the context-pressure routing), respawns via `boot_remote.boot_agent`.
   5. Agent enters new cycle.
   Failure here after ship indicates a regression and re-opens #7693, but does not gate the ship itself (TC-4.8 was the gate).
 
