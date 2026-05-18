@@ -5,11 +5,14 @@ Runs before the agent's creative phase. Handles git pull, context pressure,
 working state, triage, branch setup, and writes cycle-input.json.
 
 Usage:
-    python references/scripts/cycle_pre.py <role>
-    python references/scripts/cycle_pre.py skill
-    python references/scripts/cycle_pre.py pm
-    python references/scripts/cycle_pre.py qa
-    python references/scripts/cycle_pre.py dm
+    python references/scripts/cycle_pre.py <role>             # /loop mode
+    python references/scripts/cycle_pre.py <role> --task <n>  # event-driven, task-scoped (#8701)
+
+In task mode (#8701, used by event-driven agents), `cycle_pre` skips the
+work-queue scan and writes a `cycle-input.json` scoped to the single task
+passed via `--task`. `cycle_post.py` detects task mode by the presence of
+a `task` field in `cycle-output.json` and uses task-log files keyed by
+task id + timestamp rather than monotonic cycle numbers.
 
 Exit codes:
     0 — success (cycle-input.json written, possibly degraded)
@@ -970,19 +973,41 @@ ROLE_BUILDERS = {
 }
 
 
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: cycle_pre.py <role>", file=sys.stderr)
-        sys.exit(1)
+def _parse_cli_args(argv):
+    """Parse `<role> [--task <number>]` from argv (post-script-name).
 
-    role = sys.argv[1]
+    Returns (role, task) where task is a string or None. Kept lightweight
+    so cycle_pre stays callable from tests without rebuilding argv.
+    """
+    if not argv:
+        return None, None
+    role = argv[0]
+    task = None
+    i = 1
+    while i < len(argv):
+        if argv[i] == "--task" and i + 1 < len(argv):
+            task = argv[i + 1]
+            i += 2
+        else:
+            i += 1
+    return role, task
+
+
+def main():
+    role, task_id = _parse_cli_args(sys.argv[1:])
+    if not role:
+        print("Usage: cycle_pre.py <role> [--task <number>]", file=sys.stderr)
+        sys.exit(1)
     if role not in ROLE_BUILDERS:
         print(f"ERROR: Unknown role '{role}'. Valid: {list(ROLE_BUILDERS.keys())}",
               file=sys.stderr)
         sys.exit(1)
 
     ts = _timestamp_short()
-    print(f"[🦑 {ts}] cycle_pre starting for {role}...")
+    if task_id:
+        print(f"[🦑 {ts}] cycle_pre starting for {role} (task #{task_id}, event-driven mode)...")
+    else:
+        print(f"[🦑 {ts}] cycle_pre starting for {role}...")
     _write_status_bar(role, "pulling", "pull-latest — Syncing with remote...")
 
     # 1a. Read working state early to determine correct branch (#4942)
@@ -1011,7 +1036,18 @@ def main():
     _write_status_bar(role, "triaging", "tracker-protocol — Building work queue...")
 
     # 7. Role-specific input
-    role_input = ROLE_BUILDERS[role](role)
+    # #8701: task mode skips the role-specific work-queue scan. The harness
+    # already chose this task; cycle_pre's only forge-side responsibility is
+    # to surface the task itself plus the standard branch/state context.
+    if task_id:
+        role_input = {
+            "task": task_id,
+            "task_mode": True,
+            # Cross-agent health checks intentionally omitted in event-driven
+            # mode (per #8701 design: the harness owns liveness).
+        }
+    else:
+        role_input = ROLE_BUILDERS[role](role)
 
     # 7b. Read event bus (#5622)
     recent_events = []
@@ -1028,6 +1064,10 @@ def main():
     mechanical_reactions = _run_mechanical_reactions(recent_events, role)
 
     # 8. Build and write cycle-input.json
+    # #8701: in task mode, cycle_number is replaced by `task` + `timestamp`
+    # as the unit of work identifier. The numeric counter is kept in the
+    # JSON for downstream consumers but flagged as task-mode so cycle_post
+    # branches correctly.
     cycle_input = {
         "role": role,
         "cycle_number": cycle_number,

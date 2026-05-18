@@ -1319,3 +1319,158 @@ class TestStateCommitAfterCodeCommit:
 
         assert len(state_commit_calls) == 1
         assert "cycle 300 state" in state_commit_calls[0][0]
+
+
+# ---------------------------------------------------------------------------
+# Task-mode logging — #8701
+# ---------------------------------------------------------------------------
+
+
+class TestTaskModeLog:
+    """#8701: when cycle-output.json carries a `task` field, write a
+    task-log entry instead of the monotonic iter-N.md."""
+
+    def test_task_mode_writes_task_log(self, tmp_path):
+        with patch.object(cycle_post, "SQUID_DIR", tmp_path), \
+             patch.object(cycle_post, "REPO_ROOT", tmp_path), \
+             patch.object(cycle_post, "_run_script") as mock_script:
+            cycle_post._do_iteration_log(
+                {
+                    "task": "8701",
+                    "cycle_number": 1125,
+                    "cycle_type": "active",
+                    "iteration_summary": "task-mode refactor done",
+                    "status_transitions": [
+                        {"number": 8701, "from": "in-progress", "to": "pending-test"}
+                    ],
+                },
+                "skill",
+            )
+        # No iter-N.md path taken in task mode
+        mock_script.assert_not_called()
+        # A task-log file should exist
+        log_dir = tmp_path / "skill" / "task-log"
+        assert log_dir.is_dir()
+        logs = list(log_dir.glob("task-8701-*.md"))
+        assert len(logs) == 1
+        content = logs[0].read_text(encoding="utf-8")
+        assert "Task #8701" in content
+        assert "task-mode refactor done" in content
+        assert "#8701: in-progress → pending-test" in content
+
+    def test_task_mode_atomic_write(self, tmp_path):
+        """Task log uses .tmp + rename so partial writes leave no entry."""
+        with patch.object(cycle_post, "SQUID_DIR", tmp_path), \
+             patch.object(cycle_post, "REPO_ROOT", tmp_path), \
+             patch.object(cycle_post, "_run_script"):
+            cycle_post._do_iteration_log(
+                {"task": "1", "cycle_number": 1, "cycle_type": "quiet",
+                 "iteration_summary": "s"},
+                "pm",
+            )
+        log_dir = tmp_path / "pm" / "task-log"
+        # No `.tmp` residue after success
+        tmps = list(log_dir.glob(".task-*.tmp"))
+        assert tmps == []
+        # Final file is present
+        assert list(log_dir.glob("task-1-*.md"))
+
+    def test_non_task_mode_unchanged(self, tmp_path):
+        """When no `task` field, falls through to the existing iter-N.md path."""
+        with patch.object(cycle_post, "SQUID_DIR", tmp_path), \
+             patch.object(cycle_post, "REPO_ROOT", tmp_path), \
+             patch.object(cycle_post, "_run_script",
+                          return_value=MagicMock(returncode=0)) as mock_script:
+            cycle_post._do_iteration_log(
+                {"cycle_number": 500, "cycle_type": "active",
+                 "iteration_summary": "loop cycle"},
+                "skill",
+            )
+        # Should have invoked cycle.py log-iteration at some point (NOT task-log path)
+        assert mock_script.called
+        invocations = [c[0] for c in mock_script.call_args_list]
+        assert any(
+            inv[0] == "cycle.py" and inv[1] == "log-iteration"
+            for inv in invocations
+        ), f"expected log-iteration call in {invocations}"
+        # No task-log directory should be created
+        assert not (tmp_path / "skill" / "task-log").exists()
+
+    def test_filename_and_content_timestamp_match(self, tmp_path):
+        """R1: single datetime.now() drives both filename and content."""
+        with patch.object(cycle_post, "SQUID_DIR", tmp_path), \
+             patch.object(cycle_post, "REPO_ROOT", tmp_path):
+            cycle_post._write_task_log(
+                "skill", "8701", "active", "summary",
+                {"cycle_number": 1},
+            )
+        logs = list((tmp_path / "skill" / "task-log").glob("task-8701-*.md"))
+        assert len(logs) == 1
+        fname = logs[0].name  # task-8701-YYYY-MM-DD-HHMMSS.md
+        # Extract the YYYY-MM-DD-HHMMSS portion
+        stem = fname[len("task-8701-"):-len(".md")]
+        content = logs[0].read_text(encoding="utf-8")
+        # Content has ISO format `YYYY-MM-DDTHH:MM:SS`. Derive the same
+        # YYYY-MM-DD-HHMMSS form and check it matches the filename stem.
+        from datetime import datetime
+        # Find the Timestamp line
+        ts_line = next(l for l in content.splitlines() if "Timestamp" in l)
+        iso = ts_line.split("**: ", 1)[1].strip()
+        derived = datetime.fromisoformat(iso).strftime("%Y-%m-%d-%H%M%S")
+        assert derived == stem, f"filename {stem} != content {derived}"
+
+    def test_rejects_path_traversal_in_task_id(self, tmp_path, capsys):
+        """R2: task_id with `..`, `/`, or `\\` is refused, no file written."""
+        with patch.object(cycle_post, "SQUID_DIR", tmp_path), \
+             patch.object(cycle_post, "REPO_ROOT", tmp_path):
+            for bad in ["../escape", "a/b", "a\\b", "..", ""]:
+                cycle_post._write_task_log(
+                    "skill", bad, "active", "s", {"cycle_number": 1},
+                )
+        # No files were ever created under task-log/ (or anywhere outside)
+        log_dir = tmp_path / "skill" / "task-log"
+        if log_dir.exists():
+            assert list(log_dir.iterdir()) == []
+        # And nothing escaped the role dir
+        all_md = list(tmp_path.rglob("*.md"))
+        assert all_md == [], f"unexpected files written: {all_md}"
+
+    def test_retention_prunes_old_task_logs(self, tmp_path):
+        """R3: only the N newest entries per task are kept."""
+        import time
+        with patch.object(cycle_post, "SQUID_DIR", tmp_path), \
+             patch.object(cycle_post, "REPO_ROOT", tmp_path):
+            for i in range(cycle_post._TASK_LOG_RETENTION_PER_TASK + 3):
+                cycle_post._write_task_log(
+                    "skill", "8701", "active", f"run {i}",
+                    {"cycle_number": i},
+                )
+                # ensure distinct mtimes; filenames carry seconds so we
+                # also need a sub-second nudge between calls
+                time.sleep(1.05)
+        logs = list((tmp_path / "skill" / "task-log").glob("task-8701-*.md"))
+        assert len(logs) == cycle_post._TASK_LOG_RETENTION_PER_TASK
+
+    def test_retention_keeps_other_tasks(self, tmp_path):
+        """R3: pruning is scoped to the current task_id only."""
+        with patch.object(cycle_post, "SQUID_DIR", tmp_path), \
+             patch.object(cycle_post, "REPO_ROOT", tmp_path):
+            cycle_post._write_task_log(
+                "skill", "1234", "active", "other task",
+                {"cycle_number": 1},
+            )
+            import time
+            time.sleep(1.05)
+            for i in range(cycle_post._TASK_LOG_RETENTION_PER_TASK + 2):
+                cycle_post._write_task_log(
+                    "skill", "8701", "active", f"r{i}",
+                    {"cycle_number": i},
+                )
+                time.sleep(1.05)
+        log_dir = tmp_path / "skill" / "task-log"
+        # 1234 untouched
+        assert len(list(log_dir.glob("task-1234-*.md"))) == 1
+        # 8701 pruned
+        assert len(list(log_dir.glob("task-8701-*.md"))) == \
+            cycle_post._TASK_LOG_RETENTION_PER_TASK
+

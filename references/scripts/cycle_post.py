@@ -221,10 +221,22 @@ def _do_tracker_comments(data, role):
 
 
 def _do_iteration_log(data, role):
-    """Create iteration log entry."""
+    """Create iteration log entry.
+
+    #8701: in event-driven task mode (when cycle-output.json contains a
+    `task` field), write a task-log entry keyed by task id + timestamp
+    instead of the monotonic iter-N.md. Mid-task crashes leave no entry —
+    that's correct semantics (the task didn't complete).
+    """
     cycle_number = data.get("cycle_number", 0)
     cycle_type = data.get("cycle_type", "quiet")
     summary = data.get("iteration_summary", "")
+    task_id = data.get("task")
+
+    if task_id:
+        # Task mode: write task-log/task-<id>-<timestamp>.md.
+        _write_task_log(role, task_id, cycle_type, summary, data)
+        return
 
     if cycle_type == "quiet":
         result = _run_script(
@@ -243,6 +255,85 @@ def _do_iteration_log(data, role):
 
     if result.returncode == 0:
         print(f"  Iteration log: iter-{cycle_number}.md")
+
+
+_TASK_LOG_RETENTION_PER_TASK = 5
+
+
+def _write_task_log(role, task_id, cycle_type, summary, data):
+    """Write a task-log entry under .squidsquad/<role>/task-log/ (#8701).
+
+    Format: `task-<id>-<YYYY-MM-DD-HHMMSS>.md`. Atomic write so a
+    mid-write crash leaves no entry (matches the design intent — only
+    completed task runs produce a log).
+
+    #8701 review fixes:
+    - R1: capture `now` once so filename + content timestamps agree.
+    - R2: reject `task_id` containing path-traversal characters before
+      constructing the filename.
+    - R3: prune older entries per-task to `_TASK_LOG_RETENTION_PER_TASK`
+      so the directory doesn't grow without bound.
+    """
+    # R2: refuse any task_id that could escape the task-log/ subdir.
+    sid = str(task_id)
+    if not sid or "/" in sid or "\\" in sid or ".." in sid:
+        print(f"WARNING: Invalid task_id {sid!r} — refusing to write task-log",
+              file=sys.stderr)
+        return
+
+    log_dir = SQUID_DIR / role / "task-log"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    # R1: single now() call drives both filename and content.
+    now = datetime.now()
+    ts = now.strftime("%Y-%m-%d-%H%M%S")
+    fname = f"task-{sid}-{ts}.md"
+
+    content_lines = [
+        f"# Task #{sid} — {role}",
+        "",
+        f"- **Cycle type**: {cycle_type}",
+        f"- **Timestamp**: {now.isoformat(timespec='seconds')}",
+        f"- **Cycle number (counter)**: {data.get('cycle_number', '?')}",
+        "",
+        "## Summary",
+        "",
+        summary or "(no summary)",
+    ]
+    transitions = data.get("status_transitions", [])
+    if transitions:
+        content_lines.extend(["", "## Status transitions"])
+        for t in transitions:
+            content_lines.append(
+                f"- #{t.get('number')}: {t.get('from')} → {t.get('to')}"
+            )
+    content = "\n".join(content_lines) + "\n"
+
+    final_path = log_dir / fname
+    tmp_path = log_dir / f".{fname}.tmp"
+    try:
+        tmp_path.write_text(content, encoding="utf-8")
+        tmp_path.replace(final_path)
+    except OSError as e:
+        print(f"WARNING: Could not write task-log {final_path}: {e}",
+              file=sys.stderr)
+        return
+    print(f"  Task log: {final_path.relative_to(REPO_ROOT)}")
+
+    # R3: prune older entries for this task. Keep newest N by mtime.
+    try:
+        existing = sorted(
+            log_dir.glob(f"task-{sid}-*.md"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        for stale in existing[_TASK_LOG_RETENTION_PER_TASK:]:
+            try:
+                stale.unlink()
+            except OSError:
+                pass
+    except OSError:
+        pass
 
 
 _AUTOCLOSE_RE = re.compile(
