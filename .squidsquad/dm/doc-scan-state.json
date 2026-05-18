@@ -8,10 +8,11 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "CONTRIBUTING.md",
-  "rotation_count": 45,
+  "last_scanned": "CHANGELOG.md",
+  "rotation_count": 46,
   "scan_history": [
-    {"file": "CONTRIBUTING.md+SKILL.md:line-270", "date": "2026-05-18", "findings": 1, "fixes": ["SKILL.md line 270 — rewrote tracker-transition guidance to point at tracker.py transition (with role-authority + legal-transition enforcement) instead of gh issue edit --add-label/--remove-label (deferred from rotation 44 cycle 996, now applied since #8703 lifted)"], "note": "CONTRIBUTING.md unchanged since prior scan, no re-scan finds"},
+    {"file": "CHANGELOG.md", "date": "2026-05-18", "findings": 10, "fixes": ["v0.39.0 Fixed — removed 7 duplicate entries (#7491, #7589, #7618, #7619, #7622, #7624, #7627) already correctly listed in v0.38.0", "v0.39.0 Removed — removed 3 duplicate entries (#7590, #7625, #7628) already listed in v0.38.0 (the v0.38.0 entries are mislabeled as Fixed but were published, so leaving as-is)"], "note": "Rotation 45 complete — advancing to rotation 46 next quiet cycle. Verified via git log v0.37.0..v0.38.0 that all 10 items shipped in 0.38.0 window"},
+    {"file": "CONTRIBUTING.md+SKILL.md:line-270", "date": "2026-05-18", "findings": 1, "fixes": ["SKILL.md line 270 — rewrote tracker-transition guidance to point at tracker.py transition (with role-authority + legal-transition enforcement) instead of gh issue edit --add-label/--remove-label (deferred from rotation 44 cycle 996, now applied since #8703 lifted)"], "note": "CONTRIBUTING.md unchanged since prior scan, no re-scan finds. NOTE: cycle 1053 commit 7ffe2547 claimed this fix but did not actually include SKILL.md in the commit — change re-committed in cycle 1056"},
     {"file": "docs/sub-skill-guide.md", "date": "2026-05-18", "findings": 1, "fixes": ["added sub-skills/capabilities/ and sub-skills/project/ subdirs to the directory tree (deferred from rotation 44 cycle 1005, now applied since #8703 lifted)"]},
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-18", "findings": 0, "skipped": true, "note": "Rotation 45 — still skipped under #8703 directive (Phase 5 follow-ups #8697 #8700 still OPEN). Will resume once directive lifts"},
     {"file": "SKILL.md:sections-7-8", "date": "2026-05-17", "findings": 0, "note": "Rotation 45. SKILL.md unchanged since cycle 8fc396ca. Sec 7 (Upgrade) + Sec 8 (Schema Changelog Historical) already verified in rotation 44 — no re-scan needed"},
