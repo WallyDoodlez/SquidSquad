@@ -2,11 +2,17 @@
 
 **Issue**: #4792 (rescoped from "Deprecate sentinel files" → "Harness sole-authority lifecycle")
 **Phase**: 3 (Planning) — Context bundle
-**Date**: 2026-05-17
+**Date**: 2026-05-17 (revised 2026-05-18)
 **Author**: pm-lead
 **Inputs**: `DECISIONS-4792.md` (Q1–Q17 locks), `RESEARCH-4792-lifecycle-audit.md` (787 lines), `gh issue view 4792 --comments`
 **Hard-prereq partner**: #8692 (singleton enforcement — shipped)
 **Closes**: #7693 (context-pressure restart). Adjacent: #8689 (restart endpoint latency — shipped).
+
+---
+
+## Revision Log
+
+- **2026-05-18** — Revised per deepseek R1 review + PM-locked RESTARTING scope extension. Force-kill safety net scope now consistently documented across §2 Q7, §3.3, §3.4, §3.6, and §5.1 as `intent ∈ {STOPPING, RESTARTING}`. `.claude-pid` multi-reader clarification applied (Finding 1). §3.6 elapsed-time expression corrected to `time.time() - intent_set_at > 60` (Finding 4). §5.1 `intent_set_at` migration handling now explicitly two-case (legacy vs present) (Finding 5).
 
 ---
 
@@ -30,7 +36,8 @@ Per the load-bearing principles repeated throughout this document:
    wherever possible. Functions that are still imported by `harness.py`
    (`_kill_process`, `_read_claude_pid`) stay in place; only their `main()`
    wrappers and sentinel-file reads die. `.booting` and `.claude-pid` are
-   kept unchanged — they are single-writer/single-reader mutexes, not
+   kept unchanged — they are single-writer mutexes (`.booting` has a
+   single reader; `.claude-pid` has multiple readers, per Q14), not
    split-brain control paths (Q9, Q14).
 3. **L1–L4 only.** All agent instruction changes flow through compose stack
    fragments (Q12). The instruction-layer fix for #7693 (Q7) is a fragment
@@ -55,8 +62,9 @@ The work decomposes into **four categories** plus an upgrade-path artifact:
 - **(d) #7693 fix via Q7 mechanism** — agents self-quit via the `/quit`
   slash command after `cycle_post.py` exits 42 (instruction-layer fix in
   L1–L4 fragments), and the harness adds a 60-second force-kill safety net
-  for stuck agents whose intent has been STOPPING and whose `.claude-pid`
-  is still alive.
+  for stuck agents whose intent ∈ {STOPPING, RESTARTING} and whose
+  `.claude-pid` is still alive (the same stuck-agent failure mode applies
+  to both intents).
 
 Plus **upgrade-path artifact**: on first boot after the cleanup ships, the
 harness walks `.squidsquad/<role>/` for every configured role and deletes any
@@ -109,12 +117,15 @@ one-line "How to apply" for the implementer.
 
 - **Q7 — #7693 fix: agent self-quit via `/quit` + harness force-kill safety
   net.** Primary: cycle_post exits 42 → L1–L4 fragment instructs agent to
-  invoke `/quit`. Safety net: harness force-kills claude PID if intent has
-  been STOPPING for > 60s while `.claude-pid` remains alive.
+  invoke `/quit`. Safety net: harness force-kills claude PID if
+  `intent ∈ {STOPPING, RESTARTING}` for > 60s while `.claude-pid` remains
+  alive (per PM lock 2026-05-18 — same stuck-agent failure mode applies
+  to both intents; STOPPING leaves the agent stopped after kill,
+  RESTARTING respawns it via the normal intent gate).
   How to apply: add fragment instruction line (likely
   `agent-lifecycle.md` or new `graceful-stop.md`); add timeout logic to
   `harness.update_health()` so it tracks "intent set at" and force-kills
-  on overrun.
+  on overrun for either intent.
 
 - **Q8 — No required harness check in `cycle_pre.py`; informational only.**
   How to apply: add a `harness_status: "reachable" | "unreachable"` field
@@ -244,39 +255,52 @@ status=stopped, idle in the table.
 ### 3.3 Agent force-kill safety net
 
 If the agent does not honor `/quit` (e.g., wedged tool call, missed
-instruction, claude bug), the harness force-kills as a safety net. Per Q7:
+instruction, claude bug), the harness force-kills as a safety net. Per Q7
+(scope: `intent ∈ {STOPPING, RESTARTING}` per PM lock 2026-05-18):
 
 ```
 (harness update_health poll, every 5s)
 for role in agents:
-  if state.intent == STOPPING:
+  if state.intent in (STOPPING, RESTARTING):
     elapsed = time.time() - state.intent_set_at[role]
     if elapsed > 60 and claude_pid_alive(role):
       log.warning(f"agent {role} did not self-quit within 60s — force-killing PID {pid}")
       reboot_agent._kill_process(pid)   # via in-place helper (Q3)
-      state.set_agent(role, status=stopped)
       state.intent_set_at.pop(role, None)
+      # Do NOT directly mark status — let the next update_health poll
+      # reconcile: STOPPING → stopped (no respawn); RESTARTING → respawn
+      # via the existing intent gate in boot_remote.boot_agent().
       state.save_state()
 ```
 
 Trigger conditions (all three must hold):
 
-1. `state.intent == STOPPING`
+1. `state.intent in (STOPPING, RESTARTING)`
 2. `.claude-pid` exists and the PID is alive
 3. `time.time() - intent_set_at > 60`
 
 After kill:
 - `thin_launcher` (if still wrapping claude) observes child exit, clears
   `.claude-pid`, exits.
-- `harness.update_health` on the next poll sees PID gone, marks
-  status=stopped. Intent stays STOPPING (no re-spawn).
-- Operator visibility: `GET /status` reports the agent as stopped.
+- `harness.update_health` on the next poll sees PID gone:
+  - If `intent == STOPPING`: marks status=stopped, intent stays STOPPING
+    (no respawn).
+  - If `intent == RESTARTING`: the normal auto-reboot gate fires and
+    `boot_remote.boot_agent(role)` respawns the agent (this is the same
+    code path that already handles dead-PID-with-RESTARTING-intent
+    recovery — the force-kill simply unsticks the case where the
+    parent claude session refused to terminate).
+- Operator visibility: `GET /status` reports the agent's new status.
 
 The 60-second timeout is **load-bearing** for the #7693 fix because the
 existing self-restart mechanism (cycle_post exit 42) does not actually kill
 the parent claude session today (Research §5.3, §9.2). The Q7 primary
 mechanism (agent self-quits via `/quit`) closes the bug in the happy path;
-the 60s timeout closes the residual case where `/quit` doesn't fire.
+the 60s timeout closes the residual case where `/quit` doesn't fire. The
+same residual failure mode (stuck claude session refusing to honor `/quit`)
+applies to RESTARTING intent — the PM lock (2026-05-18) extended the safety
+net to both intents so a stuck restart cannot leave an agent permanently
+wedged either.
 
 ### 3.4 Agent restart
 
@@ -296,8 +320,10 @@ python references/scripts/squidsquad_cli.py restart skill
       → agent reaches cycle_post, queries intent, sees RESTARTING → exit 42
       → /quit (per Q7 fragment instruction) → claude exits
       → harness observes PID gone, intent=RESTARTING → respawn
-    [Force-kill safety net per Q7]:
-      → if neither path fires within 60s, harness force-kills then respawns
+    [Force-kill safety net per Q7 — scope includes RESTARTING per PM lock 2026-05-18]:
+      → if neither path fires within 60s of intent_set_at, the §3.3 timer
+        force-kills the claude PID. Because intent is RESTARTING, the
+        next update_health poll respawns via boot_remote.boot_agent(role).
 ```
 
 **Removed** from the current implementation (per 5.1 below):
@@ -342,9 +368,12 @@ harness.py startup (lifespan)
   → update_health poll begins
     [observes which PIDs are alive; reconciles state.status]
   → if state.intent[role] == RUNNING and PID dead → boot_remote.boot_agent(role)
-  → if state.intent[role] == STOPPING and PID alive and intent_set_at > 60s
-      → force-kill per 3.3
+  → if state.intent[role] in (STOPPING, RESTARTING) and PID alive
+       and `time.time() - intent_set_at > 60`
+      → force-kill per 3.3 (STOPPING leaves stopped; RESTARTING respawns
+        via the standard intent gate on the following poll)
   → if state.intent[role] == STOPPING and PID dead → leave stopped
+  → if state.intent[role] == RESTARTING and PID dead → boot_remote.boot_agent(role)
 ```
 
 Crash scenarios covered by the test plan (Q10):
@@ -352,8 +381,9 @@ Crash scenarios covered by the test plan (Q10):
 1. Harness crash after `POST /stop` set intent — state persists, agent
    still self-quits next cycle, harness resumes monitoring on restart.
 2. Harness crash during the 60s force-kill window — on restart, harness
-   reads `intent_set_at` from JSON; if elapsed > 60s and PID still alive,
-   force-kill immediately.
+   reads `intent_set_at` from JSON; if `time.time() - intent_set_at > 60`
+   and PID still alive, force-kill immediately (applies to both STOPPING
+   and RESTARTING intents per PM lock 2026-05-18).
 3. Agent crash between intent set and `cycle_post` — harness observes PID
    gone, intent STOPPING → mark stopped, do not respawn.
 4. Both simultaneous — agent already dead; harness restart sees PID gone
@@ -464,28 +494,43 @@ Changes (in approximate order of appearance):
 - **Add force-kill timeout logic** (Q7 safety net, §3.3):
   - Extend `AgentState` (or `HarnessState`) with `intent_set_at: dict[role,
     float]` field, persisted in `.harness-state.json`.
-  - Set `intent_set_at[role] = time.time()` in:
-    - `stop_agent(role)` (`harness.py:1259-1273`)
-    - `restart_agent(role)` (`harness.py:1276-1347`)
-    - `/agents/all/stop` (`harness.py:830-865`) — loop body
+  - Set `intent_set_at[role] = time.time()` in every site that flips intent
+    to STOPPING or RESTARTING:
+    - `stop_agent(role)` (`harness.py:1259-1273`) — STOPPING
+    - `restart_agent(role)` (`harness.py:1276-1347`) — RESTARTING
+    - `/agents/all/stop` (`harness.py:830-865`) — loop body, STOPPING
     - `shutdown()` (`harness.py:1350-1427`) — for each role flipped to
       STOPPING
     - `CtrlCHandler._graceful_stop` (`harness.py:1889-1950`) — for each
       role flipped to STOPPING
-    - Crash-recovery `load_state` path — if loaded state has STOPPING
-      intent but no `intent_set_at`, default to `time.time()` (i.e., reset
-      the 60s window post-recovery).
+  - Crash-recovery `load_state` path — explicit two-case handling for
+    `intent_set_at` to support both pre-#4792 state files and Q10
+    scenario 2:
+    - **(a) Legacy state file (intent ∈ {STOPPING, RESTARTING} but no
+      `intent_set_at` field present):** this is a pre-#4792 state file
+      that did not persist the field. Default
+      `intent_set_at[role] = time.time()` so the 60s force-kill window
+      begins fresh after the post-upgrade recovery (no clock data exists
+      from before the upgrade to honor).
+    - **(b) Current state file (`intent_set_at` IS present):** preserve
+      it unchanged. The normal `update_health` poll will compute
+      `time.time() - intent_set_at` and force-kill immediately if > 60s
+      per Q10 scenario 2. Do NOT reset the window — that would
+      indefinitely defer the kill on every harness restart.
   - In `update_health()`, after the existing dead-detection loop, add the
-    force-kill check:
+    force-kill check (scope: `intent ∈ {STOPPING, RESTARTING}` per PM lock
+    2026-05-18):
     ```
     for role, state in self.agents.items():
-      if state.intent == STOPPING and self.intent_set_at.get(role):
+      if state.intent in (STOPPING, RESTARTING) and self.intent_set_at.get(role):
         elapsed = time.time() - self.intent_set_at[role]
         if elapsed > 60 and _claude_pid_alive(role):
           log.warning(...)
           reboot_agent._kill_process(pid)
-          state.status = stopped
           self.intent_set_at.pop(role, None)
+          # Do NOT directly mutate status — the next update_health poll
+          # observes the dead PID and reconciles per the existing intent
+          # gate: STOPPING → stopped; RESTARTING → boot_agent() respawn.
     ```
 - **Add legacy-sentinel cleanup on boot** (Q13, §3.8):
   - In lifespan startup, **before** `update_health` first poll, iterate
