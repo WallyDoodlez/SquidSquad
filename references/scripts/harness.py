@@ -98,11 +98,11 @@ class AgentState:
         self.last_cycle_start = None
         self.last_cycle_end = None
         self.last_cycle_type = None
-        # #8695: bootup-complete gating. False until the agent emits
-        # `bootup-complete`. While False, get_events_for_role returns no events
-        # so the harness never dispatches assigned-to / status-transition into
-        # a still-booting agent (events accumulate in the stream and drain on
-        # the agent's first poll after bootup-complete).
+        # #8695 / #8914: bootup_complete is informational only. False until
+        # the agent emits `bootup-complete`; exposed via GET /agents/{role} so
+        # operators / the TUI can see whether a role has finished its boot
+        # sequence. The harness does NOT gate, queue, or hold events on this
+        # flag — CONTEXT.md §2 + §5.2 lock the harness as a pure broadcast pipe.
         self.bootup_complete = False
 
     def to_dict(self):
@@ -1088,16 +1088,10 @@ async def receive_event(request: Request):
     # Store in stream (with disk persistence via lifecycle manager)
     event_lifecycle.append(body)
 
-    # Tracker handoff dispatch (#8694): when an agent transitions a tracker
-    # item, re-evaluate affected role queues and emit assigned-to for the new
-    # top item — no /loop polling delay between consecutive work items.
-    if event_type == "status-transition":
-        handoff_dispatcher.on_transition(body.get("payload", {}), role)
-
-    # Bootup gating (#8695): agent signals it's ready to receive dispatches.
-    # Until this fires, get_events_for_role returns nothing for this role —
-    # events accumulate in the stream and drain on the agent's first poll
-    # after bootup-complete, so nothing is lost.
+    # Bootup-complete is informational only (#8914). The harness records the
+    # flag on AgentState and exposes it via GET /agents/{role}; it does NOT
+    # gate or queue events per-role. CONTEXT.md §2 + §5.2 lock the harness as
+    # a pure broadcast pipe — no tracker observation, no dispatch logic.
     if event_type == "bootup-complete" and role:
         # Mutate under state._lock to avoid racing with the health poller's
         # auto-reboot path (which sets bootup_complete=False under the same
@@ -1184,17 +1178,9 @@ async def get_events_for_role(
     """
     _validate_role(role)
 
-    # #8695: Bootup-complete gating. While the agent has not yet emitted
-    # `bootup-complete`, return an empty list so the harness never dispatches
-    # work into a still-booting agent. Events remain in the stream and will be
-    # delivered on the next poll after bootup-complete arrives.
-    agent_for_gate = state.get_agent(role)
-    if agent_for_gate is not None and not agent_for_gate.bootup_complete:
-        return {
-            "events": [],
-            "total": 0,
-            "gated": "bootup-incomplete",
-        }
+    # No per-role gating here (#8914). The harness is a pure broadcast pipe;
+    # `bootup_complete` is informational only, exposed via GET /agents/{role}
+    # but never consulted for event delivery. CONTEXT.md §5.2.
 
     # Get relevant event types for this role from config
     try:
@@ -1960,9 +1946,11 @@ class ExternalActivityDetector:
         self._thread = None
         self._last_check_epoch = 0.0  # epoch seconds — avoids ISO string comparison
         self._emitted_issues: dict[int, None] = {}  # ordered dedup: issues already emitted
-        # #8694: shared lock for _emitted_issues — TrackerHandoffDispatcher
-        # writes here from a separate thread (cross-dedup); without this the
-        # compound eviction (next(iter) + del) can race with concurrent writes.
+        # Lock guards _emitted_issues against concurrent mutation. The
+        # detector's own poller thread is the only writer now that #8914
+        # removed TrackerHandoffDispatcher, but the lock stays — the
+        # compound eviction (next(iter) + del) still needs serialization
+        # if another thread is ever added.
         self._emitted_lock = threading.Lock()
 
     def is_emitted(self, issue_num):
@@ -2087,139 +2075,11 @@ class ExternalActivityDetector:
 activity_detector = ExternalActivityDetector()
 
 
-class TrackerHandoffDispatcher:
-    """Dispatches assigned-to events on tracker transitions (#8694).
-
-    Hook: `POST /events` calls `on_transition()` for every `status-transition`
-    event received. We re-evaluate the affected role queue(s) and emit an
-    `assigned-to` event for the new top item, with per-role dedup so the same
-    queue-head isn't re-emitted repeatedly.
-
-    No /complete API — the transition IS the completion signal.
-    """
-
-    AGENT_ROLES = ExternalActivityDetector.AGENT_ROLES
-
-    def __init__(self):
-        # Per-role last-emitted top issue number (None = no item known)
-        self._last_top: dict[str, int | None] = {}
-        self._lock = threading.Lock()
-        # Per-role serialization lock: only one dispatch runs per role at a
-        # time, so rapid-fire transitions on the same issue don't spawn N
-        # concurrent `gh issue list` subprocesses (#8694 follow-up).
-        self._role_locks: dict[str, threading.Lock] = {}
-        self._role_locks_guard = threading.Lock()
-
-    def _role_lock(self, role):
-        with self._role_locks_guard:
-            lock = self._role_locks.get(role)
-            if lock is None:
-                lock = threading.Lock()
-                self._role_locks[role] = lock
-            return lock
-
-    def on_transition(self, payload, actor_role):
-        """Called from POST /events for each status-transition event.
-
-        Runs the actual GitHub-poking work in a background thread so the
-        HTTP handler doesn't block on `gh` subprocess calls.
-        """
-        # #8694 follow-up: defensive — a truthy non-dict payload (string, int,
-        # bool) would `AttributeError` inside `_do_dispatch`. The `or {}` only
-        # caught falsy non-dicts; switch to isinstance.
-        safe_payload = payload if isinstance(payload, dict) else {}
-        thread = threading.Thread(
-            target=self._do_dispatch,
-            args=(safe_payload, actor_role),
-            daemon=True,
-            name="handoff-dispatch",
-        )
-        thread.start()
-
-    def _do_dispatch(self, payload, actor_role):
-        try:
-            roles_to_check = set()
-            if actor_role and actor_role in self.AGENT_ROLES:
-                roles_to_check.add(actor_role)
-            issue_num = payload.get("issue_number")
-            if issue_num:
-                issue_role = self._get_issue_role(issue_num)
-                if issue_role and issue_role in self.AGENT_ROLES:
-                    roles_to_check.add(issue_role)
-            for role in roles_to_check:
-                self._dispatch_next(role)
-        except Exception as e:
-            _log(f"Handoff dispatcher error: {e}")
-
-    def _dispatch_next(self, role):
-        """Compute role's current top item and emit assigned-to if it changed.
-
-        Serialized per-role: concurrent transitions for the same role queue
-        up rather than each running their own `gh issue list` subprocess.
-        """
-        with self._role_lock(role):
-            queue = self._get_work_queue(role)
-            if not queue:
-                with self._lock:
-                    self._last_top[role] = None
-                return
-            top = queue[0]
-            issue_num = top.get("number")
-            with self._lock:
-                if self._last_top.get(role) == issue_num:
-                    return  # queue head unchanged — no-op
-                self._last_top[role] = issue_num
-
-            # Bidirectional cross-dedup with the external poller: skip if the
-            # 60s poller already emitted this issue (#8694 follow-up).
-            if issue_num is not None and activity_detector.is_emitted(issue_num):
-                return
-
-            _emit_event("assigned-to", "harness", payload={
-                "issue_number": str(issue_num),
-                "title": top.get("title", ""),
-                "target_role": role,
-                "event_context": f"Next work for {role} after tracker handoff",
-            })
-            if issue_num is not None:
-                activity_detector.mark_emitted(issue_num)
-
-    def _get_work_queue(self, role):
-        """Return tracker.py work-queue output as a list of dicts."""
-        result = subprocess.run(
-            [sys.executable, str(SCRIPT_DIR / "tracker.py"), "work-queue", role],
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
-            check=False, cwd=str(REPO_ROOT),
-        )
-        if result.returncode != 0:
-            return []
-        try:
-            return json.loads(result.stdout) or []
-        except json.JSONDecodeError:
-            return []
-
-    def _get_issue_role(self, issue_num):
-        """Return the role label on an issue (e.g. 'skill'), or None."""
-        result = subprocess.run(
-            ["gh", "issue", "view", str(issue_num), "--json", "labels"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
-            check=False, cwd=str(REPO_ROOT),
-        )
-        if result.returncode != 0:
-            return None
-        try:
-            data = json.loads(result.stdout) or {}
-            for lbl in data.get("labels", []):
-                name = lbl.get("name", "")
-                if name.startswith("role:"):
-                    return name[len("role:"):]
-        except json.JSONDecodeError:
-            pass
-        return None
-
-
-# Global dispatcher instance
-handoff_dispatcher = TrackerHandoffDispatcher()
+# TrackerHandoffDispatcher was removed in #8914. CONTEXT.md §2 locks the
+# harness as a pure broadcast pipe with no tracker observation, no dispatch
+# logic, and no per-role queue knowledge. Tracker handoff handling lives in
+# the agents themselves — they consult the forge via tracker.py work-queue
+# when they wake.
 
 
 # ---------------------------------------------------------------------------
