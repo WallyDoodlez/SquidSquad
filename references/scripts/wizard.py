@@ -121,17 +121,37 @@ PROJECT_TYPE_LABELS = {
 # ---------------------------------------------------------------------------
 
 
-def _run(cmd, **kwargs):
-    """Thin subprocess.run wrapper — list form only, captures output."""
-    return subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-        **kwargs,
-    )
+def _run(cmd, *, timeout=30, **kwargs):
+    """Thin subprocess.run wrapper — list form only, captures output.
+
+    A default ``timeout`` of 30 seconds guards the wizard against hangs in
+    ``gh`` and ``git`` (slow OAuth, captive-portal proxy, firewall drop without
+    RST, GitHub Enterprise rate-limit delay). On timeout, returns a
+    ``CompletedProcess`` with ``returncode=124`` so existing callers that
+    inspect ``.returncode`` / ``.stdout`` / ``.stderr`` keep working without
+    branching on exception types.
+
+    Pass ``timeout=None`` (or a larger value) for call sites that legitimately
+    take longer than 30 seconds.
+    """
+    try:
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=timeout,
+            **kwargs,
+        )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            args=cmd,
+            returncode=124,
+            stdout="",
+            stderr=f"timeout after {timeout}s: {' '.join(str(c) for c in cmd[:2])}\n",
+        )
 
 
 def check_gh():
@@ -1118,9 +1138,10 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
                     summary.setdefault("existing_clones", []).append(str(clone_dir))
                 else:
                     try:
-                        result = _run([
-                            "git", "clone", remote_url, str(clone_dir),
-                        ])
+                        result = _run(
+                            ["git", "clone", remote_url, str(clone_dir)],
+                            timeout=None,
+                        )
                         if result.returncode != 0:
                             print(
                                 f"  WARNING: Failed to clone for {agent_id}: "

@@ -57,6 +57,83 @@ def _install_fake_run(monkeypatch, mapping):
 
 
 # ===========================================================================
+# _run subprocess wrapper — timeout behavior (#8913)
+# ===========================================================================
+
+
+class TestRunWrapper:
+    def test_passes_default_timeout_to_subprocess_run(self, monkeypatch):
+        captured = {}
+
+        def _spy(cmd, **kwargs):
+            captured["cmd"] = cmd
+            captured["kwargs"] = kwargs
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(wizard.subprocess, "run", _spy)
+        wizard._run(["gh", "auth", "status"])
+        assert captured["kwargs"].get("timeout") == 30
+
+    def test_custom_timeout_forwarded(self, monkeypatch):
+        captured = {}
+
+        def _spy(cmd, **kwargs):
+            captured["kwargs"] = kwargs
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(wizard.subprocess, "run", _spy)
+        wizard._run(["gh", "auth", "status"], timeout=120)
+        assert captured["kwargs"]["timeout"] == 120
+
+    def test_none_timeout_forwarded(self, monkeypatch):
+        captured = {}
+
+        def _spy(cmd, **kwargs):
+            captured["kwargs"] = kwargs
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(wizard.subprocess, "run", _spy)
+        wizard._run(["gh", "auth", "status"], timeout=None)
+        assert captured["kwargs"]["timeout"] is None
+
+    def test_timeout_returns_completed_process_with_124(self, monkeypatch):
+        import subprocess as _sp
+
+        def _boom(cmd, **kwargs):
+            raise _sp.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout", 30))
+
+        monkeypatch.setattr(wizard.subprocess, "run", _boom)
+        result = wizard._run(["gh", "auth", "status"])
+        assert isinstance(result, _sp.CompletedProcess)
+        assert result.returncode == 124
+        assert result.stdout == ""
+        assert "timeout after 30s" in result.stderr
+        assert "gh auth" in result.stderr
+
+    def test_timeout_message_reflects_custom_timeout(self, monkeypatch):
+        import subprocess as _sp
+
+        def _boom(cmd, **kwargs):
+            raise _sp.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout", 30))
+
+        monkeypatch.setattr(wizard.subprocess, "run", _boom)
+        result = wizard._run(["git", "remote", "-v"], timeout=5)
+        assert "timeout after 5s" in result.stderr
+
+    def test_timeout_handles_non_string_cmd_elements(self, monkeypatch):
+        """Coerce non-string cmd elements (e.g. PosixPath) when building stderr."""
+        import subprocess as _sp
+
+        def _boom(cmd, **kwargs):
+            raise _sp.TimeoutExpired(cmd=cmd, timeout=30)
+
+        monkeypatch.setattr(wizard.subprocess, "run", _boom)
+        result = wizard._run([Path("gh"), "auth", "status"])
+        assert result.returncode == 124
+        assert "auth" in result.stderr
+
+
+# ===========================================================================
 # Step 0 — check_gh
 # ===========================================================================
 
