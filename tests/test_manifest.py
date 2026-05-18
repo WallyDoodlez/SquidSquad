@@ -135,6 +135,9 @@ class TestManifestIntegrity:
             "common-events/forge-read-pattern.md",
             "common-events/idle-cooldown-loop.md",
             "common-events/comment-handling.md",
+            # Cycle 1139 — DM per-role PR-merge wait fragment; awaits
+            # manifest wiring in the same follow-up cycle as the L1 base.
+            "roles/dm/events/pr-merge-wait.md",
         }
         orphans = all_md - referenced - known_unused
         assert not orphans, f"Sub-skill files not referenced in manifest: {orphans}"

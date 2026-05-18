@@ -19,35 +19,42 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-COMMON_EVENTS = REPO_ROOT / "references" / "sub-skills" / "common-events"
+SUB_SKILLS = REPO_ROOT / "references" / "sub-skills"
+COMMON_EVENTS = SUB_SKILLS / "common-events"
 
-# Fragments authored under #8915 cycle 1136. Each must exist, be non-empty,
-# and obey the AC-5 / AC-6 / AC-7 rules.
+# Fragments authored/rewritten under #8915. Stored as paths relative to
+# references/sub-skills/. AC-5 forbidden-token sweep + wikilink resolution
+# apply to all of them. AC-6 + AC-7 topic checks target the common-events
+# topic-bearing fragments only.
 NEW_FRAGMENTS = [
-    "l1-base.md",
-    "cursor-management.md",
-    "forge-read-pattern.md",
-    "idle-cooldown-loop.md",
-    "comment-handling.md",
-    # Cycle 1138: pre-existing fragment rewritten to drop forbidden tokens
-    # + obsolete completion-API content; now an orientation page that
-    # redirects to the 5 new fragments. AC-5 check applies here too.
-    "event-driven-workflow.md",
+    # Cycle 1136 — common-events L1 base fragments.
+    "common-events/l1-base.md",
+    "common-events/cursor-management.md",
+    "common-events/forge-read-pattern.md",
+    "common-events/idle-cooldown-loop.md",
+    "common-events/comment-handling.md",
+    # Cycle 1138 — legacy file rewritten to drop forbidden tokens + obsolete
+    # completion-API content; now an orientation page redirecting to the 5
+    # fragments above.
+    "common-events/event-driven-workflow.md",
+    # Cycle 1139 — DM per-role events fragment for the PR-merge wait,
+    # called out in CONTEXT.md §5.1.
+    "roles/dm/events/pr-merge-wait.md",
 ]
 
 
 @pytest.fixture(scope="module")
 def fragment_texts():
     return {
-        name: (COMMON_EVENTS / name).read_text(encoding="utf-8")
-        for name in NEW_FRAGMENTS
+        rel: (SUB_SKILLS / rel).read_text(encoding="utf-8")
+        for rel in NEW_FRAGMENTS
     }
 
 
 class TestFragmentsExist:
     @pytest.mark.parametrize("name", NEW_FRAGMENTS)
     def test_fragment_file_exists(self, name):
-        path = COMMON_EVENTS / name
+        path = SUB_SKILLS / name
         assert path.exists(), f"missing fragment: {path}"
         assert path.read_text(encoding="utf-8").strip(), (
             f"fragment {name} is empty"
@@ -93,7 +100,7 @@ class TestAc6NoStandaloneBootFragment:
     def test_l1_base_contains_boot_sequence_header(self, fragment_texts):
         # AC-6 M-6.2: the boot sequence text appears inside the L1 base
         # fragment, not a standalone l1-boot.md.
-        text = fragment_texts["l1-base.md"]
+        text = fragment_texts["common-events/l1-base.md"]
         assert re.search(r"(?im)^\s*###?\s+Boot Sequence", text), (
             "l1-base.md must contain a 'Boot Sequence' section header"
         )
@@ -105,22 +112,25 @@ class TestAc7TopicCoverage:
 
     @pytest.mark.parametrize("topic_regex,where", [
         # (case-insensitive regex matched against headers, fragment name)
-        (r"boot sequence", "l1-base.md"),
-        (r"how you listen|event poll", "l1-base.md"),
-        (r"case b\b", "l1-base.md"),
-        (r"case c\b", "l1-base.md"),
-        (r"case d\b", "l1-base.md"),
-        (r"case e\b", "l1-base.md"),
-        (r"atomic update protocol", "cursor-management.md"),
-        (r"per-event advance|per-batch", "cursor-management.md"),
-        (r"gap scenarios", "cursor-management.md"),
-        (r"forge-read pattern|forge-read", "forge-read-pattern.md"),
+        (r"boot sequence", "common-events/l1-base.md"),
+        (r"how you listen|event poll", "common-events/l1-base.md"),
+        (r"case b\b", "common-events/l1-base.md"),
+        (r"case c\b", "common-events/l1-base.md"),
+        (r"case d\b", "common-events/l1-base.md"),
+        (r"case e\b", "common-events/l1-base.md"),
+        (r"atomic update protocol", "common-events/cursor-management.md"),
+        (r"per-event advance|per-batch", "common-events/cursor-management.md"),
+        (r"gap scenarios", "common-events/cursor-management.md"),
+        (r"forge-read pattern|forge-read", "common-events/forge-read-pattern.md"),
         (r"idle.*improvement.scan.*cool.?down|cool.?down loop",
-         "idle-cooldown-loop.md"),
-        (r"working-state schema", "idle-cooldown-loop.md"),
-        (r"comment handling|the rule", "comment-handling.md"),
-        (r"dm exception|end.?of.?task re.?read", "comment-handling.md"),
-        (r"transition.?on.?handoff", "comment-handling.md"),
+         "common-events/idle-cooldown-loop.md"),
+        (r"working-state schema", "common-events/idle-cooldown-loop.md"),
+        (r"comment handling|the rule", "common-events/comment-handling.md"),
+        (r"dm exception|end.?of.?task re.?read", "common-events/comment-handling.md"),
+        (r"transition.?on.?handoff", "common-events/comment-handling.md"),
+        # Cycle 1139 — DM per-role PR-merge wait fragment.
+        (r"task is the wait|no sub-loop|end.?of.?task re.?read",
+         "roles/dm/events/pr-merge-wait.md"),
     ])
     def test_topic_has_header(self, fragment_texts, topic_regex, where):
         text = fragment_texts[where]
@@ -134,11 +144,13 @@ class TestAc7TopicCoverage:
 
 
 class TestWikilinkResolution:
-    """Wikilinks between the new fragments must resolve to actual files
-    in `common-events/` (or be documented as forward references)."""
+    """Wikilinks between the event-mode fragments must resolve to actual
+    `.md` files in `common-events/` or any `roles/<role>/events/` subdir."""
 
     def test_all_wikilinks_resolve(self, fragment_texts):
         all_files = {p.stem for p in COMMON_EVENTS.glob("*.md")}
+        for events_dir in SUB_SKILLS.glob("roles/*/events"):
+            all_files.update(p.stem for p in events_dir.glob("*.md"))
         broken = []
         for name, text in fragment_texts.items():
             for target in re.findall(r"\[\[([^\]]+)\]\]", text):
