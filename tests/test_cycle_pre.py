@@ -1551,3 +1551,37 @@ class TestRunMechanicalReactions:
         result = cycle_pre._run_mechanical_reactions(events, "pm")
         rework = [r for r in result if r["type"] == "rework-needed"]
         assert len(rework) == 0
+
+
+# ---------------------------------------------------------------------------
+# Task-mode CLI parsing — #8701
+# ---------------------------------------------------------------------------
+
+
+class TestParseCliArgs:
+    def test_role_only_no_task(self):
+        role, task = cycle_pre._parse_cli_args(["skill"])
+        assert role == "skill"
+        assert task is None
+
+    def test_role_with_task_flag(self):
+        role, task = cycle_pre._parse_cli_args(["skill", "--task", "42"])
+        assert role == "skill"
+        assert task == "42"
+
+    def test_task_flag_with_no_value_ignored(self):
+        """Trailing `--task` without a value should not crash."""
+        role, task = cycle_pre._parse_cli_args(["skill", "--task"])
+        assert role == "skill"
+        assert task is None
+
+    def test_empty_argv(self):
+        role, task = cycle_pre._parse_cli_args([])
+        assert role is None
+        assert task is None
+
+    def test_extra_args_after_task(self):
+        role, task = cycle_pre._parse_cli_args(["pm", "--task", "100", "--ignored"])
+        assert role == "pm"
+        assert task == "100"
+
