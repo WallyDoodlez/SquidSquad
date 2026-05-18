@@ -56,6 +56,15 @@ claude PID. (Scope extended to RESTARTING per PM lock 2026-05-18 after
 deepseek R1 review of CONTEXT-4792.md flagged the ambiguity. Same
 stuck-agent failure mode applies to both intents; no reason to differentiate.)
 
+**Context-pressure routing (added 2026-05-18 after deepseek R2 surfaced gap):**
+When `cycle_post.py` detects context-over-threshold before exiting 42, it
+first POSTs `/agents/{role}/restart` (reason="context-pressure") to flip
+`intent=RESTARTING`. This routes context-pressure restart through the
+existing RESTARTING flow so the harness respawns after agent self-quit,
+and the RESTARTING force-kill scope covers stuck agents. Without this
+routing, the agent would self-quit but harness wouldn't respawn because
+`intent=RUNNING` ≠ RESTARTING.
+
 Parity with event mode (both modes terminate via agent self-quit).
 **This fix closes #7693.** Sole authority preserved (harness only
 force-kills stuck cases).

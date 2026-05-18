@@ -54,7 +54,7 @@ All ACs are concrete and measurable. Pulled directly from the Q-locks in `DECISI
   - The pre-cleanup bug at `start_team._write_stop` (RESEARCH §7.1) is gone because `_write_stop` itself is deleted.
 - **AC-15 (Q11) — Distribution manifests reflect post-cleanup inventory**: `installer-files.txt` and `packages/cli/package.json` list only canonical entry points. No CLI hook for `boot_remote.py main()` or `reboot_agent.py main()` (neither has a `main()` anymore). Negative test §6.6.
 
-- **AC-16 (#7693 closure gate) — End-to-end context-pressure restart respawns the agent**: A dedicated integration test (TC-4.8 below) reproduces the #7693 scenario end-to-end: context-pressure triggered on a running agent → `cycle_post.py` exits 42 → agent invokes `/quit` (happy path, < 5s) OR harness force-kills the stuck claude PID (degraded path, < 60s) → harness observes the dead PID with `intent=RUNNING` → harness respawns the agent via `boot_remote.boot_agent(role)` and the agent enters its next cycle. This test MUST PASS for #7693 to be closed; it is a pre-ship gating test, not post-ship validation.
+- **AC-16 (#7693 closure gate) — End-to-end context-pressure restart respawns the agent**: A dedicated integration test (TC-4.8 below) reproduces the #7693 scenario end-to-end: context-pressure triggered on a running agent → `cycle_post.py` POSTs `/agents/{role}/restart` (sets `intent=RESTARTING`, reason="context-pressure") → `cycle_post.py` exits 42 → agent invokes `/quit` (happy path, < 5s) OR harness force-kills the stuck claude PID via the RESTARTING force-kill scope (degraded path, < 60s) → harness observes the dead PID with `intent=RESTARTING` → harness respawns the agent via `boot_remote.boot_agent(role)` and the agent enters its next cycle. This test MUST PASS for #7693 to be closed; it is a pre-ship gating test, not post-ship validation.
 
 ---
 
@@ -92,7 +92,7 @@ Each unit test names its target file:lines for traceability.
   - **Target**: `harness.update_health()` (RESEARCH §A `harness.py:140-282`)
   - **Setup**: Construct a `HarnessState` with one role; flip `intent=STOPPING`; set `intent_set_at = now() - 61s`. Mock `.claude-pid` to a fake live PID.
   - **Action**: Call `update_health()`.
-  - **Assert**: `_kill_process(<pid>)` called exactly once; emit log line `[harness] force-kill role=<r> pid=<p> elapsed=<s>s` (capture via caplog); intent transitions to `STOPPED` after kill confirmation.
+  - **Assert**: `_kill_process(<pid>)` called exactly once; emit log line `[harness] force-kill role=<r> pid=<p> elapsed=<s>s` (capture via caplog); after the kill is confirmed (PID reaped), the next `update_health` poll observes `.claude-pid` gone and the role's status transitions to `stopped` (lowercase status; intent remains `STOPPING` until cleared per Q10).
 
 - **TC-3.1.2 — Force-kill does NOT fire before 60s**
   - **Setup**: Same as TC-3.1.1 but `intent_set_at = now() - 30s`.
@@ -103,8 +103,8 @@ Each unit test names its target file:lines for traceability.
   - **Action**: Call `update_health()`.
   - **Assert**: `_kill_process(<pid>)` called exactly once; log line emitted with `intent=RESTARTING elapsed=<s>s`; on the NEXT `update_health` poll (simulate with a second call after the PID is reaped), `boot_remote.boot_agent(role)` is invoked (respawn via the existing intent gate). This test enforces the PM lock that extended the force-kill safety net to RESTARTING — the prior draft asserted the opposite and was corrected after the deepseek R1 review.
 
-- **TC-3.1.3b — Force-kill does NOT fire when intent ∈ {RUNNING, STOPPED}**
-  - **Setup**: `intent=RUNNING` (and a parallel case with `intent=STOPPED`), `intent_set_at = now() - 120s`, alive PID.
+- **TC-3.1.3b — Force-kill does NOT fire when intent ∈ {RUNNING, IDLE}**
+  - **Setup**: `intent=RUNNING` (and a parallel case with `intent=IDLE`), `intent_set_at = now() - 120s`, alive PID. (`STOPPED` is a status not an intent; intent values are RUNNING / STOPPING / RESTARTING / IDLE per `.harness-state.json` schema.)
   - **Assert**: `_kill_process` not called. The force-kill safety net is scoped to STOPPING and RESTARTING only.
 
 - **TC-3.1.4 — Legacy-sentinel cleanup on boot** (AC-10)

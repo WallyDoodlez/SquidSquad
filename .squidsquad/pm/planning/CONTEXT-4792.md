@@ -784,22 +784,32 @@ Adjacent dependencies:
 
 ### 8.1 #7693 — context-pressure restart does not respawn agent (CLOSES)
 
-Closure mechanism: **Q7 dual mechanism (§5.11 + §3.3)**.
+Closure mechanism: **cycle_post initiates RESTARTING intent + Q7 dual mechanism (§5.11 + §3.3)**.
 
 Root cause per Research §5.3 and §9.2: `cycle_post.py` exit code 42 is a
 bash subprocess exit, not a claude exit. The parent claude session never
 dies. The harness `update_health` therefore never observes a dead PID and
-never respawns.
+never respawns. **Additional gap surfaced by deepseek R2:** even after
+the agent self-quits via /quit, the harness would not respawn because
+`intent=RUNNING` (the harness only respawns on `intent=RESTARTING`).
 
-Fix:
-- Primary (§5.11): agent instruction-layer fragment adds the `/quit`
+Fix (three pieces):
+- **Routing (new):** when `cycle_post.py` detects context-over-threshold
+  before exiting 42, it first POSTs `/agents/{role}/restart` with
+  reason="context-pressure" to flip `intent=RESTARTING`. This routes
+  context-pressure restart through the existing RESTARTING flow.
+- **Primary (§5.11):** agent instruction-layer fragment adds the `/quit`
   invocation after exit 42 — claude actually terminates.
-- Safety net (§3.3, §5.1): if the agent fails to `/quit` within 60s of
-  intent set, harness force-kills.
+- **Safety net (§3.3, §5.1):** if the agent fails to `/quit` within 60s of
+  intent set, harness force-kills via the RESTARTING force-kill scope.
 
-Test plan TC: trigger context pressure, verify claude exits within 60s
-(happy path < 5s via `/quit`; degraded path < 60s via force-kill). Verify
-harness respawns post-exit.
+After claude PID dies with `intent=RESTARTING`, the harness respawns the
+agent via `boot_remote.boot_agent(role)` per the standard RESTARTING flow.
+
+Test plan TC: trigger context pressure, verify cycle_post POSTs /restart,
+verify claude exits within 60s (happy path < 5s via `/quit`; degraded path
+< 60s via force-kill since intent=RESTARTING is in scope), verify harness
+respawns post-exit.
 
 ### 8.2 #8689 — restart endpoint idle agent delay (ADJACENT)
 
