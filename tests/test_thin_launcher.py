@@ -275,3 +275,37 @@ class TestSingletonEnforcement:
             rc = thin_launcher.main()
 
         assert rc == 0
+
+
+class TestWritePidFailure:
+    """#8879: if _write_pid raises after Popen, claude must still be waited on."""
+
+    @pytest.mark.parametrize("wait_code", [0, 42])
+    def test_oserror_in_write_pid_does_not_orphan_child(
+        self, tmp_path, capsys, wait_code,
+    ):
+        """_write_pid OSError is caught; proc.wait() still runs and exit code propagates."""
+        (tmp_path / ".squidsquad" / "skill").mkdir(parents=True)
+
+        proc = MagicMock()
+        proc.pid = 99999
+        proc.wait.return_value = wait_code
+        proc.kill = MagicMock()
+
+        with patch("thin_launcher.os.getcwd", return_value=str(tmp_path)), \
+             patch("thin_launcher.subprocess.Popen", return_value=proc), \
+             patch("thin_launcher._get_effort_level", return_value="high"), \
+             patch("thin_launcher._write_pid",
+                   side_effect=OSError("disk full")), \
+             patch("sys.argv", ["thin_launcher.py", "skill"]):
+            rc = thin_launcher.main()
+
+        # Exit code reflects proc.wait(), not the OSError — both happy
+        # path (0) and context-pressure exit (42) must propagate.
+        assert rc == wait_code
+        # We actually waited on the child instead of unwinding past it.
+        proc.wait.assert_called_once()
+        # Warning surfaced on stderr with the pid file path for operator triage.
+        err = capsys.readouterr().err
+        assert "WARNING" in err and "pid file" in err
+        assert str(tmp_path / ".squidsquad" / "skill" / ".claude-pid") in err

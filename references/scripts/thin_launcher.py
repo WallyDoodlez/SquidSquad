@@ -171,8 +171,17 @@ def main():
         print(f"[thin-launcher] ERROR: failed to execute '{claude_exe}'", file=sys.stderr)
         return 1
 
-    # Write PID for harness monitoring
-    _write_pid(clone_path, role, proc.pid)
+    # Write PID for harness monitoring. If the write fails (disk full,
+    # permission denied, antivirus locking the .tmp), warn and continue —
+    # claude is already running and we still need to reach proc.wait()
+    # below. Otherwise the exception would unwind past the wait, leaving
+    # claude as an orphan child without a pid file for the harness (#8879).
+    try:
+        _write_pid(clone_path, role, proc.pid)
+    except OSError as e:
+        pid_path = Path(clone_path) / ".squidsquad" / role / ".claude-pid"
+        print(f"[thin-launcher] WARNING: could not write pid file "
+              f"({pid_path}): {e}", file=sys.stderr)
     print(f"[thin-launcher] claude PID: {proc.pid}")
 
     # Wait for claude to exit — keeps terminal open
