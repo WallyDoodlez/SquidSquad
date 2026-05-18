@@ -1,8 +1,7 @@
-# PM agent sub-skill manifest (polling / /loop mode — #8697)
+# PM agent sub-skill manifest (event-driven mode — #8697)
 # Order matters — includes are resolved top-to-bottom
 includes:
-  - roles/pm/ralph-loop-overview
-  - common/cycle-runner
+  - common-events/event-driven-workflow
   - common/context-pressure
   - common/task-pickup
   - roles/pm/checkin

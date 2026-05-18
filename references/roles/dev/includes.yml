@@ -1,10 +1,10 @@
-# Dev agent sub-skill manifest
+# Dev agent sub-skill manifest (polling / /loop mode — #8697)
+# This is the default manifest. compose.py loads `includes-events.yml`
+# instead when the role's wake mode is `event-driven`.
 # Order matters — includes are resolved top-to-bottom
 includes:
+  - roles/dev/ralph-loop-overview
   - common/cycle-runner
-  - common/event-driven-workflow
-  - common/event-reactions
-  - common/event-driven-workflow
   - common/context-pressure
   - common/resume-working-state
   - common/interval-sync

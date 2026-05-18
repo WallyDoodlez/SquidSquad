@@ -31,6 +31,42 @@ ROLES_DIR = REPO_ROOT / "references" / "roles"
 OUTPUT_FILE = REPO_ROOT / "references" / "agent-instructions.md"
 
 
+def _get_wake_mode(role_name: str) -> str:
+    """Determine a role's wake mode from config.md (#8697).
+
+    Lookup precedence: `event-driven-<role>` → `event-driven` → default `polling`.
+    Values normalize to `event-driven` (yes/true/1) or `polling`.
+
+    `config.get_field` prints `ERROR: Field 'X' not found` to stderr and
+    calls `sys.exit(1)` for missing fields. Field absence is the documented
+    default for both wake-mode fields, so suppress stderr while probing —
+    QA's `test_malformed_repo_scan_warns_not_crashes` (#8697 R3 retro fix)
+    asserts no spurious ERROR output during normal compose.
+    """
+    sys.path.insert(0, str(SCRIPT_DIR))
+    try:
+        from config import get_field
+    except Exception:
+        return "polling"
+    import contextlib
+    import io
+    for field in (f"event-driven-{role_name}", "event-driven"):
+        try:
+            with contextlib.redirect_stderr(io.StringIO()):
+                v = (get_field(field) or "").strip().lower()
+        except BaseException:
+            # config.get_field calls sys.exit(1) on missing field — caught
+            # via SystemExit. Also tolerate FileNotFoundError/PermissionError
+            # from a config.md TOCTOU race (matches the defensive pattern in
+            # `_read_config_value` further down this file).
+            v = ""
+        if v in ("yes", "true", "1", "event-driven"):
+            return "event-driven"
+        if v in ("no", "false", "0", "polling"):
+            return "polling"
+    return "polling"
+
+
 def _strip_outer_markers(content: str, name: str) -> str:
     """Strip matching sub-skill open/close markers from the first/last lines.
 
@@ -76,8 +112,18 @@ def _resolve_runtime(runtime_path: str) -> list[str]:
     ]
 
 
-def _resolve_includes(entry_file: Path) -> str:
-    """Resolve all {{include: path}} directives in an entry file."""
+def _resolve_includes(entry_file: Path, wake_mode: str = "polling") -> str:
+    """Resolve all {{include: path}} directives in an entry file.
+
+    Manifest-less fallback path used when no includes.yml exists or pyyaml
+    is unavailable. This path does NOT perform mode-aware filtering — every
+    `{{include:}}` directive in the template is rendered. Mode filtering
+    requires the manifest to know which fragments are mode-specific
+    (#8697 design). `wake_mode` is accepted for API symmetry with
+    `_resolve_includes_with_manifest` but currently has no effect here.
+    """
+    # `wake_mode` is intentionally unused; see docstring.
+    del wake_mode  # silence "unused" linters; keeps the signature stable
     text = entry_file.read_text(encoding="utf-8")
     lines = text.splitlines()
     result = []
@@ -117,37 +163,55 @@ def _resolve_includes(entry_file: Path) -> str:
     return "\n".join(result)
 
 
-def _load_manifest(role_name: str) -> list | None:
-    """Load includes.yml for a role, with variant inheritance.
+def _load_manifest(role_name: str, wake_mode: str = "polling") -> list | None:
+    """Load the role's wake-mode-specific manifest with variant inheritance.
 
-    Returns a list of include paths (e.g. ['common/cycle-runner', ...])
-    or None if no manifest exists.
+    `wake_mode='polling'`  → `includes.yml`           (default; pre-existing)
+    `wake_mode='event-driven'` → `includes-events.yml` (falls back to
+                                 `includes.yml` if it doesn't exist yet)
+
+    Per PM directive (#8697): parallel manifests with NO mode-conditional
+    logic inside fragments. compose.py selects the entire manifest based on
+    the role's wake mode; the chosen manifest is rendered in full.
+
+    Returns a list of include paths (e.g. ['common/cycle-runner', ...]) or
+    None if no manifest exists.
 
     Supports two schemas:
     - Base role (Layer 2): ``includes: [list]``
     - Variant (Layer 3): ``base_role: <base>`` + ``additional_includes: [list]``
       Recursively loads the base role's manifest and appends additional includes.
-
-    Dev variants (skill, be, fe) without their own includes.yml inherit
-    from references/roles/dev/includes.yml. Non-dev variants use
-    _strip_variant_suffix() to find their base role.
     """
     if yaml is None:
         return None
 
-    # Try nested variant path first (dev-skill -> dev/skill/includes.yml)
+    # #8697: choose the right manifest filename based on wake mode.
+    primary_name = "includes-events.yml" if wake_mode == "event-driven" else "includes.yml"
+    fallback_name = "includes.yml"  # used when event-driven manifest absent
+
+    def _resolve_manifest_path(role_dir: Path) -> Path | None:
+        primary = role_dir / primary_name
+        if primary.exists():
+            return primary
+        if primary_name != fallback_name:
+            fallback = role_dir / fallback_name
+            if fallback.exists():
+                return fallback
+        return None
+
+    # Try nested variant path first (dev-skill -> dev/skill/<manifest>)
     resolved = _resolve_variant(role_name)
     if resolved:
         base, variant = resolved
-        manifest_path = ROLES_DIR / base / variant / "includes.yml"
+        manifest_path = _resolve_manifest_path(ROLES_DIR / base / variant)
     else:
-        manifest_path = ROLES_DIR / role_name / "includes.yml"
-    if not manifest_path.exists():
+        manifest_path = _resolve_manifest_path(ROLES_DIR / role_name)
+    if manifest_path is None:
         # Legacy dev variant inheritance: fall back to dev manifest
         identities = _list_known_role_identities()
         if role_name not in identities and "dev" in identities:
-            manifest_path = ROLES_DIR / "dev" / "includes.yml"
-        if not manifest_path.exists():
+            manifest_path = _resolve_manifest_path(ROLES_DIR / "dev")
+        if manifest_path is None:
             return None
 
     try:
@@ -162,7 +226,7 @@ def _load_manifest(role_name: str) -> list | None:
     # Layer 3 variant schema: base_role + additional_includes
     if "base_role" in data:
         base_role = data["base_role"]
-        base_includes = _load_manifest(base_role)
+        base_includes = _load_manifest(base_role, wake_mode)
         if base_includes is None:
             print(
                 f"ERROR: includes.yml for {role_name} declares base_role={base_role} "
@@ -206,12 +270,18 @@ def _load_manifest(role_name: str) -> list | None:
     return includes
 
 
-def _resolve_includes_with_manifest(entry_file: Path, manifest: list) -> str:
+def _resolve_includes_with_manifest(entry_file: Path, manifest: list, wake_mode: str = "polling") -> str:
     """Resolve includes using manifest order, preserving inline content.
 
     The manifest declares which sub-skills to include. The entry file's
     {{include:}} directives are replaced with manifest-resolved content.
     Inline (non-include) content is preserved in its original position.
+
+    Mode separation (#8697): wake_mode is resolved upstream by _load_manifest
+    which selects an entire mode-specific manifest. By design, fragments
+    themselves have no mode-conditional logic — the manifest IS the gate.
+    `wake_mode` is threaded here only so future template-side directives
+    (e.g. `{{include: mode-specific/foo}}`) can take advantage of it.
     """
     text = entry_file.read_text(encoding="utf-8")
     lines = text.splitlines()
@@ -364,11 +434,12 @@ def compose_role(role_name: str) -> str:
 
     try:
         # Step 2: Resolve includes
-        manifest = _load_manifest(role_name)
+        wake_mode = _get_wake_mode(role_name)
+        manifest = _load_manifest(role_name, wake_mode)
         if manifest is not None:
-            composed = _resolve_includes_with_manifest(tmp, manifest)
+            composed = _resolve_includes_with_manifest(tmp, manifest, wake_mode)
         else:
-            composed = _resolve_includes(tmp)
+            composed = _resolve_includes(tmp, wake_mode)
     finally:
         tmp.unlink(missing_ok=True)
 

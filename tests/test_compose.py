@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -881,3 +881,115 @@ class TestNoRedundantReImport:
         source = inspect.getsource(compose.agent_compose)
         assert "import subprocess" not in source
         assert "import json" not in source
+
+
+# ---------------------------------------------------------------------------
+# Dual-mode composition — #8697 (parallel-manifest design per PM directive)
+# ---------------------------------------------------------------------------
+
+
+class TestGetWakeMode:
+    def test_defaults_to_polling(self):
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", return_value=""):
+            assert compose._get_wake_mode("skill") == "polling"
+
+    def test_global_event_driven_yes(self):
+        with patch.dict("sys.modules", {"config": MagicMock()}):
+            def fake(field):
+                return "yes" if field == "event-driven" else ""
+            with patch("config.get_field", side_effect=fake):
+                assert compose._get_wake_mode("skill") == "event-driven"
+
+    def test_role_specific_overrides_global(self):
+        with patch.dict("sys.modules", {"config": MagicMock()}):
+            def fake(field):
+                return {"event-driven-pm": "yes", "event-driven": "no"}.get(field, "")
+            with patch("config.get_field", side_effect=fake):
+                assert compose._get_wake_mode("pm") == "event-driven"
+                assert compose._get_wake_mode("skill") == "polling"
+
+    def test_role_polling_explicit(self):
+        with patch.dict("sys.modules", {"config": MagicMock()}):
+            def fake(field):
+                return "no" if field == "event-driven-skill" else ""
+            with patch("config.get_field", side_effect=fake):
+                assert compose._get_wake_mode("skill") == "polling"
+
+
+class TestLoadManifestSelectsByWakeMode:
+    """#8697: _load_manifest picks includes.yml or includes-events.yml based on mode."""
+
+    def test_polling_loads_includes_yml(self):
+        manifest = compose._load_manifest("dev", wake_mode="polling")
+        assert manifest is not None
+        assert "common/cycle-runner" in manifest
+        # event-driven-workflow lives in common-events/ now
+        assert "common-events/event-driven-workflow" not in manifest
+
+    def test_event_driven_loads_includes_events_yml(self):
+        manifest = compose._load_manifest("dev", wake_mode="event-driven")
+        assert manifest is not None
+        assert "common-events/event-driven-workflow" in manifest
+        # cycle-runner is polling-only, should NOT appear in events manifest
+        assert "common/cycle-runner" not in manifest
+
+    def test_event_driven_falls_back_to_includes_yml_when_events_absent(self, tmp_path):
+        """If a role has no includes-events.yml, fall back to includes.yml so
+        agents in event-driven mode still get *something*."""
+        role_dir = tmp_path / "roles" / "fakerole"
+        role_dir.mkdir(parents=True)
+        sub_skills = tmp_path / "sub-skills" / "common"
+        sub_skills.mkdir(parents=True)
+        (sub_skills / "frag.md").write_text("x", encoding="utf-8")
+        (role_dir / "includes.yml").write_text(
+            "includes:\n  - common/frag\n", encoding="utf-8"
+        )
+        with patch.object(compose, "ROLES_DIR", tmp_path / "roles"), \
+             patch.object(compose, "SUB_SKILLS_DIR", tmp_path / "sub-skills"), \
+             patch.object(compose, "_resolve_variant", return_value=None), \
+             patch.object(compose, "_list_known_role_identities", return_value=["fakerole"]):
+            manifest = compose._load_manifest("fakerole", wake_mode="event-driven")
+        assert manifest == ["common/frag"]
+
+    def test_all_four_roles_have_both_manifests(self):
+        """Every shipped role must define both manifests so mode-flipping works."""
+        for role in ("dev", "pm", "qa", "dm"):
+            poll = compose._load_manifest(role, wake_mode="polling")
+            event = compose._load_manifest(role, wake_mode="event-driven")
+            assert poll is not None, f"{role}: missing includes.yml"
+            assert event is not None, f"{role}: missing includes-events.yml"
+            # Both must reference at least one common-events/ or common/ entry
+            assert any("common-events/" in p for p in event), (
+                f"{role}: includes-events.yml has no common-events/ entries"
+            )
+
+
+class TestEventDrivenWorkflowLocation:
+    """The event-driven-workflow fragment lives under common-events/ (#8697)."""
+
+    def test_event_driven_workflow_in_common_events(self):
+        path = (Path(__file__).resolve().parent.parent
+                / "references" / "sub-skills" / "common-events"
+                / "event-driven-workflow.md")
+        assert path.exists(), "common-events/event-driven-workflow.md missing"
+
+    def test_no_event_driven_workflow_in_common(self):
+        path = (Path(__file__).resolve().parent.parent
+                / "references" / "sub-skills" / "common"
+                / "event-driven-workflow.md")
+        assert not path.exists(), (
+            "common/event-driven-workflow.md should have been moved to "
+            "common-events/ (no mode-conditional logic inside fragments)"
+        )
+
+    def test_event_driven_workflow_has_no_frontmatter(self):
+        """Per PM directive: no mode-conditional logic inside fragments."""
+        path = (Path(__file__).resolve().parent.parent
+                / "references" / "sub-skills" / "common-events"
+                / "event-driven-workflow.md")
+        first_line = path.read_text(encoding="utf-8").splitlines()[0]
+        assert first_line != "---", (
+            "event-driven-workflow.md should not have YAML frontmatter — "
+            "mode selection happens at the manifest level"
+        )

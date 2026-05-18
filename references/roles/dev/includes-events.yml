@@ -1,0 +1,31 @@
+# Dev agent sub-skill manifest (event-driven mode — #8697)
+# compose.py loads this manifest instead of `includes.yml` when the role's
+# wake mode is `event-driven` (config field `event-driven-<role>: yes` or
+# global `event-driven: yes`).
+#
+# Per PM directive: parallel manifests, no mode-conditional logic inside
+# fragments. Phase 1 scaffolding — only event-driven-workflow is in
+# common-events/ today; subsequent phases will populate the rest of the
+# mode-specific fragments (mode selector, cycle-runner-events analogue,
+# etc.) so that Phase 6 (#8698) can remove polling by deleting common/ +
+# includes.yml only.
+# Order matters — includes are resolved top-to-bottom
+includes:
+  - common-events/event-driven-workflow
+  - common/context-pressure
+  - common/resume-working-state
+  - roles/dev/triage-issues
+  - roles/dev/implement-tasks
+  - common/improvement-scan
+  - common/vault-remember
+  - common/vault-optimize
+  - common/git-commit
+  - common/discussion-protocol
+  - common/issue-filing
+  - common/working-state
+  - common/vault-protocol
+  - common/file-conventions
+  - common/status-line
+  - common/self-restart
+  - common/agent-lifecycle
+  - common/prohibitions
