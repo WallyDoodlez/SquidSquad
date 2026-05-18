@@ -1295,6 +1295,138 @@ async def get_in_flight_events(role: str):
     return {"role": role, "in_flight": event_lifecycle.get_in_flight(role)}
 
 
+# Status priority/severity rank for /human/queue ordering (high → low).
+_HUMAN_QUEUE_PRIORITY_RANK = {"high": 0, "medium": 1, "low": 2}
+
+
+def _parse_iso_to_epoch(iso_str):
+    """Parse an ISO timestamp returned by `gh` into epoch seconds.
+
+    Returns `float('inf')` on failure so items with unknown/unparseable
+    timestamps sort LAST in ascending order — they should not appear at the
+    head of "oldest first" rankings (#8704 review fix R2).
+    """
+    if not iso_str:
+        return float("inf")
+    try:
+        from datetime import datetime, timezone
+        # gh returns "2026-05-18T12:34:56Z" or with offset; normalize.
+        s = iso_str.rstrip("Z")
+        s = s.split(".")[0]
+        # Try parse without timezone first.
+        try:
+            dt = datetime.strptime(s, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+        except ValueError:
+            # Try with offset (e.g. "+00:00")
+            dt = datetime.fromisoformat(iso_str.rstrip("Z"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    except Exception:
+        return float("inf")
+
+
+def _gh_list_pending_human_issues():
+    """Query GitHub for issues in any pending-human-* status.
+
+    Returns a list of raw `gh issue list` JSON dicts. Empty list on any error
+    so the endpoint never crashes the harness.
+    """
+    statuses = ("status:pending-human-review", "status:pending-human-setup")
+    seen = {}
+    for status in statuses:
+        try:
+            result = subprocess.run(
+                ["gh", "issue", "list",
+                 "--label", f"squidsquad,{status}",
+                 "--state", "open",
+                 "--json", "number,title,labels,updatedAt,url",
+                 "--limit", "100"],
+                capture_output=True, text=True, encoding="utf-8",
+                errors="replace", check=False, cwd=str(REPO_ROOT),
+            )
+            if result.returncode != 0:
+                continue
+            try:
+                issues = json.loads(result.stdout) or []
+            except json.JSONDecodeError:
+                continue
+            for issue in issues:
+                num = issue.get("number")
+                if num is not None and num not in seen:
+                    seen[num] = issue
+        except Exception:
+            # Best-effort — never block the endpoint on `gh` failure.
+            continue
+    return list(seen.values())
+
+
+def _summarize_pending_human(issue):
+    """Compress a `gh issue list` row to the shape returned by /human/queue."""
+    labels = {l.get("name", "") for l in issue.get("labels", [])}
+    status = next(
+        (l[len("status:"):] for l in labels if l.startswith("status:pending-human-")),
+        "pending-human-unknown",
+    )
+    role = next(
+        (l[len("role:"):] for l in labels if l.startswith("role:")),
+        None,
+    )
+    severity = next(
+        (l[len("severity:"):] for l in labels if l.startswith("severity:")),
+        None,
+    )
+    priority = next(
+        (l[len("priority:"):] for l in labels if l.startswith("priority:")),
+        None,
+    )
+    return {
+        "number": issue.get("number"),
+        "title": issue.get("title", ""),
+        "status": status,
+        "role": role,
+        "priority": priority or severity,
+        "updated_at": issue.get("updatedAt", ""),
+        "url": issue.get("url", ""),
+    }
+
+
+@app.get("/human/queue")
+async def get_human_queue():
+    """Items awaiting human action (#8704).
+
+    Treats the human as another role assignee. Returns issues in any
+    `status:pending-human-*` (currently `pending-human-review` and
+    `pending-human-setup`) ordered by priority (high → low) then age
+    (oldest first — longest-waiting bubbles up).
+
+    Future TUIs / web UIs poll this on their own refresh loop (similar to
+    the status line refactor in #8700).
+    """
+    raw = _gh_list_pending_human_issues()
+    # #8704 review fix R1: defend against unexpected gh JSON shape (e.g.
+    # `labels` as a string instead of a list). Skip rows that fail to
+    # summarize rather than 500-ing the endpoint.
+    items = []
+    for issue in raw:
+        try:
+            items.append(_summarize_pending_human(issue))
+        except Exception:
+            continue
+
+    def _sort_key(item):
+        prio_rank = _HUMAN_QUEUE_PRIORITY_RANK.get(item.get("priority"), 99)
+        # Older items sort first → use updated_at ascending.
+        ts = _parse_iso_to_epoch(item.get("updated_at"))
+        return (prio_rank, ts)
+
+    items.sort(key=_sort_key)
+    return {
+        "count": len(items),
+        "items": items,
+    }
+
+
 @app.get("/events/lifecycle")
 async def get_event_lifecycle():
     """Event lifecycle overview — stream size, in-flight per role, persistence state (#7630 2-7)."""

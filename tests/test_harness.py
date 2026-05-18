@@ -1867,5 +1867,186 @@ class TestReviewFixes(unittest.TestCase):
         self.assertGreaterEqual(overlap["max_concurrent"], 2)
 
 
+# ---------------------------------------------------------------------------
+# /human/queue endpoint — #8704
+# ---------------------------------------------------------------------------
+
+class TestHumanQueueEndpoint(unittest.TestCase):
+    """#8704: harness exposes items awaiting human action via /human/queue."""
+
+    def setUp(self):
+        from fastapi.testclient import TestClient
+        from harness import app
+        self.client = TestClient(app)
+
+    def _fake_subproc(self, issues_by_status):
+        """Build a side_effect for subprocess.run that returns different issues
+        per `status:pending-human-*` label filter.
+
+        `issues_by_status` is a dict like
+        `{"status:pending-human-review": [{...}, {...}], "status:pending-human-setup": []}`.
+        """
+        def _runner(cmd, **kwargs):
+            # The command always includes `--label "squidsquad,status:..."`.
+            label_arg = ""
+            for i, arg in enumerate(cmd):
+                if arg == "--label" and i + 1 < len(cmd):
+                    label_arg = cmd[i + 1]
+                    break
+            status = next(
+                (s for s in issues_by_status if s in label_arg), None
+            )
+            issues = issues_by_status.get(status, []) if status else []
+            return MagicMock(
+                returncode=0,
+                stdout=json.dumps(issues),
+                stderr="",
+            )
+        return _runner
+
+    def test_empty_queue_returns_zero(self):
+        with patch("harness.subprocess.run", side_effect=self._fake_subproc({})):
+            resp = self.client.get("/human/queue")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["count"], 0)
+        self.assertEqual(data["items"], [])
+
+    def test_returns_pending_human_review_items(self):
+        issues = {
+            "status:pending-human-review": [{
+                "number": 42,
+                "title": "Designer review needed",
+                "labels": [
+                    {"name": "status:pending-human-review"},
+                    {"name": "role:skill"},
+                    {"name": "priority:high"},
+                ],
+                "updatedAt": "2026-05-18T08:00:00Z",
+                "url": "https://example.com/42",
+            }],
+        }
+        with patch("harness.subprocess.run", side_effect=self._fake_subproc(issues)):
+            resp = self.client.get("/human/queue")
+        data = resp.json()
+        self.assertEqual(data["count"], 1)
+        item = data["items"][0]
+        self.assertEqual(item["number"], 42)
+        self.assertEqual(item["status"], "pending-human-review")
+        self.assertEqual(item["role"], "skill")
+        self.assertEqual(item["priority"], "high")
+
+    def test_dedups_across_both_pending_statuses(self):
+        """An item flagged with both labels (unlikely) should appear only once."""
+        same_issue = {
+            "number": 99,
+            "title": "Dual-labeled",
+            "labels": [
+                {"name": "status:pending-human-review"},
+                {"name": "status:pending-human-setup"},
+            ],
+            "updatedAt": "2026-05-18T08:00:00Z",
+            "url": "",
+        }
+        issues = {
+            "status:pending-human-review": [same_issue],
+            "status:pending-human-setup": [same_issue],
+        }
+        with patch("harness.subprocess.run", side_effect=self._fake_subproc(issues)):
+            resp = self.client.get("/human/queue")
+        data = resp.json()
+        self.assertEqual(data["count"], 1)
+
+    def test_sorts_by_priority_then_age(self):
+        issues = {
+            "status:pending-human-review": [
+                {"number": 1, "title": "low new",
+                 "labels": [{"name": "priority:low"},
+                            {"name": "status:pending-human-review"}],
+                 "updatedAt": "2026-05-18T09:00:00Z", "url": ""},
+                {"number": 2, "title": "high new",
+                 "labels": [{"name": "priority:high"},
+                            {"name": "status:pending-human-review"}],
+                 "updatedAt": "2026-05-18T09:00:00Z", "url": ""},
+                {"number": 3, "title": "high old",
+                 "labels": [{"name": "priority:high"},
+                            {"name": "status:pending-human-review"}],
+                 "updatedAt": "2026-05-17T09:00:00Z", "url": ""},
+            ],
+        }
+        with patch("harness.subprocess.run", side_effect=self._fake_subproc(issues)):
+            resp = self.client.get("/human/queue")
+        data = resp.json()
+        # high+old → high+new → low+new
+        self.assertEqual([i["number"] for i in data["items"]], [3, 2, 1])
+
+    def test_uses_severity_when_priority_missing(self):
+        """Issues (severity:*) and tasks (priority:*) should both sort."""
+        issues = {
+            "status:pending-human-review": [
+                {"number": 5, "title": "issue medium",
+                 "labels": [{"name": "severity:medium"},
+                            {"name": "status:pending-human-review"}],
+                 "updatedAt": "2026-05-18T09:00:00Z", "url": ""},
+            ],
+        }
+        with patch("harness.subprocess.run", side_effect=self._fake_subproc(issues)):
+            resp = self.client.get("/human/queue")
+        self.assertEqual(resp.json()["items"][0]["priority"], "medium")
+
+    def test_does_not_crash_on_gh_failure(self):
+        """A failing gh subprocess (rc != 0) returns an empty queue, not 500."""
+        with patch("harness.subprocess.run",
+                   return_value=MagicMock(returncode=1, stdout="", stderr="gh: command not found")):
+            resp = self.client.get("/human/queue")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["count"], 0)
+
+    def test_does_not_crash_on_malformed_json(self):
+        with patch("harness.subprocess.run",
+                   return_value=MagicMock(returncode=0, stdout="not json", stderr="")):
+            resp = self.client.get("/human/queue")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["count"], 0)
+
+    def test_does_not_crash_on_unexpected_label_shape(self):
+        """#8704 R1: malformed `labels` (not a list) skips the row, doesn't 500."""
+        issues = {
+            "status:pending-human-review": [
+                {"number": 1, "title": "good", "labels": [
+                    {"name": "status:pending-human-review"}
+                ], "updatedAt": "2026-05-18T09:00:00Z", "url": ""},
+                # Row with `labels` as a string instead of a list — should be skipped.
+                {"number": 2, "title": "broken", "labels": "not-a-list",
+                 "updatedAt": "2026-05-18T09:00:00Z", "url": ""},
+            ],
+        }
+        with patch("harness.subprocess.run", side_effect=self._fake_subproc(issues)):
+            resp = self.client.get("/human/queue")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual([i["number"] for i in data["items"]], [1])
+
+    def test_unknown_updated_at_sorts_last(self):
+        """#8704 R2: items with no/unparseable updated_at sort LAST in their
+        priority tier (not first, which the old `return 0` behavior produced)."""
+        issues = {
+            "status:pending-human-review": [
+                {"number": 1, "title": "unknown age",
+                 "labels": [{"name": "priority:high"},
+                            {"name": "status:pending-human-review"}],
+                 "updatedAt": "", "url": ""},
+                {"number": 2, "title": "known old",
+                 "labels": [{"name": "priority:high"},
+                            {"name": "status:pending-human-review"}],
+                 "updatedAt": "2026-05-17T09:00:00Z", "url": ""},
+            ],
+        }
+        with patch("harness.subprocess.run", side_effect=self._fake_subproc(issues)):
+            resp = self.client.get("/human/queue")
+        # Known-age item sorts before unknown-age within the same priority tier.
+        self.assertEqual([i["number"] for i in resp.json()["items"]], [2, 1])
+
+
 if __name__ == "__main__":
     unittest.main()
