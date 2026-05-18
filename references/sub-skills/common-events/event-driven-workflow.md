@@ -1,80 +1,30 @@
-## Event-Driven Workflow (#7630)
+## Event-Driven Workflow
 
-You are a persistent agent session that reacts to events dispatched by the harness. You sit idle until the Monitor tool detects an event, then execute exactly one creative task and close the event via the completion API.
+You are a persistent agent session driven by events from the harness. You react to one event at a time, consult the forge as the source of truth, and let `event_poll.py` advance your cursor automatically.
 
-### Config Gate
+This fragment is a brief orientation. The full agent contract lives in the companion event-mode fragments — read them in this order:
 
-This mode is active ONLY when `event-driven: yes` in config.md. If `event-driven: no`, use the standard /loop + cycle_pre/cycle_post flow instead.
+1. **[[l1-base]]** — boot sequence (Case A), event reactions (Cases B–E), case-precedence rule, working-state ownership discipline, degraded-mode operation.
+2. **[[cursor-management]]** — atomic `.tmp` + `mv` protocol, per-event advance, gap handling (in-stream, long lag, eviction).
+3. **[[forge-read-pattern]]** — why the forge is the source of truth and how to read it before acting.
+4. **[[idle-cooldown-loop]]** — what an event-mode agent does when `work_queue()` is empty.
+5. **[[comment-handling]]** — comments are NOT event triggers; DM end-of-task exception; transition-on-handoff rule.
 
-### How You Wake
+### Quick reference
 
-At boot, invoke the Monitor tool to watch for events:
+- **Wake mechanism** — Monitor tool streaming `python references/scripts/event_poll.py <role> --wait 5 --target`. Each line of stdout is one JSON event.
+- **Atomic unit of work** — one event at a time. Process to completion before reading the next.
+- **Source of truth** — the forge (`tracker.py` queries). Event payloads are hints; always forge-read before acting.
+- **Cursor** — `event_poll.py` persists it to `working-state.md` automatically (see [[cursor-management]]).
+- **Idle** — improvement-scan cool-down loop (see [[idle-cooldown-loop]]).
+- **Handoff** — status transitions and label changes wake the stream; bare comments do not (see [[comment-handling]]).
 
-```
-Monitor tool invocation:
-  command: python references/scripts/event_poll.py <role> --wait 5 --target
-  description: Watch harness event bus for work events
-  persistent: true
-```
+### Error handling
 
-The Monitor tool streams `event_poll.py` stdout. Each line is a JSON event object. When the Monitor delivers a line, you wake and process it.
+If the harness becomes unreachable, the agent does NOT pivot to forge-direct work mid-session — that path exists only at boot (degraded mode, see [[l1-base]]). Mid-session unreachable is a **manual-recovery scenario**: keep retrying at the 5-minute-capped backoff; the operator restarts the harness; the agent resumes via the event stream on reconnect.
 
-### Event Types You Receive
+`event_poll.py` handles transient HTTP errors (5xx, `ConnectionError`, `Timeout`, `IncompleteRead`) automatically with exponential backoff. 4xx responses are treated as caller faults and exit non-zero.
 
-| Event Type | When | What To Do |
-|---|---|---|
-| `assigned-to` | Work item needs your attention | Read the issue from payload, do your creative work |
-| `stop-requested` | Harness wants you to exit | Checkpoint working-state.md, then exit cleanly |
-| `status-transition` | A relevant item changed status | React per your role's logic |
+### Context pressure
 
-> **Future event types** (not yet emitted by harness — planned for Phase 5+):
-> - `scan-needed` — idle timeout reached → run improvement scan
-> - `vault-reflect` — active work completed → run vault reflection
-
-### Processing Flow
-
-For each event:
-
-1. **Read**: Parse the JSON event. Extract `id`, `event_type`, and `payload`.
-2. **Act**: Do your creative work — implement, verify, plan, deliver (per your role).
-3. **Complete**: When done, call the completion endpoint:
-   ```bash
-   curl -s -X POST http://127.0.0.1:$(cat .squidsquad/.harness-port)/events/<event_id>/complete \
-     -H "Content-Type: application/json" \
-     -d '{"role": "<role>", "status": "success", "summary": "<brief description>"}'
-   ```
-   Or via Python:
-   ```python
-   import json, urllib.request
-   port = open(".squidsquad/.harness-port").read().strip()
-   data = json.dumps({"role": "<role>", "status": "success", "summary": "<brief>"}).encode()
-   req = urllib.request.Request(f"http://127.0.0.1:{port}/events/<event_id>/complete",
-                                data=data, headers={"Content-Type": "application/json"}, method="POST")
-   urllib.request.urlopen(req, timeout=5)
-   ```
-
-### What You Do NOT Do
-
-- **No /loop** — the Monitor tool + event_poll.py delivers events; you don't schedule cron
-- **No cycle_pre.py / cycle_post.py** — the harness handles git pull, commit, push
-- **No git operations** — the harness owns git pull (before event delivery) and commit/push (after completion)
-- **No cycle counting** — event IDs are the tracking unit, not cycles
-- **No conditional step branching** — you react to ONE event at a time
-
-### Atomicity
-
-Process one event at a time. Do not start a second event before completing the first. The harness will not dispatch a second event to you while one is in-flight.
-
-### Error Handling
-
-If the harness is unreachable (event_poll.py prints errors to stderr), the Monitor tool continues retrying automatically (event_poll.py has built-in retry with --wait). You remain idle until connection is restored.
-
-If processing fails, complete the event with `"status": "failure"` and include the error in `summary`. The harness may re-emit the work via a new event.
-
-### Context Pressure
-
-The harness monitors your context pressure file and triggers restarts when exceeded. You do not check context pressure yourself — the harness emits `stop-requested` when a restart is needed.
-
-### Working State
-
-Maintain `.squidsquad/<role>/working-state.md` between events for crash recovery. Update after each event completion so the harness can resume you after a restart.
+The harness monitors agent context pressure files and emits `stop-requested` when a restart is needed. Honor `stop-requested` at the next task boundary (see Case E in [[l1-base]]); the harness handles the respawn.

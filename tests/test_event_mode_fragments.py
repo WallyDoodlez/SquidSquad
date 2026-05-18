@@ -4,9 +4,13 @@ Backs TEST-PLAN-8694.md AC-5 / AC-6 / AC-7 measurable refinements at the
 file-level (not the composed-CLAUDE.md level — that wiring is a separate
 follow-up cycle).
 
-These tests are deliberately narrow: they only check the fragments authored
-in this PR. Pre-existing files in `common-events/` (e.g. the legacy
-`event-driven-workflow.md` that PM flagged for removal) are excluded.
+These tests check the fragments authored or rewritten under #8915.
+`event-driven-workflow.md` was rewritten in cycle 1138 to drop forbidden
+mode-conditional tokens + obsolete completion-API content and is now
+included in the AC-5 sweep (forbidden-token check) and the wikilink-
+resolution check, alongside the 5 fragments authored in cycle 1136. AC-7
+(topic coverage) intentionally targets only the five topic-bearing
+fragments, not the orientation page.
 """
 
 import re
@@ -25,6 +29,10 @@ NEW_FRAGMENTS = [
     "forge-read-pattern.md",
     "idle-cooldown-loop.md",
     "comment-handling.md",
+    # Cycle 1138: pre-existing fragment rewritten to drop forbidden tokens
+    # + obsolete completion-API content; now an orientation page that
+    # redirects to the 5 new fragments. AC-5 check applies here too.
+    "event-driven-workflow.md",
 ]
 
 
