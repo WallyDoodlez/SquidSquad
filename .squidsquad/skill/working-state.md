@@ -1,24 +1,17 @@
 # Working State
 
-- **Task**: #7630
-- **Status**: in-progress
-- **Started**: 2026-05-16 21:34
+- **Task**: none
+- **Status**: none
+- **Started**: 
 - **Last Processed Event ID**: 9d7c2489
 
 ## Completed Steps
-- Phase 1: Prerequisites (disk persistence, clone port fix, in-flight queues, thread safety, terminal PID)
-- Phase 2: Event infrastructure (5 L1 event types, ack processing, EventLifecycleManager, ExternalActivityDetector, event_poll.py)
-- Phase 3: Template migration (event-driven-workflow.md, includes.yml, role instructions, config)
-- Read PM's latest comment: --strict-mcp-config resolves Monitor tool availability for harness-launched agents
 
 ## Remaining Steps
-- Phase 4 prototype: config gate, event_poll.py target filtering, GET /events target param, POST /events/{id}/complete endpoint, updated sub-skill, tests
-- Run tests
-- Self-review and external review
-- Mark pending-test
 
 ## Key Decisions
-- PM agreed to incremental migration: prototype first, validate alongside /loop, migrate agents, deprecate /loop last
-- Monitor tool IS available when launched via thin_launcher with --strict-mcp-config
-- Cannot test Monitor in current manual session (account MCP plugins crowd it out)
-- Will write code that works in production (harness-launched), verify via unit tests
+
+- Cycle 1131: #8914 HIGH PM bug shipped (PR #8934). Restored Phase 5 thin-broadcast lock.
+- Cycle 1132: #8918 HIGH PM bug shipped (PR #8952). Closed remaining #8701 gaps + Audit B F2 (_do_restart_sentinel removal).
+- Cycle 1133: #8949 HIGH PM bug shipped (PR #8968) as test-only — _emit_event already correct on main, regression tests added to prevent reintroduction.
+- Cycle 1134: #8913 LOW self-filed bug shipped (PR #8980). wizard._run gets timeout=30s default + CompletedProcess(124) on TimeoutExpired. 2-iter review: git clone fixed (timeout=None), iter 2 clean.
