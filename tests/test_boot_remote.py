@@ -16,31 +16,47 @@ sys.path.insert(0, str(SCRIPTS))
 import boot_remote
 
 
-class TestReadPidFile:
-    def test_reads_valid_pid(self, tmp_path):
-        pid_file = tmp_path / ".squidsquad" / "skill" / ".pid"
-        pid_file.parent.mkdir(parents=True)
-        pid_file.write_text("12345")
-        result = boot_remote._read_pid_file(tmp_path, "skill")
-        assert result == 12345
+class TestRemovedLegacySentinelHelpers:
+    """#4792 (CONTEXT-4792.md §5.2): legacy sentinel helpers deleted in
+    Phase 2 of the sole-authority cleanup. Negative-guard tests that lock
+    the removal so a future refactor can't silently bring them back."""
 
-    def test_missing_file_returns_none(self, tmp_path):
-        result = boot_remote._read_pid_file(tmp_path, "skill")
-        assert result is None
+    def test_read_pid_file_removed(self):
+        assert not hasattr(boot_remote, "_read_pid_file"), (
+            "boot_remote._read_pid_file must stay removed — .claude-pid "
+            "is the sole liveness signal per CONTEXT-4792.md §5.2"
+        )
 
-    def test_empty_file_returns_none(self, tmp_path):
-        pid_file = tmp_path / ".squidsquad" / "skill" / ".pid"
-        pid_file.parent.mkdir(parents=True)
-        pid_file.write_text("")
-        result = boot_remote._read_pid_file(tmp_path, "skill")
-        assert result is None
+    def test_read_health_file_removed(self):
+        assert not hasattr(boot_remote, "_read_health_file"), (
+            "boot_remote._read_health_file must stay removed per "
+            "CONTEXT-4792.md §5.2"
+        )
 
-    def test_invalid_content_returns_none(self, tmp_path):
-        pid_file = tmp_path / ".squidsquad" / "skill" / ".pid"
-        pid_file.parent.mkdir(parents=True)
-        pid_file.write_text("not-a-pid")
-        result = boot_remote._read_pid_file(tmp_path, "skill")
-        assert result is None
+    def test_clean_stale_restart_removed(self):
+        assert not hasattr(boot_remote, "_clean_stale_restart"), (
+            "boot_remote._clean_stale_restart must stay removed — restart "
+            "intent lives in harness state per CONTEXT-4792.md §5.2"
+        )
+
+    def test_source_has_no_legacy_sentinel_reads(self):
+        from pathlib import Path
+        src = Path(boot_remote.__file__).read_text(encoding="utf-8")
+        # `.pid` (with the leading dot, isolated) must not be read; the
+        # `.claude-pid` reference is allowed because it is a different file
+        # and contains the substring. Search for `\".pid\"` token patterns.
+        assert '/ ".pid"' not in src and "'.pid'" not in src, (
+            "boot_remote must not read the legacy `.pid` file"
+        )
+        assert '/ ".health"' not in src and "'.health'" not in src, (
+            "boot_remote must not read the legacy `.health` file"
+        )
+        assert '/ ".restart"' not in src and "'.restart'" not in src, (
+            "boot_remote must not read or unlink the legacy `.restart` file"
+        )
+        assert '/ ".stop"' not in src and "'.stop'" not in src, (
+            "boot_remote must not read the legacy `.stop` file"
+        )
 
 
 class TestParseLocalConfigMandatory:
@@ -190,8 +206,9 @@ class TestNeedsBoot:
     @patch("boot_remote._is_process_alive", return_value=True)
     @patch("boot_remote._get_clone_path")
     def test_alive_process_skipped(self, mock_clone, mock_alive, tmp_path):
+        """#4792 Phase 2: liveness is read from `.claude-pid` only."""
         mock_clone.return_value = tmp_path
-        pid_file = tmp_path / ".squidsquad" / "skill" / ".pid"
+        pid_file = tmp_path / ".squidsquad" / "skill" / ".claude-pid"
         pid_file.parent.mkdir(parents=True)
         pid_file.write_text("12345")
         needs, reason, _ = boot_remote._needs_boot("skill")
@@ -201,8 +218,9 @@ class TestNeedsBoot:
     @patch("boot_remote._is_process_alive", return_value=False)
     @patch("boot_remote._get_clone_path")
     def test_dead_process_needs_boot(self, mock_clone, mock_alive, tmp_path):
+        """#4792 Phase 2: dead `.claude-pid` triggers boot needed."""
         mock_clone.return_value = tmp_path
-        pid_file = tmp_path / ".squidsquad" / "skill" / ".pid"
+        pid_file = tmp_path / ".squidsquad" / "skill" / ".claude-pid"
         pid_file.parent.mkdir(parents=True)
         pid_file.write_text("99999")
         needs, reason, _ = boot_remote._needs_boot("skill")
@@ -212,17 +230,22 @@ class TestNeedsBoot:
 
     @patch("boot_remote._get_clone_path")
     def test_corrupt_claude_pid_warns_stderr(self, mock_clone, tmp_path, capsys):
-        """#8160 regression: corrupt .claude-pid must warn, not silently pass."""
+        """#8160 + #4792: corrupt .claude-pid must warn AND surface a
+        distinct 'corrupt' reason rather than the misleading
+        'no PID file found' message."""
         mock_clone.return_value = tmp_path
         pid_dir = tmp_path / ".squidsquad" / "skill"
         pid_dir.mkdir(parents=True)
         (pid_dir / ".claude-pid").write_text("not-a-number", encoding="utf-8")
         needs, reason, _ = boot_remote._needs_boot("skill")
-        # Should fall through to "no PID file" (legacy .pid also missing)
         assert needs is True
         captured = capsys.readouterr()
         assert "WARNING" in captured.err
         assert "corrupt" in captured.err or ".claude-pid" in captured.err
+        # #4792 Phase 2 review iter-1 finding: reason must distinguish
+        # corrupt from missing so operators see the file-exists-but-broken
+        # state.
+        assert "corrupt" in reason
 
 
 class TestBootAgentSkip:
@@ -237,78 +260,11 @@ class TestBootAgentSkip:
 # #3348 regression: heartbeat epoch parsing + UTF-16 PID file
 # ---------------------------------------------------------------------------
 
-class TestReadHealthFileHeartbeat:
-    def test_detects_epoch_as_heartbeat(self, tmp_path):
-        """Numeric-only .health content is detected as heartbeat epoch."""
-        squid = tmp_path / ".squidsquad" / "skill"
-        squid.mkdir(parents=True)
-        (squid / ".health").write_text("1777205526", encoding="utf-8")
-        status, detail = boot_remote._read_health_file(tmp_path, "skill")
-        assert status == "heartbeat"
-        assert detail == "1777205526"
-
-    def test_legacy_status_still_works(self, tmp_path):
-        """Legacy status|detail format still parses correctly."""
-        squid = tmp_path / ".squidsquad" / "skill"
-        squid.mkdir(parents=True)
-        (squid / ".health").write_text("alive|PID 1234", encoding="utf-8")
-        status, detail = boot_remote._read_health_file(tmp_path, "skill")
-        assert status == "alive"
-        assert detail == "PID 1234"
-
-    def test_short_number_not_epoch(self, tmp_path):
-        """Short numeric strings (< 10 digits) are not treated as epochs."""
-        squid = tmp_path / ".squidsquad" / "skill"
-        squid.mkdir(parents=True)
-        (squid / ".health").write_text("12345", encoding="utf-8")
-        status, detail = boot_remote._read_health_file(tmp_path, "skill")
-        assert status == "12345"  # Treated as legacy status, not heartbeat
-
-    def test_empty_file_returns_none(self, tmp_path):
-        squid = tmp_path / ".squidsquad" / "skill"
-        squid.mkdir(parents=True)
-        (squid / ".health").write_text("", encoding="utf-8")
-        status, detail = boot_remote._read_health_file(tmp_path, "skill")
-        assert status is None
-
-
-class TestNeedsBootHeartbeat:
-    """Heartbeat (.health) is no longer checked by _needs_boot per #4966.
-    PID-based detection is primary. These tests verify the helper function
-    still works (tested in TestReadHealthFileHeartbeat above), and that
-    _needs_boot correctly falls through to PID checks when .health exists.
-    """
-
-    @patch("boot_remote._get_clone_path")
-    def test_heartbeat_alone_does_not_prevent_boot(self, mock_clone, tmp_path):
-        """A .health file alone (no PID file) still triggers boot needed."""
-        mock_clone.return_value = tmp_path
-        squid = tmp_path / ".squidsquad" / "skill"
-        squid.mkdir(parents=True)
-        # Write current epoch — but no PID file
-        (squid / ".health").write_text(str(int(time.time())), encoding="utf-8")
-        needs, reason, _ = boot_remote._needs_boot("skill")
-        assert needs is True  # PID-based detection is primary per #4966
-
-
-class TestReadPidFileUtf16:
-    def test_reads_utf16_le_pid(self, tmp_path):
-        """PID file written by PowerShell (UTF-16 LE with BOM) is parsed correctly."""
-        squid = tmp_path / ".squidsquad" / "skill"
-        squid.mkdir(parents=True)
-        # Write PID as UTF-16 LE with BOM (PowerShell default)
-        pid_content = "12345\r\n"
-        (squid / ".pid").write_bytes(b"\xff\xfe" + pid_content.encode("utf-16-le"))
-        result = boot_remote._read_pid_file(tmp_path, "skill")
-        assert result == 12345
-
-    def test_reads_utf8_pid(self, tmp_path):
-        """PID file written as plain UTF-8 still works."""
-        squid = tmp_path / ".squidsquad" / "skill"
-        squid.mkdir(parents=True)
-        (squid / ".pid").write_text("67890\n", encoding="utf-8")
-        result = boot_remote._read_pid_file(tmp_path, "skill")
-        assert result == 67890
+# TestReadHealthFileHeartbeat, TestNeedsBootHeartbeat, and
+# TestReadPidFileUtf16 were removed in #8979 Phase 2 (#4792 sole-authority
+# cleanup) — `_read_health_file` and `_read_pid_file` no longer exist. The
+# `TestRemovedLegacySentinelHelpers` class above locks the removal with
+# negative-guard tests.
 
 
 # ---------------------------------------------------------------------------
@@ -409,36 +365,12 @@ class TestBootAgentLock:
         assert "another boot in progress" in result["message"]
 
 
-# ---------------------------------------------------------------------------
-# #3349 regression: stale .restart sentinel cleanup
-# ---------------------------------------------------------------------------
-
-class TestCleanStaleRestart:
-    def test_removes_existing_restart(self, tmp_path):
-        squid = tmp_path / ".squidsquad" / "skill"
-        squid.mkdir(parents=True)
-        restart = squid / ".restart"
-        restart.write_text("reboot requested by reboot_agent.py", encoding="utf-8")
-        boot_remote._clean_stale_restart(tmp_path, "skill")
-        assert not restart.exists()
-
-    def test_no_restart_is_noop(self, tmp_path):
-        squid = tmp_path / ".squidsquad" / "skill"
-        squid.mkdir(parents=True)
-        boot_remote._clean_stale_restart(tmp_path, "skill")  # Should not raise
-
-
-class TestBootAgentCleansRestart:
-    @patch("boot_remote._spawn_terminal", return_value=(True, "spawned", 12345))
-    @patch("boot_remote._find_boot_script", return_value=(Path("/tmp/start.sh"), "sh"))
-    @patch("boot_remote._needs_boot", return_value=(True, "dead", "/tmp/clone"))
-    @patch("boot_remote._write_booting_sentinel", return_value=True)
-    def test_cleans_restart_before_spawn(self, mock_sentinel, mock_needs, mock_script, mock_spawn):
-        """boot_agent cleans stale .restart before spawning."""
-        with patch("boot_remote._clean_stale_restart") as mock_clean:
-            result = boot_remote.boot_agent("skill")
-        assert result["action"] == "spawn"
-        mock_clean.assert_called_once_with("/tmp/clone", "skill")
+# #3349 stale .restart sentinel cleanup tests removed in #8979 Phase 2
+# (#4792 sole-authority cleanup): `_clean_stale_restart` was deleted along
+# with `boot_agent`'s call site. Restart intent now lives exclusively in
+# harness state — no on-disk `.restart` sentinel exists for the wrapper
+# to read or for boot to clean. The `TestRemovedLegacySentinelHelpers`
+# class at the top of this file locks the removal.
 
 
 class TestGetAllRoles:
