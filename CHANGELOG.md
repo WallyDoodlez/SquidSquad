@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.40.0] — 2026-05-18
+
+### Added
+- #7630 — Event-driven agent architecture (Phase 4 foundation): the harness owns cycle dispatch, and agents react to events via a shared event bus instead of polling on a fixed interval. The polling-mode 30-minute Ralph Loop remains available as a fallback.
+- #8694 — When an agent transitions an issue, the harness automatically dispatches the next work item to the right agent — no manual /complete handshake required.
+- #8695 — Agents emit a `bootup-complete` event so the harness only dispatches work to agents that are fully loaded, preventing missed events during startup.
+- #8697 — Dual-mode CLAUDE.md composition: the same agent role template works in event-driven or polling mode, selected at deploy time.
+- #8814 — Polling-mode behavior extracted into a reusable sub-skill fragment so event-mode and polling-mode templates stay in sync.
+- #8915 — Event-mode L1 base sub-skills + `event_poll.py` so agents in event-driven mode read events from the bus instead of running `/loop`.
+- #8701 — `cycle_pre.py` / `cycle_post.py` task-level refactor for event-driven mode, so the per-cycle mechanical layer works in both modes.
+- #4792 — Harness owns the full agent lifecycle (start/stop/reboot) via an intent state machine; legacy sentinel files (`.stop`, `.stop-after-cycle`, etc.) are deprecated and removed.
+- #8700 — Status line refactored for event-driven mode: queries the harness for live state and falls back to file when offline, so you always see fresh agent activity.
+- #8704 — Harness exposes `/human/queue` endpoint surfacing human-assigned work to TUI/UI consumers — groundwork for the upcoming web dashboard.
+
+### Fixed
+- #8584 — `_tool_read` no longer loads the entire file into memory before checking its size; oversized files are read with a bounded `f.read()`.
+- #8664 — Removed corrupted `.event-state.json` from main and added volatile runtime files (`.event-state.json`, `.backlog-cache`, `.booting`, `.claude-pid`, `scheduled_tasks.lock`) to `.gitignore` so they stop polluting commits.
+- #8918 — `cycle_post.py` mode-gates `REQUIRED_FIELDS` and removes the legacy `_advance_event_cursor` path that survived event-mode migration.
+- #8914 — Restored the thin-broadcast lock by stripping misplaced dispatch + gating logic from `harness.py`.
+- #8879 — `thin_launcher.py`'s `_write_pid` failure no longer leaves the spawned `claude` process orphaned.
+- #8689 — `harness` restart endpoint now immediately reboots idle agents instead of waiting for the next cycle.
+- #8913 — Wizard subprocess calls now use a timeout so a hung subprocess can no longer wedge setup.
+- #8949 — Locked the `_emit_event NameError` regression behind a test so it can never silently come back.
+
+### Internal
+- #8703 — Process directive to DM persisted in scan state: pause `/loop` architecture doc updates during the Phase 5 in-flight bundle (lifted after #8697 shipped).
+- #8891 — Extracted `is_process_alive` into a shared `process_utils` module for harness/health-check/reboot/launcher reuse.
+
 ## [0.39.0] — 2026-05-16
 
 ### Fixed
