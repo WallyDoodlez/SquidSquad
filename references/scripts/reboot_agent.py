@@ -35,16 +35,12 @@ POLL_INTERVAL = 2  # seconds
 # Import boot_remote for unified clone-path resolution and spawn logic
 sys.path.insert(0, str(SCRIPT_DIR))
 import boot_remote
+from process_utils import is_process_alive as _is_process_alive  # (#8891)
 
 
 def _get_clone_path(role):
     """Get the clone path for a role. Uses boot_remote's unified resolution."""
     return boot_remote._get_clone_path(role)
-
-
-def _is_process_alive(pid):
-    """Check if a process is alive."""
-    return boot_remote._is_process_alive(pid)
 
 
 def _kill_process(pid):

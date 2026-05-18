@@ -37,6 +37,9 @@ SQUIDSQUAD_DIR = REPO_ROOT / ".squidsquad"
 LOCAL_CONFIG = SQUIDSQUAD_DIR / ".local-config"
 CONFIG_MD = SQUIDSQUAD_DIR / "config.md"
 
+sys.path.insert(0, str(SCRIPT_DIR))
+from process_utils import is_process_alive as _is_process_alive  # noqa: E402  (#8891)
+
 # Removed: BOOT_LOG, BOOT_LOCK, COOLDOWN_SECONDS, LOCK_TTL_SECONDS (#2183)
 
 
@@ -158,24 +161,6 @@ def _read_pid_file(clone_path, role):
         return int(content) if content else None
     except (ValueError, OSError):
         return None
-
-
-def _is_process_alive(pid):
-    """Check if a process with the given PID is still running."""
-    if pid is None:
-        return False
-    try:
-        if platform.system().lower() == "windows":
-            result = subprocess.run(
-                ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
-                capture_output=True, text=True, check=False,
-            )
-            return str(pid) in result.stdout
-        else:
-            os.kill(pid, 0)
-            return True
-    except (OSError, ProcessLookupError, PermissionError):
-        return False
 
 
 # _has_stop_sentinel was removed in #4792. Agent lifecycle is now controlled

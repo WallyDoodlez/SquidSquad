@@ -44,6 +44,9 @@ SQUIDSQUAD_DIR = REPO_ROOT / ".squidsquad"
 LOCAL_CONFIG = SQUIDSQUAD_DIR / ".local-config"
 CONFIG_MD = SQUIDSQUAD_DIR / "config.md"
 
+sys.path.insert(0, str(SCRIPT_DIR))
+from process_utils import is_process_alive as _is_process_alive  # noqa: E402  (#8891)
+
 # Health categories
 HEALTHY = "healthy"
 STALLED = "stalled"
@@ -206,24 +209,6 @@ def _read_any_pid(squid_dir):
     if pid is not None:
         return pid
     return _read_pid_file(squid_dir)
-
-
-def _is_process_alive(pid):
-    """Check if a process with the given PID is still running."""
-    if pid is None:
-        return False
-    try:
-        if platform.system().lower() == "windows":
-            result = subprocess.run(
-                ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
-                capture_output=True, text=True, check=False,
-            )
-            return str(pid) in result.stdout
-        else:
-            os.kill(pid, 0)
-            return True
-    except (OSError, ProcessLookupError, PermissionError):
-        return False
 
 
 def _parse_health_file(text):
