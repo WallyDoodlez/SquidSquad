@@ -36,19 +36,29 @@ def _get_wake_mode(role_name: str) -> str:
 
     Lookup precedence: `event-driven-<role>` → `event-driven` → default `polling`.
     Values normalize to `event-driven` (yes/true/1) or `polling`.
+
+    `config.get_field` prints `ERROR: Field 'X' not found` to stderr and
+    calls `sys.exit(1)` for missing fields. Field absence is the documented
+    default for both wake-mode fields, so suppress stderr while probing —
+    QA's `test_malformed_repo_scan_warns_not_crashes` (#8697 R3 retro fix)
+    asserts no spurious ERROR output during normal compose.
     """
     sys.path.insert(0, str(SCRIPT_DIR))
     try:
         from config import get_field
     except Exception:
         return "polling"
+    import contextlib
+    import io
     for field in (f"event-driven-{role_name}", "event-driven"):
         try:
-            v = (get_field(field) or "").strip().lower()
-        except SystemExit:
-            # config.get_field calls sys.exit(1) on missing field — treat as
-            # "field absent" and try the next one in the precedence chain.
-            # Other exceptions propagate so real bugs surface (#8697 R2).
+            with contextlib.redirect_stderr(io.StringIO()):
+                v = (get_field(field) or "").strip().lower()
+        except BaseException:
+            # config.get_field calls sys.exit(1) on missing field — caught
+            # via SystemExit. Also tolerate FileNotFoundError/PermissionError
+            # from a config.md TOCTOU race (matches the defensive pattern in
+            # `_read_config_value` further down this file).
             v = ""
         if v in ("yes", "true", "1", "event-driven"):
             return "event-driven"
