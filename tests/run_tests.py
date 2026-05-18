@@ -50,6 +50,7 @@ STATIC_TEST_MODULES = [
     "test_event_catalog",
     "test_event_poll",
     "test_event_mode_fragments",
+    "test_comprehension_8694",
     "test_event_validator",
     "test_event_config",
     "test_write_event_reactions",
