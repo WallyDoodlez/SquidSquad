@@ -41,12 +41,22 @@ Phase 5 event-driven architecture (#7630 EPIC) + #4792 harness sole-authority li
 ### Still OPEN
 | # | Title | Priority | Status |
 |---|---|---|---|
-| 8915 | implement #8694 actual scope (event_poll.py + agent event-mode L1 base) | high | approved (2026-05-18) |
+| 8915 | implement #8694 actual scope (event_poll.py + agent event-mode L1 base) | high | in-progress (branch `squidsquad/task/8915`) |
 | 8979 | #4792 incomplete: Phase 1/3/4/5 remediation (force-kill safety net, /quit fragment, ctx-pressure /restart routing, shim, upgrade path) | high | approved (2026-05-18) |
-| 8916 | L2 dev rule: read CONTEXT.md / TEST-PLAN.md before implementing | high | pending |
-| 8917 | PM CLAUDE.md: when planning rewrites scope, update issue body in same step | high | pending |
-| 8949 | harness.py _emit_event NameError: `_log_event(body)` → `_log_event(event)` | high | pending |
-| 8950 | defense-in-depth gates: code-review / QA / DM check planning artifact | high | pending |
+| 8916 | L2 dev rule: read CONTEXT.md / TEST-PLAN.md before implementing | high | approved (2026-05-18) — deepseek R2 NO_FINDINGS |
+| 8917 | PM CLAUDE.md: when planning rewrites scope, update issue body in same step | high | approved (2026-05-18) — deepseek R2 NO_FINDINGS |
+| 8950 | defense-in-depth gates: code-review / QA / DM check planning artifact | high | approved (2026-05-18) — deepseek R3 NO_FINDINGS |
+| 8997 | PM improvement scan — autonomous L4 writes via deepseek constitutional audit + mini-CQ | medium | pending (filed 2026-05-18 — design discussion captured, needs planning lifecycle) |
+
+### Design discussion captured (2026-05-18) — pending future work
+
+**#8997 — Autonomous L4 writes for PM improvement scan.** Key decisions reached in discussion (recorded in issue body):
+- L4 is already per-role capable via filename prefix (compose.py:384-409); no compose gap to fix
+- Constitutional rule: L1-L3 mandatory and load-bearing; L4 additive only; L1 declares this so it gates L4 interpretation
+- Every L4 write goes through deepseek `l4-audit` against the constitutional rule + a mini-CQ gate before commit
+- Append-only L4 placement preferred over explicit insertion hooks (upgrade only if CQ failures show drift)
+- Worst residual risk: PM adds noisy gate (bounded; agents can flag for rollback)
+- Memory note: `feedback_l1_l4_only.md` operationalized; `feedback_comprehension_tests_required.md` enforced via mini-CQ gate
 
 ### Hard prereq still in flight
 - **#8692** — singleton enforcement; was at `pending-test` last check; may have shipped during session
