@@ -1403,6 +1403,58 @@ class TestThinHarnessInvariants(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# _emit_event regression — #8949
+# ---------------------------------------------------------------------------
+
+class TestEmitEventRegression(unittest.TestCase):
+    """#8949: PM-filed audit B bug — `_emit_event` was alleged to call
+    `_log_event(body)` with `body` undefined, killing the daemon thread on
+    every call (notably the merge thread in `_do_merge`).
+
+    Current source already uses `_log_event(event)` so the bug doesn't
+    reproduce — these tests lock that in so a regression would fail loudly.
+    """
+
+    def test_emit_event_runs_without_nameerror(self):
+        """Direct invocation: must not raise NameError on the log call."""
+        import harness
+        # Would raise NameError under the regressed version PM described.
+        harness._emit_event(
+            "regression-test", "skill", payload={"check": True},
+        )
+
+    def test_emit_event_appends_to_stream_and_logs(self):
+        """End-to-end: the event reaches the lifecycle stream and the log
+        helper is invoked exactly once with the new event dict."""
+        import harness
+        before = len(harness.event_stream)
+        with patch("harness._log_event") as mock_log:
+            harness._emit_event(
+                "merge-thread-probe", "harness",
+                payload={"pr_number": "9999"},
+            )
+        after = len(harness.event_stream)
+        self.assertEqual(after, before + 1)
+        mock_log.assert_called_once()
+        # The argument must be the new event dict, not `body` (the regressed
+        # version would have failed with NameError before reaching this line).
+        (arg,), _ = mock_log.call_args
+        self.assertIsInstance(arg, dict)
+        self.assertEqual(arg["event_type"], "merge-thread-probe")
+        self.assertEqual(arg["role"], "harness")
+
+    def test_emit_event_source_uses_event_not_body(self):
+        """Static guard: the `_emit_event` body references `event`, not the
+        stale `body` name. Locks the fix in source so an editor change
+        outside testing can't reintroduce the typo."""
+        import inspect
+        import harness
+        src = inspect.getsource(harness._emit_event)
+        self.assertIn("_log_event(event)", src)
+        self.assertNotIn("_log_event(body)", src)
+
+
+# ---------------------------------------------------------------------------
 # Bootup-complete flag (informational only) — #8695 / #8914
 # ---------------------------------------------------------------------------
 
