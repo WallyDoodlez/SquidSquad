@@ -157,14 +157,27 @@ class TestIsProcessAlive:
 
 class TestNeedsBoot:
     @patch("boot_remote._get_clone_path")
-    def test_stopped_agent_skipped(self, mock_clone, tmp_path):
+    def test_stop_sentinel_no_longer_blocks_boot(self, mock_clone, tmp_path):
+        """#4792: a stale `.stop` file in a clone no longer blocks boot.
+
+        Lifecycle intent now lives in harness state, not on disk. The split
+        brain caused by lingering `.stop` files (removing one in the primary
+        repo not affecting clones) is the bug this issue closes.
+        """
         mock_clone.return_value = tmp_path
+        # Even with the file present, boot must NOT be blocked by it
         stop_file = tmp_path / ".squidsquad" / "skill" / ".stop"
         stop_file.parent.mkdir(parents=True)
-        stop_file.write_text("")
+        stop_file.write_text("legacy sentinel — should be ignored")
         needs, reason, _ = boot_remote._needs_boot("skill")
-        assert needs is False
-        assert ".stop" in reason
+        # boot proceeds (no PID file present, so booting fresh)
+        assert needs is True
+        # And the reason should NOT mention `.stop`
+        assert ".stop" not in reason
+
+    def test_has_stop_sentinel_function_removed(self):
+        """#4792: _has_stop_sentinel was removed from boot_remote."""
+        assert not hasattr(boot_remote, "_has_stop_sentinel")
 
     @patch("boot_remote._get_clone_path")
     def test_no_pid_needs_boot(self, mock_clone, tmp_path):

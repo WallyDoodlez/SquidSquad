@@ -16,51 +16,35 @@ import start_team
 # Sentinel operations
 # ---------------------------------------------------------------------------
 
-class TestSentinelOps:
-    def test_harness_api_stop(self, tmp_path):
-        """cmd_stop calls harness API instead of writing .stop-after-cycle (#4966)."""
-        with patch.object(start_team, "_harness_api", return_value=(True, {"action": "stop"})):
-            start_team.cmd_stop(["skill"])
-            # No .stop-after-cycle written when harness is reachable
+class TestSentinelOpsRemoved:
+    """#4792: `.stop` sentinel mechanism removed. cmd_stop now uses harness
+    API only; no file-based fallback. _write_stop / _remove_stop /
+    _clean_stale_sentinels were deleted from start_team.py."""
 
-    def test_harness_api_stop_fallback(self, tmp_path):
-        """cmd_stop falls back to .stop sentinel when harness unreachable (#4966)."""
-        role_dir = tmp_path / ".squidsquad" / "skill"
-        role_dir.mkdir(parents=True)
+    def test_cmd_stop_uses_harness_api(self):
+        with patch.object(start_team, "_harness_api", return_value=(True, {"action": "stop"})) as api:
+            ok = start_team.cmd_stop(["skill"])
+        assert ok is True
+        api.assert_called_with("POST", "/agents/skill/stop")
+
+    def test_cmd_stop_returns_false_when_harness_unreachable(self, tmp_path, capsys):
+        """No `.stop` fallback — stop fails clean instead of writing a
+        sentinel that survives the harness restart and causes split-brain."""
         with patch.object(start_team, "_harness_api", return_value=(False, None)), \
              patch.object(start_team, "SQUIDSQUAD_DIR", tmp_path / ".squidsquad"):
-            start_team.cmd_stop(["skill"])
-        sentinel = role_dir / ".stop"
-        assert sentinel.exists()
+            ok = start_team.cmd_stop(["skill"])
+        assert ok is False
+        # No `.stop` file written anywhere
+        assert not any((tmp_path / ".squidsquad").rglob(".stop"))
+        out = capsys.readouterr().out
+        assert "Harness unreachable" in out
+        assert ".stop" not in out  # no mention of the deprecated mechanism
 
-    def test_write_stop(self, tmp_path):
-        """Writes .stop sentinel."""
-        role_dir = tmp_path / ".squidsquad" / "skill"
-        role_dir.mkdir(parents=True)
-        with patch.object(start_team, "SQUIDSQUAD_DIR", tmp_path / ".squidsquad"):
-            start_team._write_stop("skill")
-        sentinel = role_dir / ".stop"
-        assert sentinel.exists()
-
-    def test_remove_stop(self, tmp_path):
-        """Removes .stop sentinel."""
-        role_dir = tmp_path / ".squidsquad" / "skill"
-        role_dir.mkdir(parents=True)
-        stop = role_dir / ".stop"
-        stop.write_text("test")
-        with patch.object(start_team, "SQUIDSQUAD_DIR", tmp_path / ".squidsquad"):
-            start_team._remove_stop("skill")
-        assert not stop.exists()
-
-    def test_clean_stale_restart(self, tmp_path):
-        """Cleans stale .restart sentinels from old system."""
-        role_dir = tmp_path / ".squidsquad" / "skill"
-        role_dir.mkdir(parents=True)
-        restart = role_dir / ".restart"
-        restart.write_text("old reason")
-        with patch.object(start_team, "SQUIDSQUAD_DIR", tmp_path / ".squidsquad"):
-            start_team._clean_stale_sentinels("skill")
-        assert not restart.exists()
+    def test_deprecated_helpers_are_gone(self):
+        for name in ("_write_stop", "_remove_stop", "_clean_stale_sentinels"):
+            assert not hasattr(start_team, name), (
+                f"start_team.{name} should be removed in #4792"
+            )
 
     def test_is_agent_idle_when_idle(self, tmp_path):
         """Agent is idle when current-state starts with 'idle'."""

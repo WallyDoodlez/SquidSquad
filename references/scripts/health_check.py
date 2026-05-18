@@ -300,12 +300,9 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
         result["reason"] = f"clone path does not exist: {clone_root}"
         return result
 
-    # Check .stop sentinel
-    stop_file = squid / ".stop"
-    if stop_file.exists():
-        result["health"] = STOPPED
-        result["reason"] = ".stop sentinel present — agent explicitly stopped"
-        return result
+    # #4792: stop-detection moved to harness state (intent=stopping/stopped),
+    # no longer file-based. Local health_check.py only reports phase/health,
+    # not lifecycle intent — that's the harness's job via /agents/<role>.
 
     # Read current-state for phase info (always, regardless of .health)
     state_file = squid / "current-state"

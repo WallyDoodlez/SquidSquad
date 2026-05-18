@@ -408,12 +408,18 @@ class TestCheckAgentHealth:
 
     # --- Edge cases ---
 
-    def test_stopped_agent(self, tmp_path):
+    def test_stop_sentinel_no_longer_reported(self, tmp_path):
+        """#4792: health_check.py no longer reads `.stop` to report 'stopped'.
+
+        Stop intent now lives in harness state; local health_check.py reports
+        process-level health only. A stale `.stop` file on disk is ignored.
+        """
         clone = self._setup_agent(tmp_path, "skill", stop=True,
                                   health_text="alive")
         result = health_check.check_agent_health("skill", clone, 30)
-        assert result["health"] == "stopped"
-        assert ".stop" in result["reason"]
+        # The agent is "alive" per .health, and `.stop` no longer overrides
+        assert result["health"] != "stopped"
+        assert ".stop" not in result.get("reason", "")
 
     def test_missing_clone_path(self, tmp_path):
         result = health_check.check_agent_health("skill", tmp_path / "nonexistent", 30)

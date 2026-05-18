@@ -469,9 +469,9 @@ class TestEndpointsViaTestClient(unittest.TestCase):
 
     def test_post_shutdown_returns_202(self):
         """POST /shutdown returns 202 Accepted (non-blocking)."""
+        # #4792: removed `_has_stop_sentinel` patch — function deleted.
         with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
              patch("harness.boot_remote._get_clone_path", return_value="/fake"), \
-             patch("harness.boot_remote._has_stop_sentinel", return_value=True), \
              patch("harness.os._exit"):  # Prevent actual exit
             resp = self.client.post("/shutdown")
         self.assertEqual(resp.status_code, 202)
