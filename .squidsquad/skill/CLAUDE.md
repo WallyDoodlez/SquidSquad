@@ -160,7 +160,11 @@ Reference issues by number in working-state.md: `- **Task**: #42`
 
 ### Planning Artifacts
 
-Planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md) remain as local files in `.squidsquad/[role]/planning/`. Only the tracker (issues/tasks) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
+Planning artifacts remain as local files. Under the #9184 workflow:
+- PM produces RESEARCH.md and CONTEXT.md under `.squidsquad/pm/planning/`. PM does NOT produce TEST-PLAN.md.
+- QA produces `TEST-PLAN-<NUMBER>.md`, `TEST-<NUMBER>-tests.py`, and `QA-RESULTS-<NUMBER>.md` under `.squidsquad/qa/planning/` when picking up verification.
+
+Only the tracker (issues/tasks) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
 
 ### Caching
 
@@ -474,54 +478,62 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    python references/scripts/tracker.py transition [NUMBER] approved in-progress --role skill-lead
    ```
 1b. **Branch checkout** (#3296): `python references/scripts/git_ops.py task-begin skill [NUMBER]` — checks out the task's feature branch if branch-workflow is enabled.
-2. **Read planning artifacts first — CONTEXT.md is authoritative** (#8916).
+2. **Read the AC list from the issue body, with CONTEXT.md as the locked decisions companion** (#8916, #9184).
 
-   Before writing any code for a task, check whether planning artifacts exist:
+   The **GitHub issue body is the authoritative source of the acceptance criteria.** PM no longer produces a test plan (#9184) — the AC list in the issue body IS the contract, and dev implements against it. CONTEXT.md captures locked decisions, scope boundaries, and side-effect mitigations agreed during Phase 2 discussion.
+
+   Before writing any code, check for planning artifacts:
    - `.squidsquad/pm/planning/CONTEXT.md` (bundle-level; the per-task section is `### 5.X #<NUMBER> — …`)
    - `.squidsquad/pm/planning/CONTEXT-<NUMBER>.md` (per-task)
-   - `.squidsquad/pm/planning/TEST-PLAN-<NUMBER>.md` (acceptance criteria + comprehension tests)
    - Fallback location: `.squidsquad/skill/planning/` (your own planning directory) — same file patterns
 
-   If a planning artifact exists, **the planning artifact is the authoritative scope.** The GitHub issue body is a high-level pointer; the planning artifact is the contract. Read the relevant CONTEXT section (`### 5.X #<NUMBER>` for bundle CONTEXT.md, OR the full per-task `CONTEXT-<NUMBER>.md`) AND the `TEST-PLAN-<NUMBER>.md` acceptance criteria **in full** before writing code.
+   Read the relevant CONTEXT section (`### 5.X #<NUMBER>` for bundle CONTEXT.md, OR the full per-task `CONTEXT-<NUMBER>.md`) AND the **Acceptance Criteria** section of the issue body **in full** before writing code. The issue body lists the ACs; CONTEXT.md states the locked architectural decisions that shape *how* to satisfy them.
 
    **Divergence handling**:
-   - If the issue body and the planning artifact **agree**, proceed normally. Do not add a planning-artifact note to the PR description.
-   - If the issue body and the planning artifact **disagree**, the planning artifact wins. Implement to the planning artifact. Flag the divergence in your implementation PR description (one sentence pointing PM at the body/artifact mismatch) so PM can update the body via the #8917 workflow.
+   - If the issue body and CONTEXT.md **agree**, proceed normally.
+   - If the issue body and CONTEXT.md **disagree**, CONTEXT.md wins (locked decisions outrank body bullets — see #8917). Implement to the locked decisions. Flag the divergence in your implementation PR description (one sentence pointing PM at the body/CONTEXT mismatch) so PM can update the body via the #8917 workflow.
 
-   If PM comments reference planning artifacts but you cannot find them, **push back** (see Prohibitions). If no planning artifact exists (bug fix or trivial task), proceed to step 2c.
+   If PM comments reference planning artifacts but you cannot find them, **push back** (see Prohibitions). If no CONTEXT artifact exists (bug fix or trivial task), the issue body's AC list is the contract; proceed to step 2c.
+
+   **Do NOT look for a PM-side `TEST-PLAN-<NUMBER>.md`** — under the new workflow (#9184) PM does not produce one. QA writes its own test plan at `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` during verification. Dev's job is to implement against the AC list, not against a pre-written test plan.
 2c. **Consult the vault** (#5572) — before implementing, search the vault for relevant context:
    ```bash
    grep -rl "[keyword]" .squidsquad/vault/ --include="*.md" | head -5
    ```
    Check for: decisions that constrain the approach, patterns to follow, learnings from similar past work, and human preferences. Especially check `[[human-profile]]` and BRIEFING.md. This takes seconds and prevents rework from missed context.
 3. Write working state: update `.squidsquad/skill/working-state.md` with `Task: #[NUMBER]`, status `in-progress`, planned approach, and acceptance criteria checklist.
-4. Implement the task according to the acceptance criteria. Respect locked decisions from CONTEXT.md. Implement required side effect mitigations. Update working state as you complete sub-steps.
-5. Run the test command: `python tests/run_tests.py`
-6. **Run smoke tests** from TEST-PLAN.md (if it exists) before marking as Pending Test.
-7. **Update docs**: Update only technical documentation (API docs, code comments, architecture notes). User-facing docs are handled by DM. If the change affects user-facing behavior, comment delivery notes on the Issue.
-8. **Copy changed references to live**: If any files in `references/` were modified (e.g. `statusline.sh`, `hints-*.txt`), copy them to the live `.squidsquad/` location so changes take effect immediately.
-9. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false`, do NOT transition — re-read the acceptance criteria and apply the implementation.
-9b. **Self-verification reflection** — before marking pending-test, stop and critically review your own work:
+4. Implement the task according to the acceptance criteria from the issue body. Respect locked decisions from CONTEXT.md. Implement required side effect mitigations. Update working state as you complete sub-steps.
+4b. **Write unit tests for your implementation** (#9184). Dev's unit tests cover the code you actually wrote — concrete assertions on functions, scripts, modules, or behavior added or changed. They commit in the **same PR** as the implementation.
+
+   - Dev's unit tests are a correctness check on the code, **not** the verification contract. They prove "I implemented what I think the AC says." They are **not** sufficient to satisfy the AC — QA executes its own AC-derived test plan against a live instance and that is the gate (see `qa/verification.md`).
+   - Put tests under `tests/` using the existing layout (`tests/test_<feature>_<NUMBER>.py` or the area-appropriate location). Run them as part of the existing `python tests/run_tests.py` suite so they cannot regress silently.
+   - If the implementation has no testable surface (pure prose / instruction edits with no executable code), state that explicitly in the PR description and rely on QA's CQ coverage instead of fabricating shallow tests.
+5. Run the test command: `python tests/run_tests.py` — your new unit tests must pass alongside the existing suite.
+6. **Update docs**: Update only technical documentation (API docs, code comments, architecture notes). User-facing docs are handled by DM. If the change affects user-facing behavior, comment delivery notes on the Issue.
+7. **Copy changed references to live**: If any files in `references/` were modified (e.g. `statusline.sh`, `hints-*.txt`), copy them to the live `.squidsquad/` location so changes take effect immediately.
+8. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false`, do NOT transition — re-read the acceptance criteria and apply the implementation.
+8b. **Self-verification reflection** — before marking pending-test, stop and critically review your own work:
    - **Regression**: Does this change break existing behavior? Read the code paths you touched — what else depends on them?
    - **Integration**: Does this work correctly with the current system setup? Is it compatible with config, compose, and the deployed state?
    - **Philosophy**: Does this violate any project philosophy, vault decisions, or established patterns?
    - **Personas**: Will this break workflows for any agent role (PM, QA, DM, human)? Think through each consumer of your change.
    If ANY of these checks reveal a concern — fix it before transitioning. Do not ship known concerns for QA to catch.
-9c. **External code review** — after self-review passes, run an external model review before marking pending-test. Self-review catches what you know; external review catches what you missed.
+8c. **External code review** — after self-review passes, run an external model review before marking pending-test. Self-review catches what you know; external review catches what you missed.
 
    **Stage all changes first**:
    ```bash
    git add -A
    ```
 
-   **Locate planning artifacts** — when a task has a CONTEXT/TEST-PLAN
-   in `.squidsquad/pm/planning/`, the review must check the diff against
-   those architectural locks, not only code quality (#8950 Gate #2 / #8916
-   §9c). Discover by task-number match — this covers both legacy
-   `FEAT-PM-<NUMBER>-TEST-PLAN.md` and new `TEST-PLAN-<NUMBER>.md`
-   conventions, and any sibling `CONTEXT-<NUMBER>.md`:
+   **Locate planning artifacts** — when a task has a `CONTEXT-<NUMBER>.md`
+   (or bundle section in `CONTEXT.md`) in `.squidsquad/pm/planning/`, the
+   review must check the diff against those architectural locks, not only
+   code quality (#8950 Gate #2 / #8916 §9c / #9184). PM-side `TEST-PLAN-*.md`
+   files are legacy historical artifacts and may exist for older tasks;
+   include them if present, but do not require them — under the new workflow
+   (#9184) PM produces no test plan. Discover by task-number match:
    ```bash
-   ARTIFACTS=$(ls .squidsquad/pm/planning/*[NUMBER]* 2>/dev/null | paste -sd, -)
+   ARTIFACTS=$(ls .squidsquad/pm/planning/CONTEXT*[NUMBER]* .squidsquad/pm/planning/*[NUMBER]*TEST-PLAN* 2>/dev/null | paste -sd, -)
    ```
 
    **Get changed files and run review**:
@@ -534,7 +546,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
      --task-id "#[NUMBER]" \
      --input-files "$INPUT_FILES" \
      --output-file ".squidsquad/skill/planning/CODE-REVIEW-[NUMBER].md" \
-     --context "Task: [title]. ACs: [acceptance criteria summary]. Project philosophy: [key constraints]. If planning artifacts (CONTEXT-*, TEST-PLAN-*) are present in --input-files, verify the diff conforms to the architectural locks documented there — not only code quality."
+     --context "Task: [title]. ACs: [acceptance criteria summary from the issue body]. Project philosophy: [key constraints]. If a CONTEXT-* planning artifact is present in --input-files, verify the diff conforms to the architectural locks documented there. Legacy TEST-PLAN-* artifacts may also appear for older tasks — treat them as informational; the authoritative AC list is the issue body (#9184)."
    ```
 
    **If external model unavailable** (exit code 1 or 2): fall back to Claude via the Agent tool with the same review prompt (read the changed files, review against ACs and project philosophy, output structured findings).
@@ -558,13 +570,13 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    ```
 
    **Re-run review** after applying fixes. Loop until:
-   - Clean review (zero findings) → exit loop immediately, proceed to step 10
-   - 5 iterations reached with remaining findings → proceed to step 10 with all findings noted in PR comment. QA decides whether to accept.
+   - Clean review (zero findings) → exit loop immediately, proceed to step 9
+   - 5 iterations reached with remaining findings → proceed to step 9 with all findings noted in PR comment. QA decides whether to accept.
    - File-to-PM disposition → exit loop, transition to planning (see above)
 
    **Escalation**: If >50% of findings across 3+ iterations are justified-ignore, note in the PR comment: "High justified-ignore rate — review model or prompt may need tuning." This is a process signal for the human.
 
-10. If tests and smoke tests pass and changes exist:
+9. If unit tests and changes exist (and code-review iteration converged):
    - Transition status:
      ```bash
      python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role skill-lead
@@ -572,7 +584,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
      ```
    - `python references/scripts/git_ops.py task-end skill [NUMBER]` — return to working branch.
    - Clear working state.
-11. If tests fail: fix the failure before changing status.
+10. If tests fail: fix the failure before changing status.
 <!-- /sub-skill: implement-tasks -->
 
 <!-- sub-skill: improvement-scan -->
@@ -1190,7 +1202,8 @@ Runs on-demand (invoked explicitly, not automatic). Checks every `.md` file: all
 - Your iteration logs: `.squidsquad/skill/iterations/iter-N.md`
 - Your working state: `.squidsquad/skill/working-state.md`
 - Your planning artifacts: `.squidsquad/skill/planning/`
-- PM planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md): `.squidsquad/pm/planning/`
+- PM planning artifacts (RESEARCH.md, CONTEXT.md): `.squidsquad/pm/planning/` — under the #9184 workflow PM no longer produces TEST-PLAN.md
+- QA planning artifacts (TEST-PLAN-<NUMBER>.md, QA-RESULTS-<NUMBER>.md, TEST-<NUMBER>-tests.py): `.squidsquad/qa/planning/` (#9184)
 - Config (read-only except ship counter): `.squidsquad/config.md`
 - Cross-filing: create GitHub Issues with `role:[OTHER_ROLE]` label
 <!-- /sub-skill: file-conventions -->
@@ -1369,7 +1382,7 @@ These instructions apply to ALL agents on this project.
 
 ### Planning & Verification
 
-- **Planning artifacts in `.squidsquad/pm/planning/`**: RESEARCH.md, CONTEXT.md, TEST-PLAN.md per task.
+- **Planning artifacts (#9184)**: PM produces RESEARCH.md and CONTEXT.md under `.squidsquad/pm/planning/`. QA produces `TEST-PLAN-<NUMBER>.md`, `TEST-<NUMBER>-tests.py`, and `QA-RESULTS-<NUMBER>.md` under `.squidsquad/qa/planning/` when picking up verification. PM does NOT produce a test plan.
 - **Clone isolation paths from `.local-config`**: Each agent's clone path resolved via boot_remote.
 - **BRIEFING.md staleness check every cycle**: Version, active agents, priorities verified against config.md.
 - **Bug fixes need research**: PM runs Phase 1 research before filing, not just "fix this."
