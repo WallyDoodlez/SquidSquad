@@ -12,11 +12,11 @@
 - Phase 2 §5.3 (reboot_agent.py gut + SIGKILL parity + deprecation stub): commit e30cdd1a.
 - Phase 2 §5.5 (cycle_pre.py `harness_status` field + stale-comment refresh): commit b02c86a2.
 - Phase 2 §5.1 (harness boot-time legacy-sentinel sweep — synchronous, before start_poller): commit 10d052a7. DeepSeek r1 caught race + TOCTOU; r2 NO_FINDINGS.
+- Phase 2 §5.6 (cycle_post.py comment refresh — `_do_stop_after_cycle_check` docstring): commit 8d711384. DeepSeek r1 NO_FINDINGS. Function rename deferred per CONTEXT-4792.md §5.6 (optional/low priority).
 
 ## Remaining Steps
 
-- Phase 2 §5.4: health_check.py trim (delete `.stop` + `.health` + `.pid` reads; keep `.claude-pid`; docstring note about offline fallback). **Biggest chunk — 506-line test file to rewrite.**
-- Phase 2 §5.6: cycle_post.py residuals tidy (most done in Phase 1).
+- Phase 2 §5.4: health_check.py trim (delete `.stop` + `.health` + `.pid` reads; keep `.claude-pid`; docstring note about offline fallback). **Biggest chunk — 506-line test file to rewrite. Needs fresh context window.**
 - Phase 3: operator entry-point convergence (start_team.py thin shim, boot_remote main() removal, reboot_agent main() removal).
 - Phase 4: `.health` legacy fragment edits in references/sub-skills/common/agent-lifecycle.md + recompose.
 - Phase 5: upgrade-path cleanup logic on harness boot.
@@ -29,3 +29,4 @@
 - §5.5 `harness_status` is strictly informational — fail-open, no gating — so cycle_pre stays robust if the harness is down or slow.
 - §5.1 cleanup must run SYNCHRONOUSLY on the lifespan thread before `state.start_poller()` and the `_deferred_init` thread spawn — DeepSeek r1 caught the race where placing it inside `_deferred_init` could let the legacy `.health` fallback fire on a stale file. Source-grep guard test pins the ordering.
 - §5.1 unlink path: skip non-existent up front + `unlink(missing_ok=True)` — the TOCTOU window where another process unlinks between exists() and unlink() still counts as a removal (post-condition satisfied).
+- §5.6: function rename `_do_stop_after_cycle_check` → `_check_harness_intent` deferred — CONTEXT-4792.md §5.6 calls it optional/low priority, and it touches the call site + any tests; not worth bundling into a comment-refresh commit.
