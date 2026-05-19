@@ -142,6 +142,10 @@ def run_integration_tests(targets):
         from integration import test_status_flow
         suite.addTests(loader.loadTestsFromModule(test_status_flow))
 
+    if not targets or "event_mode_e2e" in targets:
+        from integration import test_event_mode_e2e
+        suite.addTests(loader.loadTestsFromModule(test_event_mode_e2e))
+
     runner = unittest.TextTestRunner(verbosity=2)
     try:
         result = runner.run(suite)
@@ -165,7 +169,9 @@ def main():
 
     targets = [a for a in sys.argv[1:] if not a.startswith("-")]
     static_only = targets == ["static"]
-    integration_only = any(t in targets for t in ("harness", "status_flow"))
+    integration_only = any(
+        t in targets for t in ("harness", "status_flow", "event_mode_e2e")
+    )
 
     all_passed = True
 

@@ -478,9 +478,12 @@ class EventStream:
             for i, event in enumerate(items):
                 if event.get("id") == since_id:
                     after = items[i + 1:]
-                    return after[-limit:] if len(after) > limit else after
+                    # Return OLDEST `limit` after cursor — skim-then-advance
+                    # (CONTEXT-8694 §2 long-lag rule). Returning newest would
+                    # silently drop events between cursor and (head - limit).
+                    return after[:limit] if len(after) > limit else after
             # ID not found (evicted) — return oldest available up to limit
-            return items[-limit:] if len(items) > limit else items
+            return items[:limit] if len(items) > limit else items
 
     def __len__(self):
         with self._lock:
@@ -1315,8 +1318,16 @@ async def get_events(
         types = set(event_type.split(","))
         events = [e for e in events if e.get("event_type") in types]
 
-    # Apply limit after filtering
-    events = events[-limit:] if len(events) > limit else events
+    # Apply limit after filtering.
+    # With `since`, the agent skim-then-advance contract (CONTEXT-8694 §2)
+    # requires the OLDEST events after the cursor — slicing `[-limit:]`
+    # would silently drop the events between cursor and (head - limit).
+    # Without `since`, callers want the most recent activity, so keep the
+    # tail.
+    if since:
+        events = events[:limit] if len(events) > limit else events
+    else:
+        events = events[-limit:] if len(events) > limit else events
 
     return {"events": events, "total": len(event_stream)}
 
@@ -1364,7 +1375,12 @@ async def get_events_for_role(
         elif relevant_types and etype in relevant_types:
             filtered.append(e)
 
-    filtered = filtered[-limit:] if len(filtered) > limit else filtered
+    # Same skim-then-advance rule as GET /events: oldest-first when the
+    # caller advances a cursor, newest-first otherwise.
+    if since:
+        filtered = filtered[:limit] if len(filtered) > limit else filtered
+    else:
+        filtered = filtered[-limit:] if len(filtered) > limit else filtered
 
     # Mark dispatched in lifecycle manager
     for e in filtered:
