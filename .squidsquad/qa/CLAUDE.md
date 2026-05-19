@@ -344,6 +344,11 @@ The script handles: status transitions, tracker comments, iteration logging, git
 <!-- /sub-skill: cycle-runner -->
 
 
+
+
+
+
+
 <!-- sub-skill: context-pressure -->
 ### Step 1b — Context Pressure Check
 
@@ -574,6 +579,19 @@ python references/scripts/git_ops.py task-end [role] [number]
 2b. **Test coverage check** (always runs, with or without TEST-PLAN.md): Verify that new code has corresponding unit tests. Check for new or modified test files. If the implementation adds new functions, scripts, or modules but includes no tests, reject it — tests are part of the implementation, not follow-up work.
 
 2c. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
+
+2d. **AC walk against the planning contract** (#8950 Gate #3) — before marking any task `pending-test → pending-ship`, locate the TEST-PLAN by task-number match (covers both legacy `FEAT-PM-<NUMBER>-TEST-PLAN.md` and new `TEST-PLAN-<NUMBER>.md` conventions):
+
+   ```bash
+   TEST_PLAN=$(ls .squidsquad/pm/planning/*[NUMBER]* 2>/dev/null | grep -i 'test-plan' | head -1)
+   ```
+
+   - **If `$TEST_PLAN` is empty** (bug fix or trivial task with no planning artifact): skip this AC walk, proceed with the existing verification flow.
+   - **If `$TEST_PLAN` is non-empty**: read it and walk its AC list. For each AC, confirm it is **observably satisfied** by the implementation — run the verification command stated in the AC, check the file the AC names, or observe the output the AC describes. **Tests passing is necessary but not sufficient — do not infer AC satisfaction from test names.** If any AC is not observably satisfied, transition `pending-test → in-progress` and comment which AC failed:
+     ```bash
+     python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead
+     python references/scripts/tracker.py comment [NUMBER] --role qa-lead --message "AC walk failed: AC-[N] in $TEST_PLAN is not observably satisfied — [what was checked and what failed]. Status → In Progress."
+     ```
 
 3. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, missing test coverage, or unresolved finding is discovered:
    ```bash

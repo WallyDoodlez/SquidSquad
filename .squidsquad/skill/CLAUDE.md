@@ -335,6 +335,11 @@ The script handles: status transitions, tracker comments, iteration logging, git
 <!-- /sub-skill: cycle-runner -->
 
 
+
+
+
+
+
 <!-- sub-skill: context-pressure -->
 ### Step 1b — Context Pressure Check
 
@@ -500,14 +505,27 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    git add -A
    ```
 
+   **Locate planning artifacts** — when a task has a CONTEXT/TEST-PLAN
+   in `.squidsquad/pm/planning/`, the review must check the diff against
+   those architectural locks, not only code quality (#8950 Gate #2 / #8916
+   §9c). Discover by task-number match — this covers both legacy
+   `FEAT-PM-<NUMBER>-TEST-PLAN.md` and new `TEST-PLAN-<NUMBER>.md`
+   conventions, and any sibling `CONTEXT-<NUMBER>.md`:
+   ```bash
+   ARTIFACTS=$(ls .squidsquad/pm/planning/*[NUMBER]* 2>/dev/null | paste -sd, -)
+   ```
+
    **Get changed files and run review**:
    ```bash
    CHANGED_FILES=$(git diff --cached --name-only | paste -sd, -)
+   # If $ARTIFACTS is non-empty, append it after a comma so the review
+   # agent sees both the diff and the planning contract.
+   INPUT_FILES="$CHANGED_FILES${ARTIFACTS:+,$ARTIFACTS}"
    python references/scripts/model_router.py code-review \
      --task-id "#[NUMBER]" \
-     --input-files "$CHANGED_FILES" \
+     --input-files "$INPUT_FILES" \
      --output-file ".squidsquad/skill/planning/CODE-REVIEW-[NUMBER].md" \
-     --context "Task: [title]. ACs: [acceptance criteria summary]. Project philosophy: [key constraints]."
+     --context "Task: [title]. ACs: [acceptance criteria summary]. Project philosophy: [key constraints]. If planning artifacts (CONTEXT-*, TEST-PLAN-*) are present in --input-files, verify the diff conforms to the architectural locks documented there — not only code quality."
    ```
 
    **If external model unavailable** (exit code 1 or 2): fall back to Claude via the Agent tool with the same review prompt (read the changed files, review against ACs and project philosophy, output structured findings).
