@@ -8,7 +8,9 @@
 - (none)
 
 ## Notes
-- Skill juggling #8999 (umbrella) + #9331 (eviction-signal precondition) in parallel.
-- Approved queue for skill: #9272, #9318, #9265 (waiting behind #8999 + #9331).
-- DM approved: #3 (public launch, high) — human greenlight pending.
-- Harness OFF until #9242 ships. Polling-mode tolerance.
+- Filed #9358 cycle 1503: dm+skill cycle structure stopped today but agents continue inline. Low severity.
+- CONTEXT-9331.md committed cycle 1502.5 (main commit 9626f9ea) — grounded the eviction-signal task that I filed body-only earlier.
+- Skill on #8999 + #9331 in parallel (in-progress on both). PR #9320 open, mergeable UNKNOWN.
+- Approved queue for skill: #9272, #9318, #9265 (waiting).
+- DM approved: #3 (public launch, high) awaiting human greenlight.
+- Harness OFF until #9242 ships.
