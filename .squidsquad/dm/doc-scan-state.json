@@ -8,9 +8,10 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "CONTRIBUTING.md",
-  "rotation_count": 46,
+  "last_scanned": "CHANGELOG.md",
+  "rotation_count": 47,
   "scan_history": [
+    {"file": "CHANGELOG.md", "date": "2026-05-18", "findings": 0, "note": "Rotation 46 close. v0.40.0 section (10 Added, 8 Fixed, 2 Internal) verified accurate against bump items. Advancing rotation_count to 47"},
     {"file": "CONTRIBUTING.md", "date": "2026-05-18", "findings": 0, "note": "Rotation 46. Unchanged since cycle 979"},
     {"file": "docs/sub-skill-guide.md", "date": "2026-05-18", "findings": 0, "note": "Rotation 46. Unchanged since cycle 1050 fix (capabilities/+project/ tree gap)"},
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-18", "findings": 0, "note": "Rotation 46 first real scan since #8703 lifted. All path/script/vault refs verified intact (docs/diagrams/layer-stack.html, all 7 references/scripts/, vault subdirs galaxy/projects/areas/archives). /loop-centric architecture text in L2 layer description and How-Layers-Interact section is the scope of TASK #8702 (Phase 6 doc realignment, status:pending — awaiting approval); not rewritten inline"},
