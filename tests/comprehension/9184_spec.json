@@ -1,0 +1,49 @@
+{
+  "issue": 9184,
+  "title": "Restructure planning + verification — PM defines ACs only, dev writes unit tests, QA creates test plan from AC + executes against live system",
+  "files": [
+    "references/sub-skills/roles/pm/task-intake.md",
+    "references/sub-skills/roles/dev/implement-tasks.md",
+    "references/sub-skills/roles/qa/verification.md",
+    ".squidsquad/pm/CLAUDE.md",
+    ".squidsquad/skill/CLAUDE.md",
+    ".squidsquad/qa/CLAUDE.md"
+  ],
+  "questions": [
+    {
+      "id": "1",
+      "question": "Under the new (#9184) workflow, does PM produce a TEST-PLAN file during task intake? If not, what artifacts does PM produce?",
+      "expected": "No. PM produces no test plan. PM produces only RESEARCH.md and CONTEXT.md under .squidsquad/pm/planning/, plus the GitHub issue body containing the Acceptance Criteria. PM defines acceptance criteria only — no test plan, no test cases, no comprehension questions."
+    },
+    {
+      "id": "2",
+      "question": "Where does the AC list live that the dev agent should implement against under the new workflow?",
+      "expected": "The GitHub issue body is the authoritative source of the acceptance criteria. CONTEXT.md (.squidsquad/pm/planning/CONTEXT.md or CONTEXT-<NUMBER>.md) captures locked decisions and scope. Dev should NOT look for a PM-side TEST-PLAN-<NUMBER>.md — PM no longer produces one."
+    },
+    {
+      "id": "3",
+      "question": "What artifact must QA produce before exercising the implementation, and where does it live?",
+      "expected": "QA must produce .squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md derived independently from the AC list in the issue body (and CONTEXT.md for locked decisions). The test plan must be derivable from the AC list alone — not reverse-engineered from dev's diff."
+    },
+    {
+      "id": "4",
+      "question": "For a task that touches LLM-consumed instructions (CLAUDE.md content, sub-skill fragments, SOUL.md), who writes the comprehension question (CQ) spec, and where does it live?",
+      "expected": "QA writes the CQ spec, not PM. The spec lives at tests/comprehension/<NUMBER>_spec.json (canonical location). QA also includes a Comprehension Questions section in its TEST-PLAN-<NUMBER>.md. PM's job is only to ensure an explicit comprehension-coverage AC appears in the issue body."
+    },
+    {
+      "id": "5",
+      "question": "Must the dev agent write unit tests for their implementation? If so, in what PR?",
+      "expected": "Yes. Dev writes unit tests for the implementation as part of the same PR as the code (Step 4b). They cover what dev actually wrote — concrete assertions on functions, scripts, modules, or behavior added or changed. They are dev's correctness check, not the verification gate."
+    },
+    {
+      "id": "6",
+      "question": "When QA verifies a task, is running dev's unit tests sufficient to pass the gate, or must QA execute against something else?",
+      "expected": "Running dev's unit tests is a sanity check only — not the gate. QA must execute QA's own AC-derived test plan against a real live test instance of the system (actual harness, actual tracker, actual filesystem). QA does not mock the system under test."
+    },
+    {
+      "id": "7",
+      "question": "In the #8950 AC-walk gate (updated by #9184), where does QA look for the TEST-PLAN file? Describe the path resolution precedence.",
+      "expected": "Primary: .squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md (the new #9184 convention — QA's own derivation of the AC list). Legacy fallback: .squidsquad/pm/planning/*<NUMBER>* TEST-PLAN files (FEAT-PM-<NUMBER>-TEST-PLAN.md or TEST-PLAN-<NUMBER>.md) — only used for in-flight tasks filed under the pre-#9184 workflow. QA does not author new files at the pm/planning path."
+    }
+  ]
+}
