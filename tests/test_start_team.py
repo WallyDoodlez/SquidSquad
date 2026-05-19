@@ -1,8 +1,15 @@
-"""Tests for references/scripts/start_team.py — unified agent lifecycle."""
+"""Tests for references/scripts/start_team.py — thin shim over squidsquad_cli.
+
+Post-#4792 §5.7: start_team.py is a backward-compatible operator shim that
+delegates every command to `squidsquad_cli.cmd_start/stop/restart`. The
+familiar `--all` / `--role` / `--reboot` / `--stop` CLI surface is preserved
+(Q11) but the sentinel-file lifecycle (`.stop` writes, force-kill fallback)
+is gone.
+"""
 
 import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -12,64 +19,58 @@ sys.path.insert(0, str(SCRIPTS))
 import start_team
 
 
-# ---------------------------------------------------------------------------
-# Sentinel operations
-# ---------------------------------------------------------------------------
+class TestDelegation:
+    """Each cmd_* delegates to its squidsquad_cli counterpart per role."""
 
-class TestSentinelOpsRemoved:
-    """#4792: `.stop` sentinel mechanism removed. cmd_stop now uses harness
-    API only; no file-based fallback. _write_stop / _remove_stop /
-    _clean_stale_sentinels were deleted from start_team.py."""
+    def test_cmd_boot_delegates_per_role(self):
+        with patch.object(start_team.squidsquad_cli, "cmd_start", return_value=0) as m:
+            ok = start_team.cmd_boot(["pm", "skill"])
+        assert ok is True
+        assert m.call_args_list == [(("pm",),), (("skill",),)]
 
-    def test_cmd_stop_uses_harness_api(self):
-        with patch.object(start_team, "_harness_api", return_value=(True, {"action": "stop"})) as api:
+    def test_cmd_boot_returns_false_on_any_failure(self):
+        with patch.object(start_team.squidsquad_cli, "cmd_start",
+                          side_effect=[0, 1]) as m:
+            ok = start_team.cmd_boot(["pm", "skill"])
+        assert ok is False
+        assert m.call_count == 2
+
+    def test_cmd_stop_delegates_per_role(self):
+        with patch.object(start_team.squidsquad_cli, "cmd_stop", return_value=0) as m:
             ok = start_team.cmd_stop(["skill"])
         assert ok is True
-        api.assert_called_with("POST", "/agents/skill/stop")
+        m.assert_called_once_with("skill")
 
-    def test_cmd_stop_returns_false_when_harness_unreachable(self, tmp_path, capsys):
-        """No `.stop` fallback — stop fails clean instead of writing a
-        sentinel that survives the harness restart and causes split-brain."""
-        with patch.object(start_team, "_harness_api", return_value=(False, None)), \
-             patch.object(start_team, "SQUIDSQUAD_DIR", tmp_path / ".squidsquad"):
+    def test_cmd_stop_returns_false_on_failure(self):
+        with patch.object(start_team.squidsquad_cli, "cmd_stop", return_value=1):
             ok = start_team.cmd_stop(["skill"])
         assert ok is False
-        # No `.stop` file written anywhere
-        assert not any((tmp_path / ".squidsquad").rglob(".stop"))
+
+    def test_cmd_reboot_delegates_per_role(self):
+        with patch.object(start_team.squidsquad_cli, "cmd_restart", return_value=0) as m:
+            ok = start_team.cmd_reboot(["skill"])
+        assert ok is True
+        m.assert_called_once_with("skill")
+
+    def test_cmd_reboot_force_is_noop(self, capsys):
+        """--force is preserved on the CLI for muscle memory but no longer
+        invokes a direct SIGKILL fallback. Per CONTEXT-4792.md §5.7, the
+        harness force-kill safety net covers stuck cases."""
+        with patch.object(start_team.squidsquad_cli, "cmd_restart", return_value=0) as m:
+            ok = start_team.cmd_reboot(["skill"], force=True)
+        assert ok is True
+        m.assert_called_once_with("skill")
         out = capsys.readouterr().out
-        assert "Harness unreachable" in out
-        assert ".stop" not in out  # no mention of the deprecated mechanism
+        assert "deprecated no-op" in out
 
-    def test_deprecated_helpers_are_gone(self):
-        for name in ("_write_stop", "_remove_stop", "_clean_stale_sentinels"):
-            assert not hasattr(start_team, name), (
-                f"start_team.{name} should be removed in #4792"
-            )
+    def test_cmd_reboot_returns_false_on_failure(self):
+        with patch.object(start_team.squidsquad_cli, "cmd_restart", return_value=1):
+            ok = start_team.cmd_reboot(["skill"])
+        assert ok is False
 
-    def test_is_agent_idle_when_idle(self, tmp_path):
-        """Agent is idle when current-state starts with 'idle'."""
-        role_dir = tmp_path / ".squidsquad" / "skill"
-        role_dir.mkdir(parents=True)
-        (role_dir / "current-state").write_text("idle|")
-        with patch.object(start_team, "SQUIDSQUAD_DIR", tmp_path / ".squidsquad"):
-            assert start_team._is_agent_idle("skill") is True
-
-    def test_is_agent_not_idle_when_working(self, tmp_path):
-        """Agent is not idle when current-state shows work."""
-        role_dir = tmp_path / ".squidsquad" / "skill"
-        role_dir.mkdir(parents=True)
-        (role_dir / "current-state").write_text("implementing|dev-agent -- #42")
-        with patch.object(start_team, "SQUIDSQUAD_DIR", tmp_path / ".squidsquad"):
-            assert start_team._is_agent_idle("skill") is False
-
-
-# ---------------------------------------------------------------------------
-# CLI parsing
-# ---------------------------------------------------------------------------
 
 class TestCLIParsing:
     def test_all_flag_defaults_to_boot(self):
-        """--all without action defaults to boot."""
         with patch.object(sys, "argv", ["start_team.py", "--all"]):
             with patch.object(start_team, "cmd_boot", return_value=True) as mock_boot:
                 with patch.object(start_team, "_get_all_roles", return_value=["pm", "skill"]):
@@ -77,53 +78,116 @@ class TestCLIParsing:
                     mock_boot.assert_called_once_with(["pm", "skill"])
 
     def test_reboot_single_role(self):
-        """--reboot skill triggers reboot for skill only."""
         with patch.object(sys, "argv", ["start_team.py", "--reboot", "skill"]):
             with patch.object(start_team, "cmd_reboot", return_value=True) as mock_reboot:
                 with patch.object(start_team, "_get_all_roles", return_value=["pm", "skill"]):
                     start_team.main()
                     mock_reboot.assert_called_once_with(["skill"], force=False)
 
-    def test_stop_writes_sentinel(self):
-        """--stop skill triggers stop command."""
+    def test_stop_single_role(self):
         with patch.object(sys, "argv", ["start_team.py", "--stop", "skill"]):
             with patch.object(start_team, "cmd_stop", return_value=True) as mock_stop:
                 with patch.object(start_team, "_get_all_roles", return_value=["pm", "skill"]):
                     start_team.main()
                     mock_stop.assert_called_once_with(["skill"])
 
+    def test_role_flag_with_default_action_boots(self):
+        with patch.object(sys, "argv", ["start_team.py", "--role", "skill"]):
+            with patch.object(start_team, "cmd_boot", return_value=True) as mock_boot:
+                start_team.main()
+                mock_boot.assert_called_once_with(["skill"])
 
-# ---------------------------------------------------------------------------
-# Harness API (#4966)
-# ---------------------------------------------------------------------------
+    def test_reboot_all(self):
+        with patch.object(sys, "argv", ["start_team.py", "--reboot", "--all"]):
+            with patch.object(start_team, "cmd_reboot", return_value=True) as mock_reboot:
+                with patch.object(start_team, "_get_all_roles", return_value=["pm", "skill"]):
+                    start_team.main()
+                    mock_reboot.assert_called_once_with(["pm", "skill"], force=False)
 
-class TestHarnessAPI:
-    def test_discover_port_from_file(self, tmp_path):
-        """Reads port from .harness-port file."""
-        squid = tmp_path / ".squidsquad"
-        squid.mkdir()
-        (squid / ".harness-port").write_text("9090", encoding="utf-8")
-        with patch.object(start_team, "SQUIDSQUAD_DIR", squid):
-            port = start_team._discover_harness_port()
-        assert port == 9090
 
-    def test_discover_port_default(self, tmp_path):
-        """Falls back to 7373 when no .harness-port."""
-        squid = tmp_path / ".squidsquad"
-        squid.mkdir()
-        with patch.object(start_team, "SQUIDSQUAD_DIR", squid):
-            port = start_team._discover_harness_port()
-        assert port == 7373
+class TestRemovedHelpers:
+    """#4792 §5.7: legacy helpers removed when start_team became a thin shim.
 
-    def test_cmd_reboot_uses_api(self):
-        """cmd_reboot calls harness restart API (#4966)."""
-        with patch.object(start_team, "_harness_api", return_value=(True, {"action": "restart"})) as mock_api, \
-             patch.object(start_team.boot_remote, "_needs_boot", return_value=(False, "running", "/path")):
-            start_team.cmd_reboot(["skill"])
-            mock_api.assert_called_once_with("POST", "/agents/skill/restart")
+    The sentinel-file write fallbacks (`_write_stop`, `_remove_stop`,
+    `_clean_stale_sentinels`) were already removed in §5.2. This cycle also
+    removes `_harness_api` and `_discover_harness_port` (squidsquad_cli has
+    its own) and the dead `_is_agent_idle` function.
+    """
 
-    def test_no_bare_exception_in_kill_block(self):
-        """#8234 regression: kill block must not catch bare Exception."""
+    @pytest.mark.parametrize("name", [
+        "_write_stop",
+        "_remove_stop",
+        "_clean_stale_sentinels",
+        "_harness_api",
+        "_discover_harness_port",
+        "_is_agent_idle",
+    ])
+    def test_helper_removed(self, name):
+        assert not hasattr(start_team, name), (
+            f"start_team.{name} should be removed after §5.7 shim conversion"
+        )
+
+    def test_no_direct_boot_remote_boot_agent_call(self):
+        """cmd_boot must not call boot_remote.boot_agent directly any more —
+        all spawning flows through squidsquad_cli → harness API."""
         import inspect
-        source = inspect.getsource(start_team.cmd_reboot)
-        assert "(ImportError, Exception)" not in source
+        source = inspect.getsource(start_team)
+        # boot_remote is imported for _get_all_roles only
+        assert "boot_remote.boot_agent" not in source
+        assert "boot_remote._needs_boot" not in source
+
+    def test_no_reboot_agent_kill_fallback(self):
+        """The `--force` SIGKILL fallback that imported reboot_agent and
+        invoked `_kill_process` directly is gone. Force is now a no-op."""
+        import inspect
+        source = inspect.getsource(start_team)
+        assert "reboot_agent._kill_process" not in source
+        assert "reboot_agent._read_claude_pid" not in source
+
+
+class TestSquidsquadCliPerRoleStart:
+    """§5.8 audit: `squidsquad_cli.cmd_start` gained a per-role parameter so
+    the start_team shim has something to delegate to."""
+
+    def test_cmd_start_no_role_starts_all(self):
+        import squidsquad_cli
+        with patch.object(squidsquad_cli, "_discover_harness", return_value=7373), \
+             patch.object(squidsquad_cli, "_api_call", return_value={
+                 "results": [
+                     {"role": "skill", "success": True, "action": "spawned", "message": ""},
+                     {"role": "pm", "success": True, "action": "spawned", "message": ""},
+                 ]
+             }) as api:
+            rc = squidsquad_cli.cmd_start()
+        assert rc == 0
+        api.assert_called_once_with(7373, "POST", "/agents/all/start")
+
+    def test_cmd_start_no_role_returns_1_when_any_agent_fails(self):
+        """All-agents start aggregates per-agent success — any failure → 1."""
+        import squidsquad_cli
+        with patch.object(squidsquad_cli, "_discover_harness", return_value=7373), \
+             patch.object(squidsquad_cli, "_api_call", return_value={
+                 "results": [
+                     {"role": "skill", "success": True, "action": "spawned", "message": ""},
+                     {"role": "pm", "success": False, "action": "failed", "message": "boom"},
+                 ]
+             }):
+            rc = squidsquad_cli.cmd_start()
+        assert rc == 1
+
+    def test_cmd_start_with_role_targets_single_agent(self):
+        import squidsquad_cli
+        with patch.object(squidsquad_cli, "_discover_harness", return_value=7373), \
+             patch.object(squidsquad_cli, "_api_call",
+                          return_value={"success": True, "action": "spawned", "message": ""}) as api:
+            rc = squidsquad_cli.cmd_start("skill")
+        assert rc == 0
+        api.assert_called_once_with(7373, "POST", "/agents/skill/start")
+
+    def test_cmd_start_returns_1_when_role_start_fails(self):
+        import squidsquad_cli
+        with patch.object(squidsquad_cli, "_discover_harness", return_value=7373), \
+             patch.object(squidsquad_cli, "_api_call",
+                          return_value={"success": False, "action": "failed", "message": "boom"}):
+            rc = squidsquad_cli.cmd_start("skill")
+        assert rc == 1

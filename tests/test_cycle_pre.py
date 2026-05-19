@@ -1585,3 +1585,111 @@ class TestParseCliArgs:
         assert role == "pm"
         assert task == "100"
 
+
+# ---------------------------------------------------------------------------
+# Harness reachability probe — #4792 Phase 2 §5.5 (Q8)
+# ---------------------------------------------------------------------------
+
+
+class TestDiscoverHarnessPort:
+    def test_default_port_when_no_file(self, patch_dirs, squid_dir):
+        # No .harness-port anywhere → fall back to 7373
+        assert cycle_pre._discover_harness_port() == 7373
+
+    def test_reads_squid_dir_port_file(self, patch_dirs, squid_dir):
+        (squid_dir / ".harness-port").write_text("9999", encoding="utf-8")
+        assert cycle_pre._discover_harness_port() == 9999
+
+    def test_invalid_port_file_falls_back_to_default(self, patch_dirs, squid_dir):
+        (squid_dir / ".harness-port").write_text("not-a-port", encoding="utf-8")
+        assert cycle_pre._discover_harness_port() == 7373
+
+    def test_parent_walk_finds_port_file(self, patch_dirs, squid_dir, tmp_path):
+        """Clone-isolation: agent clone is a child of the primary repo, so
+        `.harness-port` lives in a parent's `.squidsquad/` rather than the
+        clone's own. The 5-level walk must discover it."""
+        parent_squid = tmp_path.parent / ".squidsquad"
+        parent_squid.mkdir(parents=True, exist_ok=True)
+        (parent_squid / ".harness-port").write_text("8888", encoding="utf-8")
+        try:
+            # REPO_ROOT is tmp_path; no local port file → walk picks up parent.
+            assert cycle_pre._discover_harness_port() == 8888
+        finally:
+            (parent_squid / ".harness-port").unlink()
+            parent_squid.rmdir()
+
+
+class TestQueryHarnessStatus:
+    """`harness_status` is informational (#4792 §5.5, Q8) — no decision
+    branches on it. The probe must (a) return `"reachable"` on a 2xx
+    response, (b) return `"unreachable"` on any error class, and
+    (c) never raise out of the call site."""
+
+    def test_returns_reachable_on_200(self, patch_dirs):
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.__enter__ = lambda self: self
+        mock_resp.__exit__ = lambda self, *a: False
+        with patch("cycle_pre.urllib.request.urlopen", return_value=mock_resp):
+            assert cycle_pre._query_harness_status() == "reachable"
+
+    def test_returns_unreachable_on_urlerror(self, patch_dirs):
+        import urllib.error
+        with patch("cycle_pre.urllib.request.urlopen",
+                   side_effect=urllib.error.URLError("connection refused")):
+            assert cycle_pre._query_harness_status() == "unreachable"
+
+    def test_returns_unreachable_on_timeout(self, patch_dirs):
+        """In CPython, urlopen wraps `socket.timeout` inside a `URLError`
+        before it reaches the caller (so the `URLError` test above is the
+        real production timeout path). This test pins the defense-in-depth
+        branch: if a non-stdlib urllib backend ever surfaced a bare
+        `TimeoutError`, fail-open semantics must still hold."""
+        with patch("cycle_pre.urllib.request.urlopen",
+                   side_effect=TimeoutError("slow")):
+            assert cycle_pre._query_harness_status() == "unreachable"
+
+    def test_returns_unreachable_on_httperror(self, patch_dirs):
+        """A reachable harness that returns 5xx is the realistic non-2xx
+        path: urlopen raises `HTTPError` (a URLError subclass) for any
+        4xx/5xx response rather than returning a response object. Pin
+        the production behavior here, not just the defensive branch."""
+        import urllib.error
+        err = urllib.error.HTTPError(
+            "http://127.0.0.1:7373/status", 503,
+            "Service Unavailable", {}, None,
+        )
+        with patch("cycle_pre.urllib.request.urlopen", side_effect=err):
+            assert cycle_pre._query_harness_status() == "unreachable"
+
+    def test_returns_unreachable_on_oserror(self, patch_dirs):
+        with patch("cycle_pre.urllib.request.urlopen",
+                   side_effect=OSError("network down")):
+            assert cycle_pre._query_harness_status() == "unreachable"
+
+    def test_non_2xx_response_is_unreachable(self, patch_dirs):
+        """Defense-in-depth check on the `200 <= status < 300` guard. In
+        production CPython, urlopen raises `HTTPError` for non-2xx (see
+        `test_returns_unreachable_on_httperror`), so the returning-non-2xx
+        branch is only reachable if a future urllib wrapper changes the
+        contract. Keep this test to lock the guard's value."""
+        mock_resp = MagicMock()
+        mock_resp.status = 503
+        mock_resp.__enter__ = lambda self: self
+        mock_resp.__exit__ = lambda self, *a: False
+        with patch("cycle_pre.urllib.request.urlopen", return_value=mock_resp):
+            assert cycle_pre._query_harness_status() == "unreachable"
+
+    def test_uses_short_timeout(self, patch_dirs):
+        """Spec calls for a 1-2s timeout so an unreachable harness doesn't
+        stall cycle_pre. Lock the upper bound."""
+        captured = {}
+
+        def fake_urlopen(req, timeout=None):
+            captured["timeout"] = timeout
+            raise OSError("not actually opening")
+
+        with patch("cycle_pre.urllib.request.urlopen", side_effect=fake_urlopen):
+            cycle_pre._query_harness_status()
+        assert captured["timeout"] is not None and captured["timeout"] <= 2
+

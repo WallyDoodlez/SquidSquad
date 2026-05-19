@@ -8,7 +8,7 @@ Agent lifecycle is managed by the harness (`harness.py`) via REST API (#4966). A
 2. **Graceful stop**: Harness sets intent=stopping via API. `cycle_post.py` queries `GET /agents/{role}` at cycle end, sees the intent, and exits with code 42.
 3. **Start correctly**: Harness spawns agents via thin launcher (`thin_launcher.py`) in visible terminal windows. `cycle_pre.py` handles git pull/branch per cycle.
 
-**Health monitoring**: Harness monitors agent liveness via direct PID checks (primary) and `.claude-pid` file (fallback). No heartbeat files needed — the harness polls every 5 seconds.
+**Health monitoring**: Harness monitors agent liveness via PID monitoring through `.claude-pid` (sole liveness signal). The harness polls every 5 seconds.
 
 **Intent state machine** (per-agent, in harness memory + `.harness-state.json`):
 - `running` — agent should be alive; auto-reboot on death
@@ -16,25 +16,25 @@ Agent lifecycle is managed by the harness (`harness.py`) via REST API (#4966). A
 - `restarting` — graceful restart; reboot after death
 - `stopped` — agent died as requested
 
-**Lifecycle interface**:
+**Lifecycle interface** (`squidsquad_cli.py` is canonical; `start_team.py <args>` remains as a backward-compatible shim):
 ```bash
-# Start all agents
-python references/scripts/start_team.py --all
+# Start harness + all agents
+python references/scripts/squidsquad_cli.py start
 
-# Start single agent
-python references/scripts/start_team.py --role <role>
+# Start a single agent (harness auto-spawns if needed)
+python references/scripts/squidsquad_cli.py start <role>
 
-# Graceful reboot — harness sets intent=restarting
-python references/scripts/start_team.py --reboot <role>
+# Graceful restart — harness sets intent=restarting
+python references/scripts/squidsquad_cli.py restart <role>
 
-# Reboot all agents
-python references/scripts/start_team.py --reboot --all
-
-# Stop agent — harness sets intent=stopping
-python references/scripts/start_team.py --stop <role>
+# Stop a single agent — harness sets intent=stopping
+python references/scripts/squidsquad_cli.py stop <role>
 
 # Stop all agents
-python references/scripts/start_team.py --stop --all
+python references/scripts/squidsquad_cli.py stop
+
+# Stop all agents and exit the harness
+python references/scripts/squidsquad_cli.py shutdown
 ```
 
 **Crash recovery**: Harness persists state to `.squidsquad/.harness-state.json`. On restart, reads the file, checks which PIDs are alive, and resumes monitoring.

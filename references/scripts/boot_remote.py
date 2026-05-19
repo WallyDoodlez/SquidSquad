@@ -2,9 +2,11 @@
 """SquidSquad remote agent boot — spawn dead agents in new terminals.
 
 Spawns agents via thin launcher (primary) or legacy wrapper scripts (fallback).
-Detection uses .health file and .pid for liveness. The harness calls boot_agent()
-for auto-reboot; start_team.py calls it for manual boot. Thin launcher writes
-.claude-pid for harness PID tracking (#4966).
+Liveness is detected exclusively via `.claude-pid` (written by the thin
+launcher) — the harness calls boot_agent() for auto-reboot; start_team.py
+calls it for manual boot. The legacy `.pid` / `.health` / `.stop` /
+`.restart` sentinel reads were removed under #4792 (CONTEXT-4792.md §5.2);
+agent lifecycle is owned by harness intent state.
 
 Usage:
     python scripts/boot_remote.py --role <name>   # Boot a single agent
@@ -141,32 +143,12 @@ def _get_clone_path(role):
 # PID-based process detection
 # ---------------------------------------------------------------------------
 
-def _read_pid_file(clone_path, role):
-    """Read PID from .squidsquad/{role}/.pid. Returns int or None.
-
-    Handles UTF-16 LE encoding (PowerShell's $PID > $PidFile writes BOM).
-    """
-    pid_file = Path(clone_path) / ".squidsquad" / role / ".pid"
-    if not pid_file.exists():
-        return None
-    try:
-        raw = pid_file.read_bytes()
-        # Detect UTF-16 LE BOM (PowerShell output)
-        if raw.startswith(b"\xff\xfe"):
-            content = raw.decode("utf-16-le").strip()
-        else:
-            content = raw.decode("utf-8", errors="replace").strip()
-        # Strip BOM character if present after decode
-        content = content.lstrip("\ufeff").strip()
-        return int(content) if content else None
-    except (ValueError, OSError):
-        return None
-
-
-# _has_stop_sentinel was removed in #4792. Agent lifecycle is now controlled
-# entirely by harness state (intent=running/stopping/restarting/stopped); the
-# `.stop` file caused split-brain when removing it in the primary repo didn't
-# affect clones, and when stale sentinels silently overrode harness intent.
+# _has_stop_sentinel / _read_pid_file / _read_health_file / _clean_stale_restart
+# were all removed in #4792 (CONTEXT-4792.md \u00a75.2). Agent lifecycle is now
+# controlled entirely by harness state (intent=running/stopping/restarting/
+# stopped); the legacy sentinel files caused split-brain when removing them
+# in the primary repo didn't affect clones, and when stale sentinels silently
+# overrode harness intent. Liveness is read exclusively from `.claude-pid`.
 
 
 # Max age of .booting sentinel before it's considered stale (seconds)
@@ -227,60 +209,16 @@ def _clear_booting_sentinel(clone_path, role):
         pass
 
 
-def _clean_stale_restart(clone_path, role):
-    """Remove .restart sentinel when booting a dead agent (#3349).
-
-    If the agent is dead and has a .restart sentinel, it's stale — from a
-    previous reboot_agent request that was never processed. Removing it
-    prevents the wrapper from triggering an unwanted extra respawn on fresh boot.
-    """
-    restart_file = Path(clone_path) / ".squidsquad" / role / ".restart"
-    if restart_file.exists():
-        try:
-            restart_file.unlink()
-        except OSError:
-            pass
-
-
-
-
-def _read_health_file(clone_path, role):
-    """Read .health file for a role. Returns (status, detail) or (None, None).
-
-    Supports two formats (aligned with health_check.py):
-    - New (heartbeat epoch): file contains a Unix epoch integer (e.g. "1745366400").
-      Wrapper writes this every 5s. Returns ("heartbeat", epoch_str).
-    - Legacy (status string): "status" or "status|detail".
-      Valid statuses: booting, alive, restarting, backoff, dead, error.
-    """
-    health_file = Path(clone_path) / ".squidsquad" / role / ".health"
-    if not health_file.exists():
-        return None, None
-    try:
-        content = health_file.read_text(encoding="utf-8").strip()
-        if not content:
-            return None, None
-        line = content.split("\n")[0].strip()
-        # New format: pure epoch integer (10+ digits)
-        if line.isdigit() and len(line) >= 10:
-            return "heartbeat", line
-        # Legacy format: status|detail
-        parts = line.split("|", 1)
-        status = parts[0].strip()
-        detail = parts[1].strip() if len(parts) > 1 else ""
-        return status, detail
-    except (OSError, UnicodeDecodeError):
-        return None, None
-
-
 def _needs_boot(role):
     """Determine if an agent needs booting.
 
-    Checks (in order): .booting lock, .claude-pid, .pid.
+    Checks (in order): `.booting` lock, then `.claude-pid` for liveness.
     Returns (needs_boot, reason, clone_path).
 
-    #4792: .stop sentinel check removed — stop intent now lives in harness
-    state. Auto-reboot honors `intent` (`stopping`/`stopped` blocks reboot).
+    #4792: legacy `.stop` / `.health` / `.pid` sentinel checks removed.
+    Stop intent lives in harness state; `.claude-pid` (written by
+    `thin_launcher`) is the sole liveness signal. Auto-reboot honors
+    `intent` (`stopping`/`stopped` blocks reboot).
     """
     clone_path = _get_clone_path(role)
 
@@ -288,8 +226,9 @@ def _needs_boot(role):
     if _has_booting_sentinel(clone_path, role):
         return False, "boot already in progress", str(clone_path)
 
-    # Primary: .claude-pid (written by thin_launcher)
+    # `.claude-pid` is the sole liveness signal (#4966 + #4792)
     pid_file = Path(clone_path) / ".squidsquad" / role / ".claude-pid"
+    corrupt = False
     if pid_file.exists():
         try:
             pid = int(pid_file.read_text(encoding="utf-8").strip())
@@ -299,16 +238,13 @@ def _needs_boot(role):
                 return True, f"dead (PID {pid})", str(clone_path)
         except (ValueError, OSError) as e:
             print(f"WARNING: corrupt .claude-pid for {role}: {e}", file=sys.stderr)
+            corrupt = True
 
-    # Fallback: legacy .pid file
-    pid = _read_pid_file(clone_path, role)
-    if pid:
-        if _is_process_alive(pid):
-            return False, f"alive (PID {pid})", str(clone_path)
-        else:
-            return True, f"dead (PID {pid})", str(clone_path)
-
-    return True, "no PID file found", str(clone_path)
+    # Distinguish "file is corrupt" from "no file at all" — operators reading
+    # the boot result message benefit from knowing the file exists but is
+    # unreadable rather than chasing a missing-file diagnosis.
+    reason = "corrupt .claude-pid" if corrupt else "no PID file found"
+    return True, reason, str(clone_path)
 
 
 # ---------------------------------------------------------------------------
@@ -534,8 +470,8 @@ def boot_agent(role, dry_run=False):
         result["message"] = "another boot in progress"
         return result
 
-    # Clean stale .restart sentinel (#3349)
-    _clean_stale_restart(clone_path, role)
+    # #4792: stale `.restart` sentinel cleanup deleted with _clean_stale_restart.
+    # Restart intent now lives exclusively in harness state.
 
     # Find boot script
     boot_script, script_type = _find_boot_script(clone_path, role)

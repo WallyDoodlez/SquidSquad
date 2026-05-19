@@ -1,25 +1,32 @@
 # Working State
 
-- **Task**: none
-- **Status**: none
-- **Started**: 
+- **Task**: #8979
+- **Status**: in-progress
+- **Started**: 2026-05-15
 - **Last Processed Event ID**: 9d7c2489
 
 ## Completed Steps
 
-(cleared — all four high-priority approved tasks shipped to pending-test/pending-ship; queue head is now medium-priority items)
+- Phase 1 (data model + force-kill safety net + cooperative-termination routing): shipped on PR #9010 across 3 commits.
+- Phase 2 §5.2 (boot_remote.py legacy-sentinel cleanup): commit b340b011.
+- Phase 2 §5.3 (reboot_agent.py gut + SIGKILL parity + deprecation stub): commit e30cdd1a.
+- Phase 2 §5.5 (cycle_pre.py `harness_status` field + stale-comment refresh): commit b02c86a2.
+- Phase 2 §5.1 (harness boot-time legacy-sentinel sweep — synchronous, before start_poller): commit 10d052a7. DeepSeek r1 caught race + TOCTOU; r2 NO_FINDINGS.
+- Phase 2 §5.6 (cycle_post.py comment refresh — `_do_stop_after_cycle_check` docstring): commit 8d711384. DeepSeek r1 NO_FINDINGS. Function rename deferred per CONTEXT-4792.md §5.6 (optional/low priority).
 
 ## Remaining Steps
 
-(no active work — next pickup will be #8999 or #8998 from medium-priority approved queue; all four high-priority tasks are out of skill's hands)
+- Phase 2 §5.4: health_check.py trim (delete `.stop` + `.health` + `.pid` reads; keep `.claude-pid`; docstring note about offline fallback). **Biggest chunk — 506-line test file to rewrite. Needs fresh context window.**
+- Phase 3: operator entry-point convergence (start_team.py thin shim, boot_remote main() removal, reboot_agent main() removal).
+- Phase 4: `.health` legacy fragment edits in references/sub-skills/common/agent-lifecycle.md + recompose.
+- Phase 5: upgrade-path cleanup logic on harness boot.
 
 ## Key Decisions
 
-- Cycle 1157: #8916 (L2 dev — mandate reading CONTEXT.md / TEST-PLAN.md before implementing) shipped to pending-test on PR #9173. Single fragment edit replacing step 2 of `references/sub-skills/roles/dev/implement-tasks.md` with the new authoritative-artifact step. AC-2 already satisfied by #8950 PR #9131 (merged earlier) which updated §9c. AC-3 byte-identity verified for pm/qa/dm. DeepSeek r1 NO_FINDINGS.
-- Cycle 1156: #8917 (PM scope-sync) shipped on PR #9157.
-- Cycle 1155: Resolved QA merge-conflict rejection on #8979 via 3-way merge.
-- Cycle 1154: #8950 (defense-in-depth) shipped on PR #9131, since merged to main.
-- Cycle 1141–1153: #8979 (all 5 phases of CONTEXT-4792.md) shipped on PR #9010.
-- **Bundle coordination payoff**: the three defense-in-depth tickets (#8950 #8917 #8916) were planned together. Shipping #8950 first established the §9c discovery glob that #8916 AC-2 expected — #8916 became a one-fragment edit instead of two. PM's bundle planning correctly anticipated this.
-- Stash-dance lesson: `git stash pop` can silently fail to restore changes (no error, "stash entry kept" message). Workaround: `git checkout stash@{N} -- <files>`.
-- Long-running PR coordination: when a task touches a hot file (harness.py) and the PR lingers, QA rejection due to merge conflict is expected. Resolution: merge origin/main into the task branch, let git's 3-way merge work where changes are orthogonal, push, route back.
+- Cycle 1135–1140: #8915 (event-mode L1 base) shipped to pending-test on PR #8996 — 6 commits, 23 review iterations, 38+ correctness fixes. Follow-ups filed: #8998 (manifest wiring + fixture regen), #8999 (integration tests + live CQ run).
+- Three high-priority approved tasks (#8950, #8917, #8916) waiting; PM should clarify priority order before pickup.
+- #4792 / #8979 Phase 2 is being shipped as a single rolling PR (#9010) with cohesive review-iterated commits per §-section, keeping each section small enough for a single DeepSeek pass.
+- §5.5 `harness_status` is strictly informational — fail-open, no gating — so cycle_pre stays robust if the harness is down or slow.
+- §5.1 cleanup must run SYNCHRONOUSLY on the lifespan thread before `state.start_poller()` and the `_deferred_init` thread spawn — DeepSeek r1 caught the race where placing it inside `_deferred_init` could let the legacy `.health` fallback fire on a stale file. Source-grep guard test pins the ordering.
+- §5.1 unlink path: skip non-existent up front + `unlink(missing_ok=True)` — the TOCTOU window where another process unlinks between exists() and unlink() still counts as a removal (post-condition satisfied).
+- §5.6: function rename `_do_stop_after_cycle_check` → `_check_harness_intent` deferred — CONTEXT-4792.md §5.6 calls it optional/low priority, and it touches the call site + any tests; not worth bundling into a comment-refresh commit.

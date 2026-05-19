@@ -6,6 +6,7 @@ Discovers the harness port via .squidsquad/.harness-port.
 
 Usage:
     python squidsquad_cli.py start              # Boot harness + all agents
+    python squidsquad_cli.py start <role>       # Boot harness + one agent
     python squidsquad_cli.py stop               # Stop all agents
     python squidsquad_cli.py stop <role>         # Stop one agent
     python squidsquad_cli.py restart <role>      # Restart one agent
@@ -87,8 +88,23 @@ def _discover_harness() -> int | None:
 # API calls
 # ---------------------------------------------------------------------------
 
+class HarnessAPIError(Exception):
+    """Transport- or HTTP-level failure talking to the harness API.
+
+    `_api_call` raises this instead of `sys.exit(1)` so per-role aggregation
+    loops in the operator commands and the `start_team.py` shim can catch +
+    continue, producing complete aggregation across all targeted roles even
+    when one role fails at the transport layer (#4792 §5.7).
+    """
+
+
 def _api_call(port: int, method: str, path: str) -> dict:
-    """Make an HTTP call to the harness API. Returns parsed JSON."""
+    """Make an HTTP call to the harness API. Returns parsed JSON.
+
+    Raises `HarnessAPIError` on transport or HTTP failure — the caller is
+    expected to catch and translate to a failure result for aggregation.
+    Stderr still receives the diagnostic message so operators see it.
+    """
     url = f"http://localhost:{port}{path}"
     req = urllib.request.Request(url, method=method)
 
@@ -108,19 +124,24 @@ def _api_call(port: int, method: str, path: str) -> dict:
         except (json.JSONDecodeError, AttributeError):
             detail = body
         print(f"Error: {e.code} — {detail}", file=sys.stderr)
-        sys.exit(1)
+        raise HarnessAPIError(f"HTTP {e.code}: {detail}")
     except (urllib.error.URLError, OSError, TimeoutError) as e:
         print(f"Harness not running or unreachable: {e}. Start with: squidsquad start",
               file=sys.stderr)
-        sys.exit(1)
+        raise HarnessAPIError(f"transport error: {e}")
 
 
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
 
-def cmd_start():
-    """Boot harness (if not running) + start all agents."""
+def cmd_start(role: str | None = None):
+    """Boot harness (if not running) + start agent(s).
+
+    When `role` is None, starts all agents via `/agents/all/start`. When `role`
+    is given, starts that agent only via `/agents/{role}/start`. In both cases
+    the harness is spawned first if it is not already running.
+    """
     port = _discover_harness()
 
     if port is None:
@@ -131,35 +152,69 @@ def cmd_start():
             print("Failed to start harness.", file=sys.stderr)
             return 1
 
+    if role:
+        print(f"Starting {role} (harness on port {port})...")
+        try:
+            result = _api_call(port, "POST", f"/agents/{role}/start")
+        except HarnessAPIError:
+            print(f"  [{role}] FAIL: harness API error (see stderr)")
+            return 1
+        success = result.get("success", False)
+        action = result.get("action", "?")
+        message = result.get("message", "")
+        print(f"  [{role}] {action} — {'OK' if success else 'FAIL'}: {message}")
+        return 0 if success else 1
+
     # Start all agents via harness
     print(f"Starting all agents (harness on port {port})...")
-    result = _api_call(port, "POST", "/agents/all/start")
+    try:
+        result = _api_call(port, "POST", "/agents/all/start")
+    except HarnessAPIError:
+        return 1
 
-    # Print results
-    for r in result.get("results", []):
+    # Print results and aggregate success across agents.
+    results = result.get("results", [])
+    for r in results:
         status = "OK" if r.get("success") else "FAIL"
         print(f"  [{r.get('role', '?')}] {r.get('action', '?')} — {status}: {r.get('message', '')}")
 
-    return 0
+    all_ok = bool(results) and all(r.get("success", False) for r in results)
+    return 0 if all_ok else 1
 
 
 def cmd_stop(role: str | None = None):
-    """Stop agent(s)."""
+    """Stop agent(s).
+
+    Returns 0 only when every targeted agent reports `success: true` from the
+    harness API; non-zero on any failure. The start_team shim's exit code
+    propagation depends on this contract.
+    """
     port = _discover_harness()
     if port is None:
         print("Harness not running. Start with: squidsquad start", file=sys.stderr)
         return 1
 
     if role:
-        result = _api_call(port, "POST", f"/agents/{role}/stop")
-        print(f"  [{role}] {result.get('message', 'stopped')}")
-    else:
-        result = _api_call(port, "POST", "/agents/all/stop")
-        for r in result.get("results", []):
-            status = "OK" if r.get("success") else "FAIL"
-            print(f"  [{r.get('role', '?')}] {status}")
+        try:
+            result = _api_call(port, "POST", f"/agents/{role}/stop")
+        except HarnessAPIError:
+            print(f"  [{role}] FAIL: harness API error (see stderr)")
+            return 1
+        success = result.get("success", False)
+        message = result.get("message", "stopped" if success else "failed")
+        print(f"  [{role}] {'OK' if success else 'FAIL'}: {message}")
+        return 0 if success else 1
 
-    return 0
+    try:
+        result = _api_call(port, "POST", "/agents/all/stop")
+    except HarnessAPIError:
+        return 1
+    results = result.get("results", [])
+    for r in results:
+        status = "OK" if r.get("success") else "FAIL"
+        print(f"  [{r.get('role', '?')}] {status}")
+    all_ok = bool(results) and all(r.get("success", False) for r in results)
+    return 0 if all_ok else 1
 
 
 def cmd_restart(role: str):
@@ -170,7 +225,11 @@ def cmd_restart(role: str):
         return 1
 
     print(f"Restarting {role}...")
-    result = _api_call(port, "POST", f"/agents/{role}/restart")
+    try:
+        result = _api_call(port, "POST", f"/agents/{role}/restart")
+    except HarnessAPIError:
+        print(f"  [{role}] FAIL: harness API error (see stderr)")
+        return 1
     success = result.get("success", False)
     print(f"  [{role}] {'OK' if success else 'FAIL'}: {result.get('message', '')}")
     return 0 if success else 1
@@ -183,7 +242,10 @@ def cmd_status():
         print("Harness not running. Start with: squidsquad start", file=sys.stderr)
         return 1
 
-    result = _api_call(port, "GET", "/status")
+    try:
+        result = _api_call(port, "GET", "/status")
+    except HarnessAPIError:
+        return 1
 
     # Print harness info
     harness = result.get("harness", {})
@@ -231,8 +293,9 @@ def cmd_shutdown():
     try:
         result = _api_call(port, "POST", "/shutdown")
         print(result.get("message", "Shutdown complete."))
-    except SystemExit:
-        # _api_call may exit(1) if harness closes connection mid-request
+    except HarnessAPIError:
+        # Connection error here typically means the harness closed the socket
+        # mid-request as part of the shutdown — treat as success.
         print("Harness shutting down...")
 
     return 0
@@ -329,7 +392,7 @@ USAGE = """\
 Usage: squidsquad <command> [args]
 
 Commands:
-  start              Boot harness + spawn all agents
+  start [<role>]     Boot harness + spawn agent(s) — all if no role given
   stop [<role>]      Stop all agents (or one agent)
   restart <role>     Restart a single agent
   status             Show harness + agent health
@@ -353,7 +416,8 @@ def main():
     cmd = args[0]
 
     if cmd == "start":
-        return cmd_start()
+        role = args[1] if len(args) > 1 else None
+        return cmd_start(role)
     elif cmd == "stop":
         role = args[1] if len(args) > 1 else None
         return cmd_stop(role)

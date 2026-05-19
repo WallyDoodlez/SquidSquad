@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-"""SquidSquad start_team.py — unified entry point for agent lifecycle.
+"""SquidSquad start_team.py — backward-compatible operator shim.
 
-Single script to start, reboot, or stop the entire squad or individual agents.
-Replaces: start-squad.ps1/sh, boot_remote.py --all, reboot_agent.py.
+Per CONTEXT-4792.md §5.7, this script is now a thin delegate over
+`squidsquad_cli.py`, which is the canonical operator entry point (Q1). The
+familiar `start_team.py --all` / `--reboot` / `--stop` CLI surface is
+preserved so existing muscle memory keeps working (Q11), but each command
+dispatches into `squidsquad_cli` so there is a single source of truth for
+agent lifecycle.
 
 Usage:
     python references/scripts/start_team.py --all              # Boot all agents
@@ -15,168 +19,71 @@ Usage:
 
 Exit codes:
     0 — success
-    1 — spawn/reboot failed
+    1 — at least one delegated command failed
     2 — usage error
 """
 
 import argparse
-import json
 import sys
-import time
-import urllib.request
-import urllib.error
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 SQUIDSQUAD_DIR = REPO_ROOT / ".squidsquad"
 
-# Import boot_remote for spawn/detection logic
 sys.path.insert(0, str(SCRIPT_DIR))
 import boot_remote
+import squidsquad_cli
 
-
-# ---------------------------------------------------------------------------
-# Harness API communication (#4966)
-# ---------------------------------------------------------------------------
-
-def _discover_harness_port():
-    """Discover harness port — default 7373 + .harness-port file."""
-    port_file = SQUIDSQUAD_DIR / ".harness-port"
-    if port_file.exists():
-        try:
-            return int(port_file.read_text(encoding="utf-8").strip())
-        except (ValueError, OSError):
-            pass
-    return 7373
-
-
-def _harness_api(method, path, timeout=5):
-    """Call harness API. Returns (success, response_dict) or (False, None)."""
-    port = _discover_harness_port()
-    url = f"http://127.0.0.1:{port}{path}"
-    try:
-        req = urllib.request.Request(url, method=method)
-        if method == "POST":
-            req.add_header("Content-Type", "application/json")
-            req.data = b"{}"
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            return True, data
-    except (urllib.error.URLError, OSError, json.JSONDecodeError, TimeoutError):
-        return False, None
-
-
-# Sentinel-file lifecycle removed in #4792. Stop/restart now flow exclusively
-# through the harness API (POST /agents/<role>/stop|restart). If the harness
-# is unreachable, those commands fail loudly rather than writing a stale
-# `.stop` file that survived the harness restart and caused split-brain.
-
-
-def _is_agent_idle(role):
-    """Check if agent is idle by reading current-state."""
-    state_file = SQUIDSQUAD_DIR / role / "current-state"
-    if not state_file.exists():
-        return True  # No state file = not running = effectively idle
-    try:
-        content = state_file.read_text(encoding="utf-8").strip()
-        return content.startswith("idle")
-    except OSError:
-        return True
-
-
-# ---------------------------------------------------------------------------
-# Commands
-# ---------------------------------------------------------------------------
-
-def cmd_boot(roles):
-    """Boot agents that are not running."""
-    results = []
-    for role in roles:
-        r = boot_remote.boot_agent(role)
-        results.append(r)
-        status = "OK" if r["success"] else "FAIL"
-        print(f"  [{role}] {r['action']} -- {status}: {r['message']}")
-    return all(r["success"] for r in results)
-
-
-def cmd_reboot(roles, force=False):
-    """Gracefully reboot agents via harness API (#4966)."""
-    for role in roles:
-        # Check if agent is running
-        needs_boot, reason, _ = boot_remote._needs_boot(role)
-        if needs_boot:
-            print(f"  [{role}] Not running ({reason}). Booting fresh...")
-            r = boot_remote.boot_agent(role)
-            status = "OK" if r["success"] else "FAIL"
-            print(f"  [{role}] {r['action']} -- {status}: {r['message']}")
-            continue
-
-        if force:
-            print(f"  [{role}] Force reboot -- killing process...")
-            try:
-                import reboot_agent
-                clone_path = boot_remote._get_clone_path(role)
-                claude_pid, alive = reboot_agent._read_claude_pid(
-                    Path(clone_path), role
-                )
-                if alive and claude_pid:
-                    reboot_agent._kill_process(claude_pid)
-                    print(f"  [{role}] Killed PID {claude_pid}")
-            except (ImportError, OSError, ProcessLookupError) as e:
-                print(f"  [{role}] Kill failed: {e}")
-            time.sleep(2)
-            r = boot_remote.boot_agent(role)
-            status = "OK" if r["success"] else "FAIL"
-            print(f"  [{role}] {r['action']} -- {status}: {r['message']}")
-        else:
-            # Use harness API to set intent=restarting (#4966)
-            ok, resp = _harness_api("POST", f"/agents/{role}/restart")
-            if ok:
-                print(f"  [{role}] Harness: restart requested (intent=restarting)")
-            else:
-                print(f"  [{role}] Harness unreachable — agent will continue until next cycle")
-
-    return True
-
-
-def cmd_stop(roles):
-    """Stop agents via harness API (#4966).
-
-    #4792: no more `.stop` sentinel fallback. If the harness is unreachable,
-    the stop command fails — preferable to writing a stale sentinel that
-    survives the harness restart and silently overrides next boot.
-    """
-    all_ok = True
-    for role in roles:
-        ok, resp = _harness_api("POST", f"/agents/{role}/stop")
-        if ok:
-            print(f"  [{role}] Harness: stop requested (intent=stopping)")
-        else:
-            print(
-                f"  [{role}] Harness unreachable — cannot stop agent. "
-                f"Start the harness first, then re-run this command."
-            )
-            all_ok = False
-    return all_ok
-
-
-# ---------------------------------------------------------------------------
-# Role resolution
-# ---------------------------------------------------------------------------
 
 def _get_all_roles():
     """Get all configured roles from boot_remote."""
     return boot_remote._get_all_roles()
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
+def cmd_boot(roles):
+    """Boot agents by delegating to `squidsquad_cli.cmd_start` per role."""
+    all_ok = True
+    for role in roles:
+        rc = squidsquad_cli.cmd_start(role)
+        if rc != 0:
+            all_ok = False
+    return all_ok
+
+
+def cmd_reboot(roles, force=False):
+    """Restart agents by delegating to `squidsquad_cli.cmd_restart` per role.
+
+    The `--force` flag is preserved on the CLI surface for backward
+    compatibility (Q11) but is now a no-op: the harness `/restart` endpoint
+    handles idle-kill (#8689) and the new 60s force-kill safety net (#4792
+    §3.3 Q7) covers stuck cases, so an operator-driven SIGKILL fallback is
+    no longer needed.
+    """
+    if force:
+        print("[start_team] --force is a deprecated no-op; "
+              "harness force-kill safety net (#4792) handles stuck agents.")
+    all_ok = True
+    for role in roles:
+        rc = squidsquad_cli.cmd_restart(role)
+        if rc != 0:
+            all_ok = False
+    return all_ok
+
+
+def cmd_stop(roles):
+    """Stop agents by delegating to `squidsquad_cli.cmd_stop` per role."""
+    all_ok = True
+    for role in roles:
+        rc = squidsquad_cli.cmd_stop(role)
+        if rc != 0:
+            all_ok = False
+    return all_ok
+
 
 def main():
     parser = argparse.ArgumentParser(
-        description="SquidSquad unified agent lifecycle management.",
+        description="SquidSquad operator shim — delegates to squidsquad_cli.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
@@ -188,10 +95,10 @@ def main():
     action.add_argument("--reboot", nargs="?", const=True,
                         help="Graceful restart via harness API")
     action.add_argument("--stop", nargs="?", const=True,
-                        help="Stop agent(s) permanently (write .stop)")
+                        help="Stop agent(s)")
 
     parser.add_argument("--force", action="store_true",
-                        help="Force immediate action (skip waiting)")
+                        help="Deprecated no-op (kept for muscle-memory).")
 
     args = parser.parse_args()
 
@@ -216,7 +123,6 @@ def main():
 
     print(f"[SquidSquad] Targeting: {', '.join(roles)}")
 
-    # Determine action
     if args.stop is not None:
         success = cmd_stop(roles)
     elif args.reboot is not None:

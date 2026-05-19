@@ -453,6 +453,143 @@ class TestStopAfterCycleCheck:
     # API (#4966) is the sole restart authority.
 
 
+class TestContextPressureRestartRouting:
+    """#4792 Phase 1 / CONTEXT-4792.md §5.1: when context pressure is exceeded,
+    cycle_post must POST /agents/{role}/restart BEFORE returning 42 so the
+    harness flips intent to RESTARTING (recording intent_set_at for the 60s
+    force-kill safety net). Without this routing, a context-pressure exit
+    leaves intent=RUNNING and the harness's #4949 auto-reboot path runs
+    instead, bypassing the RESTARTING bookkeeping the safety net expects."""
+
+    def test_context_pressure_exceeded_posts_restart(self, patch_dirs,
+                                                      squid_dir):
+        data = {"context_pressure": {"used_pct": 85, "threshold": 70,
+                                      "exceeded": True}}
+        with patch.object(cycle_post, "_query_harness_intent",
+                          return_value="running"), \
+             patch.object(cycle_post, "_post_harness_restart") as post:
+            result = cycle_post._do_stop_after_cycle_check(data, "skill")
+        assert result is True
+        post.assert_called_once_with("skill")
+
+    def test_context_pressure_post_failure_still_returns_true(
+        self, patch_dirs, squid_dir,
+    ):
+        """Best-effort: POST failure must NOT block the exit 42."""
+        data = {"context_pressure": {"used_pct": 85, "threshold": 70,
+                                      "exceeded": True}}
+        with patch.object(cycle_post, "_query_harness_intent",
+                          return_value="running"), \
+             patch.object(cycle_post, "_post_harness_restart",
+                          return_value=False):
+            result = cycle_post._do_stop_after_cycle_check(data, "skill")
+        assert result is True
+
+    def test_no_double_restart_when_intent_already_restarting(
+        self, patch_dirs, squid_dir,
+    ):
+        """If intent is already STOPPING/RESTARTING the intent branch caught
+        it first; this is just a defensive check that the POST is not made
+        in that path. The intent branch returns True before evaluating
+        context pressure."""
+        data = {"context_pressure": {"used_pct": 85, "threshold": 70,
+                                      "exceeded": True}}
+        with patch.object(cycle_post, "_query_harness_intent",
+                          return_value="restarting"), \
+             patch.object(cycle_post, "_post_harness_restart") as post:
+            result = cycle_post._do_stop_after_cycle_check(data, "skill")
+        assert result is True
+        # Intent branch short-circuits before reaching the context-pressure
+        # path, so no POST is made.
+        post.assert_not_called()
+
+    def test_context_pressure_not_exceeded_no_post(self, patch_dirs,
+                                                    squid_dir):
+        data = {"context_pressure": {"used_pct": 30, "threshold": 70,
+                                      "exceeded": False}}
+        with patch.object(cycle_post, "_query_harness_intent",
+                          return_value="running"), \
+             patch.object(cycle_post, "_post_harness_restart") as post:
+            result = cycle_post._do_stop_after_cycle_check(data, "skill")
+        assert result is False
+        post.assert_not_called()
+
+
+class TestPostHarnessRestart:
+    """The _post_harness_restart helper itself."""
+
+    def test_post_returns_false_when_port_unavailable(self, monkeypatch,
+                                                       capsys):
+        monkeypatch.setattr(cycle_post, "_discover_harness_port",
+                             lambda: None)
+        assert cycle_post._post_harness_restart("skill") is False
+
+    def test_post_returns_true_on_success(self, monkeypatch):
+        monkeypatch.setattr(cycle_post, "_discover_harness_port",
+                             lambda: 9999)
+
+        class _Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+        captured = {}
+
+        def _fake_urlopen(req, timeout=None):
+            captured["url"] = req.full_url
+            captured["method"] = req.get_method()
+            return _Resp()
+
+        monkeypatch.setattr(cycle_post.urllib.request, "urlopen",
+                             _fake_urlopen)
+        assert cycle_post._post_harness_restart("skill") is True
+        assert captured["url"] == "http://127.0.0.1:9999/agents/skill/restart"
+        assert captured["method"] == "POST"
+
+    def test_post_returns_false_on_network_error(self, monkeypatch, capsys):
+        monkeypatch.setattr(cycle_post, "_discover_harness_port",
+                             lambda: 9999)
+
+        def _boom(*args, **kwargs):
+            raise OSError("connection refused")
+
+        monkeypatch.setattr(cycle_post.urllib.request, "urlopen", _boom)
+        assert cycle_post._post_harness_restart("skill") is False
+        # Warning goes to stderr to match the rest of cycle_post.
+        assert "WARNING" in capsys.readouterr().err
+
+
+class TestSelfRestartFragmentMentionsQuit:
+    """#4792 Phase 1 / CONTEXT-4792.md §5.11: the self-restart fragment must
+    instruct the agent to invoke /quit after cycle_post exits 42."""
+
+    def test_self_restart_md_mentions_quit_after_42(self):
+        from pathlib import Path
+        path = (Path(__file__).resolve().parent.parent
+                / "references" / "sub-skills" / "common" / "self-restart.md")
+        text = path.read_text(encoding="utf-8")
+        assert "/quit" in text, (
+            "self-restart.md must mention `/quit` per CONTEXT-4792.md §5.11"
+        )
+        assert "exit" in text.lower() and "42" in text, (
+            "self-restart.md must reference exit code 42"
+        )
+
+    def test_self_restart_md_mentions_force_kill_safety_net(self):
+        from pathlib import Path
+        path = (Path(__file__).resolve().parent.parent
+                / "references" / "sub-skills" / "common" / "self-restart.md")
+        text = path.read_text(encoding="utf-8")
+        assert "60-second" in text or "60s" in text, (
+            "self-restart.md must mention the 60s force-kill window"
+        )
+        assert "force-kill" in text.lower(), (
+            "self-restart.md must mention the force-kill safety net"
+        )
+
+
 class TestPortDiscovery:
     """#4966: Port discovery for harness API communication."""
 

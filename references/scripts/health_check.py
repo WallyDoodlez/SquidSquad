@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
-"""SquidSquad agent health check — deterministic cross-clone health probe.
+"""SquidSquad agent health check — offline fallback for human diagnostics.
 
-DEPRECATION NOTE (#4966): The harness now monitors agent liveness via direct
-PID checks (primary) and .claude-pid file (fallback). This script is used as
-a legacy fallback by harness.update_health() for agents still using wrapper
-scripts. New agents spawned via thin launcher are monitored directly by the
-harness process table.
+Prefer `GET /status` (`squidsquad_cli.py status`) when the harness is running;
+the harness has authoritative liveness via direct PID monitoring (#4966). This
+script is an offline fallback for cases where the harness is unreachable — it
+walks each agent's `.claude-pid` and `current-state` files directly.
 
-Reads .local-config to find each agent's actual clone path, then checks
-each agent's `.health` file for liveness and `current-state` file for
-cycle-level phase detail. Falls back to current-state mtime when .health
-is missing.
+Reads `.local-config` to find each agent's clone path, then checks each
+agent's `.claude-pid` (PID-liveness, primary signal) and `current-state`
+mtime (staleness, secondary signal).
 
 Usage:
     python scripts/health_check.py              # Pretty table for humans
@@ -51,16 +49,12 @@ from process_utils import is_process_alive as _is_process_alive  # noqa: E402  (
 HEALTHY = "healthy"
 STALLED = "stalled"
 UNKNOWN = "unknown"
-STOPPED = "stopped"
-ERROR = "error"
 
 # Emoji for display
 HEALTH_EMOJI = {
     HEALTHY: "\U0001f991",  # 🦑
     STALLED: "\U0001f47b",  # 👻
-    UNKNOWN: "\u2753",       # ❓
-    STOPPED: "\u23f9\ufe0f", # ⏹️
-    ERROR: "\u274c",         # ❌
+    UNKNOWN: "❓",      # ❓
 }
 
 
@@ -175,18 +169,6 @@ def _parse_working_state_task(text):
     return "unknown"
 
 
-def _read_pid_file(squid_dir):
-    """Read PID from .squidsquad/{role}/.pid. Returns int or None."""
-    pid_file = squid_dir / ".pid"
-    if not pid_file.exists():
-        return None
-    try:
-        content = pid_file.read_text(encoding="utf-8").strip()
-        return int(content) if content else None
-    except (ValueError, OSError):
-        return None
-
-
 def _read_claude_pid_file(squid_dir):
     """Read PID from .squidsquad/{role}/.claude-pid. Returns int or None.
 
@@ -203,42 +185,12 @@ def _read_claude_pid_file(squid_dir):
         return None
 
 
-def _read_any_pid(squid_dir):
-    """Read PID from .claude-pid (preferred) or .pid (fallback). Returns int or None."""
-    pid = _read_claude_pid_file(squid_dir)
-    if pid is not None:
-        return pid
-    return _read_pid_file(squid_dir)
-
-
-def _parse_health_file(text):
-    """Parse .health file content → (status, detail).
-
-    Supports two formats for transition compatibility (#2183):
-    - **New (heartbeat epoch)**: file contains a Unix epoch integer (e.g. "1745366400").
-      Wrapper writes this every 5s. Parsed as status="heartbeat", detail=epoch_str.
-    - **Legacy (status string)**: `status` or `status|detail`.
-      Valid statuses: booting, alive, restarting, backoff, dead, error.
-    """
-    if not text:
-        return None, None
-    line = text.strip().split("\n")[0].strip()
-
-    # New format: pure epoch integer (10+ digits)
-    if line.isdigit() and len(line) >= 10:
-        return "heartbeat", line
-
-    # Legacy format: status|detail
-    parts = line.split("|", 1)
-    status = parts[0].strip() if parts else ""
-    detail = parts[1].strip() if len(parts) > 1 else ""
-    return status, detail
-
-
 def check_agent_health(role, clone_root, interval_minutes, now=None):
-    """Check a single agent's health.
+    """Check a single agent's health via .claude-pid + current-state mtime.
 
-    Uses .health file for liveness (primary), current-state mtime as fallback.
+    PID-liveness on .claude-pid is the primary signal. current-state mtime
+    is used for staleness only (agent alive but not progressing through
+    cycles). When .claude-pid is missing, falls back to mtime-only.
 
     Args:
         role: agent id (e.g. "skill", "pm")
@@ -249,16 +201,15 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
     Returns a dict:
         {
             "role": str,
-            "health": "healthy" | "stalled" | "unknown" | "stopped" | "error",
-            "health_source": "health-file" | "mtime-fallback",
-            "health_file_status": str | None,
-            "health_file_detail": str | None,
+            "health": "healthy" | "stalled" | "unknown",
+            "health_source": "pid-check" | "mtime-fallback",
             "clone_path": str,
             "current_state_phase": str,
             "current_state_desc": str,
             "task": str,
             "last_active_minutes_ago": int | None,
             "reason": str,
+            "pid": int (only when .claude-pid was read),
         }
     """
     if now is None:
@@ -270,8 +221,6 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
         "role": role,
         "health": UNKNOWN,
         "health_source": "mtime-fallback",
-        "health_file_status": None,
-        "health_file_detail": None,
         "clone_path": str(clone_root),
         "current_state_phase": "",
         "current_state_desc": "",
@@ -285,11 +234,11 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
         result["reason"] = f"clone path does not exist: {clone_root}"
         return result
 
-    # #4792: stop-detection moved to harness state (intent=stopping/stopped),
-    # no longer file-based. Local health_check.py only reports phase/health,
-    # not lifecycle intent — that's the harness's job via /agents/<role>.
+    # #4792: stop-detection lives in harness state (intent=stopping/stopped),
+    # not file-based. health_check.py reports phase/PID-liveness only —
+    # lifecycle intent is the harness's job via /agents/<role>.
 
-    # Read current-state for phase info (always, regardless of .health)
+    # Read current-state for phase info (always)
     state_file = squid / "current-state"
     state_mtime = _get_file_mtime(state_file)
     state_text = _read_file_head(state_file)
@@ -304,79 +253,20 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
 
     # Compute last_active from current-state mtime
     if state_mtime is not None:
-        elapsed_seconds = now - state_mtime
-        result["last_active_minutes_ago"] = int(elapsed_seconds / 60)
+        result["last_active_minutes_ago"] = int((now - state_mtime) / 60)
 
-    # --- Primary: read .health file for liveness ---
-    health_file = squid / ".health"
-    health_text = _read_file_head(health_file)
-    health_status, health_detail = _parse_health_file(health_text)
+    stale_threshold = interval_minutes * 2
 
-    if health_status is not None:
-        result["health_source"] = "health-file"
-        result["health_file_status"] = health_status
-        result["health_file_detail"] = health_detail
-
-        if health_status == "heartbeat":
-            # New format: epoch timestamp written by wrapper every 5s
-            try:
-                heartbeat_epoch = int(health_detail)
-                heartbeat_age = now - heartbeat_epoch
-                result["health_file_detail"] = f"epoch={heartbeat_epoch}, age={int(heartbeat_age)}s"
-                if heartbeat_age <= 10:
-                    result["health"] = HEALTHY
-                    result["reason"] = f"heartbeat {int(heartbeat_age)}s ago (alive)"
-                else:
-                    # Heartbeat stale — cross-check PID before declaring STALLED (#5429)
-                    pid = _read_any_pid(squid)
-                    pid_alive = _is_process_alive(pid)
-                    if pid is not None:
-                        result["pid"] = pid
-                    if pid_alive:
-                        result["health"] = HEALTHY
-                        result["reason"] = (
-                            f"heartbeat stale ({int(heartbeat_age)}s ago) "
-                            f"but PID {pid} alive — harness/wrapper may be down"
-                        )
-                    else:
-                        result["health"] = STALLED
-                        if pid is not None:
-                            result["reason"] = (
-                                f"heartbeat stale ({int(heartbeat_age)}s ago, threshold 10s) "
-                                f"and PID {pid} is dead"
-                            )
-                        else:
-                            result["reason"] = (
-                                f"heartbeat stale ({int(heartbeat_age)}s ago, threshold 10s), "
-                                f"no PID file to cross-check"
-                            )
-            except (ValueError, TypeError):
-                result["health"] = UNKNOWN
-                result["reason"] = f"heartbeat epoch unparseable: {health_detail}"
-            return result
-
-        elif health_status == "alive":
-            # Legacy format: PID cross-check — use _read_any_pid to support
-            # thin-launcher agents that write .claude-pid only (#7611)
-            pid = _read_any_pid(squid)
-            pid_alive = _is_process_alive(pid)
-            result["pid"] = pid
-
-            if not pid_alive:
-                result["health"] = STALLED
-                if pid is not None:
-                    result["reason"] = (
-                        f".health=alive but PID {pid} is dead — stale .health file"
-                    )
-                else:
-                    result["reason"] = (
-                        ".health=alive but no .pid file — cannot verify liveness"
-                    )
-                return result
-
-            # PID is alive — check current-state staleness
-            stale_threshold = interval_minutes * 2
-            if state_mtime is not None:
+    # --- Primary: PID-liveness via .claude-pid ---
+    pid = _read_claude_pid_file(squid)
+    if pid is not None:
+        result["pid"] = pid
+        result["health_source"] = "pid-check"
+        if _is_process_alive(pid):
+            if state_mtime is None:
+                result["health"] = HEALTHY
+                result["reason"] = f"PID {pid} alive (no current-state yet — freshly booted)"
+            else:
                 elapsed_minutes = int((now - state_mtime) / 60)
                 if elapsed_minutes <= stale_threshold:
                     result["health"] = HEALTHY
@@ -390,49 +280,18 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
                         f"PID {pid} alive but current-state stale "
                         f"({elapsed_minutes}m ago, threshold {stale_threshold}m)"
                     )
-            else:
-                result["health"] = HEALTHY
-                result["reason"] = f"PID {pid} alive (no current-state yet — freshly booted)"
-
-        elif health_status == "booting":
-            result["health"] = HEALTHY
-            result["reason"] = ".health=booting (agent starting up)"
-
-        elif health_status == "restarting":
-            result["health"] = HEALTHY
-            result["reason"] = ".health=restarting (wrapper restarting agent)"
-
-        elif health_status == "backoff":
-            result["health"] = STALLED
-            result["reason"] = ".health=backoff (crash loop — exponential backoff)"
-
-        elif health_status == "dead":
-            result["health"] = STALLED
-            result["reason"] = ".health=dead (wrapper exited)"
-
-        elif health_status == "error":
-            result["health"] = ERROR
-            detail_msg = f": {health_detail}" if health_detail else ""
-            result["reason"] = f".health=error{detail_msg}"
-
         else:
-            # Unknown .health status — treat as unknown
-            result["health"] = UNKNOWN
-            result["reason"] = f".health={health_status} (unrecognized)"
-
+            result["health"] = STALLED
+            result["reason"] = f"PID {pid} is dead (.claude-pid stale)"
         return result
 
-    # --- Fallback: mtime-based detection (no .health file) ---
-    result["health_source"] = "mtime-fallback"
-
+    # --- Fallback: mtime-based detection (no .claude-pid file) ---
     if state_mtime is None:
         result["health"] = UNKNOWN
-        result["reason"] = "no .health file, no current-state file"
+        result["reason"] = "no .claude-pid file, no current-state file"
         return result
 
-    elapsed_seconds = now - state_mtime
-    elapsed_minutes = int(elapsed_seconds / 60)
-    stale_threshold = interval_minutes * 2
+    elapsed_minutes = int((now - state_mtime) / 60)
     if elapsed_minutes <= stale_threshold:
         result["health"] = HEALTHY
         result["reason"] = (
@@ -478,10 +337,7 @@ def check_all_agents(local_config_overrides=None):
         result = check_agent_health(role, clone_root, interval, now=now)
         results.append(result)
 
-    all_healthy = all(
-        r["health"] in (HEALTHY, STOPPED)
-        for r in results
-    ) if results else True
+    all_healthy = all(r["health"] == HEALTHY for r in results) if results else True
 
     return {
         "agents": results,
@@ -508,7 +364,7 @@ def format_table(report):
 
     for a in agents:
         emoji = HEALTH_EMOJI.get(a["health"], "?")
-        source = "file" if a["health_source"] == "health-file" else "mtime"
+        source = "pid" if a["health_source"] == "pid-check" else "mtime"
         last = (
             f"{a['last_active_minutes_ago']}m"
             if a["last_active_minutes_ago"] is not None
