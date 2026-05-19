@@ -1,0 +1,21 @@
+{
+  "issue": 4792,
+  "title": "Sentinel-file cleanup — sole liveness signal & operator entry point",
+  "files": [
+    "references/sub-skills/common/agent-lifecycle.md",
+    "references/sub-skills/roles/pm/health-check.md",
+    ".squidsquad/project/shared-instructions.md"
+  ],
+  "questions": [
+    {
+      "id": "1",
+      "question": "What does the harness use as the sole liveness signal for monitoring agents?",
+      "expected": "The `.claude-pid` file. The harness polls every 5 seconds and checks whether the PID written to `.claude-pid` is alive. There is no `.health` file fallback any more — `.claude-pid` is the only liveness signal."
+    },
+    {
+      "id": "2",
+      "question": "Which script is the canonical operator entry point for starting, stopping, or restarting agents?",
+      "expected": "`squidsquad_cli.py`. It speaks directly to the harness REST API. `start_team.py` still exists as a backward-compatible shim that delegates to `squidsquad_cli`, but the canonical path is `squidsquad_cli`."
+    }
+  ]
+}

@@ -65,6 +65,7 @@ STATIC_TEST_MODULES = [
     "test_cycle",
     "test_cycle_post",
     "test_cycle_pre",
+    "test_4792_fragment_hygiene",
     "test_deterministic_qa_framework",
     "test_diagnostics",
     "test_dm_verify_before_block",
