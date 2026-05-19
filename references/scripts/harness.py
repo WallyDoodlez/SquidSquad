@@ -458,10 +458,17 @@ class EventStream:
     def __init__(self, maxlen=1000):
         self._events = collections.deque(maxlen=maxlen)
         self._lock = threading.Lock()
+        # Lifetime emit counter for the eviction-signal hint (#9331).
+        # Increments on every `append`; never decrements when the deque
+        # rolls. After the deque is full, the difference from
+        # `len(self._events)` = number of events evicted from the
+        # retained window over the harness's lifetime.
+        self._total_emitted_count = 0
 
     def append(self, event: dict):
         with self._lock:
             self._events.append(event)
+            self._total_emitted_count += 1
 
     def get_all(self) -> list[dict]:
         with self._lock:
@@ -473,18 +480,75 @@ class EventStream:
             return items[-n:] if len(items) > n else items
 
     def get_since(self, since_id: str, limit: int = 100) -> list[dict]:
-        """Return events after the given ID. If ID not found, return oldest available."""
+        """Return events after the given ID. If ID not found, return oldest available.
+
+        Single-return-value wrapper around
+        :meth:`get_since_with_eviction` — drops the eviction marker.
+        Ordering follows the skim-then-advance contract
+        (CONTEXT-8694 §2): **oldest-first when ``since_id`` is set**
+        (so the agent walks the gap event-by-event), newest-first
+        otherwise. This is the same ordering change PR #9320 ships
+        for the §4.10 long-cursor-lag scenario; #9331 inherits it
+        because the eviction-aware getter must return oldest-first
+        for re-anchor to make sense. Callers that need the eviction
+        marker should use :meth:`get_since_with_eviction` directly.
+        """
+        events, _ = self.get_since_with_eviction(since_id, limit)
+        return events
+
+    def get_since_with_eviction(
+        self, since_id: str, limit: int = 100,
+    ):
+        """Return ``(events, eviction_marker)``.
+
+        ``eviction_marker`` is ``None`` for the normal case — cursor
+        was found in the retained window, or no cursor was passed.
+        When the caller supplies a ``since_id`` that is **not** in the
+        deque, the marker becomes::
+
+            {
+                "oldest_id": <str|None>,
+                "evicted_count_hint": <int>,
+            }
+
+        - ``oldest_id`` is the id of the oldest event still retained
+          (the cursor's safe re-anchor point), or ``None`` if the
+          deque is empty.
+        - ``evicted_count_hint`` is a coarse upper bound on the number
+          of events that have been pushed out of the retained window
+          since boot (lifetime emits − currently retained). Operators
+          log this for forensics; exact precision is not required
+          (#9331).
+
+        The events list itself follows the same skim-then-advance
+        contract as before (CONTEXT-8694 §2): oldest-first when
+        ``since`` is set, newest-first otherwise. With ``since``
+        present, returning newest-first would silently drop the gap
+        between cursor and (head − limit).
+        """
         with self._lock:
             items = list(self._events)
             if not since_id:
-                return items[-limit:] if len(items) > limit else items
-            # Find the index of the since_id event
+                events = items[-limit:] if len(items) > limit else items
+                return events, None
             for i, event in enumerate(items):
                 if event.get("id") == since_id:
                     after = items[i + 1:]
-                    return after[-limit:] if len(after) > limit else after
-            # ID not found (evicted) — return oldest available up to limit
-            return items[-limit:] if len(items) > limit else items
+                    events = after[:limit] if len(after) > limit else after
+                    return events, None
+            # Cursor predates the retained window — emit the eviction
+            # signal so the agent can log + advance to a known anchor
+            # instead of silently moving past the gap.
+            events = items[:limit] if len(items) > limit else items
+            oldest_id = items[0].get("id") if items else None
+            evicted_count_hint = max(
+                0, self._total_emitted_count - len(items)
+            )
+            marker = {
+                "oldest_id": oldest_id,
+                "evicted_count_hint": evicted_count_hint,
+            }
+            return events, marker
 
     def __len__(self):
         with self._lock:
@@ -1399,8 +1463,13 @@ async def get_events(
         event_type: filter by event type (comma-separated for multiple)
         limit: max events to return (default 100)
     """
+    eviction = None
     if since:
-        events = event_stream.get_since(since, limit=limit * 3)  # over-fetch before filtering
+        # Over-fetch by *3 so post-filter still has enough rows to fill
+        # the limit. Eviction marker piggybacks on this call (#9331).
+        events, eviction = event_stream.get_since_with_eviction(
+            since, limit=limit * 3
+        )
     else:
         events = event_stream.get_recent(limit * 3)
 
@@ -1411,10 +1480,25 @@ async def get_events(
         types = set(event_type.split(","))
         events = [e for e in events if e.get("event_type") in types]
 
-    # Apply limit after filtering
-    events = events[-limit:] if len(events) > limit else events
+    # Apply limit after filtering. With `since`, the agent wants the
+    # OLDEST events after the cursor (skim-then-advance, CONTEXT-8694
+    # §2) — slicing `[-limit:]` would silently drop the gap between
+    # cursor and (head − limit). Without `since`, keep newest-first for
+    # callers that want recent activity.
+    if since:
+        events = events[:limit] if len(events) > limit else events
+    else:
+        events = events[-limit:] if len(events) > limit else events
 
-    return {"events": events, "total": len(event_stream)}
+    response = {"events": events, "total": len(event_stream)}
+    if eviction is not None:
+        # Eviction signal (#9331) — present only when the caller's
+        # cursor predates the retained window. Agents log this and
+        # advance to `oldest_id` instead of silently moving on.
+        response["evicted"] = True
+        response["oldest_id"] = eviction["oldest_id"]
+        response["evicted_count_hint"] = eviction["evicted_count_hint"]
+    return response
 
 
 @app.get("/events/for/{role}")
@@ -1444,9 +1528,13 @@ async def get_events_for_role(
     except (ImportError, Exception):
         relevant_types = None
 
-    # Fetch events from stream
+    # Fetch events from stream. Eviction marker piggybacks when `since`
+    # is provided and the cursor predates the retained window (#9331).
+    eviction = None
     if since:
-        events = event_stream.get_since(since, limit=limit * 3)
+        events, eviction = event_stream.get_since_with_eviction(
+            since, limit=limit * 3
+        )
     else:
         events = event_stream.get_recent(limit * 3)
 
@@ -1460,7 +1548,12 @@ async def get_events_for_role(
         elif relevant_types and etype in relevant_types:
             filtered.append(e)
 
-    filtered = filtered[-limit:] if len(filtered) > limit else filtered
+    # Same skim-then-advance rule as GET /events: oldest-first when the
+    # caller advances a cursor, newest-first otherwise.
+    if since:
+        filtered = filtered[:limit] if len(filtered) > limit else filtered
+    else:
+        filtered = filtered[-limit:] if len(filtered) > limit else filtered
 
     # Mark dispatched in lifecycle manager
     for e in filtered:
@@ -1468,7 +1561,12 @@ async def get_events_for_role(
         if eid:
             event_lifecycle.dispatch(eid, role, e)
 
-    return {"events": filtered, "total": len(filtered)}
+    response = {"events": filtered, "total": len(filtered)}
+    if eviction is not None:
+        response["evicted"] = True
+        response["oldest_id"] = eviction["oldest_id"]
+        response["evicted_count_hint"] = eviction["evicted_count_hint"]
+    return response
 
 
 @app.post("/events/{event_id}/complete")
