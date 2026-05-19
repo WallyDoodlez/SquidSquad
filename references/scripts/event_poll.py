@@ -147,9 +147,11 @@ def _build_url(port, role, cursor, limit, target_mode):
 
 
 def _fetch_once(url, http_timeout):
-    """Single HTTP attempt. Returns (events|None, retryable, fatal_message).
+    """Single HTTP attempt. Returns (payload|None, retryable, fatal_message).
 
-    - (list, False, None)        — success
+    - (dict, False, None)        — success; payload carries ``events`` plus
+                                   optional ``evicted``/``oldest_id``/
+                                   ``evicted_count_hint`` keys (#9331)
     - (None, True, reason)       — transient (retry with backoff)
     - (None, False, reason)      — fatal (4xx or invalid body); caller exits
     """
@@ -165,7 +167,7 @@ def _fetch_once(url, http_timeout):
         events = data.get("events", [])
         if not isinstance(events, list):
             return None, False, f"harness 'events' not a list: {type(events).__name__}"
-        return events, False, None
+        return data, False, None
     except urllib.error.HTTPError as e:
         if 500 <= e.code < 600:
             return None, True, f"HTTP {e.code}"
@@ -196,8 +198,40 @@ def poll(role, since=None, limit=50, target_mode=False,
 
     attempt = 0
     while True:
-        events, retryable, fatal_msg = _fetch_once(url, http_timeout)
-        if events is not None:
+        payload, retryable, fatal_msg = _fetch_once(url, http_timeout)
+        if payload is not None:
+            events = payload.get("events", [])
+            if payload.get("evicted"):
+                # Cursor predates the harness's retained window (#9331).
+                # Warn once per response naming the safe re-anchor + an
+                # operator-forensic hint on how many events have rolled
+                # off the deque since boot. Then re-anchor the cursor
+                # to `oldest_id` BEFORE processing events.
+                #
+                # Re-anchoring up front is needed because on the
+                # `/events/for/{role}` endpoint, the role filter can
+                # strip every event in the batch even when the deque
+                # is non-empty — leaving `events == []` with the
+                # cursor stuck on the (still-evicted) stale id and the
+                # warning repeating every poll. Anchoring to
+                # `oldest_id` first guarantees forward progress; if
+                # events DO survive the filter, the per-event advance
+                # below will overwrite the cursor to a later id, which
+                # is fine (events are oldest-first; their ids are
+                # >= oldest_id).
+                oldest_id = payload.get("oldest_id")
+                hint = payload.get("evicted_count_hint")
+                print(
+                    f"[event_poll] EVICTION: cursor predates retained "
+                    f"window — re-anchoring to {oldest_id}, ~{hint} "
+                    f"events have rolled off the deque since boot",
+                    file=sys.stderr,
+                )
+                if oldest_id and not _write_cursor_atomic(role, str(oldest_id)):
+                    # Same fatal-on-disk-fail policy as the per-event
+                    # advance below — silently retrying would burn CPU
+                    # forever against an unwritable cursor file.
+                    return None
             for event in events:
                 if not isinstance(event, dict):
                     print(f"WARNING: malformed event (not an object); "
