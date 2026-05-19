@@ -2480,5 +2480,159 @@ class TestHumanQueueEndpoint(unittest.TestCase):
         self.assertEqual([i["number"] for i in resp.json()["items"]], [2, 1])
 
 
+class TestCleanupLegacySentinels(unittest.TestCase):
+    """#4792 Phase 2 §5.1: harness boot must sweep pre-#4792 lifecycle
+    sentinels (`.stop`, `.restart`, `.health`) so a stale file left over
+    from an upgrade cannot influence the first `update_health` poll."""
+
+    def _make_clone(self, tmp_path, role, files):
+        role_dir = tmp_path / role / ".squidsquad" / role
+        role_dir.mkdir(parents=True)
+        for name in files:
+            (role_dir / name).write_text("legacy", encoding="utf-8")
+        return tmp_path / role
+
+    def test_removes_all_three_sentinels(self):
+        import tempfile
+        from harness import _cleanup_legacy_sentinels
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            skill_root = self._make_clone(tmp, "skill",
+                                          [".stop", ".restart", ".health"])
+            removed, errors = _cleanup_legacy_sentinels({"skill": skill_root})
+            self.assertEqual(removed, 3)
+            self.assertEqual(errors, 0)
+            role_dir = skill_root / ".squidsquad" / "skill"
+            for name in (".stop", ".restart", ".health"):
+                self.assertFalse((role_dir / name).exists(), name)
+
+    def test_tolerates_missing_files(self):
+        """A clone with no legacy sentinels must produce removed=0, no errors,
+        and not raise."""
+        import tempfile
+        from harness import _cleanup_legacy_sentinels
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            skill_root = self._make_clone(tmp, "skill", [])
+            removed, errors = _cleanup_legacy_sentinels({"skill": skill_root})
+            self.assertEqual(removed, 0)
+            self.assertEqual(errors, 0)
+
+    def test_tolerates_missing_role_directory(self):
+        """If `.squidsquad/<role>/` does not exist (clone never booted),
+        the helper skips it without crashing."""
+        import tempfile
+        from harness import _cleanup_legacy_sentinels
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            # Don't create the role dir — emulate a fresh clone
+            removed, errors = _cleanup_legacy_sentinels({"skill": tmp})
+            self.assertEqual(removed, 0)
+            self.assertEqual(errors, 0)
+
+    def test_handles_multiple_roles(self):
+        import tempfile
+        from harness import _cleanup_legacy_sentinels
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            skill_root = self._make_clone(tmp, "skill", [".stop", ".health"])
+            pm_root = self._make_clone(tmp, "pm", [".restart"])
+            removed, errors = _cleanup_legacy_sentinels({
+                "skill": skill_root,
+                "pm": pm_root,
+            })
+            self.assertEqual(removed, 3)
+            self.assertEqual(errors, 0)
+
+    def test_partial_removal_only_existing(self):
+        """Mixed state: one sentinel present, two absent — count must be 1."""
+        import tempfile
+        from harness import _cleanup_legacy_sentinels
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            skill_root = self._make_clone(tmp, "skill", [".health"])
+            removed, errors = _cleanup_legacy_sentinels({"skill": skill_root})
+            self.assertEqual(removed, 1)
+            self.assertEqual(errors, 0)
+
+    def test_unlink_oserror_counted_not_raised(self):
+        """OSError from unlink must be counted in errors, not propagated —
+        the cleanup pass is best-effort and runs before update_health, so
+        it cannot crash harness startup."""
+        import tempfile
+        from unittest.mock import patch
+        from harness import _cleanup_legacy_sentinels
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            skill_root = self._make_clone(tmp, "skill", [".stop"])
+            # Force the unlink to raise an OSError that is NOT
+            # FileNotFoundError (which is correctly handled separately).
+            with patch("pathlib.Path.unlink",
+                       side_effect=PermissionError("locked")):
+                removed, errors = _cleanup_legacy_sentinels(
+                    {"skill": skill_root}
+                )
+            self.assertEqual(removed, 0)
+            self.assertEqual(errors, 1)
+
+    def test_legacy_sentinel_names_locked(self):
+        """The tuple of names is part of the cleanup contract — pin it so
+        adding a new lifecycle sentinel cannot accidentally widen the
+        sweep without a deliberate change."""
+        from harness import LEGACY_SENTINEL_FILES
+        self.assertEqual(
+            tuple(LEGACY_SENTINEL_FILES), (".stop", ".restart", ".health"),
+        )
+
+    def test_cleanup_runs_synchronously_before_start_poller(self):
+        """Source-level guard for CONTEXT-4792.md §5.1: the cleanup must
+        be invoked on the lifespan thread BEFORE `state.start_poller()`,
+        not inside the `_deferred_init` background thread which races
+        the poller. A future refactor that moves the call inside the
+        deferred block reintroduces the race the review caught."""
+        import harness
+        src = Path(harness.__file__).read_text(encoding="utf-8")
+
+        # Find the lifespan body — everything between the `async def
+        # lifespan` line and the next top-level `def` (or end of file).
+        lifespan_match = src.find("async def lifespan")
+        self.assertGreater(lifespan_match, 0, "lifespan function not found")
+        # Bound the search at the first top-level def that follows
+        # lifespan (e.g. `def _validate_role`).
+        after_lifespan = src[lifespan_match:]
+        next_top_level_def = after_lifespan.find("\ndef ")
+        self.assertGreater(next_top_level_def, 0,
+                           "no top-level def found after lifespan")
+        lifespan_body = after_lifespan[:next_top_level_def]
+
+        cleanup_idx = lifespan_body.find("_cleanup_legacy_sentinels(")
+        poller_idx = lifespan_body.find("state.start_poller()")
+        deferred_thread_idx = lifespan_body.find(
+            "threading.Thread(target=_deferred_init"
+        )
+
+        self.assertGreater(
+            cleanup_idx, 0,
+            "lifespan must invoke _cleanup_legacy_sentinels (§5.1)",
+        )
+        self.assertGreater(
+            poller_idx, 0,
+            "lifespan must call state.start_poller()",
+        )
+        self.assertLess(
+            cleanup_idx, poller_idx,
+            "cleanup must run BEFORE start_poller (§5.1 — health poller "
+            "would otherwise hit the legacy .health fallback while "
+            "stale sentinels are still present)",
+        )
+        # Also confirm cleanup runs before the deferred thread fires
+        # `_deferred_init`, so neither path can read stale state.
+        self.assertLess(
+            cleanup_idx, deferred_thread_idx,
+            "cleanup must precede the _deferred_init thread spawn so "
+            "load_state() never observes legacy sentinels",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

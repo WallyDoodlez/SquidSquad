@@ -707,6 +707,59 @@ def _log(msg: str):
 
 
 # ---------------------------------------------------------------------------
+# Legacy-sentinel cleanup (#4792 Phase 2 §5.1)
+# ---------------------------------------------------------------------------
+
+LEGACY_SENTINEL_FILES = (".stop", ".restart", ".health")
+
+
+def _cleanup_legacy_sentinels(clone_paths):
+    """Unlink pre-#4792 lifecycle sentinel files from each agent clone.
+
+    Before #4792 the wrapper/PM stack wrote `.stop`, `.restart`, and
+    `.health` files under `.squidsquad/<role>/` to signal lifecycle
+    intent and liveness. Those signals are now owned by the harness
+    intent state machine (`.harness-state.json`) and the `.claude-pid`
+    file (CONTEXT-4792.md §5.1).
+
+    On harness boot, sweep the legacy files so a stale `.stop` left over
+    from a previous SquidSquad version cannot influence `update_health`
+    or be misread by any remaining legacy reader during the upgrade
+    window. Idempotent: missing files are silently ignored; any other
+    OSError is logged but does not abort startup.
+
+    Returns ``(removed, errors)`` so the caller can log a summary.
+    """
+    removed = 0
+    errors = 0
+    for role, clone_root in clone_paths.items():
+        role_dir = Path(clone_root) / ".squidsquad" / role
+        if not role_dir.is_dir():
+            continue
+        for name in LEGACY_SENTINEL_FILES:
+            sentinel = role_dir / name
+            # Skip the syscall entirely for non-existent files so the
+            # counters reflect real removals only. `missing_ok=True` on
+            # the unlink then swallows the FileNotFoundError that arises
+            # in the rare TOCTOU window where the file disappears
+            # between the `exists()` check and the unlink — in that
+            # case the post-condition (file gone) is satisfied so it
+            # still counts as a removal.
+            if not sentinel.exists():
+                continue
+            try:
+                sentinel.unlink(missing_ok=True)
+                removed += 1
+            except OSError as e:
+                errors += 1
+                _log(
+                    f"legacy-sentinel cleanup: {role}/{name} unlink "
+                    f"failed: {type(e).__name__}: {e}"
+                )
+    return removed, errors
+
+
+# ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
 
@@ -805,6 +858,25 @@ async def lifespan(app: FastAPI):
             state.save_state()
         except Exception as e:
             _log(f"Auto-start failed: {e}")
+
+    # Sweep pre-#4792 legacy lifecycle sentinels SYNCHRONOUSLY before the
+    # health poller starts, so a stale `.stop`/`.restart`/`.health` cannot
+    # be observed by the first `update_health` pass during an upgrade
+    # window (CONTEXT-4792.md §5.1). Best-effort — failures here do not
+    # block startup. Must run on the lifespan thread, NOT inside
+    # `_deferred_init`: the deferred thread races against `start_poller`,
+    # which would let the poller hit the legacy `.health` fallback in
+    # `update_health` before cleanup completes.
+    try:
+        clone_paths_for_cleanup = boot_remote._parse_local_config()
+        removed, errors = _cleanup_legacy_sentinels(clone_paths_for_cleanup)
+        if removed or errors:
+            _log(
+                f"Legacy-sentinel cleanup: removed {removed}, "
+                f"errors {errors}"
+            )
+    except (SystemExit, Exception) as e:
+        _log(f"WARNING: legacy-sentinel cleanup failed: {e}")
 
     threading.Thread(target=_deferred_init, daemon=True, name="deferred-init").start()
     state.start_poller()
