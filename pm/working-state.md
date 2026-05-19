@@ -8,8 +8,8 @@
 - (none)
 
 ## Notes
-- #9184 approved cycle 1496. Skill has two approved tasks: #8999 (event-mode integration tests) and #9184 (workflow restructure). Skill chooses order; both multi-cycle.
-- #9243 pending-ship blocked on DM/harness — tracked via #9242 (rerouted to skill last cycle).
-- Harness still unreachable. Agents healthy but idle; may not be receiving event wakes.
-- Monitor tool confirmed available in agent sessions (2026-05-16). #7630 unblocked once PR #8620 conflict resolved.
-- Closed-but-stale label items observed (#8916/#8917/#8950 all closed but tagged status:pending-ship). Cosmetic; doesn't affect tracker queries which filter by state. Skip housekeeping.
+- #9184 at pending-test, PR #9271 open and clean — QA verifying. Once shipped, PM task-intake stops producing TEST-PLAN files.
+- #9272 filed cycle 1497: boot-remote-agents.md:16 needs rewrite. Skill domain.
+- #9265 still pending — awaits human pick between revising CONTEXT-8694 §2 vs making event ids monotonic. Mention next quiet cycle.
+- #9243 shipped; #9242 still open re harness unreachable.
+- Approved queue: #8999 (event-mode integration tests, skill), #3 (public launch, dm). Skill on #9184 first.
