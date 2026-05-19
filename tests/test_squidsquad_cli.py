@@ -96,7 +96,14 @@ class TestMainDispatch:
              patch.object(squidsquad_cli, "cmd_start", return_value=0) as mock:
             result = squidsquad_cli.main()
         assert result == 0
-        mock.assert_called_once()
+        mock.assert_called_once_with(None)
+
+    def test_dispatches_start_with_role(self):
+        with patch.object(sys, "argv", ["cli", "start", "skill"]), \
+             patch.object(squidsquad_cli, "cmd_start", return_value=0) as mock:
+            result = squidsquad_cli.main()
+        assert result == 0
+        mock.assert_called_once_with("skill")
 
     def test_dispatches_stop_all(self):
         with patch.object(sys, "argv", ["cli", "stop"]), \
@@ -190,10 +197,32 @@ class TestCommandsWithHarness:
 
     def test_stop_single_role(self, capsys):
         with patch.object(squidsquad_cli, "_discover_harness", return_value=8080), \
-             patch.object(squidsquad_cli, "_api_call", return_value={"message": "stopped"}) as mock_api:
+             patch.object(squidsquad_cli, "_api_call",
+                          return_value={"success": True, "message": "stopped"}) as mock_api:
             result = squidsquad_cli.cmd_stop("skill")
         assert result == 0
         mock_api.assert_called_once_with(8080, "POST", "/agents/skill/stop")
+
+    def test_stop_single_role_returns_1_on_api_failure(self, capsys):
+        """#4792 §5.7 fix: cmd_stop must propagate failure exit codes so the
+        start_team shim can report stop failures accurately."""
+        with patch.object(squidsquad_cli, "_discover_harness", return_value=8080), \
+             patch.object(squidsquad_cli, "_api_call",
+                          return_value={"success": False, "message": "no such agent"}):
+            result = squidsquad_cli.cmd_stop("skill")
+        assert result == 1
+
+    def test_stop_all_returns_1_when_any_agent_fails(self, capsys):
+        """All-agents stop must aggregate per-agent success."""
+        with patch.object(squidsquad_cli, "_discover_harness", return_value=8080), \
+             patch.object(squidsquad_cli, "_api_call", return_value={
+                 "results": [
+                     {"role": "skill", "success": True},
+                     {"role": "pm", "success": False},
+                 ]
+             }):
+            result = squidsquad_cli.cmd_stop()
+        assert result == 1
 
     def test_stop_all(self, capsys):
         with patch.object(squidsquad_cli, "_discover_harness", return_value=8080), \
@@ -222,7 +251,11 @@ class TestCommandsWithHarness:
 
 
 class TestApiCallErrorDetails:
-    """#7619: _api_call must include error details in URLError message."""
+    """#7619: _api_call must include error details in URLError message.
+
+    #4792 §5.7: _api_call now raises HarnessAPIError instead of sys.exit(1)
+    so per-role aggregation loops can catch + continue across roles.
+    """
 
     def test_error_message_includes_exception(self, capsys):
         """URLError output should contain the actual exception details (#7842)."""
@@ -230,8 +263,46 @@ class TestApiCallErrorDetails:
         error_msg = "Connection refused"
         with patch("squidsquad_cli.urllib.request.urlopen",
                    side_effect=urllib.error.URLError(error_msg)):
-            with pytest.raises(SystemExit):
+            with pytest.raises(squidsquad_cli.HarnessAPIError):
                 squidsquad_cli._api_call(7373, "GET", "/status")
         stderr = capsys.readouterr().err
         assert error_msg in stderr, \
             f"URLError details must appear in stderr, got: {stderr!r}"
+
+    def test_http_error_raises_harness_api_error(self, capsys):
+        """HTTPError should raise HarnessAPIError, not sys.exit."""
+        import urllib.error
+        import io as _io
+        err = urllib.error.HTTPError(
+            "http://x", 500, "Internal Server Error",
+            hdrs=None, fp=_io.BytesIO(b'{"detail":"boom"}'),
+        )
+        with patch("squidsquad_cli.urllib.request.urlopen", side_effect=err):
+            with pytest.raises(squidsquad_cli.HarnessAPIError):
+                squidsquad_cli._api_call(7373, "POST", "/agents/skill/stop")
+        stderr = capsys.readouterr().err
+        assert "500" in stderr
+
+    def test_transport_failure_does_not_abort_multi_role_loop(self, capsys):
+        """A transport-level failure on one role must not short-circuit the
+        per-role aggregation loop. #4792 §5.7: start_team.cmd_stop iterates
+        roles and each squidsquad_cli.cmd_stop call is independent."""
+        import start_team
+        import urllib.error
+
+        # cmd_stop for "skill" raises (transport error), "pm" succeeds.
+        def fake_api_call(port, method, path):
+            if path == "/agents/skill/stop":
+                raise squidsquad_cli.HarnessAPIError("transport error: simulated")
+            return {"success": True, "message": "stopped"}
+
+        with patch.object(squidsquad_cli, "_discover_harness", return_value=8080), \
+             patch.object(squidsquad_cli, "_api_call", side_effect=fake_api_call):
+            ok = start_team.cmd_stop(["skill", "pm"])
+
+        # Aggregation should mark the overall result as failure but the second
+        # role MUST have been attempted (not short-circuited by sys.exit).
+        assert ok is False
+        out = capsys.readouterr().out
+        assert "[skill]" in out and "FAIL" in out
+        assert "[pm]" in out and "OK" in out

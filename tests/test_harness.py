@@ -1307,10 +1307,15 @@ class TestIntentLifecycle(unittest.TestCase):
             agent.claude_pid = 99999999
             hs.set_agent("skill", agent)
 
+            # boot_agent must return a JSON-serializable dict — the auto-reboot
+            # branch sets `agent.terminal_pid = result["terminal_pid"]` and then
+            # calls save_state(), which json.dumps the state.
+            spawn_result = {"success": True, "terminal_pid": 0}
+
             # First poll: dead → reboot triggered
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
-                 patch("harness.boot_remote.boot_agent"), \
+                 patch("harness.boot_remote.boot_agent", return_value=spawn_result), \
                  patch("harness.health_check.check_agent_health", return_value={"health": "unknown"}), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
@@ -1322,7 +1327,7 @@ class TestIntentLifecycle(unittest.TestCase):
 
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
-                 patch("harness.boot_remote.boot_agent"), \
+                 patch("harness.boot_remote.boot_agent", return_value=spawn_result), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
