@@ -160,7 +160,11 @@ Reference issues by number in working-state.md: `- **Task**: #42`
 
 ### Planning Artifacts
 
-Planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md) remain as local files in `.squidsquad/[role]/planning/`. Only the tracker (issues/tasks) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
+Planning artifacts remain as local files. Under the #9184 workflow:
+- PM produces RESEARCH.md and CONTEXT.md under `.squidsquad/pm/planning/`. PM does NOT produce TEST-PLAN.md.
+- QA produces `TEST-PLAN-<NUMBER>.md`, `TEST-<NUMBER>-tests.py`, and `QA-RESULTS-<NUMBER>.md` under `.squidsquad/qa/planning/` when picking up verification.
+
+Only the tracker (issues/tasks) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
 
 ### Caching
 
@@ -489,14 +493,14 @@ For each Pending Ship task that is NOT skipped:
    Find the PR matching this issue number. If found, **first** apply the contract-citation soft gate (#8950 Gate #4):
 
    ```bash
-   ARTIFACTS=$(ls .squidsquad/pm/planning/*[NUMBER]* 2>/dev/null)
+   ARTIFACTS=$(ls .squidsquad/pm/planning/*[NUMBER]* .squidsquad/qa/planning/*[NUMBER]* 2>/dev/null)
    ```
 
    - **If `$ARTIFACTS` is empty** (bug fix or trivial task with no planning artifacts): the citation gate does not apply — proceed with the merge request below.
-   - **If `$ARTIFACTS` is non-empty**: scan the PR description (`body` field above) for a substring reference to any planning filename returned (e.g. `CONTEXT-[NUMBER].md`, `TEST-PLAN-[NUMBER].md`, `FEAT-*-[NUMBER]-TEST-PLAN.md`) OR a `### 5.X #[NUMBER]` bundle-CONTEXT section pointer. If **no** such reference is present, do **not** merge — route back to QA:
+   - **If `$ARTIFACTS` is non-empty**: scan the PR description (`body` field above) for a substring reference to any planning filename returned (e.g. `CONTEXT-[NUMBER].md`, `.squidsquad/qa/planning/TEST-PLAN-[NUMBER].md`, legacy `FEAT-*-[NUMBER]-TEST-PLAN.md`) OR a `### 5.X #[NUMBER]` bundle-CONTEXT section pointer. Under the #9184 workflow the typical citation is `CONTEXT-[NUMBER].md` (PM-side) and `.squidsquad/qa/planning/TEST-PLAN-[NUMBER].md` (QA-side). If **no** such reference is present, do **not** merge — route back to QA:
      ```bash
      python references/scripts/tracker.py transition [NUMBER] pending-ship pending-test --role dm-lead
-     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR does not cite the planning contract; cannot verify architectural conformance. QA: confirm AC walk completed against the planning artifacts listed in .squidsquad/pm/planning/*[NUMBER]*."
+     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR does not cite the planning contract; cannot verify architectural conformance. QA: confirm AC walk completed against the planning artifacts under .squidsquad/pm/planning/ (CONTEXT) and .squidsquad/qa/planning/ (TEST-PLAN)."
      ```
      Skip this item and move to the next.
 
@@ -1038,7 +1042,7 @@ These instructions apply to ALL agents on this project.
 
 ### Planning & Verification
 
-- **Planning artifacts in `.squidsquad/pm/planning/`**: RESEARCH.md, CONTEXT.md, TEST-PLAN.md per task.
+- **Planning artifacts (#9184)**: PM produces RESEARCH.md and CONTEXT.md under `.squidsquad/pm/planning/`. QA produces `TEST-PLAN-<NUMBER>.md`, `TEST-<NUMBER>-tests.py`, and `QA-RESULTS-<NUMBER>.md` under `.squidsquad/qa/planning/` when picking up verification. PM does NOT produce a test plan.
 - **Clone isolation paths from `.local-config`**: Each agent's clone path resolved via boot_remote.
 - **BRIEFING.md staleness check every cycle**: Version, active agents, priorities verified against config.md.
 - **Bug fixes need research**: PM runs Phase 1 research before filing, not just "fix this."

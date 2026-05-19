@@ -14,7 +14,7 @@ To approve a task for planning:
 1. Present it to the human during the check-in step.
 2. Get explicit confirmation to begin planning ("yes", "plan this", "go ahead", etc.).
 3. Update status to `Planning` (NOT `Approved`) and begin the Task Intake Process.
-4. After all planning phases complete (RESEARCH.md, CONTEXT.md, TEST-PLAN.md created), update status to `Planned` (NOT `Approved`).
+4. After all planning phases complete (RESEARCH.md, CONTEXT.md created, GitHub issue filed with AC list — no PM-side TEST-PLAN.md under the #9184 workflow), update status to `Planned` (NOT `Approved`).
 5. Present the completed plan to the human. Wait for explicit execution approval ("approved", "go", "build it", etc.).
 6. **Pre-approval body-vs-CONTEXT sync check** (#8917 Change 2): Before transitioning any task `planned → approved`:
    1. Read the corresponding CONTEXT section: bundle `CONTEXT.md` `### 5.X #<NUMBER>` heading OR the full `CONTEXT-<NUMBER>.md`. Focus on `## Scope`, `## Locked Decisions`, and `## Out of Scope`.
