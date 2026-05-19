@@ -363,6 +363,11 @@ The script handles: status transitions, tracker comments, iteration logging, git
 <!-- /sub-skill: cycle-runner -->
 
 
+
+
+
+
+
 <!-- sub-skill: context-pressure -->
 ### Step 1b — Context Pressure Check
 
@@ -479,9 +484,23 @@ For each Pending Ship task that is NOT skipped:
 
 0b. **PR merge gate**: If Branch Workflow is enabled (`python references/scripts/config.py get branch-workflow` → `yes`), check for an associated PR:
    ```bash
-   gh pr list --search "squidsquad/" --state open --json number,headRefName --limit 20
+   gh pr list --search "squidsquad/" --state open --json number,headRefName,body --limit 20
    ```
-   Find the PR matching this issue number. If found, request merge via harness before shipping:
+   Find the PR matching this issue number. If found, **first** apply the contract-citation soft gate (#8950 Gate #4):
+
+   ```bash
+   ARTIFACTS=$(ls .squidsquad/pm/planning/*[NUMBER]* 2>/dev/null)
+   ```
+
+   - **If `$ARTIFACTS` is empty** (bug fix or trivial task with no planning artifacts): the citation gate does not apply — proceed with the merge request below.
+   - **If `$ARTIFACTS` is non-empty**: scan the PR description (`body` field above) for a substring reference to any planning filename returned (e.g. `CONTEXT-[NUMBER].md`, `TEST-PLAN-[NUMBER].md`, `FEAT-*-[NUMBER]-TEST-PLAN.md`) OR a `### 5.X #[NUMBER]` bundle-CONTEXT section pointer. If **no** such reference is present, do **not** merge — route back to QA:
+     ```bash
+     python references/scripts/tracker.py transition [NUMBER] pending-ship pending-test --role dm-lead
+     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR does not cite the planning contract; cannot verify architectural conformance. QA: confirm AC walk completed against the planning artifacts listed in .squidsquad/pm/planning/*[NUMBER]*."
+     ```
+     Skip this item and move to the next.
+
+   If the citation gate passes (or did not apply), request merge via harness before shipping:
      ```bash
      curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH]", "role": "dm"}'
      ```
@@ -510,6 +529,7 @@ For each Pending Ship task that is NOT skipped:
 6. Increment shipped count: `python references/scripts/config.py set shipped-since-bump [N+1]`
 7. Clear working state.
 <!-- /sub-skill: delivery-packaging -->
+
 
 <!-- sub-skill: version-bumps -->
 ### Step 3 — Version Bump Check
