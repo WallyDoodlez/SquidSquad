@@ -447,3 +447,10 @@
 - **Findings**: #9272 — boot-remote-agents.md line 16 "PM does not boot agents directly" contradicts feedback_manual_agents and live user practice
 - **Auto-fixed**: none (Tier 2 — fragment lives in skill domain)
 - **Items rejected by human**: none
+
+## Scan — 2026-05-19 14:54
+
+- **Files scanned**: .squidsquad/config.md (cross-referenced compose.py:1202 MANDATORY_ROLES, composed CLAUDE.md line 181 across pm/qa/dm/skill)
+- **Findings**: #9318 — Dev Agents value stale since #6055 (qa became mandatory; should be just "skill")
+- **Auto-fixed**: none (Tier 2 — touches config + compose + recompose across 4 roles)
+- **Items rejected by human**: none
