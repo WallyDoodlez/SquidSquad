@@ -4,18 +4,28 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #7630 EPIC: Event-driven agent architecture — harness owns cycle, agents react to events (in-progress, high, role:skill) — QA verified zero gaps (55 tests pass). PR #8620 has merge conflict — routed back to skill for resolution. Once conflict resolved, needs DM to ship. Supersedes #6056, #5775, #5613
+- #8999 Event-mode integration tests — TEST-PLAN-8694 §4 + AC-1 M-1.3 CQ run (in-progress, medium, role:skill) — re-planned cycle 1495 after §4.9 scope drop; PR-phased delivery
+- #9184 PM defines ACs only / QA owns TEST-PLAN + CQs (shipped today, cycle 1499 — workflow restructure across pm/dev/qa sub-skills)
+- #9272 boot-remote-agents fragment fix — L1 wording contradicts manual-boot policy (approved, low, role:skill)
+- #9318 config.md Dev Agents value stale since #6055 (approved, low, role:skill)
+- #9265 in-stream gap decision — revise CONTEXT-8694 §2 or monotonic event ids (approved, medium, role:skill)
+- #9242 Harness unreachable for 5+ consecutive cycles (open issue, role:skill) — harness still down; agents tolerate via direct gh CLI
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — awaiting human greenlight
 - #6574 Zero-prereq install — gh repo creation + local forge fallback (pending, medium, role:skill)
 - #5855 Vault is static decision log, not living memory (pending, high, role:skill)
 - #3963 EPIC: Web dashboard — Harness Phase 4 (pending, high, role:skill)
 - #6274 Generalize 'dev' to 'worker' across architecture (pending, medium, role:skill)
-- #6087 L2: status line redesign (pending, medium, role:skill)
 - #5783 L3: bug investigation boundary — PM symptoms, dev RCA (pending, medium, role:skill)
 - #5620 L3 PM stuck-rebase recovery (pending, high, role:skill)
 - #5773 Document start.sh as boot entry point (pending, medium, role:dm)
 ## Recently Shipped
 
+- #9184 PM defines ACs only / QA owns TEST-PLAN + CQs (shipped 2026-05-19, cycle 1499) — workflow restructure across pm/dev/qa sub-skills + L3 CQ directive rewrite + #8950 patch
+- #9243 Harness /status exposes code_version (shipped 2026-05-19, cycle 1498)
+- #7630 EPIC: Event-driven agent architecture (shipped) — harness owns cycle, agents react to events
+- #8916 L2 dev: mandate reading CONTEXT.md / TEST-PLAN.md (shipped)
+- #8917 PM body sync when planning rewrites scope (shipped)
+- #8950 Defense-in-depth gates: code-review/QA/DM check planning artifact (shipped)
 - #8081 triage.py: datetime-parsed timestamp comparison replacing fragile string compare (shipped)
 - #8082 scan_index.py: record_decision inserts file_coverage row on missing (shipped)
 - #7794 PM prohibitions.md: replaced stale 'tracker files' references in PM, DM, installer (shipped)
@@ -78,8 +88,9 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Constraints & Blockers
 
-- Event-driven architecture (#7630) PR #8620 merge conflict — skill resolving, then DM ships. DM currently stalled (PID dead)
+- Harness unreachable (#9242) — agents tolerate via direct gh CLI for tracker ops, but event wakes blocked. Human restart pending.
 - Large pending backlog (~40 tasks) awaiting human approval — pipeline idle when no work is approved
+- Event-driven architecture epic #7630 SHIPPED (PR #8620 merged). Monitor tool available in agent sessions.
 
 ## Team State
 
