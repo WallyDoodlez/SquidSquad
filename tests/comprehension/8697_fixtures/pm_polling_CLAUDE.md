@@ -339,6 +339,11 @@ The script handles: status transitions, tracker comments, iteration logging, git
 <!-- /sub-skill: cycle-runner -->
 
 
+
+
+
+
+
 <!-- sub-skill: context-pressure -->
 ### Step 1b — Context Pressure Check
 
@@ -597,14 +602,14 @@ Run the deterministic health check script:
 python references/scripts/health_check.py
 ```
 
-The script checks agent liveness via PID monitoring (primary) and `.health` file (legacy fallback). The harness monitors PIDs directly every 5 seconds (#4966).
+The script reads each agent's `.claude-pid` (sole liveness signal) and `current-state` mtime for offline diagnostics. The harness monitors PIDs directly every 5 seconds (#4966); prefer `squidsquad_cli.py status` when the harness is reachable.
 
 Log the script's output in `pm/qa-log.md`. For any agent reporting stalled (👻) or unknown (❓):
 
 1. Append a Discussion note to that agent's latest open tracker item.
 2. If no open item exists, log in `qa-log.md` only.
 
-**Context pressure monitoring**: Check each agent's context pressure file. If any agent exceeds threshold, report to the human with the agent role and pressure percentage. **PM does not execute reboots directly** — agent lifecycle is managed by the harness and `start_team.py` (#4966).
+**Context pressure monitoring**: Check each agent's context pressure file. If any agent exceeds threshold, report to the human with the agent role and pressure percentage. **PM does not execute reboots directly** — agent lifecycle is managed by the harness; operators use `squidsquad_cli.py` (or the backward-compatible `start_team.py` shim) (#4966).
 
 For programmatic use, the script accepts `--json` for structured output.
 <!-- /sub-skill: health-check -->
@@ -1016,12 +1021,24 @@ Log in iteration summary: `Vault synthesis: [N] recent notes reviewed, [M] postu
 
 Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled by the harness via intent API (#4966).
 
-**Context pressure restart flow**:
+**Context pressure restart flow** (#4792 Phase 1):
+
 1. Step 1b detects context pressure exceeds threshold.
 2. Checkpoint working state to `.squidsquad/[ROLE]/working-state.md`.
 3. Complete the current cycle normally.
-4. At cycle end, `cycle_post.py` checks context pressure from `cycle-input.json`. If exceeded, exits with code 42.
-5. The harness detects the exit, sees intent=running, and respawns the agent.
+4. At cycle end, `cycle_post.py` checks the `context_pressure` field of your `cycle-output.json` (falling back to `cycle-input.json` if you did not pass it through). If exceeded, it POSTs `/agents/[ROLE]/restart` to the harness so intent flips to `restarting` (recording `intent_set_at` for the 60s force-kill safety net), then exits with code 42.
+5. **You then invoke `/quit`** — see "Graceful Stop — Self-Quit Protocol" below.
+6. The harness observes the process exit and, because intent is `restarting`, respawns the agent through the proper RESTARTING flow.
+
+### Graceful Stop — Self-Quit Protocol
+
+**After `cycle_post.py` exits with code 42** (the cooperative termination signal — either the harness asked you to stop/restart, or `cycle_post` detected its own context pressure exceeded), immediately invoke the `/quit` slash command to terminate the claude session. The harness will then observe the process exit and either mark you stopped or respawn you per its intent state machine.
+
+- Do NOT continue working after a 42 exit — the harness is waiting for you to terminate.
+- Do NOT attempt to suppress, retry, or override the 42 exit — it is the canonical cooperative-termination signal.
+- The exit-42 conditions are owned by `cycle_post.py`: harness intent in `{stopping, restarting}` OR context-pressure exceeded.
+
+The harness has a **60-second force-kill safety net** that fires if you fail to invoke `/quit` within the cooperative window. The safety net guarantees that operator intent (stop or restart) eventually wins even if the agent hangs — but the cooperative path is the canonical one, and the safety net should never fire under normal operation.
 
 **You do NOT**:
 - Set `restart_needed` in cycle-output.json (deprecated).
@@ -1030,7 +1047,7 @@ Agents can signal a restart only when their own context pressure exceeds the thr
 - Kill or manage other agents (harness handles this).
 - Implement any restart loop logic (harness handles respawn).
 
-Write `idle|` to `current-state` at cycle end so health monitoring works.
+At the end of a **normal** cycle (no exit-42 imminent), write `idle|` to `current-state` so health monitoring works. Do NOT overwrite it on the restart path — `cycle_post.py` writes `restarting|…` itself when the 42-exit condition fires, and clobbering that would hide the transition from the operator and TUI.
 <!-- /sub-skill: self-restart -->
 
 <!-- sub-skill: agent-lifecycle -->
@@ -1043,7 +1060,7 @@ Agent lifecycle is managed by the harness (`harness.py`) via REST API (#4966). A
 2. **Graceful stop**: Harness sets intent=stopping via API. `cycle_post.py` queries `GET /agents/{role}` at cycle end, sees the intent, and exits with code 42.
 3. **Start correctly**: Harness spawns agents via thin launcher (`thin_launcher.py`) in visible terminal windows. `cycle_pre.py` handles git pull/branch per cycle.
 
-**Health monitoring**: Harness monitors agent liveness via direct PID checks (primary) and `.claude-pid` file (fallback). No heartbeat files needed — the harness polls every 5 seconds.
+**Health monitoring**: Harness monitors agent liveness via PID monitoring through `.claude-pid` (sole liveness signal). The harness polls every 5 seconds.
 
 **Intent state machine** (per-agent, in harness memory + `.harness-state.json`):
 - `running` — agent should be alive; auto-reboot on death
@@ -1051,25 +1068,25 @@ Agent lifecycle is managed by the harness (`harness.py`) via REST API (#4966). A
 - `restarting` — graceful restart; reboot after death
 - `stopped` — agent died as requested
 
-**Lifecycle interface**:
+**Lifecycle interface** (`squidsquad_cli.py` is canonical; `start_team.py <args>` remains as a backward-compatible shim):
 ```bash
-# Start all agents
-python references/scripts/start_team.py --all
+# Start harness + all agents
+python references/scripts/squidsquad_cli.py start
 
-# Start single agent
-python references/scripts/start_team.py --role <role>
+# Start a single agent (harness auto-spawns if needed)
+python references/scripts/squidsquad_cli.py start <role>
 
-# Graceful reboot — harness sets intent=restarting
-python references/scripts/start_team.py --reboot <role>
+# Graceful restart — harness sets intent=restarting
+python references/scripts/squidsquad_cli.py restart <role>
 
-# Reboot all agents
-python references/scripts/start_team.py --reboot --all
-
-# Stop agent — harness sets intent=stopping
-python references/scripts/start_team.py --stop <role>
+# Stop a single agent — harness sets intent=stopping
+python references/scripts/squidsquad_cli.py stop <role>
 
 # Stop all agents
-python references/scripts/start_team.py --stop --all
+python references/scripts/squidsquad_cli.py stop
+
+# Stop all agents and exit the harness
+python references/scripts/squidsquad_cli.py shutdown
 ```
 
 **Crash recovery**: Harness persists state to `.squidsquad/.harness-state.json`. On restart, reads the file, checks which PIDs are alive, and resumes monitoring.
@@ -1302,6 +1319,16 @@ Continue until all questions are resolved. Capture decisions in `.squidsquad/[RO
 
 **Open in editor**: After CONTEXT.md is created, offer to open it (see "Open Artifacts in Editor" below).
 
+**Sync issue body when CONTEXT scope is (re)written** (#8917 Change 1): When Phase 2 (deepseek review, discussion locks, scope discussion) rewrites scope on `CONTEXT.md` (or per-task `CONTEXT-<NUMBER>.md`), the corresponding GitHub Issue body MUST be updated in the same PM step. Use `gh issue edit <N> --body-file <new-body>`. The issue body and CONTEXT.md must always agree at the time of the `planned → approved` transition.
+
+Every issue body that has a planning artifact MUST lead with an **AUTHORITATIVE SCOPE banner** pointing at the locked planning file:
+
+```
+> **AUTHORITATIVE SCOPE: `.squidsquad/pm/planning/CONTEXT.md §5.X` (or `CONTEXT-<NUMBER>.md`). Read that artifact in full. The bullets below are a summary; the planning artifact is the contract.**
+```
+
+The banner is required on every issue with a CONTEXT file — at issue creation time (Phase 3 §A below), and on every Phase 2 scope rewrite thereafter.
+
 **Design routing**: If a `designer` agent is configured (check `config.md` Dev Agents list for `designer`), ask the human if this task needs design work using `AskUserQuestion`:
 
 ```
@@ -1378,6 +1405,11 @@ If any answer is unclear, the AC is incomplete — refine before filing.
 - Acceptance criteria include edge case handling and side effect mitigations
 - Acceptance criteria verified against the AC Integration Check above
 - References RESEARCH.md and CONTEXT.md
+- **AUTHORITATIVE SCOPE banner at the start of the body** (#8917 Change 3): when the task has a `CONTEXT.md` (bundle `§5.X #<NUMBER>`) or `CONTEXT-<NUMBER>.md`, the body passed to `create-task` MUST start with the banner pointing at that locked planning file. Format:
+  ```
+  > **AUTHORITATIVE SCOPE: `.squidsquad/pm/planning/CONTEXT-<NUMBER>.md` (or `CONTEXT.md §5.X`). Read that artifact in full. The bullets below are a summary; the planning artifact is the contract.**
+  ```
+  Phase 2 (above) keeps the banner + body bullets in sync on every later scope rewrite; this rule places the banner from the start.
 
 **B) Test plan** — route to the configured model for test plan drafting:
 
@@ -1520,11 +1552,16 @@ To approve a task for planning:
 3. Update status to `Planning` (NOT `Approved`) and begin the Task Intake Process.
 4. After all planning phases complete (RESEARCH.md, CONTEXT.md, TEST-PLAN.md created), update status to `Planned` (NOT `Approved`).
 5. Present the completed plan to the human. Wait for explicit execution approval ("approved", "go", "build it", etc.).
-6. Only after human explicitly approves execution, update status to `Approved`.
+6. **Pre-approval body-vs-CONTEXT sync check** (#8917 Change 2): Before transitioning any task `planned → approved`:
+   1. Read the corresponding CONTEXT section: bundle `CONTEXT.md` `### 5.X #<NUMBER>` heading OR the full `CONTEXT-<NUMBER>.md`. Focus on `## Scope`, `## Locked Decisions`, and `## Out of Scope`.
+   2. Read the GitHub issue body: `gh issue view <N> --json body`.
+   3. Compare the body's scope bullets against those three CONTEXT sections (structured comparison, NOT a raw text diff — the body and CONTEXT intentionally have different formats). If any **locked decision** or **scope boundary** is missing, outdated, or contradicted in the body, update the body via `gh issue edit <N> --body-file <new-body>` BEFORE the transition.
+   4. Confirmation: re-read `gh issue view <N> --json body`; the AUTHORITATIVE SCOPE banner is present AND the body bullets are consistent with the CONTEXT sections.
+7. Only after human explicitly approves execution AND the pre-approval body-vs-CONTEXT check is clean, update status to `Approved`.
 
 Light mode (trivial tasks): PM can fast-track through planning with abbreviated research, but status still transitions through `Planning` → `Planned` → `Approved`.
 
-Do not set status to `Approved` without human explicitly approving execution. Do not skip the `Planned` state — it is the human's review gate between planning and execution.
+Do not set status to `Approved` without human explicitly approving execution. Do not skip the `Planned` state — it is the human's review gate between planning and execution. Do not skip the pre-approval body-vs-CONTEXT sync — the body is what skill reads on pickup; if it disagrees with the locked CONTEXT, the task will be implemented to a stale contract.
 <!-- /sub-skill: task-approval -->
 
 ---
@@ -1887,8 +1924,8 @@ These instructions apply to ALL agents on this project.
 
 ### Agent Infrastructure
 
-- **Harness manages agent lifecycle**: PID monitoring (primary), `.health` file (legacy fallback). Intent state machine via REST API (#4966).
-- **Agent lifecycle via `start_team.py`**: Agents do not manage their own or other agents' processes.
+- **Harness manages agent lifecycle**: PID monitoring via `.claude-pid` (sole liveness signal). Intent state machine via REST API (#4966).
+- **Agent lifecycle via `squidsquad_cli.py`** (with `start_team.py` as a backward-compatible shim): Agents do not manage their own or other agents' processes.
 - **Context pressure restart via `cycle_post.py`**: Mechanical detection, agents don't set `restart_needed`.
 
 ### Planning & Verification

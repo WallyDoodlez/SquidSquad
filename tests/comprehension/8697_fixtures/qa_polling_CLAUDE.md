@@ -339,6 +339,11 @@ The script handles: status transitions, tracker comments, iteration logging, git
 <!-- /sub-skill: cycle-runner -->
 
 
+
+
+
+
+
 <!-- sub-skill: context-pressure -->
 ### Step 1b — Context Pressure Check
 
@@ -570,6 +575,19 @@ python references/scripts/git_ops.py task-end [role] [number]
 
 2c. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
 
+2d. **AC walk against the planning contract** (#8950 Gate #3) — before marking any task `pending-test → pending-ship`, locate the TEST-PLAN by task-number match (covers both legacy `FEAT-PM-<NUMBER>-TEST-PLAN.md` and new `TEST-PLAN-<NUMBER>.md` conventions):
+
+   ```bash
+   TEST_PLAN=$(ls .squidsquad/pm/planning/*[NUMBER]* 2>/dev/null | grep -i 'test-plan' | head -1)
+   ```
+
+   - **If `$TEST_PLAN` is empty** (bug fix or trivial task with no planning artifact): skip this AC walk, proceed with the existing verification flow.
+   - **If `$TEST_PLAN` is non-empty**: read it and walk its AC list. For each AC, confirm it is **observably satisfied** by the implementation — run the verification command stated in the AC, check the file the AC names, or observe the output the AC describes. **Tests passing is necessary but not sufficient — do not infer AC satisfaction from test names.** If any AC is not observably satisfied, transition `pending-test → in-progress` and comment which AC failed:
+     ```bash
+     python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead
+     python references/scripts/tracker.py comment [NUMBER] --role qa-lead --message "AC walk failed: AC-[N] in $TEST_PLAN is not observably satisfied — [what was checked and what failed]. Status → In Progress."
+     ```
+
 3. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, missing test coverage, or unresolved finding is discovered:
    ```bash
    python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead
@@ -741,12 +759,24 @@ Tag findings with the `improvement-scan` label. Max **2 items per cycle**. Defau
 
 Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled by the harness via intent API (#4966).
 
-**Context pressure restart flow**:
+**Context pressure restart flow** (#4792 Phase 1):
+
 1. Step 1b detects context pressure exceeds threshold.
 2. Checkpoint working state to `.squidsquad/[ROLE]/working-state.md`.
 3. Complete the current cycle normally.
-4. At cycle end, `cycle_post.py` checks context pressure from `cycle-input.json`. If exceeded, exits with code 42.
-5. The harness detects the exit, sees intent=running, and respawns the agent.
+4. At cycle end, `cycle_post.py` checks the `context_pressure` field of your `cycle-output.json` (falling back to `cycle-input.json` if you did not pass it through). If exceeded, it POSTs `/agents/[ROLE]/restart` to the harness so intent flips to `restarting` (recording `intent_set_at` for the 60s force-kill safety net), then exits with code 42.
+5. **You then invoke `/quit`** — see "Graceful Stop — Self-Quit Protocol" below.
+6. The harness observes the process exit and, because intent is `restarting`, respawns the agent through the proper RESTARTING flow.
+
+### Graceful Stop — Self-Quit Protocol
+
+**After `cycle_post.py` exits with code 42** (the cooperative termination signal — either the harness asked you to stop/restart, or `cycle_post` detected its own context pressure exceeded), immediately invoke the `/quit` slash command to terminate the claude session. The harness will then observe the process exit and either mark you stopped or respawn you per its intent state machine.
+
+- Do NOT continue working after a 42 exit — the harness is waiting for you to terminate.
+- Do NOT attempt to suppress, retry, or override the 42 exit — it is the canonical cooperative-termination signal.
+- The exit-42 conditions are owned by `cycle_post.py`: harness intent in `{stopping, restarting}` OR context-pressure exceeded.
+
+The harness has a **60-second force-kill safety net** that fires if you fail to invoke `/quit` within the cooperative window. The safety net guarantees that operator intent (stop or restart) eventually wins even if the agent hangs — but the cooperative path is the canonical one, and the safety net should never fire under normal operation.
 
 **You do NOT**:
 - Set `restart_needed` in cycle-output.json (deprecated).
@@ -755,7 +785,7 @@ Agents can signal a restart only when their own context pressure exceeds the thr
 - Kill or manage other agents (harness handles this).
 - Implement any restart loop logic (harness handles respawn).
 
-Write `idle|` to `current-state` at cycle end so health monitoring works.
+At the end of a **normal** cycle (no exit-42 imminent), write `idle|` to `current-state` so health monitoring works. Do NOT overwrite it on the restart path — `cycle_post.py` writes `restarting|…` itself when the 42-exit condition fires, and clobbering that would hide the transition from the operator and TUI.
 <!-- /sub-skill: self-restart -->
 
 <!-- sub-skill: agent-lifecycle -->
@@ -768,7 +798,7 @@ Agent lifecycle is managed by the harness (`harness.py`) via REST API (#4966). A
 2. **Graceful stop**: Harness sets intent=stopping via API. `cycle_post.py` queries `GET /agents/{role}` at cycle end, sees the intent, and exits with code 42.
 3. **Start correctly**: Harness spawns agents via thin launcher (`thin_launcher.py`) in visible terminal windows. `cycle_pre.py` handles git pull/branch per cycle.
 
-**Health monitoring**: Harness monitors agent liveness via direct PID checks (primary) and `.claude-pid` file (fallback). No heartbeat files needed — the harness polls every 5 seconds.
+**Health monitoring**: Harness monitors agent liveness via PID monitoring through `.claude-pid` (sole liveness signal). The harness polls every 5 seconds.
 
 **Intent state machine** (per-agent, in harness memory + `.harness-state.json`):
 - `running` — agent should be alive; auto-reboot on death
@@ -776,25 +806,25 @@ Agent lifecycle is managed by the harness (`harness.py`) via REST API (#4966). A
 - `restarting` — graceful restart; reboot after death
 - `stopped` — agent died as requested
 
-**Lifecycle interface**:
+**Lifecycle interface** (`squidsquad_cli.py` is canonical; `start_team.py <args>` remains as a backward-compatible shim):
 ```bash
-# Start all agents
-python references/scripts/start_team.py --all
+# Start harness + all agents
+python references/scripts/squidsquad_cli.py start
 
-# Start single agent
-python references/scripts/start_team.py --role <role>
+# Start a single agent (harness auto-spawns if needed)
+python references/scripts/squidsquad_cli.py start <role>
 
-# Graceful reboot — harness sets intent=restarting
-python references/scripts/start_team.py --reboot <role>
+# Graceful restart — harness sets intent=restarting
+python references/scripts/squidsquad_cli.py restart <role>
 
-# Reboot all agents
-python references/scripts/start_team.py --reboot --all
-
-# Stop agent — harness sets intent=stopping
-python references/scripts/start_team.py --stop <role>
+# Stop a single agent — harness sets intent=stopping
+python references/scripts/squidsquad_cli.py stop <role>
 
 # Stop all agents
-python references/scripts/start_team.py --stop --all
+python references/scripts/squidsquad_cli.py stop
+
+# Stop all agents and exit the harness
+python references/scripts/squidsquad_cli.py shutdown
 ```
 
 **Crash recovery**: Harness persists state to `.squidsquad/.harness-state.json`. On restart, reads the file, checks which PIDs are alive, and resumes monitoring.
@@ -1082,8 +1112,8 @@ These instructions apply to ALL agents on this project.
 
 ### Agent Infrastructure
 
-- **Harness manages agent lifecycle**: PID monitoring (primary), `.health` file (legacy fallback). Intent state machine via REST API (#4966).
-- **Agent lifecycle via `start_team.py`**: Agents do not manage their own or other agents' processes.
+- **Harness manages agent lifecycle**: PID monitoring via `.claude-pid` (sole liveness signal). Intent state machine via REST API (#4966).
+- **Agent lifecycle via `squidsquad_cli.py`** (with `start_team.py` as a backward-compatible shim): Agents do not manage their own or other agents' processes.
 - **Context pressure restart via `cycle_post.py`**: Mechanical detection, agents don't set `restart_needed`.
 
 ### Planning & Verification

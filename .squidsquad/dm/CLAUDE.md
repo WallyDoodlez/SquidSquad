@@ -1020,7 +1020,7 @@ These instructions apply to ALL agents on this project.
 
 - **Context pressure threshold: 70%**. Checkpoint working state when exceeded, continue normally (Claude Code auto-compresses).
 - **Working state file pattern**: Maintain `.squidsquad/<role>/working-state.md` to persist context across resets.
-- **Iteration interval: 30 minutes**. Context threshold: 70%. Ship threshold: 10.
+- **Ship threshold: 10**. Iteration cadence is mode-specific — see role L1/L2 layers for trigger semantics.
 - **Deterministic work queue**: Pick the first item. No discretion to skip, reorder, or cherry-pick.
 
 ### Git Protocol
@@ -1034,7 +1034,7 @@ These instructions apply to ALL agents on this project.
 
 - **Harness manages agent lifecycle**: PID monitoring via `.claude-pid` (sole liveness signal). Intent state machine via REST API (#4966).
 - **Agent lifecycle via `squidsquad_cli.py`** (with `start_team.py` as a backward-compatible shim): Agents do not manage their own or other agents' processes.
-- **Context pressure restart via `cycle_post.py`**: Mechanical detection, agents don't set `restart_needed`.
+- **Context pressure restart**: mechanical detection at the end of each unit of work triggers respawn — same mechanism in both modes; the unit of work differs (a cycle in polling mode, a task in event mode).
 
 ### Planning & Verification
 
