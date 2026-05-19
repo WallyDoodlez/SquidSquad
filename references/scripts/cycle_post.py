@@ -715,7 +715,9 @@ def _do_stop_after_cycle_check(data, role):
 
     Returns True if agent should exit for restart.
     """
-    # 1. Query harness API for intent (replaces .stop-after-cycle file check)
+    # 1. Query harness API for intent — agent restart is owned by the harness
+    #    intent state machine + 60s force-kill safety net (#4792 §3.3 Q7,
+    #    CONTEXT-4792.md §5.6). Pre-#4792 this was a .stop-after-cycle sentinel.
     intent = _query_harness_intent(role)
     if intent in ("stopping", "restarting"):
         print(f"  Harness intent={intent}. Agent will exit for {'stop' if intent == 'stopping' else 'restart'}.")
