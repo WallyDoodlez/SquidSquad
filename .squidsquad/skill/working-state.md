@@ -11,12 +11,12 @@
 - Phase 2 §5.2 (boot_remote.py legacy-sentinel cleanup): commit b340b011.
 - Phase 2 §5.3 (reboot_agent.py gut + SIGKILL parity + deprecation stub): commit e30cdd1a.
 - Phase 2 §5.5 (cycle_pre.py `harness_status` field + stale-comment refresh): commit b02c86a2.
+- Phase 2 §5.1 (harness boot-time legacy-sentinel sweep — synchronous, before start_poller): commit 10d052a7. DeepSeek r1 caught race + TOCTOU; r2 NO_FINDINGS.
 
 ## Remaining Steps
 
-- Phase 2 §5.4: health_check.py trim (delete `.stop` + `.health` + `.pid` reads; keep `.claude-pid`; docstring note about offline fallback).
+- Phase 2 §5.4: health_check.py trim (delete `.stop` + `.health` + `.pid` reads; keep `.claude-pid`; docstring note about offline fallback). **Biggest chunk — 506-line test file to rewrite.**
 - Phase 2 §5.6: cycle_post.py residuals tidy (most done in Phase 1).
-- Phase 2 §5.1: harness.py legacy-sentinel cleanup-on-boot (`.stop` / `.restart` / `.health` unlinks before first update_health poll).
 - Phase 3: operator entry-point convergence (start_team.py thin shim, boot_remote main() removal, reboot_agent main() removal).
 - Phase 4: `.health` legacy fragment edits in references/sub-skills/common/agent-lifecycle.md + recompose.
 - Phase 5: upgrade-path cleanup logic on harness boot.
@@ -27,3 +27,5 @@
 - Three high-priority approved tasks (#8950, #8917, #8916) waiting; PM should clarify priority order before pickup.
 - #4792 / #8979 Phase 2 is being shipped as a single rolling PR (#9010) with cohesive review-iterated commits per §-section, keeping each section small enough for a single DeepSeek pass.
 - §5.5 `harness_status` is strictly informational — fail-open, no gating — so cycle_pre stays robust if the harness is down or slow.
+- §5.1 cleanup must run SYNCHRONOUSLY on the lifespan thread before `state.start_poller()` and the `_deferred_init` thread spawn — DeepSeek r1 caught the race where placing it inside `_deferred_init` could let the legacy `.health` fallback fire on a stale file. Source-grep guard test pins the ordering.
+- §5.1 unlink path: skip non-existent up front + `unlink(missing_ok=True)` — the TOCTOU window where another process unlinks between exists() and unlink() still counts as a removal (post-condition satisfied).
