@@ -826,6 +826,165 @@ class TestConfigIntegration(unittest.TestCase):
         self.assertEqual(field, "Port")
 
 
+class TestCodeVersionProbe(unittest.TestCase):
+    """#9243 — compute_code_version + boot probe + /status + / endpoint."""
+
+    def test_compute_code_version_success_shape(self):
+        """All four fields present on a normal git checkout with config.md."""
+        from harness import compute_code_version
+        cv = compute_code_version()
+        self.assertIn("squidsquad_version", cv)
+        self.assertIn("git_sha", cv)
+        self.assertIn("git_branch", cv)
+        self.assertIn("git_dirty", cv)
+        # On the actual repo, version + git fields should be populated.
+        self.assertIsInstance(cv["squidsquad_version"], str)
+        self.assertIsNotNone(cv["git_sha"])
+        # SHA short form is hex; verify it parses
+        int(cv["git_sha"], 16)
+        self.assertIsInstance(cv["git_branch"], str)
+        self.assertIsInstance(cv["git_dirty"], bool)
+
+    def test_compute_code_version_no_git(self):
+        """When git fails (no repo / no git binary), all git fields are None
+        but the dict shape is preserved."""
+        from harness import compute_code_version
+        with patch("harness._git_probe", return_value=None):
+            cv = compute_code_version()
+        self.assertIsNone(cv["git_sha"])
+        self.assertIsNone(cv["git_branch"])
+        self.assertIsNone(cv["git_dirty"])
+        # Version still comes from config.md regardless of git
+        self.assertIn("squidsquad_version", cv)
+
+    def test_compute_code_version_dirty_tree(self):
+        """`git status --porcelain` non-empty -> dirty=True."""
+        from harness import compute_code_version
+
+        def fake_probe(args):
+            if args[:1] == ["status"]:
+                return " M some/file.py"
+            if args == ["rev-parse", "--short=8", "HEAD"]:
+                return "deadbeef"
+            if args == ["rev-parse", "--abbrev-ref", "HEAD"]:
+                return "main"
+            return None
+
+        with patch("harness._git_probe", side_effect=fake_probe):
+            cv = compute_code_version()
+        self.assertTrue(cv["git_dirty"])
+        self.assertEqual(cv["git_sha"], "deadbeef")
+
+    def test_compute_code_version_clean_tree(self):
+        """`git status --porcelain` empty -> dirty=False."""
+        from harness import compute_code_version
+
+        def fake_probe(args):
+            if args[:1] == ["status"]:
+                return ""
+            if args == ["rev-parse", "--short=8", "HEAD"]:
+                return "12345678"
+            if args == ["rev-parse", "--abbrev-ref", "HEAD"]:
+                return "feature-branch"
+            return None
+
+        with patch("harness._git_probe", side_effect=fake_probe):
+            cv = compute_code_version()
+        self.assertFalse(cv["git_dirty"])
+
+    def test_read_squidsquad_version_missing_config(self):
+        """Missing config.md returns None without crashing."""
+        from harness import _read_squidsquad_version
+        with patch("pathlib.Path.read_text", side_effect=OSError):
+            self.assertIsNone(_read_squidsquad_version())
+
+
+class TestStatusEndpointCodeVersion(unittest.TestCase):
+    """#9243 — GET /status exposes code_version block; GET / returns slim."""
+
+    @classmethod
+    def setUpClass(cls):
+        from fastapi.testclient import TestClient
+        from harness import app, state
+        state.start_time = time.time()
+        state.port = 7373
+        state.code_version = {
+            "squidsquad_version": "v0.40.0",
+            "git_sha": "01a2b6f4",
+            "git_branch": "main",
+            "git_dirty": False,
+        }
+        cls.client = TestClient(app, raise_server_exceptions=False)
+        cls.state = state
+
+    def test_status_includes_code_version(self):
+        with patch.object(self.state, "update_health"):
+            resp = self.client.get("/status")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("code_version", data["harness"])
+        cv = data["harness"]["code_version"]
+        self.assertEqual(cv["squidsquad_version"], "v0.40.0")
+        self.assertEqual(cv["git_sha"], "01a2b6f4")
+        self.assertEqual(cv["git_branch"], "main")
+        self.assertFalse(cv["git_dirty"])
+        self.assertIn("boot_time_iso", cv)
+        # Boot time ISO ends with Z (UTC)
+        self.assertTrue(cv["boot_time_iso"].endswith("Z"))
+
+    def test_root_endpoint_returns_slim_version(self):
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["service"], "squidsquad-harness")
+        self.assertEqual(data["version"], "v0.40.0")
+        self.assertEqual(data["git_sha"], "01a2b6f4")
+
+    def test_status_falls_back_when_state_code_version_none(self):
+        """If state.code_version is None (e.g. test client bypassed
+        lifespan), the endpoint re-probes via compute_code_version() rather
+        than crashing or returning a malformed response."""
+        prior = self.state.code_version
+        try:
+            self.state.code_version = None
+            with patch.object(self.state, "update_health"), \
+                 patch("harness.compute_code_version", return_value={
+                     "squidsquad_version": "v0.0.0-probed",
+                     "git_sha": "probedsh",
+                     "git_branch": "test-fallback",
+                     "git_dirty": False,
+                 }):
+                resp = self.client.get("/status")
+            self.assertEqual(resp.status_code, 200)
+            cv = resp.json()["harness"]["code_version"]
+            self.assertEqual(cv["squidsquad_version"], "v0.0.0-probed")
+            self.assertEqual(cv["git_sha"], "probedsh")
+            self.assertIn("boot_time_iso", cv)
+        finally:
+            self.state.code_version = prior
+
+    def test_status_code_version_with_null_git(self):
+        """Boot from outside a git repo -> git fields are null in /status."""
+        prior = self.state.code_version
+        try:
+            self.state.code_version = {
+                "squidsquad_version": "v0.40.0",
+                "git_sha": None,
+                "git_branch": None,
+                "git_dirty": None,
+            }
+            with patch.object(self.state, "update_health"):
+                resp = self.client.get("/status")
+            self.assertEqual(resp.status_code, 200)
+            cv = resp.json()["harness"]["code_version"]
+            self.assertIsNone(cv["git_sha"])
+            self.assertIsNone(cv["git_branch"])
+            self.assertIsNone(cv["git_dirty"])
+            self.assertEqual(cv["squidsquad_version"], "v0.40.0")
+        finally:
+            self.state.code_version = prior
+
+
 class TestHarnessEndpoints(unittest.TestCase):
     """Test FastAPI endpoints using TestClient (if available) or mock."""
 
