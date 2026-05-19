@@ -8,9 +8,10 @@
 - (none)
 
 ## Notes
-- Filed #9358 cycle 1503: dm+skill cycle structure stopped today but agents continue inline. Low severity.
-- CONTEXT-9331.md committed cycle 1502.5 (main commit 9626f9ea) — grounded the eviction-signal task that I filed body-only earlier.
-- Skill on #8999 + #9331 in parallel (in-progress on both). PR #9320 open, mergeable UNKNOWN.
-- Approved queue for skill: #9272, #9318, #9265 (waiting).
-- DM approved: #3 (public launch, high) awaiting human greenlight.
+- #9331 at pending-test, PR #9359 (separate from #9320). QA will verify; PM stays out per dont-do-qa-job rule.
+- #9357 filed by skill for `_loaded` flag race (out of scope for #9331). Open status:open, role:skill, severity:low.
+- #8999 still in-progress; PR #9320 mergeable UNKNOWN. Skill will resume PR3 (agent-subprocess scenarios) after #9331 verifies and ships.
+- DM cycle structure recovered cycle 1504; skill still mtime-frozen per #9358 but functional.
+- Approved queue for skill (waiting behind #8999 + #9331-verify): #9272, #9318, #9265.
+- DM approved: #3 awaiting human greenlight.
 - Harness OFF until #9242 ships.
