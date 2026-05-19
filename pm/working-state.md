@@ -8,9 +8,9 @@
 - (none)
 
 ## Notes
-- #9184 at pending-test, QA verifying. PR #9271 mergeStateStatus UNKNOWN (just calculating); check next cycle.
-- #8999 in-progress with skill. #9272 (boot-remote-agents fragment fix) pending.
-- #9318 filed cycle 1498: config Dev Agents stale value.
-- #9265 still pending awaiting human pick (CONTEXT-8694 §2 revise vs monotonic ids).
-- Harness still unreachable; agents tolerating via direct gh CLI. Improvement loops blocked.
-- Approved queue: #3 (public launch, dm). #8999 was approved but is now in-progress, no longer queued.
+- #9184 shipped (closed via PR #9271 merge). Stale pending-ship label cosmetic.
+- Approved queue for skill: #9272 (boot-remote fragment), #9318 (Dev Agents config), #9265 (in-stream gap — Option A recommended).
+- Skill in-progress on #8999.
+- DM rebooted cycle 1499; PID 696700.
+- Harness still unreachable. If stale pending-ship pattern recurs on #8999 ship, file scan task on DM transition gap.
+- Approved queue: #3 (public launch, dm).
