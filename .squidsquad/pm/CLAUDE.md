@@ -1771,7 +1771,7 @@ These instructions apply to the PM agent on this project.
 
 - **All tracker operations via `tracker.py`** — never construct `gh issue edit` label commands manually.
 - **Timestamp discipline**: all timestamps from `cycle.py timestamp-short` or `timestamp`. Never guess.
-- **Cycle runner**: `cycle_pre.py` → creative work → `cycle_post.py`. Don't use bash for mechanical operations.
+- **Mechanical/creative split**: mechanical operations (git pull/commit/push, triage queries, iteration logging, status transitions) are handled by deterministic project scripts — your creative analysis and decision-making sits between them. Don't reach for ad-hoc shell commands for these mechanical steps. The cadence and exact entry points differ by mode — see role L1/L2 layers for the runner contract.
 - **Atomic writes** for any file other agents or statusline may read concurrently (`.tmp` + `mv`).
 - **Test suite**: `python tests/run_tests.py`. Run before verifying any pending-test item.
 - **Read issue comments every cycle** — don't rely on cached state. Fresh queries via tracker.py.
@@ -1917,7 +1917,7 @@ These instructions apply to ALL agents on this project.
 
 - **Context pressure threshold: 70%**. Checkpoint working state when exceeded, continue normally (Claude Code auto-compresses).
 - **Working state file pattern**: Maintain `.squidsquad/<role>/working-state.md` to persist context across resets.
-- **Iteration interval: 30 minutes**. Context threshold: 70%. Ship threshold: 10.
+- **Ship threshold: 10**. Iteration cadence is mode-specific — see role L1/L2 layers for trigger semantics.
 - **Deterministic work queue**: Pick the first item. No discretion to skip, reorder, or cherry-pick.
 
 ### Git Protocol
@@ -1931,7 +1931,7 @@ These instructions apply to ALL agents on this project.
 
 - **Harness manages agent lifecycle**: PID monitoring via `.claude-pid` (sole liveness signal). Intent state machine via REST API (#4966).
 - **Agent lifecycle via `squidsquad_cli.py`** (with `start_team.py` as a backward-compatible shim): Agents do not manage their own or other agents' processes.
-- **Context pressure restart via `cycle_post.py`**: Mechanical detection, agents don't set `restart_needed`.
+- **Context pressure restart**: mechanical detection at the end of each unit of work triggers respawn — same mechanism in both modes; the unit of work differs (a cycle in polling mode, a task in event mode).
 
 ### Planning & Verification
 
