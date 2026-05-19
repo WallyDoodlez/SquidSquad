@@ -182,7 +182,15 @@ Add under `tests/integration/test_event_mode_e2e.py` (skip with `@pytest.mark.in
 3. Restart agent.
 4. Assert agent (a) skips forge verification step for the scan, (b) restarts the scan from scratch (idempotency), (c) on completion writes `Status: idle`, `Last completed`, `Next scan after` — values from `config.md` cooldown read at completion (NOT stored).
 
-### 4.4 Eviction gap (§2 third bullet · CONTEXT §3.1 step 3)
+### 4.4 Eviction gap (§2 third bullet · CONTEXT §3.1 step 3) — IT-EvictionGap
+
+**DEFERRED — blocked on precondition #9331.** Step 4(a)/(b) require the agent to receive an eviction signal from the harness and log a warning naming the oldest available id and the count of evicted events. Code reality (skill investigation cycle 1179):
+- `harness.EventStream.get_since` returns the oldest retained events with no eviction marker when the cursor is not in the deque.
+- `event_poll.py` has no eviction-detection or warning logic.
+
+#9331 (skill, medium) lands the precondition: harness response shape carries `evicted: true, oldest_id, evicted_count_hint` when cursor not found; event_poll.py emits the stderr warning + advances cursor. Once #9331 ships, this scenario is testable as written and #8999 picks it back up. Same DEFERRED pattern as §4.9 / #9265.
+
+Original spec (preserved for traceability, restore once #9331 ships):
 
 1. Start harness; let it accumulate >1000 events (or simulate by setting `maxlen=10` in test config) until the deque rolls.
 2. Pre-set agent `Last Processed Event ID` to a cursor that predates the oldest retained event.
