@@ -2589,6 +2589,51 @@ class TestCleanupLegacySentinels(unittest.TestCase):
             tuple(LEGACY_SENTINEL_FILES), (".stop", ".restart", ".health"),
         )
 
+    def test_idempotent_second_pass_returns_zero(self):
+        """#4792 Phase 5 / §3.8 idempotence: running the cleanup twice
+        means the second pass observes no leftover files and returns
+        ``(0, 0)`` so the lifespan callsite logs nothing. Re-running the
+        upgrade sweep must be a no-op."""
+        import tempfile
+        from harness import _cleanup_legacy_sentinels
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            skill_root = self._make_clone(
+                tmp, "skill", [".stop", ".restart", ".health"]
+            )
+            first = _cleanup_legacy_sentinels({"skill": skill_root})
+            self.assertEqual(first, (3, 0))
+            second = _cleanup_legacy_sentinels({"skill": skill_root})
+            self.assertEqual(second, (0, 0))
+
+    def test_all_four_role_directories_seeded(self):
+        """#4792 Phase 5 / §3.8: when stale `.stop`/`.restart`/`.health`
+        files are seeded across the four canonical role directories
+        (skill, pm, qa, dm), one cleanup pass removes all 12 (3 sentinels
+        × 4 roles) and the role directories no longer contain any of the
+        three legacy names."""
+        import tempfile
+        from harness import _cleanup_legacy_sentinels
+        roles = ("skill", "pm", "qa", "dm")
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            clone_paths = {
+                role: self._make_clone(
+                    tmp, role, [".stop", ".restart", ".health"]
+                )
+                for role in roles
+            }
+            removed, errors = _cleanup_legacy_sentinels(clone_paths)
+            self.assertEqual(removed, len(roles) * 3)
+            self.assertEqual(errors, 0)
+            for role, root in clone_paths.items():
+                role_dir = root / ".squidsquad" / role
+                for name in (".stop", ".restart", ".health"):
+                    self.assertFalse(
+                        (role_dir / name).exists(),
+                        f"{role}{name!r} should have been swept",
+                    )
+
     def test_cleanup_runs_synchronously_before_start_poller(self):
         """Source-level guard for CONTEXT-4792.md §5.1: the cleanup must
         be invoked on the lifespan thread BEFORE `state.start_poller()`,
