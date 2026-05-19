@@ -20,7 +20,7 @@
     {
       "id": "2",
       "question": "Read tests/comprehension/8697_fixtures/skill_events_CLAUDE.md. What is the skill agent's wake mechanism in THIS configuration, and how does the agent receive work?",
-      "expected": "Wake mechanism is event-driven. The agent invokes the Monitor tool at boot to watch the harness event bus (event_poll.py). Work arrives as `assigned-to` events; the agent processes one event at a time and signals completion via the harness completion endpoint (POST /events/<event_id>/complete). The agent does NOT invoke `/loop` and does NOT run cycle_pre.py/cycle_post.py — the harness owns those operations in event-driven mode."
+      "expected": "Wake mechanism is event-driven via the Monitor tool streaming `python references/scripts/event_poll.py <role> --wait 5 --target`. Each line of stdout is one JSON event. Events are hints, not commands — the source of truth is the forge (`tracker.py work_queue()`), which the agent reads after every event to determine canonical state. `event_poll.py` advances the cursor in `working-state.md` automatically (atomic `.tmp` + `mv`) on each event. The agent processes one event at a time. There is NO completion-API — task completion is reflected by the next forge transition (e.g., `tracker.py transition` to pending-test), not a separate POST. The agent does NOT invoke `/loop` and does NOT run cycle_pre.py/cycle_post.py."
     },
     {
       "id": "3",
@@ -30,7 +30,7 @@
     {
       "id": "4",
       "question": "In events mode (per skill_events_CLAUDE.md), if an agent receives an assigned-to event for issue #42, what is the agent's processing flow?",
-      "expected": "1. Read the event payload (id, event_type, target_role, issue_number). 2. Act on it — do the role-specific creative work for that item (implement, verify, plan, deliver). 3. Complete the event by POSTing to http://127.0.0.1:<harness-port>/events/<event_id>/complete with role + status + summary. Process one event at a time; do not start another until the current one is completed."
+      "expected": "Events are hints, not direct commands. The agent: (1) treats the event as a wake signal — `event_poll.py` has already advanced the cursor in working-state.md atomically; (2) forge-reads via `tracker.py work_queue()` to get the canonical role queue (the event payload may be stale by the time it's processed, so the forge is always the source of truth); (3) picks up the deterministic top item from the queue — transition it to `status:in-progress`, write the issue number to the Task field in working-state.md, begin the role-specific work. The agent processes one item at a time atomically; mid-task events are not acted on until the current task completes (Case D). Task completion is reflected by the next `tracker.py transition` (e.g., to pending-test), NOT by a completion-API POST — there is no `/events/<event_id>/complete` step."
     },
     {
       "id": "5",
@@ -40,7 +40,7 @@
     {
       "id": "6",
       "question": "Read dm_events_CLAUDE.md. If an operator flipped `event-driven: yes` in config.md for DM, and a feature reaches pending-ship status, how does DM learn about it?",
-      "expected": "DM learns via an `assigned-to` event (or `status-transition` event) dispatched by the harness when the item transitions into DM's role queue. DM's Monitor tool delivers the event; DM reads the event payload, picks up the item, performs the delivery (CHANGELOG, README, version bump per role responsibilities), and completes the event when done. DM does NOT poll the tracker on a /loop schedule in this mode."
+      "expected": "DM learns via a `status-transition` event emitted on the harness event bus when the item flips to `status:pending-ship` with `role:dm`. The Monitor tool, streaming `event_poll.py dm --wait 5 --target`, delivers the JSON event line to the DM session. DM treats the event as a wake hint, then forge-reads via `tracker.py work_queue()` to get the canonical pending-ship queue (the event payload may be stale). DM picks up the top item, performs delivery (CHANGELOG, README, version bump per role responsibilities), and the next status transition (pending-ship → shipped) via `tracker.py transition` is what signals completion — there is no completion-API POST. Bare comments on the issue do NOT wake DM (or any agent) — only status/label changes generate events. DM's special case for in-flight PR merges is documented in comment-handling: at the END of a task (merge resolves), DM re-reads comments once before the next pickup. DM does NOT poll the tracker on a /loop schedule in this mode."
     }
   ]
 }

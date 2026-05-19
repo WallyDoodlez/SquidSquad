@@ -218,87 +218,300 @@ python references/scripts/capability_check.py [ROLE]
 
 
 <!-- sub-skill: event-driven-workflow -->
-## Event-Driven Workflow (#7630)
+## Event-Driven Workflow
 
-You are a persistent agent session that reacts to events dispatched by the harness. You sit idle until the Monitor tool detects an event, then execute exactly one creative task and close the event via the completion API.
+You are a persistent agent session driven by events from the harness. You react to one event at a time, consult the forge as the source of truth, and let `event_poll.py` advance your cursor automatically.
 
-### Config Gate
+This fragment is a brief orientation. The full agent contract lives in the companion event-mode fragments — read them in this order:
 
-This mode is active ONLY when `event-driven: yes` in config.md. If `event-driven: no`, use the standard /loop + cycle_pre/cycle_post flow instead.
+1. **[[l1-base]]** — boot sequence (Case A), event reactions (Cases B–E), case-precedence rule, working-state ownership discipline, degraded-mode operation.
+2. **[[cursor-management]]** — atomic `.tmp` + `mv` protocol, per-event advance, gap handling (in-stream, long lag, eviction).
+3. **[[forge-read-pattern]]** — why the forge is the source of truth and how to read it before acting.
+4. **[[idle-cooldown-loop]]** — what an event-mode agent does when `work_queue()` is empty.
+5. **[[comment-handling]]** — comments are NOT event triggers; DM end-of-task exception; transition-on-handoff rule.
 
-### How You Wake
+### Quick reference
 
-At boot, invoke the Monitor tool to watch for events:
+- **Wake mechanism** — Monitor tool streaming `python references/scripts/event_poll.py <role> --wait 5 --target`. Each line of stdout is one JSON event.
+- **Atomic unit of work** — one event at a time. Process to completion before reading the next.
+- **Source of truth** — the forge (`tracker.py` queries). Event payloads are hints; always forge-read before acting.
+- **Cursor** — `event_poll.py` persists it to `working-state.md` automatically (see [[cursor-management]]).
+- **Idle** — improvement-scan cool-down loop (see [[idle-cooldown-loop]]).
+- **Handoff** — status transitions and label changes wake the stream; bare comments do not (see [[comment-handling]]).
+
+### Error handling
+
+If the harness becomes unreachable, the agent does NOT pivot to forge-direct work mid-session — that path exists only at boot (degraded mode, see [[l1-base]]). Mid-session unreachable is a **manual-recovery scenario**: keep retrying at the 5-minute-capped backoff; the operator restarts the harness; the agent resumes via the event stream on reconnect.
+
+`event_poll.py` handles transient HTTP errors (5xx, `ConnectionError`, `Timeout`, `IncompleteRead`) automatically with exponential backoff. 4xx responses are treated as caller faults and exit non-zero.
+
+### Context pressure
+
+The harness monitors agent context pressure files and emits `stop-requested` when a restart is needed. Honor `stop-requested` at the next task boundary (see Case E in [[l1-base]]); the harness handles the respawn.
+<!-- /sub-skill: event-driven-workflow -->
+
+<!-- sub-skill: l1-base -->
+## Event-Mode L1 Base — Agent Definition
+
+You are a persistent agent session that reacts to events on the harness event stream. The forge (GitHub Issues) is your source of truth; the stream is a wake-up signal that tells you when forge state may have changed.
+
+This fragment is the entire event-mode agent contract: boot sequence, event reactions, and the always-on rules that bind the two together.
+
+---
+
+### Boot Sequence (Case A — L1 failsafe)
+
+The boot sequence MUST work even when the harness is unreachable. Forge access is the only hard prerequisite.
+
+1. **Read working-state.** Open `.squidsquad/<role>/working-state.md`. Extract three fields:
+   - **Cursor** — line `- **Last Processed Event ID**: <event-id>` (see [[cursor-management]]). Missing or empty → start from the beginning of the stream with a stderr warning.
+   - **In-progress task** — line `- **Task**: <issue-number>` (or `- **Task**: none` if idle).
+   - **Improvement-scan status** — `Status:` field under `## Improvement Scan` (see [[idle-cooldown-loop]]). If the section is absent (first boot), treat `Status` as `idle`.
+
+2. **Branch on what working-state shows:**
+   - **In-progress tracker task** → verify against the forge: still my role? still `status:in-progress`? Yes → resume. No → clear the task field (`- **Task**: none` in working-state) and drop the task locally — **no forge transition is needed** because the forge already reflects the change (that is why verification failed). Fall through to a fresh `work_queue()` scan.
+   - **Improvement-scan `Status: running`** (not a tracker item) → skip forge verification; restart the scan. Improvement scans are idempotent — a fresh scan subsumes a partial one. See [[idle-cooldown-loop]]. **When the scan completes, run `work_queue()`** before re-entering the cool-down loop, in case a task arrived during the outage.
+   - **Idle / nothing in progress** → run `work_queue()` against the forge. If work is returned: **pick up the top item** — transition it to `status:in-progress`, write the issue number to the Task field in `working-state.md`, and begin work. If `work_queue()` is empty, defer to step 3 for the empty-queue path (cool-down loop if harness reachable; degraded-mode sleep loop if not).
+
+3. **Check harness reachability** (before any event-stream call or cool-down entry):
+   - **Unreachable** → skip steps 4–5 (nothing to skim, cursor unchanged) and proceed to degraded-mode operation: continue working directly from the forge via `work_queue()`. While in degraded mode, if `work_queue()` returns empty, sleep a short fixed interval (e.g. 60s) and retry `work_queue()`; if `work_queue()` returns work, pick up the top item directly (transition to `in-progress`, update the Task field, begin work) and on completion follow Case C (transition, clear Task field, re-run `work_queue()`) — then continue applying the same degraded-mode rules (empty → 60s sleep, non-empty → pick up). **Do NOT enter the improvement-scan cool-down loop in degraded mode**, because the Monitor (`event_poll.py`) requires the harness. **Before each `work_queue()` call** (including after each 60s sleep), attempt to POST `bootup-complete` using exponential backoff capped at **5 minutes**. A successful POST indicates the harness is reachable — **exit degraded mode** by skimming events from the current cursor forward (step 4), advancing the cursor (step 5 cursor write), and entering the listening loop. `bootup-complete` is **best-effort, not blocking** — the agent never hangs waiting for the harness.
+   - **Reachable** → continue to step 4. (If you got here from step 2's empty idle branch, after step 5 enter the improvement-scan cool-down loop — see [[idle-cooldown-loop]].)
+
+4. **Skim events from cursor forward.** Informational only — the forge already has current state. Skim-then-advance; never jump-to-latest. Handle gap scenarios per [[cursor-management]] (in-stream gap, long lag, eviction gap). In an eviction gap specifically, the cursor advances to the *oldest available* id, not the latest observed.
+
+5. **Advance cursor and announce.** Persist the cursor atomically (see [[cursor-management]]); emit `bootup-complete` (POST `/events` with `event_type=bootup-complete`, `role=<role>`, payload `{"listener_active": true}`); enter the event-listening loop via `event_poll.py`.
+
+After boot, processing is dictated by Cases B through E below.
+
+---
+
+### How You Listen (Event Poll)
+
+Invoke the Monitor tool to stream events from `event_poll.py`:
 
 ```
 Monitor tool invocation:
   command: python references/scripts/event_poll.py <role> --wait 5 --target
-  description: Watch harness event bus for work events
+  description: Watch harness event bus for relevant events
   persistent: true
 ```
 
-The Monitor tool streams `event_poll.py` stdout. Each line is a JSON event object. When the Monitor delivers a line, you wake and process it.
+`event_poll.py` writes one JSON object per line to stdout. Each line wakes you to process exactly one event.
 
-### Event Types You Receive
+---
 
-| Event Type | When | What To Do |
-|---|---|---|
-| `assigned-to` | Work item needs your attention | Read the issue from payload, do your creative work |
-| `stop-requested` | Harness wants you to exit | Checkpoint working-state.md, then exit cleanly |
-| `status-transition` | A relevant item changed status | React per your role's logic |
+> **Cursor advancement is automatic.** `event_poll.py` persists the cursor to `working-state.md` as each event line is emitted to stdout. Cases B–E below describe the agent's reaction to each delivered event; the cursor write happens on the agent's behalf — there is no separate "advance cursor" step for the agent to perform. See [[cursor-management]].
 
-> **Future event types** (not yet emitted by harness — planned for Phase 5+):
-> - `scan-needed` — idle timeout reached → run improvement scan
-> - `vault-reflect` — active work completed → run vault reflection
+> **Case precedence.** When an event arrives, **evaluate Case E (special events) first**, regardless of your current state. Only if the event type is not special, fall through to the state-based case (B if idle, D if mid-task; Case C is reached implicitly when work completes).
 
-### Processing Flow
+### Case B — Idle, event arrives
 
-For each event:
+1. Read the event delivered by the Monitor.
+2. **Forge-read** the referenced item (if any) via `tracker.py`. The forge is the source of truth — see [[forge-read-pattern]].
+3. Run `work_queue(<role>)` against the forge — pick up the top item if available, else stay idle (re-enter the improvement-scan cool-down loop — see [[idle-cooldown-loop]]).
 
-1. **Read**: Parse the JSON event. Extract `id`, `event_type`, and `payload`.
-2. **Act**: Do your creative work — implement, verify, plan, deliver (per your role).
-3. **Complete**: When done, call the completion endpoint:
-   ```bash
-   curl -s -X POST http://127.0.0.1:$(cat .squidsquad/.harness-port)/events/<event_id>/complete \
-     -H "Content-Type: application/json" \
-     -d '{"role": "<role>", "status": "success", "summary": "<brief description>"}'
+---
+
+### Case C — After completing work
+
+1. You just transitioned a tracker item via `tracker.py transition`.
+2. Update `working-state.md` → `- **Task**: none`.
+3. **Immediately run `work_queue()`** against the forge. Do NOT wait for your own transition event to come back through the stream.
+4. Pick up the next item, or — if `work_queue()` is empty — enter idle (improvement-scan cool-down). **Degraded-mode exception**: if the harness is currently unreachable, do NOT enter the cool-down loop; apply the degraded-mode rules instead (60s sleep + retry `work_queue()`).
+
+---
+
+### Case D — Mid-task, event arrives
+
+1. Read the event delivered by the Monitor.
+2. **Note but do NOT act.** The current task runs atomically to completion.
+3. On task completion, fall through to **Case C** (transition the item, clear the Task field, run `work_queue()`). Case C's forge-read absorbs all mid-task events that arrived during the task.
+
+---
+
+### Case E — Special events
+
+- **`stop-requested`** — honored ONLY at a task boundary. Mid-task: read the event, ignore. At a boundary: checkpoint `working-state.md` (preserve the cursor), then exit cleanly.
+- **`bootup-complete` from another agent** — informational. No action required.
+- **Unknown event type** — log a warning to stderr. Do not block.
+
+---
+
+### Always-On Rules
+
+- **Forge-read before acting.** Every decision consults the forge. Event payloads are hints, not state. See [[forge-read-pattern]].
+- **One event at a time.** Process atomically. Never start a second event before the first is complete.
+- **Cursor advance is atomic and per-event.** Write `.tmp` then `mv` — never leave a partial cursor. See [[cursor-management]].
+- **`working-state.md` writes follow an ownership discipline.** During the event-listening loop, `event_poll.py` is the sole writer of the cursor line (`- **Last Processed Event ID**: …`); the agent is the sole writer of every other field (`- **Task**: …`, the `## Improvement Scan` block, etc.). During boot (before the listening loop starts) the agent may also write the cursor line — see step 5 of the boot sequence and [[cursor-management]] for crash-recovery / gap-handling writes. Both writers use the `.tmp` + `mv` protocol so readers never see a half-written file, and each writer's read-modify-write cycle preserves the other writer's lines verbatim. `.tmp` + `mv` prevents partial writes but does NOT prevent lost updates across concurrent R-M-W cycles — the ownership rule is what makes the file safe to share. If a future writer ever needs to update both classes of field together while the listening loop is active, switch to an explicit file lock before doing so.
+- **Bare comments do not wake anyone.** Urgent agent-to-agent signaling must ride a status transition or label change. See [[comment-handling]].
+- **The harness owns git** — pull, commit, and push are managed at boot and shutdown by the harness. You do not run mechanical pre/post steps in event mode. Event IDs are the tracking unit; there is no per-iteration counter.
+- **Context pressure is managed by the harness.** When pressure exceeds threshold the harness emits `stop-requested`; honor it at the next task boundary.
+
+---
+
+### Degraded-Mode Glossary
+
+**Degraded mode** = harness unreachable at boot. The agent works directly from the forge via `work_queue()` and retries `bootup-complete` emission with the 5-minute capped backoff.
+
+**Manual-recovery scenario** = harness becomes unreachable AFTER `bootup-complete` has been emitted. The agent keeps retrying at the capped backoff but does **NOT** pivot to forge-direct work. The operator manually restarts the harness; the agent resumes via the event stream on reconnect.
+
+Rationale: agents log everything to the forge, so state is recoverable; adding a runtime degraded-mode adds complexity the failsafe boot path already handles after a restart.
+<!-- /sub-skill: l1-base -->
+
+<!-- sub-skill: cursor-management -->
+## Cursor Management
+
+Your event cursor is the last event id you have processed. It lives in `.squidsquad/<role>/working-state.md` under the line:
+
+```
+- **Last Processed Event ID**: <event-id>
+```
+
+`event_poll.py` reads and advances this cursor on your behalf — you do not write it manually under normal operation. The rules below apply when you DO need to interact with it directly (boot, crash recovery, gap handling).
+
+### Atomic Update Protocol
+
+When advancing the cursor, write the new value to `<path>.tmp` then `os.replace` (or `mv`) it onto `working-state.md`. **Never** write the cursor in place — a reader catching a half-written file would observe an undefined cursor and re-deliver or skip events.
+
+`event_poll.py` handles this for the event-listening loop. If you advance the cursor by hand (e.g. on boot after skimming events), follow the same protocol.
+
+### Per-Event Advance, Not Per-Batch
+
+When a poll returns a batch of events, the cursor advances **after each event is durably persisted**, not after the whole batch. This makes mid-batch process death safe — on restart, the next poll resumes after the last successfully-persisted id.
+
+### Gap Scenarios
+
+Three kinds of cursor gap exist (CONTEXT.md §2):
+
+- **In-stream gap.** You received events `[10, 11, 13]` — no event `12`. Log a warning naming the gap; advance to the highest observed id and forge-read affected items.
+- **Long lag.** Your cursor is hundreds or thousands of events behind. Skim-then-advance through the stream; do not jump to latest. The forge already has current state — the stream is just informational.
+- **Eviction gap.** Your cursor predates the oldest retained event in the harness deque. `GET /events?since=<old>` returns the oldest available id and an eviction-count hint. Log an eviction warning naming the oldest available id and the count of evicted events; advance the cursor to that oldest available id; proceed to a forge-read for current state. Do NOT crash.
+
+### Crash Recovery
+
+On restart, `event_poll.py` reads the cursor from `working-state.md` and resumes polling from `cursor+1`. Because writes are per-event-atomic, the resume point is exactly the first unprocessed event — no duplicates, no skips.
+
+If the cursor is missing or empty, the agent starts from the beginning of the stream with a stderr warning. Use `event_poll.py --since <id>` to bootstrap a specific cursor at first run.
+<!-- /sub-skill: cursor-management -->
+
+<!-- sub-skill: forge-read-pattern -->
+## Forge-Read Pattern
+
+**The forge is the source of truth. The event stream is a wake-up signal, not state.**
+
+Every decision consults the forge before acting. This is the rule that lets the harness remain a pure broadcast pipe and lets agents recover correctly from any sequence of crashes, evictions, or out-of-order delivery.
+
+### When You Receive An Event
+
+1. **Wake.** `event_poll.py` delivered one JSON event to stdout.
+2. **Read the event payload.** Treat it as a hint about what may have changed on the forge.
+3. **Forge-read.** Query the forge via `tracker.py` for the referenced item (and/or `work_queue(<role>)` for your role's queue). The forge tells you the actual current state.
+4. **Act on what the forge says**, not on what the event payload said. The event may be stale (delayed delivery, repeated delivery during gap recovery, etc.).
+
+The cursor advances automatically as `event_poll.py` emits each event line — there is no separate step you take to advance it (see [[cursor-management]]).
+
+### Why
+
+- Events can be **stale, duplicated, or out-of-order**. The forge is consistent.
+- The harness has **no dispatch logic** and no per-role queue — it can broadcast the same event twice during reconnects or eviction recovery without harm, because every agent forge-reads anyway.
+- **Crash recovery** is trivial: on restart, the agent reads working-state, forge-reads any in-progress task, and resumes — no special replay protocol needed.
+- **Mid-task events** (Case D in [[l1-base]]) are absorbed by the next forge-read at task completion. The agent never needs an in-memory event queue.
+
+### `work_queue()` Semantics
+
+`tracker.py list-tasks <role> --status approved` (and equivalent issue queries) is the forge query that backs `work_queue()`. It returns the current queue from the forge, ordered by priority/severity, every time. The agent does NOT cache the queue across events — re-reading is cheap and the forge is authoritative.
+
+### `tracker.py get-state <number>`
+
+Use this whenever you need to confirm an item's current status, role assignment, or labels before acting. Example: on boot, after reading an in-progress task from working-state, you call `get-state` to confirm the forge still has it in-progress and assigned to you. If the forge says otherwise, drop the task and fall through to `work_queue()`.
+<!-- /sub-skill: forge-read-pattern -->
+
+<!-- sub-skill: idle-cooldown-loop -->
+## Idle = Improvement-Scan Cool-Down Loop
+
+When `work_queue(<role>)` returns empty, you are **not** finished — you enter the improvement-scan cool-down loop. Scanning during idle time turns dead clock into proactive process improvement.
+
+### Working-State Schema
+
+The cool-down state lives under a `## Improvement Scan` section in `.squidsquad/<role>/working-state.md`:
+
+```
+## Improvement Scan
+Status: idle | running
+Last completed: YYYY-MM-DD HH:MM
+Next scan after: YYYY-MM-DD HH:MM
+```
+
+Three fields, three values:
+
+- **`Status`** — `running` while a scan is in flight; `idle` between scans.
+- **`Last completed`** — wall-clock timestamp of the last successful scan completion.
+- **`Next scan after`** — when the next scan is eligible to run. Computed at completion as `Last completed + <cool-down>`.
+
+### Lifecycle
+
+1. **Entering idle.** `work_queue()` returned empty. If `Status: running` was already set (from a previous boot interrupted mid-scan), restart the scan — improvement scans are idempotent, a fresh scan subsumes a partial one.
+2. **Eligibility check.** If `Next scan after` is missing (no prior scan) or in the past, the agent is eligible — proceed to step 3. If `Next scan after` is in the future, you are NOT eligible yet — proceed to step 5 (wait).
+3. **Start scan.** Write `Status: running` to working-state (atomic). Run your role's scanning sub-skill.
+4. **Complete scan.** Read the cool-down value from `config.md`. Compute `Next scan after = now + cooldown`. Write under `## Improvement Scan`:
    ```
-   Or via Python:
-   ```python
-   import json, urllib.request
-   port = open(".squidsquad/.harness-port").read().strip()
-   data = json.dumps({"role": "<role>", "status": "success", "summary": "<brief>"}).encode()
-   req = urllib.request.Request(f"http://127.0.0.1:{port}/events/<event_id>/complete",
-                                data=data, headers={"Content-Type": "application/json"}, method="POST")
-   urllib.request.urlopen(req, timeout=5)
+   Status: idle
+   Last completed: <YYYY-MM-DD HH:MM>
+   Next scan after: <YYYY-MM-DD HH:MM>
    ```
-
-### What You Do NOT Do
-
-- **No /loop** — the Monitor tool + event_poll.py delivers events; you don't schedule cron
-- **No cycle_pre.py / cycle_post.py** — the harness handles git pull, commit, push
-- **No git operations** — the harness owns git pull (before event delivery) and commit/push (after completion)
-- **No cycle counting** — event IDs are the tracking unit, not cycles
-- **No conditional step branching** — you react to ONE event at a time
+   Note: `Next scan after` is **stored**, not derived on the fly — this is the only place the cool-down value is read.
+4a. **Re-check the queue.** Run `work_queue()` immediately after writing the scan-completion fields. A task may have arrived during the scan (or during the crashed-out window if this was a crash-recovery restart). If `work_queue()` returns work, **exit the cool-down loop** — transition the top item to `in-progress`, update the Task field in `working-state.md`, and begin work directly (no need to wait for an event, since you already have the item). Only if `work_queue()` is empty proceed to step 5.
+5. **Wait via the Monitor.** The persistent Monitor (see [[l1-base]] "How You Listen") delivers events at a short fixed cadence; you do not perform a long blocking sleep. After each empty poll interval:
+   - If `now >= Next scan after` → run the next improvement scan (back to step 3).
+   - If a task-relevant event arrives in the meantime → the Monitor wakes Case B in [[l1-base]] (forge-read, possibly pick up new work). The cool-down timer keeps running in the background; when work completes (Case C) and the queue is empty again, return here for the eligibility check.
 
 ### Atomicity
 
-Process one event at a time. Do not start a second event before completing the first. The harness will not dispatch a second event to you while one is in-flight.
+- **An event arrives during an in-flight scan** → finish the scan first (atomicity rule). Process the event when the scan completes.
+- **Crash mid-scan** → on boot, working-state shows `Status: running`. Skip forge verification for the scan, restart it from scratch. Scans are idempotent. After the restarted scan completes, run `work_queue()` (step 4a above) before re-entering the cool-down loop — a task may have arrived during the outage.
 
-### Error Handling
+### Cool-Down Configuration
 
-If the harness is unreachable (event_poll.py prints errors to stderr), the Monitor tool continues retrying automatically (event_poll.py has built-in retry with --wait). You remain idle until connection is restored.
+`config.md` carries the default:
 
-If processing fails, complete the event with `"status": "failure"` and include the error in `summary`. The harness may re-emit the work via a new event.
+```
+- **Improvement Scan Cool-Down**: 30m
+```
 
-### Context Pressure
+Per-role overrides may be added (e.g. `Improvement Scan Cool-Down (qa)`) but are NOT shipped initially. All roles share the same default cool-down (defined in `config.md`) unless config says otherwise.
+<!-- /sub-skill: idle-cooldown-loop -->
 
-The harness monitors your context pressure file and triggers restarts when exceeded. You do not check context pressure yourself — the harness emits `stop-requested` when a restart is needed.
+<!-- sub-skill: comment-handling -->
+## Comment Handling
 
-### Working State
+**Comments are NOT standalone event triggers.** A bare comment on an issue does NOT wake any agent. Comments are absorbed by the next agent that picks up the issue.
 
-Maintain `.squidsquad/<role>/working-state.md` between events for crash recovery. Update after each event completion so the harness can resume you after a restart.
-<!-- /sub-skill: event-driven-workflow -->
+This rule is the single most important consequence of the thin-broadcast harness: any wake-up signal must ride a status transition or label change, because those are the only things the harness emits onto the event stream.
+
+### The Rule
+
+When you forge-read an issue (Case B in [[l1-base]], or at task pickup), you read **all comments since you last touched the item**. New information from comments is absorbed as part of that read. You do NOT poll comments otherwise — there is no `comment-added` event in event-mode.
+
+### DM Exception — End-Of-Task Re-Read
+
+DM is the one role that has a sub-task that **spans waiting**: the PR-merge wait. While DM is waiting on a PR to merge, the task is still in flight. Comments arriving during the wait would be silently dropped under the default rule.
+
+DM's exception: at **task completion** (the merge resolves, PR is closed, or the wait ends some other way), DM re-reads issue comments **before** the next pickup. Comments are honored once the wait ends.
+
+**No sub-loop during the wait.** DM does not poll comments while waiting. The reaction window for a comment is "the moment the current wait ends" — typically minutes, sometimes longer.
+
+### Practical Consequences for Senders
+
+- **Urgent agent-to-agent signaling MUST ride a status transition or label change.** A comment alone will not wake anyone. If you need a fast reaction:
+  - Transition the issue (e.g. `in-progress → planning`) — this emits a `status-transition` event.
+  - Add or remove a label (e.g. `pending-human-review`) — this emits a label-change event.
+- **PM nudges and pipeline-sentinel comments** are fine as bare comments — they are absorbed at the next pickup. They are advisory, not blocking.
+- **PRs and tracker items** that should bounce back to the previous owner must do so by transition (e.g. QA reject → `pending-test → in-progress`), not by comment.
+
+### Transition-On-Handoff Rule
+
+When you assign work to a different role (including humans), the assignment MUST be a status transition so it appears on the event stream. Bare comments do not constitute a handoff in event mode. This applies even when the new owner is a human — transition to `pending-human-review` or `pending-human-setup` rather than just commenting "human, please look at this."
+<!-- /sub-skill: comment-handling -->
 
 <!-- sub-skill: context-pressure -->
 ### Step 1b — Context Pressure Check
@@ -416,9 +629,23 @@ For each Pending Ship task that is NOT skipped:
 
 0b. **PR merge gate**: If Branch Workflow is enabled (`python references/scripts/config.py get branch-workflow` → `yes`), check for an associated PR:
    ```bash
-   gh pr list --search "squidsquad/" --state open --json number,headRefName --limit 20
+   gh pr list --search "squidsquad/" --state open --json number,headRefName,body --limit 20
    ```
-   Find the PR matching this issue number. If found, request merge via harness before shipping:
+   Find the PR matching this issue number. If found, **first** apply the contract-citation soft gate (#8950 Gate #4):
+
+   ```bash
+   ARTIFACTS=$(ls .squidsquad/pm/planning/*[NUMBER]* 2>/dev/null)
+   ```
+
+   - **If `$ARTIFACTS` is empty** (bug fix or trivial task with no planning artifacts): the citation gate does not apply — proceed with the merge request below.
+   - **If `$ARTIFACTS` is non-empty**: scan the PR description (`body` field above) for a substring reference to any planning filename returned (e.g. `CONTEXT-[NUMBER].md`, `TEST-PLAN-[NUMBER].md`, `FEAT-*-[NUMBER]-TEST-PLAN.md`) OR a `### 5.X #[NUMBER]` bundle-CONTEXT section pointer. If **no** such reference is present, do **not** merge — route back to QA:
+     ```bash
+     python references/scripts/tracker.py transition [NUMBER] pending-ship pending-test --role dm-lead
+     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR does not cite the planning contract; cannot verify architectural conformance. QA: confirm AC walk completed against the planning artifacts listed in .squidsquad/pm/planning/*[NUMBER]*."
+     ```
+     Skip this item and move to the next.
+
+   If the citation gate passes (or did not apply), request merge via harness before shipping:
      ```bash
      curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH]", "role": "dm"}'
      ```
@@ -447,6 +674,81 @@ For each Pending Ship task that is NOT skipped:
 6. Increment shipped count: `python references/scripts/config.py set shipped-since-bump [N+1]`
 7. Clear working state.
 <!-- /sub-skill: delivery-packaging -->
+
+<!-- sub-skill: pr-merge-wait -->
+## DM — PR-Merge Wait (Event Mode)
+
+DM is the one role whose work routinely spans **waiting on an external system**: a feature PR must merge before DM can transition the corresponding tracker item to `shipped` and run delivery packaging. Event mode makes this wait a single atomic task that DM holds open until the merge resolves (or DM rolls it back).
+
+This fragment defines DM's behavior across the lifecycle of a `pending-ship` task. It builds on [[l1-base]] (Cases A–E), [[forge-read-pattern]], and [[comment-handling]] — read those first.
+
+### The Task IS The Wait
+
+A `pending-ship` item assigned to DM is an active task even though DM is "just" waiting on a PR merge. From the agent's point of view this is a single atomic task per [[l1-base]] Case D: DM holds the Task field set to the issue number for the full wait, and the task only completes when DM has confirmed (via forge-read) that the PR has reached a terminal state — merged, closed without merge, or blocked by an unresolvable merge conflict.
+
+### Pickup-Time Readiness Check
+
+When DM picks up a `pending-ship` item via `work_queue()`, before entering the wait, DM forge-reads the PR (`gh pr view <number>` or equivalent) and inspects three signals:
+
+- **CI status** — green / red / pending
+- **Review state** — approved / changes-requested / blocked
+- **Mergeable state** — `MERGEABLE` / `CONFLICTING` / `UNKNOWN` (transient)
+
+The five resulting pickup branches:
+
+1. **Already merged** (the PR state is `merged` at pickup — a human merged manually, or a prior DM execution merged but crashed before transitioning) → skip the wait entirely and fall through directly to End-Of-Task Re-Read.
+2. **Ready to merge** (open, CI green, no blocking reviews, `MERGEABLE`) → if auto-merge is configured for the project, merge directly, **then verify via forge-read that the PR state is now `merged`**, then fall through to End-Of-Task Re-Read below. If the merge attempt did not produce `merged` state (network blip, server-side race, permissions), fall back to the begin-the-wait path — do NOT pretend the merge succeeded. If auto-merge is NOT configured, begin the wait described below: in this configuration the merge is performed by a human (the project policy), and the wait exits when that human action lands as PR `merged`. The stalled-PR ceiling is the safety net if the human never acts.
+3. **CI red OR review blocking** → comment a one-line summary of the cause on the issue, transition `pending-ship → in-progress` so the assigned dev role can fix the underlying problem, clear the Task field, fall through to Case C.
+4. **`CONFLICTING`** → same rollback as branch 3: comment, transition back to `in-progress`, clear Task, fall through.
+5. **`UNKNOWN`** → GitHub is computing the mergeable state; treat as the wait case (branch 2's begin-the-wait path) and recheck on next forge-read.
+
+Branches 3 and 4 do NOT transition to `shipped` (they actively roll back). Branch 5 enters the wait and may eventually ship via outcome (d) once GitHub finishes computing the mergeable state. Running delivery before a PR has merged would commit to a release of code that may never reach `main`.
+
+### No Sub-Loop During The Wait
+
+Per [[comment-handling]] DM exception: comments arriving on the issue during the wait are NOT polled in real time. DM does NOT enter a watch loop, does NOT re-read the issue every few seconds, and does NOT react to comments mid-wait. Doing so would violate the atomicity rule in [[l1-base]] Case D — events arriving mid-task are noted but not acted upon, and their information is absorbed by DM's final forge-read at task completion.
+
+The reaction window for a comment that arrives during the wait is "the moment the wait ends" — see "End-Of-Task Re-Read" below.
+
+### How DM Detects The Merge
+
+The wait is implemented as a **bounded periodic forge-read**, NOT as event-driven action. Events arriving on the stream during the wait are handled per [[l1-base]] Case D (noted, not acted on) — they are NOT what triggers DM to recheck the PR.
+
+On each Monitor wake (the persistent `event_poll.py` heartbeat at the role's wait cadence), DM forge-reads the PR exactly once and inspects:
+
+- **PR state == merged** → the wait ends, fall through to End-Of-Task Re-Read.
+- **PR state == closed and not merged** → the wait ends with a rollback; fall through to End-Of-Task Re-Read.
+- **PR state == open but `CONFLICTING`** → conflict developed mid-wait; the wait ends with a rollback. Fall through to End-Of-Task Re-Read.
+- **PR state == open and (`MERGEABLE` or `UNKNOWN`) BUT the wait has exceeded the project's configured stalled-PR ceiling** (a per-project policy setting; default unbounded) → the wait ends with a rollback (stalled-PR ceiling exceeded); fall through to End-Of-Task Re-Read.
+- **PR state == open and (`MERGEABLE` or `UNKNOWN`) and wait has not exceeded the ceiling** → wait is not over; return to wait.
+
+Event payloads about the PR are hints; the forge is authoritative ([[forge-read-pattern]]).
+
+### End-Of-Task Re-Read
+
+When the wait ends, DM performs a **single, complete re-read** of both the issue and the PR before deciding the outcome:
+
+1. **Re-read the PR** (`gh pr view <number>` or equivalent) so outcomes (c) and (d) compare against the freshest PR state, not the stale detection-phase snapshot. The TOCTOU qualifier in outcome (c) depends on this read.
+2. **Re-read issue comments** since DM last touched the item. Comments accumulated during the wait are honored here — never mid-wait.
+3. **Re-check the issue's current labels and status** for any operator changes that should redirect DM (e.g. a human flipped the item to `pending-human-review`, or transitioned it back to `planning`).
+4. **Pick exactly one outcome, evaluated in this precedence order** — earlier rules take priority because operator redirection is more authoritative than the PR's terminal state:
+   - **(a)** **A `pending-human-*` label appeared during the wait** → leave the item where the operator put it; do NOT transition. The human handoff wins regardless of PR state.
+   - **(b)** **The issue is no longer at `pending-ship`** (operator transitioned it to another status during the wait) → leave it where the operator put it; do NOT transition further. Comments on the new owner are honored at their next pickup.
+   - **(c)** **PR is not merged AND (closed without merge, OR open-but-conflicted, OR stalled-PR ceiling exceeded)** (rollback) → comment a one-line summary of the cause, transition `pending-ship → in-progress` so the assigned dev role can address it. Do NOT run delivery. The "not merged" qualifier prevents a stale rollback if the PR transitioned to `merged` in the interval between the detection forge-read and this re-read — in that case fall through to outcome (d).
+   - **(d)** **PR merged AND the issue is still at `pending-ship`** → **first** check the issue's Discussion for a `delivery: skip` marker (mandatory per DM's always-on prohibitions). If `delivery: skip` is present, skip delivery packaging and transition `pending-ship → shipped` directly. Otherwise run delivery packaging (CHANGELOG, version bumps as configured) and then transition `pending-ship → shipped`. Either way the transition auto-closes the issue.
+5. **Update working-state** → `- **Task**: none` (atomic write per [[l1-base]] ownership discipline). If outcome (a) or (b) was taken there was no transition, so DM did NOT just complete a tracker transition — see step 6.
+6. Run `work_queue()` for the next DM item. This is the same forge-read step that Case C performs after a transition; in outcomes (a) and (b) you skip Case C's "you just transitioned" preamble (no transition occurred) and go straight to the queue read.
+
+### Comment Examples (For Future Reference)
+
+| When the comment arrives | When DM acts on it |
+|--------------------------|-------------------|
+| Before DM picks up the item | At pickup (forge-read absorbs all prior comments) |
+| During the PR-merge wait | At task end (End-Of-Task Re-Read above) |
+| After DM ships the item | Never — the issue is closed; new work must come as a new tracker item |
+
+Senders who need DM to react faster than "end of current wait" must ride a status transition or label change ([[comment-handling]] transition-on-handoff rule). A comment alone is not enough.
+<!-- /sub-skill: pr-merge-wait -->
 
 <!-- sub-skill: version-bumps -->
 ### Step 3 — Version Bump Check
@@ -603,12 +905,24 @@ After completing **4 full rotations**, assess if accessibility improvements are 
 
 Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled by the harness via intent API (#4966).
 
-**Context pressure restart flow**:
+**Context pressure restart flow** (#4792 Phase 1):
+
 1. Step 1b detects context pressure exceeds threshold.
 2. Checkpoint working state to `.squidsquad/[ROLE]/working-state.md`.
 3. Complete the current cycle normally.
-4. At cycle end, `cycle_post.py` checks context pressure from `cycle-input.json`. If exceeded, exits with code 42.
-5. The harness detects the exit, sees intent=running, and respawns the agent.
+4. At cycle end, `cycle_post.py` checks the `context_pressure` field of your `cycle-output.json` (falling back to `cycle-input.json` if you did not pass it through). If exceeded, it POSTs `/agents/[ROLE]/restart` to the harness so intent flips to `restarting` (recording `intent_set_at` for the 60s force-kill safety net), then exits with code 42.
+5. **You then invoke `/quit`** — see "Graceful Stop — Self-Quit Protocol" below.
+6. The harness observes the process exit and, because intent is `restarting`, respawns the agent through the proper RESTARTING flow.
+
+### Graceful Stop — Self-Quit Protocol
+
+**After `cycle_post.py` exits with code 42** (the cooperative termination signal — either the harness asked you to stop/restart, or `cycle_post` detected its own context pressure exceeded), immediately invoke the `/quit` slash command to terminate the claude session. The harness will then observe the process exit and either mark you stopped or respawn you per its intent state machine.
+
+- Do NOT continue working after a 42 exit — the harness is waiting for you to terminate.
+- Do NOT attempt to suppress, retry, or override the 42 exit — it is the canonical cooperative-termination signal.
+- The exit-42 conditions are owned by `cycle_post.py`: harness intent in `{stopping, restarting}` OR context-pressure exceeded.
+
+The harness has a **60-second force-kill safety net** that fires if you fail to invoke `/quit` within the cooperative window. The safety net guarantees that operator intent (stop or restart) eventually wins even if the agent hangs — but the cooperative path is the canonical one, and the safety net should never fire under normal operation.
 
 **You do NOT**:
 - Set `restart_needed` in cycle-output.json (deprecated).
@@ -617,7 +931,7 @@ Agents can signal a restart only when their own context pressure exceeds the thr
 - Kill or manage other agents (harness handles this).
 - Implement any restart loop logic (harness handles respawn).
 
-Write `idle|` to `current-state` at cycle end so health monitoring works.
+At the end of a **normal** cycle (no exit-42 imminent), write `idle|` to `current-state` so health monitoring works. Do NOT overwrite it on the restart path — `cycle_post.py` writes `restarting|…` itself when the 42-exit condition fires, and clobbering that would hide the transition from the operator and TUI.
 <!-- /sub-skill: self-restart -->
 
 <!-- sub-skill: agent-lifecycle -->
@@ -630,7 +944,7 @@ Agent lifecycle is managed by the harness (`harness.py`) via REST API (#4966). A
 2. **Graceful stop**: Harness sets intent=stopping via API. `cycle_post.py` queries `GET /agents/{role}` at cycle end, sees the intent, and exits with code 42.
 3. **Start correctly**: Harness spawns agents via thin launcher (`thin_launcher.py`) in visible terminal windows. `cycle_pre.py` handles git pull/branch per cycle.
 
-**Health monitoring**: Harness monitors agent liveness via direct PID checks (primary) and `.claude-pid` file (fallback). No heartbeat files needed — the harness polls every 5 seconds.
+**Health monitoring**: Harness monitors agent liveness via PID monitoring through `.claude-pid` (sole liveness signal). The harness polls every 5 seconds.
 
 **Intent state machine** (per-agent, in harness memory + `.harness-state.json`):
 - `running` — agent should be alive; auto-reboot on death
@@ -638,25 +952,25 @@ Agent lifecycle is managed by the harness (`harness.py`) via REST API (#4966). A
 - `restarting` — graceful restart; reboot after death
 - `stopped` — agent died as requested
 
-**Lifecycle interface**:
+**Lifecycle interface** (`squidsquad_cli.py` is canonical; `start_team.py <args>` remains as a backward-compatible shim):
 ```bash
-# Start all agents
-python references/scripts/start_team.py --all
+# Start harness + all agents
+python references/scripts/squidsquad_cli.py start
 
-# Start single agent
-python references/scripts/start_team.py --role <role>
+# Start a single agent (harness auto-spawns if needed)
+python references/scripts/squidsquad_cli.py start <role>
 
-# Graceful reboot — harness sets intent=restarting
-python references/scripts/start_team.py --reboot <role>
+# Graceful restart — harness sets intent=restarting
+python references/scripts/squidsquad_cli.py restart <role>
 
-# Reboot all agents
-python references/scripts/start_team.py --reboot --all
-
-# Stop agent — harness sets intent=stopping
-python references/scripts/start_team.py --stop <role>
+# Stop a single agent — harness sets intent=stopping
+python references/scripts/squidsquad_cli.py stop <role>
 
 # Stop all agents
-python references/scripts/start_team.py --stop --all
+python references/scripts/squidsquad_cli.py stop
+
+# Stop all agents and exit the harness
+python references/scripts/squidsquad_cli.py shutdown
 ```
 
 **Crash recovery**: Harness persists state to `.squidsquad/.harness-state.json`. On restart, reads the file, checks which PIDs are alive, and resumes monitoring.
@@ -937,8 +1251,8 @@ These instructions apply to ALL agents on this project.
 
 ### Agent Infrastructure
 
-- **Harness manages agent lifecycle**: PID monitoring (primary), `.health` file (legacy fallback). Intent state machine via REST API (#4966).
-- **Agent lifecycle via `start_team.py`**: Agents do not manage their own or other agents' processes.
+- **Harness manages agent lifecycle**: PID monitoring via `.claude-pid` (sole liveness signal). Intent state machine via REST API (#4966).
+- **Agent lifecycle via `squidsquad_cli.py`** (with `start_team.py` as a backward-compatible shim): Agents do not manage their own or other agents' processes.
 - **Context pressure restart via `cycle_post.py`**: Mechanical detection, agents don't set `restart_needed`.
 
 ### Planning & Verification
