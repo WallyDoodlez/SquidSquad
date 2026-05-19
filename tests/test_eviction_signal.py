@@ -260,7 +260,10 @@ class TestEventPollEvictionWarning(unittest.TestCase):
                 emitted = list(result)
         return captured_stdout.getvalue(), captured_stderr.getvalue(), emitted
 
-    def test_eviction_warning_emitted_to_stderr(self):
+    def test_eviction_warning_matches_locked_format(self):
+        """CONTEXT-9331 §4 locks the stderr warning text so QA's
+        grep-based assertions remain stable. Any reword must update
+        both this test AND CONTEXT-9331 §4."""
         payload = {
             "events": [
                 {"id": "e7", "event_type": "status-transition", "role": "skill"},
@@ -273,10 +276,16 @@ class TestEventPollEvictionWarning(unittest.TestCase):
         }
         stdout, stderr, emitted = self._run_poll_with_payload(payload)
 
-        self.assertIn("EVICTION", stderr)
-        self.assertIn("e7", stderr, msg="warning must name oldest_id anchor")
-        self.assertIn("42", stderr, msg="warning must name hint")
-        # Exactly one warning per response.
+        expected_line = (
+            "[event_poll] EVICTION: cursor predates retained window — "
+            "advancing to e7, ~42 events evicted"
+        )
+        self.assertIn(
+            expected_line, stderr,
+            msg=f"stderr did not contain the locked warning line.\n"
+                f"got: {stderr!r}\nexpected substring: {expected_line!r}",
+        )
+        # Exactly one warning per response, not once per event.
         self.assertEqual(stderr.count("EVICTION"), 1)
 
         # Events still flow through stdout normally.

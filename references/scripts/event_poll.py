@@ -221,10 +221,13 @@ def poll(role, since=None, limit=50, target_mode=False,
                 # >= oldest_id).
                 oldest_id = payload.get("oldest_id")
                 hint = payload.get("evicted_count_hint")
+                # Locked format per CONTEXT-9331 §4 — kept verbatim so
+                # QA's grep-based assertions stay deterministic across
+                # rewords.
                 print(
                     f"[event_poll] EVICTION: cursor predates retained "
-                    f"window — re-anchoring to {oldest_id}, ~{hint} "
-                    f"events have rolled off the deque since boot",
+                    f"window — advancing to {oldest_id}, "
+                    f"~{hint} events evicted",
                     file=sys.stderr,
                 )
                 if oldest_id and not _write_cursor_atomic(role, str(oldest_id)):
