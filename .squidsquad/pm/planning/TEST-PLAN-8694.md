@@ -226,10 +226,13 @@ Add under `tests/integration/test_event_mode_e2e.py` (skip with `@pytest.mark.in
 
 ### 4.9 In-stream gap (CONTEXT §2 first gap scenario) — IT-CursorGapInStream
 
-1. Start harness; emit a sequence of events with ids `[1, 2, 3, 5, 6]` (intentional gap at 4 — small missing range within the retained window; the deque has NOT rolled).
-2. Pre-set agent `Last Processed Event ID` to `2`.
-3. Boot agent; let `event_poll.py` poll forward.
-4. Assert: (a) agent logs a **warning** naming the missing event id (`4`), (b) cursor is advanced past the gap (eventually reaches `6`), (c) agent does NOT crash, (d) forge-read on next decision recovers any state that the missing event would have implied.
+**DEFERRED — not implementable as written.** Event ids in `harness.py` are `os.urandom(4).hex()` (random 8-char hex, see harness.py:1920) — there is no monotonic sequence, so an agent has no way to detect that "event 4" is missing between observed ids. Only eviction gaps (deque rollover, §4.4) are detectable.
+
+Resolution required before this scenario can ship — handled out-of-band on a follow-up task:
+- **Option A**: Update CONTEXT-8694.md §2 to remove the in-stream gap scenario (only eviction-gap remains). Simpler; aligns with current id model.
+- **Option B**: Switch harness event ids to monotonic ints, then implement gap-detection in event_poll.py. Larger change; gives the agent a stronger guarantee but adds harness complexity.
+
+This scenario is dropped from #8999's scope. A follow-up task tracks the CONTEXT-vs-code decision.
 
 ### 4.10 Long cursor lag (CONTEXT §2 second gap scenario) — IT-CursorLongLag
 
@@ -525,7 +528,7 @@ These are forwarded to the human/PM rather than answered here.
 | §3.7 (Comments + DM exception) | 4.7, CQ Q5, Q6 |
 | §5.1 deliverables (transition-on-handoff) | 4.6, CQ Q8 |
 | §2 (cursor atomic write) | 3.5, 6.4, CQ Q9 |
-| §2 (in-stream gap) | 4.9 (IT-CursorGapInStream) |
+| §2 (in-stream gap) | 4.9 (deferred — see §4.9 note) |
 | §2 (long cursor lag) | 4.10 (IT-CursorLongLag) |
 | §2 (eviction gap) | 4.4, §9.2 Probe B |
 | §11 (degraded mode boot-only) | 6.3, §9.2 Probe A |
