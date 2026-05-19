@@ -30,3 +30,5 @@
 - §5.1 cleanup must run SYNCHRONOUSLY on the lifespan thread before `state.start_poller()` and the `_deferred_init` thread spawn — DeepSeek r1 caught the race where placing it inside `_deferred_init` could let the legacy `.health` fallback fire on a stale file. Source-grep guard test pins the ordering.
 - §5.1 unlink path: skip non-existent up front + `unlink(missing_ok=True)` — the TOCTOU window where another process unlinks between exists() and unlink() still counts as a removal (post-condition satisfied).
 - §5.6: function rename `_do_stop_after_cycle_check` → `_check_harness_intent` deferred — CONTEXT-4792.md §5.6 calls it optional/low priority, and it touches the call site + any tests; not worth bundling into a comment-refresh commit.
+
+- **Vault Writes This Cycle**: 1
