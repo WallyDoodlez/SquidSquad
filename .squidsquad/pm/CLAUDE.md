@@ -1324,6 +1324,16 @@ Continue until all questions are resolved. Capture decisions in `.squidsquad/pm/
 
 **Open in editor**: After CONTEXT.md is created, offer to open it (see "Open Artifacts in Editor" below).
 
+**Sync issue body when CONTEXT scope is (re)written** (#8917 Change 1): When Phase 2 (deepseek review, discussion locks, scope discussion) rewrites scope on `CONTEXT.md` (or per-task `CONTEXT-<NUMBER>.md`), the corresponding GitHub Issue body MUST be updated in the same PM step. Use `gh issue edit <N> --body-file <new-body>`. The issue body and CONTEXT.md must always agree at the time of the `planned → approved` transition.
+
+Every issue body that has a planning artifact MUST lead with an **AUTHORITATIVE SCOPE banner** pointing at the locked planning file:
+
+```
+> **AUTHORITATIVE SCOPE: `.squidsquad/pm/planning/CONTEXT.md §5.X` (or `CONTEXT-<NUMBER>.md`). Read that artifact in full. The bullets below are a summary; the planning artifact is the contract.**
+```
+
+The banner is required on every issue with a CONTEXT file — at issue creation time (Phase 3 §A below), and on every Phase 2 scope rewrite thereafter.
+
 **Design routing**: If a `designer` agent is configured (check `config.md` Dev Agents list for `designer`), ask the human if this task needs design work using `AskUserQuestion`:
 
 ```
@@ -1400,6 +1410,11 @@ If any answer is unclear, the AC is incomplete — refine before filing.
 - Acceptance criteria include edge case handling and side effect mitigations
 - Acceptance criteria verified against the AC Integration Check above
 - References RESEARCH.md and CONTEXT.md
+- **AUTHORITATIVE SCOPE banner at the start of the body** (#8917 Change 3): when the task has a `CONTEXT.md` (bundle `§5.X #<NUMBER>`) or `CONTEXT-<NUMBER>.md`, the body passed to `create-task` MUST start with the banner pointing at that locked planning file. Format:
+  ```
+  > **AUTHORITATIVE SCOPE: `.squidsquad/pm/planning/CONTEXT-<NUMBER>.md` (or `CONTEXT.md §5.X`). Read that artifact in full. The bullets below are a summary; the planning artifact is the contract.**
+  ```
+  Phase 2 (above) keeps the banner + body bullets in sync on every later scope rewrite; this rule places the banner from the start.
 
 **B) Test plan** — route to the configured model for test plan drafting:
 
@@ -1542,11 +1557,16 @@ To approve a task for planning:
 3. Update status to `Planning` (NOT `Approved`) and begin the Task Intake Process.
 4. After all planning phases complete (RESEARCH.md, CONTEXT.md, TEST-PLAN.md created), update status to `Planned` (NOT `Approved`).
 5. Present the completed plan to the human. Wait for explicit execution approval ("approved", "go", "build it", etc.).
-6. Only after human explicitly approves execution, update status to `Approved`.
+6. **Pre-approval body-vs-CONTEXT sync check** (#8917 Change 2): Before transitioning any task `planned → approved`:
+   1. Read the corresponding CONTEXT section: bundle `CONTEXT.md` `### 5.X #<NUMBER>` heading OR the full `CONTEXT-<NUMBER>.md`. Focus on `## Scope`, `## Locked Decisions`, and `## Out of Scope`.
+   2. Read the GitHub issue body: `gh issue view <N> --json body`.
+   3. Compare the body's scope bullets against those three CONTEXT sections (structured comparison, NOT a raw text diff — the body and CONTEXT intentionally have different formats). If any **locked decision** or **scope boundary** is missing, outdated, or contradicted in the body, update the body via `gh issue edit <N> --body-file <new-body>` BEFORE the transition.
+   4. Confirmation: re-read `gh issue view <N> --json body`; the AUTHORITATIVE SCOPE banner is present AND the body bullets are consistent with the CONTEXT sections.
+7. Only after human explicitly approves execution AND the pre-approval body-vs-CONTEXT check is clean, update status to `Approved`.
 
 Light mode (trivial tasks): PM can fast-track through planning with abbreviated research, but status still transitions through `Planning` → `Planned` → `Approved`.
 
-Do not set status to `Approved` without human explicitly approving execution. Do not skip the `Planned` state — it is the human's review gate between planning and execution.
+Do not set status to `Approved` without human explicitly approving execution. Do not skip the `Planned` state — it is the human's review gate between planning and execution. Do not skip the pre-approval body-vs-CONTEXT sync — the body is what skill reads on pickup; if it disagrees with the locked CONTEXT, the task will be implemented to a stale contract.
 <!-- /sub-skill: task-approval -->
 
 ---

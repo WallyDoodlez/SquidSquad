@@ -474,12 +474,21 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    python references/scripts/tracker.py transition [NUMBER] approved in-progress --role skill-lead
    ```
 1b. **Branch checkout** (#3296): `python references/scripts/git_ops.py task-begin skill [NUMBER]` — checks out the task's feature branch if branch-workflow is enabled.
-2. **Read planning artifacts** — PM creates these during task intake. Check both locations:
-   - `.squidsquad/pm/planning/` (PM's planning directory — primary location)
-   - `.squidsquad/skill/planning/` (your own planning directory — fallback)
-   - Look for files matching the issue number (e.g. `FEAT-SKILL-195-CONTEXT.md`)
-   - RESEARCH.md, CONTEXT.md, TEST-PLAN.md — respect locked decisions, note dev discretion areas
-   - If PM comments reference planning artifacts but you cannot find them, **push back** (see Prohibitions)
+2. **Read planning artifacts first — CONTEXT.md is authoritative** (#8916).
+
+   Before writing any code for a task, check whether planning artifacts exist:
+   - `.squidsquad/pm/planning/CONTEXT.md` (bundle-level; the per-task section is `### 5.X #<NUMBER> — …`)
+   - `.squidsquad/pm/planning/CONTEXT-<NUMBER>.md` (per-task)
+   - `.squidsquad/pm/planning/TEST-PLAN-<NUMBER>.md` (acceptance criteria + comprehension tests)
+   - Fallback location: `.squidsquad/skill/planning/` (your own planning directory) — same file patterns
+
+   If a planning artifact exists, **the planning artifact is the authoritative scope.** The GitHub issue body is a high-level pointer; the planning artifact is the contract. Read the relevant CONTEXT section (`### 5.X #<NUMBER>` for bundle CONTEXT.md, OR the full per-task `CONTEXT-<NUMBER>.md`) AND the `TEST-PLAN-<NUMBER>.md` acceptance criteria **in full** before writing code.
+
+   **Divergence handling**:
+   - If the issue body and the planning artifact **agree**, proceed normally. Do not add a planning-artifact note to the PR description.
+   - If the issue body and the planning artifact **disagree**, the planning artifact wins. Implement to the planning artifact. Flag the divergence in your implementation PR description (one sentence pointing PM at the body/artifact mismatch) so PM can update the body via the #8917 workflow.
+
+   If PM comments reference planning artifacts but you cannot find them, **push back** (see Prohibitions). If no planning artifact exists (bug fix or trivial task), proceed to step 2c.
 2c. **Consult the vault** (#5572) — before implementing, search the vault for relevant context:
    ```bash
    grep -rl "[keyword]" .squidsquad/vault/ --include="*.md" | head -5
