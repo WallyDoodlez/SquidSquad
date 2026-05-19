@@ -144,6 +144,10 @@ class HarnessState:
         self.agents: dict[str, AgentState] = {}
         self.start_time = time.time()
         self.port = DEFAULT_PORT
+        # #9243: code_version probed once at boot, cached. Includes
+        # squidsquad_version, git_sha, git_branch, git_dirty — see
+        # compute_code_version(). Stays None until lifespan fills it.
+        self.code_version = None
         self._lock = threading.Lock()
         self._poller_running = False
         self._poller_thread = None
@@ -707,6 +711,69 @@ def _log(msg: str):
 
 
 # ---------------------------------------------------------------------------
+# Code-version probe (#9243) — read once at boot, cache for /status + /
+# ---------------------------------------------------------------------------
+
+
+def _read_squidsquad_version():
+    """Read `SquidSquad Version` from config.md. Returns the value string or
+    None if config.md is missing or the field is absent. Never raises."""
+    try:
+        cfg = SQUIDSQUAD_DIR / "config.md"
+        for line in cfg.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("- **SquidSquad Version**:"):
+                return stripped.split(":", 1)[1].strip()
+    except (OSError, UnicodeDecodeError):
+        pass
+    return None
+
+
+def _git_probe(args):
+    """Run `git <args>` in REPO_ROOT and return stripped stdout, or None on
+    any failure (no git, not a repo, non-zero exit). Never raises."""
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=2,
+            check=False,
+        )
+    except Exception:
+        # "Never raises" boot-time contract — catch broadly so a stray
+        # ValueError / malformed args / locale glitch on Windows cannot
+        # bring down the lifespan probe.
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
+
+
+def compute_code_version():
+    """Probe squidsquad version + git state once at boot. All fields
+    individually fall back to `None` on failure so a non-git environment or
+    missing config.md still produces a stable response shape."""
+    version = _read_squidsquad_version()
+    sha = _git_probe(["rev-parse", "--short=8", "HEAD"])
+    branch = _git_probe(["rev-parse", "--abbrev-ref", "HEAD"])
+    porcelain = _git_probe(["status", "--porcelain"])
+    if porcelain is None:
+        dirty = None
+    else:
+        dirty = bool(porcelain)
+    return {
+        "squidsquad_version": version,
+        "git_sha": sha,
+        "git_branch": branch,
+        "git_dirty": dirty,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Legacy-sentinel cleanup (#4792 Phase 2 §5.1)
 # ---------------------------------------------------------------------------
 
@@ -767,6 +834,16 @@ def _cleanup_legacy_sentinels(clone_paths):
 async def lifespan(app: FastAPI):
     """Startup and shutdown hooks."""
     _log(f"Harness starting on port {state.port}...")
+
+    # #9243: Probe code version once at boot. Each field falls back to None
+    # on failure (no git, missing config.md) — never blocks startup.
+    state.code_version = compute_code_version()
+    cv = state.code_version
+    _log(
+        f"Code version: squidsquad={cv['squidsquad_version']} "
+        f"git_sha={cv['git_sha']} branch={cv['git_branch']} "
+        f"dirty={cv['git_dirty']}"
+    )
 
     # --- Verify agent clones ---
     _log("Verifying agent clones...")
@@ -941,14 +1018,33 @@ async def get_status():
     """Harness + all agent health."""
     state.update_health()
     uptime = int(time.time() - state.start_time)
+    # #9243: include code_version + boot_time_iso so operators can verify
+    # which code is actually running without a restart probe.
+    cv = state.code_version if state.code_version is not None else compute_code_version()
+    code_version = dict(cv)
+    code_version["boot_time_iso"] = time.strftime(
+        "%Y-%m-%dT%H:%M:%SZ", time.gmtime(state.start_time)
+    )
     return {
         "harness": {
             "status": "running",
             "port": state.port,
             "uptime_seconds": uptime,
             "uptime_human": f"{uptime // 3600}h {(uptime % 3600) // 60}m {uptime % 60}s",
+            "code_version": code_version,
         },
         "agents": state.all_agents(),
+    }
+
+
+@app.get("/")
+async def get_root():
+    """Slim liveness/version probe (#9243). Replaces the default 404."""
+    cv = state.code_version if state.code_version is not None else compute_code_version()
+    return {
+        "service": "squidsquad-harness",
+        "version": cv.get("squidsquad_version"),
+        "git_sha": cv.get("git_sha"),
     }
 
 
