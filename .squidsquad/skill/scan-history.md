@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-19 08:04
+
+- **Files scanned**: references/scripts/event_poll.py, references/roles/{dev,dm,pm,qa}/includes-events.yml
+- **Findings**: none (event_poll.py cursor/backoff/error paths are well-tested and consistent with l1-base.md ownership rules; all 4 event-mode manifests are symmetric with their polling-mode counterparts and reference existing sub-skills)
+- **Items rejected by human**: n/a
+
 ## Scan — 2026-05-16 23:04
 
 - **Files scanned**: references/scripts/cycle_post.py, references/scripts/thin_launcher.py, references/scripts/git_ops.py
