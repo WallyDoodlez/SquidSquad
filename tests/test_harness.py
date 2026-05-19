@@ -153,6 +153,578 @@ class TestStatePersistence(unittest.TestCase):
                         "save_state must hold lock during disk write (#7441)")
 
 
+class TestIntentSetAt(unittest.TestCase):
+    """#4792 Phase 1 (#8979): intent_set_at field + persistence + migration."""
+
+    def test_initial_intent_set_at_is_none(self):
+        from harness import AgentState
+        agent = AgentState("skill")
+        self.assertIsNone(agent.intent_set_at)
+
+    def test_to_dict_includes_intent_set_at(self):
+        from harness import AgentState
+        agent = AgentState("skill")
+        agent.intent = AgentState.INTENT_STOPPING
+        agent.intent_set_at = 1234.5
+        d = agent.to_dict()
+        self.assertEqual(d["intent_set_at"], 1234.5)
+
+    def test_save_state_persists_intent_set_at(self):
+        """save_state must include intent_set_at in the JSON."""
+        import tempfile
+        from harness import HarnessState, AgentState
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".harness-state.json"
+            with patch("harness.HARNESS_STATE_FILE", state_file):
+                hs = HarnessState()
+                agent = AgentState("skill", "/p")
+                agent.intent = AgentState.INTENT_STOPPING
+                agent.intent_set_at = 1700.0
+                hs.set_agent("skill", agent)
+                hs.save_state()
+                data = json.loads(state_file.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    data["agents"]["skill"]["intent_set_at"], 1700.0,
+                )
+
+    def test_load_state_round_trips_intent_set_at(self):
+        """A state file written by save_state loads back with intent_set_at."""
+        import tempfile
+        from harness import HarnessState, AgentState
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".harness-state.json"
+            with patch("harness.HARNESS_STATE_FILE", state_file):
+                hs = HarnessState()
+                agent = AgentState("pm")
+                agent.intent = AgentState.INTENT_RESTARTING
+                agent.intent_set_at = 555.0
+                hs.set_agent("pm", agent)
+                hs.save_state()
+
+                hs2 = HarnessState()
+                with patch("harness._log"):
+                    hs2.load_state()
+                loaded = hs2.get_agent("pm")
+                self.assertEqual(loaded.intent_set_at, 555.0)
+
+    def test_load_state_migrates_legacy_stopping_without_intent_set_at(self):
+        """Legacy state file: intent=STOPPING but no intent_set_at field.
+
+        Per CONTEXT-4792.md §5.1 case (a): seed with time.time() so the
+        force-kill clock starts now rather than firing immediately.
+        """
+        import tempfile
+        from harness import HarnessState, AgentState
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".harness-state.json"
+            legacy = {
+                "harness_pid": 1,
+                "start_time": 0.0,
+                "port": 7373,
+                "agents": {
+                    "skill": {
+                        "intent": "stopping",
+                        "status": "running",
+                        "boot_time": None,
+                        "clone_path": "",
+                        "claude_pid": None,
+                        "terminal_pid": None,
+                        # NB: no intent_set_at key
+                    }
+                },
+            }
+            state_file.write_text(json.dumps(legacy), encoding="utf-8")
+            with patch("harness.HARNESS_STATE_FILE", state_file), \
+                 patch("harness._log"), \
+                 patch("harness.time.time", return_value=9999.0):
+                hs = HarnessState()
+                hs.load_state()
+                loaded = hs.get_agent("skill")
+                self.assertEqual(loaded.intent_set_at, 9999.0)
+
+    def test_load_state_migrates_legacy_restarting_without_intent_set_at(self):
+        """Same migration applies to RESTARTING intent (Q7 PM lock)."""
+        import tempfile
+        from harness import HarnessState, AgentState
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".harness-state.json"
+            legacy = {
+                "harness_pid": 1, "start_time": 0.0, "port": 7373,
+                "agents": {
+                    "qa": {"intent": "restarting", "status": "running",
+                           "boot_time": None, "clone_path": "",
+                           "claude_pid": None, "terminal_pid": None},
+                },
+            }
+            state_file.write_text(json.dumps(legacy), encoding="utf-8")
+            with patch("harness.HARNESS_STATE_FILE", state_file), \
+                 patch("harness._log"), \
+                 patch("harness.time.time", return_value=4242.0):
+                hs = HarnessState()
+                hs.load_state()
+                self.assertEqual(hs.get_agent("qa").intent_set_at, 4242.0)
+
+    def test_load_state_preserves_none_for_running_intent(self):
+        """Legacy state with intent=RUNNING and no intent_set_at must NOT
+        be seeded — the migration only applies to STOPPING/RESTARTING."""
+        import tempfile
+        from harness import HarnessState
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".harness-state.json"
+            state_file.write_text(json.dumps({
+                "harness_pid": 1, "start_time": 0.0, "port": 7373,
+                "agents": {
+                    "dm": {"intent": "running", "status": "running",
+                           "boot_time": None, "clone_path": "",
+                           "claude_pid": None, "terminal_pid": None},
+                },
+            }), encoding="utf-8")
+            with patch("harness.HARNESS_STATE_FILE", state_file), \
+                 patch("harness._log"):
+                hs = HarnessState()
+                hs.load_state()
+                self.assertIsNone(hs.get_agent("dm").intent_set_at)
+
+    def test_load_state_loads_present_intent_set_at_as_is(self):
+        """A state file with intent_set_at present loads as-is — no seed."""
+        import tempfile
+        from harness import HarnessState
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".harness-state.json"
+            state_file.write_text(json.dumps({
+                "harness_pid": 1, "start_time": 0.0, "port": 7373,
+                "agents": {
+                    "skill": {"intent": "stopping",
+                              "intent_set_at": 1234.5,
+                              "status": "running", "boot_time": None,
+                              "clone_path": "", "claude_pid": None,
+                              "terminal_pid": None},
+                },
+            }), encoding="utf-8")
+            with patch("harness.HARNESS_STATE_FILE", state_file), \
+                 patch("harness._log"), \
+                 patch("harness.time.time", return_value=9999.0):
+                hs = HarnessState()
+                hs.load_state()
+                self.assertEqual(
+                    hs.get_agent("skill").intent_set_at, 1234.5,
+                )
+
+    def test_stop_agent_endpoint_sets_intent_set_at(self):
+        """POST /agents/{role}/stop writes intent_set_at."""
+        import asyncio
+        from harness import state, AgentState
+        try:
+            from harness import stop_agent
+        except ImportError:
+            self.skipTest("stop_agent endpoint not exported")
+        state.agents.clear()
+        state.set_agent("skill", AgentState("skill", "/p"))
+        with patch("harness.time.time", return_value=7777.0), \
+             patch.object(state, "save_state"):
+            asyncio.run(stop_agent("skill"))
+        self.assertEqual(state.get_agent("skill").intent_set_at, 7777.0)
+
+    def test_load_state_distinguishes_explicit_null_from_absent_key(self):
+        """Iter-1 finding 3: explicit `null` for intent_set_at on a STOPPING
+        agent must NOT trigger the legacy-migration seed. Only an absent key
+        seeds. CONTEXT-4792.md §5.1 case (b): present file → load as-is."""
+        import tempfile
+        from harness import HarnessState
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".harness-state.json"
+            state_file.write_text(json.dumps({
+                "harness_pid": 1, "start_time": 0.0, "port": 7373,
+                "agents": {
+                    "skill": {"intent": "stopping",
+                              "intent_set_at": None,  # explicit null
+                              "status": "running", "boot_time": None,
+                              "clone_path": "", "claude_pid": None,
+                              "terminal_pid": None},
+                },
+            }), encoding="utf-8")
+            with patch("harness.HARNESS_STATE_FILE", state_file), \
+                 patch("harness._log"), \
+                 patch("harness.time.time", return_value=9999.0):
+                hs = HarnessState()
+                hs.load_state()
+                self.assertIsNone(
+                    hs.get_agent("skill").intent_set_at,
+                    "explicit null must NOT be replaced by the migration seed",
+                )
+
+    def test_ack_stop_confirmed_guarded_by_stopping_intent(self):
+        """Iter-1 finding 4 + iter-2 findings 2/3: a stale stop-confirmed
+        ack must NOT overwrite intent when the agent has moved on to
+        RUNNING/RESTARTING/STOPPED, and must NOT reset intent_set_at when
+        intent is already STOPPING (which would extend the 60s force-kill
+        window indefinitely per CONTEXT-4792.md §3.3)."""
+        import inspect
+        from harness import receive_event
+        src = inspect.getsource(receive_event)
+        assert "stop-confirmed" in src
+        # The guard must be == STOPPING (the only state where ack is valid),
+        # not the iter-1 weaker `!= RESTARTING`.
+        assert "agent.intent == AgentState.INTENT_STOPPING" in src, (
+            "stop-confirmed handler must require intent == STOPPING"
+        )
+        # And it must NOT contain a `intent_set_at = time.time()` inside the
+        # ack branch — that would reset the force-kill clock on every ack.
+        # Locate the stop-confirmed block and assert no clock-reset inside.
+        idx = src.find("stop-confirmed")
+        block = src[idx:idx + 600]
+        assert "intent_set_at = time.time()" not in block, (
+            "stop-confirmed ack must not reset intent_set_at — it is set "
+            "at stop-REQUEST time, not at ack time"
+        )
+
+    def test_restart_agent_endpoint_sets_intent_set_at(self):
+        import asyncio
+        from harness import state, AgentState
+        try:
+            from harness import restart_agent
+        except ImportError:
+            self.skipTest("restart_agent endpoint not exported")
+        state.agents.clear()
+        state.set_agent("pm", AgentState("pm", "/p"))
+        with patch("harness.time.time", return_value=8888.0), \
+             patch.object(state, "save_state"), \
+             patch("harness.boot_remote"):
+            try:
+                asyncio.run(restart_agent("pm"))
+            except Exception:
+                # Endpoint may try to reach boot helpers we don't fully stub —
+                # that's fine, we only care that intent_set_at was written
+                # before the failure point.
+                pass
+        self.assertEqual(state.get_agent("pm").intent_set_at, 8888.0)
+
+
+class TestForceKillSafetyNet(unittest.TestCase):
+    """#4792 Phase 1 / Q7: when intent is STOPPING/RESTARTING for longer
+    than FORCE_KILL_TIMEOUT_SECONDS and the claude PID is still alive,
+    update_health must kill the PID. CONTEXT-4792.md §3.3."""
+
+    def _set_up_state(self, intent, elapsed_seconds, pid=12345):
+        """Configure HarnessState with one agent in the given intent for
+        `elapsed_seconds`. Returns (state, agent, fake_now)."""
+        from harness import HarnessState, AgentState
+        hs = HarnessState()
+        agent = AgentState("skill", "/clone")
+        agent.intent = intent
+        agent.intent_set_at = 1000.0
+        agent.claude_pid = pid
+        agent.status = "running"
+        hs.set_agent("skill", agent)
+        fake_now = 1000.0 + elapsed_seconds
+        return hs, agent, fake_now
+
+    def _patch_environment(self, fake_now, pid_alive=True):
+        """Patch boot_remote and time so update_health runs deterministically."""
+        return [
+            patch("harness.boot_remote._get_all_roles",
+                  return_value=["skill"]),
+            patch("harness.boot_remote._get_clone_path",
+                  return_value="/clone"),
+            patch("harness.boot_remote._is_process_alive",
+                  return_value=pid_alive),
+            patch("harness.time.time", return_value=fake_now),
+            patch("harness._log"),
+        ]
+
+    def _run_health(self, hs, patches):
+        for p in patches:
+            p.start()
+        try:
+            hs.update_health()
+        finally:
+            for p in patches:
+                p.stop()
+
+    def test_stopping_with_alive_pid_past_timeout_force_kills(self):
+        from harness import AgentState, FORCE_KILL_TIMEOUT_SECONDS
+        hs, agent, fake_now = self._set_up_state(
+            AgentState.INTENT_STOPPING,
+            elapsed_seconds=FORCE_KILL_TIMEOUT_SECONDS + 5,
+        )
+        patches = self._patch_environment(fake_now, pid_alive=True)
+        with patch("harness.reboot_agent._kill_process") as kill:
+            for p in patches:
+                p.start()
+            try:
+                hs.update_health()
+            finally:
+                for p in patches:
+                    p.stop()
+        kill.assert_called_once_with(12345)
+
+    def test_restarting_with_alive_pid_past_timeout_force_kills(self):
+        from harness import AgentState, FORCE_KILL_TIMEOUT_SECONDS
+        hs, agent, fake_now = self._set_up_state(
+            AgentState.INTENT_RESTARTING,
+            elapsed_seconds=FORCE_KILL_TIMEOUT_SECONDS + 1,
+        )
+        patches = self._patch_environment(fake_now, pid_alive=True)
+        with patch("harness.reboot_agent._kill_process") as kill:
+            for p in patches:
+                p.start()
+            try:
+                hs.update_health()
+            finally:
+                for p in patches:
+                    p.stop()
+        kill.assert_called_once_with(12345)
+
+    def test_stopping_within_timeout_does_not_force_kill(self):
+        """Cooperative window — the safety net must NOT fire before the
+        timeout elapses."""
+        from harness import AgentState, FORCE_KILL_TIMEOUT_SECONDS
+        hs, agent, fake_now = self._set_up_state(
+            AgentState.INTENT_STOPPING,
+            elapsed_seconds=FORCE_KILL_TIMEOUT_SECONDS - 5,
+        )
+        patches = self._patch_environment(fake_now, pid_alive=True)
+        with patch("harness.reboot_agent._kill_process") as kill:
+            for p in patches:
+                p.start()
+            try:
+                hs.update_health()
+            finally:
+                for p in patches:
+                    p.stop()
+        kill.assert_not_called()
+
+    def test_running_intent_never_force_kills(self):
+        """Even with a stale intent_set_at, intent=RUNNING must never trigger
+        a kill — the safety net is scoped to STOPPING/RESTARTING."""
+        from harness import AgentState, FORCE_KILL_TIMEOUT_SECONDS
+        hs, agent, fake_now = self._set_up_state(
+            AgentState.INTENT_RUNNING,
+            elapsed_seconds=FORCE_KILL_TIMEOUT_SECONDS + 100,
+        )
+        # RUNNING agents have intent_set_at=None per the data-model rule,
+        # but the safety net must defend against a misplaced value too.
+        patches = self._patch_environment(fake_now, pid_alive=True)
+        with patch("harness.reboot_agent._kill_process") as kill:
+            for p in patches:
+                p.start()
+            try:
+                hs.update_health()
+            finally:
+                for p in patches:
+                    p.stop()
+        kill.assert_not_called()
+
+    def test_no_intent_set_at_does_not_force_kill(self):
+        """A missing intent_set_at on STOPPING/RESTARTING must NOT fire the
+        kill — the clock is not yet started. (Could happen briefly during
+        a state-file write race; treat conservatively.)"""
+        from harness import AgentState
+        hs, agent, fake_now = self._set_up_state(
+            AgentState.INTENT_STOPPING, elapsed_seconds=0,
+        )
+        agent.intent_set_at = None
+        patches = self._patch_environment(fake_now, pid_alive=True)
+        with patch("harness.reboot_agent._kill_process") as kill:
+            for p in patches:
+                p.start()
+            try:
+                hs.update_health()
+            finally:
+                for p in patches:
+                    p.stop()
+        kill.assert_not_called()
+
+    def test_dead_pid_does_not_force_kill(self):
+        """If the claude PID is already dead, no kill is needed."""
+        from harness import AgentState, FORCE_KILL_TIMEOUT_SECONDS
+        hs, agent, fake_now = self._set_up_state(
+            AgentState.INTENT_STOPPING,
+            elapsed_seconds=FORCE_KILL_TIMEOUT_SECONDS + 10,
+        )
+        patches = self._patch_environment(fake_now, pid_alive=False)
+        with patch("harness.reboot_agent._kill_process") as kill:
+            for p in patches:
+                p.start()
+            try:
+                hs.update_health()
+            finally:
+                for p in patches:
+                    p.stop()
+        kill.assert_not_called()
+
+    def test_force_kill_clears_intent_set_at(self):
+        """After firing, intent_set_at must be cleared so the kill is not
+        re-logged every 5s while the OS reaps the process."""
+        from harness import AgentState, FORCE_KILL_TIMEOUT_SECONDS
+        hs, agent, fake_now = self._set_up_state(
+            AgentState.INTENT_STOPPING,
+            elapsed_seconds=FORCE_KILL_TIMEOUT_SECONDS + 5,
+        )
+        patches = self._patch_environment(fake_now, pid_alive=True)
+        with patch("harness.reboot_agent._kill_process"):
+            for p in patches:
+                p.start()
+            try:
+                hs.update_health()
+            finally:
+                for p in patches:
+                    p.stop()
+        self.assertIsNone(hs.get_agent("skill").intent_set_at)
+
+    def test_force_kill_swallows_kill_exceptions(self):
+        """If _kill_process raises (already-dead, permission, etc.), the
+        safety net must NOT propagate — the OS will reap on the next poll."""
+        from harness import AgentState, FORCE_KILL_TIMEOUT_SECONDS
+        hs, agent, fake_now = self._set_up_state(
+            AgentState.INTENT_STOPPING,
+            elapsed_seconds=FORCE_KILL_TIMEOUT_SECONDS + 5,
+        )
+        patches = self._patch_environment(fake_now, pid_alive=True)
+        with patch("harness.reboot_agent._kill_process",
+                   side_effect=OSError("boom")):
+            for p in patches:
+                p.start()
+            try:
+                hs.update_health()  # must not raise
+            finally:
+                for p in patches:
+                    p.stop()
+        # intent_set_at is still cleared on best-effort attempt
+        self.assertIsNone(hs.get_agent("skill").intent_set_at)
+
+
+class TestIntentSetAtRepeatRequestIsIdempotent(unittest.TestCase):
+    """#4792 Phase 1 iter-4: repeated stop/restart requests on an already
+    -STOPPING/-RESTARTING agent must NOT reset intent_set_at — that would
+    extend the 60s force-kill window indefinitely under operator spam."""
+
+    def test_stop_agent_on_already_stopping_does_not_reset_timestamp(self):
+        import asyncio
+        from harness import state, AgentState, stop_agent
+        state.agents.clear()
+        agent = AgentState("skill", "/p")
+        agent.intent = AgentState.INTENT_STOPPING
+        agent.intent_set_at = 1000.0  # original stop time
+        state.set_agent("skill", agent)
+        with patch("harness.time.time", return_value=9999.0), \
+             patch.object(state, "save_state"):
+            asyncio.run(stop_agent("skill"))
+        # Timestamp must stay at the original stop time (1000.0), NOT update
+        # to 9999.0 from the second request.
+        self.assertEqual(state.get_agent("skill").intent_set_at, 1000.0)
+
+    def test_restart_agent_on_already_restarting_does_not_reset_timestamp(self):
+        import asyncio
+        from harness import state, AgentState, restart_agent
+        state.agents.clear()
+        agent = AgentState("skill", "/p")
+        agent.intent = AgentState.INTENT_RESTARTING
+        agent.intent_set_at = 1000.0
+        state.set_agent("skill", agent)
+        with patch("harness.time.time", return_value=9999.0), \
+             patch.object(state, "save_state"), \
+             patch("harness.boot_remote"):
+            try:
+                asyncio.run(restart_agent("skill"))
+            except Exception:
+                pass
+        self.assertEqual(state.get_agent("skill").intent_set_at, 1000.0)
+
+    def test_stop_agent_on_running_records_fresh_timestamp(self):
+        """Regression guard: the idempotence fix must NOT break the
+        first-stop-records-timestamp behavior."""
+        import asyncio
+        from harness import state, AgentState, stop_agent
+        state.agents.clear()
+        agent = AgentState("skill", "/p")
+        agent.intent = AgentState.INTENT_RUNNING
+        agent.intent_set_at = None
+        state.set_agent("skill", agent)
+        with patch("harness.time.time", return_value=9999.0), \
+             patch.object(state, "save_state"):
+            asyncio.run(stop_agent("skill"))
+        self.assertEqual(state.get_agent("skill").intent_set_at, 9999.0)
+        self.assertEqual(state.get_agent("skill").intent,
+                         AgentState.INTENT_STOPPING)
+
+
+class TestIntentSetAtClearing(unittest.TestCase):
+    """#4792 Phase 1: intent_set_at must reset to None on every transition
+    to RUNNING or STOPPED, so the upcoming force-kill safety net never sees
+    a stale timestamp on a healthy or terminally-stopped agent.
+
+    Tests verify the source contains the clear at the 5 sites identified in
+    iter-1 finding 1, rather than driving the full update_health loop (which
+    pulls in boot_remote / file-system / health-check plumbing this unit
+    test does not need).
+    """
+
+    def test_update_health_clears_intent_set_at_on_restart_complete(self):
+        """RESTARTING → RUNNING transition (alive branch) clears the field."""
+        import inspect
+        from harness import HarnessState
+        src = inspect.getsource(HarnessState.update_health)
+        # Find the specific assignment `agent.intent = AgentState.INTENT_RUNNING`
+        # in the alive-branch RESTARTING handler (NOT the tuple membership
+        # check in the force-kill safety net).
+        marker = "agent.intent = AgentState.INTENT_RUNNING"
+        idx = src.find(marker)
+        assert idx != -1, f"expected '{marker}' in update_health"
+        block = src[idx:idx + 200]
+        assert "intent_set_at = None" in block, (
+            "RESTARTING→RUNNING transition must clear intent_set_at"
+        )
+
+    def test_update_health_clears_intent_set_at_on_manual_reboot(self):
+        """Manual reboot (#7637): stale STOPPING/STOPPED intent + new PID
+        flips back to RUNNING and must clear intent_set_at."""
+        import inspect
+        from harness import HarnessState
+        src = inspect.getsource(HarnessState.update_health)
+        # The #7637 branch logs "alive with new PID (stale intent=...)".
+        idx = src.find("alive with new PID")
+        assert idx != -1, "expected #7637 manual-reboot branch"
+        # Search backward to the intent reassignment.
+        pre = src[max(0, idx - 400):idx]
+        assert "INTENT_RUNNING" in pre and "intent_set_at = None" in pre, (
+            "manual-reboot reset must clear intent_set_at"
+        )
+
+    def test_update_health_clears_intent_set_at_on_stop_fulfilled(self):
+        """STOPPING → STOPPED transition (dead branch) clears the field."""
+        import inspect
+        from harness import HarnessState
+        src = inspect.getsource(HarnessState.update_health)
+        # Find the specific assignment `agent.intent = AgentState.INTENT_STOPPED`
+        # (not the tuple membership check that also references INTENT_STOPPED).
+        marker = "agent.intent = AgentState.INTENT_STOPPED"
+        idx = src.find(marker)
+        assert idx != -1, f"expected '{marker}' in update_health"
+        block = src[idx:idx + 200]
+        assert "intent_set_at = None" in block, (
+            "STOPPING→STOPPED transition must clear intent_set_at"
+        )
+
+    def test_start_all_clears_intent_set_at(self):
+        """start_all assigning INTENT_RUNNING after spawn must clear the field."""
+        import inspect
+        from harness import start_all
+        src = inspect.getsource(start_all)
+        assert "intent_set_at = None" in src, (
+            "start_all spawn path must clear intent_set_at on intent=RUNNING"
+        )
+
+    def test_start_agent_clears_intent_set_at(self):
+        """start_agent (#4966 single-agent spawn) must clear intent_set_at."""
+        import inspect
+        from harness import start_agent
+        src = inspect.getsource(start_agent)
+        assert "intent_set_at = None" in src, (
+            "start_agent must clear intent_set_at on intent=RUNNING"
+        )
+
+
 class TestStartAllPersistence(unittest.TestCase):
     """#6820: start_all must set intent=running and call save_state."""
 
@@ -436,14 +1008,18 @@ class TestEndpointsViaTestClient(unittest.TestCase):
         self.assertEqual(agent.intent, AgentState.INTENT_STOPPING)
 
     def test_post_agent_restart(self):
-        """POST /agents/{role}/restart calls reboot."""
+        """POST /agents/{role}/restart returns 200 + success=True.
+
+        #4792 Phase 2: reboot_agent.reboot() was deleted — the endpoint
+        flips intent and triggers respawn through the harness state
+        machine instead of calling a separate reboot helper. No mock
+        for reboot_agent.reboot is needed."""
         import tempfile
         with tempfile.TemporaryDirectory() as tmpdir:
             role_dir = Path(tmpdir) / ".squidsquad" / "skill"
             role_dir.mkdir(parents=True)
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
-                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
-                 patch("harness.reboot_agent.reboot", return_value=0):
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir):
                 resp = self.client.post("/agents/skill/restart")
             self.assertEqual(resp.status_code, 200)
             data = resp.json()
@@ -731,10 +1307,15 @@ class TestIntentLifecycle(unittest.TestCase):
             agent.claude_pid = 99999999
             hs.set_agent("skill", agent)
 
+            # boot_agent must return a JSON-serializable dict — the auto-reboot
+            # branch sets `agent.terminal_pid = result["terminal_pid"]` and then
+            # calls save_state(), which json.dumps the state.
+            spawn_result = {"success": True, "terminal_pid": 0}
+
             # First poll: dead → reboot triggered
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
-                 patch("harness.boot_remote.boot_agent"), \
+                 patch("harness.boot_remote.boot_agent", return_value=spawn_result), \
                  patch("harness.health_check.check_agent_health", return_value={"health": "unknown"}), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
@@ -746,7 +1327,7 @@ class TestIntentLifecycle(unittest.TestCase):
 
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
-                 patch("harness.boot_remote.boot_agent"), \
+                 patch("harness.boot_remote.boot_agent", return_value=spawn_result), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -1907,6 +2488,205 @@ class TestHumanQueueEndpoint(unittest.TestCase):
             resp = self.client.get("/human/queue")
         # Known-age item sorts before unknown-age within the same priority tier.
         self.assertEqual([i["number"] for i in resp.json()["items"]], [2, 1])
+
+
+class TestCleanupLegacySentinels(unittest.TestCase):
+    """#4792 Phase 2 §5.1: harness boot must sweep pre-#4792 lifecycle
+    sentinels (`.stop`, `.restart`, `.health`) so a stale file left over
+    from an upgrade cannot influence the first `update_health` poll."""
+
+    def _make_clone(self, tmp_path, role, files):
+        role_dir = tmp_path / role / ".squidsquad" / role
+        role_dir.mkdir(parents=True)
+        for name in files:
+            (role_dir / name).write_text("legacy", encoding="utf-8")
+        return tmp_path / role
+
+    def test_removes_all_three_sentinels(self):
+        import tempfile
+        from harness import _cleanup_legacy_sentinels
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            skill_root = self._make_clone(tmp, "skill",
+                                          [".stop", ".restart", ".health"])
+            removed, errors = _cleanup_legacy_sentinels({"skill": skill_root})
+            self.assertEqual(removed, 3)
+            self.assertEqual(errors, 0)
+            role_dir = skill_root / ".squidsquad" / "skill"
+            for name in (".stop", ".restart", ".health"):
+                self.assertFalse((role_dir / name).exists(), name)
+
+    def test_tolerates_missing_files(self):
+        """A clone with no legacy sentinels must produce removed=0, no errors,
+        and not raise."""
+        import tempfile
+        from harness import _cleanup_legacy_sentinels
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            skill_root = self._make_clone(tmp, "skill", [])
+            removed, errors = _cleanup_legacy_sentinels({"skill": skill_root})
+            self.assertEqual(removed, 0)
+            self.assertEqual(errors, 0)
+
+    def test_tolerates_missing_role_directory(self):
+        """If `.squidsquad/<role>/` does not exist (clone never booted),
+        the helper skips it without crashing."""
+        import tempfile
+        from harness import _cleanup_legacy_sentinels
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            # Don't create the role dir — emulate a fresh clone
+            removed, errors = _cleanup_legacy_sentinels({"skill": tmp})
+            self.assertEqual(removed, 0)
+            self.assertEqual(errors, 0)
+
+    def test_handles_multiple_roles(self):
+        import tempfile
+        from harness import _cleanup_legacy_sentinels
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            skill_root = self._make_clone(tmp, "skill", [".stop", ".health"])
+            pm_root = self._make_clone(tmp, "pm", [".restart"])
+            removed, errors = _cleanup_legacy_sentinels({
+                "skill": skill_root,
+                "pm": pm_root,
+            })
+            self.assertEqual(removed, 3)
+            self.assertEqual(errors, 0)
+
+    def test_partial_removal_only_existing(self):
+        """Mixed state: one sentinel present, two absent — count must be 1."""
+        import tempfile
+        from harness import _cleanup_legacy_sentinels
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            skill_root = self._make_clone(tmp, "skill", [".health"])
+            removed, errors = _cleanup_legacy_sentinels({"skill": skill_root})
+            self.assertEqual(removed, 1)
+            self.assertEqual(errors, 0)
+
+    def test_unlink_oserror_counted_not_raised(self):
+        """OSError from unlink must be counted in errors, not propagated —
+        the cleanup pass is best-effort and runs before update_health, so
+        it cannot crash harness startup."""
+        import tempfile
+        from unittest.mock import patch
+        from harness import _cleanup_legacy_sentinels
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            skill_root = self._make_clone(tmp, "skill", [".stop"])
+            # Force the unlink to raise an OSError that is NOT
+            # FileNotFoundError (which is correctly handled separately).
+            with patch("pathlib.Path.unlink",
+                       side_effect=PermissionError("locked")):
+                removed, errors = _cleanup_legacy_sentinels(
+                    {"skill": skill_root}
+                )
+            self.assertEqual(removed, 0)
+            self.assertEqual(errors, 1)
+
+    def test_legacy_sentinel_names_locked(self):
+        """The tuple of names is part of the cleanup contract — pin it so
+        adding a new lifecycle sentinel cannot accidentally widen the
+        sweep without a deliberate change."""
+        from harness import LEGACY_SENTINEL_FILES
+        self.assertEqual(
+            tuple(LEGACY_SENTINEL_FILES), (".stop", ".restart", ".health"),
+        )
+
+    def test_idempotent_second_pass_returns_zero(self):
+        """#4792 Phase 5 / §3.8 idempotence: running the cleanup twice
+        means the second pass observes no leftover files and returns
+        ``(0, 0)`` so the lifespan callsite logs nothing. Re-running the
+        upgrade sweep must be a no-op."""
+        import tempfile
+        from harness import _cleanup_legacy_sentinels
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            skill_root = self._make_clone(
+                tmp, "skill", [".stop", ".restart", ".health"]
+            )
+            first = _cleanup_legacy_sentinels({"skill": skill_root})
+            self.assertEqual(first, (3, 0))
+            second = _cleanup_legacy_sentinels({"skill": skill_root})
+            self.assertEqual(second, (0, 0))
+
+    def test_all_four_role_directories_seeded(self):
+        """#4792 Phase 5 / §3.8: when stale `.stop`/`.restart`/`.health`
+        files are seeded across the four canonical role directories
+        (skill, pm, qa, dm), one cleanup pass removes all 12 (3 sentinels
+        × 4 roles) and the role directories no longer contain any of the
+        three legacy names."""
+        import tempfile
+        from harness import _cleanup_legacy_sentinels
+        roles = ("skill", "pm", "qa", "dm")
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            clone_paths = {
+                role: self._make_clone(
+                    tmp, role, [".stop", ".restart", ".health"]
+                )
+                for role in roles
+            }
+            removed, errors = _cleanup_legacy_sentinels(clone_paths)
+            self.assertEqual(removed, len(roles) * 3)
+            self.assertEqual(errors, 0)
+            for role, root in clone_paths.items():
+                role_dir = root / ".squidsquad" / role
+                for name in (".stop", ".restart", ".health"):
+                    self.assertFalse(
+                        (role_dir / name).exists(),
+                        f"{role}{name!r} should have been swept",
+                    )
+
+    def test_cleanup_runs_synchronously_before_start_poller(self):
+        """Source-level guard for CONTEXT-4792.md §5.1: the cleanup must
+        be invoked on the lifespan thread BEFORE `state.start_poller()`,
+        not inside the `_deferred_init` background thread which races
+        the poller. A future refactor that moves the call inside the
+        deferred block reintroduces the race the review caught."""
+        import harness
+        src = Path(harness.__file__).read_text(encoding="utf-8")
+
+        # Find the lifespan body — everything between the `async def
+        # lifespan` line and the next top-level `def` (or end of file).
+        lifespan_match = src.find("async def lifespan")
+        self.assertGreater(lifespan_match, 0, "lifespan function not found")
+        # Bound the search at the first top-level def that follows
+        # lifespan (e.g. `def _validate_role`).
+        after_lifespan = src[lifespan_match:]
+        next_top_level_def = after_lifespan.find("\ndef ")
+        self.assertGreater(next_top_level_def, 0,
+                           "no top-level def found after lifespan")
+        lifespan_body = after_lifespan[:next_top_level_def]
+
+        cleanup_idx = lifespan_body.find("_cleanup_legacy_sentinels(")
+        poller_idx = lifespan_body.find("state.start_poller()")
+        deferred_thread_idx = lifespan_body.find(
+            "threading.Thread(target=_deferred_init"
+        )
+
+        self.assertGreater(
+            cleanup_idx, 0,
+            "lifespan must invoke _cleanup_legacy_sentinels (§5.1)",
+        )
+        self.assertGreater(
+            poller_idx, 0,
+            "lifespan must call state.start_poller()",
+        )
+        self.assertLess(
+            cleanup_idx, poller_idx,
+            "cleanup must run BEFORE start_poller (§5.1 — health poller "
+            "would otherwise hit the legacy .health fallback while "
+            "stale sentinels are still present)",
+        )
+        # Also confirm cleanup runs before the deferred thread fires
+        # `_deferred_init`, so neither path can read stale state.
+        self.assertLess(
+            cleanup_idx, deferred_thread_idx,
+            "cleanup must precede the _deferred_init thread spawn so "
+            "load_state() never observes legacy sentinels",
+        )
 
 
 if __name__ == "__main__":

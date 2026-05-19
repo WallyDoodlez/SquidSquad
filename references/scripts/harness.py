@@ -42,6 +42,12 @@ HARNESS_PORT_FILE = SQUIDSQUAD_DIR / ".harness-port"
 
 DEFAULT_PORT = 7373
 HEALTH_POLL_INTERVAL = 5  # seconds
+# #4792 Phase 1 (Q7): seconds after intent flip to STOPPING/RESTARTING before
+# the harness force-kills the claude PID. The cooperative path (cycle_post
+# exit 42 → /quit → process exits) typically wins in under 5s; this safety
+# net catches the case where the agent never reaches a cycle boundary or
+# /quit hangs (CONTEXT-4792.md §3.3 Q7).
+FORCE_KILL_TIMEOUT_SECONDS = 60
 HARNESS_STATE_FILE = SQUIDSQUAD_DIR / ".harness-state.json"
 
 import boot_remote
@@ -68,7 +74,8 @@ except ImportError:
 class AgentState:
     """In-memory state for a single agent."""
 
-    __slots__ = ("role", "status", "intent", "last_health_check", "boot_time",
+    __slots__ = ("role", "status", "intent", "intent_set_at",
+                 "last_health_check", "boot_time",
                  "clone_path", "claude_pid", "terminal_pid",
                  "current_cycle", "current_phase", "last_cycle_start",
                  "last_cycle_end", "last_cycle_type", "bootup_complete")
@@ -87,6 +94,11 @@ class AgentState:
         self.role = role
         self.status = "unknown"  # unknown | starting | running | stopped | stalled | error
         self.intent = self.INTENT_RUNNING  # default: agent should be alive
+        # #4792 / #8979 Phase 1: wall-clock timestamp at which intent was last
+        # flipped to STOPPING or RESTARTING. Drives the 60s force-kill safety
+        # net per CONTEXT-4792.md §3.3 (Q7). None when intent is RUNNING or
+        # STOPPED.
+        self.intent_set_at = None
         self.last_health_check = None
         self.boot_time = None
         self.clone_path = clone_path
@@ -110,6 +122,7 @@ class AgentState:
             "role": self.role,
             "status": self.status,
             "intent": self.intent,
+            "intent_set_at": self.intent_set_at,
             "boot_time": self.boot_time,
             "last_health_check": self.last_health_check,
             "clone_path": self.clone_path,
@@ -147,19 +160,9 @@ class HarnessState:
         with self._lock:
             return [a.to_dict() for a in self.agents.values()]
 
-    def _read_claude_pid(self, clone_path, role):
-        """Read claude PID from .claude-pid file and check if alive (#4966).
-
-        Returns (pid, alive) or (None, False).
-        """
-        pid_file = Path(clone_path) / ".squidsquad" / role / ".claude-pid"
-        if not pid_file.exists():
-            return None, False
-        try:
-            pid = int(pid_file.read_text(encoding="utf-8").strip())
-        except (ValueError, OSError):
-            return None, False
-        return pid, boot_remote._is_process_alive(pid)
+    # #4792 Phase 2: the per-class `_read_claude_pid` was a near-duplicate
+    # of `reboot_agent._read_claude_pid`. All three call sites (this class
+    # + two restart endpoints) now share the module-level helper.
 
     def update_health(self):
         """Check agent health via direct PID monitoring (#4966).
@@ -200,7 +203,7 @@ class HarnessState:
 
                 # If no stored PID or PID stale, try reading .claude-pid file
                 if not alive:
-                    file_pid, file_alive = self._read_claude_pid(clone_path, role)
+                    file_pid, file_alive = reboot_agent._read_claude_pid(clone_path, role)
                     if file_pid and file_alive:
                         pid = file_pid
                         alive = True
@@ -225,11 +228,47 @@ class HarnessState:
                     except Exception:
                         pass
 
+                # #4792 Phase 1 (Q7) — 60s force-kill safety net.
+                # If the agent has been STOPPING/RESTARTING for longer than
+                # the timeout AND the claude PID is still alive, the
+                # cooperative shutdown path (cycle_post exit 42 → /quit) has
+                # not completed; kill the PID directly so the operator's
+                # intent eventually wins. CONTEXT-4792.md §3.3. Idempotent:
+                # the kill races against the cooperative exit and we re-check
+                # on the next poll either way.
+                if alive and pid and agent.intent in (
+                    AgentState.INTENT_STOPPING, AgentState.INTENT_RESTARTING,
+                ) and agent.intent_set_at is not None and (
+                    time.time() - agent.intent_set_at
+                    > FORCE_KILL_TIMEOUT_SECONDS
+                ):
+                    elapsed = time.time() - agent.intent_set_at
+                    _log(
+                        f"{role}: force-kill safety net firing "
+                        f"(intent={agent.intent}, elapsed={elapsed:.1f}s, "
+                        f"timeout={FORCE_KILL_TIMEOUT_SECONDS}s) — killing "
+                        f"claude PID {pid}"
+                    )
+                    try:
+                        reboot_agent._kill_process(pid)
+                    except Exception as e:
+                        _log(
+                            f"{role}: force-kill of PID {pid} raised "
+                            f"{type(e).__name__}: {e}"
+                        )
+                    # Clear intent_set_at so we don't re-log the kill every
+                    # 5s while the OS reaps the process. The next poll cycle
+                    # will see the dead PID and run the normal STOPPING →
+                    # STOPPED / auto-reboot paths below.
+                    agent.intent_set_at = None
+                    state_changed = True
+
                 # Update status
                 if alive:
                     agent.status = "running"
                     if agent.intent == AgentState.INTENT_RESTARTING:
                         agent.intent = AgentState.INTENT_RUNNING
+                        agent.intent_set_at = None  # #4792 Phase 1
                         state_changed = True
                     elif agent.intent in (
                         AgentState.INTENT_STOPPING,
@@ -239,6 +278,7 @@ class HarnessState:
                         # Only reset when PID changed to avoid undoing an in-flight stop.
                         old_intent = agent.intent
                         agent.intent = AgentState.INTENT_RUNNING
+                        agent.intent_set_at = None  # #4792 Phase 1
                         state_changed = True
                         _log(f"{role}: alive with new PID (stale intent={old_intent}), reset to running (#7637)")
                 elif agent.status != "starting":
@@ -272,6 +312,7 @@ class HarnessState:
                 # Stopping intent fulfilled — agent died as requested (#4966)
                 if is_dead and agent.intent == AgentState.INTENT_STOPPING:
                     agent.intent = AgentState.INTENT_STOPPED
+                    agent.intent_set_at = None  # #4792 Phase 1
                     agent.claude_pid = None
                     state_changed = True
 
@@ -329,6 +370,9 @@ class HarnessState:
                 "agents": {
                     role: {
                         "intent": a.intent,
+                        # #4792 Phase 1: persist so the 60s force-kill window
+                        # survives harness restarts. CONTEXT-4792.md §3.6.
+                        "intent_set_at": a.intent_set_at,
                         "status": a.status,
                         "boot_time": a.boot_time,
                         "clone_path": a.clone_path,
@@ -373,6 +417,23 @@ class HarnessState:
                     )
                 agent = self.agents[role]
                 agent.intent = agent_data.get("intent", AgentState.INTENT_RUNNING)
+                # #4792 Phase 1 — two-case migration per CONTEXT-4792.md §5.1.
+                # We distinguish absent key from explicit null so an explicit
+                # null is always honored (case b: "load as-is") and only an
+                # absent key triggers the migration seed (case a):
+                #   (a) legacy state file: intent is STOPPING/RESTARTING and
+                #       the `intent_set_at` key is ABSENT → seed with
+                #       time.time() so the force-kill clock starts now rather
+                #       than firing immediately on a pre-existing intent.
+                #   (b) present state file: load as-is (may be None when the
+                #       intent is RUNNING/STOPPED, or a float when STOPPING/
+                #       RESTARTING).
+                if "intent_set_at" not in agent_data and agent.intent in (
+                    AgentState.INTENT_STOPPING, AgentState.INTENT_RESTARTING,
+                ):
+                    agent.intent_set_at = time.time()
+                else:
+                    agent.intent_set_at = agent_data.get("intent_set_at")
                 agent.boot_time = agent_data.get("boot_time")
                 agent.claude_pid = agent_data.get("claude_pid")
                 agent.terminal_pid = agent_data.get("terminal_pid")
@@ -646,6 +707,59 @@ def _log(msg: str):
 
 
 # ---------------------------------------------------------------------------
+# Legacy-sentinel cleanup (#4792 Phase 2 §5.1)
+# ---------------------------------------------------------------------------
+
+LEGACY_SENTINEL_FILES = (".stop", ".restart", ".health")
+
+
+def _cleanup_legacy_sentinels(clone_paths):
+    """Unlink pre-#4792 lifecycle sentinel files from each agent clone.
+
+    Before #4792 the wrapper/PM stack wrote `.stop`, `.restart`, and
+    `.health` files under `.squidsquad/<role>/` to signal lifecycle
+    intent and liveness. Those signals are now owned by the harness
+    intent state machine (`.harness-state.json`) and the `.claude-pid`
+    file (CONTEXT-4792.md §5.1).
+
+    On harness boot, sweep the legacy files so a stale `.stop` left over
+    from a previous SquidSquad version cannot influence `update_health`
+    or be misread by any remaining legacy reader during the upgrade
+    window. Idempotent: missing files are silently ignored; any other
+    OSError is logged but does not abort startup.
+
+    Returns ``(removed, errors)`` so the caller can log a summary.
+    """
+    removed = 0
+    errors = 0
+    for role, clone_root in clone_paths.items():
+        role_dir = Path(clone_root) / ".squidsquad" / role
+        if not role_dir.is_dir():
+            continue
+        for name in LEGACY_SENTINEL_FILES:
+            sentinel = role_dir / name
+            # Skip the syscall entirely for non-existent files so the
+            # counters reflect real removals only. `missing_ok=True` on
+            # the unlink then swallows the FileNotFoundError that arises
+            # in the rare TOCTOU window where the file disappears
+            # between the `exists()` check and the unlink — in that
+            # case the post-condition (file gone) is satisfied so it
+            # still counts as a removal.
+            if not sentinel.exists():
+                continue
+            try:
+                sentinel.unlink(missing_ok=True)
+                removed += 1
+            except OSError as e:
+                errors += 1
+                _log(
+                    f"legacy-sentinel cleanup: {role}/{name} unlink "
+                    f"failed: {type(e).__name__}: {e}"
+                )
+    return removed, errors
+
+
+# ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
 
@@ -733,12 +847,36 @@ async def lifespan(app: FastAPI):
                     agent_state = state.get_agent(role) or AgentState(role)
                     if result["action"] == "spawn":
                         agent_state.status = "starting"
+                        agent_state.intent = AgentState.INTENT_RUNNING
+                        agent_state.intent_set_at = None  # #4792 Phase 1
+                        # #8695: a fresh spawn must re-assert bootup-complete
+                        # before events flow — match the other spawn paths.
+                        agent_state.bootup_complete = False
                         agent_state.boot_time = time.time()
                         agent_state.terminal_pid = result.get("terminal_pid")
                     state.set_agent(role, agent_state)
             state.save_state()
         except Exception as e:
             _log(f"Auto-start failed: {e}")
+
+    # Sweep pre-#4792 legacy lifecycle sentinels SYNCHRONOUSLY before the
+    # health poller starts, so a stale `.stop`/`.restart`/`.health` cannot
+    # be observed by the first `update_health` pass during an upgrade
+    # window (CONTEXT-4792.md §5.1). Best-effort — failures here do not
+    # block startup. Must run on the lifespan thread, NOT inside
+    # `_deferred_init`: the deferred thread races against `start_poller`,
+    # which would let the poller hit the legacy `.health` fallback in
+    # `update_health` before cleanup completes.
+    try:
+        clone_paths_for_cleanup = boot_remote._parse_local_config()
+        removed, errors = _cleanup_legacy_sentinels(clone_paths_for_cleanup)
+        if removed or errors:
+            _log(
+                f"Legacy-sentinel cleanup: removed {removed}, "
+                f"errors {errors}"
+            )
+    except (SystemExit, Exception) as e:
+        _log(f"WARNING: legacy-sentinel cleanup failed: {e}")
 
     threading.Thread(target=_deferred_init, daemon=True, name="deferred-init").start()
     state.start_poller()
@@ -839,6 +977,10 @@ async def start_all():
             if result["action"] == "spawn":
                 agent_state.status = "starting"
                 agent_state.intent = AgentState.INTENT_RUNNING
+                agent_state.intent_set_at = None  # #4792 Phase 1
+                # #8695: match the other four spawn paths — a fresh agent
+                # must re-assert bootup-complete before we'll dispatch events.
+                agent_state.bootup_complete = False
                 agent_state.boot_time = time.time()
                 agent_state.terminal_pid = result.get("terminal_pid")
             state.set_agent(role, agent_state)
@@ -877,6 +1019,7 @@ async def stop_all():
         if not agent_state:
             agent_state = AgentState(role, clone_path)
         agent_state.intent = AgentState.INTENT_STOPPING
+        agent_state.intent_set_at = time.time()  # #4792 Phase 1
         state.set_agent(role, agent_state)
         results.append({"role": role, "action": "stop", "success": True})
         _log(f"  {role}: intent=stopping")
@@ -915,13 +1058,19 @@ async def start_agent(role: str):
 
     if result["success"]:
         agent_state = state.get_agent(role) or AgentState(role)
-        agent_state.status = "starting"
-        agent_state.intent = AgentState.INTENT_RUNNING
-        agent_state.boot_time = time.time()
-        agent_state.terminal_pid = result.get("terminal_pid")
-        # #8695: spawning a fresh agent → bootup-complete must be re-asserted
-        # by the new process before we'll dispatch any events to it.
-        agent_state.bootup_complete = False
+        # Only mutate state on an actual spawn — `boot_agent` can return
+        # action="skip" (e.g., another boot already in flight) without
+        # replacing the running process. Match start_all's spawn guard so a
+        # racing skip-result does not clobber a healthy agent's state.
+        if result["action"] == "spawn":
+            agent_state.status = "starting"
+            agent_state.intent = AgentState.INTENT_RUNNING
+            agent_state.intent_set_at = None  # #4792 Phase 1
+            agent_state.boot_time = time.time()
+            agent_state.terminal_pid = result.get("terminal_pid")
+            # #8695: spawning a fresh agent → bootup-complete must be re-asserted
+            # by the new process before we'll dispatch any events to it.
+            agent_state.bootup_complete = False
         state.set_agent(role, agent_state)
         state.save_state()
 
@@ -1112,12 +1261,22 @@ async def receive_event(request: Request):
             acked = event_lifecycle.ack(ack_event_id, role)
             if acked:
                 _log(f"Event {ack_event_id} acked by {role}")
-            # If ack references stop-requested, treat as shutdown confirmation
+            # If ack references stop-requested, treat as shutdown confirmation.
+            # The ack only confirms an already-requested stop — it must not
+            # reset `intent_set_at` (which would extend the 60s force-kill
+            # window indefinitely under repeated acks per CONTEXT-4792.md
+            # §3.3 Q7). Also only fires when the agent is still in STOPPING:
+            # any subsequent operator action (RUNNING / RESTARTING / STOPPED)
+            # supersedes this ack, which is now stale.
             if body.get("payload", {}).get("result") == "stop-confirmed":
                 with state._lock:
                     agent = state.agents.get(role)
-                    if agent:
-                        agent.intent = AgentState.INTENT_STOPPING
+                    if agent and agent.intent == AgentState.INTENT_STOPPING:
+                        # Intent already STOPPING and intent_set_at already
+                        # recorded at request time — nothing to update here.
+                        # The save_state below is a no-op for these fields
+                        # but kept for parity with other ack paths.
+                        pass
                 state.save_state()
 
     # Update AgentState from event
@@ -1438,9 +1597,14 @@ async def stop_agent(role: str):
     _validate_role(role)
 
     # Set intent in memory — harness won't reboot after agent exits
-    # cycle_post.py queries GET /agents/{role} and reads intent (#4966)
+    # cycle_post.py queries GET /agents/{role} and reads intent (#4966).
+    # Only record `intent_set_at` on the transition INTO STOPPING; a repeat
+    # stop request on an already-STOPPING agent must NOT extend the 60s
+    # force-kill window (CONTEXT-4792.md §3.3 Q7).
     agent_state = state.get_agent(role) or AgentState(role)
-    agent_state.intent = AgentState.INTENT_STOPPING
+    if agent_state.intent != AgentState.INTENT_STOPPING:
+        agent_state.intent = AgentState.INTENT_STOPPING
+        agent_state.intent_set_at = time.time()  # #4792 Phase 1
     state.set_agent(role, agent_state)
     state.save_state()
 
@@ -1459,9 +1623,14 @@ async def restart_agent(role: str):
     _log(f"Restarting {role}...")
 
     # Set intent — harness will auto-reboot when agent exits
-    # cycle_post.py queries GET /agents/{role} and reads intent (#4966)
+    # cycle_post.py queries GET /agents/{role} and reads intent (#4966).
+    # Only record `intent_set_at` on the transition INTO RESTARTING; a repeat
+    # restart on an already-RESTARTING agent must NOT extend the 60s
+    # force-kill window (CONTEXT-4792.md §3.3 Q7).
     agent_state = state.get_agent(role) or AgentState(role)
-    agent_state.intent = AgentState.INTENT_RESTARTING
+    if agent_state.intent != AgentState.INTENT_RESTARTING:
+        agent_state.intent = AgentState.INTENT_RESTARTING
+        agent_state.intent_set_at = time.time()  # #4792 Phase 1
     # #8695: restart will respawn the process → new boot must re-assert
     # bootup-complete before events flow again.
     agent_state.bootup_complete = False
@@ -1551,9 +1720,13 @@ async def shutdown():
             _log(f"Stopping running agents: {', '.join(running_roles)}")
             for role in running_roles:
                 clone_path = boot_remote._get_clone_path(role)
-                # Set intent — cycle_post.py queries API for intent (#4966)
+                # Set intent — cycle_post.py queries API for intent (#4966).
+                # Only stamp intent_set_at on the transition INTO STOPPING so a
+                # repeat /shutdown call does not extend the 60s force-kill clock.
                 agent = state.get_agent(role) or AgentState(role, clone_path)
-                agent.intent = AgentState.INTENT_STOPPING
+                if agent.intent != AgentState.INTENT_STOPPING:
+                    agent.intent = AgentState.INTENT_STOPPING
+                    agent.intent_set_at = time.time()  # #4792 Phase 1
                 state.set_agent(role, agent)
             state.save_state()
 
@@ -1853,6 +2026,7 @@ def _reboot_affected_agents(pr_number, files_changed):
         agent = state.get_agent(role)
         if agent and agent.intent == AgentState.INTENT_RUNNING:
             agent.intent = AgentState.INTENT_RESTARTING
+            agent.intent_set_at = time.time()  # #4792 Phase 1
             # #8695: match the other three restart paths — close the window
             # where events would still dispatch after we've marked the agent
             # for restart but before its process actually dies.
@@ -2130,7 +2304,11 @@ class CtrlCHandler:
         for role in roles:
             agent = state.get_agent(role)
             if agent and agent.status == "running":
-                agent.intent = AgentState.INTENT_STOPPING
+                # Only stamp intent_set_at on the transition INTO STOPPING; a
+                # second Ctrl+C must not extend the 60s force-kill clock.
+                if agent.intent != AgentState.INTENT_STOPPING:
+                    agent.intent = AgentState.INTENT_STOPPING
+                    agent.intent_set_at = time.time()  # #4792 Phase 1
                 state.set_agent(role, agent)
                 _log(f"  {role}: intent=stopping")
         state.save_state()

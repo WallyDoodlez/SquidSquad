@@ -23,6 +23,8 @@ import json
 import shlex
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 
@@ -229,6 +231,58 @@ def _validate_config_version():
                   f"auto-fixed to {latest_tag} (#5136)")
     except Exception:
         pass  # Non-fatal — don't block the cycle
+
+
+def _discover_harness_port():
+    """Discover harness port — default 7373, with `.harness-port` overrides.
+
+    Mirrors the resolution order used by `cycle_post.py` so both pre/post
+    cycle helpers agree on which harness they're talking to: this repo's
+    `.squidsquad/.harness-port`, then a 5-level parent-directory walk for
+    an inherited port file (clone-isolation case), then the default 7373.
+    Always returns an int.
+    """
+    port_file = SQUID_DIR / ".harness-port"
+    if port_file.exists():
+        try:
+            return int(port_file.read_text(encoding="utf-8").strip())
+        except (ValueError, OSError):
+            pass
+
+    current = REPO_ROOT.parent
+    for _ in range(5):
+        candidate = current / ".squidsquad" / ".harness-port"
+        if candidate.exists():
+            try:
+                return int(candidate.read_text(encoding="utf-8").strip())
+            except (ValueError, OSError):
+                pass
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+
+    return 7373
+
+
+def _query_harness_status():
+    """Probe the harness API and return `"reachable"` or `"unreachable"`.
+
+    Informational only (#4792 §5.5, Q8). The result is surfaced in
+    `cycle-input.json` so the agent can self-report harness liveness; no
+    cycle_pre decision branches on it. Single short-timeout GET; any
+    network/parse/timeout error returns `"unreachable"`.
+    """
+    port = _discover_harness_port()
+    url = f"http://127.0.0.1:{port}/status"
+    try:
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            if 200 <= resp.status < 300:
+                return "reachable"
+            return "unreachable"
+    except (urllib.error.URLError, OSError, TimeoutError):
+        return "unreachable"
 
 
 def _read_context_pressure(role):
@@ -675,9 +729,10 @@ def _build_pm_input(role):
     config = _read_config_flags()
     config["ship_threshold"] = _config_get_int("ship-threshold", 10)
     config["shipped_since_bump"] = _config_get_int("shipped-since-bump", 0)
-    # Boot detection — DEPRECATED (#3807). PM no longer auto-boots agents.
-    # Wrapper handles all respawning via .stop-after-cycle sentinel.
-    # Field kept as empty list for backward compat until all agents redeployed.
+    # Boot detection — DEPRECATED (#3807). PM no longer auto-boots agents;
+    # the harness owns agent respawn via the intent state machine + 60s
+    # force-kill safety net (#4792 Phase 1). Field kept as empty list for
+    # backward compat with composed CLAUDE.md files that still read it.
     boot_results = []
 
     # Approved items — dev pushback visibility (#2494)
@@ -1028,6 +1083,10 @@ def main():
     # 2. Context pressure
     context_pressure = _read_context_pressure(role)
 
+    # 2b. Harness reachability — informational only (#4792 §5.5, Q8).
+    # Surfaced in cycle-input.json for agent self-reporting; no gating.
+    harness_status = _query_harness_status()
+
     # 3. Cycle number
     cycle_number = _get_cycle_number(role)
     config_flags = _read_config_flags()
@@ -1074,6 +1133,7 @@ def main():
         "timestamp": _timestamp(),
         "pull_result": pull_result,
         "context_pressure": context_pressure,
+        "harness_status": harness_status,
         "working_state": working_state,
         "recent_events": recent_events,
         "mechanical_reactions": mechanical_reactions,

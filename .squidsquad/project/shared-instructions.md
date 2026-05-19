@@ -28,8 +28,8 @@ These instructions apply to ALL agents on this project.
 
 ### Agent Infrastructure
 
-- **Harness manages agent lifecycle**: PID monitoring (primary), `.health` file (legacy fallback). Intent state machine via REST API (#4966).
-- **Agent lifecycle via `start_team.py`**: Agents do not manage their own or other agents' processes.
+- **Harness manages agent lifecycle**: PID monitoring via `.claude-pid` (sole liveness signal). Intent state machine via REST API (#4966).
+- **Agent lifecycle via `squidsquad_cli.py`** (with `start_team.py` as a backward-compatible shim): Agents do not manage their own or other agents' processes.
 - **Context pressure restart via `cycle_post.py`**: Mechanical detection, agents don't set `restart_needed`.
 
 ### Planning & Verification
