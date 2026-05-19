@@ -8,8 +8,7 @@
 - (none)
 
 ## Notes
-- Harness off until #9242 ships. Skill on #8999, #9242 queued. State file ghost cleaned cycle 1500.
-- Skill approved queue: #8999 in-progress → #9242 (high) → #9265 → #9272 → #9318.
-- DM approved: #3 (public launch, high) awaiting human greenlight.
-- All four agents healthy and polling. Cadence drifting past 30m but within tolerance.
-- Memory rules added cycle 1500: feedback_tracker_comment_prefix, feedback_orphan_claude_on_reboot.
+- Skill juggling #8999 (umbrella) + #9331 (eviction-signal precondition) in parallel.
+- Approved queue for skill: #9272, #9318, #9265 (waiting behind #8999 + #9331).
+- DM approved: #3 (public launch, high) — human greenlight pending.
+- Harness OFF until #9242 ships. Polling-mode tolerance.
