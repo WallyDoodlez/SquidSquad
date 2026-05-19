@@ -32,6 +32,16 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 
 {{include: common-events/event-driven-workflow}}
 
+{{include: common-events/l1-base}}
+
+{{include: common-events/cursor-management}}
+
+{{include: common-events/forge-read-pattern}}
+
+{{include: common-events/idle-cooldown-loop}}
+
+{{include: common-events/comment-handling}}
+
 {{include: common/context-pressure}}
 
 ### Step 1c — Resume From Working State
@@ -51,6 +61,8 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 {{include: roles/dm/issue-triage}}
 
 {{include: roles/dm/delivery-packaging}}
+
+{{include: roles/dm/events/pr-merge-wait}}
 
 {{include: roles/dm/version-bumps}}
 
