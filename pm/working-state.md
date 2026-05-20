@@ -8,9 +8,8 @@
 - (none)
 
 ## Notes
-- Harness reachable, 165+ min uptime, stable.
-- Skill /loop stall continues but no skill work pending — not blocking.
-- Approved queue: #9415, #9478, #9398, #9386, #9387 (all role:skill, low/medium pri).
-- DM approved: #3 awaiting human greenlight.
-- PR #8812 hanging.
+- Pipeline truly steady-state. Quiet cycles N+.
+- Harness 3+ hours stable.
+- Skill stall ongoing but non-blocking.
+- Approved queue + #3 awaiting greenlight unchanged.
 - Context 55%.
