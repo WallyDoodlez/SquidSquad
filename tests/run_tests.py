@@ -154,6 +154,14 @@ def run_integration_tests(targets):
             loader.loadTestsFromModule(test_event_mode_agent_subprocess)
         )
 
+    if not targets or "real_agent_subprocess" in targets:
+        # #9398 Phase A real-subprocess scenarios. Heavy — spawns real
+        # harness + agent subprocesses; ~10-15s per test on Windows.
+        from integration import test_9398_real_agent_subprocess
+        suite.addTests(
+            loader.loadTestsFromModule(test_9398_real_agent_subprocess)
+        )
+
     runner = unittest.TextTestRunner(verbosity=2)
     try:
         result = runner.run(suite)
