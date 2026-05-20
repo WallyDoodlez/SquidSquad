@@ -1,7 +1,7 @@
 <!-- sub-skill: agent-lifecycle -->
 ### Agent Lifecycle
 
-Agent lifecycle is managed by the harness (`harness.py`) via REST API (#4966). Agents do not manage their own or other agents' processes directly.
+Agent lifecycle is managed by the harness (`harness.py`) via REST API (#4966). Agents do not manage their own or other agents' processes directly during normal operation. **Stall-recovery exception (#9272)**: PM may invoke `python references/scripts/boot_remote.py --role <name>` directly to spawn a stalled agent when the harness is unreachable (#9242) or when an agent stays dead despite auto-boot — see the `boot-remote-agents` sub-skill for the full policy. No other role boots agents directly.
 
 **Three guarantees**:
 1. **Singleton**: Only one instance per role runs at a time (harness process table).

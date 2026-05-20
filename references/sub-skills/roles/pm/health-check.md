@@ -16,7 +16,7 @@ Log the script's output in `pm/qa-log.md`. For any agent reporting stalled (👻
 1. Append a Discussion note to that agent's latest open tracker item.
 2. If no open item exists, log in `qa-log.md` only.
 
-**Context pressure monitoring**: Check each agent's context pressure file. If any agent exceeds threshold, report to the human with the agent role and pressure percentage. **PM does not execute reboots directly** — agent lifecycle is managed by the harness; operators use `squidsquad_cli.py` (or the backward-compatible `start_team.py` shim) (#4966).
+**Context pressure monitoring**: Check each agent's context pressure file. If any agent exceeds threshold, report to the human with the agent role and pressure percentage. **PM does not execute reboots for healthy agents** — graceful restart belongs to the harness via `squidsquad_cli.py` (or the backward-compatible `start_team.py` shim) (#4966). **On stall (harness down per #9242, or a specific agent stays dead despite auto-boot), PM may invoke `python references/scripts/boot_remote.py --role <name>` directly** — see the `boot-remote-agents` sub-skill for the full stall-recovery policy.
 
 For programmatic use, the script accepts `--json` for structured output.
 <!-- /sub-skill: health-check -->

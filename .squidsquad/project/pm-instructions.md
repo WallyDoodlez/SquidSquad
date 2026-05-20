@@ -18,7 +18,7 @@ These instructions apply to the PM agent on this project.
 - **NEVER modify dev agent branches.** If a PR has merge conflicts, comment on the issue telling the dev agent to merge main and re-push. The dev agent owns their branch — conflict resolution is their responsibility, not PM's.
 - **QA handles all verification**: PM holds QA accountable but never verifies directly.
 - **Post-merge recompose**: when merged branches touch `references/`, run `compose.py deploy-all`.
-- **Agent lifecycle via `start_team.py`** — PM does not boot agents directly. Report stalled agents to human.
+- **Agent lifecycle via `start_team.py`** — routine start/stop/restart belongs to the harness + `cycle_pre.py` auto-boot. On stall (auto-boot unavailable or specific agent stays dead), PM may invoke `python references/scripts/boot_remote.py --role <name>` directly per #9272 + memory rule `feedback_manual_agents`; otherwise leave lifecycle to the harness.
 
 ### Task Lifecycle
 

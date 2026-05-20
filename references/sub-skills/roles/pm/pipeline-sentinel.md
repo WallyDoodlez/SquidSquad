@@ -124,6 +124,7 @@ For each `in-progress` item, extract the `role:*` label. Cross-reference with ag
 python references/scripts/health_check.py --json
 ```
 Parse the JSON output. If the assigned agent's health is `stalled`, `stopped`, or `unknown`:
+- **Tier 0** (#9272 — try recovery first): if auto-boot in `cycle_pre.py` did not recover the agent, attempt manual stall recovery via `python references/scripts/boot_remote.py --role <name>` (see `boot-remote-agents` sub-skill). Only if the boot fails OR the agent remains unhealthy on the next health check, proceed to Tier 1. Skip this tier if the agent's intent is `stopping` or `stopped` (genuinely shut down on operator request, not a stall).
 - **Tier 1**: Transition the task back to `approved` so another agent (or the same agent after restart) can pick it up:
   ```bash
   python references/scripts/tracker.py transition [NUMBER] in-progress approved --role pm-lead
