@@ -82,13 +82,24 @@ def _log_diagnostic(severity, message):
 
 
 def _emit(event_type, payload=None, cycle_number=None, role=None):
-    """Fire-and-forget event emission (#4709). Role from arg or sys.argv."""
+    """Fire-and-forget event emission (#4709). Role from arg or sys.argv.
+
+    #9242: never emit with role=\"unknown\". The previous fallback (when
+    argv inference failed) leaked \"unknown\" events onto the bus, which
+    the harness persisted into ``.event-state.json`` and (worse) created
+    a ghost ``unknown`` agent entry in ``.harness-state.json`` that
+    contributed to the HTTP-wedge cascade. When the role cannot be
+    determined, emit nothing — better than emitting a poisoned event.
+    The matching boundary rejection in the harness (POST /events
+    validates role against the configured agent set) is defense in
+    depth so a regression here cannot re-corrupt state.
+    """
     try:
         from event_bus import emit
         # Use explicit role if provided, otherwise determine from sys.argv
         if role is None:
-            role = "unknown"
             args = sys.argv[1:]
+            role = None
             # For commands like: commit-code <role> <branch> <msg>
             # or: task-begin <role> <number>
             if len(args) >= 2 and args[1] in ("pm", "skill", "qa", "dm"):
@@ -96,6 +107,9 @@ def _emit(event_type, payload=None, cycle_number=None, role=None):
             elif len(args) >= 2 and args[0] in ("commit-code", "commit-state", "commit-push",
                                                  "commit", "task-begin", "task-end"):
                 role = args[1]
+            if role is None:
+                # Cannot infer — silent no-op rather than emit "unknown".
+                return
         emit(event_type, role, payload=payload, cycle_number=cycle_number)
     except (ImportError, Exception):
         pass
