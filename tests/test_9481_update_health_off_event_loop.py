@@ -25,12 +25,16 @@ The fix has two parts:
    refreshes state every ``HEALTH_POLL_INTERVAL`` seconds; ``/status``
    returns cached state in milliseconds.
 
-2. The other three read-only handlers wrap ``update_health()`` in
-   ``await asyncio.to_thread(...)`` so the slow probe runs in a
-   worker thread instead of freezing the loop.
+2. The other three read-only handlers wrapped ``update_health()`` in
+   ``await asyncio.to_thread(...)`` so the slow probe ran in a worker
+   thread instead of freezing the loop.
 
-Same anti-pattern, same fix shape, as #9242's ``save_state`` wraps —
-just on a different function.
+   **Superseded by #9665.** On warm Windows runs the probe exceeds
+   30s even off the event loop, which timed out the #9398
+   real-subprocess integration tests. #9665 removed the inline call
+   from those three handlers as well — same treatment ``/status``
+   already got. The positive assertion for that new invariant lives
+   in ``test_9665_no_inline_update_health_on_agents_endpoints.py``.
 """
 
 import importlib.util
@@ -121,58 +125,13 @@ class TestStatusEndpointNoInlineUpdateHealth(unittest.TestCase):
         )
 
 
-class TestReadOnlyHandlersUpdateHealthOffEventLoop(unittest.TestCase):
-    """Other read-only async handlers may still want fresh data on each
-    call (e.g. ``/agents/{role}/health`` is a deliberate probe). They
-    MUST wrap ``state.update_health()`` in ``await asyncio.to_thread(...)``
-    so the subprocess storm runs in a worker thread instead of freezing
-    the asyncio loop. Same shape as #9242's ``save_state`` wraps."""
-
-    HANDLERS = [
-        "async def list_agents",          # GET /agents
-        "async def get_agent",            # GET /agents/{role}
-        "async def get_agent_health",     # GET /agents/{role}/health
-    ]
-
-    def setUp(self):
-        self.source = HARNESS_PATH.read_text(encoding="utf-8")
-
-    def test_no_bare_update_health_in_async_handlers(self):
-        for handler in self.HANDLERS:
-            with self.subTest(handler=handler):
-                body = _extract_handler_body(self.source, handler)
-                bare = [
-                    line for line in body.splitlines()
-                    if line.strip().startswith("state.update_health(")
-                ]
-                self.assertEqual(
-                    bare, [],
-                    msg=(
-                        f"{handler}: found bare state.update_health() call(s) "
-                        "on the asyncio event loop. Wrap in "
-                        "`await asyncio.to_thread(state.update_health)` per "
-                        "#9481. Offending lines:\n" + "\n".join(bare)
-                    ),
-                )
-
-    def test_to_thread_wrap_present_in_each_handler(self):
-        """Positive check: each handler still updates health, just via
-        ``to_thread``. Guards against a refactor that drops the call
-        without leaving a wrap behind."""
-        for handler in self.HANDLERS:
-            with self.subTest(handler=handler):
-                body = _extract_handler_body(self.source, handler)
-                self.assertIn(
-                    "asyncio.to_thread(state.update_health)", body,
-                    msg=(
-                        f"{handler}: expected "
-                        "`await asyncio.to_thread(state.update_health)` so "
-                        "the slow Windows tasklist probe runs off the event "
-                        "loop. If the call was deliberately removed (like "
-                        "/status), move the handler out of HANDLERS in this "
-                        "test and add a no-inline-call assertion instead."
-                    ),
-                )
+# NOTE: ``TestReadOnlyHandlersUpdateHealthOffEventLoop`` lived here in
+# the original #9481 commit and asserted that ``list_agents``,
+# ``get_agent``, and ``get_agent_health`` wrapped ``update_health`` in
+# ``asyncio.to_thread``. #9665 superseded that — those handlers no
+# longer call ``update_health`` at all (same treatment ``/status`` got
+# above). See ``test_9665_no_inline_update_health_on_agents_endpoints.py``
+# for the new invariant.
 
 
 class TestUpdateHealthStillCalledFromPoller(unittest.TestCase):

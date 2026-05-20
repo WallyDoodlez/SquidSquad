@@ -1188,9 +1188,14 @@ async def get_root():
 
 @app.get("/agents")
 async def list_agents():
-    """List agents with state."""
-    # #9481: see get_status — keep sync subprocess off the event loop.
-    await asyncio.to_thread(state.update_health)
+    """List agents with state.
+
+    #9665: no inline update_health() call (extends #9481). On warm
+    Windows runs the call exceeds 30s even off the event loop, which
+    timed out callers like the #9398 real-subprocess tests. The
+    background health poller (HEALTH_POLL_INTERVAL) is the
+    authoritative freshness budget for this endpoint.
+    """
     return {"agents": state.all_agents()}
 
 
@@ -1267,10 +1272,12 @@ async def stop_all():
 
 @app.get("/agents/{role}")
 async def get_agent(role: str):
-    """Get single agent state."""
+    """Get single agent state.
+
+    #9665: no inline update_health() call (extends #9481). See
+    list_agents — same freshness rationale.
+    """
     _validate_role(role)
-    # #9481: see get_status — keep sync subprocess off the event loop.
-    await asyncio.to_thread(state.update_health)
     agent = state.get_agent(role)
     if agent is None:
         return {"role": role, "status": "unknown", "message": "No health data yet"}
@@ -1319,10 +1326,12 @@ async def start_agent(role: str):
 
 @app.get("/agents/{role}/health")
 async def get_agent_health(role: str):
-    """Agent health endpoint — process status, last cycle, phase, context pressure (#4966)."""
+    """Agent health endpoint — process status, last cycle, phase, context pressure (#4966).
+
+    #9665: no inline update_health() call (extends #9481). See
+    list_agents — same freshness rationale.
+    """
     _validate_role(role)
-    # #9481: see get_status — keep sync subprocess off the event loop.
-    await asyncio.to_thread(state.update_health)
     agent = state.get_agent(role)
 
     result = {
