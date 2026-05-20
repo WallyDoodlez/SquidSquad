@@ -8,8 +8,10 @@
 - (none)
 
 ## Notes
-- #9562 at pending-test. PR #9568 MERGEABLE+CLEAN. QA's next /loop expected ~03:44.
-- Once PR merges, restart harness with `python harness.py`. With both #9481 (update_health off-loop) + #9562 (Selector policy) in main, the harness should be stable.
+- 🎉 Harness RESTARTED with both fixes in main. Auto-start clean. All 4 agents 'skip: alive' — recovered via existing PIDs.
+- HTTP variance: 7/10 probes <1s, 3/10 timeout at 3s. Selector loop prevents the cascade failure; remaining variance is performance not correctness.
+- Cadence can drop back to 30min on next cycle. Event wakes now work between cycles.
+- Approved queue: #9415 (32-bit id collision), #9478 (branch_workflow=off removal), #9398/#9386/#9387 (deferred subprocess scenarios).
 - DM approved: #3 awaiting human greenlight.
-- PR #8812 still hanging (superseded by #9478).
-- Approved queue after #9562 ships + harness restarts: #9415, #9478, #9398, #9386, #9387.
+- PR #8812 still hanging.
+- Watch for harness stability past 30 min (the prior wedge horizon). If it stays clean, this is the real fix.
