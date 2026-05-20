@@ -164,5 +164,165 @@ class TestRealHarnessFixtureWritesPortFileToIsolatedDir(unittest.TestCase):
         )
 
 
+# ---------------------------------------------------------------------------
+# §4.1 AC-3 M-3.2 — work-pickup half (the real point of #9398 Phase A)
+# ---------------------------------------------------------------------------
+
+import subprocess  # noqa: E402
+import tempfile  # noqa: E402
+
+TRACKER_PY = REPO_ROOT / "references" / "scripts" / "tracker.py"
+
+
+class TestAgentWorkPickupThroughGhShim(unittest.TestCase):
+    """The §4.1 acceptance criterion calls for an event-mode agent
+    subprocess that picks up the forge's top approved item via
+    ``tracker.list-tasks`` + ``tracker.transition``. The wire half
+    of that contract (post a status-transition event, harness
+    distributes it) already passes in `test_event_mode_agent_subprocess.py`;
+    this test covers the *real subprocess* half — the agent's
+    tracker calls hit our gh PATH-shim, the shim returns canned
+    issues, the agent's transition write lands on the shim's
+    ``_writes.log``, and we assert the expected transition.
+
+    Why subprocess'd `tracker.py` instead of spawning `cycle_pre.py`:
+    the work-pickup logic in `cycle_pre._do_work_queue` is a thin
+    wrapper around `tracker.work_queue` / `tracker.list_issues` /
+    `tracker.transition`. Exercising tracker.py directly (rather
+    than the bigger cycle_pre process) keeps the test focused on
+    the shim-tracker contract that this PR is actually delivering.
+    A future cycle_pre subprocess test layers on top of this.
+    """
+
+    def _run_tracker(self, args: list[str], fixtures_dir: Path,
+                     timeout: float = 15.0):
+        """Spawn tracker.py with the gh-shim on PATH and the
+        fixtures dir set, capture stdout/stderr."""
+        env = ems.env_with_gh_shim(fixtures_dir=fixtures_dir)
+        return subprocess.run(
+            [sys.executable, str(TRACKER_PY)] + args,
+            env=env, cwd=str(REPO_ROOT),
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            timeout=timeout, check=False,
+        )
+
+    def test_agent_finds_canned_approved_task_and_transitions(self):
+        """End-to-end work-pickup slice:
+        1. Test prepares a canned approved task fixture.
+        2. tracker.py list-tasks → finds the canned task.
+        3. tracker.py transition (approved → in-progress) → write
+           logged to shim's _writes.log.
+        4. Test asserts the writes log shows the expected transition
+           with the expected from/to labels.
+
+        This is the load-bearing scenario for the AC-3 M-3.2
+        subprocess half. Without it, #9386 / #9387 (which reuse
+        this fixture) have no proven baseline."""
+        import json as _json
+
+        with tempfile.TemporaryDirectory(prefix="wp-fix-") as tmp:
+            fdir = Path(tmp)
+            issue_number = 87654
+
+            # Canned approved task for the list-tasks fetch.
+            (fdir / "issue-list").mkdir()
+            canned_task = [{
+                "number": issue_number,
+                "title": "TASK: synthetic approved task for #9398 work-pickup test",
+                "labels": [
+                    {"name": "type:task"},
+                    {"name": "role:skill"},
+                    {"name": "status:approved"},
+                    {"name": "priority:medium"},
+                ],
+            }]
+            (fdir / "issue-list" / "default.json").write_text(
+                _json.dumps(canned_task), encoding="utf-8"
+            )
+
+            # Canned issue-view (transition's _check_authority calls
+            # `gh issue view <N> --json labels` to enforce that the
+            # caller's role matches the issue's role:* label).
+            (fdir / "issue-view").mkdir()
+            (fdir / "issue-view" / str(issue_number)).with_suffix(".json").write_text(
+                _json.dumps({
+                    "labels": [
+                        {"name": "type:task"},
+                        {"name": "role:skill"},
+                        {"name": "status:approved"},
+                    ],
+                }), encoding="utf-8"
+            )
+
+            # Step 1: list-tasks finds the canned task.
+            list_result = self._run_tracker(
+                ["list-tasks", "skill", "--status", "approved"], fdir,
+            )
+            self.assertEqual(
+                list_result.returncode, 0,
+                msg=(
+                    f"list-tasks failed rc={list_result.returncode}. "
+                    f"stderr: {list_result.stderr[:500]!r}"
+                ),
+            )
+            listed = _json.loads(list_result.stdout)
+            self.assertEqual(len(listed), 1)
+            self.assertEqual(listed[0]["number"], issue_number)
+
+            # Step 2: transition approved → in-progress.
+            trans_result = self._run_tracker(
+                ["transition", str(issue_number),
+                 "approved", "in-progress",
+                 "--role", "skill-lead"],
+                fdir,
+            )
+            # tracker.transition returns 0 on success and prints
+            # a one-line confirmation. If authority is rejected
+            # we'll see a non-zero exit and the stderr will say why.
+            self.assertEqual(
+                trans_result.returncode, 0,
+                msg=(
+                    f"transition failed rc={trans_result.returncode}. "
+                    f"stdout: {trans_result.stdout[:500]!r}; "
+                    f"stderr: {trans_result.stderr[:500]!r}"
+                ),
+            )
+
+            # Step 3: assert the writes log shows the expected
+            # transition. The shim logs every write-type gh call;
+            # transition makes two: an issue-edit (--remove-label
+            # status:approved --add-label status:in-progress) and
+            # potentially a comment if --message was used (we
+            # didn't pass --message so just the edit).
+            log = fdir / "_writes.log"
+            self.assertTrue(
+                log.exists(),
+                msg=(
+                    "Shim must have logged at least one write call "
+                    "for the transition — without this, we can't "
+                    "verify the agent actually issued the transition."
+                ),
+            )
+            entries = [
+                _json.loads(line) for line in
+                log.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            edit_entries = [e for e in entries if e["verb"] == "edit"]
+            self.assertTrue(
+                edit_entries,
+                msg=(
+                    f"Expected at least one `issue edit` log entry "
+                    f"from the transition. Log entries: {entries!r}"
+                ),
+            )
+            # Pin the specific labels asserted in the edit so a
+            # future tracker refactor that drops one of them fails.
+            edit_args = " ".join(edit_entries[0]["args"])
+            self.assertIn("status:approved", edit_args)
+            self.assertIn("status:in-progress", edit_args)
+
+
 if __name__ == "__main__":
     unittest.main()
