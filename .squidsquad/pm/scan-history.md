@@ -454,3 +454,10 @@
 - **Findings**: #9318 — Dev Agents value stale since #6055 (qa became mandatory; should be just "skill")
 - **Auto-fixed**: none (Tier 2 — touches config + compose + recompose across 4 roles)
 - **Items rejected by human**: none
+
+## Scan — 2026-05-19 20:15
+
+- **Files scanned**: references/scripts/git_ops.py (cross-referenced cycle-1500 unknown ghost cleanup + scan-history 2026-05-08 entry + #5782)
+- **Findings**: git_ops.py:90 still has `role = "unknown"` fallback — upstream source of the harness state corruption. #5782 was supposed to fix it but shipped incomplete. Added as evidence to #9242 fix-proposal item #3.
+- **Auto-fixed**: none (skill domain; touches event emission semantics)
+- **Items rejected by human**: none
