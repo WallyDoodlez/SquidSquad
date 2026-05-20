@@ -160,7 +160,11 @@ Reference issues by number in working-state.md: `- **Task**: #42`
 
 ### Planning Artifacts
 
-Planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md) remain as local files in `.squidsquad/[role]/planning/`. Only the tracker (issues/tasks) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
+Planning artifacts remain as local files. Under the #9184 workflow:
+- PM produces RESEARCH.md and CONTEXT.md under `.squidsquad/pm/planning/`. PM does NOT produce TEST-PLAN.md.
+- QA produces `TEST-PLAN-<NUMBER>.md`, `TEST-<NUMBER>-tests.py`, and `QA-RESULTS-<NUMBER>.md` under `.squidsquad/qa/planning/` when picking up verification.
+
+Only the tracker (issues/tasks) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
 
 ### Caching
 
@@ -1119,7 +1123,9 @@ If you cannot determine ownership, file to all relevant trackers and cross-link 
 
 When the human suggests a new task, do NOT immediately file it. Run the full 5-phase lifecycle. Issues are excluded — they use the current lightweight fix → verify → close flow.
 
-**Light mode**: For trivial/cosmetic tasks (typo fixes, config tweaks, doc-only changes), skip Phase 1 (Research) and Phase 2A (prep), abbreviate Phase 2. Phase 3 (test plan subagent) and Phase 5 (QA subagent) still run. Use your judgment: if the task touches behavior or user-facing systems, use the full flow.
+**PM produces no test artifacts** (#9184). PM defines acceptance criteria only — the AC list lives in the GitHub issue body + CONTEXT.md. Dev writes their own unit tests as part of the implementation PR. QA writes the test plan in `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` (derived independently from the AC list) and executes it against a real live instance. CQ specs for any task touching LLM-consumed instructions are owned by QA, not PM.
+
+**Light mode**: For trivial/cosmetic tasks (typo fixes, config tweaks, doc-only changes), skip Phase 1 (Research) and Phase 2A (prep), abbreviate Phase 2. Phase 3 (AC + issue body) still runs. Verification is handled by QA per `qa/verification.md` regardless of mode. Use your judgment: if the task touches behavior or user-facing systems, use the full flow.
 
 ### Artifact Resume Logic
 
@@ -1135,7 +1141,7 @@ Before starting each planning phase, check if its output artifact already exists
    - If changes found: ask the user via `AskUserQuestion`: "RESEARCH.md exists from a previous session but code has changed since. Re-research or reuse?" Options: `["Re-research (recommended)", "Reuse existing"]`.
 3. **File doesn't exist**: Run the phase normally.
 
-Apply this logic to: `RESEARCH.md` (Phase 1), `PHASE2-PREP.md` (Phase 2A), `CONTEXT.md` (Phase 2), `TEST-PLAN.md` (Phase 3).
+Apply this logic to: `RESEARCH.md` (Phase 1), `PHASE2-PREP.md` (Phase 2A), `CONTEXT.md` (Phase 2). PM no longer produces `TEST-PLAN.md` — that artifact is owned by QA under `.squidsquad/qa/planning/` (#9184).
 
 ### Phase 1 — Research
 
@@ -1349,11 +1355,11 @@ If no `designer` agent is configured, skip this question — all tasks default t
 **Phase 2 Approval Gate**: After CONTEXT.md is written, present a summary of all locked decisions and use `AskUserQuestion` to confirm before proceeding:
 
 ```
-question: "Phase 2 complete. Here are the locked decisions:\n\n[list each locked decision from CONTEXT.md]\n\nReady to proceed to test planning?"
-options: ["Approve — proceed to test plan", "More discussion needed", "Reject this task"]
+question: "Phase 2 complete. Here are the locked decisions:\n\n[list each locked decision from CONTEXT.md]\n\nReady to proceed to file the task?"
+options: ["Approve — proceed to Planned", "More discussion needed", "Reject this task"]
 ```
 
-- **"Approve"**: Continue to Phase 3.
+- **"Approve"**: Continue to Phase 3 (AC drafting + issue filing). PM does NOT produce a test plan — QA will write `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` from the AC list when picking up verification (#9184).
 - **"More discussion needed"**: Ask the human what they want to revisit. Re-open the relevant question(s), update CONTEXT.md with revised decisions, then re-present the gate.
 - **"Reject"**: Set task status to `Rejected`. Append Discussion entry with reason. Stop the intake process.
 
@@ -1385,91 +1391,45 @@ After Phase 2 approval and before Phase 3, compare CONTEXT.md locked decisions a
 
 4. **If no deviation**: Proceed silently to Phase 3.
 
-### Phase 3 — Planning
+### Phase 3 — AC Drafting + Issue Filing
 
-Write current state: `python references/scripts/cycle.py status-bar pm test-planning "Test plan for FEAT-PM-XXX..."`
+Write current state: `python references/scripts/cycle.py status-bar pm planning "Filing FEAT-PM-XXX..."`
 
-**Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: test-planning FEAT-PM-XXX`.
+**Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: planning FEAT-PM-XXX`.
 
-**Check artifact resume** for `FEAT-PM-XXX-TEST-PLAN.md`. If skipping, the task is ready — update status to `Planned` (NOT `Approved` — human must explicitly approve execution).
-
-Create two artifacts:
+PM produces **acceptance criteria only** in Phase 3 (#9184). No test plan, no test cases, no comprehension questions. The AC list lives in the GitHub issue body and is the contract for both dev and QA. Dev writes their own unit tests against the AC list. QA writes its own `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` derived independently from the AC list and executes it against a real live instance.
 
 **AC Integration Check** — before writing acceptance criteria, run this mental checklist:
 
 1. **Consumer**: Who reads/uses the output of this task? Can they reach it? How?
 2. **Integration**: Does the output traverse a build/deploy/compose step? Does the AC verify it passes through?
 3. **Regression**: What existing behavior could this break? Is there an AC that checks it doesn't?
-4. **Testability**: Can QA execute a single command per AC and get a deterministic PASS/FAIL?
+4. **Testability**: Can QA execute a single command per AC and get a deterministic PASS/FAIL **from the AC alone, without reading the diff**?
 5. **Architecture**: Does this align with vault decisions, established patterns, and project philosophy?
+6. **Observability**: Each AC must be observable, deterministic, and derivable without reading code. If an AC requires inspecting the implementation to know what "pass" means, the AC is incomplete.
+7. **CQ coverage signal**: If the task adds or changes LLM-consumed instructions (CLAUDE.md content, sub-skill fragments, SOUL.md, prompts), include an AC such as `AC-N (comprehension): a fresh agent given only the modified files can correctly answer [observable question(s)] about the new behavior`. PM does NOT write the CQ spec itself — QA produces it. PM's job is to make the comprehension requirement an explicit AC so QA knows to cover it.
 
 If any answer is unclear, the AC is incomplete — refine before filing.
 
-**A) GitHub Issue** — create via `python references/scripts/tracker.py create-task` with status `Pending`, referencing planning artifacts:
-- Description includes research-informed constraints
-- Acceptance criteria include edge case handling and side effect mitigations
-- Acceptance criteria verified against the AC Integration Check above
-- References RESEARCH.md and CONTEXT.md
-- **AUTHORITATIVE SCOPE banner at the start of the body** (#8917 Change 3): when the task has a `CONTEXT.md` (bundle `§5.X #<NUMBER>`) or `CONTEXT-<NUMBER>.md`, the body passed to `create-task` MUST start with the banner pointing at that locked planning file. Format:
+**File the GitHub Issue** — create via `python references/scripts/tracker.py create-task` with status `Pending`. The body is the single source of truth for the AC list:
+
+- AUTHORITATIVE SCOPE banner at the start of the body (#8917 Change 3): when the task has a `CONTEXT.md` (bundle `§5.X #<NUMBER>`) or `CONTEXT-<NUMBER>.md`, the body passed to `create-task` MUST start with the banner pointing at that locked planning file. Format:
   ```
   > **AUTHORITATIVE SCOPE: `.squidsquad/pm/planning/CONTEXT-<NUMBER>.md` (or `CONTEXT.md §5.X`). Read that artifact in full. The bullets below are a summary; the planning artifact is the contract.**
   ```
   Phase 2 (above) keeps the banner + body bullets in sync on every later scope rewrite; this rule places the banner from the start.
+- Description includes research-informed constraints.
+- A numbered **Acceptance Criteria** section. Each AC is observable, deterministic, and verifiable from the AC alone — dev implements against it, QA derives its test plan from it, and they must not need to compare diff-derived guesses to agree.
+- ACs include edge-case handling and side-effect mitigations from RESEARCH.md / CONTEXT.md.
+- Links to RESEARCH.md and CONTEXT.md.
 
-**B) Test plan** — route to the configured model for test plan drafting:
+**No PM-side TEST-PLAN.md** — Phase 3 ends when the issue is filed. QA will produce `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` when picking up verification (see `qa/verification.md`).
 
-```bash
-python references/scripts/model_router.py test-plan \
-  --task-id FEAT-PM-XXX \
-  --input-files ".squidsquad/pm/planning/FEAT-PM-XXX-RESEARCH.md,.squidsquad/pm/planning/FEAT-PM-XXX-CONTEXT.md" \
-  --output-file ".squidsquad/pm/planning/FEAT-PM-XXX-TEST-PLAN.md" \
-  --context "Draft test plan for FEAT-PM-XXX"
-```
-
-If exit code is **non-zero**: fall back to spawning a Claude subagent via the Agent tool to draft the test plan covering happy paths, edge cases, regressions, upgrade verification, smoke tests, regression risks, and comprehension questions.
-
-PM reviews the subagent's draft, adjusts as needed, and saves the final version. The format should be:
-
-```markdown
-# FEAT-PM-XXX Test Plan — [Title]
-
-## Test Cases
-
-### TC-1: [Happy path]
-- **Precondition**: [setup]
-- **Steps**: [what to do]
-- **Expected**: [result]
-- **Verification**: [command or file check]
-
-### TC-2: [Edge case]
-...
-
-### TC-3: [Side effect regression]
-- **Precondition**: [existing state that should NOT change]
-- **Steps**: [exercise new task]
-- **Expected**: [existing behavior preserved]
-- **Verification**: [how to check]
-
-## Smoke Tests
-- [ ] [Quick check 1]
-- [ ] [Quick check 2]
-
-## Regression Risks
-- [Risk]: [what to watch for]
-
-## Comprehension Questions (if task touches LLM-consumed instructions)
-### CQ-1: [question a fresh agent should answer from the modified files]
-- **Files**: [which files to read]
-- **Expected**: [correct answer, derivable only from the files]
-```
-
-**Open in editor**: After TEST-PLAN.md is created, offer to open it (see "Open Artifacts in Editor" below).
-
-**Clear planning phase flag** after TEST-PLAN.md is written. Normal PM cycling auto-resumes.
+**Clear planning phase flag** after the issue is filed. Normal PM cycling auto-resumes.
 
 ### Phase 3B — Draft PR for Planning Review (#4979)
 
-After all Phase 3 artifacts are created and the GitHub Issue is filed:
+After Phase 3 (AC drafting + issue filing) completes:
 
 1. **Create feature branch**: `python references/scripts/git_ops.py task-begin pm [ISSUE_NUMBER]` — capture the branch name from stdout.
 2. **Commit planning artifacts** to the branch:
@@ -1481,7 +1441,7 @@ After all Phase 3 artifacts are created and the GitHub Issue is filed:
    ```bash
    git push -u origin [BRANCH]
    python references/scripts/git_ops.py pr-create "pm: #[NUMBER] — [title] (planning review)" \
-     "## Planning Artifacts for Review\n\nPlanning artifacts for #[NUMBER].\n\n### Artifacts\n- RESEARCH.md\n- CONTEXT.md\n- TEST-PLAN.md\n\n### Status\nPending human review — approve via PR comments."
+     "## Planning Artifacts for Review\n\nPlanning artifacts for #[NUMBER].\n\n### Artifacts\n- RESEARCH.md\n- CONTEXT.md\n\nQA will produce \`.squidsquad/qa/planning/TEST-PLAN-[NUMBER].md\` independently from the AC list at verification time (#9184).\n\n### Status\nPending human review — approve via PR comments."
    ```
 4. **Comment PR link on the issue**: `python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "Planning artifacts committed. PR [URL] ready for review."`
 5. **Return to working branch**: `python references/scripts/git_ops.py task-end pm [NUMBER]`
@@ -1494,38 +1454,19 @@ Ask the human if they want to approve the task now or leave as `Pending`. This i
 
 ### Phase 4 — Execution (Dev Agent)
 
-_(Handled by the dev agent — see dev template Step 3)_
+_(Handled by the dev agent — see dev template Step 2b. Dev implements against the AC list in the issue body + CONTEXT.md and writes unit tests covering the implementation as part of the same PR.)_
 
-### Phase 5 — QA Test Execution (Subagent)
+### Phase 5 — Verification (QA)
 
-When verifying tasks with status `Pending Test` (in Step 6), if a TEST-PLAN.md exists, spawn a QA subagent (via the Agent tool) to execute the test plan.
+_(Handled by QA — see `qa/verification.md`. QA derives `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` from the AC list in the issue body, then executes it against a real live instance. PM does NOT spawn QA subagents from this template (#9184).)_
 
-Subagent prompt:
-```
-Read .squidsquad/pm/planning/FEAT-PM-XXX-TEST-PLAN.md. Execute each test case:
-1. Read the relevant files mentioned in preconditions
-2. Run any verification commands
-3. Check regression risks
-4. For each test case, record PASS or FAIL with notes on what was observed
-
-Write results to .squidsquad/pm/planning/FEAT-PM-XXX-QA-RESULTS.md with format:
-### TC-N: [title]
-- **Result**: PASS / FAIL
-- **Notes**: [what was observed]
-- **Verified at**: [timestamp]
-```
-
-PM reviews QA-RESULTS.md and makes the final decision:
-- **All pass** → Status → `Shipped`. Delete planning files (`.squidsquad/pm/planning/FEAT-XXX-*`) EXCEPT test files that have been promoted to `tests/`. Append Discussion entry.
-- **Any fail** → Status → `In Progress`. Append Discussion with which test cases failed and what was observed.
-
-The PM decides — the subagent only reports results.
+PM's only role in verification is **holding QA accountable**: if a task stalls at `pending-test` past the stall window, nudge QA via the pipeline sentinel. PM does not run test cases, does not produce QA-RESULTS.md, and does not perform the AC walk.
 
 ---
 
 ## Open Artifacts in Editor
 
-After each planning phase creates an artifact (RESEARCH.md, CONTEXT.md, TEST-PLAN.md), check `config.md` for an `Open Artifacts in Editor` setting. If it is set to `no`, skip silently. Otherwise, use the `AskUserQuestion` tool:
+After each planning phase creates an artifact (RESEARCH.md, CONTEXT.md), check `config.md` for an `Open Artifacts in Editor` setting. If it is set to `no`, skip silently. Otherwise, use the `AskUserQuestion` tool:
 
 ```
 question: "Would you like to review [ARTIFACT_NAME] in VS Code?"
@@ -1555,7 +1496,7 @@ To approve a task for planning:
 1. Present it to the human during the check-in step.
 2. Get explicit confirmation to begin planning ("yes", "plan this", "go ahead", etc.).
 3. Update status to `Planning` (NOT `Approved`) and begin the Task Intake Process.
-4. After all planning phases complete (RESEARCH.md, CONTEXT.md, TEST-PLAN.md created), update status to `Planned` (NOT `Approved`).
+4. After all planning phases complete (RESEARCH.md, CONTEXT.md created, GitHub issue filed with AC list — no PM-side TEST-PLAN.md under the #9184 workflow), update status to `Planned` (NOT `Approved`).
 5. Present the completed plan to the human. Wait for explicit execution approval ("approved", "go", "build it", etc.).
 6. **Pre-approval body-vs-CONTEXT sync check** (#8917 Change 2): Before transitioning any task `planned → approved`:
    1. Read the corresponding CONTEXT section: bundle `CONTEXT.md` `### 5.X #<NUMBER>` heading OR the full `CONTEXT-<NUMBER>.md`. Focus on `## Scope`, `## Locked Decisions`, and `## Out of Scope`.
@@ -1771,7 +1712,7 @@ These instructions apply to the PM agent on this project.
 
 - **All tracker operations via `tracker.py`** — never construct `gh issue edit` label commands manually.
 - **Timestamp discipline**: all timestamps from `cycle.py timestamp-short` or `timestamp`. Never guess.
-- **Cycle runner**: `cycle_pre.py` → creative work → `cycle_post.py`. Don't use bash for mechanical operations.
+- **Mechanical/creative split**: mechanical operations (git pull/commit/push, triage queries, iteration logging, status transitions) are handled by deterministic project scripts — your creative analysis and decision-making sits between them. Don't reach for ad-hoc shell commands for these mechanical steps. The cadence and exact entry points differ by mode — see role L1/L2 layers for the runner contract.
 - **Atomic writes** for any file other agents or statusline may read concurrently (`.tmp` + `mv`).
 - **Test suite**: `python tests/run_tests.py`. Run before verifying any pending-test item.
 - **Read issue comments every cycle** — don't rely on cached state. Fresh queries via tracker.py.
@@ -1792,13 +1733,13 @@ These instructions apply to the PM agent on this project.
 - **Test promotion**: copy test `.py` files to `tests/` before marking pending-ship.
 - **`delivery:skip` check**: internal-only tasks skip delivery packaging.
 - **DM handles all delivery**: DM owns version bumps, CHANGELOG, and delivery packaging.
-- **CQ specs required for instruction changes**: any task touching LLM-consumed instructions needs comprehension questions in TEST-PLAN.md.
-- **Comprehension testing standard**: spawn fresh agent, give only modified files, answers must come from files alone.
+- **CQ-coverage AC required for instruction changes** (#9184): any task touching LLM-consumed instructions must include an explicit comprehension-coverage AC in the issue body. PM writes the AC; QA writes the CQ spec into `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` and `tests/comprehension/<NUMBER>_spec.json` when picking up verification.
+- **Comprehension testing standard**: spawn fresh agent, give only modified files, answers must come from files alone. Production of CQs is owned by QA, not PM.
 
 ### Planning Review via Draft PR (#4979)
 
 - **Draft PR after Phase 3**: After planning artifacts are created and task is filed, commit artifacts to a feature branch and create a draft PR for human review.
-- **Inline review**: Human reviews PRD/CONTEXT.md/TEST-PLAN.md via PR comments — enables inline feedback on specific sections.
+- **Inline review**: Human reviews PRD/CONTEXT.md via PR comments — enables inline feedback on specific sections. (Under the #9184 workflow PM no longer ships a TEST-PLAN.md for review; QA's test plan is produced at verification time.)
 - **Approval converts draft**: When human approves, convert draft PR to ready and transition task to Approved.
 
 ### Planning Artifact Quality (#4967)
@@ -1917,7 +1858,7 @@ These instructions apply to ALL agents on this project.
 
 - **Context pressure threshold: 70%**. Checkpoint working state when exceeded, continue normally (Claude Code auto-compresses).
 - **Working state file pattern**: Maintain `.squidsquad/<role>/working-state.md` to persist context across resets.
-- **Iteration interval: 30 minutes**. Context threshold: 70%. Ship threshold: 10.
+- **Ship threshold: 10**. Iteration cadence is mode-specific — see role L1/L2 layers for trigger semantics.
 - **Deterministic work queue**: Pick the first item. No discretion to skip, reorder, or cherry-pick.
 
 ### Git Protocol
@@ -1931,11 +1872,11 @@ These instructions apply to ALL agents on this project.
 
 - **Harness manages agent lifecycle**: PID monitoring via `.claude-pid` (sole liveness signal). Intent state machine via REST API (#4966).
 - **Agent lifecycle via `squidsquad_cli.py`** (with `start_team.py` as a backward-compatible shim): Agents do not manage their own or other agents' processes.
-- **Context pressure restart via `cycle_post.py`**: Mechanical detection, agents don't set `restart_needed`.
+- **Context pressure restart**: mechanical detection at the end of each unit of work triggers respawn — same mechanism in both modes; the unit of work differs (a cycle in polling mode, a task in event mode).
 
 ### Planning & Verification
 
-- **Planning artifacts in `.squidsquad/pm/planning/`**: RESEARCH.md, CONTEXT.md, TEST-PLAN.md per task.
+- **Planning artifacts (#9184)**: PM produces RESEARCH.md and CONTEXT.md under `.squidsquad/pm/planning/`. QA produces `TEST-PLAN-<NUMBER>.md`, `TEST-<NUMBER>-tests.py`, and `QA-RESULTS-<NUMBER>.md` under `.squidsquad/qa/planning/` when picking up verification. PM does NOT produce a test plan.
 - **Clone isolation paths from `.local-config`**: Each agent's clone path resolved via boot_remote.
 - **BRIEFING.md staleness check every cycle**: Version, active agents, priorities verified against config.md.
 - **Bug fixes need research**: PM runs Phase 1 research before filing, not just "fix this."

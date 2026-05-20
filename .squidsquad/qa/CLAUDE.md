@@ -160,7 +160,11 @@ Reference issues by number in working-state.md: `- **Task**: #42`
 
 ### Planning Artifacts
 
-Planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md) remain as local files in `.squidsquad/[role]/planning/`. Only the tracker (issues/tasks) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
+Planning artifacts remain as local files. Under the #9184 workflow:
+- PM produces RESEARCH.md and CONTEXT.md under `.squidsquad/pm/planning/`. PM does NOT produce TEST-PLAN.md.
+- QA produces `TEST-PLAN-<NUMBER>.md`, `TEST-<NUMBER>-tests.py`, and `QA-RESULTS-<NUMBER>.md` under `.squidsquad/qa/planning/` when picking up verification.
+
+Only the tracker (issues/tasks) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
 
 ### Caching
 
@@ -533,18 +537,68 @@ When verification is complete (pass or fail), return to working branch:
 python references/scripts/git_ops.py task-end [role] [number]
 ```
 
-1. **If a TEST-PLAN.md exists** in the PM's planning directory (`.squidsquad/pm/planning/`), spawn a QA subagent (via the Agent tool) to execute the test plan:
+1. **QA produces the test plan from the AC list** (#9184). PM does not produce a test plan; QA is the verification owner. **Before exercising the implementation**, derive the test plan from the issue body's Acceptance Criteria + the locked CONTEXT artifact (if any) and write it to:
+
+   ```
+   .squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md
+   ```
+
+   The test plan must be derivable from the AC list alone — do not reverse-engineer test cases from dev's diff. Read the AC list, read CONTEXT.md (for locked decisions and out-of-scope items), then write test cases that observably verify each AC against a real live test instance of the system (actual harness, actual tracker, actual filesystem). Running dev's unit tests is a sanity check only — not the gate.
+
+   Resume logic mirrors PM's: if `TEST-PLAN-<NUMBER>.md` already exists under `.squidsquad/qa/planning/` and the issue body's ACs have not changed since the file was committed, reuse it; otherwise re-derive.
+
+   **Test plan structure**:
+
+   ```markdown
+   # TEST-PLAN-<NUMBER> — [Title]
+
+   **Source**: GitHub issue #<NUMBER> Acceptance Criteria (and CONTEXT-<NUMBER>.md locked decisions if present).
+   **Derived without reading the diff.**
+
+   ## Test Cases
+
+   ### TC-1 (covers AC-1): [observable scenario]
+   - **Precondition**: [state of live instance before]
+   - **Steps**: [what QA does against the live system]
+   - **Expected**: [observable result that satisfies AC-1]
+   - **Verification command**: [exact command QA runs]
+
+   ### TC-2 (covers AC-2): …
+   ...
+
+   ## Coverage matrix
+   - AC-1 → TC-1
+   - AC-2 → TC-2, TC-3
+   - AC-N → TC-…
+
+   Every AC must appear in this matrix.
+
+   ## Comprehension Questions (if task touches LLM-consumed instructions)
+
+   This section is REQUIRED when the task adds or modifies LLM-consumed
+   instructions (CLAUDE.md content, sub-skill fragments, SOUL.md, prompts).
+   QA writes the CQ specs here — not PM (#9184).
+
+   ### CQ-1: [observable question a fresh agent should answer from the modified files alone]
+   - **Files**: [exact files the comprehension agent will be given]
+   - **Expected answer**: [the correct answer, derivable from the files alone]
+
+   Also persist the CQ spec at `tests/comprehension/<NUMBER>_spec.json`
+   per the existing convention so the comprehension test runner can pick it up.
+   ```
+
+   Spawn a QA subagent (via the Agent tool) to write executable assertions for the live-system test cases:
 
    Subagent prompt:
    ```
-   Read .squidsquad/qa/planning/FEAT-QA-XXX-TEST-PLAN.md. For each test case:
+   Read .squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md. For each test case:
 
-   1. Write an executable pytest test in .squidsquad/qa/planning/FEAT-QA-XXX-tests.py
+   1. Write an executable pytest test in .squidsquad/qa/planning/TEST-<NUMBER>-tests.py
       - Each TC becomes a test function: test_tc_01_[name], test_tc_02_[name], etc.
       - Tests must use concrete assertions (file exists, string matches, JSON parses, exit code checks)
-      - Use subprocess.run for script verification, pathlib for file checks, json/yaml for structure
-   2. Run the tests: python -m pytest .squidsquad/qa/planning/FEAT-QA-XXX-tests.py -v
-   3. Record pytest output verbatim in QA-RESULTS.md
+      - Tests must exercise the REAL live system — actual scripts, actual harness, actual tracker. Use subprocess.run for script verification, pathlib for file checks, json/yaml for structure. Do not mock the system under test.
+   2. Run the tests: python -m pytest .squidsquad/qa/planning/TEST-<NUMBER>-tests.py -v
+   3. Record pytest output verbatim in QA-RESULTS-<NUMBER>.md
 
    TC result rules:
    - PASS: test function passes
@@ -554,44 +608,51 @@ python references/scripts/git_ops.py task-end [role] [number]
      Tag with `blocked:human-action` label and note what the human needs to do.
    - "Deferred" and "Skipped" are NOT valid results. Every TC must be PASS, FAIL, or HUMAN-REQUIRED.
 
-   If any TC is marked `[human-required]` in TEST-PLAN.md, skip it — PM will route to human.
-
-   Write results to .squidsquad/qa/planning/FEAT-QA-XXX-QA-RESULTS.md
+   Write results to .squidsquad/qa/planning/QA-RESULTS-<NUMBER>.md
    Include the full pytest output and a summary table.
    ```
 
    **HUMAN-REQUIRED gate**: If any TC is HUMAN-REQUIRED, do NOT transition to pending-ship. Add the `blocked:human-action` label and comment: `"HUMAN-REQUIRED: [N] TCs need human environment setup: [list what's needed]. Cannot ship until resolved."`
 
-   QA reviews QA-RESULTS.md and makes the final decision.
+   QA reviews QA-RESULTS-<NUMBER>.md and makes the final decision.
 
-1b. **Comprehension testing** (if TEST-PLAN.md has a `## Comprehension Questions` section):
+1b. **Comprehension testing** (if QA's TEST-PLAN-<NUMBER>.md has a `## Comprehension Questions` section):
 
-   This applies when the task touches LLM-consumed instructions (CLAUDE.md, sub-skills, SOUL.md). If TEST-PLAN.md has no `## Comprehension Questions` section, skip this step.
+   This applies when the task touches LLM-consumed instructions (CLAUDE.md, sub-skills, SOUL.md). QA wrote the CQ specs as part of its own test plan (#9184). If TEST-PLAN-<NUMBER>.md has no `## Comprehension Questions` section, skip this step.
 
    Spawn a comprehension agent (via the Agent tool) with a neutral, file-scoped prompt: "Read the following files and answer ONLY from what you find in them. Files: [list modified files]. Answer each question below, quoting file content."
 
    **Adaptive spawning**: If 4+ sub-skills affected, spawn one agent per sub-skill group. Otherwise, single spawn.
 
-   Record results in QA-RESULTS.md under `## Comprehension Tests` with per-CQ PASS/FAIL entries. A comprehension failure is a legitimate finding.
+   Record results in QA-RESULTS-<NUMBER>.md under `## Comprehension Tests` with per-CQ PASS/FAIL entries. A comprehension failure is a legitimate finding.
 
-2. **If no TEST-PLAN.md exists**, test against the acceptance criteria manually.
+2. **Dev unit tests are a sanity check, not the gate** (#9184). Inspect dev's unit tests under `tests/` for the changed area. Running them as a sanity check is fine, but QA's gate is the live-system execution of `TEST-PLAN-<NUMBER>.md` above. Coverage gaps in dev's unit tests are a separate finding routed back to dev — do not skip QA's live execution because dev's tests pass.
 
-2b. **Test coverage check** (always runs, with or without TEST-PLAN.md): Verify that new code has corresponding unit tests. Check for new or modified test files. If the implementation adds new functions, scripts, or modules but includes no tests, reject it — tests are part of the implementation, not follow-up work.
+2b. **Test coverage check** (always runs): Verify dev's PR includes unit tests for new code per the dev workflow (#9184). If the implementation adds new functions, scripts, or modules but the PR ships with no unit tests AND no explicit "no testable surface" justification, reject — tests are part of the implementation, not follow-up work.
 
 2c. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
 
-2d. **AC walk against the planning contract** (#8950 Gate #3) — before marking any task `pending-test → pending-ship`, locate the TEST-PLAN by task-number match (covers both legacy `FEAT-PM-<NUMBER>-TEST-PLAN.md` and new `TEST-PLAN-<NUMBER>.md` conventions):
+2d. **AC walk against the issue body's Acceptance Criteria** (#8950 Gate #3, updated by #9184) — before marking any task `pending-test → pending-ship`, walk each AC in the **GitHub issue body**. For each AC:
+
+   - Confirm it is **observably satisfied** by the implementation — run the verification command stated in the AC, check the file the AC names, or observe the output the AC describes. **Tests passing is necessary but not sufficient — do not infer AC satisfaction from test names.**
+   - Use QA's own `TEST-PLAN-<NUMBER>.md` coverage matrix to cross-check that every AC has at least one TC mapped to it.
+
+   Optional supporting artifacts (look in this precedence):
 
    ```bash
-   TEST_PLAN=$(ls .squidsquad/pm/planning/*[NUMBER]* 2>/dev/null | grep -i 'test-plan' | head -1)
+   QA_TEST_PLAN=$(ls .squidsquad/qa/planning/TEST-PLAN-[NUMBER].md 2>/dev/null | head -1)
+   LEGACY_TEST_PLAN=$(ls .squidsquad/pm/planning/*[NUMBER]* 2>/dev/null | grep -i 'test-plan' | head -1)
    ```
 
-   - **If `$TEST_PLAN` is empty** (bug fix or trivial task with no planning artifact): skip this AC walk, proceed with the existing verification flow.
-   - **If `$TEST_PLAN` is non-empty**: read it and walk its AC list. For each AC, confirm it is **observably satisfied** by the implementation — run the verification command stated in the AC, check the file the AC names, or observe the output the AC describes. **Tests passing is necessary but not sufficient — do not infer AC satisfaction from test names.** If any AC is not observably satisfied, transition `pending-test → in-progress` and comment which AC failed:
-     ```bash
-     python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead
-     python references/scripts/tracker.py comment [NUMBER] --role qa-lead --message "AC walk failed: AC-[N] in $TEST_PLAN is not observably satisfied — [what was checked and what failed]. Status → In Progress."
-     ```
+   - **Primary**: `$QA_TEST_PLAN` (the new convention, #9184) — when present, it is QA's own derivation of the AC list; its coverage matrix is the source of truth for AC-walk coverage.
+   - **Legacy fallback**: `$LEGACY_TEST_PLAN` (`.squidsquad/pm/planning/FEAT-PM-<NUMBER>-TEST-PLAN.md` or `.squidsquad/pm/planning/TEST-PLAN-<NUMBER>.md`) — only used for in-flight tasks filed under the pre-#9184 workflow. Do not author new files at this path.
+
+   If any AC is not observably satisfied, transition `pending-test → in-progress` and comment which AC failed:
+
+   ```bash
+   python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role qa-lead
+   python references/scripts/tracker.py comment [NUMBER] --role qa-lead --message "AC walk failed: AC-[N] from the issue body is not observably satisfied — [what was checked and what failed]. Status → In Progress."
+   ```
 
 3. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, missing test coverage, or unresolved finding is discovered:
    ```bash
@@ -606,9 +667,9 @@ python references/scripts/git_ops.py task-end [role] [number]
 5. If all criteria pass with zero gaps:
 
    **Promote test files to tests/** (before transitioning):
-   If any test files exist in `.squidsquad/qa/planning/` matching `*-tests.py` or `*-QA-RESULTS*.md`:
+   If any test files exist in `.squidsquad/qa/planning/` matching `TEST-[NUMBER]-tests.py` or `QA-RESULTS-[NUMBER]*.md`:
    - Copy test `.py` files to `tests/` with naming convention: `tests/test_feat_[NUMBER]_[short_name].py`
-   - If comprehension test files exist, also copy to `tests/`
+   - If comprehension test spec files exist at `tests/comprehension/[NUMBER]_spec.json`, leave them in place (already canonical)
    - Verify the promoted tests still pass: `python -m pytest tests/test_feat_[NUMBER]_*.py`
    - These tests persist as regression tests — they are NOT deleted during planning cleanup
 
@@ -617,7 +678,7 @@ python references/scripts/git_ops.py task-end [role] [number]
    **If PR Flow `yes`** and a PR exists for this issue:
    - Post QA results on the PR:
      ```bash
-     gh pr comment [PR_NUMBER] --body "## QA Results\n\n**Status**: PASS\n**Test Plan**: FEAT-QA-XXX-TEST-PLAN.md\n**Results**: [N/N tests passed]\n\nAll acceptance criteria verified."
+     gh pr comment [PR_NUMBER] --body "## QA Results\n\n**Status**: PASS\n**Test Plan**: .squidsquad/qa/planning/TEST-PLAN-[NUMBER].md (QA-owned, derived from AC list)\n**Results**: [N/N tests passed]\n\nAll acceptance criteria verified against a live instance."
      ```
    - Formally approve the PR:
      ```bash
@@ -1105,7 +1166,7 @@ These instructions apply to ALL agents on this project.
 
 - **Context pressure threshold: 70%**. Checkpoint working state when exceeded, continue normally (Claude Code auto-compresses).
 - **Working state file pattern**: Maintain `.squidsquad/<role>/working-state.md` to persist context across resets.
-- **Iteration interval: 30 minutes**. Context threshold: 70%. Ship threshold: 10.
+- **Ship threshold: 10**. Iteration cadence is mode-specific — see role L1/L2 layers for trigger semantics.
 - **Deterministic work queue**: Pick the first item. No discretion to skip, reorder, or cherry-pick.
 
 ### Git Protocol
@@ -1119,11 +1180,11 @@ These instructions apply to ALL agents on this project.
 
 - **Harness manages agent lifecycle**: PID monitoring via `.claude-pid` (sole liveness signal). Intent state machine via REST API (#4966).
 - **Agent lifecycle via `squidsquad_cli.py`** (with `start_team.py` as a backward-compatible shim): Agents do not manage their own or other agents' processes.
-- **Context pressure restart via `cycle_post.py`**: Mechanical detection, agents don't set `restart_needed`.
+- **Context pressure restart**: mechanical detection at the end of each unit of work triggers respawn — same mechanism in both modes; the unit of work differs (a cycle in polling mode, a task in event mode).
 
 ### Planning & Verification
 
-- **Planning artifacts in `.squidsquad/pm/planning/`**: RESEARCH.md, CONTEXT.md, TEST-PLAN.md per task.
+- **Planning artifacts (#9184)**: PM produces RESEARCH.md and CONTEXT.md under `.squidsquad/pm/planning/`. QA produces `TEST-PLAN-<NUMBER>.md`, `TEST-<NUMBER>-tests.py`, and `QA-RESULTS-<NUMBER>.md` under `.squidsquad/qa/planning/` when picking up verification. PM does NOT produce a test plan.
 - **Clone isolation paths from `.local-config`**: Each agent's clone path resolved via boot_remote.
 - **BRIEFING.md staleness check every cycle**: Version, active agents, priorities verified against config.md.
 - **Bug fixes need research**: PM runs Phase 1 research before filing, not just "fix this."

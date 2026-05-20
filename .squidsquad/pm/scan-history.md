@@ -440,3 +440,24 @@
 - **Findings**: pr_create/pr_merge still emit with role:unknown — already tracked (#5782 shipped but incomplete). No new findings
 - **Auto-fixed**: none
 - **Items rejected by human**: (none)
+
+## Scan — 2026-05-19 14:18
+
+- **Files scanned**: references/sub-skills/common/boot-remote-agents.md (cross-referenced against memory feedback_manual_agents, .squidsquad/pm/CLAUDE.md:617,666,1786, and live user request to boot dm+skill cycle 1497)
+- **Findings**: #9272 — boot-remote-agents.md line 16 "PM does not boot agents directly" contradicts feedback_manual_agents and live user practice
+- **Auto-fixed**: none (Tier 2 — fragment lives in skill domain)
+- **Items rejected by human**: none
+
+## Scan — 2026-05-19 14:54
+
+- **Files scanned**: .squidsquad/config.md (cross-referenced compose.py:1202 MANDATORY_ROLES, composed CLAUDE.md line 181 across pm/qa/dm/skill)
+- **Findings**: #9318 — Dev Agents value stale since #6055 (qa became mandatory; should be just "skill")
+- **Auto-fixed**: none (Tier 2 — touches config + compose + recompose across 4 roles)
+- **Items rejected by human**: none
+
+## Scan — 2026-05-19 20:15
+
+- **Files scanned**: references/scripts/git_ops.py (cross-referenced cycle-1500 unknown ghost cleanup + scan-history 2026-05-08 entry + #5782)
+- **Findings**: git_ops.py:90 still has `role = "unknown"` fallback — upstream source of the harness state corruption. #5782 was supposed to fix it but shipped incomplete. Added as evidence to #9242 fix-proposal item #3.
+- **Auto-fixed**: none (skill domain; touches event emission semantics)
+- **Items rejected by human**: none

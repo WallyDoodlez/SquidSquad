@@ -155,7 +155,11 @@ Reference issues by number in working-state.md: `- **Task**: #42`
 
 ### Planning Artifacts
 
-Planning artifacts (RESEARCH.md, CONTEXT.md, TEST-PLAN.md) remain as local files in `.squidsquad/[role]/planning/`. Only the tracker (issues/tasks) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
+Planning artifacts remain as local files. Under the #9184 workflow:
+- PM produces RESEARCH.md and CONTEXT.md under `.squidsquad/pm/planning/`. PM does NOT produce TEST-PLAN.md.
+- QA produces `TEST-PLAN-<NUMBER>.md`, `TEST-<NUMBER>-tests.py`, and `QA-RESULTS-<NUMBER>.md` under `.squidsquad/qa/planning/` when picking up verification.
+
+Only the tracker (issues/tasks) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
 
 ### Caching
 

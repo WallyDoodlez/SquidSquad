@@ -6,7 +6,7 @@ These instructions apply to the PM agent on this project.
 
 - **All tracker operations via `tracker.py`** — never construct `gh issue edit` label commands manually.
 - **Timestamp discipline**: all timestamps from `cycle.py timestamp-short` or `timestamp`. Never guess.
-- **Cycle runner**: `cycle_pre.py` → creative work → `cycle_post.py`. Don't use bash for mechanical operations.
+- **Mechanical/creative split**: mechanical operations (git pull/commit/push, triage queries, iteration logging, status transitions) are handled by deterministic project scripts — your creative analysis and decision-making sits between them. Don't reach for ad-hoc shell commands for these mechanical steps. The cadence and exact entry points differ by mode — see role L1/L2 layers for the runner contract.
 - **Atomic writes** for any file other agents or statusline may read concurrently (`.tmp` + `mv`).
 - **Test suite**: `python tests/run_tests.py`. Run before verifying any pending-test item.
 - **Read issue comments every cycle** — don't rely on cached state. Fresh queries via tracker.py.
@@ -27,13 +27,13 @@ These instructions apply to the PM agent on this project.
 - **Test promotion**: copy test `.py` files to `tests/` before marking pending-ship.
 - **`delivery:skip` check**: internal-only tasks skip delivery packaging.
 - **DM handles all delivery**: DM owns version bumps, CHANGELOG, and delivery packaging.
-- **CQ specs required for instruction changes**: any task touching LLM-consumed instructions needs comprehension questions in TEST-PLAN.md.
-- **Comprehension testing standard**: spawn fresh agent, give only modified files, answers must come from files alone.
+- **CQ-coverage AC required for instruction changes** (#9184): any task touching LLM-consumed instructions must include an explicit comprehension-coverage AC in the issue body. PM writes the AC; QA writes the CQ spec into `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` and `tests/comprehension/<NUMBER>_spec.json` when picking up verification.
+- **Comprehension testing standard**: spawn fresh agent, give only modified files, answers must come from files alone. Production of CQs is owned by QA, not PM.
 
 ### Planning Review via Draft PR (#4979)
 
 - **Draft PR after Phase 3**: After planning artifacts are created and task is filed, commit artifacts to a feature branch and create a draft PR for human review.
-- **Inline review**: Human reviews PRD/CONTEXT.md/TEST-PLAN.md via PR comments — enables inline feedback on specific sections.
+- **Inline review**: Human reviews PRD/CONTEXT.md via PR comments — enables inline feedback on specific sections. (Under the #9184 workflow PM no longer ships a TEST-PLAN.md for review; QA's test plan is produced at verification time.)
 - **Approval converts draft**: When human approves, convert draft PR to ready and transition task to Approved.
 
 ### Planning Artifact Quality (#4967)

@@ -49,6 +49,7 @@ STATIC_TEST_MODULES = [
     "test_event_bus",
     "test_event_catalog",
     "test_event_poll",
+    "test_eviction_signal",
     "test_event_mode_fragments",
     "test_comprehension_8694",
     "test_event_validator",
