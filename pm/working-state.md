@@ -8,9 +8,11 @@
 - (none)
 
 ## Notes
-- #9242 still status:open — skill on #8999 §4.4 first. Fix proposal queued (cycle 1504.5 comment + cycle 1506 supplementary evidence on git_ops.py:90 source).
-- #5782 closed-but-stale-label: 'git_ops.py role unknown' fix shipped incomplete; the fallback at git_ops.py:90 is still in code. Tracked under #9242 fix #3 evidence.
-- PR #9320 2 commits, mergeable UNKNOWN. Watch next cycle.
-- Skill on #8999 (in-progress) — §4.4 now unblocked by #9331 ship.
-- Approved queue: #9242 next (human directive) → #9272 → #9318 → #9265.
+- PR #9320 MERGEABLE+CLEAN cycle 1507. Skill rebased proactively.
+- #9358 cycle structure recovered — skill 1180, dm 1103. Monitor 2 cycles then close.
+- Orphan PR #8812 open since 2026-05-18, no tracker backing. Flag next cycle if skill doesn't address.
+- #9242 next in skill queue after #8999 (per human directive cycle 1504); fix proposal posted + git_ops.py:90 evidence.
+- Approved queue: #9272 → #9318 → #9265 behind #9242.
+- DM approved: #3 (high) awaiting human greenlight.
 - Harness OFF until #9242 ships.
+- cycle_pre PR query gap: only matches PRs with 'squidsquad/' in title/body, not branch name. Known limitation, not blocking.
