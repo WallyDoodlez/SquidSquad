@@ -8,10 +8,10 @@
 - (none)
 
 ## Notes
-- Skill shipping #9481 RIGHT NOW — branch squidsquad/task/9481 has harness.py + test file. CODE-REVIEW-9481.md mid-generation by deepseek. Should land within minutes.
-- Real fix: update_health subprocess.run calls (tasklist per agent, 5-25s each on Windows) were blocking the event loop. NOT the WindowsSelectorEventLoopPolicy thing I proposed. Skill found the right offender.
-- Memory note worth saving: model-routing.log silence does NOT mean stalled — agent can be reading/editing files via Read/Edit tools without hitting the router. Use git status / branch / CODE-REVIEW artifacts as truer signals.
-- #9398 now priority:low + cross-ref to #9386/#9387.
-- Approved queue still: #9415 + #9478 parked behind #9481 + harness restart.
-- DM approved: #3 awaiting human greenlight.
-- Harness OFF.
+- 🎉 HARNESS RESTARTED 02:23:52. PR #9551 merged. All 4 agents online via event wakes.
+- Real #9481 fix: state.update_health() off event loop (skill found the actual offender; my IOCP+daemon-thread theory was wrong but skill's minimal repro caught it).
+- Tight cadence directive can lift now — agents return to 30min /loop default. Event wakes between cycles provide near-instant reactions to status transitions.
+- Approved queue now unblocked: #9415 (32-bit id collision) + #9478 (branch_workflow=off removal).
+- DM approved: #3 (public launch high pri) — awaiting human greenlight.
+- PR #8812 orphan still hanging (superseded by #9478).
+- Memory lesson worth saving: 'all symptoms matching a hypothesis' isn't proof — skill's minimal repro is the gold standard, my theory was wrong despite fitting every observation.
