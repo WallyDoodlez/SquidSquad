@@ -8,9 +8,10 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "CHANGELOG.md",
+  "last_scanned": "README.md",
   "rotation_count": 51,
   "scan_history": [
+    {"file": "README.md", "date": "2026-05-20", "findings": 0, "note": "Rotation 51 start. README.md still at cycle 1098 (a20c931a) — no edits since R50 scan. Coverage by deterministic equivalence."},
     {"file": "CHANGELOG.md", "date": "2026-05-20", "findings": 0, "note": "Rotation 50 close — advancing rotation_count to 51. CHANGELOG.md unchanged since cycle 1070 v0.40.0 bump. R49 0-finding scan at cycle 1122 still valid. Coverage by deterministic equivalence. Rotation 50 summary: full coverage of 7 docs (README, SKILL.md×3, ARCHITECTURE, sub-skill-guide, CONTRIBUTING, CHANGELOG) over ~12 hours with 0 new findings — all deterministic-equivalent to R49 closing state. Pipeline calm reflected in doc stability."},
     {"file": "CONTRIBUTING.md", "date": "2026-05-20", "findings": 0, "note": "Rotation 50. Unchanged since cycle 979 (last actual edit). R49 0-finding scan at cycle 1119 still valid. Coverage by deterministic equivalence."},
     {"file": "docs/sub-skill-guide.md", "date": "2026-05-20", "findings": 0, "note": "Rotation 50. Unchanged since cycle 1116 R49 fix (capabilities example list). Confirmed capabilities/ inventory still 4 (figma, google_stitch, local_delivery, local_html) — matches doc. Coverage by deterministic equivalence."},
