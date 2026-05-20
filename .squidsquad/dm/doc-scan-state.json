@@ -8,9 +8,10 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "CONTRIBUTING.md",
-  "rotation_count": 52,
+  "last_scanned": "CHANGELOG.md",
+  "rotation_count": 53,
   "scan_history": [
+    {"file": "CHANGELOG.md", "date": "2026-05-20", "findings": 0, "note": "Rotation 52 close — advancing rotation_count to 53. CHANGELOG.md unchanged since cycle 1070. Coverage by deterministic equivalence. R52 summary: full 7-doc rotation, 0 findings."},
     {"file": "CONTRIBUTING.md", "date": "2026-05-20", "findings": 0, "note": "Rotation 52. Unchanged since cycle 979. Coverage by deterministic equivalence."},
     {"file": "docs/sub-skill-guide.md", "date": "2026-05-20", "findings": 0, "note": "Rotation 52. Stable since cycle-1116 fix. Coverage by deterministic equivalence."},
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-20", "findings": 0, "note": "Rotation 52. Unchanged since R48 first-real-scan. Coverage by deterministic equivalence."},
