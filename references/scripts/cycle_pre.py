@@ -506,9 +506,15 @@ def _read_config_flags():
 def _get_verifiable_roles():
     """Return all roles whose items QA/PM should verify (pending-test).
 
-    Reads dev-agents from config (e.g. 'designer, qa, skill') and adds
-    dm and pm — any role can potentially have pending-test items.
-    Deduplicates and returns a sorted list.
+    Reads dev-agents from config (e.g. 'designer, skill') and adds the
+    mandatory roles (pm, qa, dm) — any role can potentially have
+    pending-test items. Deduplicates and returns a sorted list.
+
+    Note (#9318): qa was previously sourced from dev-agents because the
+    pre-#6055 config listed it there. Post-#6055 qa is mandatory and
+    config.md only carries dev-style optional add-ons, so we add qa
+    explicitly here alongside dm and pm — same pattern every other
+    role-collector uses (compose._collect_all_roles, boot_remote._get_all_roles).
     """
     roles = set()
     raw = _config_get("dev-agents")
@@ -520,9 +526,12 @@ def _get_verifiable_roles():
     else:
         # Fallback: if config returned nothing, at least include skill
         roles.add("skill")
-    # Always include dm and pm — they can have pending-test items too
+    # Always include the mandatory roles (pm, qa, dm) — any of them can
+    # have pending-test items. qa added explicitly per #9318 after
+    # config.md stopped listing it in dev-agents.
     roles.add("dm")
     roles.add("pm")
+    roles.add("qa")
     return sorted(roles)
 
 

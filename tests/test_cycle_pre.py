@@ -836,21 +836,29 @@ class TestGetVerifiableRoles:
         assert "skill" in roles
         assert "qa" in roles
 
-    def test_always_includes_dm_and_pm(self, monkeypatch):
-        """dm and pm are always included regardless of config."""
+    def test_always_includes_mandatory_roles(self, monkeypatch):
+        """pm, qa, dm are always included regardless of config (#9318).
+
+        Post-#6055 these are mandatory roles. qa was previously sourced
+        from dev-agents — when config.md stopped listing it there
+        (#9318), the test below catches the regression where qa would
+        silently drop out of PM's verifiable-role queries.
+        """
         monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "skill" if f == "dev-agents" else "")
         roles = cycle_pre._get_verifiable_roles()
         assert "dm" in roles
         assert "pm" in roles
+        assert "qa" in roles
 
     def test_fallback_when_config_empty(self, monkeypatch):
         """If config returns empty, at least skill is present."""
         monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "")
         roles = cycle_pre._get_verifiable_roles()
         assert "skill" in roles
-        # dm and pm always added
+        # mandatory roles always added (pm, qa, dm — #9318)
         assert "dm" in roles
         assert "pm" in roles
+        assert "qa" in roles
 
     def test_deduplicates(self, monkeypatch):
         """Roles are not duplicated even if they appear in config and hardcoded."""
@@ -910,6 +918,9 @@ class TestQAInputMultiRole:
         # Verify dm was queried (the core bug fix)
         assert "dm" in queried_roles, "QA input must query dm role for pending-test items"
         assert "pm" in queried_roles, "QA input must query pm role for pending-test items"
+        # #9318: qa is a mandatory role and must also be queried — otherwise
+        # QA wouldn't verify its own pending-test items.
+        assert "qa" in queried_roles, "QA input must query qa role for pending-test items"
         # Verify dm items appear in verification queue
         numbers = [i["number"] for i in result["verification_queue"]["pending_test_issues"]]
         assert 3969 in numbers, "DM pending-test issue must appear in QA verification queue"
@@ -1026,6 +1037,9 @@ class TestPMInputMultiRole:
 
         result = cycle_pre._build_pm_input("pm")
         assert "dm" in queried_roles, "PM input must query dm role for pending-test items"
+        # #9318: qa is a mandatory role and must also be queried — otherwise
+        # PM wouldn't see QA's pending-test items.
+        assert "qa" in queried_roles, "PM input must query qa role for pending-test items"
         assert 3969 in [i["number"] for i in result["tracker"]["pending_test_issues"]]
 
     def test_pm_items_have_source_role(self, patch_dirs, squid_dir, monkeypatch):
