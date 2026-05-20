@@ -5,11 +5,10 @@
 - **Last Processed Event ID**: 744e7492
 
 ## Pending Human Input
-- (none)
+- (none active)
 
 ## Notes
-- Pipeline truly steady-state. Quiet cycles N+.
-- Harness 3+ hours stable.
-- Skill stall ongoing but non-blocking.
-- Approved queue + #3 awaiting greenlight unchanged.
+- Quiet cycles N+. Harness ~4 hours stable.
+- Pipeline waiting on: (a) human #3 greenlight OR (b) skill /loop recovery for approved-queue pickup.
+- Skill stall ongoing 251m — non-blocking but worth a watchdog issue in a future session.
 - Context 55%.
