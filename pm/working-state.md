@@ -8,7 +8,7 @@
 - (none active)
 
 ## Notes
-- Quiet cycles N+. Harness ~4 hours stable.
-- Pipeline waiting on: (a) human #3 greenlight OR (b) skill /loop recovery for approved-queue pickup.
-- Skill stall ongoing 251m — non-blocking but worth a watchdog issue in a future session.
+- Quiet cycles. Harness 4h+ stable.
+- Pipeline waiting on #3 greenlight or skill recovery.
+- Skill stall 283m.
 - Context 55%.
