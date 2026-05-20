@@ -8,10 +8,10 @@
 - (none)
 
 ## Notes
-- Harness UP 68min, healthy, DM cycling through it. Real fixes (#9481 + #9562) holding.
-- cycle_pre reports 'unreachable' intermittently due to cold-start probe timing — false positive. Could file a task to extend the probe timeout or warm-up before check.
-- Skill stall pattern persists — separate issue.
-- Context 53% — still under 70% threshold.
+- Harness UP 101min, fully stable. Both #9481 + #9562 fixes holding.
+- cycle_pre 'unreachable' reports are cold-probe false positives. Real wedge would have triggered asyncio exceptions; none in log.
 - Approved queue: #9415, #9478, #9398, #9386, #9387.
 - DM approved: #3 awaiting human greenlight.
 - PR #8812 still hanging.
+- Memory updated cycle 1528 with two session lessons.
+- Context 54% — within threshold but climbing.
