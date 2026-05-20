@@ -87,9 +87,35 @@ def _write_cache(spec_path, files):
 
 
 def _find_claude():
-    """Find the claude CLI executable."""
+    """Find the claude CLI executable.
+
+    Prefers ``claude.exe`` over ``claude.cmd`` on Windows. The .cmd
+    batch wrapper is just `"claude.exe" %*`, but `%*` mangles
+    multi-line arguments — newlines in the prompt get collapsed and
+    the inner agent ends up seeing a malformed prompt with the file
+    list and questions truncated away. The inner agent then narrates
+    "your message doesn't include the list of files to read" and
+    exits cleanly with a non-JSON response, which the runner can't
+    parse (#9574). Calling the .exe directly bypasses cmd.exe arg
+    parsing entirely and CreateProcessW preserves the literal prompt.
+    """
+    # Try the npm-installed .exe first (Windows): skip the .cmd wrapper.
+    if sys.platform == "win32":
+        npm_exe = (
+            Path(os.environ.get("APPDATA", "")) / "npm" / "node_modules"
+            / "@anthropic-ai" / "claude-code" / "bin" / "claude.exe"
+        )
+        if npm_exe.exists():
+            return str(npm_exe)
+
     claude = shutil.which("claude")
     if claude:
+        # Final defence: if PATH resolution returned the .cmd, try to
+        # find a .exe alongside it.
+        if claude.lower().endswith(".cmd"):
+            sibling_exe = Path(claude).with_suffix(".exe")
+            if sibling_exe.exists():
+                return str(sibling_exe)
         return claude
     # Windows fallback paths
     for candidate in [
@@ -101,14 +127,67 @@ def _find_claude():
     return None
 
 
-def _run_agent(claude_bin, prompt, workdir, allowed_tools="Read,Write"):
-    """Run a claude agent with the given prompt and tools."""
+def _strip_outer_fences(text):
+    """Strip a single layer of ```...``` fences if present.
+
+    The agent is instructed not to use fences, but occasionally wraps
+    its output in ```markdown or ```json anyway. We tolerate exactly
+    one outer layer; deeper escaping is the agent's bug to fix.
+    """
+    s = text.strip()
+    if not s.startswith("```"):
+        return text
+    nl = s.find("\n")
+    if nl < 0:
+        return text
+    body = s[nl + 1:]
+    if body.rstrip().endswith("```"):
+        body = body.rstrip()
+        body = body[: body.rfind("```")].rstrip()
+    return body
+
+
+def _run_agent(claude_bin, prompt, workdir, allowed_tools="Read"):
+    """Run a claude agent with ``--output-format json`` and return its
+    final assistant text plus the raw CompletedProcess.
+
+    Returns ``(result_text, completed_process)``. ``result_text`` is
+    the empty string if the agent reported an error or the JSON could
+    not be parsed; the caller is expected to surface that as a runner
+    failure.
+
+    #9574 design notes: the prior implementation used
+    ``--output-format text`` and asked the inner agent to invoke the
+    ``Write`` tool to persist answers/results to disk. That path was
+    unreliable in headless ``claude -p`` on Windows — the inner agent
+    reliably narrated a permission-grant requirement (which has no
+    interactive prompt to satisfy in subprocess mode) and exited
+    rc=0 with no file written. ``--output-format json`` is the
+    documented contract for headless callers: the ``result`` field
+    contains the assistant's final message and is the path the SDK
+    itself uses. We collect that text and let the runner do the
+    on-disk write from Python, eliminating the Write-tool dependency
+    entirely. Tool budget is now read-only (default ``Read``) —
+    callers needing more should pass ``allowed_tools`` explicitly.
+    """
+    # Flag order matters: `--allowedTools <tools...>` is variadic
+    # and greedily consumes subsequent positional values until the
+    # next flag. Putting `--output-format json` AFTER it caused
+    # `json` to be absorbed as a tool name, claude fell back to its
+    # default text output, the runner's JSON parse failed, and we
+    # got the dread "your message doesn't include the list of
+    # files" hallucination from a half-running agent (#9574 first
+    # JSON-pivot attempt). Keep `--output-format` before
+    # `--allowedTools`, and omit `--allowedTools` entirely when no
+    # tools are needed (empty-string value would tickle the same
+    # variadic-consumption hazard).
     cmd = [
         claude_bin, "-p", prompt,
-        "--allowedTools", allowed_tools,
-        "--output-format", "text",
+        "--output-format", "json",
     ]
-    result = subprocess.run(
+    if allowed_tools:
+        cmd.extend(["--allowedTools", allowed_tools])
+    proc = subprocess.run(
         cmd,
         capture_output=True,
         text=True,
@@ -117,7 +196,15 @@ def _run_agent(claude_bin, prompt, workdir, allowed_tools="Read,Write"):
         cwd=str(workdir),
         timeout=300,
     )
-    return result
+    if proc.returncode != 0:
+        return "", proc
+    try:
+        data = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return "", proc
+    if data.get("is_error"):
+        return "", proc
+    return str(data.get("result") or ""), proc
 
 
 def run_test(spec_path, output_dir=None, force=False):
@@ -171,98 +258,131 @@ def run_test(spec_path, output_dir=None, force=False):
         f"### Q-{q['id']}\n{q['question']}" for q in questions
     )
 
-    test_prompt = f"""You are a comprehension test agent. Read ONLY the files listed below and answer each question based solely on what you find in those files. Do not use prior knowledge.
+    # #9574: prompt asks the inner agent to OUTPUT answers in chat
+    # (assistant final message), not to invoke the Write tool. The
+    # runner harvests the assistant text from --output-format json's
+    # `result` field and writes the file from Python. Rationale: the
+    # Write-tool path was unreliable in headless `claude -p` (silent
+    # permission-pending exits, hallucinated denial narratives) and
+    # added a layer that didn't earn its keep — the agent's *answers*
+    # were always going to come through the assistant text anyway.
+    test_prompt = f"""You are a comprehension test agent. Read ONLY the files listed below and answer each question based solely on what you find in them. Do not use prior knowledge.
 
-## Files to read
+## Files to read (use the Read tool on each)
 {file_list}
 
 ## Questions
 {question_list}
 
-## Instructions
-1. Read each file listed above using the Read tool.
-2. For each question, write your answer under the matching heading.
-3. Write ALL answers to: {answers_path}
+## Required output (your final assistant message — nothing else)
+Respond with a single markdown body, no preamble, no closing remarks, no code fences. Exactly one block per question, in this format:
 
-Use this exact format in answers.md:
-```
 ### Q-<id>
 <your answer, quoting relevant file content>
-```
 
-Answer every question. If you cannot find the answer in the listed files, say "NOT FOUND IN FILES".
+If you cannot find a question's answer in the listed files, write `NOT FOUND IN FILES` under that heading.
+
+## Procedure
+1. Read every file listed under "Files to read" using the Read tool.
+2. Compose your final assistant message as the markdown body described above. Your entire reply must be the answers — the runner harvests this text verbatim and writes it to disk.
 """
 
     print("Stage 1: Spawning test agent...")
     try:
-        test_result = _run_agent(claude_bin, test_prompt, REPO_ROOT)
+        answers_text, test_proc = _run_agent(
+            claude_bin, test_prompt, REPO_ROOT, allowed_tools="Read",
+        )
     except subprocess.TimeoutExpired:
         print("ERROR: test agent timed out after 300s", file=sys.stderr)
         sys.exit(1)
-    if test_result.returncode != 0:
-        print(f"WARNING: test agent exited with code {test_result.returncode}", file=sys.stderr)
-        if test_result.stderr:
-            print(f"  stderr: {test_result.stderr[:500]}", file=sys.stderr)
+    if test_proc.returncode != 0:
+        print(f"WARNING: test agent exited with code {test_proc.returncode}",
+              file=sys.stderr)
+        if test_proc.stderr:
+            print(f"  stderr: {test_proc.stderr[:500]}", file=sys.stderr)
 
-    if not answers_path.exists():
-        print(f"ERROR: test agent did not write {answers_path}", file=sys.stderr)
-        # Write a fallback so eval agent can still run
-        answers_path.write_text("# No answers generated\n", encoding="utf-8")
+    if not answers_text.strip():
+        # #9574: surface this loudly rather than papering over with a
+        # placeholder file. Callers (CI, skill verification) must see
+        # the regression if it reappears.
+        print(
+            f"ERROR: test agent returned empty content — runner exiting 1.",
+            file=sys.stderr,
+        )
+        print(
+            f"  raw stdout (first 500 chars): {test_proc.stdout[:500]!r}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Strip markdown fences if the agent wrapped its reply despite the
+    # instruction. Cheap defence; fences are the only common deviation.
+    answers_text = _strip_outer_fences(answers_text)
+    answers_path.write_text(answers_text, encoding="utf-8")
 
     # --- Stage 2: Eval agent ---
     expected_list = "\n".join(
         f"### Q-{q['id']}\n**Expected behavior**: {q['expected']}" for q in questions
     )
 
-    eval_prompt = f"""You are an evaluation agent. Compare the test agent's answers against expected behaviors and write structured results.
+    # #9574: answers are embedded directly in the eval prompt so the
+    # eval agent needs no tools at all — pure text-in, text-out.
+    eval_prompt = f"""You are an evaluation agent. Compare the test agent's answers (provided in full below) against the expected behaviors and respond with a raw JSON array. No tool calls are necessary.
 
-## Answers file
-Read: {answers_path}
+## Answers (verbatim from the test agent)
+{answers_text}
 
-## Expected behaviors
+## Expected behaviors (one per question)
 {expected_list}
 
-## Instructions
-1. Read the answers file using the Read tool.
-2. For each question, compare the answer against the expected behavior.
-3. A question PASSES if the answer demonstrates correct understanding of the expected behavior. Minor wording differences are OK — judge behavioral correctness, not exact phrasing.
-4. A question FAILS if the answer contradicts the expected behavior, is missing, or says "NOT FOUND IN FILES".
-5. Write results as a JSON array to: {results_path}
+## Evaluation rules
+- PASS = the answer demonstrates correct understanding of the expected behavior. Minor wording differences are OK — judge behavioral correctness, not exact phrasing.
+- FAIL = the answer contradicts the expected behavior, is missing, or says `NOT FOUND IN FILES`.
 
-Use this exact JSON format (no markdown fences, just raw JSON):
+## Required output (your final assistant message — nothing else)
+Respond with a raw JSON array. No code fences, no preamble, no closing remarks. One object per question id in this shape:
+
 [
-  {{"id": "<question-id>", "pass": true/false, "reason": "<brief explanation>"}}
+  {{"id": "<question-id>", "pass": true, "reason": "<brief explanation>"}},
+  {{"id": "<question-id>", "pass": false, "reason": "<brief explanation>"}}
 ]
 
-Write ONLY the JSON array to the results file. No other text.
+The runner parses your reply directly as JSON.
 """
 
     print("Stage 2: Spawning eval agent...")
     try:
-        eval_result = _run_agent(claude_bin, eval_prompt, REPO_ROOT)
+        results_text, eval_proc = _run_agent(
+            claude_bin, eval_prompt, REPO_ROOT, allowed_tools="",
+        )
     except subprocess.TimeoutExpired:
         print("ERROR: eval agent timed out after 300s", file=sys.stderr)
         sys.exit(1)
-    if eval_result.returncode != 0:
-        print(f"WARNING: eval agent exited with code {eval_result.returncode}", file=sys.stderr)
+    if eval_proc.returncode != 0:
+        print(f"WARNING: eval agent exited with code {eval_proc.returncode}",
+              file=sys.stderr)
 
-    if not results_path.exists():
-        print(f"ERROR: eval agent did not write {results_path}", file=sys.stderr)
+    if not results_text.strip():
+        print(
+            f"ERROR: eval agent returned empty content — runner exiting 1.",
+            file=sys.stderr,
+        )
+        print(
+            f"  raw stdout (first 500 chars): {eval_proc.stdout[:500]!r}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
-    # Parse results
-    raw = results_path.read_text(encoding="utf-8").strip()
-    # Strip markdown fences if eval agent wrapped them
-    if raw.startswith("```"):
-        lines = raw.split("\n")
-        raw = "\n".join(l for l in lines if not l.startswith("```"))
+    raw = _strip_outer_fences(results_text).strip()
 
     try:
         results = json.loads(raw)
     except json.JSONDecodeError as e:
-        print(f"ERROR: failed to parse results.json: {e}", file=sys.stderr)
+        print(f"ERROR: failed to parse results JSON: {e}", file=sys.stderr)
         print(f"  Content: {raw[:500]}", file=sys.stderr)
         sys.exit(1)
+
+    results_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
 
     if not results:
         print("ERROR: eval agent produced empty results — treating as failure",
