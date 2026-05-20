@@ -8,10 +8,9 @@
 - (none)
 
 ## Notes
-- #9331 shipped (PR #9359 merged, QA zero gaps). Skill now unblocked on §4.4 under #8999.
-- #9242 has detailed fix proposal queued (cycle 1504.5 comment): --no-auto-start flag → save_state lock release → unknown-role rejection.
-- #8999 still in-progress; PR #9320 mergeable UNKNOWN for many cycles. Watch next cycle; may need a refresh poke.
-- Approved queue for skill: #9242 next (human directive cycle 1504) → then #9272 → #9318 → #9265.
-- DM approved: #3 (public launch, high) awaiting human greenlight.
+- #9242 still status:open — skill on #8999 §4.4 first. Fix proposal queued (cycle 1504.5 comment + cycle 1506 supplementary evidence on git_ops.py:90 source).
+- #5782 closed-but-stale-label: 'git_ops.py role unknown' fix shipped incomplete; the fallback at git_ops.py:90 is still in code. Tracked under #9242 fix #3 evidence.
+- PR #9320 2 commits, mergeable UNKNOWN. Watch next cycle.
+- Skill on #8999 (in-progress) — §4.4 now unblocked by #9331 ship.
+- Approved queue: #9242 next (human directive) → #9272 → #9318 → #9265.
 - Harness OFF until #9242 ships.
-- #9358 (skill mtime broken) low-priority audit-trail issue still open.
