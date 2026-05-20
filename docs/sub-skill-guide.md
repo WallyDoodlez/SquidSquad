@@ -44,7 +44,7 @@ references/
 │   │   ├── qa/              ← QA-only behaviors
 │   │   ├── dm/              ← DM-only behaviors
 │   │   └── dev/             ← Dev-only behaviors
-│   ├── capabilities/        ← optional add-on behaviors (figma, local_delivery, etc.) with {manifest.yaml, setup.md, sub-skill.md}
+│   ├── capabilities/        ← optional add-on behaviors (figma, google_stitch, local_delivery, local_html, etc.) with {manifest.yaml, setup.md, sub-skill.md}
 │   └── project/             ← per-project overrides (shared + per-role instructions/soul-directives)
 │
 └── roles/                   ← one self-contained directory per role
