@@ -12,14 +12,14 @@
 # pattern, idle cool-down loop, comment handling). event-driven-workflow
 # is now an orientation/redirect page kept first for backward-compat with
 # any downstream that still expects that section header.
+# #9588: the six `common-events/*` fragments are now Read at runtime by
+# `common/boot-bootstrap` (the first include) rather than inlined here.
+# Manifest stays as the documentation of what's wired in — compose just
+# does not inline the runtime-Read fragments.
+#
 # Order matters — includes are resolved top-to-bottom
 includes:
-  - common-events/event-driven-workflow
-  - common-events/l1-base
-  - common-events/cursor-management
-  - common-events/forge-read-pattern
-  - common-events/idle-cooldown-loop
-  - common-events/comment-handling
+  - common/boot-bootstrap
   - common/context-pressure
   - common/resume-working-state
   - roles/dev/triage-issues

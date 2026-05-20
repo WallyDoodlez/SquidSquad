@@ -18,11 +18,9 @@ The boot sequence MUST work even when the harness is unreachable. Forge access i
 2. **Branch on what working-state shows:**
    - **In-progress tracker task** → verify against the forge: still my role? still `status:in-progress`? Yes → resume. No → clear the task field (`- **Task**: none` in working-state) and drop the task locally — **no forge transition is needed** because the forge already reflects the change (that is why verification failed). Fall through to a fresh `work_queue()` scan.
    - **Improvement-scan `Status: running`** (not a tracker item) → skip forge verification; restart the scan. Improvement scans are idempotent — a fresh scan subsumes a partial one. See [[idle-cooldown-loop]]. **When the scan completes, run `work_queue()`** before re-entering the cool-down loop, in case a task arrived during the outage.
-   - **Idle / nothing in progress** → run `work_queue()` against the forge. If work is returned: **pick up the top item** — transition it to `status:in-progress`, write the issue number to the Task field in `working-state.md`, and begin work. If `work_queue()` is empty, defer to step 3 for the empty-queue path (cool-down loop if harness reachable; degraded-mode sleep loop if not).
+   - **Idle / nothing in progress** → run `work_queue()` against the forge. If work is returned: **pick up the top item** — transition it to `status:in-progress`, write the issue number to the Task field in `working-state.md`, and begin work. If `work_queue()` is empty, defer to step 3 for the empty-queue path — the improvement-scan cool-down loop. (Harness reachability is guaranteed at this point per #9588; see step 3.)
 
-3. **Check harness reachability** (before any event-stream call or cool-down entry):
-   - **Unreachable** → skip steps 4–5 (nothing to skim, cursor unchanged) and proceed to degraded-mode operation: continue working directly from the forge via `work_queue()`. While in degraded mode, if `work_queue()` returns empty, sleep a short fixed interval (e.g. 60s) and retry `work_queue()`; if `work_queue()` returns work, pick up the top item directly (transition to `in-progress`, update the Task field, begin work) and on completion follow Case C (transition, clear Task field, re-run `work_queue()`) — then continue applying the same degraded-mode rules (empty → 60s sleep, non-empty → pick up). **Do NOT enter the improvement-scan cool-down loop in degraded mode**, because the Monitor (`event_poll.py`) requires the harness. **Before each `work_queue()` call** (including after each 60s sleep), attempt to POST `bootup-complete` using exponential backoff capped at **5 minutes**. A successful POST indicates the harness is reachable — **exit degraded mode** by skimming events from the current cursor forward (step 4), advancing the cursor (step 5 cursor write), and entering the listening loop. `bootup-complete` is **best-effort, not blocking** — the agent never hangs waiting for the harness.
-   - **Reachable** → continue to step 4. (If you got here from step 2's empty idle branch, after step 5 enter the improvement-scan cool-down loop — see [[idle-cooldown-loop]].)
+3. **Harness reachability is guaranteed by the bootstrap (#9588).** If this fragment is being Read, the boot bootstrap (`common/boot-bootstrap.md`) has already verified that the harness is reachable — otherwise the bootstrap would have routed the agent to the polling fragment, not here. Continue to step 4. (If you got here from step 2's empty idle branch, after step 5 enter the improvement-scan cool-down loop — see [[idle-cooldown-loop]].)
 
 4. **Skim events from cursor forward.** Informational only — the forge already has current state. Skim-then-advance; never jump-to-latest. Handle gap scenarios per [[cursor-management]] (long lag, eviction gap). In an eviction gap specifically, the cursor advances to the *oldest available* id, not the latest observed.
 
@@ -64,7 +62,7 @@ Monitor tool invocation:
 1. You just transitioned a tracker item via `tracker.py transition`.
 2. Update `working-state.md` → `- **Task**: none`.
 3. **Immediately run `work_queue()`** against the forge. Do NOT wait for your own transition event to come back through the stream.
-4. Pick up the next item, or — if `work_queue()` is empty — enter idle (improvement-scan cool-down). **Degraded-mode exception**: if the harness is currently unreachable, do NOT enter the cool-down loop; apply the degraded-mode rules instead (60s sleep + retry `work_queue()`).
+4. Pick up the next item, or — if `work_queue()` is empty — enter idle (improvement-scan cool-down).
 
 ---
 
@@ -96,10 +94,8 @@ Monitor tool invocation:
 
 ---
 
-### Degraded-Mode Glossary
+### Harness-Loss Recovery (#9588)
 
-**Degraded mode** = harness unreachable at boot. The agent works directly from the forge via `work_queue()` and retries `bootup-complete` emission with the 5-minute capped backoff.
+If the harness becomes unreachable AFTER `bootup-complete` has been emitted, the agent keeps retrying `bootup-complete` at the 5-minute capped backoff but does **NOT** pivot to forge-direct work mid-session. Operator restarts the agent to recover; on restart the boot bootstrap detects the unreachable harness and routes to polling mode (see `common/boot-bootstrap.md`).
 
-**Manual-recovery scenario** = harness becomes unreachable AFTER `bootup-complete` has been emitted. The agent keeps retrying at the capped backoff but does **NOT** pivot to forge-direct work. The operator manually restarts the harness; the agent resumes via the event stream on reconnect.
-
-Rationale: agents log everything to the forge, so state is recoverable; adding a runtime degraded-mode adds complexity the failsafe boot path already handles after a restart.
+Rationale: agents log everything to the forge, so state is recoverable across a restart. The bespoke "degraded mode" that ran forge-direct from a live event-mode session was removed in #9588 in favor of polling-mode fallback at boot — a battle-tested mechanism without a third execution path to reason about.

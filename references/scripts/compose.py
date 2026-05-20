@@ -30,6 +30,27 @@ CAPABILITIES_DIR = REPO_ROOT / "references" / "sub-skills" / "capabilities"
 ROLES_DIR = REPO_ROOT / "references" / "roles"
 OUTPUT_FILE = REPO_ROOT / "references" / "agent-instructions.md"
 
+# #9588: fragments the boot-bootstrap Reads at runtime. These MUST stay
+# out of every composed CLAUDE.md regardless of what the manifest looks
+# like — even a future manifest entry whose stem matches one of these
+# names via the variant-resolution fallback in
+# `_resolve_includes_with_manifest` would otherwise silently re-inline a
+# mode-specific fragment and defeat the lazy-load design. Checked
+# explicitly before the variant heuristic so the heuristic cannot win.
+RUNTIME_READ_FRAGMENTS = frozenset({
+    "roles/dev/ralph-loop-overview",
+    "roles/pm/ralph-loop-overview",
+    "roles/qa/ralph-loop-overview",
+    "roles/dm/ralph-loop-overview",
+    "common-events/event-driven-workflow",
+    "common-events/l1-base",
+    "common-events/cursor-management",
+    "common-events/forge-read-pattern",
+    "common-events/idle-cooldown-loop",
+    "common-events/comment-handling",
+    "roles/dm/events/pr-merge-wait",
+})
+
 
 def _get_wake_mode(role_name: str) -> str:
     """Determine a role's wake mode from config.md (#8697).
@@ -298,6 +319,15 @@ def _resolve_includes_with_manifest(entry_file: Path, manifest: list, wake_mode:
         if inc_match:
             include_path = inc_match.group(1).strip()
 
+            # #9588: short-circuit before the variant heuristic for any
+            # fragment the boot-bootstrap Reads at runtime. The variant-
+            # resolution fallback below (`m_base.startswith(base + "-") …`)
+            # is otherwise liberal enough to resurrect, e.g.,
+            # `common-events/l1-base` if some future manifest entry has
+            # the stem `l1-base-…`.
+            if include_path in RUNTIME_READ_FRAGMENTS:
+                continue
+
             # Check if the manifest overrides this include
             # (e.g. vault-protocol -> vault-protocol-slim)
             resolved_path = include_path
@@ -540,6 +570,15 @@ def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> s
     # Universal substitution — all roles need [ROLE] for cycle-runner paths
     content = content.replace("[ROLE]", role_name)
     content = content.replace("[ROLE_UPPER]", role_name.upper())
+
+    # #9588: the boot-bootstrap fragment needs the per-role polling-fragment
+    # path. Dev variants (skill, ios, android, web, fullstack) share one file
+    # at roles/dev/ralph-loop-overview.md — so we substitute by entry_file
+    # (the role identity that owns the polling fragment file), not role_name.
+    polling_fragment = (
+        f"references/sub-skills/roles/{entry_file}/ralph-loop-overview.md"
+    )
+    content = content.replace("[POLLING_FRAGMENT_PATH]", polling_fragment)
 
     if is_dev:
 

@@ -1,9 +1,13 @@
-# DM agent sub-skill manifest (polling / /loop mode — #8697)
-# Uses slim variants for vault-protocol and improvement-scan (read-only role)
+# DM agent sub-skill manifest (polling / /loop mode — #8697, #9588)
+# Uses slim variants for vault-protocol and improvement-scan (read-only role).
+# #9588: `common/boot-bootstrap` is the first include per CONTEXT-9588 D1;
+# mode-specific `roles/dm/ralph-loop-overview` is Read at runtime by the
+# bootstrap. Capability-check follows bootstrap — it logs warnings but
+# does not gate execution, so post-bootstrap order is fine.
 # Order matters — includes are resolved top-to-bottom
 includes:
+  - common/boot-bootstrap
   - common/capability-check
-  - roles/dm/ralph-loop-overview
   - common/cycle-runner
   - common/context-pressure
   - roles/dm/task-pickup

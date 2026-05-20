@@ -158,12 +158,17 @@ class TestAc7TopicCoverage:
 
 
 class TestAc6M62ManifestWiring:
-    """AC-6 M-6.2: every event-mode role manifest must reference the
-    L1 base fragment + its four supporting common-events fragments so
-    `compose.py deploy <role>` renders the boot sequence + Cases A–E
-    into the composed CLAUDE.md. QA cycle-1140 rejection on #8915 hung
-    on this — the fragments existed but were not wired, so a fresh
-    agent in event-driven mode would not see them.
+    """AC-6 M-6.2 (post-#9588): the event-mode L1 base fragment + its four
+    supporting common-events fragments must reach the agent at runtime via
+    the boot bootstrap, NOT via compose-time inlining.
+
+    #9588 swapped the wiring mechanism: instead of every event-mode manifest
+    listing all six common-events fragments and the template having matching
+    `{{include:}}` directives, the manifest now contains `common/boot-bootstrap`
+    only, and the bootstrap's content carries `Read references/sub-skills/
+    common-events/<name>.md` directives that fire when the agent boots in
+    event mode. The previous compose-time-inline contract (#8915) is the old
+    contract; this class enforces the new one.
     """
 
     REQUIRED_COMMON_EVENTS = [
@@ -187,47 +192,48 @@ class TestAc6M62ManifestWiring:
             out[role] = data.get("includes", [])
         return out
 
+    @pytest.fixture(scope="class")
+    def bootstrap_text(self):
+        path = SUB_SKILLS / "common" / "boot-bootstrap.md"
+        assert path.exists(), (
+            "common/boot-bootstrap.md must exist — #9588 made it the single "
+            "loader for both polling and event-mode entry fragments."
+        )
+        return path.read_text(encoding="utf-8")
+
     @pytest.mark.parametrize("role", ROLES)
-    @pytest.mark.parametrize("required", REQUIRED_COMMON_EVENTS)
-    def test_role_manifest_includes_required_event_fragment(
-        self, includes_by_role, role, required,
+    def test_role_manifest_includes_boot_bootstrap(
+        self, includes_by_role, role,
     ):
+        """Manifests reference `common/boot-bootstrap` as the loader. The
+        six legacy `common-events/*` entries are no longer present — they
+        are Read at runtime by the bootstrap instead."""
         includes = includes_by_role[role]
-        assert required in includes, (
-            f"references/roles/{role}/includes-events.yml must reference "
-            f"{required!r} per AC-6 M-6.2 — the manifest allow-lists which "
-            f"fragments compose.py will resolve when the template includes "
-            f"them. Without this manifest entry, compose.py would skip the "
-            f"corresponding `{{{{include:}}}}` directive in the role template."
+        assert "common/boot-bootstrap" in includes, (
+            f"references/roles/{role}/includes-events.yml must list "
+            f"`common/boot-bootstrap` — #9588 made it the manifest entry "
+            f"that gets the agent into event mode (or fallback polling)."
         )
 
-    @pytest.mark.parametrize("role", ROLES)
     @pytest.mark.parametrize("required", REQUIRED_COMMON_EVENTS)
-    def test_role_template_has_include_directive(
-        self, role, required,
+    def test_bootstrap_references_common_events_fragment(
+        self, bootstrap_text, required,
     ):
-        """compose.py is template-driven (#8697) — manifest membership alone
-        does not render a fragment. The role `instructions.md` template must
-        carry the matching `{{include: ...}}` directive too."""
-        path = REPO_ROOT / "references" / "roles" / role / "instructions.md"
-        text = path.read_text(encoding="utf-8")
-        directive = "{{include: " + required + "}}"
-        assert directive in text, (
-            f"{path} must contain `{directive}` for compose.py to render "
-            f"{required!r} into the composed CLAUDE.md when event-driven."
+        """The bootstrap fragment must Read each common-events fragment at
+        runtime so a fresh event-mode agent loads the full event contract."""
+        rel = f"references/sub-skills/{required}.md"
+        assert rel in bootstrap_text, (
+            f"boot-bootstrap.md must reference `{rel}` so event-mode agents "
+            f"Read it at boot. Removing the runtime Read here breaks the "
+            f"same wiring AC-6 M-6.2 was originally written to enforce."
         )
 
-    def test_dm_template_includes_pr_merge_wait_directive(self):
-        path = REPO_ROOT / "references" / "roles" / "dm" / "instructions.md"
-        text = path.read_text(encoding="utf-8")
-        assert "{{include: roles/dm/events/pr-merge-wait}}" in text, (
-            "DM template must include the pr-merge-wait directive."
-        )
-
-    def test_dm_manifest_includes_pr_merge_wait(self, includes_by_role):
-        assert "roles/dm/events/pr-merge-wait" in includes_by_role["dm"], (
-            "DM's event-mode manifest must include the per-role "
-            "pr-merge-wait fragment called out in CONTEXT.md §5.1."
+    def test_bootstrap_references_pr_merge_wait_for_dm(self, bootstrap_text):
+        """DM's role-specific events extra is loaded by the bootstrap too."""
+        rel = "references/sub-skills/roles/dm/events/pr-merge-wait.md"
+        assert rel in bootstrap_text, (
+            f"boot-bootstrap.md must reference `{rel}` in its DM-only "
+            f"branch — it is the sole loader for the per-role events extra."
         )
 
 

@@ -18,6 +18,18 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team. You operate conti
 
 ---
 
+{{include: common/boot-bootstrap}}
+
+<!--
+  #9588: the directives below are intentionally absent from BOTH
+  `includes.yml` and `includes-events.yml`. They are Read at runtime
+  by `common/boot-bootstrap` and `compose.py:RUNTIME_READ_FRAGMENTS`
+  short-circuits them at composition time. Do NOT re-add these to a
+  manifest unless you are reverting #9588 in full — the regression
+  test in `tests/test_compose_9588.py` will fail if they reappear in
+  the composed CLAUDE.md.
+-->
+
 {{include: roles/dev/ralph-loop-overview}}
 
 {{include: common/cycle-runner}}

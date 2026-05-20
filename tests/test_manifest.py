@@ -120,6 +120,33 @@ class TestManifestIntegrity:
         except Exception:
             pass
 
+        # #9588: mode-specific fragments are Read at runtime by
+        # `common/boot-bootstrap.md` instead of being inlined via manifest.
+        # Treat any fragment whose path appears inside the bootstrap text
+        # as referenced — broken paths there are caught by a dedicated
+        # test in test_compose_9588.py, so duplicating that check here
+        # would just couple the orphan-scan to bootstrap formatting.
+        bootstrap_path = self.sub_skills_dir / "common" / "boot-bootstrap.md"
+        if bootstrap_path.exists():
+            bootstrap_text = bootstrap_path.read_text(encoding="utf-8")
+            for rel_str in re.findall(
+                r"references/sub-skills/([^\s`)]+\.md)", bootstrap_text
+            ):
+                referenced.add(rel_str)
+            # The polling-fragment path is templated via the
+            # `[POLLING_FRAGMENT_PATH]` placeholder so the bootstrap
+            # text itself never spells out each role's polling fragment
+            # literally. Compose substitutes per role — see
+            # compose._substitute_placeholders. Mark every shipped
+            # role's polling fragment as referenced if the placeholder
+            # is in the bootstrap.
+            if "[POLLING_FRAGMENT_PATH]" in bootstrap_text:
+                roles_dir = self.sub_skills_dir / "roles"
+                for ralph in roles_dir.rglob("ralph-loop-overview.md"):
+                    referenced.add(
+                        ralph.relative_to(self.sub_skills_dir).as_posix()
+                    )
+
         # #8697: common/event-reactions.md exists but isn't referenced by
         # any current role manifest. It's a sub-skill that may be wired in
         # for future event-driven needs; explicitly tolerate its
@@ -247,7 +274,29 @@ class TestIncludesYml:
                 "common/improvement-scan",
                 "common/vault-protocol",
             }
-            unexpected = uncovered - known_exclusions
+
+            # #9588: mode-specific includes are intentionally NOT in any
+            # manifest. compose skips them; the agent Reads them at runtime
+            # via `common/boot-bootstrap`. The directives stay in the
+            # template as architectural documentation of the fragments
+            # involved on each mode branch. Add them to the exclusion set
+            # so this coverage test does not flag them as orphans —
+            # test_compose_9588.py asserts the bootstrap actually wires
+            # them up at runtime.
+            mode_specific_runtime_loaded = {
+                "common-events/event-driven-workflow",
+                "common-events/l1-base",
+                "common-events/cursor-management",
+                "common-events/forge-read-pattern",
+                "common-events/idle-cooldown-loop",
+                "common-events/comment-handling",
+                "roles/dev/ralph-loop-overview",
+                "roles/pm/ralph-loop-overview",
+                "roles/qa/ralph-loop-overview",
+                "roles/dm/ralph-loop-overview",
+                "roles/dm/events/pr-merge-wait",
+            }
+            unexpected = uncovered - known_exclusions - mode_specific_runtime_loaded
             assert not unexpected, (
                 f"{role}: template includes not covered by ANY manifest "
                 f"(polling+events), and not slim/role-override/excluded: "
@@ -317,6 +366,12 @@ class TestComposeManifestIntegration:
             "idle-cooldown-loop",
             "comment-handling",
             "pr-merge-wait",
+            # #9588: the polling-mode ralph-loop-overview is now Read at
+            # runtime via boot-bootstrap rather than inlined via manifest.
+            # The inline path still renders it (the directive is in the
+            # template); strip it so the comparison stays apples-to-apples
+            # with the post-#9588 polling manifest output.
+            "ralph-loop-overview",
         )
         for name in events_only_names:
             inline_result = re.sub(
