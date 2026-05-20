@@ -31,6 +31,7 @@ Role authority (who may call `transition`):
 
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -315,8 +316,46 @@ def _log_diagnostic(severity, message, context=None):
         pass
 
 
+_RESOLVED_GH_BIN: str | None = None
+
+
+def _resolve_gh_bin() -> str:
+    """Locate the ``gh`` CLI binary via ``shutil.which`` (PATHEXT-aware).
+
+    Cached after the first call. Falls back to the literal string
+    ``"gh"`` if resolution fails — that path goes through subprocess's
+    own lookup, which on POSIX honors the executable bit and on
+    Windows finds ``gh.exe`` via PATH (no functional change vs. the
+    pre-#9398 behavior).
+
+    Why: on Windows, ``subprocess.run([\"gh\", ...])`` uses
+    ``CreateProcessW`` for executable lookup, which only honors
+    ``.exe``/``.com`` extensions — ``.cmd`` files in PATH get
+    skipped. The #9398 Phase A PATH-shim ships ``gh.cmd``, which
+    ``shutil.which`` finds (it's PATHEXT-aware) but
+    ``subprocess.run([\"gh\", ...])`` does not. Routing through the
+    resolved path closes the gap so tests can shim ``gh`` for the
+    real-agent-subprocess fixture work. Same shape as
+    ``run_comprehension_test._find_claude`` (#9574 fix for the same
+    root cause on the ``claude`` CLI).
+    """
+    global _RESOLVED_GH_BIN
+    if _RESOLVED_GH_BIN is None:
+        _RESOLVED_GH_BIN = shutil.which("gh") or "gh"
+    return _RESOLVED_GH_BIN
+
+
 def _run_list(cmd_list, check=True):
-    """Run a command from repo root using list form (safe for variable args)."""
+    """Run a command from repo root using list form (safe for variable args).
+
+    #9398: if the first element is the literal string ``"gh"``,
+    substitute with the resolved gh binary path so PATH shims with
+    ``.cmd`` extensions are found on Windows (see ``_resolve_gh_bin``).
+    Other commands are passed through unchanged. Subprocess invocations
+    that pass a full path (already-resolved) are also unchanged.
+    """
+    if cmd_list and cmd_list[0] == "gh":
+        cmd_list = [_resolve_gh_bin()] + list(cmd_list[1:])
     return subprocess.run(
         cmd_list, capture_output=True, text=True,
         encoding="utf-8", errors="replace",

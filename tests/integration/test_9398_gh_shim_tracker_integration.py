@@ -32,24 +32,18 @@ from fixtures import event_mode_subprocess as ems  # noqa: E402
 TRACKER_PY = REPO_ROOT / "references" / "scripts" / "tracker.py"
 
 
-@unittest.skipIf(
-    sys.platform == "win32",
-    "PATH-shim approach is fundamentally broken on Windows — "
-    "Python's `subprocess.run([\"gh\", ...])` uses CreateProcessW "
-    "for executable lookup, which only honors .exe/.com extensions "
-    "without `shell=True`. The shim's `gh.cmd` is found by "
-    "`shutil.which` (PATHEXT-aware) but NOT by subprocess's direct "
-    "lookup. The real GitHub CLI's `gh.exe` always wins. Cross-"
-    "platform fix requires either a real `gh.exe` wrapper (shipped "
-    "as a binary stub) or a minimal `tracker.py` patch to resolve "
-    "`gh` via shutil.which once at module load. Tracked in #9398 "
-    "comment for PM's call."
-)
 class TestTrackerListTasksThroughShim(unittest.TestCase):
     """``tracker.py list-tasks <role> --status approved`` shells out
     to ``gh issue list --label LABEL --state open --json
     number,title,labels --limit 50``. The shim must intercept that
-    call and the canned response must parse and print correctly."""
+    call and the canned response must parse and print correctly.
+
+    Was skipped on Windows before #9398's tracker.py `_resolve_gh_bin`
+    patch (cycle 1194) — Python's `subprocess.run(["gh", ...])` uses
+    `CreateProcessW` which skips `.cmd` files in PATH lookup, so the
+    shim's `gh.cmd` lost to the real `gh.exe`. The patch routes the
+    invocation through `shutil.which("gh")` (PATHEXT-aware), which
+    DOES find `.cmd` files. Works cross-platform now."""
 
     def test_list_tasks_returns_canned_approved_task(self):
         with tempfile.TemporaryDirectory(prefix="gh-shim-fix-") as tmp:
@@ -122,11 +116,6 @@ class TestTrackerListTasksThroughShim(unittest.TestCase):
             self.assertEqual(parsed, [])
 
 
-@unittest.skipIf(
-    sys.platform == "win32",
-    "See TestTrackerListTasksThroughShim — same Windows "
-    "PATH-shim limitation."
-)
 class TestCheckGhThroughShim(unittest.TestCase):
     """``tracker.py check-gh`` is the boot-time gh-permissions
     probe every SquidSquad agent runs. It calls ``gh issue list
