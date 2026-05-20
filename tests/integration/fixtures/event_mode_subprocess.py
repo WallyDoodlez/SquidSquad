@@ -188,35 +188,46 @@ def real_harness(
         # reads fills its 4KB OS buffer and the harness blocks on
         # write — which looks externally like an HTTP-layer wedge
         # (a fun day to debug). Files don't have the buffer problem.
+        #
+        # Resources (stdout_fh, stderr_fh, proc) are tracked through
+        # an ExitStack so they're guaranteed-closed on every exit
+        # path, including a Popen exception between opening the
+        # files and entering the try block (Sonnet code review of
+        # #9614). Without this, a Popen FileNotFoundError leaks the
+        # file handles and Windows TemporaryDirectory cleanup fails
+        # with PermissionError, masking the real failure.
+        from contextlib import ExitStack
         stdout_log = squid_dir / "harness.stdout.log"
         stderr_log = squid_dir / "harness.stderr.log"
-        stdout_fh = open(stdout_log, "wb")
-        stderr_fh = open(stderr_log, "wb")
+        with ExitStack() as stack:
+            stdout_fh = stack.enter_context(open(stdout_log, "wb"))
+            stderr_fh = stack.enter_context(open(stderr_log, "wb"))
 
-        # CREATE_NEW_PROCESS_GROUP on Windows lets us deliver
-        # CTRL_BREAK_EVENT during teardown without also killing the
-        # parent test runner.
-        popen_kwargs = {
-            "env": env,
-            "cwd": str(REPO_ROOT),
-            "stdout": stdout_fh,
-            "stderr": stderr_fh,
-        }
-        if sys.platform == "win32":
-            popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+            # CREATE_NEW_PROCESS_GROUP on Windows lets us deliver
+            # CTRL_BREAK_EVENT during teardown without also killing
+            # the parent test runner.
+            popen_kwargs = {
+                "env": env,
+                "cwd": str(REPO_ROOT),
+                "stdout": stdout_fh,
+                "stderr": stderr_fh,
+            }
+            if sys.platform == "win32":
+                popen_kwargs["creationflags"] = (
+                    subprocess.CREATE_NEW_PROCESS_GROUP
+                )
 
-        proc = subprocess.Popen(cmd, **popen_kwargs)
-        try:
+            proc = subprocess.Popen(cmd, **popen_kwargs)
+            # Register Popen teardown on the same stack so a failure
+            # during _wait_for_port_file still gets the subprocess
+            # killed (ExitStack runs callbacks in reverse order, so
+            # we terminate BEFORE the files close — gives the
+            # harness a chance to flush its final log lines).
+            stack.callback(_terminate_proc, proc)
+
             port = _wait_for_port_file(squid_dir, proc, startup_timeout)
             _wait_for_status_ok(port, status_timeout)
             yield port, proc, squid_dir
-        finally:
-            _terminate_proc(proc)
-            try:
-                stdout_fh.close()
-                stderr_fh.close()
-            except OSError:
-                pass
 
 
 # Path to the agent-stub script that boot_agent_subprocess spawns.

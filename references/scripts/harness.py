@@ -37,13 +37,33 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 REPO_ROOT = SCRIPT_DIR.parent.parent
-# #9398: honor SQUIDSQUAD_DIR env var so isolated test harnesses can run
-# in a tmpdir without overwriting the live .harness-port file (which
-# would cause every other SquidSquad process to route to the test
-# harness on its next port discovery). Default unchanged for production
-# callers — value is identical to the previous module-level constant
-# when the env var is unset.
-SQUIDSQUAD_DIR = Path(os.environ.get("SQUIDSQUAD_DIR") or (REPO_ROOT / ".squidsquad"))
+
+
+def _resolve_squidsquad_dir() -> Path:
+    """#9398: honor SQUIDSQUAD_DIR env var so isolated test harnesses
+    can run in a tmpdir without overwriting the live .harness-port
+    file (which would cause every other SquidSquad process to route
+    to the test harness on its next port discovery).
+
+    Default unchanged for production callers — value is identical to
+    the previous module-level constant when the env var is unset.
+
+    Handles three foot-guns flagged by Sonnet code review of #9614:
+    - Empty string falls back to the default (not interpreted as cwd).
+    - Trailing whitespace is stripped (a frequent `export
+      SQUIDSQUAD_DIR=$tmp ` typo).
+    - Leading ``~`` is expanded (``~/sq-test`` becomes the user's
+      home). Relative paths are NOT resolve()d — caller decides if
+      absoluteness matters (resolve() requires the path to exist,
+      which it may not yet for first-time test setup).
+    """
+    raw = (os.environ.get("SQUIDSQUAD_DIR") or "").strip()
+    if not raw:
+        return REPO_ROOT / ".squidsquad"
+    return Path(raw).expanduser()
+
+
+SQUIDSQUAD_DIR = _resolve_squidsquad_dir()
 HARNESS_PORT_FILE = SQUIDSQUAD_DIR / ".harness-port"
 
 DEFAULT_PORT = 7373

@@ -19,11 +19,25 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
-# #9398: honor SQUIDSQUAD_DIR env var so isolated test harnesses can run
-# without clobbering the live .harness-port file. Default unchanged for
-# production callers — value is identical to the previous module-level
-# constant when the env var is unset.
-SQUID_DIR = Path(os.environ.get("SQUIDSQUAD_DIR") or (REPO_ROOT / ".squidsquad"))
+
+
+def _resolve_squid_dir() -> Path:
+    """#9398: honor SQUIDSQUAD_DIR env var so isolated test harnesses
+    can be discovered by event_bus.emit() in agent subprocesses
+    without the live .harness-port file getting in the way.
+
+    Default unchanged for production callers when env var is unset.
+    Strips whitespace, expands ``~``, treats empty as unset — same
+    foot-gun handling as harness._resolve_squidsquad_dir (Sonnet
+    code review of PR #9614).
+    """
+    raw = (os.environ.get("SQUIDSQUAD_DIR") or "").strip()
+    if not raw:
+        return REPO_ROOT / ".squidsquad"
+    return Path(raw).expanduser()
+
+
+SQUID_DIR = _resolve_squid_dir()
 
 # Timeout: 500ms — never blocks agent cycle
 _TIMEOUT = 0.5

@@ -178,5 +178,67 @@ class TestSquidsquadDirNullEnvVarHandled(unittest.TestCase):
             )
 
 
+class TestSquidsquadDirEnvVarFootguns(unittest.TestCase):
+    """Sonnet code review of PR #9614 flagged three foot-guns:
+    trailing whitespace, leading ``~``, and (already pinned above)
+    empty string. Pin the first two so a future refactor that drops
+    strip/expanduser handling fails loudly."""
+
+    def test_trailing_whitespace_is_stripped(self):
+        """A frequent ``export SQUIDSQUAD_DIR=$tmp `` typo — the
+        trailing space silently produces a different path that
+        doesn't exist; the harness's port write fails as a logged
+        WARNING and the harness becomes undiscoverable. Strip it."""
+        with tempfile.TemporaryDirectory(prefix="sqdir-ws-") as tmp:
+            mod = _fresh_load(
+                "_event_bus_ws_test",
+                SCRIPTS / "event_bus.py",
+                {"SQUIDSQUAD_DIR": f"  {tmp}  "},
+            )
+            self.assertEqual(
+                str(mod.SQUID_DIR), str(Path(tmp)),
+                msg=(
+                    "SQUIDSQUAD_DIR with surrounding whitespace must "
+                    "be stripped (PR #9614 Sonnet code review). "
+                    "Without this, '  /tmp/x  ' resolves to a literal "
+                    "path with spaces in it — the directory the user "
+                    "wanted does NOT get used."
+                ),
+            )
+
+    def test_tilde_is_expanded(self):
+        """``~/sq-test`` should resolve to the user's home, not a
+        literal tilde-prefixed directory under the cwd."""
+        mod = _fresh_load(
+            "_event_bus_tilde_test",
+            SCRIPTS / "event_bus.py",
+            {"SQUIDSQUAD_DIR": "~/__sq_tilde_probe__"},
+        )
+        # Path.expanduser turns ``~`` into ``Path.home()``.
+        expected = Path.home() / "__sq_tilde_probe__"
+        self.assertEqual(
+            str(mod.SQUID_DIR), str(expected),
+            msg=(
+                "SQUIDSQUAD_DIR='~/foo' must be expanduser'd to the "
+                "user's home (PR #9614 Sonnet code review). Without "
+                "this, the tilde is treated literally and Path('~/"
+                "foo') points at a relative './~' subdirectory."
+            ),
+        )
+
+    def test_harness_strip_expanduser_same_contract(self):
+        """The two modules' resolution functions must apply the
+        same foot-gun handling. A regression in only one module
+        would be worse than both broken — agents and the harness
+        would disagree on where the port file lives."""
+        with tempfile.TemporaryDirectory(prefix="sqdir-h-") as tmp:
+            mod = _fresh_load(
+                "_harness_ws_test",
+                SCRIPTS / "harness.py",
+                {"SQUIDSQUAD_DIR": f"  {tmp}\t"},
+            )
+            self.assertEqual(str(mod.SQUIDSQUAD_DIR), str(Path(tmp)))
+
+
 if __name__ == "__main__":
     unittest.main()
