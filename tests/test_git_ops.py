@@ -646,12 +646,30 @@ class TestRoleOwnedPatterns:
         assert "README.md" in pats
         assert "CHANGELOG.md" in pats
         assert "docs/" in pats
+        # #9474: DM also owns SKILL.md (doc-improvement-loop) and
+        # co-owns .squidsquad/config.md (ship-counter + flag toggles).
+        # Pre-#9474 these were treated as foreign and left dirty.
+        assert "SKILL.md" in pats
+        assert ".squidsquad/config.md" in pats
 
     def test_qa_has_no_extras_beyond_common(self):
         pats = git_ops._role_owned_patterns("qa")
         # QA must NOT pick up config or delivery docs
         assert ".squidsquad/config.md" not in pats
         assert "README.md" not in pats
+        # #9474 sanity check: QA also must NOT pick up SKILL.md —
+        # the DM-extras additions don't bleed into other roles.
+        assert "SKILL.md" not in pats
+
+    def test_pm_does_not_pick_up_dm_extras(self):
+        """#9474: PM and DM co-own .squidsquad/config.md, but PM must
+        NOT inherit DM's SKILL.md ownership (skill owns its own file
+        through the branch+PR workflow). Sanity check on the pattern
+        boundary between PM and DM."""
+        pats = git_ops._role_owned_patterns("pm")
+        assert "SKILL.md" not in pats
+        assert "README.md" not in pats
+        assert "CHANGELOG.md" not in pats
 
 
 class TestPathMatches:
@@ -728,6 +746,48 @@ class TestCommitRoleScoped:
         assert "CHANGELOG.md" in staged
         assert "docs/release-notes.md" in staged
         assert ".squidsquad/dm/working-state.md" in staged
+
+    @patch("git_ops.push", return_value=True)
+    @patch("git_ops.commit", return_value=True)
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_dm_stages_skill_md_and_config_md(
+        self, mock_run, mock_run_list, mock_commit, mock_push
+    ):
+        """#9474 regression: DM's cycle commit must include SKILL.md
+        (doc-improvement-loop) and .squidsquad/config.md (Shipped Since
+        Last Bump counter + feature-flag toggles). Before the fix these
+        files were treated as foreign and either rotted in the working
+        tree across cycles or got overwritten by sibling commits."""
+        mock_run.return_value = _mock_result(stdout=(
+            " M SKILL.md\n"
+            " M .squidsquad/config.md\n"
+            " M .squidsquad/dm/working-state.md\n"
+        ))
+        mock_run_list.return_value = _mock_result()
+
+        result = git_ops.commit_role_scoped("dm", "dm: ship #9474 + counter")
+        assert result is True
+
+        staged = [c[0][0][-1] for c in mock_run_list.call_args_list
+                  if c[0][0][:2] == ["git", "add"]]
+        assert "SKILL.md" in staged, (
+            "DM cycle commit must stage SKILL.md when dirty — "
+            "doc-improvement-loop fixes were silently rotting "
+            "in the working tree before #9474."
+        )
+        assert ".squidsquad/config.md" in staged, (
+            "DM cycle commit must stage .squidsquad/config.md when "
+            "dirty — the Shipped Since Last Bump counter was being "
+            "silently dropped before #9474."
+        )
+        assert ".squidsquad/dm/working-state.md" in staged
+
+        # Ensure the role kwarg propagates to the push call — without
+        # it the git-push event would be emitted with role=None and
+        # the audit trail would lose the DM attribution. Tightening
+        # this assertion was the deepseek R1 finding on this PR.
+        mock_push.assert_called_once_with(role="dm")
 
     @patch("git_ops.commit", return_value=True)
     @patch("git_ops.push", return_value=True)
