@@ -8,9 +8,10 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "docs/ARCHITECTURE.md",
+  "last_scanned": "docs/sub-skill-guide.md",
   "rotation_count": 50,
   "scan_history": [
+    {"file": "docs/sub-skill-guide.md", "date": "2026-05-20", "findings": 0, "note": "Rotation 50. Unchanged since cycle 1116 R49 fix (capabilities example list). Confirmed capabilities/ inventory still 4 (figma, google_stitch, local_delivery, local_html) — matches doc. Coverage by deterministic equivalence."},
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-20", "findings": 0, "note": "Rotation 50. Unchanged since cycle 1113 R48 first-real-scan (0 findings). Coverage by deterministic equivalence — git log -- docs/ARCHITECTURE.md confirms no commits since."},
     {"file": "SKILL.md:sections-7-8+slash-commands", "date": "2026-05-20", "findings": 0, "note": "Rotation 50. Sec 7-8 + sec 10 slash-command body stable since cycle-1137 R49 close fix (line 472 /squidsquad-status health-source) — verified intact via grep. No edits since. Coverage by deterministic equivalence."},
     {"file": "SKILL.md:sections-4-6", "date": "2026-05-20", "findings": 0, "note": "Rotation 50. Sec 4-6 stable since cycle-1131 R49 fix (line 238 QA Loop step 7 health-source) — verified intact via grep. No edits since. Coverage by deterministic equivalence."},
