@@ -588,7 +588,37 @@ def _role_owned_patterns(role):
     ]
     role_specific = {
         "pm": [".squidsquad/config.md", ".squidsquad/project/"],
-        "dm": ["README.md", "CHANGELOG.md", "docs/"],
+        # DM also legitimately writes SKILL.md (doc-improvement-loop
+        # rotation scanning + line-level corrections) and
+        # .squidsquad/config.md (Shipped Since Last Bump counter
+        # increments, feature-flag toggles post-delivery). Before #9474
+        # those edits were treated as foreign and left dirty in the
+        # working tree — they either rotted for cycles or got
+        # overwritten when a sibling commit re-staged the same file
+        # from a stale base. Co-ownership of config.md with PM is
+        # intentional: both roles legitimately mutate different fields
+        # (PM: own-domain housekeeping; DM: ship counter + flags).
+        #
+        # KNOWN LIMITATION (#9474 follow-up): config.md has
+        # `merge=ours` set in `.gitattributes`. Concurrent edits from
+        # PM and DM can silently overwrite each other's changes via
+        # the "ours" merge driver. The same hazard already existed
+        # under PM-only ownership (PM cycles in parallel clones, plus
+        # compose.py deploy contamination on feature branches —
+        # already guarded by `commit_code`'s checkout-from-working-
+        # branch step). The current single-clone, serial-cycle setup
+        # in `.local-config` makes the race unlikely. If parallel
+        # multi-clone execution is enabled later, split the DM-only
+        # fields (ship-counter + flags) into a separate file with
+        # exclusive ownership, OR convert config.md to a structured
+        # format that tolerates `merge=union`.
+        "dm": [
+            "README.md",
+            "CHANGELOG.md",
+            "docs/",
+            "SKILL.md",
+            ".squidsquad/config.md",
+        ],
         # qa: nothing beyond common
     }
     return common + role_specific.get(role, [])
