@@ -182,7 +182,7 @@ Add under `tests/integration/test_event_mode_e2e.py` (skip with `@pytest.mark.in
 3. Restart agent.
 4. Assert agent (a) skips forge verification step for the scan, (b) restarts the scan from scratch (idempotency), (c) on completion writes `Status: idle`, `Last completed`, `Next scan after` — values from `config.md` cooldown read at completion (NOT stored).
 
-### 4.4 Eviction gap (§2 third bullet · CONTEXT §3.1 step 3) — IT-EvictionGap
+### 4.4 Eviction gap (§2 second bullet · CONTEXT §3.1 step 3) — IT-EvictionGap
 
 **DEFERRED — blocked on precondition #9331.** Step 4(a)/(b) require the agent to receive an eviction signal from the harness and log a warning naming the oldest available id and the count of evicted events. Code reality (skill investigation cycle 1179):
 - `harness.EventStream.get_since` returns the oldest retained events with no eviction marker when the cursor is not in the deque.
@@ -232,17 +232,15 @@ Original spec (preserved for traceability, restore once #9331 ships):
 3. Assert: cool-down sleep is cancelled before `Next scan after`, the agent reads the event at cursor+1, runs `work_queue()` against the forge, picks up the next item (or stays idle if empty), and advances the cursor atomically.
 4. Verify cursor is monotonically advanced and the agent does NOT skip events between the prior cursor and the wake-causing event.
 
-### 4.9 In-stream gap (CONTEXT §2 first gap scenario) — IT-CursorGapInStream
+### 4.9 In-stream gap (was CONTEXT §2, dropped on #9265) — IT-CursorGapInStream
 
-**DEFERRED — not implementable as written.** Event ids in `harness.py` are `os.urandom(4).hex()` (random 8-char hex, see harness.py:1920) — there is no monotonic sequence, so an agent has no way to detect that "event 4" is missing between observed ids. Only eviction gaps (deque rollover, §4.4) are detectable.
+**DROPPED — architecturally inapplicable** (resolved on #9265, Option A).
 
-Resolution required before this scenario can ship — handled out-of-band on a follow-up task:
-- **Option A**: Update CONTEXT-8694.md §2 to remove the in-stream gap scenario (only eviction-gap remains). Simpler; aligns with current id model.
-- **Option B**: Switch harness event ids to monotonic ints, then implement gap-detection in event_poll.py. Larger change; gives the agent a stronger guarantee but adds harness complexity.
+Investigation on #9265 concluded that the in-stream-gap scenario describes a behavior the current broadcast model cannot produce. The harness is a single in-process `collections.deque` populated by `POST /events`; `GET /events?since=<cursor>` does a linear scan over that deque, so two retained events cannot have a missing event between them by construction. The scenario would only become reachable if the harness moved to a multi-process pipeline with acks that could drop intermediate events.
 
-This scenario is dropped from #8999's scope. A follow-up task tracks the CONTEXT-vs-code decision.
+CONTEXT-8694.md §2 has been updated to list only the two gap scenarios that can actually occur (long lag + eviction gap). This section is kept as a tombstone so the scenario is not re-added without a re-check against the broadcast model.
 
-### 4.10 Long cursor lag (CONTEXT §2 second gap scenario) — IT-CursorLongLag
+### 4.10 Long cursor lag (CONTEXT §2 first gap scenario) — IT-CursorLongLag
 
 1. Pre-seed agent `Last Processed Event ID` to a cursor that is far behind the current head, but still within the retained window (e.g., 24h+ of idle accumulation; deque has NOT rolled).
 2. Accumulate 50+ events in the harness deque ahead of the cursor.
@@ -536,7 +534,7 @@ These are forwarded to the human/PM rather than answered here.
 | §3.7 (Comments + DM exception) | 4.7, CQ Q5, Q6 |
 | §5.1 deliverables (transition-on-handoff) | 4.6, CQ Q8 |
 | §2 (cursor atomic write) | 3.5, 6.4, CQ Q9 |
-| §2 (in-stream gap) | 4.9 (deferred — see §4.9 note) |
+| §2 (in-stream gap) | 4.9 (dropped per #9265 — see §4.9 tombstone) |
 | §2 (long cursor lag) | 4.10 (IT-CursorLongLag) |
 | §2 (eviction gap) | 4.4, §9.2 Probe B |
 | §11 (degraded mode boot-only) | 6.3, §9.2 Probe A |

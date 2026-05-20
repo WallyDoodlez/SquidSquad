@@ -135,10 +135,12 @@ agent instructions.
   *instructions* to invoke it during normal operation are composed into
   the event-mode L1 base fragment per the L1–L4-only principle (no
   separate instruction file outside the compose stack).
-- **Event stream gap behavior — three scenarios**:
-  - **In-stream gap** (small missing range within the retained window):
-    log warning, advance cursor past the gap, continue. Forge-read makes
-    this safe.
+- **Event stream gap behavior — two scenarios** (#9265 dropped the
+  previously-listed in-stream gap as architecturally inapplicable to a
+  single-deque broadcast model — events land in `collections.deque`
+  via `POST /events` and `GET /events?since=<cursor>` scans linearly,
+  so two retained events cannot have a missing event between them by
+  construction):
   - **Long cursor lag (24h+)** — skim-then-advance for audit fidelity,
     not jump-to-latest.
   - **Eviction gap** (cursor predates oldest retained event in the
@@ -167,7 +169,9 @@ agent instructions.
      cool-down loop.
 3. Skim events from cursor forward (informational; forge already has
    current state). Skim-then-advance, never jump-to-latest. Handle gap
-   scenarios per §2 (in-stream gap / long lag / eviction gap).
+   scenarios per §2 (long lag / eviction gap — in-stream gap was dropped
+   on #9265 as architecturally inapplicable to the single-deque
+   broadcast model).
 4. Advance cursor to latest event id.
 5. **Check harness reachability**:
    - **Reachable** → emit `bootup-complete` event (POST `/events` with
@@ -349,8 +353,9 @@ entire event-mode agent contract:
   compose stack).
 - **Improvement-scan crash recovery** — `Status: running` field, fresh-scan
   idempotency.
-- **Eviction-gap handling** — third gap scenario beyond in-stream gap and
-  long lag.
+- **Eviction-gap handling** — second gap scenario alongside long lag.
+  (The originally-drafted third scenario, in-stream gap, was dropped on
+  #9265.)
 
 The boot sequence is part of the event-mode L1 base fragment — there is **no
 standalone `l1-boot.md` fragment file**. All agent instructions must live in
@@ -998,10 +1003,11 @@ tests that don't depend on the answers.
   `running` written at scan start, `idle` + `Last completed` +
   `Next scan after` written at scan completion. On boot, `Status: running`
   → restart the scan (improvement scans are idempotent).
-- **Eviction gap** — third gap scenario: the cursor predates the oldest
-  retained event in the harness's `maxlen=1000` deque. Agent logs
-  eviction details, advances cursor to oldest-available event id, and
-  skims forward. Forge current state subsumes the lost events.
+- **Eviction gap** — second gap scenario (in-stream gap dropped on
+  #9265): the cursor predates the oldest retained event in the
+  harness's `maxlen=1000` deque. Agent logs eviction details, advances
+  cursor to oldest-available event id, and skims forward. Forge current
+  state subsumes the lost events.
 - **Task-cycle** — `cycle_pre`/`cycle_post` invocation per task in
   events mode (replaces the /loop time-cycle).
 - **HITL transition** — handoff to a human modeled as a status
