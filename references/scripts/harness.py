@@ -50,6 +50,14 @@ HEALTH_POLL_INTERVAL = 5  # seconds
 FORCE_KILL_TIMEOUT_SECONDS = 60
 HARNESS_STATE_FILE = SQUIDSQUAD_DIR / ".harness-state.json"
 
+# #9242: Diagnostic escape hatch. When True (set by `main()` from
+# `--no-auto-start` or `SQUIDSQUAD_HARNESS_NO_AUTO_START=1`), the
+# deferred-init thread skips the auto-spawn-all-agents block. Lets
+# operators isolate the auto-start path from HTTP wedges during
+# diagnosis: boot harness, confirm `curl /status` works, then start
+# agents manually via `POST /agents/{role}/start`.
+_NO_AUTO_START = False
+
 import boot_remote
 import health_check
 import reboot_agent
@@ -976,7 +984,16 @@ async def lifespan(app: FastAPI):
         # Skip initial update_health() — it's slow on Windows (tasklist per agent).
         # The health poller will pick up state within HEALTH_POLL_INTERVAL seconds.
 
-        # Auto-start all agents on harness boot
+        # Auto-start all agents on harness boot — gated by #9242 escape
+        # hatch so operators can isolate the auto-start path from HTTP
+        # wedges during diagnosis.
+        if _NO_AUTO_START:
+            _log(
+                "Auto-start skipped (#9242 --no-auto-start). Start "
+                "agents manually with `POST /agents/{role}/start` "
+                "or `squidsquad start <role>`."
+            )
+            return
         _log("Auto-starting all agents...")
         try:
             roles = boot_remote._get_all_roles()
@@ -1145,7 +1162,8 @@ async def start_all():
                 agent_state.terminal_pid = result.get("terminal_pid")
             state.set_agent(role, agent_state)
 
-    state.save_state()
+    # #9242: disk write off the asyncio event loop.
+    await asyncio.to_thread(state.save_state)
     return {"results": results}
 
 
@@ -1184,7 +1202,8 @@ async def stop_all():
         results.append({"role": role, "action": "stop", "success": True})
         _log(f"  {role}: intent=stopping")
 
-    state.save_state()
+    # #9242: disk write off the asyncio event loop.
+    await asyncio.to_thread(state.save_state)
     return {"results": results}
 
 
@@ -1232,7 +1251,8 @@ async def start_agent(role: str):
             # by the new process before we'll dispatch any events to it.
             agent_state.bootup_complete = False
         state.set_agent(role, agent_state)
-        state.save_state()
+        # #9242: disk write off the asyncio event loop.
+        await asyncio.to_thread(state.save_state)
 
     status_code = 200 if result["success"] else 500
     return JSONResponse(status_code=status_code, content=result)
@@ -1391,6 +1411,30 @@ async def receive_event(request: Request):
     if not event_type or not role:
         raise HTTPException(status_code=400, detail="event_type and role are required")
 
+    # #9242: reject unknown roles at the ingestion boundary. Prior to
+    # this guard, events with role="unknown" (emitted by git_ops.py
+    # before the source fix) were persisted into .event-state.json AND
+    # created ghost agent entries in .harness-state.json — both
+    # contributors to the HTTP-wedge cascade. Defense in depth: even
+    # after the git_ops.py:90 source fix, any future regression that
+    # produces a malformed role is dropped at the boundary instead of
+    # corrupting state.
+    try:
+        allowed_roles = set(boot_remote._get_all_roles()) | {"pm"}
+    except (SystemExit, Exception):
+        # Config unreadable — fall open rather than reject everything.
+        # The original symptom (HTTP wedge) is worse than letting one
+        # weird event through during a misconfigured boot.
+        allowed_roles = None
+    if allowed_roles is not None and role not in allowed_roles:
+        _log(
+            f"DROPPED event with unknown role={role!r} "
+            f"(type={event_type!r}); allowed={sorted(allowed_roles)}"
+        )
+        # 204 No Content — caller succeeds (emit is fire-and-forget per
+        # event_bus.emit's contract) but we don't store the event.
+        return JSONResponse(status_code=204, content={})
+
     # Stamp received_at for ordering (#5622)
     body["received_at"] = time.time()
 
@@ -1411,7 +1455,9 @@ async def receive_event(request: Request):
                 agent = AgentState(role)
                 state.agents[role] = agent
             agent.bootup_complete = True
-        state.save_state()
+        # #9242: disk write off the asyncio event loop — receive_event is
+        # POSTed on every emit, so this is the hottest path.
+        await asyncio.to_thread(state.save_state)
         _log(f"{role}: bootup-complete — event dispatch unlocked")
 
     # Ack processing (#7630 2-2): if event is an ack, process the lifecycle closure
@@ -1437,7 +1483,8 @@ async def receive_event(request: Request):
                         # The save_state below is a no-op for these fields
                         # but kept for parity with other ack paths.
                         pass
-                state.save_state()
+                # #9242: disk write off the asyncio event loop.
+                await asyncio.to_thread(state.save_state)
 
     # Update AgentState from event
     _update_agent_from_event(body)
@@ -1800,7 +1847,8 @@ async def stop_agent(role: str):
         agent_state.intent = AgentState.INTENT_STOPPING
         agent_state.intent_set_at = time.time()  # #4792 Phase 1
     state.set_agent(role, agent_state)
-    state.save_state()
+    # #9242: disk write off the asyncio event loop.
+    await asyncio.to_thread(state.save_state)
 
     _log(f"Stopped {role} (intent=stopping)")
 
@@ -1829,7 +1877,8 @@ async def restart_agent(role: str):
     # bootup-complete before events flow again.
     agent_state.bootup_complete = False
     state.set_agent(role, agent_state)
-    state.save_state()
+    # #9242: disk write off the asyncio event loop.
+    await asyncio.to_thread(state.save_state)
 
     # #4792: stop is now expressed via harness intent — no sentinel to clean.
     clone_path = boot_remote._get_clone_path(role)
@@ -1922,6 +1971,10 @@ async def shutdown():
                     agent.intent = AgentState.INTENT_STOPPING
                     agent.intent_set_at = time.time()  # #4792 Phase 1
                 state.set_agent(role, agent)
+            # NOTE: this `state.save_state()` runs inside the sync
+            # `_do_shutdown` daemon thread (see threading.Thread
+            # below), NOT on the asyncio event loop, so it is
+            # intentionally NOT wrapped in `asyncio.to_thread`.
             state.save_state()
 
             _log("Waiting for agents to idle (max 30s)...")
@@ -2531,8 +2584,28 @@ def main():
 
     parser = argparse.ArgumentParser(description="SquidSquad Harness — agent lifecycle manager")
     parser.add_argument("--port", type=int, default=None, help=f"Listen port (default: {DEFAULT_PORT})")
+    parser.add_argument(
+        "--no-auto-start",
+        action="store_true",
+        help=(
+            "Skip the deferred-init auto-start of all agents (#9242). "
+            "Boot harness in a clean state with HTTP server up but no "
+            "agents spawned. Use `POST /agents/{role}/start` (or "
+            "`squidsquad start <role>`) to start agents manually. "
+            "Useful for isolating the auto-start path from HTTP wedges "
+            "during diagnosis."
+        ),
+    )
 
     args = parser.parse_args()
+
+    # Module-level switch read by `_deferred_init` in the lifespan. Also
+    # honors the `SQUIDSQUAD_HARNESS_NO_AUTO_START=1` env var so callers
+    # that don't go through argparse (e.g. test harnesses, restart
+    # scripts) can opt in too.
+    global _NO_AUTO_START
+    env_flag = os.environ.get("SQUIDSQUAD_HARNESS_NO_AUTO_START", "")
+    _NO_AUTO_START = args.no_auto_start or env_flag.lower() in ("1", "true", "yes")
 
     # Determine port
     desired_port = args.port or _read_config_port()
