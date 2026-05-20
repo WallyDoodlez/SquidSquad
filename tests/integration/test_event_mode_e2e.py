@@ -142,8 +142,11 @@ def _make_handler(stream, reacts_to=None):
                 limit = 100
             # Match harness behavior: over-fetch by *3, then post-filter,
             # then trim to limit.
+            eviction = None
             if since:
-                events = stream.get_since(since, limit=limit * 3)
+                events, eviction = stream.get_since_with_eviction(
+                    since, limit=limit * 3
+                )
             else:
                 events = stream.get_recent(limit * 3)
             if role:
@@ -154,7 +157,15 @@ def _make_handler(stream, reacts_to=None):
                 events = events[:limit] if len(events) > limit else events
             else:
                 events = events[-limit:] if len(events) > limit else events
-            self._reply_json({"events": events, "total": len(stream)})
+            response = {"events": events, "total": len(stream)}
+            if eviction is not None:
+                # Eviction signal (#9331) — surface the same three keys
+                # production /events does so event_poll.py exercises
+                # its detection path end-to-end.
+                response["evicted"] = True
+                response["oldest_id"] = eviction["oldest_id"]
+                response["evicted_count_hint"] = eviction["evicted_count_hint"]
+            self._reply_json(response)
 
         def _serve_events_for_role(self, parsed, role):
             qs = urllib.parse.parse_qs(parsed.query)
@@ -164,8 +175,11 @@ def _make_handler(stream, reacts_to=None):
             except ValueError:
                 limit = 50
 
+            eviction = None
             if since:
-                events = stream.get_since(since, limit=limit * 3)
+                events, eviction = stream.get_since_with_eviction(
+                    since, limit=limit * 3
+                )
             else:
                 events = stream.get_recent(limit * 3)
 
@@ -187,7 +201,12 @@ def _make_handler(stream, reacts_to=None):
             # Mirror harness `/events/for/{role}` shape: `total` is the
             # post-filter count there (harness.py:1391), unlike `/events`
             # which returns the global stream size.
-            self._reply_json({"events": filtered, "total": len(filtered)})
+            response = {"events": filtered, "total": len(filtered)}
+            if eviction is not None:
+                response["evicted"] = True
+                response["oldest_id"] = eviction["oldest_id"]
+                response["evicted_count_hint"] = eviction["evicted_count_hint"]
+            self._reply_json(response)
 
         def _reply_json(self, body):
             payload = json.dumps(body).encode("utf-8")
@@ -663,6 +682,155 @@ class TestReactsToFixtureMatchesConfig(unittest.TestCase):
                     f"in this file and re-confirm the §4.6/§4.7 invariants."
                 ),
             )
+
+
+class TestEvictionGap(EventModeE2ETestBase):
+    """§4.4 IT-EvictionGap.
+
+    Pre-set the agent's cursor to an event id that has been rolled
+    out of the harness's retained deque, then run ``event_poll.py``.
+    The agent must:
+
+    - log a warning naming the oldest available id and a count hint
+      (locked format per CONTEXT-9331 §4, exercised end-to-end here),
+    - advance the cursor to a known anchor (oldest retained id),
+    - NOT crash,
+    - emit subsequent retained events on stdout for normal processing.
+
+    Unblocked by #9331 — eviction-signal infrastructure now lives on
+    main (``EventStream.get_since_with_eviction``,
+    ``evicted``/``oldest_id``/``evicted_count_hint`` keys on the
+    ``GET /events`` response, and the matching detection path in
+    ``event_poll.py``). The in-process test server's ``_serve_events``
+    forwards those keys identically to the production endpoint, so
+    this test exercises the real EventStream + real event_poll
+    subprocess.
+    """
+
+    def test_stale_cursor_logs_warning_and_advances(self):
+        """Cursor predates retained window → warn, re-anchor, emit
+        retained events in order."""
+        # Fill the shared maxlen=1000 deque beyond capacity so the
+        # original cursor is definitively evicted. Events e0000–e1199
+        # emit, of which the deque retains the last 1000 (e0200..e1199).
+        stale_cursor = "evicted-before-the-deque-ever-saw-it"
+        # Pre-seed working state with the stale cursor so event_poll
+        # reads it from disk.
+        ws = self._test_role_dir / "working-state.md"
+        ws.write_text(
+            "# Working State\n\n"
+            f"- **Last Processed Event ID**: {stale_cursor}\n",
+            encoding="utf-8",
+        )
+
+        # Fill the deque past maxlen — picks up _total_emitted_count to
+        # 1200, leaves e0200..e1199 retained.
+        seeded_ids = [f"e{i:04d}" for i in range(1200)]
+        for eid in seeded_ids:
+            self._seed_event(eid)
+        retained_ids = seeded_ids[-1000:]  # what the deque still holds
+
+        # Use a small limit so we observe both the warning AND only the
+        # OLDEST retained events (skim-then-advance) — not just the
+        # newest. This is the §4.4 assertion that the agent does not
+        # silently jump-to-latest past the eviction.
+        result = self._run_event_poll(limit=8)
+        self.assertEqual(
+            result.returncode, 0,
+            msg=f"event_poll exit={result.returncode}\n"
+                f"stdout={result.stdout!r}\nstderr={result.stderr!r}",
+        )
+
+        # Locked stderr warning format from CONTEXT-9331 §4.
+        expected_anchor = retained_ids[0]  # "e0200"
+        self.assertIn(
+            "[event_poll] EVICTION: cursor predates retained window — "
+            f"advancing to {expected_anchor},",
+            result.stderr,
+            msg="§4.4: stderr must carry the locked eviction warning "
+                "naming the oldest retained id as the safe re-anchor.",
+        )
+        # Count hint must be present and non-zero — the exact value is
+        # coarse (depends on lifetime emits across other tests sharing
+        # this class's EventStream, since _total_emitted_count is a
+        # lifetime counter; only `_events` is cleared between tests).
+        # Operators only need an order-of-magnitude signal.
+        import re as _re
+        m = _re.search(
+            r"~(\d+) events evicted", result.stderr,
+        )
+        self.assertIsNotNone(
+            m,
+            msg=f"§4.4: warning must include the evicted_count_hint "
+                f"(`~N events evicted`). stderr={result.stderr!r}",
+        )
+        self.assertGreater(
+            int(m.group(1)), 0,
+            msg="§4.4: evicted_count_hint must be non-zero when the "
+                "deque has rolled past the cursor.",
+        )
+        # Exactly one warning — not once per event in the batch.
+        self.assertEqual(result.stderr.count("EVICTION"), 1)
+
+        emitted = [
+            json.loads(line) for line in result.stdout.splitlines()
+            if line.strip()
+        ]
+        emitted_ids = [e["id"] for e in emitted]
+        # §4.4: agent emits the OLDEST retained events first, advancing
+        # the cursor incrementally through them. Skim-then-advance —
+        # NOT a jump to the latest.
+        self.assertEqual(
+            emitted_ids, retained_ids[:8],
+            msg="agent jumped past the eviction window or emitted "
+                "events out of order — oldest-first contract violated.",
+        )
+        # Cursor advanced past the last emitted event in the batch.
+        self.assertEqual(self._read_cursor(), retained_ids[7])
+
+    def test_eviction_then_next_poll_resumes_from_anchor(self):
+        """After the first poll re-anchors past the gap, the next poll
+        uses the advanced cursor and surfaces no further eviction
+        warning — the agent has caught up to the retained window."""
+        stale_cursor = "stale-from-yesterday"
+        ws = self._test_role_dir / "working-state.md"
+        ws.write_text(
+            "# Working State\n\n"
+            f"- **Last Processed Event ID**: {stale_cursor}\n",
+            encoding="utf-8",
+        )
+        seeded_ids = [f"e{i:04d}" for i in range(1100)]
+        for eid in seeded_ids:
+            self._seed_event(eid)
+        retained_ids = seeded_ids[-1000:]
+
+        # First poll — should hit eviction + emit the oldest 5 retained.
+        result1 = self._run_event_poll(limit=5)
+        self.assertEqual(result1.returncode, 0, msg=result1.stderr)
+        self.assertIn("EVICTION", result1.stderr)
+        # Cursor advanced past first 5 retained.
+        self.assertEqual(self._read_cursor(), retained_ids[4])
+
+        # Second poll reads the now-advanced cursor; cursor IS in deque
+        # so no eviction marker, no warning. Use a large limit so the
+        # batch covers the remaining 995 retained events in one shot.
+        result2 = self._run_event_poll(limit=2000)
+        self.assertEqual(result2.returncode, 0, msg=result2.stderr)
+        self.assertNotIn(
+            "EVICTION", result2.stderr,
+            msg="agent caught up after first re-anchor — no more "
+                "eviction warnings on subsequent polls.",
+        )
+        emitted2 = [
+            json.loads(line) for line in result2.stdout.splitlines()
+            if line.strip()
+        ]
+        self.assertEqual(
+            [e["id"] for e in emitted2], retained_ids[5:],
+            msg="second poll must surface the remaining retained "
+                "events oldest-first; cursor must end at last id.",
+        )
+        self.assertEqual(self._read_cursor(), retained_ids[-1])
 
 
 if __name__ == "__main__":
