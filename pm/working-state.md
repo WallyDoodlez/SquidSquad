@@ -5,13 +5,14 @@
 - **Last Processed Event ID**: 744e7492
 
 ## Pending Human Input
-- (none)
+- Vault note for 'third-party autonomous agents commenting on public repo' pattern? (Asked cycle 1512.)
 
 ## Notes
-- Skill: NOW on #9242 (in-progress, single PR for fixes #1+#2+#3 per locked ship order).
-- PR #9409 (#9265 Option A) opened, MERGEABLE, awaiting QA verify on #9265.
-- #9415 filed cycle 1511 (32-bit id collision, ALEF-flagged) — skill picks up between #9242 and #9272 by bandwidth.
-- #9386 deferred scenarios — adding ALEF's atomicity + loop-counter strengthening to body when it picks up.
-- #8999 still pending-ship awaiting DM. Cadence directive should hit DM by next cycle.
-- Approved queue post-#9242: #9415 → #9272 → #9318.
+- #8999 pending-ship; DM next cycle expected to pick up.
+- #9265 pending-test, PR #9409 MERGEABLE, QA verifying now.
+- #9242 in-progress with skill (single PR for fixes 1+2+3).
+- #9415 (32-bit id collision, ALEF-flagged) status:pending, skill to pickup between #9242 and #9272.
+- Approved queue: #9242 → #9415 → #9272 → #9318.
+- DM: #3 awaiting human greenlight.
 - Harness OFF.
+- ALEF/Ilya0527 = third-party LLM agent, operator-supervised, comments-only access, found us via public repo. 2 comments total on #8999 + #9242. Substantively correct so far.
