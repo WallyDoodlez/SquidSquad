@@ -11,6 +11,7 @@ Usage (from mechanical scripts only):
 
 import hashlib
 import json
+import os
 import urllib.request
 import urllib.error
 from datetime import datetime
@@ -18,7 +19,11 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
-SQUID_DIR = REPO_ROOT / ".squidsquad"
+# #9398: honor SQUIDSQUAD_DIR env var so isolated test harnesses can run
+# without clobbering the live .harness-port file. Default unchanged for
+# production callers — value is identical to the previous module-level
+# constant when the env var is unset.
+SQUID_DIR = Path(os.environ.get("SQUIDSQUAD_DIR") or (REPO_ROOT / ".squidsquad"))
 
 # Timeout: 500ms — never blocks agent cycle
 _TIMEOUT = 0.5

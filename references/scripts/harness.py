@@ -37,7 +37,13 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 REPO_ROOT = SCRIPT_DIR.parent.parent
-SQUIDSQUAD_DIR = REPO_ROOT / ".squidsquad"
+# #9398: honor SQUIDSQUAD_DIR env var so isolated test harnesses can run
+# in a tmpdir without overwriting the live .harness-port file (which
+# would cause every other SquidSquad process to route to the test
+# harness on its next port discovery). Default unchanged for production
+# callers — value is identical to the previous module-level constant
+# when the env var is unset.
+SQUIDSQUAD_DIR = Path(os.environ.get("SQUIDSQUAD_DIR") or (REPO_ROOT / ".squidsquad"))
 HARNESS_PORT_FILE = SQUIDSQUAD_DIR / ".harness-port"
 
 DEFAULT_PORT = 7373
