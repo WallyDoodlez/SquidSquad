@@ -103,6 +103,10 @@ STATIC_TEST_MODULES = [
     "test_vault_synthesis",
     "test_work_queue",
     "test_9481_update_health_off_event_loop",
+    # #9398 Phase A unit tests
+    "test_9398_squidsquad_dir_env_var",
+    "test_9398_gh_shim",
+    "test_9398_tracker_gh_resolution",
 ]
 
 
@@ -152,6 +156,24 @@ def run_integration_tests(targets):
         from integration import test_event_mode_agent_subprocess
         suite.addTests(
             loader.loadTestsFromModule(test_event_mode_agent_subprocess)
+        )
+
+    if not targets or "real_agent_subprocess" in targets:
+        # #9398 Phase A real-subprocess scenarios. Heavy — spawns real
+        # harness + agent subprocesses; ~10-15s per test on Windows.
+        from integration import test_9398_real_agent_subprocess
+        suite.addTests(
+            loader.loadTestsFromModule(test_9398_real_agent_subprocess)
+        )
+
+    if not targets or "gh_shim_tracker" in targets:
+        # #9398 Phase A — gh PATH-shim ↔ tracker.py handshake.
+        # Subprocess-spawns tracker.py with shim on PATH; fast.
+        from integration import test_9398_gh_shim_tracker_integration
+        suite.addTests(
+            loader.loadTestsFromModule(
+                test_9398_gh_shim_tracker_integration
+            )
         )
 
     runner = unittest.TextTestRunner(verbosity=2)
