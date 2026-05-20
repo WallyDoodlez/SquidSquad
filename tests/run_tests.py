@@ -103,6 +103,9 @@ STATIC_TEST_MODULES = [
     "test_vault_synthesis",
     "test_work_queue",
     "test_9481_update_health_off_event_loop",
+    # #9398 Phase A unit tests
+    "test_9398_squidsquad_dir_env_var",
+    "test_9398_gh_shim",
 ]
 
 

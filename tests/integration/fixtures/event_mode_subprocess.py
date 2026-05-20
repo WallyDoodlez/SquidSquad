@@ -238,6 +238,39 @@ _BOOT_AGENT_STUB = (
 )
 
 
+def gh_shim_dir() -> Path:
+    """Return the directory containing the ``gh`` PATH-shim
+    (#9398 Phase A work-pickup tests).
+
+    Caller prepends this directory to a subprocess's ``PATH`` env
+    var; when ``tracker.py`` then invokes ``gh issue list ...`` the
+    shim's ``gh.cmd`` (Windows) or ``gh`` (POSIX) script is found
+    first, ahead of any real ``gh`` install. The shim consults
+    ``$GH_SHIM_FIXTURES_DIR`` for canned responses — see
+    ``gh_shim/gh_main.py`` for the contract.
+    """
+    return Path(__file__).resolve().parent / "gh_shim"
+
+
+def env_with_gh_shim(
+    base_env: dict[str, str] | None = None,
+    fixtures_dir: Path | None = None,
+) -> dict[str, str]:
+    """Build a subprocess env dict with the gh-shim directory
+    prepended to ``PATH`` and (optionally) ``GH_SHIM_FIXTURES_DIR``
+    set so reads find their fixture files.
+
+    Returns a *new* dict — does not mutate ``base_env`` or
+    ``os.environ``.
+    """
+    env = dict(base_env if base_env is not None else os.environ)
+    shim = str(gh_shim_dir())
+    env["PATH"] = shim + os.pathsep + env.get("PATH", "")
+    if fixtures_dir is not None:
+        env["GH_SHIM_FIXTURES_DIR"] = str(fixtures_dir)
+    return env
+
+
 def boot_agent_subprocess(
     role: str,
     squid_dir: Path,

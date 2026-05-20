@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+# POSIX entry point for the gh PATH-shim (#9398 Phase A test infra).
+# Re-exec gh_main.py with the same argv. See gh_main.py for the
+# contract. The Python wrapper keeps the entry point Python-only
+# rather than introducing a shell-script dependency on the path.
+
+import os
+import sys
+
+if __name__ == "__main__":
+    here = os.path.dirname(os.path.abspath(__file__))
+    # Replace the current process so signals (SIGTERM during test
+    # teardown) reach the actual implementation cleanly.
+    os.execv(
+        sys.executable,
+        [sys.executable, os.path.join(here, "gh_main.py")] + sys.argv[1:],
+    )
