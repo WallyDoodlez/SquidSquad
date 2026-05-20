@@ -102,6 +102,7 @@ STATIC_TEST_MODULES = [
     "test_vault_remember",
     "test_vault_synthesis",
     "test_work_queue",
+    "test_9481_update_health_off_event_loop",
 ]
 
 
