@@ -8,9 +8,10 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "README.md",
+  "last_scanned": "SKILL.md:sections-1-3",
   "rotation_count": 51,
   "scan_history": [
+    {"file": "SKILL.md:sections-1-3", "date": "2026-05-20", "findings": 0, "note": "Rotation 51. Sec 1-3 stable since cycle-1128 own fix. Coverage by deterministic equivalence."},
     {"file": "README.md", "date": "2026-05-20", "findings": 0, "note": "Rotation 51 start. README.md still at cycle 1098 (a20c931a) — no edits since R50 scan. Coverage by deterministic equivalence."},
     {"file": "CHANGELOG.md", "date": "2026-05-20", "findings": 0, "note": "Rotation 50 close — advancing rotation_count to 51. CHANGELOG.md unchanged since cycle 1070 v0.40.0 bump. R49 0-finding scan at cycle 1122 still valid. Coverage by deterministic equivalence. Rotation 50 summary: full coverage of 7 docs (README, SKILL.md×3, ARCHITECTURE, sub-skill-guide, CONTRIBUTING, CHANGELOG) over ~12 hours with 0 new findings — all deterministic-equivalent to R49 closing state. Pipeline calm reflected in doc stability."},
     {"file": "CONTRIBUTING.md", "date": "2026-05-20", "findings": 0, "note": "Rotation 50. Unchanged since cycle 979 (last actual edit). R49 0-finding scan at cycle 1119 still valid. Coverage by deterministic equivalence."},
