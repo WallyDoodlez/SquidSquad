@@ -154,6 +154,19 @@ python references/scripts/git_ops.py task-end [role] [number]
 
    Resume logic mirrors PM's: if `TEST-PLAN-<NUMBER>.md` already exists under `.squidsquad/qa/planning/` and the issue body's ACs have not changed since the file was committed, reuse it; otherwise re-derive.
 
+   **Optional: route test-plan drafting to an external model** (#9319 — was orphaned PM infrastructure, reclaimed for QA):
+
+   ```bash
+   python references/scripts/model_router.py route \
+     --task-type test-plan \
+     --task-id <NUMBER> \
+     --input-files "<issue body export>,<CONTEXT artifact if any>" \
+     --output-file ".squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md" \
+     --context "Draft live-system test plan for #<NUMBER> from the AC list."
+   ```
+
+   The router uses the `Test Plan Model` config setting and falls back to a Claude subagent on failure (same fallback contract PM uses for research/discussion-prep). QA reviews the draft, adjusts as needed, and saves the final version. This is optional — QA can also write the plan directly without routing.
+
    **Test plan structure**:
 
    ```markdown
