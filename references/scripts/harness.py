@@ -1117,8 +1117,18 @@ def _validate_role(role: str) -> str:
 
 @app.get("/status")
 async def get_status():
-    """Harness + all agent health."""
-    state.update_health()
+    """Harness + all agent health.
+
+    #9481: no inline update_health() call. The previous implementation
+    ran ``state.update_health()`` synchronously on the asyncio event
+    loop; on Windows it shells out to ``tasklist`` per agent under
+    ``state._lock`` and blocks for 10–20s on a cold cache, producing
+    the cycle-1500 HTTP wedge (kernel accepts, dispatcher frozen,
+    CloseWait pile-up). The background health poller already refreshes
+    agent state every ``HEALTH_POLL_INTERVAL`` seconds — that is the
+    authoritative freshness budget for /status, and operators get a
+    millisecond response instead of a timeout.
+    """
     uptime = int(time.time() - state.start_time)
     # #9243: include code_version + boot_time_iso so operators can verify
     # which code is actually running without a restart probe.
@@ -1153,7 +1163,8 @@ async def get_root():
 @app.get("/agents")
 async def list_agents():
     """List agents with state."""
-    state.update_health()
+    # #9481: see get_status — keep sync subprocess off the event loop.
+    await asyncio.to_thread(state.update_health)
     return {"agents": state.all_agents()}
 
 
@@ -1232,7 +1243,8 @@ async def stop_all():
 async def get_agent(role: str):
     """Get single agent state."""
     _validate_role(role)
-    state.update_health()
+    # #9481: see get_status — keep sync subprocess off the event loop.
+    await asyncio.to_thread(state.update_health)
     agent = state.get_agent(role)
     if agent is None:
         return {"role": role, "status": "unknown", "message": "No health data yet"}
@@ -1283,7 +1295,8 @@ async def start_agent(role: str):
 async def get_agent_health(role: str):
     """Agent health endpoint — process status, last cycle, phase, context pressure (#4966)."""
     _validate_role(role)
-    state.update_health()
+    # #9481: see get_status — keep sync subprocess off the event loop.
+    await asyncio.to_thread(state.update_health)
     agent = state.get_agent(role)
 
     result = {
