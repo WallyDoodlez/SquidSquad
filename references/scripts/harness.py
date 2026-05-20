@@ -2614,6 +2614,17 @@ class CtrlCHandler:
 # ---------------------------------------------------------------------------
 
 def main():
+    # On Windows, the default ProactorEventLoop's cleanup path
+    # (_ProactorBasePipeTransport._call_connection_lost) does not handle
+    # ConnectionResetError gracefully — when a client (uvicorn keepalive,
+    # curl probe, agent poll) resets the connection, the loop tries to
+    # shutdown the socket, hits WinError 10054, and raises uncaught,
+    # wedging the HTTP layer (#9562). SelectorEventLoop has no such bug.
+    # Harness uses sync subprocess.run/Popen everywhere (no
+    # asyncio.create_subprocess_exec), so the Selector trade-off is null.
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
     import argparse
 
     parser = argparse.ArgumentParser(description="SquidSquad Harness — agent lifecycle manager")
