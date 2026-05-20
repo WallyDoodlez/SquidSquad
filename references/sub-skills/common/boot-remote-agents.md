@@ -13,5 +13,5 @@ If any agents were spawned, print: `[🦑 HH:MM:SS] Booted: [role1, role2, ...]`
 
 If all agents alive or stopped, print nothing — silent pass.
 
-**PM does not boot agents directly.** Agent lifecycle is managed by the harness (`harness.py`) and `start_team.py` (#4966). If PM detects a stalled or dead agent, report to the human — do not attempt to spawn or restart agents.
+**Manual boot is permitted on stall.** Routine agent lifecycle (start/stop on demand, restart on healthy cycles) belongs to the harness (`harness.py`) and `start_team.py` (#4966) — and the auto-boot path in `cycle_pre.py` runs before every PM cycle. When auto-boot is unavailable (harness down — see #9242) or insufficient (a specific agent stayed dead), PM may invoke `python references/scripts/boot_remote.py --role <name>` directly to spawn the stalled agent. Use `--all` only on explicit human request. Manual PM intervention is reserved for stall recovery — do NOT pre-emptively boot healthy agents (#9272, memory rule `feedback_manual_agents`).
 <!-- /sub-skill: boot-remote-agents -->

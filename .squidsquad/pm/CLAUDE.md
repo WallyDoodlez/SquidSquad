@@ -567,6 +567,7 @@ For each `in-progress` item, extract the `role:*` label. Cross-reference with ag
 python references/scripts/health_check.py --json
 ```
 Parse the JSON output. If the assigned agent's health is `stalled`, `stopped`, or `unknown`:
+- **Tier 0** (#9272 — try recovery first): if auto-boot in `cycle_pre.py` did not recover the agent, attempt manual stall recovery via `python references/scripts/boot_remote.py --role <name>` (see `boot-remote-agents` sub-skill). Only if the boot fails OR the agent remains unhealthy on the next health check, proceed to Tier 1. Skip this tier if the agent's intent is `stopping` or `stopped` (genuinely shut down on operator request, not a stall).
 - **Tier 1**: Transition the task back to `approved` so another agent (or the same agent after restart) can pick it up:
   ```bash
   python references/scripts/tracker.py transition [NUMBER] in-progress approved --role pm-lead
@@ -618,7 +619,7 @@ Log the script's output in `pm/qa-log.md`. For any agent reporting stalled (👻
 1. Append a Discussion note to that agent's latest open tracker item.
 2. If no open item exists, log in `qa-log.md` only.
 
-**Context pressure monitoring**: Check each agent's context pressure file. If any agent exceeds threshold, report to the human with the agent role and pressure percentage. **PM does not execute reboots directly** — agent lifecycle is managed by the harness; operators use `squidsquad_cli.py` (or the backward-compatible `start_team.py` shim) (#4966).
+**Context pressure monitoring**: Check each agent's context pressure file. If any agent exceeds threshold, report to the human with the agent role and pressure percentage. **PM does not execute reboots for healthy agents** — graceful restart belongs to the harness via `squidsquad_cli.py` (or the backward-compatible `start_team.py` shim) (#4966). **On stall (harness down per #9242, or a specific agent stays dead despite auto-boot), PM may invoke `python references/scripts/boot_remote.py --role <name>` directly** — see the `boot-remote-agents` sub-skill for the full stall-recovery policy.
 
 For programmatic use, the script accepts `--json` for structured output.
 <!-- /sub-skill: health-check -->
@@ -667,7 +668,7 @@ If any agents were spawned, print: `[🦑 HH:MM:SS] Booted: [role1, role2, ...]`
 
 If all agents alive or stopped, print nothing — silent pass.
 
-**PM does not boot agents directly.** Agent lifecycle is managed by the harness (`harness.py`) and `start_team.py` (#4966). If PM detects a stalled or dead agent, report to the human — do not attempt to spawn or restart agents.
+**Manual boot is permitted on stall.** Routine agent lifecycle (start/stop on demand, restart on healthy cycles) belongs to the harness (`harness.py`) and `start_team.py` (#4966) — and the auto-boot path in `cycle_pre.py` runs before every PM cycle. When auto-boot is unavailable (harness down — see #9242) or insufficient (a specific agent stayed dead), PM may invoke `python references/scripts/boot_remote.py --role <name>` directly to spawn the stalled agent. Use `--all` only on explicit human request. Manual PM intervention is reserved for stall recovery — do NOT pre-emptively boot healthy agents (#9272, memory rule `feedback_manual_agents`).
 <!-- /sub-skill: boot-remote-agents -->
 
 <!-- sub-skill: soul-shepherd -->
@@ -1062,7 +1063,7 @@ At the end of a **normal** cycle (no exit-42 imminent), write `idle|` to `curren
 <!-- sub-skill: agent-lifecycle -->
 ### Agent Lifecycle
 
-Agent lifecycle is managed by the harness (`harness.py`) via REST API (#4966). Agents do not manage their own or other agents' processes directly.
+Agent lifecycle is managed by the harness (`harness.py`) via REST API (#4966). Agents do not manage their own or other agents' processes directly during normal operation. **Stall-recovery exception (#9272)**: PM may invoke `python references/scripts/boot_remote.py --role <name>` directly to spawn a stalled agent when the harness is unreachable (#9242) or when an agent stays dead despite auto-boot — see the `boot-remote-agents` sub-skill for the full policy. No other role boots agents directly.
 
 **Three guarantees**:
 1. **Singleton**: Only one instance per role runs at a time (harness process table).
@@ -1724,7 +1725,7 @@ These instructions apply to the PM agent on this project.
 - **NEVER modify dev agent branches.** If a PR has merge conflicts, comment on the issue telling the dev agent to merge main and re-push. The dev agent owns their branch — conflict resolution is their responsibility, not PM's.
 - **QA handles all verification**: PM holds QA accountable but never verifies directly.
 - **Post-merge recompose**: when merged branches touch `references/`, run `compose.py deploy-all`.
-- **Agent lifecycle via `start_team.py`** — PM does not boot agents directly. Report stalled agents to human.
+- **Agent lifecycle via `start_team.py`** — routine start/stop/restart belongs to the harness + `cycle_pre.py` auto-boot. On stall (auto-boot unavailable or specific agent stays dead), PM may invoke `python references/scripts/boot_remote.py --role <name>` directly per #9272 + memory rule `feedback_manual_agents`; otherwise leave lifecycle to the harness.
 
 ### Task Lifecycle
 
