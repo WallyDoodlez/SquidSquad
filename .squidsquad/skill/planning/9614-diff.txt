@@ -1,0 +1,747 @@
+diff --git a/references/scripts/event_bus.py b/references/scripts/event_bus.py
+index c5fd7fb0..e4d0f719 100644
+--- a/references/scripts/event_bus.py
++++ b/references/scripts/event_bus.py
+@@ -11,6 +11,7 @@
+ 
+ import hashlib
+ import json
++import os
+ import urllib.request
+ import urllib.error
+ from datetime import datetime
+@@ -18,7 +19,11 @@
+ 
+ SCRIPT_DIR = Path(__file__).resolve().parent
+ REPO_ROOT = SCRIPT_DIR.parent.parent
+-SQUID_DIR = REPO_ROOT / ".squidsquad"
++# #9398: honor SQUIDSQUAD_DIR env var so isolated test harnesses can run
++# without clobbering the live .harness-port file. Default unchanged for
++# production callers — value is identical to the previous module-level
++# constant when the env var is unset.
++SQUID_DIR = Path(os.environ.get("SQUIDSQUAD_DIR") or (REPO_ROOT / ".squidsquad"))
+ 
+ # Timeout: 500ms — never blocks agent cycle
+ _TIMEOUT = 0.5
+diff --git a/references/scripts/harness.py b/references/scripts/harness.py
+index 728f970f..35822285 100644
+--- a/references/scripts/harness.py
++++ b/references/scripts/harness.py
+@@ -37,7 +37,13 @@
+ SCRIPT_DIR = Path(__file__).resolve().parent
+ sys.path.insert(0, str(SCRIPT_DIR))
+ REPO_ROOT = SCRIPT_DIR.parent.parent
+-SQUIDSQUAD_DIR = REPO_ROOT / ".squidsquad"
++# #9398: honor SQUIDSQUAD_DIR env var so isolated test harnesses can run
++# in a tmpdir without overwriting the live .harness-port file (which
++# would cause every other SquidSquad process to route to the test
++# harness on its next port discovery). Default unchanged for production
++# callers — value is identical to the previous module-level constant
++# when the env var is unset.
++SQUIDSQUAD_DIR = Path(os.environ.get("SQUIDSQUAD_DIR") or (REPO_ROOT / ".squidsquad"))
+ HARNESS_PORT_FILE = SQUIDSQUAD_DIR / ".harness-port"
+ 
+ DEFAULT_PORT = 7373
+diff --git a/tests/integration/fixtures/__init__.py b/tests/integration/fixtures/__init__.py
+new file mode 100644
+index 00000000..c89c2c45
+--- /dev/null
++++ b/tests/integration/fixtures/__init__.py
+@@ -0,0 +1 @@
++"""Test fixtures for SquidSquad integration tests (#9398 Phase A)."""
+diff --git a/tests/integration/fixtures/_boot_agent_stub.py b/tests/integration/fixtures/_boot_agent_stub.py
+new file mode 100644
+index 00000000..110752b7
+--- /dev/null
++++ b/tests/integration/fixtures/_boot_agent_stub.py
+@@ -0,0 +1,43 @@
++"""Minimal boot-agent stub for the #9398 Phase A fixture.
++
++Spawned by ``boot_agent_subprocess`` to exercise the bootup-complete
++contract end-to-end across a real process boundary. Imports
++``event_bus`` (which picks up ``SQUIDSQUAD_DIR`` from the env), calls
++``event_bus.bootup_complete(role)`` once, and exits.
++
++Not a full agent — there is no cycle_pre/cycle_post loop here, no
++work_queue, no L1 init beyond the bootup signal. The intent is the
++smallest reproducible exercise of the contract: an agent process
++discovers the harness via the port file and posts the boot signal.
++
++Usage:
++    python _boot_agent_stub.py <role>
++
++Exit codes:
++    0 - bootup_complete emitted successfully (event_bus is
++        fire-and-forget; emission "success" means no exception, not
++        a 200 ack from the harness).
++    2 - bad arguments.
++"""
++
++import sys
++from pathlib import Path
++
++if __name__ == "__main__":
++    if len(sys.argv) != 2 or not sys.argv[1].strip():
++        sys.stderr.write(
++            "usage: python _boot_agent_stub.py <role>\n"
++        )
++        sys.exit(2)
++    role = sys.argv[1].strip()
++
++    # Ensure we can find the SquidSquad scripts on sys.path so the
++    # subprocess works regardless of which directory pytest happened
++    # to chdir to when invoking us.
++    repo_root = Path(__file__).resolve().parent.parent.parent.parent
++    sys.path.insert(0, str(repo_root / "references" / "scripts"))
++
++    import event_bus  # noqa: E402 — path adjusted above
++
++    event_bus.bootup_complete(role)
++    sys.exit(0)
+diff --git a/tests/integration/fixtures/event_mode_subprocess.py b/tests/integration/fixtures/event_mode_subprocess.py
+new file mode 100644
+index 00000000..1a977ad2
+--- /dev/null
++++ b/tests/integration/fixtures/event_mode_subprocess.py
+@@ -0,0 +1,260 @@
++"""Real-agent-subprocess test fixture for #9398 Phase A.
++
++The §4.1 / §4.5 acceptance criteria call for spawning a *real*
++event-mode agent against a *real* harness — not a `TestClient`
++in-process proxy. The wire halves already live in
++`tests/integration/test_event_mode_agent_subprocess.py`; this fixture
++provides the spawn-and-wait infrastructure that lets later tests
++exercise the AC-3 M-3.2 and AC-2 M-2.* paths end-to-end.
++
++Two building blocks:
++
++- `real_harness(...)`: context manager that spawns ``harness.py`` as a
++  subprocess in an isolated ``SQUIDSQUAD_DIR`` tmpdir, waits for the
++  port file and a passing ``/status`` probe, and yields
++  ``(port, proc, squid_dir)``. Cleans up the subprocess on exit
++  (SIGTERM on POSIX, CTRL_BREAK_EVENT on Windows, with a hard-kill
++  backstop).
++
++- `boot_agent_subprocess(role, squid_dir)`: spawns a thin Python
++  subprocess that imports ``event_bus`` and calls
++  ``bootup_complete(role)`` against the harness whose port is on
++  disk in ``squid_dir / ".harness-port"``. The subprocess exits
++  immediately after emitting — it does NOT run a full agent loop,
++  just the bootup signal. Used by the first §4.1 test to assert the
++  harness records the flag flip end-to-end across a real process
++  boundary.
++
++Both helpers depend on the #9398-precondition refactor (`harness.py`
++and `event_bus.py` honor the ``$SQUIDSQUAD_DIR`` env var) — without
++that, the test harness would clobber the live ``.harness-port`` file.
++"""
++
++from __future__ import annotations
++
++import os
++import signal
++import subprocess
++import sys
++import tempfile
++import time
++import urllib.error
++import urllib.request
++from contextlib import contextmanager
++from pathlib import Path
++
++REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
++SCRIPTS = REPO_ROOT / "references" / "scripts"
++HARNESS_PATH = SCRIPTS / "harness.py"
++
++# Generous defaults — Windows subprocess + uvicorn cold start is slow.
++_DEFAULT_STARTUP_TIMEOUT = 15.0
++_DEFAULT_STATUS_TIMEOUT = 10.0
++_DEFAULT_TEARDOWN_TIMEOUT = 5.0
++
++
++def _terminate_proc(proc: subprocess.Popen) -> None:
++    """Politely-then-firmly stop a child process.
++
++    On Windows we need CTRL_BREAK_EVENT (Popen must have been started
++    with CREATE_NEW_PROCESS_GROUP); on POSIX terminate() suffices.
++    Hard kill backstop after _DEFAULT_TEARDOWN_TIMEOUT.
++    """
++    if proc.poll() is not None:
++        return
++    try:
++        if sys.platform == "win32":
++            proc.send_signal(signal.CTRL_BREAK_EVENT)
++        else:
++            proc.terminate()
++    except (OSError, ValueError):
++        # Process already gone (race), or pipe closed — let kill() finish.
++        pass
++    try:
++        proc.wait(timeout=_DEFAULT_TEARDOWN_TIMEOUT)
++    except subprocess.TimeoutExpired:
++        proc.kill()
++        try:
++            proc.wait(timeout=2.0)
++        except subprocess.TimeoutExpired:
++            pass
++
++
++def _wait_for_port_file(squid_dir: Path, proc: subprocess.Popen,
++                       timeout: float) -> int:
++    """Poll ``squid_dir / .harness-port`` until it appears AND the
++    harness subprocess is still alive. Returns the port number.
++
++    Raises ``RuntimeError`` if the subprocess exited before writing,
++    or ``TimeoutError`` if it hangs.
++    """
++    port_file = squid_dir / ".harness-port"
++    deadline = time.monotonic() + timeout
++    while time.monotonic() < deadline:
++        if port_file.exists():
++            try:
++                raw = port_file.read_text(encoding="utf-8").strip()
++                if raw:
++                    return int(raw)
++            except (OSError, ValueError):
++                # Possibly mid-write; loop and retry.
++                pass
++        if proc.poll() is not None:
++            # stderr is redirected to a file (see real_harness), not
++            # a PIPE — read the tail from there so the caller can
++            # see why the harness died.
++            stderr_tail = ""
++            try:
++                stderr_path = squid_dir / "harness.stderr.log"
++                if stderr_path.exists():
++                    raw = stderr_path.read_bytes()[-500:]
++                    stderr_tail = raw.decode("utf-8", errors="replace")
++            except OSError:
++                pass
++            raise RuntimeError(
++                f"harness subprocess exited rc={proc.returncode} before "
++                f"writing port file. stderr tail: {stderr_tail!r}"
++            )
++        time.sleep(0.1)
++    raise TimeoutError(
++        f"harness did not write port file within {timeout}s"
++    )
++
++
++def _wait_for_status_ok(port: int, timeout: float) -> None:
++    """Probe ``GET /status`` until it returns 200 or timeout elapses.
++
++    The port file is written from the lifespan callback, but uvicorn
++    is also still completing its bind/listen at that moment; a
++    request issued *immediately* after the port file appears can hit
++    a TCP RST. This wait closes that gap.
++    """
++    deadline = time.monotonic() + timeout
++    last_err: str | None = None
++    while time.monotonic() < deadline:
++        try:
++            with urllib.request.urlopen(
++                f"http://127.0.0.1:{port}/status", timeout=1.0
++            ) as resp:
++                if resp.status == 200:
++                    return
++        except (urllib.error.URLError, OSError, ConnectionResetError) as e:
++            last_err = f"{type(e).__name__}: {e}"
++        time.sleep(0.1)
++    raise TimeoutError(
++        f"/status did not return 200 within {timeout}s. "
++        f"Last error: {last_err!r}"
++    )
++
++
++@contextmanager
++def real_harness(
++    *,
++    port_hint: int | None = None,
++    startup_timeout: float = _DEFAULT_STARTUP_TIMEOUT,
++    status_timeout: float = _DEFAULT_STATUS_TIMEOUT,
++):
++    """Spawn ``harness.py`` as a subprocess in an isolated SQUIDSQUAD_DIR.
++
++    Yields ``(port, proc, squid_dir)``:
++    - ``port``: the port the harness is actually listening on (read
++      from the isolated ``.harness-port`` file, NOT from any
++      module-level default — the harness may have fallen back to a
++      free port if the hint was busy).
++    - ``proc``: the ``Popen`` object so tests can ``proc.poll()`` or
++      read its pipes if needed.
++    - ``squid_dir``: the tmpdir path so tests can probe other
++      harness-managed files (``.harness-state.json``,
++      ``.event-state.json``, ...) and so an agent subprocess
++      spawned by the same test inherits the same ``SQUIDSQUAD_DIR``.
++
++    The harness is started with ``SQUIDSQUAD_HARNESS_NO_AUTO_START=1``
++    so it does not try to spawn real agents (which would attempt to
++    invoke the live ``claude`` CLI and call out to the forge).
++    """
++    with tempfile.TemporaryDirectory(prefix="sq-harness-") as tmp:
++        squid_dir = Path(tmp)
++        env = dict(os.environ)
++        env["SQUIDSQUAD_DIR"] = str(squid_dir)
++        env["SQUIDSQUAD_HARNESS_NO_AUTO_START"] = "1"
++
++        cmd = [sys.executable, str(HARNESS_PATH)]
++        if port_hint is not None:
++            cmd.extend(["--port", str(port_hint)])
++
++        # Pipe stdout/stderr to files in the tmpdir, NOT to PIPE
++        # handles. The harness chats heavily on stdout (lifespan,
++        # event traffic, deferred-init); a PIPE handle that no one
++        # reads fills its 4KB OS buffer and the harness blocks on
++        # write — which looks externally like an HTTP-layer wedge
++        # (a fun day to debug). Files don't have the buffer problem.
++        stdout_log = squid_dir / "harness.stdout.log"
++        stderr_log = squid_dir / "harness.stderr.log"
++        stdout_fh = open(stdout_log, "wb")
++        stderr_fh = open(stderr_log, "wb")
++
++        # CREATE_NEW_PROCESS_GROUP on Windows lets us deliver
++        # CTRL_BREAK_EVENT during teardown without also killing the
++        # parent test runner.
++        popen_kwargs = {
++            "env": env,
++            "cwd": str(REPO_ROOT),
++            "stdout": stdout_fh,
++            "stderr": stderr_fh,
++        }
++        if sys.platform == "win32":
++            popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
++
++        proc = subprocess.Popen(cmd, **popen_kwargs)
++        try:
++            port = _wait_for_port_file(squid_dir, proc, startup_timeout)
++            _wait_for_status_ok(port, status_timeout)
++            yield port, proc, squid_dir
++        finally:
++            _terminate_proc(proc)
++            try:
++                stdout_fh.close()
++                stderr_fh.close()
++            except OSError:
++                pass
++
++
++# Path to the agent-stub script that boot_agent_subprocess spawns.
++# Kept as a sibling file so it can be invoked with `python <path>`
++# from any cwd without import-path gymnastics.
++_BOOT_AGENT_STUB = (
++    Path(__file__).resolve().parent / "_boot_agent_stub.py"
++)
++
++
++def boot_agent_subprocess(
++    role: str,
++    squid_dir: Path,
++    *,
++    timeout: float = 10.0,
++) -> subprocess.CompletedProcess:
++    """Spawn a minimal "boot agent" subprocess that emits one
++    ``bootup-complete`` event against the harness in ``squid_dir``.
++
++    Inherits ``SQUIDSQUAD_DIR=squid_dir`` so the in-subprocess
++    ``event_bus`` module discovers the test harness's port file.
++
++    Returns the ``CompletedProcess`` — caller asserts on exit code
++    and stderr if needed. Does NOT run a full agent loop; the goal is
++    a clean, reproducible exercise of the bootup-complete contract
++    end-to-end across a real process boundary.
++    """
++    env = dict(os.environ)
++    env["SQUIDSQUAD_DIR"] = str(squid_dir)
++
++    return subprocess.run(
++        [sys.executable, str(_BOOT_AGENT_STUB), role],
++        env=env,
++        cwd=str(REPO_ROOT),
++        capture_output=True,
++        text=True,
++        encoding="utf-8",
++        errors="replace",
++        timeout=timeout,
++        check=False,
++    )
+diff --git a/tests/integration/test_9398_real_agent_subprocess.py b/tests/integration/test_9398_real_agent_subprocess.py
+new file mode 100644
+index 00000000..57a53902
+--- /dev/null
++++ b/tests/integration/test_9398_real_agent_subprocess.py
+@@ -0,0 +1,168 @@
++"""§4.1 real-agent-subprocess tests for #9398.
++
++The wire halves of these contracts already live in
++``test_event_mode_agent_subprocess.py`` (TestClient against the
++in-process FastAPI app). #9398 calls for *real* subprocess
++exercises — actually spawn ``harness.py`` and a separate agent
++process that posts events via HTTP. The fixture infrastructure
++lives in ``fixtures/event_mode_subprocess.py``.
++
++This first cut covers AC-3 M-3.2's subprocess half:
++the bootup-complete signal flips ``AgentState.bootup_complete``
++when emitted from a real subprocess. Work-pickup (the rest of
++AC-3 M-3.2) requires a gh PATH-shim and lives in a follow-up commit.
++"""
++
++from __future__ import annotations
++
++import json
++import sys
++import unittest
++import urllib.error
++import urllib.request
++from pathlib import Path
++
++REPO_ROOT = Path(__file__).resolve().parent.parent.parent
++sys.path.insert(0, str(REPO_ROOT / "tests" / "integration"))
++
++# Import the fixture as a module so unittest's discovery picks it up
++# from the package path.
++from fixtures import event_mode_subprocess as ems  # noqa: E402
++
++
++def _get_agent(port: int, role: str, timeout: float = 30.0) -> dict:
++    """GET /agents/{role} and return the parsed JSON body.
++
++    Timeout defaults to 30s because the post-#9481 handler wraps
++    ``state.update_health`` in ``asyncio.to_thread`` — on Windows that
++    shells out to ``tasklist`` for each registered agent, which can
++    take 10-20s on a cold machine. The 5s default urlopen timeout
++    races that call and fails.
++    """
++    with urllib.request.urlopen(
++        f"http://127.0.0.1:{port}/agents/{role}", timeout=timeout
++    ) as resp:
++        if resp.status != 200:
++            raise AssertionError(
++                f"GET /agents/{role} returned HTTP {resp.status} — "
++                "harness should have created the role record on first "
++                "boot-event arrival."
++            )
++        return json.loads(resp.read().decode("utf-8"))
++
++
++class TestBootupCompleteAcrossRealSubprocesses(unittest.TestCase):
++    """AC-3 M-3.2 subprocess half: a real agent subprocess emits
++    ``bootup-complete`` against a real harness, and the harness
++    records it on ``AgentState.bootup_complete`` exposed via
++    ``GET /agents/{role}``. The wire half pins the same invariant
++    against the in-process app; this test pins it across a real
++    process boundary, which the deferred §4 work for #8999 calls
++    out as the load-bearing scenario."""
++
++    def test_real_subprocess_bootup_flips_agent_state_flag(self):
++        role = "skill"
++        with ems.real_harness() as (port, harness_proc, squid_dir):
++            self.assertIsNone(
++                harness_proc.poll(),
++                msg="harness subprocess exited unexpectedly during setup",
++            )
++
++            # Pre-condition: there's no agent state for this role yet
++            # (no auto-start), so /agents/{role} should 404 or the
++            # role's record should report bootup_complete=False if the
++            # harness has lazily created it. Either is acceptable
++            # pre-state; we only care that AFTER the bootup-complete
++            # post, the flag reads True.
++
++            result = ems.boot_agent_subprocess(role, squid_dir)
++            self.assertEqual(
++                result.returncode, 0,
++                msg=(
++                    f"boot agent stub exited rc={result.returncode}. "
++                    f"stderr: {result.stderr[:500]!r}"
++                ),
++            )
++
++            agent = _get_agent(port, role)
++            self.assertTrue(
++                agent.get("bootup_complete"),
++                msg=(
++                    "harness must flip AgentState.bootup_complete=True "
++                    "after a real agent subprocess emits the event. "
++                    f"Got agent record: {agent!r}"
++                ),
++            )
++
++    def test_real_subprocess_bootup_is_idempotent(self):
++        """Per the L1 base spec: multiple bootup-complete posts are
++        safe — a re-spawned agent must be allowed to re-assert. The
++        in-process test already pins this against the TestClient
++        app; this test confirms the contract holds across real
++        process boundaries too (no race on the harness's internal
++        agent-state lock)."""
++        role = "skill"
++        with ems.real_harness() as (port, _proc, squid_dir):
++            for _ in range(3):
++                result = ems.boot_agent_subprocess(role, squid_dir)
++                self.assertEqual(
++                    result.returncode, 0,
++                    msg=(
++                        f"boot agent stub exited rc={result.returncode}. "
++                        f"stderr: {result.stderr[:500]!r}"
++                    ),
++                )
++            agent = _get_agent(port, role)
++            self.assertTrue(agent.get("bootup_complete"))
++
++
++class TestRealHarnessFixtureWritesPortFileToIsolatedDir(unittest.TestCase):
++    """Sanity check on the fixture itself: it must write the
++    ``.harness-port`` file to the isolated SQUIDSQUAD_DIR, NOT to
++    the live ``.squidsquad/`` next to the repo. Regression guard
++    for the env-var refactor that landed in cycle 1189; without
++    it, this whole approach is moot (the test harness would
++    clobber the live one)."""
++
++    def test_port_file_lives_under_isolated_squid_dir(self):
++        with ems.real_harness() as (port, _proc, squid_dir):
++            port_file = squid_dir / ".harness-port"
++            self.assertTrue(
++                port_file.exists(),
++                msg=(
++                    "Harness must write .harness-port to the env-"
++                    "overridden SQUIDSQUAD_DIR. If this fails, the "
++                    "harness is still writing to the live "
++                    ".squidsquad/.harness-port and test isolation "
++                    "is broken (#9398 Phase A precondition)."
++                ),
++            )
++            on_disk = int(port_file.read_text(encoding="utf-8").strip())
++            self.assertEqual(on_disk, port)
++
++    def test_live_port_file_not_touched(self):
++        """The live repo's ``.squidsquad/.harness-port`` must not
++        be modified by the fixture. Records its mtime before
++        entering the fixture and asserts it's unchanged after.
++        Skips cleanly if the live file doesn't exist (a clean
++        checkout state, fine)."""
++        live_port = REPO_ROOT / ".squidsquad" / ".harness-port"
++        if not live_port.exists():
++            self.skipTest("no live .harness-port to guard against")
++        before = live_port.stat().st_mtime_ns
++        with ems.real_harness():
++            pass
++        after = live_port.stat().st_mtime_ns
++        self.assertEqual(
++            before, after,
++            msg=(
++                "Fixture must not modify the live "
++                ".squidsquad/.harness-port — that would re-route every "
++                "other SquidSquad process to the test harness on its "
++                "next port discovery (#9398 Phase A precondition)."
++            ),
++        )
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/tests/run_tests.py b/tests/run_tests.py
+index 42feaaf6..2f1989af 100644
+--- a/tests/run_tests.py
++++ b/tests/run_tests.py
+@@ -154,6 +154,14 @@ def run_integration_tests(targets):
+             loader.loadTestsFromModule(test_event_mode_agent_subprocess)
+         )
+ 
++    if not targets or "real_agent_subprocess" in targets:
++        # #9398 Phase A real-subprocess scenarios. Heavy — spawns real
++        # harness + agent subprocesses; ~10-15s per test on Windows.
++        from integration import test_9398_real_agent_subprocess
++        suite.addTests(
++            loader.loadTestsFromModule(test_9398_real_agent_subprocess)
++        )
++
+     runner = unittest.TextTestRunner(verbosity=2)
+     try:
+         result = runner.run(suite)
+diff --git a/tests/test_9398_squidsquad_dir_env_var.py b/tests/test_9398_squidsquad_dir_env_var.py
+new file mode 100644
+index 00000000..b6ee783e
+--- /dev/null
++++ b/tests/test_9398_squidsquad_dir_env_var.py
+@@ -0,0 +1,182 @@
++"""Regression tests for the #9398 Phase A precondition: SQUIDSQUAD_DIR env var.
++
++Background: ``harness.py`` and ``event_bus.py`` previously hard-coded
++``SQUIDSQUAD_DIR = REPO_ROOT / ".squidsquad"`` as a module-level
++constant. The §4.1 / §4.5 real-agent-subprocess fixture work needs to
++spawn a test harness on a random port WITHOUT clobbering the live
++harness's ``.harness-port`` file (which all other SquidSquad processes
++use for port discovery). This Phase A precondition adds env-var
++override: ``SQUIDSQUAD_DIR=<tmpdir>`` re-points both modules' state
++roots at the tmpdir.
++
++Tests pin:
++
++1. ``event_bus.SQUID_DIR`` honors ``SQUIDSQUAD_DIR`` env var.
++2. ``harness.SQUIDSQUAD_DIR`` honors ``SQUIDSQUAD_DIR`` env var.
++3. With the env var unset, both modules fall back to the previous
++   default (``REPO_ROOT / ".squidsquad"``).
++4. ``harness.HARNESS_PORT_FILE`` rebases under the env-overridden
++   directory — the load-bearing assertion for #9398 fixture
++   isolation. If the constant is computed once at module load against
++   the old SQUIDSQUAD_DIR, the override is silently broken.
++"""
++
++import importlib.util
++import os
++import sys
++import tempfile
++import unittest
++from pathlib import Path
++from unittest import mock
++
++REPO_ROOT = Path(__file__).resolve().parent.parent
++SCRIPTS = REPO_ROOT / "references" / "scripts"
++
++
++def _fresh_load(module_name: str, file_path: Path, env: dict):
++    """Load a module from disk with a controlled os.environ.
++
++    Module-level constants are evaluated at import time, so the env
++    var must be set BEFORE the import. We use mock.patch.dict on
++    ``os.environ`` around an importlib spec-based load.
++    """
++    with mock.patch.dict(os.environ, env, clear=False):
++        spec = importlib.util.spec_from_file_location(module_name, file_path)
++        if not (spec and spec.loader):
++            raise ImportError(f"cannot load {file_path}")
++        mod = importlib.util.module_from_spec(spec)
++        spec.loader.exec_module(mod)
++        return mod
++
++
++class TestEventBusSquidDirEnvVar(unittest.TestCase):
++    def test_event_bus_honors_squidsquad_dir_env_var(self):
++        with tempfile.TemporaryDirectory(prefix="sqdir-test-") as tmp:
++            mod = _fresh_load(
++                "_event_bus_squidsquad_dir_test",
++                SCRIPTS / "event_bus.py",
++                {"SQUIDSQUAD_DIR": tmp},
++            )
++            self.assertEqual(
++                str(mod.SQUID_DIR), str(Path(tmp)),
++                msg=(
++                    "event_bus.SQUID_DIR must be the SQUIDSQUAD_DIR env var "
++                    "when set (#9398). Without this, a test harness in a "
++                    "tmpdir can't be discovered by event_bus.emit() in the "
++                    "agent subprocess."
++                ),
++            )
++
++    def test_event_bus_default_unchanged_when_env_var_unset(self):
++        # mock.patch.dict with clear=True ensures the env var is unset
++        with mock.patch.dict(os.environ, {}, clear=True):
++            mod = _fresh_load(
++                "_event_bus_default_test",
++                SCRIPTS / "event_bus.py",
++                {},
++            )
++            self.assertEqual(
++                str(mod.SQUID_DIR).replace("\\", "/").lower(),
++                str(REPO_ROOT / ".squidsquad").replace("\\", "/").lower(),
++                msg=(
++                    "Without SQUIDSQUAD_DIR set, event_bus.SQUID_DIR must "
++                    "fall back to the previous default REPO_ROOT/.squidsquad "
++                    "— production callers see zero behavior change."
++                ),
++            )
++
++
++class TestHarnessSquidDirEnvVar(unittest.TestCase):
++    """The harness side of the #9398 fixture-isolation contract.
++    We DO NOT actually start the harness here (uvicorn etc. is heavy
++    + has side effects); the test only re-imports the module under
++    the env var and verifies the constants resolved correctly."""
++
++    def test_harness_squidsquad_dir_honors_env_var(self):
++        with tempfile.TemporaryDirectory(prefix="sqdir-test-") as tmp:
++            mod = _fresh_load(
++                "_harness_squidsquad_dir_test",
++                SCRIPTS / "harness.py",
++                {"SQUIDSQUAD_DIR": tmp},
++            )
++            self.assertEqual(
++                str(mod.SQUIDSQUAD_DIR), str(Path(tmp)),
++                msg=(
++                    "harness.SQUIDSQUAD_DIR must be the SQUIDSQUAD_DIR env "
++                    "var when set (#9398). Without this, a test harness on "
++                    "a random port would still write .harness-port to the "
++                    "live .squidsquad/ directory, breaking the live system."
++                ),
++            )
++
++    def test_harness_port_file_rebases_under_env_overridden_dir(self):
++        """Load-bearing assertion: the derived
++        ``HARNESS_PORT_FILE`` constant must live UNDER the
++        env-overridden directory, not under the original
++        REPO_ROOT/.squidsquad. If it's computed once-at-load against
++        the old constant and never re-derived, the override is
++        silently broken at the file-write site."""
++        with tempfile.TemporaryDirectory(prefix="sqdir-test-") as tmp:
++            mod = _fresh_load(
++                "_harness_port_file_test",
++                SCRIPTS / "harness.py",
++                {"SQUIDSQUAD_DIR": tmp},
++            )
++            self.assertEqual(
++                str(mod.HARNESS_PORT_FILE), str(Path(tmp) / ".harness-port"),
++                msg=(
++                    "harness.HARNESS_PORT_FILE must rebase under the "
++                    "env-overridden SQUIDSQUAD_DIR. If this fails, the "
++                    "test harness will overwrite the live .squidsquad/"
++                    ".harness-port file every time it starts (#9398)."
++                ),
++            )
++
++    def test_harness_default_unchanged_when_env_var_unset(self):
++        with mock.patch.dict(os.environ, {}, clear=True):
++            mod = _fresh_load(
++                "_harness_default_test",
++                SCRIPTS / "harness.py",
++                {},
++            )
++            self.assertEqual(
++                str(mod.SQUIDSQUAD_DIR).replace("\\", "/").lower(),
++                str(REPO_ROOT / ".squidsquad").replace("\\", "/").lower(),
++                msg=(
++                    "Without SQUIDSQUAD_DIR set, harness.SQUIDSQUAD_DIR "
++                    "must fall back to REPO_ROOT/.squidsquad — production "
++                    "callers see zero behavior change."
++                ),
++            )
++
++
++class TestSquidsquadDirNullEnvVarHandled(unittest.TestCase):
++    """A common foot-gun: the env var is set to an empty string (e.g.,
++    by a shell script with ``SQUIDSQUAD_DIR=$something_undefined``).
++    The current implementation uses ``or`` to treat empty as unset,
++    which is the right behavior — pin it so a future refactor that
++    uses ``os.environ.get("SQUIDSQUAD_DIR", default)`` (which returns
++    "" rather than the default for empty values) doesn't break this."""
++
++    def test_empty_string_env_var_falls_back_to_default(self):
++        with mock.patch.dict(os.environ, {"SQUIDSQUAD_DIR": ""}, clear=False):
++            mod = _fresh_load(
++                "_event_bus_empty_env_test",
++                SCRIPTS / "event_bus.py",
++                {"SQUIDSQUAD_DIR": ""},
++            )
++            # Should be the default, NOT the empty string interpreted as cwd.
++            self.assertEqual(
++                str(mod.SQUID_DIR).replace("\\", "/").lower(),
++                str(REPO_ROOT / ".squidsquad").replace("\\", "/").lower(),
++                msg=(
++                    "An empty SQUIDSQUAD_DIR env var must fall back to "
++                    "the default — empty string would otherwise resolve "
++                    "to the process cwd, scattering harness state across "
++                    "wherever the harness was started from."
++                ),
++            )
++
++
++if __name__ == "__main__":
++    unittest.main()
