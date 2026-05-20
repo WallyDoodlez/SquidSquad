@@ -1,0 +1,1861 @@
+diff --git a/references/scripts/event_bus.py b/references/scripts/event_bus.py
+index c5fd7fb0..27fbd71f 100644
+--- a/references/scripts/event_bus.py
++++ b/references/scripts/event_bus.py
+@@ -11,6 +11,7 @@
+ 
+ import hashlib
+ import json
++import os
+ import urllib.request
+ import urllib.error
+ from datetime import datetime
+@@ -18,7 +19,25 @@
+ 
+ SCRIPT_DIR = Path(__file__).resolve().parent
+ REPO_ROOT = SCRIPT_DIR.parent.parent
+-SQUID_DIR = REPO_ROOT / ".squidsquad"
++
++
++def _resolve_squid_dir() -> Path:
++    """#9398: honor SQUIDSQUAD_DIR env var so isolated test harnesses
++    can be discovered by event_bus.emit() in agent subprocesses
++    without the live .harness-port file getting in the way.
++
++    Default unchanged for production callers when env var is unset.
++    Strips whitespace, expands ``~``, treats empty as unset — same
++    foot-gun handling as harness._resolve_squidsquad_dir (Sonnet
++    code review of PR #9614).
++    """
++    raw = (os.environ.get("SQUIDSQUAD_DIR") or "").strip()
++    if not raw:
++        return REPO_ROOT / ".squidsquad"
++    return Path(raw).expanduser()
++
++
++SQUID_DIR = _resolve_squid_dir()
+ 
+ # Timeout: 500ms — never blocks agent cycle
+ _TIMEOUT = 0.5
+diff --git a/references/scripts/harness.py b/references/scripts/harness.py
+index 728f970f..b43ebff5 100644
+--- a/references/scripts/harness.py
++++ b/references/scripts/harness.py
+@@ -37,7 +37,33 @@
+ SCRIPT_DIR = Path(__file__).resolve().parent
+ sys.path.insert(0, str(SCRIPT_DIR))
+ REPO_ROOT = SCRIPT_DIR.parent.parent
+-SQUIDSQUAD_DIR = REPO_ROOT / ".squidsquad"
++
++
++def _resolve_squidsquad_dir() -> Path:
++    """#9398: honor SQUIDSQUAD_DIR env var so isolated test harnesses
++    can run in a tmpdir without overwriting the live .harness-port
++    file (which would cause every other SquidSquad process to route
++    to the test harness on its next port discovery).
++
++    Default unchanged for production callers — value is identical to
++    the previous module-level constant when the env var is unset.
++
++    Handles three foot-guns flagged by Sonnet code review of #9614:
++    - Empty string falls back to the default (not interpreted as cwd).
++    - Trailing whitespace is stripped (a frequent `export
++      SQUIDSQUAD_DIR=$tmp ` typo).
++    - Leading ``~`` is expanded (``~/sq-test`` becomes the user's
++      home). Relative paths are NOT resolve()d — caller decides if
++      absoluteness matters (resolve() requires the path to exist,
++      which it may not yet for first-time test setup).
++    """
++    raw = (os.environ.get("SQUIDSQUAD_DIR") or "").strip()
++    if not raw:
++        return REPO_ROOT / ".squidsquad"
++    return Path(raw).expanduser()
++
++
++SQUIDSQUAD_DIR = _resolve_squidsquad_dir()
+ HARNESS_PORT_FILE = SQUIDSQUAD_DIR / ".harness-port"
+ 
+ DEFAULT_PORT = 7373
+diff --git a/references/scripts/tracker.py b/references/scripts/tracker.py
+index 713235b4..74036966 100644
+--- a/references/scripts/tracker.py
++++ b/references/scripts/tracker.py
+@@ -31,6 +31,7 @@
+ 
+ import json
+ import re
++import shutil
+ import subprocess
+ import sys
+ from pathlib import Path
+@@ -315,8 +316,46 @@ def _log_diagnostic(severity, message, context=None):
+         pass
+ 
+ 
++_RESOLVED_GH_BIN: str | None = None
++
++
++def _resolve_gh_bin() -> str:
++    """Locate the ``gh`` CLI binary via ``shutil.which`` (PATHEXT-aware).
++
++    Cached after the first call. Falls back to the literal string
++    ``"gh"`` if resolution fails — that path goes through subprocess's
++    own lookup, which on POSIX honors the executable bit and on
++    Windows finds ``gh.exe`` via PATH (no functional change vs. the
++    pre-#9398 behavior).
++
++    Why: on Windows, ``subprocess.run([\"gh\", ...])`` uses
++    ``CreateProcessW`` for executable lookup, which only honors
++    ``.exe``/``.com`` extensions — ``.cmd`` files in PATH get
++    skipped. The #9398 Phase A PATH-shim ships ``gh.cmd``, which
++    ``shutil.which`` finds (it's PATHEXT-aware) but
++    ``subprocess.run([\"gh\", ...])`` does not. Routing through the
++    resolved path closes the gap so tests can shim ``gh`` for the
++    real-agent-subprocess fixture work. Same shape as
++    ``run_comprehension_test._find_claude`` (#9574 fix for the same
++    root cause on the ``claude`` CLI).
++    """
++    global _RESOLVED_GH_BIN
++    if _RESOLVED_GH_BIN is None:
++        _RESOLVED_GH_BIN = shutil.which("gh") or "gh"
++    return _RESOLVED_GH_BIN
++
++
+ def _run_list(cmd_list, check=True):
+-    """Run a command from repo root using list form (safe for variable args)."""
++    """Run a command from repo root using list form (safe for variable args).
++
++    #9398: if the first element is the literal string ``"gh"``,
++    substitute with the resolved gh binary path so PATH shims with
++    ``.cmd`` extensions are found on Windows (see ``_resolve_gh_bin``).
++    Other commands are passed through unchanged. Subprocess invocations
++    that pass a full path (already-resolved) are also unchanged.
++    """
++    if cmd_list and cmd_list[0] == "gh":
++        cmd_list = [_resolve_gh_bin()] + list(cmd_list[1:])
+     return subprocess.run(
+         cmd_list, capture_output=True, text=True,
+         encoding="utf-8", errors="replace",
+diff --git a/tests/integration/fixtures/__init__.py b/tests/integration/fixtures/__init__.py
+new file mode 100644
+index 00000000..c89c2c45
+--- /dev/null
++++ b/tests/integration/fixtures/__init__.py
+@@ -0,0 +1 @@
++"""Test fixtures for SquidSquad integration tests (#9398 Phase A)."""
+diff --git a/tests/integration/fixtures/_boot_agent_stub.py b/tests/integration/fixtures/_boot_agent_stub.py
+new file mode 100644
+index 00000000..110752b7
+--- /dev/null
++++ b/tests/integration/fixtures/_boot_agent_stub.py
+@@ -0,0 +1,43 @@
++"""Minimal boot-agent stub for the #9398 Phase A fixture.
++
++Spawned by ``boot_agent_subprocess`` to exercise the bootup-complete
++contract end-to-end across a real process boundary. Imports
++``event_bus`` (which picks up ``SQUIDSQUAD_DIR`` from the env), calls
++``event_bus.bootup_complete(role)`` once, and exits.
++
++Not a full agent — there is no cycle_pre/cycle_post loop here, no
++work_queue, no L1 init beyond the bootup signal. The intent is the
++smallest reproducible exercise of the contract: an agent process
++discovers the harness via the port file and posts the boot signal.
++
++Usage:
++    python _boot_agent_stub.py <role>
++
++Exit codes:
++    0 - bootup_complete emitted successfully (event_bus is
++        fire-and-forget; emission "success" means no exception, not
++        a 200 ack from the harness).
++    2 - bad arguments.
++"""
++
++import sys
++from pathlib import Path
++
++if __name__ == "__main__":
++    if len(sys.argv) != 2 or not sys.argv[1].strip():
++        sys.stderr.write(
++            "usage: python _boot_agent_stub.py <role>\n"
++        )
++        sys.exit(2)
++    role = sys.argv[1].strip()
++
++    # Ensure we can find the SquidSquad scripts on sys.path so the
++    # subprocess works regardless of which directory pytest happened
++    # to chdir to when invoking us.
++    repo_root = Path(__file__).resolve().parent.parent.parent.parent
++    sys.path.insert(0, str(repo_root / "references" / "scripts"))
++
++    import event_bus  # noqa: E402 — path adjusted above
++
++    event_bus.bootup_complete(role)
++    sys.exit(0)
+diff --git a/tests/integration/fixtures/event_mode_subprocess.py b/tests/integration/fixtures/event_mode_subprocess.py
+new file mode 100644
+index 00000000..f5f859e4
+--- /dev/null
++++ b/tests/integration/fixtures/event_mode_subprocess.py
+@@ -0,0 +1,304 @@
++"""Real-agent-subprocess test fixture for #9398 Phase A.
++
++The §4.1 / §4.5 acceptance criteria call for spawning a *real*
++event-mode agent against a *real* harness — not a `TestClient`
++in-process proxy. The wire halves already live in
++`tests/integration/test_event_mode_agent_subprocess.py`; this fixture
++provides the spawn-and-wait infrastructure that lets later tests
++exercise the AC-3 M-3.2 and AC-2 M-2.* paths end-to-end.
++
++Two building blocks:
++
++- `real_harness(...)`: context manager that spawns ``harness.py`` as a
++  subprocess in an isolated ``SQUIDSQUAD_DIR`` tmpdir, waits for the
++  port file and a passing ``/status`` probe, and yields
++  ``(port, proc, squid_dir)``. Cleans up the subprocess on exit
++  (SIGTERM on POSIX, CTRL_BREAK_EVENT on Windows, with a hard-kill
++  backstop).
++
++- `boot_agent_subprocess(role, squid_dir)`: spawns a thin Python
++  subprocess that imports ``event_bus`` and calls
++  ``bootup_complete(role)`` against the harness whose port is on
++  disk in ``squid_dir / ".harness-port"``. The subprocess exits
++  immediately after emitting — it does NOT run a full agent loop,
++  just the bootup signal. Used by the first §4.1 test to assert the
++  harness records the flag flip end-to-end across a real process
++  boundary.
++
++Both helpers depend on the #9398-precondition refactor (`harness.py`
++and `event_bus.py` honor the ``$SQUIDSQUAD_DIR`` env var) — without
++that, the test harness would clobber the live ``.harness-port`` file.
++"""
++
++from __future__ import annotations
++
++import os
++import signal
++import subprocess
++import sys
++import tempfile
++import time
++import urllib.error
++import urllib.request
++from contextlib import contextmanager
++from pathlib import Path
++
++REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
++SCRIPTS = REPO_ROOT / "references" / "scripts"
++HARNESS_PATH = SCRIPTS / "harness.py"
++
++# Generous defaults — Windows subprocess + uvicorn cold start is slow.
++_DEFAULT_STARTUP_TIMEOUT = 15.0
++_DEFAULT_STATUS_TIMEOUT = 10.0
++_DEFAULT_TEARDOWN_TIMEOUT = 5.0
++
++
++def _terminate_proc(proc: subprocess.Popen) -> None:
++    """Politely-then-firmly stop a child process.
++
++    On Windows we need CTRL_BREAK_EVENT (Popen must have been started
++    with CREATE_NEW_PROCESS_GROUP); on POSIX terminate() suffices.
++    Hard kill backstop after _DEFAULT_TEARDOWN_TIMEOUT.
++    """
++    if proc.poll() is not None:
++        return
++    try:
++        if sys.platform == "win32":
++            proc.send_signal(signal.CTRL_BREAK_EVENT)
++        else:
++            proc.terminate()
++    except (OSError, ValueError):
++        # Process already gone (race), or pipe closed — let kill() finish.
++        pass
++    try:
++        proc.wait(timeout=_DEFAULT_TEARDOWN_TIMEOUT)
++    except subprocess.TimeoutExpired:
++        proc.kill()
++        try:
++            proc.wait(timeout=2.0)
++        except subprocess.TimeoutExpired:
++            pass
++
++
++def _wait_for_port_file(squid_dir: Path, proc: subprocess.Popen,
++                       timeout: float) -> int:
++    """Poll ``squid_dir / .harness-port`` until it appears AND the
++    harness subprocess is still alive. Returns the port number.
++
++    Raises ``RuntimeError`` if the subprocess exited before writing,
++    or ``TimeoutError`` if it hangs.
++    """
++    port_file = squid_dir / ".harness-port"
++    deadline = time.monotonic() + timeout
++    while time.monotonic() < deadline:
++        if port_file.exists():
++            try:
++                raw = port_file.read_text(encoding="utf-8").strip()
++                if raw:
++                    return int(raw)
++            except (OSError, ValueError):
++                # Possibly mid-write; loop and retry.
++                pass
++        if proc.poll() is not None:
++            # stderr is redirected to a file (see real_harness), not
++            # a PIPE — read the tail from there so the caller can
++            # see why the harness died.
++            stderr_tail = ""
++            try:
++                stderr_path = squid_dir / "harness.stderr.log"
++                if stderr_path.exists():
++                    raw = stderr_path.read_bytes()[-500:]
++                    stderr_tail = raw.decode("utf-8", errors="replace")
++            except OSError:
++                pass
++            raise RuntimeError(
++                f"harness subprocess exited rc={proc.returncode} before "
++                f"writing port file. stderr tail: {stderr_tail!r}"
++            )
++        time.sleep(0.1)
++    raise TimeoutError(
++        f"harness did not write port file within {timeout}s"
++    )
++
++
++def _wait_for_status_ok(port: int, timeout: float) -> None:
++    """Probe ``GET /status`` until it returns 200 or timeout elapses.
++
++    The port file is written from the lifespan callback, but uvicorn
++    is also still completing its bind/listen at that moment; a
++    request issued *immediately* after the port file appears can hit
++    a TCP RST. This wait closes that gap.
++    """
++    deadline = time.monotonic() + timeout
++    last_err: str | None = None
++    while time.monotonic() < deadline:
++        try:
++            with urllib.request.urlopen(
++                f"http://127.0.0.1:{port}/status", timeout=1.0
++            ) as resp:
++                if resp.status == 200:
++                    return
++        except (urllib.error.URLError, OSError, ConnectionResetError) as e:
++            last_err = f"{type(e).__name__}: {e}"
++        time.sleep(0.1)
++    raise TimeoutError(
++        f"/status did not return 200 within {timeout}s. "
++        f"Last error: {last_err!r}"
++    )
++
++
++@contextmanager
++def real_harness(
++    *,
++    port_hint: int | None = None,
++    startup_timeout: float = _DEFAULT_STARTUP_TIMEOUT,
++    status_timeout: float = _DEFAULT_STATUS_TIMEOUT,
++):
++    """Spawn ``harness.py`` as a subprocess in an isolated SQUIDSQUAD_DIR.
++
++    Yields ``(port, proc, squid_dir)``:
++    - ``port``: the port the harness is actually listening on (read
++      from the isolated ``.harness-port`` file, NOT from any
++      module-level default — the harness may have fallen back to a
++      free port if the hint was busy).
++    - ``proc``: the ``Popen`` object so tests can ``proc.poll()`` or
++      read its pipes if needed.
++    - ``squid_dir``: the tmpdir path so tests can probe other
++      harness-managed files (``.harness-state.json``,
++      ``.event-state.json``, ...) and so an agent subprocess
++      spawned by the same test inherits the same ``SQUIDSQUAD_DIR``.
++
++    The harness is started with ``SQUIDSQUAD_HARNESS_NO_AUTO_START=1``
++    so it does not try to spawn real agents (which would attempt to
++    invoke the live ``claude`` CLI and call out to the forge).
++    """
++    with tempfile.TemporaryDirectory(prefix="sq-harness-") as tmp:
++        squid_dir = Path(tmp)
++        env = dict(os.environ)
++        env["SQUIDSQUAD_DIR"] = str(squid_dir)
++        env["SQUIDSQUAD_HARNESS_NO_AUTO_START"] = "1"
++
++        cmd = [sys.executable, str(HARNESS_PATH)]
++        if port_hint is not None:
++            cmd.extend(["--port", str(port_hint)])
++
++        # Pipe stdout/stderr to files in the tmpdir, NOT to PIPE
++        # handles. The harness chats heavily on stdout (lifespan,
++        # event traffic, deferred-init); a PIPE handle that no one
++        # reads fills its 4KB OS buffer and the harness blocks on
++        # write — which looks externally like an HTTP-layer wedge
++        # (a fun day to debug). Files don't have the buffer problem.
++        #
++        # Resources (stdout_fh, stderr_fh, proc) are tracked through
++        # an ExitStack so they're guaranteed-closed on every exit
++        # path, including a Popen exception between opening the
++        # files and entering the try block (Sonnet code review of
++        # #9614). Without this, a Popen FileNotFoundError leaks the
++        # file handles and Windows TemporaryDirectory cleanup fails
++        # with PermissionError, masking the real failure.
++        from contextlib import ExitStack
++        stdout_log = squid_dir / "harness.stdout.log"
++        stderr_log = squid_dir / "harness.stderr.log"
++        with ExitStack() as stack:
++            stdout_fh = stack.enter_context(open(stdout_log, "wb"))
++            stderr_fh = stack.enter_context(open(stderr_log, "wb"))
++
++            # CREATE_NEW_PROCESS_GROUP on Windows lets us deliver
++            # CTRL_BREAK_EVENT during teardown without also killing
++            # the parent test runner.
++            popen_kwargs = {
++                "env": env,
++                "cwd": str(REPO_ROOT),
++                "stdout": stdout_fh,
++                "stderr": stderr_fh,
++            }
++            if sys.platform == "win32":
++                popen_kwargs["creationflags"] = (
++                    subprocess.CREATE_NEW_PROCESS_GROUP
++                )
++
++            proc = subprocess.Popen(cmd, **popen_kwargs)
++            # Register Popen teardown on the same stack so a failure
++            # during _wait_for_port_file still gets the subprocess
++            # killed (ExitStack runs callbacks in reverse order, so
++            # we terminate BEFORE the files close — gives the
++            # harness a chance to flush its final log lines).
++            stack.callback(_terminate_proc, proc)
++
++            port = _wait_for_port_file(squid_dir, proc, startup_timeout)
++            _wait_for_status_ok(port, status_timeout)
++            yield port, proc, squid_dir
++
++
++# Path to the agent-stub script that boot_agent_subprocess spawns.
++# Kept as a sibling file so it can be invoked with `python <path>`
++# from any cwd without import-path gymnastics.
++_BOOT_AGENT_STUB = (
++    Path(__file__).resolve().parent / "_boot_agent_stub.py"
++)
++
++
++def gh_shim_dir() -> Path:
++    """Return the directory containing the ``gh`` PATH-shim
++    (#9398 Phase A work-pickup tests).
++
++    Caller prepends this directory to a subprocess's ``PATH`` env
++    var; when ``tracker.py`` then invokes ``gh issue list ...`` the
++    shim's ``gh.cmd`` (Windows) or ``gh`` (POSIX) script is found
++    first, ahead of any real ``gh`` install. The shim consults
++    ``$GH_SHIM_FIXTURES_DIR`` for canned responses — see
++    ``gh_shim/gh_main.py`` for the contract.
++    """
++    return Path(__file__).resolve().parent / "gh_shim"
++
++
++def env_with_gh_shim(
++    base_env: dict[str, str] | None = None,
++    fixtures_dir: Path | None = None,
++) -> dict[str, str]:
++    """Build a subprocess env dict with the gh-shim directory
++    prepended to ``PATH`` and (optionally) ``GH_SHIM_FIXTURES_DIR``
++    set so reads find their fixture files.
++
++    Returns a *new* dict — does not mutate ``base_env`` or
++    ``os.environ``.
++    """
++    env = dict(base_env if base_env is not None else os.environ)
++    shim = str(gh_shim_dir())
++    env["PATH"] = shim + os.pathsep + env.get("PATH", "")
++    if fixtures_dir is not None:
++        env["GH_SHIM_FIXTURES_DIR"] = str(fixtures_dir)
++    return env
++
++
++def boot_agent_subprocess(
++    role: str,
++    squid_dir: Path,
++    *,
++    timeout: float = 10.0,
++) -> subprocess.CompletedProcess:
++    """Spawn a minimal "boot agent" subprocess that emits one
++    ``bootup-complete`` event against the harness in ``squid_dir``.
++
++    Inherits ``SQUIDSQUAD_DIR=squid_dir`` so the in-subprocess
++    ``event_bus`` module discovers the test harness's port file.
++
++    Returns the ``CompletedProcess`` — caller asserts on exit code
++    and stderr if needed. Does NOT run a full agent loop; the goal is
++    a clean, reproducible exercise of the bootup-complete contract
++    end-to-end across a real process boundary.
++    """
++    env = dict(os.environ)
++    env["SQUIDSQUAD_DIR"] = str(squid_dir)
++
++    return subprocess.run(
++        [sys.executable, str(_BOOT_AGENT_STUB), role],
++        env=env,
++        cwd=str(REPO_ROOT),
++        capture_output=True,
++        text=True,
++        encoding="utf-8",
++        errors="replace",
++        timeout=timeout,
++        check=False,
++    )
+diff --git a/tests/integration/fixtures/gh_shim/gh b/tests/integration/fixtures/gh_shim/gh
+new file mode 100644
+index 00000000..c889ab95
+--- /dev/null
++++ b/tests/integration/fixtures/gh_shim/gh
+@@ -0,0 +1,17 @@
++#!/usr/bin/env python3
++# POSIX entry point for the gh PATH-shim (#9398 Phase A test infra).
++# Re-exec gh_main.py with the same argv. See gh_main.py for the
++# contract. The Python wrapper keeps the entry point Python-only
++# rather than introducing a shell-script dependency on the path.
++
++import os
++import sys
++
++if __name__ == "__main__":
++    here = os.path.dirname(os.path.abspath(__file__))
++    # Replace the current process so signals (SIGTERM during test
++    # teardown) reach the actual implementation cleanly.
++    os.execv(
++        sys.executable,
++        [sys.executable, os.path.join(here, "gh_main.py")] + sys.argv[1:],
++    )
+diff --git a/tests/integration/fixtures/gh_shim/gh.cmd b/tests/integration/fixtures/gh_shim/gh.cmd
+new file mode 100644
+index 00000000..15dc6e0b
+--- /dev/null
++++ b/tests/integration/fixtures/gh_shim/gh.cmd
+@@ -0,0 +1,7 @@
++@ECHO off
++REM Windows entry point for the gh PATH-shim (#9398 Phase A test infra).
++REM See gh_main.py for the contract. Invokes the Python implementation,
++REM forwarding all arguments via %*. Multi-line args from tracker.py
++REM are not used so the %* mangling that bit run_comprehension_test
++REM (#9574) is not a concern here.
++python "%~dp0gh_main.py" %*
+diff --git a/tests/integration/fixtures/gh_shim/gh_main.py b/tests/integration/fixtures/gh_shim/gh_main.py
+new file mode 100644
+index 00000000..2e5f959f
+--- /dev/null
++++ b/tests/integration/fixtures/gh_shim/gh_main.py
+@@ -0,0 +1,164 @@
++#!/usr/bin/env python3
++"""PATH-shim for the ``gh`` CLI — used by #9398 Phase A real-agent-
++subprocess tests so the spawned agent's ``tracker.py`` calls don't
++hit the live GitHub forge.
++
++The fixture (``tests/integration/fixtures/event_mode_subprocess.py``)
++prepends this directory to the subprocess's ``PATH``, ahead of any
++real ``gh`` install. When ``tracker.py`` then runs e.g.
++``gh issue list --label "role:skill" --state open --json ...``, this
++script runs instead and serves a canned response from the directory
++named by the ``$GH_SHIM_FIXTURES_DIR`` env var.
++
++Response selection: each invocation looks up
++``$GH_SHIM_FIXTURES_DIR/<subcommand>/<key>.json`` where:
++- ``subcommand`` is the joined first two args after ``gh`` (e.g.
++  ``issue-list``, ``issue-view``, ``issue-edit``).
++- ``key`` is derived from the remaining args. For ``issue view N``
++  the key is the issue number; for ``issue list ...`` the key is
++  the literal string ``default`` (tests can override by setting
++  ``$GH_SHIM_LIST_KEY``).
++
++If the fixture file is missing, exits 0 with empty output for read-
++type commands (``view``, ``list``) so the agent sees "nothing to do"
++rather than crashing. For write-type commands (``edit``, ``create``,
++``comment``, ``close``) the script appends a one-line JSON record
++to ``$GH_SHIM_FIXTURES_DIR/_writes.log`` and exits 0 — tests assert
++on the log contents to verify the agent issued the expected
++transition.
++
++This is intentionally a minimal contract. Once #9398 work-pickup
++tests need richer behavior (e.g. issue create returning a new
++number), this can grow to consult a Python callback registered via
++env var, but YAGNI for now.
++"""
++
++import json
++import os
++import sys
++from datetime import datetime
++from pathlib import Path
++
++
++_READ_COMMANDS = {"view", "list", "status"}
++_WRITE_COMMANDS = {"edit", "create", "comment", "close", "delete", "transfer"}
++
++
++def _fixtures_dir() -> Path | None:
++    raw = (os.environ.get("GH_SHIM_FIXTURES_DIR") or "").strip()
++    if not raw:
++        return None
++    return Path(raw).expanduser()
++
++
++def _emit_empty_for_read(verb: str) -> int:
++    """Best-effort empty response for read-type commands when no
++    fixture is configured. ``gh ... --json ...`` outputs a JSON
++    array for ``list`` and an object for ``view``; emit shape-
++    appropriate defaults so tracker.py's JSON parse succeeds."""
++    if verb == "list":
++        sys.stdout.write("[]\n")
++    else:
++        sys.stdout.write("{}\n")
++    return 0
++
++
++def _log_write(topic: str, verb: str, args: list[str],
++               fixtures_dir: Path | None) -> int:
++    """Record a write-type invocation. If a fixtures dir is
++    configured, append to its _writes.log. Otherwise just succeed
++    silently — agents fire-and-forget on most write paths and
++    shouldn't crash if no test cares about the call.
++
++    Log shape: ``{"ts", "topic", "verb", "subcmd", "args"}``. Tests
++    can assert on any field; ``verb`` is the most useful for
++    'agent transitioned this issue' style assertions."""
++    if fixtures_dir is not None:
++        log = fixtures_dir / "_writes.log"
++        try:
++            log.parent.mkdir(parents=True, exist_ok=True)
++            line = json.dumps({
++                "ts": datetime.now().isoformat(timespec="seconds"),
++                "topic": topic,
++                "verb": verb,
++                "subcmd": f"{topic}-{verb}",
++                "args": args,
++            }) + "\n"
++            with open(log, "a", encoding="utf-8") as fh:
++                fh.write(line)
++        except OSError as e:
++            sys.stderr.write(f"gh-shim: failed to log write: {e}\n")
++            return 0  # don't fail the agent on a logging failure
++    return 0
++
++
++def _serve_read(subcmd: str, verb: str, args: list[str],
++                fixtures_dir: Path) -> int:
++    """Serve a canned response for a read-type subcommand. Returns
++    exit code; writes the response to stdout."""
++    # Key derivation: ``view N`` → key=N; everything else → "default"
++    # unless overridden via env.
++    if verb == "view" and args:
++        key = args[0]
++    else:
++        key = os.environ.get("GH_SHIM_LIST_KEY", "default")
++
++    fixture = fixtures_dir / subcmd / f"{key}.json"
++    if fixture.is_file():
++        sys.stdout.write(fixture.read_text(encoding="utf-8"))
++        if not fixture.read_text(encoding="utf-8").endswith("\n"):
++            sys.stdout.write("\n")
++        return 0
++    # No fixture for this key — fall back to empty.
++    return _emit_empty_for_read(verb)
++
++
++def main(argv: list[str]) -> int:
++    # Strip the program name; what remains is the gh invocation.
++    args = argv[1:]
++    if not args:
++        sys.stderr.write("gh-shim: missing subcommand\n")
++        return 2
++
++    # Recognize a handful of bare flags that the live gh supports
++    # so tracker.py's pre-flight checks succeed cleanly.
++    if args[0] in ("--version", "-v"):
++        sys.stdout.write("gh-shim 0.1 (fixture for SquidSquad tests)\n")
++        return 0
++    if args[0] in ("--help", "-h"):
++        sys.stdout.write(__doc__)
++        return 0
++
++    # Standard form: ``gh <topic> <verb> [args...]``. The shim
++    # serves only the small set of subcommands the agent invokes.
++    if len(args) < 2:
++        sys.stderr.write(
++            f"gh-shim: expected `gh <topic> <verb> ...`, got {args!r}\n"
++        )
++        return 2
++
++    topic, verb = args[0], args[1]
++    rest = args[2:]
++    subcmd = f"{topic}-{verb}"
++
++    fixtures_dir = _fixtures_dir()
++
++    if verb in _READ_COMMANDS:
++        if fixtures_dir is None or not fixtures_dir.is_dir():
++            return _emit_empty_for_read(verb)
++        return _serve_read(subcmd, verb, rest, fixtures_dir)
++
++    if verb in _WRITE_COMMANDS:
++        return _log_write(topic, verb, rest, fixtures_dir)
++
++    # Unrecognized — fall through to empty success. Loud failures
++    # tend to mask the actual test intent.
++    sys.stderr.write(
++        f"gh-shim: unrecognized verb {verb!r} (subcmd={subcmd!r}); "
++        f"returning empty success.\n"
++    )
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main(sys.argv))
+diff --git a/tests/integration/test_9398_gh_shim_tracker_integration.py b/tests/integration/test_9398_gh_shim_tracker_integration.py
+new file mode 100644
+index 00000000..ac307c2e
+--- /dev/null
++++ b/tests/integration/test_9398_gh_shim_tracker_integration.py
+@@ -0,0 +1,149 @@
++"""Integration tests: gh PATH-shim ↔ tracker.py CLI handshake (#9398 Phase A).
++
++The gh shim itself is unit-tested in
++``tests/test_9398_gh_shim.py``. This test exercises the next layer
++up: when ``tracker.py`` is invoked as a subprocess with the shim
++prepended to ``PATH``, does its ``gh issue list ...`` call get
++intercepted, get the canned response, and parse it correctly?
++
++That contract is the load-bearing piece for the §4.1 work-pickup
++test that lands next: a real agent subprocess shells out to
++``tracker.py list-tasks`` from inside ``cycle_pre``. If the
++shim's response shape disagrees with what ``tracker.py``'s JSON
++parse expects, the agent sees malformed data and the test fails
++in a confusing way far from the root cause. Pin the contract
++here first.
++"""
++
++from __future__ import annotations
++
++import json
++import subprocess
++import sys
++import tempfile
++import unittest
++from pathlib import Path
++
++REPO_ROOT = Path(__file__).resolve().parent.parent.parent
++sys.path.insert(0, str(REPO_ROOT / "tests" / "integration"))
++
++from fixtures import event_mode_subprocess as ems  # noqa: E402
++
++TRACKER_PY = REPO_ROOT / "references" / "scripts" / "tracker.py"
++
++
++class TestTrackerListTasksThroughShim(unittest.TestCase):
++    """``tracker.py list-tasks <role> --status approved`` shells out
++    to ``gh issue list --label LABEL --state open --json
++    number,title,labels --limit 50``. The shim must intercept that
++    call and the canned response must parse and print correctly.
++
++    Was skipped on Windows before #9398's tracker.py `_resolve_gh_bin`
++    patch (cycle 1194) — Python's `subprocess.run(["gh", ...])` uses
++    `CreateProcessW` which skips `.cmd` files in PATH lookup, so the
++    shim's `gh.cmd` lost to the real `gh.exe`. The patch routes the
++    invocation through `shutil.which("gh")` (PATHEXT-aware), which
++    DOES find `.cmd` files. Works cross-platform now."""
++
++    def test_list_tasks_returns_canned_approved_task(self):
++        with tempfile.TemporaryDirectory(prefix="gh-shim-fix-") as tmp:
++            fdir = Path(tmp)
++            (fdir / "issue-list").mkdir()
++            canned = [{
++                "number": 12345,
++                "title": "TASK: synthetic approved task for #9398 shim test",
++                "labels": [
++                    {"name": "type:task"},
++                    {"name": "role:skill"},
++                    {"name": "status:approved"},
++                    {"name": "priority:medium"},
++                ],
++            }]
++            (fdir / "issue-list" / "default.json").write_text(
++                json.dumps(canned), encoding="utf-8"
++            )
++
++            env = ems.env_with_gh_shim(fixtures_dir=fdir)
++            proc = subprocess.run(
++                [sys.executable, str(TRACKER_PY),
++                 "list-tasks", "skill", "--status", "approved"],
++                env=env, cwd=str(REPO_ROOT),
++                capture_output=True, text=True,
++                encoding="utf-8", errors="replace",
++                timeout=15, check=False,
++            )
++
++            self.assertEqual(
++                proc.returncode, 0,
++                msg=(
++                    f"tracker.py list-tasks exited rc={proc.returncode}. "
++                    f"stderr: {proc.stderr[:500]!r}; "
++                    f"stdout: {proc.stdout[:500]!r}"
++                ),
++            )
++            # tracker.list_issues prints the parsed JSON to stdout
++            # (line 382 in tracker.py at time of writing). Strip the
++            # `json.dumps(..., indent=2)` formatting and check it
++            # round-trips to our canned list.
++            parsed = json.loads(proc.stdout)
++            self.assertEqual(len(parsed), 1)
++            self.assertEqual(parsed[0]["number"], 12345)
++            self.assertEqual(
++                parsed[0]["title"],
++                "TASK: synthetic approved task for #9398 shim test",
++            )
++
++    def test_list_tasks_returns_empty_when_no_fixture(self):
++        """With the shim active but no fixture file, tracker.py
++        should see an empty list and exit cleanly — not crash on
++        a malformed response."""
++        with tempfile.TemporaryDirectory(prefix="gh-shim-empty-") as tmp:
++            fdir = Path(tmp)
++            env = ems.env_with_gh_shim(fixtures_dir=fdir)
++            proc = subprocess.run(
++                [sys.executable, str(TRACKER_PY),
++                 "list-tasks", "skill", "--status", "approved"],
++                env=env, cwd=str(REPO_ROOT),
++                capture_output=True, text=True,
++                encoding="utf-8", errors="replace",
++                timeout=15, check=False,
++            )
++            self.assertEqual(
++                proc.returncode, 0,
++                msg=f"stderr: {proc.stderr[:500]!r}",
++            )
++            parsed = json.loads(proc.stdout)
++            self.assertEqual(parsed, [])
++
++
++class TestCheckGhThroughShim(unittest.TestCase):
++    """``tracker.py check-gh`` is the boot-time gh-permissions
++    probe every SquidSquad agent runs. It calls ``gh issue list
++    --limit 1`` and accepts any non-error exit as 'gh works'. The
++    shim's read-fallback (empty list) makes this probe pass — pin
++    that contract so future shim refactors don't break agent boot
++    under the test fixture."""
++
++    def test_check_gh_passes_through_shim(self):
++        with tempfile.TemporaryDirectory(prefix="gh-shim-check-") as tmp:
++            env = ems.env_with_gh_shim(fixtures_dir=Path(tmp))
++            proc = subprocess.run(
++                [sys.executable, str(TRACKER_PY), "check-gh"],
++                env=env, cwd=str(REPO_ROOT),
++                capture_output=True, text=True,
++                encoding="utf-8", errors="replace",
++                timeout=15, check=False,
++            )
++            self.assertEqual(
++                proc.returncode, 0,
++                msg=(
++                    f"tracker.py check-gh failed through shim. "
++                    f"stderr: {proc.stderr[:500]!r}; "
++                    f"stdout: {proc.stdout[:500]!r}"
++                ),
++            )
++            self.assertIn("OK", proc.stdout)
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/tests/integration/test_9398_real_agent_subprocess.py b/tests/integration/test_9398_real_agent_subprocess.py
+new file mode 100644
+index 00000000..acf5cbfe
+--- /dev/null
++++ b/tests/integration/test_9398_real_agent_subprocess.py
+@@ -0,0 +1,328 @@
++"""§4.1 real-agent-subprocess tests for #9398.
++
++The wire halves of these contracts already live in
++``test_event_mode_agent_subprocess.py`` (TestClient against the
++in-process FastAPI app). #9398 calls for *real* subprocess
++exercises — actually spawn ``harness.py`` and a separate agent
++process that posts events via HTTP. The fixture infrastructure
++lives in ``fixtures/event_mode_subprocess.py``.
++
++This first cut covers AC-3 M-3.2's subprocess half:
++the bootup-complete signal flips ``AgentState.bootup_complete``
++when emitted from a real subprocess. Work-pickup (the rest of
++AC-3 M-3.2) requires a gh PATH-shim and lives in a follow-up commit.
++"""
++
++from __future__ import annotations
++
++import json
++import sys
++import unittest
++import urllib.error
++import urllib.request
++from pathlib import Path
++
++REPO_ROOT = Path(__file__).resolve().parent.parent.parent
++sys.path.insert(0, str(REPO_ROOT / "tests" / "integration"))
++
++# Import the fixture as a module so unittest's discovery picks it up
++# from the package path.
++from fixtures import event_mode_subprocess as ems  # noqa: E402
++
++
++def _get_agent(port: int, role: str, timeout: float = 30.0) -> dict:
++    """GET /agents/{role} and return the parsed JSON body.
++
++    Timeout defaults to 30s because the post-#9481 handler wraps
++    ``state.update_health`` in ``asyncio.to_thread`` — on Windows that
++    shells out to ``tasklist`` for each registered agent, which can
++    take 10-20s on a cold machine. The 5s default urlopen timeout
++    races that call and fails.
++    """
++    with urllib.request.urlopen(
++        f"http://127.0.0.1:{port}/agents/{role}", timeout=timeout
++    ) as resp:
++        if resp.status != 200:
++            raise AssertionError(
++                f"GET /agents/{role} returned HTTP {resp.status} — "
++                "harness should have created the role record on first "
++                "boot-event arrival."
++            )
++        return json.loads(resp.read().decode("utf-8"))
++
++
++class TestBootupCompleteAcrossRealSubprocesses(unittest.TestCase):
++    """AC-3 M-3.2 subprocess half: a real agent subprocess emits
++    ``bootup-complete`` against a real harness, and the harness
++    records it on ``AgentState.bootup_complete`` exposed via
++    ``GET /agents/{role}``. The wire half pins the same invariant
++    against the in-process app; this test pins it across a real
++    process boundary, which the deferred §4 work for #8999 calls
++    out as the load-bearing scenario."""
++
++    def test_real_subprocess_bootup_flips_agent_state_flag(self):
++        role = "skill"
++        with ems.real_harness() as (port, harness_proc, squid_dir):
++            self.assertIsNone(
++                harness_proc.poll(),
++                msg="harness subprocess exited unexpectedly during setup",
++            )
++
++            # Pre-condition: there's no agent state for this role yet
++            # (no auto-start), so /agents/{role} should 404 or the
++            # role's record should report bootup_complete=False if the
++            # harness has lazily created it. Either is acceptable
++            # pre-state; we only care that AFTER the bootup-complete
++            # post, the flag reads True.
++
++            result = ems.boot_agent_subprocess(role, squid_dir)
++            self.assertEqual(
++                result.returncode, 0,
++                msg=(
++                    f"boot agent stub exited rc={result.returncode}. "
++                    f"stderr: {result.stderr[:500]!r}"
++                ),
++            )
++
++            agent = _get_agent(port, role)
++            self.assertTrue(
++                agent.get("bootup_complete"),
++                msg=(
++                    "harness must flip AgentState.bootup_complete=True "
++                    "after a real agent subprocess emits the event. "
++                    f"Got agent record: {agent!r}"
++                ),
++            )
++
++    def test_real_subprocess_bootup_is_idempotent(self):
++        """Per the L1 base spec: multiple bootup-complete posts are
++        safe — a re-spawned agent must be allowed to re-assert. The
++        in-process test already pins this against the TestClient
++        app; this test confirms the contract holds across real
++        process boundaries too (no race on the harness's internal
++        agent-state lock)."""
++        role = "skill"
++        with ems.real_harness() as (port, _proc, squid_dir):
++            for _ in range(3):
++                result = ems.boot_agent_subprocess(role, squid_dir)
++                self.assertEqual(
++                    result.returncode, 0,
++                    msg=(
++                        f"boot agent stub exited rc={result.returncode}. "
++                        f"stderr: {result.stderr[:500]!r}"
++                    ),
++                )
++            agent = _get_agent(port, role)
++            self.assertTrue(agent.get("bootup_complete"))
++
++
++class TestRealHarnessFixtureWritesPortFileToIsolatedDir(unittest.TestCase):
++    """Sanity check on the fixture itself: it must write the
++    ``.harness-port`` file to the isolated SQUIDSQUAD_DIR, NOT to
++    the live ``.squidsquad/`` next to the repo. Regression guard
++    for the env-var refactor that landed in cycle 1189; without
++    it, this whole approach is moot (the test harness would
++    clobber the live one)."""
++
++    def test_port_file_lives_under_isolated_squid_dir(self):
++        with ems.real_harness() as (port, _proc, squid_dir):
++            port_file = squid_dir / ".harness-port"
++            self.assertTrue(
++                port_file.exists(),
++                msg=(
++                    "Harness must write .harness-port to the env-"
++                    "overridden SQUIDSQUAD_DIR. If this fails, the "
++                    "harness is still writing to the live "
++                    ".squidsquad/.harness-port and test isolation "
++                    "is broken (#9398 Phase A precondition)."
++                ),
++            )
++            on_disk = int(port_file.read_text(encoding="utf-8").strip())
++            self.assertEqual(on_disk, port)
++
++    def test_live_port_file_not_touched(self):
++        """The live repo's ``.squidsquad/.harness-port`` must not
++        be modified by the fixture. Records its mtime before
++        entering the fixture and asserts it's unchanged after.
++        Skips cleanly if the live file doesn't exist (a clean
++        checkout state, fine)."""
++        live_port = REPO_ROOT / ".squidsquad" / ".harness-port"
++        if not live_port.exists():
++            self.skipTest("no live .harness-port to guard against")
++        before = live_port.stat().st_mtime_ns
++        with ems.real_harness():
++            pass
++        after = live_port.stat().st_mtime_ns
++        self.assertEqual(
++            before, after,
++            msg=(
++                "Fixture must not modify the live "
++                ".squidsquad/.harness-port — that would re-route every "
++                "other SquidSquad process to the test harness on its "
++                "next port discovery (#9398 Phase A precondition)."
++            ),
++        )
++
++
++# ---------------------------------------------------------------------------
++# §4.1 AC-3 M-3.2 — work-pickup half (the real point of #9398 Phase A)
++# ---------------------------------------------------------------------------
++
++import subprocess  # noqa: E402
++import tempfile  # noqa: E402
++
++TRACKER_PY = REPO_ROOT / "references" / "scripts" / "tracker.py"
++
++
++class TestAgentWorkPickupThroughGhShim(unittest.TestCase):
++    """The §4.1 acceptance criterion calls for an event-mode agent
++    subprocess that picks up the forge's top approved item via
++    ``tracker.list-tasks`` + ``tracker.transition``. The wire half
++    of that contract (post a status-transition event, harness
++    distributes it) already passes in `test_event_mode_agent_subprocess.py`;
++    this test covers the *real subprocess* half — the agent's
++    tracker calls hit our gh PATH-shim, the shim returns canned
++    issues, the agent's transition write lands on the shim's
++    ``_writes.log``, and we assert the expected transition.
++
++    Why subprocess'd `tracker.py` instead of spawning `cycle_pre.py`:
++    the work-pickup logic in `cycle_pre._do_work_queue` is a thin
++    wrapper around `tracker.work_queue` / `tracker.list_issues` /
++    `tracker.transition`. Exercising tracker.py directly (rather
++    than the bigger cycle_pre process) keeps the test focused on
++    the shim-tracker contract that this PR is actually delivering.
++    A future cycle_pre subprocess test layers on top of this.
++    """
++
++    def _run_tracker(self, args: list[str], fixtures_dir: Path,
++                     timeout: float = 15.0):
++        """Spawn tracker.py with the gh-shim on PATH and the
++        fixtures dir set, capture stdout/stderr."""
++        env = ems.env_with_gh_shim(fixtures_dir=fixtures_dir)
++        return subprocess.run(
++            [sys.executable, str(TRACKER_PY)] + args,
++            env=env, cwd=str(REPO_ROOT),
++            capture_output=True, text=True,
++            encoding="utf-8", errors="replace",
++            timeout=timeout, check=False,
++        )
++
++    def test_agent_finds_canned_approved_task_and_transitions(self):
++        """End-to-end work-pickup slice:
++        1. Test prepares a canned approved task fixture.
++        2. tracker.py list-tasks → finds the canned task.
++        3. tracker.py transition (approved → in-progress) → write
++           logged to shim's _writes.log.
++        4. Test asserts the writes log shows the expected transition
++           with the expected from/to labels.
++
++        This is the load-bearing scenario for the AC-3 M-3.2
++        subprocess half. Without it, #9386 / #9387 (which reuse
++        this fixture) have no proven baseline."""
++        import json as _json
++
++        with tempfile.TemporaryDirectory(prefix="wp-fix-") as tmp:
++            fdir = Path(tmp)
++            issue_number = 87654
++
++            # Canned approved task for the list-tasks fetch.
++            (fdir / "issue-list").mkdir()
++            canned_task = [{
++                "number": issue_number,
++                "title": "TASK: synthetic approved task for #9398 work-pickup test",
++                "labels": [
++                    {"name": "type:task"},
++                    {"name": "role:skill"},
++                    {"name": "status:approved"},
++                    {"name": "priority:medium"},
++                ],
++            }]
++            (fdir / "issue-list" / "default.json").write_text(
++                _json.dumps(canned_task), encoding="utf-8"
++            )
++
++            # Canned issue-view (transition's _check_authority calls
++            # `gh issue view <N> --json labels` to enforce that the
++            # caller's role matches the issue's role:* label).
++            (fdir / "issue-view").mkdir()
++            (fdir / "issue-view" / str(issue_number)).with_suffix(".json").write_text(
++                _json.dumps({
++                    "labels": [
++                        {"name": "type:task"},
++                        {"name": "role:skill"},
++                        {"name": "status:approved"},
++                    ],
++                }), encoding="utf-8"
++            )
++
++            # Step 1: list-tasks finds the canned task.
++            list_result = self._run_tracker(
++                ["list-tasks", "skill", "--status", "approved"], fdir,
++            )
++            self.assertEqual(
++                list_result.returncode, 0,
++                msg=(
++                    f"list-tasks failed rc={list_result.returncode}. "
++                    f"stderr: {list_result.stderr[:500]!r}"
++                ),
++            )
++            listed = _json.loads(list_result.stdout)
++            self.assertEqual(len(listed), 1)
++            self.assertEqual(listed[0]["number"], issue_number)
++
++            # Step 2: transition approved → in-progress.
++            trans_result = self._run_tracker(
++                ["transition", str(issue_number),
++                 "approved", "in-progress",
++                 "--role", "skill-lead"],
++                fdir,
++            )
++            # tracker.transition returns 0 on success and prints
++            # a one-line confirmation. If authority is rejected
++            # we'll see a non-zero exit and the stderr will say why.
++            self.assertEqual(
++                trans_result.returncode, 0,
++                msg=(
++                    f"transition failed rc={trans_result.returncode}. "
++                    f"stdout: {trans_result.stdout[:500]!r}; "
++                    f"stderr: {trans_result.stderr[:500]!r}"
++                ),
++            )
++
++            # Step 3: assert the writes log shows the expected
++            # transition. The shim logs every write-type gh call;
++            # transition makes two: an issue-edit (--remove-label
++            # status:approved --add-label status:in-progress) and
++            # potentially a comment if --message was used (we
++            # didn't pass --message so just the edit).
++            log = fdir / "_writes.log"
++            self.assertTrue(
++                log.exists(),
++                msg=(
++                    "Shim must have logged at least one write call "
++                    "for the transition — without this, we can't "
++                    "verify the agent actually issued the transition."
++                ),
++            )
++            entries = [
++                _json.loads(line) for line in
++                log.read_text(encoding="utf-8").splitlines()
++                if line.strip()
++            ]
++            edit_entries = [e for e in entries if e["verb"] == "edit"]
++            self.assertTrue(
++                edit_entries,
++                msg=(
++                    f"Expected at least one `issue edit` log entry "
++                    f"from the transition. Log entries: {entries!r}"
++                ),
++            )
++            # Pin the specific labels asserted in the edit so a
++            # future tracker refactor that drops one of them fails.
++            edit_args = " ".join(edit_entries[0]["args"])
++            self.assertIn("status:approved", edit_args)
++            self.assertIn("status:in-progress", edit_args)
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/tests/run_tests.py b/tests/run_tests.py
+index 42feaaf6..6c3b1ce5 100644
+--- a/tests/run_tests.py
++++ b/tests/run_tests.py
+@@ -103,6 +103,10 @@
+     "test_vault_synthesis",
+     "test_work_queue",
+     "test_9481_update_health_off_event_loop",
++    # #9398 Phase A unit tests
++    "test_9398_squidsquad_dir_env_var",
++    "test_9398_gh_shim",
++    "test_9398_tracker_gh_resolution",
+ ]
+ 
+ 
+@@ -154,6 +158,24 @@ def run_integration_tests(targets):
+             loader.loadTestsFromModule(test_event_mode_agent_subprocess)
+         )
+ 
++    if not targets or "real_agent_subprocess" in targets:
++        # #9398 Phase A real-subprocess scenarios. Heavy — spawns real
++        # harness + agent subprocesses; ~10-15s per test on Windows.
++        from integration import test_9398_real_agent_subprocess
++        suite.addTests(
++            loader.loadTestsFromModule(test_9398_real_agent_subprocess)
++        )
++
++    if not targets or "gh_shim_tracker" in targets:
++        # #9398 Phase A — gh PATH-shim ↔ tracker.py handshake.
++        # Subprocess-spawns tracker.py with shim on PATH; fast.
++        from integration import test_9398_gh_shim_tracker_integration
++        suite.addTests(
++            loader.loadTestsFromModule(
++                test_9398_gh_shim_tracker_integration
++            )
++        )
++
+     runner = unittest.TextTestRunner(verbosity=2)
+     try:
+         result = runner.run(suite)
+diff --git a/tests/test_9398_gh_shim.py b/tests/test_9398_gh_shim.py
+new file mode 100644
+index 00000000..c8fec840
+--- /dev/null
++++ b/tests/test_9398_gh_shim.py
+@@ -0,0 +1,188 @@
++"""Unit tests for the #9398 Phase A gh PATH-shim.
++
++The shim lives at ``tests/integration/fixtures/gh_shim/gh_main.py``
++and is the foundation for the work-pickup half of AC-3 M-3.2 (real
++agent subprocess invokes ``tracker.py`` → ``gh issue list ...``;
++shim returns canned issues; assert agent picks up the top item).
++
++These tests exercise the shim directly via subprocess. The
++integration with a real agent + harness lives in
++``tests/integration/test_9398_real_agent_subprocess.py`` once the
++work-pickup test lands.
++"""
++
++import json
++import os
++import subprocess
++import sys
++import tempfile
++import unittest
++from pathlib import Path
++
++REPO_ROOT = Path(__file__).resolve().parent.parent
++GH_SHIM_DIR = REPO_ROOT / "tests" / "integration" / "fixtures" / "gh_shim"
++GH_MAIN = GH_SHIM_DIR / "gh_main.py"
++
++
++def _run_shim(args: list[str], fixtures_dir: Path | None = None,
++              extra_env: dict[str, str] | None = None
++              ) -> subprocess.CompletedProcess:
++    """Invoke gh_main.py directly (skips the platform-specific entry
++    wrapper). The wrapper just forwards argv so testing the inner
++    script is equivalent for behavioral coverage."""
++    env = dict(os.environ)
++    if fixtures_dir is not None:
++        env["GH_SHIM_FIXTURES_DIR"] = str(fixtures_dir)
++    if extra_env:
++        env.update(extra_env)
++    # The shim's main() consumes argv[1:] as the gh args (matching
++    # how the .cmd/.sh entry point invokes it: `python gh_main.py %*`).
++    # Don't prepend an extra "gh" — that would shift the argument
++    # parsing by one and make every subcommand look like a leading
++    # extra topic.
++    return subprocess.run(
++        [sys.executable, str(GH_MAIN)] + args,
++        env=env,
++        capture_output=True,
++        text=True,
++        encoding="utf-8",
++        errors="replace",
++        timeout=10,
++        check=False,
++    )
++
++
++class TestGhShimReadCommands(unittest.TestCase):
++    def test_list_returns_empty_array_when_no_fixture(self):
++        """``gh issue list ...`` without a fixture file must return
++        ``[]\\n`` so tracker.py's JSON parse succeeds and the agent
++        sees 'no work'. Anything else (HTTP error, malformed JSON,
++        crash) would break the agent's boot path."""
++        result = _run_shim(["issue", "list", "--label", "role:skill"])
++        self.assertEqual(result.returncode, 0)
++        self.assertEqual(result.stdout.strip(), "[]")
++
++    def test_view_returns_empty_object_when_no_fixture(self):
++        """``gh issue view N ...`` without a fixture returns ``{}``."""
++        result = _run_shim(["issue", "view", "42", "--json", "labels"])
++        self.assertEqual(result.returncode, 0)
++        self.assertEqual(result.stdout.strip(), "{}")
++
++    def test_list_serves_default_fixture_when_present(self):
++        """When ``GH_SHIM_FIXTURES_DIR/issue-list/default.json``
++        exists, ``gh issue list`` returns its contents verbatim."""
++        with tempfile.TemporaryDirectory() as tmp:
++            fdir = Path(tmp)
++            (fdir / "issue-list").mkdir()
++            payload = [{"number": 42, "title": "test", "labels": []}]
++            (fdir / "issue-list" / "default.json").write_text(
++                json.dumps(payload), encoding="utf-8"
++            )
++            result = _run_shim(
++                ["issue", "list", "--label", "role:skill"],
++                fixtures_dir=fdir,
++            )
++            self.assertEqual(result.returncode, 0)
++            parsed = json.loads(result.stdout)
++            self.assertEqual(parsed, payload)
++
++    def test_view_keyed_by_issue_number(self):
++        """``gh issue view 99`` reads from
++        ``GH_SHIM_FIXTURES_DIR/issue-view/99.json`` — keyed by the
++        issue number, not the literal string 'default'."""
++        with tempfile.TemporaryDirectory() as tmp:
++            fdir = Path(tmp)
++            (fdir / "issue-view").mkdir()
++            (fdir / "issue-view" / "99.json").write_text(
++                '{"number":99,"state":"open"}', encoding="utf-8"
++            )
++            result = _run_shim(
++                ["issue", "view", "99", "--json", "state"],
++                fixtures_dir=fdir,
++            )
++            self.assertEqual(result.returncode, 0)
++            parsed = json.loads(result.stdout)
++            self.assertEqual(parsed["number"], 99)
++
++    def test_list_key_overridable_by_env(self):
++        """Tests serving multiple list responses in sequence set
++        ``GH_SHIM_LIST_KEY`` to swap the fixture key between
++        invocations without rewriting the default.json file."""
++        with tempfile.TemporaryDirectory() as tmp:
++            fdir = Path(tmp)
++            (fdir / "issue-list").mkdir()
++            (fdir / "issue-list" / "after-pickup.json").write_text(
++                "[]", encoding="utf-8"
++            )
++            result = _run_shim(
++                ["issue", "list", "--label", "role:skill"],
++                fixtures_dir=fdir,
++                extra_env={"GH_SHIM_LIST_KEY": "after-pickup"},
++            )
++            self.assertEqual(result.returncode, 0)
++            self.assertEqual(result.stdout.strip(), "[]")
++
++
++class TestGhShimWriteCommands(unittest.TestCase):
++    def test_edit_logs_write_to_fixtures_dir(self):
++        """``gh issue edit ...`` (a write-type command) appends a
++        JSON line to ``GH_SHIM_FIXTURES_DIR/_writes.log`` so tests
++        can assert on the agent's transition activity."""
++        with tempfile.TemporaryDirectory() as tmp:
++            fdir = Path(tmp)
++            result = _run_shim(
++                ["issue", "edit", "42",
++                 "--remove-label", "status:approved",
++                 "--add-label", "status:in-progress"],
++                fixtures_dir=fdir,
++            )
++            self.assertEqual(result.returncode, 0)
++            log = fdir / "_writes.log"
++            self.assertTrue(log.exists())
++            line = log.read_text(encoding="utf-8").strip()
++            entry = json.loads(line)
++            self.assertEqual(entry["verb"], "edit")
++            self.assertIn("--add-label", entry["args"])
++            self.assertIn("status:in-progress", entry["args"])
++
++    def test_comment_logs_write(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            fdir = Path(tmp)
++            result = _run_shim(
++                ["issue", "comment", "42", "--body", "hi"],
++                fixtures_dir=fdir,
++            )
++            self.assertEqual(result.returncode, 0)
++            log = fdir / "_writes.log"
++            entry = json.loads(log.read_text(encoding="utf-8").strip())
++            self.assertEqual(entry["verb"], "comment")
++
++    def test_write_without_fixtures_dir_succeeds_silently(self):
++        """Agents call ``gh issue edit`` fire-and-forget on many
++        paths. The shim must not crash when no fixtures dir is
++        configured — return 0 with no log file."""
++        result = _run_shim(
++            ["issue", "edit", "42", "--add-label", "status:shipped"],
++        )
++        self.assertEqual(result.returncode, 0)
++
++
++class TestGhShimMetaCommands(unittest.TestCase):
++    def test_version_flag(self):
++        """tracker.py / other tooling may probe ``gh --version``
++        before doing real work. Shim must return 0."""
++        result = _run_shim(["--version"])
++        self.assertEqual(result.returncode, 0)
++        self.assertIn("gh-shim", result.stdout.lower())
++
++    def test_no_args_fails_loudly(self):
++        """Empty argv (just `gh`) is a programming error — shim
++        exits non-zero so the test sees the bug instead of silently
++        passing."""
++        result = _run_shim([])
++        self.assertNotEqual(result.returncode, 0)
++        self.assertIn("missing subcommand", result.stderr.lower())
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/tests/test_9398_squidsquad_dir_env_var.py b/tests/test_9398_squidsquad_dir_env_var.py
+new file mode 100644
+index 00000000..a7fa41ef
+--- /dev/null
++++ b/tests/test_9398_squidsquad_dir_env_var.py
+@@ -0,0 +1,244 @@
++"""Regression tests for the #9398 Phase A precondition: SQUIDSQUAD_DIR env var.
++
++Background: ``harness.py`` and ``event_bus.py`` previously hard-coded
++``SQUIDSQUAD_DIR = REPO_ROOT / ".squidsquad"`` as a module-level
++constant. The §4.1 / §4.5 real-agent-subprocess fixture work needs to
++spawn a test harness on a random port WITHOUT clobbering the live
++harness's ``.harness-port`` file (which all other SquidSquad processes
++use for port discovery). This Phase A precondition adds env-var
++override: ``SQUIDSQUAD_DIR=<tmpdir>`` re-points both modules' state
++roots at the tmpdir.
++
++Tests pin:
++
++1. ``event_bus.SQUID_DIR`` honors ``SQUIDSQUAD_DIR`` env var.
++2. ``harness.SQUIDSQUAD_DIR`` honors ``SQUIDSQUAD_DIR`` env var.
++3. With the env var unset, both modules fall back to the previous
++   default (``REPO_ROOT / ".squidsquad"``).
++4. ``harness.HARNESS_PORT_FILE`` rebases under the env-overridden
++   directory — the load-bearing assertion for #9398 fixture
++   isolation. If the constant is computed once at module load against
++   the old SQUIDSQUAD_DIR, the override is silently broken.
++"""
++
++import importlib.util
++import os
++import sys
++import tempfile
++import unittest
++from pathlib import Path
++from unittest import mock
++
++REPO_ROOT = Path(__file__).resolve().parent.parent
++SCRIPTS = REPO_ROOT / "references" / "scripts"
++
++
++def _fresh_load(module_name: str, file_path: Path, env: dict):
++    """Load a module from disk with a controlled os.environ.
++
++    Module-level constants are evaluated at import time, so the env
++    var must be set BEFORE the import. We use mock.patch.dict on
++    ``os.environ`` around an importlib spec-based load.
++    """
++    with mock.patch.dict(os.environ, env, clear=False):
++        spec = importlib.util.spec_from_file_location(module_name, file_path)
++        if not (spec and spec.loader):
++            raise ImportError(f"cannot load {file_path}")
++        mod = importlib.util.module_from_spec(spec)
++        spec.loader.exec_module(mod)
++        return mod
++
++
++class TestEventBusSquidDirEnvVar(unittest.TestCase):
++    def test_event_bus_honors_squidsquad_dir_env_var(self):
++        with tempfile.TemporaryDirectory(prefix="sqdir-test-") as tmp:
++            mod = _fresh_load(
++                "_event_bus_squidsquad_dir_test",
++                SCRIPTS / "event_bus.py",
++                {"SQUIDSQUAD_DIR": tmp},
++            )
++            self.assertEqual(
++                str(mod.SQUID_DIR), str(Path(tmp)),
++                msg=(
++                    "event_bus.SQUID_DIR must be the SQUIDSQUAD_DIR env var "
++                    "when set (#9398). Without this, a test harness in a "
++                    "tmpdir can't be discovered by event_bus.emit() in the "
++                    "agent subprocess."
++                ),
++            )
++
++    def test_event_bus_default_unchanged_when_env_var_unset(self):
++        # mock.patch.dict with clear=True ensures the env var is unset
++        with mock.patch.dict(os.environ, {}, clear=True):
++            mod = _fresh_load(
++                "_event_bus_default_test",
++                SCRIPTS / "event_bus.py",
++                {},
++            )
++            self.assertEqual(
++                str(mod.SQUID_DIR).replace("\\", "/").lower(),
++                str(REPO_ROOT / ".squidsquad").replace("\\", "/").lower(),
++                msg=(
++                    "Without SQUIDSQUAD_DIR set, event_bus.SQUID_DIR must "
++                    "fall back to the previous default REPO_ROOT/.squidsquad "
++                    "— production callers see zero behavior change."
++                ),
++            )
++
++
++class TestHarnessSquidDirEnvVar(unittest.TestCase):
++    """The harness side of the #9398 fixture-isolation contract.
++    We DO NOT actually start the harness here (uvicorn etc. is heavy
++    + has side effects); the test only re-imports the module under
++    the env var and verifies the constants resolved correctly."""
++
++    def test_harness_squidsquad_dir_honors_env_var(self):
++        with tempfile.TemporaryDirectory(prefix="sqdir-test-") as tmp:
++            mod = _fresh_load(
++                "_harness_squidsquad_dir_test",
++                SCRIPTS / "harness.py",
++                {"SQUIDSQUAD_DIR": tmp},
++            )
++            self.assertEqual(
++                str(mod.SQUIDSQUAD_DIR), str(Path(tmp)),
++                msg=(
++                    "harness.SQUIDSQUAD_DIR must be the SQUIDSQUAD_DIR env "
++                    "var when set (#9398). Without this, a test harness on "
++                    "a random port would still write .harness-port to the "
++                    "live .squidsquad/ directory, breaking the live system."
++                ),
++            )
++
++    def test_harness_port_file_rebases_under_env_overridden_dir(self):
++        """Load-bearing assertion: the derived
++        ``HARNESS_PORT_FILE`` constant must live UNDER the
++        env-overridden directory, not under the original
++        REPO_ROOT/.squidsquad. If it's computed once-at-load against
++        the old constant and never re-derived, the override is
++        silently broken at the file-write site."""
++        with tempfile.TemporaryDirectory(prefix="sqdir-test-") as tmp:
++            mod = _fresh_load(
++                "_harness_port_file_test",
++                SCRIPTS / "harness.py",
++                {"SQUIDSQUAD_DIR": tmp},
++            )
++            self.assertEqual(
++                str(mod.HARNESS_PORT_FILE), str(Path(tmp) / ".harness-port"),
++                msg=(
++                    "harness.HARNESS_PORT_FILE must rebase under the "
++                    "env-overridden SQUIDSQUAD_DIR. If this fails, the "
++                    "test harness will overwrite the live .squidsquad/"
++                    ".harness-port file every time it starts (#9398)."
++                ),
++            )
++
++    def test_harness_default_unchanged_when_env_var_unset(self):
++        with mock.patch.dict(os.environ, {}, clear=True):
++            mod = _fresh_load(
++                "_harness_default_test",
++                SCRIPTS / "harness.py",
++                {},
++            )
++            self.assertEqual(
++                str(mod.SQUIDSQUAD_DIR).replace("\\", "/").lower(),
++                str(REPO_ROOT / ".squidsquad").replace("\\", "/").lower(),
++                msg=(
++                    "Without SQUIDSQUAD_DIR set, harness.SQUIDSQUAD_DIR "
++                    "must fall back to REPO_ROOT/.squidsquad — production "
++                    "callers see zero behavior change."
++                ),
++            )
++
++
++class TestSquidsquadDirNullEnvVarHandled(unittest.TestCase):
++    """A common foot-gun: the env var is set to an empty string (e.g.,
++    by a shell script with ``SQUIDSQUAD_DIR=$something_undefined``).
++    The current implementation uses ``or`` to treat empty as unset,
++    which is the right behavior — pin it so a future refactor that
++    uses ``os.environ.get("SQUIDSQUAD_DIR", default)`` (which returns
++    "" rather than the default for empty values) doesn't break this."""
++
++    def test_empty_string_env_var_falls_back_to_default(self):
++        with mock.patch.dict(os.environ, {"SQUIDSQUAD_DIR": ""}, clear=False):
++            mod = _fresh_load(
++                "_event_bus_empty_env_test",
++                SCRIPTS / "event_bus.py",
++                {"SQUIDSQUAD_DIR": ""},
++            )
++            # Should be the default, NOT the empty string interpreted as cwd.
++            self.assertEqual(
++                str(mod.SQUID_DIR).replace("\\", "/").lower(),
++                str(REPO_ROOT / ".squidsquad").replace("\\", "/").lower(),
++                msg=(
++                    "An empty SQUIDSQUAD_DIR env var must fall back to "
++                    "the default — empty string would otherwise resolve "
++                    "to the process cwd, scattering harness state across "
++                    "wherever the harness was started from."
++                ),
++            )
++
++
++class TestSquidsquadDirEnvVarFootguns(unittest.TestCase):
++    """Sonnet code review of PR #9614 flagged three foot-guns:
++    trailing whitespace, leading ``~``, and (already pinned above)
++    empty string. Pin the first two so a future refactor that drops
++    strip/expanduser handling fails loudly."""
++
++    def test_trailing_whitespace_is_stripped(self):
++        """A frequent ``export SQUIDSQUAD_DIR=$tmp `` typo — the
++        trailing space silently produces a different path that
++        doesn't exist; the harness's port write fails as a logged
++        WARNING and the harness becomes undiscoverable. Strip it."""
++        with tempfile.TemporaryDirectory(prefix="sqdir-ws-") as tmp:
++            mod = _fresh_load(
++                "_event_bus_ws_test",
++                SCRIPTS / "event_bus.py",
++                {"SQUIDSQUAD_DIR": f"  {tmp}  "},
++            )
++            self.assertEqual(
++                str(mod.SQUID_DIR), str(Path(tmp)),
++                msg=(
++                    "SQUIDSQUAD_DIR with surrounding whitespace must "
++                    "be stripped (PR #9614 Sonnet code review). "
++                    "Without this, '  /tmp/x  ' resolves to a literal "
++                    "path with spaces in it — the directory the user "
++                    "wanted does NOT get used."
++                ),
++            )
++
++    def test_tilde_is_expanded(self):
++        """``~/sq-test`` should resolve to the user's home, not a
++        literal tilde-prefixed directory under the cwd."""
++        mod = _fresh_load(
++            "_event_bus_tilde_test",
++            SCRIPTS / "event_bus.py",
++            {"SQUIDSQUAD_DIR": "~/__sq_tilde_probe__"},
++        )
++        # Path.expanduser turns ``~`` into ``Path.home()``.
++        expected = Path.home() / "__sq_tilde_probe__"
++        self.assertEqual(
++            str(mod.SQUID_DIR), str(expected),
++            msg=(
++                "SQUIDSQUAD_DIR='~/foo' must be expanduser'd to the "
++                "user's home (PR #9614 Sonnet code review). Without "
++                "this, the tilde is treated literally and Path('~/"
++                "foo') points at a relative './~' subdirectory."
++            ),
++        )
++
++    def test_harness_strip_expanduser_same_contract(self):
++        """The two modules' resolution functions must apply the
++        same foot-gun handling. A regression in only one module
++        would be worse than both broken — agents and the harness
++        would disagree on where the port file lives."""
++        with tempfile.TemporaryDirectory(prefix="sqdir-h-") as tmp:
++            mod = _fresh_load(
++                "_harness_ws_test",
++                SCRIPTS / "harness.py",
++                {"SQUIDSQUAD_DIR": f"  {tmp}\t"},
++            )
++            self.assertEqual(str(mod.SQUIDSQUAD_DIR), str(Path(tmp)))
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/tests/test_9398_tracker_gh_resolution.py b/tests/test_9398_tracker_gh_resolution.py
+new file mode 100644
+index 00000000..8f49cb5e
+--- /dev/null
++++ b/tests/test_9398_tracker_gh_resolution.py
+@@ -0,0 +1,172 @@
++"""Unit tests for the #9398 ``tracker._resolve_gh_bin`` patch.
++
++Background: on Windows, ``subprocess.run([\"gh\", ...])`` uses
++``CreateProcessW`` for executable lookup, which only directly
++executes ``.exe`` and ``.com`` files. ``.cmd`` and ``.bat`` files
++in PATH get skipped. The #9398 Phase A PATH-shim ships ``gh.cmd``;
++without the patch, the real ``gh.exe`` always wins.
++
++The patch (``references/scripts/tracker.py``):
++- ``_resolve_gh_bin()`` calls ``shutil.which(\"gh\")`` once and
++  caches the result. ``shutil.which`` IS PATHEXT-aware on Windows,
++  so it finds ``gh.cmd`` when it's first in PATH.
++- ``_run_list(cmd_list)`` substitutes ``\"gh\"`` (the literal first
++  element) with the resolved path before invoking subprocess.
++
++This is the same fix-shape as ``run_comprehension_test._find_claude``
++shipped via #9574 for the ``claude`` CLI under the same root cause.
++
++Tests pin:
++1. ``_resolve_gh_bin`` returns a string.
++2. With a custom PATH that prepends a directory containing ``gh.cmd``
++   AND no ``gh.exe``, the resolved path points at the .cmd.
++3. ``_run_list([\"gh\", ...])`` does the substitution; non-``gh``
++   commands pass through unchanged.
++4. The cache is sticky within a process (subsequent calls return the
++   first resolution).
++"""
++
++import importlib.util
++import os
++import sys
++import tempfile
++import unittest
++from pathlib import Path
++from unittest import mock
++
++REPO_ROOT = Path(__file__).resolve().parent.parent
++TRACKER_PATH = REPO_ROOT / "references" / "scripts" / "tracker.py"
++
++
++def _fresh_tracker(env: dict | None = None):
++    """Load a fresh copy of tracker.py with a controlled os.environ.
++
++    Each test gets its own module instance so the
++    ``_RESOLVED_GH_BIN`` module-level cache doesn't leak across
++    tests. We patch ``os.environ`` BEFORE the import so any
++    module-level reads happen in the controlled env."""
++    with mock.patch.dict(os.environ, env or {}, clear=False):
++        spec = importlib.util.spec_from_file_location(
++            f"_tracker_{id(env)}", TRACKER_PATH
++        )
++        if not (spec and spec.loader):
++            raise ImportError(f"cannot load {TRACKER_PATH}")
++        mod = importlib.util.module_from_spec(spec)
++        spec.loader.exec_module(mod)
++        return mod
++
++
++class TestResolveGhBin(unittest.TestCase):
++    def test_returns_string(self):
++        mod = _fresh_tracker()
++        got = mod._resolve_gh_bin()
++        self.assertIsInstance(got, str)
++        self.assertTrue(got, msg="_resolve_gh_bin must not return empty")
++
++    def test_picks_up_path_prepended_cmd_on_windows(self):
++        """On Windows, prepend a dir containing only ``gh.cmd`` to
++        PATH; resolution must find it via PATHEXT instead of any
++        real ``gh.exe`` deeper in the PATH chain. This is the load-
++        bearing assertion — without it, the #9398 PATH-shim never
++        gets hit by tracker.py invocations."""
++        if sys.platform != "win32":
++            self.skipTest("PATHEXT precedence is Windows-specific")
++        with tempfile.TemporaryDirectory(prefix="ghshim-") as tmp:
++            shim_dir = Path(tmp)
++            # Create a no-op gh.cmd in the shim dir.
++            (shim_dir / "gh.cmd").write_text(
++                "@echo gh-cmd-shim\n", encoding="utf-8"
++            )
++            # Keep the patched env in scope for the _resolve_gh_bin
++            # call too — shutil.which reads os.environ['PATH'] at
++            # call time, NOT at module load.
++            patched_path = (
++                str(shim_dir) + os.pathsep + os.environ.get("PATH", "")
++            )
++            with mock.patch.dict(os.environ, {"PATH": patched_path}):
++                mod = _fresh_tracker()
++                got = mod._resolve_gh_bin()
++            self.assertEqual(
++                Path(got).resolve(), (shim_dir / "gh.cmd").resolve(),
++                msg=(
++                    f"_resolve_gh_bin must find the shim's gh.cmd "
++                    f"when prepended to PATH (#9398). Got: {got!r}"
++                ),
++            )
++
++    def test_cache_is_sticky_within_process(self):
++        """Repeated calls return the same result — a different
++        underlying CLI install path showing up mid-process won't
++        cause confusing inconsistency between calls."""
++        mod = _fresh_tracker()
++        first = mod._resolve_gh_bin()
++        # Mutate PATH after first resolution.
++        with mock.patch.dict(os.environ, {"PATH": ""}, clear=False):
++            second = mod._resolve_gh_bin()
++        self.assertEqual(first, second)
++
++
++class TestRunListSubstitutesGh(unittest.TestCase):
++    def test_first_arg_gh_substituted_with_resolved_bin(self):
++        """``_run_list([\"gh\", ...])`` must replace ``\"gh\"`` with
++        the resolved path before invoking subprocess. Without this
++        substitution the PATH-shim is bypassed (the #9398 bug)."""
++        mod = _fresh_tracker()
++        # Pin the resolver to a sentinel so we can detect substitution.
++        mod._RESOLVED_GH_BIN = "/sentinel/path/to/gh"
++
++        captured = {}
++
++        def fake_run(cmd, **kwargs):
++            captured["cmd"] = cmd
++            class _R:
++                stdout = ""
++                stderr = ""
++                returncode = 0
++            return _R()
++
++        with mock.patch.object(mod.subprocess, "run", side_effect=fake_run):
++            mod._run_list(["gh", "issue", "list", "--limit", "1"])
++
++        self.assertEqual(captured["cmd"][0], "/sentinel/path/to/gh")
++        # Rest of args preserved as-is.
++        self.assertEqual(
++            captured["cmd"][1:],
++            ["issue", "list", "--limit", "1"],
++        )
++
++    def test_non_gh_first_arg_passes_through_unchanged(self):
++        """Substitution only triggers on the literal ``\"gh\"``
++        — other commands (rare in tracker.py but possible) are
++        unaffected."""
++        mod = _fresh_tracker()
++        mod._RESOLVED_GH_BIN = "/sentinel/path/to/gh"
++        captured = {}
++
++        def fake_run(cmd, **kwargs):
++            captured["cmd"] = cmd
++            class _R:
++                stdout = ""; stderr = ""; returncode = 0
++            return _R()
++
++        with mock.patch.object(mod.subprocess, "run", side_effect=fake_run):
++            mod._run_list(["git", "status"])
++        self.assertEqual(captured["cmd"], ["git", "status"])
++
++    def test_empty_cmd_list_does_not_crash(self):
++        """Edge: an empty ``cmd_list`` would be a programming error,
++        but the substitution check must not IndexError before
++        subprocess sees the bad input."""
++        mod = _fresh_tracker()
++        with mock.patch.object(mod.subprocess, "run") as fake:
++            fake.return_value = mock.Mock(stdout="", stderr="", returncode=0)
++            try:
++                mod._run_list([])
++            except IndexError:
++                self.fail("_run_list must not IndexError on empty cmd_list")
++            except Exception:
++                pass  # subprocess may raise something else; that's fine
++
++
++if __name__ == "__main__":
++    unittest.main()
