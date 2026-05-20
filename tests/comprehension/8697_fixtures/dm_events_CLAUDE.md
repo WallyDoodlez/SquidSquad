@@ -225,7 +225,7 @@ You are a persistent agent session driven by events from the harness. You react 
 This fragment is a brief orientation. The full agent contract lives in the companion event-mode fragments — read them in this order:
 
 1. **[[l1-base]]** — boot sequence (Case A), event reactions (Cases B–E), case-precedence rule, working-state ownership discipline, degraded-mode operation.
-2. **[[cursor-management]]** — atomic `.tmp` + `mv` protocol, per-event advance, gap handling (in-stream, long lag, eviction).
+2. **[[cursor-management]]** — atomic `.tmp` + `mv` protocol, per-event advance, gap handling (long lag, eviction).
 3. **[[forge-read-pattern]]** — why the forge is the source of truth and how to read it before acting.
 4. **[[idle-cooldown-loop]]** — what an event-mode agent does when `work_queue()` is empty.
 5. **[[comment-handling]]** — comments are NOT event triggers; DM end-of-task exception; transition-on-handoff rule.
@@ -277,7 +277,7 @@ The boot sequence MUST work even when the harness is unreachable. Forge access i
    - **Unreachable** → skip steps 4–5 (nothing to skim, cursor unchanged) and proceed to degraded-mode operation: continue working directly from the forge via `work_queue()`. While in degraded mode, if `work_queue()` returns empty, sleep a short fixed interval (e.g. 60s) and retry `work_queue()`; if `work_queue()` returns work, pick up the top item directly (transition to `in-progress`, update the Task field, begin work) and on completion follow Case C (transition, clear Task field, re-run `work_queue()`) — then continue applying the same degraded-mode rules (empty → 60s sleep, non-empty → pick up). **Do NOT enter the improvement-scan cool-down loop in degraded mode**, because the Monitor (`event_poll.py`) requires the harness. **Before each `work_queue()` call** (including after each 60s sleep), attempt to POST `bootup-complete` using exponential backoff capped at **5 minutes**. A successful POST indicates the harness is reachable — **exit degraded mode** by skimming events from the current cursor forward (step 4), advancing the cursor (step 5 cursor write), and entering the listening loop. `bootup-complete` is **best-effort, not blocking** — the agent never hangs waiting for the harness.
    - **Reachable** → continue to step 4. (If you got here from step 2's empty idle branch, after step 5 enter the improvement-scan cool-down loop — see [[idle-cooldown-loop]].)
 
-4. **Skim events from cursor forward.** Informational only — the forge already has current state. Skim-then-advance; never jump-to-latest. Handle gap scenarios per [[cursor-management]] (in-stream gap, long lag, eviction gap). In an eviction gap specifically, the cursor advances to the *oldest available* id, not the latest observed.
+4. **Skim events from cursor forward.** Informational only — the forge already has current state. Skim-then-advance; never jump-to-latest. Handle gap scenarios per [[cursor-management]] (long lag, eviction gap). In an eviction gap specifically, the cursor advances to the *oldest available* id, not the latest observed.
 
 5. **Advance cursor and announce.** Persist the cursor atomically (see [[cursor-management]]); emit `bootup-complete` (POST `/events` with `event_type=bootup-complete`, `role=<role>`, payload `{"listener_active": true}`); enter the event-listening loop via `event_poll.py`.
 
@@ -381,11 +381,12 @@ When a poll returns a batch of events, the cursor advances **after each event is
 
 ### Gap Scenarios
 
-Three kinds of cursor gap exist (CONTEXT.md §2):
+Two kinds of cursor gap exist (CONTEXT.md §2):
 
-- **In-stream gap.** You received events `[10, 11, 13]` — no event `12`. Log a warning naming the gap; advance to the highest observed id and forge-read affected items.
 - **Long lag.** Your cursor is hundreds or thousands of events behind. Skim-then-advance through the stream; do not jump to latest. The forge already has current state — the stream is just informational.
 - **Eviction gap.** Your cursor predates the oldest retained event in the harness deque. `GET /events?since=<old>` returns the oldest available id and an eviction-count hint. Log an eviction warning naming the oldest available id and the count of evicted events; advance the cursor to that oldest available id; proceed to a forge-read for current state. Do NOT crash.
+
+> Note: a third "in-stream gap" scenario (missing event between two retained ids) was specified in the original CONTEXT-8694 draft and **dropped on #9265**. The current broadcast model is a single in-process `collections.deque` populated by `POST /events`; `GET /events?since=<cursor>` does a linear scan over that deque, so two retained events cannot have a missing event between them by construction. The scenario would only become reachable if the harness ever moved to a multi-process pipeline with acks that could drop intermediate events — at that point this section should be updated.
 
 ### Crash Recovery
 

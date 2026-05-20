@@ -741,12 +741,21 @@ class TestStartAllPersistence(unittest.TestCase):
         self.assertEqual(got.intent, AgentState.INTENT_RUNNING)
 
     def test_start_all_calls_save_state(self):
-        """#6820: Verify start_all code path includes save_state call."""
+        """#6820: Verify start_all code path includes save_state call.
+
+        #9242: the call is now wrapped in ``asyncio.to_thread`` to keep
+        the disk write off the asyncio event loop. Match either the
+        bare or the wrapped form so this test survives both shapes.
+        """
         import inspect
         from harness import start_all
         source = inspect.getsource(start_all)
-        self.assertIn("save_state()", source,
-                       "start_all must call save_state() to persist intent")
+        self.assertTrue(
+            "save_state()" in source
+            or "asyncio.to_thread(state.save_state)" in source,
+            "start_all must call save_state to persist intent — "
+            "either bare or wrapped via asyncio.to_thread (#9242).",
+        )
         self.assertIn("INTENT_RUNNING", source,
                        "start_all must set intent to INTENT_RUNNING")
 
