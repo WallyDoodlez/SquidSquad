@@ -8,9 +8,10 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "SKILL.md:sections-7-8+slash-commands",
+  "last_scanned": "docs/ARCHITECTURE.md",
   "rotation_count": 50,
   "scan_history": [
+    {"file": "docs/ARCHITECTURE.md", "date": "2026-05-20", "findings": 0, "note": "Rotation 50. Unchanged since cycle 1113 R48 first-real-scan (0 findings). Coverage by deterministic equivalence — git log -- docs/ARCHITECTURE.md confirms no commits since."},
     {"file": "SKILL.md:sections-7-8+slash-commands", "date": "2026-05-20", "findings": 0, "note": "Rotation 50. Sec 7-8 + sec 10 slash-command body stable since cycle-1137 R49 close fix (line 472 /squidsquad-status health-source) — verified intact via grep. No edits since. Coverage by deterministic equivalence."},
     {"file": "SKILL.md:sections-4-6", "date": "2026-05-20", "findings": 0, "note": "Rotation 50. Sec 4-6 stable since cycle-1131 R49 fix (line 238 QA Loop step 7 health-source) — verified intact via grep. No edits since. Coverage by deterministic equivalence."},
     {"file": "SKILL.md:sections-1-3", "date": "2026-05-20", "findings": 0, "note": "Rotation 50. Sec 1-3 stable since cycle-1128 R49 fix (pm-tree planning/ row at line 95) — confirmed via grep that both planning/ rows (line 84 [role]/, line 95 pm/) are intact. No new edits to sec 1-3 since 1128; later commits (1131, 1137) touched sec 4-6 and sec 10 only. Coverage by deterministic equivalence."},
