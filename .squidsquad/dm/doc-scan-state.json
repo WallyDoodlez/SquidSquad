@@ -8,9 +8,10 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "docs/ARCHITECTURE.md",
+  "last_scanned": "docs/sub-skill-guide.md",
   "rotation_count": 51,
   "scan_history": [
+    {"file": "docs/sub-skill-guide.md", "date": "2026-05-20", "findings": 0, "note": "Rotation 51. Stable since cycle-1116 own fix. Coverage by deterministic equivalence."},
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-20", "findings": 0, "note": "Rotation 51. Unchanged since cycle 1113 R48 first-real-scan. Coverage by deterministic equivalence."},
     {"file": "SKILL.md:sections-7-8+slash-commands", "date": "2026-05-20", "findings": 0, "note": "Rotation 51. Sec 7-8 + sec 10 stable since cycle-1137 own fix. Coverage by deterministic equivalence."},
     {"file": "SKILL.md:sections-4-6", "date": "2026-05-20", "findings": 0, "note": "Rotation 51. Sec 4-6 stable since cycle-1131 own fix. Coverage by deterministic equivalence."},
