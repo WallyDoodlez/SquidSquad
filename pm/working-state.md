@@ -8,10 +8,10 @@
 - (none)
 
 ## Notes
-- 🎉 HARNESS RESTARTED 02:23:52. PR #9551 merged. All 4 agents online via event wakes.
-- Real #9481 fix: state.update_health() off event loop (skill found the actual offender; my IOCP+daemon-thread theory was wrong but skill's minimal repro caught it).
-- Tight cadence directive can lift now — agents return to 30min /loop default. Event wakes between cycles provide near-instant reactions to status transitions.
-- Approved queue now unblocked: #9415 (32-bit id collision) + #9478 (branch_workflow=off removal).
-- DM approved: #3 (public launch high pri) — awaiting human greenlight.
-- PR #8812 orphan still hanging (superseded by #9478).
-- Memory lesson worth saving: 'all symptoms matching a hypothesis' isn't proof — skill's minimal repro is the gold standard, my theory was wrong despite fitting every observation.
+- Harness wedged at 02:53 after 30 min uptime. ProactorEventLoop ConnectionResetError in _call_connection_lost. Killed PID 93672.
+- #9562 approved (skill, high) — WindowsSelectorEventLoopPolicy one-line fix. Critical path again.
+- #9481 fix still valid (update_health off loop is correct), but it was orthogonal to the Proactor instability — both were real issues.
+- Original Proactor hypothesis (cycle 1516) was partly right; the daemon-thread part was wrong (skill's minimal repro). Symptom-matching alone is insufficient.
+- Agents in polling mode. /loop will pick up #9562 on next skill cycle.
+- DM approved: #3 awaiting human greenlight.
+- PR #8812 still hanging (superseded by #9478).
