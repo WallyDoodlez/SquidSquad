@@ -8,9 +8,9 @@
 - (none)
 
 ## Notes
-- Skill respawned 03:15 (PID 550084), working-state pointing at #9562.
-- Recurring skill stall pattern (4 reboots this session): each reboot fires ONE cycle then /loop silently ends. Underlying cause unknown. May need a deeper /loop schedule investigation post-harness-restart.
-- #9562 is critical path. If skill cycles cleanly this time, expect a PR within 1-2 cycles.
+- Skill on #9562 cycle 1182 (advanced from 1181). Branch squidsquad/task/9562 + harness.py mods + test file.
+- Once #9562 ships, restart harness with `python harness.py` (no --no-auto-start needed; full path).
+- Recurring skill stall (reboot → 1 cycle → silent) — confirmed pattern across 4 reboots. Working-state reset + role:skill task at top of queue gets one good cycle. May need to file the underlying watchdog issue but not now.
 - DM approved: #3 awaiting human greenlight.
 - PR #8812 still hanging.
-- Harness OFF. Tightened cadence still 10min.
+- Approved queue after #9562: #9415, #9478, #9398, #9386, #9387.
