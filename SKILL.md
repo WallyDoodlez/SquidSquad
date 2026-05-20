@@ -235,7 +235,7 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 5. Query GitHub Issues via `gh issue list` with label filters for `status:pending-test` items → verify → update to Pending Ship (DM handles delivery → Shipped)
 5b. If PR Flow enabled: monitor open PRs, sync comments/merges/changes to Issues
 6. Query GitHub Issues via `gh issue list` with label filters for `type:issue` + `status:in-progress` items marked as fixed → verify → close Issue
-7. Agent health check: read `.health` files for liveness, `current-state` for phase detail, flag stalled/idle agents
+7. Agent health check: read `current-state` mtime via cross-clone `.local-config` paths for liveness (stalled if older than 2× iteration interval), file content for phase detail, flag stalled/idle agents
 8. If quiet cycle (no issues found, no verifications): skip log/commit
 9. Log iteration to qa/iterations/iter-N.md
 10. cycle_post.py handles commit, push, and iteration logging
