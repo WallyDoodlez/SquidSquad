@@ -1360,3 +1360,9 @@
 - **Files scanned**: references/scripts/health_check.py, references/scripts/triage.py, references/scripts/scan_index.py
 - **Findings**: #1229 (triage.py json.loads without error handling), #1230 (health_check.py unused import os)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-05-20 15:50
+
+- **Files scanned**: references/scripts/process_utils.py, references/scripts/statusline_data.py, references/scripts/event_validator.py
+- **Findings**: none (process_utils clean PID-validation + cross-platform handling; statusline_data tight HTTP timeout with file fallback; event_validator deterministic + clear severity model)
+- **Items rejected by human**: none yet
