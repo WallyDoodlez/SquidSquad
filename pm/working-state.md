@@ -5,14 +5,12 @@
 - **Last Processed Event ID**: 744e7492
 
 ## Pending Human Input
-- Vault note for 'third-party autonomous agents commenting on public repo' pattern? (Asked cycle 1512.)
+- Memory rule for L4 third-party-agent directive? (asked cycle 1512, no answer yet)
 
 ## Notes
-- #8999 pending-ship; DM next cycle expected to pick up.
-- #9265 pending-test, PR #9409 MERGEABLE, QA verifying now.
-- #9242 in-progress with skill (single PR for fixes 1+2+3).
-- #9415 (32-bit id collision, ALEF-flagged) status:pending, skill to pickup between #9242 and #9272.
-- Approved queue: #9242 → #9415 → #9272 → #9318.
-- DM: #3 awaiting human greenlight.
-- Harness OFF.
-- ALEF/Ilya0527 = third-party LLM agent, operator-supervised, comments-only access, found us via public repo. 2 comments total on #8999 + #9242. Substantively correct so far.
+- #9265 SHIPPED (in-stream gap dropped from CONTEXT-8694 §2). Option A landed.
+- #9242 at pending-test. PR #9441 all-three-fixes-in-one, MERGEABLE. QA next. Critical path for harness restart.
+- #8999 still pending-ship — DM lagging. Will cycle ~23:07 on default /loop.
+- L4 directive 'Third-Party LLM Agents on Public Issues' deployed across all 4 CLAUDE.md (cycle 1512.5, commit 0e0205f6).
+- Approved queue post-#9242: #9415 (32-bit id collision, ALEF flagged) → #9272 → #9318.
+- Harness OFF — PR #9441 is the unblock. Once merged, restart.
