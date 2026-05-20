@@ -20,11 +20,12 @@ When a poll returns a batch of events, the cursor advances **after each event is
 
 ### Gap Scenarios
 
-Three kinds of cursor gap exist (CONTEXT.md §2):
+Two kinds of cursor gap exist (CONTEXT.md §2):
 
-- **In-stream gap.** You received events `[10, 11, 13]` — no event `12`. Log a warning naming the gap; advance to the highest observed id and forge-read affected items.
 - **Long lag.** Your cursor is hundreds or thousands of events behind. Skim-then-advance through the stream; do not jump to latest. The forge already has current state — the stream is just informational.
 - **Eviction gap.** Your cursor predates the oldest retained event in the harness deque. `GET /events?since=<old>` returns the oldest available id and an eviction-count hint. Log an eviction warning naming the oldest available id and the count of evicted events; advance the cursor to that oldest available id; proceed to a forge-read for current state. Do NOT crash.
+
+> Note: a third "in-stream gap" scenario (missing event between two retained ids) was specified in the original CONTEXT-8694 draft and **dropped on #9265**. The current broadcast model is a single in-process `collections.deque` populated by `POST /events`; `GET /events?since=<cursor>` does a linear scan over that deque, so two retained events cannot have a missing event between them by construction. The scenario would only become reachable if the harness ever moved to a multi-process pipeline with acks that could drop intermediate events — at that point this section should be updated.
 
 ### Crash Recovery
 
