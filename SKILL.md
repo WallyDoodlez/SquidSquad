@@ -469,7 +469,7 @@ When the user says `/squidsquad-status` (or "squad status", "show me the squad",
 
 1. Read `.squidsquad/config.md` to get the list of dev agents and the loop interval.
 2. For each agent (dev agents + PM + QA + DM):
-   - Check health: read `.squidsquad/[role]/.health` if it exists. Values are `booting`, `dead`, `error|reason`, or an **epoch timestamp** (heartbeat — if less than 10s old, agent is alive; if stale, agent is dead). The harness writes the epoch every 5 seconds while the agent runs. Fall back to `git log --oneline --since="[2×interval] minutes ago" --grep="^[agent]:"` if no `.health` file — if commits found, show as `active`; if prior commits exist but none recent, show as `stalled`; else `unknown`.
+   - Check health: prefer `python references/scripts/squidsquad_cli.py status` when the harness is reachable — it surfaces live intent + PID state per agent. If the harness is down, fall back to reading `.squidsquad/[role]/current-state` mtime (each agent updates it each cycle) and/or `.squidsquad/[role]/.claude-pid` (PID written at boot). The legacy `.health` heartbeat file (`booting` / epoch / `dead` / `error|reason`) is still consulted as a last-resort fallback for wrapper-style agents but is being retired. Final fallback if none of these are available: `git log --oneline --since="[2×interval] minutes ago" --grep="^[agent]:"` — if commits found, show as `active`; if prior commits exist but none recent, show as `stalled`; else `unknown`.
    - Show last commit time: `git log --oneline --grep="^[agent]:" -1 --format="%ar"`
 3. For each dev agent, query GitHub Issues via `python references/scripts/tracker.py`:
    - `python references/scripts/tracker.py list-issues [role]` — count and list open issues
