@@ -48,8 +48,19 @@ SCRIPTS = REPO_ROOT / "references" / "scripts"
 HARNESS_PATH = SCRIPTS / "harness.py"
 
 # Generous defaults — Windows subprocess + uvicorn cold start is slow.
-_DEFAULT_STARTUP_TIMEOUT = 15.0
-_DEFAULT_STATUS_TIMEOUT = 10.0
+# Cycle-1198 QA: the original 10s _DEFAULT_STATUS_TIMEOUT was a coin
+# flip under full-suite load (prior TestClient tests leave sockets in
+# TIME_WAIT, tasklist warms slowly, uvicorn cold-start budget
+# compresses the headroom). QA reproduced FAIL deterministically with
+# 10s and observed 6.81s status-200 time at idle baseline. Bumped to
+# 30s to match the established precedent in this same PR's
+# `_get_agent` urlopen timeout (test_9398_real_agent_subprocess.py
+# L38-45) — 30s is already the documented number for Windows-
+# tasklist races, so the two thresholds align. Startup bumped to 30s
+# too as belt-and-suspenders even though it hasn't fired in QA's
+# reproduction (0.61s observed for port-file write).
+_DEFAULT_STARTUP_TIMEOUT = 30.0
+_DEFAULT_STATUS_TIMEOUT = 30.0
 _DEFAULT_TEARDOWN_TIMEOUT = 5.0
 
 
