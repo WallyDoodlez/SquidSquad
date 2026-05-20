@@ -318,12 +318,30 @@ class TestPromptDoesNotAskForWriteTool(unittest.TestCase):
     def setUp(self):
         self.source = RUNNER_PATH.read_text(encoding="utf-8")
 
+    # Forbidden phrases: any imperative in the prompt body that tells
+    # the inner agent to persist via Write to disk. The list covers
+    # BOTH the original pre-#9574 phrasing (the wording that actually
+    # caused the bug) AND the various imperative shapes a future
+    # refactor might use. Without both halves this test would pass
+    # vacuously against the buggy pre-fix code — that was caught by
+    # the Sonnet code review of the first revision of this test.
+    _FORBIDDEN_PROMPT_PHRASES = (
+        # The literal pre-fix phrasings that caused the bug:
+        "write all answers to",
+        "write results as a json array to",
+        # Imperatives a future refactor might use:
+        "invoke the write tool",
+        "use the write tool",
+        "call the write tool",
+        "your final action must be the write",
+    )
+
     def test_runner_source_does_not_instruct_write_tool(self):
         # Grep for the assignment of test_prompt / eval_prompt bodies
-        # and assert neither contains "Write tool" in an instructional
-        # imperative. We allow Write to be mentioned in comments or
-        # function docstrings (which discuss the bug history) — only
-        # the prompt bodies are off-limits.
+        # and assert neither contains a Write-to-disk imperative. We
+        # allow Write to be mentioned in comments or function
+        # docstrings (which discuss the bug history) — only the
+        # prompt bodies are off-limits.
         for varname in ("test_prompt", "eval_prompt"):
             m = re.search(
                 rf'\b{varname}\s*=\s*f?"""(.*?)"""',
@@ -336,25 +354,185 @@ class TestPromptDoesNotAskForWriteTool(unittest.TestCase):
                     f"was renamed, update this test.",
             )
             body = m.group(1).lower()
-            # Look for any Write-tool imperative phrasing.
-            forbidden = [
-                "invoke the write tool",
-                "use the write tool",
-                "call the write tool",
-                "your final action must be the write",
-            ]
-            offending = [p for p in forbidden if p in body]
+            offending = [p for p in self._FORBIDDEN_PROMPT_PHRASES if p in body]
             self.assertEqual(
                 offending, [],
                 msg=(
                     f"{varname} body must not instruct the inner agent "
-                    f"to invoke the Write tool — #9574 moved file "
+                    f"to persist output via Write — #9574 moved file "
                     f"persistence to the Python side via "
-                    f"--output-format json. Re-introducing a Write "
-                    f"imperative resurrects the headless-permission "
+                    f"--output-format json. Re-introducing any Write-to-"
+                    f"disk imperative (including the original pre-fix "
+                    f"phrasings) resurrects the headless-permission "
                     f"failure mode. Forbidden phrases found: {offending}"
                 ),
             )
+
+    def test_forbidden_list_actually_matches_prefix_phrasing(self):
+        """Meta-test: the BLOCK finding from the Sonnet code review
+        was that the original forbidden phrase list ("invoke the
+        write tool" etc.) did NOT match the actual pre-#9574 prompt
+        phrasing ("Write ALL answers to: {path}"). The test that
+        claimed to detect the regression would have passed against
+        buggy code. This meta-test guarantees the forbidden list
+        contains at least one phrase that would match the pre-fix
+        prompts, so the regression test is load-bearing."""
+        # Lower-cased fragments of the actual pre-#9574 prompt bodies:
+        prefix_test_prompt_fragment = "write all answers to: {answers_path}"
+        prefix_eval_prompt_fragment = (
+            "write results as a json array to: {results_path}"
+        )
+        # At least one forbidden phrase must be a substring of each
+        # pre-fix fragment so the regression detector is sharp.
+        matched_test = [
+            p for p in self._FORBIDDEN_PROMPT_PHRASES
+            if p in prefix_test_prompt_fragment
+        ]
+        matched_eval = [
+            p for p in self._FORBIDDEN_PROMPT_PHRASES
+            if p in prefix_eval_prompt_fragment
+        ]
+        self.assertTrue(
+            matched_test,
+            msg=(
+                "_FORBIDDEN_PROMPT_PHRASES contains no phrase that "
+                "matches the original pre-#9574 test_prompt wording "
+                f"({prefix_test_prompt_fragment!r}). The regression "
+                "detector would pass vacuously against buggy code."
+            ),
+        )
+        self.assertTrue(
+            matched_eval,
+            msg=(
+                "_FORBIDDEN_PROMPT_PHRASES contains no phrase that "
+                "matches the original pre-#9574 eval_prompt wording "
+                f"({prefix_eval_prompt_fragment!r})."
+            ),
+        )
+
+    def test_runner_source_uses_json_output_contract(self):
+        """Positive assertion: the runner source must reference the
+        new JSON-output contract somewhere (either in `_run_agent`
+        passing `--output-format`, `"json"`, or in a prompt comment
+        about chat-output harvesting). Catches a refactor that
+        drops the contract entirely without explicitly inviting
+        the Write-tool pattern back."""
+        # Either the command-line flag or the harvest comment is
+        # acceptable evidence the contract is intact.
+        signals = [
+            '"--output-format"',
+            '"json"',
+            "harvests this text",
+            "result field",
+            "--output-format json",
+        ]
+        found = [s for s in signals if s.lower() in self.source.lower()]
+        self.assertTrue(
+            found,
+            msg=(
+                "Runner source must reference the --output-format "
+                "json chat-output contract (#9574). No matching "
+                f"signal found. Looked for: {signals}"
+            ),
+        )
+
+
+class TestFindClaudeWindowsPreference(unittest.TestCase):
+    """The Windows ``claude.cmd`` wrapper mangles multi-line prompts
+    via batch ``%*``. ``_find_claude`` must prefer ``claude.exe`` over
+    ``claude.cmd`` on Windows, with sane fallbacks. Sonnet code review
+    flagged this as MEDIUM-uncovered-by-tests."""
+
+    def setUp(self):
+        self.runner = _load_runner()
+
+    def test_win32_returns_hardcoded_npm_exe_when_present(self):
+        """On Windows with the standard npm install layout, the
+        hardcoded ``APPDATA/npm/node_modules/@anthropic-ai/claude-code/bin/claude.exe``
+        path is preferred — short-circuits before shutil.which gets
+        a chance to return the .cmd."""
+        fake_exe = "C:/fake/appdata/npm/node_modules/@anthropic-ai/claude-code/bin/claude.exe"
+
+        def fake_exists(self):
+            return str(self).replace("\\", "/").endswith(
+                "node_modules/@anthropic-ai/claude-code/bin/claude.exe"
+            )
+
+        with mock.patch.object(self.runner.sys, "platform", "win32"), \
+             mock.patch.dict(self.runner.os.environ, {"APPDATA": "C:/fake/appdata"}), \
+             mock.patch.object(Path, "exists", fake_exists), \
+             mock.patch.object(self.runner.shutil, "which",
+                               return_value="C:/fake/appdata/npm/claude.cmd"):
+            got = self.runner._find_claude()
+        self.assertTrue(
+            got.lower().endswith(".exe"),
+            msg=(
+                f"On Windows, _find_claude must prefer the npm-installed "
+                f".exe over the .cmd wrapper (#9574). Got: {got!r}"
+            ),
+        )
+
+    def test_non_win32_uses_shutil_which(self):
+        """On non-Windows platforms, the .cmd-preference logic must
+        not interfere — ``shutil.which`` result is returned as-is
+        (the .cmd bug is Windows-batch-specific)."""
+        with mock.patch.object(self.runner.sys, "platform", "linux"), \
+             mock.patch.object(self.runner.shutil, "which",
+                               return_value="/usr/local/bin/claude"):
+            got = self.runner._find_claude()
+        self.assertEqual(got, "/usr/local/bin/claude")
+
+    def test_win32_sibling_exe_returned_when_path_yields_cmd(self):
+        """If the hardcoded npm path doesn't exist (custom prefix,
+        non-standard install) but ``shutil.which`` returns a .cmd
+        AND a sibling .exe is present, prefer the .exe."""
+        path_exists_map = {
+            "C:/custom/prefix/claude.exe": True,
+            # The hardcoded npm path does NOT exist in this scenario.
+        }
+
+        def fake_exists(self):
+            return path_exists_map.get(str(self).replace("\\", "/"), False)
+
+        with mock.patch.object(self.runner.sys, "platform", "win32"), \
+             mock.patch.dict(self.runner.os.environ, {"APPDATA": "C:/missing"}), \
+             mock.patch.object(Path, "exists", fake_exists), \
+             mock.patch.object(self.runner.shutil, "which",
+                               return_value="C:/custom/prefix/claude.cmd"):
+            got = self.runner._find_claude()
+        self.assertTrue(
+            got.lower().endswith(".exe"),
+            msg=(
+                "When shutil.which returns claude.cmd with a sibling "
+                "claude.exe, _find_claude must return the .exe to "
+                f"avoid the cmd-wrapper bug. Got: {got!r}"
+            ),
+        )
+
+    def test_win32_returns_cmd_only_if_no_exe_anywhere(self):
+        """Final fallback — if nothing else is available the .cmd is
+        better than returning None, but every preceding step must
+        have failed first. This pins that the function does not
+        crash or return None when only the .cmd exists."""
+        path_exists_map = {
+            "C:/x/claude.cmd": True,
+            # No .exe anywhere.
+        }
+
+        def fake_exists(self):
+            return path_exists_map.get(str(self).replace("\\", "/"), False)
+
+        with mock.patch.object(self.runner.sys, "platform", "win32"), \
+             mock.patch.dict(self.runner.os.environ, {"APPDATA": "C:/missing"}), \
+             mock.patch.object(Path, "exists", fake_exists), \
+             mock.patch.object(self.runner.shutil, "which",
+                               return_value="C:/x/claude.cmd"):
+            got = self.runner._find_claude()
+        # The .cmd is the last resort — the function should not
+        # return None or crash, and tests above already pin that
+        # .exe is preferred when available.
+        self.assertIsNotNone(got)
+        self.assertTrue(got.lower().endswith(".cmd"))
 
 
 if __name__ == "__main__":

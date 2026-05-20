@@ -117,12 +117,20 @@ def _find_claude():
             if sibling_exe.exists():
                 return str(sibling_exe)
         return claude
-    # Windows fallback paths
+    # Last-resort fallback for non-standard installs (custom npm
+    # prefix, scoop/winget/choco, etc.) where neither the win32
+    # hardcoded path above nor shutil.which resolved anything. Prefer
+    # .exe siblings if present — returning a raw .cmd here
+    # resurrects the original #9574 multi-line-prompt bug.
     for candidate in [
         Path(os.environ.get("APPDATA", "")) / "npm" / "claude.cmd",
         Path(os.environ.get("APPDATA", "")) / "npm" / "claude",
     ]:
         if candidate.exists():
+            if candidate.suffix.lower() == ".cmd":
+                exe_alt = candidate.with_suffix(".exe")
+                if exe_alt.exists():
+                    return str(exe_alt)
             return str(candidate)
     return None
 
@@ -306,7 +314,8 @@ If you cannot find a question's answer in the listed files, write `NOT FOUND IN 
         # placeholder file. Callers (CI, skill verification) must see
         # the regression if it reappears.
         print(
-            f"ERROR: test agent returned empty content — runner exiting 1.",
+            f"ERROR: test agent returned empty content "
+            f"(rc={test_proc.returncode}) — runner exiting 1.",
             file=sys.stderr,
         )
         print(
@@ -364,7 +373,8 @@ The runner parses your reply directly as JSON.
 
     if not results_text.strip():
         print(
-            f"ERROR: eval agent returned empty content — runner exiting 1.",
+            f"ERROR: eval agent returned empty content "
+            f"(rc={eval_proc.returncode}) — runner exiting 1.",
             file=sys.stderr,
         )
         print(
