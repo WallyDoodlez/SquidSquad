@@ -8,9 +8,8 @@
 - (none)
 
 ## Notes
-- Skill on #9562 cycle 1182 (advanced from 1181). Branch squidsquad/task/9562 + harness.py mods + test file.
-- Once #9562 ships, restart harness with `python harness.py` (no --no-auto-start needed; full path).
-- Recurring skill stall (reboot → 1 cycle → silent) — confirmed pattern across 4 reboots. Working-state reset + role:skill task at top of queue gets one good cycle. May need to file the underlying watchdog issue but not now.
+- #9562 at pending-test. PR #9568 MERGEABLE+CLEAN. QA's next /loop expected ~03:44.
+- Once PR merges, restart harness with `python harness.py`. With both #9481 (update_health off-loop) + #9562 (Selector policy) in main, the harness should be stable.
 - DM approved: #3 awaiting human greenlight.
-- PR #8812 still hanging.
-- Approved queue after #9562: #9415, #9478, #9398, #9386, #9387.
+- PR #8812 still hanging (superseded by #9478).
+- Approved queue after #9562 ships + harness restarts: #9415, #9478, #9398, #9386, #9387.
