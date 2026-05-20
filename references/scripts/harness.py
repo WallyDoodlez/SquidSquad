@@ -660,17 +660,39 @@ class EventLifecycleManager:
                 pass  # Best-effort — don't crash harness on persist failure
 
     def load(self):
-        """Restore event state from disk on harness restart. Idempotent."""
-        if self._loaded:
-            return
-        if not EVENT_STATE_FILE.exists():
+        """Restore event state from disk on harness restart. Idempotent.
+
+        Thread-safety (#9357): the ``_loaded`` check-and-set is wrapped
+        in ``self._lock`` so concurrent callers cannot both pass the
+        idempotency guard and double-load the event stream. Once a
+        thread claims the load (sets ``_loaded=True``), any concurrent
+        caller observes True and returns immediately — matching the
+        existing semantics where any prior load attempt (including
+        missing-file or parse-error fast paths) marks the manager as
+        loaded so the next call is a silent no-op.
+
+        Today ``load()`` is only called from ``_deferred_init`` on the
+        lifespan thread, but the guard is the only defense against a
+        future refactor that fans the call out across multiple threads
+        (which would otherwise re-append events into ``EventStream``
+        and inflate ``_total_emitted_count`` introduced in #9331).
+        """
+        # Claim the load atomically. Mark _loaded BEFORE doing any work
+        # so a concurrent caller can't slip in between the check and the
+        # state mutations below. If we crash mid-load, the existing
+        # fast-path semantics (set _loaded=True on missing file or parse
+        # error → next call returns silently) are preserved.
+        with self._lock:
+            if self._loaded:
+                return
             self._loaded = True
+
+        if not EVENT_STATE_FILE.exists():
             return
         try:
             raw = EVENT_STATE_FILE.read_text(encoding="utf-8")
             data = json.loads(raw)
         except (json.JSONDecodeError, OSError):
-            self._loaded = True
             return
 
         # Restore in-flight/dispatch state under lock, then load events outside
@@ -690,7 +712,6 @@ class EventLifecycleManager:
         # Append events outside self._lock (acquires EventStream._lock)
         for event in events_to_load:
             self._stream.append(event)
-        self._loaded = True
 
     def timeout_scan(self):
         """Check for overdue in-flight events and escalate (#7630 2-3).
