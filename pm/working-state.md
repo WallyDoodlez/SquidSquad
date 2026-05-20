@@ -8,9 +8,9 @@
 - (none)
 
 ## Notes
-- Harness ~135min uptime. No errors. cycle_pre cold-probe false positives unchanged.
-- Skill /loop stall still active — separate concern, watchdog task viable in next session.
-- Approved queue: #9415, #9478, #9398, #9386, #9387.
+- Harness reachable, 165+ min uptime, stable.
+- Skill /loop stall continues but no skill work pending — not blocking.
+- Approved queue: #9415, #9478, #9398, #9386, #9387 (all role:skill, low/medium pri).
 - DM approved: #3 awaiting human greenlight.
 - PR #8812 hanging.
-- Context 54%.
+- Context 55%.
