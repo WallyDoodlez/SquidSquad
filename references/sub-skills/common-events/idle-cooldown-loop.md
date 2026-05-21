@@ -41,6 +41,16 @@ Three fields, three values:
 - **An event arrives during an in-flight scan** → finish the scan first (atomicity rule). Process the event when the scan completes.
 - **Crash mid-scan** → on boot, working-state shows `Status: running`. Skip forge verification for the scan, restart it from scratch. Scans are idempotent. After the restarted scan completes, run `work_queue()` (step 4a above) before re-entering the cool-down loop — a task may have arrived during the outage.
 
+#### How Monitor Buffering Interacts With Scans (#9743)
+
+The atomicity rule above is enforced **by the Claude Code runtime**, not by anything in your sub-skill. Spell this out so the failure modes are unsurprising:
+
+- While you are mid-scan (running a tool call), the persistent Monitor's stdout — `event_poll.py`'s JSON lines — is **buffered** by the Claude Code runtime. You will not see those lines until the tool call returns and the next turn begins. This is what makes "finish the scan first" possible without you needing to poll Monitor mid-tool.
+- The buffered lines arrive **in order** on the next turn. Process them in arrival order; do not re-order based on payload timestamp. Per-event ordering is the contract event_poll.py + the Monitor pipeline guarantee.
+- `event_poll.py` advances its on-disk cursor as it writes each line to stdout — the cursor is past the line **before** you have seen it. This is intentional: the cursor tracks "delivered to the agent's transport", not "processed by the agent".
+- **Crash window**: if the agent crashes between event_poll.py advancing the cursor and the agent processing the buffered line, that line is lost from the event stream — the cursor has moved past it on disk. This is **acceptable** because step 4a (Re-check the queue) runs `work_queue()` after every scan completion and after every crash-recovery restart, and `work_queue()` is a fresh forge-read that absorbs any tracker state the lost event would have communicated (per [[forge-read-pattern]] — the forge is authoritative; events are hints). The same forge-read also absorbs anything that happened during the outage window.
+- **You do NOT try to read the cursor back, replay missed events, or rebuild from a buffered-but-unprocessed line.** The forge-read pattern is the recovery mechanism. Designing a sub-skill that tries to recover events out of the on-disk cursor would violate [[forge-read-pattern]].
+
 ### Cool-Down Configuration
 
 `config.md` carries the default:
