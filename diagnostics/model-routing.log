@@ -1,0 +1,865 @@
+{"timestamp": 1777354193.5734253, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777354193.5734253, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777354193.5734253, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777365167.487095, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777365167.487095, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777365167.487095, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777365176.6409357, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777365176.6409357, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777365176.6409357, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777374190.9926195, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777374190.9926195, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777374190.9926195, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777382662.73983, "task_type": "research", "task_id": "TEST-001", "model": "gpt-5.2", "provider": "openai", "action": "success", "response_length": 8313, "elapsed_seconds": 49.3}
+{"timestamp": 1777383025.5282652, "task_type": "research", "task_id": "DEBUG-002", "model": "gpt-5.2", "provider": "openai", "action": "success", "response_length": 2678, "elapsed_seconds": 28.9}
+{"timestamp": 1777383345.8590796, "task_type": "research", "task_id": "TEST-DS", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 3667, "elapsed_seconds": 58.0}
+<<<<<<< HEAD
+{"timestamp": 1777768424.0610404, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777768424.0620759, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777768424.0636852, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777768477.2970507, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777768477.29859, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777768477.2991028, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+=======
+{"timestamp": 1777409739.9332838, "task_type": "discussion-prep", "task_id": "FEAT-PM-3465", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777409743.7901251, "task_type": "discussion-prep", "task_id": "FEAT-PM-3465", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777409748.214607, "task_type": "discussion-prep", "task_id": "FEAT-PM-3465", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777409753.2344375, "task_type": "discussion-prep", "task_id": "FEAT-PM-3465", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777409758.3533227, "task_type": "discussion-prep", "task_id": "FEAT-PM-3465", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777412095.918764, "task_type": "test-plan", "task_id": "FEAT-PM-3465", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669428.0125995, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669428.0125995, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669428.01557, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669506.2016482, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669506.2016482, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669506.2016482, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669686.5214658, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669686.5214658, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669686.5214658, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669920.9774404, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669920.9774404, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669920.992622, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669928.877423, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669928.877423, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669928.877423, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669966.4310052, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669966.4310052, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669966.4310052, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669985.7145522, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669985.7145522, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777669985.7145522, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777670020.747478, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777670020.747478, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777670020.747478, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777670070.3425663, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777670070.3425663, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777670070.3425663, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777671236.5276363, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777671236.5276363, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777671236.5276363, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777673302.8383222, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777673302.8383222, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777673302.8383222, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777673912.1746776, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777673912.1746776, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777673912.1766825, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777674257.0410266, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777674257.0410266, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777674257.0410266, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777674802.3714619, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777674802.3714619, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777674802.3714619, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777675302.039447, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777675302.0553417, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777675302.056347, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777676598.5126684, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777676598.5126684, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777676598.5182335, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777676662.3987782, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777676662.399819, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777676662.4009373, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777678402.070033, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777678402.070033, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777678402.070033, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777678461.6843953, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777678461.6843953, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777678461.6843953, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777678549.1161304, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777678549.1161304, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777678549.1161304, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777680338.3504572, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777680338.3504572, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777680338.3504572, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777682036.589305, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777682036.589305, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777682036.589305, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777682077.6838667, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777682077.6838667, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777682077.6838667, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777683799.1558206, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777683799.1558206, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777683799.157826, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777689272.3477318, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777689272.3477318, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777689272.352357, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777690999.3460915, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777690999.3460915, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777690999.3460915, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777691060.6269302, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777691060.6408138, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777691060.6408138, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777736665.766508, "task_type": "research", "task_id": "FEAT-PM-4966", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 19726, "elapsed_seconds": 364.3}
+{"timestamp": 1777739805.9191425, "task_type": "research", "task_id": "FEAT-PM-4966-SENTINEL", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 20341, "elapsed_seconds": 321.5}
+{"timestamp": 1777747344.5259633, "task_type": "research", "task_id": "AUDIT-PR-FLOW", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 14567, "elapsed_seconds": 460.3}
+{"timestamp": 1777758383.6775312, "task_type": "research", "task_id": "FEAT-PM-5040", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 14422, "elapsed_seconds": 323.9}
+{"timestamp": 1777758866.544741, "task_type": "test-plan", "task_id": "FEAT-PM-5040", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1777764746.842885, "task_type": "research", "task_id": "AUDIT-4966-PRD", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 17027, "elapsed_seconds": 411.5}
+{"timestamp": 1777873636.1345232, "task_type": "research", "task_id": "BRANCH-WORKFLOW-AUDIT", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 14386, "elapsed_seconds": 258.8}
+{"timestamp": 1777874990.9400535, "task_type": "research", "task_id": "GITATTRIBUTES-MERGE-STRATEGY", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 11149, "elapsed_seconds": 370.5}
+{"timestamp": 1777875466.598916, "task_type": "research", "task_id": "GITATTR-AUDIT-2-OURS-CONFIG", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 12620, "elapsed_seconds": 291.5}
+{"timestamp": 1777875469.5230923, "task_type": "research", "task_id": "GITATTR-AUDIT-1-UNION-MERGE", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 13864, "elapsed_seconds": 294.4}
+{"timestamp": 1777875583.2366965, "task_type": "research", "task_id": "GITATTR-AUDIT-3-GITIGNORE", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 9309, "elapsed_seconds": 408.1}
+<<<<<<< HEAD
+>>>>>>> da2a4659cf5602b5fb5fbda911f92f9c3d3c9ea1
+=======
+{"timestamp": 1777917538.0547428, "task_type": "research", "task_id": "PHASE2-IMPACT-REVIEW", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 15489, "elapsed_seconds": 310.6}
+<<<<<<< HEAD
+>>>>>>> 77dc1c259c1926b34742de481ee091fea841e1dd
+=======
+{"timestamp": 1777927596.712237, "task_type": "research", "task_id": "PHASE2-AGENT-TRANSITION", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 33705, "elapsed_seconds": 359.4}
+<<<<<<< HEAD
+>>>>>>> a54bf8a891d9482eb5c0c2a8ff6655ff0b045d5e
+=======
+{"timestamp": 1777929600.7129986, "task_type": "research", "task_id": "FEAT-PM-5622", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 22666, "elapsed_seconds": 326.3}
+<<<<<<< HEAD
+>>>>>>> 8405ec4fa828d02d4547c8b498267f61a4e4fedd
+=======
+{"timestamp": 1778030810.7879794, "task_type": "research", "task_id": "FEAT-PM-5622", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 23153, "elapsed_seconds": 362.3}
+<<<<<<< HEAD
+>>>>>>> c7caf13e8e8dc9f7497551ad6808f9d1668f5f9c
+=======
+{"timestamp": 1778033047.8178, "task_type": "test-plan", "task_id": "FEAT-PM-5622", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778033062.580476, "task_type": "test-plan", "task_id": "FEAT-PM-5622", "model": "claude", "action": "delegate-to-agent-tool"}
+<<<<<<< HEAD
+>>>>>>> ff69e3710cd716772419cc9cb65896c8a5dc2022
+=======
+{"timestamp": 1778073700.9227536, "task_type": "research", "task_id": "FEAT-PM-5856", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 10499, "elapsed_seconds": 239.7}
+<<<<<<< HEAD
+>>>>>>> c35c21c13b901706e8169381a7c6a9695fa4fe77
+=======
+{"timestamp": 1778100797.410112, "task_type": "research", "task_id": "FEAT-PM-5888", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 12909, "elapsed_seconds": 296.0}
+<<<<<<< HEAD
+>>>>>>> 0580c137de1e4f883fbdd218c06924963dd28f63
+=======
+{"timestamp": 1778103756.59653, "task_type": "research", "task_id": "FEAT-PM-5888-AUDIT", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 17866, "elapsed_seconds": 304.4}
+<<<<<<< HEAD
+>>>>>>> 8b4a34ce73c33475aa5a9993f4e940111672e8d5
+=======
+{"timestamp": 1778105614.08411, "task_type": "research", "task_id": "FEAT-PM-5888-AUDIT2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 18181, "elapsed_seconds": 287.4}
+<<<<<<< HEAD
+>>>>>>> 7b853a1f6dbdf308d1fdb94052563d4fdf3e1eb6
+=======
+{"timestamp": 1778107402.763833, "task_type": "research", "task_id": "FEAT-PM-5888-AUDIT3", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 22774, "elapsed_seconds": 430.0}
+<<<<<<< HEAD
+>>>>>>> d99610ba9809717c979078604f32f3ea551aaafe
+=======
+{"timestamp": 1778116216.855628, "task_type": "research", "task_id": "FEAT-PM-5868", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 20697, "elapsed_seconds": 328.5}
+{"timestamp": 1778117983.530309, "task_type": "discussion-prep", "task_id": "FEAT-PM-5868", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778123922.970585, "task_type": "research", "task_id": "FEAT-PM-5868-FEASIBILITY", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 21147, "elapsed_seconds": 350.7}
+<<<<<<< HEAD
+>>>>>>> 6242b9290c78b6e6efd1d8a7787559de0bcf6d00
+=======
+{"timestamp": 1778132997.635157, "task_type": "research", "task_id": "FEAT-PM-5613-MONITOR", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 21511, "elapsed_seconds": 330.9}
+<<<<<<< HEAD
+>>>>>>> 7d561075bc1cb95c2c0b7827d800a31dffa6a307
+=======
+{"timestamp": 1778190645.633838, "task_type": "research", "task_id": "PR-5994-CODE-REVIEW", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 20962, "elapsed_seconds": 417.3}
+{"timestamp": 1778190829.244077, "task_type": "research", "task_id": "FEAT-PM-5932", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 16555, "elapsed_seconds": 322.5}
+<<<<<<< HEAD
+>>>>>>> ef0dbec2690e26231a3a130b44476243ea888282
+=======
+{"timestamp": 1778246359.731334, "task_type": "research", "task_id": "FEAT-PM-6055", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 16573, "elapsed_seconds": 297.2}
+<<<<<<< HEAD
+>>>>>>> a5d5c4506a88e92119370b7d15dba4edace14f95
+=======
+{"timestamp": 1778275804.8026972, "task_type": "research", "task_id": "FEAT-PM-6126", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 17370, "elapsed_seconds": 320.6}
+{"timestamp": 1778279561.1899607, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778279561.1899607, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778279561.1899607, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778279618.339457, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778279618.339457, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778279618.339457, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778279631.7178767, "task_type": "code-review", "task_id": "#6138", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778281352.0434697, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778281352.0434697, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778281352.056391, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778281753.1375067, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778281753.1375067, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778281753.140023, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778281763.6487951, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778281763.6487951, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778281763.6487951, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778281822.185832, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778281822.185832, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778281822.185832, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778281834.2402725, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778281834.2402725, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778281834.2402725, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778281888.9638813, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778281888.9638813, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778281888.9638813, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778282020.0884254, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778282020.0884254, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778282020.0884254, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778282054.0531185, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778282054.0531185, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778282054.0531185, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778282060.138542, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 5.3}
+{"timestamp": 1778282064.225983, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 3.3}
+{"timestamp": 1778282068.5705178, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 3.6}
+{"timestamp": 1778282071.991266, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.6}
+{"timestamp": 1778282075.1789079, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.4}
+{"timestamp": 1778282078.2849724, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.3}
+{"timestamp": 1778282081.6674237, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.6}
+{"timestamp": 1778282084.7328408, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.3}
+{"timestamp": 1778282087.9923253, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.5}
+{"timestamp": 1778282091.585381, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.8}
+{"timestamp": 1778282094.6560857, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.3}
+{"timestamp": 1778282097.4721649, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.0}
+{"timestamp": 1778282100.5544446, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.3}
+{"timestamp": 1778282103.5545907, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.2}
+{"timestamp": 1778282106.6167893, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.3}
+{"timestamp": 1778282109.6856437, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.3}
+{"timestamp": 1778282112.6093733, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.2}
+{"timestamp": 1778282115.820517, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.5}
+{"timestamp": 1778282284.9847548, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778282284.9847548, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778282284.9847548, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778282288.159225, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.4}
+{"timestamp": 1778282291.4810061, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.5}
+{"timestamp": 1778282294.7481368, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.4}
+{"timestamp": 1778282297.8403747, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.3}
+{"timestamp": 1778282300.9520981, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.3}
+{"timestamp": 1778282304.075559, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.4}
+{"timestamp": 1778282307.1933184, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.3}
+{"timestamp": 1778282310.4186015, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.5}
+{"timestamp": 1778282313.2243733, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.1}
+{"timestamp": 1778282316.3407867, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.4}
+{"timestamp": 1778282319.4898741, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.4}
+{"timestamp": 1778282322.2715394, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.0}
+{"timestamp": 1778282325.4656491, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.4}
+{"timestamp": 1778282328.768608, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.5}
+{"timestamp": 1778282331.855264, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.3}
+{"timestamp": 1778282335.0596843, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.4}
+{"timestamp": 1778282338.191995, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.4}
+{"timestamp": 1778282341.2747824, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.3}
+{"timestamp": 1778282527.2778752, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778282527.2778752, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778282527.2778752, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778282530.5667212, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.5}
+{"timestamp": 1778282533.7084868, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.4}
+{"timestamp": 1778282536.677053, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.2}
+{"timestamp": 1778282539.7521927, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.3}
+{"timestamp": 1778282542.8457904, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.3}
+{"timestamp": 1778282545.9397645, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.3}
+{"timestamp": 1778282549.0495734, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.3}
+{"timestamp": 1778282551.9212308, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.1}
+{"timestamp": 1778282555.3499458, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.6}
+{"timestamp": 1778282558.4609947, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.3}
+{"timestamp": 1778282561.690183, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.4}
+{"timestamp": 1778282564.763838, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.3}
+{"timestamp": 1778282568.00296, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.4}
+{"timestamp": 1778282571.0106647, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.2}
+{"timestamp": 1778282574.205097, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.4}
+{"timestamp": 1778282577.1796038, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.1}
+{"timestamp": 1778282580.315761, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.4}
+{"timestamp": 1778282583.4557214, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.4}
+{"timestamp": 1778282659.7100701, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778282659.7100701, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778282659.7100701, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778283265.3641021, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778283265.3641021, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778283265.3641021, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778283513.1369853, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778283513.1369853, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778283513.1369853, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778283732.632091, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778283732.632091, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778283732.632091, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778285039.6548092, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778285039.6548092, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778285039.6548092, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778285043.5110197, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778285043.5110197, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778285043.5110197, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778285161.2826133, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778285161.2826133, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778285161.2874234, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778286726.1677334, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778286726.1677334, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778286726.1834788, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778286829.4776833, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778286829.4776833, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778286829.481125, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778287008.313748, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778287008.313748, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778287008.313748, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778288545.8337016, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778288545.8337016, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778288545.8337016, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778290157.342978, "task_type": "research", "task_id": "FEAT-PM-6261", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 16862, "elapsed_seconds": 331.5}
+{"timestamp": 1778292210.5575676, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778292210.5575676, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778292210.5575676, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778293961.3016646, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778293961.3016646, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778293961.3016646, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778295094.453561, "task_type": "research", "task_id": "TEST-PING", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 1103, "elapsed_seconds": 16.1}
+{"timestamp": 1778300504.970803, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778300504.9718027, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778300504.9728026, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778300896.0421455, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778300896.0421455, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778300896.0441518, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778301463.8528543, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778301463.8528543, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778301463.8528543, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778301538.7506363, "task_type": "code-review", "task_id": "#6287", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778301623.6991496, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778301623.6991496, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778301623.6991496, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778301697.640258, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778301697.640258, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778301697.640258, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778303073.4556806, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778303073.4556806, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778303073.4556806, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778303106.5934455, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778303106.5934455, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778303106.5981948, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778303780.1482277, "task_type": "research", "task_id": "REVIEW-6261-TESTPLAN", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 16052, "elapsed_seconds": 525.1}
+{"timestamp": 1778304874.0263638, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778304874.0263638, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778304874.0263638, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778306619.1291816, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778306619.1291816, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778306619.1291816, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778306651.0624957, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778306651.063537, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778306651.063537, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778306730.5384524, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778306730.5384524, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778306730.5384524, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778306800.8295395, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778306800.8295395, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778306800.8295395, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778310530.5340507, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778310530.5340507, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778310530.5340507, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778310633.4191568, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778310633.4191568, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778310633.4191568, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778311331.2680688, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778311331.2680688, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778311331.2680688, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778311482.1134722, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778311482.1134722, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778311482.1294317, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778312078.8044505, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778312078.8044505, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778312078.8044505, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778312147.123506, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778312147.123506, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778312147.123506, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778312208.5322309, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778312208.5322309, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778312208.5322309, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778312272.9757278, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778312272.9757278, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778312272.9757278, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778312794.365722, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778312794.365722, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778312794.365722, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778313079.5248811, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778313079.5248811, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778313079.5248811, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778313205.3240724, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778313205.3240724, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778313205.3240724, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778314366.840297, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778314366.8438244, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778314366.8438244, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778315957.5257015, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778315957.5362196, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778315957.5362196, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778317627.9940667, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778317627.9940667, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778317627.9940667, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778317887.3704722, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778317887.3704722, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778317887.3862302, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319253.091169, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319253.091169, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319253.091169, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319318.248645, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319318.248645, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319318.248645, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319351.3461993, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319351.3461993, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319351.3461993, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319385.890143, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319385.890143, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319385.890143, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319417.6847222, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319417.6847222, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319417.6847222, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319447.7150085, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319447.7150085, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319447.7150085, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319575.6312337, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319575.6312337, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319575.6312337, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319641.3331826, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319641.3331826, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319641.3331826, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319718.6877306, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319718.6877306, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778319718.6877306, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778321070.5800204, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778321070.5800204, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778321070.5800204, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778324688.254561, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778324688.254561, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778324688.2579799, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778324863.9097655, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778324863.9117687, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778324863.9117687, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778326427.195979, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778326427.195979, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778326427.195979, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778330074.361916, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778330074.361916, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778330074.361916, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778330143.7609274, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778330143.7619743, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778330143.7630239, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778330238.8125627, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778330238.8125627, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778330238.8125627, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778331835.2873588, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778331835.2873588, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778331835.2873588, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778333668.903693, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778333668.903693, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778333668.903693, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778335443.1130345, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778335443.1130345, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778335443.128807, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778337281.520008, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778337281.520008, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778337281.520008, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778339013.4349365, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778339013.4383945, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778339013.4383945, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778339057.052241, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778339057.052241, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778339057.052241, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778340872.4150138, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778340872.4150138, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778340872.4150138, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778340935.3638844, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778340935.3638844, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778340935.3638844, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778340998.098433, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778340998.098433, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778340998.098433, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778341226.7137792, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778341226.7137792, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778341226.7137792, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778341232.2745082, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 4.8}
+{"timestamp": 1778341236.5039537, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 3.5}
+{"timestamp": 1778341239.8699274, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.6}
+{"timestamp": 1778342714.73734, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778342714.73734, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778342714.73734, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778344414.6109538, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778344414.6109538, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778344414.6109538, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778360200.6980898, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778360200.7000968, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778360200.7000968, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778360836.6266751, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778360836.6266751, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778360836.6266751, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778362504.5787728, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778362504.5787728, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778362504.5787728, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778364212.7634826, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778364212.7634826, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778364212.7634826, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+<<<<<<< HEAD
+>>>>>>> 951bc9d089904c86a263bb77391fd340a2af5b2a
+{"timestamp": 1778450605.5049613, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450605.5049613, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450605.5049613, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450608.2358565, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450608.2358565, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450608.2358565, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450709.2595096, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450709.2595096, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450709.2595096, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450729.4397612, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450729.4397612, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450729.4397612, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450741.6545808, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450741.6545808, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450741.6695418, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450787.3649251, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450787.3669326, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450787.3669326, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450796.9555244, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450796.9570906, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450796.9586663, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450826.51535, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450826.5313451, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450826.5318546, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450885.7314744, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450885.7314744, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450885.7314744, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450918.5289354, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450918.5289354, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450918.5383475, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450981.9246776, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450981.9257364, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778450981.9268064, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451007.181028, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451007.181028, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451007.181028, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451088.8248498, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451088.8248498, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451088.8248498, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451092.4128249, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451092.4128249, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451092.4128249, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451180.1484158, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451180.1484158, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451180.1484158, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451183.5935109, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451183.6016028, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451183.6026068, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451311.0179791, "task_type": "code-review", "task_id": "#6848", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451488.1409006, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451488.1409006, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451488.1409006, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451660.5559402, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451660.5559402, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451660.5559402, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451746.2517939, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451746.2517939, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451746.2517939, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451832.4868784, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451832.4868784, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778451832.4891732, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454234.1545885, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454234.1545885, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454234.1545885, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454287.3945715, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454287.4020638, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454287.4020638, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454335.6016202, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454335.6026711, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454335.6031935, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454421.0078878, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454421.0089283, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454421.00945, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454511.8570163, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454511.8580544, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454511.8585725, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454607.0300033, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454607.0300033, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454607.0300033, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454693.5292037, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454693.5292037, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454693.5292037, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454789.3301556, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454789.3301556, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454789.3301556, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454875.5068052, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454875.5068052, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454875.518826, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454962.5788407, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454962.5788407, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778454962.5788407, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778456104.3120596, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778456104.3120596, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778456104.3120596, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778457954.6681628, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778457954.6681628, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778457954.6681628, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778459645.4796982, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778459645.4796982, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778459645.4796982, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778459738.7857254, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778459738.7857254, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778459738.7857254, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778459831.2575624, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778459831.2575624, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778459831.2575624, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778459924.2173252, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778459924.2173252, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778459924.2173252, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778460017.5502062, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778460017.5502062, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778460017.5502062, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778460106.4730287, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778460106.4730287, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778460106.4730287, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778460197.2722583, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778460197.2722583, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778460197.2722583, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778460291.77099, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778460291.77099, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778460291.77099, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778461625.1144125, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 5.7}
+{"timestamp": 1778461629.5722017, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 3.7}
+{"timestamp": 1778461632.3635488, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.1}
+{"timestamp": 1778461635.5562205, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.5}
+{"timestamp": 1778461638.2405467, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 1.9}
+{"timestamp": 1778461641.52814, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.6}
+{"timestamp": 1778461644.0415037, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 1.8}
+{"timestamp": 1778461646.6417375, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 1.9}
+{"timestamp": 1778461649.3783557, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.0}
+{"timestamp": 1778461651.9824367, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 1.9}
+{"timestamp": 1778461654.54178, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 1.8}
+{"timestamp": 1778461657.0280297, "task_type": "test-plan", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 1.8}
+{"timestamp": 1778461659.6300416, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 1.9}
+{"timestamp": 1778461662.2140129, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 1.8}
+{"timestamp": 1778461664.807131, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 1.9}
+{"timestamp": 1778461667.4010038, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 1.9}
+{"timestamp": 1778461670.063928, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.0}
+{"timestamp": 1778461672.586277, "task_type": "discussion-prep", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 1.8}
+{"timestamp": 1778461703.3403814, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778461703.3403814, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778461703.3403814, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778461757.8041792, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778461757.8041792, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778461757.8041792, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778461811.185132, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778461811.185132, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778461811.185132, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778461863.6836586, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778461863.6836586, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778461863.6836586, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778461916.1271372, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778461916.1271372, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778461916.1271372, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778461966.737503, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778461966.737503, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778461966.7415519, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462026.2181852, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462026.2192242, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462026.220783, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462081.1833782, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462081.1833782, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462081.1833782, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462139.0861847, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462139.0861847, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462139.0861847, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462195.2905698, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462195.2905698, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462195.2905698, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462246.5247152, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462246.5262315, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462246.5262315, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462308.6272082, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462308.6272082, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462308.6272082, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462362.5824518, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462362.5824518, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462362.5824518, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462421.8748264, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462421.8748264, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778462421.8798373, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463296.7337239, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463296.7357311, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463296.7357311, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463334.996401, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463334.996401, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463334.996401, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463408.1513824, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463408.1513824, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463408.1513824, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463506.3724332, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463506.3724332, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463506.3724332, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463608.3440537, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463608.3440537, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463608.3440537, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463708.3465557, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463708.3465557, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463708.3465557, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463804.4607763, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463804.4699087, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778463804.4699087, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778464039.5112188, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778464039.5112188, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778464039.5112188, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778464045.170278, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 4.8}
+{"timestamp": 1778464048.3866112, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.4}
+{"timestamp": 1778464051.7494602, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.6}
+{"timestamp": 1778464054.9825199, "task_type": "research", "task_id": "LIVE-TEST", "model": "gpt-5.2", "provider": "openai", "action": "quota-exceeded", "error": "OpenAI API error: Error code: 429 - {'error': {'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.', 'type': 'insufficient_quota', 'param': None, 'code': 'insufficient_quota'}}", "elapsed_seconds": 2.4}
+{"timestamp": 1778465149.2939548, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465149.2939548, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465149.2939548, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465238.3289132, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465238.3289132, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465238.3289132, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465327.137802, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465327.137802, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465327.152509, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465415.567813, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465415.5683296, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465415.5693715, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465504.6930525, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465504.6930525, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465504.6930525, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465591.7540636, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465591.7540636, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465591.7540636, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465680.8245175, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465680.8245175, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465680.8245175, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465772.2907019, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465772.2907019, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465772.2907019, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465864.3159046, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465864.3159046, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778465864.3159046, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+=======
+{"timestamp": 1778477027.5786264, "task_type": "research", "task_id": "FEAT-PM-6581", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 11836, "elapsed_seconds": 329.8}
+{"timestamp": 1778477241.9277053, "task_type": "research", "task_id": "FEAT-PM-6581", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 13071, "elapsed_seconds": 334.6}
+{"timestamp": 1778477895.0960383, "task_type": "test-plan", "task_id": "FEAT-PM-6581", "model": "claude", "action": "delegate-to-agent-tool"}
+<<<<<<< HEAD
+>>>>>>> a37cd507bf13e7c27a075b1b50d64709511ecc83
+=======
+{"timestamp": 1778626869.6751907, "task_type": "research", "task_id": "FEAT-PM-7630", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 19583, "elapsed_seconds": 326.8}
+<<<<<<< HEAD
+>>>>>>> b67764ad18a3a957a503b5604449accbd545a6f3
+=======
+{"timestamp": 1778633037.9361434, "task_type": "discussion-prep", "task_id": "FEAT-PM-7630", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778633201.8110604, "task_type": "discussion-prep", "task_id": "FEAT-PM-7630", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778633209.1038096, "task_type": "discussion-prep", "task_id": "FEAT-PM-7630", "model": "claude", "action": "delegate-to-agent-tool"}
+<<<<<<< HEAD
+>>>>>>> 70d8a36774b2ddd3634b6c730a46663dc59ecf30
+=======
+{"timestamp": 1778636296.7487411, "task_type": "research", "task_id": "FEAT-PM-7630-GAP-REVIEW", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 36055, "elapsed_seconds": 644.2}
+{"timestamp": 1778637379.0546298, "task_type": "research", "task_id": "FEAT-PM-7630-v2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 35217, "elapsed_seconds": 582.7}
+{"timestamp": 1778637442.2383292, "task_type": "test-plan", "task_id": "FEAT-PM-7630", "model": "claude", "action": "delegate-to-agent-tool"}
+<<<<<<< HEAD
+>>>>>>> d272f2cbff1302ad8d4e456a5a2f4928b9b52431
+=======
+{"timestamp": 1778638691.6197712, "task_type": "research", "task_id": "FEAT-PM-7630-TEST-PLAN-DS", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 76823, "elapsed_seconds": 919.0}
+{"timestamp": 1778638742.4749267, "task_type": "research", "task_id": "FEAT-PM-7690", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 21780, "elapsed_seconds": 399.2}
+<<<<<<< HEAD
+>>>>>>> 54f190c63f9309d77665254ee2b1ec8f3e81ebeb
+=======
+{"timestamp": 1778640117.5530078, "task_type": "research", "task_id": "FEAT-PM-7630-PRD", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 58988, "elapsed_seconds": 643.9}
+<<<<<<< HEAD
+>>>>>>> b7142eb5aa832854a2aa9410e5eddfb1c912688d
+=======
+{"timestamp": 1778643406.3253448, "task_type": "research", "task_id": "FEAT-PM-7630-L1L4-REACTIONS", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 41310, "elapsed_seconds": 560.7}
+<<<<<<< HEAD
+>>>>>>> 0ac5e9154afe10c1d59897b04bf07d74db33486a
+=======
+{"timestamp": 1778678384.928569, "task_type": "research", "task_id": "FEAT-PM-7630-PRD-AUDIT", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 20845, "elapsed_seconds": 369.3}
+{"timestamp": 1778678976.669885, "task_type": "research", "task_id": "FEAT-PM-7630-PRD-AUDIT-v2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 19603, "elapsed_seconds": 423.6}
+<<<<<<< HEAD
+>>>>>>> 423904081a35d2037df13a6c96d78bcad8ad1c8d
+=======
+{"timestamp": 1778708497.6095226, "task_type": "research", "task_id": "FEAT-PM-7630-PRD-CONSISTENCY", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 29040, "elapsed_seconds": 604.8}
+<<<<<<< HEAD
+>>>>>>> a95a67ad2f4c136f49b2a51aae19a8e7c3b4ff75
+=======
+{"timestamp": 1778716516.7116923, "task_type": "research", "task_id": "FEAT-PM-7630-PRD-REWRITE", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 74678, "elapsed_seconds": 689.0}
+<<<<<<< HEAD
+>>>>>>> 46afc30edec0608fc589a6943f768a83d7e9ea63
+=======
+{"timestamp": 1778722489.6193962, "task_type": "test-plan", "task_id": "FEAT-PM-7630", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778722513.056315, "task_type": "test-plan", "task_id": "FEAT-PM-7630", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1778722523.6943727, "task_type": "test-plan", "task_id": "FEAT-PM-7630", "model": "claude", "action": "delegate-to-agent-tool"}
+<<<<<<< HEAD
+>>>>>>> 1a546ae1b4fa97e18f30798241359d24b799e1d2
+=======
+{"timestamp": 1778725836.015726, "task_type": "research", "task_id": "FEAT-PM-7630-PRD-AUDIT-v3", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 25689, "elapsed_seconds": 408.9}
+<<<<<<< HEAD
+>>>>>>> f34c1e4ba8eddf75e36fc57c1958dc58f34fa5e5
+=======
+{"timestamp": 1778735158.429583, "task_type": "research", "task_id": "FEAT-PM-7630-PRD-AUDIT-v4", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 30340, "elapsed_seconds": 483.6}
+{"timestamp": 1778735664.042757, "task_type": "research", "task_id": "FEAT-PM-7630-FINAL-AUDIT", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 23035, "elapsed_seconds": 436.0}
+<<<<<<< HEAD
+>>>>>>> d3c03c63444d88c8e4dde153ed3ee509fdb402a9
+=======
+{"timestamp": 1778761910.4745705, "task_type": "research", "task_id": "FEAT-PM-7630-FEASIBILITY", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 37810, "elapsed_seconds": 398.5}
+<<<<<<< HEAD
+>>>>>>> 6b16eafc8ab91d0f4599b7d359688e679fbdade1
+=======
+{"timestamp": 1778763685.422874, "task_type": "research", "task_id": "FEAT-PM-7630-CONSISTENCY-FINAL", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 28754, "elapsed_seconds": 469.6}
+{"timestamp": 1778765191.2654102, "task_type": "research", "task_id": "FEAT-PM-7630-FEASIBILITY-v2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 33255, "elapsed_seconds": 463.4}
+<<<<<<< HEAD
+>>>>>>> 09a3efa8bfc76ed07469beefadd432b5a2d31f34
+=======
+{"timestamp": 1779000510.0885148, "task_type": "code-review", "task_id": "PHASE5-CONTEXT-REVIEW", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1779000526.7517493, "task_type": "code-review", "task_id": "PHASE5-CONTEXT-REVIEW", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1779000538.014403, "task_type": "code-review", "task_id": "PHASE5-REVIEW", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1779000544.9816842, "task_type": "code-review", "task_id": "PHASE5-REVIEW", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1779001490.528068, "task_type": "code-review", "task_id": "PHASE5-CONTEXT-REVIEW", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 62723, "elapsed_seconds": 800.2}
+{"timestamp": 1779028172.6043887, "task_type": "code-review", "task_id": "PHASE5-CONTEXT-REVIEW-R2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 9933, "elapsed_seconds": 478.0}
+{"timestamp": 1779029339.8784523, "task_type": "code-review", "task_id": "PHASE5-CONTEXT-REVIEW-R3", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 3664, "elapsed_seconds": 99.6}
+{"timestamp": 1779029660.7035134, "task_type": "code-review", "task_id": "PHASE5-CONTEXT-REVIEW-R3", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 6700, "elapsed_seconds": 398.4}
+{"timestamp": 1779030916.1508603, "task_type": "code-review", "task_id": "TEST-PLAN-8704-REVIEW", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 8488, "elapsed_seconds": 209.5}
+{"timestamp": 1779031068.3074656, "task_type": "code-review", "task_id": "TEST-PLAN-8694-REVIEW", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 11008, "elapsed_seconds": 394.0}
+{"timestamp": 1779031124.7742841, "task_type": "code-review", "task_id": "TEST-PLAN-8695-REVIEW", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 6024, "elapsed_seconds": 475.9}
+{"timestamp": 1779031156.0676074, "task_type": "code-review", "task_id": "TEST-PLAN-8701-REVIEW", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 11566, "elapsed_seconds": 372.7}
+{"timestamp": 1779031156.204951, "task_type": "code-review", "task_id": "TEST-PLAN-8697-REVIEW", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 12570, "elapsed_seconds": 415.5}
+{"timestamp": 1779031310.9266477, "task_type": "code-review", "task_id": "TEST-PLAN-8700-REVIEW", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 17734, "elapsed_seconds": 614.6}
+{"timestamp": 1779033590.8136175, "task_type": "code-review", "task_id": "TEST-PLAN-8694-REVIEW-R2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 1770, "elapsed_seconds": 68.3}
+{"timestamp": 1779033641.472073, "task_type": "code-review", "task_id": "TEST-PLAN-8704-REVIEW-R2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 4188, "elapsed_seconds": 81.9}
+{"timestamp": 1779033667.401115, "task_type": "code-review", "task_id": "TEST-PLAN-8701-REVIEW-R2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 2117, "elapsed_seconds": 114.6}
+{"timestamp": 1779033675.6200328, "task_type": "code-review", "task_id": "TEST-PLAN-8695-REVIEW-R2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 4324, "elapsed_seconds": 146.2}
+{"timestamp": 1779033683.476906, "task_type": "code-review", "task_id": "TEST-PLAN-8697-REVIEW-R2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 2842, "elapsed_seconds": 144.6}
+{"timestamp": 1779033759.1637707, "task_type": "code-review", "task_id": "TEST-PLAN-8700-REVIEW-R2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 5105, "elapsed_seconds": 212.8}
+{"timestamp": 1779033902.5942929, "task_type": "code-review", "task_id": "TEST-PLAN-8700-REVIEW-R3", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 777, "elapsed_seconds": 51.0}
+{"timestamp": 1779042965.8492153, "task_type": "code-review", "task_id": "PHASE5-CONTEXT-REVIEW-R4", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1779043008.2789705, "task_type": "code-review", "task_id": "PHASE5-CONTEXT-REVIEW-R4", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1779043213.3168175, "task_type": "code-review", "task_id": "PHASE5-CONTEXT-REVIEW-R4", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 3852, "elapsed_seconds": 158.4}
+{"timestamp": 1779043372.6466076, "task_type": "code-review", "task_id": "PHASE5-CONTEXT-REVIEW-R5", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 988, "elapsed_seconds": 89.2}
+{"timestamp": 1779077215.248647, "task_type": "code-review", "task_id": "CONTEXT-4792-REVIEW-R1", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 7948, "elapsed_seconds": 576.4}
+{"timestamp": 1779077326.7279053, "task_type": "code-review", "task_id": "TEST-PLAN-4792-REVIEW-R1", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 15547, "elapsed_seconds": 619.0}
+{"timestamp": 1779078419.1408663, "task_type": "code-review", "task_id": "CONTEXT-4792-REVIEW-R2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 4709, "elapsed_seconds": 211.8}
+{"timestamp": 1779078713.9029222, "task_type": "code-review", "task_id": "TEST-PLAN-4792-REVIEW-R2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 5827, "elapsed_seconds": 498.6}
+{"timestamp": 1779079551.4110487, "task_type": "code-review", "task_id": "TEST-PLAN-4792-REVIEW-R3", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 6741, "elapsed_seconds": 550.2}
+{"timestamp": 1779079895.0951698, "task_type": "code-review", "task_id": "TEST-PLAN-4792-REVIEW-R4", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 3411, "elapsed_seconds": 260.3}
+{"timestamp": 1779080082.809467, "task_type": "code-review", "task_id": "TEST-PLAN-4792-REVIEW-R5", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 1132, "elapsed_seconds": 100.1}
+{"timestamp": 1779080203.632576, "task_type": "code-review", "task_id": "TEST-PLAN-4792-REVIEW-R5", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 1502, "elapsed_seconds": 239.7}
+{"timestamp": 1779112902.7170136, "task_type": "code-review", "task_id": "AUDIT-A-issue-body-alignment", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 4679, "elapsed_seconds": 281.1}
+{"timestamp": 1779112979.3431096, "task_type": "code-review", "task_id": "AUDIT-D-go-forward-readiness", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 12570, "elapsed_seconds": 322.2}
+{"timestamp": 1779113257.0449452, "task_type": "code-review", "task_id": "AUDIT-C-remediation-completeness", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 9124, "elapsed_seconds": 611.2}
+{"timestamp": 1779113302.392208, "task_type": "code-review", "task_id": "AUDIT-B-hidden-violations", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 3227, "elapsed_seconds": 668.2}
+{"timestamp": 1779125921.533236, "task_type": "code-review", "task_id": "8917", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 9656, "elapsed_seconds": 332.4}
+{"timestamp": 1779125958.256305, "task_type": "code-review", "task_id": "8950", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 7528, "elapsed_seconds": 369.1}
+{"timestamp": 1779126032.9167159, "task_type": "code-review", "task_id": "8916", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 9563, "elapsed_seconds": 443.8}
+{"timestamp": 1779126408.697935, "task_type": "code-review", "task_id": "8917-r2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 3017, "elapsed_seconds": 184.6}
+{"timestamp": 1779126461.4538248, "task_type": "code-review", "task_id": "8950-r2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 2858, "elapsed_seconds": 237.4}
+{"timestamp": 1779126502.8759532, "task_type": "code-review", "task_id": "8916-r2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 2084, "elapsed_seconds": 278.8}
+{"timestamp": 1779126661.9780495, "task_type": "code-review", "task_id": "8950-r3", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 2215, "elapsed_seconds": 112.4}
+<<<<<<< HEAD
+>>>>>>> 7786175b8c942a902eb45dd530023dd04b2814c1
+{"timestamp": 1779254652.4064736, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1779254652.4064736, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1779254652.4064736, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+=======
+{"timestamp": 1779338970.6402802, "task_type": "research", "task_id": "AUDIT-B-polling-mode-regression", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "api-error", "error": "OpenAI API error: Error code: 402 - {'error': {'message': 'Insufficient Balance', 'type': 'unknown_error', 'param': None, 'code': 'invalid_request_error'}}", "elapsed_seconds": 1.4}
+{"timestamp": 1779338970.9727566, "task_type": "research", "task_id": "AUDIT-A-events-architecture", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "api-error", "error": "OpenAI API error: Error code: 402 - {'error': {'message': 'Insufficient Balance', 'type': 'unknown_error', 'param': None, 'code': 'invalid_request_error'}}", "elapsed_seconds": 1.7}
+{"timestamp": 1779339522.5414474, "task_type": "research", "task_id": "AUDIT-A-events-architecture", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 19457, "elapsed_seconds": 401.5}
+{"timestamp": 1779339566.3388538, "task_type": "research", "task_id": "AUDIT-B-polling-mode-regression", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 15395, "elapsed_seconds": 445.3}
+>>>>>>> 3f43192d6c80da6598a7edf25533c2213a77b0a5
