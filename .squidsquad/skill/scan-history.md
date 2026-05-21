@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-21 19:11
+
+- **Files scanned**: references/scripts/reboot_agent.py, references/scripts/config.py
+- **Findings**: #9882 (config.py: module docstring missing alias/sync-agents/list-agents subcommands — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-19 08:04
 
 - **Files scanned**: references/scripts/event_poll.py, references/roles/{dev,dm,pm,qa}/includes-events.yml
