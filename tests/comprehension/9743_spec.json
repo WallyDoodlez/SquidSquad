@@ -1,0 +1,29 @@
+{
+  "issue": 9743,
+  "title": "Monitor buffering during in-flight scan — comprehension test agent describes the buffering / crash-window / forge-read recovery contract from the modified file alone",
+  "files": [
+    "references/sub-skills/common-events/idle-cooldown-loop.md"
+  ],
+  "questions": [
+    {
+      "id": "1",
+      "question": "Read references/sub-skills/common-events/idle-cooldown-loop.md. The atomicity rule says: 'if an event arrives during an in-flight scan, finish the scan first'. According to the doc, WHO actually enforces this rule and how does it work mechanically?",
+      "expected": "The Claude Code runtime enforces the atomicity rule, not anything in the sub-skill itself. Mechanically: while the agent is mid-scan (running a tool call), the persistent Monitor's stdout — event_poll.py's JSON lines — is buffered by the Claude Code runtime. The agent will not see those lines until the tool call returns and the next turn begins. This is what makes 'finish the scan first' possible without the agent needing to poll Monitor mid-tool."
+    },
+    {
+      "id": "2",
+      "question": "When event_poll.py emits a JSON line to stdout for a Monitor event, when does its on-disk cursor advance relative to that line, and why is that ordering intentional?",
+      "expected": "event_poll.py advances its on-disk cursor as it writes each line to stdout — the cursor is past the line before the agent has seen it. This is intentional: the cursor tracks 'delivered to the agent's transport', not 'processed by the agent'."
+    },
+    {
+      "id": "3",
+      "question": "Suppose the agent crashes between event_poll.py advancing the cursor and the agent processing the buffered line for that event. The line is lost. Why is this acceptable, and what mechanism handles recovery?",
+      "expected": "It is acceptable because step 4a (Re-check the queue) runs work_queue() after every scan completion and after every crash-recovery restart. work_queue() is a fresh forge-read that absorbs any tracker state the lost event would have communicated — per forge-read-pattern, the forge is authoritative and events are hints. The same forge-read also absorbs anything that happened during the outage window. The agent does NOT try to read the cursor back, replay missed events, or rebuild from a buffered-but-unprocessed line."
+    },
+    {
+      "id": "4",
+      "question": "After a scan completes and the agent reads buffered Monitor output, in what order must the buffered lines be processed?",
+      "expected": "In arrival order — the same order they were written to stdout. The agent does not re-order based on payload timestamp. Per-event ordering is the contract that event_poll.py plus the Monitor pipeline guarantee."
+    }
+  ]
+}
