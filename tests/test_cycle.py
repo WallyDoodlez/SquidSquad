@@ -57,6 +57,49 @@ class TestStatusBar:
         assert result == "idle|"
 
 
+class TestStatusBarSelf:
+    """#9747: status-bar-self derives role from SQUIDSQUAD_ROLE env."""
+
+    def test_uses_squidsquad_role_env(self, tmp_path, monkeypatch):
+        role_dir = tmp_path / "skill"
+        role_dir.mkdir()
+        monkeypatch.setenv("SQUIDSQUAD_ROLE", "skill")
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            result = cycle.status_bar_self("implementing", "#42 working...")
+        assert result == "implementing|#42 working..."
+        assert (role_dir / "current-state").read_text(encoding="utf-8") == "implementing|#42 working..."
+
+    def test_routes_to_role_specific_dir(self, tmp_path, monkeypatch):
+        """qa role writes to .squidsquad/qa/current-state, not skill's."""
+        (tmp_path / "skill").mkdir()
+        qa_dir = tmp_path / "qa"
+        qa_dir.mkdir()
+        monkeypatch.setenv("SQUIDSQUAD_ROLE", "qa")
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            cycle.status_bar_self("verifying", "#100")
+        assert (qa_dir / "current-state").read_text(encoding="utf-8") == "verifying|#100"
+        assert not (tmp_path / "skill" / "current-state").exists()
+
+    def test_missing_env_exits_nonzero(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.delenv("SQUIDSQUAD_ROLE", raising=False)
+        with pytest.raises(SystemExit) as exc:
+            cycle.status_bar_self("phase")
+        assert exc.value.code == 1
+        assert "SQUIDSQUAD_ROLE" in capsys.readouterr().err
+
+    def test_empty_env_exits_nonzero(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setenv("SQUIDSQUAD_ROLE", "")
+        with pytest.raises(SystemExit) as exc:
+            cycle.status_bar_self("phase")
+        assert exc.value.code == 1
+
+    def test_whitespace_env_exits_nonzero(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setenv("SQUIDSQUAD_ROLE", "   ")
+        with pytest.raises(SystemExit) as exc:
+            cycle.status_bar_self("phase")
+        assert exc.value.code == 1
+
+
 class TestCounters:
     def _setup_working_state(self, tmp_path, role, counter=0):
         role_dir = tmp_path / role

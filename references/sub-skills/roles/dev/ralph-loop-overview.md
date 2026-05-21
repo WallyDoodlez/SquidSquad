@@ -20,10 +20,10 @@ At the end of each cycle, print:
 
 **Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions (filing bugs, committing) also get markers. Keep each marker to one concise line. **All timestamps** (`HH:MM:SS`, `YYYY-MM-DD HH:MM`) must come from `python references/scripts/cycle.py timestamp-short` — see Timestamps in Tracker Protocol. Never guess or fabricate times.
 
-**Status bar state**: At each step marker, also write your current state to `.squidsquad/[ROLE]/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
+**Status bar state**: At each step marker, also write your current state so the status bar can display it. The helper below derives your role from the `SQUIDSQUAD_ROLE` environment variable (set by `thin_launcher.py` at spawn time) and writes to your own `.squidsquad/<your-role>/current-state` file atomically — you do not pass the role yourself and you do not write the file directly (#9747):
 
 ```bash
-python references/scripts/cycle.py status-bar [ROLE] "phase" "sub-skill — description"
+python references/scripts/cycle.py status-bar-self "phase" "sub-skill — description"
 ```
 
 Phase is one of: `pulling`, `triaging`, `implementing`, `committing`, `idle`. The sub-skill is the short name of the active sub-skill (e.g., `pull-latest`, `tracker-protocol`, `dev-agent`, `git-commit`). The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
