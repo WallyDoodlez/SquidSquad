@@ -53,39 +53,18 @@ RUNTIME_READ_FRAGMENTS = frozenset({
 
 
 def _get_wake_mode(role_name: str) -> str:
-    """Determine a role's wake mode from config.md (#8697).
+    """Delegate to canonical config.get_wake_mode (#9745).
 
-    Lookup precedence: `event-driven-<role>` → `event-driven` → default `polling`.
-    Values normalize to `event-driven` (yes/true/1) or `polling`.
-
-    `config.get_field` prints `ERROR: Field 'X' not found` to stderr and
-    calls `sys.exit(1)` for missing fields. Field absence is the documented
-    default for both wake-mode fields, so suppress stderr while probing —
-    QA's `test_malformed_repo_scan_warns_not_crashes` (#8697 R3 retro fix)
-    asserts no spurious ERROR output during normal compose.
+    Thin wrapper kept so existing compose-internal callers don't need
+    import-path churn. See ``config.get_wake_mode`` for the resolution
+    rules — that is the single source of truth referenced by bootstrap.md.
     """
     sys.path.insert(0, str(SCRIPT_DIR))
     try:
-        from config import get_field
+        from config import get_wake_mode
     except Exception:
         return "polling"
-    import contextlib
-    import io
-    for field in (f"event-driven-{role_name}", "event-driven"):
-        try:
-            with contextlib.redirect_stderr(io.StringIO()):
-                v = (get_field(field) or "").strip().lower()
-        except BaseException:
-            # config.get_field calls sys.exit(1) on missing field — caught
-            # via SystemExit. Also tolerate FileNotFoundError/PermissionError
-            # from a config.md TOCTOU race (matches the defensive pattern in
-            # `_read_config_value` further down this file).
-            v = ""
-        if v in ("yes", "true", "1", "event-driven"):
-            return "event-driven"
-        if v in ("no", "false", "0", "polling"):
-            return "polling"
-    return "polling"
+    return get_wake_mode(role_name)
 
 
 def _strip_outer_markers(content: str, name: str) -> str:

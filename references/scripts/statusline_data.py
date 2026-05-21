@@ -39,22 +39,13 @@ _HTTP_TIMEOUT = 1.5  # statusline renders frequently — keep tight
 
 
 def _get_wake_mode(role):
-    """Lookup precedence: event-driven-<role> → event-driven → polling."""
+    """Delegate to canonical config.get_wake_mode (#9745)."""
     sys.path.insert(0, str(SCRIPT_DIR))
     try:
-        from config import get_field
+        from config import get_wake_mode
     except Exception:
         return "polling"
-    for field in (f"event-driven-{role}", "event-driven"):
-        try:
-            v = (get_field(field) or "").strip().lower()
-        except SystemExit:
-            v = ""
-        if v in ("yes", "true", "1", "event-driven"):
-            return "event-driven"
-        if v in ("no", "false", "0", "polling"):
-            return "polling"
-    return "polling"
+    return get_wake_mode(role)
 
 
 def _harness_port():
