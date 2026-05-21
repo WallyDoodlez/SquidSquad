@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.41.0] — 2026-05-21
+
+### Added
+- #9243 — Harness `/status` endpoint now exposes the running SquidSquad code version (semver + git SHA + branch + dirty-flag) so operators can confirm at a glance what version their squad is actually running.
+- #8998 — Event-driven mode is now fully wired through `includes-events.yml` — event-mode and polling-mode templates compose from the same sub-skill bundle, picked at deploy time.
+
+### Fixed
+- #8979 — Completed the long-tail of #4792 lifecycle work: 60-second force-kill safety net (the harness can no longer be wedged indefinitely by an unresponsive agent), `/quit` fragment, context-pressure `/restart` routing, legacy shim, and upgrade path.
+- #8999 — Event-mode integration tests now cover the §4.1/§4.5 critical paths end-to-end with a real Claude CQ run, locking the event-driven architecture against silent regressions.
+- #9398 — Closed the remaining real-system gaps in #8999's E2E coverage; AC-1 M-1.3 runs against a live Claude binary, not a mock.
+- #9562 — On Windows, the harness now sets `WindowsSelectorEventLoopPolicy` at startup, preventing the ProactorEventLoop connection-reset crash that wedged HTTP under load.
+- #9574 — `run_comprehension_test.py` no longer silently exits with rc=0 when the inner agent forgets to invoke `Write` — long-context prompt-following failures are now visible.
+- #9665 — Stabilized real-subprocess tests under sustained Windows load (deeper than the #9398 timeout fix) — eliminates flaky CI on real-binary suites.
+- #9415 — Widened event-bus event IDs to 64-bit (16-char hex) on both random and content-hash paths; eliminates birthday-paradox collision risk past 65k events. One-time eviction-signal noise per agent during transition is expected and harmless.
+- #9588 — Mode-specific instructions are now lazy-loaded at agent boot, cutting cold-start context cost for event-mode agents.
+- #9688 — Orphan `claude.exe` processes spawned by the Agent tool are now reliably cleaned up on Windows; protected-set walks the `cmd.exe→claude.exe` parent chain and multi-clone `.claude-pid` discovery prevents false positives.
+- #9725 — `thin_launcher.py` now registers its `/loop` prompt on spawn so freshly-booted agents pick up the loop cadence without manual intervention.
+- #9742 — Boot harness-reachability check now retries with a hardened TOCTOU guard, and the Monitor tool exits cleanly if the harness goes down between the curl probe and `event_poll` start.
+- #9744 — DM PR-merge-wait now re-checks issue labels on each wake and pre-checks status before waiting — operator redirects propagate within one cycle instead of stalling indefinitely.
+- #9745 — Wake-mode resolution is now a single canonical `config.get_wake_mode` helper; all 3 Python callers delegate, eliminating the 4-file drift risk.
+- #9746 — Regenerated stale `references/agent-instructions.md` (was missing #9588 bootstrap content); added a drift-detection test that asserts the file matches fresh compose output, catching future drift in CI.
+- #9747 — Eliminated LLM-dependent `[ROLE]` placeholder from the dev polling fragment; status-bar writes now go through a deterministic env-reading helper, removing a silent-failure mode if context pressure truncated the bootstrap teaching.
+- #9772 — `cycle_pre.py` now self-heals when the ship counter is silently clobbered by stale-base squash-merges; counter reconciles against `git log` so DM no longer has to detect the regression manually.
+- #9837 — DM's queue now surfaces closed-but-pending-ship-labeled items (universal-shipper queries); the auto-close-on-PR-merge pattern can no longer hide ready-to-ship work from DM.
+
+### Internal
+- #9215 — Removed `/loop`-mode-specific language from L4 `shared-instructions.md`; cleared the last pre-flip blocker for event-driven mode being the default.
+
 ## [0.40.0] — 2026-05-18
 
 ### Added
