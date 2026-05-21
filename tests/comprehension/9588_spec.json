@@ -1,0 +1,35 @@
+{
+  "issue": 9588,
+  "title": "Lazy-load mode-specific instructions at boot — comprehension test agent describes the bootstrap's boot path from the modified files alone",
+  "files": [
+    "references/sub-skills/common/boot-bootstrap.md",
+    "references/sub-skills/roles/dev/ralph-loop-overview.md"
+  ],
+  "questions": [
+    {
+      "id": "1",
+      "question": "Read references/sub-skills/common/boot-bootstrap.md. List, in order, the four steps the agent runs at fresh-session boot, and state which step decides between event-driven and polling mode.",
+      "expected": "Four steps: (1) Read .squidsquad/config.md to determine wake mode; (2) check harness reachability via curl -sf --max-time 5 http://127.0.0.1:<port>/status against the port from .squidsquad/.harness-port (default 7373); (3) EVENT mode — Read the six common-events fragments (event-driven-workflow, l1-base, cursor-management, forge-read-pattern, idle-cooldown-loop, comment-handling), plus roles/dm/events/pr-merge-wait.md if the role is dm; (4) POLLING mode — run tracker.py check-gh, schedule /loop exactly once, then Read the per-role ralph-loop-overview.md. Steps 1 and 2 together decide the mode: if config says event-driven yes AND the curl probe succeeds, mode is event-driven; for any other outcome (config absent, event-driven not yes, probe fails for any reason), mode is polling."
+    },
+    {
+      "id": "2",
+      "question": "Read references/sub-skills/common/boot-bootstrap.md. The harness probe explicitly avoids one common shell idiom. Which idiom, and why?",
+      "expected": "The probe uses `curl -sf --max-time 5 http://127.0.0.1:<port>/status` and inspects only the exit code. It explicitly avoids `> /dev/null` because that shell redirect fails on native Windows shells and would force a permanent polling fallback. The -s flag silences progress output and -f makes curl exit non-zero on any HTTP error response, so no redirect is needed."
+    },
+    {
+      "id": "3",
+      "question": "Read references/sub-skills/common/boot-bootstrap.md. Under what circumstances does the agent fall through to polling mode?",
+      "expected": "Polling fallback fires when any of: (a) .squidsquad/config.md is missing, unreadable, or empty; (b) config does not have event-driven: yes (or per-role override); (c) the curl harness probe returns non-zero for any reason (connection refused, timeout, HTTP non-2xx, curl missing from PATH, port file missing/unreadable/empty/non-integer). Polling is the safe default whenever event-mode cannot be positively confirmed."
+    },
+    {
+      "id": "4",
+      "question": "Read both references/sub-skills/common/boot-bootstrap.md and references/sub-skills/roles/dev/ralph-loop-overview.md. Which file is responsible for invoking /loop, and why is it not invoked from the other file?",
+      "expected": "/loop is invoked from boot-bootstrap.md Step 4b, with [INTERVAL] substituted at compose time from config.md (so the composed CLAUDE.md reads e.g. `/loop 30m execute one Ralph Loop cycle`). The polling fragment (ralph-loop-overview.md) does NOT invoke /loop — the bootstrap is the sole scheduler. The polling fragment describes what each cycle does (step markers, status bar, work queue, commits); the bootstrap describes how to schedule one. Re-invoking /loop from the polling fragment would stack a duplicate cron entry, and because the fragment is Read at runtime, the [INTERVAL] placeholder there would not substitute and the literal placeholder would break the invocation."
+    },
+    {
+      "id": "5",
+      "question": "Read references/sub-skills/common/boot-bootstrap.md. Once the agent has loaded its wake-mode fragments, can the wake mode change mid-session? When does a mode flip take effect?",
+      "expected": "No, the loaded mode is sticky for the session. Once Steps 3 or 4 complete, the wake-mode contract is fixed; the agent does not re-check mode mid-session. A mode flip (operator changes event-driven: value in config.md) takes effect on the next agent restart, not mid-cycle. This is intentional per CONTEXT-9588 D2: restart is the natural reload point, and mid-session reload would add a third execution path."
+    }
+  ]
+}
