@@ -8,9 +8,10 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "CHANGELOG.md",
+  "last_scanned": "README.md",
   "rotation_count": 54,
   "scan_history": [
+    {"file": "README.md", "date": "2026-05-21", "findings": 0, "note": "Rotation 54 start. README.md still at cycle 1098 (a20c931a #9243 delivery). Coverage by deterministic equivalence."},
     {"file": "CHANGELOG.md", "date": "2026-05-21", "findings": 0, "note": "Rotation 53 close — advancing rotation_count to 54. CHANGELOG.md just had v0.41.0 section added in cycle 1243 (the bump I performed this session). 20-item v0.41.0 Added/Fixed/Internal verified accurate against gh-query of shipped items (21 total minus #8915 which was already in v0.40.0 — correctly excluded). User-value framing maintained. R53 summary: 7-doc full rotation, 1 real fix (docs/ARCHITECTURE.md thin_launcher line ref :149→:168 after #9688's new Process Tree section), rest deterministic-equivalent."},
     {"file": "CONTRIBUTING.md", "date": "2026-05-21", "findings": 0, "note": "Rotation 53. Unchanged since cycle 979 (last actual edit). Coverage by deterministic equivalence."},
     {"file": "docs/sub-skill-guide.md", "date": "2026-05-21", "findings": 0, "note": "Rotation 53. Stable since cycle-1116 fix (capabilities example list refresh). No edits since. Coverage by deterministic equivalence."},
