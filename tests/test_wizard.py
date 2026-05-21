@@ -2011,23 +2011,8 @@ class TestPrFlowPrompt:
         assert len(result["options"]) == 2
 
 
-class TestBranchWorkflowPrompt:
-    """Branch Workflow question returns structured data (#2413)."""
-
-    def test_returns_question_and_options(self):
-        result = wizard.branch_workflow_prompt()
-        assert "question" in result
-        assert "options" in result
-        assert "default" in result
-        assert result["default"] is True
-
-    def test_has_two_options(self):
-        result = wizard.branch_workflow_prompt()
-        assert len(result["options"]) == 2
-
-    def test_question_mentions_feature_branches(self):
-        result = wizard.branch_workflow_prompt()
-        assert "feature branch" in result["question"].lower()
+# TestBranchWorkflowPrompt removed in #9478 — branch_workflow_prompt
+# was deleted from wizard.py because branch+PR is the only mode.
 
 
 # ---------------------------------------------------------------------------

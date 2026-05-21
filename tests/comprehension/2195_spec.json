@@ -1,26 +1,20 @@
 {
   "issue": 2195,
-  "title": "Branch workflow enforcement for all agent roles",
+  "title": "Branch+PR workflow commit routing for dev/qa/dm",
   "files": [
     "references/sub-skills/roles/dm/git-commit.md",
-    "references/sub-skills/roles/qa/git-commit.md",
-    "references/sub-skills/roles/pm/git-commit.md"
+    "references/sub-skills/roles/qa/git-commit.md"
   ],
   "questions": [
     {
       "id": "1",
-      "question": "DM is delivering #789 and Branch Workflow is enabled. Where should DM commit the README and CHANGELOG updates?",
+      "question": "DM is delivering #789. Where should DM commit the README and CHANGELOG updates?",
       "expected": "DM should commit delivery work to the feature branch squidsquad/dm/789 using git_ops.py commit-code, then commit state changes (.squidsquad/) to main using git_ops.py commit-state."
     },
     {
       "id": "2",
-      "question": "QA just verified issue #123 on branch squidsquad/skill/123. Branch Workflow is enabled. Where do QA's verification commits go?",
+      "question": "QA just verified issue #123 on branch squidsquad/skill/123. Where do QA's verification commits go?",
       "expected": "QA's verification results go on the issue's existing feature branch (squidsquad/skill/123) using git_ops.py commit-code. State changes (.squidsquad/ iteration logs, working state) go on main using git_ops.py commit-state."
-    },
-    {
-      "id": "3",
-      "question": "PM created planning artifacts for #456. Branch Workflow is enabled but it's a quiet cycle with no issue-linked work. Where does PM commit?",
-      "expected": "If PM only did state/coordination work (check-in, health check, quiet cycle), PM uses git_ops.py commit-push directly to main. Branch workflow only applies when working on a specific issue/task."
     }
   ]
 }

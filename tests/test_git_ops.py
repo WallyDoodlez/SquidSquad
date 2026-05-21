@@ -1255,15 +1255,6 @@ class TestTaskBegin:
         assert "fetch" in fetch_call[0][0]
         assert "origin" in fetch_call[0][0]
 
-    @patch("git_ops._get_working_branch", return_value="main")
-    @patch("git_ops._run_list")
-    def test_noop_when_branch_workflow_disabled(self, mock_run_list, mock_gwb):
-        """task_begin is a no-op when branch-workflow is disabled."""
-        with patch.dict("sys.modules", {"config": MagicMock()}), \
-             patch("config.get_field", return_value="no"):
-            git_ops.task_begin("skill", "400")
-        mock_run_list.assert_not_called()
-
     @patch("git_ops._auto_resolve_state_conflicts", return_value=([], []))
     @patch("git_ops._get_working_branch", return_value="main")
     @patch("git_ops._safe_checkout", return_value=True)

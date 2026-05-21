@@ -1124,13 +1124,6 @@ class TestVerifyRemoteBranch:
         assert "squidsquad/skill/100" in str(ls_remote_cmd)
         assert "*" not in str(ls_remote_cmd)
 
-    def test_returns_true_when_workflow_disabled(self):
-        with patch.dict("sys.modules", {"config": MagicMock()}), \
-             patch("config.get_field", side_effect=lambda f: {
-                 "branch-workflow": "no",
-             }.get(f, "")):
-            assert cycle_post._verify_remote_branch(100, role="skill") is True
-
     def test_returns_none_on_network_failure(self, monkeypatch):
         def fake_run(cmd, **kwargs):
             r = MagicMock()

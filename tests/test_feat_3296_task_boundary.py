@@ -1,7 +1,8 @@
 """Tests for #3296 — task-begin/task-end in git_ops.py.
 
 Verifies task-level branch boundary commands: branch checkout, missing branch
-error, branch-workflow disabled no-op, and task-end return to working branch.
+error, and task-end return to working branch. Branch+PR is the only mode
+(#9478) — the disabled no-op tests have been removed.
 """
 
 import sys
@@ -17,16 +18,7 @@ import git_ops
 
 
 def _mock_config_enabled(field):
-    """Mock config.get_field to return branch-workflow: yes."""
-    if field == "branch-workflow":
-        return "yes"
-    return None
-
-
-def _mock_config_disabled(field):
-    """Mock config.get_field to return branch-workflow: no."""
-    if field == "branch-workflow":
-        return "no"
+    """No-op config mock — branch+PR is the only mode (#9478)."""
     return None
 
 
@@ -94,12 +86,6 @@ class TestTaskBegin:
                 git_ops.task_begin("skill", "8888")
         assert exc_info.value.code == 1
 
-    def test_noop_when_branch_workflow_disabled(self):
-        """TC-4: task-begin is no-op when branch-workflow is disabled."""
-        with patch("config.get_field", side_effect=_mock_config_disabled):
-            # Should return without error, no branch switch
-            git_ops.task_begin("skill", "9999")
-
     def test_derives_correct_branch_name(self):
         """task-begin derives squidsquad/<role>/<number> branch name."""
         checked = []
@@ -133,11 +119,6 @@ class TestTaskEnd:
             git_ops.task_end("skill", "9999")
 
         mock_checkout.assert_called_with("main")
-
-    def test_noop_when_branch_workflow_disabled(self):
-        """task-end is no-op when branch-workflow is disabled."""
-        with patch("config.get_field", side_effect=_mock_config_disabled):
-            git_ops.task_end("skill", "9999")
 
     @patch("git_ops._safe_checkout", return_value=True)
     @patch("git_ops._run")

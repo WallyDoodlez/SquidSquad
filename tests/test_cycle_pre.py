@@ -263,7 +263,6 @@ class TestDoPull:
 class TestReadConfigFlags:
     def test_reads_all_flags(self, monkeypatch):
         flags = {
-            "branch-workflow": "yes",
             "pr-flow": "no",
             "improvement-scanning": "yes",
             "vault-remember": "no",
@@ -271,7 +270,6 @@ class TestReadConfigFlags:
         }
         monkeypatch.setattr(cycle_pre, "_config_get", lambda f: flags.get(f, ""))
         result = cycle_pre._read_config_flags()
-        assert result["branch_workflow"] is True
         assert result["pr_flow"] is False
         assert result["improvement_scanning"] is True
         assert result["vault_remember"] is False
@@ -280,7 +278,6 @@ class TestReadConfigFlags:
     def test_accepts_true_and_1_as_truthy(self, monkeypatch):
         """#8343 regression: 'true' and '1' must be accepted, not just 'yes'."""
         flags = {
-            "branch-workflow": "true",
             "pr-flow": "1",
             "improvement-scanning": "True",
             "vault-remember": "YES",
@@ -288,7 +285,6 @@ class TestReadConfigFlags:
         }
         monkeypatch.setattr(cycle_pre, "_config_get", lambda f: flags.get(f, ""))
         result = cycle_pre._read_config_flags()
-        assert result["branch_workflow"] is True
         assert result["pr_flow"] is True
         assert result["improvement_scanning"] is True
         assert result["vault_remember"] is True
@@ -1127,18 +1123,6 @@ class TestEnforceBranch:
         cycle_pre._enforce_branch("skill", ws)
 
         assert "main" in checkout_targets
-
-    def test_noop_when_branch_workflow_disabled(self, monkeypatch):
-        """No branch enforcement when branch-workflow is disabled."""
-        calls = []
-        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "no")
-        monkeypatch.setattr(cycle_pre, "_run_script", lambda *a, **kw: calls.append(a))
-        monkeypatch.setattr(cycle_pre, "_run", lambda cmd, **kw: calls.append(cmd))
-
-        ws = {"task": "#100", "status": "in-progress"}
-        cycle_pre._enforce_branch("skill", ws)
-
-        assert len(calls) == 0
 
     def test_stays_on_working_branch_when_already_there(self, monkeypatch):
         """No checkout when already on working branch."""

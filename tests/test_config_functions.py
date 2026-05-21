@@ -61,10 +61,6 @@ SAMPLE_CONFIG = """# SquidSquad Config
 
 - **Enabled**: yes
 
-## Branch Workflow
-
-- **Enabled**: yes
-
 ## PR Flow
 
 - **Enabled**: no
@@ -200,12 +196,6 @@ class TestGetField:
         with patch.object(config, "CONFIG_PATH", cfg):
             val = config.get_field("pr-flow")
         assert val == "no"
-
-    def test_get_branch_workflow(self, tmp_path):
-        cfg = self._setup_config(tmp_path)
-        with patch.object(config, "CONFIG_PATH", cfg):
-            val = config.get_field("branch-workflow")
-        assert val == "yes"
 
     def test_get_shipped_since_bump(self, tmp_path):
         cfg = self._setup_config(tmp_path)

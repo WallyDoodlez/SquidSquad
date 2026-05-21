@@ -772,7 +772,6 @@ class TestShippedBranchGuard:
             return FakeResult()
 
         monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
-        monkeypatch.setattr(tracker, "_is_branch_workflow_enabled", lambda: True)
 
         with pytest.raises(SystemExit) as excinfo:
             tracker.transition(42, "pending-ship", "shipped", role="dm-lead")
@@ -807,7 +806,6 @@ class TestShippedBranchGuard:
             return FakeResult()
 
         monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
-        monkeypatch.setattr(tracker, "_is_branch_workflow_enabled", lambda: True)
         # Should not raise — branch is merged
         tracker.transition(42, "pending-ship", "shipped", role="dm-lead")
 
@@ -832,27 +830,6 @@ class TestShippedBranchGuard:
             return FakeResult()
 
         monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
-        monkeypatch.setattr(tracker, "_is_branch_workflow_enabled", lambda: True)
-        tracker.transition(42, "pending-ship", "shipped", role="dm-lead")
-
-    def test_skips_check_when_branch_workflow_disabled(self, monkeypatch):
-        """Branch check is skipped entirely when branch workflow is disabled."""
-
-        class FakeResult:
-            returncode = 0
-            stdout = ""
-            stderr = ""
-
-        def _fake_run_list(cmd, **kw):
-            if "pr" in cmd and "list" in cmd:
-                r = FakeResult()
-                r.stdout = "[]"
-                return r
-            return FakeResult()
-
-        monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
-        monkeypatch.setattr(tracker, "_is_branch_workflow_enabled", lambda: False)
-        # Should not raise — branch workflow disabled, no branch check
         tracker.transition(42, "pending-ship", "shipped", role="dm-lead")
 
     def test_force_does_not_bypass_branch_check(self, monkeypatch, capsys):
@@ -879,7 +856,6 @@ class TestShippedBranchGuard:
             return FakeResult()
 
         monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
-        monkeypatch.setattr(tracker, "_is_branch_workflow_enabled", lambda: True)
 
         with pytest.raises(SystemExit) as excinfo:
             tracker.transition(42, "pending-ship", "shipped", role="dm-lead", force=True)
@@ -908,7 +884,6 @@ class TestShippedBranchGuard:
             return FakeResult()
 
         monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
-        monkeypatch.setattr(tracker, "_is_branch_workflow_enabled", lambda: True)
         # Should not raise — branch is for a different issue
         tracker.transition(42, "pending-ship", "shipped", role="dm-lead")
 

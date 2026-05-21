@@ -54,10 +54,6 @@
 
 - **Enabled**: yes
 
-## Branch Workflow
-
-- **Enabled**: yes
-
 ## PR Flow
 
 - **Enabled**: yes

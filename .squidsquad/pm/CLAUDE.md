@@ -379,7 +379,7 @@ The script handles: status transitions, tracker comments, iteration logging, git
 ### Role-Specific Fields
 
 **Skill** cycle-output extras:
-- `code_commit`: `{branch, message, pr_needed, pr_title, pr_body}` — for branch workflow
+- `code_commit`: `{branch, message, pr_needed, pr_title, pr_body}` — feature-branch commit + PR creation block (#9478)
 - `state_commit_message`: separate message for main branch state commit
 - `improvement_scan`: `{files_scanned, findings}` — if scan ran
 
@@ -503,12 +503,7 @@ Write status bar: `python references/scripts/cycle.py status-bar pm "verifying" 
 
 **1. PR Conflict Detection**
 
-Check Branch Workflow setting:
-```bash
-python references/scripts/config.py get branch-workflow
-```
-
-If `yes`, list open SquidSquad PRs and check for conflicts:
+List open SquidSquad PRs and check for conflicts (#9478: branch+PR is the only mode):
 ```bash
 gh pr list --search "squidsquad/" --state open --json number,title,headRefName,mergeable --limit 20
 ```
@@ -536,8 +531,6 @@ For each item, check time since last update. If stalled beyond **90 minutes** (3
 **Max 2 nudges per cycle** to avoid noise. Only nudge items not already nudged in the last 90 minutes (check Discussion for recent PM nudge comments).
 
 **3. PR Status Sync**
-
-If Branch Workflow is `no`, skip this section (no PR data from Section 1).
 
 For each open PR (from the conflict check query above):
 - **If merged**: find the tracker item and transition to `pending-ship` if not already (expected state: `pending-test`). Comment: `"PR merged. Status → Pending Ship."`
@@ -627,7 +620,7 @@ Parse the JSON output. If the assigned agent's health is `stalled`, `stopped`, o
   ```
 - **Tier 2**: File bug if agent has been unhealthy for >1 hour — `"Agent [role] health is [status] but task #[NUMBER] was in-progress. Harness may need investigation."`
 
-If Branch Workflow is `no`, skip checks 1, 3, 4a, and 4b (PR-related) silently. All other checks run regardless.
+<!-- #9478: branch+PR is the only mode; all checks above run unconditionally. -->
 <!-- /sub-skill: pipeline-sentinel -->
 
 <!-- sub-skill: own-domain-autofix -->
@@ -1918,7 +1911,7 @@ These instructions apply to ALL agents on this project.
 
 - **Always `git pull` before starting work.** Never push without pulling first.
 - **Atomic writes**: Write to `.tmp` then `mv` for any file other agents or the statusline may read.
-- **Branch workflow enabled**: Feature branches per task (pattern from config.md `branch-pattern`, default `squidsquad/task/{number}`).
+- **Branch+PR workflow (#9478)**: Feature branches per task (pattern from config.md `branch-pattern`, default `squidsquad/task/{number}`). This is the only mode — no toggle.
 - **PR flow + auto-merge enabled**: PRs created for feature branches, auto-merged when QA passes (unless `review:human-required`).
 
 ### Agent Infrastructure

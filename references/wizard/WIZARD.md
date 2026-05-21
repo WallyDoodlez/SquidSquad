@@ -525,22 +525,6 @@ Default is **Off** (index 0). Record the answer in the flags:
 }
 ```
 
-Then ask about Branch Workflow:
-
-> Feature branch per task? When enabled, dev agents commit code to
-> `squidsquad/<role>/<issue-number>` branches instead of directly to
-> the working branch. PRs are created when work is ready for review.
-> Default is **yes**.
-
-Accept yes/no. Default to **yes**. Record:
-
-```
-"flags": {
-    ...
-    "branch_workflow": true/false,
-}
-```
-
 ---
 
 ## Step 6 — Review screen
@@ -566,7 +550,7 @@ Roles:
   - dm       (local delivery)
 
 Loop:          10 minutes
-Flags:         improvement-scan: yes, pr-flow: no, branch-workflow: yes
+Flags:         improvement-scan: yes, pr-flow: no
 
 What would you like to do?
   [P] Proceed with setup

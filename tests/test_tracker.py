@@ -490,32 +490,4 @@ class TestLabelConsistency:
         assert "status:pending-human-review" in all_labels
 
 
-# ---------------------------------------------------------------------------
-# _is_branch_workflow_enabled (#4363)
-# ---------------------------------------------------------------------------
-
-class TestIsBranchWorkflowEnabled:
-    @patch("tracker.SCRIPT_DIR", Path("/fake"))
-    def test_none_config_value_returns_false(self):
-        """None return from get_field does not raise (#4363)."""
-        with patch.dict("sys.modules", {"config": MagicMock(
-            get_field=MagicMock(return_value=None)
-        )}):
-            result = tracker._is_branch_workflow_enabled()
-        assert result is False
-
-    @patch("tracker.SCRIPT_DIR", Path("/fake"))
-    def test_yes_returns_true(self):
-        with patch.dict("sys.modules", {"config": MagicMock(
-            get_field=MagicMock(return_value="yes")
-        )}):
-            result = tracker._is_branch_workflow_enabled()
-        assert result is True
-
-    @patch("tracker.SCRIPT_DIR", Path("/fake"))
-    def test_empty_string_returns_false(self):
-        with patch.dict("sys.modules", {"config": MagicMock(
-            get_field=MagicMock(return_value="")
-        )}):
-            result = tracker._is_branch_workflow_enabled()
-        assert result is False
+# _is_branch_workflow_enabled removed in #9478 — branch+PR is the only mode.

@@ -233,7 +233,7 @@ Each dev agent follows this loop, substituting its own role name and tracker pat
 3. Log results to qa/qa-log.md
 4. If tests fail: file bug as GitHub Issue with appropriate `role:` label via `gh issue create`
 5. Query GitHub Issues via `gh issue list` with label filters for `status:pending-test` items → verify → update to Pending Ship (DM handles delivery → Shipped)
-5b. If PR Flow enabled: monitor open PRs, sync comments/merges/changes to Issues
+5b. Monitor open PRs, sync comments/merges/changes to Issues
 6. Query GitHub Issues via `gh issue list` with label filters for `type:issue` + `status:in-progress` items marked as fixed → verify → close Issue
 7. Agent health check: read `current-state` mtime via cross-clone `.local-config` paths for liveness (stalled if older than 2× iteration interval), file content for phase detail, flag stalled/idle agents
 8. If quiet cycle (no issues found, no verifications): skip log/commit
@@ -274,23 +274,22 @@ All agents follow these rules to minimize merge conflicts on shared tracker file
 - **Commit prefix convention**: every commit message must start with the agent's role name followed by a colon (e.g. `skill: fix bug`, `fe: add button`, `pm: verify features`). This prefix is used by the status line and PM health checks to detect agent activity via `git log --grep`.
 - If a merge conflict occurs on working-branch state files: keep both versions by appending, never discard. Most state files (iterations, working-state, diagnostics) now live on the state branch (`squid-squad`) to avoid cross-agent conflicts. Tracker data lives in GitHub Issues and is conflict-free.
 
-### PR-Based Approval Flow (optional)
+### Branch + PR Workflow
 
-When `PR Flow: yes` is set in `config.md`, dev agents create PRs instead of pushing directly to main:
+SquidSquad uses a single-mode branch+PR workflow (#9478): dev agents always work on feature branches and create PRs — there is no toggle to push directly to main.
 
 - **Branching convention**: configurable via the `Branch Pattern` field in `config.md`. Default: `squidsquad/task/{number}` (e.g. `squidsquad/task/67`) — all roles share one branch per task, enabling single-PR holistic review of planning + code together. Projects can also use role-scoped patterns like `squidsquad/{role}/{number}` for per-role branches.
-- **Task-level branch boundaries**: when Branch Workflow is enabled, agents automatically check out the correct feature branch before working on each task item (verification, shipping, bug fixes) and return to the working branch when done. This is handled by the transport layer (`task-begin` / `task-end`) — agents don't manage branches manually.
+- **Task-level branch boundaries**: agents automatically check out the correct feature branch before working on each task item (verification, shipping, bug fixes) and return to the working branch when done. This is handled by the transport layer (`task-begin` / `task-end`) — agents don't manage branches manually.
 - **Dev agent workflow**: when marking work as `Pending Test`, create a branch, push it, and open a **draft** PR via `gh pr create --draft`. QA converts it to ready (`gh pr ready`) after verification passes. This prevents premature merges before QA sign-off.
 - **PM and QA workflow**: each cycle, check open SquidSquad PRs via `gh pr list`. For each PR:
   - If merged: update the tracker item status to `Pending Ship` (DM handles delivery and ships)
   - If changes requested: update status back to `In Progress` and append the feedback to Discussion
   - If new comments: append them to the tracker Discussion
-- **PM and QA still push to main** — only dev agent feature/bug work goes through PRs. PM updates (iterations, planning artifacts) and QA updates (qa-log, iterations) continue to push directly to main. All tracker operations use GitHub Issues regardless of PR flow.
-- When `PR Flow: no` (default), agents push directly to main as before.
+- **PM and QA still push to main** — only dev agent feature/bug work goes through PRs. PM updates (iterations, planning artifacts) and QA updates (qa-log, iterations) continue to push directly to main. All tracker operations use GitHub Issues.
 
 ### Auto-Merge (optional)
 
-When `Auto Merge: yes` and `Branch Workflow: yes` are set in `config.md`, the harness automatically merges PRs for verified tasks — you don't need to merge them manually. Agents request merges via `POST /merge` on the harness API; the harness executes the merge, and if the PR touched template files (`references/`), automatically recomposes agent templates and reboots only the affected agents.
+When `Auto Merge: yes` is set in `config.md`, the harness automatically merges PRs for verified tasks — you don't need to merge them manually. Agents request merges via `POST /merge` on the harness API; the harness executes the merge, and if the PR touched template files (`references/`), automatically recomposes agent templates and reboots only the affected agents.
 
 - **All verified items** — both bug fixes and tasks are auto-merged after QA verification passes.
 - **Per-task override**: add the `merge:manual` label to any task to skip auto-merge and require human review.

@@ -8,7 +8,7 @@ These instructions apply to the QA agent on this project.
 - **Verify ALL agent roles** — not just skill. QA covers dev, designer, PM (task verification), and DM (delivery verification).
 - **No direct human interaction.** Route all human communication through PM via Discussion comments.
 
-### Branch Workflow
+### Branch + PR Workflow (#9478)
 
 - **Use `git_ops.py task-begin` / `task-end`** for branch checkout when verifying tasks with code changes.
 - **QA merge authority**: resolve `.squidsquad/` conflicts via merge on your own branches only. Never modify other agents' branches.

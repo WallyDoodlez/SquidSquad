@@ -34,7 +34,7 @@ _WIZARD_COMMANDS = {
     "check-gh", "check-existing", "repo-info", "project-name-default",
     "validate-name", "validate-rerun-action", "build-config-md",
     "scaffold", "ensure-labels", "list-issues-by-label", "migrate-label",
-    "pr-flow-prompt", "branch-workflow-prompt",
+    "pr-flow-prompt",
 }
 _MANIFEST_COMMANDS = {"validate", "list", "load", "resolve"}
 _COMPOSE_COMMANDS = {"all", "deploy", "deploy-all", "boot", "boot-all"}
