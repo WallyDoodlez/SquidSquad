@@ -1057,6 +1057,103 @@ def _parse_cli_args(argv):
     return role, task
 
 
+def _reconcile_ship_counter():
+    """#9772 self-heal: restore `Shipped Since Last Bump` if it regressed.
+
+    The counter at `Auto Versioning > Shipped Since Last Bump` in config.md
+    can be silently clobbered when a skill PR squash-merges a feature branch
+    that branched off main BEFORE a DM ship landed (the branch's stale
+    config.md overwrites the bumped counter). DM has had to manually restore
+    the value twice (cycles 1120 and 1231), so this helper detects the
+    regression in the DM cycle_pre and writes back the correct value.
+
+    Derivation: count distinct issue numbers in `dm`-prefixed and `qa`-prefixed
+    commit subject lines containing "ship #N" since the last `v*` tag. If the
+    count exceeds the on-disk counter, restore. If git tools are missing or
+    config is unreadable, return ``None`` and leave config untouched.
+
+    Returns ``None`` (no action needed / fail-safe) or a dict
+    ``{"detected": N, "restored": M, "since_tag": "vX.Y.Z"}`` if a regression
+    was healed.
+
+    Gated to DM role only at the callsite — the counter is DM-owned and
+    only one writer should touch it.
+    """
+    import re
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from config import get_field, set_field
+    except Exception:
+        return None
+    # 1. Find the last v* tag (the last version bump). Counter resets to 0
+    #    at each bump, so commits BEFORE the tag are not relevant.
+    r = subprocess.run(
+        ["git", "describe", "--tags", "--abbrev=0", "--match", "v*"],
+        capture_output=True, text=True, cwd=str(REPO_ROOT),
+    )
+    if r.returncode != 0 or not r.stdout.strip():
+        # No version tag yet — can't establish a "since last bump" window.
+        return None
+    last_tag = r.stdout.strip()
+    rev_range = f"{last_tag}..HEAD"
+    # 2. Get commit subjects in the range.
+    r = subprocess.run(
+        ["git", "log", rev_range, "--format=%s"],
+        capture_output=True, text=True, cwd=str(REPO_ROOT),
+    )
+    if r.returncode != 0:
+        return None
+    # 3. Count distinct issue numbers in dm/qa ship commits. We match BOTH
+    #    the DM "ship #N" pattern and the QA "verify+ship #N" pattern. Using
+    #    a set deduplicates across the two roles (each shipped issue gets one
+    #    DM ship commit + one QA verify+ship commit, but counts once).
+    pattern = re.compile(r"#(\d+)")
+    shipped_issues = set()
+    for line in r.stdout.splitlines():
+        low = line.lower()
+        # Only commits from the shipping pipeline. Skip skill commits that
+        # mention "ship" in passing (e.g. "ship count 7→8" in a working-state
+        # commit message would NOT be a ship event — those commits don't have
+        # the role prefix at the start).
+        if not (low.startswith("dm:") or low.startswith("qa:")):
+            continue
+        # Require both "ship" and an issue ref. Excludes pure "restore"
+        # commits like "dm: restore shipped-since-bump 7→8" which mention
+        # neither "#N" nor "ship #" (the restore was triggered by the bug
+        # itself; counting it would double-count).
+        if "ship #" not in low and "+ship #" not in low:
+            continue
+        m = pattern.search(line)
+        if m:
+            shipped_issues.add(m.group(1))
+    git_count = len(shipped_issues)
+    # 4. Compare against config.md counter.
+    try:
+        config_raw = get_field("shipped-since-bump") or "0"
+        config_count = int(config_raw)
+    except (ValueError, SystemExit, Exception):
+        return None
+    if git_count <= config_count:
+        return None  # No regression — config is at-or-ahead of git evidence
+    # 5. Regression detected — restore.
+    print(
+        f"[🦑] WARNING: shipped-since-bump regression detected "
+        f"(config={config_count}, git-derived={git_count} since "
+        f"{last_tag}); restoring counter to {git_count} (#9772 self-heal)",
+        file=sys.stderr,
+    )
+    try:
+        set_field("shipped-since-bump", str(git_count))
+    except Exception as e:
+        print(f"[🦑] ERROR: failed to restore counter: {e}", file=sys.stderr)
+        return None
+    return {
+        "detected": config_count,
+        "restored": git_count,
+        "since_tag": last_tag,
+    }
+
+
 def main():
     role, task_id = _parse_cli_args(sys.argv[1:])
     if not role:
@@ -1088,6 +1185,12 @@ def main():
 
     # 1e. Post-pull config.md version validation (#5136)
     _validate_config_version()
+
+    # 1f. #9772: DM-only self-heal for `Shipped Since Last Bump` clobbers.
+    # Runs after pull so the counter check sees the freshest main state.
+    ship_counter_repair = None
+    if role == "dm" and not task_id:
+        ship_counter_repair = _reconcile_ship_counter()
 
     # 2. Context pressure
     context_pressure = _read_context_pressure(role)
@@ -1152,6 +1255,10 @@ def main():
     # Add branch correction if one was made (#5208)
     if branch_correction:
         cycle_input["branch_correction"] = branch_correction
+
+    # Add ship-counter repair if one was made (#9772)
+    if ship_counter_repair:
+        cycle_input["ship_counter_repair"] = ship_counter_repair
 
     # Update quiet_cycle_counter from working state for skill
     if role == "skill":
