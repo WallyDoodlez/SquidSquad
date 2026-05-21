@@ -92,7 +92,7 @@ For each issue:
    ```bash
    python references/scripts/git_ops.py task-begin [role] [number]
    ```
-   This is a no-op when branch-workflow is disabled. If the branch doesn't exist, task-begin exits non-zero — push back to the submitting agent.
+   If the branch doesn't exist, task-begin exits non-zero — push back to the submitting agent (#9478: branch+PR is the only mode).
    Run verification on the branch. When done, return to working branch:
    ```bash
    python references/scripts/git_ops.py task-end [role] [number]

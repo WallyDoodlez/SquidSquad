@@ -8,12 +8,7 @@ Write status bar: `python references/scripts/cycle.py status-bar [ROLE] "verifyi
 
 **1. PR Conflict Detection**
 
-Check Branch Workflow setting:
-```bash
-python references/scripts/config.py get branch-workflow
-```
-
-If `yes`, list open SquidSquad PRs and check for conflicts:
+List open SquidSquad PRs and check for conflicts (#9478: branch+PR is the only mode):
 ```bash
 gh pr list --search "squidsquad/" --state open --json number,title,headRefName,mergeable --limit 20
 ```
@@ -41,8 +36,6 @@ For each item, check time since last update. If stalled beyond **90 minutes** (3
 **Max 2 nudges per cycle** to avoid noise. Only nudge items not already nudged in the last 90 minutes (check Discussion for recent PM nudge comments).
 
 **3. PR Status Sync**
-
-If Branch Workflow is `no`, skip this section (no PR data from Section 1).
 
 For each open PR (from the conflict check query above):
 - **If merged**: find the tracker item and transition to `pending-ship` if not already (expected state: `pending-test`). Comment: `"PR merged. Status → Pending Ship."`
@@ -132,4 +125,5 @@ Parse the JSON output. If the assigned agent's health is `stalled`, `stopped`, o
   ```
 - **Tier 2**: File bug if agent has been unhealthy for >1 hour — `"Agent [role] health is [status] but task #[NUMBER] was in-progress. Harness may need investigation."`
 
-If Branch Workflow is `no`, skip checks 1, 3, 4a, and 4b (PR-related) silently. All other checks run regardless.
+<!-- #9478: branch+PR is the only mode; all checks above run unconditionally. -->
+

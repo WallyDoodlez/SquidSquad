@@ -2,12 +2,7 @@
 
 Print: `[🦑 HH:MM:SS] Committing and pushing...`
 
-Check Branch Workflow setting:
-```bash
-python references/scripts/config.py get branch-workflow
-```
-
-**If `yes`** AND you verified a specific issue/task this cycle (#[NUMBER]):
+Branch-per-feature workflow is the only mode (#9478). If you verified a specific issue/task this cycle (#[NUMBER]):
 
 QA verification results go on the issue's existing feature branch (if it exists). State changes go on main.
 
@@ -21,7 +16,7 @@ QA verification results go on the issue's existing feature branch (if it exists)
    python references/scripts/git_ops.py commit-state qa "[brief summary — verified #NUMBER]"
    ```
 
-**If `no`** (default) OR no specific issue was verified:
+If no specific issue was verified this cycle (smoke pass only, no per-issue work), commit directly to the working branch:
 
 ```bash
 python references/scripts/git_ops.py commit-push qa "[brief summary — e2e results, bugs filed, features verified]"

@@ -2,14 +2,7 @@
 
 Print: `[🦑 HH:MM:SS] Committing and pushing...`
 
-Check Branch Workflow setting:
-```bash
-python references/scripts/config.py get branch-workflow
-```
-
-**If `yes`** (branch-per-feature workflow):
-
-Split commits into code (feature branch) and state (main):
+Branch-per-feature workflow is the only mode (#9478). Split commits into code (feature branch) and state (main):
 
 1. **If working on a task** (status changed to `Pending Test` or still `In Progress`):
    - Commit code changes to the feature branch (use the branch name from task-begin output):
@@ -115,9 +108,3 @@ Split commits into code (feature branch) and state (main):
      Log: `Merge of [WORKING_BRANCH] into [BRANCH_NAME] failed — manual conflict resolution needed.`
    - Only merge into branches for your own tasks — never touch other agents' PRs.
    - Skip this step when PR Flow is off or no open PRs exist.
-
-**If `no`** (default — direct-to-main workflow):
-
-```bash
-python references/scripts/git_ops.py commit-push [ROLE] "[brief description of work done this cycle]"
-```

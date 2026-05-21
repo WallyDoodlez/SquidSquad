@@ -72,7 +72,7 @@ The script handles: status transitions, tracker comments, iteration logging, git
 ### Role-Specific Fields
 
 **Skill** cycle-output extras:
-- `code_commit`: `{branch, message, pr_needed, pr_title, pr_body}` — for branch workflow
+- `code_commit`: `{branch, message, pr_needed, pr_title, pr_body}` — feature-branch commit + PR creation block (#9478)
 - `state_commit_message`: separate message for main branch state commit
 - `improvement_scan`: `{files_scanned, findings}` — if scan ran
 
