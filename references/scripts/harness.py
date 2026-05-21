@@ -1371,10 +1371,11 @@ async def get_agent_config(role: str):
 
     result = {"role": role}
 
-    # Read config.md for agent-relevant settings
+    # Read config.md for agent-relevant settings.
+    # #9478 D2: `branch_workflow` field removed from response; branch+PR
+    # is the only mode, no toggle to expose.
     try:
         import config as cfg
-        result["branch_workflow"] = cfg.get_field("branch-workflow") == "yes"
         result["pr_flow"] = cfg.get_field("pr-flow") == "yes"
         result["interval_minutes"] = int(cfg.get_field("interval") or "30")
         result["version"] = cfg.get_field("version")

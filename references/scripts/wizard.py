@@ -1954,22 +1954,6 @@ def pr_flow_prompt():
     }
 
 
-def branch_workflow_prompt():
-    """Return the Branch Workflow question text and options for the setup agent."""
-    return {
-        "question": (
-            "Do you want feature branches per task?\n\n"
-            "**Branch Workflow ON** (default): Dev agents commit code to "
-            "`squidsquad/<role>/<issue-number>` branches. PRs are created "
-            "when work is ready for review. Keeps main clean.\n\n"
-            "**Branch Workflow OFF**: All agent commits go directly to the "
-            "working branch. Simpler but no per-task isolation."
-        ),
-        "options": ["On (default — feature branches)", "Off (direct to main)"],
-        "default": True,
-    }
-
-
 def post_setup_summary(spec):
     """Generate the 'What's Next' summary after setup completes.
 
@@ -2337,12 +2321,6 @@ def cmd_pr_flow_prompt(_args):
     return 0
 
 
-def cmd_branch_workflow_prompt(_args):
-    """Print the Branch Workflow question and options as JSON."""
-    _print_json(branch_workflow_prompt())
-    return 0
-
-
 def cmd_post_setup_summary(args):
     """Read a JSON install spec and print the post-setup summary.
 
@@ -2427,7 +2405,6 @@ def main():
         "migrate-label": cmd_migrate_label,
         "migrate-labels-staged": cmd_migrate_labels_staged,
         "pr-flow-prompt": cmd_pr_flow_prompt,
-        "branch-workflow-prompt": cmd_branch_workflow_prompt,
         "post-setup-summary": cmd_post_setup_summary,
         "load-spec": cmd_load_spec,
         "save-spec": cmd_save_spec,

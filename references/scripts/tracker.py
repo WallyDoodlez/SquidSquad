@@ -688,16 +688,6 @@ def _is_feedback_comment(body, caller_role):
     return False, None
 
 
-def _is_branch_workflow_enabled():
-    """Check if branch workflow is enabled in config."""
-    try:
-        sys.path.insert(0, str(SCRIPT_DIR))
-        from config import get_field
-        return (get_field("branch-workflow") or "").strip().lower() == "yes"
-    except Exception:
-        return False
-
-
 def _get_working_branch():
     """Get the configured working branch. Falls back to 'main'."""
     try:
@@ -712,16 +702,12 @@ def _get_working_branch():
 def _check_unmerged_branch(number):
     """Check if a feature branch exists with commits not merged to the working branch.
 
-    When branch workflow is enabled, feature branches follow the pattern
-    squidsquad/*/NUMBER. If such a branch exists and has commits not on
-    the working branch (main), shipping should be blocked.
+    Feature branches follow ``squidsquad/*/NUMBER`` (#9478: branch+PR is
+    the only mode, no toggle). If such a branch exists and has commits
+    not on the working branch (main), shipping should be blocked.
 
     Returns (branch_name, commit_count) if unmerged branch found, None otherwise.
-    Skips check if branch workflow is disabled.
     """
-    if not _is_branch_workflow_enabled():
-        return None
-
     working = _get_working_branch()
 
     # List all branches matching squidsquad/*/NUMBER pattern

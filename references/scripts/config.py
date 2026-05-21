@@ -65,7 +65,6 @@ FIELD_MAP = {
     "vault-optimize": ("Vault Optimize", "Enabled"),
     "agent-compose": ("Agent Compose", "Enabled"),
     "auto-merge": ("Auto Merge", "Enabled"),
-    "branch-workflow": ("Branch Workflow", "Enabled"),
     "mandatory-human-approval": ("Mandatory Human Approval", "Enabled"),
     "event-driven": ("Event Driven", "Enabled"),
     "scan-idle-timeout": ("Event Driven", "Scan Idle Timeout"),

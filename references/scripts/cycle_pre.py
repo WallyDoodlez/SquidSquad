@@ -161,9 +161,7 @@ def _enforce_branch(role, working_state):
 
     Returns a branch_correction dict if a correction was made, or None.
     """
-    branch_workflow = _config_get("branch-workflow").lower() in ("yes", "true", "1")
-    if not branch_workflow:
-        return None
+    # #9478 D7: branch+PR workflow is the only mode; the toggle was removed.
 
     task = working_state.get("task", "none")
     status = working_state.get("status", "none")
@@ -492,10 +490,12 @@ def _run_mechanical_reactions(events, role):
 
 
 def _read_config_flags():
-    """Read common config flags."""
+    """Read common config flags.
+
+    #9478: ``branch_workflow`` removed — branch+PR is the only mode.
+    """
     _YES = ("yes", "true", "1")
     return {
-        "branch_workflow": _config_get("branch-workflow").lower() in _YES,
         "pr_flow": _config_get("pr-flow").lower() in _YES,
         "improvement_scanning": _config_get("improvement-scanning").lower() in _YES,
         "vault_remember": _config_get("vault-remember").lower() in _YES,

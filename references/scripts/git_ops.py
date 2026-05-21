@@ -776,22 +776,12 @@ def get_branch_name(role, number):
 
 
 def task_begin(role, number):
-    """Check out the task's feature branch if branch-workflow is enabled (#3296).
+    """Check out the task's feature branch (#3296, #9478).
 
     Uses configured branch pattern (#5040). Prints branch name to stdout
-    so callers can capture it.
-    If branch-workflow is disabled, this is a no-op (exit 0).
+    so callers can capture it. Branch+PR is the only mode (#9478 D7) —
+    no toggle, no early-return.
     """
-    # Config gate: no-op if branch workflow disabled
-    try:
-        sys.path.insert(0, str(SCRIPT_DIR))
-        from config import get_field
-        bw = get_field("branch-workflow") or ""
-        if bw.strip().lower() in ("no", "false", "0", ""):
-            return
-    except Exception:
-        return  # Can't read config — treat as disabled
-
     # Auto-resolve unmerged state files from pull conflicts (#8653). Code
     # conflicts still require manual resolution — fail fast in that case so
     # the agent surfaces the real problem instead of an opaque checkout error.
@@ -854,21 +844,11 @@ def task_begin(role, number):
 
 
 def task_end(role, number):
-    """Return to the working branch after task work (#3296).
+    """Return to the working branch after task work (#3296, #9478).
 
-    If branch-workflow is disabled, this is a no-op.
+    Branch+PR is the only mode (#9478 D7) — no toggle, no early-return.
     Warns if uncommitted changes remain on the feature branch.
     """
-    # Config gate
-    try:
-        sys.path.insert(0, str(SCRIPT_DIR))
-        from config import get_field
-        bw = get_field("branch-workflow") or ""
-        if bw.strip().lower() in ("no", "false", "0", ""):
-            return
-    except Exception:
-        return
-
     working = _get_working_branch()
 
     # Safety: revert config.md to working branch version before leaving (#7491).

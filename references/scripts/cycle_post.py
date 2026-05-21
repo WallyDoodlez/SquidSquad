@@ -198,10 +198,8 @@ def _verify_remote_branch(number, role="skill"):
     Non-blocking — network failure returns None (proceed with warning).
     """
     try:
+        # #9478: branch+PR is the only mode now; no toggle to read.
         from config import get_field
-        bw = (get_field("branch-workflow") or "").strip().lower()
-        if bw not in ("yes", "true", "1"):
-            return True  # Branch workflow off — no branch expected
         pattern = get_field("branch-pattern") or "squidsquad/task/{number}"
         branch = pattern.replace("{number}", str(number)).replace("{role}", role)
     except BaseException:
@@ -451,18 +449,13 @@ def _do_commit_push(data, role):
     if not commit_msg:
         commit_msg = f"{role}: cycle {data.get('cycle_number', '?')} — {cycle_type}"
 
-    # Read branch_workflow from config.md directly — not from agent-written
-    # cycle-output.json which may be stale or missing (#5444)
-    branch_workflow = False
-    try:
-        bw = _config_get("branch-workflow")
-        branch_workflow = bw.strip().lower() in ("yes", "true", "1")
-    except Exception:
-        pass
+    # #9478 D7: branch+PR is the only mode; the toggle was removed.
+    # Skill agent split-commit path runs unconditionally when code_commit
+    # is present (it's the only role that produces code_commit blocks).
 
-    # Skill agent with branch workflow: split commits
+    # Skill agent: split commits — code to feature branch, state to working
     code_commit = data.get("code_commit")
-    if role == "skill" and branch_workflow and code_commit:
+    if role == "skill" and code_commit:
         branch = code_commit.get("branch", "")
         code_msg = _sanitize_commit_msg(code_commit.get("message", "code changes"))
 
