@@ -164,6 +164,92 @@ def test_dm_bootstrap_enumerates_pr_merge_wait():
     )
 
 
+@pytest.mark.parametrize("role", ROLES)
+def test_bootstrap_owns_loop_invocation_with_substituted_interval(role):
+    """#9588 BLOCKER fix: `/loop` is invoked from the bootstrap (which compose
+    inlines, so `[INTERVAL]` substitutes correctly), NOT from any runtime-Read
+    fragment (where the placeholder would not substitute and the agent would
+    try to invoke `/loop [INTERVAL]m …` literally).
+
+    Composed CLAUDE.md must contain `/loop <N>m execute one Ralph Loop cycle`
+    with a concrete integer N — and must NOT contain the literal placeholder
+    `[INTERVAL]`. Pulls the expected interval from config to keep the test
+    honest if someone changes the default cadence.
+    """
+    text = _compose_for(role)
+    assert "[INTERVAL]" not in text, (
+        f"{role}: composed CLAUDE.md still contains the literal `[INTERVAL]` "
+        f"placeholder — compose-time substitution failed somewhere."
+    )
+    # The /loop directive must be substituted. We don't pin the exact integer
+    # so the test survives config interval changes; we just require digits.
+    assert re.search(r"/loop \d+m execute one Ralph Loop cycle", text), (
+        f"{role}: composed CLAUDE.md should contain a substituted `/loop <N>m "
+        f"execute one Ralph Loop cycle` directive in the boot bootstrap."
+    )
+
+
+@pytest.mark.parametrize("role,entry", ROLE_TO_ENTRY.items())
+def test_polling_fragment_source_does_not_invoke_loop(role, entry):
+    """#9588 BLOCKER fix: source `ralph-loop-overview.md` fragments must NOT
+    contain a `/loop` invocation or the `[INTERVAL]` placeholder. Those moved
+    into the bootstrap (where compose substitutes `[INTERVAL]`). If a polling
+    fragment ever regains a literal `/loop [INTERVAL]m …`, an agent in
+    polling mode will Read the placeholder verbatim and the loop will never
+    fire — exactly the bug PM caught in cycle ~1537.
+    """
+    path = SUB_SKILLS / "roles" / entry / "ralph-loop-overview.md"
+    assert path.exists(), f"{role}: polling fragment missing at {path}"
+    src = path.read_text(encoding="utf-8")
+    assert "[INTERVAL]" not in src, (
+        f"{role}: source fragment {path.name} still has the [INTERVAL] "
+        f"placeholder — compose-time substitution does not fire on runtime-"
+        f"loaded fragments. Move any /loop references to boot-bootstrap.md."
+    )
+    assert "/loop " not in src, (
+        f"{role}: source fragment {path.name} still invokes `/loop` — boot "
+        f"bootstrap is now the sole scheduler. Strip the invocation from "
+        f"the source so a runtime Read cannot stack a duplicate cron entry."
+    )
+
+
+def test_bootstrap_documents_role_runtime_substitution():
+    """#9588 BLOCKER follow-on: role-placeholder still appears in the polling
+    fragment source (dev's, lines 33/36 — status-bar and current-state refs).
+    The bootstrap must tell the agent to substitute it at runtime using its
+    own role identity; otherwise the agent reads the literal placeholder
+    and writes a broken path / runs a broken arg.
+
+    The bootstrap source can't contain the literal placeholder string because
+    compose would substitute it away at compose time (the very bug we're
+    avoiding). So we check for the teaching marker + the role-name guidance.
+    """
+    text = (SUB_SKILLS / "common" / "boot-bootstrap.md").read_text(encoding="utf-8")
+    assert "Placeholder substitution inside runtime-loaded fragments" in text, (
+        "boot-bootstrap.md must carry the placeholder-substitution rule so "
+        "the agent knows what to do with role/interval placeholders inside "
+        "a runtime-loaded fragment. Without this rule, the literal "
+        "placeholder breaks path/arg construction in the polling fragment."
+    )
+    assert "Role-name placeholder" in text and "SQUIDSQUAD_ROLE" in text, (
+        "boot-bootstrap.md placeholder section must call out the role-name "
+        "placeholder and tell the agent to substitute its own SQUIDSQUAD_ROLE."
+    )
+    # And critically: the section must survive compose unchanged — i.e., the
+    # teaching itself must still be in the *composed* CLAUDE.md, not just
+    # the source. If compose were substituting the placeholder names away,
+    # the teaching section would render mangled (the original draft of this
+    # fragment had exactly that bug).
+    for role in ROLES:
+        composed = _compose_for(role)
+        assert "Role-name placeholder" in composed, (
+            f"{role}: composed CLAUDE.md is missing the placeholder-teaching "
+            f"section. Either compose mangled it (placeholder names spelled "
+            f"literally and substituted away) or the bootstrap was excluded "
+            f"from this role's compose."
+        )
+
+
 def test_l1_base_unreachable_branch_removed():
     """l1-base.md §3 no longer carries the bespoke degraded-mode block."""
     text = (SUB_SKILLS / "common-events" / "l1-base.md").read_text(encoding="utf-8")

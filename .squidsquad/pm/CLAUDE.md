@@ -245,13 +245,46 @@ Use the Read tool to read each of the following files **in order** and treat the
 
 After reading, the boot sequence and event-listening loop described in those fragments take effect immediately. Do not proceed to Step 4 (polling branch is unreachable once Step 3 executes).
 
-### Step 4 — POLLING mode: Read the polling fragment and follow it
+### Step 4 — POLLING mode: schedule `/loop`, then Read the polling fragment
+
+**Step 4a — Verify GitHub Issues access** (this check used to live inside the polling fragment; it has been moved up here so it runs BEFORE `/loop` is scheduled — a session that cannot reach GitHub should refuse to enter the loop):
+
+```bash
+python references/scripts/tracker.py check-gh
+```
+
+If this fails, print: `[🦑 HH:MM:SS] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.` and exit the session. SquidSquad requires GitHub Issues access.
+
+**Step 4b — Schedule `/loop` exactly once** (#9588 BLOCKER fix):
+
+Invoke this slash command literally. The interval value below is substituted at compose time from `config.md`'s `Iteration Interval > Minutes` field — do NOT re-derive it from the polling fragment, and do NOT re-invoke `/loop` after the fragment is loaded:
+
+```
+/loop 30m execute one Ralph Loop cycle
+```
+
+This is the only `/loop` invocation in your boot path. The polling fragment Read in Step 4c describes what a cycle DOES, not how to schedule one — re-invoking `/loop` from inside the fragment would stack cron entries.
+
+**Recovery from an interrupted `/loop`**: if a prior session ended without a cycle firing (e.g., the human ran the agent inline and then returned to `/loop` mode), re-invoke the same literal command above. Do not change the interval value.
+
+**Step 4c — Read the polling fragment**:
 
 Use the Read tool to read this single file:
 
 - `references/sub-skills/roles/pm/ralph-loop-overview.md`
 
-Treat its content as your active wake-mode contract. Follow its instructions exactly — including invoking `/loop 30m execute one Ralph Loop cycle` (or the cadence specified by `config.md`'s `interval` field) to schedule cycles.
+Treat its content as the contract for what happens INSIDE each cycle — step markers, status bar writes, work-queue pickup, commits, etc.
+
+### Placeholder substitution inside runtime-loaded fragments
+
+The fragments you Read in Step 3 or Step 4c are **source files**, not compose output. Compose-time placeholder substitution (the machinery in `compose.py:_substitute_placeholders`) only fires on content compose inlines into your CLAUDE.md — never on text you Read at runtime. As a result, source fragments may still contain square-bracketed UPPERCASE tokens that look like ``the-role-placeholder`` (uppercase R-O-L-E inside brackets) or ``the-interval-placeholder`` (uppercase I-N-T-E-R-V-A-L inside brackets).
+
+When you encounter one of these inside a runtime-loaded fragment, substitute it yourself using values you already know:
+
+- **Role-name placeholder** (uppercase R-O-L-E in square brackets) — substitute your own role name. You were started with `SQUIDSQUAD_ROLE=<role>` in your system prompt; that value IS the substitution. Example: when a fragment says ``write to `.squidsquad/<the-role-placeholder>/current-state` ``, write to ``.squidsquad/<your-role-name>/current-state``.
+- **Interval placeholder** (uppercase I-N-T-E-R-V-A-L in square brackets) — you should NOT encounter this in any runtime-loaded fragment. `/loop` is scheduled exclusively in Step 4b above, where compose has already substituted the literal interval. If you DO see the interval placeholder inside a runtime-loaded fragment, treat it as a bug — flag in your iteration log and do NOT execute the surrounding `/loop` invocation.
+
+(This section avoids writing the placeholder strings literally because compose would substitute them away at compose time, defeating the teaching. The names are spelled out letter-by-letter so the rule survives compose unchanged.)
 
 ### Loaded mode is sticky
 
