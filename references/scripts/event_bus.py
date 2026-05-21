@@ -62,9 +62,24 @@ def _discover_port():
 
 
 def _generate_id(event_type, role, timestamp, payload):
-    """Generate a short 8-char event ID from content hash."""
-    raw = f"{timestamp}{role}{event_type}{json.dumps(payload, sort_keys=True)}"
-    return hashlib.sha256(raw.encode()).hexdigest()[:8]
+    """Generate a 16-char (64-bit) event ID from content hash + per-emit nonce.
+
+    The previous 8-char width hit birthday collisions at ~65k events and
+    silently collapsed distinct emits with identical ``(event_type, role,
+    timestamp, payload)`` to the same ID. Both failure modes are addressed
+    by #9415:
+
+    - Width doubles to 16 hex (64-bit) per CONTEXT-9415 D4 — practically
+      infinite for our event volume.
+    - A 4-hex (``os.urandom(2)``) nonce is folded into the hash input per
+      CONTEXT-9415 D5 so distinct emits never collide even when content
+      is byte-identical. Callsite signature is unchanged (D5/§6.5); a
+      future caller that needs deterministic-from-content IDs can pre-
+      compute the nonce upstream — no such caller exists today.
+    """
+    nonce = os.urandom(2).hex()
+    raw = f"{timestamp}{role}{event_type}{json.dumps(payload, sort_keys=True)}{nonce}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
 def emit(event_type, role, payload=None, cycle_number=None):

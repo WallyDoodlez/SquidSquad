@@ -121,7 +121,7 @@ graph LR
     end
 
     subgraph id["Event ID"]
-        HASH["sha256(timestamp + role<br/>+ event_type + payload)[:8]<br/>Content-addressed, 8-char hex"]
+        HASH["sha256(timestamp + role<br/>+ event_type + payload + nonce)[:16]<br/>Content-hash + per-emit nonce, 16-char hex (64-bit, #9415)"]
     end
 
     POST --> D
