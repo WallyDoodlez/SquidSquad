@@ -930,7 +930,12 @@ class TestLoadManifestSelectsByWakeMode:
     def test_event_driven_loads_includes_events_yml(self):
         manifest = compose._load_manifest("dev", wake_mode="event-driven")
         assert manifest is not None
-        assert "common-events/event-driven-workflow" in manifest
+        # #9588: the events manifest is identified by the loader fragment
+        # (`common/boot-bootstrap`) plus the absence of polling-only
+        # entries like `common/cycle-runner`. The legacy assertion checked
+        # for `common-events/event-driven-workflow` — that fragment is now
+        # Read at runtime via the bootstrap, not listed in the manifest.
+        assert "common/boot-bootstrap" in manifest
         # cycle-runner is polling-only, should NOT appear in events manifest
         assert "common/cycle-runner" not in manifest
 
@@ -959,9 +964,19 @@ class TestLoadManifestSelectsByWakeMode:
             event = compose._load_manifest(role, wake_mode="event-driven")
             assert poll is not None, f"{role}: missing includes.yml"
             assert event is not None, f"{role}: missing includes-events.yml"
-            # Both must reference at least one common-events/ or common/ entry
-            assert any("common-events/" in p for p in event), (
-                f"{role}: includes-events.yml has no common-events/ entries"
+            # #9588: under the boot-bootstrap architecture, the mark that a
+            # manifest is wired correctly is the presence of the loader
+            # itself (`common/boot-bootstrap`) — the legacy check looked
+            # for `common-events/` entries directly in the events manifest,
+            # but those fragments are now Read at runtime by the bootstrap
+            # rather than listed in the manifest.
+            assert "common/boot-bootstrap" in poll, (
+                f"{role}: includes.yml missing `common/boot-bootstrap` "
+                f"loader entry"
+            )
+            assert "common/boot-bootstrap" in event, (
+                f"{role}: includes-events.yml missing `common/boot-bootstrap` "
+                f"loader entry"
             )
 
 

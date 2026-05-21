@@ -24,6 +24,16 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 
 ---
 
+{{include: common/boot-bootstrap}}
+
+<!--
+  #9588: the directives below are intentionally absent from BOTH
+  manifests; they are Read at runtime by `common/boot-bootstrap` and
+  `compose.py:RUNTIME_READ_FRAGMENTS` short-circuits them at compose
+  time. Re-adding them to a manifest will fail the regression test
+  in `tests/test_compose_9588.py`.
+-->
+
 {{include: roles/pm/ralph-loop-overview}}
 
 {{include: common/cycle-runner}}

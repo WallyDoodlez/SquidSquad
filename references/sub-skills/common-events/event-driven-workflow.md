@@ -4,7 +4,7 @@ You are a persistent agent session driven by events from the harness. You react 
 
 This fragment is a brief orientation. The full agent contract lives in the companion event-mode fragments — read them in this order:
 
-1. **[[l1-base]]** — boot sequence (Case A), event reactions (Cases B–E), case-precedence rule, working-state ownership discipline, degraded-mode operation.
+1. **[[l1-base]]** — boot sequence (Case A), event reactions (Cases B–E), case-precedence rule, working-state ownership discipline. Harness-loss recovery is handled by `common/boot-bootstrap.md` (polling-mode fallback at boot, #9588), not inline degraded mode.
 2. **[[cursor-management]]** — atomic `.tmp` + `mv` protocol, per-event advance, gap handling (in-stream, long lag, eviction).
 3. **[[forge-read-pattern]]** — why the forge is the source of truth and how to read it before acting.
 4. **[[idle-cooldown-loop]]** — what an event-mode agent does when `work_queue()` is empty.
@@ -21,7 +21,7 @@ This fragment is a brief orientation. The full agent contract lives in the compa
 
 ### Error handling
 
-If the harness becomes unreachable, the agent does NOT pivot to forge-direct work mid-session — that path exists only at boot (degraded mode, see [[l1-base]]). Mid-session unreachable is a **manual-recovery scenario**: keep retrying at the 5-minute-capped backoff; the operator restarts the harness; the agent resumes via the event stream on reconnect.
+If the harness becomes unreachable mid-session, the agent does NOT pivot to forge-direct work — this is a **manual-recovery scenario**: keep retrying `bootup-complete` at the 5-minute-capped backoff; the operator restarts the agent; on restart the boot bootstrap (`common/boot-bootstrap.md`) detects the unreachable harness and routes to polling mode (#9588). Mid-session degraded operation was removed in #9588.
 
 `event_poll.py` handles transient HTTP errors (5xx, `ConnectionError`, `Timeout`, `IncompleteRead`) automatically with exponential backoff. 4xx responses are treated as caller faults and exit non-zero.
 

@@ -1,14 +1,11 @@
 # PM agent sub-skill manifest (event-driven mode — #8697)
 # #8915 wired in the 5 event-mode L1 base fragments after the legacy
 # event-driven-workflow orientation page.
+# #9588: the six `common-events/*` fragments are now Read at runtime by
+# `common/boot-bootstrap` (the first include) rather than inlined here.
 # Order matters — includes are resolved top-to-bottom
 includes:
-  - common-events/event-driven-workflow
-  - common-events/l1-base
-  - common-events/cursor-management
-  - common-events/forge-read-pattern
-  - common-events/idle-cooldown-loop
-  - common-events/comment-handling
+  - common/boot-bootstrap
   - common/context-pressure
   - common/task-pickup
   - roles/pm/checkin
