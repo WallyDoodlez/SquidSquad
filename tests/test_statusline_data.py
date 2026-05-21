@@ -14,40 +14,21 @@ import statusline_data
 
 
 class TestGetWakeMode:
-    def test_defaults_to_polling(self):
-        with patch.dict("sys.modules", {"config": MagicMock()}), \
-             patch("config.get_field", return_value=""):
-            assert statusline_data._get_wake_mode("skill") == "polling"
+    """#9745: statusline_data._get_wake_mode delegates to config.get_wake_mode.
 
-    def test_event_driven_per_role(self):
-        with patch.dict("sys.modules", {"config": MagicMock()}):
-            def fake(field):
-                return "yes" if field == "event-driven-pm" else ""
-            with patch("config.get_field", side_effect=fake):
-                assert statusline_data._get_wake_mode("pm") == "event-driven"
-                assert statusline_data._get_wake_mode("skill") == "polling"
+    Resolution semantics are covered exhaustively in
+    tests/test_feat_9745_wake_mode_canonical.py::TestGetWakeMode. These tests
+    only verify the statusline wrapper delegates correctly.
+    """
 
-    def test_event_driven_global(self):
-        with patch.dict("sys.modules", {"config": MagicMock()}):
-            def fake(field):
-                return "yes" if field == "event-driven" else ""
-            with patch("config.get_field", side_effect=fake):
-                assert statusline_data._get_wake_mode("skill") == "event-driven"
+    def test_delegates_to_canonical_helper(self):
+        with patch("config.get_wake_mode", return_value="event-driven") as m:
+            assert statusline_data._get_wake_mode("pm") == "event-driven"
+            m.assert_called_once_with("pm")
 
-    def test_explicit_polling_per_role_beats_global_event(self):
-        with patch.dict("sys.modules", {"config": MagicMock()}):
-            def fake(field):
-                return {
-                    "event-driven-skill": "no",
-                    "event-driven": "yes",
-                }.get(field, "")
-            with patch("config.get_field", side_effect=fake):
-                assert statusline_data._get_wake_mode("skill") == "polling"
-
-    def test_systemexit_from_config_treated_as_absent(self):
-        """config.get_field calls sys.exit(1) on missing fields — must not crash."""
-        with patch.dict("sys.modules", {"config": MagicMock()}), \
-             patch("config.get_field", side_effect=SystemExit(1)):
+    def test_falls_back_to_polling_on_import_failure(self):
+        import sys as _sys
+        with patch.dict(_sys.modules, {"config": None}):
             assert statusline_data._get_wake_mode("skill") == "polling"
 
 

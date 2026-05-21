@@ -889,32 +889,26 @@ class TestNoRedundantReImport:
 
 
 class TestGetWakeMode:
-    def test_defaults_to_polling(self):
-        with patch.dict("sys.modules", {"config": MagicMock()}), \
-             patch("config.get_field", return_value=""):
+    """#9745: compose._get_wake_mode delegates to config.get_wake_mode.
+
+    The behavioral semantics (precedence, normalization, fallback) live in
+    config.get_wake_mode and are exhaustively tested in
+    tests/test_feat_9745_wake_mode_canonical.py::TestGetWakeMode. These tests
+    only verify the compose-side wrapper delegates correctly — patch the
+    canonical helper directly rather than the underlying get_field.
+    """
+
+    def test_delegates_to_canonical_helper(self):
+        with patch("config.get_wake_mode", return_value="event-driven") as m:
+            assert compose._get_wake_mode("skill") == "event-driven"
+            m.assert_called_once_with("skill")
+
+    def test_falls_back_to_polling_on_import_failure(self):
+        """If `from config import get_wake_mode` raises, wrapper returns polling."""
+        import sys as _sys
+        # Drop the config module so the wrapper's import re-runs and fails.
+        with patch.dict(_sys.modules, {"config": None}):
             assert compose._get_wake_mode("skill") == "polling"
-
-    def test_global_event_driven_yes(self):
-        with patch.dict("sys.modules", {"config": MagicMock()}):
-            def fake(field):
-                return "yes" if field == "event-driven" else ""
-            with patch("config.get_field", side_effect=fake):
-                assert compose._get_wake_mode("skill") == "event-driven"
-
-    def test_role_specific_overrides_global(self):
-        with patch.dict("sys.modules", {"config": MagicMock()}):
-            def fake(field):
-                return {"event-driven-pm": "yes", "event-driven": "no"}.get(field, "")
-            with patch("config.get_field", side_effect=fake):
-                assert compose._get_wake_mode("pm") == "event-driven"
-                assert compose._get_wake_mode("skill") == "polling"
-
-    def test_role_polling_explicit(self):
-        with patch.dict("sys.modules", {"config": MagicMock()}):
-            def fake(field):
-                return "no" if field == "event-driven-skill" else ""
-            with patch("config.get_field", side_effect=fake):
-                assert compose._get_wake_mode("skill") == "polling"
 
 
 class TestLoadManifestSelectsByWakeMode:
