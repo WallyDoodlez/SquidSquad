@@ -833,24 +833,23 @@ def main():
     except OSError:
         pass
 
-    # 7b. #9688: reap orphaned claude.exe processes left behind by the
-    # Agent tool on Windows. Defaults to enabled; flip
-    # `Orphan Cleanup > Enabled: no` in config.md to skip. POSIX skips
-    # internally — no orphans there because process groups handle it.
-    if (_config_get("orphan-cleanup") or "yes").strip().lower() != "no":
-        try:
-            import orphan_cleanup
-            result = orphan_cleanup.cleanup(role)
-            killed = result.get("killed", [])
-            if killed:
-                ts2 = _timestamp_short()
-                print(f"[🦑 {ts2}] orphan-cleanup: killed {len(killed)} "
-                      f"orphan claude.exe process(es): {sorted(killed)}",
-                      file=sys.stderr)
-        except (ImportError, Exception) as e:
-            # Best-effort — never fail the cycle on cleanup error.
-            print(f"[🦑] WARNING: orphan-cleanup raised {type(e).__name__}: {e}",
+    # 7b. #9688 / CONTEXT-9688 D5: reap orphan claude.exe Agent-tool
+    # subagents on Windows. Always on, no config flag — human direction
+    # cycle 1537. POSIX runs and exits silently (D6). Decision audit
+    # trail lands in .squidsquad/diagnostics/orphan-cleanup.log (D4).
+    try:
+        import orphan_cleanup
+        result = orphan_cleanup.sweep(invoked_by=f"cycle_post:{role}")
+        killed = result.get("killed", [])
+        if killed:
+            ts2 = _timestamp_short()
+            print(f"[🦑 {ts2}] orphan-cleanup: killed {len(killed)} "
+                  f"orphan claude.exe process(es): {sorted(killed)}",
                   file=sys.stderr)
+    except (ImportError, Exception) as e:
+        # Best-effort — never fail the cycle on cleanup error.
+        print(f"[🦑] WARNING: orphan-cleanup raised {type(e).__name__}: {e}",
+              file=sys.stderr)
 
     # 8. Emit cycle-end event (#4709)
     try:

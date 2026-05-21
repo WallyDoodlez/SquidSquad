@@ -1,93 +1,86 @@
-"""Reap orphaned ``claude.exe`` processes left behind by Agent-tool subagents (#9688).
+"""Reap orphaned ``claude.exe`` Agent-tool subagents per CONTEXT-9688.md (#9688).
 
-Windows-specific failure mode: when a SquidSquad agent invokes the Agent tool,
-Claude Code spawns ``cmd.exe`` → ``claude.exe`` to run the subagent. When the
-subagent finishes, the ``cmd.exe`` exits but Windows does not propagate the
-teardown to the ``claude.exe`` grandchild (no Unix-style process-group
-signalling). Across a long task with several Agent-tool calls (DeepSeek
-reviews, comprehension runs, exploratory subagents) ~7 orphans accumulated
-during the #9398/#9574 work and consumed ~500MB RAM + file handles.
+When a SquidSquad agent invokes the Agent tool, Claude Code spawns ``cmd.exe`` →
+``claude.exe`` for the subagent. When the subagent finishes, ``cmd.exe`` exits but
+Windows does NOT propagate the teardown to the ``claude.exe`` grandchild. Across a
+long task with several subagent calls the orphans accumulate (~500MB RAM observed
+in #9398/#9574 work).
 
-This module is intended to be invoked from the end of ``cycle_post.py``. It is
-also safe to invoke manually. It is a **no-op on POSIX** — Unix process-group
-teardown handles the subagent exit, so there are no orphans to reap.
+Per CONTEXT-9688.md ``Three claude.exe populations``:
 
-The cleanup logic deliberately keeps three protections:
+  1. **Protected agent** — ``ParentProcessId`` matches some role's ``.claude-pid``
+     (which stores the cmd.exe PID, NOT the claude.exe PID — see ARCHITECTURE.md).
+  2. **Live subagent** — parent is alive but does not match any ``.claude-pid``.
+     Spawned by the agent's Agent tool; legitimately in flight.
+  3. **Orphan** — parent is dead. Safe to terminate.
 
-1. **Self-protection** — never kill the live agent. The live PID is read from
-   ``.squidsquad/<role>/.claude-pid`` (the harness's sole liveness signal,
-   per thin_launcher and harness contract). The agent's parent chain
-   ALWAYS includes that PID directly or indirectly.
-2. **Clone-scoped** — only kill ``claude.exe`` processes whose command line
-   references the current clone path. Other clones on the same machine are
-   left alone.
-3. **Parent-dead** — only kill processes whose parent PID no longer exists.
-   A subagent with a live parent is still doing useful work; killing it
-   would interrupt a real Agent-tool invocation mid-flight.
+This module is invoked from the end of ``cycle_post.py`` AND from the start of
+``boot_remote.py``. It is a near-no-op on POSIX — Unix process-group teardown
+handles the subagent exit so there are essentially no orphans to reap (D6).
 
-The detection uses ``Get-CimInstance Win32_Process`` (the same query PM used
-in the #9688 reproduction recipe) rather than ``tasklist`` because tasklist
-does not expose parent PIDs.
+CONTEXT lock summary:
+
+  - **D1**: live parent ⇒ never kill (orphans only).
+  - **D2**: sweep globally. Filter by npm-install path so the user's own Claude
+    Code IDE / CLI sessions outside SquidSquad are never touched.
+  - **D3**: if ANY role's ``.claude-pid`` is missing or its cmd.exe is dead,
+    skip the ENTIRE cleanup run. Rather miss orphans than kill the wrong
+    process during a respawn race.
+  - **D4**: append every decision to ``.squidsquad/diagnostics/orphan-cleanup.jsonl``
+    as JSONL. Never comment on the tracker.
+  - **D5**: always on; no config flag.
+  - **D6**: cross-platform; POSIX runs and exits silently.
+  - **D7**: mock-based unit tests; the 7 cases in ``tests/test_orphan_cleanup_9688.py``.
+  - **D8**: see ``docs/ARCHITECTURE.md`` for the process-tree diagram.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import platform
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 SQUID_DIR = REPO_ROOT / ".squidsquad"
+DIAGNOSTICS_LOG = SQUID_DIR / "diagnostics" / "orphan-cleanup.jsonl"
 
-# WMI / CIM query that returns the four fields cleanup needs. Output format:
-# one record per process as CSV, header on the first line. Reading the
-# CommandLine field requires ``Get-CimInstance Win32_Process``; ``tasklist``
-# does not surface it.
-_PS_QUERY = (
-    "Get-CimInstance Win32_Process -Filter \"Name = 'claude.exe'\" | "
-    "Select-Object ProcessId,ParentProcessId,CommandLine | "
-    "ConvertTo-Csv -NoTypeInformation"
-)
+# CONTEXT D2: only consider claude.exe processes whose CommandLine references
+# the npm-installed binary. The user's own Claude Code CLI invocations from
+# unrelated paths (a different repo, the IDE) must not be killed. The npm
+# install path varies by Windows user but always ends with this fragment.
+_NPM_PATH_FRAGMENT = r"\node_modules\@anthropic-ai\claude-code\bin\claude.exe"
 
 
 def _is_windows() -> bool:
     return platform.system().lower() == "windows"
 
 
-def _read_live_pid(role: str) -> int | None:
-    """Return the live agent PID from ``.claude-pid`` or ``None`` if absent.
-
-    A missing or unparseable pid file is treated as "no protected pid" — the
-    cleanup still proceeds but with one less safety check. The other two
-    protections (clone-scoped path match, parent-dead) still apply, so this
-    failure mode does not threaten the live agent unless the pid file is
-    missing AND a clone-matching process has a dead parent (which is the
-    exact orphan scenario this script targets).
-    """
-    pid_file = SQUID_DIR / role / ".claude-pid"
-    if not pid_file.exists():
-        return None
-    try:
-        return int(pid_file.read_text(encoding="utf-8").strip())
-    except (ValueError, OSError):
-        return None
+# ---------------------------------------------------------------------------
+# Process listing
+# ---------------------------------------------------------------------------
 
 
 def _list_claude_processes() -> list[dict]:
     """Return ``claude.exe`` processes as ``{pid, ppid, cmdline}`` dicts.
 
-    Returns ``[]`` if PowerShell is unavailable or the query fails for any
-    reason. We deliberately do not raise — orphan cleanup is best-effort,
-    and a noisy crash on cycle_post tail would mask the actual cycle work.
+    Returns ``[]`` if PowerShell is unavailable or the query fails. Best-effort —
+    we never raise on the cleanup tail of cycle_post.
     """
     if not _is_windows():
         return []
+    query = (
+        "Get-CimInstance Win32_Process -Filter \"Name = 'claude.exe'\" | "
+        "Select-Object ProcessId,ParentProcessId,CommandLine | "
+        "ConvertTo-Csv -NoTypeInformation"
+    )
     try:
         result = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", _PS_QUERY],
+            ["powershell", "-NoProfile", "-Command", query],
             capture_output=True, text=True, check=False, timeout=15,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -97,16 +90,10 @@ def _list_claude_processes() -> list[dict]:
 
     lines = [ln for ln in result.stdout.splitlines() if ln.strip()]
     if len(lines) < 2:
-        # Just the CSV header, no rows.
         return []
 
-    # Skip the header. We hand-parse CSV instead of using the csv module
-    # so PowerShell-emitted lines with embedded commas inside the
-    # CommandLine field don't break us — Get-CimInstance quotes the
-    # CommandLine, so a tolerant 3-field split survives commas in args.
     out: list[dict] = []
     for line in lines[1:]:
-        # CSV: "pid","ppid","cmdline" (cmdline may itself contain commas).
         parts = _split_csv_three(line)
         if parts is None:
             continue
@@ -121,24 +108,18 @@ def _list_claude_processes() -> list[dict]:
 
 
 def _split_csv_three(line: str) -> tuple[str, str, str] | None:
-    """Split a 3-column CSV row that may have commas inside the last field.
+    """Split a 3-column CSV row whose last field may contain commas + quotes.
 
-    PowerShell ``ConvertTo-Csv`` quotes every field, so a strict left-to-right
-    scan for the first two unescaped ``","`` separators is enough — anything
-    after the second one is the CommandLine column, commas and all.
-
-    PowerShell also escapes a literal ``"`` inside a field by doubling it
-    (``""``) per RFC 4180. The pid / ppid columns are integers and never
-    contain quotes, but the CommandLine column legitimately can — e.g.
-    ``claude.exe --config "C:\\path with space"`` becomes
-    ``"...,""C:\\path with space""..."`` in CSV. After extracting the
-    raw CommandLine substring we collapse ``""`` back to ``"`` so callers
-    get the original argv-ish string.
+    PowerShell ``ConvertTo-Csv`` quotes every field and escapes embedded ``"``
+    as ``""`` per RFC 4180. The pid/ppid columns are integers and never carry
+    quotes; the CommandLine column legitimately can (e.g. quoted paths with
+    spaces). Strip outer quotes, scan for the first two ``","`` separators,
+    then collapse ``""`` → ``"`` in the CommandLine to recover the raw cmdline.
     """
     s = line.strip()
     if not (s.startswith('"') and s.endswith('"')):
         return None
-    s = s[1:-1]  # strip outer quotes
+    s = s[1:-1]
     sep = '","'
     first = s.find(sep)
     if first < 0:
@@ -153,14 +134,12 @@ def _split_csv_three(line: str) -> tuple[str, str, str] | None:
 
 
 def _is_pid_alive(pid: int) -> bool:
-    """Cross-platform PID liveness check.
+    """Cross-platform PID liveness probe.
 
-    Mirrors ``process_utils.is_process_alive`` but kept local so this module
-    has zero project imports — orphan cleanup runs at the tail of cycle_post
-    where extra import surface is least welcome (the cycle is already trying
-    to wrap up).
+    Mirrors ``process_utils.is_process_alive`` but kept local to keep this
+    module's import surface minimal at cycle_post tail.
     """
-    if pid <= 0:
+    if pid is None or pid <= 0:
         return False
     if _is_windows():
         try:
@@ -178,100 +157,123 @@ def _is_pid_alive(pid: int) -> bool:
         return False
 
 
-def _matches_clone(cmdline: str, clone_path: Path) -> bool:
-    """True if ``cmdline`` references ``clone_path`` (this repo).
+# ---------------------------------------------------------------------------
+# Protected-set resolution (CONTEXT D2 + D3)
+# ---------------------------------------------------------------------------
 
-    Path match is **boundary-aware**: a plain substring test would
-    false-positive sibling clones whose path is a superset of this one
-    (e.g., this clone ``D:\\Dev\\SquidSquad-2`` would match a command
-    line referencing ``D:\\Dev\\SquidSquad-2-other``, and orphan cleanup
-    would happily kill the sibling's claude.exe). Reject that class by
-    requiring the next character after the clone path to be either a
-    path separator, a quote, or end-of-string — anything that signals
-    the path ended HERE rather than continuing into a different
-    directory name.
+
+def _role_pid_files():
+    """Return ``{role: Path(.claude-pid)}`` for every configured role.
+
+    Walks the project's ``.local-config`` via ``boot_remote._parse_local_config``
+    so each role's pid file is resolved against ITS OWN clone — agents in
+    SquidSquad commonly run as separate clones (one per role), and skill's
+    clone has only ``skill/.claude-pid`` locally. Reading the right
+    ``.claude-pid`` per role is critical: comparing claude.exe PIDs against
+    the wrong pid file would either miss protection (kill the live agent)
+    or always-skip (D3 fires every run because pid files appear "missing").
+
+    Empty return = ``.local-config`` unavailable or unreadable; caller treats
+    that the same as "any role missing" and skips the sweep per D3.
+    """
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        import boot_remote
+        clones = boot_remote._parse_local_config()
+    except (ImportError, SystemExit, Exception):
+        return {}
+    out = {}
+    for role, clone_path in clones.items():
+        out[role] = Path(clone_path) / ".squidsquad" / role / ".claude-pid"
+    return out
+
+
+def _resolve_protected_pids(role_pid_files, processes):
+    """Resolve protected ``claude.exe`` PIDs for every role.
+
+    Returns ``(protected_pids, skipped_role_logs)``. Per CONTEXT D3: if ANY
+    role has a missing ``.claude-pid`` OR its cmd.exe is dead OR no claude.exe
+    child is found for the cmd.exe, the caller MUST skip the entire sweep.
+    The caller checks whether ``skipped_role_logs`` is empty.
+    """
+    protected = set()
+    skipped = []
+    if not role_pid_files:
+        skipped.append({
+            "role": "<any>", "reason": "no roles discoverable via .local-config",
+            "decision": "skipped",
+        })
+        return protected, skipped
+    for role, pid_file in role_pid_files.items():
+        if not pid_file.exists():
+            skipped.append({
+                "role": role, "reason": "missing .claude-pid",
+                "decision": "skipped",
+            })
+            continue
+        try:
+            cmd_pid = int(pid_file.read_text(encoding="utf-8").strip())
+        except (ValueError, OSError):
+            skipped.append({
+                "role": role, "reason": "unparseable .claude-pid",
+                "decision": "skipped",
+            })
+            continue
+        if not _is_pid_alive(cmd_pid):
+            skipped.append({
+                "role": role, "cmd_pid": cmd_pid,
+                "reason": "cmd.exe in .claude-pid not alive",
+                "decision": "skipped",
+            })
+            continue
+        # Find the claude.exe child of this cmd.exe.
+        children = [p for p in processes if p["ppid"] == cmd_pid]
+        if len(children) != 1:
+            skipped.append({
+                "role": role, "cmd_pid": cmd_pid,
+                "child_count": len(children),
+                "reason": "expected exactly one claude.exe child of cmd.exe",
+                "decision": "skipped",
+            })
+            continue
+        protected.add(children[0]["pid"])
+    return protected, skipped
+
+
+# ---------------------------------------------------------------------------
+# Classification + kill (CONTEXT D1 + D2)
+# ---------------------------------------------------------------------------
+
+
+def _matches_npm_install(cmdline):
+    """True if ``cmdline`` references the npm-installed claude.exe binary.
+
+    Per CONTEXT D2 + Out-of-Scope §7: this filter keeps the cleanup confined
+    to SquidSquad-spawned subagents and never touches the user's own Claude
+    Code IDE / CLI sessions running from a different path.
     """
     if not cmdline:
         return False
-    needle = str(clone_path).lower()
-    haystack = cmdline.lower()
-    idx = 0
-    while True:
-        idx = haystack.find(needle, idx)
-        if idx < 0:
-            return False
-        after = idx + len(needle)
-        # End-of-string, path separator, or quote = legitimate match.
-        # Anything else = the path continues (sibling clone) and is a
-        # false positive we must reject.
-        if after == len(haystack) or haystack[after] in ('\\', '/', '"', "'", ' '):
-            return True
-        idx = after
+    return _NPM_PATH_FRAGMENT.lower() in cmdline.lower()
 
 
-def find_orphans(role: str, clone_path: Path | None = None,
-                 live_pid: int | None = None) -> list[dict]:
-    """Return the list of orphan ``claude.exe`` processes safe to kill.
-
-    Parameters are injectable for testing — defaults use this clone's
-    real ``.claude-pid`` and ``REPO_ROOT``.
-    """
-    if not _is_windows():
-        return []
-    if clone_path is None:
-        clone_path = REPO_ROOT
-    if live_pid is None:
-        live_pid = _read_live_pid(role)
-
-    processes = _list_claude_processes()
-    if not processes:
-        return []
-
-    # Build a set of every PID we can see so the "parent dead" check is
-    # cheap. We then ALSO fall back to ``_is_pid_alive`` for parents not
-    # in the snapshot, because the parent of an orphan claude.exe is
-    # usually a ``cmd.exe`` — not a ``claude.exe`` — and won't appear
-    # in the Name='claude.exe' query result.
-    live_claude_pids = {p["pid"] for p in processes}
-
-    own_pid = os.getpid()
-    orphans: list[dict] = []
-    for proc in processes:
-        pid, ppid, cmd = proc["pid"], proc["ppid"], proc["cmdline"]
-
-        # Self-protect: never kill the live agent or ourselves.
-        if live_pid is not None and pid == live_pid:
-            continue
-        if pid == own_pid:
-            continue
-
-        # Clone-scoped: only touch processes that are clearly from this clone.
-        if not _matches_clone(cmd, clone_path):
-            continue
-
-        # Parent-dead test: parent isn't another claude.exe we just listed,
-        # AND a direct liveness probe says the PID is gone. Both conditions
-        # required — a parent that's a *live* cmd.exe (i.e. an Agent-tool
-        # invocation still in flight) would pass the first check but fail
-        # the second, and we should leave it alone.
-        parent_in_snapshot = ppid in live_claude_pids
-        if parent_in_snapshot:
-            continue
-        if _is_pid_alive(ppid):
-            continue
-
-        orphans.append(proc)
-    return orphans
+def _classify(proc, protected):
+    """Return ``(decision, reason)`` for one process. Pure — no kills here."""
+    pid, ppid, cmd = proc["pid"], proc["ppid"], proc["cmdline"]
+    if not _matches_npm_install(cmd):
+        return "kept", "out of scope (not npm-installed claude.exe)"
+    if pid in protected:
+        return "kept", "protected agent (claude.exe child of a role cmd.exe)"
+    if _is_pid_alive(ppid):
+        return "kept", "live subagent (parent still alive)"
+    return "killed", "orphan (parent dead)"
 
 
-def kill_orphan(pid: int) -> bool:
-    """Best-effort kill of a single PID. Returns True on apparent success."""
+def _kill(pid):
+    """Best-effort taskkill. Returns True on apparent success."""
     if pid <= 0:
         return False
     if _is_windows():
-        # /F = force, /PID = target, no /T because we already pruned the
-        # tree by listing all claude.exe processes — killing children
-        # individually keeps the kill scoped.
         try:
             result = subprocess.run(
                 ["taskkill", "/F", "/PID", str(pid)],
@@ -287,45 +289,123 @@ def kill_orphan(pid: int) -> bool:
         return False
 
 
-def cleanup(role: str, dry_run: bool = False) -> dict:
-    """Find orphans for ``role`` and (unless dry-run) kill them.
+# ---------------------------------------------------------------------------
+# Logging (CONTEXT D4)
+# ---------------------------------------------------------------------------
 
-    Returns a summary dict with ``killed`` (list of PIDs), ``skipped``
-    (list of PIDs that were detected but refused the kill), and
-    ``platform`` (the OS, for caller logging).
+
+def _log_decision(record):
+    """Append one JSON object as a line to the diagnostics log.
+
+    Append-only; best-effort. A write failure must not block the cleanup
+    itself — cleanup ran, the audit trail is just missing this entry.
     """
-    found = find_orphans(role)
+    record = dict(record)
+    record.setdefault("timestamp", time.time())
+    try:
+        DIAGNOSTICS_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with DIAGNOSTICS_LOG.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, separators=(",", ":")) + "\n")
+    except OSError:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+def sweep(invoked_by="manual", dry_run=False):
+    """Run one orphan-cleanup sweep. Returns a summary dict.
+
+    Cross-platform — on POSIX this returns immediately with a zero summary
+    (the orphan accumulation pattern is Windows-specific, see D6). Caller
+    passes ``invoked_by`` for log attribution: typically ``"cycle_post:<role>"``
+    or ``"boot_remote:<role>"``.
+    """
     summary = {
+        "invoked_by": invoked_by,
         "platform": platform.system().lower(),
-        "found": [p["pid"] for p in found],
-        "killed": [],
-        "skipped": [],
+        "kept": [], "killed": [], "skipped_roles": [],
+        "skipped_run": False,
     }
-    if dry_run or not found:
+
+    if not _is_windows():
+        _log_decision({
+            "invoked_by": invoked_by, "decision": "skipped",
+            "reason": "non-windows platform; nothing to sweep",
+        })
         return summary
-    for proc in found:
-        if kill_orphan(proc["pid"]):
-            summary["killed"].append(proc["pid"])
+
+    processes = _list_claude_processes()
+    if not processes:
+        return summary
+
+    role_pid_files = _role_pid_files()
+    protected, skipped_roles = _resolve_protected_pids(role_pid_files, processes)
+    summary["skipped_roles"] = skipped_roles
+
+    if skipped_roles:
+        # D3: any role failing to resolve aborts the entire sweep.
+        for entry in skipped_roles:
+            _log_decision({"invoked_by": invoked_by, **entry})
+        _log_decision({
+            "invoked_by": invoked_by, "decision": "skipped",
+            "reason": (f"{len(skipped_roles)} role(s) failed to resolve "
+                       "protected pid; aborting sweep per CONTEXT-9688 D3"),
+        })
+        summary["skipped_run"] = True
+        return summary
+
+    own_pid = os.getpid()
+    for proc in processes:
+        if proc["pid"] == own_pid:
+            continue
+        decision, reason = _classify(proc, protected)
+        _log_decision({
+            "invoked_by": invoked_by,
+            "pid": proc["pid"], "parent_pid": proc["ppid"],
+            "decision": decision, "reason": reason,
+        })
+        if decision == "killed":
+            if dry_run:
+                summary["killed"].append(proc["pid"])
+            elif _kill(proc["pid"]):
+                summary["killed"].append(proc["pid"])
+            else:
+                summary["kept"].append(proc["pid"])
+                _log_decision({
+                    "invoked_by": invoked_by, "pid": proc["pid"],
+                    "decision": "kept", "reason": "taskkill returned non-zero",
+                })
         else:
-            summary["skipped"].append(proc["pid"])
+            summary["kept"].append(proc["pid"])
     return summary
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: orphan_cleanup.py <role> [--dry-run]", file=sys.stderr)
-        return 1
-    role = sys.argv[1]
-    dry_run = "--dry-run" in sys.argv[2:]
-    result = cleanup(role, dry_run=dry_run)
-    found, killed, skipped = result["found"], result["killed"], result["skipped"]
-    if not found:
-        print(f"[orphan-cleanup] no orphans for {role} on {result['platform']}")
+    invoked_by = "manual"
+    dry_run = False
+    args = sys.argv[1:]
+    if "--dry-run" in args:
+        dry_run = True
+        args = [a for a in args if a != "--dry-run"]
+    if args:
+        invoked_by = args[0]
+
+    result = sweep(invoked_by=invoked_by, dry_run=dry_run)
+    if result["skipped_run"]:
+        print(f"[orphan-cleanup] sweep skipped: "
+              f"{len(result['skipped_roles'])} role(s) unresolved")
+        return 0
+    killed, kept = result["killed"], result["kept"]
+    if not killed and not kept:
+        print(f"[orphan-cleanup] no claude.exe processes found "
+              f"({result['platform']})")
         return 0
     action = "would kill" if dry_run else "killed"
-    print(f"[orphan-cleanup] {role}: found {len(found)} orphan(s) "
-          f"({sorted(found)}); {action} {sorted(killed)}; "
-          f"skipped {sorted(skipped)}")
+    print(f"[orphan-cleanup] {action} {len(killed)} orphan(s): "
+          f"{sorted(killed)} (kept {len(kept)})")
     return 0
 
 

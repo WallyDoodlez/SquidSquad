@@ -100,8 +100,6 @@ FIELD_MAP = {
     "effort-skill": ("Agent Effort", "skill"),
     "effort-qa": ("Agent Effort", "qa"),
     "effort-dm": ("Agent Effort", "dm"),
-    # #9688: orphan-claude-exe cleanup at end of cycle_post (Windows only).
-    "orphan-cleanup": ("Orphan Cleanup", "Enabled"),
 }
 
 
