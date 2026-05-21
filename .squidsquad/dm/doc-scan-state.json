@@ -8,9 +8,10 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "docs/ARCHITECTURE.md",
+  "last_scanned": "docs/sub-skill-guide.md",
   "rotation_count": 53,
   "scan_history": [
+    {"file": "docs/sub-skill-guide.md", "date": "2026-05-21", "findings": 0, "note": "Rotation 53. Stable since cycle-1116 fix (capabilities example list refresh). No edits since. Coverage by deterministic equivalence."},
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-21", "findings": 1, "fixes": ["L2 Agent Process Tree section line 77 — corrected stale line ref 'thin_launcher.py:149' → ':168' (shutil.which call has drifted since the #9688 ARCHITECTURE.md addition; actual location verified via grep). Committed manually as 70589781 because cycle_post.py only stages .squidsquad/dm/ (per #9474)."], "note": "Rotation 53. Full read of the file. New 'Agent Process Tree' subsection (lines 67-95) added by #9688 (cycle e3989001, pre-cycle-1198). Verified: process tree shape accurate (python.exe→cmd.exe→claude.exe — Windows .CMD shim behavior); .claude-pid convention matches harness.py + thin_launcher reality (cmd.exe PID stored, claude.exe via ParentProcessId lookup); kill/orphan/protected-agent enumeration aligned with #9688 implementation. Rest of file (six layers, lifecycle, coordination, design decisions) unchanged since #9688 commit — no further drift."},
     {"file": "SKILL.md:sections-7-8+slash-commands", "date": "2026-05-21", "findings": 0, "note": "Rotation 53. Sec 7-8 + sec 10 stable since cycle-1137 fix (/squidsquad-status health-source). No SKILL.md edits since. Coverage by deterministic equivalence."},
     {"file": "SKILL.md:sections-4-6", "date": "2026-05-20", "findings": 0, "note": "Rotation 53. Sec 4-6 stable since cycle-1131 fix (QA Loop step 7 health-source). No SKILL.md edits since cycle 1137. Coverage by deterministic equivalence."},
