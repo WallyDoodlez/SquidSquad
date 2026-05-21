@@ -1673,9 +1673,11 @@ async def get_events_for_role(
         filtered = filtered[-limit:] if len(filtered) > limit else filtered
 
     # #9741: dispatch() call stripped — endpoint is a pure filtered-read
-    # with no lifecycle side effects. There is no ack consumer (event_bus.ack
-    # is a dormant stub, tracked separately as #9813), so dispatching here
-    # was accumulating in-flight entries that always timed out, producing
+    # with no lifecycle side effects. The agent-side ack stub
+    # (event_bus.ack) was also removed in #9813 since it had no live
+    # producer after this. Cursor advance in event_poll.py is the
+    # de-facto ack signal. Before this change, dispatching here was
+    # accumulating in-flight entries that always timed out, producing
     # log spam and growing .event-state.json indefinitely.
 
     response = {"events": filtered, "total": len(filtered)}
