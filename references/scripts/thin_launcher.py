@@ -42,6 +42,25 @@ def _get_effort_level(role):
         return "high"
 
 
+def _get_interval():
+    """Read iteration interval (minutes) from config.md. Falls back to '30' (#9725).
+
+    Used to construct the spawn /loop prompt so freshly spawned agents register
+    a recurring loop on their first turn rather than running one inline cycle
+    and stalling (CONTEXT-9725 §2).
+    """
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from config import get_field
+        val = get_field("interval")
+        if val is None:
+            return "30"
+        s = str(val).strip()
+        return s if s else "30"
+    except (Exception, SystemExit):
+        return "30"
+
+
 def _is_process_alive(pid):
     """Check if a process with the given PID is still running. Cross-platform.
 
@@ -160,7 +179,10 @@ def main():
             "--name", f"squidsquad-{role}",
             "--effort", effort,
             "--dangerously-skip-permissions",
-            "Boot. Begin your first Ralph Loop cycle now.",
+            # #9725: spawn prompt IS the /loop registration. The agent's first
+            # turn registers the recurring schedule; subsequent cycles fire via
+            # cron, not via a stalled-in-Step-1 inline cycle. See CONTEXT-9725.
+            f"/loop {_get_interval()}m execute one Ralph Loop cycle",
         ])
 
         proc = subprocess.Popen(
