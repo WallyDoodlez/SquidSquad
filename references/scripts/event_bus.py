@@ -125,16 +125,6 @@ def emit(event_type, role, payload=None, cycle_number=None):
         pass
 
 
-def ack(event_id, role):
-    """Acknowledge event completion — posts ack event to harness (#7630 2-6).
-
-    Fire-and-forget like emit(). If harness is unreachable, silently drops.
-    """
-    if not event_id:
-        return
-    emit("ack", role, payload={"event_id": event_id})
-
-
 def bootup_complete(role):
     """Signal that the agent has finished initial boot (#8695 / #8914).
 

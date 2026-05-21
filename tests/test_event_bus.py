@@ -220,16 +220,10 @@ class TestEmitEventIdWidth9415:
         assert all(c in "0123456789abcdef" for c in evt["id"])
 
 
-class TestAck:
-    """#7630 2-6: ack() function delegates to emit() with ack event type."""
-
-    def test_ack_calls_emit(self):
-        """ack() emits an ack event with the event_id in payload."""
-        with patch.object(event_bus, "emit") as mock_emit:
-            event_bus.ack("evt123", "skill")
-        mock_emit.assert_called_once_with(
-            "ack", "skill", payload={"event_id": "evt123"}
-        )
+# TestAck removed in #9813 — event_bus.ack() deleted (Option b).
+# After #9741 stripped the dispatch() producer from /events/for/{role},
+# the ack stub had no live consumer. Cursor advance is the de-facto ack
+# signal; agents do not need a separate post-processing ack call.
 
 
 class TestNoUnusedImports:
