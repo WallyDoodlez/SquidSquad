@@ -2137,7 +2137,10 @@ def _emit_event(event_type, role, payload=None, **extra):
     without going through the HTTP /events endpoint.
     """
     event = {
-        "id": os.urandom(4).hex(),
+        # #9415 D4: widen from os.urandom(4)→(8), 8→16 hex (64-bit). The
+        # event_bus content-hash path was widened in lockstep so both ID
+        # producers now emit the same width.
+        "id": os.urandom(8).hex(),
         "event_type": event_type,
         "role": role,
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
