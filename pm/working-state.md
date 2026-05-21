@@ -1,45 +1,42 @@
 # Working State
 
-- **Task**: idle (waiting on #9837 ship-pipeline fix)
-- **Status**: idle — handover ready
+- **Task**: #9845 awaiting human approval (planned)
+- **Status**: idle — planning queue clean
 - **Last Processed Event ID**: 2461e3f1
 
-## Critical path
-- **#9837** (in-progress, skill) — tracker.py list-tasks blind to closed-but-labeled items. Blocking ship pipeline.
-- Once #9837 ships: DM can see + ship the 6 pending-ship items → version bump v0.40.0 → v0.41.0
+## Awaiting human approval
+- **#9845** (planned, role:skill) — noop event for stress/latency probe. RESEARCH+CONTEXT shipped. Lean: ship pre-flip.
 
-## Pending-ship queue (invisible to DM until #9837)
-- #9740, #9741, #9742, #9744 (Tier 1 audit findings)
-- #9725 (spawn-prompt fix)
-- #9772 (config.md ship-counter clobber, shipped via #9838)
-- #9813 (event_bus.ack() Phase 4 cleanup)
+## #9837 SHIPPED (critical path)
+- Ship-pipeline visibility bug fixed by skill
+- All Tier 1 + #9772 + #9813 + #9837 now at pending-ship — DM should see them on next cycle
+- Version bump v0.40.0 → v0.41.0 expected imminently
+
+## Pending-ship queue (8 items)
+- #9740, #9741, #9742, #9744 (Tier 1)
+- #9725 (spawn-prompt)
+- #9772, #9813, #9837 (pipeline fixes)
 
 ## Awaiting QA
 - **#9478** branch_workflow=off removal
 
-## Harness intermittent stalls — revised understanding
-- NOT a chronic wedge — verified via 3x curl retries returning HTTP 200 in 2ms after one HTTP 000 probe
-- Occasional 5s+ stalls; single probes can land in bad window
-- cycle_pre alternates between 'reachable' and 'unreachable' depending on probe luck
-- Polling-mode unaffected
-- Event-mode would degrade gracefully via existing 5s timeout fallback
-- Probably worth a low-severity bug to investigate the latency spikes; not urgent
+## Other in-flight
+- nothing — skill cleared the queue this morning
 
 ## Post-flip queue (locked)
 - #9748 — agent setup self-install
 - #3498 — backlog audit L2 sub-skill
 
-## Fleet flip prerequisites
-- ✅ All Tier 1 audit findings landed at pending-ship
-- ⏳ #9837 ship-pipeline fix (in-progress on skill)
-- ⏳ DM clears pending-ship queue once visible
+## Fleet flip prerequisites — STATUS
+- ✅ All Tier 1 audit findings shipped
+- ✅ #9837 ship-pipeline fix shipped
+- ⏳ DM clears pending-ship queue
 - ⏳ Version bump fires
 - ⏳ #9478 QA verify
-- Then: fleet flip
+- ⏳ #9845 ships (post-approval, pre-flip)
+- THEN: fleet flip
 
-## Memory rules added this session
-- feedback-proactor-loop-two-bugs
-- feedback-minimal-repro-over-symptom-match (just reaffirmed via harness 'wedge' misdiagnosis)
-- feedback-orphan-claude-from-subagents
-- feedback-tracker-comment-prefix
-- feedback-orphan-claude-on-reboot
+## Harness intermittent stalls
+- Confirmed not chronic — 3x retry gets HTTP 200 in 2ms
+- cycle_pre alternates 'reachable'/'unreachable' depending on probe luck
+- #9845 will give us a direct latency probe once shipped
