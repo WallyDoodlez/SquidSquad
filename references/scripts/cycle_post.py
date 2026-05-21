@@ -83,35 +83,20 @@ def _config_get(field):
 
 
 def _get_role_wake_mode(role):
-    """Return "event-driven" or "polling" for the given role (#8918).
+    """Delegate to canonical config.get_wake_mode (#9745).
 
-    Lookup precedence: `event-driven-<role>` → `event-driven` → default
-    `polling`. Mirrors compose._get_wake_mode (same precedence rules) — kept
-    local here to avoid pulling in compose.py just for one read at post-cycle
-    time.
+    Thin wrapper retained so cycle_post-internal callers don't need
+    import-path churn. See ``config.get_wake_mode`` for the resolution
+    rules — that is the single source of truth referenced by bootstrap.md.
     """
-    import contextlib
-    import io
     script_dir_str = str(SCRIPT_DIR)
     if script_dir_str not in sys.path:
         sys.path.insert(0, script_dir_str)
     try:
-        from config import get_field
+        from config import get_wake_mode
     except Exception:
         return "polling"
-    for field in (f"event-driven-{role}", "event-driven"):
-        try:
-            with contextlib.redirect_stderr(io.StringIO()):
-                v = (get_field(field) or "").strip().lower()
-        except BaseException:
-            # config.get_field exits(1) on missing field; tolerate that and
-            # disk-level TOCTOU on config.md the same way compose.py does.
-            v = ""
-        if v in ("yes", "true", "1", "event-driven"):
-            return "event-driven"
-        if v in ("no", "false", "0", "polling"):
-            return "polling"
-    return "polling"
+    return get_wake_mode(role)
 
 
 def _get_working_branch():
