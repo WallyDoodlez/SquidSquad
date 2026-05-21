@@ -58,6 +58,7 @@ STATIC_TEST_MODULES = [
     "test_event_derivation",
     "test_compose",
     "test_compose_9588",
+    "test_orphan_cleanup_9688",
     "test_reboot_agent",
     "test_feat_3296_task_boundary",
     "test_per_agent_workdirs",

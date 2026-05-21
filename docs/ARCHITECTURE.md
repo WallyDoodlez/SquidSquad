@@ -64,6 +64,35 @@ The **Behavior Layer** (L3) is the focal layer — it's where agents reason, dec
 
 **Boundary with L3:** Orchestration triggers each cycle. The behavior layer decides what to *do* during that cycle.
 
+### Agent Process Tree
+
+Each SquidSquad agent runs as a chain of three processes:
+
+```
+python.exe (thin_launcher.py)
+  └── cmd.exe (claude.CMD shim from npm install)
+        └── claude.exe (the actual agent)
+```
+
+Why cmd.exe is in the chain: `thin_launcher.py:149` resolves the claude binary via `shutil.which("claude")`, which returns `claude.CMD` on Windows (the npm shim). Running a `.CMD` file requires `cmd.exe` to interpret it, so Windows inserts `cmd.exe` between the launcher and the actual `claude.exe`. This is a Windows-only artifact of how `.CMD` shims work — POSIX systems launch `claude.exe` directly.
+
+### `.claude-pid` convention
+
+`.squidsquad/<role>/.claude-pid` stores the **cmd.exe** PID (the immediate parent of `claude.exe`), NOT the `claude.exe` PID itself. The name is historical — it was originally written assuming the launcher would spawn `claude.exe` directly. To find the actual agent `claude.exe` process: read `.claude-pid` → find the `claude.exe` whose `ParentProcessId` matches.
+
+### Killing agents
+
+- **Reboot (terminate agent + restart)**: `taskkill /F /T /PID <cmd.exe PID from .claude-pid>`. The `/T` flag kills the process tree — both `cmd.exe` and its `claude.exe` child terminate. The python `thin_launcher` (grandparent) sees its child exit and returns; the operator typically respawns via `boot_remote.py`.
+- **Orphan cleanup**: `taskkill /F /PID <orphan claude.exe PID>`. Orphans are leaf processes with no children, so no `/T` needed. See #9688 for the cleanup mechanism.
+
+### Three claude.exe populations
+
+When examining live `claude.exe` processes, three categories matter:
+
+1. **Protected agent** — `ParentProcessId` matches some role's `.claude-pid`. This is the live agent; never kill except via reboot.
+2. **Live subagent** — `ParentProcessId` is alive but does NOT match any `.claude-pid`. Spawned by the agent's `Agent` tool (deepseek code review, exploratory research); legitimately in progress.
+3. **Orphan** — `ParentProcessId` is dead. Subagent whose parent task completed but Windows didn't propagate the exit. Safe to terminate via the cleanup mechanism (#9688).
+
 ---
 
 ## L3 — Behavior Layer (Focal)

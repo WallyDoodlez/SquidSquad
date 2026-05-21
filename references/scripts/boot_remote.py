@@ -456,6 +456,20 @@ def boot_agent(role, dry_run=False):
         result["message"] = f"skip: {reason}"
         return result
 
+    # #9688 / CONTEXT-9688 D2: sweep orphan claude.exe subagents BEFORE
+    # spawning the new agent. Boot is a natural cleanup window — the role
+    # we're about to spawn is by definition not yet in .claude-pid (or
+    # holds the OLD cmd.exe PID we're replacing), so any claude.exe child
+    # of that old PID is unambiguously stale. Skip-if-any-role-unresolved
+    # (D3) protects sibling roles during this window.
+    if not dry_run:
+        try:
+            import orphan_cleanup
+            orphan_cleanup.sweep(invoked_by=f"boot_remote:{role}")
+        except (ImportError, Exception):
+            # Best-effort — boot must proceed even if cleanup is unavailable.
+            pass
+
     # Dry run
     if dry_run:
         result["action"] = "dry-run"

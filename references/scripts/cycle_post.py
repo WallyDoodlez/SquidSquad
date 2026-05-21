@@ -833,6 +833,24 @@ def main():
     except OSError:
         pass
 
+    # 7b. #9688 / CONTEXT-9688 D5: reap orphan claude.exe Agent-tool
+    # subagents on Windows. Always on, no config flag — human direction
+    # cycle 1537. POSIX runs and exits silently (D6). Decision audit
+    # trail lands in .squidsquad/diagnostics/orphan-cleanup.log (D4).
+    try:
+        import orphan_cleanup
+        result = orphan_cleanup.sweep(invoked_by=f"cycle_post:{role}")
+        killed = result.get("killed", [])
+        if killed:
+            ts2 = _timestamp_short()
+            print(f"[🦑 {ts2}] orphan-cleanup: killed {len(killed)} "
+                  f"orphan claude.exe process(es): {sorted(killed)}",
+                  file=sys.stderr)
+    except (ImportError, Exception) as e:
+        # Best-effort — never fail the cycle on cleanup error.
+        print(f"[🦑] WARNING: orphan-cleanup raised {type(e).__name__}: {e}",
+              file=sys.stderr)
+
     # 8. Emit cycle-end event (#4709)
     try:
         from event_bus import emit as _emit_event
