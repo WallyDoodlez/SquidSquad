@@ -1437,3 +1437,5 @@
 {"timestamp": "2026-05-18T10:10:50.486789", "severity": "error", "source": "tracker", "message": "Illegal transition status:approved -> status:planned on #8700"}
 {"timestamp": "2026-05-18T10:10:52.114475", "severity": "error", "source": "tracker", "message": "Illegal transition status:approved -> status:planned on #8704"}
 {"timestamp": "2026-05-18T10:10:54.140847", "severity": "error", "source": "tracker", "message": "Illegal transition status:approved -> status:planned on #4792"}
+{"timestamp": "2026-05-20T17:30:56.526403", "severity": "error", "source": "tracker", "message": "Illegal transition status:open -> status:planning on #9688"}
+{"timestamp": "2026-05-21T02:14:20.883156", "severity": "error", "source": "tracker", "message": "Illegal transition status:open -> status:planning on #9740"}

@@ -8,7 +8,10 @@
 - (none active)
 
 ## Notes
-- Quiet cycles. Harness 4h+ stable.
-- Pipeline waiting on #3 greenlight or skill recovery.
-- Skill stall 283m.
-- Context 55%.
+- Skill recovered from /loop stall on its own. Now on #9398 phase A scoping.
+- Approved queue (#9415, #9478) still status:pending — need human approval transition.
+- #9386 + #9387 also status:pending.
+- Harness still stable.
+- DM #3 awaiting greenlight.
+- PR #8812 hanging.
+- Context 56%.
