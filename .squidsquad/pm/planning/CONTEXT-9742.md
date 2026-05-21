@@ -1,0 +1,137 @@
+# CONTEXT-9742 — Boot TOCTOU Monitor Hang
+
+**Issue**: #9742
+**Phase**: 2 (Locked Decisions)
+**Author**: pm-lead
+**Date**: 2026-05-21
+**Status**: pending → planned (after human approval of these locks)
+
+> **AUTHORITATIVE SCOPE**: the GitHub issue body for #9742 + this CONTEXT-9742.md combined are the contract for skill at pickup.
+
+> **SCOPE EXPANSION**: the issue body recommends a doc-only fix. Research (RESEARCH-9742.md §2.2) confirms `event_poll.py --wait` retries transient connection failures forever — Monitor never exits on sustained harness loss, making a doc-only fix a dead letter in the primary failure scenario. Human approved Option B (code + doc) on 2026-05-21.
+
+---
+
+## 1. Locked Decisions
+
+### D1. Option B — Code + doc fix — LOCKED
+
+Both parts are required and ship in the same PR. A doc-only fix (Option A) is insufficient: without a retry ceiling, `event_poll.py --wait` loops indefinitely on transient-class connection failures, so Monitor never exits and the l1-base.md exit instruction is never triggered.
+
+### D2. Code change — retry ceiling in `event_poll.py --wait` loop
+
+**Locked**: add a consecutive-failure counter to the `--wait` loop (`references/scripts/event_poll.py` around line 307). After **10 consecutive transient connection failures**, exit with non-zero status (code 2). Use exponential backoff between retries: 1 s, 2 s, 4 s, … capped at 30 s per attempt. Use the existing backoff scheme if one is present in the file; otherwise implement the 1s/2s/4s/…/30s-max scheme. A single successful poll resets the consecutive-failure counter to zero.
+
+Rationale: 10 retries at the backoff schedule above gives ~5 min of tolerance before exit — enough headroom for a harness restart taking 15–30 s; not so long that a genuinely dead harness blocks auto-reboot for hours.
+
+### D3. Doc change — l1-base.md Monitor-exit clause
+
+**Locked**: add an explicit clause to `references/sub-skills/common-events/l1-base.md` under or immediately after the "How You Listen" section (currently lines 35–47). The clause must instruct the agent:
+
+> If the Monitor tool exits for any reason — `event_poll.py` terminates, non-zero exit, tool error, stream close — **exit the session immediately**. Do NOT attempt to re-invoke Monitor, wait for the harness to recover, or pivot to forge-direct work. Harness / thin_launcher auto-reboot owns recovery; agent exit is the signal.
+
+The clause applies regardless of whether Monitor exits before or after `bootup-complete` is emitted.
+
+Update the Monitor invocation example in l1-base.md if the new `--max-retries` (or equivalent) parameter changes the invocation syntax.
+
+### D4. Compose pipeline + fixture regen — MANDATORY in same PR
+
+**Locked**: after all source edits land, skill runs:
+
+```bash
+python references/scripts/compose.py deploy pm
+python references/scripts/compose.py deploy skill
+python references/scripts/compose.py deploy qa
+python references/scripts/compose.py deploy dm
+```
+
+and regenerates `tests/comprehension/8697_fixtures/*_events_CLAUDE.md` for all four roles. Both the compose run and fixture files are committed in the same PR. Per `feedback_l1_l4_only`.
+
+Note: `l1-base.md` is a `RUNTIME_READ_FRAGMENTS` fragment — agents Read it at runtime, compose does not inline it. The compose run is still required to keep composed CLAUDE.md fixtures current and CI green.
+
+### D5. CQ spec — REQUIRED for the l1-base.md instruction change
+
+**Locked**: per `feedback_comprehension_tests_required`, skill writes a comprehension-question spec alongside the l1-base.md edit. The spec must cover the new Monitor-exit instruction: a fresh agent given only the modified `l1-base.md` must answer correctly what it should do when Monitor exits. QA derives its formal test plan from this spec.
+
+### D6. Harness lifecycle authority — agent exits, harness restarts
+
+**Locked**: per `feedback_harness_sole_lifecycle`, the agent exits its session (does not attempt self-restart, does not retry Monitor invocation, does not signal the harness from within the session). The harness / thin_launcher owns restart via the `running` → auto-reboot intent path. No sentinel files. No parallel control paths.
+
+---
+
+## 2. Grounded File References
+
+| File | Relevance |
+|------|-----------|
+| `references/scripts/event_poll.py` lines 307–311 | `--wait` loop; retry ceiling added here |
+| `references/scripts/event_poll.py` lines 176–180 | `_fetch()` transient-error path; backoff behaviour confirmed here |
+| `references/sub-skills/common-events/l1-base.md` lines 35–47 | "How You Listen" — Monitor-exit clause added here |
+| `references/sub-skills/common-events/l1-base.md` lines 97–101 | "Harness-Loss Recovery (#9588)" — existing post-bootup clause; new clause must be consistent |
+| `references/sub-skills/common/boot-bootstrap.md` lines 20–26 | TOCTOU window (curl probe → Monitor invocation) — unchanged, for context only |
+| `tests/comprehension/8697_fixtures/*_events_CLAUDE.md` | Regenerated by compose in this PR |
+
+---
+
+## 3. Acceptance Criteria
+
+**AC-1 (retry ceiling — behavior)**: When `event_poll.py` is run in `--wait` mode and the harness endpoint returns connection errors on every attempt, the script exits with a non-zero status after at most 10 consecutive failures. It does not run indefinitely.
+
+**AC-2 (backoff — behavior)**: Retry delays between consecutive failures follow the 1 s / 2 s / 4 s … max-30 s exponential scheme (or the pre-existing scheme if one exists). A single successful poll resets the failure counter.
+
+**AC-3 (l1-base.md — content)**: `references/sub-skills/common-events/l1-base.md` contains an explicit clause instructing the agent to exit the session when Monitor exits, and not to re-invoke Monitor or attempt manual recovery.
+
+**AC-4 (compose + fixtures)**: `tests/comprehension/8697_fixtures/*_events_CLAUDE.md` for all four roles are regenerated and committed in the same PR. CI comprehension-fixture tests pass.
+
+**AC-5 (CQ spec)**: A comprehension-question spec for the l1-base.md change is present in the PR (in `tests/comprehension/` or equivalent). The spec verifies a fresh agent can correctly state the Monitor-exit behaviour.
+
+**AC-6 (no self-restart)**: The l1-base.md clause and any related code contain no instruction for the agent to restart itself, re-probe the harness from within the session, or write sentinel files. Session exit is the only agent action.
+
+---
+
+## 4. Out of Scope
+
+- Changes to `thin_launcher.py` or the harness intent state machine (auto-reboot path exists and is correct; this fix enables agents to exit so the path triggers).
+- Changes to `boot-bootstrap.md` curl probe (probe is not the problem — the TOCTOU gap after the probe is).
+- Adding a second curl pre-check just before Monitor invocation (narrows window only, adds a third execution path, contradicts `feedback_harness_sole_lifecycle`).
+- Addressing other AUDIT-A risks (cursor re-anchor race, in-flight dispatch, DM label-blind wait) — separate issues.
+- Polling-mode fallback path changes — unaffected.
+- Harness-side restart logic, sentinel files, or parallel control paths.
+
+---
+
+## 5. Sequencing (Tier 1)
+
+1. Edit `event_poll.py` — add consecutive-failure counter + backoff ceiling to `--wait` loop.
+2. Edit `l1-base.md` — add Monitor-exit clause; update invocation example if CLI signature changed.
+3. Write CQ spec for the l1-base.md change.
+4. Run `compose.py deploy` for all four roles; copy regenerated `*_events_CLAUDE.md` into `tests/comprehension/8697_fixtures/`.
+5. Verify all CI / comprehension tests pass.
+6. Ship as single PR.
+
+---
+
+## 6. Risk Notes
+
+1. **False-positive exits on slow harness restarts**: 10 retries × backoff schedule ≈ 5 min tolerance. If a harness restart takes longer than this in practice, agents will exit and re-enter event mode unnecessarily. Tune N at code-review time if evidence warrants — but lock is 10 retries.
+2. **Backoff scheme discovery**: research derived the retry behaviour from code reading only. Skill must confirm the existing backoff in `event_poll.py` (if any) before writing new code — do not duplicate a backoff that already exists.
+3. **Compose-only / runtime-read distinction**: l1-base.md is not composed-inlined, so the change takes effect immediately on next agent boot even before CI runs. CQ fixture update is still required so CI stays green.
+4. **l1-base.md invocation example**: if the new CLI parameter changes the Monitor invocation example in l1-base.md, all four roles' composed fixtures must reflect the updated example — covered by D4, but skill must not miss this.
+
+---
+
+## 7. Open Questions Resolved
+
+| Q | Resolution |
+|---|------------|
+| Q1 (RESEARCH §5.1) — Confirm `--wait` hang in production | Resolved by human scope approval: code reading in RESEARCH §2.2 is sufficient basis. Minimal repro not required before pickup. |
+| Q2 (RESEARCH §5.2) — Retry ceiling value | **10 retries, 1s/2s/4s/…/30s-max backoff** — locked (D2). |
+| Q3 (RESEARCH §5.3) — Distinguish exit code 0 vs 2 | No distinction needed. Either exit warrants agent session exit. Clause is unconditional. |
+| Q4 (RESEARCH §5.4) — CQ spec ownership | Skill writes CQ spec (D5). QA derives formal test plan from it at verification time. |
+| Q5 (RESEARCH §5.5) — Update Monitor invocation example | Yes, in scope if CLI signature changes (D3). |
+| "Doc-only sufficient?" | **NO** — resolved via human approval 2026-05-21. Code + doc required. |
+
+---
+
+## 8. Next Step
+
+PM transitions #9742 `open` → `planned`. Human reviews CONTEXT-9742.md. On approval, PM transitions `planned` → `approved`. Skill picks up.
