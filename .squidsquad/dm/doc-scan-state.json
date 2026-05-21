@@ -8,9 +8,10 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "CONTRIBUTING.md",
-  "rotation_count": 53,
+  "last_scanned": "CHANGELOG.md",
+  "rotation_count": 54,
   "scan_history": [
+    {"file": "CHANGELOG.md", "date": "2026-05-21", "findings": 0, "note": "Rotation 53 close — advancing rotation_count to 54. CHANGELOG.md just had v0.41.0 section added in cycle 1243 (the bump I performed this session). 20-item v0.41.0 Added/Fixed/Internal verified accurate against gh-query of shipped items (21 total minus #8915 which was already in v0.40.0 — correctly excluded). User-value framing maintained. R53 summary: 7-doc full rotation, 1 real fix (docs/ARCHITECTURE.md thin_launcher line ref :149→:168 after #9688's new Process Tree section), rest deterministic-equivalent."},
     {"file": "CONTRIBUTING.md", "date": "2026-05-21", "findings": 0, "note": "Rotation 53. Unchanged since cycle 979 (last actual edit). Coverage by deterministic equivalence."},
     {"file": "docs/sub-skill-guide.md", "date": "2026-05-21", "findings": 0, "note": "Rotation 53. Stable since cycle-1116 fix (capabilities example list refresh). No edits since. Coverage by deterministic equivalence."},
     {"file": "docs/ARCHITECTURE.md", "date": "2026-05-21", "findings": 1, "fixes": ["L2 Agent Process Tree section line 77 — corrected stale line ref 'thin_launcher.py:149' → ':168' (shutil.which call has drifted since the #9688 ARCHITECTURE.md addition; actual location verified via grep). Committed manually as 70589781 because cycle_post.py only stages .squidsquad/dm/ (per #9474)."], "note": "Rotation 53. Full read of the file. New 'Agent Process Tree' subsection (lines 67-95) added by #9688 (cycle e3989001, pre-cycle-1198). Verified: process tree shape accurate (python.exe→cmd.exe→claude.exe — Windows .CMD shim behavior); .claude-pid convention matches harness.py + thin_launcher reality (cmd.exe PID stored, claude.exe via ParentProcessId lookup); kill/orphan/protected-agent enumeration aligned with #9688 implementation. Rest of file (six layers, lifecycle, coordination, design decisions) unchanged since #9688 commit — no further drift."},
