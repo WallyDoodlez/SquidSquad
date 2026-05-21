@@ -122,7 +122,10 @@ class TestFindClaude:
         assert result is None or isinstance(result, str)
 
     def test_finds_claude_on_path(self):
-        with patch.object(rct.shutil, "which", return_value="/usr/bin/claude"):
+        # #9724: see test_run_comprehension.py::TestFindClaude — same
+        # Windows-branch short-circuit, same fix.
+        with patch("pathlib.Path.exists", return_value=False), \
+             patch.object(rct.shutil, "which", return_value="/usr/bin/claude"):
             result = rct._find_claude()
         assert result == "/usr/bin/claude"
 
@@ -195,10 +198,14 @@ class TestEmptyResultsGuard:
         results_file = out_dir / "results.json"
         results_file.write_text("[]", encoding="utf-8")
 
+        # #9724: _run_agent returns (text, proc); using "[]" works for BOTH the
+        # test-agent call (non-empty so the empty-content guard passes) AND the
+        # eval-agent call (parses to an empty JSON list, triggering the
+        # empty-results path under test).
         fake_result = MagicMock(returncode=0, stdout="", stderr="")
         with patch.object(rct, "_check_cache", return_value=False), \
              patch.object(rct, "_find_claude", return_value="/usr/bin/claude"), \
-             patch.object(rct, "_run_agent", return_value=fake_result), \
+             patch.object(rct, "_run_agent", return_value=("[]", fake_result)), \
              patch.object(rct, "REPO_ROOT", tmp_path):
             results, _ = rct.run_test(str(spec), output_dir=str(out_dir))
 
@@ -219,11 +226,14 @@ class TestEmptyResultsGuard:
         (out_dir / "answers.md").write_text("### Q-Q1\nanswer\n", encoding="utf-8")
         (out_dir / "results.json").write_text("[]", encoding="utf-8")
 
+        # #9724: _run_agent returns (text, proc); "[]" works for both calls
+        # (non-empty for the test-agent content guard, empty JSON for the
+        # eval-agent empty-results path).
         cache_dir = tmp_path / ".cache"
         fake_result = MagicMock(returncode=0, stdout="", stderr="")
         with patch.object(rct, "_check_cache", return_value=False), \
              patch.object(rct, "_find_claude", return_value="/usr/bin/claude"), \
-             patch.object(rct, "_run_agent", return_value=fake_result), \
+             patch.object(rct, "_run_agent", return_value=("[]", fake_result)), \
              patch.object(rct, "CACHE_DIR", cache_dir), \
              patch.object(rct, "REPO_ROOT", tmp_path):
             rct.run_test(str(spec), output_dir=str(out_dir))
