@@ -10,6 +10,9 @@ Usage:
     python scripts/config.py dump                  # Dump all fields as JSON
     python scripts/config.py agents                # List agents as JSON
     python scripts/config.py schema-version        # Print 1 or 2
+    python scripts/config.py alias <role>          # Get role alias (falls back to role name)
+    python scripts/config.py sync-agents           # Sync Agents section from .squidsquad/*/CLAUDE.md
+    python scripts/config.py list-agents           # Tab-separated agents for shell consumers
     python scripts/config.py --help                # Show usage
 
 Schema versions:
