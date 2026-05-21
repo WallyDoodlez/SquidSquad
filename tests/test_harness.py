@@ -1948,8 +1948,15 @@ class TestGetEventsForRole(unittest.TestCase):
         self.assertEqual(len(data["events"]), 1)
         self.assertEqual(data["events"][0]["id"], "e1")
 
-    def test_marks_dispatched(self):
-        """GET /events/for/skill marks returned events as dispatched."""
+    def test_does_not_dispatch(self):
+        """#9741: GET /events/for/skill must NOT add events to in-flight.
+
+        Before #9741 the endpoint called event_lifecycle.dispatch() on every
+        delivered event, but there is no ack consumer wired yet — every
+        event would eventually time out, growing .event-state.json and
+        spamming the timeout-scanner log. CONTEXT-9741 D1 strips the call;
+        the endpoint is a pure filtered-read with no lifecycle side effects.
+        """
         from harness import event_stream, event_lifecycle
 
         event_stream.append({
@@ -1960,7 +1967,8 @@ class TestGetEventsForRole(unittest.TestCase):
         with patch("harness._validate_role"):
             self.client.get("/events/for/skill")
 
-        self.assertIn("e3", event_lifecycle.get_in_flight("skill"))
+        # Endpoint delivers the event but does not touch in-flight state.
+        self.assertNotIn("e3", event_lifecycle.get_in_flight("skill"))
 
     def test_since_cursor_filters_events(self):
         """GET /events/for/skill?since=X returns only events after cursor."""
@@ -1983,8 +1991,15 @@ class TestGetEventsForRole(unittest.TestCase):
         self.assertNotIn("old1", ids)
         self.assertIn("new1", ids)
 
-    def test_does_not_redispatch_already_dispatched(self):
-        """GET /events/for/skill does not re-dispatch already dispatched events."""
+    def test_endpoint_does_not_touch_lifecycle_state(self):
+        """#9741: with dispatch stripped, the endpoint must not mutate in-flight.
+
+        Even when an event was pre-dispatched by some other path, calling
+        the read endpoint must not re-dispatch, re-add, or otherwise mutate
+        the lifecycle state. CONTEXT-9741 D2 — the idempotency guard test
+        is irrelevant once dispatch is stripped; this test instead verifies
+        the read-only invariant.
+        """
         from harness import event_stream, event_lifecycle
 
         event_stream.append({
@@ -1992,14 +2007,20 @@ class TestGetEventsForRole(unittest.TestCase):
             "payload": {"target_role": "skill"},
         })
 
-        # Pre-dispatch the event
+        # Pre-dispatch via the lifecycle manager directly (NOT via the endpoint).
         event_lifecycle.dispatch("e4", "skill", {"id": "e4"})
+        before = list(event_lifecycle.get_in_flight("skill"))
 
         with patch("harness._validate_role"):
             self.client.get("/events/for/skill")
 
-        # Should still be dispatched exactly once (not duplicated in in_flight)
-        self.assertEqual(event_lifecycle.get_in_flight("skill").count("e4"), 1)
+        # In-flight state must be identical — endpoint touched nothing.
+        after = list(event_lifecycle.get_in_flight("skill"))
+        self.assertEqual(before, after)
+        # And specifically: e4 still appears exactly once (the pre-dispatch),
+        # not zero (would mean endpoint cleared it) or two (would mean
+        # endpoint re-dispatched).
+        self.assertEqual(after.count("e4"), 1)
 
 
 class TestCompleteEventEndpoint(unittest.TestCase):

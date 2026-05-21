@@ -1672,11 +1672,11 @@ async def get_events_for_role(
     else:
         filtered = filtered[-limit:] if len(filtered) > limit else filtered
 
-    # Mark dispatched in lifecycle manager
-    for e in filtered:
-        eid = e.get("id")
-        if eid:
-            event_lifecycle.dispatch(eid, role, e)
+    # #9741: dispatch() call stripped — endpoint is a pure filtered-read
+    # with no lifecycle side effects. There is no ack consumer (event_bus.ack
+    # is a dormant stub, tracked separately as #9813), so dispatching here
+    # was accumulating in-flight entries that always timed out, producing
+    # log spam and growing .event-state.json indefinitely.
 
     response = {"events": filtered, "total": len(filtered)}
     if eviction is not None:
