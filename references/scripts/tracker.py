@@ -394,23 +394,50 @@ def check_gh():
 
 
 def list_issues(role, issue_type="bug", status=None):
-    """List issues by role and optional type/status filter."""
+    """List issues by role and optional type/status filter.
+
+    State + role semantics (#9837):
+
+    - For most statuses the issue is OPEN, and the ``role:<role>`` label is
+      the dev owner who works the item. Default ``state=open``, role filter
+      applies.
+    - For ``pending-ship`` and ``shipped``, two things change:
+        1. The GitHub issue may already be CLOSED because PRs auto-close
+           their linked issues via "Closes #N" body — the label survives
+           but the issue state flips to closed BEFORE DM gets to transition
+           it off pending-ship.
+        2. DM is the universal shipper — every pending-ship item is DM's
+           responsibility regardless of which dev role authored the work.
+           A ``role:dm`` filter on ``--status pending-ship`` excludes the
+           role:skill / role:qa items DM actually needs to see.
+
+    So for these two statuses we (a) widen state to ``all`` and (b) drop the
+    role filter from the query — the universal-shipper semantic. ``role`` is
+    still accepted in the signature for CLI compatibility but is ignored when
+    status is terminal-adjacent. Every other status keeps both filters.
+    """
     type_label = TYPE_LABELS.get(issue_type, f"type:{issue_type}")
-    role_label = f"role:{role}"
-    label_list = [type_label, role_label]
+    label_list = [type_label]
+    universal_status = status in ("pending-ship", "shipped")
+    if not universal_status:
+        # Standard path: role filter applies for non-terminal statuses.
+        label_list.append(f"role:{role}")
     if status:
         label_list.append(_resolve_status(status))
 
+    # #9837: closed-but-labeled issues are legitimate work for these statuses.
+    gh_state = "all" if universal_status else "open"
+
     adapter = _get_forge_adapter()
     if adapter:
-        issues = adapter.list_issues(labels=label_list, state="open", limit=50)
+        issues = adapter.list_issues(labels=label_list, state=gh_state, limit=50)
         print(json.dumps(issues, indent=2))
         return issues
 
     # Default: gh CLI
     labels = ",".join(label_list)
     result = _run_list(
-        ["gh", "issue", "list", "--label", labels, "--state", "open",
+        ["gh", "issue", "list", "--label", labels, "--state", gh_state,
          "--json", "number,title,labels", "--limit", "50"],
         check=False,
     )
