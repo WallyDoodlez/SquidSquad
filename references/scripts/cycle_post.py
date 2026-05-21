@@ -16,6 +16,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 import urllib.request
 import urllib.error
 from datetime import datetime
@@ -176,11 +177,20 @@ def _validate_output(data, role=None):
 # ---------------------------------------------------------------------------
 
 
-def _verify_remote_branch(number, role="skill"):
-    """Best-effort check that a feature branch exists on remote (#5444, #5526).
+def _verify_remote_branch(number, role="skill", _sleep=None):
+    """Best-effort check that a feature branch exists on remote (#5444, #5526, #9687).
 
     Returns True if branch is on remote, False if not, None if check failed.
     Non-blocking — network failure returns None (proceed with warning).
+
+    #9687: a single retry-after-sleep handles the tight race between
+    ``git push`` completion and the remote ref becoming visible to
+    ``ls-remote``. Without it, cycle_post's auto-transition can block
+    pending-test even though the push succeeded — operator then has to
+    apply the transition by hand. The retry is cheap (one extra
+    ls-remote round-trip after a 2-second sleep) and only fires on the
+    first-attempt False path. ``_sleep`` is injectable for tests so
+    they don't actually sleep.
     """
     try:
         # #9478: branch+PR is the only mode now; no toggle to read.
@@ -196,7 +206,18 @@ def _verify_remote_branch(number, role="skill"):
     result = _run(["git", "ls-remote", "--heads", "origin", branch], check=False)
     if result.returncode != 0:
         return None  # Network failure — don't block
-    return branch in result.stdout
+    if branch in result.stdout:
+        return True
+
+    # #9687: branch not found on first attempt. Could be the eventual-
+    # consistency race between the push (already returned success
+    # locally) and the remote refs becoming queryable. Retry once.
+    sleep_fn = _sleep if _sleep is not None else time.sleep
+    sleep_fn(2)
+    retry = _run(["git", "ls-remote", "--heads", "origin", branch], check=False)
+    if retry.returncode != 0:
+        return None  # Network failure on retry — don't block
+    return branch in retry.stdout
 
 
 def _do_status_transitions(data, role):
