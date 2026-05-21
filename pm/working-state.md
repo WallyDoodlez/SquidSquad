@@ -1,42 +1,45 @@
 # Working State
 
-- **Task**: #9845 awaiting human approval (planned)
-- **Status**: idle — planning queue clean
+- **Task**: idle (post-reflection, vault writes done)
+- **Status**: idle — handover ready
 - **Last Processed Event ID**: 2461e3f1
 
+## Today's vault writes
+- learning-strip-vs-wire-audit-findings (high confidence, source=review)
+- decision-phase-4-event-ack-lifecycle-deferred (high confidence, source=review)
+
 ## Awaiting human approval
-- **#9845** (planned, role:skill) — noop event for stress/latency probe. RESEARCH+CONTEXT shipped. Lean: ship pre-flip.
+- **#9845** noop event stress-test — RESEARCH+CONTEXT shipped, status:planned. Lean: ship narrow noop+noop-ack pair pre-flip; expand to use real ack mechanism once Phase 4 lands.
 
-## #9837 SHIPPED (critical path)
-- Ship-pipeline visibility bug fixed by skill
-- All Tier 1 + #9772 + #9813 + #9837 now at pending-ship — DM should see them on next cycle
-- Version bump v0.40.0 → v0.41.0 expected imminently
-
-## Pending-ship queue (8 items)
-- #9740, #9741, #9742, #9744 (Tier 1)
-- #9725 (spawn-prompt)
-- #9772, #9813, #9837 (pipeline fixes)
+## Pipeline ship-readiness
+- **#9837** shipped via #9844 — DM should now see pending-ship queue
+- 8 items at pending-ship awaiting DM bump
+- Ship counter still 11/10 — bump pending
 
 ## Awaiting QA
 - **#9478** branch_workflow=off removal
 
-## Other in-flight
-- nothing — skill cleared the queue this morning
+## Open architectural debt (surfaced this cycle)
+- **Phase 4 event-ack lifecycle** — no tracker item; vault-captured as decision-phase-4-event-ack-lifecycle-deferred. Open question for human: file as tracker item now (gives a Phase 4 hook) vs leave as vault-only context until triggered?
 
 ## Post-flip queue (locked)
 - #9748 — agent setup self-install
 - #3498 — backlog audit L2 sub-skill
 
-## Fleet flip prerequisites — STATUS
+## Fleet flip prerequisites
 - ✅ All Tier 1 audit findings shipped
 - ✅ #9837 ship-pipeline fix shipped
-- ⏳ DM clears pending-ship queue
-- ⏳ Version bump fires
+- ⏳ DM clears pending-ship queue + version bump
 - ⏳ #9478 QA verify
-- ⏳ #9845 ships (post-approval, pre-flip)
-- THEN: fleet flip
+- ⏳ #9845 ships (if approved)
+- THEN fleet flip
 
-## Harness intermittent stalls
-- Confirmed not chronic — 3x retry gets HTTP 200 in 2ms
-- cycle_pre alternates 'reachable'/'unreachable' depending on probe luck
-- #9845 will give us a direct latency probe once shipped
+## Memory rules added this session
+- feedback-proactor-loop-two-bugs
+- feedback-minimal-repro-over-symptom-match (reaffirmed via harness 'wedge' misdiagnosis + the #9741 strip reflection)
+- feedback-orphan-claude-from-subagents
+- feedback-tracker-comment-prefix
+- feedback-orphan-claude-on-reboot
+
+## Self-correction logged
+- #9741 strip was a PM judgment error optimizing symptom over architecture. Vault note pins the lesson for future audit triage.
