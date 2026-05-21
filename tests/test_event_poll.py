@@ -610,7 +610,8 @@ class TestSinceWithWaitOneShotSemantics:
         calls = []
 
         def _fake_poll(role, since=None, limit=50, target_mode=False,
-                       http_timeout=None, sleep=None):
+                       http_timeout=None, sleep=None,
+                       max_consecutive_failures=None):
             calls.append(since)
             if len(calls) >= 2:
                 # Returning None makes main() sys.exit(2), which we

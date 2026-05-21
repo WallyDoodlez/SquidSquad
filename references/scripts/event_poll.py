@@ -41,6 +41,11 @@ SQUID_DIR = REPO_ROOT / ".squidsquad"
 
 _DEFAULT_HTTP_TIMEOUT = 2.0
 _BACKOFF_CAP = 300
+# #9742 D2: bounded retry ceiling for --wait mode. 10 retries with the
+# existing capped-doubling backoff (cap 300s) gives sufficient tolerance
+# for harness restarts (~15-30s in practice) without leaving Monitor
+# wedged for hours on a genuinely dead harness.
+_WAIT_MAX_CONSECUTIVE_FAILURES = 10
 _CURSOR_LINE_PREFIX = "- **Last Processed Event ID**:"
 
 
@@ -181,12 +186,22 @@ def _fetch_once(url, http_timeout):
 
 
 def poll(role, since=None, limit=50, target_mode=False,
-         http_timeout=_DEFAULT_HTTP_TIMEOUT, sleep=time.sleep):
+         http_timeout=_DEFAULT_HTTP_TIMEOUT, sleep=time.sleep,
+         max_consecutive_failures=None):
     """Poll for new events with retry/backoff.
 
     Returns the list of events (possibly empty) on success, or ``None`` if
-    a fatal (non-retryable) error occurred. Successful response advances
-    the cursor atomically, one write per event (spec §3.5).
+    a fatal (non-retryable) error occurred, OR if ``max_consecutive_failures``
+    transient errors accrue without an intervening success (#9742).
+    Successful response advances the cursor atomically, one write per event
+    (spec §3.5).
+
+    ``max_consecutive_failures``: optional cap on transient connection
+    failures within a single ``poll()`` call. ``None`` (default) preserves
+    the original unlimited-retry behavior for single-shot mode. The
+    ``--wait`` outer loop passes 10 per CONTEXT-9742 D2, so a sustained
+    harness outage causes Monitor (and therefore the agent session) to exit
+    after ~10 backoff cycles instead of hanging forever.
     """
     port = _discover_port()
     if port is None:
@@ -197,6 +212,7 @@ def poll(role, since=None, limit=50, target_mode=False,
     url = _build_url(port, role, cursor, limit, target_mode)
 
     attempt = 0
+    consecutive_failures = 0
     while True:
         payload, retryable, fatal_msg = _fetch_once(url, http_timeout)
         if payload is not None:
@@ -260,6 +276,20 @@ def poll(role, since=None, limit=50, target_mode=False,
         if not retryable:
             print(f"ERROR: {fatal_msg}", file=sys.stderr)
             return None
+        consecutive_failures += 1
+        if (max_consecutive_failures is not None
+                and consecutive_failures >= max_consecutive_failures):
+            # #9742: bounded retry ceiling so Monitor exits on sustained
+            # harness loss instead of hanging forever. Returning None
+            # makes the --wait outer loop sys.exit(2), which thin_launcher
+            # then catches via the harness auto-reboot intent path.
+            print(
+                f"ERROR: harness unreachable after {consecutive_failures} "
+                f"consecutive transient errors (last: {fatal_msg}); "
+                f"giving up",
+                file=sys.stderr,
+            )
+            return None
         delay = _backoff_seconds(attempt)
         print(
             f"WARNING: harness transient error ({fatal_msg}); "
@@ -305,8 +335,12 @@ def main(argv=None):
     http_timeout = args.wait
     since = args.since
     while True:
+        # #9742: cap consecutive transient failures inside each poll() call
+        # so Monitor exits on sustained harness loss. The harness auto-reboot
+        # intent path picks up from the resulting session exit.
         events = poll(args.role, since=since, limit=args.limit,
-                      target_mode=args.target, http_timeout=http_timeout)
+                      target_mode=args.target, http_timeout=http_timeout,
+                      max_consecutive_failures=_WAIT_MAX_CONSECUTIVE_FAILURES)
         if events is None:
             sys.exit(2)
         # --since is a one-time bootstrap; subsequent iterations must

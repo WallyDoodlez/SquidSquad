@@ -43,6 +43,8 @@ Monitor tool invocation:
 
 `event_poll.py` writes one JSON object per line to stdout. Each line wakes you to process exactly one event.
 
+> **Monitor exit ⇒ exit the session immediately (#9742).** If the Monitor tool exits for ANY reason — `event_poll.py` terminates, non-zero exit, tool error, stream close — **end your session right away**. Do NOT attempt to re-invoke Monitor, do NOT wait for the harness to recover, do NOT pivot to forge-direct work or polling-mode fallback mid-session. The harness / `thin_launcher.py` auto-reboot path owns recovery; the agent exiting IS the signal that recovery is needed. This rule is unconditional — it applies whether Monitor exits before or after `bootup-complete` is emitted. `event_poll.py --wait` has a bounded retry ceiling (10 consecutive transient failures per CONTEXT-9742) so a sustained harness outage will cause Monitor to exit on its own; you do not need to enforce the ceiling yourself.
+
 ---
 
 > **Cursor advancement is automatic.** `event_poll.py` persists the cursor to `working-state.md` as each event line is emitted to stdout. Cases B–E below describe the agent's reaction to each delivered event; the cursor write happens on the agent's behalf — there is no separate "advance cursor" step for the agent to perform. See [[cursor-management]].
