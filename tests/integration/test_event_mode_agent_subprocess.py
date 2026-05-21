@@ -480,8 +480,9 @@ class TestHarnessDownBoot(unittest.TestCase):
             self.assertIsNone(eb._discover_port())
             # Must not raise, must not hang.
             eb.emit("cycle-start", "skill", {"cycle_number": 999})
-            eb.ack("ev-1", "skill")
             eb.bootup_complete("skill")
+            # eb.ack() removed in #9813 — function deleted (Option b);
+            # cursor advance is the de-facto ack signal.
 
     def test_event_bus_emit_silent_noop_when_harness_refuses_connection(self):
         """Port file exists but points at a closed port → silent
