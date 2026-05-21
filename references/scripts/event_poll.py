@@ -217,40 +217,37 @@ def poll(role, since=None, limit=50, target_mode=False,
         payload, retryable, fatal_msg = _fetch_once(url, http_timeout)
         if payload is not None:
             events = payload.get("events", [])
-            if payload.get("evicted"):
+            evicted = bool(payload.get("evicted"))
+            oldest_id = payload.get("oldest_id") if evicted else None
+            if evicted:
                 # Cursor predates the harness's retained window (#9331).
-                # Warn once per response naming the safe re-anchor + an
+                # Warn once per response, naming the safe re-anchor + an
                 # operator-forensic hint on how many events have rolled
-                # off the deque since boot. Then re-anchor the cursor
-                # to `oldest_id` BEFORE processing events.
+                # off the deque since boot. The cursor re-anchor itself
+                # happens AFTER the per-event loop (#9740) — see the
+                # post-loop guard below.
                 #
-                # Re-anchoring up front is needed because on the
-                # `/events/for/{role}` endpoint, the role filter can
-                # strip every event in the batch even when the deque
-                # is non-empty — leaving `events == []` with the
-                # cursor stuck on the (still-evicted) stale id and the
-                # warning repeating every poll. Anchoring to
-                # `oldest_id` first guarantees forward progress; if
-                # events DO survive the filter, the per-event advance
-                # below will overwrite the cursor to a later id, which
-                # is fine (events are oldest-first; their ids are
-                # >= oldest_id).
-                oldest_id = payload.get("oldest_id")
+                # Why the warning fires here (pre-loop) but the write
+                # happens post-loop: on the `/events/for/{role}` endpoint
+                # the role filter can strip every event in the batch even
+                # when the deque is non-empty, leaving `events == []`
+                # with the cursor stuck on the (still-evicted) stale id
+                # and the warning repeating every poll. Anchoring to
+                # `oldest_id` after we know whether any events survived
+                # avoids the #9740 race: if some per-event advance fails
+                # mid-batch we leave the cursor at the last successfully
+                # emitted event id (not at `oldest_id`, whose event was
+                # never emitted), so on retry that emitted event is not
+                # skipped. If `events == []`, the post-loop guard writes
+                # `oldest_id` to guarantee forward progress for the next
+                # poll. Warning format locked per CONTEXT-9331 §4.
                 hint = payload.get("evicted_count_hint")
-                # Locked format per CONTEXT-9331 §4 — kept verbatim so
-                # QA's grep-based assertions stay deterministic across
-                # rewords.
                 print(
                     f"[event_poll] EVICTION: cursor predates retained "
                     f"window — advancing to {oldest_id}, "
                     f"~{hint} events evicted",
                     file=sys.stderr,
                 )
-                if oldest_id and not _write_cursor_atomic(role, str(oldest_id)):
-                    # Same fatal-on-disk-fail policy as the per-event
-                    # advance below — silently retrying would burn CPU
-                    # forever against an unwritable cursor file.
-                    return None
             for event in events:
                 if not isinstance(event, dict):
                     print(f"WARNING: malformed event (not an object); "
@@ -272,6 +269,18 @@ def poll(role, since=None, limit=50, target_mode=False,
                     # would burn CPU and re-fetch the same events forever.
                     return None
                 print(json.dumps(event), flush=True)
+            # #9740: eviction re-anchor (post-loop). Only write `oldest_id`
+            # when the batch was empty AFTER role-filtering — otherwise the
+            # per-event advance above has already left the cursor at a valid
+            # id >= oldest_id. If `evicted: true` was returned without a
+            # truthy `oldest_id`, treat as fatal (harness contract violation,
+            # CONTEXT-9740 D4) — return None so the operator sees the
+            # failure rather than continuing on a stuck cursor.
+            if evicted and not events:
+                if not oldest_id:
+                    return None
+                if not _write_cursor_atomic(role, str(oldest_id)):
+                    return None
             return events
         if not retryable:
             print(f"ERROR: {fatal_msg}", file=sys.stderr)
