@@ -8,6 +8,7 @@ Usage:
     python scripts/cycle.py timestamp-short        # HH:MM:SS
     python scripts/cycle.py step-marker <message>   # Print step marker
     python scripts/cycle.py status-bar <role> <phase> <desc>  # Write current-state
+    python scripts/cycle.py status-bar-self <phase> <desc>    # Write current-state for SQUIDSQUAD_ROLE
     python scripts/cycle.py get-counter <role>      # Read quiet cycle counter
     python scripts/cycle.py inc-counter <role>      # Increment quiet cycle counter
     python scripts/cycle.py reset-counter <role>    # Reset counter to 0
@@ -16,6 +17,7 @@ Usage:
     python scripts/cycle.py --help
 """
 
+import os
 import re
 import sys
 from datetime import datetime
@@ -71,6 +73,27 @@ def status_bar(role, phase, description=""):
     tmp_path.write_text(content, encoding="utf-8")
     tmp_path.replace(final_path)
     return content
+
+
+def status_bar_self(phase, description=""):
+    """Write current-state for the agent's own role (#9747).
+
+    Reads the role from the ``SQUIDSQUAD_ROLE`` environment variable, which
+    every agent process has set at spawn time (thin_launcher.py:135). This
+    eliminates the ``[ROLE]`` placeholder from the runtime-loaded dev polling
+    fragment, removing the LLM-substitution dependency flagged by AUDIT-B
+    Risk 3.
+
+    Exits non-zero with a clear message if ``SQUIDSQUAD_ROLE`` is unset (which
+    should never happen for a normally-spawned agent — fail loudly rather
+    than silently writing to an unexpected location).
+    """
+    role = os.environ.get("SQUIDSQUAD_ROLE", "").strip()
+    if not role:
+        print("ERROR: status-bar-self requires SQUIDSQUAD_ROLE env var "
+              "(set by thin_launcher at spawn time)", file=sys.stderr)
+        sys.exit(1)
+    return status_bar(role, phase, description)
 
 
 def _get_working_state_path(role):
@@ -235,6 +258,11 @@ def main():
             print("Usage: cycle.py status-bar <role> <phase> [desc]", file=sys.stderr)
             sys.exit(1)
         status_bar(pos[0], pos[1], pos[2] if len(pos) > 2 else "")
+    elif cmd == "status-bar-self":
+        if len(pos) < 1:
+            print("Usage: cycle.py status-bar-self <phase> [desc]", file=sys.stderr)
+            sys.exit(1)
+        status_bar_self(pos[0], pos[1] if len(pos) > 1 else "")
     elif cmd == "get-counter":
         if not pos:
             print("Usage: cycle.py get-counter <role>", file=sys.stderr)
