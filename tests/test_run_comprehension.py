@@ -15,7 +15,13 @@ import run_comprehension_test as rct
 
 class TestFindClaude:
     def test_finds_claude_in_path(self):
-        with patch("shutil.which", return_value="/usr/bin/claude"):
+        # #9724: the Windows branch in _find_claude short-circuits via
+        # `npm_exe.exists()` BEFORE shutil.which is called. Patch Path.exists
+        # to False so the Windows branch falls through to the mocked
+        # shutil.which. No-op on POSIX (the platform check skips the npm
+        # branch entirely there).
+        with patch("pathlib.Path.exists", return_value=False), \
+             patch("shutil.which", return_value="/usr/bin/claude"):
             assert rct._find_claude() == "/usr/bin/claude"
 
     def test_returns_none_when_not_found(self):
