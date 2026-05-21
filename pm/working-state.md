@@ -1,41 +1,45 @@
 # Working State
 
-- **Task**: idle (Tier 1 done, #9837 filed for ship pipeline bug)
+- **Task**: idle (waiting on #9837 ship-pipeline fix)
 - **Status**: idle — handover ready
 - **Last Processed Event ID**: 2461e3f1
 
-## Tier 1 audit findings — DONE
-- All 5 (#9740, #9741, #9742, #9744, #9725) at pending-ship
-- #9740 shipped via PR #9825 this cycle
-- Blocked at pending-ship by #9837 (not by DM)
+## Critical path
+- **#9837** (in-progress, skill) — tracker.py list-tasks blind to closed-but-labeled items. Blocking ship pipeline.
+- Once #9837 ships: DM can see + ship the 6 pending-ship items → version bump v0.40.0 → v0.41.0
 
-## CRITICAL BUG FILED
-- **#9837** (high, role:skill) — tracker.py list-tasks --status pending-ship returns [] because of default --state open filter; auto-close-on-PR-merge makes pending-ship items invisible to DM
-- Explains the persistent ship-counter creep (11/10 now, was 44/10 historically)
-- All Tier 1 ship-able work is invisible to DM until this is fixed
+## Pending-ship queue (invisible to DM until #9837)
+- #9740, #9741, #9742, #9744 (Tier 1 audit findings)
+- #9725 (spawn-prompt fix)
+- #9772 (config.md ship-counter clobber, shipped via #9838)
+- #9813 (event_bus.ack() Phase 4 cleanup)
 
 ## Awaiting QA
 - **#9478** branch_workflow=off removal
 
-## Other shipped this session
-- #9743, #9745, #9746, #9747 (Tier 2/3)
-- #9415, #9588, #9688, #9242, #9481, #9562, #9184, #8999, #9265, #9331, #9358, #9243, #9474, #9272, #9318, #9319
+## Harness intermittent stalls — revised understanding
+- NOT a chronic wedge — verified via 3x curl retries returning HTTP 200 in 2ms after one HTTP 000 probe
+- Occasional 5s+ stalls; single probes can land in bad window
+- cycle_pre alternates between 'reachable' and 'unreachable' depending on probe luck
+- Polling-mode unaffected
+- Event-mode would degrade gracefully via existing 5s timeout fallback
+- Probably worth a low-severity bug to investigate the latency spikes; not urgent
 
 ## Post-flip queue (locked)
 - #9748 — agent setup self-install
 - #3498 — backlog audit L2 sub-skill
-- #9813 — event_bus.ack() Phase 4
 
-## Fleet flip prerequisites — REVISED
+## Fleet flip prerequisites
 - ✅ All Tier 1 audit findings landed at pending-ship
-- ✅ #9478 in QA pipeline
-- ❌ NEW BLOCKER: #9837 ship-pipeline bug — without this, pending-ship items can't reach shipped → ship counter never resets → version bumps never fire
-- Fleet flip dependency: #9837 fix
+- ⏳ #9837 ship-pipeline fix (in-progress on skill)
+- ⏳ DM clears pending-ship queue once visible
+- ⏳ Version bump fires
+- ⏳ #9478 QA verify
+- Then: fleet flip
 
-## Harness wedge
-- Cleared this cycle — REACHABLE again. Either self-recovered or external restart.
-- Wedge data point #3 logged but no current outage
-
-## Planning artifacts
-- 9-issue full coverage in `.squidsquad/pm/planning/`
-- Will file #9837 with body-only scope per Tier 2 precedent unless skill flags ambiguity
+## Memory rules added this session
+- feedback-proactor-loop-two-bugs
+- feedback-minimal-repro-over-symptom-match (just reaffirmed via harness 'wedge' misdiagnosis)
+- feedback-orphan-claude-from-subagents
+- feedback-tracker-comment-prefix
+- feedback-orphan-claude-on-reboot
