@@ -88,14 +88,16 @@ class TestClaudeInvocation:
         with patch("thin_launcher.subprocess.Popen", side_effect=mock_popen), \
              patch("thin_launcher.os.getcwd", return_value=str(tmp_path)), \
              patch("thin_launcher._get_effort_level", return_value="high"), \
+             patch("thin_launcher._get_interval", return_value="30"), \
              patch("sys.argv", ["thin_launcher.py", "skill"]):
             thin_launcher.main()
 
         assert "--strict-mcp-config" in captured_cmd
-        # Flag must appear before the prompt argument (positional)
-        prompt_idx = captured_cmd.index("Boot. Begin your first Ralph Loop cycle now.")
+        # Flag must appear before the spawn prompt (positional, last arg per #9725).
+        prompt = captured_cmd[-1]
+        assert prompt.startswith("/loop "), f"Expected /loop spawn prompt, got: {prompt}"
         flag_idx = captured_cmd.index("--strict-mcp-config")
-        assert flag_idx < prompt_idx
+        assert flag_idx < len(captured_cmd) - 1
 
     def test_append_system_prompt_includes_role(self, tmp_path):
         """Agent role is passed via --append-system-prompt."""
@@ -113,11 +115,115 @@ class TestClaudeInvocation:
         with patch("thin_launcher.subprocess.Popen", side_effect=mock_popen), \
              patch("thin_launcher.os.getcwd", return_value=str(tmp_path)), \
              patch("thin_launcher._get_effort_level", return_value="high"), \
+             patch("thin_launcher._get_interval", return_value="30"), \
              patch("sys.argv", ["thin_launcher.py", "skill"]):
             thin_launcher.main()
 
         idx = captured_cmd.index("--append-system-prompt")
         assert captured_cmd[idx + 1] == "SQUIDSQUAD_ROLE=skill"
+
+
+class TestSpawnPromptIsLoopRegistration:
+    """#9725: spawn prompt registers /loop instead of running one inline cycle."""
+
+    def test_prompt_is_loop_command(self, tmp_path):
+        """Final positional arg starts with /loop."""
+        sqdir = tmp_path / ".squidsquad" / "skill"
+        sqdir.mkdir(parents=True)
+        captured_cmd = []
+
+        def mock_popen(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            proc = MagicMock(); proc.pid = 99999; proc.wait.return_value = 0
+            return proc
+
+        with patch("thin_launcher.subprocess.Popen", side_effect=mock_popen), \
+             patch("thin_launcher.os.getcwd", return_value=str(tmp_path)), \
+             patch("thin_launcher._get_effort_level", return_value="high"), \
+             patch("thin_launcher._get_interval", return_value="30"), \
+             patch("sys.argv", ["thin_launcher.py", "skill"]):
+            thin_launcher.main()
+
+        # Prompt is the final positional arg (after --dangerously-skip-permissions)
+        prompt = captured_cmd[-1]
+        assert prompt == "/loop 30m execute one Ralph Loop cycle"
+
+    def test_legacy_boot_prompt_absent(self, tmp_path):
+        """The pre-#9725 'Boot. Begin your first Ralph Loop cycle now.' prompt is gone."""
+        sqdir = tmp_path / ".squidsquad" / "skill"
+        sqdir.mkdir(parents=True)
+        captured_cmd = []
+
+        def mock_popen(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            proc = MagicMock(); proc.pid = 99999; proc.wait.return_value = 0
+            return proc
+
+        with patch("thin_launcher.subprocess.Popen", side_effect=mock_popen), \
+             patch("thin_launcher.os.getcwd", return_value=str(tmp_path)), \
+             patch("thin_launcher._get_effort_level", return_value="high"), \
+             patch("thin_launcher._get_interval", return_value="30"), \
+             patch("sys.argv", ["thin_launcher.py", "skill"]):
+            thin_launcher.main()
+
+        assert "Boot. Begin your first Ralph Loop cycle now." not in captured_cmd
+
+    def test_interval_substituted_from_config(self, tmp_path):
+        """Interval value flows from _get_interval() into the spawn prompt."""
+        sqdir = tmp_path / ".squidsquad" / "skill"
+        sqdir.mkdir(parents=True)
+        captured_cmd = []
+
+        def mock_popen(cmd, **kwargs):
+            captured_cmd.extend(cmd)
+            proc = MagicMock(); proc.pid = 99999; proc.wait.return_value = 0
+            return proc
+
+        with patch("thin_launcher.subprocess.Popen", side_effect=mock_popen), \
+             patch("thin_launcher.os.getcwd", return_value=str(tmp_path)), \
+             patch("thin_launcher._get_effort_level", return_value="high"), \
+             patch("thin_launcher._get_interval", return_value="15"), \
+             patch("sys.argv", ["thin_launcher.py", "skill"]):
+            thin_launcher.main()
+
+        assert captured_cmd[-1] == "/loop 15m execute one Ralph Loop cycle"
+
+
+class TestGetInterval:
+    """#9725: _get_interval reads from config.md and falls back safely."""
+
+    def test_reads_interval_from_config(self):
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", return_value="20"):
+            assert thin_launcher._get_interval() == "20"
+
+    def test_defaults_to_30_when_missing(self):
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", return_value=None):
+            assert thin_launcher._get_interval() == "30"
+
+    def test_defaults_to_30_on_empty_string(self):
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", return_value=""):
+            assert thin_launcher._get_interval() == "30"
+
+    def test_defaults_to_30_when_config_raises(self):
+        def boom(_):
+            raise RuntimeError("config unreadable")
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", side_effect=boom):
+            assert thin_launcher._get_interval() == "30"
+
+    def test_handles_systemexit_from_config_get(self):
+        """config.get_field calls sys.exit(1) on missing field — must not propagate."""
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", side_effect=SystemExit(1)):
+            assert thin_launcher._get_interval() == "30"
+
+    def test_strips_whitespace(self):
+        with patch.dict("sys.modules", {"config": MagicMock()}), \
+             patch("config.get_field", return_value="  45  "):
+            assert thin_launcher._get_interval() == "45"
 
 
 class TestThinLauncherBoot:
