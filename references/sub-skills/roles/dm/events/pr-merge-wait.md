@@ -36,7 +36,14 @@ The reaction window for a comment that arrives during the wait is "the moment th
 
 The wait is implemented as a **bounded periodic forge-read**, NOT as event-driven action. Events arriving on the stream during the wait are handled per [[l1-base]] Case D (noted, not acted on) — they are NOT what triggers DM to recheck the PR.
 
-On each Monitor wake (the persistent `event_poll.py` heartbeat at the role's wait cadence), DM forge-reads the PR exactly once and inspects:
+On each Monitor wake (the persistent `event_poll.py` heartbeat at the role's wait cadence), DM performs two cheap tracker checks **before** the PR forge-read so an operator redirect lands in one wake interval rather than waiting for PR terminal state (#9744):
+
+1. **Label re-check** — `python references/scripts/tracker.py get-labels <issue-number>`. If ANY label name starts with `pending-human-` (covers `pending-human-review`, `pending-human-approval`, `pending-human-setup` — the three taxonomy variants), the wait ends immediately; fall through to End-Of-Task Re-Read, where outcome (a) will trigger because the label is present.
+2. **Status re-check** — `python references/scripts/tracker.py get-state <issue-number>`. If the status is no longer `pending-ship` (operator transitioned the item elsewhere mid-wait), the wait ends immediately; fall through to End-Of-Task Re-Read, where outcome (b) will trigger.
+
+Use prefix matching (`name.startswith("pending-human-")`) so any future `pending-human-*` label added to the taxonomy is honored automatically. Do NOT hard-code the three current variants — the prefix match is the contract.
+
+If neither tracker check triggers an abort, DM forge-reads the PR exactly once and inspects:
 
 - **PR state == merged** → the wait ends, fall through to End-Of-Task Re-Read.
 - **PR state == closed and not merged** → the wait ends with a rollback; fall through to End-Of-Task Re-Read.
@@ -45,6 +52,8 @@ On each Monitor wake (the persistent `event_poll.py` heartbeat at the role's wai
 - **PR state == open and (`MERGEABLE` or `UNKNOWN`) and wait has not exceeded the ceiling** → wait is not over; return to wait.
 
 Event payloads about the PR are hints; the forge is authoritative ([[forge-read-pattern]]).
+
+The two pre-check tracker calls cost one round-trip each per wake — equivalent in shape to the PR forge-read that already runs, so the per-wake cost roughly doubles but stays bounded by the wake cadence. The trade-off vs the prior behavior (operator redirect could be delayed indefinitely if the PR never reached a terminal state) is intentional per CONTEXT-9744 Risk 3.
 
 ### End-Of-Task Re-Read
 

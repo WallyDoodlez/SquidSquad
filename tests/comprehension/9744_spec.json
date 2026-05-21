@@ -1,0 +1,24 @@
+{
+  "issue": 9744,
+  "title": "DM pr-merge-wait per-wake label and status pre-check",
+  "files": [
+    "references/sub-skills/roles/dm/events/pr-merge-wait.md"
+  ],
+  "questions": [
+    {
+      "id": "1",
+      "question": "Per pr-merge-wait.md, what does DM do on each Monitor wake BEFORE forge-reading the PR? List the cheap tracker checks DM runs first.",
+      "expected": "Before the PR forge-read, DM runs two tracker checks: (1) tracker.py get-labels <issue-number> to detect any pending-human-* label, and (2) tracker.py get-state <issue-number> to detect a status transition away from pending-ship. Either of these aborts the wait immediately so an operator redirect lands in one wake interval rather than waiting for PR terminal state."
+    },
+    {
+      "id": "2",
+      "question": "Per pr-merge-wait.md, which exact label name(s) cause DM to abort the wait when found via the get-labels check? How does DM match them?",
+      "expected": "DM aborts on any label whose name starts with the prefix pending-human- (using prefix/startswith matching, not a hard-coded list). This covers the three current taxonomy variants pending-human-review, pending-human-approval, pending-human-setup, and is forward-compatible with any future pending-human-* labels added to the taxonomy."
+    },
+    {
+      "id": "3",
+      "question": "Per pr-merge-wait.md, when the label check finds a pending-human-* label mid-wait, which End-Of-Task Re-Read outcome applies, and does DM transition the issue?",
+      "expected": "Outcome (a) applies: DM leaves the item where the operator put it and does NOT transition. The human handoff wins regardless of PR state. The label that appeared during the wait is the trigger; the End-Of-Task Re-Read evaluates this rule with highest precedence (before the rollback or merged-pr outcomes)."
+    }
+  ]
+}
