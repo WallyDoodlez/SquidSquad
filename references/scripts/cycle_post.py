@@ -833,6 +833,25 @@ def main():
     except OSError:
         pass
 
+    # 7b. #9688: reap orphaned claude.exe processes left behind by the
+    # Agent tool on Windows. Defaults to enabled; flip
+    # `Orphan Cleanup > Enabled: no` in config.md to skip. POSIX skips
+    # internally — no orphans there because process groups handle it.
+    if (_config_get("orphan-cleanup") or "yes").strip().lower() != "no":
+        try:
+            import orphan_cleanup
+            result = orphan_cleanup.cleanup(role)
+            killed = result.get("killed", [])
+            if killed:
+                ts2 = _timestamp_short()
+                print(f"[🦑 {ts2}] orphan-cleanup: killed {len(killed)} "
+                      f"orphan claude.exe process(es): {sorted(killed)}",
+                      file=sys.stderr)
+        except (ImportError, Exception) as e:
+            # Best-effort — never fail the cycle on cleanup error.
+            print(f"[🦑] WARNING: orphan-cleanup raised {type(e).__name__}: {e}",
+                  file=sys.stderr)
+
     # 8. Emit cycle-end event (#4709)
     try:
         from event_bus import emit as _emit_event
