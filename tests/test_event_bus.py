@@ -71,7 +71,8 @@ class TestEmit:
         assert evt["role"] == "skill"
         assert evt["cycle_number"] == 42
         assert "id" in evt
-        assert len(evt["id"]) == 8
+        # #9415 D4: widened from 8 → 16 hex chars (64-bit).
+        assert len(evt["id"]) == 16
         assert "timestamp" in evt
         assert evt["payload"] == {"cycle_number": 42}
 
@@ -146,25 +147,77 @@ class TestDiscoverPort:
 
 
 class TestGenerateId:
-    """Tests for _generate_id() function."""
+    """Tests for _generate_id() function. Widened to 16 hex + nonce per #9415."""
 
-    def test_produces_8_char_hex(self):
-        """ID is exactly 8 hex characters."""
+    def test_produces_16_char_hex(self):
+        """#9415 D4 + D7 length test: ID is exactly 16 hex characters.
+
+        Catches typos like ``[:8]`` or ``os.urandom(4).hex()`` left in place
+        after the widening — the dominant implementation bug PM called out
+        in CONTEXT-9415 D7.
+        """
         result = event_bus._generate_id("cycle-start", "skill", "2026-05-01T18:00:00", {})
-        assert len(result) == 8
+        assert len(result) == 16
         assert all(c in "0123456789abcdef" for c in result)
 
-    def test_deterministic(self):
-        """Same inputs produce same ID."""
+    def test_same_inputs_produce_distinct_ids(self):
+        """#9415 D5 + D7 distinct-emit test: identical-content emits MUST
+        produce distinct IDs.
+
+        Before #9415, the content-hash path collapsed identical content to
+        the same ID — silently broke caller assumptions that every emit
+        gets a unique stream position. The nonce in ``_generate_id`` (4 hex
+        of ``os.urandom``) is the fix; this test catches it being removed.
+        """
         a = event_bus._generate_id("cycle-start", "skill", "2026-05-01T18:00:00", {})
         b = event_bus._generate_id("cycle-start", "skill", "2026-05-01T18:00:00", {})
-        assert a == b
+        assert a != b, (
+            "identical-content emits collapsed to the same ID — nonce "
+            "missing from _generate_id (#9415 D5)"
+        )
 
     def test_different_inputs_different_ids(self):
-        """Different inputs produce different IDs."""
+        """Different inputs produce different IDs (sanity — hash still
+        distinguishes content)."""
         a = event_bus._generate_id("cycle-start", "skill", "2026-05-01T18:00:00", {})
         b = event_bus._generate_id("cycle-end", "skill", "2026-05-01T18:00:00", {})
         assert a != b
+
+
+class TestEmitEventIdWidth9415:
+    """#9415 D7 length test for harness._emit_event (Path 2).
+
+    event_bus.emit() (Path 1) is covered above by TestGenerateId; Path 2 is
+    the harness-side ``os.urandom(8).hex()`` direct generator. Both widths
+    must move in lockstep — a forgotten ``os.urandom(4)`` left in harness
+    would produce 8-char IDs that mix with Path 1's 16-char IDs in the
+    same event deque, breaking downstream string-equality lookups.
+    """
+
+    def test_harness_emit_event_produces_16_char_hex(self):
+        # Import lazily — harness pulls heavy deps (fastapi/uvicorn) and
+        # we don't want to slow the suite when this is the only test that
+        # needs it. The module-level `sys.path.insert(0, ...references/
+        # scripts/...)` at line 13 of this file already places that
+        # directory on the path, so the bare `import_module("harness")`
+        # below resolves correctly under pytest. If that top-of-file
+        # insert is ever removed, this test fails with ModuleNotFoundError
+        # rather than silently passing the wrong assertion — caught loudly.
+        import importlib
+        harness = importlib.import_module("harness")
+        # Capture the event the helper would append to the lifecycle deque.
+        captured = []
+        with patch.object(harness.event_lifecycle, "append",
+                          side_effect=lambda e: captured.append(e)), \
+             patch.object(harness, "_log_event"):
+            harness._emit_event("test-event", "skill", payload={"k": "v"})
+        assert len(captured) == 1
+        evt = captured[0]
+        assert len(evt["id"]) == 16, (
+            f"harness._emit_event produced {len(evt['id'])}-char id; #9415 "
+            "D4 widens to 16 hex (os.urandom(8).hex())"
+        )
+        assert all(c in "0123456789abcdef" for c in evt["id"])
 
 
 class TestAck:
