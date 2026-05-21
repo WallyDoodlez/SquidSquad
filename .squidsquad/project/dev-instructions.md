@@ -9,10 +9,10 @@ These instructions apply to the dev/skill agent on this project.
 - **QA-rejected items are highest priority.** Fix existing work before starting new.
 - **Skip `design:needed` / `design:in-progress` items.** Wait for designer to complete.
 
-### Branch Workflow
+### Branch + PR Workflow (#9478)
 
 - **Use `git_ops.py task-begin` / `task-end`** for feature branch checkout/return.
-- **Branch workflow enabled**: code goes to `squidsquad/task/<number>` (unified branch — PM and dev share one branch per task #5040), state to main via `git_ops.py commit-code` vs `commit-state`. Branch pattern configured in config.md `branch-pattern`.
+- **Branch+PR is the only mode**: code goes to `squidsquad/task/<number>` (unified branch — PM and dev share one branch per task #5040), state to main via `git_ops.py commit-code` vs `commit-state`. Branch pattern configured in config.md `branch-pattern`.
 - **PR flow enabled**: create PRs with full summary (`git_ops.py pr-create`). Check `review:human-required` label — if present, hold for human review instead of auto-merge.
 - **Run `git_ops.py has-changes`** before transitioning to pending-test. If no changes, re-read the issue and apply the fix.
 

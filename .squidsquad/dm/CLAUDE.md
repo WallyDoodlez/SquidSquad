@@ -402,7 +402,7 @@ The script handles: status transitions, tracker comments, iteration logging, git
 ### Role-Specific Fields
 
 **Skill** cycle-output extras:
-- `code_commit`: `{branch, message, pr_needed, pr_title, pr_body}` — for branch workflow
+- `code_commit`: `{branch, message, pr_needed, pr_title, pr_body}` — feature-branch commit + PR creation block (#9478)
 - `state_commit_message`: separate message for main branch state commit
 - `improvement_scan`: `{files_scanned, findings}` — if scan ran
 
@@ -540,9 +540,9 @@ For each Pending Ship task that is NOT skipped:
    ```bash
    python references/scripts/git_ops.py task-begin [role] [number]
    ```
-   This is a no-op when branch-workflow is disabled. After delivery work is complete, return to working branch with `python references/scripts/git_ops.py task-end [role] [number]`.
+   After delivery work is complete, return to working branch with `python references/scripts/git_ops.py task-end [role] [number]`.
 
-0b. **PR merge gate**: If Branch Workflow is enabled (`python references/scripts/config.py get branch-workflow` → `yes`), check for an associated PR:
+0b. **PR merge gate** (#9478: branch+PR is the only mode): check for an associated PR:
    ```bash
    gh pr list --search "squidsquad/" --state open --json number,headRefName,body --limit 20
    ```
@@ -984,7 +984,7 @@ These instructions apply to the DM agent on this project.
 - **Increment `Shipped Since Last Bump` in config.md** after every ship.
 - **Enable feature flags after delivery.** If the task introduced a config feature flag (e.g. `Cycle Runner: no`), enable it on this project via `python references/scripts/config.py set`.
 
-### Branch Workflow
+### Branch + PR Workflow (#9478)
 
 - **Use `git_ops.py task-begin` / `task-end`** for branch checkout — same as dev agents.
 - **Skip draft PRs** — only process PRs that are ready for review.
@@ -1087,7 +1087,7 @@ These instructions apply to ALL agents on this project.
 
 - **Always `git pull` before starting work.** Never push without pulling first.
 - **Atomic writes**: Write to `.tmp` then `mv` for any file other agents or the statusline may read.
-- **Branch workflow enabled**: Feature branches per task (pattern from config.md `branch-pattern`, default `squidsquad/task/{number}`).
+- **Branch+PR workflow (#9478)**: Feature branches per task (pattern from config.md `branch-pattern`, default `squidsquad/task/{number}`). This is the only mode — no toggle.
 - **PR flow + auto-merge enabled**: PRs created for feature branches, auto-merged when QA passes (unless `review:human-required`).
 
 ### Agent Infrastructure

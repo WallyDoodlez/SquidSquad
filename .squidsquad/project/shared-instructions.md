@@ -23,7 +23,7 @@ These instructions apply to ALL agents on this project.
 
 - **Always `git pull` before starting work.** Never push without pulling first.
 - **Atomic writes**: Write to `.tmp` then `mv` for any file other agents or the statusline may read.
-- **Branch workflow enabled**: Feature branches per task (pattern from config.md `branch-pattern`, default `squidsquad/task/{number}`).
+- **Branch+PR workflow (#9478)**: Feature branches per task (pattern from config.md `branch-pattern`, default `squidsquad/task/{number}`). This is the only mode — no toggle.
 - **PR flow + auto-merge enabled**: PRs created for feature branches, auto-merged when QA passes (unless `review:human-required`).
 
 ### Agent Infrastructure

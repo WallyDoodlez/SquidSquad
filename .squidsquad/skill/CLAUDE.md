@@ -375,7 +375,7 @@ The script handles: status transitions, tracker comments, iteration logging, git
 ### Role-Specific Fields
 
 **Skill** cycle-output extras:
-- `code_commit`: `{branch, message, pr_needed, pr_title, pr_body}` — for branch workflow
+- `code_commit`: `{branch, message, pr_needed, pr_title, pr_body}` — feature-branch commit + PR creation block (#9478)
 - `state_commit_message`: separate message for main branch state commit
 - `improvement_scan`: `{files_scanned, findings}` — if scan ran
 
@@ -500,7 +500,7 @@ If the queue returns an item, read it: `gh issue view [NUMBER] --json title,body
 
 **For issues** (type:issue):
 1. Write working state: update `.squidsquad/skill/working-state.md` with `Task: #[NUMBER]`, status `in-progress`.
-2. **Branch checkout** (#3296): `python references/scripts/git_ops.py task-begin skill [NUMBER]` — checks out the task's feature branch if branch-workflow is enabled.
+2. **Branch checkout** (#3296, #9478): `python references/scripts/git_ops.py task-begin skill [NUMBER]` — checks out the task's feature branch.
 3. Transition: `python references/scripts/tracker.py transition [NUMBER] [CURRENT_STATUS] in-progress --role skill-lead`
 4. Comment: `python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Picking up. Status → In Progress."`
 5. Read the issue details, locate the relevant code, fix the issue.
@@ -534,7 +534,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Picking up. Status → In Progress."
    python references/scripts/tracker.py transition [NUMBER] approved in-progress --role skill-lead
    ```
-1b. **Branch checkout** (#3296): `python references/scripts/git_ops.py task-begin skill [NUMBER]` — checks out the task's feature branch if branch-workflow is enabled.
+1b. **Branch checkout** (#3296, #9478): `python references/scripts/git_ops.py task-begin skill [NUMBER]` — checks out the task's feature branch.
 2. **Read the AC list from the issue body, with CONTEXT.md as the locked decisions companion** (#8916, #9184).
 
    The **GitHub issue body is the authoritative source of the acceptance criteria.** PM no longer produces a test plan (#9184) — the AC list in the issue body IS the contract, and dev implements against it. CONTEXT.md captures locked decisions, scope boundaries, and side-effect mitigations agreed during Phase 2 discussion.
@@ -867,14 +867,7 @@ If the vault is too small (<20 notes) or optimize is disabled, the script exits 
 
 Print: `[🦑 HH:MM:SS] Committing and pushing...`
 
-Check Branch Workflow setting:
-```bash
-python references/scripts/config.py get branch-workflow
-```
-
-**If `yes`** (branch-per-feature workflow):
-
-Split commits into code (feature branch) and state (main):
+Branch-per-feature workflow is the only mode (#9478). Split commits into code (feature branch) and state (main):
 
 1. **If working on a task** (status changed to `Pending Test` or still `In Progress`):
    - Commit code changes to the feature branch (use the branch name from task-begin output):
@@ -980,12 +973,6 @@ Split commits into code (feature branch) and state (main):
      Log: `Merge of [WORKING_BRANCH] into [BRANCH_NAME] failed — manual conflict resolution needed.`
    - Only merge into branches for your own tasks — never touch other agents' PRs.
    - Skip this step when PR Flow is off or no open PRs exist.
-
-**If `no`** (default — direct-to-main workflow):
-
-```bash
-python references/scripts/git_ops.py commit-push skill "[brief description of work done this cycle]"
-```
 <!-- /sub-skill: git-commit -->
 
 <!-- sub-skill: self-restart -->
@@ -1313,10 +1300,10 @@ These instructions apply to the dev/skill agent on this project.
 - **QA-rejected items are highest priority.** Fix existing work before starting new.
 - **Skip `design:needed` / `design:in-progress` items.** Wait for designer to complete.
 
-### Branch Workflow
+### Branch + PR Workflow (#9478)
 
 - **Use `git_ops.py task-begin` / `task-end`** for feature branch checkout/return.
-- **Branch workflow enabled**: code goes to `squidsquad/task/<number>` (unified branch — PM and dev share one branch per task #5040), state to main via `git_ops.py commit-code` vs `commit-state`. Branch pattern configured in config.md `branch-pattern`.
+- **Branch+PR is the only mode**: code goes to `squidsquad/task/<number>` (unified branch — PM and dev share one branch per task #5040), state to main via `git_ops.py commit-code` vs `commit-state`. Branch pattern configured in config.md `branch-pattern`.
 - **PR flow enabled**: create PRs with full summary (`git_ops.py pr-create`). Check `review:human-required` label — if present, hold for human review instead of auto-merge.
 - **Run `git_ops.py has-changes`** before transitioning to pending-test. If no changes, re-read the issue and apply the fix.
 
@@ -1428,7 +1415,7 @@ These instructions apply to ALL agents on this project.
 
 - **Always `git pull` before starting work.** Never push without pulling first.
 - **Atomic writes**: Write to `.tmp` then `mv` for any file other agents or the statusline may read.
-- **Branch workflow enabled**: Feature branches per task (pattern from config.md `branch-pattern`, default `squidsquad/task/{number}`).
+- **Branch+PR workflow (#9478)**: Feature branches per task (pattern from config.md `branch-pattern`, default `squidsquad/task/{number}`). This is the only mode — no toggle.
 - **PR flow + auto-merge enabled**: PRs created for feature branches, auto-merged when QA passes (unless `review:human-required`).
 
 ### Agent Infrastructure

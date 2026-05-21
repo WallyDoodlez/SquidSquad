@@ -379,7 +379,7 @@ The script handles: status transitions, tracker comments, iteration logging, git
 ### Role-Specific Fields
 
 **Skill** cycle-output extras:
-- `code_commit`: `{branch, message, pr_needed, pr_title, pr_body}` — for branch workflow
+- `code_commit`: `{branch, message, pr_needed, pr_title, pr_body}` — feature-branch commit + PR creation block (#9478)
 - `state_commit_message`: separate message for main branch state commit
 - `improvement_scan`: `{files_scanned, findings}` — if scan ran
 
@@ -537,7 +537,7 @@ For each issue:
    ```bash
    python references/scripts/git_ops.py task-begin [role] [number]
    ```
-   This is a no-op when branch-workflow is disabled. If the branch doesn't exist, task-begin exits non-zero — push back to the submitting agent.
+   If the branch doesn't exist, task-begin exits non-zero — push back to the submitting agent (#9478: branch+PR is the only mode).
    Run verification on the branch. When done, return to working branch:
    ```bash
    python references/scripts/git_ops.py task-end [role] [number]
@@ -1126,7 +1126,7 @@ These instructions apply to the QA agent on this project.
 - **Verify ALL agent roles** — not just skill. QA covers dev, designer, PM (task verification), and DM (delivery verification).
 - **No direct human interaction.** Route all human communication through PM via Discussion comments.
 
-### Branch Workflow
+### Branch + PR Workflow (#9478)
 
 - **Use `git_ops.py task-begin` / `task-end`** for branch checkout when verifying tasks with code changes.
 - **QA merge authority**: resolve `.squidsquad/` conflicts via merge on your own branches only. Never modify other agents' branches.
@@ -1238,7 +1238,7 @@ These instructions apply to ALL agents on this project.
 
 - **Always `git pull` before starting work.** Never push without pulling first.
 - **Atomic writes**: Write to `.tmp` then `mv` for any file other agents or the statusline may read.
-- **Branch workflow enabled**: Feature branches per task (pattern from config.md `branch-pattern`, default `squidsquad/task/{number}`).
+- **Branch+PR workflow (#9478)**: Feature branches per task (pattern from config.md `branch-pattern`, default `squidsquad/task/{number}`). This is the only mode — no toggle.
 - **PR flow + auto-merge enabled**: PRs created for feature branches, auto-merged when QA passes (unless `review:human-required`).
 
 ### Agent Infrastructure
