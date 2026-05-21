@@ -1,57 +1,49 @@
 # Working State
 
-- **Task**: idle (Tier 1 audit planning complete + parallel)
+- **Task**: idle (Tier 1 burn-down + Tier 2/3 shipped)
 - **Status**: idle — handover ready
 - **Last Processed Event ID**: 2461e3f1
 
-## Active deliverables awaiting skill / QA / DM
+## Tier 1 audit findings — burndown
+- **#9740** (status:in-progress, skill) — last to land. Cursor re-anchor race. Skill on branch.
+- **#9741** (status:pending-test) — PR #9819 MERGEABLE. Awaiting QA.
+- **#9742** (CLOSED, status:pending-ship) — Boot TOCTOU, QA-verified. Awaiting DM bump.
+- **#9744** (CLOSED, status:pending-ship) — DM label-blind, QA-verified. Awaiting DM bump.
 
-### Tier 1 — Pre-event-mode-flip blockers
-- **#9740** (status:open) — cursor re-anchor race. Option A locked. RESEARCH+CONTEXT shipped this session. Awaiting skill pickup.
-- **#9741** (status:in-progress, skill) — dispatch no-ack. Option A locked. RESEARCH+CONTEXT shipped. Skill on branch `squidsquad/task/9741`.
-- **#9742** (status:pending-test) — boot TOCTOU. Option B (scope-expanded code+doc) locked. RESEARCH+CONTEXT shipped. Skill shipped, PR #9812 MERGEABLE/CLEAN, awaiting QA.
-- **#9744** (status:open) — DM PR-merge-wait label-blind. Option C + strong test bar (CQ + live QA). RESEARCH+CONTEXT shipped. Awaiting skill pickup.
-- **#9725** (status:open) — spawn-prompt fix in `thin_launcher.py:163`. Planning done.
-- **#9415** (shipped #9738) — event id widening, complete.
-- **#9478** (status:in-progress) — branch_workflow=off removal. Slice A+B pushed by skill. Awaiting Slice C.
+## Other shipped/in-flight
+- **#9725** (pending-ship) — spawn-prompt fix
+- **#9743** (shipped via #9806) — Monitor buffering docs
+- **#9745** (shipped via #9784) — wake-mode canonical
+- **#9746** (shipped via #9778) — agent-instructions.md regen
+- **#9747** (shipped via #9771) — [ROLE] placeholder fix
+- **#9478** (CLOSED, status:pending-test) — branch_workflow=off removal
+- **#9415** (shipped) — event id widening
+- **#9588** (shipped) — lazy-load
+- **#9688** (shipped) — orphan cleanup
 
-### Tier 2 — Hardening
-- **#9745** (wake-mode dup), **#9746** (stale agent-instructions.md) — body-only scope acceptable per TRIAGE; defer until Tier 1 clears
+## Ship counter
+- 11/10 — version bump v0.40.0 → v0.41.0 overdue. DM nudged on #3.
 
-### Tier 3 — Docs/debt
-- **#9743** (Monitor buffering docs), **#9747** ([ROLE] placeholder)
-
-### Follow-up bugs filed by skill this cycle
-- **#9813** — event_bus.ack() Phase 4 wiring (CONTEXT-9741 D4 out-of-scope flag)
-
-### Post-flip queue (locked in body sequencing)
-- **#9748** — Agent setup: per-role capability discovery + self-install
-- **#3498** — Formalize backlog audit as L2 PM sub-skill
-
-## Shipped this session
-- #9588 lazy-load, #9688 orphan cleanup, #9242/#9481/#9562 harness wedge fixes, #9184 workflow restructure, #8999 event-mode tests, #9265, #9331, #9358, #9243, #9474, #9272/#9318/#9319 (improvement scan), #9415 (event id widening, cycle 1206), #9742 (boot TOCTOU, today). Closing #6 + #8 as superseded.
+## Post-flip queue (locked)
+- **#9748** — agent setup self-install
+- **#3498** — backlog audit L2 sub-skill
+- **#9813** — event_bus.ack() Phase 4 (skill follow-up)
 
 ## Planning artifacts in `.squidsquad/pm/planning/`
-- RESEARCH+CONTEXT for #9588 (shipped), #9688 (shipped), #9725 (awaiting), #9415 (shipped), #9478 (in-progress), #9740 (awaiting), #9741 (in-progress), #9742 (pending-test), #9744 (awaiting)
-- audits/AUDIT-A-events-architecture.md, AUDIT-B-polling-mode-regression.md, TRIAGE-AUDIT-2026-05-21.md
+- 9-issue full coverage: 9588, 9688, 9725, 9415, 9478, 9740, 9741, 9742, 9744
+- audits/A, B, TRIAGE
+
+## Fleet reset prerequisites — STATUS
+- ✅ #9725 shipped (spawn-prompt fix)
+- ✅ #9478 at pending-test (branch_workflow=off removal)
+- ✅ #9415 shipped (event id widening)
+- ✅ #9588 shipped (lazy-load)
+- ✅ #9688 shipped (orphan cleanup)
+- ✅ #9742 at pending-ship (boot TOCTOU)
+- Awaiting: #9740 (last Tier 1), #9741 (pending-test→ship), DM ship of pending-ship items
+- READY TO FLIP after #9740 ships + DM clears pending-ship queue
 
 ## Harness wedge observation #3
-- Observed 2026-05-21T09:53Z: harness_pid=1028468 alive, port :7373 listening, accept() wedged (HTTP 000 5s)
-- Polling-mode agents unaffected; commits flowing
-- NOT restarted — preserving diagnostic state. Per `feedback_minimal_repro_over_symptom_match` no hypothesis pattern-match yet.
-- If wedges again within 24h or before fleet flip: escalate to filing new bug
-
-## Next steps after fleet reset (event-mode flip)
-1. Stop all 4 agents + harness.
-2. Flip `event-driven: yes` in config.md.
-3. Restart harness fresh.
-4. Spawn all 4 agents — boot into event-driven mode via #9588 bootstrap.
-5. Watch ~2h for stability.
-6. Resume planning queue: #9748, #3498.
-
-## Memory rules added this session
-- feedback-proactor-loop-two-bugs
-- feedback-minimal-repro-over-symptom-match
-- feedback-orphan-claude-from-subagents
-- feedback-tracker-comment-prefix
-- feedback-orphan-claude-on-reboot
+- Persists; polling-mode unaffected
+- NOT restarting yet — preserving diagnostic state
+- Will escalate if it recurs after a clean restart
