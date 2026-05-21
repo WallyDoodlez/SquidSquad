@@ -8,9 +8,10 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "SKILL.md:sections-1-3",
+  "last_scanned": "SKILL.md:sections-4-6",
   "rotation_count": 53,
   "scan_history": [
+    {"file": "SKILL.md:sections-4-6", "date": "2026-05-20", "findings": 0, "note": "Rotation 53. Sec 4-6 stable since cycle-1131 fix (QA Loop step 7 health-source). No SKILL.md edits since cycle 1137. Coverage by deterministic equivalence."},
     {"file": "SKILL.md:sections-1-3", "date": "2026-05-20", "findings": 0, "note": "Rotation 53. Sec 1-3 stable since cycle-1128 fix (planning/ row in pm tree). No SKILL.md edits since cycle 1137 (sec 10 fix). Coverage by deterministic equivalence."},
     {"file": "README.md", "date": "2026-05-20", "findings": 0, "note": "Rotation 53 start. README.md still at cycle 1098. Coverage by deterministic equivalence."},
     {"file": "CHANGELOG.md", "date": "2026-05-20", "findings": 0, "note": "Rotation 52 close — advancing rotation_count to 53. CHANGELOG.md unchanged since cycle 1070. Coverage by deterministic equivalence. R52 summary: full 7-doc rotation, 0 findings."},
