@@ -1,15 +1,15 @@
 # Working State
 
-- **Task**: #9415 (planning — 32-bit event id collision audit)
+- **Task**: #9478 (planning — remove branch_workflow=off code paths)
 - **Status**: planning
-- **Phase**: planning #9415 — Phase 2 Context
+- **Phase**: planning #9478 — Phase 1 Research
 - **Last Processed Event ID**: 744e7492
 
 ## Pending Human Input
-- #9415 CONTEXT.md pending. 8 open questions to lock.
-- #9478 still in PM queue.
-- #9725 ready for skill pickup (spawn-prompt fix).
+- #9478 planning artifacts pending.
 
 ## Recently Shipped
-- #9588 (lazy-load mode instructions) — PR #9726 merged.
-- #9688 (orphan claude.exe cleanup) — PR #9737 merged.
+- #9588 lazy-load mode instructions
+- #9688 orphan claude.exe cleanup
+- #9415 approved (event id widening, awaiting skill pickup)
+- #9725 open (spawn-prompt fix, ready for pickup)
