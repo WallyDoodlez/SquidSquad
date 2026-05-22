@@ -566,3 +566,159 @@ class TestSpawnMacosTempFile:
 
         assert ok is False
         assert "macOS spawn failed" in msg
+
+
+# ---------------------------------------------------------------------------
+# #9941 — _write_booting_sentinel atomic create-or-fail
+# ---------------------------------------------------------------------------
+
+
+class TestWriteBootingSentinelAtomic9941:
+    """#9941: _write_booting_sentinel must use an OS-atomic create-or-fail
+    primitive (O_CREAT | O_EXCL), NOT check-then-rename. Two concurrent
+    invocations that race past the TTL-stale check must produce exactly
+    one True return.
+    """
+
+    def test_pid_is_actually_written(self, tmp_path):
+        """Sanity: the sentinel content is the calling process's PID,
+        same as the pre-fix contract — forensic readers (orphan_cleanup
+        logs, manual operators) rely on this."""
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        assert boot_remote._write_booting_sentinel(tmp_path, "skill") is True
+        content = (squid / ".booting").read_text(encoding="utf-8")
+        assert content == str(os.getpid())
+
+    def test_existing_sentinel_blocks_claim(self, tmp_path):
+        """Standard case: a recent sentinel exists, the new caller
+        returns False (the TTL-aware _has_booting_sentinel check fires
+        before O_EXCL ever runs)."""
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        (squid / ".booting").write_text(str(os.getpid()), encoding="utf-8")
+        assert boot_remote._write_booting_sentinel(tmp_path, "skill") is False
+
+    def test_o_excl_used_in_implementation(self):
+        """Source-level invariant: the implementation MUST use
+        ``O_CREAT | O_EXCL`` and MUST NOT fall back to the old
+        ``tmp.replace`` pattern. AST-based so the test ignores
+        docstring mentions of the removed pattern (which legitimately
+        explain WHY the fix exists).
+        """
+        import ast
+        source = (boot_remote.SCRIPT_DIR / "boot_remote.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        target = None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "_write_booting_sentinel":
+                target = node
+                break
+        assert target is not None, "_write_booting_sentinel not found in module"
+
+        # Collect Name and Attribute identifiers used in the function body.
+        names_used = set()
+        attr_chains = []
+        for node in ast.walk(target):
+            if isinstance(node, ast.Name):
+                names_used.add(node.id)
+            elif isinstance(node, ast.Attribute):
+                # Render simple attribute chains like `tmp.replace` or `os.O_EXCL`.
+                chain = []
+                cur = node
+                while isinstance(cur, ast.Attribute):
+                    chain.append(cur.attr)
+                    cur = cur.value
+                if isinstance(cur, ast.Name):
+                    chain.append(cur.id)
+                    attr_chains.append(".".join(reversed(chain)))
+
+        assert any("O_EXCL" in c for c in attr_chains) or "O_EXCL" in names_used, (
+            "#9941: _write_booting_sentinel must use os.O_EXCL for atomic "
+            "create-or-fail; check-then-rename is not atomic"
+        )
+        assert any("O_CREAT" in c for c in attr_chains) or "O_CREAT" in names_used, (
+            "#9941: O_CREAT required alongside O_EXCL"
+        )
+        # The replaced-temp pattern must be gone from EXECUTABLE code
+        # (docstring still mentions it to explain the fix).
+        forbidden_chains = [c for c in attr_chains if c.endswith(".replace") and c.split(".")[0] == "tmp"]
+        assert not forbidden_chains, (
+            f"#9941 regression: `tmp.replace` call detected in executable "
+            f"code: {forbidden_chains}. The slot claim must use O_EXCL."
+        )
+
+    def test_o_excl_raises_FileExistsError_returns_false(self, tmp_path):
+        """If os.open raises FileExistsError (race lost), return False
+        without leaking a sentinel file."""
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        real_open = os.open
+
+        def lose_race(path, flags, mode=0o777):
+            # Simulate "another process won the race between our TTL
+            # check and our O_EXCL call".
+            raise FileExistsError(17, "File exists", str(path))
+
+        with patch("boot_remote.os.open", side_effect=lose_race):
+            result = boot_remote._write_booting_sentinel(tmp_path, "skill")
+        assert result is False
+        # We did NOT create or leak the sentinel.
+        assert not (squid / ".booting").exists()
+
+    def test_write_failure_after_create_unlinks_sentinel(self, tmp_path):
+        """If os.open succeeds but the subsequent write raises (e.g.,
+        disk full mid-write), the now-empty sentinel must be unlinked
+        so a retry can proceed — leaving it would block boots until
+        the TTL expiry timer eventually catches it."""
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        real_fdopen = os.fdopen
+
+        def crashing_fdopen(fd, *args, **kwargs):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            raise OSError("simulated disk full mid-write")
+
+        with patch("boot_remote.os.fdopen", side_effect=crashing_fdopen):
+            result = boot_remote._write_booting_sentinel(tmp_path, "skill")
+        assert result is False
+        assert not (squid / ".booting").exists(), (
+            "#9941: failed sentinel write must unlink the empty file so "
+            "future retries aren't blocked until TTL expiry"
+        )
+
+    def test_concurrent_threads_only_one_claims_slot(self, tmp_path):
+        """Integration-style: spin up N threads all racing for the same
+        slot via real os.open. Exactly ONE thread must return True.
+        This is the actual race-defense invariant — passing this test
+        with the pre-fix check-then-rename code was impossible because
+        Path.replace overwrote silently.
+        """
+        import threading
+        squid = tmp_path / ".squidsquad" / "skill"
+        squid.mkdir(parents=True)
+        results = []
+        results_lock = threading.Lock()
+        barrier = threading.Barrier(8)
+
+        def worker():
+            barrier.wait()  # release all threads simultaneously
+            ok = boot_remote._write_booting_sentinel(tmp_path, "skill")
+            with results_lock:
+                results.append(ok)
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        wins = sum(1 for r in results if r)
+        assert wins == 1, (
+            f"#9941: expected exactly 1 thread to claim the slot, got "
+            f"{wins} wins out of {len(results)} attempts. With check-then-"
+            f"rename, multiple threads could falsely win."
+        )
