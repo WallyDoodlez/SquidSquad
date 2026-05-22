@@ -1,26 +1,36 @@
 # Working State
 
-- **Task**: #9873-A awaiting human direction on lock type + R2 amendment
+- **Task**: #9873-A planning fully complete (R2); ready for human approval gate
 - **Status**: idle
 - **Last Processed Event ID**: 2461e3f1
 
-## #9873-A — DeepSeek review COMPLETE
-- File: .squidsquad/pm/planning/REVIEW-9873-A-DEEPSEEK.md
-- 1 ERROR: lock type mismatch (D5 vs D4+D11) — needs human pick (a/b/c)
-  - PM lean: option c (lock-free dict read on endpoint; atomic in CPython)
-- 6 warnings (all addressable in R2):
-  - F2: vault note still has old ack_for schema — needs update
-  - F3: RESEARCH/CONTEXT contradiction on old event_lifecycle.ack() call — clarify REMOVED
-  - F4: eviction check underspecified — lean: O(n) __contains__
-  - F5: load() backward-compat — use data.get('cursors', {})
-  - F6: cursor regression detection gap — lean: deque-position check
-  - F7: two-lock ordering not audited — needs one-time audit
+## #9873-A FOUNDATION SLICE READY
+- RESEARCH-9873-A.md ✓
+- CONTEXT-9873-A.md ✓ (14 decisions)
+- REVIEW-9873-A-DEEPSEEK.md ✓ (1 error + 6 warnings)
+- CONTEXT-9873-A-R2.md ✓ (amendments + 5 new ACs)
+- Ready to: transition planning → planned + human approval → status:approved → skill pickup
 
-## Awaiting human direction
-- Finding 1 resolution (a/b/c) before writing CONTEXT-9873-A R2
-- After R2: transition planned + restructure umbrella into 6 children + approval
+## R2 amendments
+- D5: lock-free endpoint read (CPython atomic dict.get())
+- D8: EventStream.has_event() O(n) scan; reject evicted
+- D9: old event_lifecycle.ack() explicitly REMOVED from ack-cursor branch
+- D15 (new): cursor regression detection via deque-position comparison
+- §2 load(): data.get('cursors', {}) backward compat
+- §6: verified lock ordering ELM._lock → EventStream._lock
+- §4: skill audit step pre-merge
 
-## Skill status
-- Respawned cleanly post-cycle 1562 cleanup
-- Improvement scan running; filed #9882 (config.py docstring drift)
-- Singleton invariant task #9888 still in skill's queue
+## PM follow-up TODO
+- Update vault note decision-event-bus-architecture-redesign.md to reflect ack-cursor/ack-stop split + event_id field name (outside skill's scope)
+
+## Next steps awaiting human direction
+- Restructure umbrella into 6 children OR keep #9873 as -A + file 5 children for -B/-C/-D/-E/-F
+- Transition #9873 to planned + human approval gate
+- Skill picks up -A
+
+## Other in-flight
+- #9888 (singleton invariant review, role:skill, high, planning queue)
+- #9845 noop event — status:planned, will retrofit onto -A's ack machinery once -A lands
+- #9478 still at pending-test (branch_workflow=off)
+
+## Skill healthy
