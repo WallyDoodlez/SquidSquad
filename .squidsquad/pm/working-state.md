@@ -1,62 +1,41 @@
 # Working State
 
-- **Task**: idle (backlog audit + recent planning all in flight)
+- **Task**: idle (filed #9903 + #9904 to skill; pre-cycle wedge blocks normal cycle execution on this Windows box)
 - **Status**: idle — handover ready
 - **Last Processed Event ID**: 744e7492
 
-## Active deliverables awaiting skill / QA / DM
+## Critical blocker this session
 
-### Tier 1 — Pre-event-mode-flip blockers (all in skill's deck)
-- **#9725** (status:open) — spawn-prompt fix in `thin_launcher.py:163` (use `/loop {interval}m execute one Ralph Loop cycle`). Planning done.
-- **#9415** (status:approved) — event id widening to 16-char hex + entropy on content path. Planning done. Skill branch `squidsquad/task/9415` open.
-- **#9478** (status:approved) — branch_workflow=off removal. Planning done. Closes PR #8812.
-- **#9740-#9744** (5 audit findings) — Tier 1 from `TRIAGE-AUDIT-2026-05-21.md`. No planning artifacts yet; bodies + audit files have enough scope.
+`cycle_pre.py` hangs indefinitely on Windows due to `health_check.py` → `process_utils.is_process_alive` → `platform.system()` → WMI query. Filed:
 
-### Tier 2 — Hardening (ship soon)
-- **#9745** (wake-mode dup), **#9746** (stale agent-instructions.md)
+- **#9903** (high) — root cause: WMI hang in `platform.system()` via `process_utils.py:32`. Mirrored copy in `thin_launcher.py:_is_process_alive` per its own comment.
+- **#9904** (medium) — hardening: `cycle_pre.py:717` and other `_run_script` call sites lack subprocess timeout; one hanging child wedges the whole cycle.
 
-### Tier 3 — Docs/debt (anytime)
-- **#9743** (Monitor buffering docs), **#9747** ([ROLE] placeholder)
+Until #9903 lands, PM cycles on this machine cannot run mechanically end-to-end. Manual git pull + manual commit is the workaround (used this cycle).
 
-### Post-flip queue (locked in body sequencing)
-- **#9748** — Agent setup: per-role capability discovery + self-install (substantial; PM planning when ready)
-- **#3498** — Formalize backlog audit as L2 PM sub-skill (queued for PM planning after Tier 1 clears)
+## In flight (skill)
+- **#9901** (status:in-progress, medium) — `cycle.py` status_bar three drifted copies / first-spawn crash. From improvement-scan.
+- **#9902** (status:approved, high) — retro DeepSeek review of #9873-A: 1 error + 3 warnings in `advance_cursor` / `ack_stop` / inline handler.
+- **#9903** (status:open, high, new this cycle) — pre-cycle WMI wedge.
+- **#9904** (status:open, medium, new this cycle) — `_run_script` timeout hardening.
 
-## Shipped this session
-- #9588 lazy-load mode instructions
-- #9688 orphan claude.exe cleanup
-- #9242, #9481, #9562 harness wedge fixes
-- #9184 PM/dev/QA workflow restructure
-- #8999 event-mode integration tests
-- #9265 in-stream gap dropped from CONTEXT-8694 §2
-- #9331 harness eviction signal + event_poll detection
-- #9358 cycle structure freeze fix
-- #9243 harness /status code_version
-- #9474 cycle_post.py SKILL.md/config.md drop fix
-- #9272, #9318, #9319 (process improvement scan tasks)
-- Plus closing #6 + #8 cycle 1538 as superseded
+## Pending PM approval — #9873 event-bus refactor sequence (A shipped)
+- **#9891** — #9873-B: `event_poll.py` → nudge-only — high
+- **#9892** — #9873-C: agent contract update (nudge-driven read/decide/act/ack) — high
+- **#9893** — #9873-D: improvement subloop trigger + token-burn throttle — medium
+- **#9894** — #9873-E: timeout_scan re-nudge — high
+- **#9895** — #9873-F: TUI ack visualization — low (POST-V1)
+- **#9888** — agent singleton invariant / orphan accumulation review — high
+- **#9897** — migrate cycle_post / state_bus push sites to `git_ops._git_push()` — low
 
-## Planning artifacts in `.squidsquad/pm/planning/`
-- RESEARCH-9588, CONTEXT-9588 (shipped)
-- RESEARCH-9688, CONTEXT-9688 (shipped)
-- RESEARCH-9725, CONTEXT-9725 (#9725 awaiting skill pickup)
-- RESEARCH-9415, CONTEXT-9415 (#9415 in skill flight)
-- RESEARCH-9478, CONTEXT-9478 (#9478 awaiting skill pickup)
-- audits/AUDIT-A-events-architecture.md (deepseek)
-- audits/AUDIT-B-polling-mode-regression.md (deepseek)
-- audits/TRIAGE-AUDIT-2026-05-21.md (Tier 1/2/3 ordering)
+## In planning
+- **#9874** — harness internal architecture review (high)
+- **#9875** — L2: merged-item vault writeback + research consults vault first (medium)
 
-## Next steps after fleet reset (event-mode flip)
-1. Stop all 4 agents + harness.
-2. Flip `event-driven: yes` in config.md.
-3. Restart harness fresh.
-4. Spawn all 4 agents — they boot into event-driven mode via #9588 bootstrap.
-5. Watch ~2h for stability.
-6. Resume planning queue: #9748 (capability discovery), #3498 (backlog audit sub-skill).
+## Just shipped (origin/main since last sync)
+- v0.42.0 tag pushed by DM
+- #9873-A foundation merged (PR #9899)
+- #9898 — event_poll.py emit-before-advance fix (PR #9900)
 
-## Notable findings + memory rules written this session
-- feedback-proactor-loop-two-bugs (Windows asyncio TWO independent failure modes)
-- feedback-minimal-repro-over-symptom-match
-- feedback-orphan-claude-from-subagents
-- feedback-tracker-comment-prefix
-- feedback-orphan-claude-on-reboot
+## Notes
+- Cron job 664f304c (every 30m) is scheduled in this session but every fire will wedge on the WMI bug until #9903 lands. Consider stopping the cron until then.
