@@ -1417,3 +1417,10 @@
 - **Findings**: #9932 (medium — `write_secret` uses `Path.write_text` directly which truncates before writing; a crash mid-write loses every API key in the file, not just the one being updated; recommendation: write `.tmp` + `_restrict_permissions` on tmp + `os.replace` for atomic swap, mirroring the #9901 status_bar pattern)
 - **Items rejected by human**: none yet
 - **Notes**: `_restrict_permissions` already uses `sys.platform` per #9903 (verified L70); `_parse_secrets` correctly uses `str.partition` so values containing `=` survive; `init()` doesn't chmod `~/.squidsquad/` itself, only the secrets file — minor on user-restricted homedirs but worth noting for multi-user hosts; `write_secret` is also non-locking (concurrent calls race) but only caller is the interactive `setup-provider` flow, low likelihood vs the crash-recovery issue.
+
+## Scan — 2026-05-22 13:34
+
+- **Files scanned**: references/scripts/orphan_cleanup.py (full 415 lines; focus on CONTEXT-9688 D1-D8 invariants, snapshot-to-kill timing, npm-path filter coverage)
+- **Findings**: #9937 (medium — `_kill(pid)` targets a PID from `_list_claude_processes()` snapshot without re-verifying the process's current cmdline; if the orphan exits between snapshot and taskkill, Windows can recycle the PID for an unrelated process which then gets force-killed; the D2 npm-path filter runs in `_classify` against the snapshot, not at kill time, so it doesn't protect against this race; recommendation: cheap re-verify via `tasklist /FI "PID eq <pid>"` or a second snapshot just before the kill loop)
+- **Items rejected by human**: none yet
+- **Notes**: `_is_windows()` already uses `sys.platform == "win32"` per #9903 (line 62); all subprocess calls have explicit timeouts (15s/10s/10s); `_log_decision` is append-only and best-effort per CONTEXT D4 with no size cap but ~3 entries per sweep makes that fine for years; `_role_pid_files`'s `(ImportError, SystemExit, Exception)` catch list is redundant (Exception covers ImportError) but readable; CONTEXT D1-D8 invariants generally well-documented and matched in code.
