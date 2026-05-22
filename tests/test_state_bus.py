@@ -567,3 +567,127 @@ class TestPushHardening9930:
             f"Expected `git rebase --abort` after failed pull --rebase, "
             f"saw: {[c.args[0] for c in mock_run.call_args_list]}"
         )
+
+
+# ---------------------------------------------------------------------------
+# #9934 — divergence diagnostic after retry exhaustion
+# ---------------------------------------------------------------------------
+
+
+class TestDivergenceDiagnostic9934:
+    """#9934 (follow-up to #9930): when the retry loop exhausts all 3
+    attempts because of a real content conflict (push fails, pull --rebase
+    keeps failing in the same way), emit a structured diagnostic so the
+    operator can manually recover — don't just print the generic
+    'failed after 3 attempts' warning and disappear.
+    """
+
+    @patch("state_bus._worktree_exists", return_value=True)
+    @patch("state_bus._read_branch_config", return_value=("main", "squid-squad"))
+    @patch("state_bus._run")
+    def test_exhausted_loop_prints_divergence_counts(self, mock_run, mock_config, mock_wt, capsys):
+        """After 3 attempts fail, the diagnostic must include both
+        local-ahead and origin-ahead commit counts so the operator can
+        tell a 1-commit race from a 1000-commit drift."""
+        # 3 attempts, each: push fail + pull fail + abort.
+        # Then 2 rev-list calls for the divergence summary.
+        per_attempt = [
+            MagicMock(stdout="", returncode=1),     # push FAILS
+            MagicMock(stdout="", stderr="CONFLICT (content) ...", returncode=1),  # pull --rebase FAILS
+            MagicMock(stdout="", returncode=0),     # rebase --abort
+        ]
+        mock_run.side_effect = [
+            MagicMock(stdout="", returncode=0),                 # add -A
+            MagicMock(stdout=" M file.md\n", returncode=0),     # status
+            MagicMock(stdout="", stderr="", returncode=0),      # commit
+        ] + per_attempt * 3 + [
+            MagicMock(stdout="2\n", returncode=0),              # rev-list local ahead
+            MagicMock(stdout="1110\n", returncode=0),           # rev-list origin ahead
+        ]
+        result = state_bus.commit_and_push("msg", role="skill")
+        assert result is False
+        captured = capsys.readouterr()
+        stderr = captured.err
+        assert "WARNING: State push failed after 3 attempts" in stderr
+        # Divergence counts must appear so operator knows the scale.
+        assert "local is 2 ahead" in stderr
+        assert "origin is 1110 ahead" in stderr
+        # And the manual recovery command must be visible.
+        assert "git fetch origin squid-squad" in stderr
+        assert "git reset --hard origin/squid-squad" in stderr
+
+    @patch("state_bus._worktree_exists", return_value=True)
+    @patch("state_bus._read_branch_config", return_value=("main", "squid-squad"))
+    @patch("state_bus._run")
+    def test_diagnostic_flags_content_conflict(self, mock_run, mock_config, mock_wt, capsys):
+        """If the last pull stderr mentioned CONFLICT, the diagnostic
+        must say so explicitly — operators reading scrollback shouldn't
+        have to dig for the actual failure mode."""
+        per_attempt = [
+            MagicMock(stdout="", returncode=1),
+            MagicMock(stdout="",
+                      stderr="CONFLICT (content): Merge conflict in qa/working-state.md",
+                      returncode=1),
+            MagicMock(stdout="", returncode=0),
+        ]
+        mock_run.side_effect = [
+            MagicMock(stdout="", returncode=0),
+            MagicMock(stdout=" M file.md\n", returncode=0),
+            MagicMock(stdout="", stderr="", returncode=0),
+        ] + per_attempt * 3 + [
+            MagicMock(stdout="0\n", returncode=0),
+            MagicMock(stdout="1\n", returncode=0),
+        ]
+        state_bus.commit_and_push("msg", role="skill")
+        stderr = capsys.readouterr().err
+        assert "real content conflict" in stderr.lower()
+
+    @patch("state_bus._worktree_exists", return_value=True)
+    @patch("state_bus._read_branch_config", return_value=("main", "squid-squad"))
+    @patch("state_bus._run")
+    def test_diagnostic_skipped_on_success(self, mock_run, mock_config, mock_wt, capsys):
+        """The divergence diagnostic must NOT print when the push
+        eventually succeeds — only after the loop truly exhausts."""
+        mock_run.side_effect = [
+            MagicMock(stdout="", returncode=0),                 # add -A
+            MagicMock(stdout=" M file.md\n", returncode=0),     # status
+            MagicMock(stdout="", stderr="", returncode=0),      # commit
+            MagicMock(stdout="", returncode=0),                 # push SUCCEEDS first try
+        ]
+        result = state_bus.commit_and_push("msg", role="skill")
+        assert result is True
+        stderr = capsys.readouterr().err
+        assert "divergence" not in stderr.lower()
+        assert "manual recovery" not in stderr.lower()
+
+    @patch("state_bus._worktree_exists", return_value=True)
+    @patch("state_bus._read_branch_config", return_value=("main", "squid-squad"))
+    @patch("state_bus._run")
+    def test_diagnostic_tolerates_rev_list_failure(self, mock_run, mock_config, mock_wt, capsys):
+        """The diagnostic is best-effort: if the rev-list calls
+        themselves fail (e.g., origin ref missing), the function must
+        not raise — the primary 'failed after 3 attempts' warning is
+        already on stderr, and the loss of divergence counts is
+        recoverable noise, not a crash worth propagating.
+        """
+        per_attempt = [
+            MagicMock(stdout="", returncode=1),
+            MagicMock(stdout="", stderr="", returncode=1),
+            MagicMock(stdout="", returncode=0),
+        ]
+        mock_run.side_effect = [
+            MagicMock(stdout="", returncode=0),
+            MagicMock(stdout=" M file.md\n", returncode=0),
+            MagicMock(stdout="", stderr="", returncode=0),
+        ] + per_attempt * 3 + [
+            MagicMock(stdout="", stderr="fatal: bad revision", returncode=128),
+            MagicMock(stdout="", stderr="fatal: bad revision", returncode=128),
+        ]
+        # Must not raise.
+        result = state_bus.commit_and_push("msg", role="skill")
+        assert result is False
+        stderr = capsys.readouterr().err
+        # Primary warning still printed; divergence line uses '?' for
+        # the missing counts.
+        assert "WARNING: State push failed after 3 attempts" in stderr
+        assert "local is ? ahead" in stderr or "origin is ? ahead" in stderr

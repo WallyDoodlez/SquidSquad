@@ -298,6 +298,7 @@ def commit_and_push(message, role="unknown"):
     # history linear instead of accumulating merge commits — a previous
     # default-merge pull was creating `Merge branch 'squid-squad'` commits
     # on every concurrent-write cycle.
+    last_pull_result = None
     for attempt in range(3):
         result = _run(
             ["git"] + _GH_CREDENTIAL_OVERRIDE +
@@ -315,6 +316,7 @@ def commit_and_push(message, role="unknown"):
             ["pull", "--rebase", "origin", state_branch],
             cwd=cwd, check=False, timeout=DEFAULT_GIT_TIMEOUT,
         )
+        last_pull_result = pull_result
         if pull_result.returncode != 0:
             _run(["git", "rebase", "--abort"], cwd=cwd, check=False)
             # #9930 DS review F1: if the pull timed out (returncode=124),
@@ -330,8 +332,80 @@ def commit_and_push(message, role="unknown"):
                     cwd=cwd, check=False, timeout=DEFAULT_GIT_TIMEOUT,
                 )
 
-    print(f"WARNING: State push failed after 3 attempts", file=sys.stderr)
+    # #9934: All 3 attempts exhausted. The retry loop fixes credential /
+    # timeout / merge-pollution issues from #9930, but it CANNOT recover
+    # from a real content conflict — pull --rebase keeps failing in the
+    # same way, and the next push attempt is back to square one. When
+    # this happens, give the operator a structured diagnostic with the
+    # actual divergence and a manual recovery command (per QA's
+    # recommendation #3 in the issue — the lower-risk paths). Don't
+    # auto-recover; that's outside this fix's risk budget.
+    print("WARNING: State push failed after 3 attempts", file=sys.stderr)
+    _print_divergence_diagnostic(cwd, state_branch, last_pull_result)
     return False
+
+
+def _print_divergence_diagnostic(cwd, state_branch, last_pull_result):
+    """#9934: emit a structured diagnostic after retry exhaustion.
+
+    Reports the local-vs-origin commit divergence (so the operator knows
+    whether this is a small concurrent-write race or a long-disconnected
+    worktree), surfaces the last pull stderr (which usually contains the
+    actual ``CONFLICT (content)`` lines), and prints the manual recovery
+    one-liner. Best-effort — any sub-call failure is swallowed because
+    we're already on the error path.
+    """
+    try:
+        # Local commits not on origin, and origin commits not on local.
+        # `git rev-list --count A..B` is None-on-error tolerant via _run.
+        local_ahead = _run(
+            ["git", "rev-list", "--count",
+             f"origin/{state_branch}..HEAD"],
+            cwd=cwd, check=False, timeout=DEFAULT_GIT_TIMEOUT,
+        )
+        local_behind = _run(
+            ["git", "rev-list", "--count",
+             f"HEAD..origin/{state_branch}"],
+            cwd=cwd, check=False, timeout=DEFAULT_GIT_TIMEOUT,
+        )
+        ahead = local_ahead.stdout.strip() if local_ahead.returncode == 0 else "?"
+        behind = local_behind.stdout.strip() if local_behind.returncode == 0 else "?"
+
+        # Surface the conflict signal if pull stderr mentions it.
+        pull_stderr = (last_pull_result.stderr or "") if last_pull_result else ""
+        had_conflict = (
+            "CONFLICT" in pull_stderr
+            or "cannot pull" in pull_stderr.lower()
+            or "fix conflicts" in pull_stderr.lower()
+        )
+
+        msg = [
+            "  state-branch divergence: "
+            f"local is {ahead} ahead, origin is {behind} ahead "
+            f"of '{state_branch}'.",
+        ]
+        if had_conflict:
+            msg.append(
+                "  Last pull --rebase reported a real content conflict — "
+                "retries cannot resolve this automatically."
+            )
+        msg.append(
+            "  Manual recovery (loses local state-branch commits — "
+            "iteration logs / scan history are reconstructable from "
+            "git history on main):"
+        )
+        msg.append(
+            f"    cd .squidsquad-state && "
+            f"git fetch origin {state_branch} && "
+            f"git reset --hard origin/{state_branch}"
+        )
+        msg.append("  See #9934 for context.")
+        for line in msg:
+            print(line, file=sys.stderr)
+    except Exception:
+        # Diagnostic is best-effort. If git rev-list itself wedges or
+        # cwd is gone, swallow — the primary warning has already printed.
+        pass
 
 
 def status():
