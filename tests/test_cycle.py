@@ -56,6 +56,101 @@ class TestStatusBar:
             result = cycle.status_bar("skill", "idle")
         assert result == "idle|"
 
+    def test_missing_role_dir_does_not_raise_9901(self, tmp_path):
+        """#9901: status_bar must mkdir the role dir if absent. Previously
+        the missing-dir case crashed the agent on its first cosmetic write."""
+        # No role_dir created; SQUIDSQUAD_DIR exists but skill/ does not
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            result = cycle.status_bar("skill", "implementing", "#1 fresh...")
+        assert result == "implementing|#1 fresh..."
+        state = (tmp_path / "skill" / "current-state").read_text(encoding="utf-8")
+        assert state == "implementing|#1 fresh..."
+
+    def test_disk_failure_does_not_raise_9901(self, tmp_path, monkeypatch, capsys):
+        """#9901: any OSError on the write+replace path is swallowed.
+        Function still returns the intended content so callers and tests
+        observe the contract; only the disk side-effect is best-effort.
+
+        Also asserts the failure is logged to stderr (DS finding 2) so
+        persistent issues don't go unnoticed — silent on the exception
+        path but NOT silent on the diagnostic.
+        """
+        (tmp_path / "skill").mkdir()
+
+        def _boom(self, *args, **kwargs):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(Path, "write_text", _boom)
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            # Must not raise — caller must keep cycling on cosmetic-write failure.
+            result = cycle.status_bar("skill", "implementing", "#9 fail-soft")
+        assert result == "implementing|#9 fail-soft"
+        # DS finding 2: write failure must log to stderr (observability).
+        err = capsys.readouterr().err
+        assert "status_bar write failed" in err
+        assert "skill" in err and "implementing" in err
+
+    def test_mkdir_failure_does_not_raise_9901(self, tmp_path, monkeypatch, capsys):
+        """#9901 (DS finding 4): an OSError from mkdir must be swallowed and
+        logged. Previously only the write_text failure path was tested."""
+
+        def _boom_mkdir(self, *args, **kwargs):
+            raise OSError("permission denied")
+
+        monkeypatch.setattr(Path, "mkdir", _boom_mkdir)
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            result = cycle.status_bar("skill", "implementing", "mkdir-boom")
+        assert result == "implementing|mkdir-boom"
+        assert "status_bar write failed" in capsys.readouterr().err
+
+    def test_replace_failure_does_not_raise_9901(self, tmp_path, monkeypatch, capsys):
+        """#9901 (DS finding 3+4): an OSError from Path.replace (e.g. Windows
+        file-lock on current-state) must be swallowed, logged, AND the orphan
+        `.tmp` file cleaned up — otherwise a persistent replace-failure would
+        accumulate garbage."""
+        role_dir = tmp_path / "skill"
+        role_dir.mkdir()
+
+        def _boom_replace(self, *args, **kwargs):
+            raise OSError("file locked")
+
+        monkeypatch.setattr(Path, "replace", _boom_replace)
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            result = cycle.status_bar("skill", "implementing", "replace-boom")
+        assert result == "implementing|replace-boom"
+        assert "status_bar write failed" in capsys.readouterr().err
+        # DS finding 3: orphan .tmp must be cleaned up after replace failure.
+        # The cleanup unlink() in status_bar's except block does not use
+        # replace, so it runs successfully even with replace patched.
+        tmp_file = role_dir / "current-state.tmp"
+        assert not tmp_file.exists(), (
+            f"Orphan .tmp file leaked after replace failure: {tmp_file}"
+        )
+
+    def test_consolidation_cycle_pre_delegates_9901(self, tmp_path):
+        """#9901: cycle_pre._write_status_bar is a thin shim that delegates
+        to cycle.status_bar — no separate logic to drift."""
+        sys.path.insert(0, str(SCRIPTS))
+        import cycle_pre
+        (tmp_path / "skill").mkdir()
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            cycle_pre._write_status_bar("skill", "pulling", "via shim")
+        assert (tmp_path / "skill" / "current-state").read_text(
+            encoding="utf-8"
+        ) == "pulling|via shim"
+
+    def test_consolidation_cycle_post_delegates_9901(self, tmp_path):
+        """#9901: cycle_post._write_status_bar is a thin shim that delegates
+        to cycle.status_bar — single source of truth for the write logic."""
+        sys.path.insert(0, str(SCRIPTS))
+        import cycle_post
+        (tmp_path / "skill").mkdir()
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            cycle_post._write_status_bar("skill", "committing", "via shim")
+        assert (tmp_path / "skill" / "current-state").read_text(
+            encoding="utf-8"
+        ) == "committing|via shim"
+
 
 class TestStatusBarSelf:
     """#9747: status-bar-self derives role from SQUIDSQUAD_ROLE env."""

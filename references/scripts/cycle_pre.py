@@ -129,15 +129,17 @@ def _config_get_int(field, default=0):
 
 
 def _write_status_bar(role, phase, description):
-    """Write status bar state atomically."""
-    state_file = SQUID_DIR / role / "current-state"
-    tmp_file = state_file.with_suffix(".tmp")
-    content = f"{phase}|{description}"
-    try:
-        tmp_file.write_text(content, encoding="utf-8")
-        tmp_file.replace(state_file)
-    except OSError:
-        pass
+    """Write status bar state atomically.
+
+    #9901: delegates to ``cycle.status_bar``, the single source of truth.
+    Previously this was a drifted private copy that lacked the mkdir
+    defensive practice; now there is one implementation and three
+    callers route through it.
+    """
+    if str(SCRIPT_DIR) not in sys.path:
+        sys.path.insert(0, str(SCRIPT_DIR))
+    from cycle import status_bar
+    status_bar(role, phase, description)
 
 
 def _timestamp():
