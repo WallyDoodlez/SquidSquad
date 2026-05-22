@@ -28,11 +28,11 @@ Loosen `orphan_cleanup.py` D3 so that when a specific role's `.claude-pid` is mi
 
 **Fix 2 (periodic out-of-band reap in harness.py) is REJECTED** for this issue. Rationale: (a) it adds harness complexity for a marginal belt-and-braces gain; (b) it introduces the concurrency hazard called out by DS F4 (race with `boot_agent`'s inline sweep); (c) per-role skip addresses the root cause directly. Periodic reap may be revisited in a separate issue if v1 evidence shows the gap persists.
 
-### D2 — Zero-healthy-roles backstop preserved (LOCKED, supersedes DS F5)
+### D2 — Zero-healthy-roles backstop preserved (LOCKED, supersedes DS F5; v2 simplification per DS-v2 F1)
 
-If `_resolve_protected_pids` returns ZERO healthy roles (because `.local-config` is unreadable, no roles are configured, or every role's cmd.exe is dead), the sweep MUST still abort entirely — same as today. The protected set being empty is qualitatively different from "one role is unhealthy": it removes ALL protection, and the original D3 rationale ("rather miss orphans than kill the wrong process") still holds in that case.
+If `_resolve_protected_pids` returns ZERO healthy roles, the sweep MUST abort entirely — same as today. Implementation: after `_resolve_protected_pids` returns, check `len(protected) == 0`. If true, abort the sweep (D2 backstop fires). If `len(protected) > 0`, proceed even if `skipped_roles` is non-empty (D1 per-role skip semantics).
 
-Implementation note: in `orphan_cleanup.sweep()`, check `len(protected_pids) == 0 and all_roles_unhealthy` BEFORE proceeding. Distinguish from `len(protected_pids) == 0 and roles_were_healthy_but_have_no_extra_claude_children` — the latter is a normal idle state and must continue to sweep (otherwise it'd be a regression).
+The single condition `len(protected) == 0` covers all backstop cases: no roles configured, all roles' cmd.exe dead, all roles missing pid files, all roles with wrong child count. The earlier draft's distinction between "all roles unhealthy" vs "roles were healthy but have no extra claude children" was wrong — per `_resolve_protected_pids` logic (orphan_cleanup.py lines 193–242), healthy roles always contribute their claude.exe PID to `protected`, so `len(protected) == 0` with healthy roles is logically impossible.
 
 ### D3 — Existing tests are UPDATED, not preserved as-is (LOCKED, supersedes DS F1)
 
@@ -41,6 +41,8 @@ The existing assertion `test_d7_missing_claude_pid_skips_entire_sweep` at `tests
 - `test_d7_missing_claude_pid_skips_only_affected_role` — assert `result["skipped_roles"]` lists ONLY the missing role; orphans of other roles ARE killed.
 - `test_stale_pid_with_dead_cmdexe_skips_only_affected_role` — same shape for the dead-cmd case.
 - `test_no_roles_discoverable_skips_sweep` — RETAINED as-is per D2 backstop.
+
+**Mock-setup adjustment (DS-v2 F3 fix)**: the rewritten tests MUST also adjust the existing `_is_pid_alive` mock (test file line 217: `patch.object(orphan_cleanup, "_is_pid_alive", return_value=True)`). Under the old whole-sweep-abort semantics, `_is_pid_alive` was never reached for the orphan because the sweep aborted earlier — so an always-True mock didn't matter. Under per-role skip, the sweep proceeds to classification, which calls `_is_pid_alive(ppid)` to distinguish live subagents from orphans (orphan_cleanup.py line ~269). An always-True mock would classify the orphan as "live subagent" (kept), making the test contradict its own assertion. Replace with `side_effect=lambda pid: pid == <healthy_cmd_pid>` so only the healthy role's cmd.exe PID is alive; the orphan's parent PID must be dead.
 
 The original D3 assertion message ("missing .claude-pid for any role must abort the ENTIRE sweep") must be replaced with a new message that encodes the per-role semantics — DS F1 is correct that the message is normative.
 
@@ -52,7 +54,7 @@ AC verification is via unit tests in `tests/test_orphan_cleanup_9688.py` using t
 
 ### D5 — Full file test coverage, not just D7 scenarios (LOCKED, supersedes DS F7)
 
-After the change, ALL test functions in `tests/test_orphan_cleanup_9688.py` (currently 16, not 7) MUST pass — the file's npm-path-filter, POSIX no-op, JSONL log shape, CSV parser edges, and own-PID defense tests are equally important regression coverage and any change to D3 must preserve them.
+After the change, ALL test functions in `tests/test_orphan_cleanup_9688.py` (currently 25 (16 standalone + 9 in `TestKillReverify9937` class added by #9937), not 7) MUST pass — the file's npm-path-filter, POSIX no-op, JSONL log shape, CSV parser edges, and own-PID defense tests are equally important regression coverage and any change to D3 must preserve them.
 
 ---
 
@@ -66,7 +68,7 @@ After the change, ALL test functions in `tests/test_orphan_cleanup_9688.py` (cur
   - The D7 tests asserting whole-sweep abort on a single bad role are REWRITTEN to assert per-role skip semantics per D3.
   - `test_no_roles_discoverable_skips_sweep` is retained AS-IS (D2 backstop).
   - All other tests (npm-path-filter, POSIX no-op, JSONL log shape, CSV parser edges, own-PID defense) pass with no changes required.
-  - Total green test count is unchanged or higher than the current 16.
+  - Total green test count is unchanged or higher than the current 25.
 
 - **AC4** — New unit test `test_partial_skip_kills_orphans_of_healthy_roles` covers the canonical scenario: 2 roles configured, role A has a stale `.claude-pid`, role B is healthy. An orphan claude.exe whose ParentProcessId matches neither A's nor B's `.claude-pid` is correctly classified as ORPHAN and killed. A claude.exe whose parent is role B's live cmd.exe is correctly classified PROTECTED and NOT killed.
 
@@ -74,7 +76,13 @@ After the change, ALL test functions in `tests/test_orphan_cleanup_9688.py` (cur
 
 - **AC6** — `CONTEXT-9688.md` D3 entry is updated to reference the supersession (link to #9926) in the same PR. Either prepend `**SUPERSEDED-BY-#9926 (per-role skip)** —` to D3's content, or add a new line at the bottom of D3 noting the change.
 
-- **AC7** — A live-system smoke test (manual, documented in `QA-RESULTS-9926.md`): with one role's cmd.exe deliberately killed (leaving a stale `.claude-pid`), `orphan_cleanup.py` is invoked and successfully reaps at least one orphan from another role. This validates the unit-test contract against real Win32 process semantics.
+- **AC7** — A live-system smoke test (manual, documented in `QA-RESULTS-9926.md`) with explicit precondition (DS-v2 F4 fix): orphans are transient, so the test MUST manufacture one before measuring the per-role skip behavior:
+  1. **Precondition**: trigger at least one Agent-tool subagent invocation on a healthy role (e.g., have skill spawn a research subagent), then either let the subagent complete naturally OR kill its parent cmd so the child `claude.exe` becomes an orphan. Verify the orphan exists via `Get-CimInstance Win32_Process -Filter "Name='claude.exe'"` — at least one `claude.exe` with a dead `ParentProcessId` must be present.
+  2. **Action**: deliberately kill ONE different role's cmd.exe (NOT the role whose subagent created the orphan), leaving its `.claude-pid` stale.
+  3. **Invoke**: run `python references/scripts/orphan_cleanup.py` (or the equivalent harness/cycle_post path).
+  4. **Verify**: the orphan from step 1 IS reaped (no longer in the process table); the diagnostics log at `.squidsquad/diagnostics/orphan-cleanup.jsonl` shows a `decision: "per-role-skip"` entry for the unhealthy role killed in step 2 AND a `decision: "killed"` entry for the orphan from step 1.
+
+  If step 1's precondition cannot be met (no orphans exist and none can be manufactured), the smoke test SHOULD be reduced to a partial validation: verify only that the sweep does not abort when one role is unhealthy (no orphan-reap claim).
 
 ---
 
@@ -97,4 +105,13 @@ After the change, ALL test functions in `tests/test_orphan_cleanup_9688.py` (cur
 | F4 ("both" concurrency hazard) | warning | Moot — Fix 2 rejected per D1 |
 | F5 (zero-roles edge case) | warning | D2 + AC2 |
 | F6 (bifurcated AC3) | warning | D4: single unit-test path |
-| F7 ("existing 7 tests" — there are 16) | warning | D5 + AC3: all 16 must pass |
+| F7 ("existing 7 tests" — there are 16) | warning | D5 + AC3: corrected to 25 (with #9937's 9 tests included) |
+
+## DS Re-Review Findings (v2, post-lockdown) — Resolution Map
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| v2-F1 (D2 implementation note uses undefined terms, describes impossible edge) | warning | D2 simplified to single `len(protected) == 0` condition |
+| v2-F2 (stale test count "16" → actually 25 after #9937) | warning | D5 + AC3 corrected to 25 |
+| v2-F3 (D3 missed `_is_pid_alive` mock adjustment) | warning | D3 now specifies mock side_effect change |
+| v2-F4 (AC7 smoke test under-specifies orphan precondition) | warning | AC7 expanded with 4-step precondition + verification |
