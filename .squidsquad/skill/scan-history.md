@@ -1410,3 +1410,10 @@
 - **Findings**: #9930 (medium — state_bus.commit_and_push hits the `credential.helper=manager` wedge (memory `feedback_git_push_credential_wedge`); silent retry loop leaks worktree state between attempts; observed `WARNING: State push failed after 3 attempts` on every session cycle 1250-1256 with merge-commit pollution on the `squid-squad` branch and residual `D iter-1246.md` etc. in the state worktree; 3-layer recommendation: apply `gh auth git-credential` workaround, add per-call timeout (mirror #9904), switch retry pull to `--rebase` or `--ff-only`)
 - **Items rejected by human**: none yet
 - **Notes**: `init()` orphan-branch flow looks atomic with the finally-restore from #3290; `is_state_file` segment matching handles trailing-slash + Windows backslash correctly; `_run` default `check=True` is OK because callers mostly opt out where needed but a few unconditional commits could surprise on first-spawn.
+
+## Scan — 2026-05-22 12:04
+
+- **Files scanned**: references/scripts/shared_fs.py (full 224 lines; focus on secrets-file write atomicity, cross-platform perms, parse/write symmetry)
+- **Findings**: #9932 (medium — `write_secret` uses `Path.write_text` directly which truncates before writing; a crash mid-write loses every API key in the file, not just the one being updated; recommendation: write `.tmp` + `_restrict_permissions` on tmp + `os.replace` for atomic swap, mirroring the #9901 status_bar pattern)
+- **Items rejected by human**: none yet
+- **Notes**: `_restrict_permissions` already uses `sys.platform` per #9903 (verified L70); `_parse_secrets` correctly uses `str.partition` so values containing `=` survive; `init()` doesn't chmod `~/.squidsquad/` itself, only the secrets file — minor on user-restricted homedirs but worth noting for multi-user hosts; `write_secret` is also non-locking (concurrent calls race) but only caller is the interactive `setup-provider` flow, low likelihood vs the crash-recovery issue.
