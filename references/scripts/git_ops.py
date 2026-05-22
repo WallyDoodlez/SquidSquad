@@ -70,6 +70,78 @@ def _run_list(cmd_list, check=True):
     )
 
 
+_GH_AVAILABLE_CACHE = None
+
+
+def _gh_credential_helper_available():
+    """Whether `gh` is on PATH and authenticated, so it can serve as the git
+    credential helper. Cached for the process lifetime.
+
+    #9890: on Windows the default `credential.helper=manager` (Git Credential
+    Manager) can wedge silently in agent sessions waiting on an interactive
+    auth dialog. When `gh` is available, routing credentials through it
+    sidesteps the dialog.
+    """
+    global _GH_AVAILABLE_CACHE
+    if _GH_AVAILABLE_CACHE is not None:
+        return _GH_AVAILABLE_CACHE
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "status"],
+            capture_output=True, text=True, check=False, timeout=10,
+        )
+        _GH_AVAILABLE_CACHE = (result.returncode == 0)
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        _GH_AVAILABLE_CACHE = False
+    return _GH_AVAILABLE_CACHE
+
+
+def _git_push(push_args, timeout=60):
+    """Run `git push <push_args...>` with anti-wedge defenses (#9890).
+
+    Two defenses against the silent-wedge mode observed in cycle 1244:
+
+    1. **Credential helper override**: when `gh` is available and authenticated
+       (cached via `_gh_credential_helper_available()`), prepend
+       `-c credential.helper=` + `-c credential.helper=!gh auth git-credential`
+       so the push routes through the `gh` token rather than the inherited
+       helper (which on Windows defaults to GCM and can wedge on agent sessions).
+    2. **Timeout**: subprocess.run is called with a `timeout` so a wedge fails
+       fast with a synthetic non-zero CompletedProcess (returncode 124, matching
+       GNU `timeout` convention) rather than accumulating zombie git processes.
+
+    Args:
+        push_args: list of args following `git push` (e.g., ["-u", "origin", "br"]).
+                   Pass `[]` for bare `git push`.
+        timeout: seconds before the push is killed. Default 60.
+
+    Returns:
+        subprocess.CompletedProcess. On timeout, returncode is 124 and stderr
+        carries a defense-noted message so existing `if push_result.returncode != 0`
+        callers continue to work without changes.
+    """
+    cmd = ["git"]
+    if _gh_credential_helper_available():
+        cmd.extend([
+            "-c", "credential.helper=",
+            "-c", "credential.helper=!gh auth git-credential",
+        ])
+    cmd.append("push")
+    cmd.extend(push_args)
+    try:
+        return subprocess.run(
+            cmd, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            check=False, cwd=str(REPO_ROOT),
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            args=cmd, returncode=124, stdout="",
+            stderr=f"git push timed out after {timeout}s (wedge defense per #9890)",
+        )
+
+
 def _log_diagnostic(severity, message):
     """Log a diagnostic entry (silently fails if diagnostics.py unavailable)."""
     try:
@@ -197,7 +269,7 @@ def commit(role, message):
 
 def push(role=None):
     """Push to remote."""
-    result = _run("git push", check=False)
+    result = _git_push([])
     if result.returncode != 0:
         _log_diagnostic("error", f"push failed: {result.stderr.strip()[:200]}")
         print(f"ERROR: push failed: {result.stderr}", file=sys.stderr)
@@ -253,7 +325,7 @@ def branch_delete(name):
             print(f"ERROR: could not delete local branch {name}: {result.stderr}", file=sys.stderr)
             return False
     # Delete remote tracking
-    _run_list(["git", "push", "origin", "--delete", name], check=False)
+    _git_push(["origin", "--delete", name])
     print(f"Deleted branch: {name}")
     return True
 
@@ -552,7 +624,7 @@ def commit_code(role, branch, message):
         return False
 
     # Push branch — failure is fatal for branch workflow (#5444)
-    push_result = _run_list(["git", "push", "-u", "origin", branch], check=False)
+    push_result = _git_push(["-u", "origin", branch])
     if push_result.returncode != 0:
         _log_diagnostic("error", f"branch push failed: {push_result.stderr.strip()[:200]}")
         print(f"ERROR: branch push failed: {push_result.stderr}", file=sys.stderr)
@@ -745,7 +817,7 @@ def commit_state(role, message):
                          "files_changed": len(state_files), "commit_type": "state"})
 
     # Push main — failure logged but state is committed locally (#5444)
-    push_result = _run("git push", check=False)
+    push_result = _git_push([])
     if push_result.returncode != 0:
         _log_diagnostic("error", f"state push failed: {push_result.stderr.strip()[:200]}")
         print(f"WARNING: state push failed: {push_result.stderr}", file=sys.stderr)
