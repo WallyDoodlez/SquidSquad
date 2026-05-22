@@ -179,3 +179,81 @@ class TestMain:
              patch.object(migrate_state_branch, "migrate", side_effect=RuntimeError("boom")):
             result = migrate_state_branch.main()
         assert result == 1
+
+
+# ---------------------------------------------------------------------------
+# #9939 — migrate() captures commit_and_push return value
+# ---------------------------------------------------------------------------
+
+
+class TestMigratePushFailure9939:
+    """#9939: migrate() must NOT report success when state_bus.commit_and_push
+    fails (returns False). The original code discarded the return value and
+    printed 'Migrated X/Y files' with exit 0 even when the push silently
+    failed — a footgun on machines hit by #9930's credential-helper wedge,
+    because the next git fetch + reset --hard wipes the locally-copied
+    state files that never reached origin.
+    """
+
+    def test_returns_one_when_push_fails(self, tmp_path, capsys):
+        """commit_and_push -> False must produce exit 1, not exit 0."""
+        src = tmp_path / "skill" / "working-state.md"
+        src.parent.mkdir(parents=True)
+        src.write_text("- **Task**: none\n", encoding="utf-8")
+        fake_state_bus = MagicMock()
+        fake_state_bus.write_file.return_value = True
+        fake_state_bus.commit_and_push.return_value = False  # PUSH FAILED
+        with patch.object(migrate_state_branch, "find_state_files",
+                          return_value=[Path("skill/working-state.md")]), \
+             patch.object(migrate_state_branch, "SQUIDSQUAD_DIR", tmp_path), \
+             patch.dict(sys.modules, {"state_bus": fake_state_bus}):
+            result = migrate_state_branch.migrate(dry_run=False)
+        assert result == 1, (
+            "#9939: migrate() must return 1 when commit_and_push returns False"
+        )
+        # The user-facing diagnostic must mention 'NOT durable' so an
+        # operator scanning stderr doesn't miss the failure mode.
+        err = capsys.readouterr().err
+        assert "NOT durable" in err, (
+            "expected explicit 'NOT durable' diagnostic on push failure; "
+            f"saw: {err!r}"
+        )
+
+    def test_returns_zero_when_push_succeeds(self, tmp_path):
+        """Happy path: commit_and_push -> True still returns 0."""
+        src = tmp_path / "skill" / "working-state.md"
+        src.parent.mkdir(parents=True)
+        src.write_text("- **Task**: none\n", encoding="utf-8")
+        fake_state_bus = MagicMock()
+        fake_state_bus.write_file.return_value = True
+        fake_state_bus.commit_and_push.return_value = True
+        with patch.object(migrate_state_branch, "find_state_files",
+                          return_value=[Path("skill/working-state.md")]), \
+             patch.object(migrate_state_branch, "SQUIDSQUAD_DIR", tmp_path), \
+             patch.dict(sys.modules, {"state_bus": fake_state_bus}):
+            result = migrate_state_branch.migrate(dry_run=False)
+        assert result == 0, (
+            "happy path regression: commit_and_push True should still exit 0"
+        )
+
+    def test_diagnostic_warns_against_deleting_originals(self, tmp_path, capsys):
+        """The push-failure diagnostic must explicitly warn the operator
+        NOT to delete originals from the working branch — that's how the
+        silent failure becomes catastrophic (originals removed, state-branch
+        copy never durable, all state lost on next reset)."""
+        src = tmp_path / "skill" / "working-state.md"
+        src.parent.mkdir(parents=True)
+        src.write_text("x", encoding="utf-8")
+        fake_state_bus = MagicMock()
+        fake_state_bus.write_file.return_value = True
+        fake_state_bus.commit_and_push.return_value = False
+        with patch.object(migrate_state_branch, "find_state_files",
+                          return_value=[Path("skill/working-state.md")]), \
+             patch.object(migrate_state_branch, "SQUIDSQUAD_DIR", tmp_path), \
+             patch.dict(sys.modules, {"state_bus": fake_state_bus}):
+            migrate_state_branch.migrate(dry_run=False)
+        err = capsys.readouterr().err
+        assert "deleting originals" in err.lower() or "delete originals" in err.lower(), (
+            "diagnostic must warn against deleting working-branch originals; "
+            f"saw: {err!r}"
+        )
