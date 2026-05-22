@@ -753,28 +753,35 @@ class EventLifecycleManager:
         """
         if not role or not event_id:
             return "noop"
-        # Eviction check first (D8: "check first, never advance then check").
-        # Both checks acquire EventStream._lock as inner — outer is held below.
-        if not self._stream.has_event(event_id):
-            return "evicted"
         with self._lock:
+            # Eviction check inside the lock (#9902 F1 / AC-19): doing it
+            # outside lets the deque mutate between has_event and the
+            # cursor mutation below, which could (a) misclassify eviction
+            # as regression, or (b) advance the cursor to an already-evicted
+            # event_id — directly violating D8.
+            if not self._stream.has_event(event_id):
+                return "evicted"
             current = self._cursors.get(role)
             if current is not None and current != event_id:
                 # Regression detection: only meaningful when both ids are in
-                # the deque. If the current cursor was evicted (cursor_pos =
-                # -1), skip the regression check — eviction is the dominant
-                # signal and we already passed the target eviction check above.
+                # the deque. find_positions returns -1 for ids not present.
                 target_pos, cursor_pos = self._stream.find_positions(
                     event_id, current
                 )
+                # #9902 F1: if target was evicted between has_event and here
+                # (eviction can happen via concurrent emit even with the
+                # outer lock — has_event acquires the inner EventStream
+                # lock, which is released before find_positions reacquires
+                # it), return "evicted" not "advanced".
+                if target_pos < 0:
+                    return "evicted"
                 if cursor_pos >= 0 and target_pos < cursor_pos:
                     return "regression"
             self._cursors[role] = event_id
-            # Persist under the lock — matches the existing ack()/dispatch()
-            # discipline. Note that _persist() re-acquires self._lock; the
-            # call chain works because self._lock is a threading.Lock (not
-            # an RLock) but we drop it implicitly via a nested call only on
-            # the persist branch — see _persist note below.
+        # Persist outside the lock — _persist() re-acquires self._lock
+        # internally (matches the existing ack()/dispatch() discipline).
+        # Last-write-wins on concurrent advances is acceptable; cursor
+        # state is recoverable from event history on next boot.
         self._persist()
         return "advanced"
 
@@ -1662,7 +1669,14 @@ async def receive_event(request: Request):
     # that ack-cursor MUST NOT call the old ``event_lifecycle.ack()`` — that
     # in-flight tracker is dead code since #9741 stripped dispatch().
     if event_type == "ack-cursor":
-        ack_event_id = body.get("payload", {}).get("event_id")
+        # #9902 F4: guard against payload being present-but-not-dict (e.g.
+        # a string from a malformed POST). The default `{}` only triggers
+        # on missing key, not on wrong type — without the isinstance check
+        # `.get("event_id")` would AttributeError → 500.
+        ack_payload = body.get("payload")
+        if not isinstance(ack_payload, dict):
+            ack_payload = {}
+        ack_event_id = ack_payload.get("event_id")
         if ack_event_id and role:
             # D4 / AC-9: cursor advance + persist runs off the asyncio loop.
             # advance_cursor takes EventLifecycleManager._lock (outer) and
@@ -1689,7 +1703,11 @@ async def receive_event(request: Request):
         # at the previous L1547-1557 verbatim per D6. AC-12 guards no
         # regression in the stop-confirmation flow. Payload field name is
         # ``event_id`` (consistent with ack-cursor, locked by D6/D10).
-        ack_event_id = body.get("payload", {}).get("event_id")
+        # #9902 F4: guard against non-dict payload (see ack-cursor branch).
+        ack_payload = body.get("payload")
+        if not isinstance(ack_payload, dict):
+            ack_payload = {}
+        ack_event_id = ack_payload.get("event_id")
         if ack_event_id and role:
             _log(f"Event {ack_event_id} ack-stop from {role}")
             # If ack references stop-requested, treat as shutdown confirmation.
@@ -1699,7 +1717,7 @@ async def receive_event(request: Request):
             # §3.3 Q7). Also only fires when the agent is still in STOPPING:
             # any subsequent operator action (RUNNING / RESTARTING / STOPPED)
             # supersedes this ack, which is now stale.
-            if body.get("payload", {}).get("result") == "stop-confirmed":
+            if ack_payload.get("result") == "stop-confirmed":
                 with state._lock:
                     agent = state.agents.get(role)
                     if agent and agent.intent == AgentState.INTENT_STOPPING:

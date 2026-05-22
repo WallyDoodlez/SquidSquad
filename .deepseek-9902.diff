@@ -1,0 +1,430 @@
+diff --git a/.squidsquad/qa/planning/QA-RESULTS-9901.md b/.squidsquad/qa/planning/QA-RESULTS-9901.md
+deleted file mode 100644
+index f770ecca..00000000
+--- a/.squidsquad/qa/planning/QA-RESULTS-9901.md
++++ /dev/null
+@@ -1,30 +0,0 @@
+-# QA Results — #9901 (cycle.py status_bar hardening + consolidate 3 drifted copies)
+-
+-**Verifier**: qa-lead
+-**Timestamp**: 2026-05-22 09:01 cycle 726
+-**PR**: #9911 (branch `squidsquad/task/9901`)
+-**Verdict**: PASS — zero gaps. Status → Pending Ship.
+-
+-## Acceptance Criteria
+-
+-| # | AC | Evidence | Result |
+-|---|----|----------|--------|
+-| 1 | Single canonical writer in `cycle.status_bar`; `cycle_pre`/`cycle_post` delegate | `cycle_pre.py:L93-105` and `cycle_post.py:L117-129` both `from cycle import status_bar` (verified via `inspect.getsource`) | PASS |
+-| 2 | `mkdir(parents=True, exist_ok=True)` for first-spawn | `cycle.py:L92` — behavioral spot-check: status_bar('phantom-role', 'idle', 'spot-check') on a fresh tmpdir created the role-dir and wrote the file | PASS |
+-| 3 | All `OSError` paths swallowed and logged to stderr (role + phase + exc) | `cycle.py:L96-104` — `print(f"WARNING: status_bar write failed for {role}/{phase}: {e}", file=sys.stderr)` | PASS |
+-| 4 | Orphan `.tmp` cleanup after replace failure (guarded `unlink(missing_ok=True)` inside inner try) | `cycle.py:L105-108` — `test_replace_failure_does_not_raise_9901` asserts the orphan is removed | PASS |
+-| 5 | Unit tests cover write/mkdir/replace failure paths | 6 new tests in `tests/test_cycle.py::TestStatusBar` (missing-dir, disk-failure, mkdir-failure, replace-failure, consolidation pre, consolidation post) | PASS |
+-
+-## Test runs
+-
+-- `pytest tests/test_cycle.py tests/test_cycle_post.py -v` → 124 passed, 0 failed (29.98s)
+-- `pytest tests/test_cycle.py -k 9901 -v` → 6 passed (the new tests)
+-- `python tests/run_tests.py` (canonical integration runner) → 50 passed, 1 skipped, exit 0 (71.5s)
+-
+-## Behavioral spot-check
+-
+-Independent of unit tests, called `cycle.status_bar('phantom-role', 'idle', 'spot-check')` against a fresh `tempfile.TemporaryDirectory()` (no role dir, no parent). Function returned `'idle|spot-check'` and wrote the expected content. The pre-fix failure mode (`FileNotFoundError` on first spawn) is gone.
+-
+-## Non-blocking flag for DM
+-
+-PR also includes a 2-line `.squidsquad/config.md` drift — PR branch is at version 0.41.0 / shipped-since-bump 10; main has advanced to 0.42.0 / counter 0 since the PR was opened. GitHub reports `mergeable: MERGEABLE, mergeStateStatus: CLEAN`, so this is a stale-rebase artifact, not a QA defect. Flagging so DM is aware the merge may quietly revert the version bump if not handled — DM's call at ship time.
+diff --git a/.squidsquad/skill/working-state.md b/.squidsquad/skill/working-state.md
+index 413ebd51..d2399fd9 100644
+--- a/.squidsquad/skill/working-state.md
++++ b/.squidsquad/skill/working-state.md
+@@ -1,6 +1,85 @@
+ # Working State
+ 
+-- **Task**: none
+-- **Status**: none
++- **Task**: #9478 — Remove branch_workflow=off code paths (CONTEXT-9478 D1-D9)
++- **Status**: in-progress (multi-cycle)
++- **Branch**: squidsquad/task/9478
++- **Started**: 2026-05-21 01:02
+ - **Last Processed Event ID**: 9d7c2489
+-- **Quiet Cycle Counter**: 0
++
++## Slice plan (committable units)
++
++1. **Slice A — scripts (this cycle)**: config.py, cycle_pre.py, cycle_post.py, git_ops.py, harness.py, tracker.py, wizard.py. All deletions / unconditional simplifications per CONTEXT §2.1. ~7 small edits.
++2. **Slice B — sub-skills + recompose + fixtures (next cycle)**: 9 sub-skill fragments per CONTEXT §2.2. Remove conditional language. Recompose 4 roles. Regenerate 8 comprehension fixtures.
++3. **Slice C — docs + tests audit + PR #8812 closure**: SKILL.md, .squidsquad/config.md, test audit (test_config_functions.py, test_comprehension_2195.py), close PR #8812 per D5.
++
++## Slice A progress (cycle 1207) — COMPLETE
++
++- [x] config.py:68 — removed `branch-workflow` field map entry
++- [x] cycle_pre.py — removed L164-165 guard AND L497 `branch_workflow` flag in `_read_config_flags()`
++- [x] cycle_post.py — removed L454-459 read+flag, simplified `if role == "skill" and branch_workflow ...` → `if role == "skill" and code_commit`; removed L202-204 toggle in `_verify_remote_branch`
++- [x] git_ops.py — removed no-op-when-disabled guards in `task_begin` (L785-793) and `task_end` (L852-860); kept comment at L554 ("fatal for branch workflow") as descriptive prose
++- [x] harness.py:1377 — removed `branch_workflow` from /status JSON response
++- [x] tracker.py — deleted `_is_branch_workflow_enabled()` helper + the L722 guard in `_check_unmerged_branch`
++- [x] wizard.py — deleted `branch_workflow_prompt()`, `cmd_branch_workflow_prompt()`, and the `"branch-workflow-prompt"` dispatcher entry
++- [x] .squidsquad/config.md — deleted `## Branch Workflow` section (CONTEXT D1)
++- [x] All 7 scripts import cleanly after edits
++
++## Slice B (next cycle) — sub-skill rewrites + recompose + fixtures
++
++Per CONTEXT §2.2, remove conditional language in:
++- references/sub-skills/common/cycle-runner.md
++- references/sub-skills/common/git-commit.md
++- references/sub-skills/roles/dev/implement-tasks.md
++- references/sub-skills/roles/dev/triage-issues.md
++- references/sub-skills/roles/dm/delivery-packaging.md
++- references/sub-skills/roles/dm/git-commit.md
++- references/sub-skills/roles/pm/pipeline-sentinel.md (drop "if branch_workflow" guard around PR conflict detection)
++- references/sub-skills/roles/qa/git-commit.md
++- references/sub-skills/roles/qa/verification.md
++
++Pattern: locate "If Branch Workflow is enabled, ..." or "When `branch-workflow: yes`, ..."; remove conditional, keep body imperative.
++
++Then per CONTEXT D4:
++- `python references/scripts/compose.py deploy {pm,skill,qa,dm}` — regen 4 composed CLAUDE.md
++- Copy regenerated output into `tests/comprehension/8697_fixtures/{role}_polling_CLAUDE.md` (and _events_CLAUDE.md if touched)
++
++## Slice C (after Slice B) — docs + test audit + #8812 closure
++
++- SKILL.md L282, L293 — rewrite to describe branch+PR as the only mode
++- tests/test_config_functions.py L204 — `test_get_branch_workflow` is now dead, delete
++- tests/test_cycle_post.py — several tests reference `branch_workflow` in their config dicts; the `True` cases still work (since branch+PR is now default), the False cases are dead; audit + remove dead branches
++- tests/test_comprehension_2195.py — comprehension test about branch workflow enforcement; audit if it depends on the toggle
++- PR #8812 — close with supersede comment per CONTEXT D5
++- DS review on final diff
++- PR open
++- Comment "agent reboot deferred to fleet reset per CONTEXT D9"
++
++## Key decisions (locked in CONTEXT)
++
++- D1 — `.squidsquad/config.md` `## Branch Workflow` section deleted as part of the PR (not silent ignore)
++- D2 — `branch_workflow` key removed from /status JSON (no external consumers)
++- D5 — close PR #8812 as part of #9478 ship
++- D7 — hard cutover, single PR
++- D8/D9 — agent reboot DEFERRED to fleet reset (after #9725 + #9415 also ship); skill does NOT reboot agents after this PR merges
++
++## Next steps after this cycle
++
++- Slice B (sub-skill rewrites + recompose + fixture regen)
++- Slice C (docs + test audit + #8812 closure)
++- DS review on final diff
++- PR open
++- Comment "agent reboot deferred to fleet reset per CONTEXT D9"
++
++## Recently Shipped (this session)
++
++- **#9415** (PR #9738, pending-test/QA) — event ID widening 8→16 hex + nonce per CONTEXT D5
++- **#9688** (PR #9737 merged) — orphan claude.exe cleanup per CONTEXT D1-D8
++- **#9588** (PR #9726 merged) — lazy-load mode instructions
++- **#9665**, **#9398**, **#9481**, **#9562**, **#9574** all shipped earlier this session
++
++## Filed this session (queued)
++
++- **#9739** (PM, medium) — brainstorm: surface degraded-mode events to human (model_router 402, harness down, etc.). Two halves: agent-side reflex fix + visibility design
++- **#9725** (skill, high open) — agents read CLAUDE.md but never invoke /loop. Will be #2 in queue after #9478 ships
++- **#9724** (skill, low open) — test_run_comprehension* stale mocks
++- **#9687** (skill, low open) — cycle_post.py remote-branch race
+diff --git a/references/scripts/event_bus.py b/references/scripts/event_bus.py
+index 39f8ea33..cef1cd2f 100644
+--- a/references/scripts/event_bus.py
++++ b/references/scripts/event_bus.py
+@@ -163,7 +163,7 @@ def ack_cursor(event_id, role):
+     emit("ack-cursor", role, payload={"event_id": event_id, "role": role})
+ 
+ 
+-def ack_stop(event_id, result):
++def ack_stop(event_id, result, role=None):
+     """Acknowledge a stop request from the harness (#9873-A D10 / AC-11).
+ 
+     Emits ``event_type="ack-stop"`` with payload ``{event_id, result}``. The
+@@ -173,16 +173,17 @@ def ack_stop(event_id, result):
+     resetting ``intent_set_at`` (which would extend the 60s force-kill
+     window per CONTEXT-4792 §3.3 Q7).
+ 
+-    The agent's role is read from ``SQUIDSQUAD_ROLE`` (set by
+-    ``thin_launcher.py`` at spawn time) — D10 specifies a two-arg signature,
+-    and the harness ack-stop handler reads ``body["role"]`` (top-level), so
+-    the role must travel via the emit's top-level role param. No-op when
+-    ``event_id`` or ``result`` is empty, or when ``SQUIDSQUAD_ROLE`` is
+-    unset. Fire-and-forget.
++    The agent's role is normally read from ``SQUIDSQUAD_ROLE`` (set by
++    ``thin_launcher.py`` at spawn time). Callers may pass ``role`` explicitly
++    to override the env (#9902 F3) — useful for test harnesses and out-of-band
++    callers that don't set the env var. No-op when ``event_id`` or ``result``
++    is empty, or when no role can be resolved from either source.
++    Fire-and-forget.
+     """
+     if not event_id or not result:
+         return
+-    role = (os.environ.get("SQUIDSQUAD_ROLE") or "").strip()
++    if role is None:
++        role = (os.environ.get("SQUIDSQUAD_ROLE") or "").strip()
+     if not role:
+         return
+     emit("ack-stop", role, payload={"event_id": event_id, "result": result})
+diff --git a/references/scripts/harness.py b/references/scripts/harness.py
+index 2fe69cb4..47fca30d 100644
+--- a/references/scripts/harness.py
++++ b/references/scripts/harness.py
+@@ -753,28 +753,35 @@ class EventLifecycleManager:
+         """
+         if not role or not event_id:
+             return "noop"
+-        # Eviction check first (D8: "check first, never advance then check").
+-        # Both checks acquire EventStream._lock as inner — outer is held below.
+-        if not self._stream.has_event(event_id):
+-            return "evicted"
+         with self._lock:
++            # Eviction check inside the lock (#9902 F1 / AC-19): doing it
++            # outside lets the deque mutate between has_event and the
++            # cursor mutation below, which could (a) misclassify eviction
++            # as regression, or (b) advance the cursor to an already-evicted
++            # event_id — directly violating D8.
++            if not self._stream.has_event(event_id):
++                return "evicted"
+             current = self._cursors.get(role)
+             if current is not None and current != event_id:
+                 # Regression detection: only meaningful when both ids are in
+-                # the deque. If the current cursor was evicted (cursor_pos =
+-                # -1), skip the regression check — eviction is the dominant
+-                # signal and we already passed the target eviction check above.
++                # the deque. find_positions returns -1 for ids not present.
+                 target_pos, cursor_pos = self._stream.find_positions(
+                     event_id, current
+                 )
++                # #9902 F1: if target was evicted between has_event and here
++                # (eviction can happen via concurrent emit even with the
++                # outer lock — has_event acquires the inner EventStream
++                # lock, which is released before find_positions reacquires
++                # it), return "evicted" not "advanced".
++                if target_pos < 0:
++                    return "evicted"
+                 if cursor_pos >= 0 and target_pos < cursor_pos:
+                     return "regression"
+             self._cursors[role] = event_id
+-            # Persist under the lock — matches the existing ack()/dispatch()
+-            # discipline. Note that _persist() re-acquires self._lock; the
+-            # call chain works because self._lock is a threading.Lock (not
+-            # an RLock) but we drop it implicitly via a nested call only on
+-            # the persist branch — see _persist note below.
++        # Persist outside the lock — _persist() re-acquires self._lock
++        # internally (matches the existing ack()/dispatch() discipline).
++        # Last-write-wins on concurrent advances is acceptable; cursor
++        # state is recoverable from event history on next boot.
+         self._persist()
+         return "advanced"
+ 
+@@ -1662,7 +1669,14 @@ async def receive_event(request: Request):
+     # that ack-cursor MUST NOT call the old ``event_lifecycle.ack()`` — that
+     # in-flight tracker is dead code since #9741 stripped dispatch().
+     if event_type == "ack-cursor":
+-        ack_event_id = body.get("payload", {}).get("event_id")
++        # #9902 F4: guard against payload being present-but-not-dict (e.g.
++        # a string from a malformed POST). The default `{}` only triggers
++        # on missing key, not on wrong type — without the isinstance check
++        # `.get("event_id")` would AttributeError → 500.
++        ack_payload = body.get("payload")
++        if not isinstance(ack_payload, dict):
++            ack_payload = {}
++        ack_event_id = ack_payload.get("event_id")
+         if ack_event_id and role:
+             # D4 / AC-9: cursor advance + persist runs off the asyncio loop.
+             # advance_cursor takes EventLifecycleManager._lock (outer) and
+@@ -1689,7 +1703,11 @@ async def receive_event(request: Request):
+         # at the previous L1547-1557 verbatim per D6. AC-12 guards no
+         # regression in the stop-confirmation flow. Payload field name is
+         # ``event_id`` (consistent with ack-cursor, locked by D6/D10).
+-        ack_event_id = body.get("payload", {}).get("event_id")
++        # #9902 F4: guard against non-dict payload (see ack-cursor branch).
++        ack_payload = body.get("payload")
++        if not isinstance(ack_payload, dict):
++            ack_payload = {}
++        ack_event_id = ack_payload.get("event_id")
+         if ack_event_id and role:
+             _log(f"Event {ack_event_id} ack-stop from {role}")
+             # If ack references stop-requested, treat as shutdown confirmation.
+@@ -1699,7 +1717,7 @@ async def receive_event(request: Request):
+             # §3.3 Q7). Also only fires when the agent is still in STOPPING:
+             # any subsequent operator action (RUNNING / RESTARTING / STOPPED)
+             # supersedes this ack, which is now stale.
+-            if body.get("payload", {}).get("result") == "stop-confirmed":
++            if ack_payload.get("result") == "stop-confirmed":
+                 with state._lock:
+                     agent = state.agents.get(role)
+                     if agent and agent.intent == AgentState.INTENT_STOPPING:
+diff --git a/tests/test_event_bus.py b/tests/test_event_bus.py
+index 062ef2a2..ccdebc26 100644
+--- a/tests/test_event_bus.py
++++ b/tests/test_event_bus.py
+@@ -303,6 +303,31 @@ class TestAckStop:
+         time.sleep(0.05)
+         assert events == []
+ 
++    def test_explicit_role_param_overrides_env_9902(self, mock_server, patch_dirs, monkeypatch):
++        """#9902 F3: explicit ``role`` kwarg wins over SQUIDSQUAD_ROLE env.
++        Useful for test harnesses and out-of-band callers that don't set
++        the env var."""
++        port, events = mock_server
++        (patch_dirs / ".harness-port").write_text(str(port))
++        monkeypatch.setenv("SQUIDSQUAD_ROLE", "skill")
++        event_bus.ack_stop("evt-789", "stop-confirmed", role="qa")
++        time.sleep(0.05)
++        assert len(events) == 1
++        assert events[0]["role"] == "qa"  # explicit kwarg wins
++        assert events[0]["payload"] == {"event_id": "evt-789", "result": "stop-confirmed"}
++
++    def test_emits_when_env_unset_but_role_passed_9902(self, mock_server, patch_dirs, monkeypatch):
++        """#9902 F3: env unset is no longer a silent no-op when the caller
++        passes role= explicitly. AC-12 stop-confirmation flow can't break
++        just because thin_launcher didn't set the env var."""
++        port, events = mock_server
++        (patch_dirs / ".harness-port").write_text(str(port))
++        monkeypatch.delenv("SQUIDSQUAD_ROLE", raising=False)
++        event_bus.ack_stop("evt-101", "stop-confirmed", role="dm")
++        time.sleep(0.05)
++        assert len(events) == 1
++        assert events[0]["role"] == "dm"
++
+ 
+ class TestNoUnusedImports:
+     """#8193 regression: event bus modules must not have unused imports."""
+diff --git a/tests/test_harness.py b/tests/test_harness.py
+index 6e37bbcc..67822988 100644
+--- a/tests/test_harness.py
++++ b/tests/test_harness.py
+@@ -1892,6 +1892,67 @@ class TestCursorState9873A(unittest.TestCase):
+         self.assertIn("EventLifecycleManager._lock", body)
+         self.assertIn("EventStream._lock", body)
+ 
++    def test_ac19_has_event_called_inside_lock_9902(self):
++        """#9902 F1: ``has_event`` must be invoked WHILE the outer
++        EventLifecycleManager._lock is held. Doing it before the lock
++        creates a TOCTOU window where the deque can evict between the
++        check and the cursor mutation.
++
++        Verify by patching has_event to assert the lock is non-acquirable
++        from this thread (i.e., already held)."""
++        from harness import EventStream, EventLifecycleManager
++        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
++            stream = EventStream()
++            stream.append({"id": "evt1", "event_type": "x"})
++            mgr = EventLifecycleManager(stream)
++
++            real_has_event = stream.has_event
++            observed = {"lock_held_when_called": None}
++
++            def probing_has_event(eid):
++                # If lock is held by this thread (the only thread here),
++                # acquire(blocking=False) returns False since threading.Lock
++                # is non-reentrant.
++                acquired = mgr._lock.acquire(blocking=False)
++                if acquired:
++                    mgr._lock.release()
++                    observed["lock_held_when_called"] = False
++                else:
++                    observed["lock_held_when_called"] = True
++                return real_has_event(eid)
++
++            with patch.object(stream, "has_event", side_effect=probing_has_event):
++                result = mgr.advance_cursor("skill", "evt1")
++            self.assertEqual(result, "advanced")
++            self.assertTrue(
++                observed["lock_held_when_called"],
++                "F1 regression: has_event was called BEFORE acquiring the "
++                "outer lock — TOCTOU window reopened",
++            )
++
++    def test_target_evicted_during_regression_check_9902(self):
++        """#9902 F1 (second failure mode): if find_positions returns
++        ``target_pos=-1`` (target evicted between has_event and
++        find_positions, OR cursor pointing at an id not in deque),
++        advance_cursor must return ``\"evicted\"`` — never advance the
++        cursor to an evicted event_id (violates D8).
++        """
++        from harness import EventStream, EventLifecycleManager
++        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
++            stream = EventStream()
++            stream.append({"id": "evt1", "event_type": "x"})
++            stream.append({"id": "evt2", "event_type": "x"})
++            mgr = EventLifecycleManager(stream)
++            # Cursor already at evt1; ack arrives for evt2 (still in deque,
++            # so has_event will pass), but simulate post-lock-acquisition
++            # eviction by returning target_pos=-1 from find_positions.
++            mgr._cursors["skill"] = "evt1"
++            with patch.object(stream, "find_positions", return_value=(-1, 0)):
++                result = mgr.advance_cursor("skill", "evt2")
++            self.assertEqual(result, "evicted")
++            # D8: cursor MUST NOT advance to an evicted event_id.
++            self.assertEqual(mgr._cursors["skill"], "evt1")
++
+ 
+ class TestCursorEndpoint9873A(unittest.TestCase):
+     """#9873-A: GET /events/cursor/{role} — AC-3, AC-4."""
+@@ -1931,6 +1992,64 @@ class TestCursorEndpoint9873A(unittest.TestCase):
+         self.assertEqual(resp.status_code, 404)
+ 
+ 
++class TestAckEndpointPayloadGuard9902(unittest.TestCase):
++    """#9902 F4: ``ack-cursor`` and ``ack-stop`` inline handlers must not
++    500 on a malformed payload (present-but-not-dict). The ``body.get(
++    "payload", {})`` default only triggers on a missing key — a string or
++    list payload would AttributeError on the subsequent ``.get()`` call.
++    """
++
++    @classmethod
++    def setUpClass(cls):
++        from fastapi.testclient import TestClient
++        from harness import app
++        cls.client = TestClient(app, raise_server_exceptions=False)
++
++    def test_ack_cursor_string_payload_returns_200_not_500(self):
++        """POST /events with event_type=ack-cursor and payload as a string
++        (not a dict) must return 200, not 500. The handler silently drops
++        the malformed event rather than crashing the endpoint."""
++        resp = self.client.post("/events", json={
++            "event_type": "ack-cursor",
++            "role": "skill",
++            "payload": "malformed-not-a-dict",
++            "timestamp": "2026-05-22T09:00:00",
++        })
++        self.assertEqual(resp.status_code, 200)
++
++    def test_ack_cursor_list_payload_returns_200_not_500(self):
++        """Same guard against payload being a list."""
++        resp = self.client.post("/events", json={
++            "event_type": "ack-cursor",
++            "role": "skill",
++            "payload": ["not", "a", "dict"],
++            "timestamp": "2026-05-22T09:00:00",
++        })
++        self.assertEqual(resp.status_code, 200)
++
++    def test_ack_stop_string_payload_returns_200_not_500(self):
++        """ack-stop branch has the same guard as ack-cursor."""
++        resp = self.client.post("/events", json={
++            "event_type": "ack-stop",
++            "role": "skill",
++            "payload": "malformed-not-a-dict",
++            "timestamp": "2026-05-22T09:00:00",
++        })
++        self.assertEqual(resp.status_code, 200)
++
++    def test_ack_stop_null_payload_returns_200_not_500(self):
++        """ack-stop with payload explicitly null — body.get('payload')
++        returns None, isinstance(None, dict) is False, default-dict
++        path runs without crash."""
++        resp = self.client.post("/events", json={
++            "event_type": "ack-stop",
++            "role": "skill",
++            "payload": None,
++            "timestamp": "2026-05-22T09:00:00",
++        })
++        self.assertEqual(resp.status_code, 200)
++
++
+ class TestTerminalPidInAgentState(unittest.TestCase):
+     """#7630 P-6: terminal_pid in AgentState."""
+ 
