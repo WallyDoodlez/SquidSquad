@@ -2639,3 +2639,7 @@
 =======
 {"timestamp": "2026-05-21T10:10:01.956216", "severity": "error", "source": "git_ops", "message": "push failed: To https://github.com/WallyDoodlez/SquidSquad.git\n ! [rejected]          main -> main (fetch first)\nerror: failed to push some refs to 'https://github.com/WallyDoodlez/SquidSquad.git'\nhint: Updates we"}
 >>>>>>> f38801609a13483832aec1c3a18c11d683827c3c
+{"timestamp": "2026-05-21T21:34:19.899562", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #9882: branch squidsquad/task/9882 has 1 unmerged commit(s)"}
+{"timestamp": "2026-05-21T21:34:25.251070", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #9882: branch squidsquad/task/9882 has 1 unmerged commit(s)"}
+{"timestamp": "2026-05-21T21:36:50.705682", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #9882: branch squidsquad/task/9882 has 1 unmerged commit(s)"}
+{"timestamp": "2026-05-21T21:41:30.085575", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #9882: branch squidsquad/task/9882 has 1 unmerged commit(s)"}
