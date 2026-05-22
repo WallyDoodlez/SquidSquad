@@ -1,35 +1,29 @@
 # Working State
 
-- **Task**: idle — pipeline flowing, handoffs clean
+- **Task**: idle — QA caught real AC6 gap on #9926; skill cycle handles fix
 - **Status**: idle
 - **Last Processed Event ID**: 88fe94b376fd2963
 
-## Pipeline snapshot (2026-05-22 18:31)
-- 1 PR open: #9943 (squidsquad/task/9926, MERGEABLE/CLEAN, +173/-34)
-- 1 pending-test: #9926 → QA's lane (QA triaging now)
-- 1 approved: #9925 → skill's next pickup (expected within ~7 min on its /loop cycle)
-- 0 pending-ship, 0 external issues, all 4 agents alive
-- Version v0.43.0
+## Pipeline snapshot (2026-05-22 19:01)
+- 1 PR open: #9943 (squidsquad/task/9926, state UNKNOWN post-QA-rejection)
+- 1 in-progress: #9926 (QA-rejected; skill must update CONTEXT-9688.md D3 with supersession note)
+- 1 approved: #9925 (skill's next after #9926 closes)
+- 0 pending-test, 0 pending-ship (the apparent 29 is the #9837 bug — already-shipped/closed items with lingering pending-ship labels)
+- All 4 agents healthy
 
-## #9926 implementation summary (from skill's PR comment)
-- All 7 ACs implemented following PM's suggested order
-- Per-role skip in orphan_cleanup.py (post-_resolve_protected_pids branch rewrite)
-- D2 zero-roles backstop preserved via single len(protected) == 0 check (per CONTEXT-9926 D2 simplification)
-- D7 tests rewritten with _is_pid_alive mock side_effect fix
-- 2 new unit tests added per AC4/AC5
-- CONTEXT-9688.md D3 supersession note pending verification
-- QA-RESULTS-9926.md live-system smoke test deferred to QA execution per AC7
+## QA's #9926 rejection (concrete + accurate)
+- AC6 explicitly requires `CONTEXT-9688.md` D3 entry updated in the same PR
+- PR #9943 diff is 6 files; CONTEXT-9688.md is NOT one of them
+- Line 37 still reads old whole-sweep-abort text; line 81 still says 'entire cleanup skipped (D3)'
+- Skill's pickup comment CLAIMED AC6 was done — claim wasn't backed by the diff (skill hallucinated or staged the edit and forgot to commit)
+- This is the test/dev/QA workflow self-correcting (memory: feedback_no_ship_with_gaps catches exactly this kind of overclaim)
 
-## Still active in approved queue
-- #9925 (agent boundaries 4-layer) — APPROVED, skill imminent pickup
-- #3 (Take SquidSquad public — DM lane, long-running)
-
-## Still at status:planned (awaiting human approval)
-- #9845 (noop event type) — ACs marked TBD; needs PM AC-pass before re-surfacing
+## Tasks at status:planned (awaiting human approval)
+- #9845 (noop event type) — ACs still TBD; needs PM AC-pass before re-surfacing. May become moot under event-types umbrella (absorbed into assigned-to with probe payload).
 
 ## Active discussion threads with human
-- **Event types minimal model** — paused on 'boot ready' clarification (3 interpretations offered) and whether #9845 should be retired/absorbed under the nudge-only #9891/#9892 architecture
-- **Boundary task #9925** — under skill's queue; if any L4 content seeding desired beyond stubs, can be added before pickup
+- **Event-types minimal model** — alignment complete on 3 signals (booted, assigned-to, ack with cursor/stop sub-types). User confirmed option (c) for thin_launcher vs event_poll separation. Awaiting green light to file umbrella task that supersedes #9891 + #9892. Going to hold until explicit confirmation rather than file unprompted.
+- **Boundary task #9925** — under skill's queue; no further direction from user this session.
 
 ## PM-owned tasks at status:pending / planning
 - #9874 (harness internal architecture review) — planning, no RESEARCH yet
@@ -37,9 +31,9 @@
 - #9912 (tighten external-model code-review against tool-use loop) — pending
 - #9739 (degraded-mode autonomous-fallback events surfacing) — pending
 - #8997 (PM improvement scan autonomous L4 writes) — pending
-- #9845 (noop event ACs) — needs AC drafting before re-surface
+- #9845 (noop event ACs) — needs AC drafting OR retirement under event-types umbrella
 
 ## Notes
-- DM idle 23m — below 90m stall threshold; nothing in pending-ship to act on. No nudge.
-- Skill idle 23m — also below threshold; on /loop cadence, next cycle imminent.
+- DM idle 22m — below stall threshold. Nothing in pending-ship to act on.
+- Skill idle 27m — on /loop cadence; will pick up AC6 fix next cycle.
 - Recent_events still contained synthetic test traffic on #42/#55/#269 — ignored.
