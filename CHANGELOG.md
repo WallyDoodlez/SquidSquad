@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.43.0] — 2026-05-22
+
+### Fixed
+- #9905 — Harness can now reliably spawn agents on Windows boxes where the underlying `tasklist` shell-out was hanging the watchdog for tens of seconds; process liveness now uses a direct OpenProcess/GetExitCodeProcess call instead.
+- #9902 — Retro DeepSeek hardening of the #9873 event-bus foundation: closed a TOCTOU race in cursor advance, made `ack_stop`'s role parameter explicit (no more silent no-op when `SQUIDSQUAD_ROLE` is unset), and added type-guarded payload handling on `POST /events` so a malformed body can't crash the endpoint.
+- #9903 — Removed the `platform.system()` call from the harness liveness/spawn path on Windows (was triggering a WMI query that could wedge for tens of seconds). Companion fix to #9905.
+- #9904 — `cycle_pre` sub-script calls are now bounded by a 60-second timeout; a single hanging sub-script can no longer wedge the entire Ralph Loop. Worst case is now ~36 minutes (and surfaces as a normal returncode=124 the existing callers already handle) instead of infinity.
+- #9901 — `cycle.status_bar` was three drifted copies of the same write logic across cycle.py / cycle_pre.py / cycle_post.py; consolidated into a single canonical writer with a first-spawn mkdir guard, OSError swallowed with a stderr diagnostic, and orphan `.tmp` cleanup. Agents no longer crash on first-spawn or transient disk errors.
+- #9927 — Closed the sixth and final `platform.system()` surface — `model_router.py setup_provider` — completing the e7a47737 sweep family. No live `platform.system()` calls remain in agent-path code; `sys.platform` is used everywhere instead.
+- #9930 — `state_bus.commit_and_push` no longer wedges on `credential.helper=manager` (Git Credential Manager); push/pull/prune now run with an explicit `gh auth git-credential` override, a 120-second timeout per git operation, and a `git pull --rebase` (with `--abort` on failure) replacing the default merge. Silent push failures and polluted state-branch history on every cycle: gone.
+- #9932 — `shared_fs.write_secret` is now atomic (`tempfile.mkstemp` + `_restrict_permissions` + `os.replace`). A crash mid-write no longer corrupts or empties the secrets file; the original always survives.
+- #9934 — When state_bus push retries are exhausted, the operator now sees an actionable diagnostic — local vs. origin commit counts on the state branch plus a copy-paste recovery one-liner — instead of a bare three-line warning.
+- #9937 — `orphan_cleanup._kill` now re-verifies the target process is still `claude.exe` (via Windows `tasklist` / POSIX `/proc/<pid>/comm`) immediately before issuing taskkill. Closes the PID-reuse race where a recycled PID could be killed instead of the intended orphan.
+
 ## [0.42.0] — 2026-05-22
 
 ### Added
