@@ -175,27 +175,66 @@ def _has_booting_sentinel(clone_path, role):
 
 
 def _write_booting_sentinel(clone_path, role):
-    """Write .booting sentinel to claim the boot slot for a role.
+    """Atomically claim the boot slot for a role.
 
-    Uses atomic write (write to .tmp then rename) to avoid races.
-    Returns True if sentinel was written (we got the slot), False if
-    another boot is already in progress.
+    #9941: the original implementation used a check-then-rename pattern
+    (``_has_booting_sentinel`` False → ``tmp.write_text`` → ``tmp.replace``)
+    which is NOT atomic at the slot-claim level. Two concurrent invocations
+    could both pass the check, both write a tmp, both ``replace``, and both
+    return True — falsely claiming a slot they shouldn't share. ``Path.replace``
+    overwrites silently; only the downstream ``thin_launcher`` singleton
+    (#8879) defused the actual double-boot in practice.
+
+    The fix is ``os.open`` with ``O_CREAT | O_EXCL``: the OS atomically
+    creates the file IFF it doesn't exist, otherwise raises ``FileExistsError``.
+    This makes the slot claim truly atomic with no possibility of two
+    callers winning.
+
+    Returns ``True`` if we got the slot, ``False`` if another boot is
+    already in progress OR a stale sentinel still occupies the path
+    (caller can clean stale sentinels via ``_has_booting_sentinel``'s
+    TTL-aware path, which fires before this function on a normal retry).
     """
     squid_dir = Path(clone_path) / ".squidsquad" / role
     booting_file = squid_dir / ".booting"
 
-    # Check if another boot is in progress
+    # Best-effort stale cleanup: _has_booting_sentinel deletes its own
+    # stale sentinel as a side effect when age > BOOTING_SENTINEL_TTL.
+    # Calling it here keeps the prior recovery behavior — without this,
+    # a stale sentinel would block all future boots until manually removed.
     if _has_booting_sentinel(clone_path, role):
         return False
 
-    # Write atomically
     try:
         squid_dir.mkdir(parents=True, exist_ok=True)
-        tmp = squid_dir / ".booting.tmp"
-        tmp.write_text(str(os.getpid()), encoding="utf-8")
-        tmp.replace(booting_file)
+    except OSError:
+        return False
+
+    # Atomic create-or-fail (#9941). O_EXCL is honored on POSIX and on
+    # Windows under Python 3.3+ (CreateFileW with CREATE_NEW disposition).
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    try:
+        fd = os.open(str(booting_file), flags, 0o644)
+    except FileExistsError:
+        # Another boot already claimed the slot between the TTL check
+        # above and this call (or claimed it concurrently). Not our slot.
+        return False
+    except OSError:
+        return False
+
+    # File created; we own the slot. Write the PID for diagnostic readers
+    # (orphan_cleanup logs / operator forensics) and close. If the write
+    # itself fails, unlink the sentinel so a retry can proceed — leaving
+    # an empty sentinel would block future boots until TTL expiry.
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(str(os.getpid()))
         return True
     except OSError:
+        try:
+            booting_file.unlink(missing_ok=True)
+        except OSError:
+            pass
         return False
 
 
