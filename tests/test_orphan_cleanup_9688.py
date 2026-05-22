@@ -410,3 +410,139 @@ def test_own_pid_never_targeted(patched_log, tmp_path):
     called_pids = {call.args[0] for call in killer.call_args_list}
     assert own not in called_pids
     assert own not in result["killed"]
+
+
+# ---------------------------------------------------------------------------
+# #9937 — _kill re-verifies PID is still claude.exe before taskkill
+# ---------------------------------------------------------------------------
+
+
+class TestKillReverify9937:
+    """#9937: _kill must re-verify the target is still a claude.exe
+    process at kill time. Windows can recycle a PID for any executable
+    between the _list_claude_processes() snapshot and the taskkill call;
+    without re-verification, an unrelated process at the recycled PID
+    would be force-killed (contradicting CONTEXT-9688 D2's 'never touch
+    the user's IDE' guarantee).
+    """
+
+    def test_kill_skipped_when_pid_recycled_to_non_claude(self):
+        """If _pid_is_claude_exe returns False (PID gone or recycled to
+        a different executable), _kill must NOT call taskkill — and must
+        return False."""
+        with patch.object(orphan_cleanup, "_pid_is_claude_exe", return_value=False), \
+             patch.object(orphan_cleanup, "subprocess") as mock_sp:
+            result = orphan_cleanup._kill(12345)
+        assert result is False
+        # taskkill must not have fired.
+        mock_sp.run.assert_not_called()
+
+    def test_kill_proceeds_when_pid_still_claude(self):
+        """When the re-verify confirms the PID still names a claude.exe,
+        taskkill fires as before."""
+        fake_result = type("R", (), {"returncode": 0})()
+        with patch.object(orphan_cleanup, "_pid_is_claude_exe", return_value=True), \
+             patch.object(orphan_cleanup, "_is_windows", return_value=True), \
+             patch.object(orphan_cleanup.subprocess, "run", return_value=fake_result) as mock_run:
+            result = orphan_cleanup._kill(12345)
+        assert result is True
+        # The actual taskkill call should have happened exactly once,
+        # with /F /PID 12345.
+        assert mock_run.called
+        args = mock_run.call_args.args[0]
+        assert args[0] == "taskkill"
+        assert "/F" in args
+        assert "12345" in args
+
+    def test_pid_is_claude_exe_parses_tasklist_csv(self):
+        """_pid_is_claude_exe must accept tasklist's CSV output and
+        return True only when the first column (image name) is
+        'claude.exe' (case-insensitive)."""
+        fake = type("R", (), {
+            "returncode": 0,
+            "stdout": '"claude.exe","12345","Console","1","123,456 K"\n',
+        })()
+        with patch.object(orphan_cleanup, "_is_windows", return_value=True), \
+             patch.object(orphan_cleanup.subprocess, "run", return_value=fake):
+            assert orphan_cleanup._pid_is_claude_exe(12345) is True
+
+    def test_pid_is_claude_exe_rejects_other_exe(self):
+        """Recycled to notepad.exe (or anything not claude.exe) — False."""
+        fake = type("R", (), {
+            "returncode": 0,
+            "stdout": '"notepad.exe","12345","Console","1","8,000 K"\n',
+        })()
+        with patch.object(orphan_cleanup, "_is_windows", return_value=True), \
+             patch.object(orphan_cleanup.subprocess, "run", return_value=fake):
+            assert orphan_cleanup._pid_is_claude_exe(12345) is False
+
+    def test_pid_is_claude_exe_handles_case_insensitive(self):
+        """Windows is case-insensitive; tasklist may emit Claude.EXE or
+        CLAUDE.EXE depending on how the process was launched. Match
+        must be case-insensitive."""
+        for variant in ('"Claude.exe","12345"', '"CLAUDE.EXE","12345"'):
+            fake = type("R", (), {"returncode": 0, "stdout": variant + ',"Console","1","100 K"\n'})()
+            with patch.object(orphan_cleanup, "_is_windows", return_value=True), \
+                 patch.object(orphan_cleanup.subprocess, "run", return_value=fake):
+                assert orphan_cleanup._pid_is_claude_exe(12345) is True, (
+                    f"case-insensitive match failed for variant: {variant!r}"
+                )
+
+    def test_pid_is_claude_exe_returns_false_on_dead_pid(self):
+        """If tasklist returns no matching row (PID is gone), the
+        function returns False — caller must NOT proceed with the kill."""
+        fake = type("R", (), {
+            "returncode": 0,
+            "stdout": "INFO: No tasks are running which match the specified criteria.\n",
+        })()
+        with patch.object(orphan_cleanup, "_is_windows", return_value=True), \
+             patch.object(orphan_cleanup.subprocess, "run", return_value=fake):
+            assert orphan_cleanup._pid_is_claude_exe(12345) is False
+
+    def test_pid_is_claude_exe_returns_false_on_invalid_pid(self):
+        """Zero / negative PIDs are nonsense; return False without
+        making any subprocess call."""
+        with patch.object(orphan_cleanup.subprocess, "run") as mock_run:
+            assert orphan_cleanup._pid_is_claude_exe(0) is False
+            assert orphan_cleanup._pid_is_claude_exe(-1) is False
+            assert orphan_cleanup._pid_is_claude_exe(None) is False
+            mock_run.assert_not_called()
+
+    def test_pid_is_claude_exe_returns_false_on_tasklist_failure(self):
+        """If tasklist itself errors (OSError, TimeoutExpired), the
+        verifier must return False — better to skip a kill than risk
+        killing the wrong process when we can't verify."""
+        for exc in (OSError("tasklist missing"),
+                    orphan_cleanup.subprocess.TimeoutExpired(["tasklist"], 10)):
+            with patch.object(orphan_cleanup, "_is_windows", return_value=True), \
+                 patch.object(orphan_cleanup.subprocess, "run", side_effect=exc):
+                assert orphan_cleanup._pid_is_claude_exe(12345) is False
+
+    def test_end_to_end_recycled_pid_is_not_killed(self, patched_log, tmp_path):
+        """Integration: orphan in snapshot has its PID recycled by the
+        time _kill is called. The sweep classified it as orphan based
+        on the snapshot, but the re-verify catches the recycle and
+        skips the kill. Resulting summary lists the PID under 'kept'
+        (taskkill returned non-zero per the existing 'taskkill returned
+        non-zero' fallback path), not 'killed'.
+        """
+        squid, pid_map = _setup_pid_files(tmp_path, {"skill": 1000})
+        # Snapshot: orphan claude.exe (parent dead) — would normally be killed.
+        procs = [
+            _fake_proc(1001, 1000),        # protected (cmd.exe 1000 alive)
+            _fake_proc(9999, 88888),       # orphan candidate (parent 88888 dead)
+        ]
+        def fake_alive(pid):
+            # cmd.exe 1000 alive (protected role), other parents dead.
+            return pid == 1000
+        # By kill time, PID 9999 was recycled to a non-claude process.
+        with patch.object(orphan_cleanup, "_is_windows", return_value=True), \
+             patch.object(orphan_cleanup, "_role_pid_files", return_value=pid_map), \
+             patch.object(orphan_cleanup, "_list_claude_processes", return_value=procs), \
+             patch.object(orphan_cleanup, "_is_pid_alive", side_effect=fake_alive), \
+             patch.object(orphan_cleanup, "_pid_is_claude_exe", return_value=False):
+            result = orphan_cleanup.sweep()
+        # The recycled PID must NOT be in 'killed'.
+        assert 9999 not in result["killed"], (
+            "#9937 regression: recycled PID was killed despite _pid_is_claude_exe=False"
+        )
