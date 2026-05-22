@@ -903,11 +903,13 @@ def setup_provider(provider_name):
     print(f"\nManifest file: {manifest_path}")
     print("Opening manifest in editor...")
     try:
-        import platform as plat
-        system = plat.system().lower()
-        if system == "windows":
+        # #9927: use sys.platform (compile-time constant) instead of
+        # platform.system() — the latter triggers a WMI query on Windows
+        # that can hang indefinitely (#9903 root cause, swept across 6
+        # other files in e7a47737 but this call site was missed).
+        if sys.platform == "win32":
             os.startfile(str(manifest_path))
-        elif system == "darwin":
+        elif sys.platform == "darwin":
             subprocess.Popen(["open", str(manifest_path)])
         else:
             subprocess.Popen(["xdg-open", str(manifest_path)])
