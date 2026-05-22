@@ -21,7 +21,6 @@ Exit codes:
 """
 
 import os
-import platform
 import shutil
 import subprocess
 import sys
@@ -29,6 +28,10 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 VALID_EFFORT_LEVELS = {"low", "medium", "high", "max"}
+
+# Win32 constants for OpenProcess + GetExitCodeProcess (#9904)
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_STILL_ACTIVE = 259
 
 
 def _get_effort_level(role):
@@ -67,16 +70,29 @@ def _is_process_alive(pid):
     Canonical version lives in ``process_utils.is_process_alive`` — kept
     local here to avoid importing extra modules at launcher startup
     (#8891). If you change the semantics there, mirror the change here.
+
+    Windows path uses Win32 ``OpenProcess`` / ``GetExitCodeProcess`` via
+    ``ctypes`` (instant, kernel-direct). We do NOT shell out to
+    ``tasklist`` — on some Windows systems it takes 20+ s and wedges
+    the harness (#9904). Uses ``sys.platform`` not ``platform.system()``
+    to dodge the Python 3.12 Windows WMI hang (#9903).
     """
     if pid is None or pid <= 0:
         return False
+    if sys.platform == "win32":
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return kernel32.GetLastError() == 5  # ACCESS_DENIED → exists
+        try:
+            exit_code = ctypes.c_ulong()
+            if kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return exit_code.value == _STILL_ACTIVE
+            return True
+        finally:
+            kernel32.CloseHandle(handle)
     try:
-        if platform.system().lower() == "windows":
-            result = subprocess.run(
-                ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
-                capture_output=True, text=True, check=False,
-            )
-            return str(pid) in result.stdout
         os.kill(pid, 0)
         return True
     except (OSError, ProcessLookupError, PermissionError):

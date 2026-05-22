@@ -21,7 +21,6 @@ Exit codes:
 
 import io
 import json
-import platform
 import shutil
 import subprocess
 import sys
@@ -311,7 +310,14 @@ def _spawn_harness() -> int | None:
         print(f"ERROR: harness.py not found at {HARNESS_SCRIPT}", file=sys.stderr)
         return None
 
-    system = platform.system().lower()
+    # sys.platform is a compile-time constant; platform.system() triggers
+    # a Python 3.12 Windows WMI wedge that can hang for many seconds (#9903).
+    if sys.platform == "win32":
+        system = "windows"
+    elif sys.platform == "darwin":
+        system = "darwin"
+    else:
+        system = "linux"
 
     if system == "windows":
         wt = shutil.which("wt")

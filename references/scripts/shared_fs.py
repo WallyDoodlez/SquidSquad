@@ -15,7 +15,6 @@ Usage:
 
 import json
 import os
-import platform
 import stat
 import sys
 from pathlib import Path
@@ -62,9 +61,13 @@ def init():
 
 
 def _restrict_permissions(path):
-    """Set file permissions to owner-only (chmod 600 / Windows ACL)."""
+    """Set file permissions to owner-only (chmod 600 / Windows ACL).
+
+    Uses ``sys.platform`` instead of ``platform.system()`` to avoid the
+    Python 3.12 Windows WMI wedge (#9903).
+    """
     path = Path(path)
-    if platform.system().lower() == "windows":
+    if sys.platform == "win32":
         # Windows: use icacls to restrict to current user
         import subprocess
         user = os.environ.get("USERNAME", "")

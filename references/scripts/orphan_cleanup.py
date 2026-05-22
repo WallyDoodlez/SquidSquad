@@ -38,7 +38,6 @@ from __future__ import annotations
 
 import json
 import os
-import platform
 import subprocess
 import sys
 import time
@@ -57,7 +56,10 @@ _NPM_PATH_FRAGMENT = r"\node_modules\@anthropic-ai\claude-code\bin\claude.exe"
 
 
 def _is_windows() -> bool:
-    return platform.system().lower() == "windows"
+    # sys.platform is a compile-time constant; platform.system() calls
+    # platform.uname() which on Python 3.12 Windows triggers a WMI query
+    # that can hang (#9903).
+    return sys.platform == "win32"
 
 
 # ---------------------------------------------------------------------------
@@ -325,7 +327,7 @@ def sweep(invoked_by="manual", dry_run=False):
     """
     summary = {
         "invoked_by": invoked_by,
-        "platform": platform.system().lower(),
+        "platform": sys.platform,
         "kept": [], "killed": [], "skipped_roles": [],
         "skipped_run": False,
     }

@@ -23,7 +23,6 @@ Exit codes:
 
 import json
 import os
-import platform
 import re
 import shlex
 import shutil
@@ -252,11 +251,16 @@ def _needs_boot(role):
 # ---------------------------------------------------------------------------
 
 def _detect_os():
-    """Detect OS. Returns 'windows', 'macos', 'linux'."""
-    system = platform.system().lower()
-    if system == "windows":
+    """Detect OS. Returns 'windows', 'macos', 'linux'.
+
+    Uses ``sys.platform`` (compile-time constant) rather than
+    ``platform.system()`` — the latter calls ``platform.uname()`` which
+    on Python 3.12 Windows triggers a WMI query that can hang and wedge
+    the harness (#9903).
+    """
+    if sys.platform == "win32":
         return "windows"
-    elif system == "darwin":
+    elif sys.platform == "darwin":
         return "macos"
     else:
         return "linux"
