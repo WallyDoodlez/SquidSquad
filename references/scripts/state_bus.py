@@ -35,7 +35,10 @@ DEFAULT_STATE_BRANCH = "squid-squad"
 # #9930: bound git operations so a wedged credential helper or network
 # blip can't hang commit_and_push forever. 120s is generous for normal
 # state-branch push/pull (typically <5s) but tight enough that the
-# 3-attempt retry loop can't burn more than ~6 minutes total.
+# 3-attempt retry loop bounds at ~12 minutes worst case (3 × 2 × 120s
+# for push + pull each, all timing out) — far better than the previous
+# unbounded hang. Corrected from the original ~6m comment after #9930
+# DS review F2.
 DEFAULT_GIT_TIMEOUT = 120
 
 # #9930: bypass credential.helper=manager (which hangs silently on
@@ -65,11 +68,16 @@ def _run(cmd, check=True, cwd=None, timeout=None):
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as e:
+        # #9930 DS review F3+F4: preserve partial stdout (a pre-push hook
+        # may have printed diagnostics before the hang), and drop the
+        # dead `isinstance(e.stderr, bytes)` branch — with text=True
+        # above, e.stdout / e.stderr are always str | None.
         msg = f"TIMEOUT after {timeout}s: {' '.join(str(c) for c in cmd)}"
         print(f"  WARNING: {msg}", file=sys.stderr)
         return subprocess.CompletedProcess(
-            args=cmd, returncode=124, stdout="",
-            stderr=(e.stderr.decode("utf-8", "replace") if isinstance(e.stderr, bytes) else (e.stderr or "")) + msg,
+            args=cmd, returncode=124,
+            stdout=(e.stdout or ""),
+            stderr=(e.stderr or "") + msg,
         )
 
 
@@ -299,9 +307,9 @@ def commit_and_push(message, role="unknown"):
         if result.returncode == 0:
             return True
         # Pull --rebase and retry. If the rebase itself fails (true
-        # conflict), abort it so the next iteration starts from a clean
-        # worktree — leaving a half-rebased state would make `git push`
-        # fail in a worse way on the next attempt.
+        # conflict OR pull timeout), abort it so the next iteration
+        # starts from a clean worktree — leaving a half-rebased state
+        # would make `git push` fail in a worse way on the next attempt.
         pull_result = _run(
             ["git"] + _GH_CREDENTIAL_OVERRIDE +
             ["pull", "--rebase", "origin", state_branch],
@@ -309,6 +317,18 @@ def commit_and_push(message, role="unknown"):
         )
         if pull_result.returncode != 0:
             _run(["git", "rebase", "--abort"], cwd=cwd, check=False)
+            # #9930 DS review F1: if the pull timed out (returncode=124),
+            # the child `git fetch` may have left tmp packfiles or a
+            # FETCH_HEAD.lock behind — `rebase --abort` only cleans up
+            # rebase state. Prune remote-tracking refs so the next
+            # fetch starts from a clean slate. Bounded by the same
+            # timeout — defense in depth.
+            if pull_result.returncode == 124:
+                _run(
+                    ["git"] + _GH_CREDENTIAL_OVERRIDE +
+                    ["remote", "prune", "origin"],
+                    cwd=cwd, check=False, timeout=DEFAULT_GIT_TIMEOUT,
+                )
 
     print(f"WARNING: State push failed after 3 attempts", file=sys.stderr)
     return False

@@ -446,6 +446,97 @@ class TestPushHardening9930:
         cmd = pull_call.args[0]
         assert "credential.helper=!gh auth git-credential" in cmd
 
+    def test_run_preserves_stdout_on_timeout(self):
+        """#9930 DS review F3: TimeoutExpired handler must preserve
+        partial stdout (a pre-push hook may print diagnostics before
+        the hang). Earlier the handler dropped it unconditionally."""
+        import subprocess
+        with patch.object(state_bus.subprocess, "run") as mock_sp:
+            mock_sp.side_effect = subprocess.TimeoutExpired(
+                cmd=["git", "push"],
+                timeout=1,
+                output="some stdout from a pre-push hook",
+                stderr="partial stderr",
+            )
+            result = state_bus._run(["git", "push"], check=False, timeout=1)
+        assert result.stdout == "some stdout from a pre-push hook", (
+            "TimeoutExpired stdout was dropped — should be preserved"
+        )
+        assert "partial stderr" in result.stderr
+        assert "TIMEOUT" in result.stderr
+
+    def test_run_handles_none_streams_on_timeout(self):
+        """#9930 DS review F4: with text=True, e.stdout / e.stderr are
+        str | None, never bytes. The handler must accept None for either
+        stream without crashing (e.g., child killed before any output).
+        """
+        import subprocess
+        with patch.object(state_bus.subprocess, "run") as mock_sp:
+            mock_sp.side_effect = subprocess.TimeoutExpired(
+                cmd=["git", "push"], timeout=1, output=None, stderr=None,
+            )
+            result = state_bus._run(["git", "push"], check=False, timeout=1)
+        assert result.returncode == 124
+        assert result.stdout == ""
+        assert "TIMEOUT" in result.stderr
+
+    @patch("state_bus._worktree_exists", return_value=True)
+    @patch("state_bus._read_branch_config", return_value=("main", "squid-squad"))
+    @patch("state_bus._run")
+    def test_pull_timeout_triggers_remote_prune(self, mock_run, mock_config, mock_wt):
+        """#9930 DS review F1: if `pull --rebase` times out (rc=124),
+        the child `git fetch` may have left tmp packfiles / a
+        FETCH_HEAD.lock. `rebase --abort` only cleans rebase state; we
+        also need `git remote prune origin` to clear stale fetch state
+        before the next push attempt."""
+        mock_run.side_effect = [
+            MagicMock(stdout="", returncode=0),                 # add -A
+            MagicMock(stdout=" M file.md\n", returncode=0),     # status
+            MagicMock(stdout="", stderr="", returncode=0),      # commit
+            MagicMock(stdout="", returncode=1),                 # push FAILS
+            MagicMock(stdout="", returncode=124),               # pull TIMEOUT
+            MagicMock(stdout="", returncode=0),                 # rebase --abort
+            MagicMock(stdout="", returncode=0),                 # remote prune origin
+            MagicMock(stdout="", returncode=0),                 # push retry SUCCEEDS
+        ]
+        state_bus.commit_and_push("msg", role="skill")
+        prune_seen = any(
+            "prune" in (c.args[0] if c.args else [])
+            and "origin" in (c.args[0] if c.args else [])
+            for c in mock_run.call_args_list
+        )
+        assert prune_seen, (
+            f"Expected `git remote prune origin` after pull timeout (rc=124), "
+            f"saw: {[c.args[0] for c in mock_run.call_args_list]}"
+        )
+
+    @patch("state_bus._worktree_exists", return_value=True)
+    @patch("state_bus._read_branch_config", return_value=("main", "squid-squad"))
+    @patch("state_bus._run")
+    def test_pull_non_timeout_failure_does_not_prune(self, mock_run, mock_config, mock_wt):
+        """The prune is specifically for timeout cleanup. A normal
+        rebase conflict (rc=1, not 124) should NOT trigger a prune —
+        that would waste a 120s budget on every conflict retry."""
+        mock_run.side_effect = [
+            MagicMock(stdout="", returncode=0),                 # add -A
+            MagicMock(stdout=" M file.md\n", returncode=0),     # status
+            MagicMock(stdout="", stderr="", returncode=0),      # commit
+            MagicMock(stdout="", returncode=1),                 # push FAILS
+            MagicMock(stdout="", returncode=1),                 # pull rc=1 (NOT 124)
+            MagicMock(stdout="", returncode=0),                 # rebase --abort
+            MagicMock(stdout="", returncode=0),                 # push retry
+        ]
+        state_bus.commit_and_push("msg", role="skill")
+        prune_seen = any(
+            "prune" in (c.args[0] if c.args else [])
+            for c in mock_run.call_args_list
+        )
+        assert not prune_seen, (
+            f"`git remote prune` should ONLY fire on pull timeout (rc=124), "
+            f"not on normal conflict failures. Saw: "
+            f"{[c.args[0] for c in mock_run.call_args_list]}"
+        )
+
     @patch("state_bus._worktree_exists", return_value=True)
     @patch("state_bus._read_branch_config", return_value=("main", "squid-squad"))
     @patch("state_bus._run")
