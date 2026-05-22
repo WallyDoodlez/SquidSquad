@@ -51,18 +51,54 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 
-def _run(cmd, check=False):
-    """Run a command from repo root."""
-    return subprocess.run(
-        cmd, capture_output=True, text=True,
-        encoding="utf-8", errors="replace",
-        check=check, cwd=str(REPO_ROOT),
+# Default sub-process timeout (#9904). One misbehaving sub-script must NOT
+# wedge the whole pre-cycle (the symptom that produced #9903). A bounded
+# timeout converts a deadlock into a recoverable per-cycle failure — the
+# caller sees returncode=124 (matching POSIX `timeout` convention) and the
+# existing `if result.returncode != 0` paths degrade gracefully. 60s is
+# generous for tracker.py / config.py / health_check.py while still bounding
+# the worst-case cycle latency at ~36 * 60s rather than infinity.
+DEFAULT_SCRIPT_TIMEOUT = 60
+
+
+def _run(cmd, check=False, timeout=DEFAULT_SCRIPT_TIMEOUT):
+    """Run a command from repo root.
+
+    #9904: ``timeout`` defaults to ``DEFAULT_SCRIPT_TIMEOUT`` so a single
+    hanging sub-process can't wedge the cycle. On timeout we return a fake
+    ``CompletedProcess`` with ``returncode=124`` (POSIX ``timeout`` exit
+    code) and a diagnostic on stderr — every existing call site already
+    treats ``returncode != 0`` as failure, so no caller changes are needed.
+    Pass ``timeout=None`` explicitly to opt out (no current call sites do).
+    """
+    try:
+        return subprocess.run(
+            cmd, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            check=check, cwd=str(REPO_ROOT),
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as e:
+        try:
+            cmd_display = shlex.join(str(c) for c in cmd) if isinstance(cmd, (list, tuple)) else str(cmd)
+        except Exception:
+            cmd_display = repr(cmd)
+        msg = f"TIMEOUT after {timeout}s: {cmd_display}"
+        print(f"  WARNING: {msg}", file=sys.stderr)
+        return subprocess.CompletedProcess(
+            args=cmd, returncode=124, stdout="", stderr=msg,
+        )
+
+
+def _run_script(script, *args, check=False, timeout=DEFAULT_SCRIPT_TIMEOUT):
+    """Run a Python script in references/scripts/.
+
+    #9904: forwards ``timeout`` to :func:`_run` (default 60s).
+    """
+    return _run(
+        [sys.executable, str(SCRIPT_DIR / script)] + list(args),
+        check=check, timeout=timeout,
     )
-
-
-def _run_script(script, *args, check=False):
-    """Run a Python script in references/scripts/."""
-    return _run([sys.executable, str(SCRIPT_DIR / script)] + list(args), check=check)
 
 
 def _read_file(path):
