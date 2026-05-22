@@ -34,9 +34,15 @@ Algorithm:
 
 ### D3. Missing or stale `.claude-pid` handling (Q3)
 
-**Locked: skip cleanup for this run if ANY role's `.claude-pid` is missing or its referenced cmd.exe PID is dead.**
+**SUPERSEDED-BY-#9926 (per-role skip)** — see `.squidsquad/pm/planning/CONTEXT-9926.md`.
 
-Reasoning: rather miss orphans than kill a real agent by mistake. A missing `.claude-pid` could mean the agent is mid-respawn — wait for next cleanup cycle when state has stabilized.
+The original D3 ("skip cleanup for this run if ANY role's `.claude-pid` is missing or its referenced cmd.exe PID is dead") was correct under steady state but counter-productive during the wedge/reboot episodes that *create* orphans. #9926 loosens this to a **per-role skip**: a role with a stale `.claude-pid` is excluded from the protected set, but the sweep proceeds for other roles. A **zero-healthy-roles backstop** (CONTEXT-9926 D2) preserves the original abort-the-sweep semantics for the all-roles-unhealthy case where there's no useful protection to enforce.
+
+The original locked text is preserved below for historical reference; the live behavior is encoded in #9926.
+
+> **Locked (PRE-#9926, NOW SUPERSEDED): skip cleanup for this run if ANY role's `.claude-pid` is missing or its referenced cmd.exe PID is dead.**
+>
+> Reasoning: rather miss orphans than kill a real agent by mistake. A missing `.claude-pid` could mean the agent is mid-respawn — wait for next cleanup cycle when state has stabilized.
 
 ### D4. Logging (Q4)
 
