@@ -128,13 +128,16 @@ class TestCommit:
 
 class TestPush:
     @patch("git_ops._run")
-    def test_successful_push(self, mock_run):
-        mock_run.return_value = _mock_result()
+    @patch("git_ops._git_push")
+    def test_successful_push(self, mock_git_push, mock_run):
+        mock_git_push.return_value = _mock_result()
+        mock_run.return_value = _mock_result(stdout="main\n")  # branch --show-current
         assert git_ops.push() is True
 
     @patch("git_ops._run")
-    def test_push_failure(self, mock_run):
-        mock_run.return_value = _mock_result(stderr="rejected", returncode=1)
+    @patch("git_ops._git_push")
+    def test_push_failure(self, mock_git_push, mock_run):
+        mock_git_push.return_value = _mock_result(stderr="rejected", returncode=1)
         assert git_ops.push() is False
 
 
@@ -167,9 +170,11 @@ class TestPullEmitsRole:
 class TestPushEmitsRole:
     @patch("git_ops._emit")
     @patch("git_ops._run")
-    def test_push_emits_role(self, mock_run, mock_emit):
+    @patch("git_ops._git_push")
+    def test_push_emits_role(self, mock_git_push, mock_run, mock_emit):
         """push(role='skill') passes role to _emit()."""
-        mock_run.return_value = _mock_result()
+        mock_git_push.return_value = _mock_result()
+        mock_run.return_value = _mock_result(stdout="main\n")
         git_ops.push(role="skill")
         mock_emit.assert_called()
         _, kwargs = mock_emit.call_args
@@ -177,9 +182,11 @@ class TestPushEmitsRole:
 
     @patch("git_ops._emit")
     @patch("git_ops._run")
-    def test_push_without_role_backward_compat(self, mock_run, mock_emit):
+    @patch("git_ops._git_push")
+    def test_push_without_role_backward_compat(self, mock_git_push, mock_run, mock_emit):
         """push() without role still works (role=None passed to _emit)."""
-        mock_run.return_value = _mock_result()
+        mock_git_push.return_value = _mock_result()
+        mock_run.return_value = _mock_result(stdout="main\n")
         git_ops.push()
         mock_emit.assert_called()
         _, kwargs = mock_emit.call_args
@@ -498,10 +505,11 @@ class TestIsStateFile:
 # ---------------------------------------------------------------------------
 
 class TestCommitCode:
+    @patch("git_ops._git_push")
     @patch("git_ops._run_list")
     @patch("git_ops._run")
     @patch("subprocess.run")
-    def test_splits_code_from_state(self, mock_subproc, mock_run, mock_run_list):
+    def test_splits_code_from_state(self, mock_subproc, mock_run, mock_run_list, mock_git_push):
         """commit_code only stages non-.squidsquad/ files."""
         # git status --porcelain: XY<space>path (3 chars prefix)
         mock_run.side_effect = [
@@ -515,9 +523,10 @@ class TestCommitCode:
             _mock_result(),  # git checkout branch
             _mock_result(),  # git add (code file)
             _mock_result(),  # git checkout config.md revert (#7491)
-            _mock_result(),  # git push -u
             _mock_result(),  # git checkout main
         ]
+        # push now routes through _git_push (#9890)
+        mock_git_push.return_value = _mock_result()
         # git commit
         mock_subproc.return_value = _mock_result(stdout="1 file changed")
 
@@ -529,10 +538,11 @@ class TestCommitCode:
         assert len(add_calls) == 1
         assert add_calls[0][0][0][2] == "references/scripts/git_ops.py"
 
+    @patch("git_ops._git_push")
     @patch("git_ops._run_list")
     @patch("git_ops._run")
     @patch("subprocess.run")
-    def test_reverts_config_md_before_commit(self, mock_subproc, mock_run, mock_run_list):
+    def test_reverts_config_md_before_commit(self, mock_subproc, mock_run, mock_run_list, mock_git_push):
         """#7491: commit_code reverts config.md to working branch version."""
         mock_run.side_effect = [
             _mock_result(stdout=" M references/scripts/harness.py\n"),
@@ -544,9 +554,9 @@ class TestCommitCode:
             _mock_result(),  # git checkout branch
             _mock_result(),  # git add (code file)
             _mock_result(),  # git checkout config.md revert
-            _mock_result(),  # git push -u
             _mock_result(),  # git checkout main
         ]
+        mock_git_push.return_value = _mock_result()
         mock_subproc.return_value = _mock_result(stdout="1 file changed")
 
         git_ops.commit_code("skill", "squidsquad/task/7491", "test fix")
@@ -585,17 +595,18 @@ class TestCommitCode:
 # ---------------------------------------------------------------------------
 
 class TestCommitState:
+    @patch("git_ops._git_push")
     @patch("git_ops._run")
     @patch("git_ops._run_list")
     @patch("subprocess.run")
-    def test_only_stages_squidsquad_files(self, mock_subproc, mock_run_list, mock_run):
+    def test_only_stages_squidsquad_files(self, mock_subproc, mock_run_list, mock_run, mock_git_push):
         """commit_state only stages .squidsquad/ files on main."""
         mock_run.side_effect = [
             _mock_result(stdout=" M references/scripts/git_ops.py\n M .squidsquad/skill/working-state.md\n"),
             _mock_result(stdout="main\n"),  # current branch
-            _mock_result(),  # push
         ]
         mock_run_list.return_value = _mock_result()  # git add
+        mock_git_push.return_value = _mock_result()  # state push (#9890)
         mock_subproc.return_value = _mock_result(stdout="1 file changed")
 
         result = git_ops.commit_state("skill", "state update")
@@ -926,12 +937,13 @@ class TestCommitCodePushFailure:
     @patch("git_ops._get_alias", return_value="skill")
     @patch("git_ops._get_working_branch", return_value="main")
     @patch("git_ops._safe_checkout", return_value=True)
+    @patch("git_ops._git_push")
     @patch("git_ops._run_list")
     @patch("git_ops._run")
     @patch("subprocess.run")
     def test_returns_false_on_push_failure(
-        self, mock_subproc, mock_run, mock_run_list, mock_safe_checkout,
-        mock_gwb, mock_alias
+        self, mock_subproc, mock_run, mock_run_list, mock_git_push,
+        mock_safe_checkout, mock_gwb, mock_alias
     ):
         # git status shows code file changed
         mock_run.side_effect = [
@@ -942,20 +954,22 @@ class TestCommitCodePushFailure:
         mock_run_list.side_effect = [
             _mock_result(),  # git add
             _mock_result(),  # git checkout config.md revert (#7491)
-            _mock_result(returncode=1, stderr="push rejected"),  # push FAILS
         ]
+        # push now routed through _git_push (#9890) and FAILS here
+        mock_git_push.return_value = _mock_result(returncode=1, stderr="push rejected")
         result = git_ops.commit_code("skill", "squidsquad/task/100", "test")
         assert result is False
 
     @patch("git_ops._get_alias", return_value="skill")
     @patch("git_ops._get_working_branch", return_value="main")
     @patch("git_ops._safe_checkout", return_value=True)
+    @patch("git_ops._git_push")
     @patch("git_ops._run_list")
     @patch("git_ops._run")
     @patch("subprocess.run")
     def test_returns_true_on_push_success(
-        self, mock_subproc, mock_run, mock_run_list, mock_safe_checkout,
-        mock_gwb, mock_alias
+        self, mock_subproc, mock_run, mock_run_list, mock_git_push,
+        mock_safe_checkout, mock_gwb, mock_alias
     ):
         mock_run.side_effect = [
             _mock_result(stdout=" M src/app.py\n"),  # status
@@ -965,8 +979,8 @@ class TestCommitCodePushFailure:
         mock_run_list.side_effect = [
             _mock_result(),  # git add
             _mock_result(),  # git checkout config.md revert (#7491)
-            _mock_result(),  # push succeeds
         ]
+        mock_git_push.return_value = _mock_result()  # push succeeds (#9890)
         result = git_ops.commit_code("skill", "squidsquad/task/100", "test")
         assert result is True
 
@@ -978,11 +992,13 @@ class TestCommitCodePushFailure:
 class TestCommitCodeUsesWorkingBranch:
     @patch("git_ops._get_working_branch", return_value="develop")
     @patch("git_ops._safe_checkout", return_value=True)
+    @patch("git_ops._git_push")
     @patch("git_ops._run_list")
     @patch("git_ops._run")
     @patch("subprocess.run")
     def test_commit_code_switches_back_to_working_branch(
-        self, mock_subproc, mock_run, mock_run_list, mock_safe_checkout, mock_gwb
+        self, mock_subproc, mock_run, mock_run_list, mock_git_push,
+        mock_safe_checkout, mock_gwb
     ):
         """commit_code returns to _get_working_branch(), not hardcoded 'main'."""
         mock_run.side_effect = [
@@ -994,8 +1010,8 @@ class TestCommitCodeUsesWorkingBranch:
             _mock_result(),  # git checkout
             _mock_result(),  # git add
             _mock_result(),  # git checkout config.md revert (#7491)
-            _mock_result(),  # git push -u
         ]
+        mock_git_push.return_value = _mock_result()  # push (#9890)
         mock_subproc.return_value = _mock_result(stdout="1 file changed")
 
         result = git_ops.commit_code("skill", "squidsquad/skill/3341", "test fix")
@@ -1031,19 +1047,20 @@ class TestCommitStateUsesWorkingBranch:
         assert result is False
 
     @patch("git_ops._get_working_branch", return_value="develop")
+    @patch("git_ops._git_push")
     @patch("git_ops._run")
     @patch("git_ops._run_list")
     @patch("subprocess.run")
     def test_commit_state_succeeds_on_working_branch(
-        self, mock_subproc, mock_run_list, mock_run, mock_gwb
+        self, mock_subproc, mock_run_list, mock_run, mock_git_push, mock_gwb
     ):
         """commit_state succeeds when on the configured working branch."""
         mock_run.side_effect = [
             _mock_result(stdout=" M .squidsquad/skill/working-state.md\n"),
             _mock_result(stdout="develop\n"),  # on working branch
-            _mock_result(),  # push
         ]
         mock_run_list.return_value = _mock_result()  # git add
+        mock_git_push.return_value = _mock_result()  # state push (#9890)
         mock_subproc.return_value = _mock_result(stdout="1 file changed")
 
         result = git_ops.commit_state("skill", "state update")
@@ -1475,3 +1492,104 @@ class TestGetBranchName:
         with patch.dict("sys.modules", {"config": fake_config}):
             result = git_ops.get_branch_name("skill", "77")
         assert result == "squidsquad/task/77"
+
+
+# ---------------------------------------------------------------------------
+# _gh_credential_helper_available() and _git_push() (#9890)
+# ---------------------------------------------------------------------------
+
+class TestGhCredentialHelperAvailable:
+    def setup_method(self):
+        # Reset cache before each test (module-level cache leaks across tests).
+        git_ops._GH_AVAILABLE_CACHE = None
+
+    @patch("git_ops.subprocess.run")
+    def test_returns_true_when_gh_authenticated(self, mock_run):
+        mock_run.return_value = _mock_result(returncode=0)
+        assert git_ops._gh_credential_helper_available() is True
+        call_args = mock_run.call_args[0][0]
+        assert call_args[:3] == ["gh", "auth", "status"]
+
+    @patch("git_ops.subprocess.run")
+    def test_returns_false_when_gh_unauthenticated(self, mock_run):
+        mock_run.return_value = _mock_result(returncode=1, stderr="not logged in")
+        assert git_ops._gh_credential_helper_available() is False
+
+    @patch("git_ops.subprocess.run", side_effect=FileNotFoundError("gh"))
+    def test_returns_false_when_gh_missing(self, mock_run):
+        assert git_ops._gh_credential_helper_available() is False
+
+    @patch("git_ops.subprocess.run", side_effect=subprocess.TimeoutExpired("gh", 10))
+    def test_returns_false_when_gh_hangs(self, mock_run):
+        """A wedged `gh auth status` should not propagate the timeout."""
+        assert git_ops._gh_credential_helper_available() is False
+
+    @patch("git_ops.subprocess.run")
+    def test_caches_result(self, mock_run):
+        """Second call should not re-invoke subprocess."""
+        mock_run.return_value = _mock_result(returncode=0)
+        git_ops._gh_credential_helper_available()
+        git_ops._gh_credential_helper_available()
+        git_ops._gh_credential_helper_available()
+        assert mock_run.call_count == 1
+
+
+class TestGitPush:
+    def setup_method(self):
+        git_ops._GH_AVAILABLE_CACHE = None
+
+    @patch("git_ops._gh_credential_helper_available", return_value=True)
+    @patch("git_ops.subprocess.run")
+    def test_prepends_credential_override_when_gh_available(self, mock_run, _mock_gh):
+        mock_run.return_value = _mock_result()
+        git_ops._git_push(["-u", "origin", "squidsquad/task/9890"])
+        cmd = mock_run.call_args[0][0]
+        # Must inject -c flags BEFORE "push" subcommand.
+        assert cmd[0] == "git"
+        push_idx = cmd.index("push")
+        injected = cmd[1:push_idx]
+        assert "-c" in injected
+        assert "credential.helper=" in injected
+        assert "credential.helper=!gh auth git-credential" in injected
+        # User args preserved after "push".
+        assert cmd[push_idx + 1:] == ["-u", "origin", "squidsquad/task/9890"]
+
+    @patch("git_ops._gh_credential_helper_available", return_value=False)
+    @patch("git_ops.subprocess.run")
+    def test_uses_plain_push_when_gh_unavailable(self, mock_run, _mock_gh):
+        mock_run.return_value = _mock_result()
+        git_ops._git_push(["origin", "--delete", "branch-x"])
+        cmd = mock_run.call_args[0][0]
+        # No -c override flags when gh isn't available.
+        assert cmd == ["git", "push", "origin", "--delete", "branch-x"]
+
+    @patch("git_ops._gh_credential_helper_available", return_value=False)
+    @patch("git_ops.subprocess.run")
+    def test_passes_timeout_to_subprocess(self, mock_run, _mock_gh):
+        mock_run.return_value = _mock_result()
+        git_ops._git_push([], timeout=42)
+        assert mock_run.call_args.kwargs.get("timeout") == 42
+
+    @patch("git_ops._gh_credential_helper_available", return_value=False)
+    @patch("git_ops.subprocess.run")
+    def test_default_timeout_is_60(self, mock_run, _mock_gh):
+        mock_run.return_value = _mock_result()
+        git_ops._git_push([])
+        assert mock_run.call_args.kwargs.get("timeout") == 60
+
+    @patch("git_ops._gh_credential_helper_available", return_value=False)
+    @patch("git_ops.subprocess.run",
+           side_effect=subprocess.TimeoutExpired("git push", 60))
+    def test_timeout_returns_synthetic_failure(self, _mock_run, _mock_gh):
+        result = git_ops._git_push([], timeout=60)
+        assert result.returncode == 124
+        assert "timed out" in result.stderr
+        assert "9890" in result.stderr  # references the issue in the message
+
+    @patch("git_ops._gh_credential_helper_available", return_value=False)
+    @patch("git_ops.subprocess.run")
+    def test_empty_args_produces_bare_push(self, mock_run, _mock_gh):
+        mock_run.return_value = _mock_result()
+        git_ops._git_push([])
+        cmd = mock_run.call_args[0][0]
+        assert cmd == ["git", "push"]
