@@ -127,12 +127,36 @@ def migrate(dry_run=False):
         except (OSError, UnicodeDecodeError) as e:
             print(f"  WARNING: Failed to migrate {rel}: {e}", file=sys.stderr)
 
-    # Commit the migration
+    # Commit the migration. #9939: capture the return — commit_and_push
+    # returns False on commit failure OR push failure (e.g., the #9930
+    # credential-helper wedge), and the original code discarded that
+    # signal, reporting "Migrated X/Y" with exit 0 even when the state
+    # never actually reached origin. A failed-but-reported-success
+    # migration during the 3-branch cutover can silently lose state on
+    # the next `git fetch + reset --hard` (e.g., from the #9934 manual
+    # recovery one-liner).
     if migrated > 0:
-        state_bus.commit_and_push(
+        pushed = state_bus.commit_and_push(
             f"migrate: {migrated} state files from working branch",
             role="migration",
         )
+        if not pushed:
+            print(
+                f"\nMigrated {migrated}/{len(state_files)} files LOCALLY, "
+                "but commit_and_push failed — migration is NOT durable.",
+                file=sys.stderr,
+            )
+            print(
+                "  Files exist in .squidsquad-state/ on this machine but "
+                "have NOT reached origin/<state-branch>.",
+                file=sys.stderr,
+            )
+            print(
+                "  Investigate BEFORE deleting originals from the working "
+                "branch. Common cause: #9930 credential-helper wedge.",
+                file=sys.stderr,
+            )
+            return 1
 
     print(f"\nMigrated {migrated}/{len(state_files)} files to state branch.")
     if migrated == 0 and len(state_files) > 0:
