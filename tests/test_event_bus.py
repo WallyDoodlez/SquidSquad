@@ -303,6 +303,31 @@ class TestAckStop:
         time.sleep(0.05)
         assert events == []
 
+    def test_explicit_role_param_overrides_env_9902(self, mock_server, patch_dirs, monkeypatch):
+        """#9902 F3: explicit ``role`` kwarg wins over SQUIDSQUAD_ROLE env.
+        Useful for test harnesses and out-of-band callers that don't set
+        the env var."""
+        port, events = mock_server
+        (patch_dirs / ".harness-port").write_text(str(port))
+        monkeypatch.setenv("SQUIDSQUAD_ROLE", "skill")
+        event_bus.ack_stop("evt-789", "stop-confirmed", role="qa")
+        time.sleep(0.05)
+        assert len(events) == 1
+        assert events[0]["role"] == "qa"  # explicit kwarg wins
+        assert events[0]["payload"] == {"event_id": "evt-789", "result": "stop-confirmed"}
+
+    def test_emits_when_env_unset_but_role_passed_9902(self, mock_server, patch_dirs, monkeypatch):
+        """#9902 F3: env unset is no longer a silent no-op when the caller
+        passes role= explicitly. AC-12 stop-confirmation flow can't break
+        just because thin_launcher didn't set the env var."""
+        port, events = mock_server
+        (patch_dirs / ".harness-port").write_text(str(port))
+        monkeypatch.delenv("SQUIDSQUAD_ROLE", raising=False)
+        event_bus.ack_stop("evt-101", "stop-confirmed", role="dm")
+        time.sleep(0.05)
+        assert len(events) == 1
+        assert events[0]["role"] == "dm"
+
 
 class TestNoUnusedImports:
     """#8193 regression: event bus modules must not have unused imports."""

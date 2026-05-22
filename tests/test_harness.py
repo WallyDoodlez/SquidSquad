@@ -1892,6 +1892,67 @@ class TestCursorState9873A(unittest.TestCase):
         self.assertIn("EventLifecycleManager._lock", body)
         self.assertIn("EventStream._lock", body)
 
+    def test_ac19_has_event_called_inside_lock_9902(self):
+        """#9902 F1: ``has_event`` must be invoked WHILE the outer
+        EventLifecycleManager._lock is held. Doing it before the lock
+        creates a TOCTOU window where the deque can evict between the
+        check and the cursor mutation.
+
+        Verify by patching has_event to assert the lock is non-acquirable
+        from this thread (i.e., already held)."""
+        from harness import EventStream, EventLifecycleManager
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
+            stream = EventStream()
+            stream.append({"id": "evt1", "event_type": "x"})
+            mgr = EventLifecycleManager(stream)
+
+            real_has_event = stream.has_event
+            observed = {"lock_held_when_called": None}
+
+            def probing_has_event(eid):
+                # If lock is held by this thread (the only thread here),
+                # acquire(blocking=False) returns False since threading.Lock
+                # is non-reentrant.
+                acquired = mgr._lock.acquire(blocking=False)
+                if acquired:
+                    mgr._lock.release()
+                    observed["lock_held_when_called"] = False
+                else:
+                    observed["lock_held_when_called"] = True
+                return real_has_event(eid)
+
+            with patch.object(stream, "has_event", side_effect=probing_has_event):
+                result = mgr.advance_cursor("skill", "evt1")
+            self.assertEqual(result, "advanced")
+            self.assertTrue(
+                observed["lock_held_when_called"],
+                "F1 regression: has_event was called BEFORE acquiring the "
+                "outer lock — TOCTOU window reopened",
+            )
+
+    def test_target_evicted_during_regression_check_9902(self):
+        """#9902 F1 (second failure mode): if find_positions returns
+        ``target_pos=-1`` (target evicted between has_event and
+        find_positions, OR cursor pointing at an id not in deque),
+        advance_cursor must return ``\"evicted\"`` — never advance the
+        cursor to an evicted event_id (violates D8).
+        """
+        from harness import EventStream, EventLifecycleManager
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
+            stream = EventStream()
+            stream.append({"id": "evt1", "event_type": "x"})
+            stream.append({"id": "evt2", "event_type": "x"})
+            mgr = EventLifecycleManager(stream)
+            # Cursor already at evt1; ack arrives for evt2 (still in deque,
+            # so has_event will pass), but simulate post-lock-acquisition
+            # eviction by returning target_pos=-1 from find_positions.
+            mgr._cursors["skill"] = "evt1"
+            with patch.object(stream, "find_positions", return_value=(-1, 0)):
+                result = mgr.advance_cursor("skill", "evt2")
+            self.assertEqual(result, "evicted")
+            # D8: cursor MUST NOT advance to an evicted event_id.
+            self.assertEqual(mgr._cursors["skill"], "evt1")
+
 
 class TestCursorEndpoint9873A(unittest.TestCase):
     """#9873-A: GET /events/cursor/{role} — AC-3, AC-4."""
@@ -1929,6 +1990,64 @@ class TestCursorEndpoint9873A(unittest.TestCase):
         with patch("harness.boot_remote._get_all_roles", return_value=["skill"]):
             resp = self.client.get("/events/cursor/bogus")
         self.assertEqual(resp.status_code, 404)
+
+
+class TestAckEndpointPayloadGuard9902(unittest.TestCase):
+    """#9902 F4: ``ack-cursor`` and ``ack-stop`` inline handlers must not
+    500 on a malformed payload (present-but-not-dict). The ``body.get(
+    "payload", {})`` default only triggers on a missing key — a string or
+    list payload would AttributeError on the subsequent ``.get()`` call.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from fastapi.testclient import TestClient
+        from harness import app
+        cls.client = TestClient(app, raise_server_exceptions=False)
+
+    def test_ack_cursor_string_payload_returns_200_not_500(self):
+        """POST /events with event_type=ack-cursor and payload as a string
+        (not a dict) must return 200, not 500. The handler silently drops
+        the malformed event rather than crashing the endpoint."""
+        resp = self.client.post("/events", json={
+            "event_type": "ack-cursor",
+            "role": "skill",
+            "payload": "malformed-not-a-dict",
+            "timestamp": "2026-05-22T09:00:00",
+        })
+        self.assertEqual(resp.status_code, 200)
+
+    def test_ack_cursor_list_payload_returns_200_not_500(self):
+        """Same guard against payload being a list."""
+        resp = self.client.post("/events", json={
+            "event_type": "ack-cursor",
+            "role": "skill",
+            "payload": ["not", "a", "dict"],
+            "timestamp": "2026-05-22T09:00:00",
+        })
+        self.assertEqual(resp.status_code, 200)
+
+    def test_ack_stop_string_payload_returns_200_not_500(self):
+        """ack-stop branch has the same guard as ack-cursor."""
+        resp = self.client.post("/events", json={
+            "event_type": "ack-stop",
+            "role": "skill",
+            "payload": "malformed-not-a-dict",
+            "timestamp": "2026-05-22T09:00:00",
+        })
+        self.assertEqual(resp.status_code, 200)
+
+    def test_ack_stop_null_payload_returns_200_not_500(self):
+        """ack-stop with payload explicitly null — body.get('payload')
+        returns None, isinstance(None, dict) is False, default-dict
+        path runs without crash."""
+        resp = self.client.post("/events", json={
+            "event_type": "ack-stop",
+            "role": "skill",
+            "payload": None,
+            "timestamp": "2026-05-22T09:00:00",
+        })
+        self.assertEqual(resp.status_code, 200)
 
 
 class TestTerminalPidInAgentState(unittest.TestCase):

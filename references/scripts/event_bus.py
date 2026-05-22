@@ -163,7 +163,7 @@ def ack_cursor(event_id, role):
     emit("ack-cursor", role, payload={"event_id": event_id, "role": role})
 
 
-def ack_stop(event_id, result):
+def ack_stop(event_id, result, role=None):
     """Acknowledge a stop request from the harness (#9873-A D10 / AC-11).
 
     Emits ``event_type="ack-stop"`` with payload ``{event_id, result}``. The
@@ -173,16 +173,17 @@ def ack_stop(event_id, result):
     resetting ``intent_set_at`` (which would extend the 60s force-kill
     window per CONTEXT-4792 §3.3 Q7).
 
-    The agent's role is read from ``SQUIDSQUAD_ROLE`` (set by
-    ``thin_launcher.py`` at spawn time) — D10 specifies a two-arg signature,
-    and the harness ack-stop handler reads ``body["role"]`` (top-level), so
-    the role must travel via the emit's top-level role param. No-op when
-    ``event_id`` or ``result`` is empty, or when ``SQUIDSQUAD_ROLE`` is
-    unset. Fire-and-forget.
+    The agent's role is normally read from ``SQUIDSQUAD_ROLE`` (set by
+    ``thin_launcher.py`` at spawn time). Callers may pass ``role`` explicitly
+    to override the env (#9902 F3) — useful for test harnesses and out-of-band
+    callers that don't set the env var. No-op when ``event_id`` or ``result``
+    is empty, or when no role can be resolved from either source.
+    Fire-and-forget.
     """
     if not event_id or not result:
         return
-    role = (os.environ.get("SQUIDSQUAD_ROLE") or "").strip()
+    if role is None:
+        role = (os.environ.get("SQUIDSQUAD_ROLE") or "").strip()
     if not role:
         return
     emit("ack-stop", role, payload={"event_id": event_id, "result": result})
