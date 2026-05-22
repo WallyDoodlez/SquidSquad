@@ -303,3 +303,176 @@ class TestCommitAndPushFailedCommit:
         ]
         result = state_bus.commit_and_push("test msg", role="skill")
         assert result is True
+
+
+# ---------------------------------------------------------------------------
+# #9930 — credential helper override + timeout + --rebase pull
+# ---------------------------------------------------------------------------
+
+
+class TestPushHardening9930:
+    """#9930: commit_and_push must (a) bypass credential.helper=manager
+    via `gh auth git-credential`, (b) bound every git op with a timeout
+    so a wedged helper can't hang the cycle, and (c) use `pull --rebase`
+    instead of default-merge so retry divergence keeps history linear.
+    """
+
+    def test_default_git_timeout_is_bounded(self):
+        """The default must be a positive finite value — not None."""
+        assert isinstance(state_bus.DEFAULT_GIT_TIMEOUT, (int, float))
+        assert 0 < state_bus.DEFAULT_GIT_TIMEOUT <= 600
+
+    def test_run_returns_124_on_timeout(self):
+        """`_run` must catch TimeoutExpired and return CompletedProcess
+        with returncode=124 — never raise — so existing
+        `if result.returncode != 0` paths degrade gracefully.
+        """
+        import subprocess
+        with patch.object(state_bus.subprocess, "run") as mock_sp:
+            mock_sp.side_effect = subprocess.TimeoutExpired(
+                cmd=["git", "push"], timeout=1
+            )
+            result = state_bus._run(["git", "push"], check=False, timeout=1)
+        assert result.returncode == 124
+        assert "TIMEOUT" in result.stderr
+
+    def test_run_passes_timeout_to_subprocess(self):
+        """`_run` forwards `timeout` to subprocess.run when set."""
+        import subprocess
+        captured = {}
+
+        def fake_sp(cmd, **kwargs):
+            captured.update(kwargs)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        with patch.object(state_bus.subprocess, "run", side_effect=fake_sp):
+            state_bus._run(["git", "status"], check=False, timeout=42)
+        assert captured.get("timeout") == 42
+
+    def test_run_default_timeout_is_none_for_backcompat(self):
+        """`_run` without explicit timeout passes ``None`` — the
+        constructor signature change must NOT alter the behavior of
+        existing call sites that didn't ask for a bound."""
+        import subprocess
+        captured = {}
+
+        def fake_sp(cmd, **kwargs):
+            captured.update(kwargs)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        with patch.object(state_bus.subprocess, "run", side_effect=fake_sp):
+            state_bus._run(["git", "status"], check=False)
+        assert captured.get("timeout") is None
+
+    @patch("state_bus._worktree_exists", return_value=True)
+    @patch("state_bus._read_branch_config", return_value=("main", "squid-squad"))
+    @patch("state_bus._run")
+    def test_push_uses_gh_credential_override(self, mock_run, mock_config, mock_wt):
+        """The push command must include `-c credential.helper=!gh auth
+        git-credential` so credential.helper=manager (which hangs
+        silently on Windows) is bypassed for this network op.
+        """
+        mock_run.side_effect = [
+            MagicMock(stdout="", returncode=0),                 # add -A
+            MagicMock(stdout=" M file.md\n", returncode=0),     # status
+            MagicMock(stdout="", stderr="", returncode=0),      # commit
+            MagicMock(stdout="", returncode=0),                 # push (success)
+        ]
+        state_bus.commit_and_push("msg", role="skill")
+        # The 4th call is the push — inspect its command list.
+        push_call = mock_run.call_args_list[3]
+        cmd = push_call.args[0]
+        assert "credential.helper=!gh auth git-credential" in cmd, (
+            f"push command missing credential override: {cmd}"
+        )
+        assert "push" in cmd and "origin" in cmd
+
+    @patch("state_bus._worktree_exists", return_value=True)
+    @patch("state_bus._read_branch_config", return_value=("main", "squid-squad"))
+    @patch("state_bus._run")
+    def test_push_bounded_by_default_timeout(self, mock_run, mock_config, mock_wt):
+        """Push call must pass `timeout=DEFAULT_GIT_TIMEOUT` so a
+        wedged credential helper can't hang indefinitely (the original
+        #9930 symptom)."""
+        mock_run.side_effect = [
+            MagicMock(stdout="", returncode=0),                 # add -A
+            MagicMock(stdout=" M file.md\n", returncode=0),     # status
+            MagicMock(stdout="", stderr="", returncode=0),      # commit
+            MagicMock(stdout="", returncode=0),                 # push
+        ]
+        state_bus.commit_and_push("msg", role="skill")
+        push_call = mock_run.call_args_list[3]
+        assert push_call.kwargs.get("timeout") == state_bus.DEFAULT_GIT_TIMEOUT
+
+    @patch("state_bus._worktree_exists", return_value=True)
+    @patch("state_bus._read_branch_config", return_value=("main", "squid-squad"))
+    @patch("state_bus._run")
+    def test_retry_pull_uses_rebase(self, mock_run, mock_config, mock_wt):
+        """On push failure, the retry pull must use `--rebase` (not the
+        default merge) so divergent state-branch history stays linear
+        instead of accumulating `Merge branch 'squid-squad'` commits.
+        """
+        mock_run.side_effect = [
+            MagicMock(stdout="", returncode=0),                 # add -A
+            MagicMock(stdout=" M file.md\n", returncode=0),     # status
+            MagicMock(stdout="", stderr="", returncode=0),      # commit
+            MagicMock(stdout="", returncode=1),                 # push FAILS
+            MagicMock(stdout="", returncode=0),                 # pull --rebase
+            MagicMock(stdout="", returncode=0),                 # push retry SUCCEEDS
+        ]
+        state_bus.commit_and_push("msg", role="skill")
+        # 5th call should be the pull --rebase.
+        pull_call = mock_run.call_args_list[4]
+        cmd = pull_call.args[0]
+        assert "pull" in cmd
+        assert "--rebase" in cmd, f"retry pull missing --rebase: {cmd}"
+
+    @patch("state_bus._worktree_exists", return_value=True)
+    @patch("state_bus._read_branch_config", return_value=("main", "squid-squad"))
+    @patch("state_bus._run")
+    def test_retry_pull_uses_credential_override(self, mock_run, mock_config, mock_wt):
+        """The retry pull is also a network op — it must use the same
+        credential override or it'd wedge on the same helper as push."""
+        mock_run.side_effect = [
+            MagicMock(stdout="", returncode=0),                 # add -A
+            MagicMock(stdout=" M file.md\n", returncode=0),     # status
+            MagicMock(stdout="", stderr="", returncode=0),      # commit
+            MagicMock(stdout="", returncode=1),                 # push FAILS
+            MagicMock(stdout="", returncode=0),                 # pull --rebase
+            MagicMock(stdout="", returncode=0),                 # push retry
+        ]
+        state_bus.commit_and_push("msg", role="skill")
+        pull_call = mock_run.call_args_list[4]
+        cmd = pull_call.args[0]
+        assert "credential.helper=!gh auth git-credential" in cmd
+
+    @patch("state_bus._worktree_exists", return_value=True)
+    @patch("state_bus._read_branch_config", return_value=("main", "squid-squad"))
+    @patch("state_bus._run")
+    def test_rebase_abort_on_pull_failure(self, mock_run, mock_config, mock_wt):
+        """If the retry `pull --rebase` itself fails (e.g., real
+        conflict), the loop must `git rebase --abort` so the worktree
+        is left clean for the next attempt — leaving a half-rebased
+        state was part of the #9930 'leaked state across attempts' bug.
+        """
+        mock_run.side_effect = [
+            MagicMock(stdout="", returncode=0),                 # add -A
+            MagicMock(stdout=" M file.md\n", returncode=0),     # status
+            MagicMock(stdout="", stderr="", returncode=0),      # commit
+            MagicMock(stdout="", returncode=1),                 # push FAILS (1)
+            MagicMock(stdout="", returncode=1),                 # pull --rebase FAILS
+            MagicMock(stdout="", returncode=0),                 # rebase --abort
+            MagicMock(stdout="", returncode=0),                 # push retry SUCCEEDS (2)
+        ]
+        state_bus.commit_and_push("msg", role="skill")
+        # Check that one of the calls is `git rebase --abort`.
+        abort_seen = any(
+            (lambda cmd: "--abort" in cmd and "rebase" in cmd)(
+                c.args[0] if c.args else []
+            )
+            for c in mock_run.call_args_list
+        )
+        assert abort_seen, (
+            f"Expected `git rebase --abort` after failed pull --rebase, "
+            f"saw: {[c.args[0] for c in mock_run.call_args_list]}"
+        )
