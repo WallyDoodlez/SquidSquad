@@ -1,51 +1,38 @@
 # Working State
 
-- **Task**: HOLD on fleet flip per human directive cycle 1541-1542
-- **Status**: alignment phase — locked architecture, planning artifacts in flight
+- **Task**: idle — pipeline clean, post-recovery observation cycle
+- **Status**: idle
 - **Last Processed Event ID**: 2461e3f1
 
-## FLEET FLIP — ON HOLD
-Reason: #9873-A + #9873-B (event-bus redesign) must ship before event-driven flip. Per human directive cycle 1541.
+## Pipeline snapshot (2026-05-22 08:49)
+- 0 pending-test, 0 pending-ship, 0 open PRs
+- All four agents rebooted within last 4 min after e7a47737 harness wedge fix
+- harness_status: reachable
 
-## Architectural locks (cycle 1541-1542)
-See vault: `decision-event-bus-architecture-redesign.md` for full detail.
-- Harness = transport bus, not orchestrator
-- Forge = work-state source of truth
-- Ack = event-type on bus, emitted by event_poll.py after stdout write (receipt confirmation, not completion)
-- Cursor moves to harness; new endpoint `GET /events/cursor/{role}`
-- Monitor contract unchanged — redesign happens inside event_poll.py + harness
-- No `POST /events/{id}/complete` — rejected entirely
+## Just-shipped
+- #9873-A (event-bus foundation: cursor state + ack-cursor/ack-stop split + /events/cursor/{role}) — commit 4796af26
+- v0.42.0 bump (97d78b14, 905ef7b3)
 
-## Tier 1 redesign tickets (filed cycle 1541, all status:planning)
-- **#9873** — restore event ack-on-delivery (umbrella). RESEARCH-9873.md done. Splits into:
-  - **9873-A**: cursor migration to harness + `GET /events/cursor/{role}` + ack event type + harness ack-consumer task. **Pre-flip blocker.**
-  - **9873-B**: timeout_scan re-delivery. **Pre-flip blocker.**
-  - **9873-C**: TUI ack visualization. Post-v1.
-- **#9874** — harness arch review. RESEARCH-9874.md done (8 hazards found, H3 is wedge culprit). **Deprioritized — alignment-first.**
-- **#9875** — L2 vault writeback + research-consults-vault. RESEARCH-9875.md done. **Deprioritized — alignment-first.**
+## Active in-flight (skill)
+- #9901 in-progress 450m — status_bar crash drift (three drifted copies of same write)
+- #9902 approved 430m — #9873-A retro DeepSeek review (1 error + 3 warnings in advance_cursor / ack_stop / inline handler); skill to pick up post-reboot
 
-## Awaiting human input
-- #9873 split into 3 sub-tickets vs umbrella (lean: split)
-- Cursor cutover style (lean: clean cutover, no local-file fallback)
-- Then proceed to write CONTEXT-9873-A, -B, -C
+## Recently fixed in main, awaiting transition
+- #9903 (cycle_pre WMI wedge, high) — fixed in e7a47737, skill commented, still status:open
+- #9905 (Windows tasklist 26s wedge, high) — fixed in e7a47737 (same commit), PM nudged this cycle to transition open → pending-test
+- #9904 (cycle_pre _run_script timeouts, medium) — open, not yet picked up
 
-## Other in-flight
-- **#9845** noop event stress-test — status:planned, awaiting human approval. NOTE: should be retrofitted to ride on #9873-A's ack mechanism once that lands.
-- **#9478** at status:pending-test (QA pipeline)
-- **#9837** shipped via #9844 — universal-shipper queries now surface closed-but-labeled pending-ship items
+## Planned / queued backlog (skill)
+- #9873-B / #9891 — event_poll.py to nudge-only role
+- #9873-C / #9892 — agent contract update (nudge-driven read/decide/act/ack walk)
+- #9873-D / #9893 — improvement subloop trigger + token-burn throttle
+- #9873-E / #9894 — timeout_scan re-nudge
+- #9873-F / #9895 — TUI ack visualization (POST-V1)
+- #9888 — singleton invariant review (planning queue)
+- #9845 — noop event type for stress/latency probing (status:planned)
 
-## Pending-ship queue (now visible to DM post-#9837)
-- #9740, #9741, #9742, #9744, #9725, #9772, #9813, #9837 — 8 items
-- Ship counter 11/10, awaiting DM bump
+## PM follow-up TODO (still outstanding)
+- Update vault note decision-event-bus-architecture-redesign.md to reflect ack-cursor/ack-stop split + event_id field name
 
-## Vault writes this session
-- learning-strip-vs-wire-audit-findings (1541)
-- decision-phase-4-event-ack-lifecycle-deferred (1541) — SUPERSEDED in spirit by decision-event-bus-architecture-redesign which rejects Path B entirely
-- decision-event-bus-architecture-redesign (1542)
-
-## Memory rules added this session
-- feedback-proactor-loop-two-bugs
-- feedback-minimal-repro-over-symptom-match
-- feedback-orphan-claude-from-subagents
-- feedback-tracker-comment-prefix
-- feedback-orphan-claude-on-reboot
+## Notes
+- Skill just rebooted; don't repeat #9902 'no pickup' nudge this cycle — give one cycle of grace.
