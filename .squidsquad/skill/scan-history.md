@@ -1396,3 +1396,10 @@
 - **Files scanned**: references/scripts/cycle.py (full 316 lines; focus on status_bar + counter helpers + iteration logging)
 - **Findings**: #9901 (medium — cycle.py::status_bar lacks mkdir + except OSError; 3 drifted copies in cycle.py / cycle_pre.py / cycle_post.py; consolidate or harden the public one)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-05-22 09:59
+
+- **Files scanned**: references/scripts/model_router.py (full 1068 lines; focus on security layers, error paths, output-file handling, CLI surface)
+- **Findings**: #9927 (medium — setup_provider L906-907 still calls `platform.system()`; missed by `e7a47737`'s #9903 sweep; gated behind interactive CLI, not a routine cycle path, but same Windows-WMI wedge surface; drop-in `sys.platform` replacement)
+- **Items rejected by human**: none yet
+- **Notes**: security layers (sandbox check, sensitive-file deny-list, OPENAI_TOOL_DEFS schema, tool whitelist) look solid; `_grep_python` fallback doesn't exclude heavy dirs (node_modules/, dist/) — performance only, not a real defect; quality-gate threshold 200 chars is fine for current task types (NO_FINDINGS responses observed >800 chars).
