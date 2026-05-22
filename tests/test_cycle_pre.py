@@ -919,6 +919,22 @@ class TestE2eCmdShlexSplit:
             "e2e_cmd.split() found — must use shlex.split(e2e_cmd)"
         )
 
+    def test_e2e_cmd_opts_out_of_default_timeout_9904(self):
+        """#9904 DS review: E2E test suites are user-configured commands
+        that can legitimately exceed DEFAULT_SCRIPT_TIMEOUT (60s). The
+        call site must pass ``timeout=None`` so a long-but-legitimate
+        E2E run isn't killed and falsely reported as 'failed'."""
+        import inspect
+        source = inspect.getsource(cycle_pre._build_qa_input)
+        # Locate the E2E _run line specifically.
+        e2e_lines = [l for l in source.splitlines() if "shlex.split(e2e_cmd)" in l]
+        assert e2e_lines, "E2E _run call site not found"
+        assert any("timeout=None" in l for l in e2e_lines), (
+            "E2E _run call must pass timeout=None to opt out of the "
+            "DEFAULT_SCRIPT_TIMEOUT bound — otherwise legitimately long "
+            "E2E runs would be killed and falsely reported as failed."
+        )
+
 
 # ---------------------------------------------------------------------------
 # Multi-role pending-test queries — regression #4803

@@ -948,7 +948,13 @@ def _build_qa_input(role):
     e2e_result = {"result": "skipped", "tests_run": 0, "failures": []}
     e2e_cmd = _config_get("e2e-tests")
     if e2e_cmd and e2e_cmd.strip() and e2e_cmd.strip().lower() not in ("(none)", "none", ""):
-        test_run = _run(shlex.split(e2e_cmd), check=False)
+        # #9904: opt out of DEFAULT_SCRIPT_TIMEOUT here — E2E test suites
+        # are user-configured commands that can legitimately exceed 60s.
+        # Killing a long E2E run and reporting it as "failed" would be a
+        # behavioral regression (DS review finding on the #9904 fix PR).
+        # The tracker-style sub-scripts (tracker.py / config.py /
+        # health_check.py) are bounded; arbitrary user commands are not.
+        test_run = _run(shlex.split(e2e_cmd), check=False, timeout=None)
         if test_run.returncode == 0:
             e2e_result["result"] = "passed"
         else:
