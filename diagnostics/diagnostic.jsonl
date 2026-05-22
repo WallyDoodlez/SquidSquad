@@ -2780,3 +2780,5 @@
 =======
 >>>>>>> b531930013c443b618817e94bbf9ff3a6d32682e
 >>>>>>> 25499afe06ec7b7b0aa980128c153e82ce17cc24
+{"timestamp": "2026-05-22T09:40:42.813233", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #9902: branch squidsquad/task/9902 has 1 unmerged commit(s)"}
+{"timestamp": "2026-05-22T09:40:57.988858", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #9902: branch squidsquad/task/9902 has 1 unmerged commit(s)"}
