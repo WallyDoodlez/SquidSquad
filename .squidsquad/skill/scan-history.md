@@ -1403,3 +1403,10 @@
 - **Findings**: #9927 (medium — setup_provider L906-907 still calls `platform.system()`; missed by `e7a47737`'s #9903 sweep; gated behind interactive CLI, not a routine cycle path, but same Windows-WMI wedge surface; drop-in `sys.platform` replacement)
 - **Items rejected by human**: none yet
 - **Notes**: security layers (sandbox check, sensitive-file deny-list, OPENAI_TOOL_DEFS schema, tool whitelist) look solid; `_grep_python` fallback doesn't exclude heavy dirs (node_modules/, dist/) — performance only, not a real defect; quality-gate threshold 200 chars is fine for current task types (NO_FINDINGS responses observed >800 chars).
+
+## Scan — 2026-05-22 11:06
+
+- **Files scanned**: references/scripts/state_bus.py (full 328 lines; focus on commit_and_push retry semantics + worktree state hygiene + credential-helper interaction)
+- **Findings**: #9930 (medium — state_bus.commit_and_push hits the `credential.helper=manager` wedge (memory `feedback_git_push_credential_wedge`); silent retry loop leaks worktree state between attempts; observed `WARNING: State push failed after 3 attempts` on every session cycle 1250-1256 with merge-commit pollution on the `squid-squad` branch and residual `D iter-1246.md` etc. in the state worktree; 3-layer recommendation: apply `gh auth git-credential` workaround, add per-call timeout (mirror #9904), switch retry pull to `--rebase` or `--ff-only`)
+- **Items rejected by human**: none yet
+- **Notes**: `init()` orphan-branch flow looks atomic with the finally-restore from #3290; `is_state_file` segment matching handles trailing-slash + Windows backslash correctly; `_run` default `check=True` is OK because callers mostly opt out where needed but a few unconditional commits could surprise on first-spawn.
