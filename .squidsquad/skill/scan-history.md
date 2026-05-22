@@ -1390,3 +1390,9 @@
 - **Files scanned**: references/scripts/event_poll.py (per-event loop L251-309; cursor-advance ordering)
 - **Findings**: #9898 (medium — cursor advanced BEFORE emit at L264 vs L271; crash between them loses event silently; recommend swap order + at-least-once + consumer-side dedupe by id)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-05-21 23:35
+
+- **Files scanned**: references/scripts/cycle.py (full 316 lines; focus on status_bar + counter helpers + iteration logging)
+- **Findings**: #9901 (medium — cycle.py::status_bar lacks mkdir + except OSError; 3 drifted copies in cycle.py / cycle_pre.py / cycle_post.py; consolidate or harden the public one)
+- **Items rejected by human**: none yet
