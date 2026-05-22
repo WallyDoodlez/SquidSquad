@@ -226,6 +226,84 @@ class TestEmitEventIdWidth9415:
 # signal; agents do not need a separate post-processing ack call.
 
 
+class TestAckCursor:
+    """#9873-A AC-10: event_bus.ack_cursor(event_id, role) helper."""
+
+    def test_emits_ack_cursor_with_payload(self, mock_server, patch_dirs):
+        port, events = mock_server
+        (patch_dirs / ".harness-port").write_text(str(port))
+        event_bus.ack_cursor("evt-123", "skill")
+        # Give the server a tick to record
+        time.sleep(0.05)
+        assert len(events) == 1
+        e = events[0]
+        assert e["event_type"] == "ack-cursor"
+        assert e["role"] == "skill"
+        assert e["payload"]["event_id"] == "evt-123"
+        assert e["payload"]["role"] == "skill"
+
+    def test_noop_on_empty_event_id(self, mock_server, patch_dirs):
+        port, events = mock_server
+        (patch_dirs / ".harness-port").write_text(str(port))
+        event_bus.ack_cursor("", "skill")
+        time.sleep(0.05)
+        assert events == []
+
+    def test_noop_on_empty_role(self, mock_server, patch_dirs):
+        port, events = mock_server
+        (patch_dirs / ".harness-port").write_text(str(port))
+        event_bus.ack_cursor("evt-123", "")
+        time.sleep(0.05)
+        assert events == []
+
+    def test_silent_on_transport_failure(self, patch_dirs):
+        """No port file → silent no-op, no exception."""
+        # patch_dirs created without a .harness-port file
+        event_bus.ack_cursor("evt-123", "skill")  # must not raise
+
+
+class TestAckStop:
+    """#9873-A AC-11: event_bus.ack_stop(event_id, result) helper."""
+
+    def test_emits_ack_stop_with_payload(self, mock_server, patch_dirs, monkeypatch):
+        port, events = mock_server
+        (patch_dirs / ".harness-port").write_text(str(port))
+        monkeypatch.setenv("SQUIDSQUAD_ROLE", "skill")
+        event_bus.ack_stop("evt-456", "stop-confirmed")
+        time.sleep(0.05)
+        assert len(events) == 1
+        e = events[0]
+        assert e["event_type"] == "ack-stop"
+        assert e["role"] == "skill"
+        assert e["payload"] == {"event_id": "evt-456", "result": "stop-confirmed"}
+
+    def test_noop_on_empty_event_id(self, mock_server, patch_dirs, monkeypatch):
+        port, events = mock_server
+        (patch_dirs / ".harness-port").write_text(str(port))
+        monkeypatch.setenv("SQUIDSQUAD_ROLE", "skill")
+        event_bus.ack_stop("", "stop-confirmed")
+        time.sleep(0.05)
+        assert events == []
+
+    def test_noop_on_empty_result(self, mock_server, patch_dirs, monkeypatch):
+        port, events = mock_server
+        (patch_dirs / ".harness-port").write_text(str(port))
+        monkeypatch.setenv("SQUIDSQUAD_ROLE", "skill")
+        event_bus.ack_stop("evt-456", "")
+        time.sleep(0.05)
+        assert events == []
+
+    def test_noop_when_role_env_unset(self, mock_server, patch_dirs, monkeypatch):
+        """SQUIDSQUAD_ROLE unset → can't infer role → silent no-op (rather
+        than emitting with role=None which the harness would drop)."""
+        port, events = mock_server
+        (patch_dirs / ".harness-port").write_text(str(port))
+        monkeypatch.delenv("SQUIDSQUAD_ROLE", raising=False)
+        event_bus.ack_stop("evt-456", "stop-confirmed")
+        time.sleep(0.05)
+        assert events == []
+
+
 class TestNoUnusedImports:
     """#8193 regression: event bus modules must not have unused imports."""
 

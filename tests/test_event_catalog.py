@@ -49,9 +49,14 @@ class TestCatalogCompleteness:
         assert not missing, f"Core emitted events missing from catalog: {missing}"
 
     def test_recognized_tier_contains_core_events(self):
-        """RECOGNIZED must contain core + L1 event-driven events (#7630)."""
+        """RECOGNIZED must contain core + L1 event-driven events (#7630).
+
+        #9873-A D6: the previous shared ``ack`` RECOGNIZED entry was REPLACED
+        by ``ack-cursor`` and ``ack-stop`` in the EMITTED tier (see the new
+        TestAckEventTypes class below). Do not expect ``ack`` here anymore.
+        """
         core = self.CORE_RECOGNIZED | {
-            "assigned-to", "stop-requested", "shipped", "version-bump", "ack",
+            "assigned-to", "stop-requested", "shipped", "version-bump",
         }
         actual = set(event_catalog.RECOGNIZED.keys())
         missing = core - actual
@@ -110,3 +115,36 @@ class TestListByTier:
         result = event_catalog.list_by_tier("all")
         assert "status-transition" in result
         assert "verification-failed" in result
+
+
+class TestAckEventTypes9873A:
+    """#9873-A D6 / AC-5 / AC-6: the prior shared ``ack`` event type is split
+    into ``ack-cursor`` and ``ack-stop``, both registered in the EMITTED tier.
+    """
+
+    def test_ac5_ack_cursor_in_emitted(self):
+        """AC-5: ack-cursor catalog entry — EMITTED tier."""
+        assert "ack-cursor" in event_catalog.EMITTED
+        entry = event_catalog.EMITTED["ack-cursor"]
+        assert entry["payload_fields"] == ["event_id", "role"]
+        # Description must identify it as the cursor-advance signal
+        assert "cursor" in entry["description"].lower()
+
+    def test_ac6_ack_stop_in_emitted(self):
+        """AC-6: ack-stop catalog entry — EMITTED tier."""
+        assert "ack-stop" in event_catalog.EMITTED
+        entry = event_catalog.EMITTED["ack-stop"]
+        assert entry["payload_fields"] == ["event_id", "result"]
+        # Description must identify it as the stop-confirmation signal
+        assert "stop" in entry["description"].lower()
+
+    def test_ac6_old_ack_entry_removed(self):
+        """AC-6: the old shared ``ack`` RECOGNIZED entry MUST be removed."""
+        assert "ack" not in event_catalog.RECOGNIZED
+        assert "ack" not in event_catalog.EMITTED
+
+    def test_both_classified_as_emitted(self):
+        assert event_catalog.get_tier("ack-cursor") == "emitted"
+        assert event_catalog.get_tier("ack-stop") == "emitted"
+        assert event_catalog.is_valid("ack-cursor") is True
+        assert event_catalog.is_valid("ack-stop") is True

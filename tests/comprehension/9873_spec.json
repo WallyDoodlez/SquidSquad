@@ -1,0 +1,35 @@
+{
+  "issue": 9873,
+  "title": "Event-bus foundation slice (-A): cursor + ack-cursor + ack-stop catalog + GET /events/cursor/{role} — comprehension test agent describes the schema and endpoint from the modified files alone",
+  "files": [
+    "references/scripts/event_catalog.py",
+    "references/scripts/harness.py"
+  ],
+  "questions": [
+    {
+      "id": "1",
+      "question": "Read references/scripts/event_catalog.py. Describe the ack-cursor event type: which tier is it in, what role does the event_bus helper that emits it play, and what fields must its payload carry?",
+      "expected": "ack-cursor is in the EMITTED tier (event_catalog.EMITTED). It is sourced from event_bus.py ack_cursor(). The payload carries event_id and role: event_id is the event the agent has just delivered and wants the harness consumer cursor advanced past, and role is the agent role whose cursor advances. The description identifies it as the cursor-advance signal emitted by agent infrastructure after a poll batch."
+    },
+    {
+      "id": "2",
+      "question": "Read references/scripts/event_catalog.py. Describe the ack-stop event type: which tier, which source helper, and what fields must its payload carry? How does ack-stop differ from ack-cursor?",
+      "expected": "ack-stop is also in EMITTED, sourced from event_bus.py ack_stop(). Payload carries event_id and result: event_id is the stop-request event the agent is confirming; result is the disposition (e.g. \"stop-confirmed\"). It differs from ack-cursor in that it does not advance any cursor — it confirms acceptance of an intent=stopping transition. The harness handler treats result == \"stop-confirmed\" as shutdown confirmation when the agent is in INTENT_STOPPING, without resetting intent_set_at (so it does not extend the 60s force-kill window)."
+    },
+    {
+      "id": "3",
+      "question": "Read references/scripts/event_catalog.py. The previous single \"ack\" event type was split into ack-cursor and ack-stop. Is \"ack\" still a valid event_type? What changed?",
+      "expected": "No, \"ack\" is no longer a registered event type. The prior \"ack\" RECOGNIZED entry was REPLACED (not extended) by the two new EMITTED entries ack-cursor and ack-stop. event_catalog.get_tier(\"ack\") now returns \"unknown\" and event_catalog.is_valid(\"ack\") returns False. The split was made because the two operations (advance the consumer cursor vs confirm a stop intent) have different payload shapes and different consumers in the inline harness handler — combining them under one type required overloading the payload."
+    },
+    {
+      "id": "4",
+      "question": "Read references/scripts/harness.py. What does GET /events/cursor/{role} return when the role has never sent ack-cursor? What HTTP status?",
+      "expected": "It returns HTTP 200 with body {\"cursor\": null, \"role\": \"<role>\"}. The endpoint never returns 404 for a missing cursor — null is the documented absent value. 404 is only returned by the role validator if the requested role is genuinely unknown to the configured agent list. The endpoint reads event_lifecycle.get_cursor(role) which is a lock-free dict.get() — CPython atomic at the interpreter level — so the read does not block the asyncio event loop."
+    },
+    {
+      "id": "5",
+      "question": "Read references/scripts/harness.py. What does GET /events/cursor/{role} return after the harness has processed an ack-cursor event whose payload event_id is in the retained deque?",
+      "expected": "It returns HTTP 200 with body {\"cursor\": \"<event_id>\", \"role\": \"<role>\"} where event_id is the value that was advanced to. The inline ack-handler at the POST /events path branches on event_type==\"ack-cursor\", calls event_lifecycle.advance_cursor(role, event_id) off the asyncio loop via asyncio.to_thread, and persists the updated _cursors[role] to .event-state.json under the \"cursors\" key. Subsequent GET /events/cursor/{role} reads the updated value via the same lock-free dict.get()."
+    }
+  ]
+}

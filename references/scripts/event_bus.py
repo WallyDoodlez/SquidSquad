@@ -139,3 +139,50 @@ def bootup_complete(role):
     if not role:
         return
     emit("bootup-complete", role, payload={})
+
+
+def ack_cursor(event_id, role):
+    """Advance the harness consumer cursor past ``event_id`` for ``role``
+    (#9873-A D10 / AC-10).
+
+    Emits ``event_type="ack-cursor"`` with payload ``{event_id, role}``. The
+    harness inline handler at ``harness.py`` calls ``advance_cursor`` (off
+    the asyncio loop via ``asyncio.to_thread``), which:
+
+    - rejects (silently) if ``event_id`` is no longer in the retained deque
+      (FIFO-evicted) — AC-8 / AC-16
+    - rejects (silently) if ``event_id`` appears earlier in the deque than
+      the current cursor (out-of-order delivery) — AC-17
+    - otherwise advances ``_cursors[role]`` and persists
+
+    No-op when ``event_id`` or ``role`` is empty (defensive guard, no
+    exception). Fire-and-forget — silent on transport failure.
+    """
+    if not event_id or not role:
+        return
+    emit("ack-cursor", role, payload={"event_id": event_id, "role": role})
+
+
+def ack_stop(event_id, result):
+    """Acknowledge a stop request from the harness (#9873-A D10 / AC-11).
+
+    Emits ``event_type="ack-stop"`` with payload ``{event_id, result}``. The
+    harness inline handler preserves the prior ``ack`` stop-confirmed
+    behavior at AC-12 — when ``result == "stop-confirmed"`` and the agent is
+    in ``INTENT_STOPPING``, the harness persists agent state without
+    resetting ``intent_set_at`` (which would extend the 60s force-kill
+    window per CONTEXT-4792 §3.3 Q7).
+
+    The agent's role is read from ``SQUIDSQUAD_ROLE`` (set by
+    ``thin_launcher.py`` at spawn time) — D10 specifies a two-arg signature,
+    and the harness ack-stop handler reads ``body["role"]`` (top-level), so
+    the role must travel via the emit's top-level role param. No-op when
+    ``event_id`` or ``result`` is empty, or when ``SQUIDSQUAD_ROLE`` is
+    unset. Fire-and-forget.
+    """
+    if not event_id or not result:
+        return
+    role = (os.environ.get("SQUIDSQUAD_ROLE") or "").strip()
+    if not role:
+        return
+    emit("ack-stop", role, payload={"event_id": event_id, "result": result})
