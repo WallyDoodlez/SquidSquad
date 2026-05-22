@@ -271,9 +271,77 @@ def _classify(proc, protected):
     return "killed", "orphan (parent dead)"
 
 
+def _pid_is_claude_exe(pid):
+    """#9937: re-verify that ``pid`` still names a ``claude.exe`` process.
+
+    Windows is free to recycle a PID for any executable as soon as the
+    original process exits. The snapshot taken by
+    ``_list_claude_processes()`` at sweep start can become stale by the
+    time ``_kill(pid)`` fires — if the orphan died naturally in the
+    interim and a new unrelated process inherited that PID, our
+    ``taskkill /F`` would terminate the innocent.
+
+    Re-querying via ``tasklist /FI "PID eq <pid>"`` is cheap (~30-80ms)
+    and closes the race. POSIX doesn't have the same reuse pattern at
+    the time scales involved (PIDs are reused much later in the LRU
+    cycle), but we still re-check via ``/proc/<pid>/comm`` where
+    available — defense in depth costs almost nothing here.
+
+    Best-effort: any failure (tasklist missing, /proc unreadable)
+    returns ``False`` (i.e., skip the kill). Killing the wrong process
+    is worse than missing an orphan once — the orphan will reappear
+    on the next sweep, an innocent kill cannot be undone.
+    """
+    if pid is None or pid <= 0:
+        return False
+    if _is_windows():
+        try:
+            result = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+                capture_output=True, text=True, check=False, timeout=10,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+        if result.returncode != 0 or not result.stdout.strip():
+            return False
+        # tasklist CSV format: "Image Name","PID","Session Name",...
+        # The first column is the executable name. Strip outer quotes
+        # and lowercase-compare for safety (Windows is case-insensitive).
+        line = result.stdout.splitlines()[0].strip()
+        if not line.startswith('"'):
+            return False
+        # Image name is everything up to the first '","' separator.
+        end = line.find('","')
+        if end < 0:
+            return False
+        image = line[1:end].lower()
+        return image == "claude.exe"
+    # POSIX: read /proc/<pid>/comm. Limited to Linux; on macOS /proc
+    # doesn't exist and we fall through to False (POSIX orphans are
+    # rare per CONTEXT-9688 D6, so a few skipped kills on macOS is
+    # acceptable).
+    try:
+        with open(f"/proc/{pid}/comm", "r", encoding="utf-8") as f:
+            return f.read().strip() == "claude"
+    except (OSError, ValueError):
+        return False
+
+
 def _kill(pid):
-    """Best-effort taskkill. Returns True on apparent success."""
+    """Best-effort taskkill. Returns True on apparent success.
+
+    #9937: re-verifies the target is still a ``claude.exe`` via
+    :func:`_pid_is_claude_exe` before issuing the kill, so a PID
+    recycled to an unrelated process between snapshot and kill is
+    NOT terminated. The check costs one extra ``tasklist`` call per
+    orphan (~30-80ms); orphan counts are typically 1-3 per sweep so
+    the added latency is trivial vs the safety it buys.
+    """
     if pid <= 0:
+        return False
+    if not _pid_is_claude_exe(pid):
+        # PID either gone (race won the harmless way — orphan already
+        # exited) or recycled to a non-claude process. Skip.
         return False
     if _is_windows():
         try:
