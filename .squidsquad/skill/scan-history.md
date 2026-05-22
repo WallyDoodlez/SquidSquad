@@ -1384,3 +1384,9 @@
 - **Files scanned**: references/scripts/git_ops.py (push call sites at L200, L256, L555, L748; `_run`/`_run_list` helpers L55-70)
 - **Findings**: #9890 (high — git_ops.py push wedges silently under credential.helper=manager; recommend `gh auth git-credential` override + optional timeout defense)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-05-21 22:43
+
+- **Files scanned**: references/scripts/event_poll.py (per-event loop L251-309; cursor-advance ordering)
+- **Findings**: #9898 (medium — cursor advanced BEFORE emit at L264 vs L271; crash between them loses event silently; recommend swap order + at-least-once + consumer-side dedupe by id)
+- **Items rejected by human**: none yet
