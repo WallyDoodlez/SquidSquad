@@ -1,36 +1,38 @@
 # Working State
 
-- **Task**: #9873-A planning fully complete (R2); ready for human approval gate
+- **Task**: idle — pipeline clean, post-recovery observation cycle
 - **Status**: idle
 - **Last Processed Event ID**: 2461e3f1
 
-## #9873-A FOUNDATION SLICE READY
-- RESEARCH-9873-A.md ✓
-- CONTEXT-9873-A.md ✓ (14 decisions)
-- REVIEW-9873-A-DEEPSEEK.md ✓ (1 error + 6 warnings)
-- CONTEXT-9873-A-R2.md ✓ (amendments + 5 new ACs)
-- Ready to: transition planning → planned + human approval → status:approved → skill pickup
+## Pipeline snapshot (2026-05-22 08:49)
+- 0 pending-test, 0 pending-ship, 0 open PRs
+- All four agents rebooted within last 4 min after e7a47737 harness wedge fix
+- harness_status: reachable
 
-## R2 amendments
-- D5: lock-free endpoint read (CPython atomic dict.get())
-- D8: EventStream.has_event() O(n) scan; reject evicted
-- D9: old event_lifecycle.ack() explicitly REMOVED from ack-cursor branch
-- D15 (new): cursor regression detection via deque-position comparison
-- §2 load(): data.get('cursors', {}) backward compat
-- §6: verified lock ordering ELM._lock → EventStream._lock
-- §4: skill audit step pre-merge
+## Just-shipped
+- #9873-A (event-bus foundation: cursor state + ack-cursor/ack-stop split + /events/cursor/{role}) — commit 4796af26
+- v0.42.0 bump (97d78b14, 905ef7b3)
 
-## PM follow-up TODO
-- Update vault note decision-event-bus-architecture-redesign.md to reflect ack-cursor/ack-stop split + event_id field name (outside skill's scope)
+## Active in-flight (skill)
+- #9901 in-progress 450m — status_bar crash drift (three drifted copies of same write)
+- #9902 approved 430m — #9873-A retro DeepSeek review (1 error + 3 warnings in advance_cursor / ack_stop / inline handler); skill to pick up post-reboot
 
-## Next steps awaiting human direction
-- Restructure umbrella into 6 children OR keep #9873 as -A + file 5 children for -B/-C/-D/-E/-F
-- Transition #9873 to planned + human approval gate
-- Skill picks up -A
+## Recently fixed in main, awaiting transition
+- #9903 (cycle_pre WMI wedge, high) — fixed in e7a47737, skill commented, still status:open
+- #9905 (Windows tasklist 26s wedge, high) — fixed in e7a47737 (same commit), PM nudged this cycle to transition open → pending-test
+- #9904 (cycle_pre _run_script timeouts, medium) — open, not yet picked up
 
-## Other in-flight
-- #9888 (singleton invariant review, role:skill, high, planning queue)
-- #9845 noop event — status:planned, will retrofit onto -A's ack machinery once -A lands
-- #9478 still at pending-test (branch_workflow=off)
+## Planned / queued backlog (skill)
+- #9873-B / #9891 — event_poll.py to nudge-only role
+- #9873-C / #9892 — agent contract update (nudge-driven read/decide/act/ack walk)
+- #9873-D / #9893 — improvement subloop trigger + token-burn throttle
+- #9873-E / #9894 — timeout_scan re-nudge
+- #9873-F / #9895 — TUI ack visualization (POST-V1)
+- #9888 — singleton invariant review (planning queue)
+- #9845 — noop event type for stress/latency probing (status:planned)
 
-## Skill healthy
+## PM follow-up TODO (still outstanding)
+- Update vault note decision-event-bus-architecture-redesign.md to reflect ack-cursor/ack-stop split + event_id field name
+
+## Notes
+- Skill just rebooted; don't repeat #9902 'no pickup' nudge this cycle — give one cycle of grace.
