@@ -17,6 +17,7 @@ import json
 import os
 import stat
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -122,7 +123,18 @@ def read_secret_or_env(key):
 
 
 def write_secret(key, value):
-    """Write or update a secret in ~/.squidsquad/secrets."""
+    """Write or update a secret in ~/.squidsquad/secrets.
+
+    #9932: atomic write. ``Path.write_text`` opens in ``'w'`` mode which
+    truncates the destination before writing — a crash between the
+    truncate and the final flush would leave the secrets file empty,
+    losing API keys for every configured provider (not just the one
+    being updated). Instead we write to a sibling ``.tmp``, restrict
+    permissions on it (so the brief window between rename and chmod
+    can't expose the new file with directory default ACLs), and
+    ``os.replace`` for an atomic swap (atomic on both POSIX and
+    Windows per Python docs).
+    """
     secrets_file = get_home() / "secrets"
     if not secrets_file.parent.exists():
         init()
@@ -141,8 +153,28 @@ def write_secret(key, value):
     for k, v in sorted(existing.items()):
         lines.append(f"{k}={v}\n")
 
-    secrets_file.write_text("".join(lines), encoding="utf-8")
-    _restrict_permissions(secrets_file)
+    # #9932: write to a sibling .tmp first, restrict its permissions,
+    # then atomic-rename. NamedTemporaryFile gives us a unique name
+    # in the same directory (so os.replace stays on the same filesystem
+    # and is truly atomic) and cleans up if the write itself raises.
+    tmp_fd, tmp_path = tempfile.mkstemp(
+        prefix=".secrets-", suffix=".tmp", dir=str(secrets_file.parent)
+    )
+    tmp_path = Path(tmp_path)
+    try:
+        with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+            f.write("".join(lines))
+        _restrict_permissions(tmp_path)
+        os.replace(tmp_path, secrets_file)
+    except Exception:
+        # Best-effort cleanup of the tmp file if anything went wrong
+        # between mkstemp and os.replace. The original secrets file is
+        # untouched (the whole point of the atomic-write fix).
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+        raise
     print(f"Secret '{key}' written to {secrets_file}")
 
 

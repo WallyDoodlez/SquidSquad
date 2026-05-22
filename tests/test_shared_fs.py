@@ -193,3 +193,105 @@ class TestCLI:
         assert result is None or result == 0, (
             f"#6818: read-secret returned {result} for empty secret — should be 0"
         )
+
+
+# ---------------------------------------------------------------------------
+# #9932 — write_secret atomic write
+# ---------------------------------------------------------------------------
+
+
+class TestWriteSecretAtomic9932:
+    """#9932: write_secret must write atomically — a crash between
+    truncate and final flush must NOT leave the secrets file empty,
+    because that loses every other API key the user had configured.
+    """
+
+    def test_basic_round_trip(self, tmp_path):
+        """Sanity: write then read still works after the atomic refactor."""
+        fake_home = tmp_path / ".squidsquad"
+        fake_home.mkdir()
+        with patch.object(shared_fs, "get_home", return_value=fake_home):
+            shared_fs.write_secret("MY_KEY", "my-value")
+            assert shared_fs.read_secret("MY_KEY") == "my-value"
+
+    def test_existing_secrets_preserved_on_update(self, tmp_path):
+        """Updating one secret must NOT delete the others — the
+        scenario the bug report described. Old code's truncate-first
+        approach could empty the file mid-write and lose everything.
+        """
+        fake_home = tmp_path / ".squidsquad"
+        fake_home.mkdir()
+        secrets = fake_home / "secrets"
+        secrets.write_text(
+            "OPENAI_API_KEY=sk-aaa\n"
+            "DEEPSEEK_API_KEY=ds-bbb\n"
+            "ANTHROPIC_API_KEY=sk-ant-ccc\n",
+            encoding="utf-8",
+        )
+        with patch.object(shared_fs, "get_home", return_value=fake_home):
+            shared_fs.write_secret("OPENAI_API_KEY", "sk-NEW")
+            assert shared_fs.read_secret("OPENAI_API_KEY") == "sk-NEW"
+            assert shared_fs.read_secret("DEEPSEEK_API_KEY") == "ds-bbb"
+            assert shared_fs.read_secret("ANTHROPIC_API_KEY") == "sk-ant-ccc"
+
+    def test_secrets_file_survives_write_failure(self, tmp_path):
+        """If the tmp-file write itself raises mid-way (simulate disk
+        full / SIGKILL / IOError), the ORIGINAL secrets file must be
+        completely untouched. This is the core #9932 invariant — the
+        pre-fix code couldn't satisfy it because write_text truncated
+        first, so a mid-write crash would leave the file empty.
+        """
+        fake_home = tmp_path / ".squidsquad"
+        fake_home.mkdir()
+        secrets = fake_home / "secrets"
+        original = (
+            "OPENAI_API_KEY=sk-original\n"
+            "DEEPSEEK_API_KEY=ds-original\n"
+        )
+        secrets.write_text(original, encoding="utf-8")
+
+        # Patch os.fdopen to raise as soon as the tmpfile is opened —
+        # simulates a crash AFTER mkstemp succeeded but BEFORE the
+        # content lands. The original file must remain intact.
+        def crashing_fdopen(fd, *args, **kwargs):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            raise OSError("simulated disk full")
+
+        with patch.object(shared_fs, "get_home", return_value=fake_home), \
+             patch.object(shared_fs.os, "fdopen", side_effect=crashing_fdopen):
+            with pytest.raises(OSError, match="simulated disk full"):
+                shared_fs.write_secret("NEW_KEY", "should-not-land")
+
+        # The original secrets file must be byte-for-byte unchanged.
+        assert secrets.read_text(encoding="utf-8") == original, (
+            "#9932: secrets file was modified after a simulated mid-write "
+            "crash — atomic-write invariant violated"
+        )
+        # And no leftover .tmp files should clutter the secrets dir.
+        leftover_tmps = list(fake_home.glob(".secrets-*.tmp"))
+        assert not leftover_tmps, (
+            f"tmp file not cleaned up after failure: {leftover_tmps}"
+        )
+
+    def test_uses_atomic_pattern_in_source(self):
+        """Source-level invariant: write_secret must use ``os.replace``
+        (the atomic rename) and tempfile + .tmp pattern. A future
+        refactor that drops back to ``write_text`` would regress #9932,
+        so we lock the pattern at the source level too."""
+        import inspect
+        source = inspect.getsource(shared_fs.write_secret)
+        assert "os.replace" in source, (
+            "#9932: write_secret must use os.replace for atomic swap"
+        )
+        assert "mkstemp" in source or "NamedTemporaryFile" in source, (
+            "#9932: write_secret must write to a tempfile before renaming"
+        )
+        # Defense in depth: the old `secrets_file.write_text(...)` line
+        # (which truncates before writing) must NOT be present.
+        assert "secrets_file.write_text" not in source, (
+            "#9932 regression: write_secret reverted to direct write_text "
+            "(non-atomic — truncates before writing)"
+        )
