@@ -5,12 +5,12 @@
 - **Last Processed Event ID**: 10daa38a
 - **Quiet Cycle Counter**: 1
 
-## Session Context (checkpoint at cycle 1254 replay-2)
+## Session Context (checkpoint at cycle 1255 post-#9890)
 - Version: v0.41.0
-- Shipped count: 6/10
+- Shipped count: 8/10 (2 more ships unlocks next bump if open-issues stay at 0)
 - Open issues blocking bump: 0
 - Last bump: cycle 1243 (v0.41.0, 20 items)
-- Recent ships: #9687, #9724, #9743, #9741, #9740, #9813
+- Recent ships: #9687, #9724, #9743, #9741, #9740, #9813, #9882, #9890
 - Harness: unreachable this cycle
 - Doc scan: R54 (README ✓, SKILL.md:1-3 ✓). Next: SKILL.md sec 4-6 after 2 more quiet cycles
 - Pending approval: #5773, #8702
