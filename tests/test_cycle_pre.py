@@ -1,6 +1,7 @@
 """Tests for references/scripts/cycle_pre.py — pre-cycle mechanical operations."""
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -254,6 +255,107 @@ class TestDoPull:
         fake.stderr = "fatal: unable to access remote"
         monkeypatch.setattr(cycle_pre, "_run_script", lambda *a, **kw: fake)
         assert cycle_pre._do_pull() == "error"
+
+
+# ---------------------------------------------------------------------------
+# Sub-process timeout guard (#9904)
+# ---------------------------------------------------------------------------
+
+
+class TestRunTimeout9904:
+    """#9904: `_run` / `_run_script` must not block forever — every call site
+    that fans out to a sub-process should have a defensive timeout so a
+    single misbehaving sub-script can't wedge the entire cycle (the symptom
+    that produced #9903).
+    """
+
+    def test_default_timeout_constant_is_bounded(self):
+        """The default must be a positive finite number — not None, not 0."""
+        assert isinstance(cycle_pre.DEFAULT_SCRIPT_TIMEOUT, (int, float))
+        assert cycle_pre.DEFAULT_SCRIPT_TIMEOUT > 0
+        # Sanity: not absurdly large (would defeat the point of the guard).
+        assert cycle_pre.DEFAULT_SCRIPT_TIMEOUT <= 600
+
+    def test_run_forwards_timeout_to_subprocess_run(self, monkeypatch):
+        """Confirms `_run` passes its `timeout` kwarg to subprocess.run."""
+        captured = {}
+
+        def fake_subprocess_run(cmd, **kwargs):
+            captured.update(kwargs)
+            return subprocess.CompletedProcess(cmd, 0, "ok", "")
+
+        monkeypatch.setattr(cycle_pre.subprocess, "run", fake_subprocess_run)
+        cycle_pre._run(["echo", "hi"], timeout=7)
+        assert captured.get("timeout") == 7
+
+    def test_run_default_timeout_passed_when_unspecified(self, monkeypatch):
+        """Callers that don't pass `timeout` get the default — not None."""
+        captured = {}
+
+        def fake_subprocess_run(cmd, **kwargs):
+            captured.update(kwargs)
+            return subprocess.CompletedProcess(cmd, 0, "ok", "")
+
+        monkeypatch.setattr(cycle_pre.subprocess, "run", fake_subprocess_run)
+        cycle_pre._run(["echo", "hi"])
+        assert captured.get("timeout") == cycle_pre.DEFAULT_SCRIPT_TIMEOUT
+
+    def test_run_returns_124_on_timeout(self, monkeypatch, capsys):
+        """On TimeoutExpired, `_run` must return a CompletedProcess with
+        returncode=124 (POSIX convention) — not raise — so existing
+        `if result.returncode != 0` paths degrade gracefully instead of
+        bubbling the exception to abort cycle_pre.
+        """
+
+        def fake_subprocess_run(cmd, **kwargs):
+            raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout", 0))
+
+        monkeypatch.setattr(cycle_pre.subprocess, "run", fake_subprocess_run)
+        result = cycle_pre._run(["python", "wedge.py"], timeout=1)
+        assert result.returncode == 124
+        assert result.stdout == ""
+        assert "TIMEOUT" in result.stderr
+        # Also emits a stderr diagnostic so a wedged sub-script is visible.
+        captured = capsys.readouterr()
+        assert "TIMEOUT" in captured.err
+
+    def test_run_script_forwards_timeout(self, monkeypatch):
+        """_run_script must forward `timeout` to _run — confirms the
+        wrapper doesn't silently swallow the kwarg."""
+        captured = {}
+
+        def fake_run(cmd, **kwargs):
+            captured.update(kwargs)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr(cycle_pre, "_run", fake_run)
+        cycle_pre._run_script("tracker.py", "list-issues", "skill", timeout=15)
+        assert captured.get("timeout") == 15
+
+    def test_run_script_default_timeout_when_unspecified(self, monkeypatch):
+        """_run_script without explicit timeout still bounds the sub-process —
+        the default propagates through the wrapper."""
+        captured = {}
+
+        def fake_run(cmd, **kwargs):
+            captured.update(kwargs)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr(cycle_pre, "_run", fake_run)
+        cycle_pre._run_script("tracker.py", "list-issues", "skill")
+        assert captured.get("timeout") == cycle_pre.DEFAULT_SCRIPT_TIMEOUT
+
+    def test_real_timeout_with_sleep_subprocess(self):
+        """End-to-end: a real subprocess that exceeds the timeout returns
+        124 rather than hanging. Uses a tight 1s timeout against `python -c
+        "import time; time.sleep(5)"` to keep the test fast.
+        """
+        result = cycle_pre._run(
+            [sys.executable, "-c", "import time; time.sleep(5)"],
+            timeout=1,
+        )
+        assert result.returncode == 124
+        assert "TIMEOUT" in result.stderr
 
 
 # ---------------------------------------------------------------------------
@@ -815,6 +917,22 @@ class TestE2eCmdShlexSplit:
         )
         assert "e2e_cmd.split()" not in source, (
             "e2e_cmd.split() found — must use shlex.split(e2e_cmd)"
+        )
+
+    def test_e2e_cmd_opts_out_of_default_timeout_9904(self):
+        """#9904 DS review: E2E test suites are user-configured commands
+        that can legitimately exceed DEFAULT_SCRIPT_TIMEOUT (60s). The
+        call site must pass ``timeout=None`` so a long-but-legitimate
+        E2E run isn't killed and falsely reported as 'failed'."""
+        import inspect
+        source = inspect.getsource(cycle_pre._build_qa_input)
+        # Locate the E2E _run line specifically.
+        e2e_lines = [l for l in source.splitlines() if "shlex.split(e2e_cmd)" in l]
+        assert e2e_lines, "E2E _run call site not found"
+        assert any("timeout=None" in l for l in e2e_lines), (
+            "E2E _run call must pass timeout=None to opt out of the "
+            "DEFAULT_SCRIPT_TIMEOUT bound — otherwise legitimately long "
+            "E2E runs would be killed and falsely reported as failed."
         )
 
 
