@@ -2644,3 +2644,4 @@
 {"timestamp": "2026-05-21T21:36:50.705682", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #9882: branch squidsquad/task/9882 has 1 unmerged commit(s)"}
 {"timestamp": "2026-05-21T21:41:30.085575", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #9882: branch squidsquad/task/9882 has 1 unmerged commit(s)"}
 {"timestamp": "2026-05-21T22:05:21.889527", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #9882: branch squidsquad/task/9882 has 1 unmerged commit(s)"}
+{"timestamp": "2026-05-21T23:04:21.598319", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #9890: branch squidsquad/task/9890 has 1 unmerged commit(s)"}
