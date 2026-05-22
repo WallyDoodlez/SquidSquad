@@ -6,7 +6,7 @@ metadata:
 type: decision
 tags: [event-bus, harness, architecture, ack, cursor, monitor]
 created: 2026-05-21
-updated: 2026-05-21
+updated: 2026-05-21 (rev 2)
 owner: pm
 status: active
 confidence: high
@@ -26,10 +26,18 @@ links: [decision-phase-4-event-ack-lifecycle-deferred, learning-strip-vs-wire-au
 
 ## Implementation contract
 
-### Ack as event-type
-- Ack is a new event type emitted on the bus: `event_type="ack"`, payload `{ack_for: <original_event_id>, role: <self>}`.
-- The harness watches its own deque for `ack` events (new consumer task) and updates per-role state on receipt.
-- The deleted `event_bus.ack()` (in #9813) was reaching for this pattern correctly — its restoration is the right move.
+### Ack as event-type (rev 2 — corrected per #9873-A CONTEXT R2)
+
+**SUPERSEDES the single `event_type=ack` framing above.** Per CONTEXT-9873-A D6 + R2: ack is **split into TWO event types**, both in EMITTED tier:
+
+- `event_type="ack-cursor"` — NEW. Payload `{event_id: str, role: str}`. Used by agent to advance its own cursor past `event_id`. Emit helper: `event_bus.ack_cursor(event_id, role)`.
+- `event_type="ack-stop"` — repurposes the existing shared `event_type=ack` at `harness.py:1544` (the stop-confirmed branch). Payload `{event_id: str, result: str}`. Preserves existing behavior. Emit helper: `event_bus.ack_stop(event_id, result)`.
+
+The previous framing (single `event_type=ack` with payload `{ack_for, role}`) is OBSOLETE. The field name `ack_for` is replaced by `event_id` for consistency with the existing handler's variable naming.
+
+The harness ack-consumer task watches the deque for `ack-cursor` events and updates per-role cursor state on receipt; rejects evicted event_ids and cursor-regression attempts.
+
+The deleted `event_bus.ack()` (in #9813) was reaching for this pattern correctly — its split-reimplementation as `ack_cursor()` + `ack_stop()` is the right move.
 
 ### Ack is emitted by `event_poll.py`, NOT by the agent
 - "Agent received the event" = "event was written to stdout, Monitor turned it into a task-notification, agent's session was woken."
@@ -103,3 +111,4 @@ The `event_bus.ack()` emit-to-stream pattern that was deleted in #9813 — resea
 ## Changelog
 
 - 2026-05-21 — Created by pm-lead. Captures the architectural alignment built across cycles 1541-1542 via human directive and PM reflection. Supersedes the Path A vs Path B framing in `decision-phase-4-event-ack-lifecycle-deferred` (which contemplated `POST /events/{id}/complete` as Path B; this decision rejects that path entirely).
+- 2026-05-21 (rev 2) — Updated by pm-lead. Cycle 1566. Corrected the "Ack as event-type" section to reflect the actual split locked in CONTEXT-9873-A D6 + R2: two event types (`ack-cursor` + `ack-stop`) instead of a single `event_type=ack`; payload field renamed from `ack_for` to `event_id` for consistency with the existing handler variable. Old single-type framing marked OBSOLETE in-place. Other sections (cursor-to-harness, Monitor=nudge-only, event_poll thin, batched ack, subloop semantics) remain in force.
