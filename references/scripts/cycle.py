@@ -64,14 +64,47 @@ def step_marker(message):
 
 
 def status_bar(role, phase, description=""):
-    """Write current-state atomically for status bar display."""
+    """Write current-state atomically for status bar display.
+
+    #9901: silent on failure — the status bar is cosmetic, so its write
+    must NEVER break a cycle. Defensive practices:
+
+    1. ``state_dir.mkdir(parents=True, exist_ok=True)`` so a first-ever
+       write for a role works even before cycle_pre has materialized the
+       directory (e.g., from tests or a fresh repo).
+    2. ``try / except OSError`` around the write+replace so transient I/O
+       failures (disk full, EBUSY on Windows, permission flap) don't
+       propagate. The function still returns the intended content so
+       callers and tests observe the contract; only the disk side-effect
+       is best-effort.
+
+    Replaces the two drifted private copies in ``cycle_pre.py`` and
+    ``cycle_post.py`` — those modules now import this function.
+    """
     state_dir = SQUIDSQUAD_DIR / role
     tmp_path = state_dir / "current-state.tmp"
     final_path = state_dir / "current-state"
 
     content = f"{phase}|{description}" if description else f"{phase}|"
-    tmp_path.write_text(content, encoding="utf-8")
-    tmp_path.replace(final_path)
+    try:
+        state_dir.mkdir(parents=True, exist_ok=True)
+        tmp_path.write_text(content, encoding="utf-8")
+        tmp_path.replace(final_path)
+    except OSError as e:
+        # Cosmetic write — failures must not break the cycle, but log to
+        # stderr so persistent issues don't go unnoticed. Best-effort cleanup
+        # of the `.tmp` file: if write_text succeeded but replace failed,
+        # the tmp would otherwise leak until the next successful write
+        # overwrites it (Windows file-lock on current-state is the realistic
+        # failure mode for the replace step).
+        print(
+            f"WARNING: status_bar write failed for {role}/{phase}: {e}",
+            file=sys.stderr,
+        )
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
     return content
 
 

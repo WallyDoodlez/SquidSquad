@@ -11,6 +11,10 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "references" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import cycle_post
+# #9901: cycle_post._write_status_bar now delegates to cycle.status_bar, which
+# uses cycle.SQUIDSQUAD_DIR — patching only cycle_post.SQUID_DIR would let
+# writes escape to the real repo. Import cycle here so patch_dirs can patch it.
+import cycle
 
 
 # ---------------------------------------------------------------------------
@@ -29,9 +33,18 @@ def squid_dir(tmp_path):
 
 @pytest.fixture
 def patch_dirs(squid_dir, tmp_path, monkeypatch):
-    """Patch REPO_ROOT and SQUID_DIR to use tmp_path."""
+    """Patch REPO_ROOT and SQUID_DIR to use tmp_path.
+
+    #9901: also patch ``cycle.SQUIDSQUAD_DIR`` because
+    ``cycle_post._write_status_bar`` now delegates to ``cycle.status_bar``,
+    which reads from ``cycle.SQUIDSQUAD_DIR``. Without this patch, tests
+    that exercise status-bar writes pollute the real repo's
+    ``.squidsquad/<role>/current-state`` files (DeepSeek finding 1+5).
+    """
     monkeypatch.setattr(cycle_post, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(cycle_post, "SQUID_DIR", squid_dir)
+    monkeypatch.setattr(cycle, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(cycle, "SQUIDSQUAD_DIR", squid_dir)
     return tmp_path
 
 
