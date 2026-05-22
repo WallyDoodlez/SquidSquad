@@ -84,6 +84,21 @@ EMITTED = {
         "source": "harness.py",
         "payload_fields": ["success", "error", "trigger_pr"],
     },
+    # #9873-A D6: the prior single "ack" event type is split into two
+    # distinct types — both EMITTED. ack-cursor is the cursor-advance signal
+    # emitted by agent infrastructure after the harness delivers events;
+    # ack-stop is the stop-confirmation signal emitted by an agent when it
+    # has accepted a stop intent.
+    "ack-cursor": {
+        "description": "Agent acknowledges event delivery — advances the harness consumer cursor past event_id for role. Emitted by agent infrastructure after a poll batch.",
+        "source": "event_bus.py ack_cursor()",
+        "payload_fields": ["event_id", "role"],
+    },
+    "ack-stop": {
+        "description": "Agent acknowledges a stop request — confirms the agent has accepted an intent=stopping transition. Result field carries the disposition (e.g. \"stop-confirmed\").",
+        "source": "event_bus.py ack_stop()",
+        "payload_fields": ["event_id", "result"],
+    },
 }
 
 # Tier 2: recognized -planned/expected, referenced by filters but not yet
@@ -135,11 +150,8 @@ RECOGNIZED = {
         "planned_source": "harness.py (after DM version bump)",
         "payload_fields": ["old_version", "new_version", "items_included"],
     },
-    "ack": {
-        "description": "Agent acknowledges event completion — closes the event lifecycle",
-        "planned_source": "event_bus.py ack()",
-        "payload_fields": ["event_id", "result"],
-    },
+    # #9873-A D6: the prior "ack" RECOGNIZED entry is REPLACED by the
+    # "ack-cursor" and "ack-stop" EMITTED entries above (#9873-A).
 }
 
 

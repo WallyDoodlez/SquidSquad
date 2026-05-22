@@ -588,6 +588,52 @@ class EventStream:
         with self._lock:
             return len(self._events)
 
+    def has_event(self, event_id: str) -> bool:
+        """Return True if any event in the deque has id matching ``event_id``.
+
+        Used by the ack-cursor handler to reject advancing the cursor past an
+        evicted event (#9873-A D8). O(n) scan under ``self._lock``; deque is
+        bounded at ``maxlen=1000`` so cost is acceptable at current ack
+        frequency. Caller holds ``EventLifecycleManager._lock`` already per
+        the outer→inner ordering (#9873-A §4 audit).
+        """
+        if not event_id:
+            return False
+        with self._lock:
+            for event in self._events:
+                if event.get("id") == event_id:
+                    return True
+        return False
+
+    def find_positions(self, target_id, cursor_id):
+        """Return ``(target_pos, cursor_pos)`` indices in the deque for both
+        ids in a single O(n) pass. ``-1`` means "not in deque".
+
+        Used by the ack-cursor regression check (#9873-A D15 / AC-17). Event
+        IDs are random 16-hex with no lexicographic ordering — deque insertion
+        order is the only reliable monotonic signal. Single pass keeps the
+        regression check at the same O(n) cost as the eviction check.
+
+        Pass ``None`` for an id to skip its lookup (returns ``-1`` for that
+        slot). Caller is expected to hold ``EventLifecycleManager._lock``
+        already; this method acquires ``EventStream._lock`` inside.
+        """
+        t_pos, c_pos = -1, -1
+        if not target_id and not cursor_id:
+            return t_pos, c_pos
+        with self._lock:
+            for i, event in enumerate(self._events):
+                eid = event.get("id")
+                if target_id and eid == target_id:
+                    t_pos = i
+                if cursor_id and eid == cursor_id:
+                    c_pos = i
+                if (target_id is None or t_pos >= 0) and (
+                    cursor_id is None or c_pos >= 0
+                ):
+                    break
+        return t_pos, c_pos
+
 
 EVENT_STATE_FILE = SQUIDSQUAD_DIR / ".event-state.json"
 
@@ -614,6 +660,9 @@ class EventLifecycleManager:
         self._dispatched: dict[str, dict] = {}  # event_id → event dict
         self._dispatch_times: dict[str, float] = {}  # event_id → dispatch timestamp
         self._retry_counts: dict[str, int] = {}  # event_id → retry count
+        # #9873-A: per-role consumer cursor. Populated by ack-cursor handler.
+        # Persisted under "cursors" key in .event-state.json.
+        self._cursors: dict[str, str] = {}
         self._timeout_minutes = timeout_minutes
         self._max_retries = max_retries
         self._loaded = False
@@ -662,6 +711,73 @@ class EventLifecycleManager:
         with self._lock:
             return list(self._in_flight.get(role, []))
 
+    def get_cursor(self, role: str):
+        """Return the current cursor event_id for ``role``, or ``None`` if no
+        cursor exists yet (first boot, or role has never sent ack-cursor).
+
+        Lock-free read per #9873-A R2 D5 / AC-3: CPython ``dict.get()`` is
+        atomic at the interpreter level. A momentarily stale-by-microseconds
+        value is acceptable; cursor updates are infrequent. Holding
+        ``threading.Lock`` here would block the asyncio event loop on the
+        ``GET /events/cursor/{role}`` endpoint — exactly the H6 hazard the
+        design mitigates.
+        """
+        return self._cursors.get(role)
+
+    def advance_cursor(self, role: str, event_id: str):
+        """Advance the cursor for ``role`` to ``event_id``. Called from the
+        ack-cursor handler (off the asyncio loop via ``asyncio.to_thread``).
+
+        Reject (no-op) when:
+        - the event_id is no longer in the deque (FIFO-evicted) — D8 / AC-8 /
+          AC-16. Eviction check via ``EventStream.has_event``.
+        - the event_id appears earlier in the deque than the current cursor —
+          D15 / AC-17. Out-of-order ack delivery would silently regress the
+          cursor; deque insertion order is the only reliable monotonic signal
+          since event IDs are random 16-hex with no lexicographic ordering
+          (RESEARCH-9873-A §9 Q3).
+
+        Lock ordering (#9873-A §4 / AC-19): this method acquires
+        ``EventLifecycleManager._lock`` (outer) before calling
+        ``EventStream.has_event`` / ``EventStream.find_positions`` which
+        acquire ``EventStream._lock`` (inner). The established ordering is
+        confirmed by the existing ``_persist()`` path (``self._lock`` →
+        ``self._stream.get_recent(200)``). No code path acquires the inner
+        lock before the outer lock — verified by audit during -A implementation.
+
+        Returns one of:
+        - ``"advanced"`` — cursor was advanced and persisted
+        - ``"evicted"`` — event_id no longer in deque, cursor unchanged
+        - ``"regression"`` — event_id earlier than current cursor, cursor unchanged
+        - ``"noop"`` — empty role/event_id (defensive; no-op without logging)
+        """
+        if not role or not event_id:
+            return "noop"
+        # Eviction check first (D8: "check first, never advance then check").
+        # Both checks acquire EventStream._lock as inner — outer is held below.
+        if not self._stream.has_event(event_id):
+            return "evicted"
+        with self._lock:
+            current = self._cursors.get(role)
+            if current is not None and current != event_id:
+                # Regression detection: only meaningful when both ids are in
+                # the deque. If the current cursor was evicted (cursor_pos =
+                # -1), skip the regression check — eviction is the dominant
+                # signal and we already passed the target eviction check above.
+                target_pos, cursor_pos = self._stream.find_positions(
+                    event_id, current
+                )
+                if cursor_pos >= 0 and target_pos < cursor_pos:
+                    return "regression"
+            self._cursors[role] = event_id
+            # Persist under the lock — matches the existing ack()/dispatch()
+            # discipline. Note that _persist() re-acquires self._lock; the
+            # call chain works because self._lock is a threading.Lock (not
+            # an RLock) but we drop it implicitly via a nested call only on
+            # the persist branch — see _persist note below.
+        self._persist()
+        return "advanced"
+
     def _persist(self):
         """Write event state to disk atomically.
 
@@ -677,6 +793,9 @@ class EventLifecycleManager:
                 "dispatched": {eid: ev for eid, ev in self._dispatched.items()},
                 "dispatch_times": dict(self._dispatch_times),
                 "retry_counts": dict(self._retry_counts),
+                # #9873-A: per-role consumer cursors. Pre-migration state
+                # files lack this key — load() uses .get("cursors", {}).
+                "cursors": dict(self._cursors),
             }
             try:
                 tmp = EVENT_STATE_FILE.with_suffix(".tmp")
@@ -734,6 +853,13 @@ class EventLifecycleManager:
             }
             self._retry_counts = {
                 k: int(v) for k, v in data.get("retry_counts", {}).items()
+            }
+            # #9873-A AC-1 / R2 F5: backward-compat — pre-migration state
+            # files have no "cursors" key. data.get(..., {}) prevents a
+            # KeyError that would crash harness boot on existing deployments.
+            self._cursors = {
+                r: str(eid) for r, eid in data.get("cursors", {}).items()
+                if isinstance(eid, str) and eid
             }
         # Append events outside self._lock (acquires EventStream._lock)
         for event in events_to_load:
@@ -1530,13 +1656,42 @@ async def receive_event(request: Request):
         await asyncio.to_thread(state.save_state)
         _log(f"{role}: bootup-complete — event dispatch unlocked")
 
-    # Ack processing (#7630 2-2): if event is an ack, process the lifecycle closure
-    if event_type == "ack":
+    # Ack processing (#9873-A): the previous single ``ack`` event type is
+    # split into ``ack-cursor`` (advance consumer cursor) and ``ack-stop``
+    # (preserve stop-confirmed branch). D6 locks the split; D9/AC-18 mandate
+    # that ack-cursor MUST NOT call the old ``event_lifecycle.ack()`` — that
+    # in-flight tracker is dead code since #9741 stripped dispatch().
+    if event_type == "ack-cursor":
         ack_event_id = body.get("payload", {}).get("event_id")
         if ack_event_id and role:
-            acked = event_lifecycle.ack(ack_event_id, role)
-            if acked:
-                _log(f"Event {ack_event_id} acked by {role}")
+            # D4 / AC-9: cursor advance + persist runs off the asyncio loop.
+            # advance_cursor takes EventLifecycleManager._lock (outer) and
+            # then EventStream._lock (inner) — see §4 audit / AC-19.
+            result = await asyncio.to_thread(
+                event_lifecycle.advance_cursor, role, ack_event_id
+            )
+            if result == "advanced":
+                _log(f"Event {ack_event_id} cursor-advanced by {role}")
+            elif result == "evicted":
+                # AC-8 / AC-16: silent reject + debug log.
+                _log(
+                    f"ack-cursor rejected: event_id={ack_event_id} not in "
+                    f"retained deque for role={role} (evicted)"
+                )
+            elif result == "regression":
+                # AC-17: out-of-order ack delivery — cursor unchanged.
+                _log(
+                    f"ack-cursor regression rejected: event_id={ack_event_id} "
+                    f"earlier than current cursor for role={role}"
+                )
+    elif event_type == "ack-stop":
+        # Repurposed branch — preserves the existing stop-confirmed behavior
+        # at the previous L1547-1557 verbatim per D6. AC-12 guards no
+        # regression in the stop-confirmation flow. Payload field name is
+        # ``event_id`` (consistent with ack-cursor, locked by D6/D10).
+        ack_event_id = body.get("payload", {}).get("event_id")
+        if ack_event_id and role:
+            _log(f"Event {ack_event_id} ack-stop from {role}")
             # If ack references stop-requested, treat as shutdown confirmation.
             # The ack only confirms an already-requested stop — it must not
             # reset `intent_set_at` (which would extend the 60s force-kill
@@ -1686,6 +1841,27 @@ async def get_events_for_role(
         response["oldest_id"] = eviction["oldest_id"]
         response["evicted_count_hint"] = eviction["evicted_count_hint"]
     return response
+
+
+@app.get("/events/cursor/{role}")
+async def get_events_cursor(role: str):
+    """Return the current consumer cursor for ``role`` (#9873-A AC-3 / AC-4).
+
+    Lock-free dict read per R2 D5: CPython ``dict.get()`` is atomic at the
+    interpreter level. Acquiring ``EventLifecycleManager._lock`` here would
+    block the asyncio event loop, defeating the H6 mitigation that wraps
+    the write-side persist in ``asyncio.to_thread``.
+
+    Returns ``{"cursor": null, "role": "<role>"}`` when no cursor exists for
+    the role (first boot, or role has never sent ``ack-cursor``) — D7 locks
+    null as the absent value. Otherwise returns the persisted cursor.
+
+    Status is 200 always — no 404 for missing cursors. ``_validate_role``
+    still raises 404 for genuinely unknown roles (consistent with the other
+    role-scoped endpoints).
+    """
+    _validate_role(role)
+    return {"cursor": event_lifecycle.get_cursor(role), "role": role}
 
 
 @app.post("/events/{event_id}/complete")

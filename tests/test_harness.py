@@ -1679,6 +1679,258 @@ class TestEventLifecycleManager(unittest.TestCase):
                 self.assertEqual(len(stream2.get_all()), 1)
 
 
+class TestCursorState9873A(unittest.TestCase):
+    """#9873-A: per-role cursor state on EventLifecycleManager + the
+    EventStream.has_event / find_positions helpers used by the ack-cursor
+    handler. Covers AC-1, AC-2, AC-9, AC-15, AC-16, AC-17, AC-18, AC-19.
+    """
+
+    def _fresh_manager(self, tmpdir):
+        from harness import EventStream, EventLifecycleManager
+        state_file = Path(tmpdir) / ".event-state.json"
+        return state_file, EventStream(), EventLifecycleManager
+
+    def test_ac1_cursors_dict_initialized_empty(self):
+        """AC-1 (presence): _cursors is dict[str, str] starting empty."""
+        from harness import EventStream, EventLifecycleManager
+        mgr = EventLifecycleManager(EventStream())
+        self.assertIsInstance(mgr._cursors, dict)
+        self.assertEqual(mgr._cursors, {})
+
+    def test_ac1_load_missing_cursors_key_does_not_crash(self):
+        """AC-1 (backward-compat): load() must use data.get('cursors', {}) so
+        pre-migration .event-state.json files (no 'cursors' key) don't KeyError.
+        """
+        import tempfile, json as _json
+        from harness import EventStream, EventLifecycleManager
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".event-state.json"
+            # Pre-migration shape: no "cursors" key
+            state_file.write_text(_json.dumps({
+                "events": [],
+                "in_flight": {},
+                "dispatched": {},
+                "dispatch_times": {},
+                "retry_counts": {},
+            }), encoding="utf-8")
+            with patch("harness.EVENT_STATE_FILE", state_file):
+                mgr = EventLifecycleManager(EventStream())
+                mgr.load()  # must NOT raise KeyError
+                self.assertEqual(mgr._cursors, {})
+
+    def test_ac2_cursors_persist_round_trip(self):
+        """AC-2: ack-cursor → _cursors mutates → _persist writes → load restores."""
+        import tempfile
+        from harness import EventStream, EventLifecycleManager
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".event-state.json"
+            with patch("harness.EVENT_STATE_FILE", state_file):
+                stream = EventStream()
+                mgr = EventLifecycleManager(stream)
+                mgr.append({"id": "evt1", "event_type": "x"})
+                mgr.advance_cursor("skill", "evt1")
+
+                self.assertTrue(state_file.exists())
+                # Reload — cursor must survive
+                stream2 = EventStream()
+                mgr2 = EventLifecycleManager(stream2)
+                mgr2.load()
+                self.assertEqual(mgr2.get_cursor("skill"), "evt1")
+
+    def test_get_cursor_returns_none_when_absent(self):
+        """D7: no cursor entry → get_cursor returns None."""
+        from harness import EventStream, EventLifecycleManager
+        mgr = EventLifecycleManager(EventStream())
+        self.assertIsNone(mgr.get_cursor("skill"))
+        self.assertIsNone(mgr.get_cursor("pm"))
+
+    def test_advance_cursor_noop_on_empty_args(self):
+        """Defensive: empty role or event_id is a no-op without raising."""
+        from harness import EventStream, EventLifecycleManager
+        mgr = EventLifecycleManager(EventStream())
+        self.assertEqual(mgr.advance_cursor("", "evt1"), "noop")
+        self.assertEqual(mgr.advance_cursor("skill", ""), "noop")
+        self.assertEqual(mgr._cursors, {})
+
+    def test_ac8_ac16_evicted_event_id_rejected(self):
+        """AC-8 / AC-16: cursor not advanced when event_id is not in deque."""
+        from harness import EventStream, EventLifecycleManager
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
+            mgr = EventLifecycleManager(EventStream())
+            # No events appended → has_event returns False for any id
+            result = mgr.advance_cursor("skill", "phantom-event")
+            self.assertEqual(result, "evicted")
+            self.assertIsNone(mgr.get_cursor("skill"))
+
+    def test_ac7_valid_ack_advances_cursor(self):
+        """AC-7: event_id present in deque → cursor advances to that id."""
+        from harness import EventStream, EventLifecycleManager
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
+            stream = EventStream()
+            stream.append({"id": "evt1", "event_type": "x"})
+            stream.append({"id": "evt2", "event_type": "x"})
+            mgr = EventLifecycleManager(stream)
+            result = mgr.advance_cursor("skill", "evt2")
+            self.assertEqual(result, "advanced")
+            self.assertEqual(mgr.get_cursor("skill"), "evt2")
+
+    def test_ac17_regression_rejected(self):
+        """AC-17 / D15: ack for an event earlier in the deque than the
+        current cursor is rejected (cursor unchanged)."""
+        from harness import EventStream, EventLifecycleManager
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
+            stream = EventStream()
+            stream.append({"id": "evt1", "event_type": "x"})
+            stream.append({"id": "evt2", "event_type": "x"})
+            stream.append({"id": "evt3", "event_type": "x"})
+            mgr = EventLifecycleManager(stream)
+            # Advance to evt3 first
+            mgr.advance_cursor("skill", "evt3")
+            self.assertEqual(mgr.get_cursor("skill"), "evt3")
+            # Out-of-order ack for evt1 (earlier in deque) — rejected
+            result = mgr.advance_cursor("skill", "evt1")
+            self.assertEqual(result, "regression")
+            self.assertEqual(mgr.get_cursor("skill"), "evt3")
+
+    def test_ac17_regression_check_skipped_when_no_prior_cursor(self):
+        """AC-17 edge: first ack — no prior cursor — accepts normally."""
+        from harness import EventStream, EventLifecycleManager
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
+            stream = EventStream()
+            stream.append({"id": "evt1", "event_type": "x"})
+            mgr = EventLifecycleManager(stream)
+            result = mgr.advance_cursor("skill", "evt1")
+            self.assertEqual(result, "advanced")
+
+    def test_ac17_regression_check_proceeds_when_prior_cursor_evicted(self):
+        """AC-17 edge: if the current cursor itself is no longer in the deque
+        (prior eviction), regression check is skipped — eviction check on the
+        target dominates, and we accept the target if it IS in the deque.
+        """
+        from harness import EventStream, EventLifecycleManager
+        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
+            stream = EventStream()
+            stream.append({"id": "evt-new", "event_type": "x"})
+            mgr = EventLifecycleManager(stream)
+            # Force a stale cursor that's no longer in the deque
+            mgr._cursors["skill"] = "evt-evicted"
+            result = mgr.advance_cursor("skill", "evt-new")
+            self.assertEqual(result, "advanced")
+            self.assertEqual(mgr.get_cursor("skill"), "evt-new")
+
+    def test_ac15_has_event_true_when_present(self):
+        """AC-15: EventStream.has_event returns True for an id in the deque."""
+        from harness import EventStream
+        stream = EventStream()
+        stream.append({"id": "abc", "event_type": "x"})
+        stream.append({"id": "def", "event_type": "y"})
+        self.assertTrue(stream.has_event("abc"))
+        self.assertTrue(stream.has_event("def"))
+
+    def test_ac15_has_event_false_when_absent(self):
+        """AC-15: has_event returns False for unknown id and for empty string."""
+        from harness import EventStream
+        stream = EventStream()
+        stream.append({"id": "abc", "event_type": "x"})
+        self.assertFalse(stream.has_event("missing"))
+        self.assertFalse(stream.has_event(""))
+        self.assertFalse(stream.has_event(None))
+
+    def test_find_positions_single_pass(self):
+        """find_positions returns indices for both ids; -1 means not in deque."""
+        from harness import EventStream
+        stream = EventStream()
+        stream.append({"id": "a", "event_type": "x"})
+        stream.append({"id": "b", "event_type": "x"})
+        stream.append({"id": "c", "event_type": "x"})
+        # Both present
+        t, c = stream.find_positions("c", "a")
+        self.assertEqual((t, c), (2, 0))
+        # Target missing
+        t, c = stream.find_positions("missing", "b")
+        self.assertEqual((t, c), (-1, 1))
+        # Cursor missing
+        t, c = stream.find_positions("a", "missing")
+        self.assertEqual((t, c), (0, -1))
+        # Both None — early return
+        t, c = stream.find_positions(None, None)
+        self.assertEqual((t, c), (-1, -1))
+
+    def test_ac18_old_ack_call_absent_from_ack_cursor_branch(self):
+        """AC-18 (source-level): the inline ack-handler in harness.py must
+        NOT call event_lifecycle.ack() from the ack-cursor branch."""
+        import re
+        src = (Path(__file__).resolve().parent.parent
+               / "references" / "scripts" / "harness.py").read_text(encoding="utf-8")
+        # Find the ack-cursor branch — bracket from the if line to the next
+        # elif or end-of-ack-block.
+        m = re.search(
+            r'if event_type == "ack-cursor":(.*?)(?=elif event_type == "ack-stop":)',
+            src, re.DOTALL,
+        )
+        self.assertIsNotNone(
+            m, "ack-cursor branch not found — handler split missing?"
+        )
+        branch = m.group(1)
+        self.assertNotIn(
+            "event_lifecycle.ack(", branch,
+            "ack-cursor branch MUST NOT call event_lifecycle.ack() per AC-18",
+        )
+
+    def test_ac19_lock_ordering_comment_present(self):
+        """AC-19 (source-level): advance_cursor docstring documents the
+        outer→inner lock ordering. The audit step ships as a comment on the
+        method per R2 §4 PR gate.
+        """
+        src = (Path(__file__).resolve().parent.parent
+               / "references" / "scripts" / "harness.py").read_text(encoding="utf-8")
+        self.assertIn("def advance_cursor", src)
+        idx = src.index("def advance_cursor")
+        # Look at the next ~3000 chars of the method for the lock-ordering note
+        body = src[idx:idx + 3000]
+        self.assertIn("Lock ordering", body)
+        self.assertIn("EventLifecycleManager._lock", body)
+        self.assertIn("EventStream._lock", body)
+
+
+class TestCursorEndpoint9873A(unittest.TestCase):
+    """#9873-A: GET /events/cursor/{role} — AC-3, AC-4."""
+
+    @classmethod
+    def setUpClass(cls):
+        from fastapi.testclient import TestClient
+        from harness import app
+        cls.client = TestClient(app, raise_server_exceptions=False)
+
+    def test_ac3_null_cursor_returns_200(self):
+        """AC-3: no cursor for role → 200 with {cursor: null, role}."""
+        from harness import event_lifecycle
+        # Ensure no cursor for an arbitrary valid role
+        event_lifecycle._cursors.pop("skill", None)
+        with patch("harness.boot_remote._get_all_roles", return_value=["skill"]):
+            resp = self.client.get("/events/cursor/skill")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"cursor": None, "role": "skill"})
+
+    def test_ac4_present_cursor_returns_value(self):
+        """AC-4: cursor set → 200 with the cursor value."""
+        from harness import event_lifecycle
+        event_lifecycle._cursors["skill"] = "evt-xyz"
+        try:
+            with patch("harness.boot_remote._get_all_roles", return_value=["skill"]):
+                resp = self.client.get("/events/cursor/skill")
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.json(), {"cursor": "evt-xyz", "role": "skill"})
+        finally:
+            event_lifecycle._cursors.pop("skill", None)
+
+    def test_unknown_role_returns_404(self):
+        """_validate_role still rejects unknown roles."""
+        with patch("harness.boot_remote._get_all_roles", return_value=["skill"]):
+            resp = self.client.get("/events/cursor/bogus")
+        self.assertEqual(resp.status_code, 404)
+
+
 class TestTerminalPidInAgentState(unittest.TestCase):
     """#7630 P-6: terminal_pid in AgentState."""
 
