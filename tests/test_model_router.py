@@ -735,3 +735,78 @@ class TestEnsureYaml:
         # Should only appear inside _ensure_yaml (2 times: try + after install)
         assert len(import_lines) <= 2, \
             f"Found {len(import_lines)} bare 'import yaml' lines — should be ≤2 (inside _ensure_yaml only)"
+
+
+# ---------------------------------------------------------------------------
+# #9927 / #9903 Windows-WMI wedge surface — no platform.system() calls
+# ---------------------------------------------------------------------------
+
+
+class TestNoPlatformSystem9927:
+    """#9927: model_router.py must not call ``platform.system()`` — that
+    API triggers a WMI query on Windows that can hang indefinitely
+    (#9903 root cause). Commit ``e7a47737`` swept the pattern across six
+    other files but missed ``setup_provider`` in this module. This test
+    locks that regression closed.
+    """
+
+    def test_no_platform_system_calls(self):
+        """No executable ``platform.system()`` call (direct or aliased)
+        anywhere in the module. AST-based check ignores comments and
+        docstrings (which legitimately mention the API when documenting
+        why it's been removed).
+        """
+        import ast
+        source_path = model_router.SCRIPT_DIR / "model_router.py"
+        tree = ast.parse(source_path.read_text(encoding="utf-8"))
+
+        # Collect every `import platform [as <alias>]` to know what name
+        # to flag in subsequent attribute access.
+        platform_aliases = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for n in node.names:
+                    if n.name == "platform":
+                        platform_aliases.add(n.asname or n.name)
+
+        # No platform import at all is the strongest invariant.
+        assert not platform_aliases, (
+            f"`import platform` detected in model_router.py "
+            f"(aliases: {platform_aliases}) — the module must not depend "
+            f"on the `platform` stdlib (#9927). Use sys.platform for OS "
+            f"branching to avoid the Windows-WMI wedge (#9903)."
+        )
+
+        # Defense in depth: even if a future change re-adds `import platform`
+        # in a way this test misses, also reject `.system(` calls on any
+        # name that walks like a platform module attribute.
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                if node.func.attr == "system" and isinstance(node.func.value, ast.Name):
+                    name = node.func.value.id
+                    # os.system is also unwelcome here (no shell execution
+                    # in this module), but the specific WMI wedge target
+                    # is platform.system(). Flag both for safety.
+                    assert name not in ("platform",) and name not in platform_aliases, (
+                        f"Call to {name}.system() at line {node.lineno} — "
+                        f"this is the #9903 WMI wedge surface. Use sys.platform."
+                    )
+
+    def test_setup_provider_uses_sys_platform(self):
+        """The specific call site (``setup_provider``) — the one that
+        was missed by ``e7a47737`` — must branch on ``sys.platform``."""
+        import inspect
+        source = inspect.getsource(model_router.setup_provider)
+        assert "sys.platform" in source, (
+            "setup_provider must branch on sys.platform for cross-platform "
+            "editor opening — using platform.system() instead would re-open "
+            "the #9903 WMI wedge surface."
+        )
+        # And specifically check the win32 branch is present (the Windows
+        # branch is the one whose absence would be most painful — startfile
+        # is the only way to open a file in the default editor on Windows).
+        assert 'sys.platform == "win32"' in source or \
+               "sys.platform == 'win32'" in source, (
+            "setup_provider must specifically check sys.platform == 'win32' "
+            "for the os.startfile() branch (Windows editor open)."
+        )
