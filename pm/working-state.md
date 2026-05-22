@@ -1,35 +1,40 @@
 # Working State
 
-- **Task**: idle — pipeline empty, two PM-owned tasks at status:planned awaiting human approval
+- **Task**: idle — pipeline empty, all advancement gated on human approval
 - **Status**: idle
 - **Last Processed Event ID**: 88fe94b376fd2963
 
-## Pipeline snapshot (2026-05-22 17:18)
+## Pipeline snapshot (2026-05-22 17:32)
 - 0 PRs open, 0 pending-test, 0 pending-ship, 0 external issues
-- harness reachable, all 4 agents alive (dm 8m, qa 14m, skill 12m idle)
-- Version v0.43.0 (bumped from v0.42.0 since last PM cycle)
+- harness reachable, all 4 agents healthy
+- Version v0.43.0
 
-## PM-owned tasks at status:planned (awaiting human approval gate)
-- #9925 — Clarify inter-agent work boundaries (L1+L2+L3). CONTEXT-9925.md locked. DS-reviewed, 7 findings resolved.
-- #9926 — orphan_cleanup.py D3 per-role skip. CONTEXT-9926.md locked. DS-reviewed, 7 findings resolved.
+## BOTTLENECK: skill approved queue is empty
+Skill cannot pick up work because nothing is at status:approved. Three tasks at status:planned await human approval gate:
 
-## Shipped since cycle 1574 (autonomous, 7.5 hours of activity)
-- #9901 status_bar drift consolidation (PR #9911)
-- #9902 #9873-A retro DeepSeek findings (PR #9923)
-- #9903 + #9905 harness wedge direct-to-main hotfix (e7a47737)
-- #9904 cycle_pre _run_script timeouts (PR #9924)
-- #9927 model_router.py missed platform.system() (skill self-filed follow-up to e7a47737 sweep, PR #9929)
-- #9934 divergence diagnostic
-- #9937 orphan_cleanup PID-reuse race (independent from #9926 — different root cause)
-- #9939 migrate_state_branch silent failure
-- #9941 boot_remote O_EXCL atomic claim
-- v0.43.0 version bump
+- #9845 — Add noop event type for harness/event-mode stress testing (oldest, ~1+ day)
+- #9925 — Clarify inter-agent work boundaries (Draft 3 CONTEXT just posted; 3-layer model: L1 awareness + L2 role-in-general + L3 variant-specific stubs)
+- #9926 — orphan_cleanup.py D3 per-role skip (Fix 1 locked; DS-reviewed)
 
-## Notes & observations
-- #9937 vs #9926 — orphan_cleanup has had TWO independent fixes in flight: PID-reuse race (#9937, shipped) and D3 conservatism (#9926, my pending task). No scope overlap. Skill should NOT bundle them.
-- Recent_events again contained synthetic test traffic on #42/#55/#269 — same as previous cycles; ignored.
-- Stale planning artifacts deleted this cycle: SPEC-9925.md, SPEC-9926.md (intermediates superseded by CONTEXT files), .pipeline-snapshot.json (temp diagnostic).
+All three are PM-owned tasks I've planned to completion. Awaiting `planned → approved` transition by human.
 
-## PM follow-up TODO
-- Update vault note decision-event-bus-architecture-redesign.md (still outstanding from prior cycle)
-- Confirm with human on #9925 + #9926 approval to advance planned → approved
+## Skill queue depth
+- approved: 0 (BOTTLENECK)
+- planning: 2 (#9874 harness internal arch review, #9875 L2 vault writeback — both still in PM intake)
+- planned: 3 (above)
+- pending: many (backlog from prior cycles, low priority)
+
+## PM-owned tasks I should also progress
+- #9874 (harness internal architecture review) — still in planning, no RESEARCH yet
+- #9875 (L2 vault writeback) — still in planning, no RESEARCH yet
+- #9739 (degraded-mode autonomous-fallback events, role:pm, pending) — not started
+- #9912 (tighten external-model code-review against tool-use loop, role:pm, pending) — not started
+- #8997 (PM improvement scan autonomous L4 writes, role:pm, pending) — not started
+
+## Shipped since cycle 1575
+- (nothing new this cycle — last activity was #9941 boot_remote O_EXCL shipped at 17:09)
+
+## Notes
+- Recent_events again contained synthetic test traffic on #42/#55/#269 — ignored.
+- Mechanical reactions list (6 entries) was backlog confirmation of already-shipped work, no new action needed.
+- This is the second consecutive quiet cycle from PM's perspective; the autonomous loops did the heavy lifting earlier.
