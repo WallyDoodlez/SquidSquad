@@ -23,3 +23,5 @@ includes:
   - common/self-restart
   - common/agent-lifecycle
   - roles/dm/prohibitions
+  - common/agent-boundaries
+  - roles/dm/responsibility
