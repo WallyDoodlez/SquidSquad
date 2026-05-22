@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.42.0] — 2026-05-22
+
+### Added
+- #9873 — Event-bus foundation (slice -A of the larger redesign): per-role delivery cursor in the harness, plus a dual-ack split between `ack-cursor` (consumer-side advance) and `ack-stop` (legacy stop-confirmed). Foundation for the remaining nudge-driven slices.
+
+### Fixed
+- #9687 — `cycle_post.py` remote-branch check now retries after a short sleep when the push→ls-remote race fires; auto-transitions no longer stall on that timing window.
+- #9724 — Repaired 4 stale mocks in `test_run_comprehension*`; the comprehension test suite runs cleanly on `main` again.
+- #9740 — Closed a per-event advance race in `event_poll.py` that lost an event when the cursor re-anchored mid-loop.
+- #9741 — Events delivered via `GET /events/for/{role}` are now properly acked by agents; the back-pressure gap that left in-flight events un-acked is fixed.
+- #9743 — `idle-cooldown-loop.md` now documents Monitor output buffering during indefinite waits, so the timing assumptions are explicit instead of implicit.
+- #9813 — `event_bus.ack()` now actually runs the ack path instead of being a dead stub.
+- #9882 — `config.py` module docstring now lists the `alias`, `sync-agents`, and `list-agents` CLI subcommands.
+- #9890 — `git_ops.py` push sites can no longer wedge silently under `credential.helper=manager` (GCM); the new `_git_push` helper adds an explicit timeout and a token-helper override.
+- #9898 — `event_poll.py` now emits the event **before** advancing the cursor, restoring at-least-once delivery (a crash between the two lines no longer drops the event). Bridges until #9873-B lands the full ack contract.
+
 ## [0.41.0] — 2026-05-21
 
 ### Added
