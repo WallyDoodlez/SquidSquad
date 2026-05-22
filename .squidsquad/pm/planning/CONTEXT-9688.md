@@ -34,9 +34,15 @@ Algorithm:
 
 ### D3. Missing or stale `.claude-pid` handling (Q3)
 
-**Locked: skip cleanup for this run if ANY role's `.claude-pid` is missing or its referenced cmd.exe PID is dead.**
+**SUPERSEDED-BY-#9926 (per-role skip)** — see `.squidsquad/pm/planning/CONTEXT-9926.md`.
 
-Reasoning: rather miss orphans than kill a real agent by mistake. A missing `.claude-pid` could mean the agent is mid-respawn — wait for next cleanup cycle when state has stabilized.
+The original D3 ("skip cleanup for this run if ANY role's `.claude-pid` is missing or its referenced cmd.exe PID is dead") was correct under steady state but counter-productive during the wedge/reboot episodes that *create* orphans. #9926 loosens this to a **per-role skip**: a role with a stale `.claude-pid` is excluded from the protected set, but the sweep proceeds for other roles. A **zero-healthy-roles backstop** (CONTEXT-9926 D2) preserves the original abort-the-sweep semantics for the all-roles-unhealthy case where there's no useful protection to enforce.
+
+The original locked text is preserved below for historical reference; the live behavior is encoded in #9926.
+
+> **Locked (PRE-#9926, NOW SUPERSEDED): skip cleanup for this run if ANY role's `.claude-pid` is missing or its referenced cmd.exe PID is dead.**
+>
+> Reasoning: rather miss orphans than kill a real agent by mistake. A missing `.claude-pid` could mean the agent is mid-respawn — wait for next cleanup cycle when state has stabilized.
 
 ### D4. Logging (Q4)
 
@@ -78,7 +84,7 @@ Test cases:
 - 4 protected agents (full squad) → no kills.
 - 1 protected + 1 orphan (claude.exe with dead parent) → 1 kill, parent PID logged.
 - 1 protected + 1 live subagent (claude.exe with non-protected live parent) → no kills.
-- Missing `.claude-pid` for one role → entire cleanup skipped (D3).
+- Missing `.claude-pid` for one role → entire cleanup skipped (D3). _(superseded by #9926 — per-role skip; only the affected role is excluded from the protected set, the sweep proceeds for healthy roles.)_
 - Mix of all populations → only orphans killed.
 
 ### D8. Architecture doc update (NEW — folded in from human direction)
