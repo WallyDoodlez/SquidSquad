@@ -1378,3 +1378,9 @@
 - **Files scanned**: references/scripts/thin_launcher.py (full 207 lines)
 - **Findings**: none (singleton enforcement via PID check sound, atomic PID write, OSError handled with warn-and-continue so claude is not orphaned (#8879 pattern preserved), KeyboardInterrupt path bounded with 30s timeout + kill)
 - **Items rejected by human**: none yet
+
+## Scan — 2026-05-21 21:06
+
+- **Files scanned**: references/scripts/git_ops.py (push call sites at L200, L256, L555, L748; `_run`/`_run_list` helpers L55-70)
+- **Findings**: #9890 (high — git_ops.py push wedges silently under credential.helper=manager; recommend `gh auth git-credential` override + optional timeout defense)
+- **Items rejected by human**: none yet
