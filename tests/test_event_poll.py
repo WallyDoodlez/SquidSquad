@@ -402,11 +402,13 @@ class TestCursorAdvancement:
         monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
         event_poll.poll("skill", sleep=no_sleep)
 
-        # write e1, print e1, write e2, print e2, write e3, print e3
+        # #9898: emit-before-advance — print e1, write e1, print e2, ...
+        # Per-event interleaving still holds (the cursor advances after each
+        # event, not once per batch); only the within-event order changed.
         assert ops == [
-            ("write", "e1"), ("print", "e1"),
-            ("write", "e2"), ("print", "e2"),
-            ("write", "e3"), ("print", "e3"),
+            ("print", "e1"), ("write", "e1"),
+            ("print", "e2"), ("write", "e2"),
+            ("print", "e3"), ("write", "e3"),
         ]
 
 
@@ -455,8 +457,11 @@ class TestHarnessUnreachable:
 
 class TestCursorWriteFailureGatesEmission:
     """Review iter-1 finding 1: silent cursor-write failure caused
-    re-delivery loops. Cursor write must (a) log to stderr and (b) gate
-    the print so we don't act on an event whose cursor was lost."""
+    re-delivery loops. Cursor write must (a) log to stderr and (b) still
+    abort the batch by returning None — but per #9898 the event is now
+    emitted BEFORE the cursor advances, so the first event of a batch IS
+    on stdout when the cursor write fails (at-least-once contract;
+    consumers must dedupe by event id)."""
 
     def test_write_failure_returns_false_and_logs(self, monkeypatch, tmp_path,
                                                    capsys):
@@ -469,9 +474,14 @@ class TestCursorWriteFailureGatesEmission:
         assert event_poll._write_cursor_atomic("skill", "x") is False
         assert "cursor write failed" in capsys.readouterr().err
 
-    def test_poll_skips_print_when_cursor_write_fails(
+    def test_poll_emits_first_event_before_cursor_write_fails(
         self, monkeypatch, stub_port, stub_cursor, capsys, no_sleep,
     ):
+        """#9898: emit-before-advance — when cursor write fails for the
+        first event in a batch, that event has already been emitted to
+        stdout. Subsequent events in the batch are NOT emitted because
+        poll() returns None on the cursor failure.
+        """
         import builtins
         monkeypatch.setattr(event_poll, "_write_cursor_atomic",
                             lambda r, c: False)
@@ -487,8 +497,11 @@ class TestCursorWriteFailureGatesEmission:
         fake, _ = _make_urlopen([[{"id": "e1"}, {"id": "e2"}]])
         monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
         event_poll.poll("skill", sleep=no_sleep)
-        # First event's cursor advance fails → no events printed at all
-        assert stdout_lines == []
+        # First event IS emitted (emit-before-advance). Second event is NOT
+        # emitted — poll() returned None on the cursor failure for e1.
+        # Consumer dedupes the re-delivered e1 on the next poll by id.
+        assert len(stdout_lines) == 1
+        assert json.loads(stdout_lines[0])["id"] == "e1"
 
     def test_poll_returns_none_when_cursor_fails(
         self, monkeypatch, stub_port, stub_cursor, no_sleep,
@@ -501,6 +514,54 @@ class TestCursorWriteFailureGatesEmission:
         fake, _ = _make_urlopen([[{"id": "e1"}]])
         monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
         assert event_poll.poll("skill", sleep=no_sleep) is None
+
+
+class TestEmitBeforeAdvance9898:
+    """#9898: per-event loop emits to stdout BEFORE advancing the cursor.
+
+    The previous order (cursor advance first, then print) was at-most-once
+    with no consumer-side recovery — a crash between the two operations
+    (most plausibly BrokenPipeError on the flushed print) left the cursor
+    past an unemitted event. The new order is at-least-once: a crash
+    between print and cursor-advance means the next poll re-fetches the
+    just-emitted event, which the consumer can dedupe by id.
+    """
+
+    def test_print_called_before_cursor_write(
+        self, monkeypatch, stub_port, stub_cursor, capsys, no_sleep,
+    ):
+        """Capture the call order: each event's print(json.dumps(event))
+        on stdout must happen BEFORE its _write_cursor_atomic call."""
+        import builtins
+        call_log = []
+        real_print = builtins.print
+
+        def _spy_print(*args, **kwargs):
+            if kwargs.get("file") is not sys.stderr:
+                # Stdout emit — record the event id
+                try:
+                    obj = json.loads(args[0])
+                    call_log.append(("emit", obj.get("id")))
+                except (ValueError, TypeError):
+                    pass
+            return real_print(*args, **kwargs)
+
+        def _spy_cursor(role, cursor):
+            call_log.append(("cursor", cursor))
+            return True
+
+        monkeypatch.setattr(builtins, "print", _spy_print)
+        monkeypatch.setattr(event_poll, "_write_cursor_atomic", _spy_cursor)
+        fake, _ = _make_urlopen([[{"id": "e1"}, {"id": "e2"}, {"id": "e3"}]])
+        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
+        event_poll.poll("skill", sleep=no_sleep)
+
+        # Each event's emit must come before its cursor advance.
+        assert call_log == [
+            ("emit", "e1"), ("cursor", "e1"),
+            ("emit", "e2"), ("cursor", "e2"),
+            ("emit", "e3"), ("cursor", "e3"),
+        ], call_log
 
 
 class TestEventWithoutId:

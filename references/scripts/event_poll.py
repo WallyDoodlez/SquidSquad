@@ -261,6 +261,27 @@ def poll(role, since=None, limit=50, target_mode=False,
                     print(f"WARNING: event has no id; skipping: {event!r}",
                           file=sys.stderr)
                     continue
+                # #9898: emit BEFORE advancing the cursor. Previously the
+                # order was reversed — cursor advanced, then print(). A crash
+                # between the two (most plausibly BrokenPipeError from the
+                # flushed print when Monitor's downstream pipe drops) would
+                # leave the cursor past an unemitted event → silent loss
+                # (at-most-once with no consumer-side recovery).
+                #
+                # Emit-then-advance makes the contract at-least-once: a crash
+                # between print() and _write_cursor_atomic() means the next
+                # poll re-fetches the just-emitted event, which Monitor /
+                # downstream consumers can dedupe by event id. Idempotent
+                # consumers are already required by the #9740 eviction-
+                # re-anchor path (where the cursor moves to oldest_id while
+                # earlier events in the same batch were already emitted), so
+                # this is not a new requirement on consumers — it's the
+                # contract this poll loop was already implicitly relying on.
+                #
+                # When #9873-B lands, this whole branch is replaced by an
+                # ack-cursor emit to the harness. Until then this ordering
+                # closes the loss window.
+                print(json.dumps(event), flush=True)
                 if not _write_cursor_atomic(role, str(event_id)):
                     # Cursor advance failed (disk full / permission). Return
                     # None so callers treat this like any other fatal error
@@ -268,7 +289,6 @@ def poll(role, since=None, limit=50, target_mode=False,
                     # intervention required — silently looping at HTTP-rate
                     # would burn CPU and re-fetch the same events forever.
                     return None
-                print(json.dumps(event), flush=True)
             # #9740: eviction re-anchor (post-loop). Only write `oldest_id`
             # when the batch was empty AFTER role-filtering — otherwise the
             # per-event advance above has already left the cursor at a valid
