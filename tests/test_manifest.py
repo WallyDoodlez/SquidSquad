@@ -171,7 +171,7 @@ class TestManifestIntegrity:
 class TestIncludesYml:
     """Verify includes.yml manifests exist and are valid for all roles."""
 
-    ROLES = ["dev", "pm", "qa", "dm"]
+    ROLES = ["worker", "pm", "verifier", "dm"]
 
     @pytest.fixture(autouse=True, scope="class")
     def _setup(self, request):
@@ -290,9 +290,9 @@ class TestIncludesYml:
                 "common-events/forge-read-pattern",
                 "common-events/idle-cooldown-loop",
                 "common-events/comment-handling",
-                "roles/dev/ralph-loop-overview",
+                "roles/worker/ralph-loop-overview",
                 "roles/pm/ralph-loop-overview",
-                "roles/qa/ralph-loop-overview",
+                "roles/verifier/ralph-loop-overview",
                 "roles/dm/ralph-loop-overview",
                 "roles/dm/events/pr-merge-wait",
             }
@@ -322,13 +322,22 @@ class TestComposeManifestIntegration:
             assert len(result) > 0, f"{role}: empty manifest"
 
     def test_load_manifest_dev_variant_inheritance(self):
-        """Dev variants without includes.yml inherit from dev."""
+        """Worker variants inherit worker's manifest via base_role (post-6274.2).
+
+        Pre-6274.2 the legacy bare-name fallback (`_load_manifest('skill')`)
+        returned `dev`'s manifest verbatim because `roles/<variant>/includes.yml`
+        was absent. Post-6274.2 each variant has its own `includes.yml` with
+        `base_role: worker`, so the canonical inheritance check is now done
+        through the hyphenated variant form (`worker-skill`) and asserts the
+        base's manifest is a subset of the variant's expanded manifest.
+        """
         from compose import _load_manifest
-        dev_manifest = _load_manifest("dev")
-        # 'skill' is a dev variant — should inherit dev's manifest
-        skill_manifest = _load_manifest("skill")
-        assert skill_manifest == dev_manifest, (
-            "skill should inherit dev manifest"
+        worker_manifest = _load_manifest("worker")
+        skill_manifest = _load_manifest("worker-skill")
+        assert worker_manifest, "worker manifest should be non-empty"
+        assert skill_manifest, "worker-skill manifest should be non-empty"
+        assert set(worker_manifest).issubset(set(skill_manifest)), (
+            "worker-skill should inherit every include from worker"
         )
 
     def test_manifest_composition_matches_inline_in_polling_mode(self):
@@ -345,8 +354,8 @@ class TestComposeManifestIntegration:
         events-only fragments are removed from inline.
         """
         from compose import _resolve_includes, _resolve_includes_with_manifest, _load_manifest
-        entry_file = self.roles_dir / "dev" / "instructions.md"
-        manifest = _load_manifest("dev", wake_mode="polling")
+        entry_file = self.roles_dir / "worker" / "instructions.md"
+        manifest = _load_manifest("worker", wake_mode="polling")
         manifest_result = _resolve_includes_with_manifest(
             entry_file, manifest, wake_mode="polling"
         )
