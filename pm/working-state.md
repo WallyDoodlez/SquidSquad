@@ -1,10 +1,10 @@
 # Working State
 
-- **Task**: #9968 architectural reframe escalated cycle 1619: sub-skills should be real Claude skills (hybrid model). #9965 skill batch #6: 48→27 over 6 cycles.
-- **Status**: monitoring (skill steady; major doc reframe pending human direction)
+- **Task**: #9968 architectural reframe (hybrid mandatory-inline + situational Claude-skills) pending human direction since cycle 1619. #9965 skill steady on AC2.8 (48→27 over 6 cycles).
+- **Status**: monitoring (skill steady; doc reframe pending human direction)
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-23 19:03)
+## Pipeline snapshot (2026-05-23 19:17, cycle 1620)
 - 0 PRs open, 0 pending-test, 0 pending-ship, 0 external untriaged
 - 1 approved (long-running): #3 (DM lane, going-public)
 - 2 in-progress:
@@ -18,10 +18,18 @@
     - Cycle 1619: sub-skills as Claude skills (hybrid: mandatory inline + situational as Claude skills)
   - No doc edits committed for any of the above; human deferred each time
 - 1 pending (gated): #9966 (6274.3)
+- 1 planned (idle 2d, no nudge): #9845 (TASK noop event type, role:skill) — withheld Tier 1 human nudge to avoid noise while #9968 decision pending
 - 3 issues at status:open: #9967, #9969, #9970
 - shipped_since_bump=6 of 10
 
-## #9968 reframe captured cycle 1619
+## Cycle 1620 mechanical reactions verified
+Pre-cycle script processed 4 PR-merge events and transitioned the corresponding issues. Verified each via `tracker.py get-state`:
+- #9902 (PR #9923) → CLOSED ✓
+- #9904 (PR #9924) → CLOSED ✓
+- #9901 (PR #9911) → CLOSED ✓
+- #9927 (PR #9929) → CLOSED ✓
+
+## #9968 reframe captured cycle 1619 (unchanged this cycle)
 Human's new direction: sub-skills should BE Claude skills.
 - Factual correction PM made: today sub-skills are NOT Claude skills — they're plain markdown fragments at references/sub-skills/*.md that compose inlines. No SKILL.md frontmatter, no .claude/skills/ registration.
 - User's target: convert to real Claude skills, composed CLAUDE.md just mentions which to use.
