@@ -268,3 +268,114 @@ def test_ac1_4_unaffected_roles_pass_through_silently(capsys):
         assert capsys.readouterr().err == "", (
             f"{role_with_suffix} must NOT warn (Out-of-Scope)"
         )
+
+
+# ---------------------------------------------------------------------------
+# AC1.5 — migrate_labels_6274.py exists and has the right shape
+# ---------------------------------------------------------------------------
+
+
+import migrate_labels_6274  # noqa: E402
+
+
+def test_ac1_5_migrate_script_has_label_pairs():
+    """The migrator's label pairs must cover both dev/worker and
+    qa/verifier transitions. Structural sanity check; the actual gh
+    walk needs a live GitHub backend and is exercised separately."""
+    pairs = migrate_labels_6274.LABEL_PAIRS
+    assert ("role:dev", "role:worker") in pairs
+    assert ("role:qa", "role:verifier") in pairs
+    assert len(pairs) == 2, (
+        f"unexpected extra pairs (could indicate scope drift): {pairs}"
+    )
+
+
+def test_ac1_5_migrate_script_exposes_dry_run_function():
+    """`migrate(dry_run=True)` is the in-process entry point used by
+    tests and operators wanting a JSON preview without subprocess
+    overhead."""
+    assert hasattr(migrate_labels_6274, "migrate")
+    assert callable(migrate_labels_6274.migrate)
+
+
+def test_ac1_5_migrate_script_supports_dry_run_flag():
+    """The CLI's argparse must accept `--dry-run`. Verified by source
+    inspection — invoking main() shells out to gh."""
+    source = (
+        REPO / "references" / "scripts" / "migrate_labels_6274.py"
+    ).read_text(encoding="utf-8")
+    assert "--dry-run" in source, "AC1.5 mandates a --dry-run flag"
+    assert "action=\"store_true\"" in source
+
+
+# ---------------------------------------------------------------------------
+# AC1.6 — Vault placeholder note for migration-6274-cutover
+# ---------------------------------------------------------------------------
+
+
+VAULT_NOTE = (
+    REPO / ".squidsquad" / "vault" / "galaxy" / "migration-6274-cutover.md"
+)
+
+
+def test_ac1_6_vault_note_exists():
+    assert VAULT_NOTE.exists(), (
+        f"AC1.6 vault placeholder missing at {VAULT_NOTE}"
+    )
+
+
+def test_ac1_6_vault_note_is_placeholder_with_tbd_date():
+    """The note must lead with a 'TBD — populated in 6274.2 PR'
+    marker so AC2.9 has exactly one place to fill in."""
+    body = VAULT_NOTE.read_text(encoding="utf-8")
+    assert "TBD" in body
+    assert "6274.2" in body, "AC1.6 must point at the 6274.2 PR explicitly"
+
+
+def test_ac1_6_vault_note_has_required_frontmatter():
+    """Frontmatter must include the required vault fields per the
+    vault-create protocol — type, tags, owner, status, confidence."""
+    body = VAULT_NOTE.read_text(encoding="utf-8")
+    for required in (
+        "type:",
+        "tags:",
+        "created:",
+        "updated:",
+        "owner:",
+        "status:",
+        "confidence:",
+    ):
+        assert required in body, f"frontmatter missing field: {required}"
+
+
+# ---------------------------------------------------------------------------
+# verify_dual_label_6274.py — G2→3 gate helper (per F1 resolution)
+# ---------------------------------------------------------------------------
+
+
+import verify_dual_label_6274  # noqa: E402
+
+
+def test_verify_dual_label_script_pairs_match_migration():
+    """The G2→3 gate script must check exactly the same label pairs
+    the migration script writes — otherwise the gate could pass while
+    a category was missing from the migrate sweep, or fail spuriously
+    on a label pair the migrate sweep never touched."""
+    assert (
+        verify_dual_label_6274.PAIRS == migrate_labels_6274.LABEL_PAIRS
+    ), (
+        f"verify_dual_label_6274.PAIRS must equal migrate_labels_6274."
+        f"LABEL_PAIRS; got {verify_dual_label_6274.PAIRS} vs "
+        f"{migrate_labels_6274.LABEL_PAIRS}"
+    )
+
+
+def test_verify_dual_label_script_has_days_flag():
+    """The G2→3 gate runs with a default 7-day window per CONTEXT
+    G2→3 spec but the script must allow customization for the actual
+    cutover verification."""
+    source = (
+        REPO / "references" / "scripts" / "verify_dual_label_6274.py"
+    ).read_text(encoding="utf-8")
+    assert "--days" in source
+    assert "default=7" in source
