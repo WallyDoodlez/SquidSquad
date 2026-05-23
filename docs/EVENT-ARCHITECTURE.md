@@ -493,6 +493,7 @@ Same as the normal boot, except `working-state.md` records an in-flight task who
 sequenceDiagram
     autonumber
     participant W as Worker (claude)
+    participant TR as tracker.py
     participant F as Forge<br/>(GitHub)
     participant H as Harness
     participant VEP as Verifier event_poll
@@ -500,13 +501,16 @@ sequenceDiagram
 
     Note over W: Implementation complete<br/>locally
     W->>F: push branch, open PR #9943
-    W->>F: tracker.py transition<br/>in-progress → pending-test
-    Note over F: Forge is updated<br/>(source of truth)
 
-    W->>H: POST /work/assign<br/>{issue:9926, next_role:verifier,<br/>event_context:"PR ready",<br/>payload:{pr_number:9943}}
-    H->>H: validate worker→verifier<br/>per permission table
+    W->>TR: tracker.py transition 9926<br/>in-progress pending-test
+    TR->>F: gh issue edit (label change)
+    F-->>TR: 200 OK
+    Note over F: Forge label updated<br/>(source of truth)
+    TR->>H: POST /work/assign<br/>{issue:9926, next_role:verifier,<br/>event_context:"verification-needed",<br/>payload:{pr_number:9943}}
+    H->>H: validate worker→verifier<br/>per L2 permission table
     H->>H: emit assigned-to(target_role=verifier,...)<br/>append to deque
-    H-->>W: 200 OK + event_id
+    H-->>TR: 200 OK + event_id
+    TR-->>W: transition successful<br/>(+ assignment event_id)
 
     Note over H,VEP: Verifier's event_poll<br/>polling loop continues
 
@@ -524,7 +528,24 @@ sequenceDiagram
     H-->>VC: 200 OK
 ```
 
-### 7.1 Handoff sequence — EAD safety-net path
+Walkthrough: worker ships a fix, hands off to verifier.
+
+1. **Worker** finishes its implementation work for issue `#9926`. Pushes the branch, opens PR `#9943`.
+2. **Worker** invokes `tracker.py transition 9926 in-progress pending-test --role pm-lead`. From the worker's perspective this is a single command — no separate `/work/assign` call needed. Behind the scenes `tracker.py` does:
+   - **2a.** `gh issue edit` — flips the status label on forge (the durable record).
+   - **2b.** `POST /work/assign` to harness with `{issue:9926, next_role: verifier, event_context: "verification-needed", payload: {pr_number: 9943, branch: "squidsquad/task/9926"}}`. The `(from, to)` transition is looked up in `tracker.py`'s built-in routing table (§7.2) to derive `next_role` and `event_context`.
+3. **Harness** validates worker → verifier is a legal assignment (per the L2-derived permission table from `responsibility.md`), then emits `assigned-to(target_role=verifier, ...)` into the deque. Returns the event_id to `tracker.py`, which returns success to the worker.
+4. **`event_poll` for the verifier** is polling harness on its loop. On its next poll it sees one new event past the verifier's cursor → writes one nudge line to stdout: `"NUDGE 1 new event"` (exact format TBD).
+5. **Monitor (inside the verifier's Claude session)** sees the new stdin line → wakes the Claude session.
+6. **The verifier runs its post-nudge contract** (per #9892):
+   a. Read events past cursor: `GET /events/for/verifier?since=<cursor>` → returns the assigned-to event.
+   b. Decide: care or skip? Filter rule: the verifier cares about `assigned-to` with `event_context` matching verification triggers.
+   c. If the verifier is busy with current work, this assigned-to enters a queue in `working-state.md` ("next: #9926"); the verifier does NOT interrupt current work.
+   d. If the verifier is idle, it acts on it: writes TEST-PLAN-9926, runs verification, etc.
+   e. After tending (or queuing) the event, the verifier emits `ack-cursor(event_id)` to advance.
+7. **Loop continues**: the verifier eventually verifies, transitions to pending-ship via `tracker.py` (which routes to dm via the same mechanism), and so on through the rest of the pipeline.
+
+### 7.1 EAD path (when tracker.py wasn't the trigger)
 
 ```mermaid
 sequenceDiagram
@@ -535,8 +556,8 @@ sequenceDiagram
     participant H as Harness deque
     participant V as Verifier agent tree
 
-    Note over W: Worker forgets to call<br/>POST /work/assign
-    W->>F: push branch + status transition only
+    Note over W: Forge state changes via<br/>some path OTHER than tracker.py<br/>(human edit, 3rd-party, or<br/>tracker.py's harness POST failed)
+    W->>F: change forge state directly
 
     Note over EAD: EAD's forge polling loop ticks
     EAD->>F: gh api / search (poll for changes)
@@ -551,33 +572,13 @@ sequenceDiagram
     Note over W,V: Net result: handoff still happens<br/>just with EAD-polling-lag latency<br/>instead of immediate
 ```
 
-Walkthrough: worker ships a fix, hands off to verifier.
-
-1. **Worker** finishes its implementation work for issue `#9926`. Pushes the branch, opens PR `#9943`.
-2. **Worker** transitions the tracker via `tracker.py transition 9926 in-progress pending-test --role pm-lead`. (Forge is updated; this is the durable record.)
-3. **Worker** calls `POST /work/assign` on harness:
-   ```json
-   {"issue_number": 9926, "next_role": "verifier", "event_context": "PR ready for verification",
-    "payload": {"pr_number": 9943, "branch": "squidsquad/task/9926"}}
-   ```
-4. **Harness** validates worker → verifier is a legal assignment, then emits `assigned-to(target_role=verifier, ...)` into the deque, returns the event_id.
-5. **`event_poll` for the verifier** is polling harness on its loop. On its next poll it sees one new event past the verifier's cursor → writes one nudge line to stdout: `"NUDGE 1 new event"` (exact format TBD).
-6. **Monitor (inside the verifier's Claude session)** sees the new stdin line → wakes the Claude session.
-7. **The verifier runs its post-nudge contract** (per #9892):
-   a. Read events past cursor: `GET /events/for/verifier?since=<cursor>` → returns the assigned-to event.
-   b. Decide: care or skip? Filter rule: the verifier cares about `assigned-to` with `event_context` matching verification triggers.
-   c. If the verifier is busy with current work, this assigned-to enters a queue in `working-state.md` ("next: #9926"); the verifier does NOT interrupt current work.
-   d. If the verifier is idle, it acts on it: writes TEST-PLAN-9926, runs verification, etc.
-   e. After tending (or queuing) the event, the verifier emits `ack-cursor(event_id)` to advance.
-8. **Loop continues**: the verifier eventually verifies, transitions to pending-ship, calls `POST /work/assign` for dm, etc.
-
-### 7.1 EAD path (when no explicit assign happens)
-
-If the worker forgets to call `/work/assign`, the ExternalActivityDetector catches it:
+If the forge state changes through some path OTHER than `tracker.py transition` — e.g., a human edits a label directly in the GitHub UI, a third-party automation flips a status, or `tracker.py` itself ran but the `/work/assign` POST failed because the harness was momentarily down — the ExternalActivityDetector catches it:
 - EAD polls forge, sees the new status:pending-test label on `#9926`.
 - EAD maps "status:pending-test on a tracker item" → assigned-to(target_role=verifier).
 - EAD emits `assigned-to` to the verifier's queue.
-- The verifier wakes via nudge, same as 5–8 above.
+- The verifier wakes via nudge, same as steps 4–7 above.
+
+This is the safety net for any forge change that didn't originate from `tracker.py`, plus the recovery path when `tracker.py`'s `/work/assign` call fails due to a transient harness outage.
 
 ### 7.2 tracker.py auto-routes transitions (preferred path)
 
