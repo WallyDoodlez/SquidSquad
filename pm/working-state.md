@@ -1,36 +1,36 @@
 # Working State
 
-- **Task**: idle — pipeline empty after both PM-planned tasks shipped
+- **Task**: idle — quiet cycle; skill silence under watch but not yet diagnostic-worthy
 - **Status**: idle
 - **Last Processed Event ID**: 88fe94b376fd2963
 
-## Pipeline snapshot (2026-05-22 21:02)
-- 1 PR open: #9945 (pm/event-architecture-v2) — PM event-arch doc, rev 3 with §4.1 Mermaid fix
-- 0 pending-test, 0 pending-ship, 0 in-progress, 0 external issues
+## Pipeline snapshot (2026-05-22 21:32)
+- 1 PR open: #9945 (pm/event-architecture-v2) — PM event-arch doc, awaiting human refinement
+- 0 pending-test, 0 pending-ship, 0 in-progress
+- 1 open bug: #9946 (skill pickup fidelity, awaiting skill RCA — 0 comments yet)
 - 1 approved: #3 (DM lane, long-running)
-- 1 open bug: #9946 (skill pickup fidelity, awaiting skill RCA)
-- All 4 agents alive; skill idle 53m (past /loop interval — worth watching if it persists)
+- 0 external issues
 
-## Both PM-planned tasks SHIPPED this session
-- #9926 (orphan_cleanup D3 per-role skip) — PR #9943 merged + shipped cycle 1582
-- #9925 (4-layer responsibility model) — PR #9944 merged + shipped cycle 1583, 50 files across all 4 roles
+## Skill silence (under watch)
+- 👻 in health check, last activity 83 min (well past 30m /loop interval)
+- boot_remote considers skill alive (PID 2210132 matches harness-state.json)
+- No orphan claude.exe to clean (we did that mid-day)
+- Did NOT force-restart per feedback_harness_sole_lifecycle (harness owns lifecycle; no parallel kill/spawn paths)
+- Harness health poller has authority — if skill is genuinely wedged, harness should detect and restart
+- IF still silent next cycle: file diagnostic-grade issue describing the 'alive PID + zero cycle activity' pattern
+- Possible causes (not investigated): /loop cron expired or didn't reschedule after last cycle; Claude session stuck on something; conversation mode left open
 
-## End-to-end stats for the session's intake work
-- #9926: 1 PM intake → DS review → 1 QA reject (CONTEXT-9688.md missed) → fix → ship. 3 cycles dev + 2 QA.
-- #9925: 4 PM CONTEXT drafts (post-human-corrections) → 2 DS reviews → human approval → 1 QA reject (4 ACs) → fix → ship. 4 cycles dev + 2 QA. Largest PR of session (50 files).
-
-## Event-arch v2 doc PR #9945 (open, awaiting human)
-- Rev 1: 392 lines, 15 sections (initial)
-- Rev 2: +409/-23, added 10 Mermaid diagrams + §14 22 gaps (G1-G22)
-- Rev 3: §4.1 Mermaid fix
-- Closure plan proposed in chat: 6 groups (A-F) of grouped designs closing all 22 gaps; 6 PRs recommended in sequence. Awaiting human green light to fold plan into doc as new §15.
+## Both PM-planned tasks of this session: SHIPPED
+- #9926 (orphan_cleanup D3 per-role skip) — shipped cycle 1582
+- #9925 (4-layer responsibility model, 50 files) — shipped cycle 1583
 
 ## Open threads with human
-- PR #9945 §13 (10 design questions) + §14 (22 gaps) + chat-proposed closure plan (6 groups)
-- #9946 (pickup fidelity) RCA pickup
-- #9845 (noop event) — likely retired under event-arch v2 (§13 Q8)
+- **PR #9945** — §13 (10 design questions) + §14 (22 gaps) + chat-proposed 6-group closure plan (Group D matrix simplified this conversation: 'no self-assign' instead of 'no PM-targeting')
+- **#9946 RCA** — skill must investigate git_ops.py commit_code state-filter behavior; gated on skill silence
+- **#9845 (noop event)** — likely retired under event-arch v2 (Q8 in §13)
+- **Awaiting greenlight** to fold closure plan into PR #9945 as new §15
 
-## PM-owned tasks at status:pending / planning (own backlog, no movement)
+## PM-owned tasks at status:pending / planning (own backlog)
 - #9874 (harness internal architecture review) — partly covered by event-arch doc §5
 - #9875 (L2 vault writeback) — planning
 - #9912 (tighten external-model code-review against tool-use loop) — pending
@@ -38,7 +38,7 @@
 - #8997 (PM improvement scan autonomous L4 writes) — pending
 
 ## Notes
-- DM idle 21m, below stall threshold; no work in pending-ship.
-- Skill idle 53m — past 30-min /loop cadence. Possibly wedged; possibly just hasn't fired latest cron. Harness health poller monitors; will respawn if dead. If still idle next cycle, file diagnostic.
-- QA idle 0m — just triaged the #9925 ship.
+- DM idle 22m — below stall threshold; no pending-ship.
+- QA idle 0m — recently triaged the #9925 ship.
+- Group D matrix update from chat this cycle: PM callable from any agent; matrix simplifies to 'no self-assign,' rationale = process integrity is everyone's job.
 - Recent_events still contained synthetic test traffic on #42/#55/#269 — ignored.
