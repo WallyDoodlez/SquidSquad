@@ -12,7 +12,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 1b. **Branch checkout** (#3296, #9478): `python references/scripts/git_ops.py task-begin [ROLE] [NUMBER]` — checks out the task's feature branch.
 2. **Read the AC list from the issue body, with CONTEXT.md as the locked decisions companion** (#8916, #9184).
 
-   The **GitHub issue body is the authoritative source of the acceptance criteria.** PM no longer produces a test plan (#9184) — the AC list in the issue body IS the contract, and dev implements against it. CONTEXT.md captures locked decisions, scope boundaries, and side-effect mitigations agreed during Phase 2 discussion.
+   The **GitHub issue body is the authoritative source of the acceptance criteria.** PM no longer produces a test plan (#9184) — the AC list in the issue body IS the contract, and worker implements against it. CONTEXT.md captures locked decisions, scope boundaries, and side-effect mitigations agreed during Phase 2 discussion.
 
    Before writing any code, check for planning artifacts:
    - `.squidsquad/pm/planning/CONTEXT.md` (bundle-level; the per-task section is `### 5.X #<NUMBER> — …`)
@@ -27,7 +27,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 
    If PM comments reference planning artifacts but you cannot find them, **push back** (see Prohibitions). If no CONTEXT artifact exists (bug fix or trivial task), the issue body's AC list is the contract; proceed to step 2c.
 
-   **Do NOT look for a PM-side `TEST-PLAN-<NUMBER>.md`** — under the new workflow (#9184) PM does not produce one. QA writes its own test plan at `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` during verification. Dev's job is to implement against the AC list, not against a pre-written test plan.
+   **Do NOT look for a PM-side `TEST-PLAN-<NUMBER>.md`** — under the new workflow (#9184) PM does not produce one. Verifier writes its own test plan at `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` during verification. Worker's job is to implement against the AC list, not against a pre-written test plan.
 2c. **Consult the vault** (#5572) — before implementing, search the vault for relevant context:
    ```bash
    grep -rl "[keyword]" .squidsquad/vault/ --include="*.md" | head -5
@@ -35,11 +35,11 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    Check for: decisions that constrain the approach, patterns to follow, learnings from similar past work, and human preferences. Especially check `[[human-profile]]` and BRIEFING.md. This takes seconds and prevents rework from missed context.
 3. Write working state: update `.squidsquad/[ROLE]/working-state.md` with `Task: #[NUMBER]`, status `in-progress`, planned approach, and acceptance criteria checklist.
 4. Implement the task according to the acceptance criteria from the issue body. Respect locked decisions from CONTEXT.md. Implement required side effect mitigations. Update working state as you complete sub-steps.
-4b. **Write unit tests for your implementation** (#9184). Dev's unit tests cover the code you actually wrote — concrete assertions on functions, scripts, modules, or behavior added or changed. They commit in the **same PR** as the implementation.
+4b. **Write unit tests for your implementation** (#9184). Worker's unit tests cover the code you actually wrote — concrete assertions on functions, scripts, modules, or behavior added or changed. They commit in the **same PR** as the implementation.
 
-   - Dev's unit tests are a correctness check on the code, **not** the verification contract. They prove "I implemented what I think the AC says." They are **not** sufficient to satisfy the AC — QA executes its own AC-derived test plan against a live instance and that is the gate (see `qa/verification.md`).
+   - Worker's unit tests are a correctness check on the code, **not** the verification contract. They prove "I implemented what I think the AC says." They are **not** sufficient to satisfy the AC — Verifier executes its own AC-derived test plan against a live instance and that is the gate (see `qa/verification.md`).
    - Put tests under `tests/` using the existing layout (`tests/test_<feature>_<NUMBER>.py` or the area-appropriate location). Run them as part of the existing `[ROLE_TEST_CMD]` suite so they cannot regress silently.
-   - If the implementation has no testable surface (pure prose / instruction edits with no executable code), state that explicitly in the PR description and rely on QA's CQ coverage instead of fabricating shallow tests.
+   - If the implementation has no testable surface (pure prose / instruction edits with no executable code), state that explicitly in the PR description and rely on verifier's CQ coverage instead of fabricating shallow tests.
 5. Run the test command: `[ROLE_TEST_CMD]` — your new unit tests must pass alongside the existing suite.
 6. **Update docs**: Update only technical documentation (API docs, code comments, architecture notes). User-facing docs are handled by DM. If the change affects user-facing behavior, comment delivery notes on the Issue.
 7. **Copy changed references to live**: If any files in `references/` were modified (e.g. `statusline.sh`, `hints-*.txt`), copy them to the live `.squidsquad/` location so changes take effect immediately.
@@ -48,8 +48,8 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    - **Regression**: Does this change break existing behavior? Read the code paths you touched — what else depends on them?
    - **Integration**: Does this work correctly with the current system setup? Is it compatible with config, compose, and the deployed state?
    - **Philosophy**: Does this violate any project philosophy, vault decisions, or established patterns?
-   - **Personas**: Will this break workflows for any agent role (PM, QA, DM, human)? Think through each consumer of your change.
-   If ANY of these checks reveal a concern — fix it before transitioning. Do not ship known concerns for QA to catch.
+   - **Personas**: Will this break workflows for any agent role (PM, verifier, DM, human)? Think through each consumer of your change.
+   If ANY of these checks reveal a concern — fix it before transitioning. Do not ship known concerns for verifier to catch.
 8b-bis. **Pickup-comment fidelity check** (#9946) — see the `Pickup-comment fidelity` fragment included in this CLAUDE.md. Run the mechanical diff check (`git diff origin/main...HEAD --name-only`) and the captured test run before drafting the transition comment. Every concrete claim in the comment must be substantiated by the diff and the test log. Edits to `.squidsquad/` and `.claude/` paths are filtered by `commit_code` and never appear in the feature PR — do not claim them as PR deliverables.
 8c. **External code review** — after self-review passes, run an external model review before marking pending-test. Self-review catches what you know; external review catches what you missed.
 
@@ -104,7 +104,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 
    **Re-run review** after applying fixes. Loop until:
    - Clean review (zero findings) → exit loop immediately, proceed to step 9
-   - 5 iterations reached with remaining findings → proceed to step 9 with all findings noted in PR comment. QA decides whether to accept.
+   - 5 iterations reached with remaining findings → proceed to step 9 with all findings noted in PR comment. Verifier decides whether to accept.
    - File-to-PM disposition → exit loop, transition to planning (see above)
 
    **Escalation**: If >50% of findings across 3+ iterations are justified-ignore, note in the PR comment: "High justified-ignore rate — review model or prompt may need tuning." This is a process signal for the human.

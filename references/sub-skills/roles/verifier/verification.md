@@ -9,7 +9,7 @@ If no E2E command is configured, skip this step.
 Log results in `qa/qa-log.md`:
 
 ```markdown
-## QA Run — YYYY-MM-DD HH:MM
+## Verifier Run — YYYY-MM-DD HH:MM
 
 - **Result**: Passed | Failed | Skipped (no E2E command)
 - **Tests Run**: [N]
@@ -64,7 +64,7 @@ Every finding must include structured evidence:
 
 If the finding relates to a PR, also post the structured finding as a PR comment for inline review context:
 ```bash
-gh pr comment [PR_NUMBER] --body "## QA Finding\n\n[structured finding from 3c]"
+gh pr comment [PR_NUMBER] --body "## Verifier Finding\n\n[structured finding from 3c]"
 ```
 
 ### Step 4 — Verify Fixed Issues
@@ -77,7 +77,7 @@ Query all issues pending test:
 python references/scripts/tracker.py list-issues skill --status pending-test
 ```
 
-(Repeat for each dev role.)
+(Repeat for each worker role.)
 
 For each issue:
 
@@ -144,17 +144,17 @@ When verification is complete (pass or fail), return to working branch:
 python references/scripts/git_ops.py task-end [role] [number]
 ```
 
-1. **QA produces the test plan from the AC list** (#9184). PM does not produce a test plan; QA is the verification owner. **Before exercising the implementation**, derive the test plan from the issue body's Acceptance Criteria + the locked CONTEXT artifact (if any) and write it to:
+1. **Verifier produces the test plan from the AC list** (#9184). PM does not produce a test plan; Verifier is the verification owner. **Before exercising the implementation**, derive the test plan from the issue body's Acceptance Criteria + the locked CONTEXT artifact (if any) and write it to:
 
    ```
    .squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md
    ```
 
-   The test plan must be derivable from the AC list alone — do not reverse-engineer test cases from dev's diff. Read the AC list, read CONTEXT.md (for locked decisions and out-of-scope items), then write test cases that observably verify each AC against a real live test instance of the system (actual harness, actual tracker, actual filesystem). Running dev's unit tests is a sanity check only — not the gate.
+   The test plan must be derivable from the AC list alone — do not reverse-engineer test cases from worker's diff. Read the AC list, read CONTEXT.md (for locked decisions and out-of-scope items), then write test cases that observably verify each AC against a real live test instance of the system (actual harness, actual tracker, actual filesystem). Running worker's unit tests is a sanity check only — not the gate.
 
    Resume logic mirrors PM's: if `TEST-PLAN-<NUMBER>.md` already exists under `.squidsquad/qa/planning/` and the issue body's ACs have not changed since the file was committed, reuse it; otherwise re-derive.
 
-   **Optional: route test-plan drafting to an external model** (#9319 — was orphaned PM infrastructure, reclaimed for QA):
+   **Optional: route test-plan drafting to an external model** (#9319 — was orphaned PM infrastructure, reclaimed for verifier):
 
    ```bash
    python references/scripts/model_router.py route \
@@ -165,7 +165,7 @@ python references/scripts/git_ops.py task-end [role] [number]
      --context "Draft live-system test plan for #<NUMBER> from the AC list."
    ```
 
-   The router uses the `Test Plan Model` config setting and falls back to a Claude subagent on failure (same fallback contract PM uses for research/discussion-prep). QA reviews the draft, adjusts as needed, and saves the final version. This is optional — QA can also write the plan directly without routing.
+   The router uses the `Test Plan Model` config setting and falls back to a Claude subagent on failure (same fallback contract PM uses for research/discussion-prep). Verifier reviews the draft, adjusts as needed, and saves the final version. This is optional — Verifier can also write the plan directly without routing.
 
    **Test plan structure**:
 
@@ -179,9 +179,9 @@ python references/scripts/git_ops.py task-end [role] [number]
 
    ### TC-1 (covers AC-1): [observable scenario]
    - **Precondition**: [state of live instance before]
-   - **Steps**: [what QA does against the live system]
+   - **Steps**: [what verifier does against the live system]
    - **Expected**: [observable result that satisfies AC-1]
-   - **Verification command**: [exact command QA runs]
+   - **Verification command**: [exact command verifier runs]
 
    ### TC-2 (covers AC-2): …
    ...
@@ -197,7 +197,7 @@ python references/scripts/git_ops.py task-end [role] [number]
 
    This section is REQUIRED when the task adds or modifies LLM-consumed
    instructions (CLAUDE.md content, sub-skill fragments, SOUL.md, prompts).
-   QA writes the CQ specs here — not PM (#9184).
+   Verifier writes the CQ specs here — not PM (#9184).
 
    ### CQ-1: [observable question a fresh agent should answer from the modified files alone]
    - **Files**: [exact files the comprehension agent will be given]
@@ -207,7 +207,7 @@ python references/scripts/git_ops.py task-end [role] [number]
    per the existing convention so the comprehension test runner can pick it up.
    ```
 
-   Spawn a QA subagent (via the Agent tool) to write executable assertions for the live-system test cases:
+   Spawn a Verifier subagent (via the Agent tool) to write executable assertions for the live-system test cases:
 
    Subagent prompt:
    ```
@@ -234,11 +234,11 @@ python references/scripts/git_ops.py task-end [role] [number]
 
    **HUMAN-REQUIRED gate**: If any TC is HUMAN-REQUIRED, do NOT transition to pending-ship. Add the `blocked:human-action` label and comment: `"HUMAN-REQUIRED: [N] TCs need human environment setup: [list what's needed]. Cannot ship until resolved."`
 
-   QA reviews QA-RESULTS-<NUMBER>.md and makes the final decision.
+   Verifier reviews QA-RESULTS-<NUMBER>.md and makes the final decision.
 
-1b. **Comprehension testing** (if QA's TEST-PLAN-<NUMBER>.md has a `## Comprehension Questions` section):
+1b. **Comprehension testing** (if verifier's TEST-PLAN-<NUMBER>.md has a `## Comprehension Questions` section):
 
-   This applies when the task touches LLM-consumed instructions (CLAUDE.md, sub-skills, SOUL.md). QA wrote the CQ specs as part of its own test plan (#9184). If TEST-PLAN-<NUMBER>.md has no `## Comprehension Questions` section, skip this step.
+   This applies when the task touches LLM-consumed instructions (CLAUDE.md, sub-skills, SOUL.md). Verifier wrote the CQ specs as part of its own test plan (#9184). If TEST-PLAN-<NUMBER>.md has no `## Comprehension Questions` section, skip this step.
 
    Spawn a comprehension agent (via the Agent tool) with a neutral, file-scoped prompt: "Read the following files and answer ONLY from what you find in them. Files: [list modified files]. Answer each question below, quoting file content."
 
@@ -246,16 +246,16 @@ python references/scripts/git_ops.py task-end [role] [number]
 
    Record results in QA-RESULTS-<NUMBER>.md under `## Comprehension Tests` with per-CQ PASS/FAIL entries. A comprehension failure is a legitimate finding.
 
-2. **Dev unit tests are a sanity check, not the gate** (#9184). Inspect dev's unit tests under `tests/` for the changed area. Running them as a sanity check is fine, but QA's gate is the live-system execution of `TEST-PLAN-<NUMBER>.md` above. Coverage gaps in dev's unit tests are a separate finding routed back to dev — do not skip QA's live execution because dev's tests pass.
+2. **Worker unit tests are a sanity check, not the gate** (#9184). Inspect worker's unit tests under `tests/` for the changed area. Running them as a sanity check is fine, but verifier's gate is the live-system execution of `TEST-PLAN-<NUMBER>.md` above. Coverage gaps in worker's unit tests are a separate finding routed back to worker — do not skip verifier's live execution because dev's tests pass.
 
-2b. **Test coverage check** (always runs): Verify dev's PR includes unit tests for new code per the dev workflow (#9184). If the implementation adds new functions, scripts, or modules but the PR ships with no unit tests AND no explicit "no testable surface" justification, reject — tests are part of the implementation, not follow-up work.
+2b. **Test coverage check** (always runs): Verify worker's PR includes unit tests for new code per the worker workflow (#9184). If the implementation adds new functions, scripts, or modules but the PR ships with no unit tests AND no explicit "no testable surface" justification, reject — tests are part of the implementation, not follow-up work.
 
 2c. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
 
 2d. **AC walk against the issue body's Acceptance Criteria** (#8950 Gate #3, updated by #9184) — before marking any task `pending-test → pending-ship`, walk each AC in the **GitHub issue body**. For each AC:
 
    - Confirm it is **observably satisfied** by the implementation — run the verification command stated in the AC, check the file the AC names, or observe the output the AC describes. **Tests passing is necessary but not sufficient — do not infer AC satisfaction from test names.**
-   - Use QA's own `TEST-PLAN-<NUMBER>.md` coverage matrix to cross-check that every AC has at least one TC mapped to it.
+   - Use verifier's own `TEST-PLAN-<NUMBER>.md` coverage matrix to cross-check that every AC has at least one TC mapped to it.
 
    Optional supporting artifacts (look in this precedence):
 
@@ -264,7 +264,7 @@ python references/scripts/git_ops.py task-end [role] [number]
    LEGACY_TEST_PLAN=$(ls .squidsquad/pm/planning/*[NUMBER]* 2>/dev/null | grep -i 'test-plan' | head -1)
    ```
 
-   - **Primary**: `$QA_TEST_PLAN` (the new convention, #9184) — when present, it is QA's own derivation of the AC list; its coverage matrix is the source of truth for AC-walk coverage.
+   - **Primary**: `$QA_TEST_PLAN` (the new convention, #9184) — when present, it is verifier's own derivation of the AC list; its coverage matrix is the source of truth for AC-walk coverage.
    - **Legacy fallback**: `$LEGACY_TEST_PLAN` (`.squidsquad/pm/planning/FEAT-PM-<NUMBER>-TEST-PLAN.md` or `.squidsquad/pm/planning/TEST-PLAN-<NUMBER>.md`) — only used for in-flight tasks filed under the pre-#9184 workflow. Do not author new files at this path.
 
    If any AC is not observably satisfied, transition `pending-test → in-progress` and comment which AC failed:
@@ -296,13 +296,13 @@ python references/scripts/git_ops.py task-end [role] [number]
    Check PR Flow: `python references/scripts/config.py get pr-flow`
 
    **If PR Flow `yes`** and a PR exists for this issue:
-   - Post QA results on the PR:
+   - Post verifier results on the PR:
      ```bash
-     gh pr comment [PR_NUMBER] --body "## QA Results\n\n**Status**: PASS\n**Test Plan**: .squidsquad/qa/planning/TEST-PLAN-[NUMBER].md (QA-owned, derived from AC list)\n**Results**: [N/N tests passed]\n\nAll acceptance criteria verified against a live instance."
+     gh pr comment [PR_NUMBER] --body "## Verifier Results\n\n**Status**: PASS\n**Test Plan**: .squidsquad/qa/planning/TEST-PLAN-[NUMBER].md (QA-owned, derived from AC list)\n**Results**: [N/N tests passed]\n\nAll acceptance criteria verified against a live instance."
      ```
    - Formally approve the PR:
      ```bash
-     gh pr review [PR_NUMBER] --approve --body "QA verified — zero gaps."
+     gh pr review [PR_NUMBER] --approve --body "Verifier verified — zero gaps."
      ```
    - **Check Auto Merge**: `python references/scripts/config.py get auto-merge`
    - **Check per-ticket override**: `python references/scripts/tracker.py get-labels [NUMBER]` — look for `review:human-required` label.
@@ -340,7 +340,7 @@ python references/scripts/git_ops.py task-end [role] [number]
    curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH]", "role": "qa"}'
    ```
    - **Merge succeeds**: proceed to pending-ship transition
-   - **Merge conflict**: QA merges the working branch into the feature branch (code was already verified):
+   - **Merge conflict**: Verifier merges the working branch into the feature branch (code was already verified):
      ```bash
      git fetch origin
      git checkout [BRANCH_NAME]
@@ -352,12 +352,12 @@ python references/scripts/git_ops.py task-end [role] [number]
        curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH_NAME]", "role": "qa"}'
        ```
        If merge now succeeds, proceed to pending-ship. Code was already verified — no re-verification needed.
-     - **Merge has code conflicts** (not just .squidsquad/ state files): reject back to dev with specific conflicting files
+     - **Merge has code conflicts** (not just .squidsquad/ state files): reject back to worker with specific conflicting files
        ```bash
        git merge --abort
        git checkout [WORKING_BRANCH]
        python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role verifier-lead
-       python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Merge conflict with code changes on PR #[PR_NUMBER]. Conflicting files: [list]. Dev: resolve conflicts and re-submit."
+       python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Merge conflict with code changes on PR #[PR_NUMBER]. Conflicting files: [list]. Worker: resolve conflicts and re-submit."
        ```
      - **Only .squidsquad/ state file conflicts**: resolve by keeping both versions, then push and merge. State files are always auto-resolvable.
    - **No PR found**: proceed (direct-to-main workflow, no merge needed)
@@ -374,8 +374,8 @@ python references/scripts/git_ops.py task-end [role] [number]
    **If PR Flow `yes`** and a PR exists:
    - Post failure on the PR and request changes:
      ```bash
-     gh pr comment [PR_NUMBER] --body "## QA Results\n\n**Status**: FAIL\n\n[list findings]"
-     gh pr review [PR_NUMBER] --request-changes --body "QA FAIL: [findings summary]"
+     gh pr comment [PR_NUMBER] --body "## Verifier Results\n\n**Status**: FAIL\n\n[list findings]"
+     gh pr review [PR_NUMBER] --request-changes --body "Verifier FAIL: [findings summary]"
      ```
    - Transition back to `In Progress`:
      ```bash
@@ -410,7 +410,7 @@ Print: `[🦑 HH:MM:SS] Checking agent health...`
 
 Check each agent's health by reading their `current-state` file via cross-clone paths from `.squidsquad/.local-config`. Each agent writes to its `current-state` file at the end of every cycle (including quiet cycles), so the file's mtime indicates when the agent last completed a cycle.
 
-Read `.squidsquad/.local-config` to get each agent's clone path. For each dev agent listed in `config.md`, plus PM, plus DM and designer (if their directories exist):
+Read `.squidsquad/.local-config` to get each agent's clone path. For each worker agent listed in `config.md`, plus PM, plus DM and designer (if their directories exist):
 
 1. Look up the agent's clone path from `.local-config` (format: `- **role**: /absolute/path`).
 2. Read `<path>/.squidsquad/<role>/current-state` and check the file's mtime.
@@ -421,4 +421,4 @@ Read `.squidsquad/.local-config` to get each agent's clone path. For each dev ag
   ```
   > [YYYY-MM-DD HH:MM] **qa**: Agent [role] appears stalled — no cycle activity for [elapsed] minutes. Please check.
   ```
-- If `.local-config` is missing, path is unreachable, or `current-state` doesn't exist: agent status is unknown (❓) — note in QA log.
+- If `.local-config` is missing, path is unreachable, or `current-state` doesn't exist: agent status is unknown (❓) — note in `qa/qa-log.md` (install-coupled; will be renamed with `.squidsquad/qa/` → `.squidsquad/verifier/` in wizard.py D4).
