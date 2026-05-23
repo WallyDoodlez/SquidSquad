@@ -1438,3 +1438,9 @@
 - **Findings**: #9941 (medium — `_write_booting_sentinel` claims "atomic write to avoid races" in docstring but uses check-then-rename pattern; two concurrent boots can both pass the `_has_booting_sentinel` False check, both `tmp.replace(booting_file)`, both return True; downstream thin_launcher singleton (#8879) makes the actual double-boot defended in practice, but the race produces wasted work, wrong-PID sentinels, and noisy diagnostics. Recommendation: replace check-then-rename with `os.open(O_CREAT | O_EXCL)` atomic create-or-fail to truly atomize the slot claim.)
 - **Items rejected by human**: none yet
 - **Notes**: `_detect_os()` already uses `sys.platform` per #9903 (L256); `_spawn_macos` writes self-deleting tmp script — orphans if Terminal.app exits before reaching the `rm -f` line, edge case; `_spawn_linux` unconditionally `tmux kill-session` before `new-session`, intentional force-restart behavior; `_parse_local_config` called per-role in `boot_all` with no caching (minor inefficiency, file is tiny); `boot_agent` swallows `(ImportError, Exception)` from `orphan_cleanup.sweep()` correctly (best-effort cleanup must not block boot).
+
+## Scan — 2026-05-23 00:38
+
+- **Files scanned**: references/scripts/git_ops.py (focused: commit_code, _is_state_file)
+- **Findings**: 1 filed — #9963 (TASK: defensive unstage in commit_code so state files never leak into feature PRs; follow-up to #9946 discovery)
+- **Trigger**: empirical observation during #9946 implementation/merge cycles, not a fresh code read
