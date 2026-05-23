@@ -27,7 +27,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Roles whose comments count as "QA feedback" that needs rework
-QA_FEEDBACK_ROLES = {"pm", "qa"}
+# #6274 dual-aware: "verifier" is the new canonical for the qa role; both names
+# are accepted during the 30-day window (post-6274.3 cutover, "qa" is removed
+# and this collapses to {"pm", "verifier"}).
+QA_FEEDBACK_ROLES = {"pm", "qa", "verifier"}
 
 
 def _parse_timestamp(ts):

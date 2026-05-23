@@ -20,8 +20,9 @@ Usage:
 Role authority (who may call `transition`):
   - PM  (--role pm  or pm-lead)    : pending -> planning/approved, planning -> planned,
                                      planned -> approved; pending-test -> in-progress/pending-ship
-  - QA  (--role qa  or qa-lead)    : pending-test -> in-progress, pending-test -> pending-ship
-  - Assigned dev role (--role <r>) : open -> in-progress, approved -> in-progress,
+  - QA  (--role verifier or verifier-lead) : pending-test -> in-progress, pending-test -> pending-ship
+                                     #6274 D11 dual-aware: old `qa`/`qa-lead` still accepted (deprecation warning).
+  - Assigned worker role (--role <r>) : open -> in-progress, approved -> in-progress,
                                      in-progress <-> pending-test, open -> pending-test,
                                      in-progress -> approved (must match issue's `role:*` label)
   - DM  (--role dm  or dm-lead)    : in-progress -> pending-ship, pending-ship -> shipped,
@@ -1021,7 +1022,7 @@ def transition(number, from_status, to_status, role=None, force=False):
         number: issue number
         from_status: current status (short or full label)
         to_status: target status (short or full label)
-        role: caller's role (e.g. "skill-lead", "pm", "qa-lead"). Required
+        role: caller's role (e.g. "skill-lead", "pm", "verifier-lead"). Required
               unless `force` is set. Checked against ROLE_AUTHORITY.
         force: human override — bypasses role authority AND the unread-feedback
               guard. Does NOT bypass legality.
