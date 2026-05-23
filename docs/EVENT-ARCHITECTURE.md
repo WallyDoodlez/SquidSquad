@@ -688,6 +688,66 @@ Recommended: **Option B**. Acking doesn't mean "I'm done with the work" — it j
 
 ---
 
+### 8.1 Improvement subloop (what an agent does when the queue is empty)
+
+In v1, agents ran improvement scans on quiet `/loop` cycles (memory: `feedback_scan_every_quiet`). In v2 there are no cycles — agents only wake on nudges. If we did nothing else, an agent that handles all its events would go idle forever and never run improvement work. Two problems:
+
+1. **Improvement scans stop happening.** Workflow gaps go undetected; doc-scan drift accumulates; vault never gets optimized.
+2. **Tokens still burn while idle.** Even an idle Claude session has a context cost per cycle. Doing literally nothing means we pay for nothing.
+
+The **improvement subloop** is the answer. Filed as `#9893` (`#9873-D`): *"improvement subloop trigger + token-burn throttle when cursor at end of queue."*
+
+#### When it triggers
+
+After the agent completes its read/decide/act/ack walk in §8.0, it checks: *is my cursor at the head of the deque?* If yes, the agent's queue is fully drained.
+
+```mermaid
+flowchart TD
+    Start([nudge processed, ack-cursor emitted])
+    QEmpty{cursor at<br/>deque head?}
+    Throttle{token-burn<br/>throttle OK?}
+    Subloop[run improvement subloop:<br/>one bounded task]
+    Idle[idle wait for next nudge]
+
+    Start --> QEmpty
+    QEmpty -->|no - more events past cursor| Idle
+    QEmpty -->|yes - drained| Throttle
+    Throttle -->|recent subloop ran<br/>within throttle window| Idle
+    Throttle -->|cooldown elapsed| Subloop
+    Subloop --> Idle
+```
+
+#### Token-burn throttle
+
+Without throttling, an agent at cursor-end would run improvement work every time a nudge arrives that turns out to be uninteresting (skip-filter). That's worst-case: every irrelevant nudge triggers improvement work.
+
+Throttle rule (locked): **at most one improvement subloop per agent per N minutes**, where N defaults to 30 (matches the old `/loop` cadence — same observable improvement-scan frequency as v1, without the per-cycle cost when work IS arriving).
+
+`.squidsquad/<role>/.subloop-last-run` records the last subloop timestamp. Agent checks this file before triggering. Atomic write per the §9 protocol.
+
+#### What the subloop does
+
+Single bounded task per fire — not a full cycle. Examples (role-specific, per existing per-role improvement-scan sub-skills):
+- **pm**: pipeline sentinel + improvement scan (process gaps, stalled items, doc drift)
+- **verifier**: TEST-PLAN backlog catch-up (write plans for items at pending-test that lack one)
+- **worker**: doc-scan or test-coverage scan on owned modules
+- **dm**: doc realignment + CHANGELOG hygiene + version-bump readiness check
+
+Output of the subloop may itself be a new `assigned-to` (e.g., pm-subloop finds a process gap, files a bug and routes to the owning role). That nudges the owning role into work — but only via the same `/work/assign` path everything else uses; no special bus channel for subloop output.
+
+#### Interaction with nudges arriving mid-subloop
+
+If a new nudge arrives WHILE the subloop is running:
+- The subloop completes its current bounded task (does NOT interrupt mid-edit).
+- After completion, agent re-enters the read/decide/act/ack walk from §8.0 with the new events.
+- This is conservative — could be optimized later to allow nudge preemption if a high-priority `event_context` arrives. Out of scope for v1.
+
+#### State machine integration
+
+The improvement subloop runs while the agent's `status=ready`. It does NOT flip status to "working" or anything else; from harness's perspective the agent is still idle (just doing background self-care). Health poller continues to see the agent as alive via process-liveness checks.
+
+---
+
 ## 9. State persistence map
 
 | What | Where | Why |
@@ -696,6 +756,7 @@ Recommended: **Option B**. Acking doesn't mean "I'm done with the work" — it j
 | In-flight events | `.squidsquad/.event-state.json` | Re-delivery on timeout (#9873-E) |
 | Agent intent + PID | `.squidsquad/.harness-state.json` (harness-owned) | Harness owns agent lifecycle |
 | Agent working state | `.squidsquad/<role>/working-state.md` (agent-owned) | Resume-from-crash checkpoint |
+| Improvement subloop throttle | `.squidsquad/<role>/.subloop-last-run` (agent-owned) | Timestamp of last subloop fire; gates next eligibility (§8.1) |
 | Last-seen forge event | EAD-internal persistence | Don't re-emit assigned-to on restart |
 | Work state | GitHub Issues (forge) | Source of truth for status, comments, PRs |
 | Decisions / institutional memory | `.squidsquad/vault/` | Long-lived rationale |
@@ -759,7 +820,7 @@ To land v2 cleanly, the following are retired or rewritten:
 | `#9873-A` (cursor migration + ack split) | shipped | Permanent — sub-types of v2's `ack` concept |
 | `#9873-B` / `#9891` (event_poll nudge-only) | pending | Absorbed into v2 umbrella |
 | `#9873-C` / `#9892` (agent read/decide/act/ack contract) | pending | Absorbed into v2 umbrella |
-| `#9873-D` / `#9893` (improvement subloop trigger) | pending | Possibly absorbed; possibly deferred |
+| `#9873-D` / `#9893` (improvement subloop trigger) | pending | Absorbed (per §8.1: cursor-at-head trigger + token-burn throttle) |
 | `#9873-E` / `#9894` (timeout_scan re-nudge) | pending | Absorbed |
 | `#9873-F` / `#9895` (TUI ack visualization) | pending | Out of scope, POST-V1 |
 | `#9580` (event-mode degraded fallback = polling) | pending | Confirms v2's fallback path |
