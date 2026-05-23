@@ -199,8 +199,9 @@ Consequences:
 ### Tied issues
 
 - **#9969** (manifest.md naming) — should be resolved as a fallout of #9968 Phase 2: Option B from #9969's triage maps cleanly to any of α/β/γ; Option C (rename source file) becomes more attractive if γ is picked.
+- **#9970** (composed CLAUDE.md drift from #9925) — DM cycle 1314 surfaced 182 lines of source-vs-composed delta across dm/qa/skill (sub-skills updated by #9925, composed outputs never regenerated). Measurable proof that today's pipeline allows ship-without-recompose. Concrete data point for §3's root cause: no PR check, no auto-recompose, no pre-ship gate. Resolution falls out of Phase 2 lock-in; interim PR-check could ship ahead as a quick-win.
 - **#9965** (6274.2 terminology rename, in-progress) — actively rewrites the L1-L4 source files this audit operates on. Phase 1 research (this doc) is read-only and parallel. Phase 2 discussion and beyond should sequence after 6274.2 ships so any concrete structural changes don't conflict on the same files.
-- **#9925** (4-layer responsibility model, shipped cycle 1583) — established the L1-L4 model that produces today's scatter; this audit is the natural follow-on that didn't happen at the time.
+- **#9925** (4-layer responsibility model, shipped cycle 1583) — established the L1-L4 model that produces today's scatter; this audit is the natural follow-on that didn't happen at the time. Also the source of #9970's drift evidence — #9925 shipped without committing the regenerated composed outputs.
 
 ### Vault references
 
