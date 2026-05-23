@@ -4,35 +4,35 @@
     {
       "id": "#8703",
       "lifted_at": "2026-05-18 06:20",
-      "lifted_because": "Phase 5 bundle complete \u2014 #8694, #8695, #8696, #8697, #8700, #8814 all shipped. Event-driven mode is live. Resuming /loop architecture doc updates next rotation",
+      "lifted_because": "Phase 5 bundle complete — #8694, #8695, #8696, #8697, #8700, #8814 all shipped. Event-driven mode is live. Resuming /loop architecture doc updates next rotation",
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "docs/event-bus.md",
+  "last_scanned": "README.md",
   "rotation_count": 56,
   "scan_history": [
     {
       "file": "SKILL.md:sections-4-6",
       "date": "2026-05-23",
       "findings": 0,
-      "note": "Rotation 55. Full read of lines 163-327. Verified: line 172 iteration-log retention 'last 20' claim matches reality (ls .squidsquad/dm/iterations/ | wc -l \u2192 20); line 176 health-monitoring chain accurate post-#9905/#9903 sweep; line 178 auto-versioning logic accurate (just exercised in cycle 1271 v0.43.0 bump); line 182 Multi-model subagents example deepseek-v4-pro still matches config.md (R54 cycle-1279 fix intact); [Role]/PM/QA/DM Ralph Loop summaries accurate; Git Protocol line 274 tracker.py transition guidance current; Branch+PR + Auto-Merge sections both accurate per #9478 + the harness recompose pattern; Setup Instructions (sec 6) WIZARD.md single-source-of-truth + helper scripts list all valid (wizard.py / manifest.py / compose.py deploy). Coverage by full re-read."
+      "note": "Rotation 55. Full read of lines 163-327. Verified: line 172 iteration-log retention 'last 20' claim matches reality (ls .squidsquad/dm/iterations/ | wc -l → 20); line 176 health-monitoring chain accurate post-#9905/#9903 sweep; line 178 auto-versioning logic accurate (just exercised in cycle 1271 v0.43.0 bump); line 182 Multi-model subagents example deepseek-v4-pro still matches config.md (R54 cycle-1279 fix intact); [Role]/PM/QA/DM Ralph Loop summaries accurate; Git Protocol line 274 tracker.py transition guidance current; Branch+PR + Auto-Merge sections both accurate per #9478 + the harness recompose pattern; Setup Instructions (sec 6) WIZARD.md single-source-of-truth + helper scripts list all valid (wizard.py / manifest.py / compose.py deploy). Coverage by full re-read."
     },
     {
       "file": "SKILL.md:sections-1-3",
       "date": "2026-05-23",
       "findings": 2,
       "fixes": [
-        "Sec 2 file structure tree (line 98) \u2014 added .squidsquad/project/ directory with shared-responsibility.md + per-role *-responsibility.md stubs. This is the L4 install-specific override layer introduced by #9925's 4-layer responsibility model; was missing from the user-facing file-structure documentation despite being a live load-bearing directory with content shipped to every install.",
-        "Sec 3 Feature Lifecycle 5-Phase (lines 149-159) \u2014 full update to current #9184 workflow: (a) filename pattern FEAT-XXX-RESEARCH.md / FEAT-XXX-CONTEXT.md / FEAT-XXX-TEST-PLAN.md \u2192 RESEARCH-NUMBER.md / CONTEXT-NUMBER.md / TEST-PLAN-NUMBER.md (the FEAT-XXX prefix was dropped at the #9184 cutover); (b) Phase 3 (PM Planning) corrected \u2014 PM no longer writes test plans (QA owns test-plan authorship in phase 5 under the #9184 split); (c) Phase 5 (QA) expanded to enumerate the 3 artifacts QA produces (TEST-PLAN-NUMBER.md, TEST-NUMBER-tests.py, QA-RESULTS-NUMBER.md); (d) auto-delete-after-ship claim removed \u2014 planning artifacts persist on main as the audit trail (verified by ls .squidsquad/pm/planning/ showing CONTEXT-9873-A.md, CONTEXT-9925.md, CONTEXT-9926.md, CONTEXT-6274.md etc. all for closed/shipped issues). Committed manually as 2908e2cb (1 commit covering both sec-2 + sec-3 fixes) because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
+        "Sec 2 file structure tree (line 98) — added .squidsquad/project/ directory with shared-responsibility.md + per-role *-responsibility.md stubs. This is the L4 install-specific override layer introduced by #9925's 4-layer responsibility model; was missing from the user-facing file-structure documentation despite being a live load-bearing directory with content shipped to every install.",
+        "Sec 3 Feature Lifecycle 5-Phase (lines 149-159) — full update to current #9184 workflow: (a) filename pattern FEAT-XXX-RESEARCH.md / FEAT-XXX-CONTEXT.md / FEAT-XXX-TEST-PLAN.md → RESEARCH-NUMBER.md / CONTEXT-NUMBER.md / TEST-PLAN-NUMBER.md (the FEAT-XXX prefix was dropped at the #9184 cutover); (b) Phase 3 (PM Planning) corrected — PM no longer writes test plans (QA owns test-plan authorship in phase 5 under the #9184 split); (c) Phase 5 (QA) expanded to enumerate the 3 artifacts QA produces (TEST-PLAN-NUMBER.md, TEST-NUMBER-tests.py, QA-RESULTS-NUMBER.md); (d) auto-delete-after-ship claim removed — planning artifacts persist on main as the audit trail (verified by ls .squidsquad/pm/planning/ showing CONTEXT-9873-A.md, CONTEXT-9925.md, CONTEXT-9926.md, CONTEXT-6274.md etc. all for closed/shipped issues). Committed manually as 2908e2cb (1 commit covering both sec-2 + sec-3 fixes) because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
       ],
-      "note": "Rotation 55. Full read of lines 1-162. Verified: frontmatter version 0.43.0 matches config.md; line 10 'PM, QA, and DM all mandatory' accurate post-#6274.1 (steady-state names still in user-facing docs; dual-aware shim is transitional); Roles table accurate; Common team shapes accurate; label taxonomy still uses pre-cutover role:dev/role:qa names (intentional \u2014 user-facing docs reflect steady state, #6274.1 dual-tagging is internal). Bug/feature flows + Discussion Protocol accurate. Two real drifts caught and fixed."
+      "note": "Rotation 55. Full read of lines 1-162. Verified: frontmatter version 0.43.0 matches config.md; line 10 'PM, QA, and DM all mandatory' accurate post-#6274.1 (steady-state names still in user-facing docs; dual-aware shim is transitional); Roles table accurate; Common team shapes accurate; label taxonomy still uses pre-cutover role:dev/role:qa names (intentional — user-facing docs reflect steady state, #6274.1 dual-tagging is internal). Bug/feature flows + Discussion Protocol accurate. Two real drifts caught and fixed."
     },
     {
       "file": "README.md",
       "date": "2026-05-23",
       "findings": 1,
       "fixes": [
-        "Line 41 Multi-model subagents \u2014 corrected stale example: 'external models like GPT 5.2 via API' \u2192 'external models like DeepSeek v4 Pro via API'. Same pattern as cycle-1279 SKILL.md fix; GPT 5.2 is non-existent and predates the DeepSeek v4 Pro standardization that's been the actual Research Model since v0.40.x. Brings README's illustrative example into alignment with both config.md and the corrected SKILL.md sec 4-6 example. Committed manually as 6e53aecf because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
+        "Line 41 Multi-model subagents — corrected stale example: 'external models like GPT 5.2 via API' → 'external models like DeepSeek v4 Pro via API'. Same pattern as cycle-1279 SKILL.md fix; GPT 5.2 is non-existent and predates the DeepSeek v4 Pro standardization that's been the actual Research Model since v0.40.x. Brings README's illustrative example into alignment with both config.md and the corrected SKILL.md sec 4-6 example. Committed manually as 6e53aecf because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
       ],
       "note": "Rotation 55 start. Full read of 165 lines. Verified: docs/event-bus.md exists (was in Documentation table); Forgejo backend actually implemented via forge_adapter.py + forgejo_setup.py (line 31 claim accurate); harness GET /status code_version block describes #9243 functionality (intact); squidsquad_cli.py 4-of-5 command Quick Start is intentional onboarding minimum (verified previously); Documentation table all 6 entries resolve. Single finding was the same GPT 5.2 example name drift that hit SKILL.md."
     },
@@ -40,7 +40,7 @@
       "file": "CHANGELOG.md",
       "date": "2026-05-23",
       "findings": 0,
-      "note": "Rotation 54 close \u2014 advancing rotation_count to 55. CHANGELOG.md v0.43.0 section (10 Fixed items) verified against working-state ship order: #9905, #9902, #9903, #9904, #9901, #9927, #9930, #9932, #9934, #9937 \u2014 exact match. User-value framing intact (no internal jargon). Date 2026-05-22 accurate. v0.42.0 section (1 Added, 9 Fixed) still valid from R54 cycle-1271 bump add. v0.41.0/v0.40.0 historical content stable. Post-v0.43.0 ships (#9939 #9941 #9926 #9925 #9946) correctly absent \u2014 they'll land in v0.44.0 at next bump (counter currently 5/10). R54 summary: 7 docs covered (1 README + 3 SKILL.md chunks + ARCHITECTURE + sub-skill-guide + CONTRIBUTING + CHANGELOG), 3 real fixes (SKILL.md sec 4-6 line 179 gpt-5.2->deepseek-v4-pro, ARCHITECTURE.md line 77 thin_launcher.py line drift :168->:184 \u2014 second drift on this exact line, sub-skill-guide.md added {{role-roster}} directive section). Productive rotation."
+      "note": "Rotation 54 close — advancing rotation_count to 55. CHANGELOG.md v0.43.0 section (10 Fixed items) verified against working-state ship order: #9905, #9902, #9903, #9904, #9901, #9927, #9930, #9932, #9934, #9937 — exact match. User-value framing intact (no internal jargon). Date 2026-05-22 accurate. v0.42.0 section (1 Added, 9 Fixed) still valid from R54 cycle-1271 bump add. v0.41.0/v0.40.0 historical content stable. Post-v0.43.0 ships (#9939 #9941 #9926 #9925 #9946) correctly absent — they'll land in v0.44.0 at next bump (counter currently 5/10). R54 summary: 7 docs covered (1 README + 3 SKILL.md chunks + ARCHITECTURE + sub-skill-guide + CONTRIBUTING + CHANGELOG), 3 real fixes (SKILL.md sec 4-6 line 179 gpt-5.2->deepseek-v4-pro, ARCHITECTURE.md line 77 thin_launcher.py line drift :168->:184 — second drift on this exact line, sub-skill-guide.md added {{role-roster}} directive section). Productive rotation."
     },
     {
       "file": "CONTRIBUTING.md",
@@ -53,16 +53,16 @@
       "date": "2026-05-23",
       "findings": 1,
       "fixes": [
-        "Added new '### The Role-Roster Directive' subsection between Runtime Directive and Build Pipeline (lines 115-129). Documents the {{role-roster}} compose-time directive introduced by #9925 (compose.py:550 _inject_role_roster) \u2014 was previously undocumented in this guide despite being a load-bearing composition feature. Covered: marker syntax, source (manifest.yaml), active-roles definition, ordering vs include resolution, and the 3 degraded modes (missing display_name = build error; missing tagline/description = stderr warn; missing marker = stderr warn). Committed manually as 1aaf6093 because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
+        "Added new '### The Role-Roster Directive' subsection between Runtime Directive and Build Pipeline (lines 115-129). Documents the {{role-roster}} compose-time directive introduced by #9925 (compose.py:550 _inject_role_roster) — was previously undocumented in this guide despite being a load-bearing composition feature. Covered: marker syntax, source (manifest.yaml), active-roles definition, ordering vs include resolution, and the 3 degraded modes (missing display_name = build error; missing tagline/description = stderr warn; missing marker = stderr warn). Committed manually as 1aaf6093 because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
       ],
-      "note": "Rotation 54. Full read of all 301 lines. Verified: directory tree (lines 32-58) accurate \u2014 sub-skills/{common,roles/{pm,qa,dm,dev},capabilities,project}/ all exist; capabilities example list 'figma, google_stitch, local_delivery, local_html' verified via ls. SOUL.md assembly description (line 111) accurate. Placeholders table (lines 162-170) accurate \u2014 all 7 placeholders still substituted by compose.py:_substitute_placeholders. Entry-files example (line 71+) accurate. Build pipeline (lines 117-127) accurate. Walkthrough vault-remember reference accurate. Only gap was the missing {{role-roster}} directive section."
+      "note": "Rotation 54. Full read of all 301 lines. Verified: directory tree (lines 32-58) accurate — sub-skills/{common,roles/{pm,qa,dm,dev},capabilities,project}/ all exist; capabilities example list 'figma, google_stitch, local_delivery, local_html' verified via ls. SOUL.md assembly description (line 111) accurate. Placeholders table (lines 162-170) accurate — all 7 placeholders still substituted by compose.py:_substitute_placeholders. Entry-files example (line 71+) accurate. Build pipeline (lines 117-127) accurate. Walkthrough vault-remember reference accurate. Only gap was the missing {{role-roster}} directive section."
     },
     {
       "file": "docs/ARCHITECTURE.md",
       "date": "2026-05-23",
       "findings": 1,
       "fixes": [
-        "L2 Agent Process Tree section line 77 \u2014 corrected stale line ref 'thin_launcher.py:168' \u2192 ':184'. shutil.which call has drifted again since the R53 (149\u2192168) fix, after the recent #9905/#9903/#9927 platform.system sweep added lines to thin_launcher.py. Verified via grep that shutil.which('claude') is now at line 184. Committed manually as c0978738 because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
+        "L2 Agent Process Tree section line 77 — corrected stale line ref 'thin_launcher.py:168' → ':184'. shutil.which call has drifted again since the R53 (149→168) fix, after the recent #9905/#9903/#9927 platform.system sweep added lines to thin_launcher.py. Verified via grep that shutil.which('claude') is now at line 184. Committed manually as c0978738 because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
       ],
       "note": "Rotation 54. Full read of all 6 layer sections + Agent Process Tree + Three claude.exe populations + How Layers Interact + Agent Roles + Feature Lifecycle + Coordination Model + Changing Things + Key Design Decisions. Verified: L1/L2/L3/L4 key-file path references all valid; orphan cleanup mechanism (#9688) reference still accurate after #9926 per-role-skip improvement (basic mechanism unchanged); three claude.exe populations description aligned with current #9688/#9937 implementation; line 57 harness.py description (FastAPI + PR merging + auto-recomposition) intact post-#9925/#9946 template-touching ships. Only finding was the recurring shutil.which line drift."
     },
@@ -77,9 +77,9 @@
       "date": "2026-05-22",
       "findings": 1,
       "fixes": [
-        "Sec 4 line 179 \u2014 corrected stale Multi-model subagents example: 'Research Model: gpt-5.2' \u2192 'Research Model: deepseek-v4-pro'. The gpt-5.2 example name is non-existent and predates the deepseek-v4-pro standardization that's been the actual configured Research Model since v0.40.x. Brings the illustrative example into alignment with config.md. Committed manually as 38d38f71 because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
+        "Sec 4 line 179 — corrected stale Multi-model subagents example: 'Research Model: gpt-5.2' → 'Research Model: deepseek-v4-pro'. The gpt-5.2 example name is non-existent and predates the deepseek-v4-pro standardization that's been the actual configured Research Model since v0.40.x. Brings the illustrative example into alignment with config.md. Committed manually as 38d38f71 because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
       ],
-      "note": "Rotation 54. Full read of sec 4 (Ralph Loop, lines 163-265) + sec 5 (Git Protocol + Branch+PR + Auto-Merge, 266-298) + sec 6 (Setup Instructions, 302-322). Verified: line 173 health-monitoring (PID primary + .claude-pid fallback + .health legacy) accurate post-#9905/#9903 sweep \u2014 no mention of platform.system needed (implementation detail). Line 175 auto-versioning logic accurate. Line 277+ Branch+PR Workflow Slice C rewrite stable. DM Ralph Loop (245-262) summary still accurate after recent #9930/#9934/#9939 state-branch family ships (those are implementation, not loop-shape changes). Auto-Merge section accurate. Only finding was the example model name."
+      "note": "Rotation 54. Full read of sec 4 (Ralph Loop, lines 163-265) + sec 5 (Git Protocol + Branch+PR + Auto-Merge, 266-298) + sec 6 (Setup Instructions, 302-322). Verified: line 173 health-monitoring (PID primary + .claude-pid fallback + .health legacy) accurate post-#9905/#9903 sweep — no mention of platform.system needed (implementation detail). Line 175 auto-versioning logic accurate. Line 277+ Branch+PR Workflow Slice C rewrite stable. DM Ralph Loop (245-262) summary still accurate after recent #9930/#9934/#9939 state-branch family ships (those are implementation, not loop-shape changes). Auto-Merge section accurate. Only finding was the example model name."
     },
     {
       "file": "README.md",
@@ -91,7 +91,7 @@
       "file": "CHANGELOG.md",
       "date": "2026-05-21",
       "findings": 0,
-      "note": "Rotation 53 close \u2014 advancing rotation_count to 54. CHANGELOG.md just had v0.41.0 section added in cycle 1243 (the bump I performed this session). 20-item v0.41.0 Added/Fixed/Internal verified accurate against gh-query of shipped items (21 total minus #8915 which was already in v0.40.0 \u2014 correctly excluded). User-value framing maintained. R53 summary: 7-doc full rotation, 1 real fix (docs/ARCHITECTURE.md thin_launcher line ref :149\u2192:168 after #9688's new Process Tree section), rest deterministic-equivalent."
+      "note": "Rotation 53 close — advancing rotation_count to 54. CHANGELOG.md just had v0.41.0 section added in cycle 1243 (the bump I performed this session). 20-item v0.41.0 Added/Fixed/Internal verified accurate against gh-query of shipped items (21 total minus #8915 which was already in v0.40.0 — correctly excluded). User-value framing maintained. R53 summary: 7-doc full rotation, 1 real fix (docs/ARCHITECTURE.md thin_launcher line ref :149→:168 after #9688's new Process Tree section), rest deterministic-equivalent."
     },
     {
       "file": "CONTRIBUTING.md",
@@ -110,9 +110,9 @@
       "date": "2026-05-21",
       "findings": 1,
       "fixes": [
-        "L2 Agent Process Tree section line 77 \u2014 corrected stale line ref 'thin_launcher.py:149' \u2192 ':168' (shutil.which call has drifted since the #9688 ARCHITECTURE.md addition; actual location verified via grep). Committed manually as 70589781 because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
+        "L2 Agent Process Tree section line 77 — corrected stale line ref 'thin_launcher.py:149' → ':168' (shutil.which call has drifted since the #9688 ARCHITECTURE.md addition; actual location verified via grep). Committed manually as 70589781 because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
       ],
-      "note": "Rotation 53. Full read of the file. New 'Agent Process Tree' subsection (lines 67-95) added by #9688 (cycle e3989001, pre-cycle-1198). Verified: process tree shape accurate (python.exe\u2192cmd.exe\u2192claude.exe \u2014 Windows .CMD shim behavior); .claude-pid convention matches harness.py + thin_launcher reality (cmd.exe PID stored, claude.exe via ParentProcessId lookup); kill/orphan/protected-agent enumeration aligned with #9688 implementation. Rest of file (six layers, lifecycle, coordination, design decisions) unchanged since #9688 commit \u2014 no further drift."
+      "note": "Rotation 53. Full read of the file. New 'Agent Process Tree' subsection (lines 67-95) added by #9688 (cycle e3989001, pre-cycle-1198). Verified: process tree shape accurate (python.exe→cmd.exe→claude.exe — Windows .CMD shim behavior); .claude-pid convention matches harness.py + thin_launcher reality (cmd.exe PID stored, claude.exe via ParentProcessId lookup); kill/orphan/protected-agent enumeration aligned with #9688 implementation. Rest of file (six layers, lifecycle, coordination, design decisions) unchanged since #9688 commit — no further drift."
     },
     {
       "file": "SKILL.md:sections-7-8+slash-commands",
@@ -142,7 +142,7 @@
       "file": "CHANGELOG.md",
       "date": "2026-05-20",
       "findings": 0,
-      "note": "Rotation 52 close \u2014 advancing rotation_count to 53. CHANGELOG.md unchanged since cycle 1070. Coverage by deterministic equivalence. R52 summary: full 7-doc rotation, 0 findings."
+      "note": "Rotation 52 close — advancing rotation_count to 53. CHANGELOG.md unchanged since cycle 1070. Coverage by deterministic equivalence. R52 summary: full 7-doc rotation, 0 findings."
     },
     {
       "file": "CONTRIBUTING.md",
@@ -190,7 +190,7 @@
       "file": "CHANGELOG.md",
       "date": "2026-05-20",
       "findings": 0,
-      "note": "Rotation 51 close \u2014 advancing rotation_count to 52. CHANGELOG.md unchanged since cycle 1070 v0.40.0 bump. Coverage by deterministic equivalence. Rotation 51 summary: full 7-doc coverage, 0 new findings \u2014 all stable since R49/R50 closing state."
+      "note": "Rotation 51 close — advancing rotation_count to 52. CHANGELOG.md unchanged since cycle 1070 v0.40.0 bump. Coverage by deterministic equivalence. Rotation 51 summary: full 7-doc coverage, 0 new findings — all stable since R49/R50 closing state."
     },
     {
       "file": "CONTRIBUTING.md",
@@ -232,13 +232,13 @@
       "file": "README.md",
       "date": "2026-05-20",
       "findings": 0,
-      "note": "Rotation 51 start. README.md still at cycle 1098 (a20c931a) \u2014 no edits since R50 scan. Coverage by deterministic equivalence."
+      "note": "Rotation 51 start. README.md still at cycle 1098 (a20c931a) — no edits since R50 scan. Coverage by deterministic equivalence."
     },
     {
       "file": "CHANGELOG.md",
       "date": "2026-05-20",
       "findings": 0,
-      "note": "Rotation 50 close \u2014 advancing rotation_count to 51. CHANGELOG.md unchanged since cycle 1070 v0.40.0 bump. R49 0-finding scan at cycle 1122 still valid. Coverage by deterministic equivalence. Rotation 50 summary: full coverage of 7 docs (README, SKILL.md\u00d73, ARCHITECTURE, sub-skill-guide, CONTRIBUTING, CHANGELOG) over ~12 hours with 0 new findings \u2014 all deterministic-equivalent to R49 closing state. Pipeline calm reflected in doc stability."
+      "note": "Rotation 50 close — advancing rotation_count to 51. CHANGELOG.md unchanged since cycle 1070 v0.40.0 bump. R49 0-finding scan at cycle 1122 still valid. Coverage by deterministic equivalence. Rotation 50 summary: full coverage of 7 docs (README, SKILL.md×3, ARCHITECTURE, sub-skill-guide, CONTRIBUTING, CHANGELOG) over ~12 hours with 0 new findings — all deterministic-equivalent to R49 closing state. Pipeline calm reflected in doc stability."
     },
     {
       "file": "CONTRIBUTING.md",
@@ -250,117 +250,117 @@
       "file": "docs/sub-skill-guide.md",
       "date": "2026-05-20",
       "findings": 0,
-      "note": "Rotation 50. Unchanged since cycle 1116 R49 fix (capabilities example list). Confirmed capabilities/ inventory still 4 (figma, google_stitch, local_delivery, local_html) \u2014 matches doc. Coverage by deterministic equivalence."
+      "note": "Rotation 50. Unchanged since cycle 1116 R49 fix (capabilities example list). Confirmed capabilities/ inventory still 4 (figma, google_stitch, local_delivery, local_html) — matches doc. Coverage by deterministic equivalence."
     },
     {
       "file": "docs/ARCHITECTURE.md",
       "date": "2026-05-20",
       "findings": 0,
-      "note": "Rotation 50. Unchanged since cycle 1113 R48 first-real-scan (0 findings). Coverage by deterministic equivalence \u2014 git log -- docs/ARCHITECTURE.md confirms no commits since."
+      "note": "Rotation 50. Unchanged since cycle 1113 R48 first-real-scan (0 findings). Coverage by deterministic equivalence — git log -- docs/ARCHITECTURE.md confirms no commits since."
     },
     {
       "file": "SKILL.md:sections-7-8+slash-commands",
       "date": "2026-05-20",
       "findings": 0,
-      "note": "Rotation 50. Sec 7-8 + sec 10 slash-command body stable since cycle-1137 R49 close fix (line 472 /squidsquad-status health-source) \u2014 verified intact via grep. No edits since. Coverage by deterministic equivalence."
+      "note": "Rotation 50. Sec 7-8 + sec 10 slash-command body stable since cycle-1137 R49 close fix (line 472 /squidsquad-status health-source) — verified intact via grep. No edits since. Coverage by deterministic equivalence."
     },
     {
       "file": "SKILL.md:sections-4-6",
       "date": "2026-05-20",
       "findings": 0,
-      "note": "Rotation 50. Sec 4-6 stable since cycle-1131 R49 fix (line 238 QA Loop step 7 health-source) \u2014 verified intact via grep. No edits since. Coverage by deterministic equivalence."
+      "note": "Rotation 50. Sec 4-6 stable since cycle-1131 R49 fix (line 238 QA Loop step 7 health-source) — verified intact via grep. No edits since. Coverage by deterministic equivalence."
     },
     {
       "file": "SKILL.md:sections-1-3",
       "date": "2026-05-20",
       "findings": 0,
-      "note": "Rotation 50. Sec 1-3 stable since cycle-1128 R49 fix (pm-tree planning/ row at line 95) \u2014 confirmed via grep that both planning/ rows (line 84 [role]/, line 95 pm/) are intact. No new edits to sec 1-3 since 1128; later commits (1131, 1137) touched sec 4-6 and sec 10 only. Coverage by deterministic equivalence."
+      "note": "Rotation 50. Sec 1-3 stable since cycle-1128 R49 fix (pm-tree planning/ row at line 95) — confirmed via grep that both planning/ rows (line 84 [role]/, line 95 pm/) are intact. No new edits to sec 1-3 since 1128; later commits (1131, 1137) touched sec 4-6 and sec 10 only. Coverage by deterministic equivalence."
     },
     {
       "file": "README.md",
       "date": "2026-05-20",
       "findings": 0,
-      "note": "Rotation 49 close \u2192 50 start. README.md unchanged since cycle 1098 (a20c931a #9243 delivery). Prior R49 0-finding verification at cycle 1125 still holds \u2014 same blob, same external surface. Skipped full re-scan since git log -1 confirms no edit since prior scan; coverage discipline satisfied by deterministic equivalence."
+      "note": "Rotation 49 close → 50 start. README.md unchanged since cycle 1098 (a20c931a #9243 delivery). Prior R49 0-finding verification at cycle 1125 still holds — same blob, same external surface. Skipped full re-scan since git log -1 confirms no edit since prior scan; coverage discipline satisfied by deterministic equivalence."
     },
     {
       "file": "SKILL.md:sections-7-8+slash-commands",
       "date": "2026-05-20",
       "findings": 1,
       "fixes": [
-        "Sec 10 (/squidsquad-status command) line 472 \u2014 completed cycle-1101 .health\u2192.claude-pid health-source migration. Was: 'read .health if it exists. Values are booting/dead/error|reason/epoch timestamp. The harness writes the epoch every 5 seconds.' (incorrect after harness moved to .claude-pid PID monitoring per #4966). Now: prefer 'squidsquad_cli.py status' when harness reachable; fall back to current-state mtime + .claude-pid; legacy .health as last-resort; final git-log fallback. Brings command instructions into alignment with line 173 + harness.py canon."
+        "Sec 10 (/squidsquad-status command) line 472 — completed cycle-1101 .health→.claude-pid health-source migration. Was: 'read .health if it exists. Values are booting/dead/error|reason/epoch timestamp. The harness writes the epoch every 5 seconds.' (incorrect after harness moved to .claude-pid PID monitoring per #4966). Now: prefer 'squidsquad_cli.py status' when harness reachable; fall back to current-state mtime + .claude-pid; legacy .health as last-resort; final git-log fallback. Brings command instructions into alignment with line 173 + harness.py canon."
       ],
-      "note": "Rotation 49. Sec 7 (Upgrade Instructions) Steps 1-7 verified clean \u2014 v1\u2192v2 schema migration content is forward-looking (current Architecture Version still 1; matches the documented gating). Sec 8 (Schema Changelog Historical) \u2014 locked history, no drift possible. While reading, spotted carryover .health staleness in sec 10 /squidsquad-status command body (line 472) \u2014 same pattern as cycle-1101 line 173 fix. Applied inline since user-facing slash-command instructions are higher-impact than typical rotation findings."
+      "note": "Rotation 49. Sec 7 (Upgrade Instructions) Steps 1-7 verified clean — v1→v2 schema migration content is forward-looking (current Architecture Version still 1; matches the documented gating). Sec 8 (Schema Changelog Historical) — locked history, no drift possible. While reading, spotted carryover .health staleness in sec 10 /squidsquad-status command body (line 472) — same pattern as cycle-1101 line 173 fix. Applied inline since user-facing slash-command instructions are higher-impact than typical rotation findings."
     },
     {
       "file": "SKILL.md:sections-4-6",
       "date": "2026-05-20",
       "findings": 1,
       "fixes": [
-        "Sec 4 line 238 (QA Ralph Loop step 7) \u2014 corrected health-check source from '.health files for liveness, current-state for phase detail' to 'current-state mtime via cross-clone .local-config paths for liveness (stalled if older than 2\u00d7 iteration interval), file content for phase detail'. QA's actual sub-skill (verification.md Step 6) reads current-state mtime, not .health. .health is legacy/retiring; .claude-pid is harness-side; current-state is what QA reads cross-clone."
+        "Sec 4 line 238 (QA Ralph Loop step 7) — corrected health-check source from '.health files for liveness, current-state for phase detail' to 'current-state mtime via cross-clone .local-config paths for liveness (stalled if older than 2× iteration interval), file content for phase detail'. QA's actual sub-skill (verification.md Step 6) reads current-state mtime, not .health. .health is legacy/retiring; .claude-pid is harness-side; current-state is what QA reads cross-clone."
       ],
-      "note": "Rotation 49. Sec 4 (Ralph Loop) \u2014 line 173 health-monitoring fix from cycle 1101 still intact (.claude-pid as fallback). Line 175 auto-versioning logic still accurate. Lines 177/179 references to run_comprehension_test.py + model_router.py + ~/.squidsquad/secrets verified. Full /loop-architecture rewrite still scoped to #8702. Sec 5 (Git Protocol) verified clean since cycle 1056 fix \u2014 PR Flow + Auto-Merge details still align with implementation. Sec 6 (Setup Instructions) verified clean in cycle 1104 R47 close \u2014 compose.py + wizard.py + manifest.py paths intact."
+      "note": "Rotation 49. Sec 4 (Ralph Loop) — line 173 health-monitoring fix from cycle 1101 still intact (.claude-pid as fallback). Line 175 auto-versioning logic still accurate. Lines 177/179 references to run_comprehension_test.py + model_router.py + ~/.squidsquad/secrets verified. Full /loop-architecture rewrite still scoped to #8702. Sec 5 (Git Protocol) verified clean since cycle 1056 fix — PR Flow + Auto-Merge details still align with implementation. Sec 6 (Setup Instructions) verified clean in cycle 1104 R47 close — compose.py + wizard.py + manifest.py paths intact."
     },
     {
       "file": "SKILL.md:sections-1-3",
       "date": "2026-05-20",
       "findings": 1,
       "fixes": [
-        "Sec 2 line 91-96 \u2014 pm/ directory tree was missing `planning/` subdir. PM stores feature planning artifacts (FEAT-X-RESEARCH.md, CONTEXT.md, TEST-PLAN.md) there \u2014 verified via fs (.squidsquad/pm/planning/AUDIT-*.md present). Added planning/ row between enhancements.md and iterations/."
+        "Sec 2 line 91-96 — pm/ directory tree was missing `planning/` subdir. PM stores feature planning artifacts (FEAT-X-RESEARCH.md, CONTEXT.md, TEST-PLAN.md) there — verified via fs (.squidsquad/pm/planning/AUDIT-*.md present). Added planning/ row between enhancements.md and iterations/."
       ],
-      "note": "Rotation 49 continues. Sec 1 (Architecture) mermaid + roles table + team shapes \u2014 accurate, #6055 pm/qa/dm always-present + #9318 dev-agents=optional confirmed. Sec 3 (Tracker) label taxonomy complete (type/priority/status with HITL/role/severity/special), bug flow + feature 5-phase flow + Discussion Protocol all aligned with tracker.py legal transitions. v0.40.0 frontmatter intact. Harness reachable in this cycle (recovery from earlier wedge). Quiet counter reset 2\u21920."
+      "note": "Rotation 49 continues. Sec 1 (Architecture) mermaid + roles table + team shapes — accurate, #6055 pm/qa/dm always-present + #9318 dev-agents=optional confirmed. Sec 3 (Tracker) label taxonomy complete (type/priority/status with HITL/role/severity/special), bug flow + feature 5-phase flow + Discussion Protocol all aligned with tracker.py legal transitions. v0.40.0 frontmatter intact. Harness reachable in this cycle (recovery from earlier wedge). Quiet counter reset 2→0."
     },
     {
       "file": "README.md",
       "date": "2026-05-20",
       "findings": 0,
-      "note": "Rotation 49 start. 164 lines verified. squidsquad_cli.py commands (start/stop/restart/status/shutdown) confirmed via --help. Quick Start uses 4-of-5 (omits restart) \u2014 intentional onboarding minimum, not staleness. All doc-table links (docs/ARCHITECTURE.md, docs/event-bus.md, docs/sub-skill-guide.md, CONTRIBUTING.md, CHANGELOG.md, SKILL.md, LICENSE) exist. Harness paragraph (last updated cycle 1098 for #9243) accurately describes GET /status code_version block + GET / slim version triple. Communication adapter Telegram/Slack/Discord refs backed by comms_adapter.py. Auto Merge + Code Review Model + Model Routing config-section claims still accurate. State branch 'squid-squad' + migrate_state_branch.py verified. PM/QA/DM always-present claim aligned with #6055 architecture (#9318 confirmed Dev Agents = optional only). v1.0.0 polish bar maintained."
+      "note": "Rotation 49 start. 164 lines verified. squidsquad_cli.py commands (start/stop/restart/status/shutdown) confirmed via --help. Quick Start uses 4-of-5 (omits restart) — intentional onboarding minimum, not staleness. All doc-table links (docs/ARCHITECTURE.md, docs/event-bus.md, docs/sub-skill-guide.md, CONTRIBUTING.md, CHANGELOG.md, SKILL.md, LICENSE) exist. Harness paragraph (last updated cycle 1098 for #9243) accurately describes GET /status code_version block + GET / slim version triple. Communication adapter Telegram/Slack/Discord refs backed by comms_adapter.py. Auto Merge + Code Review Model + Model Routing config-section claims still accurate. State branch 'squid-squad' + migrate_state_branch.py verified. PM/QA/DM always-present claim aligned with #6055 architecture (#9318 confirmed Dev Agents = optional only). v1.0.0 polish bar maintained."
     },
     {
       "file": "CONTRIBUTING.md",
       "date": "2026-05-20",
       "findings": 0,
-      "note": "Rotation 48 continues. 53 lines verified. Issue templates (.github/ISSUE_TEMPLATE/{issue-report.yml,task-request.yml}) \u2713. Dev deps: requirements-dev.txt \u2713, tests/run_tests.py + 'static' mode \u2713 (collected 2676 items, static analysis pytest section confirmed). References to references/scripts/ + references/sub-skills/ \u2713. Doc links SKILL.md, docs/sub-skill-guide.md \u2713. Commit-prefix pattern 'role: description' still canonical. No drift since cycle 1054 fix (rotation 45 pip-install step add)."
+      "note": "Rotation 48 continues. 53 lines verified. Issue templates (.github/ISSUE_TEMPLATE/{issue-report.yml,task-request.yml}) ✓. Dev deps: requirements-dev.txt ✓, tests/run_tests.py + 'static' mode ✓ (collected 2676 items, static analysis pytest section confirmed). References to references/scripts/ + references/sub-skills/ ✓. Doc links SKILL.md, docs/sub-skill-guide.md ✓. Commit-prefix pattern 'role: description' still canonical. No drift since cycle 1054 fix (rotation 45 pip-install step add)."
     },
     {
       "file": "docs/sub-skill-guide.md",
       "date": "2026-05-20",
       "findings": 1,
       "fixes": [
-        "Line 47 directory tree \u2014 refreshed capabilities example list from '(figma, local_delivery, etc.)' to '(figma, google_stitch, local_delivery, local_html, etc.)' to match current capabilities/ inventory of 4 add-ons. Committed manually as 4bc4f7a0 because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
+        "Line 47 directory tree — refreshed capabilities example list from '(figma, local_delivery, etc.)' to '(figma, google_stitch, local_delivery, local_html, etc.)' to match current capabilities/ inventory of 4 add-ons. Committed manually as 4bc4f7a0 because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
       ],
-      "note": "Rotation 48 continues. Path/file refs verified: roles/<role>/{instructions.md, SOUL.md, includes.yml}, sub-skills/{common,roles,capabilities,project}/, references/scripts/{compose.py, vault_remember.py}, references/agent-instructions.md, references/sub-skills/manifest.md. compose.py subcommands all/deploy/deploy-all confirmed against source (line 1237-1261). vault-remember included by dev+pm via includes.yml \u2014 verified. Runtime souls/<role> directive used in all 4 entry files. SOUL.md alongside instructions.md \u2713 (extra subdirs like android/fullstack/ios/web/skill in roles/dm,pm are specialty deployments \u2014 not drift, not documented in canonical tree but not wrong)."
+      "note": "Rotation 48 continues. Path/file refs verified: roles/<role>/{instructions.md, SOUL.md, includes.yml}, sub-skills/{common,roles,capabilities,project}/, references/scripts/{compose.py, vault_remember.py}, references/agent-instructions.md, references/sub-skills/manifest.md. compose.py subcommands all/deploy/deploy-all confirmed against source (line 1237-1261). vault-remember included by dev+pm via includes.yml — verified. Runtime souls/<role> directive used in all 4 entry files. SOUL.md alongside instructions.md ✓ (extra subdirs like android/fullstack/ios/web/skill in roles/dm,pm are specialty deployments — not drift, not documented in canonical tree but not wrong)."
     },
     {
       "file": "docs/ARCHITECTURE.md",
       "date": "2026-05-20",
       "findings": 0,
-      "note": "Rotation 48 first real scan after #8703 lifted. 248 lines verified end-to-end. L1 scripts (cycle_pre/post, git_ops, tracker) \u2713. L2 (harness.py, thin_launcher.py, .harness-state.json, current-state) \u2713. L4 (4\u00d7 includes.yml, sub-skills/common/, compose.py) \u2713. L5 (.squidsquad/[role]/SOUL.md) \u2713. L6 (vault/BRIEFING.md, galaxy/, projects/, areas/, archives/) \u2713. Coordination Model's Telegram/Slack/Discord claim backed by references/scripts/comms_adapter.py + dm/manifest.yaml + local_delivery/manifest.yaml. docs/diagrams/layer-stack.html exists. Feature Lifecycle diagram (HITL states present). Agent Roles table uses generic 'Dev Lead' label \u2014 fine after #9318 since the table describes categories not instantiations. /loop-architecture content is L2 description and \u00a7How-Layers-Interact \u2014 still under #8702 scope for full event-driven rewrite"
+      "note": "Rotation 48 first real scan after #8703 lifted. 248 lines verified end-to-end. L1 scripts (cycle_pre/post, git_ops, tracker) ✓. L2 (harness.py, thin_launcher.py, .harness-state.json, current-state) ✓. L4 (4× includes.yml, sub-skills/common/, compose.py) ✓. L5 (.squidsquad/[role]/SOUL.md) ✓. L6 (vault/BRIEFING.md, galaxy/, projects/, areas/, archives/) ✓. Coordination Model's Telegram/Slack/Discord claim backed by references/scripts/comms_adapter.py + dm/manifest.yaml + local_delivery/manifest.yaml. docs/diagrams/layer-stack.html exists. Feature Lifecycle diagram (HITL states present). Agent Roles table uses generic 'Dev Lead' label — fine after #9318 since the table describes categories not instantiations. /loop-architecture content is L2 description and §How-Layers-Interact — still under #8702 scope for full event-driven rewrite"
     },
     {
       "file": "SKILL.md:sections-7-8",
       "date": "2026-05-19",
       "findings": 0,
-      "note": "Rotation 47 close \u2014 advancing rotation_count to 48. Sec 7 (Upgrade Instructions) \u2014 steps 1-7 verified: version-gap detect, .install-spec.json (exists, ref in wizard.py + squidsquad-upgrade.md), compose.py deploy-all, SOUL.md preservation, vault preservation, ensure-labels (wizard.py supports), commit+push. v1\u2192v2 schema migration content (Step 4) describes target shape \u2014 uncertain on Improvement Scan field-naming under post-migration Flags section; current Architecture Version is still 1 so untestable. Sec 8 (Schema Changelog Historical) \u2014 v0.10.0+ GitHub Issues + Schema 1/2/3 entries are locked history, no drift possible"
+      "note": "Rotation 47 close — advancing rotation_count to 48. Sec 7 (Upgrade Instructions) — steps 1-7 verified: version-gap detect, .install-spec.json (exists, ref in wizard.py + squidsquad-upgrade.md), compose.py deploy-all, SOUL.md preservation, vault preservation, ensure-labels (wizard.py supports), commit+push. v1→v2 schema migration content (Step 4) describes target shape — uncertain on Improvement Scan field-naming under post-migration Flags section; current Architecture Version is still 1 so untestable. Sec 8 (Schema Changelog Historical) — v0.10.0+ GitHub Issues + Schema 1/2/3 entries are locked history, no drift possible"
     },
     {
       "file": "SKILL.md:sections-4-6",
       "date": "2026-05-19",
       "findings": 1,
       "fixes": [
-        "Sec 4 line 172 \u2014 corrected health-monitoring description: '.health files (fallback)' \u2192 '.claude-pid file (fallback)' with legacy .health demoted to last-resort. Matches harness.py header doc (PID check \u2192 .claude-pid \u2192 health_check.py legacy). Independent of #8702 scope (which is /loop\u2192event-driven realignment, not Phase-5 health-infra). Sec 4 /loop-architecture rewrite still scoped to #8702 (status:pending). Sec 5 (Git Protocol) verified clean since cycle 1056 fix. Sec 6 (Setup Instructions) verified clean \u2014 WIZARD.md/manifest.py/compose.py refs all valid"
+        "Sec 4 line 172 — corrected health-monitoring description: '.health files (fallback)' → '.claude-pid file (fallback)' with legacy .health demoted to last-resort. Matches harness.py header doc (PID check → .claude-pid → health_check.py legacy). Independent of #8702 scope (which is /loop→event-driven realignment, not Phase-5 health-infra). Sec 4 /loop-architecture rewrite still scoped to #8702 (status:pending). Sec 5 (Git Protocol) verified clean since cycle 1056 fix. Sec 6 (Setup Instructions) verified clean — WIZARD.md/manifest.py/compose.py refs all valid"
       ]
     },
     {
       "file": "SKILL.md:sections-1-3",
       "date": "2026-05-19",
       "findings": 0,
-      "note": "Rotation 47. Sec 1 (Architecture) \u2014 mermaid diagram + role table + team shapes accurate. Sec 2 (File Structure) \u2014 all dirs accurate including dm/, pm/migrations, qa/qa-log.md, vault PARAG subdirs; vault R/W claim 'PM and dev R/W; QA and DM read-only' matches DM CLAUDE.md vault-protocol fragment. Sec 3 (Tracker) \u2014 label taxonomy complete (type/priority/status with HITL/role/severity/special), bug flow + feature 5-phase flow + Discussion Protocol all match tracker.py. No drift since v0.40.0 frontmatter bump"
+      "note": "Rotation 47. Sec 1 (Architecture) — mermaid diagram + role table + team shapes accurate. Sec 2 (File Structure) — all dirs accurate including dm/, pm/migrations, qa/qa-log.md, vault PARAG subdirs; vault R/W claim 'PM and dev R/W; QA and DM read-only' matches DM CLAUDE.md vault-protocol fragment. Sec 3 (Tracker) — label taxonomy complete (type/priority/status with HITL/role/severity/special), bug flow + feature 5-phase flow + Discussion Protocol all match tracker.py. No drift since v0.40.0 frontmatter bump"
     },
     {
       "file": "README.md",
       "date": "2026-05-19",
       "findings": 0,
-      "note": "Rotation 47 start. Verified all internal links resolve (docs/ARCHITECTURE.md, docs/event-bus.md, docs/sub-skill-guide.md, CONTRIBUTING.md, CHANGELOG.md, SKILL.md, LICENSE). Script paths intact (squidsquad_cli.py, wizard.py, migrate_state_branch.py). Config-field claims accurate (Auto Merge=yes, Code Review Model=deepseek-v4-pro under Model Routing). Labels exist (merge:manual). Last actual edit cycle 988. Minor note: line 75-78 quick-start lists 4 squidsquad_cli commands but CLI has 5 (omits 'restart <role>') \u2014 incompleteness not staleness, not fixing inline"
+      "note": "Rotation 47 start. Verified all internal links resolve (docs/ARCHITECTURE.md, docs/event-bus.md, docs/sub-skill-guide.md, CONTRIBUTING.md, CHANGELOG.md, SKILL.md, LICENSE). Script paths intact (squidsquad_cli.py, wizard.py, migrate_state_branch.py). Config-field claims accurate (Auto Merge=yes, Code Review Model=deepseek-v4-pro under Model Routing). Labels exist (merge:manual). Last actual edit cycle 988. Minor note: line 75-78 quick-start lists 4 squidsquad_cli commands but CLI has 5 (omits 'restart <role>') — incompleteness not staleness, not fixing inline"
     },
     {
       "file": "CHANGELOG.md",
@@ -384,7 +384,7 @@
       "file": "docs/ARCHITECTURE.md",
       "date": "2026-05-18",
       "findings": 0,
-      "note": "Rotation 46 first real scan since #8703 lifted. All path/script/vault refs verified intact (docs/diagrams/layer-stack.html, all 7 references/scripts/, vault subdirs galaxy/projects/areas/archives). /loop-centric architecture text in L2 layer description and How-Layers-Interact section is the scope of TASK #8702 (Phase 6 doc realignment, status:pending \u2014 awaiting approval); not rewritten inline"
+      "note": "Rotation 46 first real scan since #8703 lifted. All path/script/vault refs verified intact (docs/diagrams/layer-stack.html, all 7 references/scripts/, vault subdirs galaxy/projects/areas/archives). /loop-centric architecture text in L2 layer description and How-Layers-Interact section is the scope of TASK #8702 (Phase 6 doc realignment, status:pending — awaiting approval); not rewritten inline"
     },
     {
       "file": "SKILL.md:sections-7-8",
@@ -396,7 +396,7 @@
       "file": "SKILL.md:sections-4-6",
       "date": "2026-05-18",
       "findings": 0,
-      "note": "Rotation 46. Section 4 (Ralph Loop) \u2014 full rewrite to describe event-driven mode as canonical is scoped to TASK #8702 (status:pending, awaiting human approval). DM does not rewrite inline. Section 5 (Git Protocol) \u2014 line 270 fixed in cycle 1056. Section 6 (Setup Instructions) \u2014 verified clean in rotation 45"
+      "note": "Rotation 46. Section 4 (Ralph Loop) — full rewrite to describe event-driven mode as canonical is scoped to TASK #8702 (status:pending, awaiting human approval). DM does not rewrite inline. Section 5 (Git Protocol) — line 270 fixed in cycle 1056. Section 6 (Setup Instructions) — verified clean in rotation 45"
     },
     {
       "file": "SKILL.md:sections-1-3",
@@ -408,26 +408,26 @@
       "file": "README.md",
       "date": "2026-05-18",
       "findings": 0,
-      "note": "Rotation 46 start. Unchanged since cycle 988. Now under no directive \u2014 full scan permitted. No drift; all refs valid"
+      "note": "Rotation 46 start. Unchanged since cycle 988. Now under no directive — full scan permitted. No drift; all refs valid"
     },
     {
       "file": "CHANGELOG.md",
       "date": "2026-05-18",
       "findings": 10,
       "fixes": [
-        "v0.39.0 Fixed \u2014 removed 7 duplicate entries (#7491, #7589, #7618, #7619, #7622, #7624, #7627) already correctly listed in v0.38.0",
-        "v0.39.0 Removed \u2014 removed 3 duplicate entries (#7590, #7625, #7628) already listed in v0.38.0 (the v0.38.0 entries are mislabeled as Fixed but were published, so leaving as-is)"
+        "v0.39.0 Fixed — removed 7 duplicate entries (#7491, #7589, #7618, #7619, #7622, #7624, #7627) already correctly listed in v0.38.0",
+        "v0.39.0 Removed — removed 3 duplicate entries (#7590, #7625, #7628) already listed in v0.38.0 (the v0.38.0 entries are mislabeled as Fixed but were published, so leaving as-is)"
       ],
-      "note": "Rotation 45 complete \u2014 advancing to rotation 46 next quiet cycle. Verified via git log v0.37.0..v0.38.0 that all 10 items shipped in 0.38.0 window"
+      "note": "Rotation 45 complete — advancing to rotation 46 next quiet cycle. Verified via git log v0.37.0..v0.38.0 that all 10 items shipped in 0.38.0 window"
     },
     {
       "file": "CONTRIBUTING.md+SKILL.md:line-270",
       "date": "2026-05-18",
       "findings": 1,
       "fixes": [
-        "SKILL.md line 270 \u2014 rewrote tracker-transition guidance to point at tracker.py transition (with role-authority + legal-transition enforcement) instead of gh issue edit --add-label/--remove-label (deferred from rotation 44 cycle 996, now applied since #8703 lifted)"
+        "SKILL.md line 270 — rewrote tracker-transition guidance to point at tracker.py transition (with role-authority + legal-transition enforcement) instead of gh issue edit --add-label/--remove-label (deferred from rotation 44 cycle 996, now applied since #8703 lifted)"
       ],
-      "note": "CONTRIBUTING.md unchanged since prior scan, no re-scan finds. NOTE: cycle 1053 commit 7ffe2547 claimed this fix but did not actually include SKILL.md in the commit \u2014 change re-committed in cycle 1056"
+      "note": "CONTRIBUTING.md unchanged since prior scan, no re-scan finds. NOTE: cycle 1053 commit 7ffe2547 claimed this fix but did not actually include SKILL.md in the commit — change re-committed in cycle 1056"
     },
     {
       "file": "docs/sub-skill-guide.md",
@@ -442,19 +442,19 @@
       "date": "2026-05-18",
       "findings": 0,
       "skipped": true,
-      "note": "Rotation 45 \u2014 still skipped under #8703 directive (Phase 5 follow-ups #8697 #8700 still OPEN). Will resume once directive lifts"
+      "note": "Rotation 45 — still skipped under #8703 directive (Phase 5 follow-ups #8697 #8700 still OPEN). Will resume once directive lifts"
     },
     {
       "file": "SKILL.md:sections-7-8",
       "date": "2026-05-17",
       "findings": 0,
-      "note": "Rotation 45. SKILL.md unchanged since cycle 8fc396ca. Sec 7 (Upgrade) + Sec 8 (Schema Changelog Historical) already verified in rotation 44 \u2014 no re-scan needed"
+      "note": "Rotation 45. SKILL.md unchanged since cycle 8fc396ca. Sec 7 (Upgrade) + Sec 8 (Schema Changelog Historical) already verified in rotation 44 — no re-scan needed"
     },
     {
       "file": "SKILL.md:sections-4-6",
       "date": "2026-05-17",
       "findings": 0,
-      "note": "Rotation 45. SKILL.md unchanged since cycle 8fc396ca. Sec 4 (Ralph Loop) fully deferred under #8703; sec 5-6 already verified in rotation 44 \u2014 no re-scan needed"
+      "note": "Rotation 45. SKILL.md unchanged since cycle 8fc396ca. Sec 4 (Ralph Loop) fully deferred under #8703; sec 5-6 already verified in rotation 44 — no re-scan needed"
     },
     {
       "file": "SKILL.md:sections-1-3",
@@ -478,38 +478,38 @@
       "file": "CONTRIBUTING.md",
       "date": "2026-05-17",
       "findings": 0,
-      "note": "verified all refs intact \u2014 .github/ISSUE_TEMPLATE/{issue-report.yml,task-request.yml}, requirements-dev.txt, tests/run_tests.py with 'static' mode, SKILL.md/docs/sub-skill-guide.md links, references/scripts/ path, commit prefix pattern. No /loop architecture content"
+      "note": "verified all refs intact — .github/ISSUE_TEMPLATE/{issue-report.yml,task-request.yml}, requirements-dev.txt, tests/run_tests.py with 'static' mode, SKILL.md/docs/sub-skill-guide.md links, references/scripts/ path, commit prefix pattern. No /loop architecture content"
     },
     {
       "file": "docs/sub-skill-guide.md",
       "date": "2026-05-17",
       "findings": 0,
-      "note": "scoped scan under #8703 directive \u2014 verified all path refs intact (git_ops.py, vault_remember.py, tests/run_tests.py, compose.py all/deploy/deploy-all, references/sub-skills/{common,roles,manifest.md}, references/roles/dm/{includes.yml,instructions.md}). Deferred to post-Phase-5: directory tree (lines 33-56) omits sub-skills/capabilities/ and sub-skills/project/ subdirs \u2014 that's tutorial-onboarding copy"
+      "note": "scoped scan under #8703 directive — verified all path refs intact (git_ops.py, vault_remember.py, tests/run_tests.py, compose.py all/deploy/deploy-all, references/sub-skills/{common,roles,manifest.md}, references/roles/dm/{includes.yml,instructions.md}). Deferred to post-Phase-5: directory tree (lines 33-56) omits sub-skills/capabilities/ and sub-skills/project/ subdirs — that's tutorial-onboarding copy"
     },
     {
       "file": "docs/ARCHITECTURE.md",
       "date": "2026-05-17",
       "findings": 0,
       "skipped": true,
-      "note": "skipped under #8703 \u2014 entire doc is architecture content (six layers, runtime interaction, design decisions). Resume scan after Phase 5 ships and directive lifts"
+      "note": "skipped under #8703 — entire doc is architecture content (six layers, runtime interaction, design decisions). Resume scan after Phase 5 ships and directive lifts"
     },
     {
       "file": "SKILL.md:sections-7-8",
       "date": "2026-05-17",
       "findings": 0,
-      "note": "scoped scan under #8703 directive \u2014 sec 7 (Upgrade Instructions) verified non-arch refs intact (compose.py deploy-all, wizard.py ensure-labels, .install-spec.json optional path); sec 8 (Schema Changelog Historical) \u2014 verified legacy bugs/features/ dirs still present in .squidsquad/skill/, tracker.py reference accurate"
+      "note": "scoped scan under #8703 directive — sec 7 (Upgrade Instructions) verified non-arch refs intact (compose.py deploy-all, wizard.py ensure-labels, .install-spec.json optional path); sec 8 (Schema Changelog Historical) — verified legacy bugs/features/ dirs still present in .squidsquad/skill/, tracker.py reference accurate"
     },
     {
       "file": "SKILL.md:sections-4-6",
       "date": "2026-05-17",
       "findings": 0,
-      "note": "scoped scan under #8703 directive \u2014 sec 4 (Ralph Loop) fully deferred; sec 5-6 verified non-arch refs: references/wizard/WIZARD.md, manifest.py, roles/dm/{manifest.yaml,SOUL.md,instructions.md}, sub-skills/capabilities/local_delivery/{setup.md,sub-skill.md}, presets/software-dev, state branch squid-squad. Deferred to post-Phase-5: SKILL.md line 270 says transitions via 'gh issue edit --add-label' but current guidance is tracker.py \u2014 that's how-an-agent-operates copy"
+      "note": "scoped scan under #8703 directive — sec 4 (Ralph Loop) fully deferred; sec 5-6 verified non-arch refs: references/wizard/WIZARD.md, manifest.py, roles/dm/{manifest.yaml,SOUL.md,instructions.md}, sub-skills/capabilities/local_delivery/{setup.md,sub-skill.md}, presets/software-dev, state branch squid-squad. Deferred to post-Phase-5: SKILL.md line 270 says transitions via 'gh issue edit --add-label' but current guidance is tracker.py — that's how-an-agent-operates copy"
     },
     {
       "file": "SKILL.md:sections-1-3",
       "date": "2026-05-17",
       "findings": 0,
-      "note": "scoped scan under #8703 directive \u2014 verified version frontmatter, dm/ structure, vault/ subdirs, label taxonomy; deferred /loop-architecture review"
+      "note": "scoped scan under #8703 directive — verified version frontmatter, dm/ structure, vault/ subdirs, label taxonomy; deferred /loop-architecture review"
     },
     {
       "file": "README.md",
@@ -621,7 +621,7 @@
       "date": "2026-04-30",
       "findings": 1,
       "fixes": [
-        "updated signal files list: .restart/.stop/.pause \u2192 .stop-after-cycle/.stop/.pid/.health"
+        "updated signal files list: .restart/.stop/.pause → .stop-after-cycle/.stop/.pid/.health"
       ]
     },
     {
@@ -632,7 +632,7 @@
         "corrected 'check the manifest' tip to reference includes.yml as source of truth"
       ],
       "tasks_filed": [
-        "#4378 \u2014 document capabilities/ directory"
+        "#4378 — document capabilities/ directory"
       ]
     },
     {
@@ -640,7 +640,7 @@
       "date": "2026-04-30",
       "findings": 1,
       "fixes": [
-        "corrected sub-skills claim \u2014 they live in this repo, linked to sub-skill guide"
+        "corrected sub-skills claim — they live in this repo, linked to sub-skill guide"
       ]
     },
     {
@@ -758,9 +758,9 @@
       "date": "2026-05-03",
       "findings": 3,
       "fixes": [
-        "updated L2 key files: wrapper scripts \u2192 harness.py + thin_launcher.py + .harness-state.json",
-        "updated L2 'what changes here': signal handling \u2192 harness API",
-        "updated 'Changing Things' table: wrapper signal handling \u2192 harness intent API"
+        "updated L2 key files: wrapper scripts → harness.py + thin_launcher.py + .harness-state.json",
+        "updated L2 'what changes here': signal handling → harness API",
+        "updated 'Changing Things' table: wrapper signal handling → harness intent API"
       ]
     },
     {
@@ -792,7 +792,7 @@
       "date": "2026-05-04",
       "findings": 1,
       "fixes": [
-        "updated health monitoring: boot script wrapper \u2192 harness PID checks + .harness-state.json"
+        "updated health monitoring: boot script wrapper → harness PID checks + .harness-state.json"
       ]
     },
     {
@@ -805,7 +805,7 @@
       "date": "2026-05-04",
       "findings": 1,
       "fixes": [
-        "updated wrapper \u2192 harness in /squidsquad-status health check docs"
+        "updated wrapper → harness in /squidsquad-status health check docs"
       ]
     },
     {
@@ -813,8 +813,8 @@
       "date": "2026-05-04",
       "findings": 2,
       "fixes": [
-        "L2 diagram: boot scripts/wrapper/signals \u2192 harness/thin launcher",
-        "runtime diagram: wrapper monitors signals \u2192 harness monitors agents"
+        "L2 diagram: boot scripts/wrapper/signals → harness/thin launcher",
+        "runtime diagram: wrapper monitors signals → harness monitors agents"
       ]
     },
     {
@@ -857,8 +857,8 @@
       "date": "2026-05-06",
       "findings": 2,
       "fixes": [
-        "updated Coordination Model: git-only \u2192 git + event bus with diagram",
-        "updated Key Design Decisions: git as only bus \u2192 git audit trail + event bus for real-time"
+        "updated Coordination Model: git-only → git + event bus with diagram",
+        "updated Key Design Decisions: git as only bus → git audit trail + event bus for real-time"
       ]
     },
     {
@@ -866,8 +866,8 @@
       "date": "2026-05-06",
       "findings": 2,
       "fixes": [
-        "corrected role-specific sub-skill paths: <role>-specific/ \u2192 roles/<role>/",
-        "corrected entry file name: CLAUDE.md \u2192 instructions.md (all references)"
+        "corrected role-specific sub-skill paths: <role>-specific/ → roles/<role>/",
+        "corrected entry file name: CLAUDE.md → instructions.md (all references)"
       ]
     },
     {
@@ -945,7 +945,7 @@
       "date": "2026-05-07",
       "findings": 1,
       "fixes": [
-        "corrected role-specific sub-skill path: sub-skills/[role]-specific/ \u2192 roles/[role]/"
+        "corrected role-specific sub-skill path: sub-skills/[role]-specific/ → roles/[role]/"
       ]
     },
     {
@@ -1028,7 +1028,7 @@
       "date": "2026-05-09",
       "findings": 3,
       "fixes": [
-        "corrected entry file name CLAUDE.md\u2192instructions.md",
+        "corrected entry file name CLAUDE.md→instructions.md",
         "added QA to always-installed roles list",
         "added QA to /squidsquad-status agent enumeration"
       ]
@@ -1039,7 +1039,7 @@
       "findings": 2,
       "fixes": [
         "added PR merge + auto-recomposition to harness.py description",
-        "updated event bus diagram pr-merge\u2192pr-merged"
+        "updated event bus diagram pr-merge→pr-merged"
       ]
     },
     {
@@ -1048,7 +1048,7 @@
       "findings": 2,
       "fixes": [
         "removed non-existent designer/ from roles directory tree",
-        "corrected SOUL.md alongside reference: CLAUDE.md\u2192instructions.md"
+        "corrected SOUL.md alongside reference: CLAUDE.md→instructions.md"
       ]
     },
     {
@@ -1066,7 +1066,7 @@
       "date": "2026-05-09",
       "findings": 2,
       "fixes": [
-        "corrected always-present roles: PM+DM \u2192 PM+QA+DM, removed designer",
+        "corrected always-present roles: PM+DM → PM+QA+DM, removed designer",
         "removed deprecated design preset from team shapes table"
       ]
     },
@@ -1148,9 +1148,9 @@
       "date": "2026-05-10",
       "findings": 3,
       "fixes": [
-        "corrected [ROLE]/[ROLE_UPPER] placeholder scope: Dev-only \u2192 All templates",
-        "corrected placeholder note: [ROLE] not substituted for PM/DM \u2192 substituted for all roles",
-        "corrected vault-remember inclusion: every role \u2192 dev and PM only"
+        "corrected [ROLE]/[ROLE_UPPER] placeholder scope: Dev-only → All templates",
+        "corrected placeholder note: [ROLE] not substituted for PM/DM → substituted for all roles",
+        "corrected vault-remember inclusion: every role → dev and PM only"
       ]
     },
     {
@@ -1235,7 +1235,7 @@
       "date": "2026-05-11",
       "findings": 0,
       "tasks_filed": [
-        "#7447 \u2014 reconcile v2 schema with actual config structure"
+        "#7447 — reconcile v2 schema with actual config structure"
       ]
     },
     {
@@ -1271,7 +1271,7 @@
       "date": "2026-05-12",
       "findings": 1,
       "fixes": [
-        "added DM to team shapes table \u2014 always-present since #6261"
+        "added DM to team shapes table — always-present since #6261"
       ]
     },
     {
@@ -1314,7 +1314,7 @@
       "date": "2026-05-12",
       "findings": 1,
       "fixes": [
-        "corrected vault access: 'all agents R/W' \u2192 'PM and dev R/W, QA and DM read-only'"
+        "corrected vault access: 'all agents R/W' → 'PM and dev R/W, QA and DM read-only'"
       ]
     },
     {
@@ -1337,7 +1337,7 @@
       "date": "2026-05-13",
       "findings": 1,
       "fixes": [
-        "corrected ACTIVE_AGENTS scope: 'PM, DM templates' \u2192 'PM, QA, DM templates'"
+        "corrected ACTIVE_AGENTS scope: 'PM, DM templates' → 'PM, QA, DM templates'"
       ]
     },
     {
@@ -1535,7 +1535,7 @@
       "date": "2026-05-15",
       "findings": 1,
       "fixes": [
-        "updated intro: 'git only' \u2192 'git + event bus' to match Coordination Model section"
+        "updated intro: 'git only' → 'git + event bus' to match Coordination Model section"
       ]
     },
     {
@@ -1543,7 +1543,7 @@
       "date": "2026-05-15",
       "findings": 1,
       "fixes": [
-        "SOUL.md 'copied' \u2192 'assembled from Layer 1 base + role SOUL' (2 instances)"
+        "SOUL.md 'copied' → 'assembled from Layer 1 base + role SOUL' (2 instances)"
       ]
     },
     {
@@ -1566,7 +1566,7 @@
       "date": "2026-05-16",
       "findings": 1,
       "fixes": [
-        "auto-merge: corrected 'tasks only' to 'all verified items' \u2014 bugs are auto-merged too"
+        "auto-merge: corrected 'tasks only' to 'all verified items' — bugs are auto-merged too"
       ]
     },
     {
@@ -1610,7 +1610,7 @@
       "date": "2026-05-23",
       "findings": 1,
       "fixes": [
-        "auto-merge: corrected README to match SKILL.md fix from cycle 1305 \u2014 bugs are auto-merged too; merge:manual is the per-item override"
+        "auto-merge: corrected README to match SKILL.md fix from cycle 1305 — bugs are auto-merged too; merge:manual is the per-item override"
       ]
     },
     {
@@ -1669,13 +1669,22 @@
       "date": "2026-05-23",
       "findings": 1,
       "fixes": [
-        "pr-merge event name \u2192 pr-merged (3 occurrences: emitted-events table, PM filter mermaid, DM filter mermaid). pr-merge is DEPRECATED per event_catalog.py:73; harness.py:2438 emits pr-merged. Also corrected source attribution: harness emits it, not git_ops.py."
+        "pr-merge event name → pr-merged (3 occurrences: emitted-events table, PM filter mermaid, DM filter mermaid). pr-merge is DEPRECATED per event_catalog.py:73; harness.py:2438 emits pr-merged. Also corrected source attribution: harness emits it, not git_ops.py."
       ]
+    },
+    {
+      "file": "README.md",
+      "date": "2026-05-23",
+      "findings": 1,
+      "fixes": [
+        "Line 33 Project-adaptive souls: corrected which section the wizard fills. Wizard populates the \"Project Context\" section in SOUL.md (verified in wizard.py:1071-1083 which inserts \"### Project Context\" using domain_ctx). The \"Project Adaptation\" section (visible at .squidsquad/dev/SOUL.md:155) is populated by PM at runtime, not the wizard. README had the two sections swapped. Will commit README manually as cycle_post.py only stages .squidsquad/dm/ (per #9474)."
+      ],
+      "note": "Rotation 57 second scan. Full read of all 165 lines. Verified: shutdown command exists in squidsquad_cli.py (cmd_shutdown at line 284); 30-minute interval matches config.md line 47 (Iteration Interval Minutes: 30); 5-phase feature planning Research→Discussion→Planning→Execution→QA matches SKILL.md lines 157-160 (#9184 workflow); GET /status code_version block valid (harness.py:1305); GET / slim version triple {service, version, git_sha} valid (harness.py:1311-1319); pipeline sentinel \"6 types of stuck tasks\" matches pm/CLAUDE.md sections 4a-4f exactly (Orphaned PR, Shipped without merge, Approved but no pickup, Planned but never approved, Pending with no planning, In-progress on dead agent); auto-merge bugs+tasks accurate (R56 fix intact); DeepSeek v4 Pro Multi-model example correct (R55 fix intact)."
     }
   ],
   "doc_inventory": {
     "README.md": {
-      "last_scanned": "2026-05-07",
+      "last_scanned": "2026-05-23",
       "status": "current"
     },
     "SKILL.md": {
@@ -1704,7 +1713,7 @@
     "date": "2026-04-29",
     "total_docs": 7,
     "docs_dir_count": 2,
-    "verdict": "below thresholds \u2014 no accessibility improvements needed",
+    "verdict": "below thresholds — no accessibility improvements needed",
     "next_assessment": "rotation 8"
   }
 }
