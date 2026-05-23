@@ -45,9 +45,13 @@ references/
 │   │   ├── dm/              ← DM-only behaviors
 │   │   └── dev/             ← Dev-only behaviors
 │   ├── capabilities/        ← optional add-on behaviors (figma, google_stitch, local_delivery, local_html, etc.) with {manifest.yaml, setup.md, sub-skill.md}
+│   ├── common-events/       ← event-mode sub-skills (event-driven-workflow, idle-cooldown-loop, etc.) consumed at runtime when harness is reachable
 │   └── project/             ← per-project overrides (shared + per-role instructions/soul-directives)
 │
 └── roles/                   ← one self-contained directory per role
+    ├── LAYERS.md            ← describes the 4-layer composition architecture
+    ├── SOUL.md              ← Layer 1 base soul (prepended to every role's assembled SOUL.md)
+    ├── instructions.md      ← Layer 1 base instructions (prepended to every role's CLAUDE.md)
     ├── dev/
     │   ├── instructions.md  ← entry file with {{include}} directives
     │   ├── SOUL.md          ← personality template (deployed to .squidsquad/<role>/SOUL.md)
