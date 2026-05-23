@@ -1,28 +1,33 @@
 # Working State
 
-- **Task**: #9965 — skill cycle 1314 OVERDUE (~10 min); last activity cycle 1313 commit 5e53e443 at 15:52. PM nudge filed cycle 1612 16:15, no response yet. #9968 EPIC v1.1 awaiting human smoke-read.
-- **Status**: monitoring (skill cycle 1314 overdue but within escalation window)
+- **Task**: #9965 skill ACK'd STOP+nudge cycle 1315, AC2.8 pivot active (cycle 1316 -1 fail). #9968 doc v1.1 smoke-read in progress with human (TOC shown, 12 findings delivered).
+- **Status**: monitoring (skill on track; doc review in human's court)
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-23 16:33)
+## Pipeline snapshot (2026-05-23 17:03)
 - 0 PRs open, 0 pending-test, 0 pending-ship, 0 external untriaged
 - 1 approved (long-running): #3 (DM lane, going-public)
 - 2 in-progress:
-  - #9965 (6274.2) — skill cycle 1314 OVERDUE: last commit 5e53e443 at 15:52 local; skill /loop 30m should have fired by ~16:22. Harness reports skill process running (claude_pid 2492056) but no cycle 1314 commit, no GH comment. PM nudge from cycle 1612 (16:15) ~17 min old, no acknowledgement.
-  - #9968 (EPIC: L1-L4 doc) — v1.1 committed cycle 1612 (47e7ba61). Awaiting human smoke-read.
-- 1 pending (gated): #9966 (6274.3)
+  - #9965 (6274.2) — skill cycle 1315 (16:44) ACKNOWLEDGED STOP+nudge directly. Pivoting 100% to AC2.8. Cycle 1316 (16:58) shipped AC2.8 batch #2: tests 48→47 (-1 failure), zero regressions. Forward-progress hold honored.
+  - #9968 (EPIC: L1-L4 doc) — v1.1 committed 47e7ba61. Human smoke-read started this session: TOC shown + 12-finding review delivered across 4 buckets (A: internal contradictions, B: deferred decisions, C: ownership, D: gaps). Human reading without indicating which findings to address first; no PM edits this cycle.
+- 1 pending (gated): #9966 (6274.3) — blocked on 6274.2 (now AC2.8) + 30d window
 - 3 issues at status:open: #9967, #9969, #9970
 - shipped_since_bump=6 of 10
 
-## #9965 escalation cadence — UPDATED
+## #9965 escalation cadence — CANCELLED
 - 16:15 (cycle 1612): PM filed nudge
-- 16:33 (cycle 1614 — this cycle): skill cycle 1314 ~10 min overdue, no GH activity, no commit. PM holds escalation — within window.
-- **Cycle 1615 (~17:00) threshold**: if STILL no skill cycle 1314 by then (~45 min since nudge, ~68 min since last skill commit) → escalate to human via direct chat-room note. Note: harness state for skill shows last_cycle_start of 2026-05-22T08:49:02 which is stale/unreliable; trust git+GH instead per [[feedback_trust_script_output]].
-- Possible non-malicious explanations to consider before escalating: (a) skill mid-cycle on long AC2.8 test rewrite — would show no commit until cycle end; (b) skill /loop missed a fire due to harness issue; (c) cycle in flight right now.
+- 16:44 (skill cycle 1315): explicit acknowledgement of STOP directive + nudge; pivoting to AC2.8
+- 16:58 (skill cycle 1316): AC2.8 batch #2 shipped, -1 failure, no forward-progress AC2.2/2.3/2.4-2.7 work
+- 17:03 (cycle 1615 — this cycle): escalation threshold not reached; cancelling. Resume standard monitoring.
 
-## #9968 EPIC state — unchanged
-- v1.1 committed to main 47e7ba61
-- Awaiting human smoke-read before DS audit + 14 sub-task filing
+## #9968 doc v1.1 review (in flight)
+- 12 findings surfaced to human in 4 buckets:
+  - A. Internal contradictions: §4.2 op-order vs target resolution; §6.2 vs §3.1 sub-procedure authoring location; §7.5 post-commit recompose vs §8.1 PR-check
+  - B. Deferred decisions: §11.1 Q5 gitignore composed output; §10.2 backward-compat shim deletion timeline
+  - C. Ownership: §12 owner column (skill vs DM/QA executors); §8.3 pre-ship gate scope creep onto QA
+  - D. Gaps: §5.5 Vault thin; §3.1 DRY post-fold scope; §7.4 mini-CQ no-human fallback; §10.3 memory→L4 non-migrating residue; WIZARD hook detail
+- Human asked for TOC only; deferring direction
+- Next: wait for human to select which finding(s) to address; do NOT edit doc unprompted
 
 ## #9966 — unchanged
-- Conditions: 6274.2 PR merged (gated by AC2.8 green), cutover date passed
+- Conditions: 6274.2/AC2.8 ships, cutover date passed
