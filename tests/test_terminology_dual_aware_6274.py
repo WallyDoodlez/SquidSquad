@@ -179,3 +179,92 @@ def test_ac1_3_workers_reads_legacy_field_with_warning(capsys):
     assert "deprecated field `Dev Agents:`" in captured.err, (
         f"expected deprecation warning in stderr; got: {captured.err!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# AC1.4 — tracker.py dual-tag + --role suffix shim (D11)
+# ---------------------------------------------------------------------------
+
+
+import tracker  # noqa: E402
+
+
+def test_ac1_4_dual_label_for_dev_and_qa_inputs():
+    """role=dev emits both role:dev and role:worker; same for qa/verifier."""
+    assert tracker._build_dual_role_labels_6274("dev") == "role:dev,role:worker"
+    assert tracker._build_dual_role_labels_6274("qa") == "role:qa,role:verifier"
+
+
+def test_ac1_4_dual_label_for_new_inputs_too():
+    """role=worker / role=verifier also dual-tag back to the old form so
+    the migration works in both directions."""
+    assert tracker._build_dual_role_labels_6274("worker") == "role:worker,role:dev"
+    assert (
+        tracker._build_dual_role_labels_6274("verifier") == "role:verifier,role:qa"
+    )
+
+
+def test_ac1_4_categorical_and_variants_not_dual_tagged():
+    """pm, dm, skill, and other variant prefixes are NOT in the alias
+    table per Out-of-Scope. They get the single `role:<x>` label."""
+    assert tracker._build_dual_role_labels_6274("pm") == "role:pm"
+    assert tracker._build_dual_role_labels_6274("dm") == "role:dm"
+    assert tracker._build_dual_role_labels_6274("skill") == "role:skill"
+    assert tracker._build_dual_role_labels_6274("ios") == "role:ios"
+
+
+def test_ac1_4_label_pair_table_bidirectional():
+    """Static structural assertion — table must be symmetric so the
+    direction-agnostic dual-tagging holds."""
+    pairs = tracker._DUAL_LABEL_PAIRS_6274
+    assert pairs["dev"] == "worker"
+    assert pairs["worker"] == "dev"
+    assert pairs["qa"] == "verifier"
+    assert pairs["verifier"] == "qa"
+    # pm, dm, and variant prefixes must NOT be in the table
+    for non_dual in ("pm", "dm", "skill", "ios", "android", "fullstack", "web"):
+        assert non_dual not in pairs
+
+
+def test_ac1_4_role_suffix_new_form_silent(capsys):
+    """--role verifier-lead and --role worker-lead are the new D11 forms —
+    accepted, normalized to canonical, and emit no warning."""
+    canon = tracker._canonicalize_role("verifier-lead")
+    assert canon == "qa"
+    assert capsys.readouterr().err == ""
+
+    canon = tracker._canonicalize_role("worker-lead")
+    assert canon == "dev"
+    assert capsys.readouterr().err == ""
+
+
+def test_ac1_4_role_suffix_old_form_warns(capsys):
+    """--role qa-lead and --role dev-lead are the deprecated forms —
+    still accepted (passthrough to canonical) but emit a stderr
+    deprecation warning per D11."""
+    canon = tracker._canonicalize_role("qa-lead")
+    assert canon == "qa"
+    assert "deprecated" in capsys.readouterr().err
+
+    canon = tracker._canonicalize_role("dev-lead")
+    assert canon == "dev"
+    assert "deprecated" in capsys.readouterr().err
+
+
+def test_ac1_4_unaffected_roles_pass_through_silently(capsys):
+    """Per Out-of-Scope: pm-lead, dm-lead, skill-lead are NOT renamed.
+    They must pass through `_canonicalize_role` with no warning."""
+    for role_with_suffix, expected_canon in [
+        ("pm-lead", "pm"),
+        ("dm-lead", "dm"),
+        ("skill-lead", "skill"),
+        ("ios-lead", "ios"),
+        ("designer-lead", "designer"),
+    ]:
+        canon = tracker._canonicalize_role(role_with_suffix)
+        assert canon == expected_canon, (
+            f"{role_with_suffix} -> {canon}, expected {expected_canon}"
+        )
+        assert capsys.readouterr().err == "", (
+            f"{role_with_suffix} must NOT warn (Out-of-Scope)"
+        )
