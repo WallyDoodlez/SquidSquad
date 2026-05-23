@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "CONTRIBUTING.md",
+  "last_scanned": "CHANGELOG.md",
   "rotation_count": 55,
   "scan_history": [
     {
@@ -1651,6 +1651,11 @@
     },
     {
       "file": "CONTRIBUTING.md",
+      "date": "2026-05-23",
+      "findings": 0
+    },
+    {
+      "file": "CHANGELOG.md",
       "date": "2026-05-23",
       "findings": 0
     }
