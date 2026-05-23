@@ -1,115 +1,111 @@
-Now I have a comprehensive picture. Let me compile the findings.
+I've carefully reviewed both documents. Here are the findings:
 
 ---
 
 ### Finding 1
 
 - **File**: `.squidsquad/pm/planning/CONTEXT-6274.md`
-- **Line**: 125 (AC1.1) vs line 113 (D10)
+- **Line**: 135 (`G2.→3` gate condition)
 - **Severity**: error
-- **Issue**: AC1.1 and D10 contradict each other on where the 6274.1 dual-aware test lives. AC1.1 says "Verified by `test_compose.py::test_dual_aware_identities`" — placing the test inside the existing `test_compose.py` file. D10 says "New unit test `test_terminology_dual_aware_6274.py` covering both old and new name resolution" — a separate new file. An implementer reading both would be confused about where to put the test.
-- **Evidence**: The two statements specify mutually exclusive locations — one is a function within an existing test module, the other is a brand-new test file. They cannot both be satisfied as written.
-- **Suggested fix**: Either (a) change AC1.1 to reference `test_terminology_dual_aware_6274.py::test_dual_aware_identities`, or (b) change D10 to say the new test goes into `test_compose.py` as `test_dual_aware_identities`. Pick one and align both sections.
+- **Issue**: G2→3 gate is logically impossible to satisfy. It requires "zero new `role:dev` / `role:qa` labels created in the trailing 7 days" before starting 6274.3, but D3 states that `tracker.py.create_issue()` and `create_task()` continue dual-labeling *through* the entire 30-day window — i.e., every new issue in those trailing 7 days will get `role:dev`/`role:qa` assigned. The dual-labeling code is only removed *in* 6274.3 (line 60: "Dual-labeling code removed"), so there is no point at which new old-label assignments stop before the gate is checked.
+- **Evidence**: D3 lines 54–56: "During sub-phase 6274.1 + 6274.2 + the 30-day window: Every NEW issue gets BOTH labels: `role:worker` AND `role:dev`". G2→3 line 135: "zero new `role:dev` / `role:qa` labels created in the trailing 7 days (script-verified)". These two statements contradict — the code creating those labels is still in main.
+- **Suggested fix**: Either (a) change G2→3 to verify "all issues created in trailing 7 days carry BOTH old and new labels (no single-old-label issues)" — confirming systems have adopted dual-labeling, or (b) insert a mid-window step that stops emitting old labels before the 30-day window expires, then use G2→3 to verify the stoppage.
 
 ---
 
 ### Finding 2
 
 - **File**: `.squidsquad/pm/planning/CONTEXT-6274.md`
-- **Line**: 130 (AC1.6) vs lines 101-106 (D9)
+- **Line**: 110 (`AC1.6`)
 - **Severity**: error
-- **Issue**: AC1.6 requires the vault note `migration-6274-cutover` to be created in sub-phase 6274.1 "with target cutover date (T+30 days from 6274.2 merge)." However, at the time 6274.1 lands, the 6274.2 merge date is unknown — it could be days or weeks later. The note cannot be created with a concrete cutover date that doesn't yet exist. This makes AC1.6 unsatisfiable as a 6274.1 acceptance criterion.
-- **Evidence**: D9 states 6274.1 is first in sequence, 6274.2 is second. The 30-day window in D3 "starts when sub-phase 6274.2 merges." At 6274.1 time, the merge date of 6274.2 is unknowable, so the note can't contain the cutover date.
-- **Suggested fix**: Split AC1.6: (a) 6274.1 creates the vault note as a placeholder with a `TODO: fill after 6274.2 merge` marker, and (b) add a new AC to 6274.2 or its post-merge checklist to populate the actual cutover date into the note after the 6274.2 PR merges.
+- **Issue**: AC1.6 requires the vault note `migration-6274-cutover` to be created in sub-phase 6274.1 with "target cutover date (T+30 days from 6274.2 merge)." But when 6274.1 is being implemented and merged, the 6274.2 merge date is unknown. The AC demands a concrete date derived from a future event.
+- **Evidence**: AC1.6 line 110: "Vault note `migration-6274-cutover` created with target cutover date (T+30 days from 6274.2 merge)." D9 line 130: "6274.2" has its own PR merging after 6274.1. The date cannot be known at 6274.1 time.
+- **Suggested fix**: Change AC1.6 to: "Vault note `migration-6274-cutover` created as a placeholder. The note is updated with the actual target date (T+30) as a step in the 6274.2 PR (or immediately after 6274.2 merge)." Alternatively, move note creation entirely to 6274.2.
 
 ---
 
 ### Finding 3
 
 - **File**: `.squidsquad/pm/planning/CONTEXT-6274.md`
-- **Line**: 37-42 (D2) vs RESEARCH-6274.md lines 86-88 and actual code at `references/scripts/compose.py` lines 465, 474, 665-693, 703
+- **Line**: 27–28 (`D2._resolve_variant` return values)
 - **Severity**: error
-- **Issue**: D2's implementation specification for the dual-aware shim omits critical functions that RESEARCH §4 identified and that the actual code requires. Specifically: (a) `_get_entry_file_for_role()` (line 665) — the central role-identity resolver that every compose path calls, which contains hardcoded `"dev"` at line 689 and calls `_list_known_role_identities()` and `_resolve_variant()`; (b) `_active_roles_for_roster()` (line 454) — hardcodes `"qa"` at line 465 and `"dev"` at line 474 in the manifest fallback path; (c) `boot_remote.py._get_all_roles()` line 127 — hardcodes `{"pm", "qa", "dm"}` for mandatory roles; D2 only mentions `_parse_dev_agents()` in boot_remote.py but not this function; (d) `compose.py` line 703 — `is_dev = entry_file == "dev"` boolean gate would silently break dev-specific placeholder substitution when `entry_file` becomes `"worker"`.
-- **Evidence**: RESEARCH §4 explicitly lists `_get_entry_file_for_role()` as a critical-path function. The actual code at lines 465, 474, 689, 703, and boot_remote.py line 127 all contain hardcoded `"dev"` or `"qa"` strings that must be updated in the dual-aware shim. D2 mentions only `_list_known_role_identities()`, `_resolve_variant()`, `config.py.get_field()`, `_parse_dev_agents()`, and `add_role.py` — missing at least 4 other load-bearing touchpoints.
-- **Suggested fix**: Extend D2's implementation list to explicitly include: `_get_entry_file_for_role()` dual-aware logic, `_active_roles_for_roster()` mandatory-set update (`"qa"` → `"verifier"` + `"dev"` → `"worker"`), `boot_remote.py._get_all_roles()` set update, and the `is_dev` comparison at line 703 (should become `entry_file in ("dev", "worker")` during the window).
+- **Issue**: D2 specifies that `_resolve_variant("dev-skill")` returns `(dev, skill)` during the dual-aware window, and D2 states both `references/roles/dev/skill/` and `references/roles/worker/skill/` paths resolve correctly "during the window." But after 6274.2's directory rename (D5: `references/roles/dev/` → `references/roles/worker/`), the `dev/` directory no longer exists. A return value of `(dev, skill)` would direct callers to a nonexistent path. D2 does not specify how path resolution remains correct after the directory is gone.
+- **Evidence**: D2 line 27–28: "returning `(dev, skill)` and `(worker, skill)` respectively. Both `references/roles/dev/skill/` and `references/roles/worker/skill/` paths resolve correctly during the window." D5 line 97–98: "`references/roles/dev/` → `references/roles/worker/`" in sub-phase 6274.2. The dual-aware window spans 6274.1+6274.2 per D1 line 24. So post-6274.2, `references/roles/dev/` is gone but D2 still claims the old path resolves.
+- **Suggested fix**: Clarify that `_resolve_variant()` normalizes the returned role ID to the canonical name during the dual-aware window — e.g., `_resolve_variant("dev-skill")` returns `(worker, skill)` (canonical), not `(dev, skill)`. Or specify a separate path-mapping layer that remaps `dev`→`worker` post-rename. Either way, document the mechanism explicitly.
 
 ---
 
 ### Finding 4
 
 - **File**: `.squidsquad/pm/planning/CONTEXT-6274.md`
-- **Line**: 38-39 (D2 path-resolution claim) vs `references/scripts/compose.py` lines 1122-1147, 386-391
-- **Severity**: error
-- **Issue**: D2 claims "Both `references/roles/dev/skill/` and `references/roles/worker/skill/` paths resolve correctly during the window." It also says `_resolve_variant("dev-skill")` returns `(dev, skill)`. After sub-phase 6274.2 renames `references/roles/dev/` → `references/roles/worker/`, the old directory literal `references/roles/dev/skill/` no longer exists on disk. But the returned tuple `(dev, skill)` is used directly for filesystem path construction (e.g., line 388: `ROLES_DIR / base / variant`). Returning `(dev, skill)` and constructing `ROLES_DIR / "dev" / "skill"` would point to a nonexistent directory. D2 doesn't specify whether `_resolve_variant` should remap the return tuple to the new identity, or whether every call site must add a fallback path lookup. The dual-aware mechanism as specified cannot simultaneously return old identity tuples AND have old paths physically resolve after the rename.
-- **Evidence**: `_resolve_variant` at line 1140 constructs `ROLES_DIR / base / variant` and checks `is_dir()`. If `base="dev"` and the directory was renamed to `worker/`, this check fails. The downstream call site at line 388 then constructs the same path and calls `.exists()` — also fails. D2's spec has no mechanism to bridge the gap between returning `(dev, skill)` and locating the file at `worker/skill/`.
-- **Suggested fix**: Specify that during the dual-aware window, `_resolve_variant` normalizes old base names to new ones in its return value: both `"dev-skill"` and `"worker-skill"` return `("worker", "skill")`. This makes path construction always use the new directory. For identity-level backward compat (code that checks `base == "dev"`), add a separate `_canonical_role_name()` helper or expand `_get_entry_file_for_role()` to accept both. Alternatively, add a fallback filesystem check at every path-construction call site.
+- **Line**: 114–115 (`AC2.2`)
+- **Severity**: warning
+- **Issue**: AC2.2 requires updating "any embedded role-string reference to `dev`/`qa` AS A ROLE (not as file paths in code comments, not as command-line variable names)." No objective, machine-checkable criteria are given for distinguishing a "role reference" from a "variable name" or "code comment." This makes the AC unverifiable by both the implementer and the reviewer.
+- **Evidence**: AC2.2 lines 114–115. Consider a Python variable `dev_agents = config.get("Dev Agents")` — is `dev` here a role reference (requiring update) or a variable name (excluded)? The AC provides no decision rule. The parenthetical only states what NOT to change, not how to identify what TO change.
+- **Suggested fix**: Replace the parenthetical exclusion with a positive definition: "Role-string references are: (a) role identity names in manifest/instruction/prohibition/responsibility prose where the string denotes an agent role, (b) hardcoded role-set constants in Python (e.g., `{"pm", "qa", "dm"}`), (c) template-embedded role routing keys." Then explicitly list what is excluded: file paths, Python variable names, CLI argument names, and code comments. Provide a concrete grep boundary (e.g., "change `dev` only when it appears as a standalone token in prose intended for agent consumption").
 
 ---
 
 ### Finding 5
 
 - **File**: `.squidsquad/pm/planning/CONTEXT-6274.md`
-- **Line**: 92 (D7 L4 dual-prefix claim) vs `references/scripts/compose.py` lines 398-410
-- **Severity**: error
-- **Issue**: D7 claims compose.py's L4 prefix routing "reads both old and new prefixes during the dual-aware window." The actual code at lines 400-410 filters L4 stub files by a single `role_identity` (determined by `_get_entry_file_for_role`) against `known_prefixes`. If `role_identity` is `"dev"`, then `worker-*.md` files are skipped due to the `file_prefix != role_identity` guard at line 409. If `role_identity` is `"worker"`, then `dev-*.md` files are skipped. The current routing architecture has no mechanism to accept BOTH prefixes simultaneously for a single agent. Making this work requires either: (a) changing the filtering logic to accept both `dev` and `worker` as valid prefixes during the window, or (b) renaming all L4 files to the new prefix simultaneously with the directory rename (eliminating the need for dual-read). D7 claims the former but neither mechanism is specified.
-- **Evidence**: Line 408: `if file_prefix and file_prefix != "shared" and file_prefix in known_prefixes:` and line 409: `if file_prefix != role_identity: continue`. The `role_identity` is a single string, not a set. A single agent can only match one prefix.
-- **Suggested fix**: Either (a) specify that during the dual-aware window, the L4 filtering logic at line 409 becomes `if file_prefix != role_identity and (role_identity not in {"dev", "worker"} or file_prefix not in {"dev", "worker"})` — allowing cross-matching between old and new prefixes, or (b) acknowledge that L4 dual-aware is infeasible with the current routing architecture and instead rename the seed files to new prefixes in 6274.2 (matching the directory rename), keeping only the live `.squidsquad/project/` files as the dual-awareness concern (which the wizard upgrade handles).
+- **Line**: 127–128 (`AC3.7`)
+- **Severity**: warning
+- **Issue**: AC3.7 requires a grep test that asserts "no stale `\bdev\b` or `\bqa\b` role-string references in active code paths" but excludes "file paths, variable names, comments." The test mechanism for distinguishing excluded categories from genuine role references is not specified. Additionally, `\bdev\b` would match "dev" inside words like "developer" or "development" (false positives).
+- **Evidence**: AC3.7 lines 127–128. A naive grep for `\bdev\b` across the codebase would return hundreds of false positives from variable names (`dev_agent`), file paths (`references/roles/dev/` — though these should be gone by 6274.3), comments, and English words. Without specifying the exclusion mechanism, the AC cannot be implemented as an automated test.
+- **Suggested fix**: Specify either (a) a whitelist of files to scan (active codepaths only), plus a structural rule for the test (e.g., "scan only non-comment, non-string-literal tokens in `.py` files and prose sections of `.md` templates"), or (b) change the AC to a manual review checklist rather than an automated grep test, or (c) define a narrower regex that targets known role-context patterns (e.g., `role:dev`, `"dev"` as a standalone string in Python, etc.) with explicit exclusion rules.
 
 ---
 
 ### Finding 6
 
 - **File**: `.squidsquad/pm/planning/CONTEXT-6274.md`
-- **Line**: 158 (G2.→3)
+- **Line**: 68–73 (`D4` wizard upgrade step)
 - **Severity**: warning
-- **Issue**: The G2.→3 gate requires "zero new `role:dev` / `role:qa` labels created in the trailing 7 days (script-verified)" but no script is named, specified, or even sketched in the ACs or locked decisions. The only label-related scripts defined are `migrate_labels_6274.py` (AC1.5, initial dual-labeling of OPEN issues) and `cleanup_labels_6274.py` (AC3.4, final label deletion). Neither of these checks the trailing-7-days condition. QA would need to write an ad-hoc `gh api` query to verify this gate, making it nondeterministic — different QA operators would implement the check differently.
-- **Evidence**: D3 says the 30-day window is "Tracked via vault note" with no detection script. AC1.5 and AC3.4 specify scripts for different purposes. The gate's own text says "script-verified" but defines no script.
-- **Suggested fix**: Add a concrete AC or specify a named script for the G2.→3 verification. For example: add `AC2.X — Script references/scripts/check_label_migration_readiness_6274.py queries GitHub API for issues labeled role:dev or role:qa created in the last 7 days; exits 0 if zero found, exits 1 with counts otherwise. This script is the gatekeeper for G2.→3.` Or fold the check into `cleanup_labels_6274.py` as a `--verify` flag.
+- **Issue**: D4 states the wizard upgrade is "Idempotent: re-running detects 'already migrated' and no-ops," but does not specify the detection mechanism. The implementer must guess whether to check for the new field name in config.md, the new directory names, a marker file, or some combination. An incorrect choice could produce false negatives (re-running renames already-renamed dirs) or false positives (detecting "migrated" when only partial migration occurred).
+- **Evidence**: D4 lines 68–73. D4 lists what the upgrade does but not how it knows whether it has already been done.
+- **Suggested fix**: Add a detection rule, e.g.: "The upgrade step checks for the presence of `Workers:` key in config.md AND the existence of `.squidsquad/worker/` directory. If both are present, it no-ops. If only one is present, it reports a partial-migration error and halts. If neither is present, it performs the migration." Or specify a single canonical check (e.g., "checks config.md for `Workers:` key only").
 
 ---
 
 ### Finding 7
 
 - **File**: `.squidsquad/pm/planning/CONTEXT-6274.md`
-- **Line**: 60-66 (D4)
+- **Line**: 71–72 (`D4` harness-state.json)
 - **Severity**: warning
-- **Issue**: D4 describes 4 sequential mutation operations on a per-install directory (config.md rewrite, two directory renames, harness-state.json update). Only the config.md rewrite is claimed atomic ("Rewrites config.md atomically"). The directory renames have no transaction boundary. On Windows, directory renames can fail with a file lock if an agent is running from that directory. If step 1 succeeds (config.md rewritten to `Workers:`) but step 2 fails (`.squidsquad/dev/` locked), the install is in a broken state: config says `Workers: skill` but the per-install directory is still at `.squidsquad/dev/`. D4's idempotency claim ("re-running detects 'already migrated' and no-ops") would then prevent recovery: detection of "already migrated" almost certainly checks config.md for `Workers:`, finds it, and no-ops, leaving the directory rename permanently undone.
-- **Evidence**: D4 lists 4 operations with no rollback or transaction. The only atomicity claim applies to a single operation. Windows file-lock behavior is a known issue (D2 itself calls out "brittle on Windows" for symlinks, acknowledging the platform concern). D2's rollback strategy ("revert the shim code; old paths still work since files haven't moved yet") applies to code-level shims, not to per-install directory mutations.
-- **Suggested fix**: (a) Implement the upgrade as a multi-check transaction: verify all directories are renameable before touching config.md, or (b) add a `--fix` mode that detects partial failures (config rewritten but directories not renamed) and completes the migration, or (c) make the idempotency check look at the directories, not config.md — detect "migrated" when `.squidsquad/worker/` exists, and detect "partial" when config has `Workers:` but `.squidsquad/worker/` doesn't exist.
+- **Issue**: D4 says the wizard "Updates `.squidsquad/.harness-state.json` agent dict keys." The schema of `.harness-state.json` is never documented in either CONTEXT or RESEARCH. The implementer cannot know what keys exist, what format they use, or what values to rewrite them to. This is an undocumented dependency.
+- **Evidence**: D4 line 71–72. RESEARCH §2 ("Per-install touchpoints") lists `.squidsquad/config.md`, `.squidsquad/{dev,qa}/`, `.squidsquad/{dev,qa}/*` files, and GitHub labels — but does not mention `.harness-state.json`. D4 introduces it without any specification.
+- **Suggested fix**: Either (a) document the `.harness-state.json` schema in RESEARCH §2 (add it to the per-install touchpoints table), or (b) specify the exact key paths that need updating (e.g., `agents.*.role` keys from `"dev"` → `"worker"` and `"qa"` → `"verifier"`), or (c) if this file is generated/maintained by a different component, specify that component and cross-reference.
 
 ---
 
 ### Finding 8
 
 - **File**: `.squidsquad/pm/planning/CONTEXT-6274.md`
-- **Line**: 89 (D7 file count)
+- **Line**: 82–86 (`D7` L4 prefix routing)
 - **Severity**: warning
-- **Issue**: D7 claims "4 files: `dev-instructions.md`, `dev-soul-directives.md`, `dev-responsibility.md`, and any future dev-prefixed." The actual filesystem under `references/sub-skills/project/` contains exactly 3 dev-prefixed files (`dev-instructions.md`, `dev-responsibility.md`, `dev-soul-directives.md`). The claim of "4 files" with an enumeration of only 3 named files is inconsistent. The glob `dev-*.md` would correctly catch all existing files regardless, but the count mismatch means the implementer can't verify correctness against the spec.
-- **Evidence**: `glob` of `references/sub-skills/project/dev-*.md` returns exactly 3 files. D7 says "4 files" but lists 3.
-- **Suggested fix**: Correct the count to "3 files" or explain what the 4th file is if it's expected to exist by the time 6274.2 lands.
+- **Issue**: D7 specifies that "Compose.py L4 prefix routing (per CONTEXT-9925 D6b) reads both old and new prefixes during the dual-aware window." This dual-awareness for L4 prefix routing is not listed in D2's dual-aware implementation inventory. D2 enumerates `_list_known_role_identities()`, `_resolve_variant()`, `config.py.get_field()`, `boot_remote._parse_dev_agents()`, and `add_role.py` mandatory set — but omits L4 prefix routing. An implementer following only D2 would miss this required dual-aware change.
+- **Evidence**: D2 lines 22–33 enumerate the dual-aware surfaces. D7 lines 82–86 add L4 prefix routing dual-awareness. The two lists are inconsistent.
+- **Suggested fix**: Add L4 prefix routing dual-awareness to D2's enumerated list: "`compose.py` L4 prefix routing (per CONTEXT-9925 D6b) reads both `dev-` and `worker-` prefixes during the dual-aware window; only `worker-`/`verifier-` after 6274.3."
 
 ---
 
 ### Finding 9
 
 - **File**: `.squidsquad/pm/planning/CONTEXT-6274.md`
-- **Line**: 114 (D10 test list) vs `tests/test_pickup_comment_fidelity_9946.py` lines 30-34
+- **Line**: 134 (Out of Scope)
 - **Severity**: warning
-- **Issue**: The #9946 pickup-comment-fidelity regression test (`tests/test_pickup_comment_fidelity_9946.py`) hardcodes paths to `references/roles/dev/` at lines 30-34 (`DEV_TEMPLATE`, `DEV_POLL_MANIFEST`, `DEV_EVENT_MANIFEST`, `IMPLEMENT_TASKS`, `TRIAGE_ISSUES` — all rooted at `references/roles/dev/`). When sub-phase 6274.2 renames `references/roles/dev/` → `references/roles/worker/`, these tests will break. D10's 6274.2 test update list enumerates `test_compose*.py`, `test_config*.py`, `test_boot_remote*.py`, `test_add_role*.py`, `test_wizard*.py`, `test_agent_boundaries.py` — it does NOT include `test_pickup_comment_fidelity_9946.py`. This test was shipped post-#9946 and is not accounted for in the D10 rename sweep.
-- **Evidence**: Lines 30-34 of the test file use `REPO / "references" / "roles" / "dev" / ...` for 5 separate path constants. D10 line 114 lists 6 test files/groups but omits this one. RESEARCH §3 explicitly calls out the #9946 sub-skill as relevant context for this rename task.
-- **Suggested fix**: Add `test_pickup_comment_fidelity_9946.py` to the D10 6274.2 test update list, or expand the glob to `test_*.py` to catch all test files that reference role paths. Also verify whether the pickup-comment-fidelity sub-skill's own includes.yml references in `references/roles/dev/includes.yml` and `references/roles/dev/includes-events.yml` (confirmed present via grep) are covered by D2/D5 directory rename.
+- **Issue**: The Out of Scope section states: "Renaming `tracker.py` role-suffix conventions (`pm-lead`, `qa-lead`, etc.) beyond the prefix swap — only `qa-lead` → `verifier-lead` and `dev-lead` (rare) → `worker-lead` are in scope." This puts `qa-lead` → `verifier-lead` and `dev-lead` → `worker-lead` IN scope, but no AC or sub-phase assignment covers these suffix renames. None of AC1.1–AC3.8 or D2/D7/D9 wire these specific suffix changes to a sub-phase.
+- **Evidence**: Out of Scope line 134: "only `qa-lead` → `verifier-lead` and `dev-lead` (rare) → `worker-lead` are in scope." No AC in 6274.1, 6274.2, or 6274.3 mentions `*-lead` suffix renames. The dual-aware mechanism (D2) and file content updates (D9 6274.2) might implicitly cover these, but the ACs do not verify them.
+- **Suggested fix**: Either (a) add an explicit sub-item to AC2.2 covering suffix convention renames (`qa-lead` → `verifier-lead`, `dev-lead` → `worker-lead`), or (b) add a clause to AC3.7's grep test to also verify these suffix forms are updated, or (c) move suffix renames to Out of Scope if they will be handled by a follow-up.
 
 ---
 
 ### Finding 10
 
-- **File**: `.squidsquad/pm/planning/CONTEXT-6274.md`
-- **Line**: 158 (G2.→3 second condition)
+- **File**: `.squidsquad/pm/planning/RESEARCH-6274.md`
+- **Line**: 54–55 (blast radius table)
 - **Severity**: warning
-- **Issue**: The G2.→3 gate's 30-day window condition and the D3 30-day window definition create a subtle timing race. D3 says "30-day window starts when sub-phase 6274.2 merges." G2.→3 says 6274.3 can land when "30-day window elapsed AND zero new `role:dev` / `role:qa` labels created in the trailing 7 days." If an issue is created with `role:dev` on day 29 (the old label being applied by a pre-upgrade install that hasn't run the wizard yet), the trailing-7-days check on day 30 would see it and block 6274.3. The window restarts implicitly — the spec says to wait until zero new old labels for 7 days, but doesn't specify how many times to retry, how long to wait between checks, or whether the 30-day window is a hard floor or a rolling gate.
-- **Evidence**: D3 states the window duration (30 days). G2.→3 adds a co-condition (trailing 7 days clean). If the window elapses but the trailing-7-days condition fails, what happens? Is it "wait another 7 days" or "re-check daily"? The spec is silent. Without this, QA can't determine deterministically when G2.→3 is satisfied.
-- **Suggested fix**: Specify the retry cadence: "If the 30-day window has elapsed but the trailing-7-days check fails, re-check daily until the condition is met. The gate is satisfied when BOTH conditions are true on the same check." Add this to G2.→3 or to a new risk-mitigation row.
-
----
-
-These 10 findings cover the review criteria systematically — contradictions (F1, F8), unsatisfiable ACs (F2), gate verifiability gaps (F6, F10), D2/D7 mechanism underspecification (F3, F4, F5), D4 rollback risk (F7), and #9946 interaction (F9).
+- **Issue**: RESEARCH §2 states `references/roles/qa/` has "base + 5 variant dirs" with type "L2 + L3 (no variants in use)." This is internally contradictory — having 5 variant dirs contradicts "no variants in use." Additionally, D5 in CONTEXT only enumerates worker variants (`skill`, `ios`, `android`, `fullstack`, `web`) but is silent on whether verifier/qa has analogous variant directories and whether they need renaming.
+- **Evidence**: RESEARCH line 54–55. CONTEXT D5 lines 97–103. If qa truly has variant directories, D5 should list them. If qa does not have variant directories, the RESEARCH measurement is incorrect and should be corrected to avoid misleading the implementer.
+- **Suggested fix**: Re-measure `references/roles/qa/` and update RESEARCH §2 with accurate variant counts. If qa has no variant dirs, correct the table entry. If qa does have variants, add them to D5's enumeration in CONTEXT.
