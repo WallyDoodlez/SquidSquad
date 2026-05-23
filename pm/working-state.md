@@ -1,41 +1,28 @@
 # Working State
 
-- **Task**: idle — awaiting human approval gate on #6274 (planned → approved)
+- **Task**: monitoring #9965 (6274.2 directory rename, approved, awaiting skill pickup); #9966 (6274.3 cleanup, pending, gated on 6274.2 merge + 30d window)
 - **Status**: idle
-- **Last Processed Event ID**: 11dcbc317b7ff67f
+- **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-23 02:35)
+## Pipeline snapshot (2026-05-23 07:13)
 - 0 PRs open, 0 pending-test, 0 pending-ship, 0 external
-- 1 approved (long-running): #3 (DM lane)
-- 1 task at status:planned: #6274 (terminology rename) — DS audit complete + 10 findings remediated, awaiting human approval
+- 1 approved (long-running): #3 (DM lane, going-public)
+- 1 approved (new this cycle): #9965 (6274.2 — directory rename + content sweep, skill lane) — ready for pickup
+- 1 pending (gated): #9966 (6274.3 — cutover + shim cleanup) — blocked on 6274.2 merge + 30d window; PM will approve once migration-6274-cutover cutover date passes
+- 1 task at status:shipped (closed): #6274 (sub-phase 6274.1 only — auto-closed on ship; follow-ups #9965/#9966 carry the remaining sub-phases)
 - All 4 agents healthy
 
-## #6274 — post-DS-remediation state
-- DS audit (REVIEW-6274-DEEPSEEK.md): 3 errors + 7 warnings, all resolved inline (commit a5375dc7 → e1a898af)
-- New D11 locked decision: `*-lead` suffix renames (qa-lead → verifier-lead, dev-lead → worker-lead) wired into every sub-phase
-- New AC2.9: cutover-date populator as last commit of 6274.2 PR (resolves F2 temporal impossibility)
-- AC2.2 rewritten with positive definition of role-string reference (a)–(d) + explicit EXCLUDED list (F4)
-- AC3.7 rewritten with AST scan + anchored prose regex (F5 — no naive grep false positives)
-- G2→3 gate now verifies dual-labeling WORKED (every trailing-7d issue has BOTH labels), not single-old-label leakage (F1)
-- D4 idempotency: single canonical check (Workers: + .squidsquad/worker/ both present → no-op)
-- RESEARCH-6274.md §2: harness-state.json schema documented, qa variants entry corrected
-- Issue body synced to match rewritten CONTEXT (AUTHORITATIVE SCOPE banner)
-- 3-sub-phase PR sequence (6274.1/6274.2/6274.3) UNCHANGED
+## Why #9965/#9966 split off #6274
+- #6274 covered all 3 sub-phases (6274.1, 6274.2, 6274.3) in CONTEXT-6274.md but the tracker auto-closes on `shipped`, so when DM shipped 6274.1's PR #9964 the parent task closed.
+- DM's ship-comment on #6274 (2026-05-23 10:09 UTC) explicitly asked PM to file 6274.2 and 6274.3 as separate issues.
+- Planning artifacts (CONTEXT-6274.md, RESEARCH-6274.md, REVIEW-6274-DEEPSEEK.md) remain AUTHORITATIVE for both follow-up issues — no re-planning needed.
+- Human's 2026-05-23 approval of #6274's full 3-sub-phase scope carries through to #9965 and #9966; #9966's gating is a temporal condition (30-day cutover window), not a fresh approval ask.
 
-## Context pressure (healthy)
-- 1593: 69% → respawn → 1594: 5% → 1595: 13%
-- Threshold 70%; ample headroom
+## #9965 — what skill picks up next
+- AC2.1-AC2.9 per CONTEXT-6274.md §Acceptance Criteria → Sub-phase 6274.2.
+- Largest of the three sub-phases (~150-200 files).
+- AC2.9 (final commit populates cutover-date in vault note) starts the 30-day clock for #9966.
 
-## Sequence progress
-1. ✅ Event-arch v2 doc shipped main (PR #9945, commit 5b21ec5f)
-2. ✅ #6274 Phase 2 CONTEXT + DS audit + remediation complete
-3. 🔄 #6274 awaiting human approval gate (planned → approved)
-4. ⏳ Implementation epic from event-arch §15 closure plan — pending #6274 ship
-
-## Open with human
-- #6274: approve advance planned → approved (CONTEXT + RESEARCH + issue body all in sync as of e1a898af)
-
-## Notes
-- /loop scheduled every 30m for this session (cron job 50ee8c0f)
-- Recent_events (19): mostly own activity from DS remediation pass (comment, body edit, comment again) — all already actioned
-- Stale .squidsquad/{.event-state.json.pre-1516.bak, .harness-state.json.bak, .harness-state.json.pre-1500-cleanup.bak, cp-trace.log, hc-trace.log} untracked files; not actionable
+## #9966 — gated, do not approve yet
+- Conditions to unblock: (a) 6274.2 PR merged, (b) cutover date in `migration-6274-cutover` vault note has passed.
+- PM checks every cycle whether (a) and (b) hold; transitions pending → approved when both true.
