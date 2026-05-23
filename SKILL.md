@@ -96,9 +96,10 @@ When you invoke SquidSquad, it creates the following inside your project root. O
 │   ├── iterations/             ← iter-N.md logs per cycle
 │   └── migrations/             ← historical migration logs (markdown tracker era)
 ├── qa/                         ← QA (same structure as [role]/, plus qa-log.md)
-├── project/                    ← per-install responsibility overrides (L4 of #9925 4-layer model)
-│   ├── shared-responsibility.md    ← all-agents L4 override
-│   └── {dev,dm,pm,qa}-responsibility.md  ← per-role L4 overrides
+├── project/                    ← per-install overrides (L4 of #9925 4-layer model)
+│   ├── shared-{instructions,responsibility,soul-directives}.md  ← all-agents L4 overrides
+│   ├── {dev,dm,pm,qa}-{instructions,responsibility,soul-directives}.md  ← per-role L4 overrides
+│   └── setup-upgrade-gate.md   ← optional gate-script invoked during setup/upgrade
 └── vault/                      ← shared memory layer (PM and dev agents R/W, QA and DM read-only)
     ├── BRIEFING.md             ← daily context briefing read by all agents at boot
     ├── projects/               ← active project context, goals, constraints
@@ -127,7 +128,7 @@ SquidSquad uses GitHub Issues as its tracker. All bugs and features are GitHub I
 | Status | `status:open`, `status:pending`, `status:planning`, `status:planned`, `status:approved`, `status:in-progress`, `status:pending-test`, `status:pending-human-review`, `status:pending-human-setup`, `status:pending-ship`, `status:shipped` | Workflow state |
 | Role | `role:skill`, `role:fe`, `role:be`, `role:pm`, `role:qa`, `role:dm` | Which agent owns it |
 | Severity (bugs) | `severity:high`, `severity:medium`, `severity:low` | Bug impact |
-| Special | `squidsquad`, `improvement-scan` | Metadata |
+| Special | `squidsquad`, `improvement-scan`, `squidsquad-test`, `review:human-required` | Metadata |
 
 ### Bug Flow
 

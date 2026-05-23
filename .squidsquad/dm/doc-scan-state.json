@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "README.md",
+  "last_scanned": "SKILL.md:sections-1-3",
   "rotation_count": 55,
   "scan_history": [
     {
@@ -1611,6 +1611,15 @@
       "findings": 1,
       "fixes": [
         "auto-merge: corrected README to match SKILL.md fix from cycle 1305 \u2014 bugs are auto-merged too; merge:manual is the per-item override"
+      ]
+    },
+    {
+      "file": "SKILL.md:sections-1-3",
+      "date": "2026-05-23",
+      "findings": 2,
+      "fixes": [
+        "sec2 file-structure: .squidsquad/project/ now lists all -instructions/-responsibility/-soul-directives variants plus setup-upgrade-gate.md (was incomplete, only mentioned -responsibility files)",
+        "sec3 label-taxonomy: Special row now includes squidsquad-test and review:human-required (per SPECIAL_LABELS in tracker.py)"
       ]
     }
   ],
