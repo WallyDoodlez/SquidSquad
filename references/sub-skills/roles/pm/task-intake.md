@@ -2,7 +2,7 @@
 
 When the human suggests a new task, do NOT immediately file it. Run the full 5-phase lifecycle. Issues are excluded — they use the current lightweight fix → verify → close flow.
 
-**PM produces no test artifacts** (#9184). PM defines acceptance criteria only — the AC list lives in the GitHub issue body + CONTEXT.md. Worker writes their own unit tests as part of the implementation PR. Verifier writes the test plan in `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` (derived independently from the AC list) and executes it against a real live instance. CQ specs for any task touching LLM-consumed instructions are owned by verifier, not PM.
+**PM produces no test artifacts** (#9184). PM defines acceptance criteria only — the AC list lives in the GitHub issue body + CONTEXT.md. Dev writes their own unit tests as part of the implementation PR. QA writes the test plan in `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` (derived independently from the AC list) and executes it against a real live instance. CQ specs for any task touching LLM-consumed instructions are owned by QA, not PM.
 
 **Light mode**: For trivial/cosmetic tasks (typo fixes, config tweaks, doc-only changes), skip Phase 1 (Research) and Phase 2A (prep), abbreviate Phase 2. Phase 3 (AC + issue body) still runs. Verification is handled by the verifier per `qa/verification.md` (install-coupled path — wizard D4 renames to verifier/verification.md) regardless of mode. Use your judgment: if the task touches behavior or user-facing systems, use the full flow.
 
@@ -20,7 +20,7 @@ Before starting each planning phase, check if its output artifact already exists
    - If changes found: ask the user via `AskUserQuestion`: "RESEARCH.md exists from a previous session but code has changed since. Re-research or reuse?" Options: `["Re-research (recommended)", "Reuse existing"]`.
 3. **File doesn't exist**: Run the phase normally.
 
-Apply this logic to: `RESEARCH.md` (Phase 1), `PHASE2-PREP.md` (Phase 2A), `CONTEXT.md` (Phase 2). PM no longer produces `TEST-PLAN.md` — that artifact is owned by QA under `.squidsquad/qa/planning/` (#9184).
+Apply this logic to: `RESEARCH.md` (Phase 1), `PHASE2-PREP.md` (Phase 2A), `CONTEXT.md` (Phase 2). PM no longer produces `TEST-PLAN.md` — that artifact is owned by the verifier under `.squidsquad/qa/planning/` (#9184).
 
 ### Phase 1 — Research
 
@@ -195,7 +195,7 @@ Continue until all questions are resolved. Capture decisions in `.squidsquad/[RO
 - [Decision]: [what and why]
 
 ## Worker Discretion (worker agent can choose)
-- [Area]: [what the dev can decide]
+- [Area]: [what the worker can decide]
 
 ## Side Effect Mitigations (required)
 - [Mitigation]: [from research, must be implemented]
@@ -223,7 +223,7 @@ The banner is required on every issue with a CONTEXT file — at issue creation 
 
 ```
 question: "Does this task need design work before implementation?"
-options: ["Yes — route to designer", "No — dev can implement directly"]
+options: ["Yes — route to designer", "No — worker can implement directly"]
 ```
 
 - **"Yes"**: Add `- **Design**: needed` to the task file. Add a `## Design Brief` section to CONTEXT.md with: user story, target platforms, existing patterns to follow, visual references, constraints, and priority. The designer agent will pick this up.
@@ -238,7 +238,7 @@ question: "Phase 2 complete. Here are the locked decisions:\n\n[list each locked
 options: ["Approve — proceed to Planned", "More discussion needed", "Reject this task"]
 ```
 
-- **"Approve"**: Continue to Phase 3 (AC drafting + issue filing). PM does NOT produce a test plan — QA will write `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` from the AC list when picking up verification (#9184).
+- **"Approve"**: Continue to Phase 3 (AC drafting + issue filing). PM does NOT produce a test plan — Verifier will write `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` from the AC list when picking up verification (#9184).
 - **"More discussion needed"**: Ask the human what they want to revisit. Re-open the relevant question(s), update CONTEXT.md with revised decisions, then re-present the gate.
 - **"Reject"**: Set task status to `Rejected`. Append Discussion entry with reason. Stop the intake process.
 
@@ -276,7 +276,7 @@ Write current state: `python references/scripts/cycle.py status-bar [ROLE] plann
 
 **Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: planning FEAT-[ROLE_UPPER]-XXX`.
 
-PM produces **acceptance criteria only** in Phase 3 (#9184). No test plan, no test cases, no comprehension questions. The AC list lives in the GitHub issue body and is the contract for both dev and verifier. Worker writes their own unit tests against the AC list. Verifier writes its own `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` derived independently from the AC list and executes it against a real live instance.
+PM produces **acceptance criteria only** in Phase 3 (#9184). No test plan, no test cases, no comprehension questions. The AC list lives in the GitHub issue body and is the contract for both dev and QA. Dev writes their own unit tests against the AC list. QA writes its own `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` derived independently from the AC list and executes it against a real live instance.
 
 **AC Integration Check** — before writing acceptance criteria, run this mental checklist:
 
@@ -286,7 +286,7 @@ PM produces **acceptance criteria only** in Phase 3 (#9184). No test plan, no te
 4. **Testability**: Can the verifier execute a single command per AC and get a deterministic PASS/FAIL **from the AC alone, without reading the diff**?
 5. **Architecture**: Does this align with vault decisions, established patterns, and project philosophy?
 6. **Observability**: Each AC must be observable, deterministic, and derivable without reading code. If an AC requires inspecting the implementation to know what "pass" means, the AC is incomplete.
-7. **CQ coverage signal**: If the task adds or changes LLM-consumed instructions (CLAUDE.md content, sub-skill fragments, SOUL.md, prompts), include an AC such as `AC-N (comprehension): a fresh agent given only the modified files can correctly answer [observable question(s)] about the new behavior`. PM does NOT write the CQ spec itself — Verifier produces it. PM's job is to make the comprehension requirement an explicit AC so the verifier knows to cover it.
+7. **CQ coverage signal**: If the task adds or changes LLM-consumed instructions (CLAUDE.md content, sub-skill fragments, SOUL.md, prompts), include an AC such as `AC-N (comprehension): a fresh agent given only the modified files can correctly answer [observable question(s)] about the new behavior`. PM does NOT write the CQ spec itself — verifier produces it. PM's job is to make the comprehension requirement an explicit AC so the verifier knows to cover it.
 
 If any answer is unclear, the AC is incomplete — refine before filing.
 
@@ -302,7 +302,7 @@ If any answer is unclear, the AC is incomplete — refine before filing.
 - ACs include edge-case handling and side-effect mitigations from RESEARCH.md / CONTEXT.md.
 - Links to RESEARCH.md and CONTEXT.md.
 
-**No PM-side TEST-PLAN.md** — Phase 3 ends when the issue is filed. QA will produce `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` when picking up verification (see `qa/verification.md`).
+**No PM-side TEST-PLAN.md** — Phase 3 ends when the issue is filed. Verifier will produce `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` when picking up verification (see `qa/verification.md`).
 
 **Clear planning phase flag** after the issue is filed. Normal PM cycling auto-resumes.
 
@@ -333,13 +333,13 @@ Ask the human if they want to approve the task now or leave as `Pending`. This i
 
 ### Phase 4 — Execution (Worker Agent)
 
-_(Handled by the worker agent — see dev template Step 2b. Worker implements against the AC list in the issue body + CONTEXT.md and writes unit tests covering the implementation as part of the same PR.)_
+_(Handled by the worker agent — see worker template Step 2b. Worker implements against the AC list in the issue body + CONTEXT.md and writes unit tests covering the implementation as part of the same PR.)_
 
 ### Phase 5 — Verification (Verifier)
 
-_(Handled by QA — see `qa/verification.md`. QA derives `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` from the AC list in the issue body, then executes it against a real live instance. PM does NOT spawn verifier subagents from this template (#9184).)_
+_(Handled by the verifier — see `qa/verification.md`. Verifier derives `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` from the AC list in the issue body, then executes it against a real live instance. PM does NOT spawn QA subagents from this template (#9184).)_
 
-PM's only role in verification is **holding QA accountable**: if a task stalls at `pending-test` past the stall window, nudge the verifier via the pipeline sentinel. PM does not run test cases, does not produce QA-RESULTS.md, and does not perform the AC walk.
+PM's only role in verification is **holding the verifier accountable**: if a task stalls at `pending-test` past the stall window, nudge QA via the pipeline sentinel. PM does not run test cases, does not produce QA-RESULTS.md, and does not perform the AC walk.
 
 ---
 
