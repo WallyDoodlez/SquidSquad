@@ -99,15 +99,30 @@ Bad (the two #9946 instances, paraphrased):
 > Fixed in commit abc1234. AC1-AC12 all satisfied including L4 stubs in
 > seed AND live locations. All 53 tests pass. Status → Pending Test.
 
-Good (when state-file work is correctly excluded):
+Bad-but-different (transitioning to pending-test with failing tests
+on the rationale that the failures are "expected" — they are not OK
+just because you understand why they happen; QA will see red and reject):
+
+> Fixed in commit abc1234. AC8 partial: 5 seed templates in PR; 5 live
+> stubs are state files filtered by commit_code. Tests: 47 pass / 6
+> fail; failures are state-file-dependent and expected. Status →
+> Pending Test.
+
+Good (when state-file work is required by an AC and tests genuinely
+cannot pass through commit_code alone — the right disposition is
+file-to-PM under Step 8c, not pending-test):
 
 > Fixed in commit abc1234. AC1, AC5, AC7 satisfied — see PR #NNNN diff.
-> AC8 partially satisfied: 5 seed templates landed in PR; the 5 live
-> stubs under `.squidsquad/project/...` are state files filtered by
-> commit_code and will be created by the next state commit / picked up
-> separately. Tests: 47 pass / 6 fail; failing tests are the live-stub
-> exist checks, expected until the state commit lands. Flagging this
-> divergence to PM for AC8 reshaping. Status → Pending Test.
+> AC8 cannot be satisfied through commit_code: the AC requires live
+> stubs at `.squidsquad/project/...` which are state files filtered out
+> of the feature PR. Tests: 47 pass / 6 fail; the 6 failures are
+> exactly the live-stub existence checks, which is the symptom of the
+> AC-mechanism mismatch. Filing #NEW to PM to reshape AC8 (either move
+> the stubs to a code-path or add a state-bootstrap step in cycle_post).
+> Status → Planning (file-to-PM disposition, per implement-tasks Step
+> 8c).
 
-The good version is longer but it is true, and it tells QA exactly what
-to look for and what to forgive.
+The good version refuses to transition under false pretenses. Pending-
+test means "QA, please verify this is done"; you cannot meaningfully
+claim that with a red suite, even when the red is "expected." If the
+mismatch is genuine, it is a planning problem, not a testing problem.
