@@ -51,7 +51,7 @@ Every finding must include structured evidence:
 
 - If **objective** (clear pass/fail, crash, error): File immediately with the structured format above.
   ```bash
-  python references/scripts/tracker.py create-issue --title "[title]" --body "[structured finding]" --role [target-role] --severity [high|medium|low] --reporter qa
+  python references/scripts/tracker.py create-issue --title "[title]" --body "[structured finding]" --role [target-role] --severity [high|medium|low] --reporter verifier
   ```
 - If **subjective** (coherence issue, style concern, architectural question): Flag for PM/human review. Do NOT file an issue — PM and human decide.
   ```bash
@@ -310,7 +310,7 @@ python references/scripts/git_ops.py task-end [role] [number]
    **If Auto Merge `yes` AND no `review:human-required` label** — merge via harness:
      ```bash
      gh pr ready [PR_NUMBER]
-     curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH]", "role": "qa"}'
+     curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH]", "role": "verifier"}'
      ```
      The harness returns 202 immediately. The `pr-merged` event appears in your next cycle's `recent_events`.
      - **Merge succeeds** (check `pr-merged` event with `success: true`): transition to pending-ship:
@@ -337,7 +337,7 @@ python references/scripts/git_ops.py task-end [role] [number]
    For each PR with branch matching `squidsquad/*/[NUMBER]`:
    ```bash
    gh pr ready [PR_NUMBER] 2>/dev/null
-   curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH]", "role": "qa"}'
+   curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH]", "role": "verifier"}'
    ```
    - **Merge succeeds**: proceed to pending-ship transition
    - **Merge conflict**: Verifier merges the working branch into the feature branch (code was already verified):
@@ -349,7 +349,7 @@ python references/scripts/git_ops.py task-end [role] [number]
      - **Merge succeeds (no code conflicts)**: push and retry merge
        ```bash
        git push origin [BRANCH_NAME]
-       curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH_NAME]", "role": "qa"}'
+       curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH_NAME]", "role": "verifier"}'
        ```
        If merge now succeeds, proceed to pending-ship. Code was already verified — no re-verification needed.
      - **Merge has code conflicts** (not just .squidsquad/ state files): reject back to worker with specific conflicting files
@@ -397,9 +397,9 @@ gh pr list --search "squidsquad/" --state all --json number,title,state,mergedAt
 ```
 
 For each PR:
-- **If merged**: find the corresponding tracker item (parse the task/issue ID from the PR title). Update status to `Pending Ship`. Append Discussion entry: `> [YYYY-MM-DD HH:MM] **qa**: PR [URL] merged by human. Status → Pending Ship.` Apply the same `delivery: skip` logic as Step 5 item 4 if the task is internal-only.
+- **If merged**: find the corresponding tracker item (parse the task/issue ID from the PR title). Update status to `Pending Ship`. Append Discussion entry: `> [YYYY-MM-DD HH:MM] **verifier**: PR [URL] merged by human. Status → Pending Ship.` Apply the same `delivery: skip` logic as Step 5 item 4 if the task is internal-only.
 - **If closed without merge**: update status back to `In Progress`. Append Discussion entry with note.
-- **If open with new comments**: fetch comments via `gh pr view [N] --comments`. Append any new comments to the tracker Discussion: `> [YYYY-MM-DD HH:MM] **qa**: PR comment from [author]: [summary]`
+- **If open with new comments**: fetch comments via `gh pr view [N] --comments`. Append any new comments to the tracker Discussion: `> [YYYY-MM-DD HH:MM] **verifier**: PR comment from [author]: [summary]`
 - **If open with "changes requested" review**: update status back to `In Progress`. Append Discussion entry with the requested changes.
 
 If `PR Flow: no`, skip this step.
@@ -419,6 +419,6 @@ Read `.squidsquad/.local-config` to get each agent's clone path. For each worker
 - If `current-state` exists and mtime is recent (within 2× interval): agent is healthy (🦑).
 - If `current-state` exists but mtime is stale (older than 2× interval): agent is **stalled** (👻). Log a warning in `qa/qa-log.md` and append a Discussion note:
   ```
-  > [YYYY-MM-DD HH:MM] **qa**: Agent [role] appears stalled — no cycle activity for [elapsed] minutes. Please check.
+  > [YYYY-MM-DD HH:MM] **verifier**: Agent [role] appears stalled — no cycle activity for [elapsed] minutes. Please check.
   ```
 - If `.local-config` is missing, path is unreachable, or `current-state` doesn't exist: agent status is unknown (❓) — note in `qa/qa-log.md` (install-coupled; will be renamed with `.squidsquad/qa/` → `.squidsquad/verifier/` in wizard.py D4).

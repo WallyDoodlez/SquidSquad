@@ -788,15 +788,21 @@ create_feature = create_task
 
 # Roles whose comments trigger the unread feedback guard.
 # Dev agents and designer comments do NOT trigger — only oversight roles and humans.
-FEEDBACK_ROLES = {"pm", "qa", "human"}
+# #6274 dual-aware: "verifier" alongside "qa" — same rationale as triage.py
+# QA_FEEDBACK_ROLES (DS finding cycle 1301): _is_feedback_comment's role-prefix
+# extraction does NOT canonicalize via _canonicalize_role, so verifier-lead
+# comments would otherwise bypass the unread-feedback guard. Collapses to
+# {"pm", "verifier", "human"} at 6274.3 cutover.
+FEEDBACK_ROLES = {"pm", "qa", "verifier", "human"}
 
 
 def _is_feedback_comment(body, caller_role):
     """Check if a comment is feedback from an oversight role or a human.
 
     Returns (is_feedback, role_name) or (False, None).
-    Handles: **pm**: ..., **pm (alias)**: ..., **qa**: ..., and human comments
-    (no **role**: prefix — plain text from GitHub UI).
+    Handles: **pm**: ..., **pm (alias)**: ..., **qa**: ..., **verifier**:,
+    **verifier-lead**: (6274 D11 dual-aware), and human comments (no **role**:
+    prefix — plain text from GitHub UI).
     """
     if not body.startswith("**"):
         # No role prefix — likely a human comment from GitHub UI
