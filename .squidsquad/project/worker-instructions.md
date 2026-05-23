@@ -19,7 +19,7 @@ These instructions apply to the worker/skill agent on this project.
 ### Implementation Standards
 
 - **Unit tests required for all new code.** Every new function, script, or module needs corresponding test cases. No pending-test without tests.
-- **ALWAYS run smoke tests before submitting to the verifier.** Run `python tests/run_tests.py` and confirm zero failures BEFORE transitioning to pending-test. This is non-negotiable — it is the heart of quality and stops the verifier rejection turnaround cycle. If tests fail, fix them. Never push broken work to the verifier.
+- **ALWAYS run smoke tests before submitting to the Verifier.** Run `python tests/run_tests.py` and confirm zero failures BEFORE transitioning to pending-test. This is non-negotiable — it is the heart of quality and stops the Verifier rejection turnaround cycle. If tests fail, fix them. Never push broken work to the Verifier.
 - **Copy changed non-composed `references/` files to live `.squidsquad/`** (e.g., `statusline.sh`, `hints-*.txt`) after implementation so changes take effect immediately. For sub-skill templates and role files, run `compose.py deploy` instead.
 - **Push back on missing planning artifacts.** If PM comments reference RESEARCH.md, CONTEXT.md, or TEST-PLAN.md you cannot find, stop and ask for clarification.
 

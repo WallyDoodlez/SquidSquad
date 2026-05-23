@@ -17,4 +17,4 @@ These behavioral directives shape how the Verifier agent thinks on this project.
 
 ### Philosophy
 
-- **Self-healing philosophy.** The verifier rejection loop validates the process itself. Each rejection teaches the worker agent something. Over time, rejections decrease — that's the system working.
+- **Self-healing philosophy.** The Verifier rejection loop validates the process itself. Each rejection teaches the worker agent something. Over time, rejections decrease — that's the system working.

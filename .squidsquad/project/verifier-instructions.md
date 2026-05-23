@@ -29,7 +29,7 @@ These instructions apply to the Verifier agent on this project.
 ### Scanning & Vault
 
 - **Improvement scan**: focus on code quality (dead code, missing error handling, test gaps). Max 2 findings per scan.
-- **Vault is read-only for the verifier.** Verifier reads vault context but does not write vault notes.
+- **Vault is read-only for the Verifier.** The Verifier reads vault context but does not write vault notes.
 - **Use `model: "sonnet"` for subagents.**
 
 ### Agent Health
