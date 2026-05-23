@@ -902,18 +902,18 @@ To land v2 cleanly, the following are retired or rewritten:
 
 ## 13. Open questions to refine
 
-These are deliberate gaps in this draft. Each needs a human-locked decision before the umbrella task is filed.
+**All 10 questions now locked.** Original questions retained below for traceability; full lock table is in §15.7.
 
-1. **Booted-payload shape**: just `{role}`, or also include `pid`, `clone_path`, `version`?
-2. **POST /work/assign authorization**: hard-coded permission table per role pair, or open (any agent can assign to any role)? Recommended: hard-coded with explicit table.
-3. ~~**EAD polling cadence**: 5s? 15s? Tradeoff is forge API quota vs. assignment latency.~~ **CLOSED (2026-05-22)**: REST API (not Search), adaptive cadence 10s active → 30s quiet, hard bounds 5s floor / 60s ceiling. See §5.4 for the full rule + API-budget table. Config-knob override deferred to post-v1.
-4. **`event_poll` polling cadence**: how often does it ask the harness for events? Recommended: 5s active when there's an in-flight assignment, 30s when fully idle (with adaptive backoff).
-5. **Cursor on first boot**: `null` (start from head of deque) or "skip everything emitted before my booted time" (start from now). Recommended: `null` per CONTEXT-9873-A D7.
-6. **Care filter granularity**: role-only in v1, or richer matching by `event_context` from day 1?
-7. ~~**Queue-while-busy behavior**: ignore-on-nudge or read-decide-queue-ack? Recommended: read-decide-queue-ack (see §8.2).~~ **CLOSED (2026-05-22)**: agent notes the nudge in conversation context only — no `working-state.md` write, no flag, no queue. Continues current work uninterrupted; post-cycle always GETs the queue regardless. event_poll's re-poll within 10–60s covers crash-loss of context. See §8.2 for the crash-safety walkthrough.
-8. **What about #9845 (noop)?**: retire and absorb into `assigned-to` payload, OR keep as a dedicated 4th event type for probe semantics?
-9. **`compose.py` deploy after merging this v2**: any compose-pipeline changes needed for the trimmed `event_catalog` or the new boot path?
-10. **Migration plan**: do we ship v2 with a feature flag (`event-driven: yes` vs `no`), or hard cutover with rollback only via revert?
+1. ~~**Booted-payload shape**~~ **CLOSED (2026-05-23, §15.1)**: `{role, pid, clone_path, version}` — full diagnostic from day 1.
+2. ~~**POST /work/assign authorization**~~ **CLOSED (2026-05-23, §15.4)**: L2-derived from each role's `responsibility.md` `## Bus contract` section; not hardcoded in harness.
+3. ~~**EAD polling cadence**~~ **CLOSED (2026-05-22, §5.4)**: REST API (not Search), adaptive cadence 10s active → 30s quiet, hard bounds 5s floor / 60s ceiling. Config-knob override deferred to post-v1.
+4. ~~**`event_poll` polling cadence**~~ **CLOSED (2026-05-23, §15.1)**: 5s active / 30s idle, adaptive backoff, hard bounds 2s floor / 60s ceiling. Same pattern as §5.4 EAD.
+5. ~~**Cursor on first boot**~~ **CLOSED (2026-05-23, §6.0)**: `null` per CONTEXT-9873-A D7 — agent starts from deque head.
+6. ~~**Care filter granularity**~~ **CLOSED (2026-05-23, §8.0 + §15.4)**: role-only in v1; `event_context` filter as a v2 extension via the L2 `## Bus contract` section.
+7. ~~**Queue-while-busy behavior**~~ **CLOSED (2026-05-22, §8.2)**: agent notes the nudge in conversation context only — no `working-state.md` write, no flag, no queue. Continues current work uninterrupted; post-cycle always GETs the queue regardless. event_poll's re-poll within 10–60s covers crash-loss of context.
+8. ~~**What about #9845 (noop)?**~~ **CLOSED (2026-05-23, §15.5)**: retire #9845; absorb probe semantics into `assigned-to(target_role=R, event_context="probe", ack_only=true)`.
+9. ~~**`compose.py` deploy after merging this v2**~~ **CLOSED (2026-05-23, §11 + §15.5)**: per §11 (trim catalog, retire emit calls) plus add `compose-needed` translator (harness emits `assigned-to(pm, event_context=compose-needed)` when a merge touches `references/`). Existing L4 + manifest pipeline carries everything; no new compose mechanism.
+10. ~~**Migration plan**~~ **CLOSED (2026-05-23, §15.5 + §10)**: feature flag `event-driven: yes/no` in `config.md`. Default `no` for the first release; operator flips per install when ready. Rollback = flip the flag + restart agents. `/loop` fallback stays available indefinitely until a future cleanup decision.
 
 ---
 
@@ -923,59 +923,145 @@ Drawing the sequence + arch diagrams above exposed concrete gaps in the model. T
 
 ### 14.1 Process-tree / lifecycle gaps
 
-- **G1 — Who spawns `event_poll`?** The §4.2 diagram shows `thin_launcher` spawning `claude` and `event_poll` running as a sibling. But who launches `event_poll`? Is it the harness (separately from thin_launcher), or thin_launcher itself in a "spawn-and-fork" pattern, or Monitor's invocation contract that names the script? The doc says "harness calls boot_agent which spawns thin_launcher + event_poll separately" — but the exact mechanism is hand-wavy. Per §6.0 step 4-5, both are spawned by harness; need to make that concrete (probably two `subprocess.Popen` calls in `boot_agent`).
-- **G2 — Who restarts `event_poll` if it crashes?** Today nothing watches it. In the new model, an event_poll crash silently severs the agent's nudge path; agent appears alive but receives no work. Need either: (a) harness health-polls `event_poll` like it polls claude, (b) thin_launcher monitors event_poll as a child, or (c) Monitor itself detects stdin source EOF and signals.
+- **G1 — Who spawns `event_poll`?** *(Closed by §15.1.)* `boot_agent()` makes two `subprocess.Popen` calls — one for `thin_launcher`, one for `event_poll`. Both PIDs recorded in `.harness-state.json`. Harness owns both.
+- **G2 — Who restarts `event_poll` if it crashes?** *(Closed by §15.1.)* Health poller watches both PIDs (claude AND event_poll). On death while `intent=running` and `status=ready`, harness respawns. Same machinery as today's claude restart, no new code path.
 - **G3 — Booted-event delivery race.** *(Partially closed by §6.0 + §6.1 state machine.)* `boot_agent()` writes `intent=running, status=booting` synchronously BEFORE spawning subprocesses, so when the agent emits `booted` the harness record always exists. Remaining residual race: agent could emit `booted` while `intent=stopped` (operator fires stop during a boot in progress). §6.0 step 6 handles this — harness validates `intent==running` on the booted POST and rejects otherwise; the agent's process exits naturally on the rejection.
 - **G4 — Stop intent flow is undocumented.** *(Closed by §6.1 state machine.)* Stop path: operator/harness writes `intent=stopping, status=stopping` → harness emits `assigned-to(role, event_context="stop-intent")` via the existing bus path → agent's care-filter recognizes `stop-intent` → finishes current work → emits `ack-stop` → harness writes `status=stopped` and reaps both `event_poll` and `thin_launcher` subprocesses. Timeout: 30s grace after `assigned-to` → SIGTERM → 10s → SIGKILL. One control path, no parallel mechanisms.
 
 ### 14.2 Event-delivery gaps
 
-- **G5 — Multi-event nudge formatting.** §8 walk shows the agent reading `[e1, e2, e3]` after one nudge. But `event_poll` writes only one nudge line per polling cycle regardless of count. What does the nudge line contain — a count? An event_id range? Nothing? Affects whether the agent can skip the GET if it already knows the event ids.
-- **G6 — Out-of-order ack semantics.** §8.0 batches the ack to the last tended event_id. If the agent decides care/skip in order but for some reason cannot tend an earlier event (transient error reading from forge, say), can it still ack past it? Or must it block on the failed event? #9873-A has cursor-regression protection but doesn't cover forward-skip semantics.
-- **G7 — Cursor when deque has been compacted.** If agent's cursor points to an evicted event_id (harness deque rolled past it during agent downtime), GET `/events/for/{role}?since=cursor` needs to return "your cursor is too old, you've missed events" — not just empty. The doc says "synthetic cursor-evicted handling" but doesn't specify the wire format.
-- **G8 — EAD double-emit on restart with lost last-seen.** §5.4 says EAD persists last-seen forge id "so it doesn't double-process on restart." If that file is corrupt or missing, EAD starts from zero and could emit thousands of historical assigned-to events, flooding queues. Need a bounded recovery: e.g., on missing/corrupt last-seen, default to "now - 10 minutes" not "epoch."
+- **G5 — Multi-event nudge formatting.** *(Closed by §15.2.)* Nudge line is literal `NUDGE\n` text — no payload. Agent always does the GET to find what's new. False positives harmless.
+- **G6 — Out-of-order ack semantics.** *(Closed by §15.2.)* Forward-only, monotonic. Care-skipped events that tend-failed stay past cursor; agent ack-cursors only up to last-successfully-tended. `event_poll` re-nudges within 10–60s; `timeout_scan` provides backup redelivery.
+- **G7 — Cursor when deque has been compacted.** *(Closed by §15.2.)* `GET /events/for/{role}?since=<old_cursor>` returns `HTTP 410 Gone` with body `{cursor_evicted: true, current_head: <event_id>}`. Agent recovers from forge, emits `ack-cursor(current_head)`, re-enters idle.
+- **G8 — EAD double-emit on restart with lost last-seen.** *(Closed by §15.3.)* On missing/corrupt last-seen file, EAD defaults to `now - 5 minutes`. Bounded dup-emit window; agents dedup via care-filter on `(issue_number, target_role, event_context)`.
 - **G9 — Forge → EAD lag floor.** *(Closed by §5.4 REST-API choice.)* The original concern assumed Search API (5-30s indexing lag); switching to REST removes that floor — REST is real-time. Latency floors documented in §5.4 are now driven purely by polling cadence, not API indexing. Sub-second `tracker.py` path, 5-30s typical / 60s worst-case for EAD safety net.
 
 ### 14.3 Work-handoff gaps
 
-- **G10 — Assignment to an offline agent.** §7.0 step 4 emits `assigned-to(target_role=verifier)` directly into the deque. What if the verifier isn't booted (down for maintenance, crashed, etc.)? The event sits past the verifier's cursor; when it boots, it'll see the event past its cursor. OK. But what if EAD ALSO detects the forge change and emits a second assigned-to? Need dedup logic OR explicit "operator-acknowledged duplicates fine because care-filter handles it."
-- **G11 — `/work/assign` permission table.** §13 Q2 asked the question; §7.0 step 2 just says "validate." Need an actual matrix:
-  ```
-  caller ↓  | assign-to →  pm   verifier   worker   dm
-  pm                       –    ✓          ✓        ✓
-  verifier                 ✓    –          ✓        ✓
-  worker                   ✓    ✓          –        ✓
-  dm                       ✓    ✓          ✓        –
-  (worker variants inherit worker row; — = self-assign forbidden)
-  ```
-  This is the kind of table the locked decisions section should contain. Process-integrity rationale: any agent should be able to route a process concern to pm (skill notices a workflow bug → assigns to pm with `event_context="process-concern"`).
-- **G12 — Assigning to pm.** pm IS callable from any agent (per the matrix above, all `→ pm` cells are ✓). Rationale: process integrity is everyone's job — when any role notices a workflow gap, it should route to pm rather than just opening an issue that pm might miss. pm's inbox is disambiguated by `event_context`: EAD emits `event_context="human-comment"` for human activity and `event_context="agent-down"` / `"agent-stalled"` for harness health detections; other agents emit `event_context="process-concern"` or `"route-handoff"` for explicit routing.
+- **G10 — Assignment to an offline agent.** *(Closed by §15.4.)* Events queue past target's cursor; processed on next boot via §6.0 read path. Care-filter on `(issue, role, context)` dedups if `/work/assign` and EAD both fire.
+- **G11 — `/work/assign` permission table.** *(Closed by §15.4 — L2-derived.)* Each role's `responsibility.md` `## Bus contract` section declares `accepts assigned-to from: [list]` or `any`. Harness reads at boot, builds in-memory permission table. For current 4 roles: all accept from any role. Self-assign is built-in invariant (not declarable). `403 Forbidden` with explicit error body on rejection.
+- **G12 — Assigning to pm.** *(Closed by §15.4.)* pm is callable from any agent — falls out of the uniform "accepts from: any role" L2 declaration. pm's inbox is disambiguated by `event_context`: EAD emits `"human-comment"` for human activity and `"agent-down"`/`"agent-stalled"` for harness health detections; other agents emit `"process-concern"` or `"route-handoff"` for explicit routing.
 
 ### 14.4 State / persistence gaps
 
 - **G13 — `working-state.md` write race.** *(Closed by §8.2.)* The nudge path now writes nothing to `working-state.md` (context-only memory). The remaining write surface on `working-state.md` is the agent's current-work checkpointing during normal cycle pre/post — single-writer per agent, already serialized by the cycle wrapper. Atomic `.tmp + rename` from L1 base remains standard. No nudge-related concurrent-write surface to manage.
-- **G14 — `.event-state.json` size unbounded.** Cursors are bounded (one per role). In-flight is bounded by deque maxlen. But if events get evicted while in-flight, those entries become orphans in `_in_flight`. Need a `timeout_scan`-driven cleanup that removes in-flight entries whose event_id is no longer in the deque.
-- **G15 — Harness restart loses deque.** Stated in §5.2 but not flagged as a gap. On harness restart, all in-flight events are gone, all cursors are still pointing at event_ids that may have been in the deque. Agents reading `/events/for/{role}?since=cursor` after harness restart see an empty result — looks like no work — but the work may still exist in forge. EAD on restart should re-detect from forge and re-emit. Need to specify that contract.
+- **G14 — `.event-state.json` size unbounded.** *(Closed by §15.3.)* `timeout_scan` (already running every 30s per `#9873-E`) also sweeps in-flight entries whose `event_id` is past deque eviction. Passive cleanup; no agent involvement.
+- **G15 — Harness restart loses deque.** *(Closed by §15.3.)* On harness boot, EAD does a 30-minute catch-up scan against forge; re-emits assigned-to for anything missed during downtime. Beyond 30 min, agents recover from forge on first read (cursor-evicted path per §15.2).
 
 ### 14.5 Boot / runtime ordering gaps
 
-- **G16 — First boot of the very first agent.** §6 assumes harness is up before any agent. But the harness itself has to be started by something (wizard, `start.sh`, operator command). Need a §6.x for "system cold start" covering: operator launches harness → harness loads state → harness `boot_agent(pm)` → ... in what order? Especially: does EAD start before or after the first agent boots?
-- **G17 — `compose-completed` removed but compose still happens.** §11 removes `compose-completed` from the catalog. But `compose.py` still runs (e.g., after `references/` changes merge). Today other agents react to `compose-completed` by reloading their CLAUDE.md (sort of). In v2, when does an agent get a refreshed CLAUDE.md? Probably: agent restart only. Need to state that explicitly — compose changes require an operator restart of affected agents.
-- **G18 — Wizard at install time.** Nowhere mentioned. New installs run the wizard to set up `.squidsquad/`. Wizard needs to know whether the install will use event-mode or polling-mode (sets `config.md`). The doc should mention the wizard's role in choosing the boot mode.
+- **G16 — First boot of the very first agent.** *(Closed by §15.1.)* Cold start order: harness loads state → starts HTTP server → starts EAD → `boot_agent(pm)` → `boot_agent(verifier)` → `boot_agent(dm)` → `boot_agent(worker)` (+ variants). EAD starts before any agent so it can begin emitting assigned-to into the deque immediately.
+- **G17 — `compose-completed` removed but compose still happens.** *(Closed by §15.5.)* Harness emits `assigned-to(target_role=pm, event_context="compose-needed", payload={touched_files})` when a merge touches `references/`. PM runs `compose.py deploy-all`, restarts affected agents via `/agents/{role}/stop + /start`. No new event type.
+- **G18 — Wizard at install time.** *(Closed by §15.1.)* Wizard creates `.squidsquad/`, writes `config.md` (including `event-driven: yes/no` per Q10), runs `compose.py deploy-all`, starts harness, calls `/agents/{role}/start`. Only mode-flipping authority at install time.
 
 ### 14.6 Observability / TUI gaps
 
-- **G19 — Where does TUI fit?** Existing `event-bus.md` mentioned TUI/observability as a consumer of the bus. In v2 with 3 signals, TUI would only see booted + ack + assigned-to — not enough for a useful agent activity stream. Possibly TUI subscribes to a separate "diagnostic" tap (not a bus event) that lets harness expose the lifecycle/git/tracker activity it ignores for routing. Or TUI just reads forge directly. Either way, doc is silent.
-- **G20 — Harness logs vs. event stream.** Locally meaningful events (cycle-start, git-commit) still happen. Where do they go? Stderr of each agent process? A central log file? Today they're emitted to the bus AND logged. In v2 they leave the bus — where they go instead needs to be stated.
+- **G19 — Where does TUI fit?** *(Closed by §15.6.)* TUI polls harness HTTP via `/status`, `/agents`, `/events/recent` (last 100 events of any type, harness-tracked for visualization). NOT a bus subscriber. TUI failures don't affect agents.
+- **G20 — Harness logs vs. event stream.** *(Closed by §15.6.)* Lifecycle/git logs stay in `.squidsquad/<role>/iterations/iter-NNNN.md` per existing cycle_post behavior. Already happens; doc just calls it out as the v2 home for what was previously bus events.
 
 ### 14.7 Migration gaps
 
-- **G21 — Trim sequencing.** §11 lists "20 catalog entries removed." But other code (event_poll, harness consumers, agent code that reads events) currently uses some of those types. Need a sequencing plan: (a) stop emitting first, then (b) stop reading, then (c) delete from catalog. Or accept some staleness.
-- **G22 — `Event Reactions` block collapse.** §11 says every role's `reacts-to` becomes just `assigned-to`. But the existing pm reacts-to list includes `agent-health` (pm is supposed to act on dead agents) — under v2, who emits the assigned-to event that triggers pm's agent-recovery action? EAD doesn't watch agent processes. Possibly harness's health poller becomes a producer that emits `assigned-to(target_role=pm, event_context='agent-down', payload={role:worker})` when a watched agent dies.
+- **G21 — Trim sequencing.** *(Closed by §15.5.)* 3-phase: (A) stop emitting deprecated types from cycle_pre/post/git_ops/tracker; (B) rewrite `Event Reactions` so every role's `reacts-to: assigned-to` only; (C) delete catalog entries + rewrite event_poll for nudge-only. Each phase reversible at its boundary; split into 3 sub-PRs.
+- **G22 — `Event Reactions` block collapse.** *(Closed by §15.5.)* Harness health poller becomes a producer. When a watched agent dies/stalls past threshold, emits `assigned-to(target_role=pm, event_context="agent-down", payload={role, last_seen})`. PM's existing pipeline-sentinel logic re-routes to handle this signal. One event path, one consumer.
 
 ---
 
-## 15. References
+## 15. Closure plan (locked decisions for v2 implementation)
+
+This section consolidates the locked decisions from the gap-walkthrough session (2026-05-22 → 2026-05-23). All 10 §13 questions answered; all 22 §14 gaps closed or partially closed. Each Group A–F below is a coherent design closing related gaps; the §15.7 question lock table maps each §13 question to where it's enforced; the §15.8 implementation sequence orders the 6 implementation PRs.
+
+### 15.1 Group A — Lifecycle plumbing (closes G1, G2, G16, G18)
+
+- `boot_agent(role)` is synchronous: writes `intent=running, status=booting` to `.harness-state.json` FIRST, then makes two `subprocess.Popen` calls — one for `thin_launcher`, one for `event_poll`. Both PIDs recorded in `.harness-state.json`.
+- Health poller watches both PIDs. If either dies while `intent=running` and `status=ready`, harness respawns it. Same machinery as today's claude restart.
+- **Cold start order**: load state → start HTTP server → start EAD → `boot_agent(pm)` → `boot_agent(verifier)` → `boot_agent(dm)` → `boot_agent(worker)` (and variants). PM first because everything else can route to PM.
+- **Wizard at install**: creates `.squidsquad/`, writes `config.md` (including `event-driven: yes/no` per Q10), runs `compose.py deploy-all`, starts harness, calls `/agents/{role}/start` for each. Wizard is the only mode-flipping authority at install time.
+
+**PR size:** medium. Touches `harness.py boot_agent` + `stop_agent`, `wizard.py`, `health_check.py`.
+
+### 15.2 Group B — Cursor + delivery semantics (closes G5, G6, G7)
+
+- **Nudge format**: literal `NUDGE\n` text. No payload. Agent always does `GET /events/for/{role}?since=cursor` to find what's new. False positives on nudge are harmless (GET returns `[]`).
+- **Ack semantics**: forward-only monotonic. If a care-skipped event tend-fails (transient forge error), agent ack-cursors only up to the last *successfully tended* event. Skipped event stays past cursor; `event_poll` re-nudges within 10–60s; `timeout_scan` provides backup redelivery per `#9873-E`.
+- **Cursor-evicted wire format**: `GET /events/for/{role}?since=<old_cursor>` returns `HTTP 410 Gone` with body `{"cursor_evicted": true, "current_head": "<event_id>"}`. Agent recovery: read forge for state, emit `ack-cursor(current_head)`, re-enter idle.
+
+**PR size:** low. Wire-shape changes to harness HTTP endpoints + agent contract update for 410-Gone handling.
+
+### 15.3 Group C — EAD & restart safety (closes G8, G14, G15)
+
+- **Lost last-seen-id recovery**: on missing/corrupt last-seen file, EAD defaults to `now - 5 minutes`. Bounded dup-emit window; agents dedup via care-filter on `(issue_number, target_role, event_context)`.
+- **Orphan in-flight cleanup**: `timeout_scan` (already runs every 30s per `#9873-E`) also sweeps in-flight entries whose `event_id` is past deque eviction. Passive; no agent involvement.
+- **Harness restart catch-up**: on harness boot, EAD does a 30-minute catch-up scan against forge. Re-emits assigned-to for anything missed during downtime. Beyond 30 min, agents recover from forge state on first read (cursor-evicted path per §15.2).
+
+**PR size:** low. Additive logic to EAD + timeout_scan.
+
+### 15.4 Group D — L2-derived handoff permissions (closes G10, G11, G12, §13 Q2)
+
+- Each role's `responsibility.md` (per `#9925`) gets a `## Bus contract` section declaring `accepts assigned-to from: [list]` (or `any`). Self-assign forbidden by built-in invariant (not declarable).
+- Harness reads composed `responsibility.md` files at boot, parses `## Bus contract` sections, builds in-memory permission table.
+- `POST /work/assign` validates: caller role ∈ target's `accepts-from`. If not → `HTTP 403 Forbidden` with `{error, target_accepts_from}` body.
+- Permission table reloads when `compose.py deploy <role>` runs (via the `compose-needed` PM trigger from §15.5).
+- For all 4 current roles, `accepts assigned-to from: any role` per the principle "process integrity is everyone's job."
+- **Offline target**: events queue past cursor; processed on next boot via §6.0 read path. Care-filter on `(issue, role, context)` dedups if `/work/assign` and EAD both fire.
+
+**PR size:** low. New parser + permission-table builder in harness; small response-body extension on `/work/assign`.
+
+### 15.5 Group E — Migration sequencing (closes G17, G21, G22, §13 Q8, Q9, Q10)
+
+**3-phase migration, each reversible at its boundary:**
+
+- **Phase A — Stop emitting deprecated types.** Remove emit calls from `cycle_pre.py`, `cycle_post.py`, `git_ops.py`, `tracker.py` for the 20 deprecated event types. Catalog entries stay; no consumer breakage. Silent change to bus volume.
+- **Phase B — Stop reacting.** Rewrite `Event Reactions` block in `config.md` so every role's `reacts-to` collapses to `assigned-to` only. Verify no agent code still references removed types in care-filters.
+- **Phase C — Delete catalog.** Trim `event_catalog.py` to 4 entries (`booted`, `assigned-to`, `ack-cursor`, `ack-stop`). Rewrite `event_poll.py` to nudge-only per §15.2.
+
+**`compose-completed` replacement (G17):** harness emits `assigned-to(target_role=pm, event_context="compose-needed", payload={touched_files})` when a merge touches `references/`. PM runs `compose.py deploy-all`, restarts affected agents via `/agents/{role}/stop + /start`. No new event type.
+
+**`agent-health` replacement (G22):** harness health poller becomes a producer. When a watched agent dies/stalls past threshold, emits `assigned-to(target_role=pm, event_context="agent-down", payload={role, last_seen})`. PM's existing pipeline-sentinel handles.
+
+**`#9845` (noop) retirement (Q8):** close `#9845` with redirect. Probe semantics absorbed into `assigned-to(target_role=R, event_context="probe", ack_only=true)`. Agent acks without doing work; latency measured as emit → ack delta.
+
+**Feature flag (Q10):** v2 ships under `event-driven: yes/no` in `config.md`. Default `no` for the first release; operator flips to `yes` per install when ready. Rollback = flip the flag + restart agents. Matches existing `#9580`/`#9588` dual-mode pattern. `/loop` fallback stays available indefinitely until a future cleanup decision.
+
+**PR size:** highest of the six. Split into 3 sub-PRs (one per phase). Phase A blast radius small (silent); Phase B is observable behavior change; Phase C is irreversible catalog trim.
+
+### 15.6 Group F — Observability (closes G19, G20)
+
+- **TUI**: polls harness HTTP via `/status`, `/agents`, `/events/recent` (last 100 events of any type, harness-tracked for visualization). NOT a bus subscriber. TUI failures don't affect agents.
+- **Lifecycle/git logs**: each agent writes `.squidsquad/<role>/iterations/iter-NNNN.md` per existing cycle_post behavior. Already happens. This doc just calls it out as the v2 home for what was previously bus events.
+
+**PR size:** very low. Mostly documentation + a `/events/recent` endpoint addition.
+
+### 15.7 §13 question lock table
+
+| # | Question | Lock | Enforced in |
+|---|---|---|---|
+| Q1 | Booted payload shape | `{role, pid, clone_path, version}` — full diagnostic from day 1 | §3 catalog entry + §15.1 spawn flow |
+| Q2 | `/work/assign` authorization | L2-derived from `responsibility.md` `## Bus contract` | §15.4 |
+| Q3 | EAD polling cadence | REST + adaptive 10s active / 30s idle, 5s floor / 60s ceiling | §5.4 |
+| Q4 | `event_poll` polling cadence | 5s active / 30s idle, adaptive backoff, 2s floor / 60s ceiling | §15.1 (same pattern as §5.4) |
+| Q5 | Cursor on first boot | `null` per CONTEXT-9873-A D7 | §6.0 |
+| Q6 | Care filter granularity | Role-only in v1; `event_context` filter as v2 extension via L2 bus contract | §8.0 + §15.4 |
+| Q7 | Queue-while-busy | Context-only; no `working-state.md` flag; no shadow queue | §8.2 |
+| Q8 | `#9845` (noop) fate | Retire; absorb probe semantics into `assigned-to(event_context=probe)` | §15.5 |
+| Q9 | `compose.py` changes for v2 | Per §11 + §15.5: trim catalog, retire emit calls, add compose-needed translator | §11 + §15.5 |
+| Q10 | Migration plan | Feature flag `event-driven: yes/no` in `config.md` | §15.5 + §10 |
+
+### 15.8 Implementation sequence (recommended)
+
+| # | Group | Risk | Why this order |
+|---|---|---|---|
+| 1 | **A** — Lifecycle plumbing | medium | Foundation: rest depends on stable harness lifecycle |
+| 2 | **C** — EAD + restart safety | low | Catches bugs in A's restart paths early |
+| 3 | **D** — L2-derived permissions | low | Foundation for `/work/assign` validation; needs to land before E starts removing the old emit paths |
+| 4 | **B** — Cursor + delivery | low | Refines wire shapes once A+C+D are stable |
+| 5 | **F** — Observability | very low | Additive; can land any time after D |
+| 6 | **E** — Migration | highest | Last, in 3 sub-PRs (Phase A → Phase B → Phase C). Removes old paths once new paths are proven |
+
+After all 6 land: v2 is on `event-driven: no` by default. Operator flips per-install when ready. Old `/loop` path stays available indefinitely until a future cleanup decision (separate task, post-v2).
+
+---
+
+## 16. References
 
 - Vault: `.squidsquad/vault/galaxy/decision-event-bus-architecture-redesign.md` — locked architectural principles.
 - `references/scripts/event_catalog.py` — current catalog (to be trimmed to 3 entries).
@@ -992,7 +1078,9 @@ Drawing the sequence + arch diagrams above exposed concrete gaps in the model. T
 
 ---
 
-## 16. Revision log
+## 17. Revision log
 
 - **2026-05-22 (rev 1) — initial draft** by pm-lead (Wallace). Captures the architectural alignment from this session's discussion: 3 signals, harness as bus master, EAD as forge→bus translator, thin_launcher + event_poll separation, polling fallback. Co-designed with human collaborator; refinement to follow on this PR.
 - **2026-05-22 (rev 2) — diagrams + gaps pass.** Added 8 Mermaid diagrams: §1.1 before/after, §3.0 signal-flow, §4.1 system overview, §4.2 per-agent process tree, §5.0 harness component map, §6.0 boot sequence, §7.0 explicit-handoff sequence, §7.1 EAD-handoff sequence, §8.0 nudge-walk sequence, §10.1 boot decision tree. New §14 "Gaps surfaced via diagramming" with 22 concrete gaps (G1–G22) in 7 categories: process-tree/lifecycle, event-delivery, work-handoff, state/persistence, boot/runtime ordering, observability/TUI, migration. These are additive to the §13 open design questions — they're things the prose left implicit that the diagrams forced into visibility. Each is something to resolve before the umbrella implementation task is filed.
+- **2026-05-23 (rev 3) — refinement session: terminology + state machine + tracker.py routing + improvement subloop + §8.2 context-only.** Multiple commits: §4.1 Mermaid parse fix (subgraph IDs as edge endpoints don't render on GitHub), terminology pass (dev→worker, qa→verifier per L2 categorical naming + #6274 expanded scope), §6.0+§6.1 explicit agent state machine (intent vs status; 5 states), §6.1 stateDiagram-v2 parse fix, §7.2 tracker.py auto-routes /work/assign on transitions (11-row mapping table), §7.0+§7.1 reflect tracker.py auto-routing + dedupe duplicate §7.1, §8.1 → §8.3 improvement subloop (cursor-at-head trigger + token-burn throttle, closes #9893 absorption), §8.2 nudge-while-busy rewritten twice — first to a `pending_nudge` flag, then narrowed further to context-only (no working-state write), §5.4 EAD locked to REST+adaptive (closes Q3 + G9). Running closure tally: §13 Q3 + Q7 closed, §14 G3 partial + G4 + G9 + G13 closed.
+- **2026-05-23 (rev 4) — gap-walkthrough + closure plan locked.** Walked all remaining §13 questions (10) and §14 gaps (22) with human in a structured AskUserQuestion pass. All 10 §13 questions answered; all 22 §14 gaps closed or partially closed. New §15 "Closure plan" added consolidating 6 grouped designs (A–F) covering 14 gaps + 4 questions, plus §15.7 question lock table (all 10) and §15.8 implementation sequence (6 PRs in dependency order). §13 + §14 entries marked CLOSED with cross-refs into §15. References renumbered §15 → §16; Revision log renumbered §16 → §17. Doc is now lock-ready: ready to spawn the implementation epic after `#6274` (terminology rename) ships.
