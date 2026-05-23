@@ -369,6 +369,12 @@ This is the explicit alternative to "EAD detects the PR existed" — it lets age
 
 ### 6.0 Boot sequence diagram
 
+The harness tracks each agent with two distinct fields in `.harness-state.json`:
+- **`intent`** = what the operator wants (`running` | `stopping` | `stopped`)
+- **`status`** = what the agent is actually doing (`booting` | `ready` | `stopping` | `stopped` | `crashed`)
+
+These move independently. The operator sets `intent`; the harness updates `status` as it observes lifecycle transitions. They're equal in steady state and differ only during transitions (booting up, shutting down, or after a crash).
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -380,15 +386,16 @@ sequenceDiagram
     participant WS as working-state.md
 
     Op->>H: start agent (role)
-    H->>H: write intent=running<br/>in .harness-state.json
+    H->>H: write intent=running, status=booting<br/>in .harness-state.json
     H->>TL: spawn (cmd.exe → thin_launcher role)
     H->>EP: spawn (event_poll --wait)
     TL->>TL: write .claude-pid<br/>(cmd.exe PID)
     TL->>C: spawn claude.exe
-    Note over C: Boot bootstrap runs<br/>(L1 boot-bootstrap.md)
+    Note over C: Boot bootstrap runs<br/>(L1 boot-bootstrap.md)<br/>status still = booting
 
     C->>H: POST /events {type: booted, role}
-    H->>H: record "agent ready"<br/>in .harness-state.json
+    H->>H: validate intent==running<br/>(reject if stopping/stopped)
+    H->>H: write status=ready<br/>(transition: booting → ready)
     H-->>C: 200 OK + event_id
 
     C->>H: GET /events/cursor/{role}
@@ -406,8 +413,34 @@ sequenceDiagram
         C->>C: enter idle wait
     end
 
-    Note over C,EP: Agent now idle.<br/>Next nudge wakes it.
+    Note over C,EP: Agent now status=ready.<br/>Next nudge wakes it.
 ```
+
+### 6.1 Agent state machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> stopped
+    stopped --> booting: operator /agents/{role}/start<br/>(intent=running, status=booting)
+    booting --> ready: agent emits booted<br/>(status=ready)
+    booting --> crashed: subprocess exits<br/>before booted (status=crashed)
+    ready --> stopping: operator /agents/{role}/stop<br/>(intent=stopping;<br/>harness emits assigned-to stop-intent)
+    stopping --> stopped: agent emits ack-stop<br/>OR timeout → SIGTERM → SIGKILL
+    ready --> crashed: process death detected<br/>by health poller
+    crashed --> booting: harness auto-respawn<br/>(intent still running)
+    crashed --> stopped: operator gives up<br/>(intent=stopped)
+```
+
+State semantics:
+- **`booting`** — `intent=running`, subprocess spawned, `booted` event NOT yet received. Health poller does NOT count agent as alive yet (boot-grace window applies). Any `assigned-to` events for the role queue but are NOT delivered until status flips to `ready`.
+- **`ready`** — `intent=running`, `booted` received, agent listening for nudges. This is the steady-state "alive" status. Both idle-waiting and actively-working agents are `ready` (no separate `working` status — work is per-event, not per-state).
+- **`stopping`** — `intent=stopping` written by operator/harness; harness emits `assigned-to(role, event_context="stop-intent")` so the agent finishes current work and emits `ack-stop`. Timeout: 30s grace → SIGTERM → 10s → SIGKILL.
+- **`stopped`** — process is dead AND `intent=stopped`. Terminal until operator restarts.
+- **`crashed`** — process death detected by health poller (PID gone) but `intent=running`. Harness auto-respawns; status flips back to `booting`.
+
+Why two fields, not one: distinguishing `intent` from `status` makes recovery semantics explicit. After a host reboot, the harness reads `.harness-state.json`, sees `intent=running` but no live PID → it knows it owes the operator a respawn (status flips to `booting` again). If the fields were collapsed, the harness couldn't distinguish "operator stopped this" from "this crashed" on disk.
+
+This state machine also resolves part of G3 (booted-event race): the booted POST is validated against `intent`, not just `status`. If an agent emits `booted` while `intent=stopped` (race: stop fired during boot), harness rejects the POST and lets the agent's process exit naturally.
 
 When the harness spawns an agent (or the agent restarts after a crash):
 
@@ -718,8 +751,8 @@ Drawing the sequence + arch diagrams above exposed concrete gaps in the model. T
 
 - **G1 — Who spawns `event_poll`?** The §4.2 diagram shows `thin_launcher` spawning `claude` and `event_poll` running as a sibling. But who launches `event_poll`? Is it the harness (separately from thin_launcher), or thin_launcher itself in a "spawn-and-fork" pattern, or Monitor's invocation contract that names the script? The doc says "harness calls boot_agent which spawns thin_launcher + event_poll separately" — but the exact mechanism is hand-wavy. Per §6.0 step 4-5, both are spawned by harness; need to make that concrete (probably two `subprocess.Popen` calls in `boot_agent`).
 - **G2 — Who restarts `event_poll` if it crashes?** Today nothing watches it. In the new model, an event_poll crash silently severs the agent's nudge path; agent appears alive but receives no work. Need either: (a) harness health-polls `event_poll` like it polls claude, (b) thin_launcher monitors event_poll as a child, or (c) Monitor itself detects stdin source EOF and signals.
-- **G3 — Booted-event delivery race.** If the agent emits `booted` *before* the harness's `boot_agent()` finishes recording intent, the POST hits an unprepared harness. Need either: (a) `boot_agent()` records intent BEFORE returning (sync, not deferred), so when the agent emits booted the record exists; or (b) harness `/events` accepts booted from any role regardless of intent state and reconciles later.
-- **G4 — Stop intent flow is undocumented.** §3 mentions `ack-stop` but no diagram shows the full stop sequence: harness wants to stop agent → emits stop-request? sets intent? → agent detects it how? → drains work → emits `ack-stop` → exits cleanly. The current contract has gaps in WHO initiates, HOW the agent learns, and the deadline before forced kill.
+- **G3 — Booted-event delivery race.** *(Partially closed by §6.0 + §6.1 state machine.)* `boot_agent()` writes `intent=running, status=booting` synchronously BEFORE spawning subprocesses, so when the agent emits `booted` the harness record always exists. Remaining residual race: agent could emit `booted` while `intent=stopped` (operator fires stop during a boot in progress). §6.0 step 6 handles this — harness validates `intent==running` on the booted POST and rejects otherwise; the agent's process exits naturally on the rejection.
+- **G4 — Stop intent flow is undocumented.** *(Closed by §6.1 state machine.)* Stop path: operator/harness writes `intent=stopping, status=stopping` → harness emits `assigned-to(role, event_context="stop-intent")` via the existing bus path → agent's care-filter recognizes `stop-intent` → finishes current work → emits `ack-stop` → harness writes `status=stopped` and reaps both `event_poll` and `thin_launcher` subprocesses. Timeout: 30s grace after `assigned-to` → SIGTERM → 10s → SIGKILL. One control path, no parallel mechanisms.
 
 ### 14.2 Event-delivery gaps
 
