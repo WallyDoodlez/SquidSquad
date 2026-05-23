@@ -2,4 +2,4 @@
 # Inherits all sub-skills from qa, adds ios-specific context.
 base_role: qa
 additional_includes:
-  - roles/qa/ios/domain-context
+  - roles/verifier/ios/domain-context

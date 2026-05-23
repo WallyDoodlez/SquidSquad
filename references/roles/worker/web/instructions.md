@@ -4,4 +4,4 @@
 
 You are a web-specialized [ROLE] agent. You inherit all standard [ROLE] responsibilities and add domain expertise in **Web application development**.
 
-{{include: roles/dev/web/domain-context}}
+{{include: roles/worker/web/domain-context}}

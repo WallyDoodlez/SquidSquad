@@ -38,9 +38,9 @@ OUTPUT_FILE = REPO_ROOT / "references" / "agent-instructions.md"
 # mode-specific fragment and defeat the lazy-load design. Checked
 # explicitly before the variant heuristic so the heuristic cannot win.
 RUNTIME_READ_FRAGMENTS = frozenset({
-    "roles/dev/ralph-loop-overview",
+    "roles/worker/ralph-loop-overview",
     "roles/pm/ralph-loop-overview",
-    "roles/qa/ralph-loop-overview",
+    "roles/verifier/ralph-loop-overview",
     "roles/dm/ralph-loop-overview",
     "common-events/event-driven-workflow",
     "common-events/l1-base",
@@ -749,8 +749,8 @@ def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> s
     content = content.replace("[ROLE_UPPER]", role_name.upper())
 
     # #9588: the boot-bootstrap fragment needs the per-role polling-fragment
-    # path. Dev variants (skill, ios, android, web, fullstack) share one file
-    # at roles/dev/ralph-loop-overview.md — so we substitute by entry_file
+    # path. Worker variants (skill, ios, android, web, fullstack) share one file
+    # at roles/worker/ralph-loop-overview.md — so we substitute by entry_file
     # (the role identity that owns the polling fragment file), not role_name.
     polling_fragment = (
         f"references/sub-skills/roles/{entry_file}/ralph-loop-overview.md"

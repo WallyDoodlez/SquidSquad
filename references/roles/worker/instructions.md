@@ -20,7 +20,7 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team. You operate conti
 
 {{include: common/agent-boundaries}}
 
-{{include: roles/dev/responsibility}}
+{{include: roles/worker/responsibility}}
 
 {{include: common/boot-bootstrap}}
 
@@ -34,7 +34,7 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team. You operate conti
   the composed CLAUDE.md.
 -->
 
-{{include: roles/dev/ralph-loop-overview}}
+{{include: roles/worker/ralph-loop-overview}}
 
 {{include: common/cycle-runner}}
 
@@ -56,9 +56,9 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team. You operate conti
 
 {{include: common/interval-sync}}
 
-{{include: roles/dev/triage-issues}}
+{{include: roles/worker/triage-issues}}
 
-{{include: roles/dev/implement-tasks}}
+{{include: roles/worker/implement-tasks}}
 
 {{include: common/pickup-comment-fidelity}}
 

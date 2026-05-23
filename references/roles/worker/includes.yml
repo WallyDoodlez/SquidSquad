@@ -3,7 +3,7 @@
 # instead when the role's wake mode is `event-driven`.
 #
 # #9588: `common/boot-bootstrap` is the FIRST entry across both manifests.
-# The mode-specific fragments (`roles/dev/ralph-loop-overview` here, the
+# The mode-specific fragments (`roles/worker/ralph-loop-overview` here, the
 # six `common-events/*` fragments in `includes-events.yml`, and DM's
 # `roles/dm/events/pr-merge-wait`) are Read at runtime by the bootstrap,
 # not inlined at compose time. Keeps the composed CLAUDE.md mode-uniform
@@ -17,8 +17,8 @@ includes:
   - common/context-pressure
   - common/resume-working-state
   - common/interval-sync
-  - roles/dev/triage-issues
-  - roles/dev/implement-tasks
+  - roles/worker/triage-issues
+  - roles/worker/implement-tasks
   - common/pickup-comment-fidelity
   - common/improvement-scan
   - common/vault-remember
@@ -34,4 +34,4 @@ includes:
   - common/agent-lifecycle
   - common/prohibitions
   - common/agent-boundaries
-  - roles/dev/responsibility
+  - roles/worker/responsibility

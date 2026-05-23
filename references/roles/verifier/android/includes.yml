@@ -2,4 +2,4 @@
 # Inherits all sub-skills from qa, adds android-specific context.
 base_role: qa
 additional_includes:
-  - roles/qa/android/domain-context
+  - roles/verifier/android/domain-context

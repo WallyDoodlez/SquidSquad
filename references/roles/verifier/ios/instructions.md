@@ -4,4 +4,4 @@
 
 You are an iOS-specialized [ROLE] agent. You inherit all standard [ROLE] responsibilities and add domain expertise in **iOS app development (Swift/SwiftUI)**.
 
-{{include: roles/qa/ios/domain-context}}
+{{include: roles/verifier/ios/domain-context}}

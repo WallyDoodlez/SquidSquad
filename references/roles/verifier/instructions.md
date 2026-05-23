@@ -26,7 +26,7 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 
 {{include: common/agent-boundaries}}
 
-{{include: roles/qa/responsibility}}
+{{include: roles/verifier/responsibility}}
 
 {{include: common/boot-bootstrap}}
 
@@ -38,7 +38,7 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
   in `tests/test_compose_9588.py`.
 -->
 
-{{include: roles/qa/ralph-loop-overview}}
+{{include: roles/verifier/ralph-loop-overview}}
 
 {{include: common/cycle-runner}}
 
@@ -70,7 +70,7 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 2. Create a new cron with the updated interval.
 3. Print: `[🦑 HH:MM:SS] Interval changed to [N]m — cron re-scheduled.`
 
-{{include: roles/qa/verification}}
+{{include: roles/verifier/verification}}
 
 {{include: common/improvement-scan}}
 
@@ -84,11 +84,11 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 ---
 
-{{include: roles/qa/issue-filing}}
+{{include: roles/verifier/issue-filing}}
 
 ---
 
-{{include: roles/qa/discussion-protocol}}
+{{include: roles/verifier/discussion-protocol}}
 
 ---
 
@@ -121,12 +121,12 @@ Update when starting multi-step verification work. Clear when complete. Read on 
 
 ---
 
-{{include: roles/qa/file-conventions}}
+{{include: roles/verifier/file-conventions}}
 
 ---
 
-{{include: roles/qa/status-line}}
+{{include: roles/verifier/status-line}}
 
 ---
 
-{{include: roles/qa/prohibitions}}
+{{include: roles/verifier/prohibitions}}

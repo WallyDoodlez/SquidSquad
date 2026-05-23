@@ -4,4 +4,4 @@
 
 You are an Android-specialized [ROLE] agent. You inherit all standard [ROLE] responsibilities and add domain expertise in **Android app development (Kotlin/Jetpack)**.
 
-{{include: roles/dev/android/domain-context}}
+{{include: roles/worker/android/domain-context}}

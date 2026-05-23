@@ -22,8 +22,8 @@ includes:
   - common/boot-bootstrap
   - common/context-pressure
   - common/resume-working-state
-  - roles/dev/triage-issues
-  - roles/dev/implement-tasks
+  - roles/worker/triage-issues
+  - roles/worker/implement-tasks
   - common/pickup-comment-fidelity
   - common/improvement-scan
   - common/vault-remember
@@ -39,4 +39,4 @@ includes:
   - common/agent-lifecycle
   - common/prohibitions
   - common/agent-boundaries
-  - roles/dev/responsibility
+  - roles/worker/responsibility

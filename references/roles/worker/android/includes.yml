@@ -2,4 +2,4 @@
 # Inherits all sub-skills from dev, adds android-specific context.
 base_role: dev
 additional_includes:
-  - roles/dev/android/domain-context
+  - roles/worker/android/domain-context

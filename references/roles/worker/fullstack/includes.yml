@@ -2,4 +2,4 @@
 # Inherits all sub-skills from dev, adds fullstack-specific context.
 base_role: dev
 additional_includes:
-  - roles/dev/fullstack/domain-context
+  - roles/worker/fullstack/domain-context

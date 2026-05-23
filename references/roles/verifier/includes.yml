@@ -1,22 +1,22 @@
 # QA agent sub-skill manifest (polling / /loop mode — #8697, #9588)
 # Uses slim variants for vault-protocol and improvement-scan (read-only role).
 # #9588: `common/boot-bootstrap` is the first include; mode-specific
-# `roles/qa/ralph-loop-overview` is Read at runtime by the bootstrap.
+# `roles/verifier/ralph-loop-overview` is Read at runtime by the bootstrap.
 # Order matters — includes are resolved top-to-bottom
 includes:
   - common/boot-bootstrap
   - common/cycle-runner
   - common/context-pressure
   - common/task-pickup
-  - roles/qa/verification
+  - roles/verifier/verification
   - common/improvement-scan-slim
-  - roles/qa/issue-filing
-  - roles/qa/discussion-protocol
+  - roles/verifier/issue-filing
+  - roles/verifier/discussion-protocol
   - common/vault-protocol-slim
-  - roles/qa/file-conventions
-  - roles/qa/status-line
+  - roles/verifier/file-conventions
+  - roles/verifier/status-line
   - common/self-restart
   - common/agent-lifecycle
-  - roles/qa/prohibitions
+  - roles/verifier/prohibitions
   - common/agent-boundaries
-  - roles/qa/responsibility
+  - roles/verifier/responsibility

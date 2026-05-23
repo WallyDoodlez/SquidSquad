@@ -2,4 +2,4 @@
 # Inherits all sub-skills from dev, adds ios-specific context.
 base_role: dev
 additional_includes:
-  - roles/dev/ios/domain-context
+  - roles/worker/ios/domain-context
