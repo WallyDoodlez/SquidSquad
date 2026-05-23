@@ -314,7 +314,7 @@ def test_ac1_5_migrate_script_supports_dry_run_flag():
 
 
 VAULT_NOTE = (
-    REPO / ".squidsquad" / "vault" / "galaxy" / "migration-6274-cutover.md"
+    REPO / ".squidsquad" / "vault" / "galaxy" / "learning-migration-6274-cutover.md"
 )
 
 
