@@ -481,9 +481,9 @@ def _parse_agents_v1(text):
             entry["test_command"] = cmd
         result.append(entry)
 
-    # Fixed team: QA + DM always present (#6261)
+    # Fixed team: verifier + DM always present (#6261/#6274: qa→verifier per D5)
     seen_ids = {e["id"] for e in result}
-    for mandatory_role in ("qa", "dm"):
+    for mandatory_role in ("verifier", "dm"):
         if mandatory_role not in seen_ids:
             result.append({"id": mandatory_role, "alias": _alias(mandatory_role), "role": mandatory_role})
 
@@ -587,8 +587,8 @@ def sync_agents():
             continue
         if (subdir / "CLAUDE.md").exists():
             name = subdir.name
-            # Fixed team roles are listed separately (#6261)
-            if name in ("pm", "qa", "dm"):
+            # Fixed team roles are listed separately (#6261/#6274: qa→verifier per D5)
+            if name in ("pm", "verifier", "dm"):
                 continue
             dev_roles.append(name)
 
