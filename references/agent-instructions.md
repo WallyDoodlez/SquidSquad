@@ -1,5 +1,5 @@
 <!-- GENERATED FILE — DO NOT EDIT. -->
-<!-- Source: references/roles/dev/instructions.md + sub-skills/ -->
+<!-- Source: references/roles/worker/instructions.md + sub-skills/ -->
 <!-- Regenerate with: python references/scripts/compose.py all -->
 
 <!-- Layer 1: Base Agent Definition -->

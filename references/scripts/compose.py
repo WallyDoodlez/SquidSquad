@@ -626,7 +626,7 @@ def compose_all() -> str:
     """Compose the dev-agent template as the default agent-instructions.md."""
     # agent-instructions.md is the dev template (primary output)
     header = "<!-- GENERATED FILE — DO NOT EDIT. -->\n"
-    header += "<!-- Source: references/roles/dev/instructions.md + sub-skills/ -->\n"
+    header += "<!-- Source: references/roles/worker/instructions.md + sub-skills/ -->\n"
     header += "<!-- Regenerate with: python references/scripts/compose.py all -->\n\n"
     composed = compose_role("dev")
     return header + composed
