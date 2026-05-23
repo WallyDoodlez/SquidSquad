@@ -114,54 +114,54 @@ Everything currently in `event_catalog.py` other than the three above is removed
 
 ```mermaid
 flowchart TB
-    Operator(("Human<br/>operator"))
+    Operator(["Human operator"])
     Forge[("Forge<br/>GitHub Issues")]
 
     subgraph harness_box["Harness host (one process per project)"]
-        Harness[["harness.py<br/>HTTP API · port 7373<br/>EventLifecycleManager · EAD<br/>Agent lifecycle state"]]
+        Harness[["harness.py<br/>HTTP API :7373<br/>EventLifecycleManager"]]
+        EAD["EAD<br/>forge state poller"]
         StateFiles[(".harness-state.json<br/>.event-state.json")]
-        Harness <--> StateFiles
+        Harness --- EAD
+        Harness --- StateFiles
     end
 
-    subgraph pm_box["PM agent subprocess tree"]
-        PMCmd["cmd.exe"]
-        PMLauncher["thin_launcher.py"]
-        PMClaude["claude.exe<br/>(Monitor inside)"]
-        PMPoll["event_poll.py --wait"]
-        PMCmd --> PMLauncher --> PMClaude
-        PMPoll -. "stdout → Monitor stdin" .-> PMClaude
+    subgraph pm_box["PM agent"]
+        PMTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
     end
 
-    subgraph qa_box["QA agent subprocess tree"]
-        QABox["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
+    subgraph qa_box["QA agent"]
+        QATree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
     end
 
-    subgraph skill_box["Skill agent subprocess tree"]
-        SkillBox["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
+    subgraph skill_box["Skill agent"]
+        SkillTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
     end
 
-    subgraph dm_box["DM agent subprocess tree"]
-        DMBox["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
+    subgraph dm_box["DM agent"]
+        DMTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
     end
 
     Operator --> Harness
-    Harness -. "spawns + monitors" .-> PMCmd
-    Harness -. "spawns + monitors" .-> qa_box
-    Harness -. "spawns + monitors" .-> skill_box
-    Harness -. "spawns + monitors" .-> dm_box
 
-    PMPoll <--> Harness
-    PMClaude <--> Harness
+    Harness -.->|spawns + monitors| PMTree
+    Harness -.->|spawns + monitors| QATree
+    Harness -.->|spawns + monitors| SkillTree
+    Harness -.->|spawns + monitors| DMTree
 
-    PMClaude <--> Forge
-    qa_box <--> Forge
-    skill_box <--> Forge
-    dm_box <--> Forge
+    PMTree <--> Harness
+    QATree <--> Harness
+    SkillTree <--> Harness
+    DMTree <--> Harness
 
-    EAD["EAD (inside harness)<br/>polls forge"]
-    Harness --- EAD
-    EAD <-. "watches state changes" .- Forge
+    PMTree <--> Forge
+    QATree <--> Forge
+    SkillTree <--> Forge
+    DMTree <--> Forge
+
+    EAD <-->|watches state changes| Forge
 ```
+
+The §4.2 zoomed view below shows what's inside each agent's subprocess tree.
 
 ### 4.2 Per-agent subprocess tree (zoomed)
 
