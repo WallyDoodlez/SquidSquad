@@ -560,11 +560,17 @@ def _get_verifiable_roles():
     explicitly here alongside dm and pm — same pattern every other
     role-collector uses (compose._collect_all_roles, boot_remote._get_all_roles).
 
-    Note (#6274 D5): qa→verifier rename. Both names are included during
-    the dual-aware migration window so tracker queries hit whichever
-    role:<name> label is on the issue (migrate_labels_6274.py dual-tags
-    both, so the returned issue sets are identical). After AC2.8 closes
-    the dual window, drop "qa" from the set.
+    Note (#6274 D5): qa→verifier rename. Returns exactly ONE of {qa,
+    verifier} based on which install directory is present on disk
+    (mirrors the sync_agents() pattern in config.py:599-606). Returning
+    both would double-query the tracker — migrate_labels_6274.py
+    dual-tags every issue, so role:qa and role:verifier queries return
+    the identical issue set, and callers (_build_pm_input,
+    _build_qa_input) extend without deduplicating, producing duplicate
+    pending-test entries with mirrored source_role values. Picking the
+    canonical name based on dir existence keeps the existing
+    `assert "qa" in roles` tests green pre-wizard-D4 (qa/ dir exists)
+    and flips cleanly to "verifier" once D4 renames the install dir.
     """
     roles = set()
     raw = _config_get("dev-agents")
@@ -578,12 +584,14 @@ def _get_verifiable_roles():
         roles.add("skill")
     # Always include the mandatory roles (pm, qa/verifier, dm) — any of
     # them can have pending-test items. qa added explicitly per #9318
-    # after config.md stopped listing it in dev-agents. Both qa and
-    # verifier added per #6274 D5 during the dual-aware window.
+    # after config.md stopped listing it in dev-agents. #6274 D5: pick
+    # qa or verifier based on which install dir exists.
     roles.add("dm")
     roles.add("pm")
-    roles.add("qa")
-    roles.add("verifier")
+    if (SQUID_DIR / "verifier" / "CLAUDE.md").exists():
+        roles.add("verifier")
+    else:
+        roles.add("qa")
     return sorted(roles)
 
 
@@ -897,7 +905,15 @@ def _build_qa_input(role):
                     item["source_role"] = query_role
                     # Check for test plan
                     test_plan_path = ""
-                    for planning_dir in [SQUID_DIR / "pm" / "planning", SQUID_DIR / "qa" / "planning"]:
+                    # #6274 D5: qa/planning → verifier/planning at wizard
+                    # D4. Parameterized by the function's role argument so
+                    # the path tracks the SQUIDSQUAD_ROLE dispatched via
+                    # ROLE_BUILDERS — pre-D4 role="qa" reads qa/planning;
+                    # post-D4 role="verifier" reads verifier/planning. The
+                    # rename and SQUIDSQUAD_ROLE flip happen atomically in
+                    # wizard so `role` matches the existing dir at all
+                    # times.
+                    for planning_dir in [SQUID_DIR / "pm" / "planning", SQUID_DIR / role / "planning"]:
                         if planning_dir.exists():
                             for f in planning_dir.glob(f"*{num}*TEST-PLAN*"):
                                 test_plan_path = str(f.relative_to(REPO_ROOT))
@@ -919,7 +935,15 @@ def _build_qa_input(role):
                     item["branch"] = branch
                     item["source_role"] = query_role
                     test_plan_path = ""
-                    for planning_dir in [SQUID_DIR / "pm" / "planning", SQUID_DIR / "qa" / "planning"]:
+                    # #6274 D5: qa/planning → verifier/planning at wizard
+                    # D4. Parameterized by the function's role argument so
+                    # the path tracks the SQUIDSQUAD_ROLE dispatched via
+                    # ROLE_BUILDERS — pre-D4 role="qa" reads qa/planning;
+                    # post-D4 role="verifier" reads verifier/planning. The
+                    # rename and SQUIDSQUAD_ROLE flip happen atomically in
+                    # wizard so `role` matches the existing dir at all
+                    # times.
+                    for planning_dir in [SQUID_DIR / "pm" / "planning", SQUID_DIR / role / "planning"]:
                         if planning_dir.exists():
                             for f in planning_dir.glob(f"*{num}*TEST-PLAN*"):
                                 test_plan_path = str(f.relative_to(REPO_ROOT))
