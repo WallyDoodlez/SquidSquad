@@ -1277,8 +1277,12 @@ def _assemble_soul(role_name: str) -> str:
     """Assemble a flat SOUL.md from Layer 1 (base) + role SOUL.
 
     Layer 1: references/roles/SOUL.md (at roles root — shared agent identity)
-    Role SOUL: for variants (dev-skill), try roles/dev/skill/SOUL.md first,
-    then fall back to roles/dev/SOUL.md. For base roles, use roles/<role>/SOUL.md.
+    Role SOUL (Layer 2): for variants (e.g. worker-skill), use the base
+    role's SOUL.md — `roles/worker/SOUL.md` post-6274.2, or `roles/dev/SOUL.md`
+    via 6274.1 alias for pre-rename installs. For base roles, use
+    `roles/<role>/SOUL.md`. (Layer 3 variant-level SOUL files are NOT read
+    here — the variant gets the base role's SOUL only, per the
+    `_resolve_variant` branch below.)
 
     Layer markers are embedded so upgrade_soul() can identify boundaries.
     """
