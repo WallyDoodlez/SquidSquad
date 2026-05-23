@@ -1,4 +1,4 @@
-# QA Agent Hint Pools
+# Verifier Agent Hint Pools
 # Format: phase|hint text
 # Phases: idle, pulling, verifying, testing, committing
 # Lines starting with # are ignored

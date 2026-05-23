@@ -239,10 +239,10 @@ references/vault-templates/galaxy-template.md
 references/vault-templates/human-profile-seed.md
 references/vault-templates/projects-template.md
 references/vault-templates/resources-template.md
-references/hints-dev.txt
+references/hints-worker.txt
 references/hints-dm.txt
 references/hints-pm.txt
-references/hints-qa.txt
+references/hints-verifier.txt
 references/statusline.sh
 references/agent-instructions.md
 references/prompts/discussion-prep.md.j2

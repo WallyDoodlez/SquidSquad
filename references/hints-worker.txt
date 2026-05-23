@@ -1,4 +1,4 @@
-# Dev Agent Hint Pools
+# Worker Agent Hint Pools
 # Format: phase|hint text
 # Phases: idle, pulling, triaging, implementing, committing
 # Lines starting with # are ignored
