@@ -96,6 +96,9 @@ When you invoke SquidSquad, it creates the following inside your project root. O
 │   ├── iterations/             ← iter-N.md logs per cycle
 │   └── migrations/             ← historical migration logs (markdown tracker era)
 ├── qa/                         ← QA (same structure as [role]/, plus qa-log.md)
+├── project/                    ← per-install responsibility overrides (L4 of #9925 4-layer model)
+│   ├── shared-responsibility.md    ← all-agents L4 override
+│   └── {dev,dm,pm,qa}-responsibility.md  ← per-role L4 overrides
 └── vault/                      ← shared memory layer (PM and dev agents R/W, QA and DM read-only)
     ├── BRIEFING.md             ← daily context briefing read by all agents at boot
     ├── projects/               ← active project context, goals, constraints
@@ -150,13 +153,13 @@ Discussion entries are **Issue comments** using the same timestamped, role-signe
 
 Features go through a deep, research-driven lifecycle before reaching the dev agent:
 
-1. **Research (PM)** — Spawn research agent: codebase impact, side effects, edge cases, integration risks → `FEAT-XXX-RESEARCH.md`
-2. **Discussion (PM + Human)** — Present findings, ask targeted questions with WHY, capture locked decisions vs dev discretion → `FEAT-XXX-CONTEXT.md`
-3. **Planning (PM)** — Write feature entry + test cases → `FEAT-XXX-TEST-PLAN.md`
-4. **Execution (Dev)** — Implement reading planning artifacts, run smoke tests before Pending Test
-5. **QA (QA)** — Execute test cases from TEST-PLAN.md, record pass/fail, only ship when all pass
+1. **Research (PM)** — Spawn research agent: codebase impact, side effects, edge cases, integration risks → `.squidsquad/pm/planning/RESEARCH-NUMBER.md`
+2. **Discussion (PM + Human)** — Present findings, ask targeted questions with WHY, capture locked decisions vs dev discretion → `.squidsquad/pm/planning/CONTEXT-NUMBER.md`
+3. **Planning (PM)** — Synthesize research and discussion into the locked CONTEXT-NUMBER.md decisions; test-plan authorship belongs to QA in phase 5
+4. **Execution (Dev)** — Implement reading the planning artifacts, run smoke tests before Pending Test
+5. **QA (QA)** — Write the test plan, derive tests, record results → `.squidsquad/qa/planning/TEST-PLAN-NUMBER.md`, `TEST-NUMBER-tests.py`, `QA-RESULTS-NUMBER.md`. Only ship when all pass
 
-Planning files live in `.squidsquad/[role]/planning/` and are auto-deleted after ship (git preserves them). Bugs are excluded — they use the current lightweight flow. Trivial/cosmetic features can use light mode (PM skips research).
+Planning artifacts persist in `.squidsquad/pm/planning/` and `.squidsquad/qa/planning/` after ship — they are the audit trail. Bugs are excluded — they use the current lightweight flow. Trivial/cosmetic features can use light mode (PM skips research).
 
 ---
 
