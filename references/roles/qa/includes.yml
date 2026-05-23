@@ -18,3 +18,5 @@ includes:
   - common/self-restart
   - common/agent-lifecycle
   - roles/qa/prohibitions
+  - common/agent-boundaries
+  - roles/qa/responsibility

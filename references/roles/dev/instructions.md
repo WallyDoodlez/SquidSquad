@@ -18,6 +18,10 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team. You operate conti
 
 ---
 
+{{include: common/agent-boundaries}}
+
+{{include: roles/dev/responsibility}}
+
 {{include: common/boot-bootstrap}}
 
 <!--

@@ -24,6 +24,10 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 
 ---
 
+{{include: common/agent-boundaries}}
+
+{{include: roles/qa/responsibility}}
+
 {{include: common/boot-bootstrap}}
 
 <!--

@@ -420,6 +420,156 @@ def _assemble_claude(role_name: str) -> str:
     return "\n".join(parts)
 
 
+# #9925: cache manifest reads within a single compose run so the
+# role-roster injection doesn't re-parse the same manifest.yaml once per
+# active role per composed agent (would be N×N parses for N active roles).
+_ROLE_MANIFEST_CACHE: dict = {}
+
+
+def _read_role_manifest(role_id: str) -> dict | None:
+    """#9925 D2/D7: read a role's manifest.yaml metadata (id/display_name/
+    tagline/description). Cached within a single compose run.
+
+    Returns None on missing file or parse failure (caller's degraded path).
+    """
+    if role_id in _ROLE_MANIFEST_CACHE:
+        return _ROLE_MANIFEST_CACHE[role_id]
+    manifest_path = ROLES_DIR / role_id / "manifest.yaml"
+    if not manifest_path.exists() or yaml is None:
+        _ROLE_MANIFEST_CACHE[role_id] = None
+        return None
+    try:
+        data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(
+            f"WARNING: #9925 — failed to parse {manifest_path}: {e}",
+            file=sys.stderr,
+        )
+        _ROLE_MANIFEST_CACHE[role_id] = None
+        return None
+    _ROLE_MANIFEST_CACHE[role_id] = data if isinstance(data, dict) else None
+    return _ROLE_MANIFEST_CACHE[role_id]
+
+
+def _active_roles_for_roster() -> list[str]:
+    """#9925 D2/F4: return the list of role identities active in THIS
+    install's config.md, sorted alphabetically (D8). Sources:
+      - PM, QA, DM — always present per #6261 mandatory team.
+      - Dev agents — from `Dev Agents:` line in config.md (parsed via
+        config.py get-field 'dev-agents', falling back to a regex on
+        config.md if config.py is unavailable).
+    Roles whose manifest.yaml doesn't exist in references/roles/ are
+    dropped silently — the roster only lists roles that can be
+    described from a manifest.
+    """
+    roles = {"pm", "qa", "dm"}  # mandatory team
+    dev_agents_raw = _read_config_value("dev-agents")
+    if dev_agents_raw:
+        for token in dev_agents_raw.split(","):
+            t = token.strip()
+            if t:
+                roles.add(t)
+    # Filter to roles that actually have a manifest.yaml — D8 degraded mode.
+    return sorted(r for r in roles if (ROLES_DIR / r / "manifest.yaml").exists()
+                  or (ROLES_DIR / "dev" / "manifest.yaml").exists() and r not in {"pm", "qa", "dm"})
+
+
+def _render_role_roster() -> str:
+    """#9925 D7 item 3 + D8: render the L1 roster block by reading each
+    active role's manifest.yaml and emitting display_name + tagline +
+    description in alphabetical (id) order.
+
+    Returns the markdown block (no leading/trailing newlines).
+    """
+    active = _active_roles_for_roster()
+    if not active:
+        # D8 degraded mode: no active roles discoverable — skip roster.
+        print(
+            "WARNING: #9925 — no active roles found for role-roster injection; "
+            "leaving {{role-roster}} marker in composed output",
+            file=sys.stderr,
+        )
+        return "## Your Teammates' Responsibilities\n\n_(no active roles discoverable; check config.md `Dev Agents:` field)_"
+
+    lines = ["## Your Teammates' Responsibilities", ""]
+    for role_id in active:
+        # Dev variants like "skill" don't have their own manifest.yaml —
+        # fall through to dev's manifest for the roster entry.
+        manifest = _read_role_manifest(role_id)
+        if manifest is None and (ROLES_DIR / "dev" / "manifest.yaml").exists():
+            manifest = _read_role_manifest("dev")
+        if manifest is None:
+            print(
+                f"WARNING: #9925 — no manifest for active role {role_id!r}; "
+                "skipping in roster (D8 degraded mode)",
+                file=sys.stderr,
+            )
+            continue
+
+        display = manifest.get("display_name")
+        if not display:
+            # D8: missing display_name is a BUILD ERROR (per AC11).
+            print(
+                f"ERROR: #9925 — role {role_id!r} manifest is missing required "
+                "`display_name` field; cannot render roster",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+
+        tagline = manifest.get("tagline", "")
+        description = manifest.get("description", "")
+        if not tagline:
+            print(
+                f"WARNING: #9925 — role {role_id!r} manifest has no `tagline`; "
+                "rendering with empty tagline",
+                file=sys.stderr,
+            )
+        if not description:
+            print(
+                f"WARNING: #9925 — role {role_id!r} manifest has no "
+                "`description`; rendering with empty description",
+                file=sys.stderr,
+            )
+
+        if tagline:
+            lines.append(f"### {display} — {tagline}")
+        else:
+            lines.append(f"### {display}")
+        lines.append("")
+        if description:
+            # Manifest YAML uses block scalars (`>` folded) — strip and re-flow.
+            lines.append(description.strip())
+        lines.append("")
+
+    # Drop the trailing blank.
+    if lines and lines[-1] == "":
+        lines.pop()
+    return "\n".join(lines)
+
+
+def _inject_role_roster(content: str, role_name: str) -> str:
+    """#9925 D7 item 3 + F6: post-process the composed content to replace
+    the `{{role-roster}}` marker with the rendered roster. Runs AFTER
+    `_resolve_includes_with_manifest` to avoid tangling with the
+    existing `{{include:}}` / `{{runtime:}}` / `{{capability:}}`
+    resolvers and to avoid firing inside code blocks of unrelated files
+    that happen to mention the marker.
+    """
+    if "{{role-roster}}" not in content:
+        # D8 degraded mode: marker absent — likely agent-boundaries.md was
+        # not included for this role. Emit a warning and continue without
+        # substitution.
+        print(
+            f"WARNING: #9925 — no {{{{role-roster}}}} marker in composed "
+            f"{role_name} output; skipping roster injection (likely "
+            "common/agent-boundaries not in includes.yml)",
+            file=sys.stderr,
+        )
+        return content
+    roster = _render_role_roster()
+    return content.replace("{{role-roster}}", roster)
+
+
 def compose_role(role_name: str) -> str:
     """Compose a role's full CLAUDE.md from 3-layer assembly + include resolution.
 
@@ -427,6 +577,9 @@ def compose_role(role_name: str) -> str:
             source files (same concatenation pattern as SOUL.md).
     Step 2: Resolve {{include:}}, {{runtime:}}, {{capability:}} directives
             using the role's includes.yml manifest.
+    Step 3 (#9925): inject the role roster by replacing the
+            ``{{role-roster}}`` marker introduced via L1
+            ``common/agent-boundaries`` include.
 
     The result is a single flat CLAUDE.md with all sub-skills inlined.
     """
@@ -451,6 +604,9 @@ def compose_role(role_name: str) -> str:
             composed = _resolve_includes(tmp, wake_mode)
     finally:
         tmp.unlink(missing_ok=True)
+
+    # Step 3 (#9925 D7 item 3): role-roster post-processing.
+    composed = _inject_role_roster(composed, role_name)
 
     return composed
 
