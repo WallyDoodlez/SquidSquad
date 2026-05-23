@@ -435,7 +435,9 @@ def _parse_agents_v1(text):
     Returns a list of dicts shaped like the v2 output:
         [{"id": "fe", "alias": "fe", "role": "dev"}, ...]
 
-    Infrastructure roles (pm, qa, dm) are always present (#6261 fixed team).
+    Infrastructure roles (pm, verifier, dm) are always present (#6261 fixed
+    team; #6274 D5: qa→verifier — see _parse_agents_v1 mandatory loop and
+    sync_agents() for the dual-aware behaviour during the migration window).
     Aliases are read from the `## Aliases` section.
     """
     sections = _parse_sections(text)
@@ -587,8 +589,11 @@ def sync_agents():
             continue
         if (subdir / "CLAUDE.md").exists():
             name = subdir.name
-            # Fixed team roles are listed separately (#6261/#6274: qa→verifier per D5)
-            if name in ("pm", "verifier", "dm"):
+            # Fixed team roles are listed separately (#6261/#6274: qa→verifier
+            # per D5 — skip BOTH names during the dual-aware migration window
+            # so neither leaks into dev_roles regardless of which directory
+            # name exists on disk before/after wizard.py D4 rename).
+            if name in ("pm", "qa", "verifier", "dm"):
                 continue
             dev_roles.append(name)
 
@@ -596,11 +601,16 @@ def sync_agents():
     if dev_roles:
         set_field("dev-agents", ", ".join(dev_roles))
 
-    # Report — include fixed team roles that have CLAUDE.md
+    # Report — include fixed team roles that have CLAUDE.md (#6274 D5:
+    # the verifier directory replaces qa post-rename; during the dual-aware
+    # window only one of the two will exist on disk, so check both and
+    # report whichever is present).
     roles = dev_roles + ["pm"]
     if (sqdir / "dm" / "CLAUDE.md").exists():
         roles.append("dm")
-    if (sqdir / "qa" / "CLAUDE.md").exists():
+    if (sqdir / "verifier" / "CLAUDE.md").exists():
+        roles.append("verifier")
+    elif (sqdir / "qa" / "CLAUDE.md").exists():
         roles.append("qa")
     print(f"Synced agents: {', '.join(roles)}")
     return roles

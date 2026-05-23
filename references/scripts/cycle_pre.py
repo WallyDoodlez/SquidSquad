@@ -442,7 +442,13 @@ def _get_cycle_number(role):
 _ROLE_EVENT_TYPES = {
     "pm": {"pr-merged", "compose-completed", "verification-failed", "verification-passed",
             "cycle-start", "cycle-end", "status-transition", "agent-health"},
+    # #6274 D5: qa→verifier. Both keys map to the same event set during the
+    # dual-aware migration window so role="qa" (current) and role="verifier"
+    # (post-rename) both filter to the intended subset rather than falling
+    # through the `if not allowed: return events` branch unfiltered.
     "qa": {"pr-merged", "compose-completed", "status-transition", "cycle-end",
+            "verification-failed"},
+    "verifier": {"pr-merged", "compose-completed", "status-transition", "cycle-end",
             "verification-failed"},
     "skill": {"pr-merged", "compose-completed", "verification-failed", "status-transition"},
     "dm": {"status-transition", "verification-passed", "pr-merged", "compose-completed"},
@@ -553,6 +559,12 @@ def _get_verifiable_roles():
     config.md only carries dev-style optional add-ons, so we add qa
     explicitly here alongside dm and pm — same pattern every other
     role-collector uses (compose._collect_all_roles, boot_remote._get_all_roles).
+
+    Note (#6274 D5): qa→verifier rename. Both names are included during
+    the dual-aware migration window so tracker queries hit whichever
+    role:<name> label is on the issue (migrate_labels_6274.py dual-tags
+    both, so the returned issue sets are identical). After AC2.8 closes
+    the dual window, drop "qa" from the set.
     """
     roles = set()
     raw = _config_get("dev-agents")
@@ -564,12 +576,14 @@ def _get_verifiable_roles():
     else:
         # Fallback: if config returned nothing, at least include skill
         roles.add("skill")
-    # Always include the mandatory roles (pm, qa, dm) — any of them can
-    # have pending-test items. qa added explicitly per #9318 after
-    # config.md stopped listing it in dev-agents.
+    # Always include the mandatory roles (pm, qa/verifier, dm) — any of
+    # them can have pending-test items. qa added explicitly per #9318
+    # after config.md stopped listing it in dev-agents. Both qa and
+    # verifier added per #6274 D5 during the dual-aware window.
     roles.add("dm")
     roles.add("pm")
     roles.add("qa")
+    roles.add("verifier")
     return sorted(roles)
 
 
@@ -1080,7 +1094,13 @@ def _build_dm_input(role):
 ROLE_BUILDERS = {
     "skill": _build_skill_input,
     "pm": _build_pm_input,
+    # #6274 D5: qa→verifier. Both keys dispatch to the same builder during
+    # the dual-aware migration window so cycle_pre.py works whether the
+    # agent invokes with SQUIDSQUAD_ROLE=qa (current) or =verifier (post-
+    # wizard D4 directory rename). Drop the "qa" entry in AC2.8 once the
+    # migration window closes.
     "qa": _build_qa_input,
+    "verifier": _build_qa_input,
     "dm": _build_dm_input,
 }
 
