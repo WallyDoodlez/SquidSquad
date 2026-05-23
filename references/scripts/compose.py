@@ -138,6 +138,13 @@ def _resolve_includes(entry_file: Path, wake_mode: str = "polling") -> str:
 
         if inc_match:
             include_path = inc_match.group(1).strip()
+            # #9588 belt-and-suspenders (DS cycle 1301 phase d4c44589 F1): the
+            # manifest-aware path filters RUNTIME_READ_FRAGMENTS explicitly;
+            # this manifest-less fallback must do the same, otherwise a yaml
+            # parse error / pyyaml-absent install silently inlines runtime
+            # fragments and defeats the lazy-load design.
+            if include_path in RUNTIME_READ_FRAGMENTS:
+                continue
             full_path = SUB_SKILLS_DIR / f"{include_path}.md"
             if not full_path.exists():
                 result.append(f"<!-- ERROR: Missing include: {include_path} -->")
@@ -475,15 +482,16 @@ def _read_role_manifest(role_id: str) -> dict | None:
 def _active_roles_for_roster() -> list[str]:
     """#9925 D2/F4: return the list of role identities active in THIS
     install's config.md, sorted alphabetically (D8). Sources:
-      - PM, QA, DM — always present per #6261 mandatory team.
-      - Dev agents — from `Dev Agents:` line in config.md (parsed via
-        config.py get-field 'dev-agents', falling back to a regex on
-        config.md if config.py is unavailable).
+      - PM, verifier, DM — always present per #6261 mandatory team.
+        (#6274: was {pm, qa, dm}; "qa" → "verifier" per D5.)
+      - Worker agents — from `Workers:` (or legacy `Dev Agents:`) line in
+        config.md (parsed via config.py get-field 'workers', falling back
+        to a regex on config.md if config.py is unavailable).
     Roles whose manifest.yaml doesn't exist in references/roles/ are
     dropped silently — the roster only lists roles that can be
     described from a manifest.
     """
-    roles = {"pm", "qa", "dm"}  # mandatory team
+    roles = {"pm", "verifier", "dm"}  # mandatory team — #6274 renamed qa→verifier
     dev_agents_raw = _read_config_value("dev-agents")
     if dev_agents_raw:
         for token in dev_agents_raw.split(","):
@@ -491,8 +499,13 @@ def _active_roles_for_roster() -> list[str]:
             if t:
                 roles.add(t)
     # Filter to roles that actually have a manifest.yaml — D8 degraded mode.
+    # Worker variants (e.g. "skill", "be") fall back to the worker base
+    # manifest (#6274: was "dev"). Dual-aware: try both "worker" and "dev"
+    # in case the install hasn't been re-composed yet.
     return sorted(r for r in roles if (ROLES_DIR / r / "manifest.yaml").exists()
-                  or (ROLES_DIR / "dev" / "manifest.yaml").exists() and r not in {"pm", "qa", "dm"})
+                  or ((ROLES_DIR / "worker" / "manifest.yaml").exists()
+                      or (ROLES_DIR / "dev" / "manifest.yaml").exists())
+                  and r not in {"pm", "verifier", "dm"})
 
 
 def _render_role_roster() -> str:
@@ -1469,15 +1482,15 @@ def generate_local_config(roles: list, target_root: Path = None,
 
 
 
-MANDATORY_ROLES = {"pm", "qa", "dm"}  # #6055: always present, no fallbacks
+MANDATORY_ROLES = {"pm", "verifier", "dm"}  # #6055/#6274: always present (qa→verifier per D5)
 
 
 def _collect_all_roles() -> list:
-    """Return all configured roles: dev-agents from config + pm + qa + dm."""
+    """Return all configured roles: worker-agents from config + pm + verifier + dm."""
     agents = _read_config_value("dev-agents") or ""
     roles = [r.strip() for r in agents.split(",") if r.strip()]
-    # Mandatory roles — always required (#6055)
-    for role in ("pm", "qa", "dm"):
+    # Mandatory roles — always required (#6055/#6274: qa→verifier per D5)
+    for role in ("pm", "verifier", "dm"):
         if role not in roles:
             roles.append(role)
     return roles

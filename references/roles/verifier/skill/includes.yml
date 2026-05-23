@@ -1,5 +1,5 @@
 # Layer 3 variant manifest — verifier-skill
-# Inherits all sub-skills from qa, adds skill-specific context.
+# Inherits all sub-skills from verifier, adds skill-specific context.
 base_role: verifier
 additional_includes:
   - roles/verifier/skill/domain-context

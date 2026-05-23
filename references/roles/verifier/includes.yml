@@ -1,4 +1,4 @@
-# QA agent sub-skill manifest (polling / /loop mode — #8697, #9588)
+# Verifier agent sub-skill manifest (polling / /loop mode — #8697, #9588)
 # Uses slim variants for vault-protocol and improvement-scan (read-only role).
 # #9588: `common/boot-bootstrap` is the first include; mode-specific
 # `roles/verifier/ralph-loop-overview` is Read at runtime by the bootstrap.

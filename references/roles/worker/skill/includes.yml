@@ -1,5 +1,5 @@
 # Layer 3 variant manifest — worker-skill
-# Inherits all sub-skills from dev, adds skill-specific context.
+# Inherits all sub-skills from worker, adds skill-specific context.
 base_role: worker
 additional_includes:
   - roles/worker/skill/domain-context

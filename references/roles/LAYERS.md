@@ -29,7 +29,7 @@ references/roles/
 | Layer | Location | What it defines | Who maintains it |
 |-------|----------|-----------------|------------------|
 | **L1 — Agent** | `roles/` root | What ANY SquidSquad agent is | SquidSquad core |
-| **L2 — Role** | `roles/<role>/` | What a dev/pm/qa/dm IS | SquidSquad core |
+| **L2 — Role** | `roles/<role>/` | What a worker/pm/verifier/dm IS | SquidSquad core |
 | **L3 — Domain** | `roles/<role>/<variant>/` | Domain specialization (iOS, web, skill) | Preset authors |
 | **L4 — Project** | `.squidsquad/<agent>/` | Project-specific adaptations | soul-shepherd + human |
 

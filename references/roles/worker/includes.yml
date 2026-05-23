@@ -1,4 +1,4 @@
-# Dev agent sub-skill manifest (polling / /loop mode — #8697, #9588)
+# Worker agent sub-skill manifest (polling / /loop mode — #8697, #9588)
 # This is the default manifest. compose.py loads `includes-events.yml`
 # instead when the role's wake mode is `event-driven`.
 #

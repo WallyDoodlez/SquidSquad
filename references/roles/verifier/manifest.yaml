@@ -1,6 +1,6 @@
 # SquidSquad role manifest — Verifier
 #
-# QA verifies completed engineering work against its acceptance criteria and
+# Verifier verifies completed engineering work against its acceptance criteria and
 # either hands it on to delivery or bounces it back for rework. Only installed
 # alongside dev in the software-development preset.
 #
@@ -16,9 +16,9 @@ description: >
   it against the feature's acceptance criteria and smoke tests, and either
   hands it forward for delivery or sends it back with specific gaps.
 show_in_roster: false
-# QA is infrastructure (#6261 — fixed team). Always installed, not a specialist.
+# Verifier is infrastructure (#6261 — fixed team). Always installed, not a specialist.
 # Previously shown in roster as specialist; now infrastructure like PM and DM.
-# will flip this to `always_installed: true` so QA becomes infrastructure
+# will flip this to `always_installed: true` so Verifier becomes infrastructure
 # like PM and DM. That change is intentionally scoped as a single-field edit
 # here, which was the point of declaring this field up front in #328.
 always_installed: true

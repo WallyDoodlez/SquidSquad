@@ -1,4 +1,4 @@
-# Dev agent sub-skill manifest (event-driven mode — #8697)
+# Worker agent sub-skill manifest (event-driven mode — #8697)
 # compose.py loads this manifest instead of `includes.yml` when the role's
 # wake mode is `event-driven` (config field `event-driven-<role>: yes` or
 # global `event-driven: yes`).

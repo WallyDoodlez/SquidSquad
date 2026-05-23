@@ -1,5 +1,5 @@
 # Layer 3 variant manifest — verifier-fullstack
-# Inherits all sub-skills from qa, adds fullstack-specific context.
+# Inherits all sub-skills from verifier, adds fullstack-specific context.
 base_role: verifier
 additional_includes:
   - roles/verifier/fullstack/domain-context

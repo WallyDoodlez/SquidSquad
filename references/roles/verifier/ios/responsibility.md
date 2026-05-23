@@ -1,6 +1,6 @@
 # verifier/ios — Variant-Specific Responsibility
 
-No variant-specific responsibility narrowing for `qa/ios` at this time.
+No variant-specific responsibility narrowing for `verifier/ios` at this time.
 Refer to L2 at `references/sub-skills/roles/verifier/responsibility.md` for the general role scope, and the L1 team roster for cross-role awareness.
 
 <!-- Future variant-specific content will replace this stub. Example shape (illustrative, not a deliverable for #9925):
