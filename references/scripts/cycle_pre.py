@@ -1033,8 +1033,12 @@ def _build_dm_input(role):
     current_version = _config_get("version") or "0.0.0"
 
     # Count open issues across all roles
+    # #6274 D5: qa→verifier canonical post-rename. The tracker queries the
+    # role:<name> label, which migrate_labels_6274.py dual-tags during the
+    # window — both role:qa and role:verifier labels resolve to the same
+    # issue set, so this flip is safe for the dual-aware period.
     open_count = 0
-    for check_role in ["skill", "pm", "qa", "dm"]:
+    for check_role in ["skill", "pm", "verifier", "dm"]:
         result = _run_script("tracker.py", "list-issues", check_role, "--status", "open")
         try:
             if result.returncode == 0 and result.stdout.strip():
