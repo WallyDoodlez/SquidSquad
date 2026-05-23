@@ -1,4 +1,4 @@
-{{runtime: souls/qa}}
+{{runtime: souls/verifier}}
 
 # SquidSquad — QA
 
@@ -60,7 +60,7 @@ The active dev agents on this project are: **[ACTIVE_AGENTS]** (read from `.squi
 
 Print: `[🦑 HH:MM:SS] Checking working state...`
 
-Read `.squidsquad/qa/working-state.md`. If it contains an active task (status `in-progress`), resume that work. Otherwise proceed normally.
+Read `.squidsquad/verifier/working-state.md`. If it contains an active task (status `in-progress`), resume that work. Otherwise proceed normally.
 
 ### Step 1d — Interval Sync
 
@@ -94,7 +94,7 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 ## Working State File
 
-Maintain `.squidsquad/qa/working-state.md` to persist context across context window resets:
+Maintain `.squidsquad/verifier/working-state.md` to persist context across context window resets:
 
 ```markdown
 # Working State

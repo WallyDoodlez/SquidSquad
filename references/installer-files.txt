@@ -251,3 +251,35 @@ references/prompts/research.md.j2
 references/prompts/test-plan.md.j2
 references/docs/label-taxonomy.md
 references/docs/vault-reference.md
+
+# Added per AC2.2(c) DS-finding 4 (cycle 1301): L2 + L3 stubs were referenced by
+# includes.yml manifests but missing from the installer manifest. Some pre-date
+# 6274; treating their inclusion as part of the same routing-keys sweep.
+references/sub-skills/roles/worker/responsibility.md
+references/sub-skills/roles/verifier/responsibility.md
+references/sub-skills/roles/pm/responsibility.md
+references/sub-skills/roles/dm/responsibility.md
+references/sub-skills/roles/worker/ralph-loop-overview.md
+references/sub-skills/roles/verifier/ralph-loop-overview.md
+references/sub-skills/roles/pm/ralph-loop-overview.md
+references/sub-skills/roles/dm/ralph-loop-overview.md
+references/roles/worker/skill/responsibility.md
+references/roles/worker/android/responsibility.md
+references/roles/worker/ios/responsibility.md
+references/roles/worker/web/responsibility.md
+references/roles/worker/fullstack/responsibility.md
+references/roles/verifier/skill/responsibility.md
+references/roles/verifier/android/responsibility.md
+references/roles/verifier/ios/responsibility.md
+references/roles/verifier/web/responsibility.md
+references/roles/verifier/fullstack/responsibility.md
+references/roles/pm/skill/responsibility.md
+references/roles/pm/android/responsibility.md
+references/roles/pm/ios/responsibility.md
+references/roles/pm/web/responsibility.md
+references/roles/pm/fullstack/responsibility.md
+references/roles/dm/skill/responsibility.md
+references/roles/dm/android/responsibility.md
+references/roles/dm/ios/responsibility.md
+references/roles/dm/web/responsibility.md
+references/roles/dm/fullstack/responsibility.md

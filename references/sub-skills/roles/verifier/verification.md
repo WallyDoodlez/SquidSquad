@@ -246,7 +246,7 @@ python references/scripts/git_ops.py task-end [role] [number]
 
    Record results in QA-RESULTS-<NUMBER>.md under `## Comprehension Tests` with per-CQ PASS/FAIL entries. A comprehension failure is a legitimate finding.
 
-2. **Worker unit tests are a sanity check, not the gate** (#9184). Inspect worker's unit tests under `tests/` for the changed area. Running them as a sanity check is fine, but verifier's gate is the live-system execution of `TEST-PLAN-<NUMBER>.md` above. Coverage gaps in worker's unit tests are a separate finding routed back to worker — do not skip verifier's live execution because dev's tests pass.
+2. **Worker unit tests are a sanity check, not the gate** (#9184). Inspect worker's unit tests under `tests/` for the changed area. Running them as a sanity check is fine, but verifier's gate is the live-system execution of `TEST-PLAN-<NUMBER>.md` above. Coverage gaps in worker's unit tests are a separate finding routed back to worker — do not skip verifier's live execution because worker's tests pass.
 
 2b. **Test coverage check** (always runs): Verify worker's PR includes unit tests for new code per the worker workflow (#9184). If the implementation adds new functions, scripts, or modules but the PR ships with no unit tests AND no explicit "no testable surface" justification, reject — tests are part of the implementation, not follow-up work.
 
@@ -298,7 +298,7 @@ python references/scripts/git_ops.py task-end [role] [number]
    **If PR Flow `yes`** and a PR exists for this issue:
    - Post verifier results on the PR:
      ```bash
-     gh pr comment [PR_NUMBER] --body "## Verifier Results\n\n**Status**: PASS\n**Test Plan**: .squidsquad/qa/planning/TEST-PLAN-[NUMBER].md (QA-owned, derived from AC list)\n**Results**: [N/N tests passed]\n\nAll acceptance criteria verified against a live instance."
+     gh pr comment [PR_NUMBER] --body "## Verifier Results\n\n**Status**: PASS\n**Test Plan**: .squidsquad/qa/planning/TEST-PLAN-[NUMBER].md (Verifier-owned, derived from AC list)\n**Results**: [N/N tests passed]\n\nAll acceptance criteria verified against a live instance."
      ```
    - Formally approve the PR:
      ```bash

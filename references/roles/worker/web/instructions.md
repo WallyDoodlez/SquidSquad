@@ -1,4 +1,4 @@
-{{runtime: souls/dev-web}}
+{{runtime: souls/worker-web}}
 
 # SquidSquad — [ROLE] Lead (Web Specialization)
 

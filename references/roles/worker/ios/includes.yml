@@ -1,5 +1,5 @@
-# Layer 3 variant manifest — dev-ios
+# Layer 3 variant manifest — worker-ios
 # Inherits all sub-skills from dev, adds ios-specific context.
-base_role: dev
+base_role: worker
 additional_includes:
   - roles/worker/ios/domain-context

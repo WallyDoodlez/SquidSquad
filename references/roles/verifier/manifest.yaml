@@ -1,4 +1,4 @@
-# SquidSquad role manifest — QA
+# SquidSquad role manifest — Verifier
 #
 # QA verifies completed engineering work against its acceptance criteria and
 # either hands it on to delivery or bounces it back for rework. Only installed
@@ -8,9 +8,9 @@
 # domain terms. Do not reference internal status labels or scripts.
 
 schema_version: 2
-id: qa
-display_name: QA
-tagline: Verifies dev work against acceptance criteria
+id: verifier
+display_name: Verifier
+tagline: Verifies worker work against acceptance criteria
 description: >
   The verification specialist. Takes completed engineering work, exercises
   it against the feature's acceptance criteria and smoke tests, and either

@@ -1,4 +1,4 @@
-# dev/skill — Variant-Specific Responsibility
+# worker/skill — Variant-Specific Responsibility
 
 No variant-specific responsibility narrowing for `dev/skill` at this time.
 Refer to L2 at `references/sub-skills/roles/worker/responsibility.md` for the general role scope, and the L1 team roster for cross-role awareness.

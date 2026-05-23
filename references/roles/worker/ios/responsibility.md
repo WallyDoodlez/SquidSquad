@@ -1,4 +1,4 @@
-# dev/ios — Variant-Specific Responsibility
+# worker/ios — Variant-Specific Responsibility
 
 No variant-specific responsibility narrowing for `dev/ios` at this time.
 Refer to L2 at `references/sub-skills/roles/worker/responsibility.md` for the general role scope, and the L1 team roster for cross-role awareness.

@@ -1,5 +1,5 @@
-# Layer 3 variant manifest — qa-ios
+# Layer 3 variant manifest — verifier-ios
 # Inherits all sub-skills from qa, adds ios-specific context.
-base_role: qa
+base_role: verifier
 additional_includes:
   - roles/verifier/ios/domain-context

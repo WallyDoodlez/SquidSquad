@@ -1,4 +1,4 @@
-# dev/android — Variant-Specific Responsibility
+# worker/android — Variant-Specific Responsibility
 
 No variant-specific responsibility narrowing for `dev/android` at this time.
 Refer to L2 at `references/sub-skills/roles/worker/responsibility.md` for the general role scope, and the L1 team roster for cross-role awareness.

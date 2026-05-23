@@ -1,4 +1,4 @@
-# qa/web — Variant-Specific Responsibility
+# verifier/web — Variant-Specific Responsibility
 
 No variant-specific responsibility narrowing for `qa/web` at this time.
 Refer to L2 at `references/sub-skills/roles/verifier/responsibility.md` for the general role scope, and the L1 team roster for cross-role awareness.

@@ -1,4 +1,4 @@
-{{runtime: souls/dev-fullstack}}
+{{runtime: souls/worker-fullstack}}
 
 # SquidSquad — [ROLE] Lead (Fullstack Specialization)
 

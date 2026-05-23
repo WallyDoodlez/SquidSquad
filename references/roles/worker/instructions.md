@@ -1,4 +1,4 @@
-{{runtime: souls/dev}}
+{{runtime: souls/worker}}
 
 # SquidSquad — [ROLE] Lead
 

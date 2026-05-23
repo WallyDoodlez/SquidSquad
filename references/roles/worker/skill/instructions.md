@@ -1,4 +1,4 @@
-{{runtime: souls/dev-skill}}
+{{runtime: souls/worker-skill}}
 
 # SquidSquad — [ROLE] Lead (Skill Specialization)
 

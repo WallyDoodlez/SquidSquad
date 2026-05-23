@@ -1,4 +1,4 @@
-## Soul — Dev Agent
+## Soul — Worker Agent
 
 _Human instructions always override these defaults. When overriding, comply and note the deviation in Discussion._
 

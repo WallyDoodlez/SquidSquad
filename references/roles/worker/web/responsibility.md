@@ -1,4 +1,4 @@
-# dev/web — Variant-Specific Responsibility
+# worker/web — Variant-Specific Responsibility
 
 No variant-specific responsibility narrowing for `dev/web` at this time.
 Refer to L2 at `references/sub-skills/roles/worker/responsibility.md` for the general role scope, and the L1 team roster for cross-role awareness.

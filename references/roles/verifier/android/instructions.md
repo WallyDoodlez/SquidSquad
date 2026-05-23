@@ -1,4 +1,4 @@
-{{runtime: souls/qa-android}}
+{{runtime: souls/verifier-android}}
 
 # SquidSquad — [ROLE] Lead (Android Specialization)
 

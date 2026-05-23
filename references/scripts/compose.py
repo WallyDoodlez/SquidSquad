@@ -212,6 +212,16 @@ def _load_manifest(role_name: str, wake_mode: str = "polling") -> list | None:
         if role_name not in identities and "dev" in identities:
             manifest_path = _resolve_manifest_path(ROLES_DIR / "dev")
         if manifest_path is None:
+            # #6274 dual-aware: belt-and-suspenders alias fallback (DS finding
+            # cycle 1301 phase 2.2.2-3 F3). If role_name is in _BASE_ALIAS_6274
+            # (e.g., "dev" → "worker", "qa" → "verifier"), retry against the
+            # aliased identity. Defense in depth — phase 2.2.1 already updated
+            # all base_role: values in variant includes.yml to new names; this
+            # catches any legacy caller that still passes "dev"/"qa".
+            if role_name in _BASE_ALIAS_6274:
+                aliased = _BASE_ALIAS_6274[role_name]
+                manifest_path = _resolve_manifest_path(ROLES_DIR / aliased)
+        if manifest_path is None:
             return None
 
     try:
@@ -623,12 +633,12 @@ def compose_role(role_name: str) -> str:
 
 
 def compose_all() -> str:
-    """Compose the dev-agent template as the default agent-instructions.md."""
-    # agent-instructions.md is the dev template (primary output)
+    """Compose the worker-agent template as the default agent-instructions.md."""
+    # agent-instructions.md is the worker template (primary output)
     header = "<!-- GENERATED FILE — DO NOT EDIT. -->\n"
     header += "<!-- Source: references/roles/worker/instructions.md + sub-skills/ -->\n"
     header += "<!-- Regenerate with: python references/scripts/compose.py all -->\n\n"
-    composed = compose_role("dev")
+    composed = compose_role("worker")
     return header + composed
 
 
@@ -742,7 +752,7 @@ def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> s
     cycle-runner sub-skill which is shared across all agents).
     [ROLE_TEST_CMD], [OTHER_ROLES] are dev-only.
     """
-    is_dev = entry_file == "dev"
+    is_dev = entry_file in ("dev", "worker")  # #6274 dual-aware
 
     # Universal substitution — all roles need [ROLE] for cycle-runner paths
     content = content.replace("[ROLE]", role_name)

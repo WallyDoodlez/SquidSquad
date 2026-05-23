@@ -1,4 +1,4 @@
-# SquidSquad role manifest — Dev
+# SquidSquad role manifest — Worker
 #
 # Dev is the engineering specialist. Only installed in software-development
 # projects. One manifest covers all variants (backend, frontend, fullstack);
@@ -8,8 +8,8 @@
 # domain terms. Do not reference internal paths, tracker labels, or scripts.
 
 schema_version: 2
-id: dev
-display_name: Dev
+id: worker
+display_name: Worker
 tagline: Writes code (backend, frontend, or fullstack)
 description: >
   The engineering specialist. Implements features and fixes bugs against a
@@ -27,7 +27,7 @@ claude_template: instructions.md
 
 # Dev hands completed work to the verifier, or directly to delivery when no
 # verifier is installed.
-routes_to: [qa, dm]
+routes_to: [verifier, dm]
 
 # No tool requirements — dev uses whatever the project's stack already has.
 requires_sub_skills: {}

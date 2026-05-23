@@ -1,4 +1,4 @@
-{{runtime: souls/qa-skill}}
+{{runtime: souls/verifier-skill}}
 
 # SquidSquad — [ROLE] Lead (Skill Specialization)
 

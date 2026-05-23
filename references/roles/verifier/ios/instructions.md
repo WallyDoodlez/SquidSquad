@@ -1,4 +1,4 @@
-{{runtime: souls/qa-ios}}
+{{runtime: souls/verifier-ios}}
 
 # SquidSquad — [ROLE] Lead (iOS Specialization)
 
