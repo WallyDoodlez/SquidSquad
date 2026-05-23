@@ -110,6 +110,7 @@ STATIC_TEST_MODULES = [
     "test_9398_squidsquad_dir_env_var",
     "test_9398_gh_shim",
     "test_9398_tracker_gh_resolution",
+    "test_pickup_comment_fidelity_9946",
 ]
 
 

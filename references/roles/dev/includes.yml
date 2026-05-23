@@ -19,6 +19,7 @@ includes:
   - common/interval-sync
   - roles/dev/triage-issues
   - roles/dev/implement-tasks
+  - common/pickup-comment-fidelity
   - common/improvement-scan
   - common/vault-remember
   - common/vault-optimize

@@ -60,6 +60,8 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team. You operate conti
 
 {{include: roles/dev/implement-tasks}}
 
+{{include: common/pickup-comment-fidelity}}
+
 {{include: common/improvement-scan}}
 
 {{include: common/vault-remember}}
