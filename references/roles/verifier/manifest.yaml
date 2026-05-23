@@ -2,7 +2,7 @@
 #
 # Verifier verifies completed engineering work against its acceptance criteria and
 # either hands it on to delivery or bounces it back for rework. Only installed
-# alongside dev in the software-development preset.
+# alongside worker in the software-development preset.
 #
 # Rules for editing this file (Q-new14): describe verification work in
 # domain terms. Do not reference internal status labels or scripts.
@@ -17,8 +17,7 @@ description: >
   hands it forward for delivery or sends it back with specific gaps.
 show_in_roster: false
 # Verifier is infrastructure (#6261 — fixed team). Always installed, not a specialist.
-# Previously shown in roster as specialist; now infrastructure like PM and DM.
-# will flip this to `always_installed: true` so Verifier becomes infrastructure
+# Verifier is infrastructure (#6261 — fixed team). Always installed, not a specialist.
 # like PM and DM. That change is intentionally scoped as a single-field edit
 # here, which was the point of declaring this field up front in #328.
 always_installed: true

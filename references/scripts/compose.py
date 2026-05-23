@@ -6,8 +6,8 @@ the referenced sub-skill content, and wraps each inclusion with
 <!-- sub-skill: name --> section markers.
 
 Usage:
-    python scripts/compose.py dev-agent        # Compose dev agent template
-    python scripts/compose.py pm-agent         # Compose PM/QA template
+    python scripts/compose.py worker-agent     # Compose worker agent template
+    python scripts/compose.py pm-agent         # Compose PM/Verifier template
     python scripts/compose.py all              # Compose all roles to agent-instructions.md
     python scripts/compose.py --help
 """
@@ -527,11 +527,18 @@ def _render_role_roster() -> str:
 
     lines = ["## Your Teammates' Responsibilities", ""]
     for role_id in active:
-        # Dev variants like "skill" don't have their own manifest.yaml —
-        # fall through to dev's manifest for the roster entry.
+        # Worker variants like "skill" don't have their own manifest.yaml —
+        # fall through to worker's manifest for the roster entry (#6274 dual-aware
+        # also accepts dev/ as a fallback during the migration window).
         manifest = _read_role_manifest(role_id)
-        if manifest is None and (ROLES_DIR / "dev" / "manifest.yaml").exists():
-            manifest = _read_role_manifest("dev")
+        if manifest is None:
+            # #6274 dual-aware (DS cycle 1301 phase cfa512ff F3): check both
+            # worker/ (new canonical) and dev/ (pre-rename) so worker variants
+            # like "skill"/"be" resolve via either parent manifest.
+            if (ROLES_DIR / "worker" / "manifest.yaml").exists():
+                manifest = _read_role_manifest("worker")
+            elif (ROLES_DIR / "dev" / "manifest.yaml").exists():
+                manifest = _read_role_manifest("dev")
         if manifest is None:
             print(
                 f"WARNING: #9925 — no manifest for active role {role_id!r}; "
@@ -1548,7 +1555,7 @@ def main():
         missing = _check_mandatory_roles(roles)
         if missing:
             print(f"ERROR: Mandatory role(s) missing: {', '.join(missing)}", file=sys.stderr)
-            print(f"Every SquidSquad team requires PM, QA, and DM.", file=sys.stderr)
+            print(f"Every SquidSquad team requires PM, Verifier, and DM.", file=sys.stderr)
             print(f"Add missing roles with: /squidsquad-setup or manually create .squidsquad/{missing[0]}/", file=sys.stderr)
             sys.exit(1)
         failed = []

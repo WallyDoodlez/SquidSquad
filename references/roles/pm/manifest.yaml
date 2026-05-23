@@ -19,7 +19,7 @@ description: >
   orchestrates the team's environment (tools, configuration, hand-offs).
 show_in_roster: false
 # PM is always part of the team — installed regardless of preset, not listed
-# in preset `role_install_order`. See #347 for the matching flip for QA.
+# in preset `role_install_order`. See #347 for the matching flip for Verifier.
 always_installed: true
 iteration_mode: normal
 
@@ -32,7 +32,7 @@ claude_template: instructions.md
 # PM prefers handing to a specialist when one exists, and falls through to
 # delivery when no specialist can take the work. Every terminal chain reaches
 # DM so work always lands with someone who can ship it.
-routes_to: [dev, qa, dm]
+routes_to: [worker, verifier, dm]
 
 # PM owns tool configuration on everyone else's behalf, but does not require
 # any tool of its own in v1.
