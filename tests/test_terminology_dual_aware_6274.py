@@ -70,3 +70,112 @@ def test_ac1_1_dual_aware_constant_is_frozenset():
     assert compose._DUAL_AWARE_IDENTITIES_6274 == frozenset(
         {"worker", "verifier", "dev", "qa"}
     )
+
+
+# ---------------------------------------------------------------------------
+# AC1.2 — _resolve_variant accepts both old and new prefixes
+# ---------------------------------------------------------------------------
+
+
+def test_ac1_2_dev_skill_resolves_pre_rename():
+    """Pre-6274.2 state: `references/roles/dev/skill/` exists. The
+    canonical form resolves directly."""
+    result = compose._resolve_variant("dev-skill")
+    assert result == ("dev", "skill"), (
+        f"dev-skill should resolve to ('dev', 'skill') pre-rename; got {result}"
+    )
+
+
+def test_ac1_2_worker_skill_resolves_pre_rename_via_alias():
+    """Pre-6274.2 state: `worker-skill` is input-normalized to the
+    on-disk `dev/skill/` directory via the dual-aware alias. F3
+    contract: input independent of disk; return tracks disk."""
+    result = compose._resolve_variant("worker-skill")
+    assert result == ("dev", "skill"), (
+        f"worker-skill should resolve to ('dev', 'skill') pre-rename "
+        f"(return tracks disk per F3); got {result}"
+    )
+
+
+def test_ac1_2_qa_and_verifier_resolve_identically():
+    """`qa-*` and `verifier-*` follow the same dual-aware rule as
+    dev/worker. Even when the directory has no `instructions.md`
+    (scaffolding-only per D5/F10), the fallback path resolves it via
+    `_list_known_role_identities()`."""
+    qa_result = compose._resolve_variant("qa-skill")
+    verifier_result = compose._resolve_variant("verifier-skill")
+    assert qa_result == verifier_result, (
+        f"qa-skill and verifier-skill must resolve identically; "
+        f"got qa={qa_result}, verifier={verifier_result}"
+    )
+    # Both should resolve to a qa-rooted tuple pre-rename
+    assert qa_result is not None
+    assert qa_result[0] == "qa"
+
+
+def test_ac1_2_non_variant_inputs_return_none():
+    """Inputs that aren't variant-shaped (no hyphen, or no matching
+    directory) return None."""
+    assert compose._resolve_variant("pm") is None
+    assert compose._resolve_variant("skill") is None  # legacy dev variant w/o hyphen
+    assert compose._resolve_variant("nonexistent-nope") is None
+
+
+def test_ac1_2_alias_table_is_bidirectional():
+    """The alias table must be bidirectional so that both the old→new
+    direction (pre-rename) and the new→old direction (post-rename) are
+    handled by a single lookup. Tested as a static structural assertion
+    so callers can rely on the symmetry."""
+    assert compose._BASE_ALIAS_6274["worker"] == "dev"
+    assert compose._BASE_ALIAS_6274["verifier"] == "qa"
+    assert compose._BASE_ALIAS_6274["dev"] == "worker"
+    assert compose._BASE_ALIAS_6274["qa"] == "verifier"
+    # pm and dm are categorical — they must NOT be in the alias table
+    assert "pm" not in compose._BASE_ALIAS_6274
+    assert "dm" not in compose._BASE_ALIAS_6274
+
+
+# ---------------------------------------------------------------------------
+# AC1.3 — config.py.get_field("workers") dual-aware
+# ---------------------------------------------------------------------------
+
+
+import config  # noqa: E402  (intentional late import — needs SCRIPTS on sys.path)
+
+
+def test_ac1_3_workers_short_name_in_field_map():
+    """`workers` must be in FIELD_MAP so the canonical post-rename key
+    is the primary entry point. The deprecated `dev-agents` key stays
+    until 6274.3 cutover."""
+    assert "workers" in config.FIELD_MAP
+    assert config.FIELD_MAP["workers"] == ("Agents", "Workers")
+    # The deprecated key MUST still be present during the dual-aware
+    # window so `get_field('dev-agents')` still works for any caller
+    # that hasn't migrated yet.
+    assert "dev-agents" in config.FIELD_MAP
+
+
+def test_ac1_3_dual_aware_mapping_present():
+    """The dual-aware fallback table must map workers -> dev-agents.
+    Deleted in 6274.3 along with the legacy FIELD_MAP row."""
+    assert "workers" in config._DUAL_AWARE_CONFIG_FIELDS_6274
+    assert config._DUAL_AWARE_CONFIG_FIELDS_6274["workers"] == "dev-agents"
+
+
+def test_ac1_3_workers_reads_legacy_field_with_warning(capsys):
+    """When config.md still has `Dev Agents:` (and no `Workers:`),
+    `get_field('workers')` must return the legacy value AND emit a
+    deprecation warning to stderr."""
+    val = config.get_field("workers")
+    captured = capsys.readouterr()
+    assert val is not None, "get_field('workers') should fall back to dev-agents"
+    assert val == config.get_field("dev-agents"), (
+        "workers fallback must equal dev-agents value"
+    )
+    # Deprecation warning was emitted on the first call above
+    # (capsys captures across both calls). The second `get_field(
+    # 'dev-agents')` call does NOT emit the warning, so only one
+    # occurrence is expected.
+    assert "deprecated field `Dev Agents:`" in captured.err, (
+        f"expected deprecation warning in stderr; got: {captured.err!r}"
+    )

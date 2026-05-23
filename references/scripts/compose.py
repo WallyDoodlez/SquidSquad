@@ -692,7 +692,23 @@ def _get_entry_file_for_role(role_name: str) -> str:
     without any compose.py edit.
     """
     identities = _list_known_role_identities()
+    # #6274 D2: identities now includes dual-aware aliases ({worker,
+    # verifier}). For input normalization, prefer the on-disk canonical
+    # over the alias. Specifically: if the input matches a dual-aware
+    # alias AND its canonical form has an on-disk template, return the
+    # canonical form. (Without this, `_get_entry_file_for_role('worker')`
+    # would return 'worker' pre-rename even though only roles/dev/
+    # exists on disk, and compose would fail to find the template.)
     if role_name in identities:
+        # If role_name is a dual-aware alias and its target directory
+        # exists, return the target. Otherwise return as-is.
+        if role_name in _BASE_ALIAS_6274:
+            alias_target = _BASE_ALIAS_6274[role_name]
+            target_dir = ROLES_DIR / alias_target
+            if target_dir.is_dir() and (target_dir / "instructions.md").exists():
+                return alias_target
+            # Alias target doesn't exist on disk — own directory must;
+            # fall through to returning role_name unchanged.
         return role_name
     # Layer 3 variant: resolve nested directory (dev-skill -> dev/skill/)
     resolved = _resolve_variant(role_name)
@@ -1143,23 +1159,67 @@ def _resolve_variant(role_name: str) -> tuple[str, str] | None:
 
     Returns (base, variant) or None if not a variant.
 
+    #6274 D2 dual-aware shim (F3 resolution): input normalization is
+    independent of directory state; the return value tracks whichever
+    directory exists on disk.
+
+    - Pre-6274.2 (only `references/roles/dev/` exists):
+        `_resolve_variant("dev-skill")` -> ("dev", "skill")
+        `_resolve_variant("worker-skill")` -> ("dev", "skill")
+    - Post-6274.2 (only `references/roles/worker/` exists):
+        `_resolve_variant("dev-skill")` -> ("worker", "skill")
+        `_resolve_variant("worker-skill")` -> ("worker", "skill")
+    - Same rule for `qa`/`verifier`.
+
+    The shim accepts both old and new prefixes throughout the migration
+    and is removed in 6274.3.
+
     Examples:
-        dev-skill  -> ("dev", "skill")
-        pm-ios     -> ("pm", "ios")
-        pm         -> None (base role, not a variant)
-        skill      -> None (legacy dev variant without hyphen)
+        dev-skill     -> ("dev", "skill")     (pre-rename on-disk)
+        worker-skill  -> ("dev", "skill")     (pre-rename on-disk, input alias)
+        pm-ios        -> ("pm", "ios")
+        pm            -> None (base role, not a variant)
+        skill         -> None (legacy dev variant without hyphen)
     """
     if "-" not in role_name:
         return None
     base, variant = role_name.split("-", 1)
-    variant_dir = ROLES_DIR / base / variant
-    if variant_dir.is_dir() and (variant_dir / "instructions.md").exists():
-        return base, variant
-    # Fallback: check if base is a known identity
+
+    # #6274 D2: input-normalize base via dual-aware alias table. The
+    # canonical (on-disk) base is tried first; if its directory does
+    # not exist, fall through to the alias. This makes the shim a
+    # one-line addition with no behavior change pre-migration.
+    candidates_in_order = [base]
+    alias = _BASE_ALIAS_6274.get(base)
+    if alias is not None:
+        candidates_in_order.append(alias)
+
     identities = _list_known_role_identities()
-    if base in identities and (ROLES_DIR / base / variant).is_dir():
-        return base, variant
+    for candidate_base in candidates_in_order:
+        variant_dir = ROLES_DIR / candidate_base / variant
+        if variant_dir.is_dir() and (variant_dir / "instructions.md").exists():
+            return candidate_base, variant
+        # Fallback: known identity + variant dir (no instructions.md required)
+        if (
+            candidate_base in identities
+            and (ROLES_DIR / candidate_base / variant).is_dir()
+        ):
+            return candidate_base, variant
     return None
+
+
+# #6274 D2 dual-aware base alias table. Bidirectional: pre-rename
+# `worker -> dev`/`verifier -> qa` lets new names fall back to old
+# directories; post-rename `dev -> worker`/`qa -> verifier` lets old
+# names fall back to new directories. `_resolve_variant` tries the
+# input as-given first, then the alias — so the return value always
+# tracks whichever directory exists on disk (F3). Deleted in 6274.3.
+_BASE_ALIAS_6274 = {
+    "worker": "dev",
+    "verifier": "qa",
+    "dev": "worker",
+    "qa": "verifier",
+}
 
 
 def _assemble_soul(role_name: str) -> str:
