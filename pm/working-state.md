@@ -1,36 +1,36 @@
 # Working State
 
-- **Task**: idle — pipeline flowing; #9926 just shipped, #9925 close behind
+- **Task**: idle — pipeline empty after both PM-planned tasks shipped
 - **Status**: idle
 - **Last Processed Event ID**: 88fe94b376fd2963
 
-## Pipeline snapshot (2026-05-22 20:32)
-- 2 PRs open:
-  - #9944 (squidsquad/task/9925) — boundaries v4, third attempt at pending-test (skill fixed AC6/AC8/AC9/AC12)
-  - #9945 (pm/event-architecture-v2) — PM event-arch doc, awaiting human refinement on §13 questions + §14 gaps
-- 1 pending-test: #9925 (QA verifying)
-- 1 open bug: #9946 (skill pickup fidelity, awaiting skill RCA)
+## Pipeline snapshot (2026-05-22 21:02)
+- 1 PR open: #9945 (pm/event-architecture-v2) — PM event-arch doc, rev 3 with §4.1 Mermaid fix
+- 0 pending-test, 0 pending-ship, 0 in-progress, 0 external issues
 - 1 approved: #3 (DM lane, long-running)
-- 0 in-progress, 0 pending-ship, 0 external issues
-- All 4 agents healthy
+- 1 open bug: #9946 (skill pickup fidelity, awaiting skill RCA)
+- All 4 agents alive; skill idle 53m (past /loop interval — worth watching if it persists)
 
-## Shipped this conversation (still relevant context)
-- #9926 (orphan_cleanup D3 per-role skip) — SHIPPED this cycle, full intake-to-ship round trip completed
-- v0.43.0 + 9 other hot bugs from earlier today (#9901, #9902, #9903, #9904, #9905, #9927, #9934, #9937, #9939, #9941)
+## Both PM-planned tasks SHIPPED this session
+- #9926 (orphan_cleanup D3 per-role skip) — PR #9943 merged + shipped cycle 1582
+- #9925 (4-layer responsibility model) — PR #9944 merged + shipped cycle 1583, 50 files across all 4 roles
 
-## Skill's underlying root-cause discovery (relevant to #9946)
-Both #9926 AC6 and #9925 AC8 failures shared one root cause: agent commits files in cycle_post's state-branch path (where most agent-local file edits land) but assumes those files are in the feature-branch's commit_code path (which filters state-branch artifacts). Skill identified this on the #9925 fix; PR #9944's f805db4b commit incorporates the workaround. Real fix for #9946 is either:
-  (a) make git_ops.py commit_code include the relevant categories, OR
-  (b) add pre-transition self-check that diffs the agent's claimed files against actually-staged files and warns on mismatch.
-Left to skill to choose path per feedback_bugs_behavior_only.
+## End-to-end stats for the session's intake work
+- #9926: 1 PM intake → DS review → 1 QA reject (CONTEXT-9688.md missed) → fix → ship. 3 cycles dev + 2 QA.
+- #9925: 4 PM CONTEXT drafts (post-human-corrections) → 2 DS reviews → human approval → 1 QA reject (4 ACs) → fix → ship. 4 cycles dev + 2 QA. Largest PR of session (50 files).
 
-## Tasks at status:planned (awaiting human approval)
-- #9845 (noop event type) — likely retired under event-arch v2 (§13 Q8)
+## Event-arch v2 doc PR #9945 (open, awaiting human)
+- Rev 1: 392 lines, 15 sections (initial)
+- Rev 2: +409/-23, added 10 Mermaid diagrams + §14 22 gaps (G1-G22)
+- Rev 3: §4.1 Mermaid fix
+- Closure plan proposed in chat: 6 groups (A-F) of grouped designs closing all 22 gaps; 6 PRs recommended in sequence. Awaiting human green light to fold plan into doc as new §15.
 
-## Active discussion threads with human
-- **Event-arch doc PR #9945** — rev 3 pushed (§4.1 Mermaid fix); awaiting refinement on §13 (10 design questions) + §14 (22 gaps surfaced via diagramming)
+## Open threads with human
+- PR #9945 §13 (10 design questions) + §14 (22 gaps) + chat-proposed closure plan (6 groups)
+- #9946 (pickup fidelity) RCA pickup
+- #9845 (noop event) — likely retired under event-arch v2 (§13 Q8)
 
-## PM-owned tasks at status:pending / planning
+## PM-owned tasks at status:pending / planning (own backlog, no movement)
 - #9874 (harness internal architecture review) — partly covered by event-arch doc §5
 - #9875 (L2 vault writeback) — planning
 - #9912 (tighten external-model code-review against tool-use loop) — pending
@@ -38,6 +38,7 @@ Left to skill to choose path per feedback_bugs_behavior_only.
 - #8997 (PM improvement scan autonomous L4 writes) — pending
 
 ## Notes
-- DM idle 22m — nothing in pending-ship to act on; will fire when QA passes #9925
-- Skill idle 24m — on /loop cadence; will pick up #9946 RCA OR #9925-next-rejection when next cycle fires
-- Recent_events still contained synthetic test traffic on #42/#55/#269 — ignored
+- DM idle 21m, below stall threshold; no work in pending-ship.
+- Skill idle 53m — past 30-min /loop cadence. Possibly wedged; possibly just hasn't fired latest cron. Harness health poller monitors; will respawn if dead. If still idle next cycle, file diagnostic.
+- QA idle 0m — just triaged the #9925 ship.
+- Recent_events still contained synthetic test traffic on #42/#55/#269 — ignored.
