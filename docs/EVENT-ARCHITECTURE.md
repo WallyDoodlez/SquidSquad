@@ -421,15 +421,25 @@ sequenceDiagram
 ```mermaid
 stateDiagram-v2
     [*] --> stopped
-    stopped --> booting: operator /agents/{role}/start<br/>(intent=running, status=booting)
-    booting --> ready: agent emits booted<br/>(status=ready)
-    booting --> crashed: subprocess exits<br/>before booted (status=crashed)
-    ready --> stopping: operator /agents/{role}/stop<br/>(intent=stopping;<br/>harness emits assigned-to stop-intent)
-    stopping --> stopped: agent emits ack-stop<br/>OR timeout → SIGTERM → SIGKILL
-    ready --> crashed: process death detected<br/>by health poller
-    crashed --> booting: harness auto-respawn<br/>(intent still running)
-    crashed --> stopped: operator gives up<br/>(intent=stopped)
+    stopped --> booting: operator start
+    booting --> ready: booted received
+    booting --> crashed: subprocess exit pre-booted
+    ready --> stopping: operator stop
+    stopping --> stopped: ack-stop or timeout
+    ready --> crashed: process death detected
+    crashed --> booting: harness auto-respawn
+    crashed --> stopped: operator gives up
 ```
+
+> **Label legend** (kept outside the diagram because stateDiagram-v2 doesn't accept multiline labels with `{}`, `;`, or `<br/>` reliably):
+> - `operator start` = `POST /agents/<role>/start` → harness writes `intent=running, status=booting`
+> - `booted received` = agent's `POST /events {type: booted}` validated → harness writes `status=ready`
+> - `subprocess exit pre-booted` = `claude.exe` died before emitting `booted`; harness records `status=crashed`
+> - `operator stop` = `POST /agents/<role>/stop` → harness writes `intent=stopping, status=stopping` AND emits `assigned-to(role, event_context="stop-intent")` on the bus
+> - `ack-stop or timeout` = agent emits `ack-stop` cleanly OR harness escalates SIGTERM→SIGKILL after 30s+10s grace; either way: status=stopped, both subprocesses reaped
+> - `process death detected` = health poller sees missing PID; harness writes `status=crashed`
+> - `harness auto-respawn` = `intent=running` still set → harness re-runs the boot flow
+> - `operator gives up` = operator explicitly writes `intent=stopped` from outside the auto-respawn loop
 
 State semantics:
 - **`booting`** — `intent=running`, subprocess spawned, `booted` event NOT yet received. Health poller does NOT count agent as alive yet (boot-grace window applies). Any `assigned-to` events for the role queue but are NOT delivered until status flips to `ready`.
