@@ -82,7 +82,7 @@ The catalog collapses to three concepts. Everything else is either local-side-ef
 
 | Signal | Direction | When | Payload |
 |---|---|---|---|
-| **`booted`** | agent → harness | First action after the agent's Claude session boots | `{role}` |
+| **`booted`** | agent → harness | First action after the agent's Claude session boots | `{role, pid, clone_path, version}` |
 | **`assigned-to`** | harness → agent (queue entry) | Harness detects work exists for the role | `{issue_number, title, target_role, event_context, payload}` |
 | **`ack`** | agent → harness | Agent has received a delivered signal and the harness cursor can advance past it | Two sub-types: `ack-cursor` `{event_id, role}` advances cursor; `ack-stop` `{event_id, result}` confirms a stop intent |
 
@@ -117,7 +117,7 @@ Everything currently in `event_catalog.py` other than the three above is removed
 - Harness internal: `compose-completed`, `agent-health` — harness sees these in its own state; if action needed, harness emits `assigned-to`.
 - Speculative RECOGNIZED entries: `verification-passed`, `verification-failed`, `phase-change`, `request-merge`, `stop-requested`, `shipped`, `version-bump` — never emitted, dead weight in the catalog.
 
-20 catalog entries removed. Down to 3.
+20 catalog entries removed. Down to **4 catalog entries** (`booted`, `assigned-to`, `ack-cursor`, `ack-stop`) covering **3 signal concepts** — the `ack` concept has two emit helpers as a split shipped via `#9873-A`.
 
 ---
 
@@ -282,7 +282,7 @@ flowchart TB
 harness.py (single process)
 │
 ├── HTTP API (FastAPI + uvicorn, port 7373)
-│    ├── POST /events                         <- emit (booted, ack-cursor, ack-stop, assigned-to)
+│    ├── POST /events                         <- agent → harness (booted, ack-cursor, ack-stop)
 │    ├── GET  /events/for/{role}?since=cursor <- agent reads its event queue
 │    ├── GET  /events/cursor/{role}           <- agent reads its cursor (#9873-A)
 │    ├── POST /work/assign                    <- agent requests harness assign work to next role
@@ -428,7 +428,7 @@ sequenceDiagram
     TL->>C: spawn claude.exe
     Note over C: Boot bootstrap runs<br/>(L1 boot-bootstrap.md)<br/>status still = booting
 
-    C->>H: POST /events {type: booted, role}
+    C->>H: POST /events {type: booted,<br/>role, pid, clone_path, version}
     H->>H: validate intent==running<br/>(reject if stopping/stopped)
     H->>H: write status=ready<br/>(transition: booting → ready)
     H-->>C: 200 OK + event_id
@@ -496,7 +496,7 @@ When the harness spawns an agent (or the agent restarts after a crash):
    c. `thin_launcher` spawns `claude.exe` with the appropriate flags and waits.
    d. Separately, harness ensures `event_poll.py --wait --target <stdout-fd>` is running as the Claude session's Monitor stdin source.
 3. **Claude session boots**, reads its composed `.squidsquad/<role>/CLAUDE.md` (output of `compose.py deploy <role>`), runs the L1 boot bootstrap (`references/sub-skills/common/boot-bootstrap.md`).
-4. **Agent emits `booted`** via `POST /events` with payload `{role}`. Harness:
+4. **Agent emits `booted`** via `POST /events` with payload `{role, pid, clone_path, version}` (per locked §13 Q1 — full diagnostic from day 1). Harness:
    a. Records "agent ready" in `.harness-state.json`.
    b. Begins dispatching any queued `assigned-to` events for this role (events that arrived while the agent was down get delivered now).
 5. **Agent reads its cursor** via `GET /events/cursor/{role}`.
@@ -634,7 +634,7 @@ Behind the scenes, tracker.py does three things:
 |---|---|---|
 | `in-progress → pending-test` | `verifier` | `"verification-needed"` |
 | `pending-test → pending-ship` | `dm` | `"delivery-needed"` |
-| `pending-test → in-progress` | assigned role from `role:*` label | `"qa-rejected"` |
+| `pending-test → in-progress` | assigned role from `role:*` label | `"verifier-rejected"` |
 | `pending-ship → in-progress` | assigned role | `"merge-conflict"` |
 | `pending → planning` | `pm` | `"planning-needed"` |
 | `planning → planned` | (no assign — self-routing) | — |
@@ -738,7 +738,7 @@ The sequence, between completing event A's work and starting event B's work:
 **Why no flag is needed:**
 
 - **The harness cursor is canonical.** Post-cycle the agent always GETs the queue regardless of whether a nudge was noted. Cursor = "what's tended-up-to"; events past cursor = "what's pending." A flag duplicates information the cursor already encodes.
-- **`event_poll` is self-healing.** Even if conversation context is lost (session crash, mid-window compaction), event_poll's next poll within 10–60s (per §5.4 cadence) will see events past cursor and re-emit a nudge. The agent re-wakes naturally on the next poll tick.
+- **`event_poll` is self-healing.** Even if conversation context is lost (session crash, mid-window compaction), event_poll's next poll within 5–60s (per locked §13 Q4: 5s active / 30s idle, 2s floor / 60s ceiling — see also §15.1) will see events past cursor and re-emit a nudge. The agent re-wakes naturally on the next poll tick.
 - **Monotonic-forward cursor prevents double-processing.** Agent processes B only after acking A; cursor advances forward only via successful acks. There's no way to "lose B" because acking A doesn't change B's position in the deque.
 
 **Crash-safety walkthrough:**
@@ -746,7 +746,7 @@ The sequence, between completing event A's work and starting event B's work:
 | Crash point | Recovery |
 |---|---|
 | Agent crashes mid-A | Restart reads `working-state.md` (sees current = A), resumes A. Eventually completes, acks. Post-A walk finds B onwards. Same as no-crash flow. |
-| Agent crashes between A's ack and the post-A walk | Restart reads `working-state.md` (no current work — A is done), enters idle. The original mid-A nudge for B is "lost" from context, but `event_poll`'s next poll (within 10–60s) re-detects B past cursor and re-nudges. |
+| Agent crashes between A's ack and the post-A walk | Restart reads `working-state.md` (no current work — A is done), enters idle. The original mid-A nudge for B is "lost" from context, but `event_poll`'s next poll (within 5–60s) re-detects B past cursor and re-nudges. |
 | Multiple nudges arrived mid-A; agent crashes pre-walk | Only one fresh nudge is needed post-crash because the cursor is now past A; any single nudge triggers the walk that processes B–F in order. |
 
 **Trade-off considered (and rejected):**
@@ -910,7 +910,7 @@ To land v2 cleanly, the following are retired or rewritten:
 4. ~~**`event_poll` polling cadence**~~ **CLOSED (2026-05-23, §15.1)**: 5s active / 30s idle, adaptive backoff, hard bounds 2s floor / 60s ceiling. Same pattern as §5.4 EAD.
 5. ~~**Cursor on first boot**~~ **CLOSED (2026-05-23, §6.0)**: `null` per CONTEXT-9873-A D7 — agent starts from deque head.
 6. ~~**Care filter granularity**~~ **CLOSED (2026-05-23, §8.0 + §15.4)**: role-only in v1; `event_context` filter as a v2 extension via the L2 `## Bus contract` section.
-7. ~~**Queue-while-busy behavior**~~ **CLOSED (2026-05-22, §8.2)**: agent notes the nudge in conversation context only — no `working-state.md` write, no flag, no queue. Continues current work uninterrupted; post-cycle always GETs the queue regardless. event_poll's re-poll within 10–60s covers crash-loss of context.
+7. ~~**Queue-while-busy behavior**~~ **CLOSED (2026-05-22, §8.2)**: agent notes the nudge in conversation context only — no `working-state.md` write, no flag, no queue. Continues current work uninterrupted; post-cycle always GETs the queue regardless. event_poll's re-poll within 5–60s covers crash-loss of context.
 8. ~~**What about #9845 (noop)?**~~ **CLOSED (2026-05-23, §15.5)**: retire #9845; absorb probe semantics into `assigned-to(target_role=R, event_context="probe", ack_only=true)`.
 9. ~~**`compose.py` deploy after merging this v2**~~ **CLOSED (2026-05-23, §11 + §15.5)**: per §11 (trim catalog, retire emit calls) plus add `compose-needed` translator (harness emits `assigned-to(pm, event_context=compose-needed)` when a merge touches `references/`). Existing L4 + manifest pipeline carries everything; no new compose mechanism.
 10. ~~**Migration plan**~~ **CLOSED (2026-05-23, §15.5 + §10)**: feature flag `event-driven: yes/no` in `config.md`. Default `no` for the first release; operator flips per install when ready. Rollback = flip the flag + restart agents. `/loop` fallback stays available indefinitely until a future cleanup decision.
@@ -931,7 +931,7 @@ Drawing the sequence + arch diagrams above exposed concrete gaps in the model. T
 ### 14.2 Event-delivery gaps
 
 - **G5 — Multi-event nudge formatting.** *(Closed by §15.2.)* Nudge line is literal `NUDGE\n` text — no payload. Agent always does the GET to find what's new. False positives harmless.
-- **G6 — Out-of-order ack semantics.** *(Closed by §15.2.)* Forward-only, monotonic. Care-skipped events that tend-failed stay past cursor; agent ack-cursors only up to last-successfully-tended. `event_poll` re-nudges within 10–60s; `timeout_scan` provides backup redelivery.
+- **G6 — Out-of-order ack semantics.** *(Closed by §15.2.)* Forward-only, monotonic. Care-skipped events that tend-failed stay past cursor; agent ack-cursors only up to last-successfully-tended. `event_poll` re-nudges within 5–60s; `timeout_scan` provides backup redelivery.
 - **G7 — Cursor when deque has been compacted.** *(Closed by §15.2.)* `GET /events/for/{role}?since=<old_cursor>` returns `HTTP 410 Gone` with body `{cursor_evicted: true, current_head: <event_id>}`. Agent recovers from forge, emits `ack-cursor(current_head)`, re-enters idle.
 - **G8 — EAD double-emit on restart with lost last-seen.** *(Closed by §15.3.)* On missing/corrupt last-seen file, EAD defaults to `now - 5 minutes`. Bounded dup-emit window; agents dedup via care-filter on `(issue_number, target_role, event_context)`.
 - **G9 — Forge → EAD lag floor.** *(Closed by §5.4 REST-API choice.)* The original concern assumed Search API (5-30s indexing lag); switching to REST removes that floor — REST is real-time. Latency floors documented in §5.4 are now driven purely by polling cadence, not API indexing. Sub-second `tracker.py` path, 5-30s typical / 60s worst-case for EAD safety net.
@@ -974,6 +974,7 @@ This section consolidates the locked decisions from the gap-walkthrough session 
 
 - `boot_agent(role)` is synchronous: writes `intent=running, status=booting` to `.harness-state.json` FIRST, then makes two `subprocess.Popen` calls — one for `thin_launcher`, one for `event_poll`. Both PIDs recorded in `.harness-state.json`.
 - Health poller watches both PIDs. If either dies while `intent=running` and `status=ready`, harness respawns it. Same machinery as today's claude restart.
+- **`event_poll` polling cadence** (closes §13 Q4): 5s active / 30s idle, adaptive backoff, hard bounds 2s floor / 60s ceiling. Same adaptive pattern as EAD's forge polling in §5.4 — `event_poll` polls the harness HTTP API (`GET /events/for/{role}?since=cursor`); EAD polls forge. Active = last poll returned events; idle = N consecutive empty polls.
 - **Cold start order**: load state → start HTTP server → start EAD → `boot_agent(pm)` → `boot_agent(verifier)` → `boot_agent(dm)` → `boot_agent(worker)` (and variants). PM first because everything else can route to PM.
 - **Wizard at install**: creates `.squidsquad/`, writes `config.md` (including `event-driven: yes/no` per Q10), runs `compose.py deploy-all`, starts harness, calls `/agents/{role}/start` for each. Wizard is the only mode-flipping authority at install time.
 
@@ -982,7 +983,7 @@ This section consolidates the locked decisions from the gap-walkthrough session 
 ### 15.2 Group B — Cursor + delivery semantics (closes G5, G6, G7)
 
 - **Nudge format**: literal `NUDGE\n` text. No payload. Agent always does `GET /events/for/{role}?since=cursor` to find what's new. False positives on nudge are harmless (GET returns `[]`).
-- **Ack semantics**: forward-only monotonic. If a care-skipped event tend-fails (transient forge error), agent ack-cursors only up to the last *successfully tended* event. Skipped event stays past cursor; `event_poll` re-nudges within 10–60s; `timeout_scan` provides backup redelivery per `#9873-E`.
+- **Ack semantics**: forward-only monotonic. If a care-skipped event tend-fails (transient forge error), agent ack-cursors only up to the last *successfully tended* event. Skipped event stays past cursor; `event_poll` re-nudges within 5–60s; `timeout_scan` provides backup redelivery per `#9873-E`.
 - **Cursor-evicted wire format**: `GET /events/for/{role}?since=<old_cursor>` returns `HTTP 410 Gone` with body `{"cursor_evicted": true, "current_head": "<event_id>"}`. Agent recovery: read forge for state, emit `ack-cursor(current_head)`, re-enter idle.
 
 **PR size:** low. Wire-shape changes to harness HTTP endpoints + agent contract update for 410-Gone handling.
@@ -1000,7 +1001,7 @@ This section consolidates the locked decisions from the gap-walkthrough session 
 - Each role's `responsibility.md` (per `#9925`) gets a `## Bus contract` section declaring `accepts assigned-to from: [list]` (or `any`). Self-assign forbidden by built-in invariant (not declarable).
 - Harness reads composed `responsibility.md` files at boot, parses `## Bus contract` sections, builds in-memory permission table.
 - `POST /work/assign` validates: caller role ∈ target's `accepts-from`. If not → `HTTP 403 Forbidden` with `{error, target_accepts_from}` body.
-- Permission table reloads when `compose.py deploy <role>` runs (via the `compose-needed` PM trigger from §15.5).
+- Permission table is built once at harness boot from the composed `responsibility.md` files. Reloading the table mid-run (in response to a recompose) is **deferred until §15.5 Group E lands** — Group E adds the `compose-needed` PM trigger that this reload would consume. In the interim (after D ships, before E ships), operators restart the harness to pick up `responsibility.md` changes. This is acceptable because compose changes are themselves rare events. Per the §15.8 sequence (D as PR #3, E as PR #6), the reload feature activates once E's `compose-needed` flow is in main.
 - For all 4 current roles, `accepts assigned-to from: any role` per the principle "process integrity is everyone's job."
 - **Offline target**: events queue past cursor; processed on next boot via §6.0 read path. Care-filter on `(issue, role, context)` dedups if `/work/assign` and EAD both fire.
 
@@ -1008,11 +1009,11 @@ This section consolidates the locked decisions from the gap-walkthrough session 
 
 ### 15.5 Group E — Migration sequencing (closes G17, G21, G22, §13 Q8, Q9, Q10)
 
-**3-phase migration, each reversible at its boundary:**
+**3-sub-phase migration, each reversible at its boundary** (named `E1/E2/E3` to disambiguate from the top-level Groups A–F in §15.8):
 
-- **Phase A — Stop emitting deprecated types.** Remove emit calls from `cycle_pre.py`, `cycle_post.py`, `git_ops.py`, `tracker.py` for the 20 deprecated event types. Catalog entries stay; no consumer breakage. Silent change to bus volume.
-- **Phase B — Stop reacting.** Rewrite `Event Reactions` block in `config.md` so every role's `reacts-to` collapses to `assigned-to` only. Verify no agent code still references removed types in care-filters.
-- **Phase C — Delete catalog.** Trim `event_catalog.py` to 4 entries (`booted`, `assigned-to`, `ack-cursor`, `ack-stop`). Rewrite `event_poll.py` to nudge-only per §15.2.
+- **Sub-phase E1 — Stop emitting deprecated types.** Remove emit calls from `cycle_pre.py`, `cycle_post.py`, `git_ops.py`, `tracker.py` for the 20 deprecated event types. Catalog entries stay; no consumer breakage. Silent change to bus volume.
+- **Sub-phase E2 — Stop reacting.** Rewrite `Event Reactions` block in `config.md` so every role's `reacts-to` collapses to `assigned-to` only. Verify no agent code still references removed types in care-filters.
+- **Sub-phase E3 — Delete catalog.** Trim `event_catalog.py` to 4 entries (`booted`, `assigned-to`, `ack-cursor`, `ack-stop`). Rewrite `event_poll.py` to nudge-only per §15.2.
 
 **`compose-completed` replacement (G17):** harness emits `assigned-to(target_role=pm, event_context="compose-needed", payload={touched_files})` when a merge touches `references/`. PM runs `compose.py deploy-all`, restarts affected agents via `/agents/{role}/stop + /start`. No new event type.
 
@@ -1022,7 +1023,7 @@ This section consolidates the locked decisions from the gap-walkthrough session 
 
 **Feature flag (Q10):** v2 ships under `event-driven: yes/no` in `config.md`. Default `no` for the first release; operator flips to `yes` per install when ready. Rollback = flip the flag + restart agents. Matches existing `#9580`/`#9588` dual-mode pattern. `/loop` fallback stays available indefinitely until a future cleanup decision.
 
-**PR size:** highest of the six. Split into 3 sub-PRs (one per phase). Phase A blast radius small (silent); Phase B is observable behavior change; Phase C is irreversible catalog trim.
+**PR size:** highest of the six. Split into 3 sub-PRs (one per sub-phase). E1 blast radius small (silent); E2 is observable behavior change; E3 is irreversible catalog trim.
 
 ### 15.6 Group F — Observability (closes G19, G20)
 
@@ -1055,7 +1056,7 @@ This section consolidates the locked decisions from the gap-walkthrough session 
 | 3 | **D** — L2-derived permissions | low | Foundation for `/work/assign` validation; needs to land before E starts removing the old emit paths |
 | 4 | **B** — Cursor + delivery | low | Refines wire shapes once A+C+D are stable |
 | 5 | **F** — Observability | very low | Additive; can land any time after D |
-| 6 | **E** — Migration | highest | Last, in 3 sub-PRs (Phase A → Phase B → Phase C). Removes old paths once new paths are proven |
+| 6 | **E** — Migration | highest | Last, in 3 sub-PRs (E1 stop emit → E2 stop react → E3 delete catalog). Removes old paths once new paths are proven |
 
 After all 6 land: v2 is on `event-driven: no` by default. Operator flips per-install when ready. Old `/loop` path stays available indefinitely until a future cleanup decision (separate task, post-v2).
 
@@ -1064,7 +1065,7 @@ After all 6 land: v2 is on `event-driven: no` by default. Operator flips per-ins
 ## 16. References
 
 - Vault: `.squidsquad/vault/galaxy/decision-event-bus-architecture-redesign.md` — locked architectural principles.
-- `references/scripts/event_catalog.py` — current catalog (to be trimmed to 3 entries).
+- `references/scripts/event_catalog.py` — current catalog (to be trimmed to 4 entries: `booted`, `assigned-to`, `ack-cursor`, `ack-stop`).
 - `references/scripts/thin_launcher.py` — current launcher (to lose the `/loop` invocation).
 - `references/scripts/event_poll.py` — current polling subprocess (to become nudge-only).
 - `references/scripts/harness.py` — bus master (EAD + EventLifecycleManager to be extended).
@@ -1084,3 +1085,4 @@ After all 6 land: v2 is on `event-driven: no` by default. Operator flips per-ins
 - **2026-05-22 (rev 2) — diagrams + gaps pass.** Added 8 Mermaid diagrams: §1.1 before/after, §3.0 signal-flow, §4.1 system overview, §4.2 per-agent process tree, §5.0 harness component map, §6.0 boot sequence, §7.0 explicit-handoff sequence, §7.1 EAD-handoff sequence, §8.0 nudge-walk sequence, §10.1 boot decision tree. New §14 "Gaps surfaced via diagramming" with 22 concrete gaps (G1–G22) in 7 categories: process-tree/lifecycle, event-delivery, work-handoff, state/persistence, boot/runtime ordering, observability/TUI, migration. These are additive to the §13 open design questions — they're things the prose left implicit that the diagrams forced into visibility. Each is something to resolve before the umbrella implementation task is filed.
 - **2026-05-23 (rev 3) — refinement session: terminology + state machine + tracker.py routing + improvement subloop + §8.2 context-only.** Multiple commits: §4.1 Mermaid parse fix (subgraph IDs as edge endpoints don't render on GitHub), terminology pass (dev→worker, qa→verifier per L2 categorical naming + #6274 expanded scope), §6.0+§6.1 explicit agent state machine (intent vs status; 5 states), §6.1 stateDiagram-v2 parse fix, §7.2 tracker.py auto-routes /work/assign on transitions (11-row mapping table), §7.0+§7.1 reflect tracker.py auto-routing + dedupe duplicate §7.1, §8.1 → §8.3 improvement subloop (cursor-at-head trigger + token-burn throttle, closes #9893 absorption), §8.2 nudge-while-busy rewritten twice — first to a `pending_nudge` flag, then narrowed further to context-only (no working-state write), §5.4 EAD locked to REST+adaptive (closes Q3 + G9). Running closure tally: §13 Q3 + Q7 closed, §14 G3 partial + G4 + G9 + G13 closed.
 - **2026-05-23 (rev 4) — gap-walkthrough + closure plan locked.** Walked all remaining §13 questions (10) and §14 gaps (22) with human in a structured AskUserQuestion pass. All 10 §13 questions answered; all 22 §14 gaps closed or partially closed. New §15 "Closure plan" added consolidating 6 grouped designs (A–F) covering 14 gaps + 4 questions, plus §15.7 question lock table (all 10) and §15.8 implementation sequence (6 PRs in dependency order). §13 + §14 entries marked CLOSED with cross-refs into §15. References renumbered §15 → §16; Revision log renumbered §16 → §17. Doc is now lock-ready: ready to spawn the implementation epic after `#6274` (terminology rename) ships.
+- **2026-05-23 (rev 5) — DS pre-merge audit + fixes.** Ran DeepSeek code-review on the full doc as a final pre-merge audit. 2 errors + 8 warnings, all real and fixed in this rev. Fixes applied: (F1) `booted` payload updated in §3 catalog row, §6.0 sequence diagram, §6.0 walkthrough step 4 — was still `{role}` after Q1 locked to `{role, pid, clone_path, version}`. (F2) Removed `assigned-to` from the `POST /events` endpoint description in §5.1 — that endpoint is agent→harness emit only. (F3 + F10) Fixed 5 stale `10–60s` references to `5–60s` and cross-reference `(per §5.4 cadence)` → `(per locked §13 Q4)` — §5.4 is EAD forge polling, not event_poll. (F4) Added event_poll cadence bullet to §15.1 so the §15.7 Q4 "Enforced in: §15.1" cross-reference holds. (F5) Reworded §15.4 permission-table reload to explicitly state the reload feature activates only after §15.5 Group E ships (D as PR #3, E as PR #6); operators restart harness in the interim. (F6) Clarified §3.1 catalog count: "4 catalog entries covering 3 signal concepts." (F7) Updated §16 References from "trimmed to 3 entries" → "4 entries." (F8) Renamed routing-table event_context `"qa-rejected"` → `"verifier-rejected"` per terminology pass. (F9) Renamed Group E sub-phases Phase A/B/C → E1/E2/E3 to disambiguate from top-level Groups A–F in §15.8. DS-audit artifact: `.squidsquad/pm/planning/REVIEW-EVENT-ARCH-V2-DEEPSEEK.md`. Doc is now genuinely lock-ready and clean for merge.
