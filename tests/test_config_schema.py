@@ -204,7 +204,7 @@ class TestParseAgentsV1:
     def test_single_dev_role_with_pm_qa_dm(self):
         agents = config._parse_agents_v1(V1_MINIMAL)
         by_id = {a["id"]: a for a in agents}
-        assert set(by_id) == {"pm", "skill", "qa", "dm"}
+        assert set(by_id) == {"pm", "skill", "verifier", "dm"}
 
         # pm first, always present
         assert by_id["pm"]["role"] == "pm"
@@ -215,17 +215,18 @@ class TestParseAgentsV1:
         assert by_id["skill"]["alias"] == "skill"
         assert by_id["skill"]["test_command"] == "python tests/run_tests.py"
 
-        # qa implied because Dev Agents is non-empty + PM/QA always present
-        assert by_id["qa"]["role"] == "qa"
+        # verifier implied because Dev Agents is non-empty + PM/QA always present
+        # (qa→verifier per #6274 D5)
+        assert by_id["verifier"]["role"] == "verifier"
 
         # dm because `**DM**: present`
         assert by_id["dm"]["role"] == "dm"
 
     def test_mandatory_roles_always_present(self):
-        """Fixed team: QA + DM always present regardless of config text (#6261)."""
+        """Fixed team: verifier + DM always present regardless of config text (#6261/#6274 D5)."""
         agents = config._parse_agents_v1(V1_NO_DM)
         by_id = {a["id"]: a for a in agents}
-        assert set(by_id) == {"pm", "be", "fe", "qa", "dm"}
+        assert set(by_id) == {"pm", "be", "fe", "verifier", "dm"}
         assert by_id["be"]["alias"] == "backend"
         assert by_id["fe"]["alias"] == "frontend"
         assert by_id["pm"]["alias"] == "peggy"
@@ -233,12 +234,12 @@ class TestParseAgentsV1:
         assert by_id["fe"]["test_command"] == "npm test"
 
     def test_no_dev_roles(self):
-        """A config with only infrastructure roles still returns pm + qa + dm (#6261)."""
+        """A config with only infrastructure roles still returns pm + verifier + dm (#6261/#6274 D5)."""
         agents = config._parse_agents_v1(V1_NO_DEV_ROLES)
         by_id = {a["id"]: a for a in agents}
         assert "pm" in by_id
         assert "dm" in by_id
-        assert "qa" in by_id
+        assert "verifier" in by_id
 
     def test_get_agents_uses_v1_path(self):
         agents = config.get_agents(V1_MINIMAL)
@@ -445,13 +446,14 @@ class TestComposeKnownRoles:
 
     def test_get_entry_file_for_shipped_role(self):
         import compose
-        for role in ("pm", "dm", "dev", "qa"):
+        for role in ("pm", "dm", "worker", "verifier"):
             assert compose._get_entry_file_for_role(role) == role
 
     def test_dev_variants_resolve_to_dev(self):
+        """Variants resolve to the canonical worker role (post-6274.2 rename)."""
         import compose
-        for variant in ("skill", "be", "fe", "fullstack", "worker"):
-            assert compose._get_entry_file_for_role(variant) == "dev"
+        for variant in ("skill", "be", "fe", "fullstack", "dev"):
+            assert compose._get_entry_file_for_role(variant) == "worker"
 
     def test_no_longer_hardcodes_known_roles_set(self):
         """Regression guard: #328 Phase H removed the hardcoded set."""
