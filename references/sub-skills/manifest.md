@@ -27,25 +27,29 @@ Project sub-skills are owned by PM (via the L4 propagation flow: PM writes to `.
 
 Entry file with includes (the role's own `SOUL.md` sits alongside `CLAUDE.md` in the role directory and is copied verbatim to `.squidsquad/<role>/SOUL.md` at install time — it is NOT listed in the include order because it is not composed). **Source of truth**: `references/roles/worker/includes.yml`.
 
-1. `common/cycle-runner` — Cycle runner transport layer (pre/post cycle mechanical operations)
-2. `common/context-pressure` — Step 1b: context pressure check
-3. `common/resume-working-state` — Step 1c: resume from working state
-4. `common/interval-sync` — Step 1d: interval sync
-5. `roles/worker/triage-issues` — Step 2: deterministic work queue triage
+1. `common/boot-bootstrap` — #9588 mode-aware boot: reads runtime fragments at session start
+2. `common/cycle-runner` — Cycle runner transport layer (pre/post cycle mechanical operations)
+3. `common/context-pressure` — Step 1b: context pressure check
+4. `common/resume-working-state` — Step 1c: resume from working state
+5. `common/interval-sync` — Step 1d: interval sync
+6. `roles/worker/triage-issues` — Step 2: deterministic work queue triage
 7. `roles/worker/implement-tasks` — Step 2b: implement approved tasks
-8. `common/improvement-scan` — Quiet-cycle improvement scanning
-9. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
-10. `common/vault-optimize` — Vault optimization on quiet cycles
-11. `common/git-commit` — Step 5: commit/push protocol with PR flow
-12. `common/discussion-protocol` — Discussion entry format and rules
-13. `common/issue-filing` — Self-file and cross-file bug templates
-14. `common/working-state` — Working State File format
-15. `common/vault-protocol` — Vault operations
-16. `common/file-conventions` — File/directory conventions
-17. `common/status-line` — Status line description
-18. `common/self-restart` — Context-pressure self-restart at cycle end
-19. `common/agent-lifecycle` — Agent lifecycle management (reboot, heartbeat, singleton)
-20. `common/prohibitions` — "Never do" rules
+8. `common/pickup-comment-fidelity` — Verify pickup comment scope matches issue before transitioning
+9. `common/improvement-scan` — Quiet-cycle improvement scanning
+10. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
+11. `common/vault-optimize` — Vault optimization on quiet cycles
+12. `common/git-commit` — Step 5: commit/push protocol with PR flow
+13. `common/discussion-protocol` — Discussion entry format and rules
+14. `common/issue-filing` — Self-file and cross-file bug templates
+15. `common/working-state` — Working State File format
+16. `common/vault-protocol` — Vault operations (full)
+17. `common/file-conventions` — File/directory conventions
+18. `common/status-line` — Status line description
+19. `common/self-restart` — Context-pressure self-restart at cycle end
+20. `common/agent-lifecycle` — Agent lifecycle management (reboot, heartbeat, singleton)
+21. `common/prohibitions` — "Never do" rules (shared baseline)
+22. `common/agent-boundaries` — #9925 inter-role responsibility layering rules (#9944)
+23. `roles/worker/responsibility` — Worker-specific responsibility narrowing
 
 Optional (comms-layer, not yet included by default):
 - `common/chat-etiquette` — Chat room behavior rules
@@ -56,68 +60,80 @@ Optional (comms-layer, not yet included by default):
 
 Entry file with includes. PM's `SOUL.md` sits alongside its `CLAUDE.md` and is copied verbatim at install time. **Source of truth**: `references/roles/pm/includes.yml`.
 
-1. `common/cycle-runner` — Cycle runner transport layer
-2. `common/context-pressure` — Context pressure check
-3. `roles/pm/checkin` — Step 2: human check-in and input handling
-4. `roles/pm/testing-and-verification` — Steps 3-6c: QA handles verification (PM delegates)
-5. `roles/pm/delivery` — Delivery: DM handles all delivery (PM delegates)
-7. `roles/pm/pipeline-sentinel` — Step 6f: pipeline health (conflict, stall, PR sync)
+1. `common/boot-bootstrap` — #9588 mode-aware boot: reads runtime fragments at session start
+2. `common/cycle-runner` — Cycle runner transport layer (pre/post cycle mechanical operations)
+3. `common/context-pressure` — Step 1b: context pressure check
+4. `common/task-pickup` — Deterministic work-queue triage for non-worker roles
+5. `roles/pm/checkin` — Step 2: human check-in and input handling
+6. `roles/pm/testing-and-verification` — Steps 3-6c: verifier handles verification (PM delegates)
+7. `roles/pm/delivery` — Delivery: DM handles all delivery (PM delegates)
+8. `roles/pm/pipeline-sentinel` — Step 6f: pipeline health (conflict, stall, PR sync)
 9. `roles/pm/own-domain-autofix` — Auto-fix own-domain mechanical issues
 10. `roles/pm/health-check` — Step 7: agent health check
 11. `roles/pm/github-issues` — Step 7b: GitHub Issues management
-12. `common/boot-remote-agents` — Boot stalled/missing agents
+12. `common/boot-remote-agents` — Boot stalled/missing agents (PM stall-recovery)
 13. `roles/pm/soul-shepherd` — Soul shepherd: character signal detection
 14. `roles/pm/improvement-scan` — PM-specific improvement scanning (process focus)
-15. `common/vault-remember` — End-of-cycle vault reflection
+15. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
 16. `common/vault-optimize` — Vault optimization on quiet cycles
 17. `roles/pm/vault-synthesis` — Cross-agent pattern detection
 18. `roles/pm/issue-filing` — Bug Filing Protocol
 19. `roles/pm/task-intake` — Feature Lifecycle (5-Phase)
 20. `roles/pm/task-approval` — Feature Approval Gate
 21. `roles/pm/discussion-protocol` — Discussion entry format
-22. `common/vault-protocol` — Vault operations
+22. `common/vault-protocol` — Vault operations (full)
 23. `roles/pm/file-conventions` — PM file/directory conventions
 24. `roles/pm/status-line` — PM status line description
-25. `common/self-restart` — Self-restart
-26. `common/agent-lifecycle` — Agent lifecycle
+25. `common/self-restart` — Context-pressure self-restart at cycle end
+26. `common/agent-lifecycle` — Agent lifecycle management (reboot, heartbeat, singleton)
 27. `roles/pm/prohibitions` — PM "never do" rules
+28. `common/agent-boundaries` — #9925 inter-role responsibility layering rules (#9944)
+29. `roles/pm/responsibility` — PM-specific responsibility narrowing
 
 ### Verifier Agent (`references/roles/verifier/CLAUDE.md`)
 
 Entry file with includes. **Source of truth**: `references/roles/verifier/includes.yml`.
 
-1. `common/cycle-runner` — Cycle runner transport layer
-2. `common/context-pressure` — Context pressure check
-3. `roles/verifier/verification` — Steps 2-6: E2E tests, verification, health check
-4. `common/improvement-scan-slim` — Improvement filing only (slim variant)
-5. `roles/verifier/issue-filing` — QA Bug Filing Protocol
-7. `roles/verifier/discussion-protocol` — Discussion entry format
-8. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
-9. `roles/verifier/file-conventions` — QA file/directory conventions
-10. `roles/verifier/status-line` — QA status line description
-11. `common/self-restart` — Self-restart
-12. `common/agent-lifecycle` — Agent lifecycle
-13. `roles/verifier/prohibitions` — QA "never do" rules
+1. `common/boot-bootstrap` — #9588 mode-aware boot: reads runtime fragments at session start
+2. `common/cycle-runner` — Cycle runner transport layer (pre/post cycle mechanical operations)
+3. `common/context-pressure` — Step 1b: context pressure check
+4. `common/task-pickup` — Deterministic work-queue triage for non-worker roles
+5. `roles/verifier/verification` — Steps 2-6: E2E tests, verification, health check
+6. `common/improvement-scan-slim` — Improvement filing only (slim variant for verifier/DM)
+7. `roles/verifier/issue-filing` — Verifier Bug Filing Protocol
+8. `roles/verifier/discussion-protocol` — Discussion entry format (verifier alias)
+9. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
+10. `roles/verifier/file-conventions` — Verifier file/directory conventions
+11. `roles/verifier/status-line` — Verifier status line description
+12. `common/self-restart` — Context-pressure self-restart at cycle end
+13. `common/agent-lifecycle` — Agent lifecycle management (reboot, heartbeat, singleton)
+14. `roles/verifier/prohibitions` — Verifier "never do" rules
+15. `common/agent-boundaries` — #9925 inter-role responsibility layering rules (#9944)
+16. `roles/verifier/responsibility` — Verifier-specific responsibility narrowing
 
 ### DM Agent (`references/roles/dm/CLAUDE.md`)
 
 Entry file with includes. **Source of truth**: `references/roles/dm/includes.yml`.
 
-1. `common/capability-check` — Startup capability verification
-2. `common/cycle-runner` — Cycle runner transport layer
-3. `common/context-pressure` — Context pressure check
-4. `roles/dm/issue-triage` — Triage bugs assigned to DM
-5. `roles/dm/delivery-packaging` — Delivery packaging
-6. `roles/dm/version-bumps` — Version bump check + sequence
-8. `common/improvement-scan-slim` — Improvement filing only (slim variant)
-9. `roles/dm/discussion-protocol` — Discussion entry format
-10. `roles/dm/issue-filing` — DM bug/feature filing
-11. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
-12. `roles/dm/file-conventions` — DM file/directory conventions
-13. `roles/dm/status-line` — DM status line description
-14. `common/self-restart` — Self-restart
-15. `common/agent-lifecycle` — Agent lifecycle
-16. `roles/dm/prohibitions` — DM "never do" rules
+1. `common/boot-bootstrap` — #9588 mode-aware boot: reads runtime fragments at session start
+2. `common/capability-check` — Startup capability verification (DM)
+3. `common/cycle-runner` — Cycle runner transport layer (pre/post cycle mechanical operations)
+4. `common/context-pressure` — Step 1b: context pressure check
+5. `roles/dm/task-pickup` — DM task pickup override (routes to pending-ship)
+6. `roles/dm/issue-triage` — Triage bugs assigned to DM
+7. `roles/dm/delivery-packaging` — Delivery packaging (Steps 2-2c)
+8. `roles/dm/version-bumps` — Step 3: version bump check + sequence
+9. `roles/dm/doc-improvement-loop` — Quiet-cycle doc scanning (DM only)
+10. `roles/dm/discussion-protocol` — Discussion entry format (dm alias)
+11. `roles/dm/issue-filing` — DM bug/feature filing
+12. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
+13. `roles/dm/file-conventions` — DM file/directory conventions
+14. `roles/dm/status-line` — DM status line description
+15. `common/self-restart` — Context-pressure self-restart at cycle end
+16. `common/agent-lifecycle` — Agent lifecycle management (reboot, heartbeat, singleton)
+17. `roles/dm/prohibitions` — DM "never do" rules
+18. `common/agent-boundaries` — #9925 inter-role responsibility layering rules (#9944)
+19. `roles/dm/responsibility` — DM-specific responsibility narrowing
 
 ### Legacy Sub-Skills (not included by any role)
 
