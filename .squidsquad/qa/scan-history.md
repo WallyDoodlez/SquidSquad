@@ -29,3 +29,10 @@
 - **Files scanned**: references/scripts/compose.py (529 lines, 14 functions, 2 indirect tests), references/scripts/boot_remote.py (608 lines, 24 functions, 29 tests — spawn/lock untested), references/scripts/git_ops.py (427 lines, 39 tests — adequate)
 - **Findings**: #1078 (compose.py no dedicated test file — 529 lines, 14 functions), #1079 (boot_remote.py spawn/lock/poll functions lack unit tests)
 - **Items rejected by human**: none
+
+## Scan — 2026-05-23 01:31
+
+- **Files scanned**: state_bus.py, orphan_cleanup.py, cycle_pre.py, git_ops.py, compose.py, event_bus.py, harness.py, shared_fs.py (test:source ratios all ≥1.0x); monitor_smoke_poller.py (untested but a smoke-test tool itself).
+- **Findings**: none — recently-touched files have proportional test coverage. #9925's 4 new compose.py helpers (`_read_role_manifest`, `_active_roles_for_roster`, `_render_role_roster`, `_inject_role_roster`) covered by `test_agent_boundaries.py` integration tests (live compose runs).
+- **Auto-fixed**: none
+- **Items rejected by human**: none
