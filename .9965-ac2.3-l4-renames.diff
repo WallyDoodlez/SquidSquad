@@ -1,0 +1,112 @@
+diff --git a/.squidsquad/project/qa-instructions.md b/.squidsquad/project/verifier-instructions.md
+similarity index 100%
+rename from .squidsquad/project/qa-instructions.md
+rename to .squidsquad/project/verifier-instructions.md
+diff --git a/references/sub-skills/project/dev-responsibility.md b/.squidsquad/project/verifier-responsibility.md
+similarity index 67%
+rename from references/sub-skills/project/dev-responsibility.md
+rename to .squidsquad/project/verifier-responsibility.md
+index 4d8aa003..a1c8a386 100644
+--- a/references/sub-skills/project/dev-responsibility.md
++++ b/.squidsquad/project/verifier-responsibility.md
+@@ -1,9 +1,9 @@
+-# dev — Install-specific responsibility additions (L4)
++# verifier — Install-specific responsibility additions (L4)
+ 
+-No install-specific responsibility additions for dev at this time.
++No install-specific responsibility additions for verifier at this time.
+ 
+ To add: replace this stub with directives in the same shape as L2 (`What this role does / does NOT do / Why`),
+-or freeform install-specific notes about responsibility scope. Content here is appended to dev's
++or freeform install-specific notes about responsibility scope. Content here is appended to verifier's
+ composed CLAUDE.md after L1, L2, and L3 — operator intent is the most specific layer.
+ 
+ <!-- L4 stub for #9925 — fill in to spell out install-specific role responsibilities -->
+diff --git a/.squidsquad/project/qa-soul-directives.md b/.squidsquad/project/verifier-soul-directives.md
+similarity index 100%
+rename from .squidsquad/project/qa-soul-directives.md
+rename to .squidsquad/project/verifier-soul-directives.md
+diff --git a/.squidsquad/project/dev-instructions.md b/.squidsquad/project/worker-instructions.md
+similarity index 100%
+rename from .squidsquad/project/dev-instructions.md
+rename to .squidsquad/project/worker-instructions.md
+diff --git a/.squidsquad/project/dev-responsibility.md b/.squidsquad/project/worker-responsibility.md
+similarity index 68%
+rename from .squidsquad/project/dev-responsibility.md
+rename to .squidsquad/project/worker-responsibility.md
+index 4d8aa003..b17ec6f9 100644
+--- a/.squidsquad/project/dev-responsibility.md
++++ b/.squidsquad/project/worker-responsibility.md
+@@ -1,9 +1,9 @@
+-# dev — Install-specific responsibility additions (L4)
++# worker — Install-specific responsibility additions (L4)
+ 
+-No install-specific responsibility additions for dev at this time.
++No install-specific responsibility additions for worker at this time.
+ 
+ To add: replace this stub with directives in the same shape as L2 (`What this role does / does NOT do / Why`),
+-or freeform install-specific notes about responsibility scope. Content here is appended to dev's
++or freeform install-specific notes about responsibility scope. Content here is appended to worker's
+ composed CLAUDE.md after L1, L2, and L3 — operator intent is the most specific layer.
+ 
+ <!-- L4 stub for #9925 — fill in to spell out install-specific role responsibilities -->
+diff --git a/.squidsquad/project/dev-soul-directives.md b/.squidsquad/project/worker-soul-directives.md
+similarity index 100%
+rename from .squidsquad/project/dev-soul-directives.md
+rename to .squidsquad/project/worker-soul-directives.md
+diff --git a/references/sub-skills/project/qa-instructions.md b/references/sub-skills/project/verifier-instructions.md
+similarity index 100%
+rename from references/sub-skills/project/qa-instructions.md
+rename to references/sub-skills/project/verifier-instructions.md
+diff --git a/references/sub-skills/project/qa-responsibility.md b/references/sub-skills/project/verifier-responsibility.md
+similarity index 67%
+rename from references/sub-skills/project/qa-responsibility.md
+rename to references/sub-skills/project/verifier-responsibility.md
+index 53731768..a1c8a386 100644
+--- a/references/sub-skills/project/qa-responsibility.md
++++ b/references/sub-skills/project/verifier-responsibility.md
+@@ -1,9 +1,9 @@
+-# qa — Install-specific responsibility additions (L4)
++# verifier — Install-specific responsibility additions (L4)
+ 
+-No install-specific responsibility additions for qa at this time.
++No install-specific responsibility additions for verifier at this time.
+ 
+ To add: replace this stub with directives in the same shape as L2 (`What this role does / does NOT do / Why`),
+-or freeform install-specific notes about responsibility scope. Content here is appended to qa's
++or freeform install-specific notes about responsibility scope. Content here is appended to verifier's
+ composed CLAUDE.md after L1, L2, and L3 — operator intent is the most specific layer.
+ 
+ <!-- L4 stub for #9925 — fill in to spell out install-specific role responsibilities -->
+diff --git a/references/sub-skills/project/qa-soul-directives.md b/references/sub-skills/project/verifier-soul-directives.md
+similarity index 100%
+rename from references/sub-skills/project/qa-soul-directives.md
+rename to references/sub-skills/project/verifier-soul-directives.md
+diff --git a/references/sub-skills/project/dev-instructions.md b/references/sub-skills/project/worker-instructions.md
+similarity index 100%
+rename from references/sub-skills/project/dev-instructions.md
+rename to references/sub-skills/project/worker-instructions.md
+diff --git a/.squidsquad/project/qa-responsibility.md b/references/sub-skills/project/worker-responsibility.md
+similarity index 68%
+rename from .squidsquad/project/qa-responsibility.md
+rename to references/sub-skills/project/worker-responsibility.md
+index 53731768..b17ec6f9 100644
+--- a/.squidsquad/project/qa-responsibility.md
++++ b/references/sub-skills/project/worker-responsibility.md
+@@ -1,9 +1,9 @@
+-# qa — Install-specific responsibility additions (L4)
++# worker — Install-specific responsibility additions (L4)
+ 
+-No install-specific responsibility additions for qa at this time.
++No install-specific responsibility additions for worker at this time.
+ 
+ To add: replace this stub with directives in the same shape as L2 (`What this role does / does NOT do / Why`),
+-or freeform install-specific notes about responsibility scope. Content here is appended to qa's
++or freeform install-specific notes about responsibility scope. Content here is appended to worker's
+ composed CLAUDE.md after L1, L2, and L3 — operator intent is the most specific layer.
+ 
+ <!-- L4 stub for #9925 — fill in to spell out install-specific role responsibilities -->
+diff --git a/references/sub-skills/project/dev-soul-directives.md b/references/sub-skills/project/worker-soul-directives.md
+similarity index 100%
+rename from references/sub-skills/project/dev-soul-directives.md
+rename to references/sub-skills/project/worker-soul-directives.md
