@@ -9,18 +9,18 @@
 
 ## Completed (sub-phase 6274.1)
 
-- [x] **AC1.1** (commit `e4d21b37`) — `compose._list_known_role_identities()` dual set via `_DUAL_AWARE_IDENTITIES_6274` frozenset.
-- [x] **AC1.2** (commit `eef5b49b`) — `compose._resolve_variant` accepts `worker-skill`/`dev-skill` (and qa/verifier) via `_BASE_ALIAS_6274` bidirectional table. F3 contract: return tracks on-disk state. Also extended `_get_entry_file_for_role` with alias-to-disk normalization (necessary side fix — without it AC1.1's identity-widening broke pre-rename compose for `worker`).
-- [x] **AC1.3** (commit `eef5b49b`) — `config.get_field("workers")` reads `Workers:` then falls back to `Dev Agents:` with stderr deprecation warning. New `_DUAL_AWARE_CONFIG_FIELDS_6274` table; both FIELD_MAP rows coexist during window.
+- [x] **AC1.1** (commit `e4d21b37`) — `compose._list_known_role_identities()` dual set.
+- [x] **AC1.2** (commit `eef5b49b`) — `compose._resolve_variant` + `_get_entry_file_for_role` dual-aware via `_BASE_ALIAS_6274`.
+- [x] **AC1.3** (commit `eef5b49b`) — `config.get_field("workers")` with `Dev Agents:` fallback + deprecation warning.
+- [x] **AC1.4** (commit `f110e564`) — tracker dual-tag (`_build_dual_role_labels_6274`) + `--role` suffix shim per D11. New form (`verifier-lead`/`worker-lead`) accepted silently; old form (`qa-lead`/`dev-lead`) accepted with deprecation warning. Untouched: `pm-lead`, `dm-lead`, `skill-lead`, `ios-lead`, etc.
 
-Regression: 226 tests pass (test_terminology_dual_aware_6274 + test_compose + test_compose_9588 + test_config + test_config_schema).
+Regression: 275 tests pass.
 
-## Remaining for sub-phase 6274.1
+## Remaining
 
-- [ ] **AC1.4** — `tracker.py.create_*` dual-tag (`role:worker` + `role:dev`); `--role` shim accepts both `qa-lead`/`verifier-lead` etc. (per D11). Tests.
-- [ ] **AC1.5** — `references/scripts/migrate_labels_6274.py` (one-shot, idempotent, `--dry-run`).
-- [ ] **AC1.6** — Vault note `migration-6274-cutover` placeholder.
-- [ ] **AC1.7** — full regression suite green.
+- [ ] **AC1.5** — `references/scripts/migrate_labels_6274.py` (one-shot, idempotent, `--dry-run`). Walks OPEN issues with `role:dev`/`role:qa`, adds the new label alongside.
+- [ ] **AC1.6** — Vault placeholder note `.squidsquad/vault/galaxy/migration-6274-cutover.md`.
+- [ ] **AC1.7** — Full `python tests/run_tests.py` exit 0.
 - [ ] G2→3 script `references/scripts/verify_dual_label_6274.py`.
 - [ ] Self-verify + pickup-comment fidelity check + external review.
 - [ ] Open PR for sub-phase 6274.1.
@@ -28,11 +28,10 @@ Regression: 226 tests pass (test_terminology_dual_aware_6274 + test_compose + te
 
 ## Next-cycle plan
 
-AC1.4 is the biggest remaining piece (tracker.py touches both `create_*` and `--role` argparse). Estimate: AC1.4 alone next cycle. Then AC1.5 (script). Then AC1.6 + AC1.7 + verify_dual_label_6274.py + PR + review.
+AC1.5 (migrate script) + AC1.6 (vault note) + verify_dual_label_6274.py — all small. Then AC1.7 (full regression) + external review + PR + transition.
 
 ## Key Decisions
 
-- **Hold PR until sub-phase fully complete.**
-- **Bidirectional alias table** (`_BASE_ALIAS_6274`) — handles both pre-rename and post-rename in one lookup.
-- **Test rewrites land in same commit as the implementation** (D10).
-- **`_get_entry_file_for_role` shim was a discovered necessity** — AC1.1's identity widening made `worker` resolve to itself, but the on-disk template lives at `roles/dev/`. Without the alias-to-disk fallback in `_get_entry_file_for_role`, compose would fail for `worker` pre-rename. Documented in the commit message.
+- **D11 suffix shim is bidirectional but asymmetric in warning**: new forms silent, old forms warn. Operators see migration pressure; scripted callers still work.
+- **`_build_dual_role_labels_6274` produces comma-separated labels** — fits cleanly into the existing labels string passed to `gh issue create --label`.
+- **Variant prefixes excluded from alias table** (skill, ios, android, fullstack, web) per Out-of-Scope.
