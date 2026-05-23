@@ -575,7 +575,7 @@ Walkthrough: worker ships a fix, hands off to verifier.
 6. **The verifier runs its post-nudge contract** (per #9892):
    a. Read events past cursor: `GET /events/for/verifier?since=<cursor>` → returns the assigned-to event.
    b. Decide: care or skip? Filter rule: the verifier cares about `assigned-to` with `event_context` matching verification triggers.
-   c. If the verifier is busy with current work, it records `pending_nudge: true` in `working-state.md` and continues current work uninterrupted. The event itself stays in the harness deque past the verifier's cursor — `working-state.md` does NOT carry an event queue; that's the harness's job. See §8.2.
+   c. If the verifier is busy with current work, it notes the nudge in conversation context and continues current work uninterrupted (no file write). The event itself stays in the harness deque past the verifier's cursor — `working-state.md` does NOT carry an event queue or a nudge flag; that's the harness's job. See §8.2.
    d. If the verifier is idle, it acts on it: writes TEST-PLAN-9926, runs verification, etc.
    e. After tending (or queuing) the event, the verifier emits `ack-cursor(event_id)` to advance.
 7. **Loop continues**: the verifier eventually verifies, transitions to pending-ship via `tracker.py` (which routes to dm via the same mechanism), and so on through the rest of the pipeline.
@@ -724,31 +724,38 @@ Pre/post-cycle wraps EACH cared event individually. Skipped events do not trigge
 
 Each role has a simple care filter — typically just "events with `target_role == my_role`." Future refinement could allow finer-grained filtering based on `event_context` or `payload`, but v2 ships with role-only filtering.
 
-### 8.2 Nudge handling while busy (signal-recorded, no shadow queue)
+### 8.2 Nudge handling while busy (context-only, no state mutation)
 
-If an agent receives a nudge while it's mid-cycle on prior work (event A), the agent does NOT interrupt and does NOT carry a shadow event queue in `working-state.md`. **The harness cursor is the only record of what's been tended; `working-state.md` tracks current work only.**
+If an agent receives a nudge while it's mid-cycle on prior work (event A), the agent does NOT interrupt and does NOT write anything to `working-state.md`. **The agent simply remembers in conversation context that a nudge occurred** — and trusts two existing mechanisms to recover even if that context is lost.
 
 The sequence, between completing event A's work and starting event B's work:
 
 1. **Nudge arrives** for event B (and possibly C, D, …) while the agent is still working on A.
-2. **Agent records `pending_nudge: true`** in `working-state.md` (atomic `.tmp + rename`). This is a single boolean — NOT an event list, NOT a queue. Just "I've been nudged; check the harness when current work completes."
-3. **Agent also notes in conversation context** that a nudge was received — so if the current cycle completes within the same session, the agent doesn't need to re-read the working-state file to know to check.
-4. **Agent continues processing event A uninterrupted** — finishes its pre-cycle/work/post-cycle wrap. Emits `ack-cursor(A.id)` per §8.0; harness advances cursor past A.
-5. **Post-A**, agent reads `pending_nudge` (from context or working-state) → clears it (`pending_nudge: false`, atomic write).
-6. **Agent re-enters the §8.0 read/decide/act/ack walk:** `GET /events/for/{role}?since=cursor` — harness returns events B onwards in cursor order. Agent processes per the normal walk.
+2. **Agent notes the nudge in conversation context.** No file write. No queue. No flag.
+3. **Agent continues processing event A uninterrupted** — finishes its pre-cycle/work/post-cycle wrap. Emits `ack-cursor(A.id)` per §8.0; harness advances cursor past A.
+4. **Post-A, agent enters the §8.0 walk:** `GET /events/for/{role}?since=cursor` — harness returns events B onwards in cursor order. Agent processes per the normal walk.
 
-**Why this design:**
+**Why no flag is needed:**
 
-- **Single source of truth.** Cursor on harness = the agent's tended-up-to mark. `working-state.md` = current work in progress. No third concept (shadow queue) to keep in sync.
-- **Crash-safe.** If the agent crashes between steps 4 and 6, restart reads `working-state.md`. Either it finds `pending_nudge: true` and checks the queue, OR the next nudge arrives anyway and triggers a fresh walk. Either way, no event is lost — the harness deque still holds them past the cursor.
-- **Idempotent under multi-nudge bursts.** If 5 nudges arrive while the agent is busy with A, `pending_nudge` is set once and stays `true`. The post-A walk reads the queue once and processes B through F in order. No queue grows in working-state; no race on multiple writes.
-- **Honors the locked principle** (`decision-event-bus-architecture-redesign` §2): forge owns work state, harness owns delivery state (cursor), agent owns its OWN current work. The shadow queue in working-state would have violated that boundary.
+- **The harness cursor is canonical.** Post-cycle the agent always GETs the queue regardless of whether a nudge was noted. Cursor = "what's tended-up-to"; events past cursor = "what's pending." A flag duplicates information the cursor already encodes.
+- **`event_poll` is self-healing.** Even if conversation context is lost (session crash, mid-window compaction), event_poll's next poll within 10–60s (per §5.4 cadence) will see events past cursor and re-emit a nudge. The agent re-wakes naturally on the next poll tick.
+- **Monotonic-forward cursor prevents double-processing.** Agent processes B only after acking A; cursor advances forward only via successful acks. There's no way to "lose B" because acking A doesn't change B's position in the deque.
 
-**What `pending_nudge: true` means operationally:**
+**Crash-safety walkthrough:**
 
-- It's a *signal awareness* flag, not a *work assignment*. The agent doesn't act on `pending_nudge` directly — it just remembers to check the harness queue post-cycle.
-- If pre-cycle/work/post-cycle for event A naturally completes and the agent then runs the §8.0 walk, the `pending_nudge` check is redundant (the agent always checks the queue post-cycle anyway). The flag matters mainly for crash-resume: an agent restarting mid-flow knows to check even if no fresh nudge has arrived yet.
-- Cleared atomically right before the post-cycle walk's first `GET /events/for/{role}` call.
+| Crash point | Recovery |
+|---|---|
+| Agent crashes mid-A | Restart reads `working-state.md` (sees current = A), resumes A. Eventually completes, acks. Post-A walk finds B onwards. Same as no-crash flow. |
+| Agent crashes between A's ack and the post-A walk | Restart reads `working-state.md` (no current work — A is done), enters idle. The original mid-A nudge for B is "lost" from context, but `event_poll`'s next poll (within 10–60s) re-detects B past cursor and re-nudges. |
+| Multiple nudges arrived mid-A; agent crashes pre-walk | Only one fresh nudge is needed post-crash because the cursor is now past A; any single nudge triggers the walk that processes B–F in order. |
+
+**Trade-off considered (and rejected):**
+
+An earlier draft of §8.2 proposed a `pending_nudge: bool` flag in `working-state.md` as crash-safety insurance. Audit found it redundant — `event_poll`'s continued polling and the cursor's monotonic-forward property already guarantee events are not lost. The flag would have added one concurrent-write surface (G13) for no net benefit.
+
+Residual risk window: a NARROW interval where the agent crashes between A's ack and post-A walk AND `event_poll` also crashes before its next poll. With G2 closed (event_poll restart governance), this window is bounded by the health-poller's detection time (~5s).
+
+**Honors the locked principle** (`decision-event-bus-architecture-redesign` §2): forge owns work state, harness owns delivery state (cursor), agent owns ONLY its current work. A nudge flag would have crept agent state into duplicating delivery state — explicitly avoided here.
 
 ---
 
@@ -819,7 +826,7 @@ The improvement subloop runs while the agent's `status=ready`. It does NOT flip 
 | Per-role cursor | `.squidsquad/.event-state.json` (harness-owned) | Harness owns delivery state |
 | In-flight events | `.squidsquad/.event-state.json` | Re-delivery on timeout (#9873-E) |
 | Agent intent + PID | `.squidsquad/.harness-state.json` (harness-owned) | Harness owns agent lifecycle |
-| Agent current-work state | `.squidsquad/<role>/working-state.md` (agent-owned) | Resume-from-crash checkpoint for the agent's OWN current work. Includes `pending_nudge: bool` flag per §8.2. Does NOT contain an event queue — that's the harness deque + cursor's job. |
+| Agent current-work state | `.squidsquad/<role>/working-state.md` (agent-owned) | Resume-from-crash checkpoint for the agent's OWN current work. Does NOT contain an event queue (the harness deque + cursor own that) AND does NOT contain a nudge flag (per §8.2 — nudge memory lives only in conversation context; event_poll's re-poll covers any loss). |
 | Improvement subloop throttle | `.squidsquad/<role>/.subloop-last-run` (agent-owned) | Timestamp of last subloop fire; gates next eligibility (§8.3) |
 | Last-seen forge event | EAD-internal persistence | Don't re-emit assigned-to on restart |
 | Work state | GitHub Issues (forge) | Source of truth for status, comments, PRs |
@@ -903,7 +910,7 @@ These are deliberate gaps in this draft. Each needs a human-locked decision befo
 4. **`event_poll` polling cadence**: how often does it ask the harness for events? Recommended: 5s active when there's an in-flight assignment, 30s when fully idle (with adaptive backoff).
 5. **Cursor on first boot**: `null` (start from head of deque) or "skip everything emitted before my booted time" (start from now). Recommended: `null` per CONTEXT-9873-A D7.
 6. **Care filter granularity**: role-only in v1, or richer matching by `event_context` from day 1?
-7. ~~**Queue-while-busy behavior**: ignore-on-nudge or read-decide-queue-ack? Recommended: read-decide-queue-ack (see §8.2).~~ **CLOSED (2026-05-22)**: agent records single `pending_nudge: bool` flag in `working-state.md`, continues current work uninterrupted, then re-enters the §8.0 walk after post-cycle. Working-state.md does NOT carry an event queue — the harness cursor is the single source of truth for tended events. See §8.2 for the full sequence + rationale.
+7. ~~**Queue-while-busy behavior**: ignore-on-nudge or read-decide-queue-ack? Recommended: read-decide-queue-ack (see §8.2).~~ **CLOSED (2026-05-22)**: agent notes the nudge in conversation context only — no `working-state.md` write, no flag, no queue. Continues current work uninterrupted; post-cycle always GETs the queue regardless. event_poll's re-poll within 10–60s covers crash-loss of context. See §8.2 for the crash-safety walkthrough.
 8. **What about #9845 (noop)?**: retire and absorb into `assigned-to` payload, OR keep as a dedicated 4th event type for probe semantics?
 9. **`compose.py` deploy after merging this v2**: any compose-pipeline changes needed for the trimmed `event_catalog` or the new boot path?
 10. **Migration plan**: do we ship v2 with a feature flag (`event-driven: yes` vs `no`), or hard cutover with rollback only via revert?
@@ -946,7 +953,7 @@ Drawing the sequence + arch diagrams above exposed concrete gaps in the model. T
 
 ### 14.4 State / persistence gaps
 
-- **G13 — `working-state.md` write race.** *(Narrowed by §8.2.)* Surface area dropped significantly: the only concurrent write contention is on the `pending_nudge` flag itself. Mitigation: atomic write protocol (`.tmp + rename`, standard per L1 base) — same as today. Multiple nudges arriving simultaneously all write `pending_nudge: true` independently; the final value is consistent regardless of write order. Post-cycle clear-to-false is also atomic; if cleared concurrently with a new nudge's set-to-true, the new nudge wins on disk and the post-cycle GET still finds the new event in the harness queue. No data loss.
+- **G13 — `working-state.md` write race.** *(Closed by §8.2.)* The nudge path now writes nothing to `working-state.md` (context-only memory). The remaining write surface on `working-state.md` is the agent's current-work checkpointing during normal cycle pre/post — single-writer per agent, already serialized by the cycle wrapper. Atomic `.tmp + rename` from L1 base remains standard. No nudge-related concurrent-write surface to manage.
 - **G14 — `.event-state.json` size unbounded.** Cursors are bounded (one per role). In-flight is bounded by deque maxlen. But if events get evicted while in-flight, those entries become orphans in `_in_flight`. Need a `timeout_scan`-driven cleanup that removes in-flight entries whose event_id is no longer in the deque.
 - **G15 — Harness restart loses deque.** Stated in §5.2 but not flagged as a gap. On harness restart, all in-flight events are gone, all cursors are still pointing at event_ids that may have been in the deque. Agents reading `/events/for/{role}?since=cursor` after harness restart see an empty result — looks like no work — but the work may still exist in forge. EAD on restart should re-detect from forge and re-emit. Need to specify that contract.
 
