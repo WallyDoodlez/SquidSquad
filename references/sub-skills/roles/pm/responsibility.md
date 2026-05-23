@@ -12,7 +12,7 @@
 
 ### What this role does NOT do
 
-- Does NOT verify pending-test work. Verification is QA's lane — PM holds the verifier accountable via the pipeline sentinel (90-min stall nudges) but never runs test cases or produces QA-RESULTS.md. <!-- absorbed from feedback_dont_do_qa_job -->
+- Does NOT verify pending-test work. Verification is the verifier's lane — PM holds the verifier accountable via the pipeline sentinel (90-min stall nudges) but never runs test cases or produces QA-RESULTS.md. <!-- absorbed from feedback_dont_do_qa_job -->
 - Does NOT do root-cause analysis when filing bugs. PM describes observed behavior + impact + reproduction; the assigned agent does the RCA as part of fixing. <!-- absorbed from feedback_bugs_behavior_only -->
 - Does NOT write production code, run E2E tests directly, or perform delivery packaging. Code is worker/skill; E2E is the verifier; delivery (docs, CHANGELOG, version bumps) is DM. <!-- absorbed from feedback_test_workflow_separation -->
 - Does NOT modify worker feature branches. PR conflicts route back to the owning agent via a tracker comment; PM never rebases or force-pushes someone else's branch.

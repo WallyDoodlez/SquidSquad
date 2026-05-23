@@ -2,7 +2,7 @@
 
 When the human suggests a new task, do NOT immediately file it. Run the full 5-phase lifecycle. Issues are excluded — they use the current lightweight fix → verify → close flow.
 
-**PM produces no test artifacts** (#9184). PM defines acceptance criteria only — the AC list lives in the GitHub issue body + CONTEXT.md. Dev writes their own unit tests as part of the implementation PR. QA writes the test plan in `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` (derived independently from the AC list) and executes it against a real live instance. CQ specs for any task touching LLM-consumed instructions are owned by QA, not PM.
+**PM produces no test artifacts** (#9184). PM defines acceptance criteria only — the AC list lives in the GitHub issue body + CONTEXT.md. Worker writes their own unit tests as part of the implementation PR. Verifier writes the test plan in `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` (derived independently from the AC list) and executes it against a real live instance. CQ specs for any task touching LLM-consumed instructions are owned by the verifier, not PM.
 
 **Light mode**: For trivial/cosmetic tasks (typo fixes, config tweaks, doc-only changes), skip Phase 1 (Research) and Phase 2A (prep), abbreviate Phase 2. Phase 3 (AC + issue body) still runs. Verification is handled by the verifier per `qa/verification.md` (install-coupled path — wizard D4 renames to verifier/verification.md) regardless of mode. Use your judgment: if the task touches behavior or user-facing systems, use the full flow.
 
@@ -276,7 +276,7 @@ Write current state: `python references/scripts/cycle.py status-bar [ROLE] plann
 
 **Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: planning FEAT-[ROLE_UPPER]-XXX`.
 
-PM produces **acceptance criteria only** in Phase 3 (#9184). No test plan, no test cases, no comprehension questions. The AC list lives in the GitHub issue body and is the contract for both dev and QA. Dev writes their own unit tests against the AC list. QA writes its own `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` derived independently from the AC list and executes it against a real live instance.
+PM produces **acceptance criteria only** in Phase 3 (#9184). No test plan, no test cases, no comprehension questions. The AC list lives in the GitHub issue body and is the contract for both worker and verifier. Worker writes their own unit tests against the AC list. Verifier writes its own `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` derived independently from the AC list and executes it against a real live instance.
 
 **AC Integration Check** — before writing acceptance criteria, run this mental checklist:
 
@@ -320,7 +320,7 @@ After Phase 3 (AC drafting + issue filing) completes:
    ```bash
    git push -u origin [BRANCH]
    python references/scripts/git_ops.py pr-create "[ROLE]: #[NUMBER] — [title] (planning review)" \
-     "## Planning Artifacts for Review\n\nPlanning artifacts for #[NUMBER].\n\n### Artifacts\n- RESEARCH.md\n- CONTEXT.md\n\nQA will produce \`.squidsquad/qa/planning/TEST-PLAN-[NUMBER].md\` independently from the AC list at verification time (#9184).\n\n### Status\nPending human review — approve via PR comments."
+     "## Planning Artifacts for Review\n\nPlanning artifacts for #[NUMBER].\n\n### Artifacts\n- RESEARCH.md\n- CONTEXT.md\n\nVerifier will produce \`.squidsquad/qa/planning/TEST-PLAN-[NUMBER].md\` independently from the AC list at verification time (#9184).\n\n### Status\nPending human review — approve via PR comments."
    ```
 4. **Comment PR link on the issue**: `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Planning artifacts committed. PR [URL] ready for review."`
 5. **Return to working branch**: `python references/scripts/git_ops.py task-end [ROLE] [NUMBER]`
@@ -337,9 +337,9 @@ _(Handled by the worker agent — see worker template Step 2b. Worker implements
 
 ### Phase 5 — Verification (Verifier)
 
-_(Handled by the verifier — see `qa/verification.md`. Verifier derives `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` from the AC list in the issue body, then executes it against a real live instance. PM does NOT spawn QA subagents from this template (#9184).)_
+_(Handled by the verifier — see `qa/verification.md`. Verifier derives `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` from the AC list in the issue body, then executes it against a real live instance. PM does NOT spawn verifier subagents from this template (#9184).)_
 
-PM's only role in verification is **holding the verifier accountable**: if a task stalls at `pending-test` past the stall window, nudge QA via the pipeline sentinel. PM does not run test cases, does not produce QA-RESULTS.md, and does not perform the AC walk.
+PM's only role in verification is **holding the verifier accountable**: if a task stalls at `pending-test` past the stall window, nudge the verifier via the pipeline sentinel. PM does not run test cases, does not produce QA-RESULTS.md, and does not perform the AC walk.
 
 ---
 
