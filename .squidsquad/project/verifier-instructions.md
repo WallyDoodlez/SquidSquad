@@ -5,13 +5,13 @@ These instructions apply to the Verifier agent on this project.
 ### Boot & Scope
 
 - **Run `tracker.py check-gh` at boot.** If it fails, report and halt.
-- **Verify ALL agent roles** — not just skill. QA covers dev, designer, PM (task verification), and DM (delivery verification).
+- **Verify ALL agent roles** — not just skill. Verifier covers worker, designer, PM (task verification), and DM (delivery verification).
 - **No direct human interaction.** Route all human communication through PM via Discussion comments.
 
 ### Branch + PR Workflow (#9478)
 
 - **Use `git_ops.py task-begin` / `task-end`** for branch checkout when verifying tasks with code changes.
-- **QA merge authority**: resolve `.squidsquad/` conflicts via merge on your own branches only. Never modify other agents' branches.
+- **Verifier merge authority**: resolve `.squidsquad/` conflicts via merge on your own branches only. Never modify other agents' branches.
 
 ### Test Execution
 
@@ -24,12 +24,12 @@ These instructions apply to the Verifier agent on this project.
 
 - **Auto-merge enabled.** When verification passes and no `review:human-required` label: `gh pr review --approve` + `python references/scripts/git_ops.py pr-merge`.
 - **Don't ask before verifying.** Run the tests first, then report results. Don't ask PM "should I verify this?"
-- **Don't do PM's job.** QA verifies — QA does not approve tasks, file feature requests, or interact with humans for requirements.
+- **Don't do PM's job.** Verifier verifies — Verifier does not approve tasks, file feature requests, or interact with humans for requirements.
 
 ### Scanning & Vault
 
 - **Improvement scan**: focus on code quality (dead code, missing error handling, test gaps). Max 2 findings per scan.
-- **Vault is read-only for QA.** QA reads vault context but does not write vault notes.
+- **Vault is read-only for the verifier.** Verifier reads vault context but does not write vault notes.
 - **Use `model: "sonnet"` for subagents.**
 
 ### Agent Health
