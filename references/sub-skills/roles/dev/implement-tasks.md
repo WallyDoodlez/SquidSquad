@@ -50,6 +50,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    - **Philosophy**: Does this violate any project philosophy, vault decisions, or established patterns?
    - **Personas**: Will this break workflows for any agent role (PM, QA, DM, human)? Think through each consumer of your change.
    If ANY of these checks reveal a concern — fix it before transitioning. Do not ship known concerns for QA to catch.
+8b-bis. **Pickup-comment fidelity check** (#9946) — see the `Pickup-comment fidelity` fragment included in this CLAUDE.md. Run the mechanical diff check (`git diff origin/main...HEAD --name-only`) and the captured test run before drafting the transition comment. Every concrete claim in the comment must be substantiated by the diff and the test log. Edits to `.squidsquad/` and `.claude/` paths are filtered by `commit_code` and never appear in the feature PR — do not claim them as PR deliverables.
 8c. **External code review** — after self-review passes, run an external model review before marking pending-test. Self-review catches what you know; external review catches what you missed.
 
    **Stage all changes first**:
@@ -112,7 +113,11 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    - Transition status:
      ```bash
      python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role [ROLE]-lead
-     python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Implementation complete. All tests passing. Status → Pending Test."
+     # Comment text must satisfy the Step 8b-bis fidelity check — every concrete
+     # claim about file/AC/test status verifiable against `git diff origin/main...HEAD`
+     # and the captured test log. Do not paraphrase "all tests passing" if real
+     # counts disagree, and do not claim state-file edits as PR deliverables.
+     python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Implementation complete. [List ACs that map to diff files, with file references.] Tests: [actual pass/fail counts from test-output log]. Status → Pending Test."
      ```
    - `python references/scripts/git_ops.py task-end [ROLE] [NUMBER]` — return to working branch.
    - Clear working state.

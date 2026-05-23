@@ -48,11 +48,12 @@ If the queue returns an item, read it: `gh issue view [NUMBER] --json title,body
 5. Read the issue details, locate the relevant code, fix the issue.
 6. Run the test command: `[ROLE_TEST_CMD]`
 7. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false`, do NOT transition — re-read the issue and apply the fix.
-7b. **Self-verification reflection** — before marking pending-test, run the same self-review as for tasks (Step 9b in implement-tasks): regression, integration, philosophy, personas checks. Fix any concerns before proceeding.
-7c. **External code review** — run the external review loop (Step 9c in implement-tasks). Stage changes, get changed files, run model review, process findings. Same dispositions apply (fix, file-to-PM, justified-ignore).
+7b. **Self-verification reflection** — before marking pending-test, run the same self-review as for tasks (Step 8b in implement-tasks): regression, integration, philosophy, personas checks. Fix any concerns before proceeding.
+7b-bis. **Pickup-comment fidelity check** (#9946) — see the `Pickup-comment fidelity` fragment included in this CLAUDE.md, and Step 8b-bis in implement-tasks. Run `git diff origin/main...HEAD --name-only` and a captured test run before drafting the transition comment; every concrete claim must be substantiated. State-file edits (`.squidsquad/`, `.claude/`) are filtered by `commit_code` and never appear in the feature PR — do not claim them as PR deliverables.
+7c. **External code review** — run the external review loop (Step 8c in implement-tasks). Stage changes, get changed files, run model review, process findings. Same dispositions apply (fix, file-to-PM, justified-ignore).
 8. If tests pass, self-review passes, and changes exist:
    - Transition: `python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role [ROLE]-lead`
-   - Comment: `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Fixed in commit [hash]. [Brief explanation]. Status → Pending Test."`
+   - Comment: must satisfy Step 7b-bis fidelity check (claims verifiable against the diff and the test log; no state-file deliverables claimed): `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Fixed in commit [hash]. [File-by-file mapping to issue root cause.] Tests: [actual pass/fail counts]. Status → Pending Test."`
    - `python references/scripts/git_ops.py task-end [ROLE] [NUMBER]` — return to working branch.
    - Clear working state.
 9. If the root cause belongs to another agent's domain:
