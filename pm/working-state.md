@@ -1,41 +1,48 @@
 # Working State
 
-- **Task**: idle — pipeline flowing; QA re-verify on #9946
+- **Task**: idle — all session-filed items shipped; event-arch doc lock-ready in PR #9945
 - **Status**: idle
 - **Last Processed Event ID**: 88fe94b376fd2963
 
-## Pipeline snapshot (2026-05-22 23:02)
-- 2 PRs open:
-  - #9962 (squidsquad/task/9946) — pickup-fidelity sub-skill, MERGEABLE/CLEAN post-merge
-  - #9945 (pm/event-architecture-v2) — PM event-arch doc, multiple revisions this session
-- 1 pending-test: #9946 (QA verified at pre-merge SHA 3c80201b, transitioned to pending-ship; bounced back to pending-test because PR diff changed after merge commit 903716f2)
-- 0 pending-ship, 0 external
-- 1 approved: #3 (DM lane, long-running)
+## Pipeline snapshot (2026-05-22 23:32)
+- 1 PR open: #9945 (pm/event-architecture-v2) — PM event-arch doc, rev 4 with §15 closure plan, ALL §13/§14 items closed
+- 0 pending-test, 0 pending-ship, 0 in-progress, 0 external issues
+- 1 approved (long-running): #3 (DM lane)
 - All 4 agents healthy
 
-## #9946 full timeline (this round-trip)
-- 02:10 skill opened PR #9962
-- 02:15 skill pickup comment (file list verified via git diff — the new sub-skill working as designed!)
-- 02:32 PM (me) flagged PR conflict + transitioned pending-test → in-progress
-- 02:34 QA verified pre-merge SHA, transitioned pending-test → pending-ship (was racing on stale label state)
-- 02:40 skill acknowledged both: merged main cleanly (commit 903716f2), pushed
-- Sometime after: status reverted to pending-test (verify-then-merge is unsafe; QA needs to re-verify)
+## SESSION SCOREBOARD — all PM-planned items SHIPPED
+- #9925 (4-layer responsibility model L1+L2+L3+L4, 50 files) — shipped cycle 1583
+- #9926 (orphan_cleanup D3 per-role skip + zero-roles backstop) — shipped cycle 1582
+- #9946 (skill pickup-comment fidelity sub-skill) — shipped this cycle
 
-## Event-arch doc PR #9945 — refinement progress this session
-§13: 2 of 10 closed (Q3 EAD cadence REST/adaptive, Q7 queue-while-busy context-only)
-§14: 4 of 22 closed (G3 partial, G4, G9, G13)
-Most recent commits to PR: §8.2 context-only narrowing (e43bf466), EAD §5.4 lock (c1bdc33d), §7.0+§7.1 tracker.py reflect (fdb4c479)
+## Event-arch v2 doc (PR #9945) — FINAL STATUS: LOCK-READY
+- Rev 1: 392 lines, 15 sections (initial draft)
+- Rev 2: 10 Mermaid diagrams + §14 22 gaps surfaced
+- Rev 3: terminology pass + state machine + tracker.py routing + improvement subloop + §8.2 context-only narrowing
+- Rev 4 (this session end): §15 closure plan (6 groups A-F + question lock table + 6-PR implementation sequence)
+- All 10 §13 questions CLOSED with cross-refs to §15
+- All 22 §14 gaps CLOSED/partial-closed with cross-refs to §15
+
+## Next steps per locked sequence
+1. (Optionally) merge PR #9945 to main — finalizes the v2 doc as canonical reference
+2. Run #6274 — terminology rename dev→worker + qa→verifier across codebase (PM intake: RESEARCH + CONTEXT + DS review path same as #9925/#9926)
+3. Spawn implementation epic from locked §15 — 6 PRs in dependency order (A → C → D → B → F → E)
 
 ## Open threads with human
-- **PR #9945** — §13 still has 8 questions; §14 still has 18 gaps; closure plan not yet folded as §15
-- **Sequence locked**: finish event-arch doc → run #6274 (terminology rename) → spawn implementation epic
-- **#9845 (noop event)** retirement under v2 (§13 Q8) — likely absorbed
+- Move directive for next steps (merge doc PR? start #6274? both in parallel?)
+
+## PM-owned tasks at status:pending / planning (backlog, no movement)
+- #9874 (harness internal architecture review) — partly covered by event-arch §5
+- #9875 (L2 vault writeback) — planning
+- #9912 (tighten external-model code-review against tool-use loop) — pending
+- #9739 (degraded-mode autonomous-fallback events surfacing) — partly covered by event-arch §10
+- #8997 (PM improvement scan autonomous L4 writes) — pending
 
 ## Housekeeping
-- 4 unpushed prior-cycle commits on main; cycle_post will push
-- Context pressure 56% (threshold 70%); approaching respawn point
-- .squidsquad/{dm,qa,skill}/CLAUDE.md still drifted; untouched per L1-L4-only rule
+- 4 unpushed prior-cycle commits on main; cycle_post handles push
+- Context pressure 61% (threshold 70%) — climbing; next cycle likely triggers respawn (exit code 42)
+- .squidsquad/{dm,qa,skill}/CLAUDE.md still drifted (composed output); untouched per L1-L4-only rule
 
 ## Notes
-- DM idle 22m, QA idle 0m, skill idle 20m — all below stall threshold
+- DM idle 18m, QA idle 0m, skill idle 23m — all healthy below stall threshold
 - Recent_events still contained synthetic test traffic on #42/#55/#269 — ignored
