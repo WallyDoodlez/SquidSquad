@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "SKILL.md:sections-1-3",
+  "last_scanned": "SKILL.md:sections-4-6",
   "rotation_count": 55,
   "scan_history": [
     {
@@ -1621,6 +1621,11 @@
         "sec2 file-structure: .squidsquad/project/ now lists all -instructions/-responsibility/-soul-directives variants plus setup-upgrade-gate.md (was incomplete, only mentioned -responsibility files)",
         "sec3 label-taxonomy: Special row now includes squidsquad-test and review:human-required (per SPECIAL_LABELS in tracker.py)"
       ]
+    },
+    {
+      "file": "SKILL.md:sections-4-6",
+      "date": "2026-05-23",
+      "findings": 0
     }
   ],
   "doc_inventory": {
