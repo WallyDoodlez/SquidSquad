@@ -492,9 +492,9 @@ def _active_roles_for_roster() -> list[str]:
     described from a manifest.
     """
     roles = {"pm", "verifier", "dm"}  # mandatory team — #6274 renamed qa→verifier
-    dev_agents_raw = _read_config_value("dev-agents")
-    if dev_agents_raw:
-        for token in dev_agents_raw.split(","):
+    workers_raw = _read_config_value("workers")  # dual-aware: shim falls back to deprecated `Dev Agents:` key
+    if workers_raw:
+        for token in workers_raw.split(","):
             t = token.strip()
             if t:
                 roles.add(t)
@@ -725,7 +725,8 @@ def _get_entry_file_for_role(role_name: str) -> str:
     `references/roles/<role>/`. For any role that exists in the registry
     the identity equals the role name. Anything else is resolved via:
     1. Suffix-strip: pm-skill -> pm (Layer 3 variant of any base role)
-    2. Dev fallback: skill, be, fe -> dev (legacy dev variants)
+    2. Base-role fallback: skill, be, fe -> worker (post-6274.2 canonical),
+       with dev as dual-aware fallback during the migration window.
 
     After #328 Phase H the identity list is read from the manifest
     registry, not hardcoded — adding a new role directory under
@@ -800,7 +801,7 @@ def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> s
         content = content.replace("[ROLE_TEST_CMD]", test_cmd)
 
         # Other roles
-        all_agents = _read_config_value("dev-agents") or role_name
+        all_agents = _read_config_value("workers") or role_name
         other = [r.strip() for r in all_agents.split(",") if r.strip() != role_name]
         content = content.replace("[OTHER_ROLES]", ", ".join(other) if other else "(none)")
 
@@ -810,7 +811,7 @@ def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> s
 
     # PM/DM-specific
     if not is_dev:
-        active_agents = _read_config_value("dev-agents") or ""
+        active_agents = _read_config_value("workers") or ""
         content = content.replace("[ACTIVE_AGENTS]", active_agents)
 
         e2e_cmd = _read_config_value("e2e-tests") or "(none)"
@@ -1499,7 +1500,7 @@ MANDATORY_ROLES = {"pm", "verifier", "dm"}  # #6055/#6274: always present (qa→
 
 def _collect_all_roles() -> list:
     """Return all configured roles: worker-agents from config + pm + verifier + dm."""
-    agents = _read_config_value("dev-agents") or ""
+    agents = _read_config_value("workers") or ""
     roles = [r.strip() for r in agents.split(",") if r.strip()]
     # Mandatory roles — always required (#6055/#6274: qa→verifier per D5)
     for role in ("pm", "verifier", "dm"):
