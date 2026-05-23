@@ -112,6 +112,20 @@ Unlike `{{include:}}` which compiles content into the template at build time, `{
 - Changes to `.squidsquad/<role>/SOUL.md` take effect on next agent boot without recomposing.
 - Typically used at the top of an entry file: `{{runtime: souls/dev}}`.
 
+### The Role-Roster Directive
+
+```
+{{role-roster}}
+```
+
+A compose-time marker (introduced by #9925) for injecting the active team roster. When the marker appears in any composed sub-skill, `compose.py` replaces it with a markdown block listing each active role's `display_name`, `tagline`, and `description` (sourced from `references/roles/<role>/manifest.yaml`). Used by `common/agent-boundaries` so every agent's CLAUDE.md gets a real summary of its teammates and what they own.
+
+- Active roles = configured `Dev Agents` from `config.md` + always-present PM, QA, DM.
+- Manifests are cached per compose run (one read per role).
+- Replacement runs **after** all `{{include:}}` resolution, so the marker can live in any included sub-skill.
+- Missing `display_name` is a build error (`SystemExit(2)`); missing `tagline` / `description` warns to stderr and proceeds.
+- If the marker is absent from a role's composed output (no `agent-boundaries` in its `includes.yml`), `compose.py` warns to stderr and proceeds.
+
 ### Build Pipeline
 
 ```
