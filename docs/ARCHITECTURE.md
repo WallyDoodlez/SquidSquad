@@ -74,7 +74,7 @@ python.exe (thin_launcher.py)
         └── claude.exe (the actual agent)
 ```
 
-Why cmd.exe is in the chain: `thin_launcher.py:168` resolves the claude binary via `shutil.which("claude")`, which returns `claude.CMD` on Windows (the npm shim). Running a `.CMD` file requires `cmd.exe` to interpret it, so Windows inserts `cmd.exe` between the launcher and the actual `claude.exe`. This is a Windows-only artifact of how `.CMD` shims work — POSIX systems launch `claude.exe` directly.
+Why cmd.exe is in the chain: `thin_launcher.py:184` resolves the claude binary via `shutil.which("claude")`, which returns `claude.CMD` on Windows (the npm shim). Running a `.CMD` file requires `cmd.exe` to interpret it, so Windows inserts `cmd.exe` between the launcher and the actual `claude.exe`. This is a Windows-only artifact of how `.CMD` shims work — POSIX systems launch `claude.exe` directly.
 
 ### `.claude-pid` convention
 
