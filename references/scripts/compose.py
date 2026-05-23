@@ -404,9 +404,20 @@ def _assemble_claude(role_name: str) -> str:
             # Determine the file's target prefix (text before first hyphen)
             file_prefix = name.split("-", 1)[0] if "-" in name else None
             # Include if: shared, unprefixed, prefix not a known role, or
-            # prefix matches this role's identity
+            # prefix matches this role's identity (or its #6274 alias).
             if file_prefix and file_prefix != "shared" and file_prefix in known_prefixes:
-                if file_prefix != role_identity:
+                # #6274 D2: L4 prefix routing dual-aware. A `worker-` prefixed
+                # file routes to the `dev`-identity consumer (and vice-versa);
+                # `verifier-` / `qa-` likewise. Without this, AC1.1's
+                # identity-set widening makes `worker-foo.md` pass the
+                # known-prefix gate but silently skip the dev-identity role
+                # because `file_prefix != role_identity`. The alias table
+                # canonicalizes both sides to the same form for the comparison.
+                if (
+                    file_prefix != role_identity
+                    and _BASE_ALIAS_6274.get(file_prefix) != role_identity
+                    and _BASE_ALIAS_6274.get(role_identity) != file_prefix
+                ):
                     continue
             content = skill_file.read_text(encoding="utf-8").rstrip()
             content = _strip_outer_markers(content, name)

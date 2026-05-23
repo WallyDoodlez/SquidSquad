@@ -101,12 +101,24 @@ def _parse_local_config():
     return result
 
 
-def _parse_dev_agents():
-    """Read Dev Agents list from config.md → list of role names."""
+def _parse_workers():
+    """Read Workers list from config.md → list of role names.
+
+    #6274 D2: reads the canonical post-rename field `Workers:` first,
+    then falls back to the deprecated `Dev Agents:` field. After 6274.3
+    the legacy regex is removed.
+    """
     if not CONFIG_MD.exists():
         return []
     try:
         text = CONFIG_MD.read_text(encoding="utf-8")
+        # Try the new canonical field first.
+        m = re.search(r"Workers\*\*:\s*(.+)", text)
+        if m:
+            return [a.strip() for a in m.group(1).split(",") if a.strip()]
+        # Fall back to the deprecated `Dev Agents:` field. No warning here —
+        # `config.get_field('workers')` emits the canonical one once at the
+        # central read site; emitting again here would double-log.
         m = re.search(r"Dev Agents\*\*:\s*(.+)", text)
         if m:
             return [a.strip() for a in m.group(1).split(",") if a.strip()]
@@ -115,12 +127,25 @@ def _parse_dev_agents():
     return []
 
 
+# #6274 D2 backward-compat alias. Existing callers that import
+# `_parse_dev_agents` continue to work through the dual-aware window.
+# Deleted in 6274.3.
+def _parse_dev_agents():
+    """Deprecated alias for `_parse_workers` — kept through #6274 cutover."""
+    return _parse_workers()
+
+
 def _get_all_roles():
     """Get all agent roles from config.md, including PM.
 
-    Only reads the Dev Agents list from config.md — does not scan directories
+    Only reads the Workers list from config.md — does not scan directories
     or .local-config for extra roles. This prevents booting agents that have
     been removed from config.md but still have leftover directories (#943).
+
+    #6274 D2: calls `_parse_dev_agents` (the backward-compat alias) rather
+    than `_parse_workers` directly so existing tests that `@patch
+    boot_remote._parse_dev_agents` continue to work. In 6274.3 the alias
+    is deleted and this line switches to `_parse_workers()`.
     """
     roles = set(_parse_dev_agents())
     # Fixed team: PM + QA + DM always present (#6261)

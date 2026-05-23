@@ -53,19 +53,59 @@ def _get_project_name():
 
 
 def _get_configured_agents():
-    """Read dev-agents + infrastructure roles from config."""
+    """Read worker-agents + infrastructure roles from config.
+
+    #6274 D2: reads the new `workers` field via config.get_field with
+    fallback to `dev-agents` (handled inside config.py). The mandatory
+    set is `MANDATORY_ROLES_6274` — see its docstring for the dual-aware
+    semantics during the migration window.
+    """
     try:
         sys.path.insert(0, str(SCRIPT_DIR))
         from config import get_field
-        agents_str = get_field("dev-agents")
+        # #6274 D2: prefer the canonical `workers` field; the config.py
+        # shim falls back to `dev-agents` and emits a deprecation warning.
+        agents_str = get_field("workers")
         agents = [a.strip() for a in agents_str.split(",") if a.strip()]
-        # Fixed team: PM + QA + DM always present (#6261)
-        for role in ("pm", "qa", "dm"):
+        # Fixed team: PM + QA + DM always present (#6261). #6274 D2:
+        # `verifier` is the canonical post-rename name for the verifier
+        # role; we add both during the dual-aware window so neither pre-
+        # nor post-rename installs lose mandatory coverage. In 6274.3
+        # this collapses to ("pm", "verifier", "dm").
+        for role in MANDATORY_ROLES_6274:
             if role not in agents:
                 agents.append(role)
         return agents
     except (ImportError, SystemExit):
         return ["pm"]
+
+
+# #6274 D2: mandatory-role set with dual-aware membership during the
+# migration window. Contains both `qa` (old) and `verifier` (new) so
+# the pre-rename install (which lists `qa` in config) and the post-
+# rename install (which lists `verifier`) both satisfy the mandatory-
+# coverage check. After 6274.3 cutover, `qa` is removed and this
+# collapses to ("pm", "verifier", "dm"). Callers that still hardcode
+# the old set should switch to importing this constant.
+MANDATORY_ROLES_6274 = ("pm", "qa", "verifier", "dm")
+
+
+def _warn_if_caller_uses_legacy_mandatory_set(literal_set):
+    """#6274 D2: invoked by external callers passing their own
+    mandatory-role set; emits a deprecation warning if the caller is
+    still using the pre-rename `("pm", "qa", "dm")` shape. Removed in
+    6274.3. This function is the warning surface mentioned in D2 — call
+    sites outside add_role.py that hardcode the legacy set can opt into
+    the warning by calling this directly.
+    """
+    if tuple(sorted(literal_set)) == ("dm", "pm", "qa"):
+        print(
+            "WARNING: legacy mandatory-roles set ('pm', 'qa', 'dm') is "
+            "deprecated by #6274. Use add_role.MANDATORY_ROLES_6274 instead, "
+            "which includes both `qa` and `verifier` through the dual-aware "
+            "window and collapses to ('pm', 'verifier', 'dm') in 6274.3.",
+            file=sys.stderr,
+        )
 
 
 def _validate_role(role):

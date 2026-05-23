@@ -241,8 +241,10 @@ def _canonicalize_role(role):
     if paren >= 0:
         role = role[:paren]
     role = role.strip()
+    had_lead_suffix = False
     if role.endswith("-lead"):
         role = role[: -len("-lead")]
+        had_lead_suffix = True
 
     # #6274 D11: dual-aware role-prefix normalization. Map both old
     # (pre-rename) and new (post-rename) prefixes to whichever form is
@@ -252,10 +254,18 @@ def _canonicalize_role(role):
     if role in _DUAL_ROLE_PREFIXES_6274:
         new_role, is_deprecated = _DUAL_ROLE_PREFIXES_6274[role]
         if is_deprecated:
+            # Display the input form the operator actually used. Inputs
+            # without `-lead` (e.g. --role dev) are legal — don't fake
+            # the suffix in the warning text.
+            old_display = f"{role}-lead" if had_lead_suffix else role
+            new_display = (
+                f"{_PREFIX_NEW_NAME_6274[role]}-lead"
+                if had_lead_suffix
+                else _PREFIX_NEW_NAME_6274[role]
+            )
             print(
-                f"WARNING: --role '{role}-lead' is deprecated and will be "
-                f"rejected after #6274.3 cutover. Use '"
-                f"{_PREFIX_NEW_NAME_6274[role]}-lead' instead.",
+                f"WARNING: --role '{old_display}' is deprecated and will be "
+                f"rejected after #6274.3 cutover. Use '{new_display}' instead.",
                 file=sys.stderr,
             )
         role = new_role
