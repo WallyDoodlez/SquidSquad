@@ -40,6 +40,22 @@ Four layers, in shipping/precedence order:
 
 **Key invariant** — L1-L3 are part of the SquidSquad repo and ship globally. L4 is *generated and maintained per-install* by the agent in response to human instruction in the deployed project. L4 is the **memory of how this project diverges from default SquidSquad behaviour**.
 
+```mermaid
+flowchart TB
+  subgraph SHIP["SquidSquad-shipped (versioned in main repo)"]
+    direction TB
+    L1["<b>L1 — Base</b><br/>What ANY agent is.<br/>Identity, principles, tracker protocol.<br/><i>references/sub-skills/common/</i>"]
+    L2["<b>L2 — Capability</b><br/>Cross-cutting: vault, scanning,<br/>git, lifecycle.<br/><i>references/sub-skills/capabilities/</i>"]
+    L3["<b>L3 — Role</b><br/>Role-specific: PM, QA, DM, dev.<br/><i>references/sub-skills/roles/&lt;role&gt;/</i>"]
+    L1 --> L2 --> L3
+  end
+  subgraph LOCAL["Project-local (per-install, not distributed)"]
+    L4["<b>L4 — Project</b><br/>Customizations from human conversation.<br/>replace / insert / append ops on L1-L3.<br/><i>.squidsquad/project/</i>"]
+  end
+  L3 --> L4
+  L4 -->|"compose.py deploy &lt;role&gt;"| OUT["<b>.squidsquad/&lt;role&gt;/CLAUDE.md</b><br/>composed output — DO NOT EDIT"]
+```
+
 ---
 
 ## 3. Authoring principles
@@ -95,6 +111,42 @@ ordinal: <integer>                # only for append, optional
 
 `target` is a stable step ID declared in L1-L3 frontmatter (see §6.1). Compose **must validate** that every L4 `target` resolves to a real L1-L3 step ID before emitting output.
 
+Visual semantics of the four ops, all acting on the same L1-L3 base:
+
+```mermaid
+flowchart TB
+  subgraph BASE["L1-L3 base (instructions/cycle)"]
+    direction TB
+    B1["check-in"] --> B2["triage"] --> B3["file-bug"]
+  end
+  subgraph REP["replace (target=triage)"]
+    direction TB
+    R1["check-in"] --> R2["<i>new triage prose</i>"] --> R3["file-bug"]
+  end
+  subgraph IB["insert-before (target=file-bug)"]
+    direction TB
+    IB1["check-in"] --> IB2["triage"] --> IB3["<i>new step</i>"] --> IB4["file-bug"]
+  end
+  subgraph IA["insert-after (target=triage)"]
+    direction TB
+    IA1["check-in"] --> IA2["triage"] --> IA3["<i>new step</i>"] --> IA4["file-bug"]
+  end
+  subgraph AP["append (no target)"]
+    direction TB
+    AP1["check-in"] --> AP2["triage"] --> AP3["file-bug"] --> AP4["<i>new step</i>"]
+  end
+  BASE --> REP
+  BASE --> IB
+  BASE --> IA
+  BASE --> AP
+  style R2 fill:#fff3b0
+  style IB3 fill:#fff3b0
+  style IA3 fill:#fff3b0
+  style AP4 fill:#fff3b0
+```
+
+`replace` swaps prose at the same position; `insert-before`/`insert-after` adds adjacent to a named anchor; `append` lands at the slot's tail. Step IDs are preserved across `replace` so downstream L4 ops targeting them still resolve.
+
 ---
 
 ## 4. Compose pipeline behaviour
@@ -137,6 +189,34 @@ L4 is not instructions-only. Project customization spans every slot:
 | `vault` | "Vault note `clients/<name>.md` is required for any client-touching work — link from each related task." |
 
 The same op grammar (`replace` / `insert-after` / etc.) applies to any slot. This makes L4 the **single project-level customization mechanism** — there is no other place where deployed projects add or override behaviour.
+
+### 4.4 End-to-end pipeline
+
+The full compose run, source-walk to output-write:
+
+```mermaid
+flowchart TB
+  Start([compose.py deploy &lt;role&gt;]) --> Walk[Walk references/sub-skills/<br/>+ references/roles/&lt;role&gt;/]
+  Walk --> Parse[Read frontmatter from each file:<br/>slot, ordinal, roles, step-ids]
+  Parse --> Filter[Filter to files where<br/>role applies]
+  Filter --> WakeMode{Wake mode<br/>per §6.5}
+  WakeMode -->|polling| MP[Load includes.yml<br/>polling manifest]
+  WakeMode -->|event| ME[Load includes-events.yml<br/>event manifest]
+  MP --> Sort
+  ME --> Sort[Stable sort by<br/>slot_index, ordinal]
+  Sort --> Base[L1-L3 base composition<br/>built in memory]
+  Base --> L4Walk[Walk .squidsquad/project/<br/>read L4 frontmatter]
+  L4Walk --> L4Group[Group L4 ops by slot]
+  L4Group --> L4Apply[Within each slot, apply ops:<br/>1. all replace<br/>2. all insert-before / insert-after<br/>3. all append]
+  L4Apply --> Validate{Validate:<br/>L4 targets resolve?<br/>DRY ok? no orphans?}
+  Validate -->|fail| Abort([Abort with diagnostic<br/>no output written])
+  Validate -->|pass| Emit[Emit composed CLAUDE.md]
+  Emit --> Write([Write .squidsquad/&lt;role&gt;/CLAUDE.md])
+  style Abort fill:#fdd
+  style Write fill:#dfd
+```
+
+The pipeline is fully deterministic: given `(role, wake-mode, source-tree-hash, L4-tree-hash)`, the composed output is bit-stable.
 
 ---
 
@@ -429,6 +509,21 @@ SquidSquad agents support two wake mechanisms: **event-driven** (the harness dis
 
 `compose.py:_load_manifest` reads `config.get_wake_mode(role)` and chooses the manifest; `_resolve_includes_with_manifest` then renders the chosen manifest in full. There are **no mode-conditional directives inside fragments** — the manifest is the gate. The agent receives one fully-resolved CLAUDE.md whose §3.2 is shaped for exactly one mode. Mid-session mode flips do not exist; an operator flipping `config.md` from `polling` to `event-driven` (or vice versa) takes effect on the next compose+restart.
 
+```mermaid
+flowchart LR
+  Cfg[".squidsquad/config.md<br/>event-driven: yes | no"] --> Reader["compose.py<br/>config.get_wake_mode(role)"]
+  Reader -->|polling| MP["includes.yml<br/>(polling manifest)"]
+  Reader -->|event| ME["includes-events.yml<br/>(event manifest)"]
+  MP --> RP["Composed CLAUDE.md<br/>§3.2 = 10 Ralph Loop steps<br/>(see §5.6.1)"]
+  ME --> RE["Composed CLAUDE.md<br/>§3.2 = 8 per-event steps<br/>(see §5.6.2)"]
+  RP -.->|"agent sees ONE flavored output<br/>never both"| Agent[("agent session")]
+  RE -.->|"agent sees ONE flavored output<br/>never both"| Agent
+  style RP fill:#dfe7fd
+  style RE fill:#fde7d3
+```
+
+Mode flip = next compose + agent restart, never mid-session. The two outputs differ only at §3.2 + one step of §3.1 (see §5.6.3).
+
 **Why two parallel manifests instead of one branchy file**:
 
 - Keeps fragment bodies clean — no `{% if event %}…{% else %}…{% endif %}` ladders in human-authored prose.
@@ -535,6 +630,48 @@ Every L4 write is:
 
 The composed `.squidsquad/<role>/CLAUDE.md` regenerates on every L4 write (compose runs as a post-commit hook for files in `.squidsquad/project/`).
 
+### 7.6 End-to-end sequence
+
+The full runtime L4 write flow, from human directive to recomposed CLAUDE.md:
+
+```mermaid
+sequenceDiagram
+  participant H as Human
+  participant A as Agent
+  participant DS as DeepSeek audit
+  participant C as compose.py
+  participant G as git
+
+  H->>A: "From now on, before X do Y"
+  A->>A: Walk decision tree (§7.2)<br/>replace / insert / append?
+  A->>DS: Classify candidate L4 op
+  alt classification wrong
+    DS-->>A: Reject — wrong op
+    A->>H: Clarifying question
+  else classification correct
+    DS-->>A: Approve
+    A->>H: mini-CQ: "Adding<br/>insert-before step:cycle/X. OK?"
+    alt human rejects
+      H-->>A: No
+      A->>A: Abort, no write
+    else human approves
+      H-->>A: Yes
+      A->>C: compose --check (dry-run)
+      alt dry-run fails
+        C-->>A: orphan target / DRY violation
+        A->>H: Surface error, abort
+      else dry-run passes
+        C-->>A: Clean
+        A->>G: Write .squidsquad/project/&lt;file&gt;.md
+        A->>G: Commit (body quotes directive)
+        G->>C: Post-commit hook<br/>recompose CLAUDE.md
+      end
+    end
+  end
+```
+
+Three gates (DS audit, mini-CQ, dry-run) must all pass before any write commits. Any failure aborts cleanly with no partial state.
+
 ---
 
 ## 8. Source-output sync (response to #9970)
@@ -565,6 +702,26 @@ QA's pending-test → pending-ship transition includes a compose-sync check:
 - If drift is detected, QA does not pass the task — it routes back to dev with a "compose out of sync" note.
 
 The three mechanisms are deliberately redundant. PR-check is the primary; auto-recompose catches anything that slipped through (e.g. emergency direct-to-main hotfixes); pre-ship gate catches anything that slipped through *both* prior layers. Defence in depth for a class of bug that is otherwise invisible to humans (composed outputs are marked `DO NOT EDIT` and rarely read).
+
+```mermaid
+flowchart TB
+  Change([L1-L3 source change])
+  Change --> L1c{"Layer 1: PR check<br/>(GitHub Actions + pre-commit)"}
+  L1c -->|"catches:<br/>most drift"| L1Block[/"PR blocked until composed<br/>outputs included in PR"/]
+  L1c -->|"misses:<br/>direct-to-main hotfix"| L2c
+  L2c{"Layer 2: auto-recompose on merge<br/>(DM workflow)"}
+  L2c -->|"catches:<br/>post-merge drift"| L2Block[/"DM commits follow-up<br/>recompose + files bug"/]
+  L2c -->|"misses:<br/>edge cases"| L3c
+  L3c{"Layer 3: pre-ship gate<br/>(QA workflow)"}
+  L3c -->|"catches:<br/>last-mile drift"| L3Block[/"QA routes back to dev:<br/>'compose out of sync'"/]
+  L3c -->|"all clean"| Ship([Task ships])
+  style L1Block fill:#fff3b0
+  style L2Block fill:#fff3b0
+  style L3Block fill:#fff3b0
+  style Ship fill:#dfd
+```
+
+Each layer is sized to its blast radius: PR-check is the cheap-and-frequent gate, auto-recompose handles emergency direct-to-main paths, pre-ship is the safety net before delivery.
 
 ---
 
