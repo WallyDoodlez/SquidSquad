@@ -331,15 +331,50 @@ harness.py (single process)
 
 ### 5.4 The ExternalActivityDetector (EAD)
 
-EAD is the bridge from forge to bus. It runs inside the harness on a fast polling loop (the only polling in the system) and:
+EAD is the bridge from forge to bus. It runs inside the harness on a polling loop and:
 
-1. Subscribes to GitHub via `gh api` or the search API.
-2. Diffs against last-seen event id stored on disk.
-3. For each new forge event (issue created, status label added, PR merged, comment posted), maps to a target role per a rule table.
-4. Emits one `assigned-to` event per (event, target_role) pair into the deque.
-5. Records the new last-seen id so it doesn't re-emit on restart.
+1. Polls GitHub via REST API (`gh api repos/<owner>/<repo>/issues?since=<last_seen_iso>&state=all&per_page=100`).
+2. Diffs against last-seen timestamp stored on disk.
+3. For each changed issue, fetches full label state if needed, then maps to a target role per a rule table (status label changes, comments, PR state changes).
+4. Emits one `assigned-to` event per (forge change, target_role) pair into the deque.
+5. Records the new last-seen timestamp so it doesn't re-emit on restart.
 
-EAD is the only producer of `assigned-to`. Agents do not emit `assigned-to` directly; they call `POST /work/assign` which the harness translates.
+EAD is the only producer of `assigned-to` from forge state. Agents trigger `assigned-to` indirectly via `POST /work/assign` (typically called by `tracker.py` per §7.2).
+
+**Why REST, not Search API** (locked):
+- Search API has a 5–30s indexing lag built in; EAD-driven latency would inherit that floor on every event.
+- REST API is real-time (event appears in the response as soon as forge processes the write).
+- REST quota is 5000 req/hr; Search is 30 req/min. REST gives more headroom for adaptive polling.
+
+**Polling cadence — adaptive backoff** (locked, closes §13 Q3):
+
+```
+default state: active (10s between polls)
+
+  last_poll_found_activity? → stay at 10s
+  3 consecutive empty polls?  → step up to 30s
+  activity returns after backoff? → reset to 10s
+  hard floor: 5s  (rate-limit safety; never poll faster)
+  hard ceiling: 60s  (safety-net usefulness degrades beyond this)
+```
+
+**Forge API budget under this rule:**
+
+| State | Polls/hr | Calls/hr (with ~1–3 follow-ups per changed issue, bursts) | % of 5000/hr quota |
+|---|---|---|---|
+| Steady-state quiet | ~120 | ~120 | 2% |
+| Steady-state active | ~360 | ~360–720 | 7–14% |
+| Worst-case burst (10 changes/poll, sustained active) | ~360 | ~3600 | 72% |
+
+Per-install overrides via `config.md` fields (`EAD Cadence Active`, `EAD Cadence Quiet`) are NOT v1 scope — defaults are hardcoded in EAD. Add as config fields only if a real install hits a quota issue.
+
+**Latency floors per path** (recap from §7.0 + §7.1):
+
+| Path | Worst case | Typical |
+|---|---|---|
+| `tracker.py` happy path (primary) | sub-second | sub-second |
+| EAD safety net, quiet period | 60s | 30s |
+| EAD safety net, active period | 10s | 5–10s |
 
 ### 5.5 The `POST /work/assign` endpoint
 
@@ -846,7 +881,7 @@ These are deliberate gaps in this draft. Each needs a human-locked decision befo
 
 1. **Booted-payload shape**: just `{role}`, or also include `pid`, `clone_path`, `version`?
 2. **POST /work/assign authorization**: hard-coded permission table per role pair, or open (any agent can assign to any role)? Recommended: hard-coded with explicit table.
-3. **EAD polling cadence**: 5s? 15s? Tradeoff is forge API quota vs. assignment latency.
+3. ~~**EAD polling cadence**: 5s? 15s? Tradeoff is forge API quota vs. assignment latency.~~ **CLOSED (2026-05-22)**: REST API (not Search), adaptive cadence 10s active → 30s quiet, hard bounds 5s floor / 60s ceiling. See §5.4 for the full rule + API-budget table. Config-knob override deferred to post-v1.
 4. **`event_poll` polling cadence**: how often does it ask the harness for events? Recommended: 5s active when there's an in-flight assignment, 30s when fully idle (with adaptive backoff).
 5. **Cursor on first boot**: `null` (start from head of deque) or "skip everything emitted before my booted time" (start from now). Recommended: `null` per CONTEXT-9873-A D7.
 6. **Care filter granularity**: role-only in v1, or richer matching by `event_context` from day 1?
@@ -874,7 +909,7 @@ Drawing the sequence + arch diagrams above exposed concrete gaps in the model. T
 - **G6 — Out-of-order ack semantics.** §8.0 batches the ack to the last tended event_id. If the agent decides care/skip in order but for some reason cannot tend an earlier event (transient error reading from forge, say), can it still ack past it? Or must it block on the failed event? #9873-A has cursor-regression protection but doesn't cover forward-skip semantics.
 - **G7 — Cursor when deque has been compacted.** If agent's cursor points to an evicted event_id (harness deque rolled past it during agent downtime), GET `/events/for/{role}?since=cursor` needs to return "your cursor is too old, you've missed events" — not just empty. The doc says "synthetic cursor-evicted handling" but doesn't specify the wire format.
 - **G8 — EAD double-emit on restart with lost last-seen.** §5.4 says EAD persists last-seen forge id "so it doesn't double-process on restart." If that file is corrupt or missing, EAD starts from zero and could emit thousands of historical assigned-to events, flooding queues. Need a bounded recovery: e.g., on missing/corrupt last-seen, default to "now - 10 minutes" not "epoch."
-- **G9 — Forge → EAD lag floor.** GitHub Search API has 5-30s indexing lag. Even with EAD polling every 1s, assigned-to latency has an indexing-lag floor that the doc currently understates. Mention this so v2 isn't sold as "sub-second" when it's really "10-30s for EAD-driven handoffs, sub-second for `/work/assign`-driven."
+- **G9 — Forge → EAD lag floor.** *(Closed by §5.4 REST-API choice.)* The original concern assumed Search API (5-30s indexing lag); switching to REST removes that floor — REST is real-time. Latency floors documented in §5.4 are now driven purely by polling cadence, not API indexing. Sub-second `tracker.py` path, 5-30s typical / 60s worst-case for EAD safety net.
 
 ### 14.3 Work-handoff gaps
 
