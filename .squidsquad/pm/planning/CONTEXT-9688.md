@@ -84,7 +84,7 @@ Test cases:
 - 4 protected agents (full squad) → no kills.
 - 1 protected + 1 orphan (claude.exe with dead parent) → 1 kill, parent PID logged.
 - 1 protected + 1 live subagent (claude.exe with non-protected live parent) → no kills.
-- Missing `.claude-pid` for one role → entire cleanup skipped (D3).
+- Missing `.claude-pid` for one role → entire cleanup skipped (D3). _(superseded by #9926 — per-role skip; only the affected role is excluded from the protected set, the sweep proceeds for healthy roles.)_
 - Mix of all populations → only orphans killed.
 
 ### D8. Architecture doc update (NEW — folded in from human direction)

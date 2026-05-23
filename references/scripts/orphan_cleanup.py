@@ -193,10 +193,20 @@ def _role_pid_files():
 def _resolve_protected_pids(role_pid_files, processes):
     """Resolve protected ``claude.exe`` PIDs for every role.
 
-    Returns ``(protected_pids, skipped_role_logs)``. Per CONTEXT D3: if ANY
-    role has a missing ``.claude-pid`` OR its cmd.exe is dead OR no claude.exe
-    child is found for the cmd.exe, the caller MUST skip the entire sweep.
-    The caller checks whether ``skipped_role_logs`` is empty.
+    Returns ``(protected_pids, skipped_role_logs)``.
+
+    #9926 — SUPERSEDES CONTEXT-9688 D3: a role with a stale ``.claude-pid``
+    (missing file, dead cmd.exe, or no claude.exe child) is now excluded
+    from the protected set as a **per-role skip** — it does NOT abort the
+    whole sweep. Other roles still contribute their protected PIDs and
+    orphans of dead parents that aren't in any role's protected set are
+    still killed. This closes the steady-state-vs-turbulence gap where
+    the wedge/reboot episodes that *create* orphans were the same ones
+    that suppressed cleanup.
+
+    The caller (``sweep``) inspects the returned ``skipped`` list to
+    decide whether the zero-healthy-roles backstop (D2) applies — that
+    case is qualitatively different and DOES still abort the sweep.
     """
     protected = set()
     skipped = []
@@ -415,14 +425,39 @@ def sweep(invoked_by="manual", dry_run=False):
     protected, skipped_roles = _resolve_protected_pids(role_pid_files, processes)
     summary["skipped_roles"] = skipped_roles
 
-    if skipped_roles:
-        # D3: any role failing to resolve aborts the entire sweep.
-        for entry in skipped_roles:
-            _log_decision({"invoked_by": invoked_by, **entry})
+    # #9926 — SUPERSEDES CONTEXT-9688 D3. The previous behavior aborted
+    # the whole sweep if ANY role failed to resolve. That was correct under
+    # steady state but counter-productive during the wedge/reboot episodes
+    # that *create* orphans: 3 orphan claude.exe accumulated during the
+    # 2026-05-22 harness wedge and were never reaped because one role's
+    # cmd.exe was dead.
+    #
+    # New behavior:
+    #   1. Always log per-role skip entries to the JSONL (D4 audit trail).
+    #   2. Apply the D2 zero-healthy-roles backstop ONLY when every
+    #      configured role failed to resolve — in that case the protected
+    #      set is empty AND there's no useful sweep to run (no protection
+    #      to enforce), so abort like before.
+    #   3. Otherwise: proceed with the sweep using whatever protected
+    #      PIDs we DID resolve. Orphans of dead parents that aren't in
+    #      this partial protected set are still killed; the skipped
+    #      role's claude.exe (if any) is one of the still-alive parents
+    #      and won't be touched because its child has a live ppid.
+    for entry in skipped_roles:
+        _log_decision({"invoked_by": invoked_by, **entry, "decision": "per-role-skip"})
+
+    # D2 backstop: zero-healthy-roles. Distinguish from "idle state with no
+    # extra claude.exe to sweep" — in that latter case role_pid_files is
+    # non-empty AND at least one resolved successfully (skipped count <
+    # configured count). Only when skipped == configured do we abort.
+    # An empty role_pid_files (no .local-config) hits this path via the
+    # synthetic "<any>" entry pushed by _resolve_protected_pids.
+    if not protected and len(skipped_roles) >= len(role_pid_files or [1]):
         _log_decision({
             "invoked_by": invoked_by, "decision": "skipped",
-            "reason": (f"{len(skipped_roles)} role(s) failed to resolve "
-                       "protected pid; aborting sweep per CONTEXT-9688 D3"),
+            "reason": (f"D2 backstop: zero healthy roles "
+                       f"({len(skipped_roles)} skipped, no protected PIDs); "
+                       "aborting sweep per CONTEXT-9926 D2"),
         })
         summary["skipped_run"] = True
         return summary

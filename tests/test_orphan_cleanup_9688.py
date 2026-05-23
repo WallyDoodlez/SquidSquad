@@ -198,38 +198,49 @@ def test_d7_live_subagent_with_non_protected_parent_not_killed(
 
 
 # ---------------------------------------------------------------------------
-# D7 #6 — Missing .claude-pid for one role → ENTIRE cleanup skipped (D3)
+# D7 #6 — Missing .claude-pid for one role → ONLY that role skipped (#9926)
 # ---------------------------------------------------------------------------
 
-def test_d7_missing_claude_pid_skips_entire_sweep(patched_log, tmp_path):
+def test_d7_missing_claude_pid_skips_only_affected_role(patched_log, tmp_path):
+    """#9926 D1 (supersedes CONTEXT-9688 D3): a missing .claude-pid for one
+    role excludes ONLY that role from the protected set — the sweep proceeds
+    for healthy roles, and orphans whose parents are dead are killed.
+    """
     squid, pid_map = _setup_pid_files(tmp_path, {"skill": 1000})
-    # PM is configured (has a clone path resolvable via .local-config) but
-    # its .claude-pid file is absent — D3 must fire.
+    # PM is configured but its .claude-pid is absent.
     pid_map["pm"] = tmp_path / ".squidsquad" / "pm" / ".claude-pid"  # non-existent
     orphan_pid = 8008
     procs = [
-        _fake_proc(1001, 1000),
-        _fake_proc(orphan_pid, 99999),
+        _fake_proc(1001, 1000),       # protected (skill cmd.exe 1000 alive)
+        _fake_proc(orphan_pid, 99999),  # orphan (parent 99999 dead)
     ]
+    # _is_pid_alive: skill's cmd.exe (1000) is alive, orphan's parent dead.
+    def fake_alive(pid):
+        return pid == 1000
     with patch.object(orphan_cleanup, "_is_windows", return_value=True), \
          patch.object(orphan_cleanup, "_role_pid_files", return_value=pid_map), \
          patch.object(orphan_cleanup, "_list_claude_processes", return_value=procs), \
-         patch.object(orphan_cleanup, "_is_pid_alive", return_value=True), \
-         patch.object(orphan_cleanup, "_kill") as killer:
+         patch.object(orphan_cleanup, "_is_pid_alive", side_effect=fake_alive), \
+         patch.object(orphan_cleanup, "_kill", return_value=True) as killer:
         result = orphan_cleanup.sweep()
-    killer.assert_not_called()
-    assert result["skipped_run"] is True, (
-        "missing .claude-pid for any role must abort the ENTIRE sweep (D3)"
+    # Sweep must NOT abort — only PM is skipped.
+    assert result["skipped_run"] is False, (
+        "#9926: missing .claude-pid for ONE role must NOT abort the entire "
+        "sweep; only the affected role is excluded from the protected set"
     )
+    # PM appears in the per-role skip list.
     assert any(s["role"] == "pm" and "missing" in s["reason"]
                for s in result["skipped_roles"])
+    # The orphan was killed — sweep proceeded despite PM's stale pid.
+    killer.assert_called_once_with(orphan_pid)
+    assert result["killed"] == [orphan_pid]
 
 
 def test_no_roles_discoverable_skips_sweep(patched_log, tmp_path):
-    """If `.local-config` is unavailable (returns empty {}), D3 fires too —
-    rather miss the sweep than guess. This is the multi-clone safety net
-    for the case where orphan_cleanup runs from a context without clone
-    information."""
+    """#9926 D2 backstop (retained): if `.local-config` is unavailable
+    (returns empty {}), abort the sweep — there are zero healthy roles,
+    so the original D3 rationale ("rather miss orphans than kill the
+    wrong process") still applies."""
     procs = [_fake_proc(1001, 99999)]  # would be orphan if sweep ran
     with patch.object(orphan_cleanup, "_is_windows", return_value=True), \
          patch.object(orphan_cleanup, "_role_pid_files", return_value={}), \
@@ -241,22 +252,35 @@ def test_no_roles_discoverable_skips_sweep(patched_log, tmp_path):
     assert result["skipped_run"] is True
 
 
-def test_stale_pid_with_dead_cmdexe_also_skips_sweep(patched_log, tmp_path):
-    """D3 also fires when .claude-pid exists but its cmd.exe is dead — that's
-    a respawn race; rather miss the sweep than risk killing the new agent
-    that's about to claim the role."""
+def test_stale_pid_with_dead_cmdexe_skips_only_affected_role(patched_log, tmp_path):
+    """#9926 D1: when .claude-pid exists but its cmd.exe is dead, only
+    THAT role is excluded — the sweep proceeds for healthy roles. Was the
+    pre-#9926 behavior to abort the entire sweep; that produced the
+    "orphans accumulate exactly during the wedge episodes that create them"
+    bug documented in the issue.
+    """
     squid, pid_map = _setup_pid_files(tmp_path, {"skill": 1000, "pm": 2000})
-    procs = [_fake_proc(1001, 1000)]
+    orphan_pid = 5005
+    procs = [
+        _fake_proc(1001, 1000),       # protected (skill alive)
+        _fake_proc(orphan_pid, 99999),  # orphan (parent dead, not in any role's protected set)
+    ]
+    # skill (1000) alive; pm (2000) dead; orphan parent (99999) dead.
     def fake_alive(pid):
-        return pid != 2000
+        return pid == 1000
     with patch.object(orphan_cleanup, "_is_windows", return_value=True), \
          patch.object(orphan_cleanup, "_role_pid_files", return_value=pid_map), \
          patch.object(orphan_cleanup, "_list_claude_processes", return_value=procs), \
          patch.object(orphan_cleanup, "_is_pid_alive", side_effect=fake_alive), \
-         patch.object(orphan_cleanup, "_kill") as killer:
+         patch.object(orphan_cleanup, "_kill", return_value=True) as killer:
         result = orphan_cleanup.sweep()
-    killer.assert_not_called()
-    assert result["skipped_run"] is True
+    assert result["skipped_run"] is False, (
+        "#9926: dead cmd.exe for ONE role must NOT abort the sweep"
+    )
+    assert any(s["role"] == "pm" and "not alive" in s["reason"]
+               for s in result["skipped_roles"])
+    killer.assert_called_once_with(orphan_pid)
+    assert result["killed"] == [orphan_pid]
 
 
 # ---------------------------------------------------------------------------
@@ -546,3 +570,83 @@ class TestKillReverify9937:
         assert 9999 not in result["killed"], (
             "#9937 regression: recycled PID was killed despite _pid_is_claude_exe=False"
         )
+
+
+# ---------------------------------------------------------------------------
+# #9926 — per-role skip semantics (AC4 + AC5)
+# ---------------------------------------------------------------------------
+
+
+def test_partial_skip_kills_orphans_of_healthy_roles(patched_log, tmp_path):
+    """#9926 AC4 (canonical scenario): 2 roles configured, role A has a
+    stale `.claude-pid`, role B is healthy. An orphan claude.exe whose
+    parent matches neither A's nor B's `.claude-pid` is correctly
+    classified ORPHAN and killed. A claude.exe whose parent is role B's
+    live cmd.exe is correctly classified PROTECTED and NOT killed.
+    """
+    # Role A (skill) is stale — pid file points at 1000 but cmd.exe 1000
+    # is dead. Role B (pm) is healthy with cmd.exe 2000 alive.
+    squid, pid_map = _setup_pid_files(tmp_path, {"skill": 1000, "pm": 2000})
+    orphan_pid = 7007
+    protected_pid_b = 2001
+    procs = [
+        _fake_proc(protected_pid_b, 2000),  # role B's protected claude.exe
+        _fake_proc(orphan_pid, 88888),       # orphan (parent dead, no role)
+    ]
+    # Aliveness: pm (2000) alive; skill (1000) and orphan parent (88888) dead.
+    def fake_alive(pid):
+        return pid == 2000
+    with patch.object(orphan_cleanup, "_is_windows", return_value=True), \
+         patch.object(orphan_cleanup, "_role_pid_files", return_value=pid_map), \
+         patch.object(orphan_cleanup, "_list_claude_processes", return_value=procs), \
+         patch.object(orphan_cleanup, "_is_pid_alive", side_effect=fake_alive), \
+         patch.object(orphan_cleanup, "_kill", return_value=True) as killer:
+        result = orphan_cleanup.sweep()
+    # Sweep must NOT abort.
+    assert result["skipped_run"] is False
+    # Role B's claude.exe must NOT be killed (protected via live cmd.exe).
+    assert protected_pid_b not in result["killed"]
+    assert protected_pid_b in result["kept"]
+    # The orphan IS killed despite role A being unhealthy.
+    killer.assert_called_once_with(orphan_pid)
+    assert orphan_pid in result["killed"]
+
+
+def test_partial_skip_logs_per_role_decision(patched_log, tmp_path):
+    """#9926 AC5: the JSONL diagnostics log contains a
+    `decision: "per-role-skip"` entry for the unhealthy role AND normal
+    `decision: "killed"`/`"protected"` entries for processes evaluated
+    against healthy roles.
+    """
+    squid, pid_map = _setup_pid_files(tmp_path, {"skill": 1000, "pm": 2000})
+    orphan_pid = 6006
+    procs = [
+        _fake_proc(1001, 1000),
+        _fake_proc(orphan_pid, 77777),
+    ]
+    def fake_alive(pid):
+        return pid == 1000  # skill alive, pm dead, orphan parent dead
+    with patch.object(orphan_cleanup, "_is_windows", return_value=True), \
+         patch.object(orphan_cleanup, "_role_pid_files", return_value=pid_map), \
+         patch.object(orphan_cleanup, "_list_claude_processes", return_value=procs), \
+         patch.object(orphan_cleanup, "_is_pid_alive", side_effect=fake_alive), \
+         patch.object(orphan_cleanup, "_kill", return_value=True):
+        result = orphan_cleanup.sweep()
+
+    log = _read_log_lines(patched_log)
+    # 1. A per-role-skip entry for pm exists.
+    per_role_skips = [e for e in log
+                      if e.get("decision") == "per-role-skip"
+                      and e.get("role") == "pm"]
+    assert per_role_skips, (
+        f"#9926 AC5: expected a 'per-role-skip' decision for pm in the "
+        f"JSONL log, saw: {log}"
+    )
+    # 2. A normal killed-decision entry for the orphan exists alongside.
+    kill_entries = [e for e in log
+                    if e.get("decision") == "killed"
+                    and e.get("pid") == orphan_pid]
+    assert kill_entries, (
+        f"#9926 AC5: expected a normal 'killed' decision for the orphan "
+        f"({orphan_pid}) alongside the per-role-skip entry, saw: {log}"
+    )
