@@ -1,34 +1,41 @@
 # Working State
 
-- **Task**: idle — awaiting human direction on #6274 Phase 2 approval gate
+- **Task**: idle — awaiting human approval gate on #6274 (planned → approved)
 - **Status**: idle
-- **Last Processed Event ID**: da573e18413ae4d2
+- **Last Processed Event ID**: 11dcbc317b7ff67f
 
-## Pipeline snapshot (2026-05-23 02:06)
+## Pipeline snapshot (2026-05-23 02:35)
 - 0 PRs open, 0 pending-test, 0 pending-ship, 0 external
 - 1 approved (long-running): #3 (DM lane)
-- 1 task at status:planned: #6274 (terminology rename, awaiting human approval to advance planned → approved)
-- All 4 agents healthy (no recent boot failures in cycle-input)
+- 1 task at status:planned: #6274 (terminology rename) — DS audit complete + 10 findings remediated, awaiting human approval
+- All 4 agents healthy
 
-## DS audit follow-up (carry-over from cycle 1593)
-- REVIEW-6274-DEEPSEEK.md is a stub (`# STATUS: generating...`, 65 bytes, mtime 01:59)
-- Cycle 1593 commit claimed "DS audit running" but no DS subprocess found in repo (only provider adapters in references/scripts/providers/deepseek/, no review-launcher script)
-- Prior session respawned at ctx 69%; DS process likely died with parent
-- **Next cycle action**: either re-invoke DS review on CONTEXT-6274.md (if there's an external tool the human runs) OR delete stub and proceed directly to human approval gate on #6274
+## #6274 — post-DS-remediation state
+- DS audit (REVIEW-6274-DEEPSEEK.md): 3 errors + 7 warnings, all resolved inline (commit a5375dc7 → e1a898af)
+- New D11 locked decision: `*-lead` suffix renames (qa-lead → verifier-lead, dev-lead → worker-lead) wired into every sub-phase
+- New AC2.9: cutover-date populator as last commit of 6274.2 PR (resolves F2 temporal impossibility)
+- AC2.2 rewritten with positive definition of role-string reference (a)–(d) + explicit EXCLUDED list (F4)
+- AC3.7 rewritten with AST scan + anchored prose regex (F5 — no naive grep false positives)
+- G2→3 gate now verifies dual-labeling WORKED (every trailing-7d issue has BOTH labels), not single-old-label leakage (F1)
+- D4 idempotency: single canonical check (Workers: + .squidsquad/worker/ both present → no-op)
+- RESEARCH-6274.md §2: harness-state.json schema documented, qa variants entry corrected
+- Issue body synced to match rewritten CONTEXT (AUTHORITATIVE SCOPE banner)
+- 3-sub-phase PR sequence (6274.1/6274.2/6274.3) UNCHANGED
 
-## Context pressure (fresh after respawn)
-- 1593: 69% → respawn → 1594: 5%
-- Threshold 70%; healthy headroom
+## Context pressure (healthy)
+- 1593: 69% → respawn → 1594: 5% → 1595: 13%
+- Threshold 70%; ample headroom
 
 ## Sequence progress
-1. ✅ Event-arch v2 doc shipped main (PR #9945 merged 2026-05-23 commit 5b21ec5f)
-2. 🔄 #6274 Phase 2 CONTEXT complete; DS audit stub stale; awaiting human approval gate
-3. ⏳ Implementation epic from §15 closure plan — pending #6274 ship
+1. ✅ Event-arch v2 doc shipped main (PR #9945, commit 5b21ec5f)
+2. ✅ #6274 Phase 2 CONTEXT + DS audit + remediation complete
+3. 🔄 #6274 awaiting human approval gate (planned → approved)
+4. ⏳ Implementation epic from event-arch §15 closure plan — pending #6274 ship
 
 ## Open with human
-- #6274: approve advance planned → approved (DS audit pending — flag stale stub at check-in)
-- Direction on DS audit tooling (no launcher script in repo)
+- #6274: approve advance planned → approved (CONTEXT + RESEARCH + issue body all in sync as of e1a898af)
 
 ## Notes
-- /loop scheduled every 30m for this session (job 50ee8c0f)
-- Recent_events: 30 events, mostly past DM deliveries (9927/9930/9932/9934/9937/9939/9941) all shipped; PM activity on #9925/#9926 CONTEXT rewrites — all already actioned
+- /loop scheduled every 30m for this session (cron job 50ee8c0f)
+- Recent_events (19): mostly own activity from DS remediation pass (comment, body edit, comment again) — all already actioned
+- Stale .squidsquad/{.event-state.json.pre-1516.bak, .harness-state.json.bak, .harness-state.json.pre-1500-cleanup.bak, cp-trace.log, hc-trace.log} untracked files; not actionable
