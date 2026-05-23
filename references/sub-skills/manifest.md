@@ -222,7 +222,7 @@ references/sub-skills/
 │   └── responsibility.md             (Worker-specific responsibility narrowing)
 ├── roles/pm/
 │   ├── checkin.md                  (Step 2 — human check-in and input handling)
-│   ├── testing-and-verification.md (Steps 3-6c — E2E, investigate, verify, ship counter)
+│   ├── testing-and-verification.md (Steps 3-6c — PM delegates; verifier handles verification)
 │   ├── health-check.md            (Step 7 — agent health check)
 │   ├── task-intake.md              (5-phase lifecycle + Open Artifacts)
 │   ├── task-approval.md            (Feature Approval Gate)
