@@ -291,7 +291,7 @@ class TestL4RoleFiltering:
         """Create project sub-skill files with role prefixes."""
         # Ensure all role directories exist so known_prefixes includes them
         roles_dir = compose_env / "references" / "roles"
-        for role in ("dm", "qa"):
+        for role in ("dm", "verifier"):  # #6274: qa→verifier
             role_dir = roles_dir / role
             role_dir.mkdir(parents=True, exist_ok=True)
             (role_dir / "instructions.md").write_text(

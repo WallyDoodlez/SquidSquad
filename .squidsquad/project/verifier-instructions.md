@@ -1,6 +1,6 @@
-## QA Project Operations — SquidSquad
+## Verifier Project Operations — SquidSquad
 
-These instructions apply to the QA agent on this project.
+These instructions apply to the Verifier agent on this project.
 
 ### Boot & Scope
 

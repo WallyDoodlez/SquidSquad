@@ -1,6 +1,6 @@
-## QA Project Identity — SquidSquad
+## Verifier Project Identity — SquidSquad
 
-These behavioral directives shape how the QA agent thinks on this project.
+These behavioral directives shape how the Verifier agent thinks on this project.
 
 ### Verification Standards
 

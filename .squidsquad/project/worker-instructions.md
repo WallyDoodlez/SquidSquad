@@ -1,6 +1,6 @@
-## Dev/Skill Project Operations — SquidSquad
+## Worker/Skill Project Operations — SquidSquad
 
-These instructions apply to the dev/skill agent on this project.
+These instructions apply to the worker/skill agent on this project.
 
 ### Boot & Queue
 
