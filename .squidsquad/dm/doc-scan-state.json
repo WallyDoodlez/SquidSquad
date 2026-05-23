@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "docs/sub-skill-guide.md",
+  "last_scanned": "CONTRIBUTING.md",
   "rotation_count": 55,
   "scan_history": [
     {
@@ -1648,6 +1648,11 @@
         "sub-skills tree: added common-events/ (event-mode runtime fragments; exists on disk, was missing from tree)",
         "roles tree: added LAYERS.md, SOUL.md, instructions.md root-level files (Layer 1 base files; line 111 already references roles/SOUL.md as Layer 1 base)"
       ]
+    },
+    {
+      "file": "CONTRIBUTING.md",
+      "date": "2026-05-23",
+      "findings": 0
     }
   ],
   "doc_inventory": {
