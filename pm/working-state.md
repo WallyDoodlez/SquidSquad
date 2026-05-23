@@ -1,33 +1,34 @@
 # Working State
 
-- **Task**: #9965 skill ACK'd STOP+nudge cycle 1315, AC2.8 pivot active (cycle 1316 -1 fail). #9968 doc v1.1 smoke-read in progress with human (TOC shown, 12 findings delivered).
-- **Status**: monitoring (skill on track; doc review in human's court)
+- **Task**: #9968 doc v1.3 shipped (8b33aebd) — 6 Mermaid diagrams added (L1-L4 stack, L4 op grammar, compose pipeline, wake-mode, runtime L4 write, sync defense). Awaiting human smoke-read of rendered Mermaid. #9965 skill AC2.8 steady: 48→41 fails over cycles 1315-1317.
+- **Status**: awaiting human review of v1.3 diagrams
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-23 17:03)
+## Pipeline snapshot (2026-05-23 17:33)
 - 0 PRs open, 0 pending-test, 0 pending-ship, 0 external untriaged
 - 1 approved (long-running): #3 (DM lane, going-public)
 - 2 in-progress:
-  - #9965 (6274.2) — skill cycle 1315 (16:44) ACKNOWLEDGED STOP+nudge directly. Pivoting 100% to AC2.8. Cycle 1316 (16:58) shipped AC2.8 batch #2: tests 48→47 (-1 failure), zero regressions. Forward-progress hold honored.
-  - #9968 (EPIC: L1-L4 doc) — v1.1 committed 47e7ba61. Human smoke-read started this session: TOC shown + 12-finding review delivered across 4 buckets (A: internal contradictions, B: deferred decisions, C: ownership, D: gaps). Human reading without indicating which findings to address first; no PM edits this cycle.
-- 1 pending (gated): #9966 (6274.3) — blocked on 6274.2 (now AC2.8) + 30d window
+  - #9965 (6274.2/AC2.8) — skill steadily executing pivot:
+    - cycle 1315 (16:44): ACK STOP+nudge, no forward AC2.2/2.3/2.4-2.7 work
+    - cycle 1316 (16:58): AC2.8 batch #2 downscoped, tests 48→47 (-1)
+    - cycle 1317 (17:06): AC2.8 batch #3 non-wizard-coupled, tests 47→41 (-6)
+    - Trend: -7 failures in 3 cycles, zero regressions, suite-green target on track
+  - #9968 (EPIC: L1-L4 doc) — v1.3 shipped 8b33aebd cycle 1616: 6 Mermaid diagrams added (D1 §2, D6 §3.3, D2 §4.4, D3 §6.5, D4 §7.6, D5 §8). Doc 711→863 lines. Human-driven session: TOC review → diagram selection via AskUserQuestion → all 6 + Mermaid format approved → inserted + pushed. Awaiting smoke-read of rendered Mermaid on GitHub.
+- 1 pending (gated): #9966 (6274.3) — blocked on 6274.2 + AC2.8 green + 30d window
 - 3 issues at status:open: #9967, #9969, #9970
 - shipped_since_bump=6 of 10
 
-## #9965 escalation cadence — CANCELLED
-- 16:15 (cycle 1612): PM filed nudge
-- 16:44 (skill cycle 1315): explicit acknowledgement of STOP directive + nudge; pivoting to AC2.8
-- 16:58 (skill cycle 1316): AC2.8 batch #2 shipped, -1 failure, no forward-progress AC2.2/2.3/2.4-2.7 work
-- 17:03 (cycle 1615 — this cycle): escalation threshold not reached; cancelling. Resume standard monitoring.
+## #9968 doc revision history (this session)
+- v1 (cycle 1606): initial draft committed
+- v1.1 (cycle 1612, 47e7ba61): §5.6 dual TOCs, §6.5 manifest-selection rewrite, §3.2 Important callout
+- v1.2 (cycle 1615+, f41398ea): §5.6.2 expanded to full TOC, §5.6.3 diff table added
+- v1.3 (cycle 1616, 8b33aebd): 6 Mermaid diagrams (D1-D6)
+- Outstanding from human review (delivered earlier but not addressed in v1.1-v1.3 substantively): 12 findings in 4 buckets (A: internal contradictions, B: deferred decisions, C: ownership, D: gaps). Human has not picked priority order; PM holds until human picks.
 
-## #9968 doc v1.1 review (in flight)
-- 12 findings surfaced to human in 4 buckets:
-  - A. Internal contradictions: §4.2 op-order vs target resolution; §6.2 vs §3.1 sub-procedure authoring location; §7.5 post-commit recompose vs §8.1 PR-check
-  - B. Deferred decisions: §11.1 Q5 gitignore composed output; §10.2 backward-compat shim deletion timeline
-  - C. Ownership: §12 owner column (skill vs DM/QA executors); §8.3 pre-ship gate scope creep onto QA
-  - D. Gaps: §5.5 Vault thin; §3.1 DRY post-fold scope; §7.4 mini-CQ no-human fallback; §10.3 memory→L4 non-migrating residue; WIZARD hook detail
-- Human asked for TOC only; deferring direction
-- Next: wait for human to select which finding(s) to address; do NOT edit doc unprompted
+## #9965 — back to normal monitoring
+- Skill is honoring directive: no AC2.2/2.3/2.4-2.7 forward work, AC2.8 only, suite-tracking each cycle
+- No PM nudge needed; resume standard monitoring
+- Next escalation trigger only if (a) suite regresses on a commit, (b) skill abandons AC2.8 pivot, or (c) ~8h pass without progress
 
 ## #9966 — unchanged
-- Conditions: 6274.2/AC2.8 ships, cutover date passed
+- Conditions: AC2.8 ships, cutover date passed
