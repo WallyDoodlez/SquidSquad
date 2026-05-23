@@ -82,7 +82,7 @@ This distinction matters because emitted events are guaranteed (the script alway
 |-------|-------------|------|---------------------------|
 | `status-transition` | tracker.py | Any status label change | "Issue #42 moved from pending-test to pending-ship" |
 | `tracker-comment` | tracker.py | A comment is posted on an issue | "QA commented on #42 — mentioned skill agent" |
-| `pr-merge` | git_ops.py | A PR is merged | "PR #99 was merged — related issue can ship" |
+| `pr-merged` | harness | A PR is merged (emitted by the harness after `POST /merge` completes) | "PR #99 was merged — related issue can ship" |
 | `pr-create` | git_ops.py | A PR is opened | "New PR #99 for review" |
 | `git-commit` | git_ops.py | Agent creates a commit | "Skill committed code changes" |
 | `git-push` | git_ops.py | Agent pushes changes | "New commits on main from skill" |
@@ -136,13 +136,13 @@ graph TD
     EVENTS --> SKILL_FILTER["Skill Filter"]
     EVENTS --> DM_FILTER["DM Filter"]
 
-    PM_FILTER --> PM_EVENTS["agent-health<br/>phase-change<br/>pr-merge<br/>status-transition<br/>tracker-comment<br/>verification-failed/passed"]
+    PM_FILTER --> PM_EVENTS["agent-health<br/>phase-change<br/>pr-merged<br/>status-transition<br/>tracker-comment<br/>verification-failed/passed"]
 
     QA_FILTER --> QA_EVENTS["agent-health<br/>status-transition"]
 
     SKILL_FILTER --> SKILL_EVENTS["cycle-start/end<br/>status-transition<br/>tracker-comment<br/>verification-failed"]
 
-    DM_FILTER --> DM_EVENTS["agent-health<br/>pr-merge<br/>status-transition<br/>verification-passed"]
+    DM_FILTER --> DM_EVENTS["agent-health<br/>pr-merged<br/>status-transition<br/>verification-passed"]
 ```
 
 PM has the widest filter because it coordinates the whole pipeline — it needs health alerts, phase changes, PR merges, status transitions, comments, and verification results. QA watches agent health and status transitions to know when work is ready for verification. Skill watches for cycle signals, comments mentioning it, and verification failures that mean rework. DM watches for status transitions (to catch pending-ship items), PR merges, health alerts, and verification signals.

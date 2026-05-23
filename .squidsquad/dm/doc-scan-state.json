@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "README.md",
+  "last_scanned": "docs/event-bus.md",
   "rotation_count": 56,
   "scan_history": [
     {
@@ -1663,6 +1663,14 @@
       "file": "README.md",
       "date": "2026-05-23",
       "findings": 0
+    },
+    {
+      "file": "docs/event-bus.md",
+      "date": "2026-05-23",
+      "findings": 1,
+      "fixes": [
+        "pr-merge event name \u2192 pr-merged (3 occurrences: emitted-events table, PM filter mermaid, DM filter mermaid). pr-merge is DEPRECATED per event_catalog.py:73; harness.py:2438 emits pr-merged. Also corrected source attribution: harness emits it, not git_ops.py."
+      ]
     }
   ],
   "doc_inventory": {
