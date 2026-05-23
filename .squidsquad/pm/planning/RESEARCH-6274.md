@@ -45,7 +45,8 @@ Grep survey on the current main branch (2026-05-23):
 | `references/sub-skills/project/{dev,dev-soul-directives}-*.md` | 2+2 files | L4 seed templates |
 | `references/sub-skills/roles/qa/verification.md` | 9 occurrences | L2 sub-skill |
 | `references/roles/dev/{base,android,fullstack,ios,skill,web}/` | 5 variant dirs | L3 variant trees |
-| `references/roles/qa/` | base + 5 variant dirs | L2 + L3 (no variants in use) |
+| `references/roles/qa/{android,fullstack,ios,skill,web}/` | base + 5 variant dirs | L2 + L3 (variant dirs exist on disk as scaffolding from the symmetric layout, but no `instructions.md` content authored yet — variants not in active use, only structure present). D5 in CONTEXT enumerates them explicitly so the rename doesn't miss the scaffolding tree. |
+| `.squidsquad/.harness-state.json` | top-level `agents.<key>` dict | Keys are role identities (`pm`, `dm`, `qa`) or worker variants (`skill`). D4 wizard upgrade renames `agents.qa` → `agents.verifier` (and `agents.dev` → `agents.worker` if present, rare). Variant keys like `agents.skill` unchanged per D5. Schema: `{harness_pid, start_time, port, agents: {<role>: {intent, status, boot_time, clone_path, claude_pid, terminal_pid, bootup_complete}}}`. |
 
 **Per-install touchpoints** (will need migration):
 
