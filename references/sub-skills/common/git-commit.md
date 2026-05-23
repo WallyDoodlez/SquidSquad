@@ -43,7 +43,7 @@ Branch-per-feature workflow is the only mode (#9478). Split commits into code (f
    - **What**: [what changed]
    - **Why**: [rationale and key decisions]
 
-   ### QA Status
+   ### Verifier Status
    - [ ] Unit tests passing
    - [ ] Smoke tests passing
    - [ ] Acceptance criteria met
@@ -100,7 +100,7 @@ Branch-per-feature workflow is the only mode (#9478). Split commits into code (f
      git checkout [WORKING_BRANCH]
      ```
      Log in iteration summary: `Merged [WORKING_BRANCH] into [BRANCH_NAME] — conflict resolved.`
-   - **Merge has code conflicts**: abort and log (PM/QA will handle):
+   - **Merge has code conflicts**: abort and log (PM/verifier will handle):
      ```bash
      git merge --abort
      git checkout [WORKING_BRANCH]

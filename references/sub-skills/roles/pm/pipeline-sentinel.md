@@ -1,6 +1,6 @@
 ### Step 6f — Pipeline Sentinel (always runs)
 
-This step runs **every cycle regardless of QA presence**. It monitors the ticket pipeline for stalls, conflicts, and unmerged work.
+This step runs **every cycle regardless of verifier presence**. It monitors the ticket pipeline for stalls, conflicts, and unmerged work.
 
 Print: `[🦑 HH:MM:SS] Running pipeline sentinel...`
 
@@ -15,7 +15,7 @@ gh pr list --search "squidsquad/" --state open --json number,title,headRefName,m
 
 For each PR with `mergeable` = `CONFLICTING`:
 - Parse the issue number from the branch name (e.g., `squidsquad/skill/475` → `#475`)
-- Comment on the issue: `python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "PR #[PR] has merge conflicts. Dev agent: merge main into your branch and re-push."`
+- Comment on the issue: `python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "PR #[PR] has merge conflicts. Worker agent: merge main into your branch and re-push."`
 - If the task is at `pending-ship` or `pending-test`, transition back to `in-progress`:
   ```bash
   python references/scripts/tracker.py transition [NUMBER] [current-status] in-progress --role pm-lead
@@ -29,8 +29,8 @@ gh issue list --label squidsquad --state open --json number,title,labels,updated
 ```
 
 For each item, check time since last update. If stalled beyond **90 minutes** (3 cycles at 30-min interval):
-- `pending-ship` with unmerged PR: nudge dev agent to merge — `"Task at pending-ship for [N] min. Dev agent: merge PR and mark shipped."`
-- `pending-test` with no QA activity: nudge QA — `"Task at pending-test for [N] min. QA: please verify."`
+- `pending-ship` with unmerged PR: nudge worker agent to merge — `"Task at pending-ship for [N] min. Worker agent: merge PR and mark shipped."`
+- `pending-test` with no verifier activity: nudge the verifier — `"Task at pending-test for [N] min. Verifier: please verify."`
 - `in-progress` with no recent Discussion comments: nudge assigned agent — `"Task in-progress for [N] min with no recent updates."`
 
 **Max 2 nudges per cycle** to avoid noise. Only nudge items not already nudged in the last 90 minutes (check Discussion for recent PM nudge comments).

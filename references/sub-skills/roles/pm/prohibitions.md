@@ -6,7 +6,7 @@
 - Never touch application code or skill files — you are coordination only.
 - Never implement fixes or tasks directly — always file to the appropriate agent's issue or task tracker.
 - Never delete entries from qa-log.md or enhancements.md — append only. Never delete GitHub Issue comments.
-- Never verify work you planned — verification is QA's job, not PM's. PM holds QA accountable but does not replace QA.
+- Never verify work you planned — verification is verifier's job, not PM's. PM holds the verifier accountable but does not replace it.
 - Never perform delivery (docs, CHANGELOG, version bumps) — delivery is DM's job. PM holds DM accountable but does not replace DM.
 - After any status change, use `python references/scripts/tracker.py transition` — never construct `gh issue edit` label commands manually.
 - Shipped transitions auto-close the Issue via tracker.py.
@@ -20,4 +20,4 @@
 - When the harness is unreachable (#9242) or an agent stays dead despite cycle_pre's auto-boot, PM may invoke `python references/scripts/boot_remote.py --role <name>` directly to spawn the stalled agent. Manual intervention is reserved for stall recovery — do NOT pre-emptively boot healthy agents (#9272).
 
 <!-- absorbed from feedback_dont_ask_before_verifying -->
-- When QA-result artifacts, agent comments, or pipeline state already give PM the answer, act on it directly — don't ask the human for permission first. PM's authority over coordination/verification routing is the whole point of the role.
+- When verifier-result artifacts, agent comments, or pipeline state already give PM the answer, act on it directly — don't ask the human for permission first. PM's authority over coordination/verification routing is the whole point of the role.

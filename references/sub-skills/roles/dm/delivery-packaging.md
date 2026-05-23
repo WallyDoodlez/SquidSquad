@@ -11,7 +11,7 @@ python references/scripts/tracker.py list-by-labels "status:pending-ship"
 Pick the highest-priority item first. When picking up an item, print: `[🦑 HH:MM:SS] Delivering #[NUMBER]...`
 
 1. Write working state: update `.squidsquad/dm/working-state.md` with the task ID, status `in-progress`, and planned delivery steps.
-2. Read the task description, acceptance criteria, and Discussion entries (especially dev's delivery notes).
+2. Read the task description, acceptance criteria, and Discussion entries (especially worker's delivery notes).
 
 ### Step 2b — Check for delivery:skip
 
@@ -48,10 +48,10 @@ For each Pending Ship task that is NOT skipped:
    ```
 
    - **If `$ARTIFACTS` is empty** (bug fix or trivial task with no planning artifacts): the citation gate does not apply — proceed with the merge request below.
-   - **If `$ARTIFACTS` is non-empty**: scan the PR description (`body` field above) for a substring reference to any planning filename returned (e.g. `CONTEXT-[NUMBER].md`, `.squidsquad/qa/planning/TEST-PLAN-[NUMBER].md`, legacy `FEAT-*-[NUMBER]-TEST-PLAN.md`) OR a `### 5.X #[NUMBER]` bundle-CONTEXT section pointer. Under the #9184 workflow the typical citation is `CONTEXT-[NUMBER].md` (PM-side) and `.squidsquad/qa/planning/TEST-PLAN-[NUMBER].md` (QA-side). If **no** such reference is present, do **not** merge — route back to QA:
+   - **If `$ARTIFACTS` is non-empty**: scan the PR description (`body` field above) for a substring reference to any planning filename returned (e.g. `CONTEXT-[NUMBER].md`, `.squidsquad/qa/planning/TEST-PLAN-[NUMBER].md`, legacy `FEAT-*-[NUMBER]-TEST-PLAN.md`) OR a `### 5.X #[NUMBER]` bundle-CONTEXT section pointer. Under the #9184 workflow the typical citation is `CONTEXT-[NUMBER].md` (PM-side) and `.squidsquad/qa/planning/TEST-PLAN-[NUMBER].md` (QA-side). If **no** such reference is present, do **not** merge — route back to the verifier:
      ```bash
      python references/scripts/tracker.py transition [NUMBER] pending-ship pending-test --role dm-lead
-     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR does not cite the planning contract; cannot verify architectural conformance. QA: confirm AC walk completed against the planning artifacts under .squidsquad/pm/planning/ (CONTEXT) and .squidsquad/qa/planning/ (TEST-PLAN)."
+     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR does not cite the planning contract; cannot verify architectural conformance. verifier: confirm AC walk completed against the planning artifacts under .squidsquad/pm/planning/ (CONTEXT) and .squidsquad/qa/planning/ (TEST-PLAN)."
      ```
      Skip this item and move to the next.
 
@@ -61,7 +61,7 @@ For each Pending Ship task that is NOT skipped:
      ```
      The harness returns 202 immediately. Check for `pr-merged` event in your next cycle's `recent_events`. If merge fails (`success: false` in event payload):
      ```bash
-     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR merge failed — merge conflict. Dev agent: resolve conflicts and re-push. Status → In Progress."
+     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR merge failed — merge conflict. Worker agent: resolve conflicts and re-push. Status → In Progress."
      python references/scripts/tracker.py transition [NUMBER] pending-ship in-progress --role dm-lead
      ```
      Skip this item and move to the next.

@@ -11,7 +11,7 @@ python references/scripts/tracker.py list-all-open
 For each open issue that does NOT have the `squidsquad` label:
 
 1. **Classify**: Read the title and body. Determine if it's an issue or task request.
-2. **Route**: Determine which dev agent's domain it belongs to based on content.
+2. **Route**: Determine which worker agent's domain it belongs to based on content.
 3. **Label**: Add appropriate labels:
    ```bash
    python references/scripts/tracker.py add-labels [NUMBER] "squidsquad,type:[issue|task],priority:low,role:[target-role]"

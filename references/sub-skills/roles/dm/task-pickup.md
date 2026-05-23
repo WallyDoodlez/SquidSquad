@@ -19,7 +19,7 @@ If the queue returns an approved task:
 5. Implement the task per acceptance criteria.
 6. Run tests: `python tests/run_tests.py`
 7. **Verify changes exist**: `python references/scripts/git_ops.py has-changes`
-8. Transition to pending-ship (DM skips QA — #6261):
+8. Transition to pending-ship (DM skips verifier — #6261):
    ```bash
    python references/scripts/tracker.py transition [NUMBER] in-progress pending-ship --role dm-lead
    python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "Implementation complete. Status -> Pending Ship."

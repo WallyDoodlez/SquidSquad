@@ -82,7 +82,7 @@ The script handles: status transitions, tracker comments, iteration logging, git
 - `external_issues_triaged`, `health_alerts`, `vault_writes`
 - `version_bump`: `{new_version, items_included}` — deprecated (DM always present)
 
-**QA** cycle-output extras:
+**Verifier** cycle-output extras:
 - `e2e_log`: `{result, tests_run, failures}`
 - `issues_filed`, `issues_verified`, `tasks_verified`
 - `pr_actions`: `[{pr_number, action, comment}]`
