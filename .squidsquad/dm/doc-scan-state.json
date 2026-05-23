@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "SKILL.md:sections-7-8+sec-10",
+  "last_scanned": "docs/ARCHITECTURE.md",
   "rotation_count": 55,
   "scan_history": [
     {
@@ -1631,6 +1631,14 @@
       "file": "SKILL.md:sections-7-8+sec-10",
       "date": "2026-05-23",
       "findings": 0
+    },
+    {
+      "file": "docs/ARCHITECTURE.md",
+      "date": "2026-05-23",
+      "findings": 1,
+      "fixes": [
+        "L6 Memory key-files list: added vault/resources/ line (was missing despite being part of PARAG model on line 169 and existing on disk)"
+      ]
     }
   ],
   "doc_inventory": {

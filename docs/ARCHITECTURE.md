@@ -156,6 +156,7 @@ When examining live `claude.exe` processes, three categories matter:
 - `.squidsquad/vault/galaxy/` — atomic knowledge notes (Zettelkasten): decisions, patterns, learnings, styles
 - `.squidsquad/vault/projects/` — active project context
 - `.squidsquad/vault/areas/` — ongoing concerns: preferences, conventions, values
+- `.squidsquad/vault/resources/` — reference material, external docs
 - `.squidsquad/vault/archives/` — shipped features, closed decisions
 
 **What changes here:** Adding new knowledge types, changing how agents consolidate learnings, modifying the BRIEFING.md update protocol, tuning confidence decay.
