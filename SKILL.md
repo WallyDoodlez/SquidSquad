@@ -477,7 +477,7 @@ When the user says `/squidsquad-status` (or "squad status", "show me the squad",
    - `python references/scripts/tracker.py list-issues [role]` — count and list open issues
    - `python references/scripts/tracker.py list-tasks [role] --status approved` — count and list approved tasks
    - `python references/scripts/tracker.py list-tasks [role] --status in-progress` — count and list in-progress tasks
-4. List recent shipped items: `gh issue list --label "squidsquad" --state closed --limit 5 --json number,title`
+4. List recent shipped items: `gh issue list --label "squidsquad" --label "status:shipped" --state closed --limit 5 --json number,title` (the `status:shipped` label filter excludes issues closed for other reasons — cancellations, won't-fix, duplicates).
 5. Format as a clean dashboard:
 
 ```
