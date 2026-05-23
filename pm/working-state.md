@@ -1,34 +1,35 @@
 # Working State
 
-- **Task**: #9968 doc v1.3 shipped (8b33aebd) — 6 Mermaid diagrams added (L1-L4 stack, L4 op grammar, compose pipeline, wake-mode, runtime L4 write, sync defense). Awaiting human smoke-read of rendered Mermaid. #9965 skill AC2.8 steady: 48→41 fails over cycles 1315-1317.
-- **Status**: awaiting human review of v1.3 diagrams
+- **Task**: #9968 v1.3 shipped + 20-gap analysis delivered to human across 3 tiers. v1.4 drafting deferred by human. #9965 skill steadily executing AC2.8: 48→36 fails over cycles 1315-1318.
+- **Status**: monitoring (skill on track; doc v1.4 awaiting human selection on which gaps to address)
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-23 17:33)
+## Pipeline snapshot (2026-05-23 18:03)
 - 0 PRs open, 0 pending-test, 0 pending-ship, 0 external untriaged
 - 1 approved (long-running): #3 (DM lane, going-public)
 - 2 in-progress:
-  - #9965 (6274.2/AC2.8) — skill steadily executing pivot:
-    - cycle 1315 (16:44): ACK STOP+nudge, no forward AC2.2/2.3/2.4-2.7 work
-    - cycle 1316 (16:58): AC2.8 batch #2 downscoped, tests 48→47 (-1)
-    - cycle 1317 (17:06): AC2.8 batch #3 non-wizard-coupled, tests 47→41 (-6)
-    - Trend: -7 failures in 3 cycles, zero regressions, suite-green target on track
-  - #9968 (EPIC: L1-L4 doc) — v1.3 shipped 8b33aebd cycle 1616: 6 Mermaid diagrams added (D1 §2, D6 §3.3, D2 §4.4, D3 §6.5, D4 §7.6, D5 §8). Doc 711→863 lines. Human-driven session: TOC review → diagram selection via AskUserQuestion → all 6 + Mermaid format approved → inserted + pushed. Awaiting smoke-read of rendered Mermaid on GitHub.
-- 1 pending (gated): #9966 (6274.3) — blocked on 6274.2 + AC2.8 green + 30d window
+  - #9965 (6274.2/AC2.8) — skill steadily executing:
+    - cycle 1315 (16:44): ACK STOP+nudge
+    - cycle 1316 (16:58): batch #2 tests 48→47 (-1)
+    - cycle 1317 (17:06): batch #3 tests 47→41 (-6)
+    - cycle 1318 (17:37): batch #4 test_config_schema.py tests 41→36 (-5)
+    - Trend: -12 failures in 4 cycles, zero regressions
+  - #9968 (EPIC: L1-L4 doc) — v1.3 shipped 8b33aebd cycle 1616. v1.4 gap analysis delivered cycle 1617: 20 gaps in 3 tiers. Human deferred drafting. Awaiting human direction.
+- 1 pending (gated): #9966 (6274.3)
 - 3 issues at status:open: #9967, #9969, #9970
 - shipped_since_bump=6 of 10
 
-## #9968 doc revision history (this session)
-- v1 (cycle 1606): initial draft committed
-- v1.1 (cycle 1612, 47e7ba61): §5.6 dual TOCs, §6.5 manifest-selection rewrite, §3.2 Important callout
-- v1.2 (cycle 1615+, f41398ea): §5.6.2 expanded to full TOC, §5.6.3 diff table added
-- v1.3 (cycle 1616, 8b33aebd): 6 Mermaid diagrams (D1-D6)
-- Outstanding from human review (delivered earlier but not addressed in v1.1-v1.3 substantively): 12 findings in 4 buckets (A: internal contradictions, B: deferred decisions, C: ownership, D: gaps). Human has not picked priority order; PM holds until human picks.
+## #9968 gap analysis (delivered cycle 1617)
+- **Tier 1 (would block implementation, 7 items)**: manifest format spec, frontmatter schema, empty L4 default, (slot,ordinal) tiebreaker, L1/L2 split criteria, compose-on-clone choreography, test strategy
+- **Tier 2 (would help readers, 5 items)**: end-to-end worked example, L4 visibility tool, boot-vs-compose mode probe, memory/L4 boundary post-migration, L4 lifecycle (edits/deletes)
+- **Tier 3 (nice-to-have, 8 items)**: compose-version stamp, error UX, backward-compat migration, role-class composition, v1-ship scope, 'won't change' invariants, troubleshooting flow, ADR summaries
+- PM recommendation: v1.4 adds §15 Schemas + §16 Operations + §17 Test strategy for tier 1; v1.5 covers tier 2; tier 3 rides DS audit feedback
+- Human has not picked which tier or which specific gaps to address; PM holds
 
 ## #9965 — back to normal monitoring
-- Skill is honoring directive: no AC2.2/2.3/2.4-2.7 forward work, AC2.8 only, suite-tracking each cycle
-- No PM nudge needed; resume standard monitoring
-- Next escalation trigger only if (a) suite regresses on a commit, (b) skill abandons AC2.8 pivot, or (c) ~8h pass without progress
+- Skill is honoring directive: AC2.8 only, suite-tracking each cycle, no regressions
+- Trajectory at -3 fails/cycle average → ~12 more cycles to reach 0 if rate holds
+- No PM nudge needed; standard monitoring continues
 
 ## #9966 — unchanged
 - Conditions: AC2.8 ships, cutover date passed
