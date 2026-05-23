@@ -218,9 +218,13 @@ class TestListKnownRoleIdentities:
         assert "pm" in identities
 
     def test_missing_roles_dir(self, tmp_path):
+        # #6274 D2 dual-aware shim: even when ROLES_DIR doesn't exist,
+        # the dual-aware identity set is still returned (worker, verifier,
+        # dev, qa). After 6274.3 cutover this assertion reverts to
+        # `identities == set()`.
         with patch.object(compose, "ROLES_DIR", tmp_path / "nonexistent"):
             identities = compose._list_known_role_identities()
-        assert identities == set()
+        assert identities == {"worker", "verifier", "dev", "qa"}
 
     def test_ignores_dirs_without_claude_md(self, compose_env):
         # Create a directory without CLAUDE.md

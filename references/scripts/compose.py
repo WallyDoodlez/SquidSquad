@@ -653,13 +653,28 @@ def _list_known_role_identities():
     We read the filesystem every time rather than caching so that
     tests which build a fresh role directory at runtime see the new
     role immediately — the hot path here is tiny (a single readdir).
+
+    #6274 dual-aware window (sub-phases 6274.1 + 6274.2): also include
+    `worker` and `verifier` as known identities regardless of disk
+    state, plus `dev` and `qa` for backward-compatibility. This lets
+    `_resolve_variant("worker-skill")` and `_resolve_variant("dev-skill")`
+    both pass the base-in-identities check during the migration. Removed
+    in 6274.3 — see `references/sub-skills/common/migration-6274-cutover`.
     """
     if not ROLES_DIR.exists():
-        return set()
-    return {
+        return _DUAL_AWARE_IDENTITIES_6274.copy()
+    on_disk = {
         d.name for d in ROLES_DIR.iterdir()
         if d.is_dir() and (d / "instructions.md").exists()
     }
+    return on_disk | _DUAL_AWARE_IDENTITIES_6274
+
+
+# #6274 D2: dual-aware window identity set. After 6274.3 (cutover),
+# this constant + the `|` above are deleted and the function returns
+# `on_disk` directly. Inventory of dual-aware surfaces lives in
+# CONTEXT-6274.md D2.
+_DUAL_AWARE_IDENTITIES_6274 = frozenset({"worker", "verifier", "dev", "qa"})
 
 
 def _get_entry_file_for_role(role_name: str) -> str:
