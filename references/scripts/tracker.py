@@ -224,6 +224,15 @@ def _canonicalize_role(role):
         "qa-lead (tester)"   -> "qa"
         "dm"                 -> "dm"
 
+    #6274 D11 dual-aware shim: accept the new prefix-swapped suffixes
+    `worker-lead` and `verifier-lead` as inputs and normalize to the
+    current-canonical internal form (`dev` and `qa` respectively pre-
+    6274.3, because that's what ROLE_AUTHORITY and role:* labels use
+    throughout the dual-aware window). Old form `qa-lead`/`dev-lead`
+    is also accepted; emits a stderr deprecation warning steering
+    operators toward the new suffix. Rejection of the old form happens
+    in 6274.3 — see AC3.5.
+
     Returns None if role is None.
     """
     if role is None:
@@ -232,9 +241,96 @@ def _canonicalize_role(role):
     if paren >= 0:
         role = role[:paren]
     role = role.strip()
+    had_lead_suffix = False
     if role.endswith("-lead"):
         role = role[: -len("-lead")]
+        had_lead_suffix = True
+
+    # #6274 D11: dual-aware role-prefix normalization. Map both old
+    # (pre-rename) and new (post-rename) prefixes to whichever form is
+    # currently canonical for label/authority lookups. Pre-6274.3 the
+    # canonical form is the OLD prefix (dev, qa); 6274.3 will flip
+    # this table.
+    if role in _DUAL_ROLE_PREFIXES_6274:
+        new_role, is_deprecated = _DUAL_ROLE_PREFIXES_6274[role]
+        if is_deprecated:
+            # Display the input form the operator actually used. Inputs
+            # without `-lead` (e.g. --role dev) are legal — don't fake
+            # the suffix in the warning text.
+            old_display = f"{role}-lead" if had_lead_suffix else role
+            new_display = (
+                f"{_PREFIX_NEW_NAME_6274[role]}-lead"
+                if had_lead_suffix
+                else _PREFIX_NEW_NAME_6274[role]
+            )
+            print(
+                f"WARNING: --role '{old_display}' is deprecated and will be "
+                f"rejected after #6274.3 cutover. Use '{new_display}' instead.",
+                file=sys.stderr,
+            )
+        role = new_role
     return role
+
+
+# #6274 D11 dual-aware role-suffix table. Each entry maps a base
+# prefix (the part before `-lead`) to (canonical_internal_form,
+# is_deprecated_input). During the dual-aware window (6274.1+2):
+#   - `worker` -> ('dev', False)     [new form, no warning, maps to canonical]
+#   - `verifier` -> ('qa', False)    [new form, no warning, maps to canonical]
+#   - `dev` -> ('dev', True)         [old form, deprecation warning]
+#   - `qa` -> ('qa', True)           [old form, deprecation warning]
+# After 6274.3 cutover the table flips: `dev`/`qa` are rejected
+# entirely (raising with exit code 2 per AC3.5) and `worker`/`verifier`
+# become the only accepted forms.
+#
+# Note: `pm`, `dm`, `skill` and other variant prefixes are NOT in this
+# table per Out-of-Scope — they pass through `_canonicalize_role`
+# unchanged with no warning.
+_DUAL_ROLE_PREFIXES_6274 = {
+    "worker": ("dev", False),
+    "verifier": ("qa", False),
+    "dev": ("dev", True),
+    "qa": ("qa", True),
+}
+
+# #6274 D11 reverse map for the deprecation warning text. Maps each
+# deprecated input to the new prefix the operator should switch to.
+_PREFIX_NEW_NAME_6274 = {
+    "dev": "worker",
+    "qa": "verifier",
+}
+
+
+# #6274 D3: bidirectional label-pair table for issue/task creation.
+# When the caller passes role=dev we also emit role:worker; when they
+# pass role=worker we also emit role:dev. Same for qa/verifier.
+_DUAL_LABEL_PAIRS_6274 = {
+    "dev": "worker",
+    "qa": "verifier",
+    "worker": "dev",
+    "verifier": "qa",
+}
+
+
+def _build_dual_role_labels_6274(role: str) -> str:
+    """Return a comma-separated label string with both old and new
+    `role:*` labels during the #6274 dual-aware window.
+
+    role='dev'      -> 'role:dev,role:worker'
+    role='worker'   -> 'role:worker,role:dev'
+    role='qa'       -> 'role:qa,role:verifier'
+    role='verifier' -> 'role:verifier,role:qa'
+    role='pm'       -> 'role:pm'   (categorical, not in alias table)
+    role='skill'    -> 'role:skill' (variant, not in alias table)
+
+    After 6274.3 cutover this function is deleted and callers go back
+    to the literal `f"role:{role}"` form.
+    """
+    primary = f"role:{role}"
+    alias = _DUAL_LABEL_PAIRS_6274.get(role)
+    if alias is None:
+        return primary
+    return f"{primary},role:{alias}"
 
 
 def _get_issue_role_labels(number):
@@ -587,9 +683,15 @@ def add_labels(number, labels_str):
 
 
 def create_issue(title, body, role, severity, reporter=None):
-    """Create an issue with correct label format."""
+    """Create an issue with correct label format.
+
+    #6274 D3 dual-aware: also emits the alias `role:*` label during the
+    migration window. role=dev/qa adds role:worker/role:verifier and
+    vice-versa. The doubling is removed in 6274.3 (`cleanup_labels_6274.py`
+    deletes the role:dev/role:qa label classes altogether).
+    """
     sev_label = SEVERITY_LABELS.get(severity, f"severity:{severity}")
-    role_label = f"role:{role}"
+    role_label = _build_dual_role_labels_6274(role)
     # Issues start at `open` (immediately actionable by the assigned dev agent).
     # Tasks start at `pending` (awaiting human approval via PM intake).
     # This distinction matters: dev-agent Step 2 picks up all non-shipped
@@ -636,9 +738,13 @@ create_bug = create_issue
 
 
 def create_task(title, body, role, priority, reporter=None):
-    """Create a task with correct label format."""
+    """Create a task with correct label format.
+
+    #6274 D3 dual-aware: also emits the alias `role:*` label during the
+    migration window — see create_issue.
+    """
     pri_label = PRIORITY_LABELS.get(priority, f"priority:{priority}")
-    role_label = f"role:{role}"
+    role_label = _build_dual_role_labels_6274(role)
     labels = f"type:task,{pri_label},{role_label},squidsquad,status:pending"
 
     full_body = body

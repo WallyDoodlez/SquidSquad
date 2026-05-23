@@ -45,6 +45,12 @@ FIELD_MAP = {
     "tracker": (None, "Tracker"),
     "arch-version": (None, "Architecture Version"),
     "dev-agents": ("Agents", "Dev Agents"),
+    # #6274 D2 dual-aware: `workers` is the canonical post-rename field
+    # (`Workers:` in config.md). Pre-6274.3 cutover, get_field("workers")
+    # reads `Workers:` first then falls back to `Dev Agents:` with a
+    # deprecation warning — see `_DUAL_AWARE_CONFIG_FIELDS_6274` below.
+    # In 6274.3 the `dev-agents` row above is deleted and this stays.
+    "workers": ("Agents", "Workers"),
     "project-name": ("Project", "Name"),
     "repo": ("Project", "Repo"),
     "project-intent": ("Project", "Intent Description"),
@@ -160,7 +166,11 @@ _FIELD_DEFAULTS = {
 
 
 def get_field(field):
-    """Get a config field by short name or full name."""
+    """Get a config field by short name or full name.
+
+    #6274 D2: for fields in `_DUAL_AWARE_CONFIG_FIELDS_6274`, read the new
+    field first and fall back to the deprecated one with a stderr warning.
+    """
     text = _read_config()
     entry = FIELD_MAP.get(field)
     if entry:
@@ -168,12 +178,39 @@ def get_field(field):
         val = _parse_field(text, section, field_name)
     else:
         val = _parse_field_in_text(text, field)
+
+    # #6274 D2 dual-aware fallback: if the canonical field is absent but
+    # the deprecated field is present, return the deprecated value and
+    # log a one-time warning. Removed in 6274.3 — the deprecated field
+    # then raises the normal "Field not found" error.
+    if val is None and field in _DUAL_AWARE_CONFIG_FIELDS_6274:
+        deprecated_short = _DUAL_AWARE_CONFIG_FIELDS_6274[field]
+        deprecated_entry = FIELD_MAP.get(deprecated_short)
+        if deprecated_entry is not None:
+            dsection, dfield = deprecated_entry
+            val = _parse_field(text, dsection, dfield)
+            if val is not None:
+                print(
+                    f"WARNING: config.md uses deprecated field "
+                    f"`{dfield}:` — rename to `{entry[1] if entry else field}:` "
+                    f"before #6274.3 cutover.",
+                    file=sys.stderr,
+                )
+
     if val is None:
         if field in _FIELD_DEFAULTS:
             return _FIELD_DEFAULTS[field]
         print(f"ERROR: Field '{field}' not found in config.md", file=sys.stderr)
         sys.exit(1)
     return val
+
+
+# #6274 D2 dual-aware mapping: { canonical_short: deprecated_short }.
+# Looked up by get_field when the canonical field is absent. Deleted in
+# 6274.3 along with the deprecated FIELD_MAP rows.
+_DUAL_AWARE_CONFIG_FIELDS_6274 = {
+    "workers": "dev-agents",
+}
 
 
 def get_wake_mode(role):
