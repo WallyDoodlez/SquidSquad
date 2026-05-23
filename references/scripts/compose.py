@@ -523,7 +523,7 @@ def _render_role_roster() -> str:
             "leaving {{role-roster}} marker in composed output",
             file=sys.stderr,
         )
-        return "## Your Teammates' Responsibilities\n\n_(no active roles discoverable; check config.md `Dev Agents:` field)_"
+        return "## Your Teammates' Responsibilities\n\n_(no active roles discoverable; check config.md `Workers:` field — 6274.1 shim also reads the deprecated `Dev Agents:` key)_"
 
     lines = ["## Your Teammates' Responsibilities", ""]
     for role_id in active:
@@ -756,11 +756,16 @@ def _get_entry_file_for_role(role_name: str) -> str:
     if resolved:
         base, _ = resolved
         return base
-    # Dev variants (skill, be, fe, bespoke names) compose from the
-    # `dev` role template as long as one exists in the registry.
+    # Worker variants (skill, be, fe, bespoke names) compose from the
+    # `worker` role template (post-6274.2). Pre-rename installs that still
+    # have `roles/dev/` work via the 6274.1 alias shim — `dev` stays in
+    # `identities` as a dual-aware alias and `_BASE_ALIAS_6274` maps it
+    # to `worker` at the call sites that need the on-disk canonical.
+    if "worker" in identities:
+        return "worker"
     if "dev" in identities:
         return "dev"
-    # No registry, or no `dev` identity — fall back to the literal
+    # No registry, or no `worker`/`dev` identity — fall back to the literal
     # role name so at least the error message points at the right file.
     return role_name
 
