@@ -4,13 +4,26 @@ _Working document. Authored by PM (Wallace) and co-designed with human collabora
 
 > **Status**: DRAFT. The model below is being refined; details may change. Existing docs `docs/EVENT-BUS-ARCHITECTURE.md` and `docs/event-bus.md` describe the earlier additive observability bus and will be retired or rewritten once v2 lands.
 
+## Terminology (L2 categorical role names)
+
+This document uses the L2 categorical role names from `responsibility.md`, not concrete-install instance names. The mapping for the current install:
+
+| L2 categorical name | Concrete instance (this repo) | Responsibility (one line) |
+|---|---|---|
+| **`pm`** | `pm` | Coordinates the team and the human; manages workflow and process |
+| **`verifier`** | `qa` | Verifies the product being delivered; does not do technical implementation |
+| **`worker`** | `dev` base, `skill` variant | Implements technical work to acceptance criteria |
+| **`dm`** | `dm` | Delivers (CHANGELOG, version bumps, releases) |
+
+Future installs may have additional `worker` variants (e.g., `ios`, `android`, `web`) or specialized verifiers. The architecture below works at the categorical level so it doesn't need to be rewritten per install. When the doc says "the worker hands off to the verifier," substitute your install's concrete instances (here: `skill` → `qa`). Tracker `#6274` covers the broader `dev` → `worker` terminology generalization across the project.
+
 ---
 
 ## 1. Why v2 exists
 
 The current system runs every agent on a `/loop 30m` cron. Each cycle the agent wakes, reads forge state, decides if work exists, acts, commits, sleeps. This works but has three persistent problems:
 
-1. **Latency floor** — an agent can be idle for up to 30 minutes after work arrives. Worst case: QA verifies at minute 0, DM doesn't notice until minute 30, ships at minute 32. End-to-end shipping latency is dominated by these polling gaps.
+1. **Latency floor** — an agent can be idle for up to 30 minutes after work arrives. Worst case: verifier completes at minute 0, dm doesn't notice until minute 30, ships at minute 32. End-to-end shipping latency is dominated by these polling gaps.
 2. **Tokens burned on idle cycles** — every agent spends a meaningful slice of its context window per cycle even when there's nothing to do. Quiet cycles still cost real money.
 3. **Cycle/work coupling** — the cycle wrapper (pre-cycle git pull, post-cycle commit/push) fires whether or not work was done. State churn happens on the timer, not on the work.
 
@@ -129,12 +142,12 @@ flowchart TB
         PMTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
     end
 
-    subgraph qa_box["QA agent"]
-        QATree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
+    subgraph verifier_box["Verifier agent"]
+        VerifierTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
     end
 
-    subgraph skill_box["Skill agent"]
-        SkillTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
+    subgraph worker_box["Worker agent"]
+        WorkerTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
     end
 
     subgraph dm_box["DM agent"]
@@ -144,18 +157,18 @@ flowchart TB
     Operator --> Harness
 
     Harness -.->|spawns + monitors| PMTree
-    Harness -.->|spawns + monitors| QATree
-    Harness -.->|spawns + monitors| SkillTree
+    Harness -.->|spawns + monitors| VerifierTree
+    Harness -.->|spawns + monitors| WorkerTree
     Harness -.->|spawns + monitors| DMTree
 
     PMTree <--> Harness
-    QATree <--> Harness
-    SkillTree <--> Harness
+    VerifierTree <--> Harness
+    WorkerTree <--> Harness
     DMTree <--> Harness
 
     PMTree <--> Forge
-    QATree <--> Forge
-    SkillTree <--> Forge
+    VerifierTree <--> Forge
+    WorkerTree <--> Forge
     DMTree <--> Forge
 
     EAD <-->|watches state changes| Forge
@@ -167,7 +180,7 @@ The §4.2 zoomed view below shows what's inside each agent's subprocess tree.
 
 ```mermaid
 flowchart TB
-    subgraph agent_tree["Per-agent subprocess tree (PM, QA, skill, DM each look like this)"]
+    subgraph agent_tree["Per-agent subprocess tree (pm, verifier, worker, dm each look like this)"]
         Cmd["cmd.exe (Windows)<br/>or shell (POSIX)"]
         TL["thin_launcher.py<br/>· writes .claude-pid<br/>· singleton enforcement (#8692)<br/>· spawns claude, waits for exit"]
         Claude["claude.exe (the agent)<br/>· runs composed CLAUDE.md<br/>· has Monitor tool built in"]
@@ -336,16 +349,16 @@ When an agent finishes work and the next step belongs to another role, it calls 
 POST /work/assign
 {
   "issue_number": 9926,
-  "next_role": "qa",
-  "event_context": "PR ready for QA verification",
+  "next_role": "verifier",
+  "event_context": "PR ready for verification",
   "payload": { "pr_number": 9943 }
 }
 ```
 
 Harness:
-1. Validates the calling role is allowed to assign to `next_role` (per a static permission table — dev can hand off to QA, QA can bounce back to dev, etc.).
+1. Validates the calling role is allowed to assign to `next_role` (per a static permission table — worker can hand off to verifier, verifier can bounce back to worker, etc.).
 2. Records the assignment in its in-flight state.
-3. Emits `assigned-to(target_role=qa, issue_number=9926, ...)` into the deque.
+3. Emits `assigned-to(target_role=verifier, issue_number=9926, ...)` into the deque.
 4. Returns the event_id of the emitted assigned-to so the calling agent can log the handoff.
 
 This is the explicit alternative to "EAD detects the PR existed" — it lets agents directly signal handoffs that EAD might not infer correctly.
@@ -436,36 +449,36 @@ Same as the normal boot, except `working-state.md` records an in-flight task who
 ```mermaid
 sequenceDiagram
     autonumber
-    participant SK as Skill (claude)
+    participant W as Worker (claude)
     participant F as Forge<br/>(GitHub)
     participant H as Harness
-    participant Q as QA event_poll
-    participant QC as QA claude
+    participant VEP as Verifier event_poll
+    participant VC as Verifier claude
 
-    Note over SK: Implementation complete<br/>locally
-    SK->>F: push branch, open PR #9943
-    SK->>F: tracker.py transition<br/>in-progress → pending-test
+    Note over W: Implementation complete<br/>locally
+    W->>F: push branch, open PR #9943
+    W->>F: tracker.py transition<br/>in-progress → pending-test
     Note over F: Forge is updated<br/>(source of truth)
 
-    SK->>H: POST /work/assign<br/>{issue:9926, next_role:qa,<br/>event_context:"PR ready",<br/>payload:{pr_number:9943}}
-    H->>H: validate skill→qa<br/>per permission table
-    H->>H: emit assigned-to(target_role=qa,...)<br/>append to deque
-    H-->>SK: 200 OK + event_id
+    W->>H: POST /work/assign<br/>{issue:9926, next_role:verifier,<br/>event_context:"PR ready",<br/>payload:{pr_number:9943}}
+    H->>H: validate worker→verifier<br/>per permission table
+    H->>H: emit assigned-to(target_role=verifier,...)<br/>append to deque
+    H-->>W: 200 OK + event_id
 
-    Note over H,Q: QA's event_poll<br/>polling loop continues
+    Note over H,VEP: Verifier's event_poll<br/>polling loop continues
 
-    Q->>H: GET /events/for/qa?since=cursor
-    H-->>Q: [assigned-to event]
-    Q->>QC: write nudge line to stdout
-    Note over QC: Monitor sees stdin line<br/>wakes Claude session
+    VEP->>H: GET /events/for/verifier?since=cursor
+    H-->>VEP: [assigned-to event]
+    VEP->>VC: write nudge line to stdout
+    Note over VC: Monitor sees stdin line<br/>wakes Claude session
 
-    QC->>H: GET /events/for/qa?since=cursor
-    H-->>QC: [assigned-to event]
-    QC->>QC: care filter:<br/>target_role==qa? YES
-    QC->>QC: run pre-cycle + work + post-cycle<br/>(produce TEST-PLAN-9926.md, verify, etc.)
-    QC->>H: POST /events {type:ack-cursor, event_id, role:qa}
-    H->>H: advance qa cursor past event_id
-    H-->>QC: 200 OK
+    VC->>H: GET /events/for/verifier?since=cursor
+    H-->>VC: [assigned-to event]
+    VC->>VC: care filter:<br/>target_role==verifier? YES
+    VC->>VC: run pre-cycle + work + post-cycle<br/>(produce TEST-PLAN-9926.md, verify, etc.)
+    VC->>H: POST /events {type:ack-cursor, event_id, role:verifier}
+    H->>H: advance verifier cursor past event_id
+    H-->>VC: 200 OK
 ```
 
 ### 7.1 Handoff sequence — EAD safety-net path
@@ -473,55 +486,55 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     autonumber
-    participant SK as Skill (claude)
+    participant W as Worker (claude)
     participant F as Forge
     participant EAD as EAD (in harness)
     participant H as Harness deque
-    participant Q as QA agent tree
+    participant V as Verifier agent tree
 
-    Note over SK: Skill forgets to call<br/>POST /work/assign
-    SK->>F: push branch + status transition only
+    Note over W: Worker forgets to call<br/>POST /work/assign
+    W->>F: push branch + status transition only
 
     Note over EAD: EAD's forge polling loop ticks
     EAD->>F: gh api / search (poll for changes)
     F-->>EAD: status:pending-test added to #9926
-    EAD->>EAD: map: "status:pending-test"<br/>→ target_role=qa
-    EAD->>H: append assigned-to(target_role=qa,...)
+    EAD->>EAD: map: "status:pending-test"<br/>→ target_role=verifier
+    EAD->>H: append assigned-to(target_role=verifier,...)
     EAD->>EAD: persist last-seen forge id
 
-    Note over Q: Same delivery as §7.0<br/>(event_poll → nudge → Monitor → walk)
-    H-->>Q: assigned-to flows through<br/>same nudge path
+    Note over V: Same delivery as §7.0<br/>(event_poll → nudge → Monitor → walk)
+    H-->>V: assigned-to flows through<br/>same nudge path
 
-    Note over SK,Q: Net result: handoff still happens<br/>just with EAD-polling-lag latency<br/>instead of immediate
+    Note over W,V: Net result: handoff still happens<br/>just with EAD-polling-lag latency<br/>instead of immediate
 ```
 
-Walkthrough: skill ships a fix, hands off to QA.
+Walkthrough: worker ships a fix, hands off to verifier.
 
-1. **Skill** finishes its implementation work for issue `#9926`. Pushes the branch, opens PR `#9943`.
-2. **Skill** transitions the tracker via `tracker.py transition 9926 in-progress pending-test --role pm-lead`. (Forge is updated; this is the durable record.)
-3. **Skill** calls `POST /work/assign` on harness:
+1. **Worker** finishes its implementation work for issue `#9926`. Pushes the branch, opens PR `#9943`.
+2. **Worker** transitions the tracker via `tracker.py transition 9926 in-progress pending-test --role pm-lead`. (Forge is updated; this is the durable record.)
+3. **Worker** calls `POST /work/assign` on harness:
    ```json
-   {"issue_number": 9926, "next_role": "qa", "event_context": "PR ready for verification",
+   {"issue_number": 9926, "next_role": "verifier", "event_context": "PR ready for verification",
     "payload": {"pr_number": 9943, "branch": "squidsquad/task/9926"}}
    ```
-4. **Harness** validates skill → qa is a legal assignment, then emits `assigned-to(target_role=qa, ...)` into the deque, returns the event_id.
-5. **`event_poll` for QA** is polling harness on its loop. On its next poll it sees one new event past QA's cursor → writes one nudge line to stdout: `"NUDGE 1 new event"` (exact format TBD).
-6. **Monitor (inside QA's Claude session)** sees the new stdin line → wakes the Claude session.
-7. **QA's agent runs its post-nudge contract** (per #9892):
-   a. Read events past cursor: `GET /events/for/qa?since=<cursor>` → returns the assigned-to event.
-   b. Decide: care or skip? Filter rule: QA cares about `assigned-to` with `event_context` matching verification triggers.
-   c. If QA is busy with current work, this assigned-to enters a queue in `working-state.md` ("next: #9926"); QA does NOT interrupt current work.
-   d. If QA is idle, QA acts on it: writes TEST-PLAN-9926, runs verification, etc.
-   e. After tending (or queuing) the event, QA emits `ack-cursor(event_id)` to advance.
-8. **Loop continues**: QA eventually verifies, transitions to pending-ship, calls `POST /work/assign` for DM, etc.
+4. **Harness** validates worker → verifier is a legal assignment, then emits `assigned-to(target_role=verifier, ...)` into the deque, returns the event_id.
+5. **`event_poll` for the verifier** is polling harness on its loop. On its next poll it sees one new event past the verifier's cursor → writes one nudge line to stdout: `"NUDGE 1 new event"` (exact format TBD).
+6. **Monitor (inside the verifier's Claude session)** sees the new stdin line → wakes the Claude session.
+7. **The verifier runs its post-nudge contract** (per #9892):
+   a. Read events past cursor: `GET /events/for/verifier?since=<cursor>` → returns the assigned-to event.
+   b. Decide: care or skip? Filter rule: the verifier cares about `assigned-to` with `event_context` matching verification triggers.
+   c. If the verifier is busy with current work, this assigned-to enters a queue in `working-state.md` ("next: #9926"); the verifier does NOT interrupt current work.
+   d. If the verifier is idle, it acts on it: writes TEST-PLAN-9926, runs verification, etc.
+   e. After tending (or queuing) the event, the verifier emits `ack-cursor(event_id)` to advance.
+8. **Loop continues**: the verifier eventually verifies, transitions to pending-ship, calls `POST /work/assign` for dm, etc.
 
 ### 7.1 EAD path (when no explicit assign happens)
 
-If skill forgets to call `/work/assign`, the ExternalActivityDetector catches it:
+If the worker forgets to call `/work/assign`, the ExternalActivityDetector catches it:
 - EAD polls forge, sees the new status:pending-test label on `#9926`.
-- EAD maps "status:pending-test on a tracker item" → assigned-to(target_role=qa).
-- EAD emits `assigned-to` to QA's queue.
-- QA wakes via nudge, same as 5–8 above.
+- EAD maps "status:pending-test on a tracker item" → assigned-to(target_role=verifier).
+- EAD emits `assigned-to` to the verifier's queue.
+- The verifier wakes via nudge, same as 5–8 above.
 
 The two paths (explicit `/work/assign` and implicit EAD detection) are both valid. Explicit is preferred for clarity; EAD is the safety net.
 
@@ -718,18 +731,18 @@ Drawing the sequence + arch diagrams above exposed concrete gaps in the model. T
 
 ### 14.3 Work-handoff gaps
 
-- **G10 — Assignment to an offline agent.** §7.0 step 4 emits `assigned-to(target_role=qa)` directly into the deque. What if QA isn't booted (down for maintenance, crashed, etc.)? The event sits past QA's cursor; when QA boots, it'll see the event past its cursor. OK. But what if EAD ALSO detects the forge change and emits a second assigned-to? Need dedup logic OR explicit "operator-acknowledged duplicates fine because care-filter handles it."
+- **G10 — Assignment to an offline agent.** §7.0 step 4 emits `assigned-to(target_role=verifier)` directly into the deque. What if the verifier isn't booted (down for maintenance, crashed, etc.)? The event sits past the verifier's cursor; when it boots, it'll see the event past its cursor. OK. But what if EAD ALSO detects the forge change and emits a second assigned-to? Need dedup logic OR explicit "operator-acknowledged duplicates fine because care-filter handles it."
 - **G11 — `/work/assign` permission table.** §13 Q2 asked the question; §7.0 step 2 just says "validate." Need an actual matrix:
   ```
-  caller ↓  | assign-to →  pm   qa   skill   dm
-  pm                       –   ✓    ✓       ✓
-  qa                       ✓   –    ✓       ✓
-  skill                    ✓   ✓    –       ✓
-  dm                       ✓   ✓    ✓       –
-  (dev variants inherit dev row; — = self-assign forbidden)
+  caller ↓  | assign-to →  pm   verifier   worker   dm
+  pm                       –    ✓          ✓        ✓
+  verifier                 ✓    –          ✓        ✓
+  worker                   ✓    ✓          –        ✓
+  dm                       ✓    ✓          ✓        –
+  (worker variants inherit worker row; — = self-assign forbidden)
   ```
-  This is the kind of table the locked decisions section should contain.
-- **G12 — Assigning to PM.** PM is the human-facing role. Most workflows shouldn't generate assigned-to events for PM because PM acts on human input + sentinel scans, not on other agents handing off work. But §7.1 shows "DM done → assign to PM"? Actually PM doesn't appear in any handoff loop in our current workflow. Possibly the table should be: `assigned-to(target_role=pm)` is emitted ONLY by EAD on "human commented on issue" events, never by `/work/assign` from another agent.
+  This is the kind of table the locked decisions section should contain. Process-integrity rationale: any agent should be able to route a process concern to pm (skill notices a workflow bug → assigns to pm with `event_context="process-concern"`).
+- **G12 — Assigning to pm.** pm IS callable from any agent (per the matrix above, all `→ pm` cells are ✓). Rationale: process integrity is everyone's job — when any role notices a workflow gap, it should route to pm rather than just opening an issue that pm might miss. pm's inbox is disambiguated by `event_context`: EAD emits `event_context="human-comment"` for human activity and `event_context="agent-down"` / `"agent-stalled"` for harness health detections; other agents emit `event_context="process-concern"` or `"route-handoff"` for explicit routing.
 
 ### 14.4 State / persistence gaps
 
@@ -751,7 +764,7 @@ Drawing the sequence + arch diagrams above exposed concrete gaps in the model. T
 ### 14.7 Migration gaps
 
 - **G21 — Trim sequencing.** §11 lists "20 catalog entries removed." But other code (event_poll, harness consumers, agent code that reads events) currently uses some of those types. Need a sequencing plan: (a) stop emitting first, then (b) stop reading, then (c) delete from catalog. Or accept some staleness.
-- **G22 — `Event Reactions` block collapse.** §11 says every role's `reacts-to` becomes just `assigned-to`. But the existing `pm` reacts-to list includes `agent-health` (PM is supposed to act on dead agents) — under v2, who emits the assigned-to event that triggers PM's agent-recovery action? EAD doesn't watch agent processes. Possibly harness's health poller becomes a producer that emits `assigned-to(target_role=pm, event_context='agent-down', payload={role:skill})` when a watched agent dies.
+- **G22 — `Event Reactions` block collapse.** §11 says every role's `reacts-to` becomes just `assigned-to`. But the existing pm reacts-to list includes `agent-health` (pm is supposed to act on dead agents) — under v2, who emits the assigned-to event that triggers pm's agent-recovery action? EAD doesn't watch agent processes. Possibly harness's health poller becomes a producer that emits `assigned-to(target_role=pm, event_context='agent-down', payload={role:worker})` when a watched agent dies.
 
 ---
 
