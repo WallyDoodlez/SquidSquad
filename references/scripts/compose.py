@@ -206,7 +206,8 @@ def _load_manifest(role_name: str, wake_mode: str = "polling") -> list | None:
                 return fallback
         return None
 
-    # Try nested variant path first (dev-skill -> dev/skill/<manifest>)
+    # Try nested variant path first (worker-skill -> worker/skill/<manifest>;
+    # dev-skill is also accepted via the 6274.1 dual-aware shim)
     resolved = _resolve_variant(role_name)
     if resolved:
         base, variant = resolved
@@ -752,7 +753,8 @@ def _get_entry_file_for_role(role_name: str) -> str:
             # Alias target doesn't exist on disk — own directory must;
             # fall through to returning role_name unchanged.
         return role_name
-    # Layer 3 variant: resolve nested directory (dev-skill -> dev/skill/)
+    # Layer 3 variant: resolve nested directory (worker-skill -> worker/skill/;
+    # legacy dev-skill also routes here via 6274.1 alias)
     resolved = _resolve_variant(role_name)
     if resolved:
         base, _ = resolved
@@ -776,7 +778,8 @@ def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> s
 
     [ROLE] and [ROLE_UPPER] are substituted for ALL roles (needed by
     cycle-runner sub-skill which is shared across all agents).
-    [ROLE_TEST_CMD], [OTHER_ROLES] are dev-only.
+    [ROLE_TEST_CMD], [OTHER_ROLES] are worker-only (6274.2: was dev-only;
+    `is_dev` below accepts both "dev" and "worker" entry_file values).
     """
     is_dev = entry_file in ("dev", "worker")  # #6274 dual-aware
 
@@ -1129,14 +1132,15 @@ def deploy_role(role_name: str, target_root: Path = None,
     """Full pipeline: compose entry file -> substitute placeholders -> write CLAUDE.md.
 
     Args:
-        role_name: the role composition source (e.g. "skill", "dev-ios", "pm").
+        role_name: the role composition source (e.g. "skill", "worker-ios", "pm";
+            legacy "dev-ios" still accepted via 6274.1 alias).
             Resolves to a role identity via `_get_entry_file_for_role`.
         target_root: base directory that will contain `.squidsquad/<output_name>/`.
             Defaults to REPO_ROOT (the installed repo). Tests override to
             write into a scratch directory without touching the real install.
         output_name: the agent instance id for the output directory. Defaults
             to role_name. Use this when the compose source differs from the
-            agent directory (e.g. compose from "dev-ios" but output to "skill").
+            agent directory (e.g. compose from "worker-ios" but output to "skill").
 
     Returns the absolute path of the composed CLAUDE.md.
     """
@@ -1297,7 +1301,7 @@ def _assemble_soul(role_name: str) -> str:
     else:
         role_soul_path = ROLES_DIR / role_name / "SOUL.md"
         if not role_soul_path.exists():
-            # Legacy dev variant fallback (skill -> dev)
+            # Legacy worker-variant fallback (skill -> worker, or skill -> dev for pre-6274 installs)
             role_identity = _get_entry_file_for_role(role_name)
             role_soul_path = ROLES_DIR / role_identity / "SOUL.md"
 
