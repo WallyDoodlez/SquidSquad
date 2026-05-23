@@ -266,8 +266,15 @@ This section is intentionally short — most vault detail belongs in `references
 ```
 # PM Agent
 
-## 1. Identity            (identical to 5.6.1)
-## 2. Soul                (identical to 5.6.1)
+## 1. Identity
+   1.1 Function — coordinates the squad
+   1.2 Team membership (4-role: PM, QA, DM, dev/skill)
+   1.3 Lifecycle governance (harness owns start/stop/restart)
+   1.4 Team-awareness (one paragraph each: DM, QA, dev)
+   1.5 Boundaries (folded "never do" — broad prohibitions)
+
+## 2. Soul
+   (SOUL.md inlined verbatim)
 
 ## 3. Instructions
    3.1 On boot
@@ -292,11 +299,36 @@ This section is intentionally short — most vault detail belongs in `references
                                     — improvement-scan loop when work_queue empty
        8. Context-pressure honor    (step:cycle/stop-requested)
                                     — honor stop-requested at next task boundary
-   3.3 On shutdown                  (identical to 5.6.1)
+   3.3 On shutdown
+       1. Graceful stop             (step:shutdown/graceful-stop)
 
-## 4. Project Context     (identical to 5.6.1)
-## 5. Vault               (identical to 5.6.1)
+## 4. Project Context
+   4.1 Domain / audience
+   4.2 File conventions (folded from today's standalone H2)
+   4.3 Status line (folded — display fact, not instruction)
+   4.4 Repositories of record
+
+## 5. Vault
+   5.1 Description
+   5.2 Wikilink + entity model
 ```
+
+#### 5.6.3 Diff between the two modes (where they actually differ)
+
+The two TOCs are identical at §1, §2, §4, §5 — and §3.1 differs by exactly one step, §3.3 is identical, §3.2 is fully divergent.
+
+| Section | Polling (5.6.1) | Event (5.6.2) | Differs? |
+|---|---|---|---|
+| §1 Identity | 1.1-1.5 | 1.1-1.5 | No |
+| §2 Soul | SOUL.md inlined | SOUL.md inlined | No |
+| §3.1 On boot — step 3 | `step:boot/schedule-loop` (`/loop` scheduling) | `step:boot/bootup-complete` (handshake to harness) | **Yes — 1 step** |
+| §3.1 On boot — other steps | permission-check, mode-detect, load-fragments | permission-check, mode-detect, load-fragments | No |
+| §3.2 cycle structure | 10 numbered Ralph Loop steps | 8 numbered per-event steps | **Yes — whole sub-slot** |
+| §3.3 On shutdown | graceful-stop | graceful-stop | No |
+| §4 Project Context | 4.1-4.4 | 4.1-4.4 | No |
+| §5 Vault | 5.1-5.2 | 5.1-5.2 | No |
+
+So the **only** mode-driven divergence is `step:boot/schedule-loop` ↔ `step:boot/bootup-complete` plus the whole §3.2 sub-slot. Everything else composes bit-identically across the two manifests. Any unintentional divergence in §1, §2, §3.3, §4, §5 between the two flavored outputs is a bug per §6.5 "authoring discipline".
 
 Notes that apply to both:
 
