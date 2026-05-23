@@ -13,13 +13,21 @@ from conftest import REPO_ROOT, SQUIDSQUAD_DIR, REFERENCES_DIR
 class TestHintFiles:
     """Verify hints files exist and are non-empty."""
 
-    @pytest.mark.parametrize("role", ["dev", "dm", "pm"])
+    # #6274 D5: roles renamed dev→worker, qa→verifier in this sub-phase.
+    # Reference side: only canonical post-rename names. Live side may still
+    # have legacy {dev,qa} names on installs that haven't run wizard D4
+    # — test_live_hints_match_reference skips when the live file is absent.
+    @pytest.mark.parametrize("role", ["worker", "verifier", "dm", "pm"])
     def test_reference_hints_exist(self, role):
         path = REFERENCES_DIR / f"hints-{role}.txt"
         assert path.exists(), f"Missing reference hints: {path}"
         assert path.stat().st_size > 0, f"Empty hints file: {path}"
 
-    @pytest.mark.parametrize("role", ["dev", "dm", "pm"])
+    # #6274 D5: roles renamed dev→worker, qa→verifier in this sub-phase.
+    # Reference side: only canonical post-rename names. Live side may still
+    # have legacy {dev,qa} names on installs that haven't run wizard D4
+    # — test_live_hints_match_reference skips when the live file is absent.
+    @pytest.mark.parametrize("role", ["worker", "verifier", "dm", "pm"])
     def test_live_hints_match_reference(self, role):
         ref = REFERENCES_DIR / f"hints-{role}.txt"
         live = SQUIDSQUAD_DIR / f"hints-{role}.txt"

@@ -191,7 +191,7 @@ fi
 
 # --- Resolve line 2: current step or rotating hint ---
 get_line2() {
-  local role_type="$1"  # "dev" or "pm"
+  local role_type="$1"  # "worker"/"verifier"/"pm" (6274.2 canonical; legacy "dev"/"qa" still accepted via internal fallback)
 
   # If there's an active step description, show it (🚧 prefix)
   if [ -n "$CURRENT_DESC" ]; then
@@ -204,7 +204,15 @@ get_line2() {
   fi
 
   # Otherwise show rotating hint based on phase
+  # #6274 dual-aware: try the post-rename canonical name first, fall back to
+  # the deprecated name for legacy installs that haven't re-composed yet.
   local hint_file="$SQDIR/hints-${role_type}.txt"
+  if [ ! -f "$hint_file" ]; then
+    case "$role_type" in
+      worker)   hint_file="$SQDIR/hints-dev.txt" ;;
+      verifier) hint_file="$SQDIR/hints-qa.txt" ;;
+    esac
+  fi
   [ ! -f "$hint_file" ] && return
 
   local phase="${CURRENT_PHASE:-idle}"
@@ -471,11 +479,13 @@ else
   [ -n "$VAULT_Q" ] && LINE1="${LINE1} │ ${VAULT_Q}"
   LINE1="${LINE1} │ ${CTX_STR} │ ${TIMER_STR}"
 
-  # Line 2: current step or rotating hint (QA gets its own hints if available)
-  if [ "$ROLE" = "qa" ] && [ -f "$SQDIR/hints-qa.txt" ]; then
-    LINE2=$(get_line2 "qa")
+  # Line 2: current step or rotating hint (Verifier gets its own hints if available)
+  # #6274 dual-aware: accept both new (verifier/worker) and legacy (qa/dev)
+  # role names; get_line2 internally falls back from new→legacy hint file.
+  if [ "$ROLE" = "verifier" ] || [ "$ROLE" = "qa" ]; then
+    LINE2=$(get_line2 "verifier")
   else
-    LINE2=$(get_line2 "dev")
+    LINE2=$(get_line2 "worker")
   fi
 
   echo -e "${LINE1}"
