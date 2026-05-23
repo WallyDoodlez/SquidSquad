@@ -1,0 +1,407 @@
+diff --git a/references/sub-skills/common/cycle-runner.md b/references/sub-skills/common/cycle-runner.md
+index 6f188473..995e50be 100644
+--- a/references/sub-skills/common/cycle-runner.md
++++ b/references/sub-skills/common/cycle-runner.md
+@@ -82,7 +82,7 @@ The script handles: status transitions, tracker comments, iteration logging, git
+ - `external_issues_triaged`, `health_alerts`, `vault_writes`
+ - `version_bump`: `{new_version, items_included}` — deprecated (DM always present)
+ 
+-**QA** cycle-output extras:
++**Verifier** cycle-output extras:
+ - `e2e_log`: `{result, tests_run, failures}`
+ - `issues_filed`, `issues_verified`, `tasks_verified`
+ - `pr_actions`: `[{pr_number, action, comment}]`
+diff --git a/references/sub-skills/common/event-reactions.md b/references/sub-skills/common/event-reactions.md
+index e8344559..fc1451cd 100644
+--- a/references/sub-skills/common/event-reactions.md
++++ b/references/sub-skills/common/event-reactions.md
+@@ -12,8 +12,8 @@ Your job in the creative phase is to **interpret events that require judgment**
+ | `pr-merged` | Harness merged a PR (code landed on main) | Pull latest on next task boundary; check if merged code affects your work |
+ | `compose-completed` | Harness ran compose after a merge touching references/ | Your templates may have changed — harness reboots affected agents automatically |
+ | `request-merge` | An agent requested harness to merge a PR | Audit trail only — no action needed |
+-| `verification-failed` | QA/PM found gaps in submitted work | If your task: read feedback, fix gaps |
+-| `verification-passed` | QA/PM verified work is complete | If your task: await shipping |
++| `verification-failed` | Verifier/PM found gaps in submitted work | If your task: read feedback, fix gaps |
++| `verification-passed` | Verifier/PM verified work is complete | If your task: await shipping |
+ | `agent-health` | Another agent's health changed | Note if it blocks your work |
+ | `cycle-start` / `cycle-end` | Another agent completed a cycle | Informational only |
+ | `tracker-comment` | An agent commented on a tracker item | Read if it mentions your task |
+diff --git a/references/sub-skills/common/git-commit.md b/references/sub-skills/common/git-commit.md
+index 2a153f9c..499b70dc 100644
+--- a/references/sub-skills/common/git-commit.md
++++ b/references/sub-skills/common/git-commit.md
+@@ -43,7 +43,7 @@ Branch-per-feature workflow is the only mode (#9478). Split commits into code (f
+    - **What**: [what changed]
+    - **Why**: [rationale and key decisions]
+ 
+-   ### QA Status
++   ### Verifier Status
+    - [ ] Unit tests passing
+    - [ ] Smoke tests passing
+    - [ ] Acceptance criteria met
+@@ -100,7 +100,7 @@ Branch-per-feature workflow is the only mode (#9478). Split commits into code (f
+      git checkout [WORKING_BRANCH]
+      ```
+      Log in iteration summary: `Merged [WORKING_BRANCH] into [BRANCH_NAME] — conflict resolved.`
+-   - **Merge has code conflicts**: abort and log (PM/QA will handle):
++   - **Merge has code conflicts**: abort and log (PM/verifier will handle):
+      ```bash
+      git merge --abort
+      git checkout [WORKING_BRANCH]
+diff --git a/references/sub-skills/common/pickup-comment-fidelity.md b/references/sub-skills/common/pickup-comment-fidelity.md
+index f8b95ccb..937b0065 100644
+--- a/references/sub-skills/common/pickup-comment-fidelity.md
++++ b/references/sub-skills/common/pickup-comment-fidelity.md
+@@ -1,7 +1,7 @@
+ ## Pickup-comment fidelity (#9946)
+ 
+ Comments you post on issues and tasks — especially the one accompanying a
+-status transition — are read by QA and PM as a credibility signal for what
++status transition — are read by the verifier and PM as a credibility signal for what
+ landed in the PR. They are not narrative. Every concrete claim ("AC<N>
+ satisfied by editing file X", "all stubs populated", "tests pass") must be
+ backed by the actual diff and the actual test run, not by your mental model
+@@ -21,7 +21,7 @@ in `implement-tasks`; the parallel step in `triage-issues` is Step 7b-bis.
+    `.squidsquad/project/*.md`, `.squidsquad/vault/...`, `.claude/*` — does
+    NOT appear in your feature-branch PR. Those edits will land on `main`
+    via the next `cycle_post` state commit (or have already landed in a
+-   prior cycle's state commit), but the PR diff QA reads is empty of them.
++   prior cycle's state commit), but the PR diff the verifier reads is empty of them.
+    Claiming "I edited X" where X is a state file, in a comment that
+    announces a feature PR, is a literal falsehood about the PR contents.
+ 
+@@ -57,7 +57,7 @@ the supporting path in the output above. Two specific recipes:
+   rewrite the claim).
+ - **Bulk claims** ("all 5 stubs populated", "all 12 ACs satisfied"): list
+   each item explicitly in working state, then verify each one against the
+-  diff. "All N" claims fail loudly when even one is missing — QA grep'd the
++  diff. "All N" claims fail loudly when even one is missing — the verifier grep'd the
+   numbers in the two #9946 instances and the discrepancy was the first
+   thing they noticed.
+ 
+@@ -101,7 +101,7 @@ Bad (the two #9946 instances, paraphrased):
+ 
+ Bad-but-different (transitioning to pending-test with failing tests
+ on the rationale that the failures are "expected" — they are not OK
+-just because you understand why they happen; QA will see red and reject):
++just because you understand why they happen; verifier will see red and reject):
+ 
+ > Fixed in commit abc1234. AC8 partial: 5 seed templates in PR; 5 live
+ > stubs are state files filtered by commit_code. Tests: 47 pass / 6
+@@ -123,6 +123,6 @@ file-to-PM under Step 8c, not pending-test):
+ > 8c).
+ 
+ The good version refuses to transition under false pretenses. Pending-
+-test means "QA, please verify this is done"; you cannot meaningfully
++test means "verifier, please verify this is done"; you cannot meaningfully
+ claim that with a red suite, even when the red is "expected." If the
+ mismatch is genuine, it is a planning problem, not a testing problem.
+diff --git a/references/sub-skills/roles/dm/delivery-packaging.md b/references/sub-skills/roles/dm/delivery-packaging.md
+index 2da9b354..3a005baf 100644
+--- a/references/sub-skills/roles/dm/delivery-packaging.md
++++ b/references/sub-skills/roles/dm/delivery-packaging.md
+@@ -11,7 +11,7 @@ python references/scripts/tracker.py list-by-labels "status:pending-ship"
+ Pick the highest-priority item first. When picking up an item, print: `[🦑 HH:MM:SS] Delivering #[NUMBER]...`
+ 
+ 1. Write working state: update `.squidsquad/dm/working-state.md` with the task ID, status `in-progress`, and planned delivery steps.
+-2. Read the task description, acceptance criteria, and Discussion entries (especially dev's delivery notes).
++2. Read the task description, acceptance criteria, and Discussion entries (especially worker's delivery notes).
+ 
+ ### Step 2b — Check for delivery:skip
+ 
+@@ -48,10 +48,10 @@ For each Pending Ship task that is NOT skipped:
+    ```
+ 
+    - **If `$ARTIFACTS` is empty** (bug fix or trivial task with no planning artifacts): the citation gate does not apply — proceed with the merge request below.
+-   - **If `$ARTIFACTS` is non-empty**: scan the PR description (`body` field above) for a substring reference to any planning filename returned (e.g. `CONTEXT-[NUMBER].md`, `.squidsquad/qa/planning/TEST-PLAN-[NUMBER].md`, legacy `FEAT-*-[NUMBER]-TEST-PLAN.md`) OR a `### 5.X #[NUMBER]` bundle-CONTEXT section pointer. Under the #9184 workflow the typical citation is `CONTEXT-[NUMBER].md` (PM-side) and `.squidsquad/qa/planning/TEST-PLAN-[NUMBER].md` (QA-side). If **no** such reference is present, do **not** merge — route back to QA:
++   - **If `$ARTIFACTS` is non-empty**: scan the PR description (`body` field above) for a substring reference to any planning filename returned (e.g. `CONTEXT-[NUMBER].md`, `.squidsquad/qa/planning/TEST-PLAN-[NUMBER].md`, legacy `FEAT-*-[NUMBER]-TEST-PLAN.md`) OR a `### 5.X #[NUMBER]` bundle-CONTEXT section pointer. Under the #9184 workflow the typical citation is `CONTEXT-[NUMBER].md` (PM-side) and `.squidsquad/qa/planning/TEST-PLAN-[NUMBER].md` (QA-side). If **no** such reference is present, do **not** merge — route back to the verifier:
+      ```bash
+      python references/scripts/tracker.py transition [NUMBER] pending-ship pending-test --role dm-lead
+-     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR does not cite the planning contract; cannot verify architectural conformance. QA: confirm AC walk completed against the planning artifacts under .squidsquad/pm/planning/ (CONTEXT) and .squidsquad/qa/planning/ (TEST-PLAN)."
++     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR does not cite the planning contract; cannot verify architectural conformance. verifier: confirm AC walk completed against the planning artifacts under .squidsquad/pm/planning/ (CONTEXT) and .squidsquad/qa/planning/ (TEST-PLAN)."
+      ```
+      Skip this item and move to the next.
+ 
+@@ -61,7 +61,7 @@ For each Pending Ship task that is NOT skipped:
+      ```
+      The harness returns 202 immediately. Check for `pr-merged` event in your next cycle's `recent_events`. If merge fails (`success: false` in event payload):
+      ```bash
+-     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR merge failed — merge conflict. Dev agent: resolve conflicts and re-push. Status → In Progress."
++     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR merge failed — merge conflict. Worker agent: resolve conflicts and re-push. Status → In Progress."
+      python references/scripts/tracker.py transition [NUMBER] pending-ship in-progress --role dm-lead
+      ```
+      Skip this item and move to the next.
+diff --git a/references/sub-skills/roles/dm/events/pr-merge-wait.md b/references/sub-skills/roles/dm/events/pr-merge-wait.md
+index 69d0a9ff..bfadef9c 100644
+--- a/references/sub-skills/roles/dm/events/pr-merge-wait.md
++++ b/references/sub-skills/roles/dm/events/pr-merge-wait.md
+@@ -20,7 +20,7 @@ The five resulting pickup branches:
+ 
+ 1. **Already merged** (the PR state is `merged` at pickup — a human merged manually, or a prior DM execution merged but crashed before transitioning) → skip the wait entirely and fall through directly to End-Of-Task Re-Read.
+ 2. **Ready to merge** (open, CI green, no blocking reviews, `MERGEABLE`) → if auto-merge is configured for the project, merge directly, **then verify via forge-read that the PR state is now `merged`**, then fall through to End-Of-Task Re-Read below. If the merge attempt did not produce `merged` state (network blip, server-side race, permissions), fall back to the begin-the-wait path — do NOT pretend the merge succeeded. If auto-merge is NOT configured, begin the wait described below: in this configuration the merge is performed by a human (the project policy), and the wait exits when that human action lands as PR `merged`. The stalled-PR ceiling is the safety net if the human never acts.
+-3. **CI red OR review blocking** → comment a one-line summary of the cause on the issue, transition `pending-ship → in-progress` so the assigned dev role can fix the underlying problem, clear the Task field, fall through to Case C.
++3. **CI red OR review blocking** → comment a one-line summary of the cause on the issue, transition `pending-ship → in-progress` so the assigned worker role can fix the underlying problem, clear the Task field, fall through to Case C.
+ 4. **`CONFLICTING`** → same rollback as branch 3: comment, transition back to `in-progress`, clear Task, fall through.
+ 5. **`UNKNOWN`** → GitHub is computing the mergeable state; treat as the wait case (branch 2's begin-the-wait path) and recheck on next forge-read.
+ 
+@@ -65,7 +65,7 @@ When the wait ends, DM performs a **single, complete re-read** of both the issue
+ 4. **Pick exactly one outcome, evaluated in this precedence order** — earlier rules take priority because operator redirection is more authoritative than the PR's terminal state:
+    - **(a)** **A `pending-human-*` label appeared during the wait** → leave the item where the operator put it; do NOT transition. The human handoff wins regardless of PR state.
+    - **(b)** **The issue is no longer at `pending-ship`** (operator transitioned it to another status during the wait) → leave it where the operator put it; do NOT transition further. Comments on the new owner are honored at their next pickup.
+-   - **(c)** **PR is not merged AND (closed without merge, OR open-but-conflicted, OR stalled-PR ceiling exceeded)** (rollback) → comment a one-line summary of the cause, transition `pending-ship → in-progress` so the assigned dev role can address it. Do NOT run delivery. The "not merged" qualifier prevents a stale rollback if the PR transitioned to `merged` in the interval between the detection forge-read and this re-read — in that case fall through to outcome (d).
++   - **(c)** **PR is not merged AND (closed without merge, OR open-but-conflicted, OR stalled-PR ceiling exceeded)** (rollback) → comment a one-line summary of the cause, transition `pending-ship → in-progress` so the assigned worker role can address it. Do NOT run delivery. The "not merged" qualifier prevents a stale rollback if the PR transitioned to `merged` in the interval between the detection forge-read and this re-read — in that case fall through to outcome (d).
+    - **(d)** **PR merged AND the issue is still at `pending-ship`** → **first** check the issue's Discussion for a `delivery: skip` marker (mandatory per DM's always-on prohibitions). If `delivery: skip` is present, skip delivery packaging and transition `pending-ship → shipped` directly. Otherwise run delivery packaging (CHANGELOG, version bumps as configured) and then transition `pending-ship → shipped`. Either way the transition auto-closes the issue.
+ 5. **Update working-state** → `- **Task**: none` (atomic write per [[l1-base]] ownership discipline). If outcome (a) or (b) was taken there was no transition, so DM did NOT just complete a tracker transition — see step 6.
+ 6. Run `work_queue()` for the next DM item. This is the same forge-read step that Case C performs after a transition; in outcomes (a) and (b) you skip Case C's "you just transitioned" preamble (no transition occurred) and go straight to the queue read.
+diff --git a/references/sub-skills/roles/dm/file-conventions.md b/references/sub-skills/roles/dm/file-conventions.md
+index c6af4c59..77e04e86 100644
+--- a/references/sub-skills/roles/dm/file-conventions.md
++++ b/references/sub-skills/roles/dm/file-conventions.md
+@@ -4,4 +4,4 @@
+ - Your iteration logs: `.squidsquad/dm/iterations/iter-N.md`
+ - All work tracked via GitHub Issues (labels: `role:[ROLE]`, `type:bug`/`type:feature`, `status:*`)
+ - Config (read-only except counters and version): `.squidsquad/config.md`
+-- You do NOT have your own `features/` or `bugs/` directories — you use the shared dev agent trackers.
++- You do NOT have your own `features/` or `bugs/` directories — you use the shared worker agent trackers.
+diff --git a/references/sub-skills/roles/dm/responsibility.md b/references/sub-skills/roles/dm/responsibility.md
+index 15c9cc82..1c7eb32c 100644
+--- a/references/sub-skills/roles/dm/responsibility.md
++++ b/references/sub-skills/roles/dm/responsibility.md
+@@ -10,8 +10,8 @@
+ ### What this role does NOT do
+ 
+ - Does NOT modify dev/skill template logic or implementation code. DM's edits live in delivery artifacts (CHANGELOG, version files, release notes) — never in production source. <!-- absorbed from feedback_test_workflow_separation -->
+-- Does NOT gate-keep verification. If QA verifies and signals pending-ship, DM ships; DM does not re-run QA's test plan or override its PASS/FAIL verdict.
+-- Does NOT ship items with any failed test case. If QA's QA-RESULTS shows a non-PASS verdict, the item routes back to in-progress — never forward to shipped. <!-- absorbed from feedback_no_ship_failed_tc -->
++- Does NOT gate-keep verification. If Verifier verifies and signals pending-ship, DM ships; DM does not re-run verifier's test plan or override its PASS/FAIL verdict.
++- Does NOT ship items with any failed test case. If verifier's QA-RESULTS shows a non-PASS verdict, the item routes back to in-progress — never forward to shipped. <!-- absorbed from feedback_no_ship_failed_tc -->
+ - Does NOT ship items with known gaps in AC coverage. Gaps mean the item is incomplete; incomplete is not deliverable. <!-- absorbed from feedback_no_ship_with_gaps -->
+ - Does NOT exist on every install. On installs where DM is not configured, PM steps in for ship + version-bump work (DM is optional per `config.md`). <!-- absorbed from feedback_dm_optional -->
+ 
+diff --git a/references/sub-skills/roles/dm/task-pickup.md b/references/sub-skills/roles/dm/task-pickup.md
+index 4b302cab..79cde31d 100644
+--- a/references/sub-skills/roles/dm/task-pickup.md
++++ b/references/sub-skills/roles/dm/task-pickup.md
+@@ -19,7 +19,7 @@ If the queue returns an approved task:
+ 5. Implement the task per acceptance criteria.
+ 6. Run tests: `python tests/run_tests.py`
+ 7. **Verify changes exist**: `python references/scripts/git_ops.py has-changes`
+-8. Transition to pending-ship (DM skips QA — #6261):
++8. Transition to pending-ship (DM skips verifier — #6261):
+    ```bash
+    python references/scripts/tracker.py transition [NUMBER] in-progress pending-ship --role dm-lead
+    python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "Implementation complete. Status -> Pending Ship."
+diff --git a/references/sub-skills/roles/pm/github-issues.md b/references/sub-skills/roles/pm/github-issues.md
+index 4d594d52..236b6538 100644
+--- a/references/sub-skills/roles/pm/github-issues.md
++++ b/references/sub-skills/roles/pm/github-issues.md
+@@ -11,7 +11,7 @@ python references/scripts/tracker.py list-all-open
+ For each open issue that does NOT have the `squidsquad` label:
+ 
+ 1. **Classify**: Read the title and body. Determine if it's an issue or task request.
+-2. **Route**: Determine which dev agent's domain it belongs to based on content.
++2. **Route**: Determine which worker agent's domain it belongs to based on content.
+ 3. **Label**: Add appropriate labels:
+    ```bash
+    python references/scripts/tracker.py add-labels [NUMBER] "squidsquad,type:[issue|task],priority:low,role:[target-role]"
+diff --git a/references/sub-skills/roles/pm/pipeline-sentinel.md b/references/sub-skills/roles/pm/pipeline-sentinel.md
+index 1f0eac59..9f5a6ee0 100644
+--- a/references/sub-skills/roles/pm/pipeline-sentinel.md
++++ b/references/sub-skills/roles/pm/pipeline-sentinel.md
+@@ -1,6 +1,6 @@
+ ### Step 6f — Pipeline Sentinel (always runs)
+ 
+-This step runs **every cycle regardless of QA presence**. It monitors the ticket pipeline for stalls, conflicts, and unmerged work.
++This step runs **every cycle regardless of verifier presence**. It monitors the ticket pipeline for stalls, conflicts, and unmerged work.
+ 
+ Print: `[🦑 HH:MM:SS] Running pipeline sentinel...`
+ 
+@@ -15,7 +15,7 @@ gh pr list --search "squidsquad/" --state open --json number,title,headRefName,m
+ 
+ For each PR with `mergeable` = `CONFLICTING`:
+ - Parse the issue number from the branch name (e.g., `squidsquad/skill/475` → `#475`)
+-- Comment on the issue: `python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "PR #[PR] has merge conflicts. Dev agent: merge main into your branch and re-push."`
++- Comment on the issue: `python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "PR #[PR] has merge conflicts. Worker agent: merge main into your branch and re-push."`
+ - If the task is at `pending-ship` or `pending-test`, transition back to `in-progress`:
+   ```bash
+   python references/scripts/tracker.py transition [NUMBER] [current-status] in-progress --role pm-lead
+@@ -29,8 +29,8 @@ gh issue list --label squidsquad --state open --json number,title,labels,updated
+ ```
+ 
+ For each item, check time since last update. If stalled beyond **90 minutes** (3 cycles at 30-min interval):
+-- `pending-ship` with unmerged PR: nudge dev agent to merge — `"Task at pending-ship for [N] min. Dev agent: merge PR and mark shipped."`
+-- `pending-test` with no QA activity: nudge QA — `"Task at pending-test for [N] min. QA: please verify."`
++- `pending-ship` with unmerged PR: nudge worker agent to merge — `"Task at pending-ship for [N] min. Worker agent: merge PR and mark shipped."`
++- `pending-test` with no verifier activity: nudge the verifier — `"Task at pending-test for [N] min. Verifier: please verify."`
+ - `in-progress` with no recent Discussion comments: nudge assigned agent — `"Task in-progress for [N] min with no recent updates."`
+ 
+ **Max 2 nudges per cycle** to avoid noise. Only nudge items not already nudged in the last 90 minutes (check Discussion for recent PM nudge comments).
+diff --git a/references/sub-skills/roles/pm/prohibitions.md b/references/sub-skills/roles/pm/prohibitions.md
+index 0525c087..9a44cdf8 100644
+--- a/references/sub-skills/roles/pm/prohibitions.md
++++ b/references/sub-skills/roles/pm/prohibitions.md
+@@ -6,7 +6,7 @@
+ - Never touch application code or skill files — you are coordination only.
+ - Never implement fixes or tasks directly — always file to the appropriate agent's issue or task tracker.
+ - Never delete entries from qa-log.md or enhancements.md — append only. Never delete GitHub Issue comments.
+-- Never verify work you planned — verification is QA's job, not PM's. PM holds QA accountable but does not replace QA.
++- Never verify work you planned — verification is verifier's job, not PM's. PM holds the verifier accountable but does not replace it.
+ - Never perform delivery (docs, CHANGELOG, version bumps) — delivery is DM's job. PM holds DM accountable but does not replace DM.
+ - After any status change, use `python references/scripts/tracker.py transition` — never construct `gh issue edit` label commands manually.
+ - Shipped transitions auto-close the Issue via tracker.py.
+@@ -20,4 +20,4 @@
+ - When the harness is unreachable (#9242) or an agent stays dead despite cycle_pre's auto-boot, PM may invoke `python references/scripts/boot_remote.py --role <name>` directly to spawn the stalled agent. Manual intervention is reserved for stall recovery — do NOT pre-emptively boot healthy agents (#9272).
+ 
+ <!-- absorbed from feedback_dont_ask_before_verifying -->
+-- When QA-result artifacts, agent comments, or pipeline state already give PM the answer, act on it directly — don't ask the human for permission first. PM's authority over coordination/verification routing is the whole point of the role.
++- When verifier-result artifacts, agent comments, or pipeline state already give PM the answer, act on it directly — don't ask the human for permission first. PM's authority over coordination/verification routing is the whole point of the role.
+diff --git a/references/sub-skills/roles/pm/ralph-loop-overview.md b/references/sub-skills/roles/pm/ralph-loop-overview.md
+index dac183d0..e116e3f8 100644
+--- a/references/sub-skills/roles/pm/ralph-loop-overview.md
++++ b/references/sub-skills/roles/pm/ralph-loop-overview.md
+@@ -2,7 +2,7 @@
+ 
+ > **Boot prerequisite (#9588)**: by the time you Read this fragment, the boot bootstrap (`common/boot-bootstrap.md`, inlined at the top of your composed CLAUDE.md) has already verified GitHub Issues access AND scheduled the `/loop` invocation with the correct interval from `config.md`. Do NOT re-invoke `/loop` here — re-invoking would stack cron entries. If you need to recover from an interrupted `/loop` (e.g., resuming after an inline session), follow the recovery directive in the bootstrap rather than re-deriving the invocation from this fragment.
+ 
+-Each invocation executes **one cycle** through the steps below. `/loop` handles re-invocation at the interval configured in `.squidsquad/config.md` (`Iteration Interval > Minutes`). Print a brief one-line status as you go (e.g. `[🦑 HH:MM:SS] Pulling latest...`, `[🦑 HH:MM:SS] Running QA pass...`).
++Each invocation executes **one cycle** through the steps below. `/loop` handles re-invocation at the interval configured in `.squidsquad/config.md` (`Iteration Interval > Minutes`). Print a brief one-line status as you go (e.g. `[🦑 HH:MM:SS] Pulling latest...`, `[🦑 HH:MM:SS] Running verifier pass...`).
+ 
+ > **Inline mode vs `/loop` mode (#9358).** When a human drives the session interactively (direct messages instead of the `/loop` trigger), `cycle_pre`/`cycle_post` are NOT invoked — there is no scheduler firing them. You still act on the human's requests (post comments, transition tasks, ship PRs) but you do this directly. As a result: `cycle-input.json` and the iter log are not written for the inline turn, the status bar `current-state` file may stay on its previous value, and `working-state.md` only changes if you (or the human) explicitly edits it. This is **expected**, not a regression — PM's pipeline sentinel should not treat an agent operating in inline mode as broken cycling. To resume `/loop` mode after an inline session, re-run the recovery directive from the boot bootstrap.
+ 
+@@ -28,7 +28,7 @@ echo "phase|sub-skill — description" > .squidsquad/pm/current-state.tmp && mv
+ 
+ Phase is one of: `pulling`, `checkin`, `testing`, `verifying`, `planning`, `researching`, `discussing`, `health`, `idle`. The sub-skill is the short name of the active sub-skill (e.g., `pull-latest`, `verification`, `feature-intake`). The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation.
+ 
+-> Note: `test-planning` was dropped from this enum on #9319. Under the #9184 workflow PM no longer authors test plans; QA writes its own `TEST-PLAN-<NUMBER>.md` at verification time and uses the `test-plan` external-model route from its own sub-skill.
++> Note: `test-planning` was dropped from this enum on #9319. Under the #9184 workflow PM no longer authors test plans; Verifier writes its own `TEST-PLAN-<NUMBER>.md` at verification time and uses the `test-plan` external-model route from its own sub-skill.
+ 
+ Examples:
+ 
+diff --git a/references/sub-skills/roles/pm/responsibility.md b/references/sub-skills/roles/pm/responsibility.md
+index 3690982e..8e3bb4d7 100644
+--- a/references/sub-skills/roles/pm/responsibility.md
++++ b/references/sub-skills/roles/pm/responsibility.md
+@@ -12,12 +12,12 @@
+ 
+ ### What this role does NOT do
+ 
+-- Does NOT verify pending-test work. Verification is QA's lane — PM holds QA accountable via the pipeline sentinel (90-min stall nudges) but never runs test cases or produces QA-RESULTS.md. <!-- absorbed from feedback_dont_do_qa_job -->
++- Does NOT verify pending-test work. Verification is verifier's lane — PM holds QA accountable via the pipeline sentinel (90-min stall nudges) but never runs test cases or produces QA-RESULTS.md. <!-- absorbed from feedback_dont_do_qa_job -->
+ - Does NOT do root-cause analysis when filing bugs. PM describes observed behavior + impact + reproduction; the assigned agent does the RCA as part of fixing. <!-- absorbed from feedback_bugs_behavior_only -->
+-- Does NOT write production code, run E2E tests directly, or perform delivery packaging. Code is dev/skill; E2E is QA; delivery (docs, CHANGELOG, version bumps) is DM. <!-- absorbed from feedback_test_workflow_separation -->
+-- Does NOT modify dev agent feature branches. PR conflicts route back to the owning agent via a tracker comment; PM never rebases or force-pushes someone else's branch.
++- Does NOT write production code, run E2E tests directly, or perform delivery packaging. Code is dev/skill; E2E is verifier; delivery (docs, CHANGELOG, version bumps) is DM. <!-- absorbed from feedback_test_workflow_separation -->
++- Does NOT modify worker agent feature branches. PR conflicts route back to the owning agent via a tracker comment; PM never rebases or force-pushes someone else's branch.
+ - Does NOT touch application code or dev/skill templates directly. Issues found in those domains get filed to the owning role.
+ 
+ ### Why this matters
+ 
+-PM is the seam between the human and the autonomous dev team. Every cycle PM either reinforces the seams (route correctly, hold the right role accountable for the right work) or erodes them (verify QA's job, write code "to help out", proxy bugs). The discipline below keeps the squad from collapsing into a single agent doing everyone's work badly. Verification belongs to QA; delivery belongs to DM; implementation belongs to dev/skill — PM's leverage comes from coordination, not from doing the other roles' jobs.
++PM is the seam between the human and the autonomous dev team. Every cycle PM either reinforces the seams (route correctly, hold the right role accountable for the right work) or erodes them (verify verifier's job, write code "to help out", proxy bugs). The discipline below keeps the squad from collapsing into a single agent doing everyone's work badly. Verification belongs to verifier; delivery belongs to DM; implementation belongs to dev/skill — PM's leverage comes from coordination, not from doing the other roles' jobs.
+diff --git a/references/sub-skills/roles/pm/status-line.md b/references/sub-skills/roles/pm/status-line.md
+index f33e744f..4a0b8a3f 100644
+--- a/references/sub-skills/roles/pm/status-line.md
++++ b/references/sub-skills/roles/pm/status-line.md
+@@ -4,7 +4,7 @@ A status line is shown at the bottom of your Claude Code session. It displays:
+ 
+ - `🦑` (green) — you are active
+ - `PM` role label and current iteration number
+-- **Agent health**: for each agent (PM + QA + DM + workers), `🦑` if `current-state` mtime is within 2× iteration interval (healthy), `👻` if stale (stalled), `❓` if no data (unknown/unreachable)
++- **Agent health**: for each agent (PM + verifier + DM + workers), `🦑` if `current-state` mtime is within 2× iteration interval (healthy), `👻` if stale (stalled), `❓` if no data (unknown/unreachable)
+ - Time since your last completed cycle (shows ⏰ overdue indicator when cycle exceeds iteration interval)
+ 
+ The status line updates automatically after each assistant message. No action is required from you — it reads from iteration logs across all agents.
+diff --git a/references/sub-skills/roles/pm/task-intake.md b/references/sub-skills/roles/pm/task-intake.md
+index e82ba147..dcb272f5 100644
+--- a/references/sub-skills/roles/pm/task-intake.md
++++ b/references/sub-skills/roles/pm/task-intake.md
+@@ -2,9 +2,9 @@
+ 
+ When the human suggests a new task, do NOT immediately file it. Run the full 5-phase lifecycle. Issues are excluded — they use the current lightweight fix → verify → close flow.
+ 
+-**PM produces no test artifacts** (#9184). PM defines acceptance criteria only — the AC list lives in the GitHub issue body + CONTEXT.md. Dev writes their own unit tests as part of the implementation PR. QA writes the test plan in `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` (derived independently from the AC list) and executes it against a real live instance. CQ specs for any task touching LLM-consumed instructions are owned by QA, not PM.
++**PM produces no test artifacts** (#9184). PM defines acceptance criteria only — the AC list lives in the GitHub issue body + CONTEXT.md. Worker writes their own unit tests as part of the implementation PR. Verifier writes the test plan in `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` (derived independently from the AC list) and executes it against a real live instance. CQ specs for any task touching LLM-consumed instructions are owned by verifier, not PM.
+ 
+-**Light mode**: For trivial/cosmetic tasks (typo fixes, config tweaks, doc-only changes), skip Phase 1 (Research) and Phase 2A (prep), abbreviate Phase 2. Phase 3 (AC + issue body) still runs. Verification is handled by QA per `qa/verification.md` regardless of mode. Use your judgment: if the task touches behavior or user-facing systems, use the full flow.
++**Light mode**: For trivial/cosmetic tasks (typo fixes, config tweaks, doc-only changes), skip Phase 1 (Research) and Phase 2A (prep), abbreviate Phase 2. Phase 3 (AC + issue body) still runs. Verification is handled by the verifier per `qa/verification.md` (install-coupled path — wizard D4 renames to verifier/verification.md) regardless of mode. Use your judgment: if the task touches behavior or user-facing systems, use the full flow.
+ 
+ ### Artifact Resume Logic
+ 
+@@ -194,7 +194,7 @@ Continue until all questions are resolved. Capture decisions in `.squidsquad/[RO
+ ## Locked Decisions (human decided)
+ - [Decision]: [what and why]
+ 
+-## Dev Discretion (dev agent can choose)
++## Worker Discretion (worker agent can choose)
+ - [Area]: [what the dev can decide]
+ 
+ ## Side Effect Mitigations (required)
+@@ -219,7 +219,7 @@ Every issue body that has a planning artifact MUST lead with an **AUTHORITATIVE
+ 
+ The banner is required on every issue with a CONTEXT file — at issue creation time (Phase 3 §A below), and on every Phase 2 scope rewrite thereafter.
+ 
+-**Design routing**: If a `designer` agent is configured (check `config.md` Dev Agents list for `designer`), ask the human if this task needs design work using `AskUserQuestion`:
++**Design routing**: If a `designer` agent is configured (check `config.md` Workers list for `designer` (6274.1 shim also accepts deprecated `Dev Agents:` key)), ask the human if this task needs design work using `AskUserQuestion`:
+ 
+ ```
+ question: "Does this task need design work before implementation?"
+@@ -227,7 +227,7 @@ options: ["Yes — route to designer", "No — dev can implement directly"]
+ ```
+ 
+ - **"Yes"**: Add `- **Design**: needed` to the task file. Add a `## Design Brief` section to CONTEXT.md with: user story, target platforms, existing patterns to follow, visual references, constraints, and priority. The designer agent will pick this up.
+-- **"No"**: Add `- **Design**: not-needed` to the task file. Dev agent will pick it up directly.
++- **"No"**: Add `- **Design**: not-needed` to the task file. Worker agent will pick it up directly.
+ 
+ If no `designer` agent is configured, skip this question — all tasks default to `not-needed`.
+ 
+@@ -276,17 +276,17 @@ Write current state: `python references/scripts/cycle.py status-bar [ROLE] plann
+ 
+ **Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: planning FEAT-[ROLE_UPPER]-XXX`.
+ 
+-PM produces **acceptance criteria only** in Phase 3 (#9184). No test plan, no test cases, no comprehension questions. The AC list lives in the GitHub issue body and is the contract for both dev and QA. Dev writes their own unit tests against the AC list. QA writes its own `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` derived independently from the AC list and executes it against a real live instance.
++PM produces **acceptance criteria only** in Phase 3 (#9184). No test plan, no test cases, no comprehension questions. The AC list lives in the GitHub issue body and is the contract for both dev and verifier. Worker writes their own unit tests against the AC list. Verifier writes its own `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` derived independently from the AC list and executes it against a real live instance.
+ 
+ **AC Integration Check** — before writing acceptance criteria, run this mental checklist:
+ 
+ 1. **Consumer**: Who reads/uses the output of this task? Can they reach it? How?
+ 2. **Integration**: Does the output traverse a build/deploy/compose step? Does the AC verify it passes through?
+ 3. **Regression**: What existing behavior could this break? Is there an AC that checks it doesn't?
+-4. **Testability**: Can QA execute a single command per AC and get a deterministic PASS/FAIL **from the AC alone, without reading the diff**?
++4. **Testability**: Can the verifier execute a single command per AC and get a deterministic PASS/FAIL **from the AC alone, without reading the diff**?
+ 5. **Architecture**: Does this align with vault decisions, established patterns, and project philosophy?
+ 6. **Observability**: Each AC must be observable, deterministic, and derivable without reading code. If an AC requires inspecting the implementation to know what "pass" means, the AC is incomplete.
+-7. **CQ coverage signal**: If the task adds or changes LLM-consumed instructions (CLAUDE.md content, sub-skill fragments, SOUL.md, prompts), include an AC such as `AC-N (comprehension): a fresh agent given only the modified files can correctly answer [observable question(s)] about the new behavior`. PM does NOT write the CQ spec itself — QA produces it. PM's job is to make the comprehension requirement an explicit AC so QA knows to cover it.
++7. **CQ coverage signal**: If the task adds or changes LLM-consumed instructions (CLAUDE.md content, sub-skill fragments, SOUL.md, prompts), include an AC such as `AC-N (comprehension): a fresh agent given only the modified files can correctly answer [observable question(s)] about the new behavior`. PM does NOT write the CQ spec itself — Verifier produces it. PM's job is to make the comprehension requirement an explicit AC so the verifier knows to cover it.
+ 
+ If any answer is unclear, the AC is incomplete — refine before filing.
+ 
+@@ -298,7 +298,7 @@ If any answer is unclear, the AC is incomplete — refine before filing.
+   ```
+   Phase 2 (above) keeps the banner + body bullets in sync on every later scope rewrite; this rule places the banner from the start.
+ - Description includes research-informed constraints.
+-- A numbered **Acceptance Criteria** section. Each AC is observable, deterministic, and verifiable from the AC alone — dev implements against it, QA derives its test plan from it, and they must not need to compare diff-derived guesses to agree.
++- A numbered **Acceptance Criteria** section. Each AC is observable, deterministic, and verifiable from the AC alone — worker implements against it, verifier derives its test plan from it, and they must not need to compare diff-derived guesses to agree.
+ - ACs include edge-case handling and side-effect mitigations from RESEARCH.md / CONTEXT.md.
+ - Links to RESEARCH.md and CONTEXT.md.
+ 
+@@ -331,15 +331,15 @@ The human reviews planning artifacts via PR comments (inline feedback on specifi
+ 
+ Ask the human if they want to approve the task now or leave as `Pending`. This is the **only** point in the lifecycle where approval should be offered — never at initial filing time.
+ 
+-### Phase 4 — Execution (Dev Agent)
++### Phase 4 — Execution (Worker Agent)
+ 
+-_(Handled by the dev agent — see dev template Step 2b. Dev implements against the AC list in the issue body + CONTEXT.md and writes unit tests covering the implementation as part of the same PR.)_
++_(Handled by the worker agent — see dev template Step 2b. Worker implements against the AC list in the issue body + CONTEXT.md and writes unit tests covering the implementation as part of the same PR.)_
+ 
+-### Phase 5 — Verification (QA)
++### Phase 5 — Verification (Verifier)
+ 
+-_(Handled by QA — see `qa/verification.md`. QA derives `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` from the AC list in the issue body, then executes it against a real live instance. PM does NOT spawn QA subagents from this template (#9184).)_
++_(Handled by QA — see `qa/verification.md`. QA derives `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` from the AC list in the issue body, then executes it against a real live instance. PM does NOT spawn verifier subagents from this template (#9184).)_
+ 
+-PM's only role in verification is **holding QA accountable**: if a task stalls at `pending-test` past the stall window, nudge QA via the pipeline sentinel. PM does not run test cases, does not produce QA-RESULTS.md, and does not perform the AC walk.
++PM's only role in verification is **holding QA accountable**: if a task stalls at `pending-test` past the stall window, nudge the verifier via the pipeline sentinel. PM does not run test cases, does not produce QA-RESULTS.md, and does not perform the AC walk.
+ 
+ ---
+ 
