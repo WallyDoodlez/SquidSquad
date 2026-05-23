@@ -569,6 +569,48 @@ If the worker forgets to call `/work/assign`, the ExternalActivityDetector catch
 - EAD emits `assigned-to` to the verifier's queue.
 - The verifier wakes via nudge, same as 5–8 above.
 
+### 7.2 tracker.py auto-routes transitions (preferred path)
+
+In practice, agents never call `/work/assign` directly for transition-driven handoffs. `tracker.py transition` does it automatically. The §7.0 diagram shows the underlying mechanics; the agent-facing API is just one command:
+
+```bash
+python references/scripts/tracker.py transition 9926 in-progress pending-test --role pm-lead
+```
+
+Behind the scenes, tracker.py does three things:
+1. `gh issue edit` — the forge label change (source-of-truth update).
+2. Lookup the `(from, to)` transition in an internal mapping table to find the implied `next_role`.
+3. If `next_role` is defined: `POST /work/assign {issue, next_role, event_context: "transition:<from>→<to>"}` to the harness.
+
+**Built-in transition → routing table** (locked):
+
+| Transition (from → to) | Implied `next_role` | event_context |
+|---|---|---|
+| `in-progress → pending-test` | `verifier` | `"verification-needed"` |
+| `pending-test → pending-ship` | `dm` | `"delivery-needed"` |
+| `pending-test → in-progress` | assigned role from `role:*` label | `"qa-rejected"` |
+| `pending-ship → in-progress` | assigned role | `"merge-conflict"` |
+| `pending → planning` | `pm` | `"planning-needed"` |
+| `planning → planned` | (no assign — self-routing) | — |
+| `planned → approved` | assigned role | `"ready-for-pickup"` |
+| `approved → in-progress` | (no assign — self-pickup) | — |
+| `pending-ship → shipped` | (no assign — terminal) | — |
+| `* → pending-human-review` | `pm` | `"human-needed"` |
+| `* → pending-human-setup` | `pm` | `"human-needed"` |
+
+**Why this layering helps:**
+
+- **Mitigates pickup-fidelity bugs** (`#9946`): agents can't forget the `/work/assign` step because tracker.py does it. One whole class of "skill claimed handoff but only did the transition" disappears.
+- **Replaces the deprecated `status-transition` emit** (tracker.py:1062). Under v2's catalog trim, that emit path goes away; this is its successor.
+- **Direct `/work/assign` remains** for non-transition routing — e.g., when an agent surfaces a process concern to pm without changing any tracker state:
+  ```bash
+  python references/scripts/tracker.py work-assign --target pm \
+      --event-context process-concern --payload '{"concern": "..."}'
+  ```
+- **EAD becomes a safety net, not the primary path.** Most handoffs go through tracker.py (sub-second); EAD only catches forge changes that didn't originate from tracker.py (human edits in the GitHub UI, third-party tooling, etc.).
+
+**Failure mode:** if the harness is unreachable when tracker.py tries to POST `/work/assign`, the forge label change already succeeded — EAD picks it up on its next poll (within the 10-30s indexing window). The transition is durable; only the immediate-nudge latency degrades.
+
 The two paths (explicit `/work/assign` and implicit EAD detection) are both valid. Explicit is preferred for clarity; EAD is the safety net.
 
 ---
