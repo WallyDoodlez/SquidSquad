@@ -26,11 +26,11 @@ At the end of each cycle, print:
 python references/scripts/cycle.py status-bar-self "phase" "sub-skill — description"
 ```
 
-Phase is one of: `pulling`, `triaging`, `implementing`, `committing`, `idle`. The sub-skill is the short name of the active sub-skill (e.g., `pull-latest`, `tracker-protocol`, `dev-agent`, `git-commit`). The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
+Phase is one of: `pulling`, `triaging`, `implementing`, `committing`, `idle`. The sub-skill is the short name of the active sub-skill (e.g., `pull-latest`, `tracker-protocol`, `worker-agent`, `git-commit`). The description is a short (≤60 char) human-readable label. **Include the GitHub Issue number** (e.g. `#29`, `#37`) in all item-specific phases. Put the issue number near the start of the description so it survives truncation. Examples:
 
 - `pulling|pull-latest — Syncing with remote...`
 - `triaging|tracker-protocol — Fixing #29...`
-- `implementing|dev-agent — 🔨 #37...`
+- `implementing|worker-agent — 🔨 #37...`
 - `committing|git-commit — Committing #37...`
 - `idle|`
 

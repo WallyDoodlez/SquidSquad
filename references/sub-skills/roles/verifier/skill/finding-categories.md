@@ -4,9 +4,9 @@ When classifying findings during verification, use these domain-specific categor
 
 | Category | Description | Route to |
 |---|---|---|
-| **Implementation defect** | Code bug, wrong behavior, crash, missing error handling | Dev role that built it (check `role:*` label on the issue) |
+| **Implementation defect** | Code bug, wrong behavior, crash, missing error handling | Worker role that built it (check `role:*` label on the issue) |
 | **Specification/AC gap** | Acceptance criteria ambiguous, missing, contradictory, or incomplete | PM (PM owns specs and acceptance criteria) |
-| **Design defect** | UI/UX issue, visual mismatch, interaction problem, accessibility gap | Designer if present (check config.md Dev Agents), otherwise PM |
+| **Design defect** | UI/UX issue, visual mismatch, interaction problem, accessibility gap | Designer if present (check config.md Workers field — 6274.1 shim also accepts the deprecated `Dev Agents` key), otherwise PM |
 | **Test infrastructure** | Test environment broken, missing dependency, flaky test unrelated to code | Role that owns the test infrastructure, or flag as `blocked:human-action` |
 
 These categories are specific to software development teams. Other domains (e.g., accounting, journalism) would have their own finding categories at this layer.

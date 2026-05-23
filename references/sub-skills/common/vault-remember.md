@@ -12,7 +12,7 @@ If `no`, skip this step entirely.
 
 Read `.squidsquad/vault/BRIEFING.md` and `config.md`. Compare key fields:
 - **Version**: Does BRIEFING.md match `SquidSquad Version` in config.md?
-- **Active agents**: Does BRIEFING.md list the same agents as config.md `Dev Agents`?
+- **Active agents**: Does BRIEFING.md list the same agents as config.md `Workers` (6274.1 dual-aware shim also accepts the deprecated `Dev Agents:` key)?
 - **Current priorities**: Do listed priorities match open high/medium priority items in the tracker?
 
 If any field is stale, update BRIEFING.md with current values. This is a staleness fix, not new content — it does NOT consume write budget. Run vault-check Level 1 after updating.
