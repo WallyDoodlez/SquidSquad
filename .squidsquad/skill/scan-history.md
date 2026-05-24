@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 17:10
+
+- **Files scanned**: references/scripts/vault_entity.py (218 lines; heuristic entity-extraction utility for vault-remember)
+- **Findings**: none. PROPER_NAME_PATTERN over-matches by design (LLM judgment downstream filters); `_is_noise_name` correctly checks both full name and first-word so "GitHub Actions" is filtered via "GitHub" in NOISE_WORDS. PREFERENCE_MARKERS substring search is intentionally loose. The shared `seen` set between URLs and proper names is theoretically clash-prone but the type space is disjoint in practice. Performance is O(M*N) for preference scan — fine for typical vault inputs.
+- **Items rejected by human**: none yet
+- **Notes**: vault_entity is a heuristic feeder for vault-remember; correctness is downstream. No structural issues. vault_optimize.py (664 lines) reserved for a future cycle when context is fresher — it's the larger of the vault group and the right one to look at after PM's brainstorm crystallizes into actual tasks.
+
 ## Scan — 2026-05-24 16:40
 
 - **Files scanned**: references/scripts/vault_check.py (full 393 lines; focus on `check_wikilinks` regex, frontmatter parser, validate exit semantics)
