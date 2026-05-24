@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "SKILL.md:sections-1-3",
+  "last_scanned": "SKILL.md:sections-4-6",
   "rotation_count": 58,
   "scan_history": [
     {
@@ -1798,6 +1798,12 @@
       "date": "2026-05-24",
       "findings": 0,
       "note": "Rotation 59 second scan. Full read of lines 1-166 (frontmatter + sections 1 Architecture, 2 File Structure Generated, 3 Tracker GitHub Issues). Verified: frontmatter version 0.43.0 matches .squidsquad/config.md line 3 SquidSquad Version 0.43.0; .squidsquad/pm/{enhancements.md, planning/, iterations/, migrations/} structure exists; .squidsquad/project/{shared-instructions,shared-responsibility,shared-soul-directives,setup-upgrade-gate}.md + per-role L4 overrides ({dev,dm,pm,qa}-{instructions,responsibility,soul-directives}.md) exist; tracker.py STATUS_LABELS (lines 81-98) include all 11 documented status labels; legal transition table (lines 118+) matches SKILL.md bug flow (open → in-progress → pending-test → pending-ship → closed) and feature flow (pending → planning → planned → approved → in-progress → pending-test → pending-ship → closed). 0 findings — doc is current."
+    },
+    {
+      "file": "SKILL.md:sections-4-6",
+      "date": "2026-05-24",
+      "findings": 0,
+      "note": "Rotation 59 third scan. Full read of lines 167-348 (sec 4 Ralph Loop with [Role]/PM/QA/DM sub-loops, sec 5 Git Protocol + Branch+PR Workflow + Auto-Merge, sec 6 Setup Instructions). Verified: /loop INTERVAL format matches my own boot; iter retention default 20 (cycle.py line 237 def cleanup_iterations(role, keep=20)); references/wizard/WIZARD.md exists; references/scripts/{manifest.py, run_comprehension_test.py, model_router.py} exist; references/presets/{design, software-dev} exist; Branch Pattern default squidsquad/task/{number} matches config.md line 43; PR draft creation (git_ops.py:363 gh pr create --draft); pr_ready conversion (git_ops.py:380 #4991 GAP-5) and tracker.py auto-convert routing (tracker.py:995 #4991 GAP-3 with _convert_draft_pr_to_ready at line 980) — SKILL references both GAP-3 (tracker side) and matches code structure. 0 findings — doc is current."
     }
   ],
   "doc_inventory": {
