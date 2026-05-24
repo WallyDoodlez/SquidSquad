@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 16:40
+
+- **Files scanned**: references/scripts/vault_check.py (full 393 lines; focus on `check_wikilinks` regex, frontmatter parser, validate exit semantics)
+- **Findings**: none filed. Observations: (a) `_extract_wikilinks` at L62-63 strips pipe-aliases but not `#fragment` suffixes — a link like `[[note#section]]` would be checked as `note#section` against bare note_names and report broken, but a grep of `.squidsquad/vault/` finds zero fragment-style wikilinks today so the bug is dormant. (b) `validate()` at L327-340 prints orphans but doesn't add them to `all_issues` — likely intentional (orphans are advisory, output type "ORPHAN" vs "FAIL"). (c) third copy of the simplistic `_parse_frontmatter` parser (alongside vault_remember + soul_adaptation) — same multi-line-value blindness already documented in #10007's audit; adding a fourth file to that audit comment would be noise.
+- **Items rejected by human**: none yet
+- **Notes**: PM ran a vault sub-skill brainstorm 2h ago (commit `07670cb3`) — vault tooling is relevant context. Worth keeping vault_optimize.py / vault_entity.py / vault_remember.py in mind as a related group if PM's brainstorm produces follow-up tasks. dm reached cycle 1375 (R59 doc scans on SKILL.md sections 1-6) per recent commits; skill at cycle 1368, gap consistent with the per-role independent counters.
+
 ## Scan — 2026-05-24 16:09
 
 - **Files scanned**: references/scripts/migrate_labels_6274.py (164 lines; one-shot dual-label migration for #6274.1)
