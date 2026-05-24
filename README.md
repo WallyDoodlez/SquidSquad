@@ -147,7 +147,7 @@ This project is developed by SquidSquad itself. The [CHANGELOG](./CHANGELOG.md) 
 | Document | Description |
 |----------|-------------|
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | How SquidSquad works under the hood |
-| [Event Bus](docs/event-bus.md) | How agents coordinate in real-time |
+| [Agent Runtime](docs/AGENT-RUNTIME.md) | How agents coordinate in real-time (event bus, lifecycle, triggers) |
 | [Sub-Skill Guide](docs/sub-skill-guide.md) | Creating and contributing sub-skills |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to report bugs, propose features, submit PRs |
 | [CHANGELOG.md](CHANGELOG.md) | Version history (maintained by agents) |
