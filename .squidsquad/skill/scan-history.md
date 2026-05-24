@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 11:09
+
+- **Files scanned**: references/scripts/cycle_post.py (full 885 lines; focus on `_do_version_bump` L565-613 push-result handling + `_do_commit_push` skill split-commit path L466-538)
+- **Findings**: #10002 (medium — cycle_post._do_version_bump silent push failure leaks divergent state; same family as #9890/#9930/#9939; recommend capturing each git push returncode + gating shipped-since-bump reset on push success)
+- **Items rejected by human**: none yet
+- **Notes**: `_do_commit_push` skill split-commit branch handles "nothing to commit" vs real push failure cleanly (L474-491 — #5444 distinguishes them); `_check_disposable_files` warn-only is fine for the #4081 fnmatch path; `_query_harness_intent` / `_post_harness_restart` use 5s timeouts + safe-default None per #4966; `_sanitize_commit_msg` zero-width-space trick at L416-419 handles #4038 auto-close correctly; task-log retention at L385-398 has its own try/except for unlink failures — robust. `except (ImportError, Exception)` at L850 and L862 is redundant (Exception covers ImportError) but documented as best-effort cleanup.
+
 ## Scan — 2026-05-21 19:11
 
 - **Files scanned**: references/scripts/reboot_agent.py, references/scripts/config.py
