@@ -248,15 +248,17 @@ class TestGetEntryFileForRole:
             assert compose._get_entry_file_for_role("dev") == "dev"
 
     def test_unknown_role_falls_back_to_dev(self, compose_env):
-        # Post-6274.2: dual-aware identities preference returns 'worker' for
-        # unknown variants because 'worker' is in _DUAL_AWARE_IDENTITIES_6274
-        # and the fallback check `if "worker" in identities` fires first
-        # (compose.py:_get_entry_file_for_role:767). Method name retained for
-        # diff hygiene; canonical-on-disk target is the assertion's substance.
+        # Post-6274.2 (3b) disk-check shim: identities always includes both
+        # `worker` and `dev` (dual-aware set), so the fallback now picks the
+        # one whose directory actually exists on disk. In this scratch env
+        # only `roles/dev/` is set up by the fixture, so the worker branch
+        # short-circuits via the disk check and the dev branch wins —
+        # restoring the original "fall back to dev" semantic on pre-rename
+        # installs while still preferring `worker` post-rename.
         with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"):
-            assert compose._get_entry_file_for_role("skill") == "worker"
-            assert compose._get_entry_file_for_role("be") == "worker"
-            assert compose._get_entry_file_for_role("fe") == "worker"
+            assert compose._get_entry_file_for_role("skill") == "dev"
+            assert compose._get_entry_file_for_role("be") == "dev"
+            assert compose._get_entry_file_for_role("fe") == "dev"
 
 
 # ---------------------------------------------------------------------------

@@ -226,9 +226,16 @@ def _load_manifest(role_name: str, wake_mode: str = "polling") -> list | None:
             # aliased identity. Defense in depth — phase 2.2.1 already updated
             # all base_role: values in variant includes.yml to new names; this
             # catches any legacy caller that still passes "dev"/"qa".
+            # #6274.2 (3b) disk-check shim: `_resolve_manifest_path` already
+            # tests `.exists()` on the resolved file, so this fallback safely
+            # returns None when the alias directory is absent on disk — making
+            # the dual-aware behavior consistent between pre- and post-rename
+            # installs (no spurious successes against ghost role names).
             if role_name in _BASE_ALIAS_6274:
                 aliased = _BASE_ALIAS_6274[role_name]
-                manifest_path = _resolve_manifest_path(ROLES_DIR / aliased)
+                aliased_dir = ROLES_DIR / aliased
+                if aliased_dir.is_dir():
+                    manifest_path = _resolve_manifest_path(aliased_dir)
         if manifest_path is None:
             return None
 
@@ -764,9 +771,14 @@ def _get_entry_file_for_role(role_name: str) -> str:
     # have `roles/dev/` work via the 6274.1 alias shim — `dev` stays in
     # `identities` as a dual-aware alias and `_BASE_ALIAS_6274` maps it
     # to `worker` at the call sites that need the on-disk canonical.
-    if "worker" in identities:
+    # #6274.2 (3b) disk-check shim: `worker`/`dev` are dual-aware identities
+    # regardless of disk state, so the literal `in identities` check fires
+    # in both pre- and post-rename installs. Confirm the target directory
+    # actually has an entry template before returning it; otherwise fall
+    # through to the other side of the alias pair.
+    if "worker" in identities and (ROLES_DIR / "worker" / "instructions.md").exists():
         return "worker"
-    if "dev" in identities:
+    if "dev" in identities and (ROLES_DIR / "dev" / "instructions.md").exists():
         return "dev"
     # No registry, or no `worker`/`dev` identity — fall back to the literal
     # role name so at least the error message points at the right file.
