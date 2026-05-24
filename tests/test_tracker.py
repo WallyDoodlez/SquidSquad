@@ -491,3 +491,86 @@ class TestLabelConsistency:
 
 
 # _is_branch_workflow_enabled removed in #9478 — branch+PR is the only mode.
+
+
+# ---------------------------------------------------------------------------
+# #9999 regression: ship-gate squash-merge false-positive
+# ---------------------------------------------------------------------------
+
+class TestCheckMergedPr:
+    """`_check_merged_pr` is the GitHub-PR-state second opinion that
+    rescues the ship gate from false-positive ancestry blocks on
+    squash-merges (#9999)."""
+
+    def test_returns_pr_when_branch_matches_merged_pr(self, monkeypatch):
+        prs = [{
+            "number": 9997,
+            "headRefName": "squidsquad/task/9967",
+            "url": "https://github.com/example/repo/pull/9997",
+        }]
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(
+            tracker, "_run_list",
+            lambda cmd, **kw: _mock_result(stdout=json.dumps(prs)),
+        )
+        result = tracker._check_merged_pr(9967)
+        assert result == (9997, "https://github.com/example/repo/pull/9997")
+
+    def test_returns_none_when_no_merged_pr(self, monkeypatch):
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(
+            tracker, "_run_list",
+            lambda cmd, **kw: _mock_result(stdout="[]"),
+        )
+        assert tracker._check_merged_pr(9967) is None
+
+    def test_returns_none_when_pr_branch_mismatches_issue_number(self, monkeypatch):
+        # A merged PR exists, but for a different issue number — must
+        # not falsely satisfy the gate for #9967.
+        prs = [{
+            "number": 9998,
+            "headRefName": "squidsquad/task/1234",
+            "url": "https://github.com/example/repo/pull/9998",
+        }]
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(
+            tracker, "_run_list",
+            lambda cmd, **kw: _mock_result(stdout=json.dumps(prs)),
+        )
+        assert tracker._check_merged_pr(9967) is None
+
+    def test_returns_none_on_gh_failure(self, monkeypatch):
+        # Network / auth error → returns None so the caller falls
+        # through to the existing ancestry block (safe default).
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(
+            tracker, "_run_list",
+            lambda cmd, **kw: _mock_result(returncode=1, stderr="error"),
+        )
+        assert tracker._check_merged_pr(9967) is None
+
+    def test_returns_none_on_malformed_gh_output(self, monkeypatch):
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(
+            tracker, "_run_list",
+            lambda cmd, **kw: _mock_result(stdout="not valid json"),
+        )
+        assert tracker._check_merged_pr(9967) is None
+
+    def test_queries_for_merged_state(self, monkeypatch):
+        """The query must filter for state=merged, not open or all —
+        only merged PRs prove the code is on the working branch."""
+        calls = []
+
+        def fake_run(cmd, **kw):
+            calls.append(cmd)
+            return _mock_result(stdout="[]")
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list", fake_run)
+        tracker._check_merged_pr(9967)
+        assert calls, "expected gh pr list to be invoked"
+        cmd = calls[0]
+        # state must be merged
+        state_idx = cmd.index("--state")
+        assert cmd[state_idx + 1] == "merged"

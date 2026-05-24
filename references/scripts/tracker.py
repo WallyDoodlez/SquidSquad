@@ -876,6 +876,59 @@ def _check_unmerged_branch(number):
     return None
 
 
+def _check_merged_pr(number):
+    """Check if there's a merged PR for this issue number on GitHub (#9999).
+
+    Squash-merges (the project's default merge strategy) produce a new
+    commit on the working branch with a different SHA from the feature
+    branch's tip — so ``git rev-list main..<branch>`` correctly reports
+    the branch tip as "not reachable from main" even after a successful
+    merge. The ship-gate's ancestry check (`_check_unmerged_branch`)
+    treats this as evidence the branch is unmerged, when it's actually
+    evidence of a successful squash.
+
+    This function provides an authoritative second opinion: if a MERGED
+    PR exists on GitHub for the branch, the code IS on the working
+    branch (as a squash commit) regardless of local git ancestry, and
+    the ship transition should be allowed.
+
+    Returns (pr_number, pr_url) if a merged PR is found, None otherwise.
+    On any forge error, returns None — callers must treat None as "no
+    proof of merge" (the existing ancestry block remains in force).
+    """
+    adapter = _get_forge_adapter()
+    if adapter:
+        try:
+            prs = adapter.list_prs(state="merged", search=f"squidsquad/ {number}")
+            for pr in prs:
+                head = pr.get("headRefName", "")
+                parts = head.split("/")
+                if len(parts) >= 2 and parts[-1] == str(number):
+                    return pr.get("number"), pr.get("url", "")
+        except Exception:
+            pass
+        return None
+
+    # Default: gh CLI
+    result = _run_list(
+        ["gh", "pr", "list", "--state", "merged",
+         "--json", "number,headRefName,url", "--limit", "20"],
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        prs = json.loads(result.stdout) if result.stdout.strip() else []
+        for pr in prs:
+            head = pr.get("headRefName", "")
+            parts = head.split("/")
+            if len(parts) >= 2 and parts[-1] == str(number):
+                return pr["number"], pr.get("url", "")
+    except (json.JSONDecodeError, KeyError):
+        pass
+    return None
+
+
 def _check_unmerged_pr(number):
     """Check if there's an open PR for this issue number.
 
@@ -1129,19 +1182,39 @@ def transition(number, from_status, to_status, role=None, force=False):
 
         unmerged_branch = _check_unmerged_branch(number)
         if unmerged_branch:
-            branch_name, commit_count = unmerged_branch
-            _log_diagnostic(
-                "error",
-                f"Blocked shipped transition on #{number}: branch {branch_name} "
-                f"has {commit_count} unmerged commit(s)",
-            )
-            print(
-                f"BLOCKED: Cannot ship #{number} — branch '{branch_name}' has "
-                f"{commit_count} commit(s) not merged to the working branch. "
-                f"Merge the branch or create a PR first.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+            # #9999: squash-merges leave the feature branch tip with a
+            # different SHA from the squash commit on main, so the
+            # ancestry check falsely reports the branch as unmerged.
+            # Before blocking, query GitHub PR state — a MERGED PR is
+            # authoritative proof the code is on the working branch
+            # regardless of what local git ancestry reports. If the
+            # GitHub query fails (network / auth error → returns None),
+            # the ancestry block remains in force (safe default).
+            merged_pr = _check_merged_pr(number)
+            if merged_pr:
+                pr_num, pr_url = merged_pr
+                branch_name, commit_count = unmerged_branch
+                _log_diagnostic(
+                    "info",
+                    f"Ship gate on #{number}: branch '{branch_name}' tip has "
+                    f"{commit_count} commit(s) not reachable from working "
+                    f"branch, but PR #{pr_num} is MERGED on GitHub "
+                    f"(squash-merge) — allowing ship.",
+                )
+            else:
+                branch_name, commit_count = unmerged_branch
+                _log_diagnostic(
+                    "error",
+                    f"Blocked shipped transition on #{number}: branch {branch_name} "
+                    f"has {commit_count} unmerged commit(s)",
+                )
+                print(
+                    f"BLOCKED: Cannot ship #{number} — branch '{branch_name}' has "
+                    f"{commit_count} commit(s) not merged to the working branch. "
+                    f"Merge the branch or create a PR first.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
 
     adapter = _get_forge_adapter()
     if adapter:
