@@ -187,20 +187,34 @@ class TestRegistryCrossReferences:
     def test_runbook_roster_uses_new_canonical_role_names_6274(self, runbook):
         """#6274.2 AC2.2 phase 9: roster/pipeline displays use new names.
 
-        The wizard renders both the in-conversation roster block (Step 2)
-        and the Step 6 preview summary. Both must display `Worker`/
-        `Verifier` (the post-6274.2 canonical display_name values from
-        the role manifests) — not the pre-rename `Dev`/`QA`. Locks the
-        prose against accidental revert during the AC2.4-2.7 wizard.py
-        work.
+        Locks two things against accidental revert during the AC2.4-2.7
+        wizard.py work:
+
+        1. The post-6274.2 canonical `display_name` values (`Worker`,
+           `Verifier`) appear where they should — Worker as a specialist
+           in the Step 2 roster block, Verifier in Step 3/6 pipelines
+           and the Step 7.6 boot line.
+
+        2. The pre-rename display tokens (`Dev`/`QA`) do NOT reappear in
+           any roster, pipeline arrow, or boot line.
+
+        Per `references/roles/verifier/manifest.yaml` (`show_in_roster:
+        false`, `always_installed: true`), Verifier is infrastructure —
+        not a specialist — so it does NOT appear in the Step 2 roster
+        block alongside Designer/Worker. It is named in the boot line
+        (alongside PM/DM/workers) and in every pipeline (`→ Verifier →
+        DM`).
         """
         # Roster block (Step 2) — render as conversational lines.
+        # Worker is a specialist (show_in_roster: true) so it MUST appear.
         assert "Worker    — Writes code" in runbook, (
             "Step 2 roster must render Worker line (post-6274.2 display_name)"
         )
-        assert "Verifier  — Verifies worker work" in runbook, (
-            "Step 2 roster must render Verifier line "
-            "(post-6274.2 display_name + tagline)"
+        # Verifier is infrastructure (show_in_roster: false) per #6261 —
+        # it must NOT appear as a roster-block bullet (DS 9965-3c F2).
+        assert "Verifier  — Verifies" not in runbook, (
+            "Verifier is infrastructure (show_in_roster: false) — must "
+            "not be listed in the Step 2 specialist roster block"
         )
 
         # Pipeline arrow strings (Step 3 + Step 6 preview).
@@ -211,7 +225,8 @@ class TestRegistryCrossReferences:
             "Pipeline must route through Verifier, not QA"
         )
 
-        # Final boot announcement (Step 7.6) names the running agents.
+        # Final boot announcement (Step 7.6) names the running agents —
+        # all three infrastructure roles (PM/Verifier/DM) plus workers.
         assert "PM, Verifier, DM, workers" in runbook, (
             "Step 7.6 boot line must name Verifier alongside PM/DM/workers"
         )
@@ -219,10 +234,14 @@ class TestRegistryCrossReferences:
         # Old display tokens must not reappear in prose (excluding
         # legitimate substrings like 'Designer', 'devtools', etc.).
         # Whole-word check on the exact display tokens we replaced.
+        # `→ QA →` catches any pipeline arrow where QA was not removed —
+        # the `[Dev] → QA` token alone misses partial reverts in the
+        # `design` and `Minimal` pipelines (DS 9965-3c F5).
         forbidden_displays = (
             "Dev       — Writes code",
             "QA        — Verifies dev work",
             "[Dev] → QA",
+            "→ QA →",
             "PM, QA, DM, workers",
         )
         for token in forbidden_displays:

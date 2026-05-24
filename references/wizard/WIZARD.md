@@ -208,10 +208,10 @@ ids. For each role, `python references/scripts/manifest.py load roles
 <id>` returns its manifest as JSON. Partition them by `show_in_roster`:
 
 - **Infrastructure roles** (`show_in_roster: false`): these are always
-  installed. Do NOT list them in the roster. v1: `pm`, `dm`.
+  installed. Do NOT list them in the roster. v1: `pm`, `dm`, `verifier`.
 
 - **Specialist roles** (`show_in_roster: true`): list each with its
-  `display_name` and `tagline`. v1: `designer`, `worker`, `verifier`.
+  `display_name` and `tagline`. v1: `designer`, `worker`.
 
 Render the roster in a single conversational block:
 
@@ -220,7 +220,6 @@ Under our roster, we have these agents available:
 
   Designer  — Produces visual designs (iterates with you directly)
   Worker    — Writes code (backend, frontend, or fullstack)
-  Verifier  — Verifies worker work against acceptance criteria
 
 Tell me what you're trying to create and I'll select the right agents
 for you.
