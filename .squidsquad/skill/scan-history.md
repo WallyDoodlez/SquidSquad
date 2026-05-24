@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 16:09
+
+- **Files scanned**: references/scripts/migrate_labels_6274.py (164 lines; one-shot dual-label migration for #6274.1)
+- **Findings**: none filed. Real bug observed: `main()` at L160 unconditionally `return 0` regardless of `_add_label` failures — `updated` list only records successes, but the script's exit code never reflects partial failure (operator running this in CI would see exit 0 even with 3-of-10 label adds failing). Same exit-code-doesn't-reflect-failure family as #10006 (`cmd_stop` returning 1 on empty success). **Deliberately not filing**: per L16 docstring the script is scheduled for deletion in 6274.3 alongside `cleanup_labels_6274.py`; filing a fix for code about to be removed is wasted backlog. Also: hardcoded `--limit 500` at L58 same as verify_dual_label_6274 (safe at SquidSquad's volume).
+- **Items rejected by human**: none yet
+- **Notes**: deletion-imminent code is a legitimate not-file category alongside the existing edge-case-and-low-impact category. Add it as a triage rule: **deletion-imminent + non-blocking = scan-history note only**. If 6274.3 ships and the script survives (scope creep), revisit then.
+
 ## Scan — 2026-05-24 15:40
 
 - **Files scanned**: references/scripts/verify_dual_label_6274.py (141 lines; one-shot G2→3 gate verification for #6274 dual-labeling)
