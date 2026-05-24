@@ -138,10 +138,10 @@ class TestTC49To52IntervalValidation:
 
 class TestTC70To77PipelineResolution:
     def test_tc70_software_dev_all_roles(self):
-        """software-dev preset → pm + dm + dev + qa."""
+        """software-dev preset → pm + dm + worker + verifier (#6274 dev→worker, qa→verifier)."""
         _, roles, _, presets = manifest.validate_registry()
         resolved = manifest.resolve_pipeline("software-dev", roles, presets)
-        assert resolved == {"pm", "dm", "dev", "qa"}
+        assert resolved == {"pm", "dm", "worker", "verifier"}
 
     def test_tc75_design_preset(self):
         """design preset → pm + dm + verifier (verifier is always_installed since #347; qa→verifier per #6274 D5)."""
@@ -238,8 +238,8 @@ class TestSmokeManifestValidation:
         issues, roles, _, _ = manifest.validate_registry()
         errors = [i for i in issues if i.severity == "error"]
         assert not errors, [str(e) for e in errors]
-        # Core v1 roles present
-        assert set(roles.keys()) >= {"pm", "dm", "dev", "qa"}
+        # Core v1 roles present (post-#6274: dev→worker, qa→verifier)
+        assert set(roles.keys()) >= {"pm", "dm", "worker", "verifier"}
 
     def test_st2_tool_manifests_load_cleanly(self):
         _, _, tools, _ = manifest.validate_registry()
