@@ -1,42 +1,39 @@
 # Working State
 
-- **Task**: #9965 catch-up nearly done ((3a)+(3b) landed, (3c) pending). #9967 SHIPPED. #9999 filed (skill-owned). #9998 Q1-Q5 locked in conversation thread — significant scope add.
-- **Status**: pipeline healthy, no PM action needed
-- **Last Processed Event ID**: df9f33751a6a (still stale; #9967 fix is shipped but our session is mid-flight — harness cursor should advance on next agent restart)
+- **Task**: #9965 option-3 carve-out COMPLETE (3a/3b/3c + DS fixups landed). Suite at 5 freeze-blocked fails. PM declined pending-test transition with reds; awaiting human AC2.4-2.7 STOP-lift directive.
+- **Status**: human decision needed on STOP-lift; skill steady in improvement-scan / quiet cycles meanwhile
+- **Last Processed Event ID**: df9f33751a6a (still stale; harness fix shipped but our session pre-dates the restart)
 
-## Pipeline snapshot (2026-05-24 00:43, cycle 1625)
+## Pipeline snapshot (2026-05-24 01:13, cycle 1626)
 - 0 PRs open, 0 pending-test, 0 pending-ship, 0 external untriaged
 - 1 approved (long-running, DM lane): #3 (going-public)
 - 2 in-progress:
-  - #9965 (skill, 6274.2 / AC2.8) — (3a)+(3b) DONE (commits 2afacb77 + cycle 1333 commit). Remaining: (3c) WIZARD.md prose + 1 test_wizard_runbook test. Suite trajectory: 14 → ~6 after 3a → ~4 after 3b → ~3 after 3c. The 5 test_wizard.py tests stay red (couple to wizard.py D4, still frozen by STOP).
-  - #9968 (PM, EPIC L1-L4 doc) — no PM work this cycle; effectively superseded in conversation by #9998 Q1-Q5 lock-in (which IS #9968 doc rewrite work; needs reconciliation when #9998 is picked up).
-- 1 pending-ship: (none — #9967 just shipped)
-- 2 pending tasks (PM): #9996 (preset catalog), #9998 (multi-worker doc + Q1-Q5 lock) — both awaiting discussion-phase pickup; coupled
+  - #9965 (skill, 6274.2 / AC2.8) — option-3 DONE. Suite: 14 → 5 (5 in test_wizard.py, all wizard.py D4-coupled / STOP-frozen). Skill cycle 1335 (3c) + cycle 1335 fix-up (commit 9aae44ba). PM declined pending-test transition per feedback_no_ship_failed_tc. **HUMAN DECISION NEEDED**: lift AC2.4-2.7 STOP for final batch → clears 5 reds → then transition to pending-test with 0 fails.
+  - #9968 (PM, EPIC L1-L4 doc) — superseded by #9998 + #9996 in conversation; needs reconciliation when those are picked up.
+- 0 pending-ship
+- 2 pending tasks (PM, discussion-phase): #9996 (preset catalog), #9998 (multi-worker doc + Q1-Q5 lock)
 - 1 pending (gated): #9966
 - 2 planning (skill, stale): #9874, #9875
 - 1 planned (skill, stale): #9845
-- 2 issues at status:open: #9969 (manifest naming), #9970 (composed-md drift), and #9999 (ship-gate false-positive, severity:low, role:skill, auto-routed)
-- shipped_since_bump: should now be 7 of 10 (after #9967 ship)
+- 3 issues at status:open: #9969 (manifest naming), #9970 (composed-md drift), #9999 (ship-gate false-positive, severity:low, role:skill)
+- shipped_since_bump = 7 of 10 (after #9967 ship; still under threshold)
 
-## #9967 — SHIPPED this interval
-DM closed at Z 04:21. Fix: event_bus_reader.query() honors harness eviction signal. Live fix means once any agent restarts, the cursor-stuck symptom we've seen all session ends. Our current session predates the deploy — the eviction message at top of cycle_pre output this cycle is the OLD behavior printing the warning before exiting; expected.
+## Pending human decisions (surface at next check-in)
+1. **#9965 AC2.4-2.7 STOP-lift**: option-3 cleared 9 of 14 reds (with the 6th untracked one found by skill); remaining 5 in test_wizard.py couple to wizard.py D4 which is frozen. Lifting the STOP unblocks the final batch → 0 fails → pending-test.
+2. **#9996 + #9998 discussion-phase pickup**: both pending, coupled. The Q1-Q5 lock-in last 2 cycles already produced substantial design content; ready for human-approve once humans walks the locked decisions.
+3. **#9968 EPIC reconciliation**: probably close as superseded by #9996+#9998 (PM's prior recommendation).
 
-## #9999 — filed by DM, routed to skill
-Ship-gate falsely blocks squash-merged PRs (ancestry check fails because squash creates new SHA on main). DM provided RCA + workaround + suggested fix in body (more than behavior-only — DM's call, not PM's to police). Severity:low, role:skill, status:open. Per auto-approve-bugs memory: no PM gate needed; skill picks up on next dev cycle. DM workaround (branch-delete + fetch + retry) costs 3-5 commands per ship but unblocks deliveries in the meantime.
+## #9965 — option-3 trace summary
+- (3a) cycle 1332 commit 2afacb77: preset YAML `[dev]→[worker]` + 7-8 feat328 tests cleared
+- (3b) cycle 1333: two compose.py disk-check shims + 3 test_compose.py tests cleared
+- (3c) cycle 1335: WIZARD.md prose + test_wizard_runbook + NEW lock test; 6th untracked fail caught + cleared
+- (3c) DS fix-up commit 9aae44ba: F2 verifier roster placement (`show_in_roster: false` + `always_installed: true`), F5 forbidden-token coverage for `→ QA →` partial reverts; F1/F3 justified-ignore
+- 5 remaining reds: TestScaffoldInstallDevVariants x3 + TestScaffoldL4Files x2 (all wizard.py D4)
 
-## #9965 — (3a)+(3b) landed, (3c) is the last piece
-Next expected: skill cycle 1334+ lands (3c) WIZARD.md prose. After that, curated suite should be at ~3 failures, all in test_wizard.py / test_manifest_registry.py that couple to wizard.py D4 — those stay red until human lifts AC2.4-2.7 freeze.
+## #9999 — no movement
+Filed cycle 1625 by DM, role:skill, severity:low. Skill busy with #9965 + DS reviews; will pick up post-#9965 or on next quiet cycle. DM workaround in place.
 
-## In-session #9998 Q1-Q5 lock-in (captured as tracker comment cycle 1624)
-Architectural decisions landed:
-- Same-class agents = scaling, not specialization (identical replicas)
-- Composed-output uniformity guarantee (compose.py verify-class-uniformity)
-- Routing by class, instance-pick post-routing
-- EAD adds human-comment → pm rule (event_context=human-message; PM patches missing role labels)
-- Subloop runner declared in roster
-Scope add: preset manifest schema gains count/instance_names/subloop_runner; PM L2 gets human-message triage section; INSTALLER-ARCH §1.1 clarifies scaling-not-specialization.
-
-## #9968 / #9996 / #9998 — convergence note
-#9998 Q1-Q5 decisions ARE substantive #9968 doc-rewrite content. When #9998 is picked up, need to decide: (a) fold #9998 doc-edits into #9968 EPIC and close #9998 as covered, or (b) close #9968 doc-only scope as superseded by #9998. Suggest the latter — #9998 has the locked contract, #9968 was the EPIC umbrella that's now narrower than #9998 + #9996.
+## In-session #9998 Q1-Q5 + new rules
+Locked as tracker comment cycle 1624. Coupled to #9996. Both pending discussion-phase pickup; scope is significant (preset schema, PM L2 add, compose verify-uniformity step, INSTALLER-ARCH §1.1 framing fix).
 
 ## #9966 — unchanged (gated)
