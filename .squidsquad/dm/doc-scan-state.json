@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "docs/ARCHITECTURE.md",
+  "last_scanned": "docs/sub-skill-guide.md",
   "rotation_count": 56,
   "scan_history": [
     {
@@ -1714,6 +1714,15 @@
         "L2 Orchestration key files (lines 60-61) — \".harness-state.json\" and \"current-state\" were listed without their actual paths, while the other L2 entries used full paths (references/scripts/harness.py, references/scripts/thin_launcher.py). Verified actual locations: HARNESS_STATE_FILE = SQUIDSQUAD_DIR / \".harness-state.json\" (harness.py:77) → lives at .squidsquad/.harness-state.json (single file per repo), and current-state is per-role at .squidsquad/[role]/current-state. Updated to show full paths and clarify scope. Committed manually because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
       ],
       "note": "Rotation 57 sixth scan. Full read of all 279 lines (6 layer sections + Agent Process Tree + Three claude.exe populations + How Layers Interact + Agent Roles + Feature Lifecycle + Coordination Model + Changing Things + Key Design Decisions). Verified: L1 key files all exist (cycle_pre/post.py, git_ops.py, tracker.py); L2 thin_launcher.py:184 shutil.which line ref intact (R54 fix still good); L4 includes.yml + sub-skills/common/ + compose.py exist; {{runtime:}} directive accurate (references/roles/*/instructions.md use this); L6 vault PARAG structure all 5 dirs + BRIEFING.md present (R56 resources/ fix intact); orphan_cleanup.py #9688 + taskkill /F mechanism accurate; HARNESS_STATE_FILE path correct; Feature Lifecycle states match tracker.py legal transitions; event bus read in cycle_pre.py:1268-1274. One drift caught: L2 key files state-file paths missing prefixes (.harness-state.json + current-state). Note: BRIEFING.md ~50 line claim is documented consistently across vault-protocol.md / vault-protocol-slim.md / ARCHITECTURE.md — current install at 98 lines is a known bloat issue (working state note), not a doc drift."
+    },
+    {
+      "file": "docs/sub-skill-guide.md",
+      "date": "2026-05-23",
+      "findings": 1,
+      "fixes": [
+        "Build Pipeline diagram (lines 135-145) — the diagram showed \"<role>/instructions.md → compose.py all → agent-instructions.md → compose.py deploy <role> → CLAUDE.md\" as a sequential pipeline with both arrows. Two factual issues: (a) compose.py all is dev-only (compose_all docstring: \"Compose the dev-agent template as the default agent-instructions.md\" and code: header references roles/dev/instructions.md + composed = compose_role(\"dev\")), so the generic <role> at the top is misleading; (b) compose.py deploy <role> does not read agent-instructions.md as input — it composes from the role entry file directly. Replaced with two independent paths: a primary path (deploy <role>, any role) and a separate dev-only reference-output path (all). Added a one-liner above the diagram noting the two are independent. Also clarified the reference output has no placeholder substitution (verified: agent-instructions.md contains 75 instances of [ROLE]/[INTERVAL] placeholders, while .squidsquad/<role>/CLAUDE.md has them substituted). Committed manually because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
+      ],
+      "note": "Rotation 57 seventh scan. Full read of all 319 lines. Verified: directory tree (lines 33-62) accurate — sub-skills/{common, roles/{pm,qa,dm,dev}, capabilities, common-events, project}/ all exist (R56 common-events/ fix intact); roles/{LAYERS.md, SOUL.md, instructions.md} root-level files exist (R56 fix intact); capabilities list \"figma, google_stitch, local_delivery, local_html\" verified via ls. Entry file example (lines 75-93) accurate — references/roles/dev/instructions.md starts with {{runtime: souls/dev}} and # SquidSquad — [ROLE] Lead. Common sub-skills referenced (pull-latest, context-pressure, vault-protocol) all exist. {{runtime:}} and {{include:}} directive descriptions accurate. {{role-roster}} section (R56 fix) intact. Placeholders table (lines 182-188) all 7 placeholders verified vs compose.py:_substitute_placeholders (R55 verification still good). Walkthrough vault-remember accurate. Build pipeline was the one drift."
     }
   ],
   "doc_inventory": {
@@ -1730,7 +1739,7 @@
       "status": "current"
     },
     "docs/sub-skill-guide.md": {
-      "last_scanned": "2026-05-06",
+      "last_scanned": "2026-05-23",
       "status": "current"
     },
     "CONTRIBUTING.md": {
