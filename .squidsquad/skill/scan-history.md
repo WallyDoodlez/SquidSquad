@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 15:10
+
+- **Files scanned**: references/scripts/tc_coverage.py (full 313 lines; focus on TC parsing regexes + result extraction + coverage gate exit-code semantics)
+- **Findings**: none filed. `_RESULT_RE` at L45-47 with `\b` word boundaries could in principle false-positive on prose like "does not pass" appearing in QA-RESULTS body (only when neither valid result tokens nor invalid-result regex match first); requires QA agent to write narrative commentary inside a TC's body block instead of structured `**Result**: ...` or table format — typical QA-RESULTS layouts don't trigger it. The #2469 fix that excluded the heading line from `search_block` handles the most common case (TC title containing "not-applicable"). Edge case, narrow trigger, not worth a ticket against the existing backlog.
+- **Items rejected by human**: none yet
+- **Notes**: `_discover_files` planning_dirs sorting at L127-129 correctly puts pm first (PM owns test plans). The QA-RESULTS revision picker at L146-153 sorts numerically by `-R<N>` suffix — solid. `coverage_pct:.0f` formatting at L229 rounds 99.4 to 99 and 99.5 to 100 (banker's edge case but only matters at non-100% which already fails the gate via missing TCs). `_TC_TABLE_RE` doesn't match markdown table separator rows since `TC` regex demands literal `TC`. Exit-code semantics 0/1/2 (pass/fail/blocked) are clean and documented. Stopped at one file this cycle — context climbing past 25% and we've covered enough breadth.
+
 ## Scan — 2026-05-24 14:40
 
 - **Files scanned**: references/scripts/event_bus.py (189 lines) + references/scripts/event_catalog.py (256 lines)
