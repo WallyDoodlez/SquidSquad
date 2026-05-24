@@ -88,7 +88,7 @@ Sub-skills live in five source directories under `references/sub-skills/`:
 | `common-events/` | roles in event-driven mode | **runtime-loaded** by `boot-bootstrap` on session start (not inlined) |
 | `roles/<role>/` | one role | inlined at compose time |
 | `project/` | seed templates for L4 | copied to `.squidsquad/project/` at install (not consumed by compose) |
-| `capabilities/<tool>/` | roles that bind to a specific tool | inlined at compose time, gated by `common/capability-check` |
+| `capabilities/<tool>/` | _deprecated — slated for removal_ | _was: tool integrations; superseded by per-agent post-install tool setup, see [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md)_ |
 
 ---
 
@@ -139,7 +139,7 @@ Reusable across multiple roles.
 | `git-commit` | Commit/push protocol with PR flow | dev (DM has its own variant) |
 | `improvement-scan` | Full proactive scan for process/template gaps | PM, dev |
 | `improvement-scan-slim` | Filing-only variant (no auto-fix) for read-only roles | QA |
-| `capability-check` | Verify the agent's environment has the tools it expects | DM |
+| `capability-check` | _deprecated — slated for removal_; was: verify the agent's environment has the tools it expects | DM (currently; manifest removal pending — see [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md)) |
 
 ### Chat & coordination (optional, not on by default)
 
@@ -263,16 +263,11 @@ These are **seed templates** copied to `.squidsquad/project/` at install time. T
 
 ---
 
-## `capabilities/<tool>/` — Tool-binding sub-skills
+## ~~`capabilities/<tool>/` — Tool-binding sub-skills (DEPRECATED)~~
 
-Bind a role to a specific external tool. Each capability ships with a `sub-skill.md` (the runtime behavior) and a `setup.md` (one-time configuration the human runs at install). Capability sub-skills are gated by `common/capability-check`.
+**This category is being removed.** The original model bound a role to a specific external tool via a `capabilities/<tool>/` sub-skill plus a `setup.md` walked at install time. That model is superseded — tool/MCP/CLI configuration is now a **per-agent, post-install runtime concern**. See [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md) for the replacement model: the human tells each agent what tools to use, and the agent persists via L4 writes per [COMPOSE-ARCHITECTURE.md §7](COMPOSE-ARCHITECTURE.md).
 
-| Capability | Domain | Tool |
-|---|---|---|
-| `figma/` | Design | Figma MCP server |
-| `google_stitch/` | Design | Google Stitch |
-| `local_html/` | Design | Local HTML mockups (no external tool) |
-| `local_delivery/` | Delivery | Local filesystem delivery (no remote registry) |
+Currently-deployed installs may still have `figma/`, `google_stitch/`, `local_html/`, `local_delivery/` under `references/sub-skills/capabilities/`. These will be deleted in a follow-up task against `worker` (skill) — no replacement sub-skill is needed because tool-specific instructions become L4 content in each install.
 
 ---
 
