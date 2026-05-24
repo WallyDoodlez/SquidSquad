@@ -56,7 +56,7 @@ flowchart LR
 
 - Redesigning the L1-L4 *responsibility model* itself — that landed in #9925 and is preserved as-is.
 - Defining the event bus, harness lifecycle, or agent state machine — see [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md).
-- Replacing the role concept itself (PM / QA / DM / dev variants) — those are stable.
+- Replacing the role concept itself (pm / qa / worker / dm — see [AGENT-RUNTIME.md](AGENT-RUNTIME.md) Terminology) — those are stable.
 - Specifying the wizard install flow beyond compose hooks — see `WIZARD.md`.
 
 ---
@@ -69,7 +69,7 @@ Four layers, in shipping/precedence order:
 |---|---|---|---|
 | **L1** — Base | What ANY SquidSquad agent is. Identity foundation, core principles, tracker protocol, cycle runner transport. | `references/sub-skills/common/` and parts of `references/sub-skills/manifest.md` | SquidSquad maintainers (shipped) |
 | **L2** — Capability | Cross-cutting behaviours that some roles share: vault, improvement scanning, agent lifecycle, git commit protocol, working-state format. | `references/sub-skills/common/` (the bulk), `references/sub-skills/capabilities/` | SquidSquad maintainers (shipped) |
-| **L3** — Role | Role-specific behaviours: PM's pipeline sentinel, QA's verification, DM's delivery packaging, dev's task implementation. | `references/sub-skills/roles/<role>/` and `references/roles/<role>/instructions.md` | SquidSquad maintainers (shipped) |
+| **L3** — Role | Role-specific behaviours: `pm`'s pipeline sentinel, `qa`'s verification, `dm`'s delivery packaging, `worker`'s task implementation. | `references/sub-skills/roles/<role>/` and `references/roles/<role>/instructions.md` | SquidSquad maintainers (shipped) |
 | **L4** — Project | Project-local customizations sourced from human conversation in the deployed install. Includes project-specific instructions, project context, identity overlays, vault customization. | `.squidsquad/project/` (project-local, not distributed) | Agent (via human conversation), persisted by `compose.py` |
 
 **Key invariant** — L1-L3 are part of the SquidSquad repo and ship globally. L4 is *generated and maintained per-install* by the agent in response to human instruction in the deployed project. L4 is the **memory of how this project diverges from default SquidSquad behaviour**.
@@ -80,7 +80,7 @@ flowchart TB
     direction TB
     L1["<b>L1 — Base</b><br/>What ANY agent is.<br/>Identity, principles, tracker protocol.<br/><i>references/sub-skills/common/</i>"]
     L2["<b>L2 — Capability</b><br/>Cross-cutting: vault, scanning,<br/>git, lifecycle.<br/><i>references/sub-skills/capabilities/</i>"]
-    L3["<b>L3 — Role</b><br/>Role-specific: PM, QA, DM, dev.<br/><i>references/sub-skills/roles/&lt;role&gt;/</i>"]
+    L3["<b>L3 — Role</b><br/>Role-specific: pm, qa, worker, dm.<br/><i>references/sub-skills/roles/&lt;role&gt;/</i>"]
     L1 --> L2 --> L3
   end
   subgraph LOCAL["Project-local (per-install, not distributed)"]
@@ -98,7 +98,7 @@ flowchart TB
 
 Each creative-work concept must have exactly **one authoring location**:
 
-- **Step orchestration** (which steps run, in what order, with what gating) lives at exactly one layer in L1-L4. If two layers define the same orchestration concept (e.g. an L3 "PM Project Operations" section and an L4 "Project Operations" section), the compose pipeline detects the collision and **rejects the build**.
+- **Step orchestration** (which steps run, in what order, with what gating) lives at exactly one layer in L1-L4. If two layers define the same orchestration concept (e.g. an L3 "pm Project Operations" section and an L4 "Project Operations" section), the compose pipeline detects the collision and **rejects the build**.
 - **Sub-skill bodies** (the actual how-to for "file a bug", "run pre-cycle", "scan for improvements") live in exactly one location: the sub-skill source file. They are catalogued in [`sub-skill-catalog.md`](sub-skill-catalog.md) and referenced from composed CLAUDE.md by name — **never inlined**.
 
 DRY enforcement applies to:
@@ -259,6 +259,47 @@ flowchart TB
 
 The pipeline is fully deterministic: given `(role, wake-mode, source-tree-hash, L4-tree-hash)`, the composed output is bit-stable.
 
+### 4.5 Sub-skill reference resolution
+
+Because composed CLAUDE.md emits sub-skill *references* (not bodies) in the `instructions` slot, compose must validate that every reference resolves to a real sub-skill. The validation runs after L4 overlay and before output emission:
+
+1. **Extract** every `→ run sub-skill: <name>` (or equivalent reference grammar from §4.1 step 4 and §5.3) from the composed-in-memory `instructions` content.
+2. **Resolve** each `<name>` against the union of:
+   - Sub-skills indexed in [`sub-skill-catalog.md`](sub-skill-catalog.md), AND
+   - Sub-skills discoverable on disk under `references/sub-skills/` (today's source files), AND
+   - Sub-skills registered in `.claude/skills/` (target state — real Claude skills).
+3. **Reject** if any reference fails to resolve: abort with a diagnostic naming the offending step ID and unresolved sub-skill name. No partial output is written.
+4. **Catalog drift check**: every resolved sub-skill must have a catalog entry, AND every catalog entry must resolve to a real sub-skill source. If either side is out of sync, compose aborts with a diagnostic (same failure mode as an unresolved reference above) — this is an in-pipeline check, distinct from the §8 source-output sync gates which guard the orthogonal "composed CLAUDE.md is stale relative to its L1-L3 sources" failure mode.
+
+```mermaid
+flowchart TB
+    Base["L1-L4 composed in memory<br/>(instructions slot has<br/>sub-skill references)"]
+    Extract["Extract refs:<br/>→ run sub-skill: &lt;name&gt;"]
+    Resolve{"resolve each &lt;name&gt;"}
+    Catalog[("sub-skill-catalog.md")]
+    Source[("references/sub-skills/")]
+    Skills[("`.claude/skills/`<br/>(target state)")]
+    Drift{"catalog ⇆ source<br/>in sync?"}
+    Abort([Abort — unresolved ref])
+    Warn([Warn — catalog drift])
+    Emit([Emit composed CLAUDE.md])
+
+    Base --> Extract --> Resolve
+    Resolve -.->|"lookup"| Catalog
+    Resolve -.->|"lookup"| Source
+    Resolve -.->|"lookup"| Skills
+    Resolve -->|"any fail"| Abort
+    Resolve -->|"all resolve"| Drift
+    Drift -->|"drift"| Warn --> Abort
+    Drift -->|"clean"| Emit
+
+    style Abort fill:#fdd
+    style Warn fill:#ffd
+    style Emit fill:#dfd
+```
+
+This is the v2 analogue of v1's "every `{{include}}` directive must resolve to a file" rule — now expressed in terms of sub-skill names against a catalog rather than file paths.
+
 ---
 
 ## 5. Composed-output structure
@@ -279,8 +320,8 @@ No other H2 may appear at the document top level. (Sub-sections at H3+ are unres
 
 ### 5.1 Identity
 
-- What this agent's primary function is (role-specific: "PM coordinates the squad", "QA verifies dev work", etc.).
-- Team membership ("You are a SquidSquad agent on a four-role team: PM, QA, DM, dev/skill.").
+- What this agent's primary function is (role-specific: "pm coordinates the squad", "qa verifies worker output", etc.).
+- Team membership ("You are a SquidSquad agent on a four-role team: pm, qa, worker, dm — see [AGENT-RUNTIME.md](AGENT-RUNTIME.md) Terminology section.").
 - Lifecycle governance ("Your wake mechanism — polling or event-driven — is determined by the harness. The harness owns all start/stop/restart authority.").
 - Team-awareness: who the other roles are and what they do (one short paragraph each).
 
@@ -312,7 +353,7 @@ Structure (suggested H3 grouping within the H2):
 1. **step:cycle/pre-cycle** → see sub-skill `cycle-runner` (pre phase)
 2. **step:cycle/context-pressure** → see sub-skill `context-pressure`
 3. **step:cycle/pipeline-sentinel** → see sub-skill `pipeline-sentinel`
-   *(PM-only; see [sub-skill-catalog.md](sub-skill-catalog.md))*
+   *(pm-only; see [sub-skill-catalog.md](sub-skill-catalog.md))*
    ...
 
 ### 3.3 On shutdown
@@ -338,22 +379,22 @@ See §6 for step ID grammar, reference grammar, and the relationship to sub-skil
 
 This section is intentionally short — most vault detail belongs in `references/sub-skills/common/vault-protocol.md` linked from inside step content where vault commands are actually used.
 
-### 5.6 Worked example: PM composed CLAUDE.md TOC (both modes)
+### 5.6 Worked example: pm composed CLAUDE.md TOC (both modes)
 
 `.squidsquad/pm/CLAUDE.md` looks **structurally different** depending on which manifest `compose.py` selects (per §3.2 callout and §6.5). Below are the two flavored outputs after L1-L4 + flat renumbering — §1, §2, §4, §5 are identical; §3.1 differs by exactly one step; §3.3 is identical; §3.2 (`instructions/cycle`) is fully divergent.
 
 **Each step is a reference**, not an inlined sub-skill body. The right-column `step:cycle/<name>` is the step ID; the implementation lives in the sub-skill named after it (or referenced from it), catalogued in [`sub-skill-catalog.md`](sub-skill-catalog.md).
 
-#### 5.6.1 PM — polling mode (`includes.yml` selected)
+#### 5.6.1 pm — polling mode (`includes.yml` selected)
 
 ```
-# PM Agent
+# pm Agent
 
 ## 1. Identity
    1.1 Function — coordinates the squad
-   1.2 Team membership (4-role: PM, QA, DM, dev/skill)
+   1.2 Team membership (4-role: pm, qa, worker, dm)
    1.3 Lifecycle governance (harness owns start/stop/restart)
-   1.4 Team-awareness (one paragraph each: DM, QA, dev)
+   1.4 Team-awareness (one paragraph each: dm, qa, worker)
    1.5 Boundaries (folded "never do" — broad prohibitions)
 
 ## 2. Soul
@@ -390,16 +431,16 @@ This section is intentionally short — most vault detail belongs in `references
    5.2 Wikilink + entity model
 ```
 
-#### 5.6.2 PM — event-driven mode (`includes-events.yml` selected)
+#### 5.6.2 pm — event-driven mode (`includes-events.yml` selected)
 
 ```
-# PM Agent
+# pm Agent
 
 ## 1. Identity
    1.1 Function — coordinates the squad
-   1.2 Team membership (4-role: PM, QA, DM, dev/skill)
+   1.2 Team membership (4-role: pm, qa, worker, dm)
    1.3 Lifecycle governance (harness owns start/stop/restart)
-   1.4 Team-awareness (one paragraph each: DM, QA, dev)
+   1.4 Team-awareness (one paragraph each: dm, qa, worker)
    1.5 Boundaries (folded "never do" — broad prohibitions)
 
 ## 2. Soul
@@ -416,14 +457,14 @@ This section is intentionally short — most vault detail belongs in `references
                                     — Monitor `event_poll.py <role> --wait 5 --target`
        2. Case dispatch             (step:cycle/case-dispatch)
                                     A: bootup, B: work-queue, C: status-transition,
-                                    D: pr-merge (DM only), E: stop-requested
+                                    D: pr-merge (dm only), E: stop-requested
        3. Forge-read before act     (step:cycle/forge-read)
        4. Process one event         (step:cycle/process-event)
                                     — react, transition, comment, commit
        5. Advance cursor            (step:cycle/cursor-advance)
                                     — atomic .tmp + mv into working-state.md
        6. Comment-handling rules    (step:cycle/comment-handling)
-                                    — comments are NOT triggers; DM end-of-task exception
+                                    — comments are NOT triggers; dm end-of-task exception
        7. Idle cool-down            (step:cycle/idle-cooldown)
                                     — improvement-scan loop when work_queue empty
        8. Context-pressure honor    (step:cycle/stop-requested)
@@ -469,29 +510,49 @@ Notes that apply to both:
 
 ## 6. The Instructions section in detail
 
-### 6.1 Step ID grammar
+### 6.1 Step ID grammar and step ↔ sub-skill mapping
 
-Every L1-L3 instruction step declares a **stable step ID** that L4 can target. Grammar:
+Every L1-L3 instruction step declares a **stable step ID** that L4 can target.
+
+**Formal grammar** (BNF):
 
 ```
-step:<sub-slot>/<kebab-case-name>
+step-id        ::= "step:" sub-slot "/" name
+sub-slot       ::= "boot" | "cycle" | "shutdown"
+name           ::= segment ("/" segment)?           # one optional nesting level
+segment        ::= [a-z][a-z0-9]*("-"[a-z0-9]+)*    # kebab-case
 ```
+
+Rules:
+
+- Lowercase only; ASCII only. Hyphens separate words; slashes create nesting.
+- Max one nesting level beyond the sub-slot (i.e. `step:cycle/foo/bar` is allowed; `step:cycle/foo/bar/baz` is not).
+- Globally unique across all roles. The same step ID cannot be declared by two different sub-skill source files.
 
 Examples:
 
 - `step:boot/permission-check` — boot-time gh permission check.
 - `step:cycle/pre-cycle` — run `cycle_pre.py` at start of each cycle.
 - `step:cycle/check-in` — talk to the human.
-- `step:cycle/pipeline-sentinel` — PM-specific cycle step.
+- `step:cycle/pipeline-sentinel` — pm-specific cycle step.
+- `step:cycle/vault/remember` — nested example: end-of-cycle vault reflection.
 - `step:shutdown/graceful-stop` — handle self-quit signal.
 
-Step IDs are **stable across refactors**. When an L1-L3 sub-skill is rewritten, its step IDs are preserved so L4 overlays don't silently break.
+**Step ID ↔ sub-skill mapping**:
 
-Renaming a step ID is a **breaking change** and must:
+- A step is a **named position** in the orchestration; a sub-skill is the **functionality** that implements it. Default mapping is 1:1 — step `step:cycle/pipeline-sentinel` is implemented by sub-skill `pipeline-sentinel`.
+- N:1 is allowed — multiple steps may reference the same sub-skill. E.g. `step:cycle/pre-cycle` and `step:cycle/post-cycle` both reference sub-skill `cycle-runner` (different phases). The catalog entry names which phase or invocation context applies.
+- 1:N is **not allowed** — one step cannot reference multiple sub-skills directly. If a step truly needs to invoke several sub-skills, model it as multiple sequential steps in the orchestration, each with its own step ID.
+
+**Stability**: step IDs are stable across refactors. When an L1-L3 sub-skill is rewritten, its step IDs are preserved so L4 overlays don't silently break.
+
+**Renaming a step ID** is a breaking change and must:
 
 1. Be flagged in the sub-skill's frontmatter as `breaking: step-id-rename`.
 2. Be paired with a compose-time migration (compose.py prints a warning when it sees an L4 file targeting the old ID; offers an auto-rewrite or aborts).
 3. Be batched at a release boundary.
+
+**Renaming a sub-skill** is also a breaking change: it requires updating the catalog entry + every step that references it. compose.py validates that all references resolve after the rename (§4.5) before emitting output.
 
 ### 6.2 Sub-procedures are sub-skills, not inlined H2 sections
 
@@ -519,14 +580,14 @@ This eliminates two problems v1 created: (a) sub-skill bodies bloated composed C
 
 ### 6.3 Constraints & conventions
 
-Today's standalone H2 sections like `## What You Must Never Do`, `## File Conventions`, `## Status Line` are **also folded** — but into the most contextually relevant place:
+Today's standalone H2 sections like `## What You Must Never Do`, `## File Conventions`, `## Status Line` are **also folded** under v2 — but with the reference-only discipline applied:
 
-- **"Never do" prohibitions** that apply broadly fold into **Identity** as "Boundaries" (one or two short lists at the bottom of the Identity section).
-- **"Never do" prohibitions** that are step-specific fold into the relevant step's body (e.g. "Never amend a published commit" appears inside `step:cycle/git-commit`).
-- **File conventions** fold into **Project Context** (since most are project-shaped).
-- **Status Line description** folds into **Project Context** as well — it's a project-display fact, not an instruction.
+- **"Never do" prohibitions that apply broadly** fold into **Identity** as "Boundaries" (one or two short lists at the bottom of the Identity section). These are orchestration-layer assertions about the agent's overall character — short, top-level, emitted verbatim.
+- **"Never do" prohibitions that are step-specific** are NOT inlined into the composed CLAUDE.md. Under v2, step-specific prohibitions live in the **sub-skill** that owns the step (e.g. "Never amend a published commit" lives in the `git-commit` sub-skill's source file, not in the composed orchestration). The step reference in §3.2 pulls them in implicitly when the model invokes the sub-skill.
+- **File conventions** fold into **Project Context** when they're project-shaped (most are). When they're sub-skill-shaped (e.g. "qa writes `TEST-PLAN-<n>.md` under `.squidsquad/qa/planning/`"), they live in the relevant sub-skill's source file.
+- **Status Line description** folds into **Project Context** — it's a project-display fact, not an instruction.
 
-This removes 3-5 H2 sections from today's output without losing any content.
+This removes 3-5 H2 sections from today's output without losing any content. The key v2 distinction from v1: step-specific constraints don't get inlined into orchestration step bodies; they stay in the sub-skill that owns them.
 
 ### 6.4 Numbering grammar
 
@@ -600,6 +661,45 @@ Mode flip = next compose + agent restart, never mid-session. The two outputs dif
 
 **Current development convention** (as of this doc — pre-event-GA): every role's `includes.yml` and `includes-events.yml` are both maintained, but most installs ship with `config.md` `event-driven: no` so the polling manifest is what gets composed in production. The event manifest is exercised in CI and on opt-in installs; it becomes the default once event mode reaches GA. This lets us iterate the event-mode authoring (and lets reviewers diff the two flavored outputs) without forcing production fleets onto event mode before it is proven.
 
+### 6.6 Subagent usage rules
+
+Agents may delegate work to subagents via the Agent tool. Under v2, subagent guidance composes deterministically into agent CLAUDE.md as orchestration content (not as a sub-skill body — subagent-spawning is decision logic the orchestration owns).
+
+**Default model selection** (L1 baseline, applies to all roles):
+
+- Use the lightest model that can do the job. Sonnet 4.6 is the default for mechanical or scoped subtasks (file searches, summarization, lint passes, narrow research).
+- Reserve Opus 4.7 for complex reasoning, multi-step planning, architectural review, or work that requires holding many constraints simultaneously.
+- The parent agent's own model is independent of subagent model choice.
+
+**Per-role overrides** (L3 content authored alongside the role's other L3 sub-skills; takes effect by appearing later in compose's `(slot, ordinal)` order than the L1 default):
+
+- `worker` (and variants like `skill`): subagent spawns default to Sonnet — the heavy thinking is in the parent. (Authority: memory rule `feedback_skill_sonnet_subagents`.)
+- `dm`: subagent spawns default to Sonnet — `dm`'s work is mostly mechanical packaging. (Authority: memory rule `feedback_dm_sonnet_subagents`.)
+- `pm`, `qa`: use the L1 default — pick per task.
+
+**When to spawn vs inline**:
+
+- **Spawn** when the work is genuinely parallelizable (multiple independent investigations) OR when the output volume would blow the parent's context window (large grep/scan results).
+- **Inline** for small lookups (known file path, single grep), narrow questions, anything the parent already has context for.
+
+**Prompt hygiene**:
+
+- Subagent prompts must be self-contained. The subagent doesn't see the parent's conversation; brief it like a smart colleague who just walked in.
+- Include exact file paths, line numbers, and what specifically to change/check. Don't write "based on your findings, fix the bug" — that delegates the synthesis the parent should already have done.
+- Ask for a length cap when one is appropriate ("report in under 200 words") — keeps the subagent's response from re-bloating the parent's context.
+
+**Trust but verify**:
+
+- A subagent's summary describes what it *intended* to do, not necessarily what it did.
+- When a subagent writes or edits code, the parent verifies the actual diff before reporting the work as done.
+
+**Parallelism**:
+
+- Independent subagent calls go in a single tool-use batch (one message, multiple Agent calls) so they run concurrently.
+- Sequential dependencies are sequential — don't parallelize when output of A feeds B.
+
+**L1-L3 authoring location for these rules**: the default-model paragraph is authored once at L1 (e.g. `references/sub-skills/common/subagent-defaults.md`, slot `identity`). Per-role L3 files (under `references/sub-skills/roles/<role>/`) declare their own slot-`identity` content that emits later in `(slot, ordinal)` order — effectively overriding the default bullet for that role at compose time.
+
 ---
 
 ## 7. Runtime L4 writes by the agent
@@ -611,7 +711,7 @@ This is the **new architectural dimension** that goes beyond the original Phase 
 When the human gives the agent a new instruction in conversation:
 
 - "From now on, before filing a bug, also check the `incidents/` directory for recent SEV1 tickets."
-- "When QA finds a regression, also notify the on-call rotation via the bundled `oncall.sh` script."
+- "When qa finds a regression, also notify the on-call rotation via the bundled `oncall.sh` script."
 - "Stop checking the production deploy log on every cycle; only check it on Tuesdays."
 
 These are project-specific instruction changes. They don't belong in L1-L3 (which ships globally) — they belong in L4 (which is project-local).
@@ -739,7 +839,7 @@ A GitHub Actions check (or local pre-commit hook) inspects every PR:
 
 ### 8.2 Auto-recompose on merge
 
-DM's delivery flow runs `compose.py deploy-all` immediately after merging any PR that touched L1-L3 sources. If the post-recompose diff is non-empty (composer found drift the PR didn't catch), DM:
+`dm`'s delivery flow runs `compose.py deploy-all` immediately after merging any PR that touched L1-L3 sources. If the post-recompose diff is non-empty (composer found drift the PR didn't catch), `dm`:
 
 - Commits the diff to main as a follow-up commit: `dm: post-merge recompose for #<PR>`.
 - Comments on the original PR with the diff for traceability.
@@ -747,10 +847,10 @@ DM's delivery flow runs `compose.py deploy-all` immediately after merging any PR
 
 ### 8.3 Pre-ship gate
 
-QA's pending-test → pending-ship transition includes a compose-sync check:
+`qa`'s pending-test → pending-ship transition includes a compose-sync check:
 
-- Before passing verification, QA runs `compose.py deploy-all --check`.
-- If drift is detected, QA does not pass the task — it routes back to dev with a "compose out of sync" note.
+- Before passing verification, `qa` runs `compose.py deploy-all --check`.
+- If drift is detected, `qa` does not pass the task — it routes back to `worker` with a "compose out of sync" note.
 
 The three mechanisms are deliberately redundant. PR-check is the primary; auto-recompose catches anything that slipped through (e.g. emergency direct-to-main hotfixes); pre-ship gate catches anything that slipped through *both* prior layers. Defence in depth for a class of bug that is otherwise invisible to humans (composed outputs are marked `DO NOT EDIT` and rarely read).
 
@@ -760,11 +860,11 @@ flowchart TB
   Change --> L1c{"Layer 1: PR check<br/>(GitHub Actions + pre-commit)"}
   L1c -->|"catches:<br/>most drift"| L1Block[/"PR blocked until composed<br/>outputs included in PR"/]
   L1c -->|"misses:<br/>direct-to-main hotfix"| L2c
-  L2c{"Layer 2: auto-recompose on merge<br/>(DM workflow)"}
-  L2c -->|"catches:<br/>post-merge drift"| L2Block[/"DM commits follow-up<br/>recompose + files bug"/]
+  L2c{"Layer 2: auto-recompose on merge<br/>(dm workflow)"}
+  L2c -->|"catches:<br/>post-merge drift"| L2Block[/"dm commits follow-up<br/>recompose + files bug"/]
   L2c -->|"misses:<br/>edge cases"| L3c
-  L3c{"Layer 3: pre-ship gate<br/>(QA workflow)"}
-  L3c -->|"catches:<br/>last-mile drift"| L3Block[/"QA routes back to dev:<br/>'compose out of sync'"/]
+  L3c{"Layer 3: pre-ship gate<br/>(qa workflow)"}
+  L3c -->|"catches:<br/>last-mile drift"| L3Block[/"qa routes back to worker:<br/>'compose out of sync'"/]
   L3c -->|"all clean"| Ship([Task ships])
   style L1Block fill:#fff3b0
   style L2Block fill:#fff3b0
@@ -778,7 +878,7 @@ Each layer is sized to its blast radius: PR-check is the cheap-and-frequent gate
 
 ## 9. Code-review checklist (deliverable b)
 
-New sub-skill: `references/sub-skills/common/compose-output-review.md`. Composed into every dev agent's CLAUDE.md as a sub-procedure invoked during code review.
+New sub-skill: `references/sub-skills/common/compose-output-review.md`. Composed into every `worker` agent's CLAUDE.md as a sub-procedure invoked during code review.
 
 The checklist (suggested initial content):
 
@@ -814,14 +914,25 @@ In order of importance:
 7. **Implement source-output sync** (§8). Three sub-PRs: PR check, auto-recompose, pre-ship gate.
 8. **Implement runtime L4 writes** (§7). Two sub-PRs: decision-tree skill + mini-CQ; deepseek audit hook.
 
-### 10.3 L4 backfill from today's memory feedback files
+### 10.3 Sub-skill catalog maintenance
 
-The PM auto-memory directory (`C:\Users\...\memory\`) contains 30+ feedback files that today represent project-local customization stored *outside* L4. As part of this migration:
+[`sub-skill-catalog.md`](sub-skill-catalog.md) is the canonical index of sub-skills referenced from composed CLAUDE.md (per §4.5). Authoring rules:
+
+- **Hand-authored, not generated.** The catalog is a curated developer-facing doc with one-line descriptions per sub-skill, organized by source directory. Compose validates *references* against it (§4.5); it does not generate it.
+- **Single source of truth for sub-skill names.** When a new sub-skill is added under `references/sub-skills/`, the same PR must add a row to the catalog. The §4.5 catalog-drift check refuses to ship composed outputs when the catalog and source tree disagree.
+- **Rename = breaking change.** Renaming a sub-skill requires updating the catalog row, every step that references it, and any L4 file that names it. Compose catches missed updates via §4.5 validation.
+- **Deletion = breaking change.** Removing a sub-skill requires removing its catalog row AND removing every step that references it (or replacing those references with another sub-skill). Compose-time validation fails the build otherwise.
+
+A future automation could check catalog/source drift in CI (per §8.1's PR-check pattern). For v2 this is a manual discipline backed by compose-time validation.
+
+### 10.4 L4 backfill from today's memory feedback files
+
+The `pm` auto-memory directory (`C:\Users\...\memory\`) contains 30+ feedback files that today represent project-local customization stored *outside* L4. As part of this migration:
 
 - Each memory file is reviewed against the new L4 model.
 - Memory entries that are durable behaviour overrides become L4 files (with proper frontmatter and target step IDs).
 - Memory entries that are session-context or user-profile facts stay in the memory system.
-- A one-time migration tool (`migrate_memory_to_l4.py`) does the conversion; PM reviews each output before commit.
+- A one-time migration tool (`migrate_memory_to_l4.py`) does the conversion; `pm` reviews each output before commit.
 
 This collapses today's two-system memory architecture (per-user memory + L4) into a cleaner split: **memory** = user identity + session continuity; **L4** = project-customized agent behaviour.
 
@@ -839,14 +950,15 @@ This collapses today's two-system memory architecture (per-user memory + L4) int
 
 ### 11.2 Known gaps in this doc
 
-- **G1** — Step ID naming convention is informal; needs a formal grammar (allowed characters, max depth, collision rules across roles).
-- **G2** — Compose's role-filter (§4.1.2) is sketched but not specified — what does the `roles:` frontmatter list support beyond literal role names (e.g. wildcards, role classes)?
-- **G3** — Boot-vs-cycle-vs-shutdown sub-slot boundaries inside `instructions` need a precise definition (currently informal).
-- **G4** — Vault slot is the most underspecified — needs §5.5 expansion.
-- **G5** — L4 file naming convention beyond `<slot>-<desc>.md` needs collision rules.
-- **G6** — Subagent usage rules are not yet covered. Today scattered across one thin L1 line ("evaluate the best model for the task — use lighter models for mechanical subtasks") plus out-of-band memory feedback files (skill → Sonnet, DM → Sonnet). Under the new model these must compose deterministically into agent CLAUDE.md. Proposed §6.6 in **v2** of this doc (§6.5 is now occupied by wake-mode handling): model selection defaults + Opus exceptions; spawn-vs-inline decision tree; parallelism patterns; prompt hygiene (self-contained, file paths, write-vs-research); trust-but-verify on subagent claims. Per-role overrides (skill, DM) ship as L3 `replace` overlays on top of an L1-L2 default.
+- **G1** — ✅ CLOSED (v2). Step ID grammar formalized in §6.1 (BNF + character set + nesting depth + global uniqueness rule).
+- **G2** — Compose's role-filter (§4.1 step 2) is sketched but not fully specified: what does the `roles:` frontmatter list support beyond literal role names? (e.g. wildcards like `*`, role classes like `worker:*`.) For v2, only literal role names are supported; wildcards/classes are deferred.
+- **G3** — Boot/cycle/shutdown sub-slot boundaries inside `instructions` are still informal. v2 working definition: `boot` = one-time session-start work; `cycle` = repeated work (per `/loop` tick in polling mode, per nudge in event mode — see [AGENT-RUNTIME.md](AGENT-RUNTIME.md)); `shutdown` = clean-stop work. Formal acceptance tests for sub-slot membership are a follow-up.
+- **G4** — Vault slot is the most underspecified — §5.5 is intentionally short. A future revision should expand it with the wikilink grammar, entity types, confidence levels, and the relationship to `references/sub-skills/common/vault-protocol.md`.
+- **G5** — L4 file naming convention beyond `<slot>-<desc>.md` needs collision rules. Open: what happens when two L4 files share the same `<slot>-<desc>` after `<desc>` normalization? v2 proposal: file names must be globally unique within `.squidsquad/project/`; compose aborts on collision.
+- **G6** — ✅ CLOSED (v2). Subagent usage rules now in §6.6 (default-model + per-role overrides + spawn-vs-inline + prompt hygiene + parallelism + trust-but-verify). L3 `replace` overlays on the L1 default cover the per-role Sonnet defaults for `worker`/`dm`.
+- **G7** — Sub-skill reference resolution semantics for L4. Open: can L4 *insert* a new step that references a sub-skill not yet referenced anywhere in L1-L3? Yes per §4.5 (catalog is the source of truth, not the L1-L3 reference set), but the L4-write decision tree in §7.2 should explicitly cover the "introduce a new sub-skill reference" case.
 
-Each gap is filed for explicit closure in §12.
+Each open gap is filed for explicit closure in §12.
 
 ---
 
@@ -864,8 +976,8 @@ Once this doc is merged, the implementation epic spawns these sub-PRs in order. 
 | **F** | Fold today's protocol H2 sections into Instructions sub-procedures | skill | E |
 | **G** | Fold today's constraints/conventions H2 sections into Identity + Project Context | skill | E |
 | **H** | Source-output sync: PR-check (GitHub Actions + pre-commit hook) | skill | C, D |
-| **I** | Source-output sync: auto-recompose on merge (DM workflow) | skill (with dm test) | H |
-| **J** | Source-output sync: pre-ship gate (QA workflow) | skill (with qa test) | H |
+| **I** | Source-output sync: auto-recompose on merge (`dm` workflow) | worker (with `dm` test) | H |
+| **J** | Source-output sync: pre-ship gate (`qa` workflow) | worker (with `qa` test) | H |
 | **K** | Runtime L4 writes: agent decision-tree sub-skill | skill | C |
 | **L** | Runtime L4 writes: deepseek audit + mini-CQ wiring | skill | K |
 | **M** | Code-review checklist sub-skill (deliverable b) | skill | F, G |
@@ -906,6 +1018,8 @@ Total: ~14 sub-PRs. Comparable to event-arch v2's implementation epic (6 PRs in 
 - **2026-05-23 (v2 draft)** — reframe: composed CLAUDE.md becomes a **thin orchestration layer** that references sub-skills rather than inlining them. Aligns with the Claude-skills direction locked in #9968 cycle 1619. Substantive changes: §1 goal + new model diagram; §3.1 DRY now explicitly covers sub-skill bodies as single-source; §4.1 emits references not inline; §5.3 Instructions section is references-only; §6.2 sub-procedures are sub-skills (with their own catalog entry), not folded into step bodies; §5.6 worked examples clarified as step-reference TOCs; §14 references updated for the archived event docs and the new `sub-skill-catalog.md` / `sub-skill-guide.md` companions.
 - **2026-05-23 (v2 draft, R1 fixes)** — DS round-1 surfaced 5 findings (2 HIGH, 1 MED, 2 LOW). Applied: §1 non-goals "see EVENT-ARCHITECTURE.md" → "see AGENT-RUNTIME.md" (stale ref); §13 glossary "Sub-procedure" entry updated to v2 (no longer says "written inline at H4 level"; added a "Sub-skill" entry for clarity); §4.1 step 1 clarifies the sub-skill reference is body-extracted, not a frontmatter field; §6.5 `common/boot-bootstrap.md` → `references/sub-skills/common/boot-bootstrap.md` (full path); §5.2 "Inlined directly" → "Emitted verbatim" with explicit note that Soul is orchestration-layer content, not a sub-skill (avoids confusion with v1 inline-sub-skill anti-pattern). DS artifact: `.squidsquad/pm/planning/REVIEW-COMPOSE-ARCH-DEEPSEEK-1.md`.
 - **2026-05-23 (v2 draft, R2 fix + CONVERGED)** — DS round-2 confirmed all R1 fixes applied and returned 1 LOW residual finding (CONVERGED with the fix). §3.2 emit-rule clarified: "emits the literal content of each" was unqualified and would have led implementers to inline sub-skill bodies in the `instructions` slot (the v1 anti-pattern). Rewrote to specify that non-instructions slots are emitted verbatim while the `instructions` slot is emitted as sub-skill *references* per §4.1 step 4. DS artifact: `.squidsquad/pm/planning/REVIEW-COMPOSE-ARCH-DEEPSEEK-2.md`.
+- **2026-05-23 (v2 draft, fill-out pass)** — Filled in under-specified areas and closed two of the §11.2 gaps. Substantive additions: NEW §4.5 specifies sub-skill reference resolution (compose validates every `→ run sub-skill: <name>` ref against catalog + source + skill-registry; aborts on unresolved or catalog drift); §6.1 step ID grammar formalized with BNF + character set + nesting depth + global-uniqueness rule, and the step↔sub-skill mapping (1:1 default, N:1 allowed, 1:N forbidden) made explicit (closes G1); §6.3 constraints reframed for v2 (step-specific prohibitions live in the owning sub-skill, not inlined into composed orchestration); NEW §6.6 subagent usage rules — default Sonnet for `worker`/`dm`, parent-context for `pm`/`qa`, spawn-vs-inline, prompt hygiene, trust-but-verify (closes G6); NEW §10.3 sub-skill catalog maintenance (hand-authored, single source of truth, compose validates drift); §5.1 swapped concrete-instance leak "PM/QA/DM/dev/skill" to L2 categorical names per the AGENT-RUNTIME rev-6 rename; §11.2 marks G1+G6 closed, adds G7 (L4 introducing new sub-skill refs).
+- **2026-05-23 (v2 draft, R3 fixes)** — DS round 3 surfaced 5 findings on the fill-out pass (1 HIGH BNF contradiction, 4 MED). All applied: §6.1 BNF `(/segment)*` "max depth 3" → `(/segment)?` matching the prose "one nesting level"; §4.5 step 1 cross-ref to step grammar fixed (was §6.1 which is step ID grammar; correct ref is §4.1 step 4 + §5.3 for reference grammar); §6.6 L3 "replace overlays" rewritten — `replace` is L4-only, L3 overrides happen via natural `(slot, ordinal)` ordering; §4.5 step 4 catalog-drift cross-ref clarified — that's an in-pipeline compose check, distinct from §8 source-output sync gates. Also: doc-wide naming pass to match AGENT-RUNTIME rev 6 — all remaining `PM`/`QA`/`DM`/`dev` references in prose, diagrams, and §5.6 worked-example TOCs now use the L2 categorical names `pm`/`qa`/`dm`/`worker`. DS artifact: `.squidsquad/pm/planning/REVIEW-COMPOSE-ARCH-DEEPSEEK-3.md`.
 
 ---
 
