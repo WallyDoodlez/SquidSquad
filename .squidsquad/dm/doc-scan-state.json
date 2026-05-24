@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "README.md",
+  "last_scanned": "SKILL.md:sections-1-3",
   "rotation_count": 56,
   "scan_history": [
     {
@@ -1744,6 +1744,12 @@
         "README.md docs table line 150: dead link docs/event-bus.md \u2192 updated to docs/AGENT-RUNTIME.md (PM consolidated event/runtime docs in commit 4012500f; old file moved to docs/archive/event-bus.md). Description updated to reflect consolidated scope: event bus, lifecycle, triggers."
       ],
       "note": "Rotation 58 first scan. Full read of all 165 lines. Verified: all referenced scripts exist (migrate_state_branch.py, squidsquad_cli.py, wizard.py with cmd_setup_yes); docs ARCHITECTURE.md, sub-skill-guide.md, CONTRIBUTING.md, CHANGELOG.md, SKILL.md, LICENSE all present; tests/comprehension/ exists with _spec.json files; config.md sections Auto Merge + Model Routing + Code Review Model verified present; merge:manual label real (FEAT-PM-1228 research); .harness-state.json real (harness.py HARNESS_STATE_FILE). Quick-start CLI list (lines 75-78) still omits restart \u2014 R47 declined to fix as teaser scope, respecting prior judgment. Only real drift was the event-bus.md link."
+    },
+    {
+      "file": "SKILL.md:sections-1-3",
+      "date": "2026-05-24",
+      "findings": 0,
+      "fixes": []
     }
   ],
   "doc_inventory": {
@@ -1753,7 +1759,7 @@
       "status": "current"
     },
     "SKILL.md": {
-      "last_scanned": "2026-05-23",
+      "last_scanned": "2026-05-24",
       "status": "current"
     },
     "docs/ARCHITECTURE.md": {
