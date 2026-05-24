@@ -776,9 +776,9 @@ def _get_entry_file_for_role(role_name: str) -> str:
     # in both pre- and post-rename installs. Confirm the target directory
     # actually has an entry template before returning it; otherwise fall
     # through to the other side of the alias pair.
-    if "worker" in identities and (ROLES_DIR / "worker" / "instructions.md").exists():
+    if "worker" in identities and (ROLES_DIR / "worker").is_dir() and (ROLES_DIR / "worker" / "instructions.md").exists():
         return "worker"
-    if "dev" in identities and (ROLES_DIR / "dev" / "instructions.md").exists():
+    if "dev" in identities and (ROLES_DIR / "dev").is_dir() and (ROLES_DIR / "dev" / "instructions.md").exists():
         return "dev"
     # No registry, or no `worker`/`dev` identity — fall back to the literal
     # role name so at least the error message points at the right file.
