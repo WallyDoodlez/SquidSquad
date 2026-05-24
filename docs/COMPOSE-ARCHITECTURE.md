@@ -1,8 +1,8 @@
-# Compose Architecture (v1 draft)
+# Compose Architecture (v2 draft)
 
-> **Status**: v1 draft, 2026-05-23. Authored under issue #9968 (L1-L4 review + compose-architecture doc epic).
-> **Companion docs**: [`ARCHITECTURE.md`](ARCHITECTURE.md) (overall system), [`EVENT-ARCHITECTURE.md`](EVENT-ARCHITECTURE.md) (event bus + harness), [`EVENT-BUS-ARCHITECTURE.md`](EVENT-BUS-ARCHITECTURE.md).
-> **Source-of-truth scope**: this document defines how SquidSquad assembles agent CLAUDE.md outputs from layered sources. Audited and merged to main as canonical. Implementation work sequences from §12 (Closure plan).
+> **Status**: v2 draft, 2026-05-23. Authored under issue #9968 (L1-L4 review + compose-architecture doc epic). v1 (cycle 1616) emphasized inlining sub-skill content into the composed CLAUDE.md; v2 reframes the composed CLAUDE.md as a **thin orchestration layer that references sub-skills** catalogued in [`sub-skill-catalog.md`](sub-skill-catalog.md). Aligns with the Claude-skills direction from #9968 cycle 1619.
+> **Companion docs**: [`ARCHITECTURE.md`](ARCHITECTURE.md) (overall system), [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) (loop vs event runtime, harness, event bus), [`sub-skill-catalog.md`](sub-skill-catalog.md) (the catalog of sub-skills referenced from composed CLAUDE.md), [`sub-skill-guide.md`](sub-skill-guide.md) (how to author sub-skills).
+> **Source-of-truth scope**: this document defines how SquidSquad assembles agent CLAUDE.md outputs from layered sources, and how those outputs reference sub-skills. Implementation work sequences from §12 (Closure plan).
 
 ---
 
@@ -10,18 +10,52 @@
 
 ### Goal
 
-Establish a single source of truth for how SquidSquad **composes** the per-role agent instruction document (`.squidsquad/<role>/CLAUDE.md`) from layered source files. The composition produces a **well-defined, ordered, deterministic** output that an agent can read top-to-bottom and execute as a checklist.
+Establish a single source of truth for how SquidSquad **composes** the per-role agent instruction document (`.squidsquad/<role>/CLAUDE.md`) from layered source files.
+
+The composed CLAUDE.md is a **thin orchestration layer** — it declares an agent's identity, soul, ordered step references, project context, and vault description. It does **not** contain the bodies of sub-skills; instead it references them by name from [`sub-skill-catalog.md`](sub-skill-catalog.md). Sub-skill bodies live in their source files (today as plain markdown fragments under `references/sub-skills/`, eventually as real Claude skills registered in `.claude/skills/`).
 
 The composition must:
 
-- Treat SquidSquad-shipped layers (L1-L3) as **literal** content authored and versioned in this repo.
-- Treat the project-local layer (L4) as **creative overlay** authored in deployed installs from human conversation in those projects — instructions, project context, identity overlays, vault customization.
-- Produce a composed output whose structure does not depend on author discipline alone — the compose pipeline enforces section grammar and ordering.
+- Treat SquidSquad-shipped layers (L1-L3) as **literal** orchestration content authored and versioned in this repo.
+- Treat the project-local layer (L4) as **creative overlay** authored in deployed installs from human conversation — instructions, project context, identity overlays, vault customization.
+- Produce a composed output whose **structure does not depend on author discipline alone** — the compose pipeline enforces section grammar, ordering, and the rule that step bodies are *references*, not duplicated sub-skill content.
+
+### The model in one diagram
+
+```mermaid
+flowchart LR
+    subgraph SOURCES["Sources (compose inputs)"]
+        L1["L1 — Base<br/>(universal orchestration)"]
+        L2["L2 — Capability<br/>(cross-cutting orchestration)"]
+        L3["L3 — Role<br/>(role-specific orchestration)"]
+        L4["L4 — Project<br/>(project-local overlay)"]
+    end
+
+    Compose["compose.py<br/>(stacks L1→L4)"]
+    OUT["<b>.squidsquad/&lt;role&gt;/CLAUDE.md</b><br/>thin orchestration<br/>step references only"]
+
+    Catalog[("sub-skill-catalog.md<br/>catalog of sub-skills")]
+    SubSkills[("Sub-skills<br/>(today: markdown fragments<br/>target: Claude skills)")]
+
+    L1 --> Compose
+    L2 --> Compose
+    L3 --> Compose
+    L4 --> Compose
+    Compose --> OUT
+    OUT -.->|"references by name"| Catalog
+    Catalog -.->|"points at"| SubSkills
+
+    style OUT fill:#dfd
+    style Catalog fill:#dff
+    style SubSkills fill:#dff
+```
+
+**L1-L4 = the layered authoring model that compose stacks into a single CLAUDE.md per agent.** Sub-skills = the units of functionality that CLAUDE.md references. The catalog (`sub-skill-catalog.md`) is the single index of which sub-skills exist. The two axes are independent — see [`sub-skill-catalog.md`](sub-skill-catalog.md) "Sub-skills vs L1-L4".
 
 ### Non-goals
 
 - Redesigning the L1-L4 *responsibility model* itself — that landed in #9925 and is preserved as-is.
-- Defining the event bus, harness lifecycle, or agent state machine — see `EVENT-ARCHITECTURE.md`.
+- Defining the event bus, harness lifecycle, or agent state machine — see [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md).
 - Replacing the role concept itself (PM / QA / DM / dev variants) — those are stable.
 - Specifying the wizard install flow beyond compose hooks — see `WIZARD.md`.
 
@@ -60,16 +94,21 @@ flowchart TB
 
 ## 3. Authoring principles
 
-### 3.1 DRY across layers (single authoring location)
+### 3.1 DRY across layers + sub-skill catalog (single authoring location)
 
-Each creative-work concept must have exactly **one authoring location** across L1-L4. If two layers define the same concept (e.g. an L3 "PM Project Operations" section and an L4 "Project Operations" section), the compose pipeline detects the collision and **rejects the build**. The DRY enforcement applies to:
+Each creative-work concept must have exactly **one authoring location**:
 
-- Section titles at H2 level.
-- Sub-procedure names (e.g. "Issue Filing").
+- **Step orchestration** (which steps run, in what order, with what gating) lives at exactly one layer in L1-L4. If two layers define the same orchestration concept (e.g. an L3 "PM Project Operations" section and an L4 "Project Operations" section), the compose pipeline detects the collision and **rejects the build**.
+- **Sub-skill bodies** (the actual how-to for "file a bug", "run pre-cycle", "scan for improvements") live in exactly one location: the sub-skill source file. They are catalogued in [`sub-skill-catalog.md`](sub-skill-catalog.md) and referenced from composed CLAUDE.md by name — **never inlined**.
+
+DRY enforcement applies to:
+
+- Section titles at H2 level (per §5 five-section grammar).
+- Sub-skill names (each sub-skill has exactly one source file and one catalog entry).
 - Step IDs (see §6.1).
 - Vault note names.
 
-When extension is needed across layers, the *lower* layer extracts a referenceable hook (e.g. `step:cycle/checkin`); the *higher* layer references it by ID instead of duplicating its text.
+When extension is needed across layers, the *lower* layer extracts a referenceable hook (e.g. `step:cycle/check-in`); the *higher* layer references it by ID. Sub-skill bodies are never copied between layers — they're authored once at their source file and referenced from any orchestration layer that needs them.
 
 ### 3.2 Slot + ordinal contract (L1-L3)
 
@@ -83,7 +122,7 @@ step-ids: [step:cycle/<name>, step:boot/<name>, ...]  # for instructions slot on
 ---
 ```
 
-`compose.py` reads frontmatter from every L1-L3 file, sorts by `(slot, ordinal)`, and emits the literal content of each in that order under the appropriate top-level section (see §5).
+`compose.py` reads frontmatter from every L1-L3 file, sorts by `(slot, ordinal)`, and emits the content of each in that order under the appropriate top-level section (see §5) — emitted verbatim for non-instructions slots (`identity`, `soul`, `project-context`, `vault`); the `instructions` slot is emitted as **sub-skill references**, not inlined sub-skill bodies, per §4.1 step 4.
 
 Ordinals are integers, non-dense (gaps allowed). Authors use gaps of 10 (e.g. 10, 20, 30) so future inserts don't require renumbering.
 
@@ -155,12 +194,14 @@ flowchart TB
 
 Compose processes L1-L3 deterministically:
 
-1. **Collect**: walk `references/sub-skills/`, `references/roles/<role>/`. For each file with frontmatter, read its `slot` and `ordinal`.
+1. **Collect**: walk `references/sub-skills/`, `references/roles/<role>/`. For each file with frontmatter, read its `slot` and `ordinal`. For files in the `instructions` slot, also extract the sub-skill name referenced in the file body (e.g. from `→ run sub-skill: <name>` directives) — this is a body-extracted reference, not a frontmatter field.
 2. **Filter by role**: each file may declare which roles it applies to (via `roles:` frontmatter list; default = all). Files not applicable to the current role are dropped.
 3. **Sort**: stable sort by `(slot_index, ordinal)`. `slot_index` is a fixed enum: identity=0, soul=1, instructions=2, project-context=3, vault=4.
-4. **Emit literally**: under the appropriate top-level section header, emit each file's content verbatim. No transformation beyond removing the frontmatter block.
+4. **Emit orchestration**: under the appropriate top-level section header, emit each file's orchestration content verbatim. Inside the `instructions` slot, step bodies are **references to sub-skills by name** (e.g. `→ run sub-skill: pipeline-sentinel`) rather than inlined sub-skill content. The catalog of available sub-skills lives at [`sub-skill-catalog.md`](sub-skill-catalog.md) — composed CLAUDE.md never duplicates it.
 
-The output of step 4 is the **L1-L3 base composition** — purely the SquidSquad-shipped instructions, without any project customization.
+The output of step 4 is the **L1-L3 base composition** — purely the SquidSquad-shipped orchestration, with sub-skill names referenced (not their bodies), and no project customization yet applied.
+
+**Why references and not inlining**: today's behavior inlined sub-skill bodies via `{{include}}` directives, producing 50KB+ composed CLAUDE.md files where most content was duplicated sub-skill text. Under v2, composed CLAUDE.md is the thin orchestration (5–10KB) and the model invokes sub-skills via the Skill tool when their description matches the situation. The transition is staged — see §10 migration plan.
 
 ### 4.2 Creative L4 application
 
@@ -248,14 +289,14 @@ Authored across multiple L1-L3 files (each contributes via `slot: identity`); L4
 ### 5.2 Soul
 
 - The agent's professional identity, voice, perspective.
-- **Inlined directly** into the composed CLAUDE.md (not a reference link to `.squidsquad/<role>/SOUL.md`). The source SOUL.md file is the authoring location; compose inlines its content.
+- **Emitted verbatim** into the composed CLAUDE.md (not a reference link to `.squidsquad/<role>/SOUL.md`). The source SOUL.md file is the authoring location; compose copies its content into the composed output. Soul is orchestration-layer identity content, not a sub-skill — it is rendered directly, not referenced through the catalog.
 - L4 may append project-specific tone adjustments or `replace` core traits as needed.
 
 This is one of the simpler slots — typically one to three short paragraphs.
 
 ### 5.3 Instructions
 
-The single ordered checklist for what the agent does. Composed creatively from all L1-L4 instructions-slot content.
+The single ordered checklist for what the agent does. Each step is a **reference to a sub-skill by name**, not the sub-skill's body. Composed from all L1-L4 instructions-slot content.
 
 Structure (suggested H3 grouping within the H2):
 
@@ -263,20 +304,26 @@ Structure (suggested H3 grouping within the H2):
 ## 3. Instructions
 
 ### 3.1 On boot (one-time, session start)
-- Step boot/...
-- Step boot/...
+1. **step:boot/permission-check** → see sub-skill `permission-check`
+2. **step:boot/mode-detect** → see sub-skill `boot-bootstrap`
+3. **step:boot/load-fragments** → see sub-skill `boot-bootstrap`
 
-### 3.2 Each cycle (Ralph Loop)
-- Step cycle/...
-- Step cycle/...
+### 3.2 Each cycle
+1. **step:cycle/pre-cycle** → see sub-skill `cycle-runner` (pre phase)
+2. **step:cycle/context-pressure** → see sub-skill `context-pressure`
+3. **step:cycle/pipeline-sentinel** → see sub-skill `pipeline-sentinel`
+   *(PM-only; see [sub-skill-catalog.md](sub-skill-catalog.md))*
+   ...
 
 ### 3.3 On shutdown
-- Step shutdown/...
+1. **step:shutdown/graceful-stop** → see sub-skill `agent-lifecycle` (shutdown)
 ```
+
+Step bodies in the composed CLAUDE.md are **short references** — typically one line each — that name a step ID and point at the sub-skill that implements it. The full how-to for "pipeline-sentinel" or "context-pressure" is in that sub-skill's source file, indexed in [`sub-skill-catalog.md`](sub-skill-catalog.md).
 
 Boot / cycle / shutdown are the three sub-slots within the `instructions` slot. Within each sub-slot, steps appear in `ordinal` order (after L4 overlay is applied).
 
-See §6 for step ID grammar, sub-procedures, and constraint folding.
+See §6 for step ID grammar, reference grammar, and the relationship to sub-skills.
 
 ### 5.4 Project Context
 
@@ -293,7 +340,9 @@ This section is intentionally short — most vault detail belongs in `references
 
 ### 5.6 Worked example: PM composed CLAUDE.md TOC (both modes)
 
-`.squidsquad/pm/CLAUDE.md` looks **structurally different** depending on which manifest `compose.py` selects (per §3.2 callout and §6.5). Below are the two flavored outputs after L1-L4 + folding + flat renumbering — §1, §2, §4, §5 are identical; §3.1 and §3.3 are identical; **only §3.2 (`instructions/cycle`) differs**.
+`.squidsquad/pm/CLAUDE.md` looks **structurally different** depending on which manifest `compose.py` selects (per §3.2 callout and §6.5). Below are the two flavored outputs after L1-L4 + flat renumbering — §1, §2, §4, §5 are identical; §3.1 differs by exactly one step; §3.3 is identical; §3.2 (`instructions/cycle`) is fully divergent.
+
+**Each step is a reference**, not an inlined sub-skill body. The right-column `step:cycle/<name>` is the step ID; the implementation lives in the sub-skill named after it (or referenced from it), catalogued in [`sub-skill-catalog.md`](sub-skill-catalog.md).
 
 #### 5.6.1 PM — polling mode (`includes.yml` selected)
 
@@ -444,27 +493,29 @@ Renaming a step ID is a **breaking change** and must:
 2. Be paired with a compose-time migration (compose.py prints a warning when it sees an L4 file targeting the old ID; offers an auto-rewrite or aborts).
 3. Be batched at a release boundary.
 
-### 6.2 Sub-procedures (folding today's protocols)
+### 6.2 Sub-procedures are sub-skills, not inlined H2 sections
 
-Today's standalone H2 sections like `## Issue Filing Protocol`, `## Discussion Protocol`, `## Task Lifecycle (5-Phase)` are **eliminated** as top-level sections. They are absorbed into the cycle checklist as **sub-procedures referenced inline**:
+Today's standalone H2 sections like `## Issue Filing Protocol`, `## Discussion Protocol`, `## Task Lifecycle (5-Phase)` are **eliminated** as top-level sections — and v2 does NOT fold them inline into step bodies (the v1 model). Instead, each becomes a **sub-skill** with its own source file and catalog entry, referenced from the cycle steps that invoke it:
 
 ```markdown
 ### 3.2 Each cycle
 
 ...
 
-- **step:cycle/file-bug-if-found** — When you find a bug during pipeline scrutiny:
-  1. Identify the assigned role (where the failure originates).
-  2. File with `tracker.py create-issue --role <r> --severity <s>`.
-  3. Add a comment with reproduction details using `tracker.py comment`.
-  4. Continue the cycle; the bug routes itself.
+5. **step:cycle/file-bug-if-found** — when pipeline scrutiny surfaces a bug
+   → see sub-skill `issue-filing` ([sub-skill-catalog.md](sub-skill-catalog.md))
+
+6. **step:cycle/post-cycle** — commit, push, advance cursor
+   → see sub-skill `cycle-runner` (post phase)
 
 ...
 ```
 
-The procedure is **inline at the point it's invoked**. If the same procedure is referenced from multiple steps, it appears once (as a numbered H4 under Instructions) and other steps link to it with `(see step:cycle/file-bug)`.
+The how-to for issue filing lives in `references/sub-skills/common/issue-filing.md` (today, a markdown fragment) or in `.claude/skills/issue-filing/SKILL.md` (target state, a real Claude skill). The composed CLAUDE.md never duplicates that content.
 
-This eliminates the "I have to mentally stitch together cycle steps and protocols" problem of today's output.
+If the same sub-skill is referenced from multiple steps, the catalog is the single index — composed CLAUDE.md references the sub-skill by name from each step that uses it, and the catalog disambiguates which roles use it and how.
+
+This eliminates two problems v1 created: (a) sub-skill bodies bloated composed CLAUDE.md to 50KB+ with duplicated content; (b) "I have to mentally stitch together cycle steps and protocols" — under v2 the orchestration is the checklist; protocols are referenced sub-skills.
 
 ### 6.3 Constraints & conventions
 
@@ -542,7 +593,7 @@ Mode flip = next compose + agent restart, never mid-session. The two outputs dif
 
 - Polling has proven stable across harness outages — it does not depend on a live harness HTTP endpoint.
 - The polling manifest is the documented compose-time fallback when `includes-events.yml` is absent for a role (e.g. a new role not yet ported to event mode).
-- The boot bootstrap (`common/boot-bootstrap.md`) treats polling as the fallback when harness reachability fails at boot in event-mode (#9588) — and that fallback is a separate restart, not a mid-session pivot.
+- The boot bootstrap (`references/sub-skills/common/boot-bootstrap.md`) treats polling as the fallback when harness reachability fails at boot in event-mode (#9588) — and that fallback is a separate restart, not a mid-session pivot.
 - Operators may explicitly select polling via `config.md` (`event-driven: no`) while debugging the event bus, or until event mode reaches GA in their install.
 
 **Authoring discipline**: both manifests must stay in sync on what an agent *does* — same status transitions, same comment etiquette, same vault behaviors. Only the *how* differs (event stream vs `/loop` tick). The two `5.6.x` worked examples should diff only on §3.2; if a non-§3.2 section diverges between modes, that is a bug, not a feature.
@@ -842,9 +893,19 @@ Total: ~14 sub-PRs. Comparable to event-arch v2's implementation epic (6 PRs in 
 | **Target** | A step ID that an L4 op points at. Required for non-`append` ops. |
 | **Step ID** | A stable identifier for an instruction step. Grammar: `step:<sub-slot>/<kebab-name>`. Stable across refactors. |
 | **Sub-slot** | A sub-grouping within the `instructions` slot: `boot`, `cycle`, `shutdown`. |
-| **Sub-procedure** | A reusable named procedure (e.g. "file a bug") referenced from one or more cycle steps, written inline at H4 level. Replaces today's standalone H2 protocol sections. |
+| **Sub-procedure** | A reusable named procedure (e.g. "file a bug") authored as a **sub-skill** with its own source file and catalog entry in [`sub-skill-catalog.md`](sub-skill-catalog.md). Referenced by name from cycle steps in the composed CLAUDE.md; **never inlined** into it. Replaces today's standalone H2 protocol sections. |
+| **Sub-skill** | A self-contained unit of agent functionality (e.g. `pipeline-sentinel`, `cycle-runner`, `vault-remember`). Lives in its own source file under `references/sub-skills/` (today, as a markdown fragment) or under `.claude/skills/` (target state, as a real Claude skill). Catalogued in [`sub-skill-catalog.md`](sub-skill-catalog.md); referenced from composed CLAUDE.md by name. Distinct from the L1-L4 layers — see "Sub-skills vs L1-L4" in the catalog. |
 | **Composed output** | The generated `.squidsquad/<role>/CLAUDE.md` file. Marked `DO NOT EDIT`; regenerated on every compose run. |
 | **Compose pipeline** | The deterministic L1-L3 merge + creative L4 overlay process implemented in `references/scripts/compose.py`. |
+
+---
+
+## 13a. Revision log
+
+- **2026-05-23 (v1.3)** — shipped under #9968 cycle 1616 (commit `8b33aebd`). Established the L1-L4 composition pipeline and 5-section composed-output structure. Treated sub-skill bodies as inlined content within the composed CLAUDE.md.
+- **2026-05-23 (v2 draft)** — reframe: composed CLAUDE.md becomes a **thin orchestration layer** that references sub-skills rather than inlining them. Aligns with the Claude-skills direction locked in #9968 cycle 1619. Substantive changes: §1 goal + new model diagram; §3.1 DRY now explicitly covers sub-skill bodies as single-source; §4.1 emits references not inline; §5.3 Instructions section is references-only; §6.2 sub-procedures are sub-skills (with their own catalog entry), not folded into step bodies; §5.6 worked examples clarified as step-reference TOCs; §14 references updated for the archived event docs and the new `sub-skill-catalog.md` / `sub-skill-guide.md` companions.
+- **2026-05-23 (v2 draft, R1 fixes)** — DS round-1 surfaced 5 findings (2 HIGH, 1 MED, 2 LOW). Applied: §1 non-goals "see EVENT-ARCHITECTURE.md" → "see AGENT-RUNTIME.md" (stale ref); §13 glossary "Sub-procedure" entry updated to v2 (no longer says "written inline at H4 level"; added a "Sub-skill" entry for clarity); §4.1 step 1 clarifies the sub-skill reference is body-extracted, not a frontmatter field; §6.5 `common/boot-bootstrap.md` → `references/sub-skills/common/boot-bootstrap.md` (full path); §5.2 "Inlined directly" → "Emitted verbatim" with explicit note that Soul is orchestration-layer content, not a sub-skill (avoids confusion with v1 inline-sub-skill anti-pattern). DS artifact: `.squidsquad/pm/planning/REVIEW-COMPOSE-ARCH-DEEPSEEK-1.md`.
+- **2026-05-23 (v2 draft, R2 fix + CONVERGED)** — DS round-2 confirmed all R1 fixes applied and returned 1 LOW residual finding (CONVERGED with the fix). §3.2 emit-rule clarified: "emits the literal content of each" was unqualified and would have led implementers to inline sub-skill bodies in the `instructions` slot (the v1 anti-pattern). Rewrote to specify that non-instructions slots are emitted verbatim while the `instructions` slot is emitted as sub-skill *references* per §4.1 step 4. DS artifact: `.squidsquad/pm/planning/REVIEW-COMPOSE-ARCH-DEEPSEEK-2.md`.
 
 ---
 
@@ -852,12 +913,15 @@ Total: ~14 sub-PRs. Comparable to event-arch v2's implementation epic (6 PRs in 
 
 - **#9925** (4-layer responsibility model) — shipped 2026-05-23 (commit `f3a0e94e`). Established the L1-L4 model preserved here. Closed.
 - **#9965** (6274.2 terminology rename) — in-progress; rewrites L1-L4 source files this doc operates on. Implementation epic sequences after #9965 ships.
-- **#9968** (this doc's parent epic).
+- **#9968** (this doc's parent epic) — Claude-skills reframe locked cycle 1619.
 - **#9969** (manifest.md naming) — concrete drift artifact; resolution from §10.2 step 3 (eliminate duplicate H2 sections).
 - **#9970** (composed CLAUDE.md drift) — concrete sync evidence; resolution from §8.
 - **#8997** (L4 autonomous writes) — pre-existing direction for safe L4 writes; aligns with §7.4.
-- **#9588** (event vs polling mode) — referenced in instructions slot's `boot` sub-slot but architecturally distinct.
+- **#9588** (event vs polling mode) — referenced in instructions slot's `boot` sub-slot; full lifecycle/runtime model lives in `docs/AGENT-RUNTIME.md`.
 - **`RESEARCH-9968.md`** (`.squidsquad/pm/planning/`) — Phase 1 inventory + scatter evidence.
-- **`docs/EVENT-ARCHITECTURE.md`** — companion architecture doc; this doc follows the same playbook.
+- **`docs/AGENT-RUNTIME.md`** — companion runtime architecture doc (consolidates the former `EVENT-ARCHITECTURE.md` / `EVENT-BUS-ARCHITECTURE.md` / `event-bus.md`). Defines loop vs event-driven mode, harness, event bus, and the nudge contract — all consumed by sub-skill `boot-bootstrap` at runtime.
+- **`docs/sub-skill-catalog.md`** — the catalog of available sub-skills referenced from composed CLAUDE.md.
+- **`docs/sub-skill-guide.md`** — how to author new sub-skills.
 - **`docs/ARCHITECTURE.md`** — overall system architecture.
-- **`references/sub-skills/manifest.md`** — current sub-skill composition manifest; to be superseded by frontmatter-driven discovery per §3.2.
+- **`docs/archive/EVENT-ARCHITECTURE.md`** + **`docs/archive/EVENT-BUS-ARCHITECTURE.md`** + **`docs/archive/event-bus.md`** — superseded; kept for traceability of prior architectural decisions.
+- **`references/sub-skills/manifest.md`** — current sub-skill composition manifest; to be superseded by frontmatter-driven discovery per §3.2 and by `sub-skill-catalog.md` as the canonical index.

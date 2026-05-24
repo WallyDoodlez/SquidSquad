@@ -8,16 +8,16 @@ _How a SquidSquad agent's operating model is defined — what triggers it to act
 
 ## Terminology (L2 categorical role names)
 
-This document uses the L2 categorical role names from `responsibility.md`, not concrete-install instance names. Mapping for the current install:
+This document uses the L2 categorical role names from `responsibility.md`. The four canonical roles:
 
-| L2 categorical | Concrete (this repo) | Responsibility (one line) |
-|---|---|---|
-| **`pm`** | `pm` | Coordinates the team and the human; manages workflow and process |
-| **`verifier`** | `qa` | Verifies the product being delivered; does not do technical implementation |
-| **`worker`** | `dev` base, `skill` variant | Implements technical work to acceptance criteria |
-| **`dm`** | `dm` | Delivers (CHANGELOG, version bumps, releases) |
+| Role | Responsibility (one line) |
+|---|---|
+| **`pm`** | Coordinates the team and the human; manages workflow and process |
+| **`qa`** | Verifies the product being delivered; does not do technical implementation |
+| **`worker`** | Implements technical work to acceptance criteria |
+| **`dm`** | Delivers (CHANGELOG, version bumps, releases) |
 
-Future installs may add `worker` variants (`ios`, `android`, `web`) or specialized verifiers. The architecture below works at the categorical level.
+Installs may add `worker` variants (`ios`, `android`, `web`, etc.) or specialized `qa` variants. The architecture below works at the categorical level — wire-format payloads, permission tables, and routing rules name only these four roles.
 
 ---
 
@@ -39,7 +39,7 @@ Out of scope:
 
 ## 2. Two triggering modes
 
-Every agent runs in exactly one of two modes, selected per role at install via `config.md`'s `event-driven:` field:
+Every agent in an install runs in the same mode — there is one global mode for the project, selected at install via `config.md`'s `event-driven:` field:
 
 | Mode | What wakes the agent | When to use |
 |---|---|---|
@@ -52,7 +52,7 @@ The cycle wrapper (pre → creative → post) is the same in both modes — only
 
 Loop mode has three persistent problems v2's event-driven mode fixes:
 
-1. **Latency floor** — an agent can be idle up to 30 min after work arrives. Worst case end-to-end ship: verifier completes at min 0, dm doesn't notice until min 30, ships at min 32. Polling gaps dominate shipping latency.
+1. **Latency floor** — an agent can be idle up to 30 min after work arrives. Worst case end-to-end ship: qa completes at min 0, dm doesn't notice until min 30, ships at min 32. Polling gaps dominate shipping latency.
 2. **Tokens burned on idle cycles** — every cycle costs context window even when nothing is happening.
 3. **Cycle/work coupling** — the cycle wrapper fires on the timer, not on the work. State churn happens regardless.
 
@@ -112,8 +112,8 @@ flowchart TB
         PMTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
     end
 
-    subgraph verifier_box["Verifier agent"]
-        VerifierTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
+    subgraph qa_box["QA agent"]
+        QATree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
     end
 
     subgraph worker_box["Worker agent"]
@@ -127,17 +127,17 @@ flowchart TB
     Operator --> Harness
 
     Harness -.->|spawns + monitors| PMTree
-    Harness -.->|spawns + monitors| VerifierTree
+    Harness -.->|spawns + monitors| QATree
     Harness -.->|spawns + monitors| WorkerTree
     Harness -.->|spawns + monitors| DMTree
 
     PMTree <--> Harness
-    VerifierTree <--> Harness
+    QATree <--> Harness
     WorkerTree <--> Harness
     DMTree <--> Harness
 
     PMTree <--> Forge
-    VerifierTree <--> Forge
+    QATree <--> Forge
     WorkerTree <--> Forge
     DMTree <--> Forge
 
@@ -148,7 +148,7 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    subgraph agent_tree["Per-agent subprocess tree (pm, verifier, worker, dm each look like this)"]
+    subgraph agent_tree["Per-agent subprocess tree (pm, qa, worker, dm each look like this)"]
         Cmd["cmd.exe (Windows)<br/>or shell (POSIX)"]
         TL["thin_launcher.py<br/>· writes .claude-pid<br/>· singleton enforcement (#8692)<br/>· spawns claude, waits for exit"]
         Claude["claude.exe (the agent)<br/>· runs composed CLAUDE.md<br/>· has Monitor tool built in"]
@@ -356,15 +356,13 @@ At-least-once delivery: cursor advances only after a successful ack. Crashed age
 
 Events are filtered to what each role cares about. Today's per-role filter (loop mode):
 
-_Concrete-install snapshot (current repo has `pm`, `qa`, `skill`, `dm`)._
-
 ```mermaid
 graph TD
     ALL["All Events in EventStream"]
-    ALL --> PM["pm (categorical: pm) sees:<br/>pr-merged, compose-completed<br/>verification-failed, verification-passed<br/>cycle-start, cycle-end<br/>status-transition, agent-health"]
-    ALL --> QA["qa (categorical: verifier) sees:<br/>pr-merged, compose-completed<br/>status-transition, cycle-end<br/>verification-failed"]
-    ALL --> SKILL["skill (categorical: worker) sees:<br/>pr-merged, compose-completed<br/>verification-failed, status-transition"]
-    ALL --> DM["dm (categorical: dm) sees:<br/>status-transition, pr-merged<br/>verification-passed, compose-completed"]
+    ALL --> PM["pm sees:<br/>pr-merged, compose-completed<br/>verification-failed, verification-passed<br/>cycle-start, cycle-end<br/>status-transition, agent-health"]
+    ALL --> QA["qa sees:<br/>pr-merged, compose-completed<br/>status-transition, cycle-end<br/>verification-failed"]
+    ALL --> WORKER["worker sees:<br/>pr-merged, compose-completed<br/>verification-failed, status-transition"]
+    ALL --> DM["dm sees:<br/>status-transition, pr-merged<br/>verification-passed, compose-completed"]
 ```
 
 Filtering is client-side in `cycle_pre.py` via `_ROLE_EVENT_TYPES` dict. Roles not in the dict receive all events.
@@ -401,7 +399,7 @@ default state: active (10s between polls)
   hard ceiling: 60s (safety-net usefulness degrades beyond this)
 ```
 
-Two-tier backoff: 10s → 30s → 60s. A quiet period stabilizes at 60s after ≥6 consecutive empty polls (≈3 minutes of inactivity).
+Two-tier backoff: 10s → 30s → 60s. A quiet period stabilizes at 60s after ≥6 consecutive empty polls (≈2 minutes of inactivity).
 
 **Latency floors:**
 
@@ -451,7 +449,7 @@ flowchart TD
 Today (loop mode) only two patterns qualify:
 
 1. **PR merge detected** (PM) — surfaces merge context.
-2. **Rework needed** (worker) — surfaces the verifier's rejection reason.
+2. **Rework needed** (worker) — surfaces the qa's rejection reason.
 
 Everything else lands in `recent_events` for the creative phase to interpret.
 
@@ -597,7 +595,7 @@ default state: active (5s between polls)
   hard ceiling: 60s
 ```
 
-Two-tier backoff: 5s → 30s → 60s. A drained queue stabilizes at 60s after ≥6 consecutive empty polls (≈2.5 minutes idle).
+Two-tier backoff: 5s → 30s → 60s. A drained queue stabilizes at 60s after ≥6 consecutive empty polls (≈1.75 minutes idle).
 
 Nudge format is literal `NUDGE\n` with no payload — the agent always does `GET /events/for/{role}?since=cursor` to find out what's new. False positives (a `NUDGE` arriving when no relevant events exist) are harmless because the GET returns `[]`.
 
@@ -744,8 +742,8 @@ sequenceDiagram
     participant TR as tracker.py
     participant F as Forge<br/>(GitHub)
     participant H as Harness
-    participant VEP as Verifier event_poll
-    participant VC as Verifier claude
+    participant VEP as QA event_poll
+    participant VC as QA claude
 
     Note over W: Implementation complete<br/>locally
     W->>F: push branch, open PR #9943
@@ -754,25 +752,25 @@ sequenceDiagram
     TR->>F: gh issue edit (label change)
     F-->>TR: 200 OK
     Note over F: Forge label updated<br/>(source of truth)
-    TR->>H: POST /work/assign<br/>{issue_number:9926, target_role:verifier,<br/>event_context:"verification-needed",<br/>payload:{pr_number:9943}}
-    H->>H: validate worker→verifier<br/>per L2 permission table
-    H->>H: emit assigned-to(target_role=verifier,...)<br/>append to deque
+    TR->>H: POST /work/assign<br/>{issue_number:9926, target_role:qa,<br/>event_context:"verification-needed",<br/>payload:{pr_number:9943}}
+    H->>H: validate worker→qa<br/>per L2 permission table
+    H->>H: emit assigned-to(target_role=qa,...)<br/>append to deque
     H-->>TR: 200 OK + event_id
     TR-->>W: transition successful<br/>(+ assignment event_id)
 
-    Note over H,VEP: Verifier's event_poll<br/>polling loop continues
+    Note over H,VEP: QA's event_poll<br/>polling loop continues
 
-    VEP->>H: GET /events/for/verifier?since=cursor
+    VEP->>H: GET /events/for/qa?since=cursor
     H-->>VEP: [assigned-to event]
     VEP->>VC: write nudge line to stdout
     Note over VC: Monitor sees stdin line<br/>wakes Claude session
 
-    VC->>H: GET /events/for/verifier?since=cursor
+    VC->>H: GET /events/for/qa?since=cursor
     H-->>VC: [assigned-to event]
-    VC->>VC: care filter:<br/>target_role==verifier? YES
+    VC->>VC: care filter:<br/>target_role==qa? YES
     VC->>VC: run pre-cycle + work + post-cycle
-    VC->>H: POST /events {type:ack-cursor, event_id, role:verifier}
-    H->>H: advance verifier cursor past event_id
+    VC->>H: POST /events {type:ack-cursor, event_id, role:qa}
+    H->>H: advance qa cursor past event_id
     H-->>VC: 200 OK
 ```
 
@@ -782,9 +780,9 @@ In practice agents never call `/work/assign` directly for transition-driven hand
 
 | Transition (from → to) | Implied `target_role` | event_context |
 |---|---|---|
-| `in-progress → pending-test` | `verifier` | `"verification-needed"` |
+| `in-progress → pending-test` | `qa` | `"verification-needed"` |
 | `pending-test → pending-ship` | `dm` | `"delivery-needed"` |
-| `pending-test → in-progress` | assigned role from `role:*` label; if none, route to `pm` with `event_context="unowned-rejection"` | `"verifier-rejected"` |
+| `pending-test → in-progress` | assigned role from `role:*` label; if none, route to `pm` with `event_context="unowned-rejection"` | `"qa-rejected"` |
 | `pending-ship → in-progress` | assigned role from `role:*` label; if none, route to `pm` with `event_context="unowned-rejection"` | `"merge-conflict"` |
 | `pending → planning` | `pm` | `"planning-needed"` |
 | `planning → planned` | (no assign — self-routing) | — |
@@ -823,7 +821,7 @@ sequenceDiagram
     participant F as Forge
     participant EAD as EAD (in harness)
     participant H as Harness deque
-    participant V as Verifier agent tree
+    participant V as QA agent tree
 
     Note over W: Forge state changes via<br/>some path OTHER than tracker.py
     W->>F: change forge state directly
@@ -831,8 +829,8 @@ sequenceDiagram
     Note over EAD: EAD's forge polling loop ticks
     EAD->>F: gh api repos/.../issues?since=...
     F-->>EAD: status:pending-test added to #9926
-    EAD->>EAD: map: "status:pending-test"<br/>→ target_role=verifier
-    EAD->>H: append assigned-to(target_role=verifier,...)
+    EAD->>EAD: map: "status:pending-test"<br/>→ target_role=qa
+    EAD->>H: append assigned-to(target_role=qa,...)
     EAD->>EAD: persist last-seen forge id
 
     Note over V: Same delivery as §7.3<br/>(event_poll → nudge → Monitor → walk)
@@ -877,17 +875,17 @@ The improvement subloop fires when the agent's queue is observably drained — `
 
 ```mermaid
 flowchart TD
-    Start([nudge processed, ack-cursor emitted])
-    QEmpty{GET returns empty?<br/>(no events past cursor)}
-    Throttle{cooldown elapsed?<br/>(time-based throttle)}
-    Subloop[run improvement subloop:<br/>one bounded task]
-    Idle[idle wait for next nudge]
+    Start(["nudge processed, ack-cursor emitted"])
+    QEmpty{"GET returns empty?<br/>no events past cursor"}
+    Throttle{"cooldown elapsed?<br/>time-based throttle"}
+    Subloop["run improvement subloop:<br/>one bounded task"]
+    Idle["idle wait for next nudge"]
 
     Start --> QEmpty
-    QEmpty -->|no - more events past cursor| Idle
-    QEmpty -->|yes - drained| Throttle
-    Throttle -->|recent subloop ran<br/>within throttle window| Idle
-    Throttle -->|cooldown elapsed| Subloop
+    QEmpty -->|"no — more events past cursor"| Idle
+    QEmpty -->|"yes — drained"| Throttle
+    Throttle -->|"recent subloop ran<br/>within throttle window"| Idle
+    Throttle -->|"cooldown elapsed"| Subloop
     Subloop --> Idle
 ```
 
@@ -895,7 +893,7 @@ flowchart TD
 
 **What the subloop does** (role-specific, one bounded task per fire):
 - **pm**: pipeline sentinel + improvement scan (process gaps, stalled items, doc drift)
-- **verifier**: TEST-PLAN backlog catch-up
+- **qa**: TEST-PLAN backlog catch-up
 - **worker**: doc-scan or test-coverage scan on owned modules
 - **dm**: doc realignment + CHANGELOG hygiene + version-bump readiness
 
@@ -905,38 +903,40 @@ Subloop output may emit a new `assigned-to` (e.g., pm-subloop files a bug and ro
 
 ## 8. Mode selection & migration
 
-### 8.1 Per-role config
+### 8.1 Global config
 
-`config.md` has an `event-driven:` field, settable globally and per-role:
+`config.md` has one `event-driven:` field that controls mode for the entire install:
 
 ```
-event-driven: no            # global default
-event-driven-pm: yes        # per-role override (PM only)
+event-driven: no    # global — applies to all agents
 ```
+
+There is no per-role override — mixed modes are not *configurable*, only the global flag controls intent. Note that runtime *degraded fallback* can transiently produce a mixed-mode state (an agent whose harness probe fails at boot falls back to loop mode while peers in the same install whose probes succeed enter event mode; see §8.3). That divergence is per-agent and temporary; it resolves as soon as the failed agent is restarted after the harness recovers. The configured intent is always single-mode.
 
 **How mode selection actually works** (compose-time + runtime, both layers):
 
-- **Compose-time** (#8697): `compose.py` reads `event-driven:` to pick which sub-skill manifest to inline into the composed CLAUDE.md — `includes.yml` for loop mode, `includes-events.yml` for event mode. The non-selected manifest is NOT included; this is a hard compile-time decision.
+- **Compose-time** (#8697): `compose.py` reads `event-driven:` to pick which sub-skill manifest to inline into each composed CLAUDE.md — `includes.yml` for loop mode, `includes-events.yml` for event mode. The non-selected manifest is NOT included; this is a hard compile-time decision.
 - **Runtime** (#9588): the *mode-specific procedural fragments* (`roles/<role>/ralph-loop-overview.md` for loop mode; the six `common-events/*.md` fragments for event mode) are NOT inlined at compose time. They're Read at boot by `common/boot-bootstrap` based on the harness probe + config check.
 
-So the composed CLAUDE.md is mode-uniform on disk (no mode-specific fragments inlined), but the agent's running behavior is mode-specific (loaded at boot). This split is what lets §8.2 say "no recompose is needed for a mode flip" — the procedural contract loads at runtime, even though the manifest choice is compose-time.
+So the composed CLAUDE.md is mode-uniform on disk (no mode-specific fragments inlined), but the agent's running behavior is mode-specific (loaded at boot). This split is what lets §8.2 say "no recompose is strictly needed for a mode flip" — the procedural contract loads at runtime, even though the manifest choice is compose-time.
 
-### 8.2 Flipping a role's mode
+### 8.2 Flipping the install's mode
 
-A mode flip takes effect on next agent restart. No recompose is strictly needed because boot-bootstrap reads the mode-specific procedural fragments at runtime (#9588). However, if you change `event-driven:` from `no` → `yes` (or vice versa) you should also recompose so the manifest match is consistent — otherwise the composed CLAUDE.md still references the old-mode sub-skill set, which can produce surprises. Steps:
+A mode flip is install-wide and takes effect on the next restart of each agent. No recompose is strictly needed because boot-bootstrap reads the mode-specific procedural fragments at runtime (#9588). However, when you flip `event-driven:` from `no` → `yes` (or vice versa) you should also recompose so the manifest match is consistent — otherwise the composed CLAUDE.md still references the old-mode sub-skill set, which can produce surprises. Steps:
 
-1. Edit `config.md` `event-driven-<role>:` value.
-2. Restart the affected role agent (`python references/scripts/squidsquad_cli.py restart <role>` or similar).
-3. New session boots into the new mode.
+1. Edit `config.md` `event-driven:` value.
+2. Run `compose.py deploy-all` to refresh manifest selection across all composed CLAUDE.md outputs.
+3. Restart every agent (`python references/scripts/squidsquad_cli.py restart-all` or equivalent).
+4. New sessions boot into the new mode.
 
 ### 8.3 Boot decision tree
 
 ```mermaid
 flowchart TD
     Start([agent process starts])
-    ReadConfig["read config.md<br/>event-driven? (global + per-role)"]
+    ReadConfig["read config.md<br/>event-driven? (global)"]
+    ConfigGate{event-driven<br/>= yes?}
     Probe{HTTP probe<br/>harness :7373 reachable?}
-    ConfigGate{event-driven<br/>= yes for role?}
     LoadEvent[load event-mode<br/>boot-bootstrap branch]
     LoadPoll["load polling-mode<br/>boot-bootstrap branch<br/>schedule /loop 30m"]
     EmitBoot["emit booted to harness"]
@@ -945,23 +945,23 @@ flowchart TD
     PollLoop["run cycle now,<br/>then sleep 30 min"]
     OpRestart["operator restart required<br/>to re-enter event mode"]
 
-    Start --> ReadConfig --> Probe
-    Probe -->|"yes"| ConfigGate
-    ConfigGate -->|"yes"| LoadEvent --> EmitBoot --> ReadCursor --> Idle
+    Start --> ReadConfig --> ConfigGate
+    ConfigGate -->|"yes"| Probe
     ConfigGate -->|"no"| LoadPoll
+    Probe -->|"yes"| LoadEvent --> EmitBoot --> ReadCursor --> Idle
     Probe -->|"no (fallback)"| LoadPoll
     LoadPoll --> PollLoop
     PollLoop -.->|"30 min"| PollLoop
     PollLoop -.->|"harness recovers"| OpRestart -.-> Start
 ```
 
-Two independent gates must both be `yes` for event mode: the role's `event-driven:` config AND harness reachability. If `event-driven: no` (per-role or global default), the agent boots into loop mode regardless of harness state. If `event-driven: yes` but harness is unreachable, the agent falls back to loop mode (per §8.4). Only when both align does the agent enter event mode.
+Two gates must both be `yes` for event mode: the install's global `event-driven:` config AND harness reachability. If `event-driven: no`, every agent boots into loop mode regardless of harness state. If `event-driven: yes` but the harness is unreachable at boot, the affected agent falls back to loop mode (per §8.4) while other agents in the same install may still enter event mode if their harness probe succeeds — the config is global but each agent's probe is independent. Only when both align does the agent enter event mode.
 
 Mode is locked at boot — no mid-session switch — to keep the agent's contract predictable. The operator is the only mode-flipping authority.
 
 ### 8.4 Polling fallback when the harness is down
 
-When the harness is unreachable at boot (probe fails per `common/boot-bootstrap` Step 2), the agent falls back to loop mode (`/loop 30m`) regardless of its `event-driven:` config. Once the harness recovers, the operator restarts the agent to re-enter event mode. Mid-session mode-flipping is explicitly not supported ("loaded mode is sticky" — `common/boot-bootstrap`).
+When `event-driven: yes` is configured but the harness is unreachable at boot (probe fails per `common/boot-bootstrap` Step 2), the agent falls back to loop mode (`/loop 30m`). When `event-driven: no` is configured, the agent boots into loop mode unconditionally — this is the configured path, not a fallback. Once the harness recovers, the operator restarts the affected agent to re-enter event mode. Mid-session mode-flipping is explicitly not supported ("loaded mode is sticky" — `common/boot-bootstrap`).
 
 ### 8.5 Migration from loop → event mode (v2 closure plan)
 
@@ -969,7 +969,7 @@ The migration ships as 6 grouped PRs (originally in `archive/EVENT-ARCHITECTURE.
 
 | # | Group | What it does | Risk |
 |---|---|---|---|
-| 1 | **A — Lifecycle plumbing** | `boot_agent` spawns thin_launcher + event_poll; health poller watches both; cold start order; wizard creates per-role mode flag | medium |
+| 1 | **A — Lifecycle plumbing** | `boot_agent` spawns thin_launcher + event_poll; health poller watches both; cold start order; wizard writes the global `event-driven:` flag | medium |
 | 2 | **C — EAD + restart safety** | Last-seen-id recovery, in-flight cleanup, harness restart catch-up | low |
 | 3 | **D — L2-derived permissions** | Each role's `responsibility.md` declares `## Bus contract`; harness builds permission table at boot | low |
 | 4 | **B — Cursor + delivery wire** | Nudge format = literal `NUDGE\n`; forward-only ack; `HTTP 410 Gone` for cursor-evicted | low |
@@ -1052,3 +1052,8 @@ PM agents recognize this set as their care-filter; new values added in future re
 - **2026-05-23 (rev 3) — review-loop pass 2.** Second DeepSeek pass surfaced 6 new findings (3 MED, 3 LOW) — mostly fallout from incomplete updates in rev 2. Applied: glossary "token-throttled" → "time-throttled" (was inconsistent with §7.6); cursor-model sequence diagram replaced `working-state.md` participant with `.event-state.json` to match the migrated architecture; routing table now has fallbacks for `pending-ship → in-progress` (unowned-rejection) and `planned → approved` (unowned-approval); event_poll cadence specifies `3 consecutive empty polls` (matching EAD); `assigned-to` catalog payload reconciled with wire diagrams (`title` moved under `payload`); subloop trigger reframed as "GET returns empty" (the observable check) instead of "cursor at deque head" (not directly observable). DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-2.md`.
 - **2026-05-23 (rev 4) — review-loop pass 3.** Third DeepSeek pass surfaced 2 new findings (1 MED, 1 LOW). MED fix: EAD and event_poll cadence blocks now describe a two-tier backoff (10s → 30s → 60s and 5s → 30s → 60s) — the prior single-step backoff couldn't actually reach the documented 60s ceiling. LOW fix: `ack_only=true` for the probe `event_context` is now correctly notated as a `payload` extension, not a top-level `assigned-to` field. DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-3.md`.
 - **2026-05-23 (rev 5) — review-loop pass 4.** Fourth DeepSeek pass returned 1 LOW finding only and explicitly assessed the doc as "converged well; no HIGH or MED issues remain." Applied: §8.5 PM-inbox `event_context` disambiguation rewritten from an incomplete-and-partially-fictional list (`route-handoff` wasn't defined anywhere) to an exhaustive enumeration sourced from the routing table, catalog-trim translators, EAD, and direct `/work/assign` callers. DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-4.md`.
+- **2026-05-23 (rev 6) — terminology unification + global-only mode flag.** Two related cleanups.
+  - **Terminology**: removed all current-repo concrete-instance references (no `skill`, no `dev`, no "concrete-install snapshot" framing). The doc now uses only the four L2 categorical role names: `pm`, `qa`, `worker`, `dm`. Terminology table simplified to 4 rows with no concrete-instance column; role-filtering diagram drops the per-install qualifier and uses categorical names directly; previous `verifier` → `qa` everywhere (sequence diagrams, routing table, wire-format payloads, `event_context` `"verifier-rejected"` → `"qa-rejected"`); stack-specific specialization is noted as `worker`/`qa` variants rather than as alternative role names.
+  - **Mode flag**: dropped per-role event-driven config (`event-driven-pm: yes` etc.). `event-driven:` is now a single global flag for the install — the whole squad runs in loop mode together or event-driven mode together. §8.1 rewritten; §8.2 mode-flip steps now install-wide; §8.3 boot decision tree simplified to one ConfigGate before the harness probe. Rationale: keeps the harness contract uniform (load-bearing for everyone, or observational for everyone), avoids the cross-role coordination puzzle of mixed modes.
+- **2026-05-23 (rev 7) — post-rev-6 DS verification + §7.6 diagram fix.** DS round-7 verification found 2 actionable findings (1 MED, 1 LOW); both applied: §8.1 clarified that mixed modes are not *configurable* but degraded fallback can produce a transient mixed-mode state per-agent (the previous wording falsely implied install-wide uniformity even under fallback); §8.4 reworded to distinguish the configured `event-driven: no` path (loop mode by design) from the `event-driven: yes` + probe-fail fallback path (the prior "regardless of config" wording collapsed the two). Also: §7.6 subloop diagram nodes now use quoted-label form ({"…"}, ["…"]) so unquoted parentheses can't break Mermaid rendering. The "sub-skill" terminology is retained as the canonical compose-fragment term and is distinct from the "skill" agent-role term that was removed in rev 6 (DS flagged as info, accepted as intentional). DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-7.md`.
+- **2026-05-23 (rev 8) — final convergence + cadence-math fixes.** DS round-8 confirmed all R7 fixes correct and returned 2 LOW math errors: EAD cadence "≈3 minutes" → "≈2 minutes" (correct: 6 polls × 10/20/30/60/90/120s = 120s = 2 min); event_poll cadence "≈2.5 minutes idle" → "≈1.75 minutes idle" (correct: 6 polls × 5/10/15/45/75/105s = 105s ≈ 1.75 min). Both fixed. The doc is now mathematically and architecturally converged. DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-8.md`.
