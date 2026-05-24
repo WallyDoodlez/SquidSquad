@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 19:09
+
+- **Files scanned**: references/scripts/event_validator.py (re-check; previously scanned 2026-05-20 with no findings — confirmed still applies, no re-read this cycle)
+- **Findings**: none. Cycle skipped fresh code reads to preserve context (37%, trending up post-1371). Recording a no-op rotation entry only.
+- **Items rejected by human**: none yet
+- **Notes**: deliberate amortization cycle — see cycle 1372 notes on context post-1371 cross-role read. State: paused #9965, 4 open scan findings, no PM/human triage activity.
+
 ## Scan — 2026-05-24 18:39
 
 - **Files scanned**: references/scripts/migrate_state_branch.py (re-check; already had #9939 filed cycle 2026-05-22 about migrate() discarding state_bus.commit_and_push() return value — confirmed still present, finding still valid, no follow-up needed)
