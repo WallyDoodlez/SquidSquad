@@ -149,6 +149,8 @@ When examining live `claude.exe` processes, three categories matter:
 
 ## L6 — Memory Layer
 
+> **Deep-dive**: [`VAULT-ARCH.md`](VAULT-ARCH.md) — full vault architecture (PARAG model, entity types, frontmatter, sub-skills, scripts, cycle integration, failure modes, current inventory).
+
 **Purpose:** Institutional knowledge that persists across sessions and version bumps. What the squad has learned about your project, your preferences, your decisions, and your patterns.
 
 **Key files:**

@@ -97,7 +97,7 @@ Three commitments:
 | `.squidsquad/config.md` | Project config — iter interval, ship threshold, model routing, tracker backend, git workflow |
 | `.squidsquad/<role>/` | Per-role agent directory (CLAUDE.md composed, SOUL.md, working-state.md skeleton, planning/, iterations/) — one per role in the chosen team preset: PM, each worker, each verifier, DM |
 | `.squidsquad/project/` | L4 project-local seeds (copied from `references/sub-skills/project/` and enriched with conversational answers) |
-| `.squidsquad/vault/` | Shared memory layer skeleton (BRIEFING.md + the five vault dirs: projects/, areas/, resources/, archives/, galaxy/) |
+| `.squidsquad/vault/` | Shared memory layer skeleton (BRIEFING.md + the five vault dirs: projects/, areas/, resources/, archives/, galaxy/). Vault architecture documented in [`VAULT-ARCH.md`](VAULT-ARCH.md). |
 | `.squidsquad/.local-config` | Per-clone role→path mapping for `start.sh` to sync clones |
 | `.squidsquad/.harness-port`, `.harness-state.json`, `.event-state.json` (at runtime) | Harness-owned runtime files — written when the harness boots, not by the installer. Listed here for completeness; their schemas are documented in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §4–§5. |
 | `~/.squidsquad/secrets` | API keys for external models (restricted permissions, never committed to repo) |

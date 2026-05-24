@@ -125,6 +125,8 @@ Reusable across multiple roles.
 
 ### Vault (institutional memory)
 
+> Vault architecture (PARAG model, entity types, cycle integration, failure modes): [`VAULT-ARCH.md`](VAULT-ARCH.md).
+
 | Sub-skill | One-liner | Used by |
 |---|---|---|
 | `vault-remember` | End-of-cycle reflection; writes to vault when something is worth remembering | PM, dev |

@@ -377,7 +377,7 @@ See §6 for step ID grammar, reference grammar, and the relationship to sub-skil
 - Wikilink format reminder, entity model, confidence levels.
 - L4 may customize vault note conventions for this project.
 
-This section is intentionally short — most vault detail belongs in `references/sub-skills/common/vault-protocol.md` linked from inside step content where vault commands are actually used.
+This section is intentionally short — most vault detail belongs in `references/sub-skills/common/vault-protocol.md` (per-cycle usage contract) and [`VAULT-ARCH.md`](VAULT-ARCH.md) (vault architecture: PARAG model, entity types, sub-skills, scripts, cycle integration).
 
 ### 5.6 Worked example: pm composed CLAUDE.md TOC (both modes)
 
@@ -953,7 +953,7 @@ This collapses today's two-system memory architecture (per-user memory + L4) int
 - **G1** — ✅ CLOSED (v2). Step ID grammar formalized in §6.1 (BNF + character set + nesting depth + global uniqueness rule).
 - **G2** — Compose's role-filter (§4.1 step 2) is sketched but not fully specified: what does the `roles:` frontmatter list support beyond literal role names? (e.g. wildcards like `*`, role classes like `worker:*`.) For v2, only literal role names are supported; wildcards/classes are deferred.
 - **G3** — Boot/cycle/shutdown sub-slot boundaries inside `instructions` are still informal. v2 working definition: `boot` = one-time session-start work; `cycle` = repeated work (per `/loop` tick in polling mode, per nudge in event mode — see [AGENT-RUNTIME.md](AGENT-RUNTIME.md)); `shutdown` = clean-stop work. Formal acceptance tests for sub-slot membership are a follow-up.
-- **G4** — Vault slot is the most underspecified — §5.5 is intentionally short. A future revision should expand it with the wikilink grammar, entity types, confidence levels, and the relationship to `references/sub-skills/common/vault-protocol.md`.
+- **G4** — ✅ PARTIALLY CLOSED (2026-05-24). [`VAULT-ARCH.md`](VAULT-ARCH.md) now covers entity types (§4), wikilink grammar (§4.5), confidence levels (§4.4), and the relationship to `vault-protocol.md` (§7). What remains open here: defining the *slot contract* (what content fragments are valid under `slot: vault` in L1-L4 sources, beyond the short descriptor pattern in §5.5).
 - **G5** — L4 file naming convention beyond `<slot>-<desc>.md` needs collision rules. Open: what happens when two L4 files share the same `<slot>-<desc>` after `<desc>` normalization? v2 proposal: file names must be globally unique within `.squidsquad/project/`; compose aborts on collision.
 - **G6** — ✅ CLOSED (v2). Subagent usage rules now in §6.6 (default-model + per-role overrides + spawn-vs-inline + prompt hygiene + parallelism + trust-but-verify). L3 `replace` overlays on the L1 default cover the per-role Sonnet defaults for `worker`/`dm`.
 - **G7** — Sub-skill reference resolution semantics for L4. Open: can L4 *insert* a new step that references a sub-skill not yet referenced anywhere in L1-L3? Yes per §4.5 (catalog is the source of truth, not the L1-L3 reference set), but the L4-write decision tree in §7.2 should explicitly cover the "introduce a new sub-skill reference" case.

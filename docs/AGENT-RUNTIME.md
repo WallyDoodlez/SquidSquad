@@ -504,7 +504,7 @@ Each agent typically runs in its own git clone. The harness writes its port to `
 | Improvement subloop throttle | `.squidsquad/<role>/.subloop-last-run` | agent | Last-fire timestamp; gates next eligibility (§7.6) |
 | Last-seen forge event | EAD-internal persistence | harness | Don't re-emit assigned-to on restart |
 | Work state | GitHub Issues (forge) | forge | Source of truth for status, comments, PRs |
-| Decisions / institutional memory | `.squidsquad/vault/` | shared | Long-lived rationale |
+| Decisions / institutional memory | `.squidsquad/vault/` | shared | Long-lived rationale — see [`VAULT-ARCH.md`](VAULT-ARCH.md) for architecture (PARAG model, sub-skills, scripts, cycle integration) |
 
 **Invariant**: agents do not write to harness-owned files. Harness does not write to agent-owned files.
 
