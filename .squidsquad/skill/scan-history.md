@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 13:11
+
+- **Files scanned**: references/scripts/soul_adaptation.py (full 299 lines) → triggered codebase-wide `.write_text(` grep across references/scripts/ to audit the #10007 non-atomic-write defect family
+- **Findings**: no new issue filed — instead, posted an audit comment on #10007 listing 9 confirmed non-atomic call-sites across 6 files (vault_remember L55+L151, cycle.py L167, cycle_post.py L769+L584, soul_adaptation.py L147+L226, config.py L285, diagnostics.py L97) targeting concurrently-read state files (working-state.md, SOUL.md, role-adaptations.md, config.md, SKILL.md, diagnostic.jsonl). Strengthens the original recommendation: extract `shared_fs.atomic_write_text` and route all 9 sites through it in one consolidated PR rather than per-site fixes.
+- **Items rejected by human**: none yet
+- **Notes**: scanned soul_adaptation.py first because it's a fresh target with high-impact writers; finding the same L147+L226 pattern triggered the systemic-vs-local question — answered by the grep audit. Sites already using tmp+replace (correct): config.py:406, cycle.py:91, cycle_post.py:377, compose.py:1297/1348, event_poll.py:125, harness.py:430/809/1128/1149, run_comprehension_test.py:85, shared_fs.py:43/52, thin_launcher.py:127, add_role.py:149. The split inside config.py itself (L285 wrong, L406 right) is the smoking gun that the pattern is known but not consistently applied. Deliberate choice not to file a duplicate-feeling #10008 for soul_adaptation.py since a comprehensive audit comment on #10007 produces a more actionable fix than splitting it across multiple issues. start_team.py (137 lines) considered as a scan target but it's a thin delegate over squidsquad_cli — clean, no findings warranted.
+
 ## Scan — 2026-05-24 12:40
 
 - **Files scanned**: references/scripts/vault_remember.py (full 418 lines; focus on `_write_working_state_field` + `_upsert_vault_writes` write paths, frontmatter parser robustness, path-traversal defenses)
