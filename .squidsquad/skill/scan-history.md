@@ -1,5 +1,13 @@
 # Scan History
 
+## Scan — 2026-05-24 13:41
+
+- **Files scanned**: references/scripts/repo_scan.py (full 409 lines; focus on `_check_python_deps` substring match + `_count_extensions` os.walk SKIP_DIRS coverage + `scan()` save path)
+- **Findings**: none filed. `_check_python_deps` at L228-242 uses bare substring match (`if dep.lower() in text`) against pyproject.toml/requirements.txt — false-positive risk (e.g. `flask-cors` matches `flask`, `[project] name = "fastapi-app"` matches `fastapi`). Setup-time only (wizard.py invokes via `scan()`), no steady-state callers, low blast radius — not worth a fresh ticket against the backlog. Also: `save_path.write_text(output + "\n")` at L402 is technically non-atomic but `.squidsquad/.repo-scan.json` is written once per setup with no concurrent readers, so it's not in #10007's audit scope.
+- **Vault writes**: 1 — `learning-scan-comment-vs-file-duplicate.md` (captures the cycle-1361 audit-vs-file methodology so future agents can find it; links to [[learning-strip-vs-wire-audit-findings]] for the orthogonal strip-vs-wire dimension).
+- **Items rejected by human**: none yet
+- **Notes**: SKIP_DIRS omits `.idea/`, `.vscode/`, `.parcel-cache/`, `.svelte-kit/` — minor. LANGUAGE_EXTENSIONS misses `.mjs`, `.cjs`, `.pyi`, `.pyx` — minor. `os.walk` dir-modify pattern at L192 is correct. Deliberate decision to bias the cycle toward vault capture (one learning note) over filing another low-impact issue, given the existing PM-triage backlog of 4 open scan findings.
+
 ## Scan — 2026-05-24 13:11
 
 - **Files scanned**: references/scripts/soul_adaptation.py (full 299 lines) → triggered codebase-wide `.write_text(` grep across references/scripts/ to audit the #10007 non-atomic-write defect family
