@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 12:11
+
+- **Files scanned**: references/scripts/squidsquad_cli.py (full 446 lines; focus on cross-platform `_spawn_harness` L307-390, aggregation exit codes in `cmd_start`/`cmd_stop`/`cmd_status`, `_harness_alive` strictness)
+- **Findings**: #10006 (low — `cmd_stop` returns exit 1 when `results: []` because `bool([]) and all(...)` short-circuits to False; inconsistent with `cmd_status` which treats no-agents as success; teardown scripts chaining `squidsquad stop && next` see false failure when squad was already idle)
+- **Items rejected by human**: none yet
+- **Notes**: `_spawn_harness` already routes through `sys.platform` per #9903 (L315-320). `HarnessAPIError` documented at L90-97 for #4792 §5.7 aggregation. The Windows `cmd /c start squidsquad-harness python harness.py` fallback at L338-344 has an unquoted title that *might* be interpreted by cmd.exe's `start` as the command rather than the title — but the wt.exe path covers Win10+ defaults and the fallback is only exercised on stripped systems; not filing without a repro. `_harness_alive` strict-200 check (L62-69) could trigger duplicate-harness spawn if a live harness returns 5xx; theoretical, didn't file. `localhost` vs `127.0.0.1` inconsistency between this file and cycle_post's `_discover_harness_port`-shaped callers — cosmetic, didn't file. `_api_call`'s POST `req.data = b\"\"` posture is correct for the FastAPI harness.
+
 ## Scan — 2026-05-24 11:41
 
 - **Files scanned**: references/scripts/diagnostics.py (full 247 lines; focus on `generate_report` L140-190 vs `_sanitize_config` L101-119 redaction asymmetry, plus `rotate()` atomic-write posture)
