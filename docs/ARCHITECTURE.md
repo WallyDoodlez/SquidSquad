@@ -57,8 +57,8 @@ The **Behavior Layer** (L3) is the focal layer — it's where agents reason, dec
 - `references/scripts/harness.py` — FastAPI lifecycle manager, owns agent spawning, health monitoring, crash recovery, PR merging, and auto-recomposition of agent templates
 - `references/scripts/thin_launcher.py` — lightweight agent launcher, spawned by harness into terminal windows
 - `/loop` command — schedules recurring cycle execution
-- `.harness-state.json` — persistent agent state for crash recovery
-- `current-state` — status bar state file, written atomically
+- `.squidsquad/.harness-state.json` — persistent agent state for crash recovery (single file per repo)
+- `.squidsquad/[role]/current-state` — per-role status bar state file, written atomically
 
 **What changes here:** Cycle cadence, restart logic, boot sequence, harness API. The orchestration layer knows about timing but not about what work gets done.
 
