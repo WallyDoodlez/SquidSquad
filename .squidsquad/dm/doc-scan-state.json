@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "CONTRIBUTING.md",
+  "last_scanned": "CHANGELOG.md",
   "rotation_count": 56,
   "scan_history": [
     {
@@ -1729,6 +1729,12 @@
       "date": "2026-05-23",
       "findings": 0,
       "note": "Rotation 57 eighth scan. Full read of all 53 lines. Verified: .github/ISSUE_TEMPLATE/{issue-report.yml,task-request.yml} both exist; requirements-dev.txt exists; tests/run_tests.py exists with valid static mode (run_tests.py:6); /squidsquad-issue command defined in SKILL.md sec 9 (canonical implementation); WallyDoodlez/SquidSquad URL consistent with SKILL.md:454+458; commit prefix pattern role: description matches project convention (verified in recent commits); references/scripts/ path valid; SKILL.md + docs/sub-skill-guide.md cross-links resolve. No drift since cycle-1054 pip-install step add."
+    },
+    {
+      "file": "CHANGELOG.md",
+      "date": "2026-05-23",
+      "findings": 0,
+      "note": "Rotation 57 ninth scan — closes R57. Read v0.43.0 through v0.38.0 sections (~150 lines). Verified: v0.43.0 dated 2026-05-22 matches git tag date; 10 Fixed items (#9905 #9902 #9903 #9904 #9901 #9927 #9930 #9932 #9934 #9937) intact (R55 cycle-1271 bump match). Spot-checked specific behavior claims and all hold: #9927 \"no live platform.system() calls remain in agent-path code\" verified — grep finds 7 occurrences in references/scripts/ but ALL are in comments/docstrings explaining why sys.platform is used instead; #9930 explicit gh-auth-git-credential override verified (state_bus.py:46-51 _GH_CREDENTIAL_OVERRIDE); #9772 ship-counter self-heal verified (cycle_pre.py:1104 _reconcile_ship_counter); #4792 legacy sentinel files .stop/.restart/.health deprecation verified (harness.py:1032 LEGACY_SENTINEL_FILES); #8704 /human/queue endpoint verified (harness.py:2046); #9873 ack-cursor + ack-stop dual-ack verified (harness.py:1671 ack-cursor handler). Post-v0.43.0 ships (#9939 #9941 #9926 #9925 #9946 #6274) correctly absent — they land in v0.44.0 at next bump (counter currently 6/10). R57 rotation summary: 9 docs covered (event-bus.md + README + 3 SKILL.md chunks + ARCHITECTURE + sub-skill-guide + CONTRIBUTING + CHANGELOG), 7 real fixes (event-bus.md pr-merge name, README Project-Adaptation→Context, SKILL.md sec-1-3 file-structure-tree ×2 (#9184 drift), SKILL.md sec-4-6 line-287 draft→ready actor+trigger, ARCHITECTURE.md L2 state-file paths, sub-skill-guide build-pipeline diagram). Lesson learned from R56→R57: when fixing an architectural cutover in one place, check whole doc for related diagrams/trees mirroring same drift — caught both file-structure-tree counterparts to R56 sec-3 prose fix. Productive rotation."
     }
   ],
   "doc_inventory": {
@@ -1753,7 +1759,7 @@
       "status": "current"
     },
     "CHANGELOG.md": {
-      "last_scanned": "2026-05-07",
+      "last_scanned": "2026-05-23",
       "status": "current"
     }
   },
