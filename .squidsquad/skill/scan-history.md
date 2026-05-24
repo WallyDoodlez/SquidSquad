@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 11:41
+
+- **Files scanned**: references/scripts/diagnostics.py (full 247 lines; focus on `generate_report` L140-190 vs `_sanitize_config` L101-119 redaction asymmetry, plus `rotate()` atomic-write posture)
+- **Findings**: #10005 (medium — `generate_report` ships diagnostic entries verbatim via `json.dumps(e)` while `_sanitize_config` redacts the same keyword set for config; `log_entry` accepts arbitrary `message` + `context` so entries can carry tokens/paths; `is_public_repo()` exists precisely because the report flow targets public trackers; same defect family as #8235 which fixed only the config path)
+- **Items rejected by human**: none yet
+- **Notes**: `rotate()` at L97 uses `LOG_FILE.write_text` (truncate-write) — violates the `Use atomic writes (...)` agent-foundation rule since other agents read this concurrently; worth a follow-up but lower urgency than the redaction leak. `log_entry` size-check-then-rotate at L60-64 is a TOCTOU race when two agents log near the cap; in practice diagnostic volume is low so the rotate-clobber risk is theoretical. `is_public_repo` defaults `isPrivate=True` (safe-private) on missing field — correct posture. The keyword redaction list at L113 now covers all the #8235 misses (url/clone/webhook/password present); no fresh keyword gaps observed.
+
 ## Scan — 2026-05-24 11:09
 
 - **Files scanned**: references/scripts/cycle_post.py (full 885 lines; focus on `_do_version_bump` L565-613 push-result handling + `_do_commit_push` skill split-commit path L466-538)
