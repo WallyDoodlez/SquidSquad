@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 14:40
+
+- **Files scanned**: references/scripts/event_bus.py (189 lines) + references/scripts/event_catalog.py (256 lines)
+- **Findings**: none filed. event_bus is clean — `_generate_id` width is 16-char post-#9415, `_resolve_squid_dir` honors `SQUIDSQUAD_DIR` env var per #9398, `emit()` is fire-and-forget with 500ms timeout (documented contract); same `urlopen-without-with` stylistic nit as event_bus_reader. event_catalog has a real documentation drift — `payload_fields` for cycle-start/cycle-end lists `cycle_number`, but `event_bus.emit()` puts `cycle_number` at the top-level of the event dict (L113), not in payload; cycle-end also emits an undocumented `summary` field (cycle_post.py L859). Drift is real but `payload_fields` has zero programmatic consumers (grep confirmed: only event_catalog.py itself references the key), so this is pure docs drift — not worth a ticket against the existing backlog.
+- **Items rejected by human**: none yet
+- **Notes**: continuing context-conservation rotation. Both files solid for steady-state observability. event_bus.py's docstring at L155 ("Tier 2: recognized... no error") matches the EMITTED/RECOGNIZED/unknown tier model; `is_valid` and `get_tier` are consistent. Worth noting for future: if a subscriber ever starts consuming `payload_fields` (e.g. a schema validator), the cycle-start/cycle-end entries will need fixing — file then with concrete proposed schema.
+
 ## Scan — 2026-05-24 14:10
 
 - **Files scanned**: references/scripts/monitor_smoke_poller.py (37 lines) + references/scripts/event_bus_reader.py (94 lines)
