@@ -1,0 +1,208 @@
+diff --git a/references/scripts/tracker.py b/references/scripts/tracker.py
+index 0b738679..52ce3ffd 100644
+--- a/references/scripts/tracker.py
++++ b/references/scripts/tracker.py
+@@ -876,6 +876,59 @@ def _check_unmerged_branch(number):
+     return None
+ 
+ 
++def _check_merged_pr(number):
++    """Check if there's a merged PR for this issue number on GitHub (#9999).
++
++    Squash-merges (the project's default merge strategy) produce a new
++    commit on the working branch with a different SHA from the feature
++    branch's tip — so ``git rev-list main..<branch>`` correctly reports
++    the branch tip as "not reachable from main" even after a successful
++    merge. The ship-gate's ancestry check (`_check_unmerged_branch`)
++    treats this as evidence the branch is unmerged, when it's actually
++    evidence of a successful squash.
++
++    This function provides an authoritative second opinion: if a MERGED
++    PR exists on GitHub for the branch, the code IS on the working
++    branch (as a squash commit) regardless of local git ancestry, and
++    the ship transition should be allowed.
++
++    Returns (pr_number, pr_url) if a merged PR is found, None otherwise.
++    On any forge error, returns None — callers must treat None as "no
++    proof of merge" (the existing ancestry block remains in force).
++    """
++    adapter = _get_forge_adapter()
++    if adapter:
++        try:
++            prs = adapter.list_prs(state="merged", search=f"squidsquad/ {number}")
++            for pr in prs:
++                head = pr.get("headRefName", "")
++                parts = head.split("/")
++                if len(parts) >= 2 and parts[-1] == str(number):
++                    return pr.get("number"), pr.get("url", "")
++        except Exception:
++            pass
++        return None
++
++    # Default: gh CLI
++    result = _run_list(
++        ["gh", "pr", "list", "--state", "merged",
++         "--json", "number,headRefName,url", "--limit", "20"],
++        check=False,
++    )
++    if result.returncode != 0:
++        return None
++    try:
++        prs = json.loads(result.stdout) if result.stdout.strip() else []
++        for pr in prs:
++            head = pr.get("headRefName", "")
++            parts = head.split("/")
++            if len(parts) >= 2 and parts[-1] == str(number):
++                return pr["number"], pr.get("url", "")
++    except (json.JSONDecodeError, KeyError):
++        pass
++    return None
++
++
+ def _check_unmerged_pr(number):
+     """Check if there's an open PR for this issue number.
+ 
+@@ -1129,19 +1182,39 @@ def transition(number, from_status, to_status, role=None, force=False):
+ 
+         unmerged_branch = _check_unmerged_branch(number)
+         if unmerged_branch:
+-            branch_name, commit_count = unmerged_branch
+-            _log_diagnostic(
+-                "error",
+-                f"Blocked shipped transition on #{number}: branch {branch_name} "
+-                f"has {commit_count} unmerged commit(s)",
+-            )
+-            print(
+-                f"BLOCKED: Cannot ship #{number} — branch '{branch_name}' has "
+-                f"{commit_count} commit(s) not merged to the working branch. "
+-                f"Merge the branch or create a PR first.",
+-                file=sys.stderr,
+-            )
+-            sys.exit(1)
++            # #9999: squash-merges leave the feature branch tip with a
++            # different SHA from the squash commit on main, so the
++            # ancestry check falsely reports the branch as unmerged.
++            # Before blocking, query GitHub PR state — a MERGED PR is
++            # authoritative proof the code is on the working branch
++            # regardless of what local git ancestry reports. If the
++            # GitHub query fails (network / auth error → returns None),
++            # the ancestry block remains in force (safe default).
++            merged_pr = _check_merged_pr(number)
++            if merged_pr:
++                pr_num, pr_url = merged_pr
++                branch_name, commit_count = unmerged_branch
++                _log_diagnostic(
++                    "info",
++                    f"Ship gate on #{number}: branch '{branch_name}' tip has "
++                    f"{commit_count} commit(s) not reachable from working "
++                    f"branch, but PR #{pr_num} is MERGED on GitHub "
++                    f"(squash-merge) — allowing ship.",
++                )
++            else:
++                branch_name, commit_count = unmerged_branch
++                _log_diagnostic(
++                    "error",
++                    f"Blocked shipped transition on #{number}: branch {branch_name} "
++                    f"has {commit_count} unmerged commit(s)",
++                )
++                print(
++                    f"BLOCKED: Cannot ship #{number} — branch '{branch_name}' has "
++                    f"{commit_count} commit(s) not merged to the working branch. "
++                    f"Merge the branch or create a PR first.",
++                    file=sys.stderr,
++                )
++                sys.exit(1)
+ 
+     adapter = _get_forge_adapter()
+     if adapter:
+diff --git a/tests/test_tracker.py b/tests/test_tracker.py
+index 2b08feb7..36fd38a0 100644
+--- a/tests/test_tracker.py
++++ b/tests/test_tracker.py
+@@ -491,3 +491,86 @@ class TestLabelConsistency:
+ 
+ 
+ # _is_branch_workflow_enabled removed in #9478 — branch+PR is the only mode.
++
++
++# ---------------------------------------------------------------------------
++# #9999 regression: ship-gate squash-merge false-positive
++# ---------------------------------------------------------------------------
++
++class TestCheckMergedPr:
++    """`_check_merged_pr` is the GitHub-PR-state second opinion that
++    rescues the ship gate from false-positive ancestry blocks on
++    squash-merges (#9999)."""
++
++    def test_returns_pr_when_branch_matches_merged_pr(self, monkeypatch):
++        prs = [{
++            "number": 9997,
++            "headRefName": "squidsquad/task/9967",
++            "url": "https://github.com/example/repo/pull/9997",
++        }]
++        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
++        monkeypatch.setattr(
++            tracker, "_run_list",
++            lambda cmd, **kw: _mock_result(stdout=json.dumps(prs)),
++        )
++        result = tracker._check_merged_pr(9967)
++        assert result == (9997, "https://github.com/example/repo/pull/9997")
++
++    def test_returns_none_when_no_merged_pr(self, monkeypatch):
++        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
++        monkeypatch.setattr(
++            tracker, "_run_list",
++            lambda cmd, **kw: _mock_result(stdout="[]"),
++        )
++        assert tracker._check_merged_pr(9967) is None
++
++    def test_returns_none_when_pr_branch_mismatches_issue_number(self, monkeypatch):
++        # A merged PR exists, but for a different issue number — must
++        # not falsely satisfy the gate for #9967.
++        prs = [{
++            "number": 9998,
++            "headRefName": "squidsquad/task/1234",
++            "url": "https://github.com/example/repo/pull/9998",
++        }]
++        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
++        monkeypatch.setattr(
++            tracker, "_run_list",
++            lambda cmd, **kw: _mock_result(stdout=json.dumps(prs)),
++        )
++        assert tracker._check_merged_pr(9967) is None
++
++    def test_returns_none_on_gh_failure(self, monkeypatch):
++        # Network / auth error → returns None so the caller falls
++        # through to the existing ancestry block (safe default).
++        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
++        monkeypatch.setattr(
++            tracker, "_run_list",
++            lambda cmd, **kw: _mock_result(returncode=1, stderr="error"),
++        )
++        assert tracker._check_merged_pr(9967) is None
++
++    def test_returns_none_on_malformed_gh_output(self, monkeypatch):
++        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
++        monkeypatch.setattr(
++            tracker, "_run_list",
++            lambda cmd, **kw: _mock_result(stdout="not valid json"),
++        )
++        assert tracker._check_merged_pr(9967) is None
++
++    def test_queries_for_merged_state(self, monkeypatch):
++        """The query must filter for state=merged, not open or all —
++        only merged PRs prove the code is on the working branch."""
++        calls = []
++
++        def fake_run(cmd, **kw):
++            calls.append(cmd)
++            return _mock_result(stdout="[]")
++
++        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
++        monkeypatch.setattr(tracker, "_run_list", fake_run)
++        tracker._check_merged_pr(9967)
++        assert calls, "expected gh pr list to be invoked"
++        cmd = calls[0]
++        # state must be merged
++        state_idx = cmd.index("--state")
++        assert cmd[state_idx + 1] == "merged"
