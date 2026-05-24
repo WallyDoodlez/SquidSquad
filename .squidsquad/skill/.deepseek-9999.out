@@ -1,3 +1,47 @@
-# STATUS: generating...
-# Task: 9999
-# Model: deepseek-v4-pro
+I now have full context. Let me compile my findings.
+
+---
+
+### Finding 1
+
+- **File**: `references/scripts/tracker.py`
+- **Line**: 902 (in the diff; `_check_merged_pr` adapter path)
+- **Severity**: error
+- **Issue**: The Forgejo adapter search string `f"squadsquad/ {number}"` contains a space between `squadsquad/` and the issue number (e.g., `"squadsquad/ 9967"`). ForgejoAdapter.list_prs applies this as a literal substring match against `headRefName` (line 457 of forge_adapter.py: `search.lower() in r.get("headRefName", "").lower()`). A branch name like `squadsquad/task/9967` does NOT contain the literal substring `"squadsquad/ 9967"` (with space), so the client-side filter discards ALL results. This makes `_check_merged_pr` always return `None` when running on a Forgejo backend, defeating the squash-merge rescue entirely for non-GitHub forges.
+- **Evidence**: ForgejoAdapter.list_prs (forge_adapter.py:456-458) performs a substring match with the raw search string. `"squadsquad/ 9967"` is not a substring of any valid branch name like `"squadsquad/task/9967"` or `"squadsquad/feature/9967"`. The gh CLI path (line 913-916) does NOT pass `--search` at all — it fetches the 20 most recent merged PRs unfiltered and applies the same local `parts[-1]` check, which works correctly. The adapter path and gh CLI path are therefore asymmetric: the adapter path is broken, the gh CLI path works.
+- **Suggested fix**: Either (a) remove the `search` parameter from the adapter call entirely — `adapter.list_prs(state="merged")` — relying solely on the local `parts[-1]` check to filter, matching the gh CLI path's behavior; or (b) change the search string to `f"squadsquad/"` (prefix only) so it filters to squadsquad branches server-side but without the space that breaks substring matching. Option (a) is simpler and mirrors the gh CLI path exactly.
+
+### Finding 2
+
+- **File**: `tests/test_tracker.py`
+- **Line**: 494-580 (the entire `TestCheckMergedPr` class in the diff)
+- **Severity**: warning
+- **Issue**: All 6 new unit tests monkeypatch `_get_forge_adapter` to return `None`, testing only the gh CLI code path. The Forgejo adapter path (lines 899-910 in the diff) has zero test coverage. Combined with Finding 1, the broken adapter path would never be caught by the test suite.
+- **Evidence**: Every test method in the diff sets `monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)`. There is no test that provides a mock adapter and verifies `adapter.list_prs` is called correctly with `state="merged"` or that the local filtering loop works on adapter-returned dicts. The adapter path is the primary reason `_get_forge_adapter` exists; skipping it entirely in tests leaves a significant coverage gap.
+- **Suggested fix**: Add at least one test that sets `_get_forge_adapter` to return a mock ForgejoAdapter and verifies the happy path (merged PR found with matching branch) and at least one negative path (adapter raises, returns None). E.g., mock `adapter.list_prs` to return properly shaped dicts and assert the return value.
+
+### Finding 3
+
+- **File**: `tests/test_tracker.py`
+- **Line**: 494-580 (the entire `TestCheckMergedPr` class in the diff)
+- **Severity**: warning
+- **Issue**: No integration test exercises the full ship transition path (`transition()`) with a squash-merge scenario. The new tests only validate `_check_merged_pr` in isolation. The acceptance criteria explicitly ask for verification that (1) "ship transition succeeds on squash-merged PRs" and (2) "ship still blocked when no PR exists / PR is open." Only criterion (2) is partially covered — criterion (1) is not tested because `transition()` is never invoked with a simulated squash-merge state.
+- **Evidence**: The test class `TestCheckMergedPr` tests `tracker._check_merged_pr()` directly. No test calls `tracker.transition()` with the full context where `_check_unmerged_branch` returns a branch and `_check_merged_pr` returns a merged PR. Without this, a regression in the wiring inside `transition()` (e.g., accidentally calling `sys.exit(1)` even when `merged_pr` is truthy) would go undetected.
+- **Suggested fix**: Add a test that monkeypatches `_check_unmerged_branch` to return a fake branch, `_check_merged_pr` to return a fake merged PR, `_check_unmerged_pr` to return `None`, `_check_unread_feedback` to return `None`, etc., then calls `transition(number, "pending-ship", "shipped")` and asserts it returns `True` without calling `sys.exit`.
+
+### Finding 4
+
+- **File**: `references/scripts/tracker.py`
+- **Line**: 1199 (in the diff; the `_log_diagnostic` call in the merged-PR case)
+- **Severity**: warning
+- **Issue**: The log message hardcodes "on GitHub" — `f"...but PR #{pr_num} is MERGED on GitHub (squash-merge) — allowing ship."`. The project has a forge adapter system specifically to support non-GitHub backends (Forgejo). When running against a Forgejo backend, this message misleadingly says "GitHub."
+- **Evidence**: `_get_forge_adapter()` (tracker.py:48-66) returns a ForgejoAdapter for non-GitHub providers. The `_check_merged_pr` adapter path (lines 899-910) queries Forgejo's API. If a merged PR is found, the transition code logs "on GitHub" regardless of the actual backend. The rest of the file uses generic phrasing (e.g., "Merge the PR first: {pr_url}" at line 1177, which is backend-agnostic).
+- **Suggested fix**: Change the log message to use a backend-agnostic phrase, e.g., `"but PR #{pr_num} is MERGED on the forge (squash-merge) — allowing ship."` or simply `"but PR #{pr_num} is MERGED (squash-merge) — allowing ship."`
+
+---
+
+**Summary of additional observations (not filed as separate findings):**
+
+- **False-positive risk (different branch's merged PR matching the issue number)**: Low. The `_check_unmerged_branch` gate already requires a branch matching `squadsquad/*/{number}` to exist locally before `_check_merged_pr` is called. The PR check further requires `parts[-1] == str(number)`. A merged PR for a different issue would have a different number and wouldn't match. A merged PR for the same issue from a different branch name is correct evidence that the code has been merged.
+- **`--limit 20` false-negative risk**: Both paths cap at 20 PRs. If the target merged PR is older than the 20 most recent, it won't be found and the ship gate blocks (safe default). This is the same behavior as `_check_unmerged_pr` and is acceptable given the safe-fail behavior.
+- **Missing `url` in ForgejoAdapter.list_prs response**: ForgejoAdapter returns `number, title, headRefName, mergeable, isDraft` but NOT `url`. So `pr.get("url", "")` always returns `""` on Forgejo. This is cosmetic for the ship-gate path (the URL is unpacked in `transition()` but not used in the merged-PR case's log message). This is a pre-existing asymmetry also present in `_check_unmerged_pr`.
