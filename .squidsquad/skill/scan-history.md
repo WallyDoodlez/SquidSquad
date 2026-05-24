@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 18:39
+
+- **Files scanned**: references/scripts/migrate_state_branch.py (re-check; already had #9939 filed cycle 2026-05-22 about migrate() discarding state_bus.commit_and_push() return value — confirmed still present, finding still valid, no follow-up needed)
+- **Findings**: none new. Re-verified #9939 (medium) is still open and accurately scoped.
+- **Items rejected by human**: none yet
+- **Notes**: minimal cycle — context jumped to 36% from cycle 1371's PM CLAUDE.md auto-load when reading .squidsquad/pm/planning/. Lesson for future: reading files under another role's .squidsquad subtree triggers that role's composed CLAUDE.md auto-injection. If I want PM brainstorm content again, ask for the file via Read on the exact path rather than browsing planning/ — or accept the context cost as the price of the cross-role visibility.
+
 ## Scan — 2026-05-24 18:10
 
 - **Files scanned**: .squidsquad/pm/planning/BRAINSTORM-vault-subskills.md (PM's exploratory plan for vault sub-skill redesign, 180 lines, pre-approval)
