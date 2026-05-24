@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 15:40
+
+- **Files scanned**: references/scripts/verify_dual_label_6274.py (141 lines; one-shot G2→3 gate verification for #6274 dual-labeling)
+- **Findings**: none filed. `_list_recent_issues` uses hardcoded `--limit 500` (L58) which would silently truncate at high volume — but SquidSquad creates ~10 issues/week so a 7-day window stays well under the cap. `_run` returncode check at L61 + JSON parse fallback at L69 is solid. Minor: an issue carrying all 4 dual labels would be counted twice in `checked` (loop iterates PAIRS) — not a correctness bug but a cosmetic count inflation. Script is purposefully tied to the 6274 sub-phase lifecycle (one-shot gate, retires when 6274.3 ships).
+- **Items rejected by human**: none yet
+- **Notes**: paired migrate_labels_6274.py skipped for context economy — both scripts share the same lifecycle and 6274.1 was already scanned during #9964 review. Continuing single-file conservation cycles.
+
 ## Scan — 2026-05-24 15:10
 
 - **Files scanned**: references/scripts/tc_coverage.py (full 313 lines; focus on TC parsing regexes + result extraction + coverage gate exit-code semantics)
