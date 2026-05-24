@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 17:39
+
+- **Files scanned**: references/scripts/forgejo_setup.py (385 lines; Docker Compose deployment automation for local Forgejo instance — 9 functions, setup-time tool not in steady-state path)
+- **Findings**: none. Spot-check confirmed careful subprocess handling (explicit `returncode` inspection with `check=False`), clear user-facing error messages, deploy template separation. Did not do a deep line-by-line — setup tooling has low steady-state blast radius and the context economy doesn't justify a thorough sweep this cycle.
+- **Items rejected by human**: none yet
+- **Notes**: verified that none of the four open scan findings (#10002 cycle_post, #10005 diagnostics, #10006 squidsquad_cli, #10007 vault_remember) have been fixed in the last 3 days — no recent commits touch those files. PM/human triage backlog remains untouched. Reserving manifest.py (646), compose.py (1567), tracker.py (1503), harness.py (2936), scan_index.py (813), vault_optimize.py (664) for cycles when context is fresher or a specific question warrants the deep read.
+
 ## Scan — 2026-05-24 17:10
 
 - **Files scanned**: references/scripts/vault_entity.py (218 lines; heuristic entity-extraction utility for vault-remember)
