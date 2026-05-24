@@ -1,57 +1,47 @@
 # Working State
 
-- **Task**: #9968 architectural reframe (hybrid mandatory-inline + situational Claude-skills) pending human direction since cycle 1619. #9965 skill steady on AC2.8 (48→27 over 6 cycles).
-- **Status**: monitoring (skill steady; doc reframe pending human direction)
+- **Task**: #9968 architectural reframe — human reaffirmed cycle 1621 (sub-skills should BE Claude skills); PM offered three paths, awaiting choice. #9965 skill steady on AC2.8.
+- **Status**: awaiting human choice on #9968 reframe shape
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-23 19:17, cycle 1620)
+## Pipeline snapshot (2026-05-23 19:35, cycle 1621)
 - 0 PRs open, 0 pending-test, 0 pending-ship, 0 external untriaged
 - 1 approved (long-running): #3 (DM lane, going-public)
 - 2 in-progress:
-  - #9965 (6274.2/AC2.8) — skill steady:
-    - cycles 1315-1320 (16:44→18:36): 48→47→41→36→31→27
-    - 6 cycles, -21 failures total, avg -3.5/cycle, zero regressions
-    - Trajectory: ~7-8 more cycles to 0 if rate holds
-  - #9968 (EPIC: L1-L4 doc) — v1.3 (8b33aebd) shipped cycle 1616. Three architectural conversations layered this session:
-    - Cycle 1617: 20-gap analysis (3 tiers)
-    - Cycle 1618: manifest elimination (4 jobs analyzed; all displaced by frontmatter + config.md)
-    - Cycle 1619: sub-skills as Claude skills (hybrid: mandatory inline + situational as Claude skills)
-  - No doc edits committed for any of the above; human deferred each time
+  - #9965 (6274.2/AC2.8, 0.5h since update) — skill steady; trajectory ~7-8 more cycles to 0 failures
+  - #9968 (EPIC: L1-L4 doc, 5.3h since update) — reframe in conversation, no commits
 - 1 pending (gated): #9966 (6274.3)
-- 1 planned (idle 2d, no nudge): #9845 (TASK noop event type, role:skill) — withheld Tier 1 human nudge to avoid noise while #9968 decision pending
-- 3 issues at status:open: #9967, #9969, #9970
+- 2 planning (skill, 58.3h): #9874 (harness architecture review), #9875 (L2 vault writeback)
+- 1 planned (skill, 58.9h): #9845 — withholding human nudge while #9968 decision pending
+- 3 issues at status:open: #9967 (skill), #9969 (pm), #9970 (pm)
+- 42 pending tail (known backlog, no triage this cycle)
 - shipped_since_bump=6 of 10
 
-## Cycle 1620 mechanical reactions verified
-Pre-cycle script processed 4 PR-merge events and transitioned the corresponding issues. Verified each via `tracker.py get-state`:
-- #9902 (PR #9923) → CLOSED ✓
-- #9904 (PR #9924) → CLOSED ✓
-- #9901 (PR #9911) → CLOSED ✓
-- #9927 (PR #9929) → CLOSED ✓
+## #9968 reframe — choice surfaced cycle 1621
+Human reaffirmed direction: SquidSquad = main skill; sub-skills should BE Claude skills (SKILL.md + .claude/skills/ registration).
 
-## #9968 reframe captured cycle 1619 (unchanged this cycle)
-Human's new direction: sub-skills should BE Claude skills.
-- Factual correction PM made: today sub-skills are NOT Claude skills — they're plain markdown fragments at references/sub-skills/*.md that compose inlines. No SKILL.md frontmatter, no .claude/skills/ registration.
-- User's target: convert to real Claude skills, composed CLAUDE.md just mentions which to use.
-- PM-surfaced tension: Claude skills are discretionary (model decides when to invoke). But mandatory procedures (cycle-runner, boot-bootstrap, context-pressure, agent-lifecycle) cannot be optional — they MUST execute every cycle/boot. Pure Claude-skills model risks reliability regression.
-- PM recommendation: hybrid tier system
-  - **Mandatory tier**: inlined into small composed CLAUDE.md (5-10KB instead of today's 50KB+). Includes cycle-runner, boot-bootstrap, context-pressure, status transitions, identity, soul.
-  - **Situational tier**: real Claude skills with SKILL.md frontmatter. Includes vault-remember, improvement-scan, code-review, issue-filing, soul-shepherd, etc.
-  - Maps to `load: always | on-demand` from cycle 1618 discussion.
-- This invalidates much of v1.3 doc's compose-pipeline emphasis. Doc would need significant rewrite to position compose as ONLY handling the small mandatory CLAUDE.md, with the bulk of behavior moving to Claude's skill registry.
+PM offered three paths to proceed:
+  - **(a) Hybrid**: mandatory tier inline in small CLAUDE.md + situational tier as Claude skills. Lower-risk; PM's recommendation. File T4/T6/T7 conversion tasks.
+  - **(b) Pure-Claude-skills with reliability test first** (T5): test whether description-matching reliably triggers mandatory procedures every cycle/boot. If reliable, pure model works; if not, fall back to hybrid.
+  - **(c) Something else**: human picks an alternative framing.
 
-Pending decisions (none filed as tasks; all in working state):
-- T1 (cycle 1618): sub-skill cruft audit
-- T2 (cycle 1618): doc v1.4 §15 Schemas
-- T3 (cycle 1618): §6.5 wake-mode revision
-- T4 (cycle 1619): convert situational sub-skills to Claude skills (SKILL.md format)
-- T5 (cycle 1619): test mandatory-procedure reliability under Claude skill mechanism (does description-matching reliably trigger every cycle?)
-- T6 (cycle 1619): redefine `compose.py` scope to just the small mandatory CLAUDE.md
-- T7 (cycle 1619): doc #9968 v2.0 rewrite (scope expansion beyond what v1.3 captured)
+Awaiting human choice. Once selected, file the implementing tasks.
+
+## #9967 cursor-advance bug — observed symptom this cycle
+Pre-cycle re-emitted mechanical_reactions for PRs #9923/#9924/#9911/#9929 (issues #9902/#9904/#9901/#9927), all of which were closed last cycle. Last Processed Event ID stuck at df9f33751a6a. Idempotent on closed issues, but confirms #9967 is still live. Not filing a separate bug — already tracked.
+
+## Pending decisions captured (unchanged from cycle 1620)
+- T1: sub-skill cruft audit
+- T2: doc v1.4 §15 Schemas
+- T3: §6.5 wake-mode revision
+- T4: convert situational sub-skills to Claude skills (SKILL.md format)
+- T5: test mandatory-procedure reliability under Claude skill mechanism
+- T6: redefine compose.py scope to just the small mandatory CLAUDE.md
+- T7: doc #9968 v2.0 rewrite
 
 ## #9965 — standard monitoring
-- Skill execution remains exemplary; no PM action needed
-- shipped_since_bump=6/10 — under threshold, no bump
+- Skill execution steady; no PM action needed
+- shipped_since_bump=6/10 — under DM threshold, no bump
 
 ## #9966 — unchanged
 - Conditions: AC2.8 ships, cutover date passed
