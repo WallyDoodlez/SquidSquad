@@ -115,6 +115,96 @@ class TestQuery:
 
 
 # ---------------------------------------------------------------------------
+# #9967 — eviction signal handling
+# ---------------------------------------------------------------------------
+
+class TestQueryEvictionHandling:
+    """#9967: when harness signals `evicted: true`, drop the stale events
+    list (buffer-start) and return [] so callers don't re-process events
+    older than their cursor on every cycle.
+    """
+
+    def test_evicted_response_returns_empty_list(self):
+        """Harness returns `evicted: true` + oldest-events fallback → query() returns []."""
+        stale_events = [
+            {"id": "old1", "event_type": "git-pull", "timestamp": "2026-05-22T01:45:31"},
+            {"id": "old2", "event_type": "cycle-start", "timestamp": "2026-05-22T08:45:21"},
+        ]
+        resp = MagicMock()
+        resp.read.return_value = json.dumps({
+            "events": stale_events,
+            "total": 1000,
+            "evicted": True,
+            "oldest_id": "old1",
+            "evicted_count_hint": 250,
+        }).encode("utf-8")
+
+        with patch.object(event_bus_reader, "_discover_port", return_value=7373), \
+             patch("urllib.request.urlopen", return_value=resp):
+            result = event_bus_reader.query(since="evicted_cursor")
+
+        assert result == [], (
+            "evicted response must return [] (not the buffer-start events) "
+            "so callers don't re-process events older than the cursor"
+        )
+
+    def test_evicted_response_emits_stderr_breadcrumb(self, capsys):
+        """Eviction case prints a one-line forensic signal to stderr."""
+        resp = MagicMock()
+        resp.read.return_value = json.dumps({
+            "events": [{"id": "old1", "event_type": "x"}],
+            "evicted": True,
+            "oldest_id": "old1",
+            "evicted_count_hint": 250,
+        }).encode("utf-8")
+
+        with patch.object(event_bus_reader, "_discover_port", return_value=7373), \
+             patch("urllib.request.urlopen", return_value=resp):
+            event_bus_reader.query(since="evicted_cursor")
+
+        captured = capsys.readouterr()
+        assert "cursor evicted" in captured.err
+        assert "oldest_id=old1" in captured.err
+        assert "evicted_count_hint=250" in captured.err
+        assert "#9967" in captured.err
+
+    def test_non_evicted_response_returns_events(self):
+        """Normal (non-evicted) response still returns the events list."""
+        fresh_events = [
+            {"id": "new1", "event_type": "cycle-start"},
+            {"id": "new2", "event_type": "git-pull"},
+        ]
+        resp = MagicMock()
+        resp.read.return_value = json.dumps({
+            "events": fresh_events,
+            "total": 50,
+            # No `evicted` key — normal path.
+        }).encode("utf-8")
+
+        with patch.object(event_bus_reader, "_discover_port", return_value=7373), \
+             patch("urllib.request.urlopen", return_value=resp):
+            result = event_bus_reader.query(since="fresh_cursor")
+
+        assert len(result) == 2
+        assert result[0]["id"] == "new1"
+
+    def test_evicted_false_explicit_returns_events(self):
+        """`evicted: false` explicitly (not missing) still returns events."""
+        events = [{"id": "x"}]
+        resp = MagicMock()
+        resp.read.return_value = json.dumps({
+            "events": events,
+            "evicted": False,
+        }).encode("utf-8")
+
+        with patch.object(event_bus_reader, "_discover_port", return_value=7373), \
+             patch("urllib.request.urlopen", return_value=resp):
+            result = event_bus_reader.query(since="cursor")
+
+        assert result == events
+
+
+# ---------------------------------------------------------------------------
 # Harness GET /events endpoint filtering (EventStream.get_since)
 # ---------------------------------------------------------------------------
 

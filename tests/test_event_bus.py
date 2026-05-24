@@ -330,14 +330,27 @@ class TestAckStop:
 
 
 class TestNoUnusedImports:
-    """#8193 regression: event bus modules must not have unused imports."""
+    """#8193 regression: event bus modules must not have unused imports.
+
+    Updated #9967: the assertion is "if `import sys` is present it must be
+    used", not "import is forbidden". event_bus_reader now uses sys.stderr
+    to surface the eviction breadcrumb per the #9967 fix.
+    """
+
+    def _assert_no_unused_sys(self, module):
+        import inspect
+        source = inspect.getsource(module)
+        if "import sys" in source:
+            # Strip the import line itself before checking for usage so
+            # the import never trivially satisfies its own usage check.
+            without_import = source.replace("import sys\n", "", 1)
+            assert "sys." in without_import, (
+                f"{module.__name__}: `import sys` present but `sys.` not "
+                f"referenced anywhere — unused import (#8193 regression)."
+            )
 
     def test_event_bus_no_unused_sys(self):
-        import inspect
-        source = inspect.getsource(event_bus)
-        assert "import sys" not in source
+        self._assert_no_unused_sys(event_bus)
 
     def test_event_bus_reader_no_unused_sys(self):
-        import inspect
-        source = inspect.getsource(event_bus_reader)
-        assert "import sys" not in source
+        self._assert_no_unused_sys(event_bus_reader)
