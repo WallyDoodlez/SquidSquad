@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "SKILL.md:sections-4-6",
+  "last_scanned": "SKILL.md:sections-7-8+sec-10",
   "rotation_count": 56,
   "scan_history": [
     {
@@ -1699,6 +1699,12 @@
         "Line 287 Dev agent workflow — was \"QA converts it to ready (gh pr ready) after verification passes\" but verification of tracker.py:918 (_convert_draft_pr_to_ready) and tracker.py:1152-1154 shows that tracker.py auto-converts the draft PR on the pending-test (and pending-ship) transition, not QA on verification pass. Confirmed via dev/CLAUDE.md content: \"After all fixes are pushed and the task moves to pending-test, cycle_post.py commits and creates the PR first, then the status transition triggers auto-conversion of the draft PR to ready.\" Also clarified ordering: PR is created during the cycle that transitions to pending-test (cycle_post.py:811-816 commits/creates PR before status transition so PR exists for auto-conversion); during in-progress the dev pushes commits to the branch with no PR yet. Persistent draft state only happens during human-requested rework. Rewrote line 287 to reflect actual lifecycle and cite #4991 GAP-3 (the GAP that introduced auto-conversion). Committed manually because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
       ],
       "note": "Rotation 57 fourth scan. Full read of lines 163-327. Verified: line 169 /loop INTERVAL prefix format accurate; line 173 iteration log retention \"last 20\" matches reality (R55 fix intact); line 175 context_window.used_percentage JSON field accurate (statusline.sh:66 reads this from claude code hook input); line 177 .harness-state.json crash recovery intact; line 179 auto-versioning Ship Threshold + zero-open-issues gate accurate (matches DM CLAUDE.md Step 3 and cycle_post.py _do_version_bump); line 181 comprehension testing pipeline accurate (run_comprehension_test.py exists, tests/comprehension/*_spec.json exist); line 183 multi-model deepseek-v4-pro example accurate (R54+R55 fixes intact); [Role] Lead / PM / QA / DM Ralph Loop step lists all accurate; line 278 commit prefix convention matches reality; line 282 #9478 single-mode branch+PR intact; line 285 default Branch Pattern squidsquad/task/{number} matches config.md line 43; Auto-Merge section accurate (cycle 967 \"All verified items\" fix intact, per-task override and conflict handling current). One stale claim was line 287 wrongly attributing draft→ready conversion to QA."
+    },
+    {
+      "file": "SKILL.md:sections-7-8+sec-10",
+      "date": "2026-05-23",
+      "findings": 0,
+      "note": "Rotation 57 fifth scan. Full read of lines 349-443 (sec 7 Upgrade + sec 8 Schema Changelog) + lines 467-505 (sec 10 /squidsquad-status). Verified: sec 7 Step 3 /squidsquad-compose + compose.py deploy-all both exist and match the upgrade flow in references/commands/squidsquad-upgrade.md; line 376 SOUL.md preservation claim accurate (compose.py:1148-1150 guards with \"if not soul_path.exists()\"); Step 4 v1→v2 patch sections (Loop/Flags/Git Branches/Forge Backend/Model Routing) match wizard.py:540-547 _SECTION_ORDER and the v2 emitter at lines 713-758; v2 field names match (Interval Minutes, Context Threshold, Working Branch/State Branch defaults main/squid-squad, Provider github + Endpoint https://api.github.com, Default Model claude); Step 5 wizard.py ensure-labels command valid; Step 6 commit format matches squidsquad-upgrade.md step 9. Sec 8 Schema Changelog historical content stable. Sec 10 squidsquad_cli.py status fallback to current-state mtime + .claude-pid + legacy .health described correctly (R55 fix intact); tracker.py list-issues + list-tasks --status approved/in-progress all valid (tracker.py:1329, 1335); Recently Shipped query (gh issue list --label squidsquad --label status:shipped --state closed) verified executes and returns shipped-only results — R56 status:shipped filter fix intact. One minor v2-schema cosmetic noted but not filed: wizard._flag_label converts pr_flow → \"Pr Flow\" not \"PR Flow\"; SKILL.md sec 7 line 389 says \"PR Flow\" which is the project convention. This is a code-side cosmetic, not a doc drift — left untouched."
     }
   ],
   "doc_inventory": {
