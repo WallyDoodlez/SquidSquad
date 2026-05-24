@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "README.md",
+  "last_scanned": "SKILL.md:sections-1-3",
   "rotation_count": 56,
   "scan_history": [
     {
@@ -1680,6 +1680,16 @@
         "Line 33 Project-adaptive souls: corrected which section the wizard fills. Wizard populates the \"Project Context\" section in SOUL.md (verified in wizard.py:1071-1083 which inserts \"### Project Context\" using domain_ctx). The \"Project Adaptation\" section (visible at .squidsquad/dev/SOUL.md:155) is populated by PM at runtime, not the wizard. README had the two sections swapped. Will commit README manually as cycle_post.py only stages .squidsquad/dm/ (per #9474)."
       ],
       "note": "Rotation 57 second scan. Full read of all 165 lines. Verified: shutdown command exists in squidsquad_cli.py (cmd_shutdown at line 284); 30-minute interval matches config.md line 47 (Iteration Interval Minutes: 30); 5-phase feature planning Research→Discussion→Planning→Execution→QA matches SKILL.md lines 157-160 (#9184 workflow); GET /status code_version block valid (harness.py:1305); GET / slim version triple {service, version, git_sha} valid (harness.py:1311-1319); pipeline sentinel \"6 types of stuck tasks\" matches pm/CLAUDE.md sections 4a-4f exactly (Orphaned PR, Shipped without merge, Approved but no pickup, Planned but never approved, Pending with no planning, In-progress on dead agent); auto-merge bugs+tasks accurate (R56 fix intact); DeepSeek v4 Pro Multi-model example correct (R55 fix intact)."
+    },
+    {
+      "file": "SKILL.md:sections-1-3",
+      "date": "2026-05-23",
+      "findings": 2,
+      "fixes": [
+        "Line 84 [role]/planning/ description — was \"feature planning artifacts (research, context, test plans)\" which is wrong for dev agents post-#9184. Dev agents do NOT write research/context (PM owns those) or test plans (QA owns those per phase 5). Verified by ls .squidsquad/skill/planning/ which shows per-task work files: 9588-issue-body.md, 9614-cumulative-diff.txt, AC1-REVIEW.md, AUDIT-4966-R2-RESULTS.md etc. Updated to \"per-task work files (code reviews, audits, AC analysis); canonical planning artifacts live in pm/ and qa/\".",
+        "Line 95 pm/planning/ description — was \"(FEAT-X-RESEARCH.md, CONTEXT.md, TEST-PLAN.md)\". Two errors: (a) #9184 cutover dropped FEAT-X prefix (filenames are RESEARCH-NUMBER.md, CONTEXT-NUMBER.md — verified via ls .squidsquad/pm/planning/ showing CONTEXT-4792.md, CONTEXT-6274.md, CONTEXT-9184.md etc.); (b) PM no longer writes TEST-PLAN.md (#9184 split test-plan authorship to QA — verified ls .squidsquad/qa/planning/ shows TEST-PLAN-9184.md, TEST-PLAN-9331.md, TEST-PLAN-9588.md, TEST-PLAN-9688.md). Updated to \"(RESEARCH-NUMBER.md, CONTEXT-NUMBER.md); TEST-PLAN-NUMBER.md lives in qa/planning/ per #9184\". Both fixes are the file-structure-tree counterparts to the R56 Feature Lifecycle text fix (sec 3 lines 149-159) — same #9184 drift hit two places, R56 caught the prose but missed the tree diagrams. Committed manually because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
+      ],
+      "note": "Rotation 57 third scan. Full read of lines 1-162. Verified: frontmatter version 0.43.0 matches config.md; line 10 PM+QA+DM all mandatory matches config.md (PM always, QA always, DM present); line 52 same claim repeated; Architecture mermaid intact; Common team shapes table accurate; File Structure tree mostly accurate — .squidsquad/project/ L4 overrides preserved from R56 sec-2 fix; Label Taxonomy table intact (squidsquad-test + review:human-required preserved from R56 sec-3 fix); Bug Flow and Feature Flow with pending-human-review + pending-human-setup accurate; Feature Lifecycle 5-Phase (lines 157-161) intact from R56 sec-3 fix (RESEARCH-NUMBER.md, CONTEXT-NUMBER.md, QA-owned phase 5 test plan). Two new finds were the file-structure-tree counterparts to the R56 sec-3 Lifecycle fix — same #9184 drift, separate place."
     }
   ],
   "doc_inventory": {
@@ -1688,7 +1698,7 @@
       "status": "current"
     },
     "SKILL.md": {
-      "last_scanned": "2026-05-06",
+      "last_scanned": "2026-05-23",
       "status": "current"
     },
     "docs/ARCHITECTURE.md": {
