@@ -10,6 +10,7 @@ Usage:
 """
 
 import json
+import sys
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -70,6 +71,23 @@ def query(since=None, role=None, event_type=None, limit=100):
         req = urllib.request.Request(url, method="GET")
         resp = urllib.request.urlopen(req, timeout=_TIMEOUT)
         data = json.loads(resp.read().decode("utf-8"))
+        # #9967: When the harness signals eviction (cursor predates the
+        # retained window), the `events` field contains the OLDEST events
+        # in the buffer — not events after the cursor. Returning them
+        # would make the caller re-process stale events on every cycle
+        # (PM observed 51 stale events from 25h before the cursor). Per
+        # PM's recommendation in the bug report, surface as no-events.
+        # A one-line stderr breadcrumb preserves the forensic signal.
+        if data.get("evicted"):
+            oldest_id = data.get("oldest_id")
+            evicted_hint = data.get("evicted_count_hint")
+            print(
+                f"event_bus_reader: cursor evicted from harness window "
+                f"(oldest_id={oldest_id}, evicted_count_hint={evicted_hint}); "
+                f"returning [] instead of buffer-start (#9967)",
+                file=sys.stderr,
+            )
+            return []
         return data.get("events", [])
     except Exception:
         # Silent empty-list — same contract as emit's fire-and-forget
