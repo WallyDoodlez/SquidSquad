@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 14:10
+
+- **Files scanned**: references/scripts/monitor_smoke_poller.py (37 lines) + references/scripts/event_bus_reader.py (94 lines)
+- **Findings**: none. monitor_smoke_poller is a tight 37-line smoke utility — no validation on `int(sys.argv[1])` / `float(sys.argv[2])` but it's a smoke test invoked with known args. event_bus_reader is clean — 500ms timeout, silent empty-list on failure (documented contract), #9967 eviction handling has clear stderr breadcrumb. Single nit: L72 `urlopen` without `with` context manager (vs cycle_post.py which uses `with urlopen(...) as resp:`); response is short-lived so GC handles it, stylistic only.
+- **Items rejected by human**: none yet
+- **Notes**: deliberately picked two small files this cycle to conserve context (rising to 22%) and rotate scan coverage. No new vault writes — last cycle's `learning-scan-comment-vs-file-duplicate.md` is sufficient methodology capture.
+
 ## Scan — 2026-05-24 13:41
 
 - **Files scanned**: references/scripts/repo_scan.py (full 409 lines; focus on `_check_python_deps` substring match + `_count_extensions` os.walk SKIP_DIRS coverage + `scan()` save path)
