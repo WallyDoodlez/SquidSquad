@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "README.md",
+  "last_scanned": "SKILL.md:sections-1-3",
   "rotation_count": 58,
   "scan_history": [
     {
@@ -1792,6 +1792,12 @@
       "date": "2026-05-24",
       "findings": 0,
       "note": "Rotation 59 first scan. Full read of all 164 lines. Verified: references/scripts/{wizard.py setup-yes (line 2236/2413), squidsquad_cli.py with start/stop/status/shutdown commands (lines 424/427/435/437), migrate_state_branch.py} all exist; docs/{ARCHITECTURE.md, AGENT-RUNTIME.md, sub-skill-guide.md} + CONTRIBUTING.md + CHANGELOG.md + SKILL.md + LICENSE all exist; tests/comprehension/ dir exists; .squidsquad/config.md has Auto Merge (line 53), Model Routing (line 90), Code Review Model (line 99); references/roles/{dm,pm}/SOUL.md have Project Context + Project Adaptation sections matching README claim. 0 findings — doc is current."
+    },
+    {
+      "file": "SKILL.md:sections-1-3",
+      "date": "2026-05-24",
+      "findings": 0,
+      "note": "Rotation 59 second scan. Full read of lines 1-166 (frontmatter + sections 1 Architecture, 2 File Structure Generated, 3 Tracker GitHub Issues). Verified: frontmatter version 0.43.0 matches .squidsquad/config.md line 3 SquidSquad Version 0.43.0; .squidsquad/pm/{enhancements.md, planning/, iterations/, migrations/} structure exists; .squidsquad/project/{shared-instructions,shared-responsibility,shared-soul-directives,setup-upgrade-gate}.md + per-role L4 overrides ({dev,dm,pm,qa}-{instructions,responsibility,soul-directives}.md) exist; tracker.py STATUS_LABELS (lines 81-98) include all 11 documented status labels; legal transition table (lines 118+) matches SKILL.md bug flow (open → in-progress → pending-test → pending-ship → closed) and feature flow (pending → planning → planned → approved → in-progress → pending-test → pending-ship → closed). 0 findings — doc is current."
     }
   ],
   "doc_inventory": {
