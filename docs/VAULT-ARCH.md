@@ -48,7 +48,7 @@ The vault is **distinct from**:
 
 ## 3. On-disk layout — PARAG
 
-The vault uses a PARAG taxonomy (Projects, Areas, Resources, Archives, Galaxy):
+The vault uses a **PARAG** taxonomy: **P**rojects, **A**reas, **R**esources, **A**rchives, **G**alaxy. The first four letters come from Tiago Forte's PARA system in *Building a Second Brain*; the fifth letter (G — Galaxy) is a SquidSquad addition for Zettelkasten-style atomic notes.
 
 ```
 .squidsquad/vault/
@@ -64,7 +64,51 @@ The vault uses a PARAG taxonomy (Projects, Areas, Resources, Archives, Galaxy):
 └── .obsidian/          # optional Obsidian app config (gitignored)
 ```
 
-P/A/R/A is the Tiago Forte taxonomy for personal knowledge management. The "G" (Galaxy) is an added Zettelkasten-style atomic-note layer specific to SquidSquad — one idea per note, heavy cross-linking via wikilinks, intended for long-tail compounding knowledge.
+### 3.1 The PARA buckets — what goes where
+
+PARA sorts notes by **actionability** rather than topic. The original framing (paraphrased): "How soon will I need to act on this?" Buckets are ordered by decreasing actionability.
+
+| Bucket | What it holds | Test for placement |
+|---|---|---|
+| `projects/` | Bounded, scoped work with a definition-of-done | "Does this end?" If yes → project. One note per project. |
+| `areas/` | Ongoing responsibilities and standing context with no end date | "Will I always care about this?" If yes → area. Stable, slow-changing, few notes. |
+| `resources/` | Reference material — research, external docs, third-party patterns | "Would I look this up later?" Prefer linking to externals over copy-paste. |
+| `archives/` | Anything from the three above that is no longer active | "Has this shipped / been superseded / become irrelevant?" |
+
+The placement test is **"actionable now vs. someday vs. never"**, not topic similarity. The same subject can validly live in `projects/` (active work), `areas/` (the ongoing concern behind that work), and `archives/` (a closed past project on it) simultaneously — each captures a different lifecycle slice.
+
+### 3.2 Galaxy — the Zettelkasten layer
+
+PARA covers *contextual* knowledge (what's active, what's standing, what's reference). It does not cover **atomic, durable, cross-cutting knowledge**: a single architectural decision, a reusable pattern observed across many projects, a lesson from a single incident. Those are too small to be a project, too pointed to be an area, and too internal to be a resource — but too valuable to lose.
+
+The `galaxy/` folder fills that gap with Zettelkasten-style notes:
+
+- **Atomic** — one idea per note; if a note grows past ~500 lines or covers more than one idea, split it (per §4.1).
+- **Typed by filename prefix** — `decision-*`, `pattern-*`, `learning-*`, `style-*` (full taxonomy in §4.2).
+- **Heavily cross-linked** — body text uses bare `[[wikilinks]]` to connect related notes; the `links:` frontmatter field is auto-maintained from those wikilinks by `vault_check.py` (§4.5).
+- **Append-only in practice** — galaxy notes are rarely deleted; superseded ones get `status: superseded` and are auto-archived by `vault_optimize.py prune-scan` (§3.3).
+
+Galaxy is the **compounding** layer: every decision the squad makes and every learning it captures adds one more linkable node. PARA tells you *what's hot right now*; Galaxy tells you *what we have learned over time*.
+
+### 3.3 How notes move between buckets
+
+Note movement is rare and almost always one-directional:
+
+- **`projects/` → `archives/`** — when a project completes or is abandoned, the note's `status:` flips to `archived` and either an agent or `vault_optimize.py prune-scan` moves the file. Project notes are not deleted; the historical context matters.
+- **`galaxy/` → `archives/`** — `vault_optimize.py prune-scan` auto-archives galaxy notes that are (a) `status: superseded`, or (b) stale **and** orphaned (no inbound wikilinks for longer than the staleness threshold in `config.md`). Archived galaxy notes get a `<!-- archived: [[name]] moved to archives/ -->` breadcrumb appended to every note that linked to them, so the link graph degrades gracefully.
+- **`areas/` and `resources/`** — generally stay put. Areas are stable by definition; resources stay as long as someone might look them up. Both can be manually archived if the squad decides they're dead weight, but `vault_optimize.py` does not touch them automatically.
+
+There is no automatic *promotion* path (e.g., a `learning-*` note that turns out to be a fundamental pattern is rewritten or split manually; the script doesn't second-guess). The trim-or-graduate rule in §5 covers the **BRIEFING → galaxy** edge case, where lines trimmed from BRIEFING.md become new galaxy notes rather than being deleted.
+
+### 3.4 Why this layout
+
+The PARAG split serves three jobs that a single flat folder couldn't:
+
+1. **Boot-time signal** — `BRIEFING.md` + `projects/` + `areas/` are the small, hot set agents read at every cycle start. Keeping them as separate top-level folders means an agent can read "current context" without scanning the (much larger) `galaxy/` or `archives/`.
+2. **Long-tail without dilution** — `galaxy/` can grow to thousands of notes without dragging on every read, because nothing reads the whole folder during a cycle — only `vault_optimize.py reindex` and `vault-synthesis` traverse it, and both are quiet-cycle work.
+3. **Lossless decay** — `archives/` is the dumping ground that keeps prune scans honest. Nothing is deleted; if a hot note turns cold, it moves to `archives/` and the link graph rewrites itself.
+
+Concrete operational consequences appear in §6 (who reads/writes which bucket), §8 (which script touches which folder), and §10 (what the buckets actually contain in this repo today).
 
 ---
 
