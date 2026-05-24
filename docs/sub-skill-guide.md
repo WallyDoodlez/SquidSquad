@@ -132,16 +132,20 @@ A compose-time marker (introduced by #9925) for injecting the active team roster
 
 ### Build Pipeline
 
+`compose.py deploy <role>` and `compose.py all` are **independent** paths, not a sequence — `deploy` does not read `agent-instructions.md`.
+
 ```
 references/roles/<role>/instructions.md   (entry file with {{include}} directives)
         │
-        ▼  compose.py all
-references/agent-instructions.md         (all includes resolved, section markers added)
-        │
-        ▼  compose.py deploy <role>
+        ▼  compose.py deploy <role>        (any role; live build path)
 .squidsquad/<role>/CLAUDE.md             (placeholders substituted with config values)
                                           + .squidsquad/<role>/SOUL.md (assembled from
                                             Layer 1 base + role SOUL.md if missing)
+
+references/roles/dev/instructions.md     (dev only; reference output)
+        │
+        ▼  compose.py all
+references/agent-instructions.md         (composed dev template, no placeholder substitution)
 ```
 
 Run composition:
