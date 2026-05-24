@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "docs/sub-skill-guide.md",
+  "last_scanned": "CONTRIBUTING.md",
   "rotation_count": 56,
   "scan_history": [
     {
@@ -1774,6 +1774,12 @@
       "date": "2026-05-24",
       "findings": 0,
       "note": "Rotation 58 sixth scan. Full read of all 322 lines (sub-skill definition, locations, composition, directives, build pipeline, section markers, placeholders, manifest, creating new sub-skill, vault-remember walkthrough, contributing, tips). Verified: directory tree (references/sub-skills/{common,roles,capabilities,common-events,project}/) matches reality; figma capability has {manifest.yaml, setup.md, sub-skill.md} as documented; common-events has event-driven-workflow.md, idle-cooldown-loop.md, l1-base.md, cursor-management.md, forge-read-pattern.md, comment-handling.md as listed; all role entry files (dev/pm/qa/dm with instructions.md+SOUL.md+manifest.yaml) exist; references/roles/{LAYERS.md,SOUL.md,instructions.md} exist; compose.py supports all/deploy/deploy-all (lines 1497/1502/1521); compose.py all writes references/agent-instructions.md (line 31); role-roster directive #9925 implemented (compose.py line 488/561) and used in common/agent-boundaries.md; all 7 placeholders processed in compose.py (line 743-782): ROLE_TEST_CMD/OTHER_ROLES/INTERVAL/ACTIVE_AGENTS/E2E_TEST_CMD. 0 findings — doc is current."
+    },
+    {
+      "file": "CONTRIBUTING.md",
+      "date": "2026-05-24",
+      "findings": 0,
+      "note": "Rotation 58 seventh scan. Full read of all 53 lines. Verified: .github/ISSUE_TEMPLATE/{issue-report.yml, task-request.yml} exist; tests/run_tests.py exists and supports static arg (run_tests.py:206 static_only = targets == [\"static\"]); requirements-dev.txt exists; SKILL.md/README.md/CHANGELOG.md exist; docs/sub-skill-guide.md exists; /squidsquad-issue command implemented inline via SKILL.md:444-446 (not a standalone command file); upstream WallyDoodlez/SquidSquad URL matches git remote origin. 0 findings — doc is current."
     }
   ],
   "doc_inventory": {
