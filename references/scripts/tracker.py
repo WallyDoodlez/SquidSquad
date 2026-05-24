@@ -896,10 +896,19 @@ def _check_merged_pr(number):
     On any forge error, returns None — callers must treat None as "no
     proof of merge" (the existing ancestry block remains in force).
     """
+    # #9999 DS F1: do NOT pass a `search=` substring to the adapter.
+    # ForgejoAdapter.list_prs applies the search as a literal substring
+    # match against headRefName client-side; a value like `squidsquad/ N`
+    # (with the space that the natural format produces) does not appear
+    # in any real branch name like `squidsquad/task/N`, so the filter
+    # discards every result and the adapter path always returns None.
+    # Mirror the gh CLI path: fetch the recent merged PRs unfiltered and
+    # rely on the local `parts[-1] == str(number)` check below to match
+    # by branch suffix.
     adapter = _get_forge_adapter()
     if adapter:
         try:
-            prs = adapter.list_prs(state="merged", search=f"squidsquad/ {number}")
+            prs = adapter.list_prs(state="merged")
             for pr in prs:
                 head = pr.get("headRefName", "")
                 parts = head.split("/")
@@ -1198,7 +1207,7 @@ def transition(number, from_status, to_status, role=None, force=False):
                     "info",
                     f"Ship gate on #{number}: branch '{branch_name}' tip has "
                     f"{commit_count} commit(s) not reachable from working "
-                    f"branch, but PR #{pr_num} is MERGED on GitHub "
+                    f"branch, but PR #{pr_num} is MERGED on the forge "
                     f"(squash-merge) — allowing ship.",
                 )
             else:

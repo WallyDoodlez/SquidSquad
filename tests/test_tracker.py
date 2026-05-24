@@ -574,3 +574,104 @@ class TestCheckMergedPr:
         # state must be merged
         state_idx = cmd.index("--state")
         assert cmd[state_idx + 1] == "merged"
+
+    # --- DS 9999 F2: forge-adapter path coverage ---
+
+    def test_adapter_path_happy_path(self, monkeypatch):
+        """When a forge adapter is configured (e.g. Forgejo), the
+        adapter path must invoke list_prs(state='merged') and return
+        the matching branch's PR. DS 9999 F1 regression: the call must
+        NOT pass a broken `search=` substring that would discard all
+        results client-side."""
+        adapter = MagicMock()
+        adapter.list_prs.return_value = [
+            {"number": 9997,
+             "headRefName": "squidsquad/task/9967",
+             "url": "https://forge.example/owner/repo/pulls/9997"},
+        ]
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: adapter)
+        result = tracker._check_merged_pr(9967)
+        assert result == (9997, "https://forge.example/owner/repo/pulls/9997")
+        adapter.list_prs.assert_called_once_with(state="merged")
+
+    def test_adapter_path_returns_none_when_exception(self, monkeypatch):
+        """If the adapter raises (network, auth, schema mismatch), the
+        check must return None so the existing ancestry block stays in
+        force — safe default, no regression of the ship gate."""
+        adapter = MagicMock()
+        adapter.list_prs.side_effect = RuntimeError("forge unreachable")
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: adapter)
+        assert tracker._check_merged_pr(9967) is None
+
+
+# --- DS 9999 F3: integration test for the full ship-transition path ---
+
+class TestTransitionShipGateSquashMerge:
+    """End-to-end test for the squash-merge ship-gate rescue (#9999).
+
+    Exercises `transition()` with the wiring around the
+    `_check_unmerged_branch` / `_check_merged_pr` interplay: when
+    ancestry reports a hit AND a merged PR exists, the transition
+    must succeed (not call sys.exit). A regression in the wiring
+    (e.g. missing the `if merged_pr:` branch) would be caught here.
+    """
+
+    def _stub_transition_environment(self, monkeypatch):
+        """Stub everything except the unmerged-branch / merged-PR
+        guards so we can isolate the squash-merge rescue logic.
+
+        `pending-ship -> shipped` doesn't trip the unread-feedback or
+        TC-coverage guards (neither is in `_GUARDED_TRANSITIONS` for
+        that pair), so only the unmerged-PR check and the side-effect
+        calls (label edit, close, log) need stubbing.
+        """
+        monkeypatch.setattr(tracker, "_check_unmerged_pr",
+                            lambda *a, **kw: None)
+        # No forge adapter — gh CLI path.
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        # All gh CLI calls succeed silently (label edit, close).
+        monkeypatch.setattr(tracker, "_run_list",
+                            lambda *a, **kw: _mock_result(stdout="ok"))
+        # Stub the diagnostics subprocess so it can't spawn diagnostics.py.
+        monkeypatch.setattr(tracker, "_log_diagnostic",
+                            lambda *a, **kw: None)
+
+    def test_ship_allowed_when_squash_merged(self, monkeypatch):
+        """Branch ancestry says unmerged; forge PR state says MERGED →
+        transition must NOT call sys.exit. Locks the squash-merge
+        rescue wiring against accidental removal."""
+        self._stub_transition_environment(monkeypatch)
+        monkeypatch.setattr(
+            tracker, "_check_unmerged_branch",
+            lambda n: ("squidsquad/task/9967", 1),
+        )
+        monkeypatch.setattr(
+            tracker, "_check_merged_pr",
+            lambda n: (9997, "https://example.com/x/y/pull/9997"),
+        )
+
+        try:
+            tracker.transition(9967, "pending-ship", "shipped",
+                               role="dm-lead", force=False)
+        except SystemExit:
+            pytest.fail("ship gate falsely blocked a squash-merged PR")
+
+    def test_ship_blocked_when_branch_unmerged_and_no_merged_pr(
+            self, monkeypatch, capsys):
+        """Branch ancestry says unmerged AND no merged PR found →
+        transition must block (sys.exit 1). Guards against the
+        rescue widening too far (i.e., approving any ancestry hit)."""
+        self._stub_transition_environment(monkeypatch)
+        monkeypatch.setattr(
+            tracker, "_check_unmerged_branch",
+            lambda n: ("squidsquad/task/9967", 1),
+        )
+        monkeypatch.setattr(tracker, "_check_merged_pr", lambda n: None)
+
+        with pytest.raises(SystemExit) as exc_info:
+            tracker.transition(9967, "pending-ship", "shipped",
+                               role="dm-lead", force=False)
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "BLOCKED" in captured.err
+        assert "not merged to the working branch" in captured.err
