@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 12:40
+
+- **Files scanned**: references/scripts/vault_remember.py (full 418 lines; focus on `_write_working_state_field` + `_upsert_vault_writes` write paths, frontmatter parser robustness, path-traversal defenses)
+- **Findings**: #10007 (medium — non-atomic working-state.md writes at L55 and L151 violate the agent-foundation \"atomic writes for concurrently-read files\" rule; statusline + ≥10 scripts read this file concurrently; cycle_post._write_task_log already has the correct tmp+replace pattern, vault_remember just doesn't apply it; same defect family as #9930/#9932)
+- **Items rejected by human**: none yet
+- **Notes**: `effective_confidence` path-traversal defense at L213-219 is solid (resolve-then-`is_relative_to(VAULT_DIR.resolve())`). YAML frontmatter parser at L237-240/L316-319 doesn't handle block-scalars or array-on-next-line `tags:\\n  - evergreen` form — would silently miss the evergreen exemption; but inspecting `.squidsquad/vault/galaxy/*.md` confirms current notes use inline `tags: [...]` so the substring check works in practice (didn't file). `is_quiet` defaults to \"quiet\" on read error (L110-112) — wastes a cycle but is non-destructive. `note_count` excludes only `.gitkeep` (L281) so any future README in vault/ would inflate count; cosmetic. `_upsert_vault_writes` is single-process intra-cycle so the read-modify-write race is theoretical for that script alone — but the cross-process statusline-reader is the real concurrency hazard.
+
 ## Scan — 2026-05-24 12:11
 
 - **Files scanned**: references/scripts/squidsquad_cli.py (full 446 lines; focus on cross-platform `_spawn_harness` L307-390, aggregation exit codes in `cmd_start`/`cmd_stop`/`cmd_status`, `_harness_alive` strictness)
