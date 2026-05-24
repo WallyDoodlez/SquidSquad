@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "CHANGELOG.md",
+  "last_scanned": "README.md",
   "rotation_count": 58,
   "scan_history": [
     {
@@ -1786,6 +1786,12 @@
       "date": "2026-05-24",
       "findings": 0,
       "note": "Rotation 58 eighth scan — closes R58. Read v0.43.0 through v0.36.0 sections (~200 lines, 8 most recent versions). Verified: v0.43.0 dated 2026-05-22 with 10 items (#9905, #9902, #9903, #9904, #9901, #9927, #9930, #9932, #9934, #9937) matches threshold; no Unreleased section (consistent with DM-at-bump-time workflow); 8 pending-bump items (#9939, #9941, #9926, #9925, #9946, #6274 (6274.1), #9967, #9999) correctly absent from CHANGELOG — they batch into v0.44.0 at threshold; 41 version sections total. 0 findings — doc is current. R58 ROTATION COMPLETE."
+    },
+    {
+      "file": "README.md",
+      "date": "2026-05-24",
+      "findings": 0,
+      "note": "Rotation 59 first scan. Full read of all 164 lines. Verified: references/scripts/{wizard.py setup-yes (line 2236/2413), squidsquad_cli.py with start/stop/status/shutdown commands (lines 424/427/435/437), migrate_state_branch.py} all exist; docs/{ARCHITECTURE.md, AGENT-RUNTIME.md, sub-skill-guide.md} + CONTRIBUTING.md + CHANGELOG.md + SKILL.md + LICENSE all exist; tests/comprehension/ dir exists; .squidsquad/config.md has Auto Merge (line 53), Model Routing (line 90), Code Review Model (line 99); references/roles/{dm,pm}/SOUL.md have Project Context + Project Adaptation sections matching README claim. 0 findings — doc is current."
     }
   ],
   "doc_inventory": {
