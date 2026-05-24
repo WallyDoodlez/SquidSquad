@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 18:10
+
+- **Files scanned**: .squidsquad/pm/planning/BRAINSTORM-vault-subskills.md (PM's exploratory plan for vault sub-skill redesign, 180 lines, pre-approval)
+- **Findings**: none filed (it's a brainstorm, not approved scope). Cross-role situational awareness: PM is proposing to tear down `vault-protocol`, `vault-protocol-slim`, `vault-remember`, `vault-optimize` (as cycle routines), and `vault-synthesis`; replace with two classes — A (composed sub-skills hooked into agent workflow) and B (event-bus-subscriber sub-skills running in the harness layer). A6 `vault-capture-on-scan-finding` is the proposed handler for the T2 improvement-scan trigger; PM explicitly cites **#10007's audit** as the paradigm case for "systemic finding → auto-create `pattern-*.md` vault note alongside the bug". My cycle-1361 audit-vs-file methodology (captured in `learning-scan-comment-vs-file-duplicate.md` cycle 1362) is being absorbed upstream into PM's broader proposal — positive signal that scan output is being read.
+- **Items rejected by human**: none yet
+- **Notes**: PM has 5 open questions for human (B-class lifecycle timing, ASK-USER autonomous protocol, B3 L4-injector v1-vs-v2, drop `projects/` folder, cron host for `vault-decay-keeper`). Skill should NOT react with implementation while brainstorm is pre-approval — but worth tracking. Question 2 (ASK-USER protocol in autonomous cycles) affects skill: my last 30+ cycles have been autonomous, and vault-capture-on-pr's ASK-USER would fire in that context. When PM files concrete tasks from the brainstorm, skill can offer the autonomous-cycle perspective as a CONTEXT.md input.
+
 ## Scan — 2026-05-24 17:39
 
 - **Files scanned**: references/scripts/forgejo_setup.py (385 lines; Docker Compose deployment automation for local Forgejo instance — 9 functions, setup-time tool not in steady-state path)
