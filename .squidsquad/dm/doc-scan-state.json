@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "SKILL.md:sections-7-8+sec-10",
+  "last_scanned": "docs/ARCHITECTURE.md",
   "rotation_count": 56,
   "scan_history": [
     {
@@ -1705,6 +1705,15 @@
       "date": "2026-05-23",
       "findings": 0,
       "note": "Rotation 57 fifth scan. Full read of lines 349-443 (sec 7 Upgrade + sec 8 Schema Changelog) + lines 467-505 (sec 10 /squidsquad-status). Verified: sec 7 Step 3 /squidsquad-compose + compose.py deploy-all both exist and match the upgrade flow in references/commands/squidsquad-upgrade.md; line 376 SOUL.md preservation claim accurate (compose.py:1148-1150 guards with \"if not soul_path.exists()\"); Step 4 v1→v2 patch sections (Loop/Flags/Git Branches/Forge Backend/Model Routing) match wizard.py:540-547 _SECTION_ORDER and the v2 emitter at lines 713-758; v2 field names match (Interval Minutes, Context Threshold, Working Branch/State Branch defaults main/squid-squad, Provider github + Endpoint https://api.github.com, Default Model claude); Step 5 wizard.py ensure-labels command valid; Step 6 commit format matches squidsquad-upgrade.md step 9. Sec 8 Schema Changelog historical content stable. Sec 10 squidsquad_cli.py status fallback to current-state mtime + .claude-pid + legacy .health described correctly (R55 fix intact); tracker.py list-issues + list-tasks --status approved/in-progress all valid (tracker.py:1329, 1335); Recently Shipped query (gh issue list --label squidsquad --label status:shipped --state closed) verified executes and returns shipped-only results — R56 status:shipped filter fix intact. One minor v2-schema cosmetic noted but not filed: wizard._flag_label converts pr_flow → \"Pr Flow\" not \"PR Flow\"; SKILL.md sec 7 line 389 says \"PR Flow\" which is the project convention. This is a code-side cosmetic, not a doc drift — left untouched."
+    },
+    {
+      "file": "docs/ARCHITECTURE.md",
+      "date": "2026-05-23",
+      "findings": 1,
+      "fixes": [
+        "L2 Orchestration key files (lines 60-61) — \".harness-state.json\" and \"current-state\" were listed without their actual paths, while the other L2 entries used full paths (references/scripts/harness.py, references/scripts/thin_launcher.py). Verified actual locations: HARNESS_STATE_FILE = SQUIDSQUAD_DIR / \".harness-state.json\" (harness.py:77) → lives at .squidsquad/.harness-state.json (single file per repo), and current-state is per-role at .squidsquad/[role]/current-state. Updated to show full paths and clarify scope. Committed manually because cycle_post.py only stages .squidsquad/dm/ (per #9474)."
+      ],
+      "note": "Rotation 57 sixth scan. Full read of all 279 lines (6 layer sections + Agent Process Tree + Three claude.exe populations + How Layers Interact + Agent Roles + Feature Lifecycle + Coordination Model + Changing Things + Key Design Decisions). Verified: L1 key files all exist (cycle_pre/post.py, git_ops.py, tracker.py); L2 thin_launcher.py:184 shutil.which line ref intact (R54 fix still good); L4 includes.yml + sub-skills/common/ + compose.py exist; {{runtime:}} directive accurate (references/roles/*/instructions.md use this); L6 vault PARAG structure all 5 dirs + BRIEFING.md present (R56 resources/ fix intact); orphan_cleanup.py #9688 + taskkill /F mechanism accurate; HARNESS_STATE_FILE path correct; Feature Lifecycle states match tracker.py legal transitions; event bus read in cycle_pre.py:1268-1274. One drift caught: L2 key files state-file paths missing prefixes (.harness-state.json + current-state). Note: BRIEFING.md ~50 line claim is documented consistently across vault-protocol.md / vault-protocol-slim.md / ARCHITECTURE.md — current install at 98 lines is a known bloat issue (working state note), not a doc drift."
     }
   ],
   "doc_inventory": {
@@ -1717,7 +1726,7 @@
       "status": "current"
     },
     "docs/ARCHITECTURE.md": {
-      "last_scanned": "2026-05-07",
+      "last_scanned": "2026-05-23",
       "status": "current"
     },
     "docs/sub-skill-guide.md": {
