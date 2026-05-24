@@ -4,7 +4,7 @@
 - **Status**: active; draft PR #10004 on branch squidsquad/pm/10003 (MERGEABLE); arch-closure audit in progress
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-24 15:12, cycle 1655)
+## Pipeline snapshot (2026-05-24 15:42, cycle 1656)
 - 1 PR open: #10004 (draft, MERGEABLE, our work on #10003)
 - 0 pending-test, 0 pending-ship, 0 external
 - 1 approved (DM lane): #3
@@ -15,29 +15,25 @@
 - 1 planned (skill, stale): #9845
 - 6 issues at status:open: #9969, #9970, #10002, #10005, #10006, #10007
 - shipped_since_bump = 8 of 10
-- agent health: 4/4 healthy
+- agent health: 4/4 healthy (prior reading)
 
 ## Plan-first gate (#feedback_plan_first)
 No close/fold/umbrella moves until arch doc set is demonstrably complete + gap audit passes.
 
-## Arch-closure audit (in progress, cycle 1655)
-Proposal posted to umbrella #9968 with 21 tickets in 4 tiers:
-- **Tier 1 (ready-to-close, 8)**: #9968, #8702, #9969, #9970, #4082, #4085, #4378, #7694
-- **Tier 2 (partial, 7)**: #9996, #5170, #5613, #5783, #5620, #9581, #8698
-- **Tier 3 (keep-open, 6)**: #9874, #9875, #4221, #5171, #7464, #5855
-- **Tier 4 (housekeeping)**: #10001 (gap-audit task itself), #9998 (open question)
+## Arch-closure audit (in progress)
+Proposal posted to umbrella #9968 (cycle 1654) with 21 tickets in 4 tiers.
 
-### Tier-1 four-older-tickets risk audit (RISK REALIZED on 3/4)
-- **#4082** → OBSOLETE not superseded: designer role removed entirely; preset deprecated (`references/presets/design/manifest.yaml` lines 11–14)
-- **#4085** → decision needed: COMPOSE-ARCHITECTURE.md documents L1–L4 model but script reorg into layered dirs never happened; scripts still flat in `references/scripts/`
-- **#4378** → partial: `sub-skill-guide.md` line 47 mentions `capabilities/` in file tree, but dedicated explanation section (setup-time vs compose-time) is missing
-- **#7694** → OBSOLETE: referenced `roles/dev/includes.yml` line 10 which no longer exists; current architecture has `implement-tasks.md` shared at L2 via `manifest.md`, variants only contribute `domain-context.md`
+### Tier-1 older-four audit findings (RISK REALIZED on 3/4)
+- **#4082** → OBSOLETE: designer role removed entirely; preset deprecated
+- **#4085** → **DISPOSITION RECORDED (cycle 1656)**: not closing standalone; fold into #10001 gap-audit. Disposition comment on #4085 + cross-ref on #10001 both posted. Closure pending arch-doc explicit decision (defer/won't-do/plan-it).
+- **#4378** → partial: file-tree bullet exists, dedicated capabilities-vs-sub-skills explanation section missing. Walked with human cycle 1656: confirmed dual-nature (setup-time manifest.yaml+setup.md, compose-time sub-skill.md with role opt-in via applicable_roles). 3 options presented to human (inline-fix in #10003 / fold-into-#10001 / keep-open). **Awaiting disposition.**
+- **#7694** → OBSOLETE: referenced `includes.yml` mechanism no longer exists
 
 ### Pending human input
-1. #4085 disposition: keep open vs. close as won't-fix vs. close as superseded (weakest)
-2. #4378 disposition: keep open, close gap inline (~30 lines), or close as good-enough
-3. Approval to update #9968 umbrella comment with corrected rationales before any batch close
-4. Whether to walk the rest of Tier 1 (#9968, #8702, #9969, #9970) — those 4 are newer (post-arch-doc-push) so risk is lower but not zero
+1. #4378 disposition (3 options on the table)
+2. Approval to update #9968 umbrella comment with corrected rationales for the older-four before any batch close
+3. Whether to walk newer Tier-1 four (#9968, #8702, #9969, #9970)
+4. Tier 2 case-by-case pass
 
 ## Doc set status
 - ARCHITECTURE.md (280 lines)
@@ -53,3 +49,4 @@ Proposal posted to umbrella #9968 with 21 tickets in 4 tiers:
 - Continue VAULT-ARCH polish (sections 4-12 untouched)
 - Switch to a different arch doc
 - Run first-pass gap audit on current doc set (overlaps with #10001 + arch-closure work)
+- Add capabilities section to sub-skill-guide.md (closes #4378 inline) — pending human pick
