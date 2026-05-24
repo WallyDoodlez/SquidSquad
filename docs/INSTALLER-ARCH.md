@@ -22,6 +22,14 @@ The **team preset** is the concrete roster chosen at install — which actual wo
 
 Throughout this doc, **prose talks about the categorical classes** (PM, workers, verifiers, DM). File-layout examples use `<worker-role>/`, `<verifier-role>/`, `pm/`, `dm/` placeholders since concrete names depend on the chosen preset.
 
+### 1.2 Per-agent clone isolation (mandatory)
+
+**Every agent runs in its own git clone of the project repo.** This is a base architectural commitment — not a configurable mode. The installer always sets up per-role clones; there is no flag to disable clone isolation.
+
+Why: agents work autonomously and concurrently. If they shared one working tree they would step on each other's `git pull`, `git checkout`, branch switches, and uncommitted state. Per-agent clones make each agent's working tree disjoint while still coordinating through the same remote (the source-of-truth git repo) and forge (GitHub Issues).
+
+The clones live wherever the operator places them on disk; their paths are registered in `~/.squidsquad/clones/<role>` (one file per role, contents = absolute path to that role's clone). The harness reads this registry at boot, and `start.sh` uses it to sync all clones with `git pull` before booting the squad.
+
 In scope:
 
 - How the installer is structured (agent + helpers + runbook)
@@ -93,7 +101,7 @@ Three commitments:
 | `.squidsquad/.local-config` | Per-clone role→path mapping for `start.sh` to sync clones |
 | `.squidsquad/.harness-port`, `.harness-state.json`, `.event-state.json` (at runtime) | Harness-owned runtime files — written when the harness boots, not by the installer. Listed here for completeness; their schemas are documented in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §4–§5. |
 | `~/.squidsquad/secrets` | API keys for external models (restricted permissions, never committed to repo) |
-| `~/.squidsquad/clones/` | Per-role git clones (when clone isolation is enabled — each agent works in its own clone with project-local paths only, never global `~/.squidsquad/clones/` outside the install's scope) |
+| `~/.squidsquad/clones/` | Per-role clone-path registry. One file per role (`pm`, each worker, each verifier, `dm`) whose contents is the absolute path to that role's clone. Always created — clone isolation is mandatory (see §1.2), not a configurable mode. |
 | **Forge (GitHub)** | Issue labels created via `gh label create` — status/role/type/priority/severity taxonomy |
 | **Git commit** | Single atomic install commit on `main` (or the operator's chosen branch) |
 
@@ -154,7 +162,7 @@ Helper: `references/scripts/wizard.py check-gh` returns a JSON envelope with `ok
 ~/.squidsquad/
 ├── secrets        # API keys, restricted perms (0600)
 ├── config         # cross-install config
-└── clones/        # per-install per-role clone trees (if clone isolation enabled)
+└── clones/        # per-role clone-path registry (one file per role; mandatory per §1.2)
 ```
 
 Helper: `references/scripts/shared_fs.py init`. Idempotent — re-runs are safe.
@@ -298,7 +306,7 @@ And the per-user shared filesystem (not part of any single repo):
 ~/.squidsquad/
 ├── secrets         # API keys (chmod 0600)
 ├── config          # cross-install config
-└── clones/         # per-install per-role git clones (if clone isolation enabled)
+└── clones/         # per-role clone-path registry — one file per role, contents = absolute path
 ```
 
 ---
@@ -497,6 +505,7 @@ Across both upgrade and clean-rebuild, these are always preserved:
 - **2026-05-23 (v1 draft)** — initial draft. Consolidates the install flow into one architecture doc, distinct from the step-by-step WIZARD.md runbook. Locks the two-phase (conversation, then atomic commit) model, the ephemeral-installer-agent commitment, and the simple "pull latest sources + recompose" upgrade flow. Open gaps in §12 carry forward to follow-up issues.
 - **2026-05-23 (v1 draft, capability removal)** — §8 rewritten. SquidSquad no longer has a "capability" framework at install time. Tool/MCP/CLI configuration is per-agent post-install: the human tells each agent what tools to use, the agent persists via L4 writes per [COMPOSE-ARCHITECTURE.md §7](COMPOSE-ARCHITECTURE.md). All references in §3 (inputs), §4 (Phase 1 conversation, Phase 5 atomic write), and §5 (file layout) updated to drop capability mentions. The prior `references/sub-skills/capabilities/` directory and `common/capability-check.md` are marked as architectural deadwood; follow-up task against `worker` (skill) to remove them.
 - **2026-05-23 (v1 draft, R1 fixes)** — DS round-1 surfaced 8 findings (4 ERROR, 3 WARNING, 1 LOW). All applied: (1) 3 broken §7→§10 cross-refs for the upgrade flow location; (2) Phase 3 review screen example still leaked "Figma design; local delivery" — replaced with capability-free spec; (3) §11.1 "Phases 0–6 make no changes" rewritten honestly — Phases 0–4 don't touch the target repo, Phases 5–7 are pre-commit local + forge writes, Phase 8 is the atomic commit; (4) Step vs Phase numbering clash — added an explicit numbering-note callout at the end of §2, replaced "Step 7 commit" in the diagram with "Phase 8 commit"; (5) "Phase 5c" for Forgejo → "WIZARD Step 5c" (the wizard's step number, mapped into this doc's Phase 1 conversation); (6) §10 upgrade flow expanded with a user-confirm gate showing a changeset summary, and an explicit harness-restart specification (`POST /agents/<role>/stop` + `POST /agents/<role>/start` per role, falling through to `start.sh` if the harness isn't running); (7) NEW §4.8 Phase 4 dedicated approval section — describes the Approve / Edit / Abort prompt format and the "last clean abort point" semantics; (8) §3.2 outputs row for runtime harness files now lists `.harness-port` + `.harness-state.json` + `.event-state.json` together with a "harness-owned, not installer-written" note. Phase numbering renumbered downstream: old §4.7 (Phase 4–5 bundled) split into §4.7 Phase 4 + §4.8 Phase 5; §4.8–4.11 shifted to §4.9–4.12. DS artifact: `.squidsquad/pm/planning/REVIEW-INSTALLER-ARCH-DEEPSEEK-1.md`.
+- **2026-05-23 (v1 draft, clone isolation mandatory + secret-file clarity)** — Two small clarifications. (a) NEW §1.2: clone isolation is a hard architectural commitment, not a configurable mode. The installer always creates the per-role clone-path registry at `~/.squidsquad/clones/`. All conditional phrasing ("if clone isolation enabled", "when enabled") removed across §3.2 outputs row, §4.2 ~/.squidsquad tree, and §5 layout footer. (b) `~/.squidsquad/clones/` was described as containing the clones themselves; corrected — it contains a *registry* (one file per role with the absolute path to that role's clone). Clones live wherever the operator places them on disk.
 - **2026-05-23 (v1 draft, categorical roles + R2 fixes)** — Two related changes.
   - **Categorical roles**: prose now talks about the four categorical role classes (**PM / workers / verifiers / DM**) rather than specific concrete role names (`be`, `fe`, `skill`, `qa`, `dev`, etc.). The concrete roster — `pm/dev/qa/dm` for the default preset, `pm/fe/be/qa/dm` for the frontend-backend preset, etc. — is now framed as a *team preset* selected during install. NEW §1.1 introduces this terminology. §3.1 inputs row now says "team preset (which workers and verifiers)" rather than "team shape (which dev roles)". §4.4 Phase 1 conversation reframes "Intent + specialist roster" as "Team preset" with the wizard offering a small named set (default, frontend-backend, multi-platform, custom). §4.5 install spec uses `team_preset:` + `workers:` + `verifiers:` keys. §4.6 review screen example uses preset-shape language ("PM + N workers + M verifiers + DM"). §4.9 compose iterates "PM, each worker, each verifier, DM" not concrete names. §5 file layout uses `<worker-role>/` + `<verifier-role>/` placeholders alongside the always-present `pm/` and `dm/`; explicit note that the default-preset names shown are illustrative.
   - **R2 fixes**: DS round-2 returned 3 new findings (1 ERROR, 2 WARNING) on top of R1. Applied: (1) dead `(MEMORY)` link targets in §3.2 and §9 replaced with inline descriptions (clone isolation principle, tracker abstraction principle); (2) Phase 7 flowchart node "(labels + initial issues)" → "(initial issues)" — labels were already documented as Phase 5 work; (3) §12 G4 reference to "Phase 5.1" → "§11.2" (the interrupted-install recovery path; "Phase 5.1" was not a real section ID). DS artifact: `.squidsquad/pm/planning/REVIEW-INSTALLER-ARCH-DEEPSEEK-2.md`.
