@@ -8,8 +8,8 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "CONTRIBUTING.md",
-  "rotation_count": 56,
+  "last_scanned": "CHANGELOG.md",
+  "rotation_count": 58,
   "scan_history": [
     {
       "file": "SKILL.md:sections-4-6",
@@ -1780,6 +1780,12 @@
       "date": "2026-05-24",
       "findings": 0,
       "note": "Rotation 58 seventh scan. Full read of all 53 lines. Verified: .github/ISSUE_TEMPLATE/{issue-report.yml, task-request.yml} exist; tests/run_tests.py exists and supports static arg (run_tests.py:206 static_only = targets == [\"static\"]); requirements-dev.txt exists; SKILL.md/README.md/CHANGELOG.md exist; docs/sub-skill-guide.md exists; /squidsquad-issue command implemented inline via SKILL.md:444-446 (not a standalone command file); upstream WallyDoodlez/SquidSquad URL matches git remote origin. 0 findings — doc is current."
+    },
+    {
+      "file": "CHANGELOG.md",
+      "date": "2026-05-24",
+      "findings": 0,
+      "note": "Rotation 58 eighth scan — closes R58. Read v0.43.0 through v0.36.0 sections (~200 lines, 8 most recent versions). Verified: v0.43.0 dated 2026-05-22 with 10 items (#9905, #9902, #9903, #9904, #9901, #9927, #9930, #9932, #9934, #9937) matches threshold; no Unreleased section (consistent with DM-at-bump-time workflow); 8 pending-bump items (#9939, #9941, #9926, #9925, #9946, #6274 (6274.1), #9967, #9999) correctly absent from CHANGELOG — they batch into v0.44.0 at threshold; 41 version sections total. 0 findings — doc is current. R58 ROTATION COMPLETE."
     }
   ],
   "doc_inventory": {
