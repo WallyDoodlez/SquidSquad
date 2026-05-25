@@ -36,10 +36,29 @@ def _stub_clock(start=0.0):
 
 
 class TestResolveClaudeExePidFastPath:
-    """When claude_exe_used is a real .exe, no resolution is needed."""
+    """Fast path: no descendant walk needed.
 
-    def test_returns_wrapper_pid_for_direct_exe_path(self):
-        """If shutil.which returned a .exe, that IS the claude PID."""
+    Triggered when:
+    - claude_exe_used is None (defensive — caller didn't tell us), or
+    - on non-Windows AND the executable ends in .exe / extensionless.
+
+    Windows always walks regardless of extension (DS 10101 F4) to
+    eliminate the .cmd/.bat/.ps1 allowlist fragility.
+    """
+
+    def test_returns_wrapper_pid_when_claude_exe_used_is_none(self):
+        """None path takes the fast path on every platform."""
+        pid = thin_launcher._resolve_claude_exe_pid(
+            wrapper_pid=99,
+            claude_exe_used=None,
+            _list_children=lambda p: pytest.fail("should not walk tree"),
+        )
+        assert pid == 99
+
+    def test_unix_exe_path_skips_walk(self, monkeypatch):
+        """POSIX + .exe → fast path. Mock sys.platform to make the
+        test deterministic on any host."""
+        monkeypatch.setattr(thin_launcher.sys, "platform", "linux")
         pid = thin_launcher._resolve_claude_exe_pid(
             wrapper_pid=12345,
             claude_exe_used="/usr/bin/claude.exe",
@@ -47,8 +66,9 @@ class TestResolveClaudeExePidFastPath:
         )
         assert pid == 12345
 
-    def test_returns_wrapper_pid_for_unix_no_extension(self):
-        """POSIX claude binary has no extension — also the fast path."""
+    def test_unix_extensionless_skips_walk(self, monkeypatch):
+        """POSIX + extensionless claude binary → fast path."""
+        monkeypatch.setattr(thin_launcher.sys, "platform", "linux")
         pid = thin_launcher._resolve_claude_exe_pid(
             wrapper_pid=12345,
             claude_exe_used="/usr/local/bin/claude",
@@ -56,14 +76,46 @@ class TestResolveClaudeExePidFastPath:
         )
         assert pid == 12345
 
-    def test_returns_wrapper_pid_when_claude_exe_used_is_none(self):
-        """Defensive — None path treated as non-shim."""
+
+class TestResolveClaudeExePidWindowsAlwaysWalks:
+    """DS 10101 F4: on Windows, walk the descendant tree regardless of
+    the resolved executable extension. Eliminates the .cmd/.bat/.ps1
+    allowlist fragility — a future npm shim with a different extension
+    (e.g. .vbs, .com) won't silently re-introduce the stale-wrapper bug.
+    """
+
+    def test_windows_walks_even_for_exe(self, monkeypatch):
+        """Windows + .exe → walks anyway, in case Popen's child PID
+        is still wrapped (cmd /c invocation, AV interposition, etc.)."""
+        monkeypatch.setattr(thin_launcher.sys, "platform", "win32")
+        now_fn, sleep_fn = _stub_clock()
+
+        def children_of(parent_pid):
+            return [{"pid": 8765, "name": "claude.exe"}]
+
         pid = thin_launcher._resolve_claude_exe_pid(
-            wrapper_pid=99,
-            claude_exe_used=None,
-            _list_children=lambda p: pytest.fail("should not walk tree"),
+            wrapper_pid=8764,
+            claude_exe_used="C:\\bin\\claude.exe",
+            _now=now_fn, _sleep=sleep_fn,
+            _list_children=children_of,
         )
-        assert pid == 99
+        assert pid == 8765
+
+    def test_windows_walks_for_unknown_extension(self, monkeypatch):
+        """Windows + .vbs (hypothetical future shim) → walks anyway."""
+        monkeypatch.setattr(thin_launcher.sys, "platform", "win32")
+        now_fn, sleep_fn = _stub_clock()
+
+        def children_of(parent_pid):
+            return [{"pid": 9999, "name": "claude.exe"}]
+
+        pid = thin_launcher._resolve_claude_exe_pid(
+            wrapper_pid=9998,
+            claude_exe_used="C:\\bin\\claude.vbs",
+            _now=now_fn, _sleep=sleep_fn,
+            _list_children=children_of,
+        )
+        assert pid == 9999
 
 
 class TestResolveClaudeExePidShimPath:
@@ -237,3 +289,70 @@ class TestResolveClaudeExePidBatAndPs1:
             _list_children=children_of,
         )
         assert pid == 9001
+
+
+class TestRealDescendantWalkersSmoke:
+    """DS 10101 F2: smoke tests for the platform-specific walkers.
+
+    The resolver tests above inject `_list_children` stubs, so the real
+    `_win32_list_descendants` / `_posix_list_descendants` walkers aren't
+    exercised. These smoke tests call them with the running process's
+    PID and validate shape — proof the walker can read the live process
+    table on this OS without crashing.
+    """
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only walker")
+    def test_win32_walker_returns_list_of_dicts_with_expected_keys(self):
+        import os
+        result = thin_launcher._win32_list_descendants(os.getpid())
+        assert isinstance(result, list)
+        # The test process may or may not have child processes — what we
+        # validate is that whatever it returns, each entry has the right
+        # shape: {"pid": int, "name": str}.
+        for entry in result:
+            assert isinstance(entry, dict)
+            assert "pid" in entry and isinstance(entry["pid"], int)
+            assert "name" in entry and isinstance(entry["name"], str)
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only walker")
+    def test_win32_walker_does_not_include_parent_pid(self):
+        """Walker returns descendants, not the parent itself."""
+        import os
+        my_pid = os.getpid()
+        result = thin_launcher._win32_list_descendants(my_pid)
+        assert all(entry["pid"] != my_pid for entry in result)
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only walker")
+    def test_win32_walker_returns_empty_for_nonexistent_pid(self):
+        """Walker handles a PID that doesn't exist (using a very large value
+        that's extremely unlikely to be a real PID)."""
+        result = thin_launcher._win32_list_descendants(2**31 - 1)
+        assert result == []
+
+    @pytest.mark.skipif(not Path("/proc").is_dir(), reason="POSIX /proc walker")
+    def test_posix_walker_returns_list_of_dicts_with_expected_keys(self):
+        import os
+        result = thin_launcher._posix_list_descendants(os.getpid())
+        assert isinstance(result, list)
+        for entry in result:
+            assert isinstance(entry, dict)
+            assert "pid" in entry and isinstance(entry["pid"], int)
+            assert "name" in entry and isinstance(entry["name"], str)
+
+    @pytest.mark.skipif(not Path("/proc").is_dir(), reason="POSIX /proc walker")
+    def test_posix_walker_does_not_include_parent_pid(self):
+        import os
+        my_pid = os.getpid()
+        result = thin_launcher._posix_list_descendants(my_pid)
+        assert all(entry["pid"] != my_pid for entry in result)
+
+
+class TestDescendantMaxDepth:
+    """DS 10101 F3: the BFS walker is depth-capped to bound traversal
+    on pathological process trees. _DESCENDANT_MAX_DEPTH=5 is generous
+    headroom over the realistic cmd.exe → claude.exe depth-1 case.
+    """
+
+    def test_max_depth_constant_is_sensible(self):
+        assert thin_launcher._DESCENDANT_MAX_DEPTH >= 2  # cmd → node → claude
+        assert thin_launcher._DESCENDANT_MAX_DEPTH <= 20  # not unbounded

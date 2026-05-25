@@ -38,6 +38,11 @@ _STILL_ACTIVE = 259
 # of the cmd.exe wrapper spawned by the npm shim on Windows.
 _CLAUDE_EXE_RESOLVE_TIMEOUT_S = 5.0
 _CLAUDE_EXE_RESOLVE_POLL_S = 0.1
+# Bound BFS depth in the descendant walker (DS 10101 Finding 3). Real
+# process trees from `cmd.exe → claude.exe` (or `cmd.exe → node.exe →
+# claude.exe`) are depth ≤ 2; allow extra headroom for unforeseen
+# wrapping layers without unbounded traversal.
+_DESCENDANT_MAX_DEPTH = 5
 
 
 def _get_effort_level(role):
@@ -156,11 +161,23 @@ def _resolve_claude_exe_pid(wrapper_pid, claude_exe_used,
     impl), ``_list_children`` (process-tree walker that returns a list
     of ``{"pid": int, "name": str}`` dicts for a given parent PID).
     """
-    # Fast path: not a shim, no resolution needed.
-    # ``None`` is treated as non-shim — if we don't know what was used,
-    # trust the wrapper PID rather than burn a 5s poll budget hunting
-    # for a descendant that may not exist.
-    if claude_exe_used is None or not claude_exe_used.lower().endswith(
+    # Fast path: trust the wrapper PID directly when we know we didn't
+    # go through a shim.
+    # - ``None`` claude_exe_used: we don't know what was launched; don't
+    #   burn 5s polling for a descendant that may not exist.
+    # - non-Windows + .exe / extensionless: POSIX shells launch claude
+    #   directly, no shim involved.
+    #
+    # On Windows we always walk the descendant tree regardless of the
+    # extension (DS 10101 Finding 4): npm currently ships .cmd shims,
+    # but the PATHEXT-resolved shim could also be .bat / .ps1 / .vbs /
+    # .com, and a non-shim .exe rarely matches Popen's child PID when
+    # CMD interpretation is involved. The cost is ~one toolhelp snapshot
+    # (sub-ms) on the happy path; the upside is the stale-wrapper bug
+    # cannot recur silently if Anthropic ever ships a non-.cmd shim.
+    if claude_exe_used is None:
+        return wrapper_pid
+    if sys.platform != "win32" and not claude_exe_used.lower().endswith(
             (".cmd", ".bat", ".ps1")):
         return wrapper_pid
 
@@ -252,13 +269,15 @@ def _win32_list_descendants(parent_pid):
     finally:
         kernel32.CloseHandle(snap)
 
-    # Walk descendants of parent_pid (BFS — claude.exe is typically a
-    # direct child of the cmd.exe shim, but allow one extra hop in case
-    # of intermediate wrappers).
+    # Walk descendants of parent_pid (BFS). claude.exe is typically a
+    # direct child of the cmd.exe shim, sometimes one hop deeper through
+    # an intermediate node.exe wrapper. Capped at _DESCENDANT_MAX_DEPTH
+    # to bound traversal on pathological process trees (DS 10101 F3).
     out = []
     frontier = [parent_pid]
     seen = {parent_pid}
-    while frontier:
+    depth = 0
+    while frontier and depth < _DESCENDANT_MAX_DEPTH:
         next_frontier = []
         for ppid in frontier:
             for pid, (parent, name) in procs.items():
@@ -267,6 +286,7 @@ def _win32_list_descendants(parent_pid):
                     out.append({"pid": pid, "name": name})
                     next_frontier.append(pid)
         frontier = next_frontier
+        depth += 1
     return out
 
 
@@ -278,50 +298,59 @@ def _posix_list_descendants(parent_pid):
     binary directly. Implemented for symmetry + future-proofing.
     """
     out = []
+    proc_dir = Path("/proc")
+    if not proc_dir.is_dir():
+        return out
+    # Build pid → (ppid, name) map from /proc/<pid>/stat.
+    # OSError on individual /proc entries (race with process exit) is
+    # expected and skipped per-entry. We do NOT swallow programming
+    # errors at the function level (DS 10101 F1) — let them propagate
+    # to the resolver, which retries on the next poll.
+    procs = {}
     try:
-        proc_dir = Path("/proc")
-        if not proc_dir.is_dir():
-            return out
-        # Build pid → (ppid, name) map from /proc/<pid>/stat.
-        procs = {}
-        for entry in proc_dir.iterdir():
-            if not entry.name.isdigit():
-                continue
-            try:
-                stat = (entry / "stat").read_text(encoding="utf-8")
-            except OSError:
-                continue
-            # stat format: pid (comm) state ppid ...
-            # comm can contain spaces and parens; use rfind on ')'.
-            close = stat.rfind(")")
-            if close < 0:
-                continue
-            open_paren = stat.find("(")
-            if open_paren < 0:
-                continue
-            comm = stat[open_paren + 1:close]
-            rest = stat[close + 2:].split()
-            if len(rest) < 2:
-                continue
-            try:
-                pid = int(entry.name)
-                ppid = int(rest[1])
-            except ValueError:
-                continue
-            procs[pid] = (ppid, comm)
-        frontier = [parent_pid]
-        seen = {parent_pid}
-        while frontier:
-            next_frontier = []
-            for current in frontier:
-                for pid, (ppid, name) in procs.items():
-                    if ppid == current and pid not in seen:
-                        seen.add(pid)
-                        out.append({"pid": pid, "name": name})
-                        next_frontier.append(pid)
-            frontier = next_frontier
-    except Exception:
-        pass
+        entries = list(proc_dir.iterdir())
+    except OSError:
+        return out
+    for entry in entries:
+        if not entry.name.isdigit():
+            continue
+        try:
+            stat = (entry / "stat").read_text(encoding="utf-8")
+        except OSError:
+            continue
+        # stat format: pid (comm) state ppid ...
+        # comm can contain spaces and parens; use rfind on ')'.
+        close = stat.rfind(")")
+        if close < 0:
+            continue
+        open_paren = stat.find("(")
+        if open_paren < 0:
+            continue
+        comm = stat[open_paren + 1:close]
+        rest = stat[close + 2:].split()
+        if len(rest) < 2:
+            continue
+        try:
+            pid = int(entry.name)
+            ppid = int(rest[1])
+        except ValueError:
+            continue
+        procs[pid] = (ppid, comm)
+    # BFS descendants, depth-capped per DS 10101 F3 (same as the
+    # Windows walker; symmetric implementation).
+    frontier = [parent_pid]
+    seen = {parent_pid}
+    depth = 0
+    while frontier and depth < _DESCENDANT_MAX_DEPTH:
+        next_frontier = []
+        for current in frontier:
+            for pid, (ppid, name) in procs.items():
+                if ppid == current and pid not in seen:
+                    seen.add(pid)
+                    out.append({"pid": pid, "name": name})
+                    next_frontier.append(pid)
+        frontier = next_frontier
+        depth += 1
     return out
 
 
