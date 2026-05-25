@@ -951,28 +951,29 @@ class TestGetVerifiableRoles:
         assert "qa" in roles
 
     def test_always_includes_mandatory_roles(self, monkeypatch):
-        """pm, qa, dm are always included regardless of config (#9318).
+        """pm, verifier, dm are always included regardless of config (#9318, #6274.2).
 
-        Post-#6055 these are mandatory roles. qa was previously sourced
-        from dev-agents — when config.md stopped listing it there
-        (#9318), the test below catches the regression where qa would
-        silently drop out of PM's verifiable-role queries.
+        Post-#6055 these are mandatory roles. verifier (renamed from qa
+        in #6274.2) was previously sourced from dev-agents — when
+        config.md stopped listing it there (#9318), the test below
+        catches the regression where verifier would silently drop out
+        of PM's verifiable-role queries.
         """
         monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "skill" if f == "dev-agents" else "")
         roles = cycle_pre._get_verifiable_roles()
         assert "dm" in roles
         assert "pm" in roles
-        assert "qa" in roles
+        assert "verifier" in roles
 
     def test_fallback_when_config_empty(self, monkeypatch):
         """If config returns empty, at least skill is present."""
         monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "")
         roles = cycle_pre._get_verifiable_roles()
         assert "skill" in roles
-        # mandatory roles always added (pm, qa, dm — #9318)
+        # mandatory roles always added (pm, verifier, dm — #9318 / #6274.2)
         assert "dm" in roles
         assert "pm" in roles
-        assert "qa" in roles
+        assert "verifier" in roles
 
     def test_deduplicates(self, monkeypatch):
         """Roles are not duplicated even if they appear in config and hardcoded."""
