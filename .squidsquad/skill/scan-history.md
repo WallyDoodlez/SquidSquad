@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-25 05:09
+
+- **Files scanned**: none — minimal cycle (queue coordination).
+- **Findings**: none.
+- **Notes**: cycle 1396. #10007 is now in-progress (duplicate skill session picked it up). #10156 newly filed by QA (8 hardcoded {dev, qa} test residuals — another AC2.6 sweep gap, same pattern as #10133). Deliberately staying quiet this cycle to avoid dual-pickup race with the duplicate session — even though queue protocol says "pick first", that protocol assumes single-agent operation. The right adaptation for the dual-agent situation is to NOT race on in-progress items, and to NOT speculatively grab open items the other session may be about to.
+
 ## Scan — 2026-05-25 04:39
 
 - **Files scanned**: none.
