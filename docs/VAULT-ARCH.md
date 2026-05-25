@@ -577,6 +577,27 @@ Open design questions for whoever picks this up:
 
 Falls under the broader vault-living-memory umbrella (#5855).
 
+### 11.4 Future gap — event bus integration (vault emits/consumes zero events today)
+
+[`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §4 documents the event bus and §4.2 the signal catalog. The vault is presently **not on the bus**: vault operations (`vault-create`, `vault-update`, `decay-apply`, `prune-scan`, `vault-synthesis` posture writes) execute as in-process script calls plus git commits, with no event emission. Agents discover vault changes via git pull on the next cycle, not in real time.
+
+Consequences for current behavior:
+
+- No way for one agent to react to another agent's vault write before the next cycle boundary
+- The §11.3 impression-tracking model has no natural event source today (every vault read would have to be observed in-process by the reader's own sub-skill rather than via a bus subscription)
+- `vault-synthesis` cross-agent broadcast (notifying other agents when a posture lands) has to be done manually via `tracker.py create-task` instead of as an event subscription
+- Sub-skills like `vault-remember` and `vault-optimize` cannot be triggered by external signals — they only fire on cycle steps
+
+A future integration would add vault-related signal types to the catalog, e.g.:
+
+- `vault.note-written` (payload: `path`, `type`, `owner`, `tags`) — emitted by `vault-create`
+- `vault.note-updated` (payload: `path`, `fields-changed`) — emitted by `vault-update`
+- `vault.note-archived` (payload: `from-path`, `to-path`, `reason`) — emitted by `vault_optimize.py prune-scan`
+- `vault.posture-detected` (payload: `posture-name`, `source-notes`) — emitted by `vault-synthesis`
+- `vault.note-read` (payload: `path`, `reader-role`) — would source the §11.3 impression model
+
+Falls under the broader vault-living-memory umbrella (#5855) and overlaps with the event-driven mode work in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §7.
+
 ---
 
 ## 12. Cross-references to other docs
