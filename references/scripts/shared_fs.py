@@ -85,6 +85,15 @@ def atomic_write_text(path, content, encoding="utf-8"):
     (e.g. ``cycle.set_counter``, ``vault_remember._upsert_vault_writes``) can
     still race between the read and the write; that is an application-level
     concern outside this helper's scope (#10007 DS review Finding 4).
+
+    Trade-off (#10007 DS round-2 Finding 3): closing the mkstemp fd before
+    re-opening by path leaves a brief window where the empty tmp file is
+    visible on disk with no open handle. For SquidSquad state files in a
+    single-agent directory this is benign — no other process is racing for
+    that specific tmp name. For shared multi-writer files where exclusivity
+    matters between create and first-write, prefer the ``os.fdopen``-on-the
+    mkstemp-fd pattern used by ``write_secret`` (which trades the Windows
+    fd-leak-on-test-patch hazard for the no-window guarantee).
     """
     path = Path(path)
     tmp_fd, tmp_path_str = tempfile.mkstemp(

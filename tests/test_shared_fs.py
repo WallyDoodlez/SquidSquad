@@ -318,27 +318,28 @@ class TestAtomicWriteText:
         assert p.read_text(encoding="utf-8") == content
 
     def test_no_tmp_leftover_after_success(self, tmp_path):
+        """#10007 DS round-2 Finding 1: assert against ANY unexpected file,
+        not just `.tmp` suffix — a future suffix change must not silently
+        skip the leak check."""
         p = tmp_path / "out.txt"
         shared_fs.atomic_write_text(p, "x")
-        leftovers = [f for f in tmp_path.iterdir() if f.suffix == ".tmp"]
-        assert leftovers == []
+        leftovers = [f for f in tmp_path.iterdir() if f != p]
+        assert leftovers == [], f"unexpected files in dir: {leftovers}"
 
     def test_crash_mid_write_leaves_original_intact(self, tmp_path, monkeypatch):
-        """If the inner write raises, the original file must be untouched."""
+        """If the inner write raises, the original file must be untouched.
+
+        #10007 DS round-2 Finding 2: patch ``os.replace`` (the observable
+        swap step) rather than ``builtins.open`` — the latter couples to
+        the internal file-opening mechanism and would silently skip the
+        crash path if the impl ever moves to ``os.fdopen``."""
         p = tmp_path / "out.txt"
         shared_fs.atomic_write_text(p, "original")
 
-        import builtins
-        real_open = builtins.open
-
         def boom(*args, **kwargs):
-            # Only intercept the inner write-to-tmp call (mode 'w');
-            # leave read calls (mode 'r' or no mode) alone.
-            if len(args) >= 2 and args[1] == "w":
-                raise RuntimeError("simulated crash")
-            return real_open(*args, **kwargs)
+            raise RuntimeError("simulated crash at swap step")
 
-        monkeypatch.setattr(builtins, "open", boom)
+        monkeypatch.setattr(shared_fs.os, "replace", boom)
 
         with pytest.raises(RuntimeError):
             shared_fs.atomic_write_text(p, "should not land")
@@ -347,25 +348,26 @@ class TestAtomicWriteText:
         assert p.read_text(encoding="utf-8") == "original"
 
     def test_crash_mid_write_cleans_up_tmp(self, tmp_path, monkeypatch):
-        """If the inner write raises, the tmp sibling must be deleted."""
+        """If the swap step raises, the tmp sibling must be deleted.
+
+        #10007 DS round-2 Findings 1+2: capture pre-call file set, then
+        assert no new files exist after — robust against suffix changes
+        and decoupled from internal open mechanism."""
         p = tmp_path / "out.txt"
         shared_fs.atomic_write_text(p, "original")
-
-        import builtins
-        real_open = builtins.open
+        before = set(tmp_path.iterdir())
 
         def boom(*args, **kwargs):
-            if len(args) >= 2 and args[1] == "w":
-                raise RuntimeError("simulated crash")
-            return real_open(*args, **kwargs)
+            raise RuntimeError("simulated crash at swap step")
 
-        monkeypatch.setattr(builtins, "open", boom)
+        monkeypatch.setattr(shared_fs.os, "replace", boom)
 
         with pytest.raises(RuntimeError):
             shared_fs.atomic_write_text(p, "x")
 
-        leftovers = [f for f in tmp_path.iterdir() if f.suffix == ".tmp"]
-        assert leftovers == [], f"tmp file leaked: {leftovers}"
+        after = set(tmp_path.iterdir())
+        new_files = after - before
+        assert new_files == set(), f"tmp file(s) leaked: {new_files}"
 
     def test_large_write_roundtrip(self, tmp_path):
         """Large content round-trips correctly through the helper.
