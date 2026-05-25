@@ -2118,8 +2118,11 @@ def generate_default_spec(scan_data=None, repo_info=None):
     default_preset = "software-dev"
     domain_variants = resolve_domain_variants(default_preset)
 
-    # Default agents — variants from manifest, not hardcoded
-    dev_variant = domain_variants.get("dev")
+    # Default agents — variants from manifest, not hardcoded.
+    # Use canonical new identity 'worker' (renamed from 'dev' in #6274.2);
+    # `or domain_variants.get("dev")` keeps pre-rename manifests resolving
+    # during the 6274.1 dual-aware window (deleted in 6274.3).
+    worker_variant = domain_variants.get("worker") or domain_variants.get("dev")
     pm_variant = domain_variants.get("pm")
     agents = [
         {"id": "pm", "alias": "pm", "role": "pm",
@@ -2127,8 +2130,8 @@ def generate_default_spec(scan_data=None, repo_info=None):
         {
             "id": "skill",
             "alias": "skill",
-            "role": "dev",
-            **({"variant": dev_variant} if dev_variant else {}),
+            "role": "worker",
+            **({"variant": worker_variant} if worker_variant else {}),
             "stack": stack,
             "test_command": test_command,
         },
