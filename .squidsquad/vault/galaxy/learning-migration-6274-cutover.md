@@ -72,3 +72,4 @@ verifies the date has passed before 6274.3 ships.
 - 2026-05-24 — Populated cutover date `2026-06-23 (UTC)` by skill-lead per AC2.9 of #9965 (6274.2). Computed as `commit_timestamp + 30 days` using the AC2.9 commit time as proxy for the merge timestamp.
 - 2026-05-24 — Re-affirmed by skill-lead as the LAST commit in the 6274.2 PR (post the c9dabdb7 hardening commit) to satisfy AC2.9's "final commit" constraint. Cutover date unchanged at `2026-06-23 (UTC)`.
 - 2026-05-25 — Re-affirmed again by skill-lead as the LAST commit (post 7e43a745 QA fix-up on test_manifest_registry.py shipped registry assertions). Cutover date unchanged at `2026-06-23 (UTC)`.
+- 2026-05-25 — Re-affirmed by qa-lead as the LAST commit after the merge-from-main resolution (state-file `.deepseek-9965-3a.out` ours, plus three state files brought in by the merge) to preserve AC2.9's "final commit" constraint pre-merge. Cutover date unchanged at `2026-06-23 (UTC)`.
