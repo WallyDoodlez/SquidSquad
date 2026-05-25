@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 20:36
+
+- **Files scanned**: references/scripts/cycle_pre.py (focused: `_enforce_branch` L193-230)
+- **Findings**: #10072 (medium — `_enforce_branch` task parsing breaks on verbose `#NNNN — desc` format; `lstrip(\"#\").strip()` + `.isdigit()` fails the digit check when task field carries the standard human-readable description after the issue number; manual checkout required every cycle of feature work; observed cycles 1334-1373 of #9965). Carried in working-state since cycle 1334; filed now that #9965 has shipped to pending-test.
+- **Items rejected by human**: none yet
+- **Notes**: minimal-cycle filing of a previously-deferred process bug. The fix is trivial (regex extraction of leading digits) but the impact is real — every feature-work cycle currently no-ops branch enforcement until the operator manually checks out.
+
 ## Scan — 2026-05-24 20:33
 
 - **Files scanned**: not applicable — active implementation cycle (not improvement scan)
