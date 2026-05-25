@@ -177,10 +177,22 @@ The `links` field is **auto-maintained** by `vault_check.py` from `[[bare-wikili
 | Level | Meaning |
 |---|---|
 | `high` | Human explicitly stated or confirmed this |
-| `medium` | Agent observed this directly (e.g., from code review, conversation pattern) |
+| `medium` | Agent observed this directly (e.g., during review or examination of material, observable pattern in conversation or behavior) |
 | `low` | Agent inferred this (e.g., from indirect signals, extrapolation) |
 
-Confidence decays automatically via `vault_optimize.py decay-apply`: `high → medium` after 60 days, `medium → low` after 120 days (defaults; configurable as "Confidence Decay Days" in `config.md`).
+**Decay**: `vault_optimize.py decay-apply` walks all notes and decays staleness:
+
+| Transition | Threshold |
+|---|---|
+| `high → medium` | 60 days since last `updated:` |
+| `medium → low` | 120 days since last `updated:` |
+| `low → ?` | **Terminal — no further decay.** Note stays at `low`, remains in its current folder, and still contributes to relevance scoring at reduced weight (`high`=10, `medium`=6, `low`=3 in `vault_optimize.py compute-relevance`). |
+
+A changelog entry is appended to the note body on each decay step, so the decay history is visible without `git blame`.
+
+**Opt-out**: notes tagged `evergreen` are exempt from decay entirely. Use for content where staleness is meaningless — enduring style preferences, fundamental architectural commitments.
+
+**Configuration drift** (current snapshot): `config.md` exposes a `Confidence Decay Days` field (default 60), and `config.py` maps the slug, but `vault_optimize.py` hardcodes the threshold at `STALE_DAYS = 60` and does NOT read the config field. The field exists but is not consumed today. Wiring tracked in #10099.
 
 ### 4.5 Wikilinks
 
