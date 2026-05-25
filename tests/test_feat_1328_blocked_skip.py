@@ -8,7 +8,7 @@ from pathlib import Path
 
 REPO = Path(__file__).parent.parent
 PM_VERIFICATION = REPO / "references/sub-skills/roles/pm/testing-and-verification.md"
-QA_VERIFICATION = REPO / "references/sub-skills/roles/qa/verification.md"
+QA_VERIFICATION = REPO / "references/sub-skills/roles/verifier/verification.md"  # #10156
 
 
 class TestPMVerificationBlockedCheck:
@@ -19,8 +19,9 @@ class TestPMVerificationBlockedCheck:
         return PM_VERIFICATION.read_text(encoding="utf-8")
 
     def test_pm_does_not_verify_directly(self, content):
-        """PM template explicitly states QA handles verification."""
-        assert "QA handles all testing and verification" in content
+        """PM template explicitly states the verifier handles verification.
+        #10156: terminology — post-#6274.2 the role is `verifier`, not `qa`."""
+        assert "Verifier handles all testing and verification" in content
 
     def test_pm_has_no_verification_steps(self, content):
         """PM should not contain Step 5/6 verification sections."""

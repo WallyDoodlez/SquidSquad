@@ -49,7 +49,8 @@ class TestVerificationSubSkill:
 
     @pytest.fixture
     def verification(self):
-        return (REPO / "references/sub-skills/roles/qa/verification.md").read_text(encoding="utf-8")
+        # #10156: post-#6274.2 rename — qa→verifier directory.
+        return (REPO / "references/sub-skills/roles/verifier/verification.md").read_text(encoding="utf-8")
 
     def test_deferred_not_valid(self, verification):
         assert '"Deferred"' in verification and "NOT valid" in verification

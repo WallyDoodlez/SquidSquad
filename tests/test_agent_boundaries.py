@@ -85,17 +85,17 @@ def test_ac4_roster_has_exactly_active_roles():
     ("feedback_auto_approve_bugs", "references/sub-skills/roles/pm/responsibility.md"),
     ("feedback_dm_optional", "references/sub-skills/roles/pm/responsibility.md"),
     # QA L2 absorptions
-    ("feedback_no_ship_failed_tc", "references/sub-skills/roles/qa/responsibility.md"),
-    ("feedback_no_ship_with_gaps", "references/sub-skills/roles/qa/responsibility.md"),
+    ("feedback_no_ship_failed_tc", "references/sub-skills/roles/verifier/responsibility.md"),
+    ("feedback_no_ship_with_gaps", "references/sub-skills/roles/verifier/responsibility.md"),
     # DM L2 absorptions
     ("feedback_dm_optional", "references/sub-skills/roles/dm/responsibility.md"),
     ("feedback_no_ship_failed_tc", "references/sub-skills/roles/dm/responsibility.md"),
     ("feedback_no_ship_with_gaps", "references/sub-skills/roles/dm/responsibility.md"),
     # Cross-role test_workflow_separation
     ("feedback_test_workflow_separation", "references/sub-skills/roles/pm/responsibility.md"),
-    ("feedback_test_workflow_separation", "references/sub-skills/roles/qa/responsibility.md"),
+    ("feedback_test_workflow_separation", "references/sub-skills/roles/verifier/responsibility.md"),
     ("feedback_test_workflow_separation", "references/sub-skills/roles/dm/responsibility.md"),
-    ("feedback_test_workflow_separation", "references/sub-skills/roles/dev/responsibility.md"),
+    ("feedback_test_workflow_separation", "references/sub-skills/roles/worker/responsibility.md"),
 ])
 def test_ac6_memory_absorption_lineage_tag(source, filename):
     """AC6: each memory entry from D5 is absorbed into the indicated L2
@@ -114,7 +114,8 @@ def test_ac6_memory_absorption_lineage_tag(source, filename):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("role", ["dev", "dm", "pm", "qa"])
+# #10156: post-#6274.2 rename — dev→worker, qa→verifier.
+@pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
 @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
 def test_ac7_l3_stub_exists_and_matches_template(role, variant):
     """AC7: all 20 L3 stub files exist and match the D6a template
@@ -134,7 +135,8 @@ def test_ac7_l3_stub_exists_and_matches_template(role, variant):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("prefix", ["pm", "qa", "dm", "dev", "shared"])
+# #10156: post-#6274.2 rename — dev→worker, qa→verifier prefix.
+@pytest.mark.parametrize("prefix", ["pm", "verifier", "dm", "worker", "shared"])
 def test_ac8_l4_seed_stub_exists(prefix):
     """AC8 (seed half): seed templates at references/sub-skills/project/."""
     seed = REPO / "references" / "sub-skills" / "project" / f"{prefix}-responsibility.md"
@@ -143,7 +145,8 @@ def test_ac8_l4_seed_stub_exists(prefix):
     assert "Install-specific responsibility additions" in content
 
 
-@pytest.mark.parametrize("prefix", ["pm", "qa", "dm", "dev", "shared"])
+# #10156: post-#6274.2 rename — dev→worker, qa→verifier prefix.
+@pytest.mark.parametrize("prefix", ["pm", "verifier", "dm", "worker", "shared"])
 def test_ac8_l4_live_stub_exists(prefix):
     """AC8 (live half): live stubs at .squidsquad/project/."""
     live = REPO / ".squidsquad" / "project" / f"{prefix}-responsibility.md"
