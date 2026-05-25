@@ -41,12 +41,14 @@ Out of scope:
 
 Every agent in an install runs in the same mode — there is one global mode for the project, selected at install via `config.md`'s `event-driven:` field:
 
-| Mode | What wakes the agent | When to use |
-|---|---|---|
-| **Loop (polling)** | Cron timer (`/loop 30m execute one Ralph Loop cycle`) | Battle-tested fallback; works without the harness; current default |
-| **Event-driven (nudge)** | A nudge from the harness, delivered via the Claude Monitor tool's stdin | Target steady-state; lower latency; no idle token burn |
+| Mode | What wakes the agent | Event-bus relationship | When to use |
+|---|---|---|---|
+| **Loop (polling)** | Cron timer (`/loop 30m execute one Ralph Loop cycle`) | **Emit-only** — agents may publish transient events for observability, but do NOT consume from the bus and do NOT maintain a cursor. Work queue + mechanical reactions both derive from tracker state. | Battle-tested fallback; works without the harness; current default |
+| **Event-driven (nudge)** | A nudge from the harness, delivered via the Claude Monitor tool's stdin | **Emit + consume** — agents subscribe with a cursor; nudges + per-event reactions both originate from the bus. | Target steady-state; lower latency; no idle token burn |
 
-The cycle wrapper (pre → creative → post) is the same in both modes — only *what initiates the wrapper* differs.
+The cycle wrapper (pre → creative → post) is the same in both modes — only *what initiates the wrapper* and *where reactions derive from* differs.
+
+**Mutual exclusivity** is intentional: loop mode and event mode are exclusive on both the wake-mechanism axis (cron vs nudge) AND the event-bus axis (emit-only vs emit+consume). A loop-mode agent that consumed events would re-introduce the harness dependency loop mode exists to avoid; an event-mode agent that polled the tracker as its work queue would re-introduce the latency floor event mode exists to fix.
 
 ### 2.1 Why both exist
 
@@ -429,38 +431,54 @@ Per-install cadence overrides via `config.md` (`EAD Cadence Active`, `EAD Cadenc
 
 ### 4.5 Mechanical reactions vs creative decisions
 
-Some event patterns are predictable enough to handle deterministically in pre-cycle, without consuming the agent's creative time.
+Some state-change patterns are predictable enough to handle deterministically in pre-cycle, without consuming the agent's creative time. **The data source differs by mode** (per §2 mutual-exclusivity):
+
+- **Event mode** — reactions are derived from `recent_events` consumed from the event bus.
+- **Loop mode** — reactions are derived from tracker state changes since last cycle (deduplicated by timestamp, not by event cursor). Loop mode does not consume from the bus.
 
 ```mermaid
 flowchart TD
-    EVENTS["recent_events"] --> SF{"Self-event?<br/>event.role == my_role"}
-    SF -->|Yes| SKIP["Skip (cascade protection)"]
-    SF -->|No| TYPE{"Event type?"}
+    subgraph event_mode["Event mode: bus-derived"]
+        EVENTS["recent_events<br/>(from event bus)"] --> SF{"Self-event?<br/>event.role == my_role"}
+        SF -->|Yes| SKIP["Skip (cascade protection)"]
+        SF -->|No| TYPE_E{"Event type?"}
+        TYPE_E -->|pr-merged + PM| R1E["Reaction: pr-merge-detected"]
+        TYPE_E -->|verification-failed + worker| R2E["Reaction: rework-needed"]
+        TYPE_E -->|other| PASS_E["No reaction → creative phase"]
+    end
 
-    TYPE -->|pr-merged + PM| R1["Reaction: pr-merge-detected<br/>PM checks issue status"]
-    TYPE -->|verification-failed + worker| R2["Reaction: rework-needed<br/>Worker prioritizes fix"]
-    TYPE -->|other| PASS["No reaction<br/>Pass to creative phase"]
+    subgraph loop_mode["Loop mode: tracker-derived"]
+        TRACKER["tracker query<br/>(gh pr list / gh issue list)"] --> DELTA{"State change since<br/>last cycle?<br/>(timestamp dedup)"}
+        DELTA -->|PR merged + PM| R1L["Reaction: pr-merge-detected"]
+        DELTA -->|issue verification-failed + worker| R2L["Reaction: rework-needed"]
+        DELTA -->|none| PASS_L["No reaction → creative phase"]
+    end
 
-    R1 --> CIJ["cycle-input.json<br/>mechanical_reactions: [...]"]
-    R2 --> CIJ
-    PASS --> CIJ
+    R1E --> CIJ["cycle-input.json<br/>mechanical_reactions: [...]"]
+    R2E --> CIJ
+    PASS_E --> CIJ
+    R1L --> CIJ
+    R2L --> CIJ
+    PASS_L --> CIJ
 ```
 
-Today (loop mode) only two patterns qualify:
+Today only two patterns qualify in either mode:
 
 1. **PR merge detected** (PM) — surfaces merge context.
-2. **Rework needed** (worker) — surfaces the qa's rejection reason.
+2. **Rework needed** (worker) — surfaces the verifier's rejection reason.
 
-Everything else lands in `recent_events` for the creative phase to interpret.
+Everything else lands in `recent_events` (event mode) or is left for the creative phase to detect via tracker reads (loop mode).
 
 ### 4.6 Cascade protection
 
-Two mechanisms prevent infinite reaction loops:
+Two mechanisms prevent infinite reaction loops. Mechanism 2 differs by mode (per §2):
 
-1. **Self-event filter**: `if event.get("role") == role: continue`. An agent's own emissions never trigger its own mechanical reactions.
-2. **Cursor deduplication**: events before the cursor are never re-read. A reaction that triggers a tracker transition (which emits a new event) will only be seen by *other* agents on their next cycle, not by the emitting agent.
+1. **Self-event filter** (both modes): `if event.get("role") == role: continue`. An agent's own emissions never trigger its own mechanical reactions. In loop mode the equivalent is a tracker-state filter — an agent doesn't react to its own most-recent transition on an issue.
+2. **Dedup mechanism**:
+   - **Event mode**: cursor deduplication. Events before the cursor are never re-read.
+   - **Loop mode**: timestamp deduplication. Tracker state changes since last cycle's timestamp are considered; older changes are skipped. No cursor.
 
-Chains terminate by construction: A emits → B reacts → B emits → A sees next cycle (but won't re-fire the original reaction because the cursor has moved).
+Chains terminate by construction: A emits/transitions → B reacts → B emits/transitions → A sees next cycle (but won't re-fire because either the cursor has moved or the original state change is now older than last cycle's timestamp).
 
 ### 4.7 Port discovery (clone isolation)
 
@@ -525,8 +543,8 @@ Boot (session start, once):
 │ · git pull (with stash/pop)                      │
 │ · read working-state.md                          │
 │ · query work queue (tracker)                     │
-│ · GET /events/for/<role>?since=cursor            │
-│ · apply mechanical reactions                     │
+│ · derive mechanical reactions from tracker       │
+│   state changes since last cycle (§6.3)          │
 │ · build .squidsquad/<role>/cycle-input.json      │
 └──────────────────────────────────────────────────┘
                        ↓
@@ -553,9 +571,9 @@ Boot (session start, once):
 │ · post tracker comments                          │
 │ · write iteration log                            │
 │ · git commit + push (incl. vault note writes)    │
-│ · update working-state.md                        │
+│ · update working-state.md (incl. last-cycle      │
+│   timestamp for tracker-state dedup)             │
 │ · status-bar cleanup                             │
-│ · advance event cursor                           │
 │ · context-pressure check → exit 42 if exceeded   │
 └──────────────────────────────────────────────────┘
 ```
@@ -572,11 +590,13 @@ The 30-minute interval is read from `config.md`'s `Iteration Interval > Minutes`
 
 The pre-cycle script applies the high-confidence reactions from §4.5 before the agent's creative phase runs. Reactions land as `mechanical_reactions` in `cycle-input.json` so the agent can see what was done.
 
-Today's reactions:
-- `pr-merge-detected` (PM): on each `pr-merged` event, look up the linked issue and verify its status.
-- `rework-needed` (worker): on each `verification-failed` event, prioritize the named issue.
+In loop mode, reactions are **derived from tracker state**, not from the event bus (per §2 mutual exclusivity). Dedup is by the last-cycle timestamp persisted in working-state.md; state changes older than that are ignored.
 
-Both are idempotent against already-handled issues (e.g., transitioning a closed issue is a no-op).
+Today's reactions:
+- `pr-merge-detected` (PM): `gh pr list` finds PRs that newly transitioned to merged since last cycle's timestamp; for each, look up the linked issue and verify its status.
+- `rework-needed` (worker): `gh issue list` finds tasks newly transitioned to `status:in-progress` by the verifier (rework signal) since last cycle's timestamp; for each, prioritize the named issue.
+
+Both are idempotent against already-handled issues (e.g., transitioning a closed issue is a no-op). Loop mode does NOT issue `GET /events/for/<role>` and does NOT maintain an event cursor — those are exclusively event-mode mechanisms (see §7).
 
 ### 6.4 Context-pressure exit-42 and respawn
 
@@ -609,6 +629,8 @@ For the full vault architecture (storage model, frontmatter spec, scripts, cycle
 ---
 
 ## 7. Event-driven mode in detail
+
+Event mode is the **exclusive home** for event-bus consumption and cursor logic (per §2 mutual exclusivity). Everything in this section — `event_poll` sidecar, nudge contract, per-event cycle wrapping, cursor advancement, cascade protection via cursor dedup — applies only when the install is in event mode. Loop mode does not touch any of this.
 
 ### 7.0 The `event_poll` sidecar
 
