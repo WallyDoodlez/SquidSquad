@@ -137,23 +137,40 @@ Subtypes layered on top via tags:
 
 - `pattern` + tag `posture` = synthesis-derived cross-agent principle (written only by `vault-synthesis`, see §6.3).
 
+### 4.2a Consistency rules (folder + prefix + type)
+
+Three fields must agree:
+
+1. **Folder ↔ type**: a note in `projects/` must have `type: project`; same for `areas/`, `resources/`. `galaxy/` accepts the four prefixed types (`decision`, `pattern`, `learning`, `style`); `archives/` accepts any type with `status: archived`.
+2. **Galaxy prefix ↔ type**: `decision-X.md` → `type: decision`; `pattern-X.md` → `type: pattern`; `learning-X.md` → `type: learning`; `style-X.md` → `type: style`.
+3. **Validation**: checked manually today; planned to be enforced by a future `vault_check.py check-consistency` subcommand (tracked in #10098).
+
 ### 4.3 Required frontmatter (all notes)
 
 ```yaml
 ---
 type: decision | pattern | learning | style | area | project | resource
-tags: [list]
+tags: [list]                          # see Tag convention below
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
-owner: pm | skill | qa | dm | shared
 status: active | archived | superseded
-confidence: high | medium | low   # see §4.4
-source: conversation | code | review | observation | research
-links: [bare-note-names]          # auto-maintained from body wikilinks
+confidence: high | medium | low       # see §4.4
+source: conversation | review | observation | research
+links: [bare-note-names]              # auto-maintained from body wikilinks
 ---
 ```
 
 The `links` field is **auto-maintained** by `vault_check.py` from `[[bare-wikilinks]]` in the body — agents do not curate it manually.
+
+**Tag convention** (for searchability):
+
+- **Required**: at least one **domain tag** identifying the subsystem, feature, or area the note is about. Domain tags are **project-specific** — they reflect the vocabulary of the codebase the vault serves (e.g., a billing app might use `payments`, `subscription`, `invoicing`; a content platform might use `editor`, `publishing`, `cdn`). Use whatever a teammate searching for related notes would naturally type.
+- **Recommended**: one **category tag** identifying the kind of insight. Categories are **universal** across projects: `architecture`, `process`, `testing`, `convention`, `migration`, `incident`, `lifecycle`.
+- **Optional, role-relevance**: `role:<name>` prefix when the note is most useful to one role (e.g., `role:pm`, `role:skill`, `role:qa`, `role:dm`). Used by future cross-role broadcast features.
+- **Reserved subtype tags**: `posture` (see §4.2 — `pattern + posture` is the synthesis-derived cross-agent principle subtype). Other reserved tags will be added here as the system grows.
+- **Free-form**: any additional keywords for searchability.
+
+**Empty values**: `tags: []` is not allowed (the required domain tag rule means at least one tag is always present). `links: []` is allowed (no wikilinks in the body).
 
 ### 4.4 Confidence levels
 
