@@ -569,6 +569,24 @@ The §4.5 operating assumption (SquidSquad-only writes; sub-skills mediate all m
 
 Tracked in #10100.
 
+### 11.3 Future gap — usage-aware decay (impression-based / hybrid)
+
+The current decay model (§4.4) is purely time-based: every note decays by `updated:` age regardless of how much it is actually being used. This is blunt — evergreen content that is heavily read still decays unless manually tagged `evergreen` at creation time, which requires foresight and is brittle to miscategorization.
+
+A more accurate model would treat **usage as the primary signal**:
+
+- **Impression-based**: decay based on impressions-since-last-event (read, search hit, wikilink traversal, BRIEFING reference). Heavily used notes never decay.
+- **Hybrid (recommended direction)**: time decays as today, BUT every impression resets the timer. Captures both failure modes — old + unused → decays; old + used → stays.
+
+Open design questions for whoever picks this up:
+
+- What counts as an impression? Just file reads? Search hits? Wikilink traversal? BRIEFING-loads? All four with weights?
+- Where do impression counters live? `.relevance-index.json` (already gitignored, already updated by `vault_optimize`) is the natural home. Frontmatter would be too noisy — counter increments every cycle.
+- Cold-start: how do new notes accumulate enough impressions to defend themselves before the timer fires?
+- Backfill for existing notes: assume average impression count, or start cold?
+
+Falls under the broader vault-living-memory umbrella (#5855).
+
 ---
 
 ## 12. Cross-references to other docs
