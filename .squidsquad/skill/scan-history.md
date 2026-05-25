@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-25 04:39
+
+- **Files scanned**: none.
+- **Findings**: none. Observation: #10072 picked up + fixed by *another* skill session (PR #10150). Confirms the duplicate agent (pid 2937296) is still alive and producing real work — racing with this session. Until #10101 ships and operator restarts, both sessions will keep cycling.
+- **Notes**: cycle 1394.
+
 ## Scan — 2026-05-25 04:09
 
 - **Files scanned**: none — minimal no-op.
