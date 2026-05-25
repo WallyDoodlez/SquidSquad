@@ -1,0 +1,16 @@
+I now have all the evidence needed. Here is my finding:
+
+---
+
+### Finding 1
+
+- **File**: references/scripts/wizard.py
+- **Line**: 1395–1418 (F4 collision check) and 1374–1386 (F1 OSError-on-read check) and 1443–1455 (F1 OSError-on-write check)
+- **Severity**: error
+- **Issue**: The F4/F1 error checks inside the `.harness-state.json` processing block (step 4) execute **after** the config rewrite (step 1, line 1340–1347) and directory renames (steps 2–3, lines 1350–1357). If a collision or I/O error is detected, the function returns `ok=False` / `action="error"` but the filesystem has already been mutated (config rewritten, dirs renamed). On re-run, the idempotency check at lines 1319–1333 sees only new-style dirs/config and returns `"no-op"` — the state-file problem is permanently masked, and the install is left inconsistent (new dirs + config vs. unrepaired state file) with no further automated path to recovery.
+
+- **Evidence**: The partial-mismatch checks at lines 1272–1295 inspect **only** config.md and directory existence. They do not open or inspect `.harness-state.json`. Therefore a state file that has both old and new agent keys (e.g., `"qa"` + `"verifier"`) but no corresponding filesystem collision passes the pre-modification gate. Steps 1–3 then mutate the filesystem before step 4 discovers the state-file collision and returns an error. The `migrated` list in that error return (line 1417) is also populated with entries from steps 1–3, contradicting the `"action": "error"` / `"ok": False` envelope.
+
+  Concrete reproduction: create an install with `dev/` + `qa/` dirs, config containing only `Dev Agents`, and a `.harness-state.json` containing both `"qa"` and `"verifier"` keys. Call `upgrade_install`. The function will rename `dev/`→`worker/`, `qa/`→`verifier/`, rewrite config to `Workers`, then return `ok=False` citing state-file collision. A second call returns `"no-op"` because the filesystem looks clean. The state file collision is never surfaced again.
+
+- **Suggested fix**: Read and validate the state file **before** any modifications, as part of the partial-mismatch detection block (lines 1272–1310). Move the F4 collision check (lines 1396–1418) and the F1 read-OSError check (lines 1372–1386) into that early section so `upgrade_install` can refuse to proceed before mutating any filesystem state. The write-OSError check (lines 1438–1455) necessarily remains where it is but is acceptable since all preceding mutations succeeded — the remaining inconsistency is confined to the state file itself.

@@ -1,0 +1,66 @@
+Now I have all the information needed. Here are my findings:
+
+---
+
+### Finding 1
+
+- **File**: `tests/test_wizard_runbook.py`
+- **Line**: 178 (changed line: `for role in ("pm", "dm", "worker", "verifier"):`)
+- **Severity**: error
+- **Issue**: The test `test_referenced_roles_exist` will fail if the directory rename (AC2.1) has not been applied yet. The first loop asserts that `"worker"` and `"verifier"` exist as directory names under `references/roles/`, but the current on-disk state still has `dev/` and `qa/` — `worker/` and `verifier/` do not exist.
+- **Evidence**: `glob` of `references/roles/*/manifest.yaml` returns only `dev`, `dm`, `pm`, `qa`. The test iterates `(REPO_ROOT / "references" / "roles").iterdir()` which would yield `dev`, `qa`, `pm`, `dm` — so `"worker" in roles` and `"verifier" in roles` both fail. The task is sub-bundle (3c); if this sub-bundle lands before the AC2.1 directory-rename sub-bundle in the same PR, the test breaks transiently. If they are in separate PRs, the test is red on main until AC2.1 merges.
+- **Suggested fix**: Either (a) ensure the directory rename lands before or atomically with this test change in the same commit, or (b) make the test dual-aware during the transition window — accept both old names (`dev`, `qa`) and new names (`worker`, `verifier`) with a deprecation path, consistent with D2/D10 in CONTEXT-6274.md. The D10 spec says "6274.2 PR: rename references in existing tests; assertions on the new identities" — the test should be coupled with the rename atomically.
+
+---
+
+### Finding 2
+
+- **File**: `references/wizard/WIZARD.md`
+- **Line**: 214, 223 (post-diff)
+- **Severity**: warning
+- **Issue**: The diff places `verifier` in the specialist roster (line 214: `v1: \`designer\`, \`worker\`, \`verifier\``) and renders it in the roster block (line 223). However, the existing `qa` manifest at `references/roles/qa/manifest.yaml:18` has `show_in_roster: false` with comment "QA is infrastructure (#6261 — fixed team). Always installed, not a specialist." The runbook's own partitioning rule (lines 210–211) says infrastructure roles (`show_in_roster: false`) should NOT be listed in the roster. This contradiction predates the diff — the current runbook already lists QA in the roster despite `show_in_roster: false`. The diff perpetuates the mismatch under the new name.
+- **Evidence**: QA manifest line 18: `show_in_roster: false`. Runbook line 211: "Do NOT list them in the roster." Runbook line 214/223 (post-diff): Verifier is listed in the roster. The wizard agent is told to partition by `show_in_roster` dynamically (line 208), then given a hardcoded roster block that contradicts what the dynamic partition would produce for verifier.
+- **Suggested fix**: If verifier is staying infrastructure (`show_in_roster: false` per #6261), then (a) move `verifier` from the specialist `v1:` list (line 214) to the infrastructure list (line 211: `v1: \`pm\`, \`dm\`, \`verifier\``), (b) remove the Verifier line from the roster block (line 223), and (c) update `test_runbook_roster_uses_new_canonical_role_names_6274` to not assert Verifier appears in the roster. If instead verifier should be `show_in_roster: true`, then the manifest needs to change — but that is outside the changed files and may need a separate sub-bundle.
+
+---
+
+### Finding 3
+
+- **File**: `references/wizard/WIZARD.md`
+- **Line**: 316, 329, 342, 350, 354–358, 368
+- **Severity**: warning
+- **Issue**: The diff omits nine `dev` role-identity references in Step 4. These are prose references to the old role identity and should be updated per AC2.2(a) ("role identity names in prose meant for agent consumption"). The requirement IDs `dev.variant`/`dev.stack` qualify the manifest IDs with the old role name — the runbook should use `worker.variant`/`worker.stack`. The prose "Dev agents" / "dev agents" / "dev agent" uses the old display name.
+- **Evidence**:
+  - Line 316: `e.g. dev with be+fe` — should be `worker with be+fe`
+  - Line 329: `` `dev.variant` `` — should be `` `worker.variant` ``
+  - Line 342: `` `dev.stack` `` — should be `` `worker.stack` ``
+  - Line 350: `` `dev.variant` `` and `Dev agents` — should be `` `worker.variant` `` and `Worker agents`
+  - Line 354: `dev agents` and `` `dev.stack` `` — should be `worker agents` and `` `worker.stack` ``
+  - Line 356: `dev agent: \`dev\`` and `` `dev.stack` `` — should be `worker agent` and `` `worker.stack` `` (the agent instance ID `dev` for fullstack may be a separate concern)
+  - Lines 357–358: same pattern
+  - Line 368: `dev can expand to be+fe` — should be `worker can expand to be+fe`
+- **Suggested fix**: Either (a) include these updates in this sub-bundle for completeness of Step 4, or (b) confirm they are intentionally deferred to a subsequent phase and document that in the task/commit. If deferred, the new `test_runbook_roster_uses_new_canonical_role_names_6274` should probably not assert on Step 4 content since it's incomplete.
+
+---
+
+### Finding 4
+
+- **File**: `tests/test_wizard_runbook.py`
+- **Line**: 190–196 (new test docstring)
+- **Severity**: warning
+- **Issue**: The new test `test_runbook_roster_uses_new_canonical_role_names_6274` asserts `"Verifier  — Verifies worker work" in runbook` and `"PM, Verifier, DM, workers" in runbook`. If Finding 2 is addressed (verifier removed from roster because `show_in_roster: false`), these assertions must be updated. The test currently locks in the assumption that Verifier appears in the roster and boot announcement as a named agent — this may be wrong if verifier is infrastructure.
+- **Evidence**: Same as Finding 2. The test encodes the roster placement as a locked invariant, but the underlying manifest says verifier should not be in the roster.
+- **Suggested fix**: Tie resolution to Finding 2. If verifier stays in roster, test is correct. If verifier becomes infrastructure-only, remove the roster assertion and update the boot-line assertion to match whatever the new boot line says (e.g., `"PM, DM, workers"` — verifier would boot implicitly like PM/DM).
+
+---
+
+### Finding 5
+
+- **File**: `tests/test_wizard_runbook.py`
+- **Line**: 227–230 (forbidden token: `"[Dev] → QA"`)
+- **Severity**: warning
+- **Issue**: The forbidden-token check `"[Dev] → QA"` is a substring of the old `software-dev` pipeline line but will also match if the token appears in other contexts. More importantly, it does **not** catch a partial revert of the `design` or `Minimal` pipelines (which used `→ QA →` without `[Dev]`). The positive assertion `"Verifier → DM" in runbook` would still pass even if `QA` accidentally remained in one of those pipelines, because `Verifier → DM` appears in all three pipeline lines.
+- **Evidence**: Old design pipeline: `PM → Designer ↻ → QA → DM`. Old Minimal pipeline: `PM → QA → DM`. Neither contains `[Dev] → QA`. The forbidden token `"[Dev] → QA"` would not match a stale `QA` in these lines. The other forbidden tokens (`"QA        — Verifies dev work"`, `"PM, QA, DM, workers"`) also wouldn't match these pipeline-specific `QA` instances.
+- **Suggested fix**: Add an additional forbidden token for the generic pipeline pattern: `"→ QA →"` to catch QA in any pipeline arrow context. This would match the design and Minimal pipelines without false-positive risk (no legitimate `→ QA →` should survive the rename).
+
+---

@@ -1,0 +1,16 @@
+I've traced through all the changed code paths in detail: `generate_default_spec`, `scaffold_install`, `deploy_role`, `_get_entry_file_for_role`, `_resolve_variant`, `_assemble_claude`, `_substitute_placeholders`, and the manifest structure. Here's my analysis:
+
+**`wizard.py` changes (lines 2121–2138)**:
+- `worker_variant = domain_variants.get("worker") or domain_variants.get("dev")` — correct dual-aware fallback matching the manifest's current `dev: skill` key while preferring the canonical `worker` key
+- `"role": "worker"` — uses the new canonical identity; `scaffold_install` resolves `references/roles/worker/instructions.md` which exists on disk ✅
+- `compose.py`'s own dual-aware table (`_BASE_ALIAS_6274`) independently handles both `worker`/`dev` and `verifier`/`qa` in `_resolve_variant`, `_get_entry_file_for_role`, and `_substitute_placeholders` — so the compose pipeline correctly routes `"worker-be"` → base `worker` template when no `worker/be/` variant directory exists ✅
+
+**`test_wizard.py` changes**:
+- `_software_dev_spec()`: `"dev"` → `"worker"` for be/fe roles, `"qa"` → `"verifier"` for the verifier agent — consistent with the new identities ✅
+- All assertion updates (`"qa"` → `"verifier"`, `"dev"` → `"worker"`) match the fixture change ✅
+- `test_generate_default_spec_uses_manifest`: the `expected_variant` computation mirrors `generate_default_spec`'s logic exactly — consistent ✅
+- `test_l4_stack_details_created` and `test_l4_overwrite_guard_preserves_existing`: `"role": "worker"` instead of `"dev"` — compose correctly resolves `"worker"` identity ✅
+
+**The manifest** (`references/presets/software-dev/manifest.yaml`) still has `dev: skill` and `qa: skill` under `domain_variants` — but this is outside the changed files, and the `or` fallback in `generate_default_spec` is explicitly designed for this dual-aware window.
+
+NO_FINDINGS

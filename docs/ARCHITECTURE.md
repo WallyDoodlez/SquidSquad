@@ -57,8 +57,8 @@ The **Behavior Layer** (L3) is the focal layer — it's where agents reason, dec
 - `references/scripts/harness.py` — FastAPI lifecycle manager, owns agent spawning, health monitoring, crash recovery, PR merging, and auto-recomposition of agent templates
 - `references/scripts/thin_launcher.py` — lightweight agent launcher, spawned by harness into terminal windows
 - `/loop` command — schedules recurring cycle execution
-- `.harness-state.json` — persistent agent state for crash recovery
-- `current-state` — status bar state file, written atomically
+- `.squidsquad/.harness-state.json` — persistent agent state for crash recovery (single file per repo)
+- `.squidsquad/[role]/current-state` — per-role status bar state file, written atomically
 
 **What changes here:** Cycle cadence, restart logic, boot sequence, harness API. The orchestration layer knows about timing but not about what work gets done.
 
@@ -149,6 +149,8 @@ When examining live `claude.exe` processes, three categories matter:
 
 ## L6 — Memory Layer
 
+> **Deep-dive**: [`VAULT-ARCH.md`](VAULT-ARCH.md) — full vault architecture (PARAG model, entity types, frontmatter, sub-skills, scripts, cycle integration, failure modes, current inventory).
+
 **Purpose:** Institutional knowledge that persists across sessions and version bumps. What the squad has learned about your project, your preferences, your decisions, and your patterns.
 
 **Key files:**
@@ -156,6 +158,7 @@ When examining live `claude.exe` processes, three categories matter:
 - `.squidsquad/vault/galaxy/` — atomic knowledge notes (Zettelkasten): decisions, patterns, learnings, styles
 - `.squidsquad/vault/projects/` — active project context
 - `.squidsquad/vault/areas/` — ongoing concerns: preferences, conventions, values
+- `.squidsquad/vault/resources/` — reference material, external docs
 - `.squidsquad/vault/archives/` — shipped features, closed decisions
 
 **What changes here:** Adding new knowledge types, changing how agents consolidate learnings, modifying the BRIEFING.md update protocol, tuning confidence decay.

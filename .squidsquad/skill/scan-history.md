@@ -1,5 +1,153 @@
 # Scan History
 
+## Scan — 2026-05-24 21:39
+
+- **Files scanned**: references/scripts/health_check.py (re-check; previously scanned with no new findings)
+- **Findings**: none. Minimal cycle while QA re-verifies #9965. Context 47%, conserving.
+- **Items rejected by human**: none yet
+- **Notes**: #9965 still pending-test (QA hasn't re-picked yet after cycle 1376 re-transition). Open scan-finding backlog unchanged at 5 items.
+
+## Scan — 2026-05-24 21:20
+
+- **Files scanned**: not applicable — QA-rejected fix-up cycle (highest priority per protocol)
+- **Findings**: not applicable
+- **Items rejected by human**: not applicable
+- **Notes**: cycle 1376 picked up the QA rejection of #9965. Fixed 2 assertions in `tests/test_manifest_registry.py::TestShippedRegistry` (L193 + L201/L203) from `{dev, qa}` to `{worker, verifier}` per AC2.6. Committed 7e43a745, AC2.9 re-affirmed 06037552. Re-transitioned to pending-test.
+
+## Scan — 2026-05-24 20:36
+
+- **Files scanned**: references/scripts/cycle_pre.py (focused: `_enforce_branch` L193-230)
+- **Findings**: #10072 (medium — `_enforce_branch` task parsing breaks on verbose `#NNNN — desc` format; `lstrip(\"#\").strip()` + `.isdigit()` fails the digit check when task field carries the standard human-readable description after the issue number; manual checkout required every cycle of feature work; observed cycles 1334-1373 of #9965). Carried in working-state since cycle 1334; filed now that #9965 has shipped to pending-test.
+- **Items rejected by human**: none yet
+- **Notes**: minimal-cycle filing of a previously-deferred process bug. The fix is trivial (regex extraction of leading digits) but the impact is real — every feature-work cycle currently no-ops branch enforcement until the operator manually checks out.
+
+## Scan — 2026-05-24 20:33
+
+- **Files scanned**: not applicable — active implementation cycle (not improvement scan)
+- **Findings**: not applicable
+- **Items rejected by human**: not applicable
+- **Notes**: cycle 1374 was a substantial implementation cycle, not a scan rotation. Human lifted STOP on #9965 at start; skill picked up AC2.4-2.7 + AC2.9. Spawned 2 subagents for the implementation work (the second to re-apply DS-hardening that I accidentally reverted via a misuse of `git checkout HEAD -- ...`). Lessons captured below for future reference.
+
+## Scan — 2026-05-24 19:09
+
+- **Files scanned**: references/scripts/event_validator.py (re-check; previously scanned 2026-05-20 with no findings — confirmed still applies, no re-read this cycle)
+- **Findings**: none. Cycle skipped fresh code reads to preserve context (37%, trending up post-1371). Recording a no-op rotation entry only.
+- **Items rejected by human**: none yet
+- **Notes**: deliberate amortization cycle — see cycle 1372 notes on context post-1371 cross-role read. State: paused #9965, 4 open scan findings, no PM/human triage activity.
+
+## Scan — 2026-05-24 18:39
+
+- **Files scanned**: references/scripts/migrate_state_branch.py (re-check; already had #9939 filed cycle 2026-05-22 about migrate() discarding state_bus.commit_and_push() return value — confirmed still present, finding still valid, no follow-up needed)
+- **Findings**: none new. Re-verified #9939 (medium) is still open and accurately scoped.
+- **Items rejected by human**: none yet
+- **Notes**: minimal cycle — context jumped to 36% from cycle 1371's PM CLAUDE.md auto-load when reading .squidsquad/pm/planning/. Lesson for future: reading files under another role's .squidsquad subtree triggers that role's composed CLAUDE.md auto-injection. If I want PM brainstorm content again, ask for the file via Read on the exact path rather than browsing planning/ — or accept the context cost as the price of the cross-role visibility.
+
+## Scan — 2026-05-24 18:10
+
+- **Files scanned**: .squidsquad/pm/planning/BRAINSTORM-vault-subskills.md (PM's exploratory plan for vault sub-skill redesign, 180 lines, pre-approval)
+- **Findings**: none filed (it's a brainstorm, not approved scope). Cross-role situational awareness: PM is proposing to tear down `vault-protocol`, `vault-protocol-slim`, `vault-remember`, `vault-optimize` (as cycle routines), and `vault-synthesis`; replace with two classes — A (composed sub-skills hooked into agent workflow) and B (event-bus-subscriber sub-skills running in the harness layer). A6 `vault-capture-on-scan-finding` is the proposed handler for the T2 improvement-scan trigger; PM explicitly cites **#10007's audit** as the paradigm case for "systemic finding → auto-create `pattern-*.md` vault note alongside the bug". My cycle-1361 audit-vs-file methodology (captured in `learning-scan-comment-vs-file-duplicate.md` cycle 1362) is being absorbed upstream into PM's broader proposal — positive signal that scan output is being read.
+- **Items rejected by human**: none yet
+- **Notes**: PM has 5 open questions for human (B-class lifecycle timing, ASK-USER autonomous protocol, B3 L4-injector v1-vs-v2, drop `projects/` folder, cron host for `vault-decay-keeper`). Skill should NOT react with implementation while brainstorm is pre-approval — but worth tracking. Question 2 (ASK-USER protocol in autonomous cycles) affects skill: my last 30+ cycles have been autonomous, and vault-capture-on-pr's ASK-USER would fire in that context. When PM files concrete tasks from the brainstorm, skill can offer the autonomous-cycle perspective as a CONTEXT.md input.
+
+## Scan — 2026-05-24 17:39
+
+- **Files scanned**: references/scripts/forgejo_setup.py (385 lines; Docker Compose deployment automation for local Forgejo instance — 9 functions, setup-time tool not in steady-state path)
+- **Findings**: none. Spot-check confirmed careful subprocess handling (explicit `returncode` inspection with `check=False`), clear user-facing error messages, deploy template separation. Did not do a deep line-by-line — setup tooling has low steady-state blast radius and the context economy doesn't justify a thorough sweep this cycle.
+- **Items rejected by human**: none yet
+- **Notes**: verified that none of the four open scan findings (#10002 cycle_post, #10005 diagnostics, #10006 squidsquad_cli, #10007 vault_remember) have been fixed in the last 3 days — no recent commits touch those files. PM/human triage backlog remains untouched. Reserving manifest.py (646), compose.py (1567), tracker.py (1503), harness.py (2936), scan_index.py (813), vault_optimize.py (664) for cycles when context is fresher or a specific question warrants the deep read.
+
+## Scan — 2026-05-24 17:10
+
+- **Files scanned**: references/scripts/vault_entity.py (218 lines; heuristic entity-extraction utility for vault-remember)
+- **Findings**: none. PROPER_NAME_PATTERN over-matches by design (LLM judgment downstream filters); `_is_noise_name` correctly checks both full name and first-word so "GitHub Actions" is filtered via "GitHub" in NOISE_WORDS. PREFERENCE_MARKERS substring search is intentionally loose. The shared `seen` set between URLs and proper names is theoretically clash-prone but the type space is disjoint in practice. Performance is O(M*N) for preference scan — fine for typical vault inputs.
+- **Items rejected by human**: none yet
+- **Notes**: vault_entity is a heuristic feeder for vault-remember; correctness is downstream. No structural issues. vault_optimize.py (664 lines) reserved for a future cycle when context is fresher — it's the larger of the vault group and the right one to look at after PM's brainstorm crystallizes into actual tasks.
+
+## Scan — 2026-05-24 16:40
+
+- **Files scanned**: references/scripts/vault_check.py (full 393 lines; focus on `check_wikilinks` regex, frontmatter parser, validate exit semantics)
+- **Findings**: none filed. Observations: (a) `_extract_wikilinks` at L62-63 strips pipe-aliases but not `#fragment` suffixes — a link like `[[note#section]]` would be checked as `note#section` against bare note_names and report broken, but a grep of `.squidsquad/vault/` finds zero fragment-style wikilinks today so the bug is dormant. (b) `validate()` at L327-340 prints orphans but doesn't add them to `all_issues` — likely intentional (orphans are advisory, output type "ORPHAN" vs "FAIL"). (c) third copy of the simplistic `_parse_frontmatter` parser (alongside vault_remember + soul_adaptation) — same multi-line-value blindness already documented in #10007's audit; adding a fourth file to that audit comment would be noise.
+- **Items rejected by human**: none yet
+- **Notes**: PM ran a vault sub-skill brainstorm 2h ago (commit `07670cb3`) — vault tooling is relevant context. Worth keeping vault_optimize.py / vault_entity.py / vault_remember.py in mind as a related group if PM's brainstorm produces follow-up tasks. dm reached cycle 1375 (R59 doc scans on SKILL.md sections 1-6) per recent commits; skill at cycle 1368, gap consistent with the per-role independent counters.
+
+## Scan — 2026-05-24 16:09
+
+- **Files scanned**: references/scripts/migrate_labels_6274.py (164 lines; one-shot dual-label migration for #6274.1)
+- **Findings**: none filed. Real bug observed: `main()` at L160 unconditionally `return 0` regardless of `_add_label` failures — `updated` list only records successes, but the script's exit code never reflects partial failure (operator running this in CI would see exit 0 even with 3-of-10 label adds failing). Same exit-code-doesn't-reflect-failure family as #10006 (`cmd_stop` returning 1 on empty success). **Deliberately not filing**: per L16 docstring the script is scheduled for deletion in 6274.3 alongside `cleanup_labels_6274.py`; filing a fix for code about to be removed is wasted backlog. Also: hardcoded `--limit 500` at L58 same as verify_dual_label_6274 (safe at SquidSquad's volume).
+- **Items rejected by human**: none yet
+- **Notes**: deletion-imminent code is a legitimate not-file category alongside the existing edge-case-and-low-impact category. Add it as a triage rule: **deletion-imminent + non-blocking = scan-history note only**. If 6274.3 ships and the script survives (scope creep), revisit then.
+
+## Scan — 2026-05-24 15:40
+
+- **Files scanned**: references/scripts/verify_dual_label_6274.py (141 lines; one-shot G2→3 gate verification for #6274 dual-labeling)
+- **Findings**: none filed. `_list_recent_issues` uses hardcoded `--limit 500` (L58) which would silently truncate at high volume — but SquidSquad creates ~10 issues/week so a 7-day window stays well under the cap. `_run` returncode check at L61 + JSON parse fallback at L69 is solid. Minor: an issue carrying all 4 dual labels would be counted twice in `checked` (loop iterates PAIRS) — not a correctness bug but a cosmetic count inflation. Script is purposefully tied to the 6274 sub-phase lifecycle (one-shot gate, retires when 6274.3 ships).
+- **Items rejected by human**: none yet
+- **Notes**: paired migrate_labels_6274.py skipped for context economy — both scripts share the same lifecycle and 6274.1 was already scanned during #9964 review. Continuing single-file conservation cycles.
+
+## Scan — 2026-05-24 15:10
+
+- **Files scanned**: references/scripts/tc_coverage.py (full 313 lines; focus on TC parsing regexes + result extraction + coverage gate exit-code semantics)
+- **Findings**: none filed. `_RESULT_RE` at L45-47 with `\b` word boundaries could in principle false-positive on prose like "does not pass" appearing in QA-RESULTS body (only when neither valid result tokens nor invalid-result regex match first); requires QA agent to write narrative commentary inside a TC's body block instead of structured `**Result**: ...` or table format — typical QA-RESULTS layouts don't trigger it. The #2469 fix that excluded the heading line from `search_block` handles the most common case (TC title containing "not-applicable"). Edge case, narrow trigger, not worth a ticket against the existing backlog.
+- **Items rejected by human**: none yet
+- **Notes**: `_discover_files` planning_dirs sorting at L127-129 correctly puts pm first (PM owns test plans). The QA-RESULTS revision picker at L146-153 sorts numerically by `-R<N>` suffix — solid. `coverage_pct:.0f` formatting at L229 rounds 99.4 to 99 and 99.5 to 100 (banker's edge case but only matters at non-100% which already fails the gate via missing TCs). `_TC_TABLE_RE` doesn't match markdown table separator rows since `TC` regex demands literal `TC`. Exit-code semantics 0/1/2 (pass/fail/blocked) are clean and documented. Stopped at one file this cycle — context climbing past 25% and we've covered enough breadth.
+
+## Scan — 2026-05-24 14:40
+
+- **Files scanned**: references/scripts/event_bus.py (189 lines) + references/scripts/event_catalog.py (256 lines)
+- **Findings**: none filed. event_bus is clean — `_generate_id` width is 16-char post-#9415, `_resolve_squid_dir` honors `SQUIDSQUAD_DIR` env var per #9398, `emit()` is fire-and-forget with 500ms timeout (documented contract); same `urlopen-without-with` stylistic nit as event_bus_reader. event_catalog has a real documentation drift — `payload_fields` for cycle-start/cycle-end lists `cycle_number`, but `event_bus.emit()` puts `cycle_number` at the top-level of the event dict (L113), not in payload; cycle-end also emits an undocumented `summary` field (cycle_post.py L859). Drift is real but `payload_fields` has zero programmatic consumers (grep confirmed: only event_catalog.py itself references the key), so this is pure docs drift — not worth a ticket against the existing backlog.
+- **Items rejected by human**: none yet
+- **Notes**: continuing context-conservation rotation. Both files solid for steady-state observability. event_bus.py's docstring at L155 ("Tier 2: recognized... no error") matches the EMITTED/RECOGNIZED/unknown tier model; `is_valid` and `get_tier` are consistent. Worth noting for future: if a subscriber ever starts consuming `payload_fields` (e.g. a schema validator), the cycle-start/cycle-end entries will need fixing — file then with concrete proposed schema.
+
+## Scan — 2026-05-24 14:10
+
+- **Files scanned**: references/scripts/monitor_smoke_poller.py (37 lines) + references/scripts/event_bus_reader.py (94 lines)
+- **Findings**: none. monitor_smoke_poller is a tight 37-line smoke utility — no validation on `int(sys.argv[1])` / `float(sys.argv[2])` but it's a smoke test invoked with known args. event_bus_reader is clean — 500ms timeout, silent empty-list on failure (documented contract), #9967 eviction handling has clear stderr breadcrumb. Single nit: L72 `urlopen` without `with` context manager (vs cycle_post.py which uses `with urlopen(...) as resp:`); response is short-lived so GC handles it, stylistic only.
+- **Items rejected by human**: none yet
+- **Notes**: deliberately picked two small files this cycle to conserve context (rising to 22%) and rotate scan coverage. No new vault writes — last cycle's `learning-scan-comment-vs-file-duplicate.md` is sufficient methodology capture.
+
+## Scan — 2026-05-24 13:41
+
+- **Files scanned**: references/scripts/repo_scan.py (full 409 lines; focus on `_check_python_deps` substring match + `_count_extensions` os.walk SKIP_DIRS coverage + `scan()` save path)
+- **Findings**: none filed. `_check_python_deps` at L228-242 uses bare substring match (`if dep.lower() in text`) against pyproject.toml/requirements.txt — false-positive risk (e.g. `flask-cors` matches `flask`, `[project] name = "fastapi-app"` matches `fastapi`). Setup-time only (wizard.py invokes via `scan()`), no steady-state callers, low blast radius — not worth a fresh ticket against the backlog. Also: `save_path.write_text(output + "\n")` at L402 is technically non-atomic but `.squidsquad/.repo-scan.json` is written once per setup with no concurrent readers, so it's not in #10007's audit scope.
+- **Vault writes**: 1 — `learning-scan-comment-vs-file-duplicate.md` (captures the cycle-1361 audit-vs-file methodology so future agents can find it; links to [[learning-strip-vs-wire-audit-findings]] for the orthogonal strip-vs-wire dimension).
+- **Items rejected by human**: none yet
+- **Notes**: SKIP_DIRS omits `.idea/`, `.vscode/`, `.parcel-cache/`, `.svelte-kit/` — minor. LANGUAGE_EXTENSIONS misses `.mjs`, `.cjs`, `.pyi`, `.pyx` — minor. `os.walk` dir-modify pattern at L192 is correct. Deliberate decision to bias the cycle toward vault capture (one learning note) over filing another low-impact issue, given the existing PM-triage backlog of 4 open scan findings.
+
+## Scan — 2026-05-24 13:11
+
+- **Files scanned**: references/scripts/soul_adaptation.py (full 299 lines) → triggered codebase-wide `.write_text(` grep across references/scripts/ to audit the #10007 non-atomic-write defect family
+- **Findings**: no new issue filed — instead, posted an audit comment on #10007 listing 9 confirmed non-atomic call-sites across 6 files (vault_remember L55+L151, cycle.py L167, cycle_post.py L769+L584, soul_adaptation.py L147+L226, config.py L285, diagnostics.py L97) targeting concurrently-read state files (working-state.md, SOUL.md, role-adaptations.md, config.md, SKILL.md, diagnostic.jsonl). Strengthens the original recommendation: extract `shared_fs.atomic_write_text` and route all 9 sites through it in one consolidated PR rather than per-site fixes.
+- **Items rejected by human**: none yet
+- **Notes**: scanned soul_adaptation.py first because it's a fresh target with high-impact writers; finding the same L147+L226 pattern triggered the systemic-vs-local question — answered by the grep audit. Sites already using tmp+replace (correct): config.py:406, cycle.py:91, cycle_post.py:377, compose.py:1297/1348, event_poll.py:125, harness.py:430/809/1128/1149, run_comprehension_test.py:85, shared_fs.py:43/52, thin_launcher.py:127, add_role.py:149. The split inside config.py itself (L285 wrong, L406 right) is the smoking gun that the pattern is known but not consistently applied. Deliberate choice not to file a duplicate-feeling #10008 for soul_adaptation.py since a comprehensive audit comment on #10007 produces a more actionable fix than splitting it across multiple issues. start_team.py (137 lines) considered as a scan target but it's a thin delegate over squidsquad_cli — clean, no findings warranted.
+
+## Scan — 2026-05-24 12:40
+
+- **Files scanned**: references/scripts/vault_remember.py (full 418 lines; focus on `_write_working_state_field` + `_upsert_vault_writes` write paths, frontmatter parser robustness, path-traversal defenses)
+- **Findings**: #10007 (medium — non-atomic working-state.md writes at L55 and L151 violate the agent-foundation \"atomic writes for concurrently-read files\" rule; statusline + ≥10 scripts read this file concurrently; cycle_post._write_task_log already has the correct tmp+replace pattern, vault_remember just doesn't apply it; same defect family as #9930/#9932)
+- **Items rejected by human**: none yet
+- **Notes**: `effective_confidence` path-traversal defense at L213-219 is solid (resolve-then-`is_relative_to(VAULT_DIR.resolve())`). YAML frontmatter parser at L237-240/L316-319 doesn't handle block-scalars or array-on-next-line `tags:\\n  - evergreen` form — would silently miss the evergreen exemption; but inspecting `.squidsquad/vault/galaxy/*.md` confirms current notes use inline `tags: [...]` so the substring check works in practice (didn't file). `is_quiet` defaults to \"quiet\" on read error (L110-112) — wastes a cycle but is non-destructive. `note_count` excludes only `.gitkeep` (L281) so any future README in vault/ would inflate count; cosmetic. `_upsert_vault_writes` is single-process intra-cycle so the read-modify-write race is theoretical for that script alone — but the cross-process statusline-reader is the real concurrency hazard.
+
+## Scan — 2026-05-24 12:11
+
+- **Files scanned**: references/scripts/squidsquad_cli.py (full 446 lines; focus on cross-platform `_spawn_harness` L307-390, aggregation exit codes in `cmd_start`/`cmd_stop`/`cmd_status`, `_harness_alive` strictness)
+- **Findings**: #10006 (low — `cmd_stop` returns exit 1 when `results: []` because `bool([]) and all(...)` short-circuits to False; inconsistent with `cmd_status` which treats no-agents as success; teardown scripts chaining `squidsquad stop && next` see false failure when squad was already idle)
+- **Items rejected by human**: none yet
+- **Notes**: `_spawn_harness` already routes through `sys.platform` per #9903 (L315-320). `HarnessAPIError` documented at L90-97 for #4792 §5.7 aggregation. The Windows `cmd /c start squidsquad-harness python harness.py` fallback at L338-344 has an unquoted title that *might* be interpreted by cmd.exe's `start` as the command rather than the title — but the wt.exe path covers Win10+ defaults and the fallback is only exercised on stripped systems; not filing without a repro. `_harness_alive` strict-200 check (L62-69) could trigger duplicate-harness spawn if a live harness returns 5xx; theoretical, didn't file. `localhost` vs `127.0.0.1` inconsistency between this file and cycle_post's `_discover_harness_port`-shaped callers — cosmetic, didn't file. `_api_call`'s POST `req.data = b\"\"` posture is correct for the FastAPI harness.
+
+## Scan — 2026-05-24 11:41
+
+- **Files scanned**: references/scripts/diagnostics.py (full 247 lines; focus on `generate_report` L140-190 vs `_sanitize_config` L101-119 redaction asymmetry, plus `rotate()` atomic-write posture)
+- **Findings**: #10005 (medium — `generate_report` ships diagnostic entries verbatim via `json.dumps(e)` while `_sanitize_config` redacts the same keyword set for config; `log_entry` accepts arbitrary `message` + `context` so entries can carry tokens/paths; `is_public_repo()` exists precisely because the report flow targets public trackers; same defect family as #8235 which fixed only the config path)
+- **Items rejected by human**: none yet
+- **Notes**: `rotate()` at L97 uses `LOG_FILE.write_text` (truncate-write) — violates the `Use atomic writes (...)` agent-foundation rule since other agents read this concurrently; worth a follow-up but lower urgency than the redaction leak. `log_entry` size-check-then-rotate at L60-64 is a TOCTOU race when two agents log near the cap; in practice diagnostic volume is low so the rotate-clobber risk is theoretical. `is_public_repo` defaults `isPrivate=True` (safe-private) on missing field — correct posture. The keyword redaction list at L113 now covers all the #8235 misses (url/clone/webhook/password present); no fresh keyword gaps observed.
+
+## Scan — 2026-05-24 11:09
+
+- **Files scanned**: references/scripts/cycle_post.py (full 885 lines; focus on `_do_version_bump` L565-613 push-result handling + `_do_commit_push` skill split-commit path L466-538)
+- **Findings**: #10002 (medium — cycle_post._do_version_bump silent push failure leaks divergent state; same family as #9890/#9930/#9939; recommend capturing each git push returncode + gating shipped-since-bump reset on push success)
+- **Items rejected by human**: none yet
+- **Notes**: `_do_commit_push` skill split-commit branch handles "nothing to commit" vs real push failure cleanly (L474-491 — #5444 distinguishes them); `_check_disposable_files` warn-only is fine for the #4081 fnmatch path; `_query_harness_intent` / `_post_harness_restart` use 5s timeouts + safe-default None per #4966; `_sanitize_commit_msg` zero-width-space trick at L416-419 handles #4038 auto-close correctly; task-log retention at L385-398 has its own try/except for unlink failures — robust. `except (ImportError, Exception)` at L850 and L862 is redundant (Exception covers ImportError) but documented as best-effort cleanup.
+
 ## Scan — 2026-05-21 19:11
 
 - **Files scanned**: references/scripts/reboot_agent.py, references/scripts/config.py

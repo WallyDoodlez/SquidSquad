@@ -1,0 +1,69 @@
+diff --git a/references/scripts/compose.py b/references/scripts/compose.py
+index 99af1475..b3f24ea4 100644
+--- a/references/scripts/compose.py
++++ b/references/scripts/compose.py
+@@ -226,9 +226,16 @@ def _load_manifest(role_name: str, wake_mode: str = "polling") -> list | None:
+             # aliased identity. Defense in depth — phase 2.2.1 already updated
+             # all base_role: values in variant includes.yml to new names; this
+             # catches any legacy caller that still passes "dev"/"qa".
++            # #6274.2 (3b) disk-check shim: `_resolve_manifest_path` already
++            # tests `.exists()` on the resolved file, so this fallback safely
++            # returns None when the alias directory is absent on disk — making
++            # the dual-aware behavior consistent between pre- and post-rename
++            # installs (no spurious successes against ghost role names).
+             if role_name in _BASE_ALIAS_6274:
+                 aliased = _BASE_ALIAS_6274[role_name]
+-                manifest_path = _resolve_manifest_path(ROLES_DIR / aliased)
++                aliased_dir = ROLES_DIR / aliased
++                if aliased_dir.is_dir():
++                    manifest_path = _resolve_manifest_path(aliased_dir)
+         if manifest_path is None:
+             return None
+ 
+@@ -764,9 +771,14 @@ def _get_entry_file_for_role(role_name: str) -> str:
+     # have `roles/dev/` work via the 6274.1 alias shim — `dev` stays in
+     # `identities` as a dual-aware alias and `_BASE_ALIAS_6274` maps it
+     # to `worker` at the call sites that need the on-disk canonical.
+-    if "worker" in identities:
++    # #6274.2 (3b) disk-check shim: `worker`/`dev` are dual-aware identities
++    # regardless of disk state, so the literal `in identities` check fires
++    # in both pre- and post-rename installs. Confirm the target directory
++    # actually has an entry template before returning it; otherwise fall
++    # through to the other side of the alias pair.
++    if "worker" in identities and (ROLES_DIR / "worker" / "instructions.md").exists():
+         return "worker"
+-    if "dev" in identities:
++    if "dev" in identities and (ROLES_DIR / "dev" / "instructions.md").exists():
+         return "dev"
+     # No registry, or no `worker`/`dev` identity — fall back to the literal
+     # role name so at least the error message points at the right file.
+diff --git a/tests/test_compose.py b/tests/test_compose.py
+index 47a4606c..26022c80 100644
+--- a/tests/test_compose.py
++++ b/tests/test_compose.py
+@@ -248,15 +248,17 @@ class TestGetEntryFileForRole:
+             assert compose._get_entry_file_for_role("dev") == "dev"
+ 
+     def test_unknown_role_falls_back_to_dev(self, compose_env):
+-        # Post-6274.2: dual-aware identities preference returns 'worker' for
+-        # unknown variants because 'worker' is in _DUAL_AWARE_IDENTITIES_6274
+-        # and the fallback check `if "worker" in identities` fires first
+-        # (compose.py:_get_entry_file_for_role:767). Method name retained for
+-        # diff hygiene; canonical-on-disk target is the assertion's substance.
++        # Post-6274.2 (3b) disk-check shim: identities always includes both
++        # `worker` and `dev` (dual-aware set), so the fallback now picks the
++        # one whose directory actually exists on disk. In this scratch env
++        # only `roles/dev/` is set up by the fixture, so the worker branch
++        # short-circuits via the disk check and the dev branch wins —
++        # restoring the original "fall back to dev" semantic on pre-rename
++        # installs while still preferring `worker` post-rename.
+         with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"):
+-            assert compose._get_entry_file_for_role("skill") == "worker"
+-            assert compose._get_entry_file_for_role("be") == "worker"
+-            assert compose._get_entry_file_for_role("fe") == "worker"
++            assert compose._get_entry_file_for_role("skill") == "dev"
++            assert compose._get_entry_file_for_role("be") == "dev"
++            assert compose._get_entry_file_for_role("fe") == "dev"
+ 
+ 
+ # ---------------------------------------------------------------------------

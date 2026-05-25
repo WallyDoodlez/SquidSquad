@@ -41,3 +41,5 @@
 - **Migration script uses gh CLI not forge adapter** — one-shot operator tool, not normal cycle flow.
 - **Vault note placeholder says "TBD — populated in 6274.2 PR"** — gives AC2.9 a single canonical location to update.
 - **G2→3 verifier shares LABEL_PAIRS with migration script** via structural test, preventing drift.
+
+- **Vault Writes This Cycle**: 1
