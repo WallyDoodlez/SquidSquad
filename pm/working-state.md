@@ -1,10 +1,10 @@
 # Working State
 
-- **Task**: #10003 in-progress — interactive massage of docs/VAULT-ARCH.md; PR #10004 open MERGEABLE; §4+§6+§7+§11.2 polish landed
+- **Task**: #10003 in-progress — interactive massage of docs/VAULT-ARCH.md; PR #10004 open MERGEABLE; §4+§6+§7+§11.2 polish landed (4 commits)
 - **Status**: §4+§6+§7+§11.2 polish complete; awaiting human pick on next polish target
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-25 08:42, cycle 1690)
+## Pipeline snapshot (2026-05-25 09:12, cycle 1691)
 - 1 PR open: #10004 (PM, draft, MERGEABLE)
 - 0 pending-test, 0 pending-ship, 0 external
 - 1 approved (DM lane): #3 — paused
