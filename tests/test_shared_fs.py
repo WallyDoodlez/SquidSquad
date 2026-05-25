@@ -367,19 +367,49 @@ class TestAtomicWriteText:
         leftovers = [f for f in tmp_path.iterdir() if f.suffix == ".tmp"]
         assert leftovers == [], f"tmp file leaked: {leftovers}"
 
-    def test_concurrent_reader_never_sees_partial_write(self, tmp_path):
-        """Reader reading the path mid-write either sees old content or new.
-        Validated indirectly via os.replace atomicity: there is no window
-        where the destination exists in a partial state — it's either the
-        pre-existing inode or the new one. The tmp file is in the same
-        directory (same filesystem) so the replace is atomic on all OSes."""
+    def test_large_write_roundtrip(self, tmp_path):
+        """Large content round-trips correctly through the helper.
+
+        The actual concurrent-read safety is a structural guarantee of
+        ``os.replace`` on a same-filesystem path — see
+        ``test_uses_os_replace_for_atomic_swap`` for the source-level lock.
+        This test just locks in that the helper handles non-trivial payload
+        sizes (#10007 DS review Finding 3 — renamed from
+        test_concurrent_reader_never_sees_partial_write because the original
+        name implied a behavioral assertion the test body didn't make)."""
         p = tmp_path / "out.txt"
         shared_fs.atomic_write_text(p, "v1" * 1000)
-        # After successful write, reader sees the complete new content.
-        # (The atomicity guarantee is structural — provided by os.replace
-        # on a same-filesystem path — and is exercised by every other
-        # test in this class. This test serves as documentation.)
         assert p.read_text(encoding="utf-8") == "v1" * 1000
+
+    def test_uses_os_replace_for_atomic_swap(self):
+        """Source-level lock: the helper must call ``os.replace`` (atomic
+        on POSIX and Windows for same-filesystem paths). A future refactor
+        that drops to ``shutil.move`` or similar non-atomic primitive would
+        break the core guarantee (#10007 DS review Finding 3 — companion
+        source-level assertion to the test rename above)."""
+        import inspect
+        source = inspect.getsource(shared_fs.atomic_write_text)
+        assert "os.replace" in source, (
+            "atomic_write_text must use os.replace for the swap step."
+        )
+        assert "mkstemp" in source, (
+            "atomic_write_text must write to a sibling tmp file before swap."
+        )
+
+    def test_preserves_path_write_text_newline_behavior(self, tmp_path):
+        """#10007 DS review Finding 1: the helper must match Path.write_text
+        newline behavior so existing state files don't acquire a phantom
+        git diff from line-ending changes when the helper is first deployed."""
+        p_helper = tmp_path / "helper.txt"
+        p_native = tmp_path / "native.txt"
+        content = "line1\nline2\nline3\n"
+        shared_fs.atomic_write_text(p_helper, content)
+        p_native.write_text(content, encoding="utf-8")
+        # Compare raw bytes — text mode normalizes, defeating the check.
+        assert p_helper.read_bytes() == p_native.read_bytes(), (
+            "atomic_write_text must produce byte-identical output to "
+            "Path.write_text (same newline translation behavior)."
+        )
 
 
 class TestCallSitesUseAtomicWrite:
@@ -397,6 +427,7 @@ class TestCallSitesUseAtomicWrite:
         ("soul_adaptation", "add_adaptation"),
         ("soul_adaptation", "render_soul"),
         ("config", "set_field"),
+        ("config", "write_event_reactions"),  # #10007 DS review Finding 5
         ("diagnostics", "rotate"),
     ])
     def test_call_site_uses_atomic_write_text(self, module_name, function_name):

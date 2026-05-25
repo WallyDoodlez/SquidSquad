@@ -404,10 +404,11 @@ def write_event_reactions(reactions_dict, text=None):
         # Append to end of file
         new_text = text.rstrip() + "\n" + new_section
 
-    # Atomic write
-    tmp = CONFIG_PATH.with_suffix(".tmp")
-    tmp.write_text(new_text, encoding="utf-8")
-    tmp.replace(CONFIG_PATH)
+    # #10007 DS review Finding 5: route through shared atomic helper so this
+    # function and set_field stay consistent (both use the same newline
+    # handling and mkstemp/replace pattern; previously this used a bespoke
+    # `with_suffix(".tmp") + write_text + replace` pattern that diverged).
+    atomic_write_text(CONFIG_PATH, new_text)
 
 
 # ---------------------------------------------------------------------------

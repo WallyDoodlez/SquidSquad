@@ -74,6 +74,17 @@ def atomic_write_text(path, content, encoding="utf-8"):
 
     Cleans up the tmp file on any exception during write so a crash mid-write
     leaves the original file untouched.
+
+    Newline handling matches ``Path.write_text``: ``open`` uses the default
+    ``newline=None`` so on Windows ``\\n`` in ``content`` is translated to
+    ``\\r\\n``. This preserves the prior behavior of the 9 call sites this
+    helper replaces, so existing state files don't acquire a phantom git diff
+    from line-ending changes (#10007 DS review Finding 1).
+
+    Note: atomicity is at the write level only. Read-modify-write call sites
+    (e.g. ``cycle.set_counter``, ``vault_remember._upsert_vault_writes``) can
+    still race between the read and the write; that is an application-level
+    concern outside this helper's scope (#10007 DS review Finding 4).
     """
     path = Path(path)
     tmp_fd, tmp_path_str = tempfile.mkstemp(
@@ -88,7 +99,7 @@ def atomic_write_text(path, content, encoding="utf-8"):
     except OSError:
         pass
     try:
-        with open(tmp_path, "w", encoding=encoding, newline="") as f:
+        with open(tmp_path, "w", encoding=encoding) as f:
             f.write(content)
         os.replace(tmp_path, path)
     except Exception:
