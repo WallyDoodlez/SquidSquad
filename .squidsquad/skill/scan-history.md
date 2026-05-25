@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 22:09
+
+- **Files scanned**: references/scripts/scan_index.py (re-check, no read this cycle)
+- **Findings**: none. Minimal cycle. cycle_pre auto-fixed a config.md version regression (0.29.0 → 0.43.0) per #5136.
+- **Items rejected by human**: none yet
+- **Notes**: same state as cycle 1377. QA hasn't re-picked #9965. 5 open scan findings.
+
 ## Scan — 2026-05-24 21:39
 
 - **Files scanned**: references/scripts/health_check.py (re-check; previously scanned with no new findings)
