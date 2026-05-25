@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 21:20
+
+- **Files scanned**: not applicable — QA-rejected fix-up cycle (highest priority per protocol)
+- **Findings**: not applicable
+- **Items rejected by human**: not applicable
+- **Notes**: cycle 1376 picked up the QA rejection of #9965. Fixed 2 assertions in `tests/test_manifest_registry.py::TestShippedRegistry` (L193 + L201/L203) from `{dev, qa}` to `{worker, verifier}` per AC2.6. Committed 7e43a745, AC2.9 re-affirmed 06037552. Re-transitioned to pending-test.
+
 ## Scan — 2026-05-24 20:36
 
 - **Files scanned**: references/scripts/cycle_pre.py (focused: `_enforce_branch` L193-230)
