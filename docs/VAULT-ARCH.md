@@ -15,7 +15,7 @@ This doc describes:
 - What the vault *is* — its purpose, the storage model, the entity types it holds
 - Where it lives on disk
 - Who reads and who writes (per agent role)
-- The five sub-skills and four scripts that operate on it
+- The sub-skills and scripts that operate on it
 - How it integrates into the cycle (boot, pre-cycle, creative phase, post-cycle, quiet ticks)
 - What is actually present in this repo's vault as of the snapshot date
 - Known gaps between the spec and the live behavior
@@ -135,7 +135,7 @@ Concrete operational consequences appear in §8 (which script touches which fold
 
 Subtypes layered on top via tags:
 
-- `pattern` + tag `posture` = synthesis-derived cross-agent principle (written only by the `vault-synthesis` sub-skill, see §7.5).
+- `pattern` + tag `posture` = synthesis-derived cross-agent principle (written only by the `vault-synthesis` sub-skill, see §7.4).
 
 ### 4.2a Consistency rules (folder + prefix + type)
 
@@ -227,9 +227,9 @@ The staleness check is special — it runs every cycle including quiet cycles, a
 
 ---
 
-## 7. The five sub-skills
+## 7. The sub-skills
 
-All vault behavior is encoded in five markdown fragments under `references/sub-skills/`. Each is inlined into the consuming agent's composed `CLAUDE.md` by `compose.py`. The split between `vault-protocol` and `vault-protocol-slim` is the standard "full vs read-only" variant pair used elsewhere in SquidSquad — `compose.py` maps base name to the slim variant for read-only-vault roles (per the comment at `references/scripts/compose.py:311`).
+All vault behavior is encoded as markdown fragments under `references/sub-skills/`. Each fragment is inlined into the consuming agent's composed `CLAUDE.md` by `compose.py`. Four distinct sub-skills are described below; `vault-protocol` ships with a read-only variant (`vault-protocol-slim`) — see §7.1.
 
 ### 7.1 `vault-protocol`
 
@@ -251,19 +251,9 @@ All vault behavior is encoded in five markdown fragments under `references/sub-s
 
 **Source-vs-spec drift**: source file still references the dropped `owner` and `links` frontmatter fields, the dropped `source: code` value, and the unimplemented "auto-maintain `links` frontmatter" behavior. Sync tracked in #10098.
 
-### 7.2 `vault-protocol-slim`
+**Read-only variant** (`references/sub-skills/common/vault-protocol-slim.md`): the same protocol with all write operations removed — just session-start `BRIEFING.md` reading and the four `vault-search` modes. Composed by `compose.py` for roles where vault writes are not appropriate; the base-name-to-slim-variant mapping is a composition concern (see [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md)).
 
-**Path**: `references/sub-skills/common/vault-protocol-slim.md`
-
-**Behavior**: Read-only subset of `vault-protocol`. Provides session-start `BRIEFING.md` reading and the same four `vault-search` modes (by tag / type / keyword / wikilink traversal). Explicitly declares that the consuming agent has no vault-write capability; writes are performed by other agents.
-
-**Cycle integration**: Composed at session start via `compose.py`'s base-name-to-slim-variant mapping for read-only-vault roles. Rules apply continuously.
-
-**Scripts used**: none. All operations are inline `grep` commands documented in the sub-skill body.
-
-**Outputs**: none — no write capability.
-
-### 7.3 `vault-remember`
+### 7.2 `vault-remember`
 
 **Path**: `references/sub-skills/common/vault-remember.md`
 
@@ -278,7 +268,7 @@ All vault behavior is encoded in five markdown fragments under `references/sub-s
 
 **Outputs**: Up to 2 new `.squidsquad/vault/galaxy/*.md` notes per cycle (`decision-*`/`pattern-*`/`learning-*`), optional `BRIEFING.md` staleness updates, iteration-log notes for deferred candidates.
 
-### 7.4 `vault-optimize`
+### 7.3 `vault-optimize`
 
 **Path**: `references/sub-skills/common/vault-optimize.md`
 
@@ -299,7 +289,7 @@ The sub-skill also exposes a pending-questions queue: optimization-surfaced ques
 
 **Source-vs-spec drift**: source's "Reindex" item is stale per the §4.3 polish that dropped the `links` frontmatter field. Sync tracked in #10098.
 
-### 7.5 `vault-synthesis`
+### 7.4 `vault-synthesis`
 
 **Path**: `references/sub-skills/roles/pm/vault-synthesis.md`
 
