@@ -2787,3 +2787,4 @@
 {"timestamp": "2026-05-24T00:21:09.410930", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #9967: branch squidsquad/task/9967 has 1 unmerged commit(s)"}
 {"timestamp": "2026-05-24T00:23:36.790379", "severity": "error", "source": "tracker", "message": "Blocked shipped transition on #9967: branch squidsquad/task/9967 has 1 unmerged commit(s)"}
 {"timestamp": "2026-05-24T02:34:02.166247", "severity": "info", "source": "tracker", "message": "Ship gate on #9999: branch 'squidsquad/task/9999' tip has 2 commit(s) not reachable from working branch, but PR #10000 is MERGED on the forge (squash-merge) \u2014 allowing ship."}
+{"timestamp": "2026-05-24T22:12:06.283245", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
