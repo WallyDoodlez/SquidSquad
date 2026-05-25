@@ -2,7 +2,7 @@
 type: learning
 tags: [migration, 6274, terminology, cutover]
 created: 2026-05-23
-updated: 2026-05-23
+updated: 2026-05-24
 owner: skill-lead
 status: active
 confidence: high
@@ -29,13 +29,16 @@ the canonical record of that target date.
 
 ## Content
 
-**Target cutover date: TBD — populated in 6274.2 PR.**
+**Target cutover date: 2026-06-23 (UTC).**
 
-The AC2.9 commit (final commit of the 6274.2 PR, pre-merge) populates
-the `## Content` block above with the actual ISO 8601 UTC date
-`T = merge_commit_timestamp + 30 days`. The G1→2 gate verifies that
-this commit exists in the 6274.2 PR; the G2→3 gate verifies the
-date has passed before 6274.3 ships.
+Computed as `T = merge_commit_timestamp + 30 days` per AC2.9 of CONTEXT-6274.md.
+The AC2.9 commit timestamp 2026-05-24 (UTC) is used as the proxy for the
+eventual 6274.2 merge timestamp — DM typically merges within hours of QA pass,
+and the spec mandates pre-merge population. If the actual merge slips
+materially (>72h), a Changelog addendum below records the corrected date.
+
+The G1→2 gate verifies that this commit exists in the 6274.2 PR; the G2→3 gate
+verifies the date has passed before 6274.3 ships.
 
 ## Rationale
 
@@ -66,3 +69,4 @@ date has passed before 6274.3 ships.
 ### Changelog
 
 - 2026-05-23 — Created by skill-lead. Placeholder for AC1.6 of #6274 sub-phase 6274.1. The target cutover date is "TBD — populated in 6274.2 PR" per AC2.9.
+- 2026-05-24 — Populated cutover date `2026-06-23 (UTC)` by skill-lead per AC2.9 of #9965 (6274.2). Computed as `commit_timestamp + 30 days` using the AC2.9 commit time as proxy for the merge timestamp.
