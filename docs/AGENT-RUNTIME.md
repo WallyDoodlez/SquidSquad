@@ -514,9 +514,12 @@ Each agent typically runs in its own git clone. The harness writes its port to `
 
 ### 6.1 The Ralph Loop cycle
 
-A cycle has three phases:
+A cycle has three phases (vault touchpoints inlined; see §6.5 + VAULT-ARCH §7 for execution-lane detail):
 
 ```
+Boot (session start, once):
+  · read .squidsquad/vault/BRIEFING.md   [vault-protocol, inline]
+                       ↓
 ┌─── Phase 1: Pre-cycle (mechanical) ──────────────┐
 │ cycle_pre.py <role>                              │
 │ · git pull (with stash/pop)                      │
@@ -524,12 +527,23 @@ A cycle has three phases:
 │ · query work queue (tracker)                     │
 │ · GET /events/for/<role>?since=cursor            │
 │ · apply mechanical reactions                     │
+│ · read vault-remember + vault-optimize flags     │
 │ · build .squidsquad/<role>/cycle-input.json      │
 └──────────────────────────────────────────────────┘
                        ↓
 ┌─── Phase 2: Creative work (agent) ───────────────┐
 │ Read cycle-input.json                            │
 │ Investigate / decide / act                       │
+│   ↳ vault-protocol reads inline as needed        │
+│   ↳ vault-protocol writes inline (vault-create / │
+│       vault-update + vault-check Level 1)        │
+│ End-of-Phase-2 reflection (if not a quiet cycle):│
+│   ↳ vault-remember → subagent (`sonnet`)         │
+│       returns write decisions → applied inline   │
+│ Quiet-cycle additions:                           │
+│   ↳ vault-optimize inline (gated: 20+ notes)     │
+│   ↳ every 5th quiet (PM): vault-synthesis        │
+│       → subagent (`sonnet`) returns ≤1 posture   │
 │ Write cycle-output.json                          │
 │ (free use of git, bash, subagents for the work)  │
 └──────────────────────────────────────────────────┘
@@ -539,7 +553,7 @@ A cycle has three phases:
 │ · apply status transitions                       │
 │ · post tracker comments                          │
 │ · write iteration log                            │
-│ · git commit + push                              │
+│ · git commit + push (incl. vault note writes)    │
 │ · update working-state.md                        │
 │ · status-bar cleanup                             │
 │ · advance event cursor                           │
@@ -547,7 +561,7 @@ A cycle has three phases:
 └──────────────────────────────────────────────────┘
 ```
 
-The agent only writes the creative phase. Mechanical phases are deterministic scripts.
+The agent only writes the creative phase. Mechanical phases are deterministic scripts. Vault sub-skills split between inline execution (`vault-protocol`, `vault-optimize`) and background-subagent execution (`vault-remember`, `vault-synthesis`) — see §6.5.
 
 ### 6.2 What wakes the agent in loop mode
 
@@ -573,6 +587,25 @@ When the cycle's context usage exceeds the configured threshold (default 70%), t
 - **Harness-less loop mode**: `thin_launcher` is the parent process and exits when `claude.exe` exits — there is no automatic respawn. The agent stops after exit-42 until an operator restarts it. Context pressure is therefore a soft terminal state in harness-less mode; operators are expected to use a process supervisor (systemd, launchd, NSSM) or to restart agents periodically.
 
 This is loop mode's primary form of session lifecycle — agents don't shut down cleanly between cycles; they respawn (with harness) or stop (without) on context pressure.
+
+### 6.5 Vault touchpoints within Phase 2
+
+Vault sub-skills participate in the creative phase at four touchpoints. They split into two execution lanes by weight — anything that requires meaningful reasoning over vault content runs out of process to keep the consuming agent's context lean:
+
+| Touchpoint | Sub-skill | Lane | When |
+|---|---|---|---|
+| Continuous reads/writes during work | `vault-protocol` | **inline** | Throughout Phase 2; the agent IS doing the read/write the protocol governs |
+| End-of-Phase-2 reflection | `vault-remember` | **background subagent** (`sonnet`) | Step 4b, gated by `vault-remember: yes` + non-quiet cycle. Returns `{action, path, type, body, reason}` per candidate; consuming agent applies the write list deterministically |
+| Quiet-cycle housekeeping | `vault-optimize` | **inline** | Quiet cycle, after improvement-scan check; gated by 20+ note count. Wrapper around `vault_optimize.py run` — no reasoning to offload |
+| Every-5-quiet cross-agent synthesis | `vault-synthesis` | **background subagent** (`sonnet`) | PM only; counter resets on real work or completed synthesis. Returns ≤1 posture descriptor; consuming agent writes it via `vault-create` + files the pending-review task |
+
+A fifth touchpoint sits **outside** the per-cycle phases: at boot (session start, once per session), every agent reads `.squidsquad/vault/BRIEFING.md` for active context. That's part of `vault-protocol` and is always inline.
+
+The model pin for subagent-lane sub-skills is the **`sonnet`** tier — see [`VAULT-ARCH.md`](VAULT-ARCH.md) §7 Execution model and `[[decision-vault-subagent-model-sonnet]]` for rationale. The pin is by tier, not by dated version.
+
+**Implementation gap** (today): the subagent lane is the architectural target, not the current behavior. Both `vault-remember` and `vault-synthesis` currently compose into the consuming agent's CLAUDE.md inline; closing the gap requires splitting each sub-skill source into a stub (composed into agent) plus a prompt (loaded by the subagent). Tracked as VAULT-ARCH §11.5 + #10180.
+
+For the full vault architecture (storage model, frontmatter spec, scripts, cycle integration detail beyond what this sub-section captures), see [`VAULT-ARCH.md`](VAULT-ARCH.md) — §7 for sub-skills, §9 for cycle integration, §11 for known gaps.
 
 ---
 
