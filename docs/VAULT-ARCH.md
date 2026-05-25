@@ -4,7 +4,7 @@
 >
 > **Companion docs**: [`ARCHITECTURE.md`](ARCHITECTURE.md) (overall system; vault appears as "L6 Memory"), [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) (cycle integration), [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) (vault slot in composed CLAUDE.md), [`sub-skill-catalog.md`](sub-skill-catalog.md) (vault sub-skill entries).
 >
-> **Known live gap**: [#5855 — Vault is static decision log, not living institutional memory](https://github.com/WallyDoodlez/SquidSquad/issues/5855) (status:pending, high, role:skill). Documented in §11; not addressed by this doc.
+> **Known live gaps**: [#5855 — Vault is static decision log, not living institutional memory](https://github.com/WallyDoodlez/SquidSquad/issues/5855) (status:pending, high, role:skill); [#10100 — vault: CI/CD enforce knowledge-tree integrity on note renames](https://github.com/WallyDoodlez/SquidSquad/issues/10100) (low). Documented in §11; not addressed by this doc.
 
 ---
 
@@ -156,11 +156,10 @@ updated: YYYY-MM-DD
 status: active | archived | superseded
 confidence: high | medium | low       # see §4.4
 source: conversation | review | observation | research
-links: [bare-note-names]              # auto-maintained from body wikilinks
 ---
 ```
 
-The `links` field is **auto-maintained** by `vault_check.py` from `[[bare-wikilinks]]` in the body — agents do not curate it manually.
+There is no `links` frontmatter field. Cross-note references live exclusively in the body as `[[bare-wikilinks]]` (see §4.5) — the body is the single source of truth, no separate index in frontmatter.
 
 **Tag convention** (for searchability):
 
@@ -170,7 +169,7 @@ The `links` field is **auto-maintained** by `vault_check.py` from `[[bare-wikili
 - **Reserved subtype tags**: `posture` (see §4.2 — `pattern + posture` is the synthesis-derived cross-agent principle subtype). Other reserved tags will be added here as the system grows.
 - **Free-form**: any additional keywords for searchability.
 
-**Empty values**: `tags: []` is not allowed (the required domain tag rule means at least one tag is always present). `links: []` is allowed (no wikilinks in the body).
+**Empty values**: `tags: []` is not allowed (the required domain tag rule means at least one tag is always present).
 
 ### 4.4 Confidence levels
 
@@ -196,7 +195,22 @@ A changelog entry is appended to the note body on each decay step, so the decay 
 
 ### 4.5 Wikilinks
 
-Bare wikilink syntax in the body: `[[note-name]]`. No aliases (e.g., `[[note-name|display]]` is not used). Cross-note references resolve via filename match anywhere under `.squidsquad/vault/`. Broken wikilinks are flagged by `vault_check.py check-wikilinks`.
+Bare wikilink syntax in the body: `[[note-name]]`. No aliases (e.g., `[[note-name|display]]` is not used). Cross-note references resolve via filename match anywhere under `.squidsquad/vault/`.
+
+**Operating assumption**: only SquidSquad agents write to the vault (per §6.2). Agent-driven note modifications go through `vault_*` sub-skills which trigger the link-rewrite-on-archive logic in `vault_optimize.py _rewrite_wikilinks_after_archive`. Under this assumption, broken wikilinks are rare in practice.
+
+**Broken-link validation**: `vault_check.py check-wikilinks` walks all notes, extracts every `[[bare-wikilink]]`, and flags any whose target filename does not exist in the vault.
+
+| Behavior | Detail |
+|---|---|
+| Per-broken-link output | `WARN: <path>: broken link [[<name>]]` to stdout |
+| Clean output | `OK: All wikilinks resolve` |
+| Exit code | `1` if any broken link found; `0` if all clean |
+| Automated invocation | None today; on-demand only. Acceptable risk under the SquidSquad-only-write assumption. |
+
+**Semantic note**: a wikilink to a previously-existing note that has gone dead is itself information — it signals that the referenced concept was removed or superseded. Broken links are not automatically a defect; they should be investigated case-by-case (could be a typo, deletion signal, intentional forward-reference, or rename without rewrite).
+
+**Note renames**: renaming a vault note in the filesystem without rewriting incoming wikilinks breaks references. Today this is mitigated by the operating assumption (SquidSquad-only writes go through the sub-skills). Hard enforcement is tracked in §11.2 (#10100).
 
 ---
 
@@ -473,7 +487,9 @@ These are seeds used by `vault-init` (per `vault-protocol.md` §Vault Initializa
 
 ---
 
-## 11. Known gap — #5855
+## 11. Known gaps
+
+### 11.1 #5855 — Vault is static decision log
 
 [Issue #5855 — Vault is static decision log, not living institutional memory](https://github.com/WallyDoodlez/SquidSquad/issues/5855) (status:pending, priority:high, role:skill).
 
@@ -502,6 +518,18 @@ Additional drift surfaced by this audit (not yet in #5855):
 - **No `superseded` notes** (§10.5): every note is `active`. Either decisions are never superseded (unlikely over 1+ months of work) or the supersession mechanism isn't being used.
 
 This doc does not propose fixes — those belong to whoever picks up #5855.
+
+### 11.2 Future gap — vault knowledge-tree integrity enforcement (#10100)
+
+The §4.5 operating assumption (SquidSquad-only writes; sub-skills mediate all modifications) is a convention, not a hard guarantee. A future CI/CD workflow should formally enforce knowledge-tree integrity on note renames:
+
+- **Detect**: git diff between PR head and base reveals any vault note that was renamed (filesystem path change) or moved
+- **Enforce**: one of two policies
+  - **Reconcile**: auto-rewrite all incoming `[[wikilinks]]` to point at the new name; fail the CI check if the rewrite is ambiguous (e.g., name collision)
+  - **Prohibit**: fail the CI check outright on any direct rename; force the rename to go through a vault sub-skill (e.g., `vault_optimize rename-note`) that triggers the existing rewrite logic
+- **Policy choice**: prohibit-outright is simpler and matches the SquidSquad-only-write assumption (humans never rename vault notes directly); reconcile-automatically is more permissive but adds CI complexity. The recommendation in #10100 is to start with prohibit.
+
+Tracked in #10100.
 
 ---
 
