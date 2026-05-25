@@ -38,6 +38,9 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 CONFIG_PATH = REPO_ROOT / ".squidsquad" / "config.md"
 
+sys.path.insert(0, str(SCRIPT_DIR))
+from shared_fs import atomic_write_text  # #10007
+
 # Known field mappings: short name -> (section_heading, field_name)
 # Section heading is used for disambiguation when field names repeat (e.g. "Enabled")
 FIELD_MAP = {
@@ -282,7 +285,7 @@ def set_field(field, value):
             print(f"ERROR: Field '{field}' not found in config.md", file=sys.stderr)
             sys.exit(1)
 
-    CONFIG_PATH.write_text(new_text, encoding="utf-8")
+    atomic_write_text(CONFIG_PATH, new_text)
     return value
 
 

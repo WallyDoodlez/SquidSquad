@@ -61,6 +61,44 @@ def init():
     return str(home)
 
 
+def atomic_write_text(path, content, encoding="utf-8"):
+    """Atomically write text to ``path`` (#10007).
+
+    Writes to a sibling ``.tmp`` file in the same directory, then ``os.replace``
+    swaps it into place. Concurrent readers of ``path`` either see the old full
+    file or the new full file — never a partial/torn write.
+
+    Same-directory + ``os.replace`` is required for atomicity (Python docs:
+    atomic on both POSIX and Windows, but only if source and destination are
+    on the same filesystem — which the sibling-tmp pattern guarantees).
+
+    Cleans up the tmp file on any exception during write so a crash mid-write
+    leaves the original file untouched.
+    """
+    path = Path(path)
+    tmp_fd, tmp_path_str = tempfile.mkstemp(
+        prefix=f".{path.name}-", suffix=".tmp", dir=str(path.parent)
+    )
+    tmp_path = Path(tmp_path_str)
+    # Close mkstemp's fd immediately; we re-open by path. This avoids the
+    # fd-leak edge case where ``os.fdopen`` raises (e.g. patched in tests)
+    # and the fd stays open, blocking ``tmp_path.unlink`` on Windows.
+    try:
+        os.close(tmp_fd)
+    except OSError:
+        pass
+    try:
+        with open(tmp_path, "w", encoding=encoding, newline="") as f:
+            f.write(content)
+        os.replace(tmp_path, path)
+    except Exception:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+        raise
+
+
 def _restrict_permissions(path):
     """Set file permissions to owner-only (chmod 600 / Windows ACL).
 

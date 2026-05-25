@@ -35,6 +35,9 @@ SQUID_DIR = REPO_ROOT / ".squidsquad"
 VAULT_DIR = SQUID_DIR / "vault"
 ADAPTATIONS_FILE = VAULT_DIR / "areas" / "role-adaptations.md"
 
+sys.path.insert(0, str(SCRIPT_DIR))
+from shared_fs import atomic_write_text  # #10007
+
 ADAPTATION_HEADER = "## Project Adaptation"
 ADAPTATION_FOOTER = "<!-- /project-adaptation -->"
 
@@ -144,7 +147,7 @@ def add_adaptation(role, category, signal, source_task=None):
         else:
             content = content.rstrip() + f"\n{entry}\n"
 
-    ADAPTATIONS_FILE.write_text(content, encoding="utf-8")
+    atomic_write_text(ADAPTATIONS_FILE, content)
     return entry
 
 
@@ -223,7 +226,7 @@ def render_soul(role):
         # Append at end
         content = content.rstrip() + "\n\n" + adaptation_text
 
-    soul_path.write_text(content, encoding="utf-8")
+    atomic_write_text(soul_path, content)
     return True
 
 

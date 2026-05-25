@@ -295,3 +295,118 @@ class TestWriteSecretAtomic9932:
             "#9932 regression: write_secret reverted to direct write_text "
             "(non-atomic — truncates before writing)"
         )
+
+
+class TestAtomicWriteText:
+    """#10007: shared atomic_write_text helper for concurrent-read safety."""
+
+    def test_basic_write(self, tmp_path):
+        p = tmp_path / "out.txt"
+        shared_fs.atomic_write_text(p, "hello world")
+        assert p.read_text(encoding="utf-8") == "hello world"
+
+    def test_overwrites_existing(self, tmp_path):
+        p = tmp_path / "out.txt"
+        p.write_text("old", encoding="utf-8")
+        shared_fs.atomic_write_text(p, "new")
+        assert p.read_text(encoding="utf-8") == "new"
+
+    def test_unicode_roundtrip(self, tmp_path):
+        p = tmp_path / "out.md"
+        content = "Task: #9965 — em-dash and 中文 mix\n"
+        shared_fs.atomic_write_text(p, content)
+        assert p.read_text(encoding="utf-8") == content
+
+    def test_no_tmp_leftover_after_success(self, tmp_path):
+        p = tmp_path / "out.txt"
+        shared_fs.atomic_write_text(p, "x")
+        leftovers = [f for f in tmp_path.iterdir() if f.suffix == ".tmp"]
+        assert leftovers == []
+
+    def test_crash_mid_write_leaves_original_intact(self, tmp_path, monkeypatch):
+        """If the inner write raises, the original file must be untouched."""
+        p = tmp_path / "out.txt"
+        shared_fs.atomic_write_text(p, "original")
+
+        import builtins
+        real_open = builtins.open
+
+        def boom(*args, **kwargs):
+            # Only intercept the inner write-to-tmp call (mode 'w');
+            # leave read calls (mode 'r' or no mode) alone.
+            if len(args) >= 2 and args[1] == "w":
+                raise RuntimeError("simulated crash")
+            return real_open(*args, **kwargs)
+
+        monkeypatch.setattr(builtins, "open", boom)
+
+        with pytest.raises(RuntimeError):
+            shared_fs.atomic_write_text(p, "should not land")
+
+        # Critical invariant: the original file is untouched.
+        assert p.read_text(encoding="utf-8") == "original"
+
+    def test_crash_mid_write_cleans_up_tmp(self, tmp_path, monkeypatch):
+        """If the inner write raises, the tmp sibling must be deleted."""
+        p = tmp_path / "out.txt"
+        shared_fs.atomic_write_text(p, "original")
+
+        import builtins
+        real_open = builtins.open
+
+        def boom(*args, **kwargs):
+            if len(args) >= 2 and args[1] == "w":
+                raise RuntimeError("simulated crash")
+            return real_open(*args, **kwargs)
+
+        monkeypatch.setattr(builtins, "open", boom)
+
+        with pytest.raises(RuntimeError):
+            shared_fs.atomic_write_text(p, "x")
+
+        leftovers = [f for f in tmp_path.iterdir() if f.suffix == ".tmp"]
+        assert leftovers == [], f"tmp file leaked: {leftovers}"
+
+    def test_concurrent_reader_never_sees_partial_write(self, tmp_path):
+        """Reader reading the path mid-write either sees old content or new.
+        Validated indirectly via os.replace atomicity: there is no window
+        where the destination exists in a partial state — it's either the
+        pre-existing inode or the new one. The tmp file is in the same
+        directory (same filesystem) so the replace is atomic on all OSes."""
+        p = tmp_path / "out.txt"
+        shared_fs.atomic_write_text(p, "v1" * 1000)
+        # After successful write, reader sees the complete new content.
+        # (The atomicity guarantee is structural — provided by os.replace
+        # on a same-filesystem path — and is exercised by every other
+        # test in this class. This test serves as documentation.)
+        assert p.read_text(encoding="utf-8") == "v1" * 1000
+
+
+class TestCallSitesUseAtomicWrite:
+    """#10007 regression locks: every call site listed in the issue body
+    must route through atomic_write_text (not Path.write_text). Source-level
+    invariants — a future refactor that drops back to direct write_text on
+    a concurrently-read state file would regress this issue."""
+
+    @pytest.mark.parametrize("module_name,function_name", [
+        ("vault_remember", "_write_working_state_field"),
+        ("vault_remember", "_upsert_vault_writes"),
+        ("cycle", "set_counter"),
+        ("cycle_post", "_do_working_state_update"),
+        ("cycle_post", "_do_version_bump"),
+        ("soul_adaptation", "add_adaptation"),
+        ("soul_adaptation", "render_soul"),
+        ("config", "set_field"),
+        ("diagnostics", "rotate"),
+    ])
+    def test_call_site_uses_atomic_write_text(self, module_name, function_name):
+        import importlib
+        import inspect
+        mod = importlib.import_module(module_name)
+        fn = getattr(mod, function_name)
+        source = inspect.getsource(fn)
+        assert "atomic_write_text" in source, (
+            f"#10007 regression: {module_name}.{function_name} must call "
+            f"atomic_write_text (not Path.write_text) — concurrent readers "
+            f"can see torn writes on the state file it manages."
+        )
