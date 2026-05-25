@@ -527,7 +527,6 @@ Boot (session start, once):
 │ · query work queue (tracker)                     │
 │ · GET /events/for/<role>?since=cursor            │
 │ · apply mechanical reactions                     │
-│ · read vault-remember + vault-optimize flags     │
 │ · build .squidsquad/<role>/cycle-input.json      │
 └──────────────────────────────────────────────────┘
                        ↓
@@ -595,7 +594,7 @@ Vault sub-skills participate in the creative phase at four touchpoints. They spl
 | Touchpoint | Sub-skill | Lane | When |
 |---|---|---|---|
 | Continuous reads/writes during work | `vault-protocol` | **inline** | Throughout Phase 2; the agent IS doing the read/write the protocol governs |
-| End-of-Phase-2 reflection | `vault-remember` | **background subagent** (`sonnet`) | Step 4b, gated by `vault-remember: yes` + non-quiet cycle. Returns `{action, path, type, body, reason}` per candidate; consuming agent applies the write list deterministically |
+| End-of-Phase-2 reflection | `vault-remember` | **background subagent** (`sonnet`) | Step 4b, gated by the non-quiet-cycle check only (always-on; no feature toggle). Returns `{action, path, type, body, reason}` per candidate; consuming agent applies the write list deterministically |
 | Quiet-cycle housekeeping | `vault-optimize` | **inline** | Quiet cycle, after improvement-scan check; gated by 20+ note count. Wrapper around `vault_optimize.py run` — no reasoning to offload |
 | Every-5-quiet cross-agent synthesis | `vault-synthesis` | **background subagent** (`sonnet`) | PM only; counter resets on real work or completed synthesis. Returns ≤1 posture descriptor; consuming agent writes it via `vault-create` + files the pending-review task |
 

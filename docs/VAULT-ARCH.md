@@ -272,9 +272,9 @@ Each sub-skill's **Cycle integration** line below names its lane.
 1. **BRIEFING.md staleness check** — runs every cycle, including quiet cycles. Compares `BRIEFING.md` key fields (version, active agents, current priorities) against `config.md` and the tracker; updates any stale field. Staleness fixes do NOT consume the write budget.
 2. **Reflection** — gated by a quiet-cycle check (skipped if the cycle did no real work). Evaluates this cycle's iteration log for vault-worthy candidates in four categories: DECISIONS, PATTERNS, LEARNINGS, PROJECT CONTEXT. Each candidate runs through four deterministic gates IN ORDER: (1) write budget remaining (default 2 per cycle, per `config.md` `Vault Remember > Writes Per Cycle`), (2) dedup-check against existing notes by title + tags, (3) reusability beyond this cycle, (4) would a fresh agent benefit? Only candidates passing all four are written. When more than 2 pass, priority is decisions > learnings > patterns; surplus is deferred to iteration-log notes as `Vault-worthy but deferred (budget): <description>`. Behavioral or personality directives are explicitly out of scope — those go to soul-shepherd (observed signals) or L4 (explicit directives), not the vault.
 
-**Cycle integration**: Post-cycle Step 4b. Gated by `vault-remember: yes` in `config.md` and the per-cycle quiet check. **Lane**: background subagent (`sonnet`). The consuming agent hands the iteration log + write-budget + dedup-tool access to the subagent; the subagent runs the 4-gate evaluation and returns a structured list of `{action: write|update|skip, path, type, body, reason}` decisions plus the resulting note paths. The reflection transcript stays out of the consuming agent's context.
+**Cycle integration**: Post-cycle Step 4b. Gated by the per-cycle quiet check only — always-on, no feature toggle (the 4-gate filter already provides sufficient noise control; a blunt on/off flag on top earns no use case). **Lane**: background subagent (`sonnet`). The consuming agent hands the iteration log + write-budget + dedup-tool access to the subagent; the subagent runs the 4-gate evaluation and returns a structured list of `{action: write|update|skip, path, type, body, reason}` decisions plus the resulting note paths. The reflection transcript stays out of the consuming agent's context.
 
-**Scripts used** (from §8): `config.py get vault-remember` (config gate), `vault_remember.py is-quiet`/`reset-writes`/`write-budget`/`inc-writes`/`briefing-budget` (gating and accounting), `vault_check.py dedup-check` (gate 2).
+**Scripts used** (from §8): `vault_remember.py is-quiet`/`reset-writes`/`write-budget`/`inc-writes`/`briefing-budget` (gating and accounting), `vault_check.py dedup-check` (gate 2). (The legacy `config.py get vault-remember` enabled-flag read is being retired — see follow-up.)
 
 **Outputs**: Up to 2 new `.squidsquad/vault/galaxy/*.md` notes per cycle (`decision-*`/`pattern-*`/`learning-*`), optional `BRIEFING.md` staleness updates, iteration-log notes for deferred candidates.
 
@@ -290,7 +290,7 @@ Each sub-skill's **Cycle integration** line below names its lane.
 
 The sub-skill also exposes a pending-questions queue: optimization-surfaced questions that need human input (e.g., "should these similar notes be merged?") are added via `vault_optimize.py add-question`, surfaced in the status bar, and mentioned in the next agent check-in.
 
-**Cycle integration**: Quiet cycle only, after the improvement-scan check. Gated by `Vault Optimize > Enabled` in `config.md` and the 20+ note count. **Lane**: inline (thin wrapper around `vault_optimize.py run` — no reasoning happens in the agent's context).
+**Cycle integration**: Quiet cycle only, after the improvement-scan check. Gated by the 20+ note count — always-on, no feature toggle (the quiet-cycle + note-count gates already provide sufficient activation control). **Lane**: inline (thin wrapper around `vault_optimize.py run` — no reasoning happens in the agent's context).
 
 **Scripts used** (from §8): `vault_optimize.py run` (the all-in-one orchestrator), `vault_optimize.py add-question` (pending-question queue).
 
@@ -385,8 +385,7 @@ The vault is touched at four points in a cycle:
 
 ### 9.2 Pre-cycle (mechanical)
 
-- `cycle_pre.py` reads the `vault-remember` and `vault-optimize` config flags (`cycle_pre.py:539-540`) and includes them in `cycle-input.json` so the creative phase knows which sub-skills are active.
-- No vault read or write.
+- No vault read or write. (Earlier revisions had `cycle_pre.py` read `vault-remember` and `vault-optimize` enabled-flags into `cycle-input.json`; those flags are being retired — both sub-skills are always-on and self-gate via their per-cycle conditions.)
 
 ### 9.3 Creative phase (agent)
 
