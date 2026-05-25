@@ -272,12 +272,11 @@ All vault behavior is encoded as markdown fragments under `references/sub-skills
 
 **Path**: `references/sub-skills/common/vault-optimize.md`
 
-**Behavior**: Quiet-cycle housekeeping. Runs after the improvement-scan check (if the scan ran this cycle, optimize skips). Activates only when the vault has 20+ notes. Invokes `vault_optimize.py run`, which performs four bundled operations:
+**Behavior**: Quiet-cycle housekeeping. Runs after the improvement-scan check (if the scan ran this cycle, optimize skips). Activates only when the vault has 20+ notes. Invokes `vault_optimize.py run`, which performs three bundled operations:
 
 1. **Prune** — auto-archive galaxy notes that are both stale (60+ days since `updated:`) and orphaned (no inbound wikilinks). Notes created today are never pruned.
 2. **Confidence decay** — apply the §4.4 decay rules (high → medium at 60 days, medium → low at 120 days, terminal at `low`). Notes tagged `evergreen` are exempt.
-3. **Reindex** — declared in the sub-skill source as "rebuild `links` frontmatter from body wikilinks across all notes", but this behavior is NOT delivered by the current script (the `links` field was dropped from the §4.3 spec; the source line is stale).
-4. **Relevance scoring** — compute link-count + recency + confidence scores, write to `.squidsquad/vault/.relevance-index.json` (gitignored).
+3. **Relevance scoring** — compute link-count + recency + confidence scores, write to `.squidsquad/vault/.relevance-index.json` (gitignored).
 
 The sub-skill also exposes a pending-questions queue: optimization-surfaced questions that need human input (e.g., "should these similar notes be merged?") are added via `vault_optimize.py add-question`, surfaced in the status bar, and mentioned in the next agent check-in.
 
@@ -286,8 +285,6 @@ The sub-skill also exposes a pending-questions queue: optimization-surfaced ques
 **Scripts used** (from §8): `vault_optimize.py run` (the all-in-one orchestrator), `vault_optimize.py add-question` (pending-question queue).
 
 **Outputs**: Archived notes (moved from `galaxy/` to `archives/`); in-place confidence-decay frontmatter edits plus body changelog entries; `.relevance-index.json`; pending-question queue entries.
-
-**Source-vs-spec drift**: source's "Reindex" item is stale per the §4.3 polish that dropped the `links` frontmatter field. Sync tracked in #10098.
 
 ### 7.4 `vault-synthesis`
 
