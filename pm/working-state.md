@@ -4,7 +4,7 @@
 - **Status**: VAULT-ARCH §7 + §11.5 polish landed. Next: AGENT-RUNTIME.md vault-invocation gap — A/A+B/A+C/all shape options presented, awaiting human pick.
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-25 12:43, cycle 1697)
+## Pipeline snapshot (2026-05-25 13:13, cycle 1698)
 - 1 PR open: #10004 (PM, draft, mergeable=UNKNOWN — GH still computing)
 - 0 pending-test, 0 pending-ship, 0 external
 - 1 approved (DM lane): #3 — paused
@@ -13,9 +13,9 @@
 - 1 pending (unblocked): #9966
 - ctx 22% / 70% threshold
 
-## This-cycle housekeeping
-- BRIEFING.md Recently Shipped trim-or-graduate: 25 entries archived to vault/archives/shipped-pre-2026-05-19.md; 8 strategic ships kept inline
-- BRIEFING.md now 71 lines (was 95 → 99 originally)
+## Recent scans (this session)
+- 1694: model-tier-not-version rule audit — zero spec violations
+- 1698: vault wikilink integrity — all resolve
 
 ## Pending human input
 1. AGENT-RUNTIME.md vault-invocation polish shape: A (§6.5 only) / A+B (extend §6.1 diagram) / A+C (add §4.9 event-bus gap) / all
