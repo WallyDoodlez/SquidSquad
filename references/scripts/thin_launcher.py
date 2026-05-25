@@ -24,6 +24,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -32,6 +33,11 @@ VALID_EFFORT_LEVELS = {"low", "medium", "high", "max"}
 # Win32 constants for OpenProcess + GetExitCodeProcess (#9904)
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 _STILL_ACTIVE = 259
+
+# #10101: poll budget for resolving the actual claude.exe descendant
+# of the cmd.exe wrapper spawned by the npm shim on Windows.
+_CLAUDE_EXE_RESOLVE_TIMEOUT_S = 5.0
+_CLAUDE_EXE_RESOLVE_POLL_S = 0.1
 
 
 def _get_effort_level(role):
@@ -117,6 +123,206 @@ def _check_singleton(clone_path, role):
         # Defensive: our own PID shouldn't be there, but if it is, treat as stale.
         return None
     return pid if _is_process_alive(pid) else None
+
+
+def _resolve_claude_exe_pid(wrapper_pid, claude_exe_used,
+                            _now=None, _sleep=None, _list_children=None):
+    """Resolve the actual claude.exe descendant PID, given the wrapper PID
+    that Popen returned (#10101).
+
+    Background: on Windows installs via npm, ``shutil.which("claude")``
+    returns ``claude.CMD`` — a 7-line cmd shim that invokes the real
+    ``node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe`` and
+    exits. ``Popen(claude.CMD).pid`` is therefore the cmd.exe wrapper,
+    not the claude.exe we need for singleton enforcement. The wrapper
+    exits in seconds; claude.exe outlives it by hours. When the wrapper
+    dies, ``.claude-pid`` (if it recorded the wrapper PID) becomes stale
+    and singleton check returns "no agent alive" forever after — even
+    though claude.exe is still running. Result: duplicate claude.exe on
+    next thin_launcher invocation.
+
+    This function polls the wrapper's descendant tree for a claude.exe
+    process and returns its PID. Falls back to ``wrapper_pid`` if the
+    descendant cannot be found within the timeout (preserves the prior
+    behavior so we never write nothing).
+
+    No-op when the launched executable was already claude.exe directly
+    (i.e., no shim involved) — that's the Linux/macOS path and any
+    Windows install that exposes claude.exe on PATH. ``claude_exe_used``
+    is the path returned by ``shutil.which("claude")``; if it already
+    ends in ``.exe``, return ``wrapper_pid`` unchanged.
+
+    Args injected for tests: ``_now`` (clock source), ``_sleep`` (sleep
+    impl), ``_list_children`` (process-tree walker that returns a list
+    of ``{"pid": int, "name": str}`` dicts for a given parent PID).
+    """
+    # Fast path: not a shim, no resolution needed.
+    # ``None`` is treated as non-shim — if we don't know what was used,
+    # trust the wrapper PID rather than burn a 5s poll budget hunting
+    # for a descendant that may not exist.
+    if claude_exe_used is None or not claude_exe_used.lower().endswith(
+            (".cmd", ".bat", ".ps1")):
+        return wrapper_pid
+
+    # Cross-platform claude.exe descendant lookup. We use Win32 toolhelp via
+    # ctypes on Windows (no subprocess shell-out — matches the #9904 posture
+    # of avoiding tasklist). On non-Windows the shim case doesn't arise in
+    # practice, but the same poll loop with a Linux-flavored child walker
+    # keeps the function pure for tests.
+    sleep_fn = _sleep if _sleep is not None else time.sleep
+    now_fn = _now if _now is not None else time.monotonic
+    list_children = _list_children if _list_children is not None else (
+        _win32_list_descendants if sys.platform == "win32"
+        else _posix_list_descendants
+    )
+
+    deadline = now_fn() + _CLAUDE_EXE_RESOLVE_TIMEOUT_S
+    while now_fn() < deadline:
+        try:
+            descendants = list_children(wrapper_pid)
+        except Exception:
+            descendants = []
+        for entry in descendants:
+            name = (entry.get("name") or "").lower()
+            if name == "claude.exe" or name == "claude":
+                return entry.get("pid", wrapper_pid)
+        sleep_fn(_CLAUDE_EXE_RESOLVE_POLL_S)
+
+    # Timeout: claude.exe didn't appear under wrapper in budget. Preserve
+    # the prior behavior — write the wrapper PID and let singleton fail
+    # closed (false-positive-stale is the old failure mode; at least
+    # we're no worse off than before this fix).
+    print(
+        f"[thin-launcher] WARNING: could not resolve claude.exe descendant "
+        f"of wrapper PID {wrapper_pid} within "
+        f"{_CLAUDE_EXE_RESOLVE_TIMEOUT_S}s (#10101); recording wrapper PID. "
+        f"Singleton enforcement may misbehave if the wrapper exits before "
+        f"the next thin_launcher invocation.",
+        file=sys.stderr,
+    )
+    return wrapper_pid
+
+
+def _win32_list_descendants(parent_pid):
+    """Return all descendants of `parent_pid` on Windows via toolhelp32.
+
+    Implementation note: builds the full process snapshot then walks the
+    tree from `parent_pid`. CreateToolhelp32Snapshot is in-process and
+    avoids the WMI / tasklist hangs documented in #9903 / #9904.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    TH32CS_SNAPPROCESS = 0x00000002
+    INVALID_HANDLE_VALUE = -1
+
+    class PROCESSENTRY32(ctypes.Structure):
+        _fields_ = [
+            ("dwSize", wintypes.DWORD),
+            ("cntUsage", wintypes.DWORD),
+            ("th32ProcessID", wintypes.DWORD),
+            ("th32DefaultHeapID", ctypes.c_void_p),
+            ("th32ModuleID", wintypes.DWORD),
+            ("cntThreads", wintypes.DWORD),
+            ("th32ParentProcessID", wintypes.DWORD),
+            ("pcPriClassBase", wintypes.LONG),
+            ("dwFlags", wintypes.DWORD),
+            ("szExeFile", ctypes.c_char * 260),
+        ]
+
+    kernel32 = ctypes.windll.kernel32
+    snap = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+    if snap == INVALID_HANDLE_VALUE:
+        return []
+
+    try:
+        entry = PROCESSENTRY32()
+        entry.dwSize = ctypes.sizeof(PROCESSENTRY32)
+        # Build {pid: (parent_pid, name)} map.
+        procs = {}
+        if not kernel32.Process32First(snap, ctypes.byref(entry)):
+            return []
+        while True:
+            procs[entry.th32ProcessID] = (
+                entry.th32ParentProcessID,
+                entry.szExeFile.decode("utf-8", errors="replace"),
+            )
+            if not kernel32.Process32Next(snap, ctypes.byref(entry)):
+                break
+    finally:
+        kernel32.CloseHandle(snap)
+
+    # Walk descendants of parent_pid (BFS — claude.exe is typically a
+    # direct child of the cmd.exe shim, but allow one extra hop in case
+    # of intermediate wrappers).
+    out = []
+    frontier = [parent_pid]
+    seen = {parent_pid}
+    while frontier:
+        next_frontier = []
+        for ppid in frontier:
+            for pid, (parent, name) in procs.items():
+                if parent == ppid and pid not in seen:
+                    seen.add(pid)
+                    out.append({"pid": pid, "name": name})
+                    next_frontier.append(pid)
+        frontier = next_frontier
+    return out
+
+
+def _posix_list_descendants(parent_pid):
+    """Return all descendants of `parent_pid` on POSIX via /proc.
+
+    Reserved for future use — the shim-wrapper bug doesn't occur on
+    Linux/macOS today because shutil.which("claude") returns the
+    binary directly. Implemented for symmetry + future-proofing.
+    """
+    out = []
+    try:
+        proc_dir = Path("/proc")
+        if not proc_dir.is_dir():
+            return out
+        # Build pid → (ppid, name) map from /proc/<pid>/stat.
+        procs = {}
+        for entry in proc_dir.iterdir():
+            if not entry.name.isdigit():
+                continue
+            try:
+                stat = (entry / "stat").read_text(encoding="utf-8")
+            except OSError:
+                continue
+            # stat format: pid (comm) state ppid ...
+            # comm can contain spaces and parens; use rfind on ')'.
+            close = stat.rfind(")")
+            if close < 0:
+                continue
+            open_paren = stat.find("(")
+            if open_paren < 0:
+                continue
+            comm = stat[open_paren + 1:close]
+            rest = stat[close + 2:].split()
+            if len(rest) < 2:
+                continue
+            try:
+                pid = int(entry.name)
+                ppid = int(rest[1])
+            except ValueError:
+                continue
+            procs[pid] = (ppid, comm)
+        frontier = [parent_pid]
+        seen = {parent_pid}
+        while frontier:
+            next_frontier = []
+            for current in frontier:
+                for pid, (ppid, name) in procs.items():
+                    if ppid == current and pid not in seen:
+                        seen.add(pid)
+                        out.append({"pid": pid, "name": name})
+                        next_frontier.append(pid)
+            frontier = next_frontier
+    except Exception:
+        pass
+    return out
 
 
 def _write_pid(clone_path, role, pid):
@@ -210,18 +416,30 @@ def main():
         print(f"[thin-launcher] ERROR: failed to execute '{claude_exe}'", file=sys.stderr)
         return 1
 
+    # Resolve the actual claude.exe descendant PID before recording (#10101).
+    # If we launched through the npm cmd shim on Windows, proc.pid is the
+    # cmd.exe wrapper, not claude.exe — recording the wrapper makes singleton
+    # check fail as soon as the wrapper exits (which it does in seconds).
+    # No-op on the non-shim path (Linux/macOS, or any Windows install that
+    # exposes claude.exe directly on PATH).
+    claude_pid = _resolve_claude_exe_pid(proc.pid, claude_exe)
+
     # Write PID for harness monitoring. If the write fails (disk full,
     # permission denied, antivirus locking the .tmp), warn and continue —
     # claude is already running and we still need to reach proc.wait()
     # below. Otherwise the exception would unwind past the wait, leaving
     # claude as an orphan child without a pid file for the harness (#8879).
     try:
-        _write_pid(clone_path, role, proc.pid)
+        _write_pid(clone_path, role, claude_pid)
     except OSError as e:
         pid_path = Path(clone_path) / ".squidsquad" / role / ".claude-pid"
         print(f"[thin-launcher] WARNING: could not write pid file "
               f"({pid_path}): {e}", file=sys.stderr)
-    print(f"[thin-launcher] claude PID: {proc.pid}")
+    if claude_pid != proc.pid:
+        print(f"[thin-launcher] claude PID: {claude_pid} "
+              f"(wrapper {proc.pid} resolved via descendant walk #10101)")
+    else:
+        print(f"[thin-launcher] claude PID: {claude_pid}")
 
     # Wait for claude to exit — keeps terminal open
     try:
