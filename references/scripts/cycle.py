@@ -35,6 +35,8 @@ except ImportError:
     def _state_path(rel):
         return SQUIDSQUAD_DIR / rel
 
+from shared_fs import atomic_write_text  # #10007
+
 
 def _now():
     """Get current local time."""
@@ -164,7 +166,7 @@ def set_counter(role, value):
         )
     else:
         new_text = text.rstrip("\n") + f"\n- **Quiet Cycle Counter**: {value}\n"
-    ws_path.write_text(new_text, encoding="utf-8")
+    atomic_write_text(ws_path, new_text)
     return value
 
 

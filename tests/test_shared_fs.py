@@ -295,3 +295,162 @@ class TestWriteSecretAtomic9932:
             "#9932 regression: write_secret reverted to direct write_text "
             "(non-atomic — truncates before writing)"
         )
+
+
+class TestAtomicWriteText:
+    """#10007: shared atomic_write_text helper for concurrent-read safety."""
+
+    def test_basic_write(self, tmp_path):
+        p = tmp_path / "out.txt"
+        shared_fs.atomic_write_text(p, "hello world")
+        assert p.read_text(encoding="utf-8") == "hello world"
+
+    def test_overwrites_existing(self, tmp_path):
+        p = tmp_path / "out.txt"
+        p.write_text("old", encoding="utf-8")
+        shared_fs.atomic_write_text(p, "new")
+        assert p.read_text(encoding="utf-8") == "new"
+
+    def test_unicode_roundtrip(self, tmp_path):
+        p = tmp_path / "out.md"
+        content = "Task: #9965 — em-dash and 中文 mix\n"
+        shared_fs.atomic_write_text(p, content)
+        assert p.read_text(encoding="utf-8") == content
+
+    def test_no_tmp_leftover_after_success(self, tmp_path):
+        """#10007 DS round-2 Finding 1: assert against ANY unexpected file,
+        not just `.tmp` suffix — a future suffix change must not silently
+        skip the leak check."""
+        p = tmp_path / "out.txt"
+        shared_fs.atomic_write_text(p, "x")
+        leftovers = [f for f in tmp_path.iterdir() if f != p]
+        assert leftovers == [], f"unexpected files in dir: {leftovers}"
+
+    def test_crash_mid_write_leaves_original_intact(self, tmp_path, monkeypatch):
+        """If the inner write raises, the original file must be untouched.
+
+        #10007 DS round-2 Finding 2: patch ``os.replace`` (the observable
+        swap step) rather than ``builtins.open`` — the latter couples to
+        the internal file-opening mechanism and would silently skip the
+        crash path if the impl ever moves to ``os.fdopen``."""
+        p = tmp_path / "out.txt"
+        shared_fs.atomic_write_text(p, "original")
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("simulated crash at swap step")
+
+        monkeypatch.setattr(shared_fs.os, "replace", boom)
+
+        with pytest.raises(RuntimeError):
+            shared_fs.atomic_write_text(p, "should not land")
+
+        # Critical invariant: the original file is untouched.
+        assert p.read_text(encoding="utf-8") == "original"
+
+    def test_crash_mid_write_cleans_up_tmp(self, tmp_path, monkeypatch):
+        """If the swap step raises, the tmp sibling must be deleted.
+
+        #10007 DS round-2 Findings 1+2: capture pre-call file set, then
+        assert no new files exist after — robust against suffix changes
+        and decoupled from internal open mechanism."""
+        p = tmp_path / "out.txt"
+        shared_fs.atomic_write_text(p, "original")
+        before = set(tmp_path.iterdir())
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("simulated crash at swap step")
+
+        monkeypatch.setattr(shared_fs.os, "replace", boom)
+
+        with pytest.raises(RuntimeError):
+            shared_fs.atomic_write_text(p, "x")
+
+        after = set(tmp_path.iterdir())
+        new_files = after - before
+        assert new_files == set(), f"tmp file(s) leaked: {new_files}"
+
+    def test_large_write_roundtrip(self, tmp_path):
+        """Large content round-trips correctly through the helper.
+
+        The actual concurrent-read safety is a structural guarantee of
+        ``os.replace`` on a same-filesystem path — see
+        ``test_uses_os_replace_for_atomic_swap`` for the source-level lock.
+        This test just locks in that the helper handles non-trivial payload
+        sizes (#10007 DS review Finding 3 — renamed from
+        test_concurrent_reader_never_sees_partial_write because the original
+        name implied a behavioral assertion the test body didn't make)."""
+        p = tmp_path / "out.txt"
+        shared_fs.atomic_write_text(p, "v1" * 1000)
+        assert p.read_text(encoding="utf-8") == "v1" * 1000
+
+    def test_uses_os_replace_for_atomic_swap(self):
+        """Source-level lock: the helper must call ``os.replace`` (atomic
+        on POSIX and Windows for same-filesystem paths). A future refactor
+        that drops to ``shutil.move`` or similar non-atomic primitive would
+        break the core guarantee (#10007 DS review Finding 3 — companion
+        source-level assertion to the test rename above)."""
+        import inspect
+        source = inspect.getsource(shared_fs.atomic_write_text)
+        assert "os.replace" in source, (
+            "atomic_write_text must use os.replace for the swap step."
+        )
+        assert "mkstemp" in source, (
+            "atomic_write_text must write to a sibling tmp file before swap."
+        )
+
+    def test_preserves_path_write_text_newline_behavior(self, tmp_path):
+        """#10007 DS review Finding 1: the helper must match Path.write_text
+        newline behavior so existing state files don't acquire a phantom
+        git diff from line-ending changes when the helper is first deployed."""
+        p_helper = tmp_path / "helper.txt"
+        p_native = tmp_path / "native.txt"
+        content = "line1\nline2\nline3\n"
+        shared_fs.atomic_write_text(p_helper, content)
+        p_native.write_text(content, encoding="utf-8")
+        # Compare raw bytes — text mode normalizes, defeating the check.
+        assert p_helper.read_bytes() == p_native.read_bytes(), (
+            "atomic_write_text must produce byte-identical output to "
+            "Path.write_text (same newline translation behavior)."
+        )
+
+
+class TestCallSitesUseAtomicWrite:
+    """#10007 regression locks: every call site listed in the issue body
+    must route through atomic_write_text (not Path.write_text). Source-level
+    invariants — a future refactor that drops back to direct write_text on
+    a concurrently-read state file would regress this issue."""
+
+    @pytest.mark.parametrize("module_filename,function_name", [
+        ("vault_remember.py", "_write_working_state_field"),
+        ("vault_remember.py", "_upsert_vault_writes"),
+        ("cycle.py", "set_counter"),
+        ("cycle_post.py", "_do_working_state_update"),
+        ("cycle_post.py", "_do_version_bump"),
+        ("soul_adaptation.py", "add_adaptation"),
+        ("soul_adaptation.py", "render_soul"),
+        ("config.py", "set_field"),
+        ("config.py", "write_event_reactions"),  # #10007 DS review Finding 5
+        ("diagnostics.py", "rotate"),
+    ])
+    def test_call_site_uses_atomic_write_text(self, module_filename, function_name):
+        """#10007 DS round-3 (Claude fallback) Finding 1: resolve modules by
+        explicit file path under `references/scripts/` instead of bare
+        ``importlib.import_module(name)``. A bare name resolves via sys.path
+        order, so a future PyPI package named e.g. ``config`` could silently
+        shadow our local script and make this regression lock vacuous."""
+        import importlib.util
+        import inspect
+
+        script_path = SCRIPTS / module_filename
+        spec = importlib.util.spec_from_file_location(
+            f"_locked_{module_filename[:-3]}", script_path
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        fn = getattr(mod, function_name)
+        source = inspect.getsource(fn)
+        assert "atomic_write_text" in source, (
+            f"#10007 regression: {module_filename}::{function_name} must call "
+            f"atomic_write_text (not Path.write_text) — concurrent readers "
+            f"can see torn writes on the state file it manages."
+        )

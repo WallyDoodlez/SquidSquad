@@ -32,6 +32,8 @@ except ImportError:
     def _read_config():
         return ""
 
+from shared_fs import atomic_write_text  # #10007
+
 try:
     from state_bus import state_path as _state_path
     DIAGNOSTICS_DIR = _state_path("diagnostics")
@@ -94,7 +96,7 @@ def rotate():
         return
 
     # Keep last 500
-    LOG_FILE.write_text("\n".join(lines[-500:]) + "\n", encoding="utf-8")
+    atomic_write_text(LOG_FILE, "\n".join(lines[-500:]) + "\n")
     print(f"Rotated: kept last 500 of {len(lines)} entries")
 
 

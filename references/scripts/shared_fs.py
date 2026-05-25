@@ -61,6 +61,64 @@ def init():
     return str(home)
 
 
+def atomic_write_text(path, content, encoding="utf-8"):
+    """Atomically write text to ``path`` (#10007).
+
+    Writes to a sibling ``.tmp`` file in the same directory, then ``os.replace``
+    swaps it into place. Concurrent readers of ``path`` either see the old full
+    file or the new full file — never a partial/torn write.
+
+    Same-directory + ``os.replace`` is required for atomicity (Python docs:
+    atomic on both POSIX and Windows, but only if source and destination are
+    on the same filesystem — which the sibling-tmp pattern guarantees).
+
+    Cleans up the tmp file on any exception during write so a crash mid-write
+    leaves the original file untouched.
+
+    Newline handling matches ``Path.write_text``: ``open`` uses the default
+    ``newline=None`` so on Windows ``\\n`` in ``content`` is translated to
+    ``\\r\\n``. This preserves the prior behavior of the 9 call sites this
+    helper replaces, so existing state files don't acquire a phantom git diff
+    from line-ending changes (#10007 DS review Finding 1).
+
+    Note: atomicity is at the write level only. Read-modify-write call sites
+    (e.g. ``cycle.set_counter``, ``vault_remember._upsert_vault_writes``) can
+    still race between the read and the write; that is an application-level
+    concern outside this helper's scope (#10007 DS review Finding 4).
+
+    Trade-off (#10007 DS round-2 Finding 3): closing the mkstemp fd before
+    re-opening by path leaves a brief window where the empty tmp file is
+    visible on disk with no open handle. For SquidSquad state files in a
+    single-agent directory this is benign — no other process is racing for
+    that specific tmp name. For shared multi-writer files where exclusivity
+    matters between create and first-write, prefer the ``os.fdopen``-on-the
+    mkstemp-fd pattern used by ``write_secret`` (which trades the Windows
+    fd-leak-on-test-patch hazard for the no-window guarantee).
+    """
+    path = Path(path)
+    tmp_fd, tmp_path_str = tempfile.mkstemp(
+        prefix=f".{path.name}-", suffix=".tmp", dir=str(path.parent)
+    )
+    tmp_path = Path(tmp_path_str)
+    # Close mkstemp's fd immediately; we re-open by path. This avoids the
+    # fd-leak edge case where ``os.fdopen`` raises (e.g. patched in tests)
+    # and the fd stays open, blocking ``tmp_path.unlink`` on Windows.
+    try:
+        os.close(tmp_fd)
+    except OSError:
+        pass
+    try:
+        with open(tmp_path, "w", encoding=encoding) as f:
+            f.write(content)
+        os.replace(tmp_path, path)
+    except Exception:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+        raise
+
+
 def _restrict_permissions(path):
     """Set file permissions to owner-only (chmod 600 / Windows ACL).
 

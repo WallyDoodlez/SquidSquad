@@ -46,6 +46,8 @@ except ImportError:
     def _worktree_exists():
         return False
 
+from shared_fs import atomic_write_text  # #10007
+
 # Required top-level fields in cycle-output.json. Mode-gated (#8918): event
 # mode replaces `cycle_number` with `task` — the task IS the cycle in event
 # mode (DECISIONS-4792.md Q7 + CONTEXT.md §5.5 + TEST-PLAN-8701 §3.2 UT-10).
@@ -581,7 +583,7 @@ def _do_version_bump(data, role):
     if skill_md.exists():
         content = skill_md.read_text(encoding="utf-8")
         content = re.sub(r'version:\s*[\d.]+', f'version: {new_version}', content, count=1)
-        skill_md.write_text(content, encoding="utf-8")
+        atomic_write_text(skill_md, content)
 
     # DM always handles CHANGELOG entries (#6261). No PM fallback.
 
@@ -766,7 +768,7 @@ def _do_working_state_update(data, role):
 
     ws_path = _state_path(f"{role}/working-state.md")
     ws_path.parent.mkdir(parents=True, exist_ok=True)
-    ws_path.write_text(update, encoding="utf-8")
+    atomic_write_text(ws_path, update)
 
 
 # ---------------------------------------------------------------------------
