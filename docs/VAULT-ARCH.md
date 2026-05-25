@@ -234,9 +234,9 @@ All vault behavior is encoded as markdown fragments under `references/sub-skills
 **Execution model**: vault sub-skills split into two execution lanes by weight. The principle: keep the consuming agent's context lean — anything that requires meaningful reasoning over vault content runs out of process.
 
 - **Inline (runs in the consuming agent's context)**: `vault-protocol` (continuous read/write rules; the agent is doing real work the vault must record) and `vault-optimize` (thin wrapper around `vault_optimize.py run` — almost entirely mechanical, no reasoning to offload).
-- **Background subagent (Agent tool, fresh context, `claude-sonnet-4-6`)**: `vault-remember` (end-of-cycle reflection: 4-category candidate evaluation, dedup near-match decision, write/skip/update judgment per candidate) and `vault-synthesis` (cross-agent theme detection, convergence detection, posture drafting). Only the structured write decisions (and any new note paths) return to the main agent — never the reflection transcript.
+- **Background subagent (Agent tool, fresh context, `sonnet`)**: `vault-remember` (end-of-cycle reflection: 4-category candidate evaluation, dedup near-match decision, write/skip/update judgment per candidate) and `vault-synthesis` (cross-agent theme detection, convergence detection, posture drafting). Only the structured write decisions (and any new note paths) return to the main agent — never the reflection transcript.
 
-Model choice rationale: vault reflection is pattern-matching + dedup judgment + small write decisions, not multi-step planning. Sonnet 4.6 is the same tier already used for skill and DM subagent spawns (see `feedback_skill_sonnet_subagents`, `feedback_dm_sonnet_subagents`); Opus is overkill, Haiku underpowered for the dedup near-match call.
+Model choice rationale: vault reflection is pattern-matching + dedup judgment + small write decisions, not multi-step planning. Sonnet is the same tier already used for skill and DM subagent spawns (see `feedback_skill_sonnet_subagents`, `feedback_dm_sonnet_subagents`); Opus is overkill, Haiku underpowered for the dedup near-match call. The pin is by tier (`sonnet`), not a specific version — version selection follows the Agent-tool model alias, which tracks the latest in the tier.
 
 Each sub-skill's **Cycle integration** line below names its lane.
 
@@ -271,7 +271,7 @@ Each sub-skill's **Cycle integration** line below names its lane.
 1. **BRIEFING.md staleness check** — runs every cycle, including quiet cycles. Compares `BRIEFING.md` key fields (version, active agents, current priorities) against `config.md` and the tracker; updates any stale field. Staleness fixes do NOT consume the write budget.
 2. **Reflection** — gated by a quiet-cycle check (skipped if the cycle did no real work). Evaluates this cycle's iteration log for vault-worthy candidates in four categories: DECISIONS, PATTERNS, LEARNINGS, PROJECT CONTEXT. Each candidate runs through four deterministic gates IN ORDER: (1) write budget remaining (default 2 per cycle, per `config.md` `Vault Remember > Writes Per Cycle`), (2) dedup-check against existing notes by title + tags, (3) reusability beyond this cycle, (4) would a fresh agent benefit? Only candidates passing all four are written. When more than 2 pass, priority is decisions > learnings > patterns; surplus is deferred to iteration-log notes as `Vault-worthy but deferred (budget): <description>`. Behavioral or personality directives are explicitly out of scope — those go to soul-shepherd (observed signals) or L4 (explicit directives), not the vault.
 
-**Cycle integration**: Post-cycle Step 4b. Gated by `vault-remember: yes` in `config.md` and the per-cycle quiet check. **Lane**: background subagent (`claude-sonnet-4-6`). The consuming agent hands the iteration log + write-budget + dedup-tool access to the subagent; the subagent runs the 4-gate evaluation and returns a structured list of `{action: write|update|skip, path, type, body, reason}` decisions plus the resulting note paths. The reflection transcript stays out of the consuming agent's context.
+**Cycle integration**: Post-cycle Step 4b. Gated by `vault-remember: yes` in `config.md` and the per-cycle quiet check. **Lane**: background subagent (`sonnet`). The consuming agent hands the iteration log + write-budget + dedup-tool access to the subagent; the subagent runs the 4-gate evaluation and returns a structured list of `{action: write|update|skip, path, type, body, reason}` decisions plus the resulting note paths. The reflection transcript stays out of the consuming agent's context.
 
 **Scripts used** (from §8): `config.py get vault-remember` (config gate), `vault_remember.py is-quiet`/`reset-writes`/`write-budget`/`inc-writes`/`briefing-budget` (gating and accounting), `vault_check.py dedup-check` (gate 2).
 
@@ -311,7 +311,7 @@ When triggered, the synthesis runs in five steps:
 
 Postures need explicit human approval before becoming active scan criteria for other agents — they are never auto-approved. Single-agent patterns are not postures; convergence across agents is the defining property.
 
-**Cycle integration**: Quiet cycle, sub-skill composed only for the agent designated as synthesizer. Gated by the 5-consecutive-quiet-cycle counter and the 10+ galaxy-note threshold. **Lane**: background subagent (`claude-sonnet-4-6`). The synthesizer agent hands the recent-notes set to the subagent; the subagent runs theme/convergence detection and returns at most one posture descriptor `{name, principle, source-notes, body}` for the consuming agent to write via `vault-create` (plus the pending-review task body). Cross-note reasoning transcript stays out of the consuming agent's context.
+**Cycle integration**: Quiet cycle, sub-skill composed only for the agent designated as synthesizer. Gated by the 5-consecutive-quiet-cycle counter and the 10+ galaxy-note threshold. **Lane**: background subagent (`sonnet`). The synthesizer agent hands the recent-notes set to the subagent; the subagent runs theme/convergence detection and returns at most one posture descriptor `{name, principle, source-notes, body}` for the consuming agent to write via `vault-create` (plus the pending-review task body). Cross-note reasoning transcript stays out of the consuming agent's context.
 
 **Scripts used** (from §8): `vault_check.py` Level 1 (after creating the posture note), `tracker.py create-task` (file the pending-review task).
 
@@ -606,7 +606,7 @@ Falls under the broader vault-living-memory umbrella (#5855) and overlaps with t
 
 ### 11.5 Implementation gap — heavy sub-skills currently run inline (target: background subagent)
 
-§7's Execution model paragraph specifies that `vault-remember` and `vault-synthesis` must run as background subagents (`claude-sonnet-4-6`) so the reflection / cross-note reasoning transcript stays out of the consuming agent's context. The current implementation runs both inline:
+§7's Execution model paragraph specifies that `vault-remember` and `vault-synthesis` must run as background subagents (`sonnet`) so the reflection / cross-note reasoning transcript stays out of the consuming agent's context. The current implementation runs both inline:
 
 - `references/sub-skills/common/vault-remember.md` is composed directly into the consuming agent's `CLAUDE.md` and the agent itself performs the 4-gate evaluation, dedup decisions, and write reasoning every cycle.
 - `references/sub-skills/roles/pm/vault-synthesis.md` is composed into PM's `CLAUDE.md` and PM itself performs theme/convergence detection across recent notes.
@@ -622,7 +622,7 @@ Closing this gap requires:
 1. **Sub-skill source split** — the `references/sub-skills/common/vault-remember.md` body becomes two parts: a short stub composed into the consuming agent (defines the "spawn subagent at Step 4b with these inputs and apply the returned write list" contract) and a longer subagent prompt template stored separately (the actual 4-gate reflection instructions, loaded only by the subagent). Same split for `vault-synthesis.md`.
 2. **Compose-time awareness** — `compose.py` must know to compose the stub into the role's CLAUDE.md but leave the subagent prompt at its source path for the spawned subagent to read.
 3. **Subagent contract** — defined by the structured return shape on each sub-skill's §7 entry (vault-remember returns `{action, path, type, body, reason}` per candidate; vault-synthesis returns at most one posture descriptor).
-4. **Model pin** — `claude-sonnet-4-6` per §7's rationale; honor `feedback_skill_sonnet_subagents` / `feedback_dm_sonnet_subagents` consistency.
+4. **Model pin** — `sonnet` per §7's rationale; honor `feedback_skill_sonnet_subagents` / `feedback_dm_sonnet_subagents` consistency.
 
 Filed as #10180. Until that lands, the §7 description is the architectural target and the current code is the documented departure from it.
 

@@ -9,11 +9,11 @@ source: conversation
 owner: pm
 ---
 
-# Decision — Vault heavy sub-skills run on claude-sonnet-4-6
+# Decision — Vault heavy sub-skills run on sonnet
 
 ## Decision
 
-Heavy vault sub-skills (`vault-remember`, `vault-synthesis`) execute as background subagents (Agent tool, fresh context) pinned to **`claude-sonnet-4-6`**. Light vault sub-skills (`vault-protocol`, `vault-optimize`) stay inline in the consuming agent's context.
+Heavy vault sub-skills (`vault-remember`, `vault-synthesis`) execute as background subagents (Agent tool, fresh context) pinned to **`sonnet`**. Light vault sub-skills (`vault-protocol`, `vault-optimize`) stay inline in the consuming agent's context.
 
 ## Rationale
 
@@ -22,6 +22,7 @@ Heavy vault sub-skills (`vault-remember`, `vault-synthesis`) execute as backgrou
 - **Why Sonnet, not Haiku**: dedup near-match calls and convergence detection across notes need more than mechanical token-matching — Haiku's been judged insufficient for the comparable skill/DM subagent spawns.
 - **Consistency with existing precedent**: `[[feedback_skill_sonnet_subagents]]` and `[[feedback_dm_sonnet_subagents]]` already establish Sonnet as the standard subagent model. No reason to diverge for vault.
 - **Light ones stay inline**: `vault-protocol` IS the agent's continuous read/write work — offloading is nonsensical. `vault-optimize` is a thin wrapper around `vault_optimize.py run` — no reasoning happens in-agent to offload.
+- **Tier, not version**: pin is `sonnet`, never a dated version (`claude-sonnet-4-6`, etc.) so the spec doesn't rot when Anthropic ships the next Sonnet revision. The Agent-tool model alias tracks the latest in-tier model.
 
 ## Where this lives
 
