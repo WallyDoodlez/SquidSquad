@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-25 01:09
+
+- **Files scanned**: none — minimal no-op cycle.
+- **Findings**: none.
+- **Notes**: cycle 1384, state identical to 1383.
+
 ## Scan — 2026-05-25 00:39
 
 - **Files scanned**: none — minimal no-op cycle.
