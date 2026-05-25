@@ -420,26 +420,37 @@ class TestCallSitesUseAtomicWrite:
     invariants — a future refactor that drops back to direct write_text on
     a concurrently-read state file would regress this issue."""
 
-    @pytest.mark.parametrize("module_name,function_name", [
-        ("vault_remember", "_write_working_state_field"),
-        ("vault_remember", "_upsert_vault_writes"),
-        ("cycle", "set_counter"),
-        ("cycle_post", "_do_working_state_update"),
-        ("cycle_post", "_do_version_bump"),
-        ("soul_adaptation", "add_adaptation"),
-        ("soul_adaptation", "render_soul"),
-        ("config", "set_field"),
-        ("config", "write_event_reactions"),  # #10007 DS review Finding 5
-        ("diagnostics", "rotate"),
+    @pytest.mark.parametrize("module_filename,function_name", [
+        ("vault_remember.py", "_write_working_state_field"),
+        ("vault_remember.py", "_upsert_vault_writes"),
+        ("cycle.py", "set_counter"),
+        ("cycle_post.py", "_do_working_state_update"),
+        ("cycle_post.py", "_do_version_bump"),
+        ("soul_adaptation.py", "add_adaptation"),
+        ("soul_adaptation.py", "render_soul"),
+        ("config.py", "set_field"),
+        ("config.py", "write_event_reactions"),  # #10007 DS review Finding 5
+        ("diagnostics.py", "rotate"),
     ])
-    def test_call_site_uses_atomic_write_text(self, module_name, function_name):
-        import importlib
+    def test_call_site_uses_atomic_write_text(self, module_filename, function_name):
+        """#10007 DS round-3 (Claude fallback) Finding 1: resolve modules by
+        explicit file path under `references/scripts/` instead of bare
+        ``importlib.import_module(name)``. A bare name resolves via sys.path
+        order, so a future PyPI package named e.g. ``config`` could silently
+        shadow our local script and make this regression lock vacuous."""
+        import importlib.util
         import inspect
-        mod = importlib.import_module(module_name)
+
+        script_path = SCRIPTS / module_filename
+        spec = importlib.util.spec_from_file_location(
+            f"_locked_{module_filename[:-3]}", script_path
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
         fn = getattr(mod, function_name)
         source = inspect.getsource(fn)
         assert "atomic_write_text" in source, (
-            f"#10007 regression: {module_name}.{function_name} must call "
+            f"#10007 regression: {module_filename}::{function_name} must call "
             f"atomic_write_text (not Path.write_text) — concurrent readers "
             f"can see torn writes on the state file it manages."
         )
