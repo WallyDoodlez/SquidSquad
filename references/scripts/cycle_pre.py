@@ -210,7 +210,7 @@ def _enforce_branch(role, working_state):
         # bare ("#9965", "9965"), verbose ("#9965 — description"), and
         # whitespace-tolerant ("# 9965") forms. Trailing anchor rejects
         # glued suffixes like "9965-fix" that old `.isdigit()` also rejected.
-        m = re.match(r"#?\s*(\d+)(?:\s|—|$)", task.lstrip())
+        m = re.match(r"#*\s*(\d+)(?:\s|—|$)", task.lstrip())
         if m:
             number = m.group(1)
             result = _run_script("git_ops.py", "task-begin", role, number)

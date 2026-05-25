@@ -1232,6 +1232,9 @@ class TestEnforceBranch:
         ("  #9965", "9965"),
         ("#\t9965", "9965"),
         ("#9965 - ASCII dash separator", "9965"),
+        # Backward compat with old task.lstrip("#") behavior (DS round 2 Finding 1)
+        ("##4942", "4942"),
+        ("###9965 — triple-hash typo", "9965"),
     ])
     def test_extracts_number_from_verbose_task_field(
         self, monkeypatch, task_field, expected_number
