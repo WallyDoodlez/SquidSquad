@@ -4,7 +4,7 @@
 - **Status**: §4+§6+§7+§11.2 polish complete; awaiting human pick on next polish target
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-25 03:42, cycle 1680)
+## Pipeline snapshot (2026-05-25 04:12, cycle 1681)
 - 1 PR open: #10004 (PM, draft, MERGEABLE)
 - 0 pending-test, 0 pending-ship, 0 external
 - 1 approved (DM lane): #3 — paused
@@ -17,8 +17,6 @@
 ## Track B status
 All §4+§6+§7+§11.2 polish landed. Remaining VAULT-ARCH sections: §5, §8, §9, §10, §12.
 
-## Plan-first gate / DS-per-change / PM=docs-only — all in force
-
 ## Pending human input
-1. next polish target on #10003 OR pivot [PM ACTIVE]
-2-N: deferred until docs good
+1. next polish target [PM ACTIVE]
+2-N: deferred
