@@ -34,11 +34,13 @@ import compose  # noqa: E402
 ROLES = ["skill", "pm", "qa", "dm"]
 
 # (role, entry_file) — entry_file is the directory under references/sub-skills/roles
-# that owns the polling fragment for this role. Dev variants share dev's.
+# that owns the polling fragment for this role. Worker variants share worker's
+# (post-6274.2 rename; was dev's). 'qa' resolves to 'verifier' via the dual-aware
+# alias-target preference in compose._get_entry_file_for_role.
 ROLE_TO_ENTRY = {
-    "skill": "dev",
+    "skill": "worker",
     "pm": "pm",
-    "qa": "qa",
+    "qa": "verifier",
     "dm": "dm",
 }
 

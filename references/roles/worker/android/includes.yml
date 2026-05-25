@@ -1,0 +1,5 @@
+# Layer 3 variant manifest — worker-android
+# Inherits all sub-skills from worker, adds android-specific context.
+base_role: worker
+additional_includes:
+  - roles/worker/android/domain-context

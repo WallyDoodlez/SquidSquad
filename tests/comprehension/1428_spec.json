@@ -2,7 +2,7 @@
   "issue": 1428,
   "title": "Deterministic QA verification framework",
   "files": [
-    "references/sub-skills/roles/qa/verification.md",
+    "references/sub-skills/roles/verifier/verification.md",
     "references/prompts/test-plan.md.j2"
   ],
   "questions": [

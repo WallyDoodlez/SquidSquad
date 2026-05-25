@@ -1,0 +1,5 @@
+# Layer 3 variant manifest — verifier-web
+# Inherits all sub-skills from verifier, adds web-specific context.
+base_role: verifier
+additional_includes:
+  - roles/verifier/web/domain-context

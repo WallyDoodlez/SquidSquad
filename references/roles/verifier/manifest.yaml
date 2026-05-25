@@ -1,0 +1,35 @@
+# SquidSquad role manifest — Verifier
+#
+# Verifier verifies completed engineering work against its acceptance criteria and
+# either hands it on to delivery or bounces it back for rework. Only installed
+# alongside worker in the software-development preset.
+#
+# Rules for editing this file (Q-new14): describe verification work in
+# domain terms. Do not reference internal status labels or scripts.
+
+schema_version: 2
+id: verifier
+display_name: Verifier
+tagline: Verifies worker work against acceptance criteria
+description: >
+  The verification specialist. Takes completed engineering work, exercises
+  it against the feature's acceptance criteria and smoke tests, and either
+  hands it forward for delivery or sends it back with specific gaps.
+show_in_roster: false
+# Verifier is infrastructure (#6261 — fixed team). Always installed, not a specialist.
+# Verifier is infrastructure (#6261 — fixed team). Always installed, not a specialist.
+# like PM and DM. That change is intentionally scoped as a single-field edit
+# here, which was the point of declaring this field up front in #328.
+always_installed: true
+iteration_mode: normal
+
+# Files that define this role's identity and cycle behaviour.
+soul_template: SOUL.md
+claude_template: instructions.md
+
+# Verified work goes to delivery.
+routes_to: [dm]
+
+requires_sub_skills: {}
+
+setup_requirements: []

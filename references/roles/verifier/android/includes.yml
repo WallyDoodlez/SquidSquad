@@ -1,0 +1,5 @@
+# Layer 3 variant manifest — verifier-android
+# Inherits all sub-skills from verifier, adds android-specific context.
+base_role: verifier
+additional_includes:
+  - roles/verifier/android/domain-context

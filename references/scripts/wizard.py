@@ -938,6 +938,40 @@ def _write_l4_project_files(spec, project_dir, summary):
         )
 
 
+def _copy_l4_seed_stubs(project_dir, summary):
+    """Copy worker-*/verifier-* L4 seed stubs from references/sub-skills/project/.
+
+    Only copies files that do not yet exist in project_dir (overwrite guard).
+    Records newly-copied paths in summary["l4_stubs_copied"] and preserved
+    paths in summary["preserved"].
+
+    Per D6/D7 (sub-phase 6274.2): new installs get worker-responsibility.md,
+    worker-instructions.md, worker-soul-directives.md, verifier-responsibility.md,
+    verifier-instructions.md, verifier-soul-directives.md from seed templates.
+    """
+    seed_dir = REPO_ROOT / "references" / "sub-skills" / "project"
+    if not seed_dir.is_dir():
+        return  # Seed directory absent — silent skip
+
+    copied = []
+    for src in sorted(seed_dir.iterdir()):
+        if not src.is_file():
+            continue
+        name = src.name
+        # Only copy worker-* and verifier-* stubs; leave other seeds alone
+        if not (name.startswith("worker-") or name.startswith("verifier-")):
+            continue
+        dest = project_dir / name
+        if dest.exists():
+            summary.setdefault("preserved", []).append(str(dest))
+        else:
+            shutil.copy2(src, dest)
+            copied.append(str(dest))
+
+    if copied:
+        summary["l4_stubs_copied"] = copied
+
+
 def scaffold_install(spec, target_root, overwrite_existing=False):
     """Write a full `.squidsquad/` tree from an install spec.
 
@@ -1024,6 +1058,12 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
     # These are the "structured" half of the hybrid L4 writer. The WIZARD.md
     # runbook adds qualitative notes (conventions, patterns) after scaffold.
     _write_l4_project_files(spec, project_dir, summary)
+
+    # 1d. L4 seed stubs — copy worker-*/verifier-* stubs from
+    # references/sub-skills/project/ to .squidsquad/project/ for new installs.
+    # This absorbs #9925 deferred work per D6/D7. Existing files are preserved
+    # (overwrite guard) so re-runs don't clobber operator customisations.
+    _copy_l4_seed_stubs(project_dir, summary)
 
     # 2. Per-agent directories
     for agent in spec["agents"]:
@@ -1184,6 +1224,241 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
     summary["install_spec"] = spec_path
 
     return summary
+
+
+# ---------------------------------------------------------------------------
+# D4 upgrade step — dev→worker / qa→verifier migration (#6274.2)
+# ---------------------------------------------------------------------------
+
+
+def upgrade_install(base_dir=None):
+    """Upgrade an existing .squidsquad/ install from dev/qa to worker/verifier.
+
+    Runs BEFORE any other install/upgrade logic per D4.
+
+    Returns a dict:
+        {
+            "ok": bool,
+            "action": "no-op" | "migrated" | "error",
+            "summary": str,   — human-readable one-line summary
+            "migrated": list  — what was renamed/rewritten
+        }
+
+    Exit codes (for CLI callers):
+        0 — success or no-op
+        2 — partial migration detected (manual intervention required)
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    base_dir = Path(base_dir).resolve()
+    squid = base_dir / ".squidsquad"
+    config_path = squid / "config.md"
+
+    # --- Read current state ---
+    config_text = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+
+    # The legacy field name appears in two formats:
+    #   v1 (arch v1 legacy): "- **Dev Agents**: skill"  (no bare "Dev Agents:")
+    #   v2 (new schema):     "- Dev Agents: skill"      (rare/hypothetical)
+    # Search for the field name string "Dev Agents" (case-sensitive) to catch
+    # both. "Workers" covers both "**Workers**: ..." and "Workers: ..." forms.
+    config_has_workers = "Workers" in config_text
+    config_has_dev_agents = "Dev Agents" in config_text
+    dir_worker_exists = (squid / "worker").is_dir()
+    dir_dev_exists = (squid / "dev").is_dir()
+    dir_verifier_exists = (squid / "verifier").is_dir()
+    dir_qa_exists = (squid / "qa").is_dir()
+
+    # --- Idempotency / partial-migration checks (D4 canonical rule) ---
+    partial_mismatches = []
+    if config_has_workers and config_has_dev_agents:
+        partial_mismatches.append(
+            "config.md has both 'Workers' and 'Dev Agents' fields"
+        )
+    if config_has_workers and dir_dev_exists and not dir_worker_exists:
+        partial_mismatches.append(
+            "config.md has 'Workers' but .squidsquad/dev/ still exists "
+            "and .squidsquad/worker/ is missing"
+        )
+    if dir_worker_exists and config_has_dev_agents and not config_has_workers:
+        partial_mismatches.append(
+            ".squidsquad/worker/ exists but config.md still has 'Dev Agents' "
+            "(no 'Workers' field)"
+        )
+    if dir_worker_exists and dir_dev_exists:
+        partial_mismatches.append(
+            "both .squidsquad/worker/ and .squidsquad/dev/ exist"
+        )
+    if dir_verifier_exists and dir_qa_exists:
+        partial_mismatches.append(
+            "both .squidsquad/verifier/ and .squidsquad/qa/ exist"
+        )
+
+    if partial_mismatches:
+        mismatch_str = "; ".join(partial_mismatches)
+        msg = (
+            f"partial migration detected: {mismatch_str}; "
+            f"manual intervention required"
+        )
+        print(msg, file=sys.stderr)
+        return {
+            "ok": False,
+            "action": "error",
+            "exit_code": 2,
+            "summary": msg,
+            "migrated": [],
+        }
+
+    # --- No-op check ---
+    # Nothing installed at all (no dev/qa/worker/verifier dirs, no config fields)
+    nothing_installed = (
+        not dir_dev_exists and not dir_worker_exists
+        and not dir_qa_exists and not dir_verifier_exists
+        and not config_has_dev_agents and not config_has_workers
+    )
+    # Already fully migrated: both pairs complete
+    worker_pair_complete = (
+        config_has_workers and not config_has_dev_agents
+        and dir_worker_exists and not dir_dev_exists
+    )
+    verifier_pair_complete = dir_verifier_exists and not dir_qa_exists
+    already_done = worker_pair_complete and verifier_pair_complete
+
+    if nothing_installed or already_done:
+        return {
+            "ok": True,
+            "action": "no-op",
+            "summary": "upgrade: nothing to migrate (already up to date)",
+            "migrated": [],
+        }
+
+    # --- DS 3e F1 / DS 3d F4: Pre-read .harness-state.json BEFORE any fs mutation ---
+    # Reading the state file here (before dirs are renamed and config is rewritten)
+    # means an unreadable or malformed state file, or a state collision, is detected
+    # at the partial-mismatch step rather than after dirs+config have been renamed —
+    # which would let the next-run idempotency check silently mask the problem.
+    state_path = squid / ".harness-state.json"
+    state = None
+    if state_path.exists():
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            msg = f"partial migration detected: .harness-state.json unreadable ({exc}); manual intervention required"
+            print(msg, file=sys.stderr)
+            return {
+                "ok": False,
+                "action": "error",
+                "exit_code": 2,
+                "summary": msg,
+                "migrated": [],
+            }
+        except json.JSONDecodeError as exc:
+            msg = f"partial migration detected: .harness-state.json malformed ({exc}); manual intervention required"
+            print(msg, file=sys.stderr)
+            return {
+                "ok": False,
+                "action": "error",
+                "exit_code": 2,
+                "summary": msg,
+                "migrated": [],
+            }
+        # DS 3d F4: Detect state-key collisions BEFORE any fs mutation
+        agents = state.get("agents", {})
+        state_mismatches = []
+        if "qa" in agents and "verifier" in agents:
+            state_mismatches.append(
+                ".harness-state.json has both 'agents.qa' and 'agents.verifier'"
+            )
+        if "dev" in agents and "worker" in agents:
+            state_mismatches.append(
+                ".harness-state.json has both 'agents.dev' and 'agents.worker'"
+            )
+        if state_mismatches:
+            mismatch_str = "; ".join(state_mismatches)
+            msg = (
+                f"partial migration detected: {mismatch_str}; "
+                f"manual intervention required"
+            )
+            print(msg, file=sys.stderr)
+            return {
+                "ok": False,
+                "action": "error",
+                "exit_code": 2,
+                "summary": msg,
+                "migrated": [],
+            }
+
+    migrated = []
+
+    # --- 1. Rewrite config.md: Dev Agents → Workers ---
+    # Handles both legacy v1 format ("**Dev Agents**: ...") and
+    # hypothetical bare format ("Dev Agents: ...").
+    if config_has_dev_agents and config_path.exists():
+        # Replace bold form first (most common), then bare form
+        new_text = config_text.replace("**Dev Agents**:", "**Workers**:")
+        new_text = new_text.replace("Dev Agents:", "Workers:")
+        tmp = config_path.with_suffix(".tmp")
+        tmp.write_text(new_text, encoding="utf-8")
+        tmp.replace(config_path)
+        migrated.append("config.md: 'Dev Agents' -> 'Workers'")
+
+    # --- 2. Rename .squidsquad/dev/ → .squidsquad/worker/ ---
+    if dir_dev_exists and not dir_worker_exists:
+        (squid / "dev").rename(squid / "worker")
+        migrated.append(".squidsquad/dev/ -> .squidsquad/worker/")
+
+    # --- 3. Rename .squidsquad/qa/ → .squidsquad/verifier/ ---
+    if dir_qa_exists and not dir_verifier_exists:
+        (squid / "qa").rename(squid / "verifier")
+        migrated.append(".squidsquad/qa/ -> .squidsquad/verifier/")
+
+    # --- 4. Update .harness-state.json agent keys ---
+    # State was pre-read and validated above; use the cached value.
+    if state is not None:
+        agents = state.get("agents", {})
+        changed = False
+        # qa → verifier
+        if "qa" in agents:
+            agents["verifier"] = agents.pop("qa")
+            changed = True
+            migrated.append(".harness-state.json: agents.qa -> agents.verifier")
+        # dev → worker (rare — variant keys like 'skill' are unchanged)
+        if "dev" in agents:
+            agents["worker"] = agents.pop("dev")
+            changed = True
+            migrated.append(".harness-state.json: agents.dev -> agents.worker")
+        if changed:
+            state["agents"] = agents
+            tmp_state = state_path.with_suffix(".json.tmp")
+            tmp_state.write_text(
+                json.dumps(state, indent=2) + "\n", encoding="utf-8"
+            )
+            tmp_state.replace(state_path)
+
+    summary_str = (
+        "upgrade: migrated — " + ", ".join(migrated)
+        if migrated
+        else "upgrade: no changes needed"
+    )
+    print(summary_str)
+    return {
+        "ok": True,
+        "action": "migrated" if migrated else "no-op",
+        "summary": summary_str,
+        "migrated": migrated,
+    }
+
+
+def cmd_upgrade(args):
+    """Run the dev→worker / qa→verifier upgrade step.
+
+    Usage: wizard.py upgrade [target_dir]
+    """
+    target = args[0] if args else "."
+    result = upgrade_install(target)
+    exit_code = result.get("exit_code", 0 if result["ok"] else 1)
+    _print_json(result)
+    return exit_code
 
 
 # ---------------------------------------------------------------------------
@@ -2118,8 +2393,11 @@ def generate_default_spec(scan_data=None, repo_info=None):
     default_preset = "software-dev"
     domain_variants = resolve_domain_variants(default_preset)
 
-    # Default agents — variants from manifest, not hardcoded
-    dev_variant = domain_variants.get("dev")
+    # Default agents — variants from manifest, not hardcoded.
+    # Use canonical new identity 'worker' (renamed from 'dev' in #6274.2);
+    # `or domain_variants.get("dev")` keeps pre-rename manifests resolving
+    # during the 6274.1 dual-aware window (deleted in 6274.3).
+    worker_variant = domain_variants.get("worker") or domain_variants.get("dev")
     pm_variant = domain_variants.get("pm")
     agents = [
         {"id": "pm", "alias": "pm", "role": "pm",
@@ -2127,8 +2405,8 @@ def generate_default_spec(scan_data=None, repo_info=None):
         {
             "id": "skill",
             "alias": "skill",
-            "role": "dev",
-            **({"variant": dev_variant} if dev_variant else {}),
+            "role": "worker",
+            **({"variant": worker_variant} if worker_variant else {}),
             "stack": stack,
             "test_command": test_command,
         },
@@ -2412,6 +2690,7 @@ def main():
         "generate-defaults": cmd_generate_defaults,
         "setup-yes": cmd_setup_yes,
         "preflight": cmd_preflight,
+        "upgrade": cmd_upgrade,
     }
     if cmd not in dispatch:
         print(f"Unknown command: {cmd}", file=sys.stderr)

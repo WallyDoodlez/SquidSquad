@@ -1,5 +1,0 @@
-# Layer 3 variant manifest — dev-web
-# Inherits all sub-skills from dev, adds web-specific context.
-base_role: dev
-additional_includes:
-  - roles/dev/web/domain-context

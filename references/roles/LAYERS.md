@@ -8,7 +8,7 @@ Role definitions compose from 4 layers. The directory depth IS the layer.
 references/roles/
 ├── instructions.md              ← Layer 1 (base agent definition)
 ├── SOUL.md                      ← Layer 1 (base agent identity)
-├── dev/                         ← Layer 2 (role definition)
+├── worker/                      ← Layer 2 (role definition)
 │   ├── instructions.md
 │   ├── SOUL.md
 │   ├── includes.yml
@@ -29,7 +29,7 @@ references/roles/
 | Layer | Location | What it defines | Who maintains it |
 |-------|----------|-----------------|------------------|
 | **L1 — Agent** | `roles/` root | What ANY SquidSquad agent is | SquidSquad core |
-| **L2 — Role** | `roles/<role>/` | What a dev/pm/qa/dm IS | SquidSquad core |
+| **L2 — Role** | `roles/<role>/` | What a worker/pm/verifier/dm IS | SquidSquad core |
 | **L3 — Domain** | `roles/<role>/<variant>/` | Domain specialization (iOS, web, skill) | Preset authors |
 | **L4 — Project** | `.squidsquad/<agent>/` | Project-specific adaptations | soul-shepherd + human |
 
@@ -43,7 +43,7 @@ references/roles/
 
 **instructions.md → CLAUDE.md**: L1 + L2 + L3 assembled, includes resolved → deployed as `.squidsquad/<agent>/CLAUDE.md`.
 
-**Naming**: Agent instance `dev-skill` maps to `roles/dev/skill/`. compose.py splits on hyphen.
+**Naming**: Agent instance `worker-skill` maps to `roles/worker/skill/`. compose.py splits on hyphen.
 
 ## Adding a New Role (Layer 2)
 

@@ -1,0 +1,67 @@
+# SquidSquad role manifest — Worker
+#
+# Worker is the engineering specialist. Only installed in software-development
+# projects. One manifest covers all variants (backend, frontend, fullstack);
+# the variant is asked at install time and recorded per installed agent.
+#
+# Rules for editing this file (Q-new14): describe engineering work in
+# domain terms. Do not reference internal paths, tracker labels, or scripts.
+
+schema_version: 2
+id: worker
+display_name: Worker
+tagline: Writes code (backend, frontend, or fullstack)
+description: >
+  The engineering specialist. Implements features and fixes bugs against a
+  specific tech stack, runs the project's own tests, and hands the result
+  to the verifier when ready. Can be installed as a backend-focused agent,
+  a frontend-focused agent, both in parallel, or a single fullstack agent.
+show_in_roster: true
+# Worker is a specialist — only installed in software-development projects.
+always_installed: false
+iteration_mode: normal
+
+# Files that define this role's identity and cycle behaviour.
+soul_template: SOUL.md
+claude_template: instructions.md
+
+# Worker hands completed work to the verifier, or directly to delivery when no
+# verifier is installed.
+routes_to: [verifier, dm]
+
+# No tool requirements — worker uses whatever the project's stack already has.
+requires_sub_skills: {}
+
+setup_requirements:
+  # Which team shape to install. Default in the software-development preset
+  # is two agents (backend + frontend), but a single fullstack agent or a
+  # single-discipline setup are equally supported.
+  - id: variant
+    needs: >-
+      which engineering team shape the user wants — backend only, frontend
+      only, both as two separate agents, or a single fullstack agent
+    used_for: >-
+      deciding how to structure the engineering team for this project
+    only_in_presets: [software-dev]
+
+  # Per-agent stack answer. The wizard inspects the repo first for common
+  # manifest files and uses them as hints when asking.
+  - id: stack
+    needs: >-
+      the tech stack this engineering agent works in — primary language,
+      framework, package manager, and test runner
+    used_for: >-
+      knowing how the dev agent runs builds and tests for the project
+    repo_hints:
+      - package.json
+      - pnpm-lock.yaml
+      - yarn.lock
+      - requirements.txt
+      - pyproject.toml
+      - go.mod
+      - Cargo.toml
+      - pom.xml
+      - Gemfile
+      - composer.json
+    per_installed_agent: true
+    only_in_presets: [software-dev]

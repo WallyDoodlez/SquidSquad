@@ -1,0 +1,24 @@
+# Worker Agent Hint Pools
+# Format: phase|hint text
+# Phases: idle, pulling, triaging, implementing, committing
+# Lines starting with # are ignored
+
+idle|Msg me any time to file a bug or request a feature
+idle|I'm watching for new work — drop a message whenever
+idle|All clear — ready for the next task
+idle|Nothing in my queue — feel free to assign something
+idle|Quiet cycle — I'll pick up anything you file
+
+pulling|Syncing with remote...
+pulling|Checking for upstream changes...
+
+triaging|Scanning for open bugs...
+triaging|Checking bug tracker for new issues...
+
+implementing|Working on it — check scrollback for details
+implementing|Building this out — sit tight
+implementing|Heads down on the current task
+implementing|Making progress — will update when done
+
+committing|Wrapping up this cycle's work...
+committing|Pushing changes to remote...

@@ -6,8 +6,8 @@ the referenced sub-skill content, and wraps each inclusion with
 <!-- sub-skill: name --> section markers.
 
 Usage:
-    python scripts/compose.py dev-agent        # Compose dev agent template
-    python scripts/compose.py pm-agent         # Compose PM/QA template
+    python scripts/compose.py worker-agent     # Compose worker agent template
+    python scripts/compose.py pm-agent         # Compose PM/Verifier template
     python scripts/compose.py all              # Compose all roles to agent-instructions.md
     python scripts/compose.py --help
 """
@@ -38,9 +38,9 @@ OUTPUT_FILE = REPO_ROOT / "references" / "agent-instructions.md"
 # mode-specific fragment and defeat the lazy-load design. Checked
 # explicitly before the variant heuristic so the heuristic cannot win.
 RUNTIME_READ_FRAGMENTS = frozenset({
-    "roles/dev/ralph-loop-overview",
+    "roles/worker/ralph-loop-overview",
     "roles/pm/ralph-loop-overview",
-    "roles/qa/ralph-loop-overview",
+    "roles/verifier/ralph-loop-overview",
     "roles/dm/ralph-loop-overview",
     "common-events/event-driven-workflow",
     "common-events/l1-base",
@@ -138,6 +138,13 @@ def _resolve_includes(entry_file: Path, wake_mode: str = "polling") -> str:
 
         if inc_match:
             include_path = inc_match.group(1).strip()
+            # #9588 belt-and-suspenders (DS cycle 1301 phase d4c44589 F1): the
+            # manifest-aware path filters RUNTIME_READ_FRAGMENTS explicitly;
+            # this manifest-less fallback must do the same, otherwise a yaml
+            # parse error / pyyaml-absent install silently inlines runtime
+            # fragments and defeats the lazy-load design.
+            if include_path in RUNTIME_READ_FRAGMENTS:
+                continue
             full_path = SUB_SKILLS_DIR / f"{include_path}.md"
             if not full_path.exists():
                 result.append(f"<!-- ERROR: Missing include: {include_path} -->")
@@ -199,7 +206,8 @@ def _load_manifest(role_name: str, wake_mode: str = "polling") -> list | None:
                 return fallback
         return None
 
-    # Try nested variant path first (dev-skill -> dev/skill/<manifest>)
+    # Try nested variant path first (worker-skill -> worker/skill/<manifest>;
+    # dev-skill is also accepted via the 6274.1 dual-aware shim)
     resolved = _resolve_variant(role_name)
     if resolved:
         base, variant = resolved
@@ -211,6 +219,23 @@ def _load_manifest(role_name: str, wake_mode: str = "polling") -> list | None:
         identities = _list_known_role_identities()
         if role_name not in identities and "dev" in identities:
             manifest_path = _resolve_manifest_path(ROLES_DIR / "dev")
+        if manifest_path is None:
+            # #6274 dual-aware: belt-and-suspenders alias fallback (DS finding
+            # cycle 1301 phase 2.2.2-3 F3). If role_name is in _BASE_ALIAS_6274
+            # (e.g., "dev" → "worker", "qa" → "verifier"), retry against the
+            # aliased identity. Defense in depth — phase 2.2.1 already updated
+            # all base_role: values in variant includes.yml to new names; this
+            # catches any legacy caller that still passes "dev"/"qa".
+            # #6274.2 (3b) disk-check shim: `_resolve_manifest_path` already
+            # tests `.exists()` on the resolved file, so this fallback safely
+            # returns None when the alias directory is absent on disk — making
+            # the dual-aware behavior consistent between pre- and post-rename
+            # installs (no spurious successes against ghost role names).
+            if role_name in _BASE_ALIAS_6274:
+                aliased = _BASE_ALIAS_6274[role_name]
+                aliased_dir = ROLES_DIR / aliased
+                if aliased_dir.is_dir():
+                    manifest_path = _resolve_manifest_path(aliased_dir)
         if manifest_path is None:
             return None
 
@@ -465,24 +490,30 @@ def _read_role_manifest(role_id: str) -> dict | None:
 def _active_roles_for_roster() -> list[str]:
     """#9925 D2/F4: return the list of role identities active in THIS
     install's config.md, sorted alphabetically (D8). Sources:
-      - PM, QA, DM — always present per #6261 mandatory team.
-      - Dev agents — from `Dev Agents:` line in config.md (parsed via
-        config.py get-field 'dev-agents', falling back to a regex on
-        config.md if config.py is unavailable).
+      - PM, verifier, DM — always present per #6261 mandatory team.
+        (#6274: was {pm, qa, dm}; "qa" → "verifier" per D5.)
+      - Worker agents — from `Workers:` (or legacy `Dev Agents:`) line in
+        config.md (parsed via config.py get-field 'workers', falling back
+        to a regex on config.md if config.py is unavailable).
     Roles whose manifest.yaml doesn't exist in references/roles/ are
     dropped silently — the roster only lists roles that can be
     described from a manifest.
     """
-    roles = {"pm", "qa", "dm"}  # mandatory team
-    dev_agents_raw = _read_config_value("dev-agents")
-    if dev_agents_raw:
-        for token in dev_agents_raw.split(","):
+    roles = {"pm", "verifier", "dm"}  # mandatory team — #6274 renamed qa→verifier
+    workers_raw = _read_config_value("workers")  # dual-aware: shim falls back to deprecated `Dev Agents:` key
+    if workers_raw:
+        for token in workers_raw.split(","):
             t = token.strip()
             if t:
                 roles.add(t)
     # Filter to roles that actually have a manifest.yaml — D8 degraded mode.
+    # Worker variants (e.g. "skill", "be") fall back to the worker base
+    # manifest (#6274: was "dev"). Dual-aware: try both "worker" and "dev"
+    # in case the install hasn't been re-composed yet.
     return sorted(r for r in roles if (ROLES_DIR / r / "manifest.yaml").exists()
-                  or (ROLES_DIR / "dev" / "manifest.yaml").exists() and r not in {"pm", "qa", "dm"})
+                  or ((ROLES_DIR / "worker" / "manifest.yaml").exists()
+                      or (ROLES_DIR / "dev" / "manifest.yaml").exists())
+                  and r not in {"pm", "verifier", "dm"})
 
 
 def _render_role_roster() -> str:
@@ -500,15 +531,22 @@ def _render_role_roster() -> str:
             "leaving {{role-roster}} marker in composed output",
             file=sys.stderr,
         )
-        return "## Your Teammates' Responsibilities\n\n_(no active roles discoverable; check config.md `Dev Agents:` field)_"
+        return "## Your Teammates' Responsibilities\n\n_(no active roles discoverable; check config.md `Workers:` field — 6274.1 shim also reads the deprecated `Dev Agents:` key)_"
 
     lines = ["## Your Teammates' Responsibilities", ""]
     for role_id in active:
-        # Dev variants like "skill" don't have their own manifest.yaml —
-        # fall through to dev's manifest for the roster entry.
+        # Worker variants like "skill" don't have their own manifest.yaml —
+        # fall through to worker's manifest for the roster entry (#6274 dual-aware
+        # also accepts dev/ as a fallback during the migration window).
         manifest = _read_role_manifest(role_id)
-        if manifest is None and (ROLES_DIR / "dev" / "manifest.yaml").exists():
-            manifest = _read_role_manifest("dev")
+        if manifest is None:
+            # #6274 dual-aware (DS cycle 1301 phase cfa512ff F3): check both
+            # worker/ (new canonical) and dev/ (pre-rename) so worker variants
+            # like "skill"/"be" resolve via either parent manifest.
+            if (ROLES_DIR / "worker" / "manifest.yaml").exists():
+                manifest = _read_role_manifest("worker")
+            elif (ROLES_DIR / "dev" / "manifest.yaml").exists():
+                manifest = _read_role_manifest("dev")
         if manifest is None:
             print(
                 f"WARNING: #9925 — no manifest for active role {role_id!r}; "
@@ -623,12 +661,12 @@ def compose_role(role_name: str) -> str:
 
 
 def compose_all() -> str:
-    """Compose the dev-agent template as the default agent-instructions.md."""
-    # agent-instructions.md is the dev template (primary output)
+    """Compose the worker-agent template as the default agent-instructions.md."""
+    # agent-instructions.md is the worker template (primary output)
     header = "<!-- GENERATED FILE — DO NOT EDIT. -->\n"
-    header += "<!-- Source: references/roles/dev/instructions.md + sub-skills/ -->\n"
+    header += "<!-- Source: references/roles/worker/instructions.md + sub-skills/ -->\n"
     header += "<!-- Regenerate with: python references/scripts/compose.py all -->\n\n"
-    composed = compose_role("dev")
+    composed = compose_role("worker")
     return header + composed
 
 
@@ -695,7 +733,8 @@ def _get_entry_file_for_role(role_name: str) -> str:
     `references/roles/<role>/`. For any role that exists in the registry
     the identity equals the role name. Anything else is resolved via:
     1. Suffix-strip: pm-skill -> pm (Layer 3 variant of any base role)
-    2. Dev fallback: skill, be, fe -> dev (legacy dev variants)
+    2. Base-role fallback: skill, be, fe -> worker (post-6274.2 canonical),
+       with dev as dual-aware fallback during the migration window.
 
     After #328 Phase H the identity list is read from the manifest
     registry, not hardcoded — adding a new role directory under
@@ -721,16 +760,27 @@ def _get_entry_file_for_role(role_name: str) -> str:
             # Alias target doesn't exist on disk — own directory must;
             # fall through to returning role_name unchanged.
         return role_name
-    # Layer 3 variant: resolve nested directory (dev-skill -> dev/skill/)
+    # Layer 3 variant: resolve nested directory (worker-skill -> worker/skill/;
+    # legacy dev-skill also routes here via 6274.1 alias)
     resolved = _resolve_variant(role_name)
     if resolved:
         base, _ = resolved
         return base
-    # Dev variants (skill, be, fe, bespoke names) compose from the
-    # `dev` role template as long as one exists in the registry.
-    if "dev" in identities:
+    # Worker variants (skill, be, fe, bespoke names) compose from the
+    # `worker` role template (post-6274.2). Pre-rename installs that still
+    # have `roles/dev/` work via the 6274.1 alias shim — `dev` stays in
+    # `identities` as a dual-aware alias and `_BASE_ALIAS_6274` maps it
+    # to `worker` at the call sites that need the on-disk canonical.
+    # #6274.2 (3b) disk-check shim: `worker`/`dev` are dual-aware identities
+    # regardless of disk state, so the literal `in identities` check fires
+    # in both pre- and post-rename installs. Confirm the target directory
+    # actually has an entry template before returning it; otherwise fall
+    # through to the other side of the alias pair.
+    if "worker" in identities and (ROLES_DIR / "worker").is_dir() and (ROLES_DIR / "worker" / "instructions.md").exists():
+        return "worker"
+    if "dev" in identities and (ROLES_DIR / "dev").is_dir() and (ROLES_DIR / "dev" / "instructions.md").exists():
         return "dev"
-    # No registry, or no `dev` identity — fall back to the literal
+    # No registry, or no `worker`/`dev` identity — fall back to the literal
     # role name so at least the error message points at the right file.
     return role_name
 
@@ -740,17 +790,18 @@ def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> s
 
     [ROLE] and [ROLE_UPPER] are substituted for ALL roles (needed by
     cycle-runner sub-skill which is shared across all agents).
-    [ROLE_TEST_CMD], [OTHER_ROLES] are dev-only.
+    [ROLE_TEST_CMD], [OTHER_ROLES] are worker-only (6274.2: was dev-only;
+    `is_dev` below accepts both "dev" and "worker" entry_file values).
     """
-    is_dev = entry_file == "dev"
+    is_dev = entry_file in ("dev", "worker")  # #6274 dual-aware
 
     # Universal substitution — all roles need [ROLE] for cycle-runner paths
     content = content.replace("[ROLE]", role_name)
     content = content.replace("[ROLE_UPPER]", role_name.upper())
 
     # #9588: the boot-bootstrap fragment needs the per-role polling-fragment
-    # path. Dev variants (skill, ios, android, web, fullstack) share one file
-    # at roles/dev/ralph-loop-overview.md — so we substitute by entry_file
+    # path. Worker variants (skill, ios, android, web, fullstack) share one file
+    # at roles/worker/ralph-loop-overview.md — so we substitute by entry_file
     # (the role identity that owns the polling fragment file), not role_name.
     polling_fragment = (
         f"references/sub-skills/roles/{entry_file}/ralph-loop-overview.md"
@@ -765,7 +816,7 @@ def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> s
         content = content.replace("[ROLE_TEST_CMD]", test_cmd)
 
         # Other roles
-        all_agents = _read_config_value("dev-agents") or role_name
+        all_agents = _read_config_value("workers") or role_name
         other = [r.strip() for r in all_agents.split(",") if r.strip() != role_name]
         content = content.replace("[OTHER_ROLES]", ", ".join(other) if other else "(none)")
 
@@ -775,7 +826,7 @@ def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> s
 
     # PM/DM-specific
     if not is_dev:
-        active_agents = _read_config_value("dev-agents") or ""
+        active_agents = _read_config_value("workers") or ""
         content = content.replace("[ACTIVE_AGENTS]", active_agents)
 
         e2e_cmd = _read_config_value("e2e-tests") or "(none)"
@@ -1093,14 +1144,15 @@ def deploy_role(role_name: str, target_root: Path = None,
     """Full pipeline: compose entry file -> substitute placeholders -> write CLAUDE.md.
 
     Args:
-        role_name: the role composition source (e.g. "skill", "dev-ios", "pm").
+        role_name: the role composition source (e.g. "skill", "worker-ios", "pm";
+            legacy "dev-ios" still accepted via 6274.1 alias).
             Resolves to a role identity via `_get_entry_file_for_role`.
         target_root: base directory that will contain `.squidsquad/<output_name>/`.
             Defaults to REPO_ROOT (the installed repo). Tests override to
             write into a scratch directory without touching the real install.
         output_name: the agent instance id for the output directory. Defaults
             to role_name. Use this when the compose source differs from the
-            agent directory (e.g. compose from "dev-ios" but output to "skill").
+            agent directory (e.g. compose from "worker-ios" but output to "skill").
 
     Returns the absolute path of the composed CLAUDE.md.
     """
@@ -1237,8 +1289,12 @@ def _assemble_soul(role_name: str) -> str:
     """Assemble a flat SOUL.md from Layer 1 (base) + role SOUL.
 
     Layer 1: references/roles/SOUL.md (at roles root — shared agent identity)
-    Role SOUL: for variants (dev-skill), try roles/dev/skill/SOUL.md first,
-    then fall back to roles/dev/SOUL.md. For base roles, use roles/<role>/SOUL.md.
+    Role SOUL (Layer 2): for variants (e.g. worker-skill), use the base
+    role's SOUL.md — `roles/worker/SOUL.md` post-6274.2, or `roles/dev/SOUL.md`
+    via 6274.1 alias for pre-rename installs. For base roles, use
+    `roles/<role>/SOUL.md`. (Layer 3 variant-level SOUL files are NOT read
+    here — the variant gets the base role's SOUL only, per the
+    `_resolve_variant` branch below.)
 
     Layer markers are embedded so upgrade_soul() can identify boundaries.
     """
@@ -1261,7 +1317,7 @@ def _assemble_soul(role_name: str) -> str:
     else:
         role_soul_path = ROLES_DIR / role_name / "SOUL.md"
         if not role_soul_path.exists():
-            # Legacy dev variant fallback (skill -> dev)
+            # Legacy worker-variant fallback (skill -> worker, or skill -> dev for pre-6274 installs)
             role_identity = _get_entry_file_for_role(role_name)
             role_soul_path = ROLES_DIR / role_identity / "SOUL.md"
 
@@ -1459,15 +1515,15 @@ def generate_local_config(roles: list, target_root: Path = None,
 
 
 
-MANDATORY_ROLES = {"pm", "qa", "dm"}  # #6055: always present, no fallbacks
+MANDATORY_ROLES = {"pm", "verifier", "dm"}  # #6055/#6274: always present (qa→verifier per D5)
 
 
 def _collect_all_roles() -> list:
-    """Return all configured roles: dev-agents from config + pm + qa + dm."""
-    agents = _read_config_value("dev-agents") or ""
+    """Return all configured roles: worker-agents from config + pm + verifier + dm."""
+    agents = _read_config_value("workers") or ""
     roles = [r.strip() for r in agents.split(",") if r.strip()]
-    # Mandatory roles — always required (#6055)
-    for role in ("pm", "qa", "dm"):
+    # Mandatory roles — always required (#6055/#6274: qa→verifier per D5)
+    for role in ("pm", "verifier", "dm"):
         if role not in roles:
             roles.append(role)
     return roles
@@ -1525,7 +1581,7 @@ def main():
         missing = _check_mandatory_roles(roles)
         if missing:
             print(f"ERROR: Mandatory role(s) missing: {', '.join(missing)}", file=sys.stderr)
-            print(f"Every SquidSquad team requires PM, QA, and DM.", file=sys.stderr)
+            print(f"Every SquidSquad team requires PM, Verifier, and DM.", file=sys.stderr)
             print(f"Add missing roles with: /squidsquad-setup or manually create .squidsquad/{missing[0]}/", file=sys.stderr)
             sys.exit(1)
         failed = []

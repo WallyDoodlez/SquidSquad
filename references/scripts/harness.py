@@ -2628,7 +2628,11 @@ class ExternalActivityDetector:
     Deduplicates by tracking previously emitted issue numbers.
     """
 
-    AGENT_ROLES = {"skill", "pm", "qa", "dm"}
+    # #6274: qa→verifier per D5. AGENT_ROLES is currently unused (issue
+    # filtering is done via role-labels on the issue itself, not against
+    # this set), but the constant documents the canonical mandatory team.
+    # Flipping in lockstep with config.py:486/591 and cycle_pre.py:1037.
+    AGENT_ROLES = {"skill", "pm", "verifier", "dm"}
 
     def __init__(self, poll_interval: int = 60):
         self._poll_interval = poll_interval

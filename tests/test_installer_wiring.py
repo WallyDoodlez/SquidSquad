@@ -244,7 +244,7 @@ class TestInstallerFileManifest:
             "references/roles/pm/manifest.yaml",
             "references/roles/pm/instructions.md",
             "references/roles/pm/SOUL.md",
-            "references/roles/dev/instructions.md",
+            "references/roles/worker/instructions.md",
             "references/presets/software-dev/manifest.yaml",
             "references/presets/design/manifest.yaml",
         ):

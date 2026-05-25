@@ -1,0 +1,5 @@
+# Layer 3 variant manifest — worker-fullstack
+# Inherits all sub-skills from worker, adds fullstack-specific context.
+base_role: worker
+additional_includes:
+  - roles/worker/fullstack/domain-context

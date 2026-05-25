@@ -946,7 +946,7 @@ def _design_preset_spec():
 
 
 def _software_dev_spec():
-    """Valid install spec for software-dev preset (pm + be + fe + qa + dm)."""
+    """Valid install spec for software-dev preset (pm + be + fe + verifier + dm)."""
     return {
         "squidsquad_version": "0.16.0",
         "project": {"name": "scratch", "repo": "github.com/x/y"},
@@ -956,7 +956,7 @@ def _software_dev_spec():
             {
                 "id": "be",
                 "alias": "be",
-                "role": "dev",
+                "role": "worker",
                 "variant": "be",
                 "stack": "FastAPI + Python 3.11 + pytest",
                 "test_command": "pytest tests/be",
@@ -964,12 +964,12 @@ def _software_dev_spec():
             {
                 "id": "fe",
                 "alias": "fe",
-                "role": "dev",
+                "role": "worker",
                 "variant": "fe",
                 "stack": "Next.js + TypeScript + jest",
                 "test_command": "npm test",
             },
-            {"id": "qa", "alias": "qa", "role": "qa"},
+            {"id": "verifier", "alias": "verifier", "role": "verifier"},
             {"id": "dm", "alias": "dm", "role": "dm"},
         ],
         "tools": {"dm.tool": "local_delivery"},
@@ -1041,18 +1041,18 @@ class TestScaffoldInstallDevVariants:
         summary = wizard.scaffold_install(spec, tmp_path)
         assert len(summary["agents"]) == 5
         squid = tmp_path / ".squidsquad"
-        for role_id in ("pm", "be", "fe", "qa", "dm"):
+        for role_id in ("pm", "be", "fe", "verifier", "dm"):
             assert (squid / role_id / "CLAUDE.md").is_file()
             assert (squid / role_id / "SOUL.md").is_file()
 
     def test_dev_variants_share_dev_identity(self, tmp_path):
-        """`be` and `fe` both compose from references/roles/dev/CLAUDE.md."""
+        """`be` and `fe` both compose from references/roles/worker/CLAUDE.md."""
         spec = _software_dev_spec()
         summary = wizard.scaffold_install(spec, tmp_path)
         be = next(a for a in summary["agents"] if a["id"] == "be")
         fe = next(a for a in summary["agents"] if a["id"] == "fe")
-        assert be["role"] == "dev"
-        assert fe["role"] == "dev"
+        assert be["role"] == "worker"
+        assert fe["role"] == "worker"
 
     def test_dev_variant_claude_md_has_variant_substituted(self, tmp_path):
         """The [ROLE] placeholder is substituted with the agent id (be/fe)."""
@@ -1064,7 +1064,7 @@ class TestScaffoldInstallDevVariants:
         fe_md = (tmp_path / ".squidsquad" / "fe" / "CLAUDE.md").read_text(
             encoding="utf-8"
         )
-        # The dev template references [ROLE] in many places — after
+        # The worker template references [ROLE] in many places — after
         # substitution neither file should still contain the bracket form.
         assert "[ROLE]" not in be_md
         assert "[ROLE]" not in fe_md
@@ -1188,9 +1188,9 @@ class TestScaffoldL4Files:
     def test_l4_stack_details_created(self, tmp_path):
         """TC-3: scaffold_install writes shared-stack-details.md."""
         spec = _design_preset_spec()
-        # Add a dev agent with stack and test_command
+        # Add a worker agent with stack and test_command
         spec["agents"].append({
-            "id": "skill", "alias": "skill", "role": "dev",
+            "id": "skill", "alias": "skill", "role": "worker",
             "variant": "skill", "stack": "Python + pytest",
             "test_command": "pytest",
         })
@@ -1205,7 +1205,7 @@ class TestScaffoldL4Files:
         """TC-8: existing L4 files not overwritten on re-run."""
         spec = _design_preset_spec()
         spec["agents"].append({
-            "id": "skill", "alias": "skill", "role": "dev",
+            "id": "skill", "alias": "skill", "role": "worker",
             "variant": "skill", "stack": "original",
             "test_command": "original-test",
         })
@@ -1232,9 +1232,201 @@ class TestScaffoldL4Files:
         spec = wizard.generate_default_spec()
         assert spec["preset"] == "software-dev"
         assert len(spec["agents"]) >= 1
-        dev_agents = [a for a in spec["agents"] if a["role"] == "dev"]
-        assert len(dev_agents) == 1
-        assert dev_agents[0].get("variant") is not None
+        worker_agents = [a for a in spec["agents"] if a["role"] == "worker"]
+        assert len(worker_agents) == 1
+        assert worker_agents[0].get("variant") is not None
+
+
+# ===========================================================================
+# D4 upgrade step — upgrade_install (dev→worker / qa→verifier migration)
+# ===========================================================================
+
+
+def _make_old_install(squid, state_agents=None):
+    """Create a minimal old-style .squidsquad/ layout with dev/ and qa/ dirs.
+
+    Writes a v1-style config.md with '**Dev Agents**:' field, creates
+    .squidsquad/dev/ and .squidsquad/qa/ directories, and optionally writes
+    a .harness-state.json with the given agents dict.
+    """
+    squid.mkdir(parents=True, exist_ok=True)
+    config = squid / "config.md"
+    config.write_text(
+        "# Config\n- **Dev Agents**: skill\n- Other: value\n",
+        encoding="utf-8",
+    )
+    (squid / "dev").mkdir()
+    (squid / "qa").mkdir()
+    if state_agents is not None:
+        state = {"agents": state_agents, "version": "1"}
+        (squid / ".harness-state.json").write_text(
+            json.dumps(state, indent=2) + "\n", encoding="utf-8"
+        )
+
+
+class TestUpgradeInstall:
+    """D4 spec — upgrade_install() dev→worker / qa→verifier migration.
+
+    Covers: idempotency, partial-mismatch exit 2, atomic config rewrite,
+    dir rename, state-file key rename, and DS 3e F1 / DS 3d F4 hardening
+    (unreadable state file, malformed state file, state-key collisions).
+    """
+
+    def test_idempotency_already_migrated(self, tmp_path):
+        """Running upgrade_install twice → second call is a no-op."""
+        squid = tmp_path / ".squidsquad"
+        _make_old_install(squid, state_agents={"qa": {}, "skill": {}})
+
+        result1 = wizard.upgrade_install(tmp_path)
+        assert result1["ok"] is True
+        assert result1["action"] == "migrated"
+
+        # Second run — already migrated
+        result2 = wizard.upgrade_install(tmp_path)
+        assert result2["ok"] is True
+        assert result2["action"] == "no-op"
+        assert result2["migrated"] == []
+
+    def test_idempotency_nothing_installed(self, tmp_path):
+        """upgrade_install on an empty dir → no-op, exit 0."""
+        result = wizard.upgrade_install(tmp_path)
+        assert result["ok"] is True
+        assert result["action"] == "no-op"
+
+    def test_partial_mismatch_both_worker_and_dev_dirs(self, tmp_path, capsys):
+        """Both worker/ and dev/ present → exit 2 + stderr message."""
+        squid = tmp_path / ".squidsquad"
+        squid.mkdir()
+        (squid / "dev").mkdir()
+        (squid / "worker").mkdir()
+        result = wizard.upgrade_install(tmp_path)
+        assert result["ok"] is False
+        assert result.get("exit_code") == 2
+        err = capsys.readouterr().err
+        assert "partial migration detected" in err
+        assert "worker" in err and "dev" in err
+
+    def test_partial_mismatch_both_verifier_and_qa_dirs(self, tmp_path, capsys):
+        """Both verifier/ and qa/ present → exit 2 + stderr message."""
+        squid = tmp_path / ".squidsquad"
+        squid.mkdir()
+        (squid / "qa").mkdir()
+        (squid / "verifier").mkdir()
+        result = wizard.upgrade_install(tmp_path)
+        assert result["ok"] is False
+        assert result.get("exit_code") == 2
+        err = capsys.readouterr().err
+        assert "partial migration detected" in err
+        assert "verifier" in err and "qa" in err
+
+    def test_atomic_config_rewrite(self, tmp_path):
+        """config.md '**Dev Agents**:' is replaced with '**Workers**:'."""
+        squid = tmp_path / ".squidsquad"
+        _make_old_install(squid)
+        wizard.upgrade_install(tmp_path)
+        config_text = (squid / "config.md").read_text(encoding="utf-8")
+        assert "Dev Agents" not in config_text
+        assert "Workers" in config_text
+
+    def test_dir_rename_dev_to_worker(self, tmp_path):
+        """upgrade_install renames .squidsquad/dev/ → .squidsquad/worker/."""
+        squid = tmp_path / ".squidsquad"
+        _make_old_install(squid)
+        wizard.upgrade_install(tmp_path)
+        assert (squid / "worker").is_dir()
+        assert not (squid / "dev").exists()
+
+    def test_dir_rename_qa_to_verifier(self, tmp_path):
+        """upgrade_install renames .squidsquad/qa/ → .squidsquad/verifier/."""
+        squid = tmp_path / ".squidsquad"
+        _make_old_install(squid)
+        wizard.upgrade_install(tmp_path)
+        assert (squid / "verifier").is_dir()
+        assert not (squid / "qa").exists()
+
+    def test_state_file_key_rename(self, tmp_path):
+        """upgrade_install renames agents.qa→verifier and agents.dev→worker in state file."""
+        squid = tmp_path / ".squidsquad"
+        _make_old_install(squid, state_agents={"qa": {"cycles": 5}, "dev": {"cycles": 3}})
+        wizard.upgrade_install(tmp_path)
+        state = json.loads((squid / ".harness-state.json").read_text(encoding="utf-8"))
+        agents = state["agents"]
+        assert "verifier" in agents
+        assert "worker" in agents
+        assert "qa" not in agents
+        assert "dev" not in agents
+        assert agents["verifier"]["cycles"] == 5
+        assert agents["worker"]["cycles"] == 3
+
+    def test_ds_hardening_unreadable_state_file(self, tmp_path, capsys, monkeypatch):
+        """DS 3e F1: unreadable .harness-state.json → exit 2 BEFORE any fs mutation.
+
+        Uses monkeypatch to inject an OSError on read_text so the test is
+        portable across platforms (Windows does not honour chmod 000 for the
+        file owner).
+        """
+        from pathlib import Path
+        squid = tmp_path / ".squidsquad"
+        _make_old_install(squid)
+        state_path = squid / ".harness-state.json"
+        state_path.write_text("{}", encoding="utf-8")
+
+        # Patch Path.read_text so that reading .harness-state.json raises OSError
+        original_read_text = Path.read_text
+
+        def patched_read_text(self, *args, **kwargs):
+            if self.name == ".harness-state.json":
+                raise OSError("Permission denied")
+            return original_read_text(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", patched_read_text)
+
+        result = wizard.upgrade_install(tmp_path)
+        assert result["ok"] is False
+        assert result.get("exit_code") == 2
+        err = capsys.readouterr().err
+        assert "partial migration detected" in err
+        assert "unreadable" in err
+        # Filesystem must not have been mutated
+        assert (squid / "dev").exists(), "dev/ should not have been renamed"
+        assert not (squid / "worker").exists(), "worker/ should not exist yet"
+
+    def test_ds_hardening_malformed_state_file(self, tmp_path, capsys):
+        """DS 3e F1: malformed .harness-state.json → exit 2 BEFORE any fs mutation."""
+        squid = tmp_path / ".squidsquad"
+        _make_old_install(squid)
+        (squid / ".harness-state.json").write_text("NOT VALID JSON{{", encoding="utf-8")
+        result = wizard.upgrade_install(tmp_path)
+        assert result["ok"] is False
+        assert result.get("exit_code") == 2
+        err = capsys.readouterr().err
+        assert "partial migration detected" in err
+        assert "malformed" in err
+        # Filesystem must not have been mutated
+        assert (squid / "dev").exists(), "dev/ should not have been renamed"
+        assert not (squid / "worker").exists(), "worker/ should not exist yet"
+
+    def test_ds_hardening_state_qa_verifier_collision(self, tmp_path, capsys):
+        """DS 3d F4: agents.qa + agents.verifier both present → exit 2 BEFORE mutation."""
+        squid = tmp_path / ".squidsquad"
+        _make_old_install(squid, state_agents={"qa": {}, "verifier": {}})
+        result = wizard.upgrade_install(tmp_path)
+        assert result["ok"] is False
+        assert result.get("exit_code") == 2
+        err = capsys.readouterr().err
+        assert "partial migration detected" in err
+        assert "agents.qa" in err and "agents.verifier" in err
+
+    def test_ds_hardening_state_dev_worker_collision(self, tmp_path, capsys):
+        """DS 3d F4: agents.dev + agents.worker both present → exit 2 BEFORE mutation."""
+        squid = tmp_path / ".squidsquad"
+        _make_old_install(squid, state_agents={"dev": {}, "worker": {}})
+        result = wizard.upgrade_install(tmp_path)
+        assert result["ok"] is False
+        assert result.get("exit_code") == 2
+        err = capsys.readouterr().err
+        assert "partial migration detected" in err
+        assert "agents.dev" in err and "agents.worker" in err
 
 
 # ===========================================================================
@@ -2333,12 +2525,16 @@ class TestManifestResolution:
         """TC-7: generate_default_spec derives variants from manifest."""
         spec = wizard.generate_default_spec()
         assert spec["preset"] == "software-dev"
-        # Dev agent should have variant from manifest
-        dev_agents = [a for a in spec["agents"] if a["role"] == "dev"]
-        assert len(dev_agents) == 1
+        # Worker agent should have variant from manifest (role renamed dev→worker in #6274.2)
+        worker_agents = [a for a in spec["agents"] if a["role"] == "worker"]
+        assert len(worker_agents) == 1
         manifest = wizard.load_preset_manifest("software-dev")
-        expected_variant = manifest["domain_variants"]["dev"]
-        assert dev_agents[0].get("variant") == expected_variant
+        # Manifest may have 'worker' or the legacy 'dev' key during dual-aware window
+        expected_variant = (
+            manifest["domain_variants"].get("worker")
+            or manifest["domain_variants"].get("dev")
+        )
+        assert worker_agents[0].get("variant") == expected_variant
 
 
 # ---------------------------------------------------------------------------

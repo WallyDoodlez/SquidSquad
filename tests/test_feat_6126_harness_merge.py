@@ -307,14 +307,14 @@ class TestTemplateUpdates:
     """Verify template files were updated correctly."""
 
     def test_qa_verification_no_git_ops_pr_merge(self):
-        """QA verification.md should not reference git_ops.py pr-merge (#6126 AC-5)."""
-        path = REPO_ROOT / "references" / "sub-skills" / "roles" / "qa" / "verification.md"
+        """verifier verification.md should not reference git_ops.py pr-merge (#6126 AC-5)."""
+        path = REPO_ROOT / "references" / "sub-skills" / "roles" / "verifier" / "verification.md"
         content = path.read_text(encoding="utf-8")
         assert "git_ops.py pr-merge" not in content
 
     def test_qa_verification_has_post_merge(self):
-        """QA verification.md should reference POST /merge."""
-        path = REPO_ROOT / "references" / "sub-skills" / "roles" / "qa" / "verification.md"
+        """verifier verification.md should reference POST /merge."""
+        path = REPO_ROOT / "references" / "sub-skills" / "roles" / "verifier" / "verification.md"
         content = path.read_text(encoding="utf-8")
         assert "POST" in content and "/merge" in content
 

@@ -1,5 +1,0 @@
-# Layer 3 variant manifest — dev-skill
-# Inherits all sub-skills from dev, adds skill-specific context.
-base_role: dev
-additional_includes:
-  - roles/dev/skill/domain-context

@@ -1,5 +1,0 @@
-# Layer 3 variant manifest — dev-ios
-# Inherits all sub-skills from dev, adds ios-specific context.
-base_role: dev
-additional_includes:
-  - roles/dev/ios/domain-context

@@ -1,3 +1,39 @@
-# STATUS: generating...
-# Task: 9965-3a
-# Model: deepseek-v4-pro
+Now I have a complete understanding. Let me produce my findings.
+
+---
+
+### Finding 1
+
+- **File**: `references/presets/software-dev/manifest.yaml`
+- **Line**: 24-27
+- **Severity**: error
+- **Issue**: `domain_variants` keys (`dev`, `qa`) are not updated alongside `role_install_order`. After the `dev→worker` / `qa→verifier` role rename, `domain_variants` will reference dead role IDs, silently breaking wizard variant assignment.
+- **Evidence**: 
+  - `role_install_order` on line 33 is changed from `dev` to `worker` — confirming the role ID namespace is being migrated.
+  - `domain_variants` on lines 24-27 still uses the old keys `dev: skill` and `qa: skill`.
+  - `wizard.py` line 588 (`variant = domain_variants.get(role)`) looks up variants by agent role. After role renames, agents will have `role: "worker"` / `role: "verifier"`, but `domain_variants` will still map the old keys `dev` / `qa` → lookups return `None`, and no variant is assigned.
+  - The comment on line 26 explicitly states this is the *"single authority for domain-to-agent mappings (#6581)"* — keeping it out of sync with actual role IDs violates that contract.
+- **Suggested fix**: Update `domain_variants` keys in the same diff: `dev: skill` → `worker: skill`, `qa: skill` → `verifier: skill`.
+
+### Finding 2
+
+- **File**: `references/presets/software-dev/manifest.yaml`
+- **Line**: 7
+- **Severity**: warning
+- **Issue**: The comment `# (pm, dm, qa) are not listed — they are always installed.` still references `qa`. After the `qa→verifier` rename (implied by the test updates in this same sub-bundle changing `qa` to `verifier`), the comment is stale.
+- **Evidence**: 
+  - The diff updates the test docstring to say `qa→verifier` (line 20 of diff) and changes assertions from `qa` to `verifier` (line 24, 35 of diff).
+  - The manifest comment on line 7 still says `qa`, not `verifier`. If all other references are migrating, this one should too.
+- **Suggested fix**: Change `qa` to `verifier` in the comment on line 7, or add a note that it will be updated when the role rename lands.
+
+### Finding 3
+
+- **File**: `references/presets/software-dev/manifest.yaml`
+- **Line**: 33
+- **Severity**: error
+- **Issue**: `role_install_order` references `worker`, but no role with ID `worker` exists on disk. The role directory is `references/roles/dev/manifest.yaml` with `id: dev`. This will cause `manifest.validate_registry()` to emit an error for unknown role ID, which will fail `test_st1_role_manifests_load_cleanly` at line 240 (`assert not errors`).
+- **Evidence**:
+  - `manifest.py` lines 488-496 validate that every ID in `role_install_order` exists in the `roles` dict loaded from disk. `worker` is not in that dict.
+  - `glob` confirms `references/roles/worker/` does not exist; `references/roles/dev/` does (with `id: dev`).
+  - The test `test_st1_role_manifests_load_cleanly` in the same changed file asserts `not errors` — this assertion will fire before the keys check on line 242 is even reached.
+- **Suggested fix**: Either (a) include the role directory rename (`dev→worker`, `qa→verifier`) in this sub-bundle, or (b) defer the `role_install_order` change to the sub-bundle that performs the role directory renames. The current split creates an intermediate state where `role_install_order` references a non-existent role while the test suite expects zero validation errors.

@@ -53,3 +53,9 @@ references/scripts/migrate_*.py.bak
 
 .squidsquad-state/
 .squidsquad/.harness-state.json
+
+# Per-task DS review tmp files (created by model_router code-review)
+.[0-9]*-phase*-*.diff
+.[0-9]*-phase*-*review*.md
+.[0-9]*-fixup*.diff
+.[0-9]*-fixup*review*.md

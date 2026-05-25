@@ -1,7 +1,7 @@
 ## Pickup-comment fidelity (#9946)
 
 Comments you post on issues and tasks — especially the one accompanying a
-status transition — are read by QA and PM as a credibility signal for what
+status transition — are read by the verifier and PM as a credibility signal for what
 landed in the PR. They are not narrative. Every concrete claim ("AC<N>
 satisfied by editing file X", "all stubs populated", "tests pass") must be
 backed by the actual diff and the actual test run, not by your mental model
@@ -21,7 +21,7 @@ in `implement-tasks`; the parallel step in `triage-issues` is Step 7b-bis.
    `.squidsquad/project/*.md`, `.squidsquad/vault/...`, `.claude/*` — does
    NOT appear in your feature-branch PR. Those edits will land on `main`
    via the next `cycle_post` state commit (or have already landed in a
-   prior cycle's state commit), but the PR diff QA reads is empty of them.
+   prior cycle's state commit), but the PR diff the verifier reads is empty of them.
    Claiming "I edited X" where X is a state file, in a comment that
    announces a feature PR, is a literal falsehood about the PR contents.
 
@@ -57,7 +57,7 @@ the supporting path in the output above. Two specific recipes:
   rewrite the claim).
 - **Bulk claims** ("all 5 stubs populated", "all 12 ACs satisfied"): list
   each item explicitly in working state, then verify each one against the
-  diff. "All N" claims fail loudly when even one is missing — QA grep'd the
+  diff. "All N" claims fail loudly when even one is missing — the verifier grep'd the
   numbers in the two #9946 instances and the discrepancy was the first
   thing they noticed.
 
@@ -101,7 +101,7 @@ Bad (the two #9946 instances, paraphrased):
 
 Bad-but-different (transitioning to pending-test with failing tests
 on the rationale that the failures are "expected" — they are not OK
-just because you understand why they happen; QA will see red and reject):
+just because you understand why they happen; verifier will see red and reject):
 
 > Fixed in commit abc1234. AC8 partial: 5 seed templates in PR; 5 live
 > stubs are state files filtered by commit_code. Tests: 47 pass / 6
@@ -123,6 +123,6 @@ file-to-PM under Step 8c, not pending-test):
 > 8c).
 
 The good version refuses to transition under false pretenses. Pending-
-test means "QA, please verify this is done"; you cannot meaningfully
+test means "verifier, please verify this is done"; you cannot meaningfully
 claim that with a red suite, even when the red is "expected." If the
 mismatch is genuine, it is a planning problem, not a testing problem.

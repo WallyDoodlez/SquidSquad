@@ -189,18 +189,18 @@ class TestShippedRegistry:
             f"Shipped registry has {len(errors)} error(s):\n"
             + "\n".join(str(i) for i in errors)
         )
-        # v2 shape guarantee
-        assert set(roles) >= {"pm", "dm", "dev", "qa"}
+        # v2 shape guarantee (post-#6274.2: dev→worker, qa→verifier)
+        assert set(roles) >= {"pm", "dm", "worker", "verifier"}
         assert set(tools) >= {"figma", "google_stitch", "local_html", "local_delivery"}
         assert set(presets) >= {"software-dev", "design"}
 
     def test_shipped_pipelines_match_spec(self):
-        """Resolved pipelines match expected sets (qa always_installed since #347)."""
+        """Resolved pipelines match expected sets (verifier always_installed since #347)."""
         _, roles, _, presets = manifest.validate_registry()
         sw = manifest.resolve_pipeline("software-dev", roles, presets)
-        assert sw == {"pm", "dm", "dev", "qa"}
+        assert sw == {"pm", "dm", "worker", "verifier"}
         design = manifest.resolve_pipeline("design", roles, presets)
-        assert design == {"pm", "dm", "qa"}
+        assert design == {"pm", "dm", "verifier"}
 
 
 # ---------------------------------------------------------------------------

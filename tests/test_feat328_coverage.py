@@ -38,8 +38,11 @@ class TestTC47EmptySetupRequirements:
     list is the declarative way to express that.
     """
 
-    @pytest.mark.parametrize("role", ["pm", "dm", "qa"])
+    @pytest.mark.parametrize("role", ["pm", "dm", "verifier"])
     def test_role_has_empty_setup_requirements(self, role):
+        # Post-6274.2 D5: qa → verifier; manifest.validate_registry reads
+        # `references/roles/<role>/manifest.yaml` from disk so the keys are
+        # the canonical on-disk identities.
         _, roles, _, _ = manifest.validate_registry()
         assert role in roles, f"role manifest not loaded: {role}"
         assert roles[role]["setup_requirements"] == [], (
@@ -49,7 +52,8 @@ class TestTC47EmptySetupRequirements:
 
     def test_dev_has_variant_and_stack(self):
         _, roles, _, _ = manifest.validate_registry()
-        ids = [r["id"] for r in roles["dev"]["setup_requirements"]]
+        # Post-6274.2: dev role renamed to worker.
+        ids = [r["id"] for r in roles["worker"]["setup_requirements"]]
         assert ids == ["variant", "stack"]
 
 
@@ -134,16 +138,16 @@ class TestTC49To52IntervalValidation:
 
 class TestTC70To77PipelineResolution:
     def test_tc70_software_dev_all_roles(self):
-        """software-dev preset → pm + dm + dev + qa."""
+        """software-dev preset → pm + dm + worker + verifier (#6274 dev→worker, qa→verifier)."""
         _, roles, _, presets = manifest.validate_registry()
         resolved = manifest.resolve_pipeline("software-dev", roles, presets)
-        assert resolved == {"pm", "dm", "dev", "qa"}
+        assert resolved == {"pm", "dm", "worker", "verifier"}
 
     def test_tc75_design_preset(self):
-        """design preset → pm + dm + qa (qa is always_installed since #347)."""
+        """design preset → pm + dm + verifier (verifier is always_installed since #347; qa→verifier per #6274 D5)."""
         _, roles, _, presets = manifest.validate_registry()
         resolved = manifest.resolve_pipeline("design", roles, presets)
-        assert resolved == {"pm", "dm", "qa"}
+        assert resolved == {"pm", "dm", "verifier"}
 
     def test_every_shipped_role_is_reachable_from_some_preset(self):
         """Sanity — every non-infra role appears in at least one preset."""
@@ -234,8 +238,8 @@ class TestSmokeManifestValidation:
         issues, roles, _, _ = manifest.validate_registry()
         errors = [i for i in issues if i.severity == "error"]
         assert not errors, [str(e) for e in errors]
-        # Core v1 roles present
-        assert set(roles.keys()) >= {"pm", "dm", "dev", "qa"}
+        # Core v1 roles present (post-#6274: dev→worker, qa→verifier)
+        assert set(roles.keys()) >= {"pm", "dm", "worker", "verifier"}
 
     def test_st2_tool_manifests_load_cleanly(self):
         _, _, tools, _ = manifest.validate_registry()

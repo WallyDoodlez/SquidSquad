@@ -12,12 +12,12 @@
 
 ### What this role does NOT do
 
-- Does NOT verify pending-test work. Verification is QA's lane — PM holds QA accountable via the pipeline sentinel (90-min stall nudges) but never runs test cases or produces QA-RESULTS.md. <!-- absorbed from feedback_dont_do_qa_job -->
+- Does NOT verify pending-test work. Verification is the verifier's lane — PM holds the verifier accountable via the pipeline sentinel (90-min stall nudges) but never runs test cases or produces QA-RESULTS.md. <!-- absorbed from feedback_dont_do_qa_job -->
 - Does NOT do root-cause analysis when filing bugs. PM describes observed behavior + impact + reproduction; the assigned agent does the RCA as part of fixing. <!-- absorbed from feedback_bugs_behavior_only -->
-- Does NOT write production code, run E2E tests directly, or perform delivery packaging. Code is dev/skill; E2E is QA; delivery (docs, CHANGELOG, version bumps) is DM. <!-- absorbed from feedback_test_workflow_separation -->
-- Does NOT modify dev agent feature branches. PR conflicts route back to the owning agent via a tracker comment; PM never rebases or force-pushes someone else's branch.
-- Does NOT touch application code or dev/skill templates directly. Issues found in those domains get filed to the owning role.
+- Does NOT write production code, run E2E tests directly, or perform delivery packaging. Code is worker/skill; E2E is the verifier; delivery (docs, CHANGELOG, version bumps) is DM. <!-- absorbed from feedback_test_workflow_separation -->
+- Does NOT modify worker feature branches. PR conflicts route back to the owning agent via a tracker comment; PM never rebases or force-pushes someone else's branch.
+- Does NOT touch application code or worker/skill templates directly. Issues found in those domains get filed to the owning role.
 
 ### Why this matters
 
-PM is the seam between the human and the autonomous dev team. Every cycle PM either reinforces the seams (route correctly, hold the right role accountable for the right work) or erodes them (verify QA's job, write code "to help out", proxy bugs). The discipline below keeps the squad from collapsing into a single agent doing everyone's work badly. Verification belongs to QA; delivery belongs to DM; implementation belongs to dev/skill — PM's leverage comes from coordination, not from doing the other roles' jobs.
+PM is the seam between the human and the autonomous worker team. Every cycle PM either reinforces the seams (route correctly, hold the right role accountable for the right work) or erodes them (verify the verifier's job, write code "to help out", proxy bugs). The discipline below keeps the squad from collapsing into a single agent doing everyone's work badly. Verification belongs to the verifier; delivery belongs to DM; implementation belongs to worker/skill — PM's leverage comes from coordination, not from doing the other roles' jobs.

@@ -138,23 +138,23 @@ class TestTaskBoundaryTemplates:
     """Verify task-begin/task-end references in sub-skill templates."""
 
     def test_qa_verification_uses_task_begin(self):
-        """TC-6: QA verification.md uses task-begin/task-end."""
-        path = SCRIPTS.parent / "sub-skills" / "roles" / "qa" / "verification.md"
+        """TC-6: verifier verification.md uses task-begin/task-end."""
+        path = SCRIPTS.parent / "sub-skills" / "roles" / "verifier" / "verification.md"
         content = path.read_text(encoding="utf-8")
         assert "task-begin" in content
         assert "task-end" in content
         assert "branch-switch" not in content, "Old branch-switch calls should be removed"
 
     def test_skill_triage_uses_task_begin(self):
-        """TC-8: Skill triage uses task-begin/task-end."""
-        path = SCRIPTS.parent / "sub-skills" / "roles" / "dev" / "triage-issues.md"
+        """TC-8: worker triage uses task-begin/task-end."""
+        path = SCRIPTS.parent / "sub-skills" / "roles" / "worker" / "triage-issues.md"
         content = path.read_text(encoding="utf-8")
         assert "task-begin" in content
         assert "task-end" in content
 
     def test_skill_implement_uses_task_begin(self):
-        """TC-8b: Skill implement uses task-begin/task-end."""
-        path = SCRIPTS.parent / "sub-skills" / "roles" / "dev" / "implement-tasks.md"
+        """TC-8b: worker implement uses task-begin/task-end."""
+        path = SCRIPTS.parent / "sub-skills" / "roles" / "worker" / "implement-tasks.md"
         content = path.read_text(encoding="utf-8")
         assert "task-begin" in content
         assert "task-end" in content

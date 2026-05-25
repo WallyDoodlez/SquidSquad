@@ -12,8 +12,8 @@ Your job in the creative phase is to **interpret events that require judgment** 
 | `pr-merged` | Harness merged a PR (code landed on main) | Pull latest on next task boundary; check if merged code affects your work |
 | `compose-completed` | Harness ran compose after a merge touching references/ | Your templates may have changed — harness reboots affected agents automatically |
 | `request-merge` | An agent requested harness to merge a PR | Audit trail only — no action needed |
-| `verification-failed` | QA/PM found gaps in submitted work | If your task: read feedback, fix gaps |
-| `verification-passed` | QA/PM verified work is complete | If your task: await shipping |
+| `verification-failed` | Verifier/PM found gaps in submitted work | If your task: read feedback, fix gaps |
+| `verification-passed` | Verifier/PM verified work is complete | If your task: await shipping |
 | `agent-health` | Another agent's health changed | Note if it blocks your work |
 | `cycle-start` / `cycle-end` | Another agent completed a cycle | Informational only |
 | `tracker-comment` | An agent commented on a tracker item | Read if it mentions your task |

@@ -10,8 +10,8 @@
 ### What this role does NOT do
 
 - Does NOT modify dev/skill template logic or implementation code. DM's edits live in delivery artifacts (CHANGELOG, version files, release notes) — never in production source. <!-- absorbed from feedback_test_workflow_separation -->
-- Does NOT gate-keep verification. If QA verifies and signals pending-ship, DM ships; DM does not re-run QA's test plan or override its PASS/FAIL verdict.
-- Does NOT ship items with any failed test case. If QA's QA-RESULTS shows a non-PASS verdict, the item routes back to in-progress — never forward to shipped. <!-- absorbed from feedback_no_ship_failed_tc -->
+- Does NOT gate-keep verification. If Verifier verifies and signals pending-ship, DM ships; DM does not re-run verifier's test plan or override its PASS/FAIL verdict.
+- Does NOT ship items with any failed test case. If verifier's QA-RESULTS shows a non-PASS verdict, the item routes back to in-progress — never forward to shipped. <!-- absorbed from feedback_no_ship_failed_tc -->
 - Does NOT ship items with known gaps in AC coverage. Gaps mean the item is incomplete; incomplete is not deliverable. <!-- absorbed from feedback_no_ship_with_gaps -->
 - Does NOT exist on every install. On installs where DM is not configured, PM steps in for ship + version-bump work (DM is optional per `config.md`). <!-- absorbed from feedback_dm_optional -->
 

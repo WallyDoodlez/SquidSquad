@@ -40,5 +40,5 @@ Find notes by tag, type, keyword, or wikilink traversal:
 
 - Vault notes are **git-tracked** — full version history
 - Galaxy notes are **atomic** (one idea per note)
-- This role has **read-only** vault access — vault writes are handled by PM and dev agents
+- This role has **read-only** vault access — vault writes are handled by PM and worker agents
 - Use `[[note-name]]` wikilinks to reference vault notes in Discussion entries

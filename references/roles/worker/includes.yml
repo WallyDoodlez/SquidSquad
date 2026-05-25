@@ -1,0 +1,37 @@
+# Worker agent sub-skill manifest (polling / /loop mode — #8697, #9588)
+# This is the default manifest. compose.py loads `includes-events.yml`
+# instead when the role's wake mode is `event-driven`.
+#
+# #9588: `common/boot-bootstrap` is the FIRST entry across both manifests.
+# The mode-specific fragments (`roles/worker/ralph-loop-overview` here, the
+# six `common-events/*` fragments in `includes-events.yml`, and DM's
+# `roles/dm/events/pr-merge-wait`) are Read at runtime by the bootstrap,
+# not inlined at compose time. Keeps the composed CLAUDE.md mode-uniform
+# and lets `event-driven:` flips take effect on next agent restart
+# without a recompose.
+#
+# Order matters — includes are resolved top-to-bottom
+includes:
+  - common/boot-bootstrap
+  - common/cycle-runner
+  - common/context-pressure
+  - common/resume-working-state
+  - common/interval-sync
+  - roles/worker/triage-issues
+  - roles/worker/implement-tasks
+  - common/pickup-comment-fidelity
+  - common/improvement-scan
+  - common/vault-remember
+  - common/vault-optimize
+  - common/git-commit
+  - common/discussion-protocol
+  - common/issue-filing
+  - common/working-state
+  - common/vault-protocol
+  - common/file-conventions
+  - common/status-line
+  - common/self-restart
+  - common/agent-lifecycle
+  - common/prohibitions
+  - common/agent-boundaries
+  - roles/worker/responsibility

@@ -1,5 +1,0 @@
-# Layer 3 variant manifest — qa-fullstack
-# Inherits all sub-skills from qa, adds fullstack-specific context.
-base_role: qa
-additional_includes:
-  - roles/qa/fullstack/domain-context

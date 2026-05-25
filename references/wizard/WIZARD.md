@@ -208,10 +208,10 @@ ids. For each role, `python references/scripts/manifest.py load roles
 <id>` returns its manifest as JSON. Partition them by `show_in_roster`:
 
 - **Infrastructure roles** (`show_in_roster: false`): these are always
-  installed. Do NOT list them in the roster. v1: `pm`, `dm`.
+  installed. Do NOT list them in the roster. v1: `pm`, `dm`, `verifier`.
 
 - **Specialist roles** (`show_in_roster: true`): list each with its
-  `display_name` and `tagline`. v1: `designer`, `dev`, `qa`.
+  `display_name` and `tagline`. v1: `designer`, `worker`.
 
 Render the roster in a single conversational block:
 
@@ -219,8 +219,7 @@ Render the roster in a single conversational block:
 Under our roster, we have these agents available:
 
   Designer  — Produces visual designs (iterates with you directly)
-  Dev       — Writes code (backend, frontend, or fullstack)
-  QA        — Verifies dev work against acceptance criteria
+  Worker    — Writes code (backend, frontend, or fullstack)
 
 Tell me what you're trying to create and I'll select the right agents
 for you.
@@ -283,9 +282,9 @@ Infrastructure first, then specialists in install order.
 Render the resolved pipeline to the user in one line with ASCII
 arrows (Q-new20):
 
-- `software-dev` default: `PM → Designer ↻ → [Dev] → QA → DM`
-- `design`: `PM → Designer ↻ → QA → DM`
-- Minimal: `PM → QA → DM`
+- `software-dev` default: `PM → Designer ↻ → [Worker] → Verifier → DM`
+- `design`: `PM → Designer ↻ → Verifier → DM`
+- Minimal: `PM → Verifier → DM`
 
 The `↻` glyph indicates HITL iteration (designer), per CONTEXT. Put
 it directly after the role name, before the arrow.
@@ -357,7 +356,7 @@ rest of the wizard:
 - `be only` → one dev agent: `be`. Ask `dev.stack` once, plain.
 - `fe only` → one dev agent: `fe`. Ask `dev.stack` once, plain.
 
-For other roles in v1 (pm, dm, designer.install_optional, qa), follow
+For other roles in v1 (pm, dm, designer.install_optional, verifier), follow
 the manifest as-is. Designer's `install_optional` filters designer out
 of the pipeline entirely if the user says "no" in the software-dev
 preset (the design preset always installs designer).
@@ -539,14 +538,14 @@ SquidSquad Setup Summary
 Project:       my-app
 Repo:          github.com/alice/my-app
 Preset:        software-dev
-Pipeline:      PM → Designer ↻ → [BE, FE] → QA → DM
+Pipeline:      PM → Designer ↻ → [BE, FE] → Verifier → DM
 
 Roles:
   - pm       (always)
   - designer (HITL, tool: configured on first use)
   - be       (FastAPI + Python 3.11 + pytest)
   - fe       (Next.js + TypeScript + jest)
-  - qa
+  - verifier
   - dm       (local delivery)
 
 Loop:          10 minutes
@@ -672,7 +671,7 @@ Print exactly this (adjust the boot command per OS):
 >     ./start.sh            (Linux / macOS)
 >     .\\start.ps1          (Windows)
 >
-> The harness boots all agents (PM, QA, DM, workers) automatically.
+> The harness boots all agents (PM, Verifier, DM, workers) automatically.
 
 Then **exit the conversation**. You are ephemeral (Q-new21) — do NOT
 start the loop yourself, do NOT transition into PM, do NOT keep the

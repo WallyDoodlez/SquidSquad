@@ -181,7 +181,9 @@ class TestSubstitutePlaceholders:
         """[ROLE] is substituted for all roles (#2487 — universal substitution)."""
         content = "For dev: [ROLE], Active: [ACTIVE_AGENTS], E2E: [E2E_TEST_CMD], Interval: [INTERVAL]"
         with patch.object(compose, "_read_config_value", side_effect=lambda f: {
-            "dev-agents": "skill,be",
+            # Post-6274.2: compose reads "workers" key (was "dev-agents") with
+            # the dual-aware shim in config.py falling back to legacy.
+            "workers": "skill,be",
             "e2e-tests": "npm test",
             "interval": "15",
         }.get(f, "")):
@@ -197,7 +199,8 @@ class TestSubstitutePlaceholders:
         content = "Others: [OTHER_ROLES]"
         with patch.object(compose, "_read_config_value", side_effect=lambda f: {
             "skill-tests": "",
-            "dev-agents": "skill,be,fe",
+            # Post-6274.2: compose reads "workers" key (was "dev-agents").
+            "workers": "skill,be,fe",
             "interval": "30",
         }.get(f, "")):
             result = compose._substitute_placeholders(content, "skill", "dev")
@@ -245,6 +248,13 @@ class TestGetEntryFileForRole:
             assert compose._get_entry_file_for_role("dev") == "dev"
 
     def test_unknown_role_falls_back_to_dev(self, compose_env):
+        # Post-6274.2 (3b) disk-check shim: identities always includes both
+        # `worker` and `dev` (dual-aware set), so the fallback now picks the
+        # one whose directory actually exists on disk. In this scratch env
+        # only `roles/dev/` is set up by the fixture, so the worker branch
+        # short-circuits via the disk check and the dev branch wins —
+        # restoring the original "fall back to dev" semantic on pre-rename
+        # installs while still preferring `worker` post-rename.
         with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"):
             assert compose._get_entry_file_for_role("skill") == "dev"
             assert compose._get_entry_file_for_role("be") == "dev"
@@ -291,7 +301,7 @@ class TestL4RoleFiltering:
         """Create project sub-skill files with role prefixes."""
         # Ensure all role directories exist so known_prefixes includes them
         roles_dir = compose_env / "references" / "roles"
-        for role in ("dm", "qa"):
+        for role in ("dm", "verifier"):  # #6274: qa→verifier
             role_dir = roles_dir / role
             role_dir.mkdir(parents=True, exist_ok=True)
             (role_dir / "instructions.md").write_text(
@@ -518,13 +528,13 @@ class TestCollectAllRoles:
         with patch.object(compose, "_read_config_value", return_value="skill,be"), \
              patch.object(compose, "REPO_ROOT", tmp_path):
             roles = compose._collect_all_roles()
-        assert roles == ["skill", "be", "pm", "qa", "dm"]
+        assert roles == ["skill", "be", "pm", "verifier", "dm"]
 
     def test_mandatory_roles_not_duplicated_when_in_config(self, tmp_path):
         with patch.object(compose, "_read_config_value", return_value="skill,dm"), \
              patch.object(compose, "REPO_ROOT", tmp_path):
             roles = compose._collect_all_roles()
-        assert roles == ["skill", "dm", "pm", "qa"]
+        assert roles == ["skill", "dm", "pm", "verifier"]
         assert roles.count("dm") == 1
         assert roles.count("pm") == 1
 
@@ -532,14 +542,14 @@ class TestCollectAllRoles:
         with patch.object(compose, "_read_config_value", return_value="skill"), \
              patch.object(compose, "REPO_ROOT", tmp_path):
             roles = compose._collect_all_roles()
-        for mandatory in ("pm", "qa", "dm"):
+        for mandatory in ("pm", "verifier", "dm"):
             assert mandatory in roles
 
     def test_empty_dev_agents(self, tmp_path):
         with patch.object(compose, "_read_config_value", return_value=""), \
              patch.object(compose, "REPO_ROOT", tmp_path):
             roles = compose._collect_all_roles()
-        assert roles == ["pm", "qa", "dm"]
+        assert roles == ["pm", "verifier", "dm"]
 
     def test_strips_whitespace_from_agent_names(self, tmp_path):
         with patch.object(compose, "_read_config_value", return_value=" skill , be "), \
@@ -562,11 +572,14 @@ class TestResolveVariant:
 
     def test_dev_ios_resolves(self):
         result = compose._resolve_variant("dev-ios")
-        assert result == ("dev", "ios")
+        # Post-6274.2: legacy "dev-ios" routes to canonical worker on disk
+        # via the _BASE_ALIAS_6274 dual-aware shim in _resolve_variant.
+        assert result == ("worker", "ios")
 
     def test_qa_android_resolves(self):
         result = compose._resolve_variant("qa-android")
-        assert result == ("qa", "android")
+        # Post-6274.2: legacy "qa-android" routes to canonical verifier on disk.
+        assert result == ("verifier", "android")
 
     def test_base_role_returns_none(self):
         assert compose._resolve_variant("pm") is None
@@ -672,9 +685,9 @@ class TestVariantInheritance:
         assert result == "pm"
 
     def test_get_entry_file_dev_variant_unchanged(self):
-        """skill still resolves to dev (legacy behavior)."""
+        """skill resolves to worker (post-6274.2 canonical; was dev pre-rename)."""
         result = compose._get_entry_file_for_role("skill")
-        assert result == "dev"
+        assert result == "worker"
 
     def test_get_entry_file_base_role_unchanged(self):
         """pm resolves to pm."""
