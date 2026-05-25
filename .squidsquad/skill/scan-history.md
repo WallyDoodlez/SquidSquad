@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-25 02:10
+
+- **Files scanned**: references/scripts/thin_launcher.py (focused: `_write_pid` L122-128 + `_check_singleton` L102-119 + npm shim resolution path)
+- **Findings**: #10101 (high — singleton check fails because `_write_pid` records `proc.pid` which on Windows-via-npm is the cmd.exe shim wrapper, not the actual claude.exe; wrapper exits in seconds, `.claude-pid` becomes stale, next thin_launcher invocation spawns a duplicate claude.exe; root cause of memory rule `project_skill_agent_running` observations). Investigation triggered by human report at cycle 1385. Live evidence: 2 skill claude.exe processes (pids 2738704 and 2937296) in this clone; parent of older = dead, parent of newer = the cmd.exe currently recorded in `.claude-pid`.
+- **Items rejected by human**: none yet
+- **Notes**: investigation cycle, not routine rotation. `shutil.which('claude')` returns `claude.CMD` on the affected system — confirms the npm shim hypothesis. Recommended fix path is surgical: prefer `shutil.which('claude.exe')` on Windows before falling back to `.CMD`. Files awaiting human decision on (a) killing the duplicate process pid 2937296, (b) any other remediation.
+
 ## Scan — 2026-05-25 01:39
 
 - **Files scanned**: none — minimal no-op cycle.
