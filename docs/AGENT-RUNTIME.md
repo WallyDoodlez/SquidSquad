@@ -6,18 +6,30 @@ _How a SquidSquad agent's operating model is defined — what triggers it to act
 
 ---
 
-## Terminology (L2 categorical role names)
+## Terminology — role classes vs aliases
 
-This document uses the L2 categorical role names from `responsibility.md`. The four canonical roles (post-#6274 rename — `dev` → `worker`, `qa` → `verifier`):
+SquidSquad has a small fixed set of **role classes** and a per-install set of **agent aliases**. Routing targets aliases, not classes.
 
-| Role | Responsibility (one line) |
+**Role classes** (4 categorical, post-#6274 rename — `dev` → `worker`, `qa` → `verifier`):
+
+| Class | What this class of agent does (one line) |
 |---|---|
 | **`pm`** | Coordinates the team and the human; manages workflow and process |
 | **`verifier`** | Verifies the product being delivered; does not do technical implementation |
 | **`worker`** | Implements technical work to acceptance criteria |
 | **`dm`** | Delivers (CHANGELOG, version bumps, releases) |
 
-Installs may add `worker` variants (`ios`, `android`, `web`, etc.) or specialized `verifier` variants. The architecture below works at the categorical level — wire-format payloads, permission tables, and routing rules name only these four roles.
+**Agent aliases** (1..N per class, install-defined in `config.md` `## Aliases`):
+
+- Every running agent has a unique alias. The alias IS the agent's name in all routing.
+- A single-instance install can use the class name as its alias (default: a `worker`-class agent is named `worker`).
+- A multi-instance install MUST give each agent of the same class a distinct alias. Example: an install with 2 frontend + 2 backend worker-class agents might use aliases `frontend-1`, `frontend-2`, `backend-1`, `backend-2` — four worker-class agents, four distinct aliases.
+- Specialty/skill (FE vs BE vs iOS, etc.) lives in each agent's `SOUL.md` + L4 directives, not in the role-class definition. All worker-class agents share the same L2/L3 responsibilities and bus contract; per-agent specialization is an L4 concern.
+- Each agent knows the other aliases on the team and their declared specialties; mis-routed work is re-assigned via `/work/assign` to the correct alias (see §7.3 mis-route recovery).
+
+**Routing rule**: `/work/assign` always names a **target alias**. The harness validates the alias is registered (returns 404 if unknown) but does NOT enforce class-from-class permissions — process discipline lives in each agent's L2/L3/L4, not in a harness gate (see §7.3).
+
+The architecture below uses class names when describing a class of behavior, and alias placeholders when describing instance-level routing.
 
 ---
 
@@ -209,7 +221,7 @@ In v2 the catalog collapses to **3 signal concepts / 4 catalog entries**:
 | Signal | Direction | When | Payload |
 |---|---|---|---|
 | **`booted`** | agent → harness | First action after the agent's Claude session boots | `{role, pid, clone_path, version}` |
-| **`assigned-to`** | harness → agent (queue entry) | Harness detects work exists for the role | `{issue_number, target_role, event_context, payload}` (EAD populates `payload.title` from the forge issue; `/work/assign` callers may pass it through the `payload` object) |
+| **`assigned-to`** | harness → agent (queue entry) | Harness detects work exists for the named agent | `{issue_number, target_alias, event_context, payload}` (EAD populates `payload.title` from the forge issue; `/work/assign` callers may pass it through the `payload` object) |
 | **`ack-cursor`** | agent → harness | Agent has received a delivered signal; advances harness cursor | `{event_id, role}` |
 | **`ack-stop`** | agent → harness | Agent has accepted a stop intent and is checkpointing | `{event_id, result}` |
 
@@ -378,7 +390,7 @@ EAD is the bridge from forge → bus. It runs inside the harness on a polling lo
 1. Polls GitHub via REST API (`gh api repos/<owner>/<repo>/issues?since=<last_seen_iso>&state=all&per_page=100`).
 2. Diffs against last-seen timestamp on disk.
 3. For each changed issue, maps to a target role per a rule table (status label changes, comments, PR state changes).
-4. Emits one `assigned-to` per (forge change, target_role) pair into the deque.
+4. Emits one `assigned-to` per (forge change, target_alias) pair into the deque.
 5. Records the new last-seen timestamp so it doesn't re-emit on restart.
 
 EAD is the only emitter of `assigned-to` from forge state. Agents trigger `assigned-to` indirectly via `POST /work/assign` (typically called by `tracker.py`; see §7.3).
@@ -423,7 +435,7 @@ Per-install cadence overrides via `config.md` (`EAD Cadence Active`, `EAD Cadenc
 
 **Recovery & restart semantics:**
 
-- **Lost last-seen-id**: on missing/corrupt last-seen file, EAD defaults to `now - 5 minutes`. Bounded dup-emit window; agents dedup via care-filter on `(issue_number, target_role, event_context)` tuple.
+- **Lost last-seen-id**: on missing/corrupt last-seen file, EAD defaults to `now - 5 minutes`. Bounded dup-emit window; agents dedup via care-filter on `(issue_number, target_alias, event_context)` tuple.
 - **Harness restart catch-up**: on harness boot, EAD does a 30-minute scan against forge and re-emits `assigned-to` for anything missed during downtime. Beyond 30 min, agents recover from forge on first read (cursor-evicted path above).
 - **Orphan in-flight cleanup**: `timeout_scan` (every 30s, per #9873-E) sweeps in-flight entries whose `event_id` is past deque eviction. Passive; no agent involvement.
 
@@ -695,7 +707,7 @@ sequenceDiagram
     H-->>A: [e1, e2, e3]
 
     loop for each event
-        A->>A: care filter (target_role match?)
+        A->>A: care filter (target_alias == my_alias?)
         alt cared
             A->>A: run pre-cycle (git pull, state read)
             A->>F: do work (status transitions, comments,<br/>commits, PRs as needed)
@@ -806,9 +818,9 @@ sequenceDiagram
     TR->>F: gh issue edit (label change)
     F-->>TR: 200 OK
     Note over F: Forge label updated<br/>(source of truth)
-    TR->>H: POST /work/assign<br/>{issue_number:9926, target_role:verifier,<br/>event_context:"verification-needed",<br/>payload:{pr_number:9943}}
-    H->>H: validate worker→verifier<br/>per L2 permission table
-    H->>H: emit assigned-to(target_role=verifier,...)<br/>append to deque
+    TR->>H: POST /work/assign<br/>{issue_number:9926, target_alias:verifier,<br/>event_context:"verification-needed",<br/>payload:{pr_number:9943}}
+    H->>H: validate target_alias exists<br/>in config.md registry
+    H->>H: emit assigned-to(target_alias=verifier,...)<br/>append to deque
     H-->>TR: 200 OK + event_id
     TR-->>W: transition successful<br/>(+ assignment event_id)
 
@@ -821,7 +833,7 @@ sequenceDiagram
 
     VC->>H: GET /events/for/verifier?since=cursor
     H-->>VC: [assigned-to event]
-    VC->>VC: care filter:<br/>target_role==verifier? YES
+    VC->>VC: care filter:<br/>target_alias == my_alias? YES
     VC->>VC: run pre-cycle + work + post-cycle
     VC->>H: POST /events {type:ack-cursor, event_id, role:verifier}
     H->>H: advance verifier cursor past event_id
@@ -832,35 +844,46 @@ In practice agents never call `/work/assign` directly for transition-driven hand
 
 #### `tracker.py` auto-routing table (locked)
 
-| Transition (from → to) | Implied `target_role` | event_context |
+| Transition (from → to) | Implied `target_alias` | event_context |
 |---|---|---|
-| `in-progress → pending-test` | `verifier` | `"verification-needed"` |
-| `pending-test → pending-ship` | `dm` | `"delivery-needed"` |
-| `pending-test → in-progress` | assigned role from `role:*` label; if none, route to `pm` with `event_context="unowned-rejection"` | `"verifier-rejected"` |
-| `pending-ship → in-progress` | assigned role from `role:*` label; if none, route to `pm` with `event_context="unowned-rejection"` | `"merge-conflict"` |
+| `in-progress → pending-test` | alias from issue's `role:*` label (a verifier-class alias); if none, route to `pm` with `event_context="unowned-verification"` | `"verification-needed"` |
+| `pending-test → pending-ship` | alias from issue's `role:*` label (a dm-class alias); if none, `dm` (single-instance default) | `"delivery-needed"` |
+| `pending-test → in-progress` | alias from issue's `role:*` label; if none, route to `pm` with `event_context="unowned-rejection"` | `"verifier-rejected"` |
+| `pending-ship → in-progress` | alias from issue's `role:*` label; if none, route to `pm` with `event_context="unowned-rejection"` | `"merge-conflict"` |
 | `pending → planning` | `pm` | `"planning-needed"` |
 | `planning → planned` | (no assign — self-routing) | — |
-| `planned → approved` | assigned role from `role:*` label; if none, route to `pm` with `event_context="unowned-approval"` | `"ready-for-pickup"` |
+| `planned → approved` | alias from issue's `role:*` label; if none, route to `pm` with `event_context="unowned-approval"` | `"ready-for-pickup"` |
 | `approved → in-progress` | (no assign — self-pickup) | — |
 | `pending-ship → shipped` | (no assign — terminal) | — |
 | `* → pending-human-review` | `pm` | `"human-needed"` |
 | `* → pending-human-setup` | `pm` | `"human-needed"` |
 
+The issue's `role:*` label IS the target alias (aliases and label values use the same namespace). In a single-instance install, alias = class name; in a multi-instance install, the label is the specific agent's alias (e.g., `role:frontend-1`, not `role:worker`).
+
 Mitigates an entire class of pickup-fidelity bugs (#9946) — agents can't forget to call `/work/assign` because `tracker.py` does it. Replaces the deprecated `status-transition` emit.
 
-#### `/work/assign` permission model
+#### `/work/assign` validation + mis-route recovery
 
-Each role's `responsibility.md` (per #9925) declares a `## Bus contract` section: `accepts assigned-to from: [list]` (or `any`). Harness reads composed `responsibility.md` files at boot, parses bus-contract sections, and builds an in-memory permission table.
+The harness performs **one** validation on `/work/assign`: does `target_alias` resolve to a registered agent in this install (per `config.md` `## Aliases`)?
 
-- All 4 current roles declare `accepts assigned-to from: any role` — process integrity is everyone's job.
-- **Self-assign forbidden by built-in invariant** (not declarable; harness enforces).
-- Rejection wire format: `HTTP 403 Forbidden` with body `{"error": "<reason>", "target_accepts_from": [...]}`.
-- The permission table is built once at boot. Reloading on recompose ships with the `compose-needed` flow (see §8.5 Group E); until then, operators restart the harness to pick up `responsibility.md` changes.
+- **Unknown alias** → `HTTP 404 Not Found` with body `{"error": "unknown alias", "target_alias": "<value>", "known_aliases": [...]}`. Prevents typos and misconfigurations from reaching the deque.
+- **Self-assign** → forbidden by built-in invariant (the harness rejects any `assigned-to` where `target_alias == emitter_alias`). Structural anti-loop, not a permission table.
+- **No class-from-class permissions**: any alias may assign-to any other alias. Process discipline lives in each agent's L2/L3/L4 — not in a harness gate. This aligns with §4.1's "harness is a transport bus, not an orchestrator" principle (adding a permission table would make the harness gate-keep work assignment, which it explicitly doesn't do).
+
+**Mis-route recovery** (the human-team analogy): when an agent receives `assigned-to` work that doesn't match its declared specialty:
+
+1. Agent reads the event in Phase 2.
+2. Agent recognizes the work is outside its domain (per L2/L3/L4 + SOUL.md).
+3. Agent re-assigns via `/work/assign` to the correct alias. No special wire-format, no `re-assign` event type — same `/work/assign` call any normal routing uses, with the corrected `target_alias`.
+4. Agent emits its own cycle's `ack-cursor` and continues.
+5. If the agent doesn't know who the correct alias is, it routes to `pm` with `event_context="route-help"` so PM can triage.
+
+This is the **only** recovery mechanism. There is no harness-side "is this a good match?" check — agents are trusted to recognize and correct mis-assignments the same way a human team-member redirects a misfiled ticket.
 
 For non-transition routing (e.g., process concerns surfaced to PM without a state change), agents call `/work/assign` directly:
 
 ```bash
-python references/scripts/tracker.py work-assign --target pm \
+python references/scripts/tracker.py work-assign --target-alias pm \
     --event-context process-concern --payload '{"concern": "..."}'
 ```
 
@@ -883,8 +906,8 @@ sequenceDiagram
     Note over EAD: EAD's forge polling loop ticks
     EAD->>F: gh api repos/.../issues?since=...
     F-->>EAD: status:pending-test added to #9926
-    EAD->>EAD: map: "status:pending-test"<br/>→ target_role=verifier
-    EAD->>H: append assigned-to(target_role=verifier,...)
+    EAD->>EAD: map: "status:pending-test"<br/>→ target_alias=verifier
+    EAD->>H: append assigned-to(target_alias=verifier,...)
     EAD->>EAD: persist last-seen forge id
 
     Note over V: Same delivery as §7.3<br/>(event_poll → nudge → Monitor → walk)
@@ -895,7 +918,7 @@ Tracker.py path is sub-second; EAD path is 5–60s polling-cadence-bounded.
 
 ### 7.4 Care filter
 
-Each role's care filter is "events with `target_role == my_role`." Future refinement could allow finer-grained filtering on `event_context` or `payload`, but v2 ships with role-only filtering. The L2-derived permission table (`responsibility.md` `## Bus contract`) declares `accepts assigned-to from: [list]` per role.
+Each agent's care filter is "events with `target_alias == my_alias`." Future refinement could allow finer-grained filtering on `event_context` or `payload`, but v2 ships with alias-only filtering. There is no permission gate to traverse — the harness has already validated the alias exists; everything past the care filter is the agent's own routing decision.
 
 ### 7.5 Nudge handling while busy (context-only, no state mutation)
 
@@ -1025,7 +1048,7 @@ The migration ships as 6 grouped PRs (originally in `archive/EVENT-ARCHITECTURE.
 |---|---|---|---|
 | 1 | **A — Lifecycle plumbing** | `boot_agent` spawns thin_launcher + event_poll; health poller watches both; cold start order; wizard writes the global `event-driven:` flag | medium |
 | 2 | **C — EAD + restart safety** | Last-seen-id recovery, in-flight cleanup, harness restart catch-up | low |
-| 3 | **D — L2-derived permissions** | Each role's `responsibility.md` declares `## Bus contract`; harness builds permission table at boot | low |
+| 3 | **D — alias-existence validation** | Harness validates `target_alias` against the install's registered aliases (per `config.md` `## Aliases`); 404 on unknown. No class-from-class permissions. | low |
 | 4 | **B — Cursor + delivery wire** | Nudge format = literal `NUDGE\n`; forward-only ack; `HTTP 410 Gone` for cursor-evicted | low |
 | 5 | **F — Observability** | TUI polls `/status`, `/agents`, `/events/recent`; lifecycle/git logs stay in iter-NNNN.md | very low |
 | 6 | **E — Migration** (3 sub-phases) | E1: stop emitting deprecated types · E2: collapse `Event Reactions` to `assigned-to` only · E3: trim catalog + rewrite event_poll | highest |
@@ -1036,9 +1059,9 @@ After all 6 land: v2 ships under `event-driven: no` default; operators flip per 
 
 | Retired type | Replacement | When emitted |
 |---|---|---|
-| `compose-completed` | `assigned-to(target_role=pm, event_context="compose-needed", payload={touched_files})` | After a merge touches `references/`. PM runs `compose.py deploy-all`, restarts affected agents. |
-| `agent-health` (stalled/down) | `assigned-to(target_role=pm, event_context="agent-down", payload={role, last_seen})` | Harness health poller detects a watched agent dies or stalls past threshold. PM's pipeline-sentinel handles. |
-| `noop` (#9845) | `assigned-to(target_role=R, event_context="probe", payload={ack_only:true})` | Latency probe / harness liveness check. Agent acks without doing work. `ack_only` is a `payload` extension, not a top-level `assigned-to` field — see §4.2 catalog entry. |
+| `compose-completed` | `assigned-to(target_alias=pm, event_context="compose-needed", payload={touched_files})` | After a merge touches `references/`. PM runs `compose.py deploy-all`, restarts affected agents. |
+| `agent-health` (stalled/down) | `assigned-to(target_alias=pm, event_context="agent-down", payload={role, last_seen})` | Harness health poller detects a watched agent dies or stalls past threshold. PM's pipeline-sentinel handles. |
+| `noop` (#9845) | `assigned-to(target_alias=A, event_context="probe", payload={ack_only:true})` | Latency probe / harness liveness check. Agent acks without doing work. `ack_only` is a `payload` extension, not a top-level `assigned-to` field — see §4.2 catalog entry. |
 
 PM's inbox is disambiguated by `event_context`. The full set in use:
 
@@ -1058,11 +1081,11 @@ PM agents recognize this set as their care-filter; new values added in future re
 | # | Question | Lock |
 |---|---|---|
 | Q1 | Booted payload shape | `{role, pid, clone_path, version}` |
-| Q2 | `/work/assign` authorization | L2-derived from `responsibility.md` `## Bus contract` |
+| Q2 | `/work/assign` authorization | Alias-existence check only (404 if unknown); no class-from-class permissions. Process discipline lives in L2/L3/L4, not in a harness gate. |
 | Q3 | EAD polling cadence | REST + adaptive 10s active / 30s idle, 5s floor / 60s ceiling |
 | Q4 | `event_poll` polling cadence | 5s active / 30s idle, adaptive backoff, 2s floor / 60s ceiling |
 | Q5 | Cursor on first boot | `null` per CONTEXT-9873-A D7 |
-| Q6 | Care filter granularity | Role-only in v1; `event_context` filter as v2 extension via L2 bus contract |
+| Q6 | Care filter granularity | Alias-only in v1; `event_context` filter could be a v2 extension if needed (no L2 bus-contract dependency — that mechanism was retired) |
 | Q7 | Queue-while-busy | Context-only; no `working-state.md` flag |
 | Q8 | `#9845` (noop) fate | Retired; absorbed into `assigned-to(event_context=probe)` |
 | Q9 | `compose.py` changes for v2 | Trim catalog, retire emit calls, add `compose-needed` translator |
@@ -1112,7 +1135,13 @@ PM agents recognize this set as their care-filter; new values added in future re
 - **2026-05-23 (rev 7) — post-rev-6 DS verification + §7.6 diagram fix.** DS round-7 verification found 2 actionable findings (1 MED, 1 LOW); both applied: §8.1 clarified that mixed modes are not *configurable* but degraded fallback can produce a transient mixed-mode state per-agent (the previous wording falsely implied install-wide uniformity even under fallback); §8.4 reworded to distinguish the configured `event-driven: no` path (loop mode by design) from the `event-driven: yes` + probe-fail fallback path (the prior "regardless of config" wording collapsed the two). Also: §7.6 subloop diagram nodes now use quoted-label form ({"…"}, ["…"]) so unquoted parentheses can't break Mermaid rendering. The "sub-skill" terminology is retained as the canonical compose-fragment term and is distinct from the "skill" agent-role term that was removed in rev 6 (DS flagged as info, accepted as intentional). DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-7.md`.
 - **2026-05-23 (rev 8) — final convergence + cadence-math fixes.** DS round-8 confirmed all R7 fixes correct and returned 2 LOW math errors: EAD cadence "≈3 minutes" → "≈2 minutes" (correct: 6 polls × 10/20/30/60/90/120s = 120s = 2 min); event_poll cadence "≈2.5 minutes idle" → "≈1.75 minutes idle" (correct: 6 polls × 5/10/15/45/75/105s = 105s ≈ 1.75 min). Both fixed. The doc is now mathematically and architecturally converged. DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-8.md`.
 - **2026-05-25 (rev 9) — post-#6274 `qa` → `verifier` rename + loop/event mutual-exclusivity on event-bus axis + vault invocation polish.** Three coordinated edits:
-  - **Role rename**: post-#6274 (shipped 2026-05-23) the canonical role is `verifier`, not `qa`. Swept all instance-level references in this doc (Terminology table, §2.1 latency-floor example, §3.1 + §3.2 mermaid subgraph and tree labels, §4.3 role-filtering diagram, §7.3 verification-needed sequence diagram + routing table, §7.5 EAD safety-net sequence diagram, §7.6 subloop role list). Wire-format strings updated too: `target_role:qa` → `target_role:verifier`, `role:qa` → `role:verifier`, `event_context:"qa-rejected"` → `event_context:"verifier-rejected"`, `GET /events/for/qa` → `GET /events/for/verifier`. Note: live code (`references/scripts/triage.py`, `cycle_pre.py:614`) still emits `qa-rejected` — doc now describes architectural target; code task to skill.
+  - **Role rename**: post-#6274 (shipped 2026-05-23) the canonical role is `verifier`, not `qa`. Swept all instance-level references in this doc (Terminology table, §2.1 latency-floor example, §3.1 + §3.2 mermaid subgraph and tree labels, §4.3 role-filtering diagram, §7.3 verification-needed sequence diagram + routing table, §7.5 EAD safety-net sequence diagram, §7.6 subloop role list). Wire-format strings updated too: `target_role:qa` → `target_alias:verifier`, `role:qa` → `role:verifier`, `event_context:"qa-rejected"` → `event_context:"verifier-rejected"`, `GET /events/for/qa` → `GET /events/for/verifier`. Note: live code (`references/scripts/triage.py`, `cycle_pre.py:614`) still emits `qa-rejected` — doc now describes architectural target; code task to skill.
   - **Loop/event mutual exclusivity** (§2 + §4.5 + §4.6 + §6.1 + §6.3 + §7 lead): loop mode is now documented as emit-only on the event bus (no consume, no cursor); event mode is the exclusive home for bus consumption + cursor logic. Loop-mode mechanical reactions derive from tracker state changes since last cycle (timestamp dedup in working-state.md), not from event-bus reads. Rationale: keeps the harness contract uniform — loop is observational-only, event is load-bearing.
   - **Vault invocation** (§6.1 diagram + §6.5 new sub-section): named the four Phase 2 vault touchpoints + boot-time BRIEFING read + the inline-vs-subagent execution lane principle (heavy sub-skills `vault-remember` and `vault-synthesis` run on the `sonnet` tier via background subagent; light ones `vault-protocol` and `vault-optimize` stay inline). Cross-references VAULT-ARCH §7 for the lane principle's full rationale.
   - **Vault flag retirement** (§6.1 diagram): dropped the `· read vault-remember + vault-optimize flags` line from Phase 1 and the `· advance event cursor` line from Phase 3 (both per the above changes). The vault-remember/vault-optimize `Enabled` flags in `config.md` are being retired; both sub-skills are always-on and self-gate via their per-cycle conditions. Code task to skill.
+- **2026-05-25 (rev 10) — class vs alias as routing primitive + responsibility.md / permission-table retirement.** Architectural simplification arc:
+  - **Class vs alias** (Terminology refactor + wire-format swap): role classes (pm/dm/worker/verifier) are categorical and have uniform L2/L3 + bus contract per class; aliases are per-agent unique names from `config.md` `## Aliases`. An install may have 1..N agents per class — e.g., 2 frontend + 2 backend worker-class agents named `frontend-1`, `frontend-2`, `backend-1`, `backend-2` (four worker-class agents, four distinct aliases). Specialty/skill (FE/BE/iOS/etc.) lives in SOUL.md + L4, not in a separate class. Wire-format field `target_role` renamed to `target_alias` across all 16 catalog + sequence-diagram + routing-table references; care filter is now `target_alias == my_alias`; EAD emits one assigned-to per (forge change, target_alias) pair.
+  - **`responsibility.md` retired**: the file's prose responsibility narrative was ~90% redundant with L2/L3 (which compose into each agent's CLAUDE.md anyway); the only load-bearing content was the `## Bus contract` section. Permission tables are being retired entirely (next bullet), so `responsibility.md` has no remaining purpose. Marked for code-task deletion.
+  - **Permission table retired**: the harness no longer maintains a class-from-class `accepts assigned-to from:` permission table. Rationale: it duplicated discipline that already lives in each agent's L2/L3/L4 + SOUL.md; it conflicted with §4.1's "harness is a transport bus, not an orchestrator" principle; and the human-team analogy (mis-routed tickets get pushed back, no security guard at the assignment desk) applies. Replaced with two minimal harness checks: (1) target-alias existence (404 if unknown) and (2) self-assign invariant (rejected by structure, not by permission). Mis-route recovery happens at the agent layer: receiving agent recognizes out-of-domain work and re-assigns via the same `/work/assign` call to the correct alias; if recipient is unknown, routes to `pm` with `event_context="route-help"`.
+  - §7.3 `/work/assign permission model` subsection replaced with `/work/assign validation + mis-route recovery`. §7.4 care filter section drops the L2-derived permission-table mention. §8.5 Group D row repurposed from "L2-derived permissions" to "alias-existence validation". §9 Q2 and Q6 updated to match.
+  - Code task to skill (deferred per plan-first rule): drop `responsibility.md` files + compose pipeline reads, drop the harness permission-table build at boot, replace with the simpler alias-existence check, replace `target_role` field with `target_alias` in all wire-format emitters, rename `tracker.py work-assign --target` flag to `--target-alias`.
