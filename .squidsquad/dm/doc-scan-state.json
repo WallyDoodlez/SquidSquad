@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "docs/ARCHITECTURE.md",
+  "last_scanned": "docs/sub-skill-guide.md",
   "rotation_count": 58,
   "scan_history": [
     {
@@ -1816,6 +1816,12 @@
       "date": "2026-05-24",
       "findings": 0,
       "note": "Rotation 59 fifth scan — differential. File unchanged since R58 scan-5 (commit bf96b72b at cycle 1357, 2 days ago): git log bf96b72b..HEAD -- docs/ARCHITECTURE.md is empty. Spot-checked the only line-specific reference: thin_launcher.py:184 still has claude_exe = shutil.which(\"claude\"). No DM-assigned issues open. 0 findings — doc remains current."
+    },
+    {
+      "file": "docs/sub-skill-guide.md",
+      "date": "2026-05-24",
+      "findings": 0,
+      "note": "Rotation 59 sixth scan — differential. File unchanged since R58 scan-6 (commit 470b112b at cycle 1360): git log 470b112b..HEAD -- docs/sub-skill-guide.md is empty. Spot-checked compose.py command surface still has all/deploy/deploy-all (lines 1497/1502/1521). 0 findings — doc remains current."
     }
   ],
   "doc_inventory": {
