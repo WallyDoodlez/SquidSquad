@@ -20,6 +20,7 @@ Exit codes:
 """
 
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -205,9 +206,13 @@ def _enforce_branch(role, working_state):
     status = working_state.get("status", "none")
 
     if task != "none" and status == "in-progress":
-        # Extract issue number from task field (e.g. "#4942" -> "4942")
-        number = task.lstrip("#").strip()
-        if number.isdigit():
+        # Extract issue number from task field (#10072). Anchored to match
+        # bare ("#9965", "9965"), verbose ("#9965 — description"), and
+        # whitespace-tolerant ("# 9965") forms. Trailing anchor rejects
+        # glued suffixes like "9965-fix" that old `.isdigit()` also rejected.
+        m = re.match(r"#*\s*(\d+)(?:\s|—|$)", task.lstrip())
+        if m:
+            number = m.group(1)
             result = _run_script("git_ops.py", "task-begin", role, number)
             if result.returncode != 0:
                 # Non-fatal — log and continue on current branch
