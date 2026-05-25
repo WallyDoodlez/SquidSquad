@@ -654,24 +654,24 @@ The cross-references above are **accurate but not yet two-way**. Reconciliation 
 
 These are noted here; the actual edits land in a separate commit or as part of this PR depending on review preference.
 
-### 12.2 Vault sub-skill source files (canonical specs)
+### 12.3 Vault sub-skill source files (canonical specs)
 
-- [`references/sub-skills/common/vault-protocol.md`](../references/sub-skills/common/vault-protocol.md) — full R/W contract
-- [`references/sub-skills/common/vault-protocol-slim.md`](../references/sub-skills/common/vault-protocol-slim.md) — read-only variant
+- [`references/sub-skills/common/vault-protocol.md`](../references/sub-skills/common/vault-protocol.md) — full R/W contract (the `vault-protocol-slim.md` file in the same directory is the read-only variant; see §7.1)
 - [`references/sub-skills/common/vault-remember.md`](../references/sub-skills/common/vault-remember.md) — reflection
 - [`references/sub-skills/common/vault-optimize.md`](../references/sub-skills/common/vault-optimize.md) — quiet-cycle maintenance
 - [`references/sub-skills/roles/pm/vault-synthesis.md`](../references/sub-skills/roles/pm/vault-synthesis.md) — PM cross-agent synthesis
 
-### 12.3 Vault scripts (canonical implementations)
+### 12.4 Vault scripts (canonical implementations)
 
 - [`references/scripts/vault_check.py`](../references/scripts/vault_check.py)
 - [`references/scripts/vault_entity.py`](../references/scripts/vault_entity.py)
 - [`references/scripts/vault_optimize.py`](../references/scripts/vault_optimize.py)
 - [`references/scripts/vault_remember.py`](../references/scripts/vault_remember.py)
 
-### 12.4 Related vault decisions in the vault itself
+### 12.5 Related vault decisions in the vault itself
 
-- [`galaxy/decision-vault-remember-source-agnostic.md`](../.squidsquad/vault/galaxy/decision-vault-remember-source-agnostic.md) — the only `decision-vault-*` note today
+- [`galaxy/decision-vault-remember-source-agnostic.md`](../.squidsquad/vault/galaxy/decision-vault-remember-source-agnostic.md) — vault-remember treats QA-rejection learnings as equal in value to human-directive learnings (source-agnostic reflection)
+- [`galaxy/decision-vault-subagent-model-sonnet.md`](../.squidsquad/vault/galaxy/decision-vault-subagent-model-sonnet.md) — heavy vault sub-skills (`vault-remember`, `vault-synthesis`) execute as background subagents on the `sonnet` tier; light ones stay inline (see §7 Execution model + §11.5)
 
 ---
 
