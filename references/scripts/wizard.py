@@ -1332,6 +1332,62 @@ def upgrade_install(base_dir=None):
             "migrated": [],
         }
 
+    # --- DS 3e F1 / DS 3d F4: Pre-read .harness-state.json BEFORE any fs mutation ---
+    # Reading the state file here (before dirs are renamed and config is rewritten)
+    # means an unreadable or malformed state file, or a state collision, is detected
+    # at the partial-mismatch step rather than after dirs+config have been renamed —
+    # which would let the next-run idempotency check silently mask the problem.
+    state_path = squid / ".harness-state.json"
+    state = None
+    if state_path.exists():
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            msg = f"partial migration detected: .harness-state.json unreadable ({exc}); manual intervention required"
+            print(msg, file=sys.stderr)
+            return {
+                "ok": False,
+                "action": "error",
+                "exit_code": 2,
+                "summary": msg,
+                "migrated": [],
+            }
+        except json.JSONDecodeError as exc:
+            msg = f"partial migration detected: .harness-state.json malformed ({exc}); manual intervention required"
+            print(msg, file=sys.stderr)
+            return {
+                "ok": False,
+                "action": "error",
+                "exit_code": 2,
+                "summary": msg,
+                "migrated": [],
+            }
+        # DS 3d F4: Detect state-key collisions BEFORE any fs mutation
+        agents = state.get("agents", {})
+        state_mismatches = []
+        if "qa" in agents and "verifier" in agents:
+            state_mismatches.append(
+                ".harness-state.json has both 'agents.qa' and 'agents.verifier'"
+            )
+        if "dev" in agents and "worker" in agents:
+            state_mismatches.append(
+                ".harness-state.json has both 'agents.dev' and 'agents.worker'"
+            )
+        if state_mismatches:
+            mismatch_str = "; ".join(state_mismatches)
+            msg = (
+                f"partial migration detected: {mismatch_str}; "
+                f"manual intervention required"
+            )
+            print(msg, file=sys.stderr)
+            return {
+                "ok": False,
+                "action": "error",
+                "exit_code": 2,
+                "summary": msg,
+                "migrated": [],
+            }
+
     migrated = []
 
     # --- 1. Rewrite config.md: Dev Agents → Workers ---
@@ -1357,31 +1413,27 @@ def upgrade_install(base_dir=None):
         migrated.append(".squidsquad/qa/ -> .squidsquad/verifier/")
 
     # --- 4. Update .harness-state.json agent keys ---
-    state_path = squid / ".harness-state.json"
-    if state_path.exists():
-        try:
-            state = json.loads(state_path.read_text(encoding="utf-8"))
-            agents = state.get("agents", {})
-            changed = False
-            # qa → verifier
-            if "qa" in agents:
-                agents["verifier"] = agents.pop("qa")
-                changed = True
-                migrated.append(".harness-state.json: agents.qa -> agents.verifier")
-            # dev → worker (rare — variant keys like 'skill' are unchanged)
-            if "dev" in agents:
-                agents["worker"] = agents.pop("dev")
-                changed = True
-                migrated.append(".harness-state.json: agents.dev -> agents.worker")
-            if changed:
-                state["agents"] = agents
-                tmp_state = state_path.with_suffix(".json.tmp")
-                tmp_state.write_text(
-                    json.dumps(state, indent=2) + "\n", encoding="utf-8"
-                )
-                tmp_state.replace(state_path)
-        except (json.JSONDecodeError, OSError):
-            pass  # Non-fatal: state file absent or malformed; skip key rename
+    # State was pre-read and validated above; use the cached value.
+    if state is not None:
+        agents = state.get("agents", {})
+        changed = False
+        # qa → verifier
+        if "qa" in agents:
+            agents["verifier"] = agents.pop("qa")
+            changed = True
+            migrated.append(".harness-state.json: agents.qa -> agents.verifier")
+        # dev → worker (rare — variant keys like 'skill' are unchanged)
+        if "dev" in agents:
+            agents["worker"] = agents.pop("dev")
+            changed = True
+            migrated.append(".harness-state.json: agents.dev -> agents.worker")
+        if changed:
+            state["agents"] = agents
+            tmp_state = state_path.with_suffix(".json.tmp")
+            tmp_state.write_text(
+                json.dumps(state, indent=2) + "\n", encoding="utf-8"
+            )
+            tmp_state.replace(state_path)
 
     summary_str = (
         "upgrade: migrated — " + ", ".join(migrated)
