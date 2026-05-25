@@ -98,6 +98,7 @@ STATIC_TEST_MODULES = [
     "test_start_team",
     "test_tc_coverage",
     "test_thin_launcher",
+    "test_thin_launcher_10101",
     "test_triage",
     "test_vault_check_unit",
     "test_vault_optimize",
