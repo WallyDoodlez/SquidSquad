@@ -1,0 +1,154 @@
+diff --git a/references/scripts/wizard.py b/references/scripts/wizard.py
+index 61fb85a6..30c451d2 100644
+--- a/references/scripts/wizard.py
++++ b/references/scripts/wizard.py
+@@ -2118,8 +2118,11 @@ def generate_default_spec(scan_data=None, repo_info=None):
+     default_preset = "software-dev"
+     domain_variants = resolve_domain_variants(default_preset)
+ 
+-    # Default agents — variants from manifest, not hardcoded
+-    dev_variant = domain_variants.get("dev")
++    # Default agents — variants from manifest, not hardcoded.
++    # Use canonical new identity 'worker' (renamed from 'dev' in #6274.2);
++    # `or domain_variants.get("dev")` keeps pre-rename manifests resolving
++    # during the 6274.1 dual-aware window (deleted in 6274.3).
++    worker_variant = domain_variants.get("worker") or domain_variants.get("dev")
+     pm_variant = domain_variants.get("pm")
+     agents = [
+         {"id": "pm", "alias": "pm", "role": "pm",
+@@ -2127,8 +2130,8 @@ def generate_default_spec(scan_data=None, repo_info=None):
+         {
+             "id": "skill",
+             "alias": "skill",
+-            "role": "dev",
+-            **({"variant": dev_variant} if dev_variant else {}),
++            "role": "worker",
++            **({"variant": worker_variant} if worker_variant else {}),
+             "stack": stack,
+             "test_command": test_command,
+         },
+diff --git a/tests/test_wizard.py b/tests/test_wizard.py
+index 3700e113..da34ac20 100644
+--- a/tests/test_wizard.py
++++ b/tests/test_wizard.py
+@@ -946,7 +946,7 @@ def _design_preset_spec():
+ 
+ 
+ def _software_dev_spec():
+-    """Valid install spec for software-dev preset (pm + be + fe + qa + dm)."""
++    """Valid install spec for software-dev preset (pm + be + fe + verifier + dm)."""
+     return {
+         "squidsquad_version": "0.16.0",
+         "project": {"name": "scratch", "repo": "github.com/x/y"},
+@@ -956,7 +956,7 @@ def _software_dev_spec():
+             {
+                 "id": "be",
+                 "alias": "be",
+-                "role": "dev",
++                "role": "worker",
+                 "variant": "be",
+                 "stack": "FastAPI + Python 3.11 + pytest",
+                 "test_command": "pytest tests/be",
+@@ -964,12 +964,12 @@ def _software_dev_spec():
+             {
+                 "id": "fe",
+                 "alias": "fe",
+-                "role": "dev",
++                "role": "worker",
+                 "variant": "fe",
+                 "stack": "Next.js + TypeScript + jest",
+                 "test_command": "npm test",
+             },
+-            {"id": "qa", "alias": "qa", "role": "qa"},
++            {"id": "verifier", "alias": "verifier", "role": "verifier"},
+             {"id": "dm", "alias": "dm", "role": "dm"},
+         ],
+         "tools": {"dm.tool": "local_delivery"},
+@@ -1041,18 +1041,18 @@ class TestScaffoldInstallDevVariants:
+         summary = wizard.scaffold_install(spec, tmp_path)
+         assert len(summary["agents"]) == 5
+         squid = tmp_path / ".squidsquad"
+-        for role_id in ("pm", "be", "fe", "qa", "dm"):
++        for role_id in ("pm", "be", "fe", "verifier", "dm"):
+             assert (squid / role_id / "CLAUDE.md").is_file()
+             assert (squid / role_id / "SOUL.md").is_file()
+ 
+     def test_dev_variants_share_dev_identity(self, tmp_path):
+-        """`be` and `fe` both compose from references/roles/dev/CLAUDE.md."""
++        """`be` and `fe` both compose from references/roles/worker/CLAUDE.md."""
+         spec = _software_dev_spec()
+         summary = wizard.scaffold_install(spec, tmp_path)
+         be = next(a for a in summary["agents"] if a["id"] == "be")
+         fe = next(a for a in summary["agents"] if a["id"] == "fe")
+-        assert be["role"] == "dev"
+-        assert fe["role"] == "dev"
++        assert be["role"] == "worker"
++        assert fe["role"] == "worker"
+ 
+     def test_dev_variant_claude_md_has_variant_substituted(self, tmp_path):
+         """The [ROLE] placeholder is substituted with the agent id (be/fe)."""
+@@ -1064,7 +1064,7 @@ class TestScaffoldInstallDevVariants:
+         fe_md = (tmp_path / ".squidsquad" / "fe" / "CLAUDE.md").read_text(
+             encoding="utf-8"
+         )
+-        # The dev template references [ROLE] in many places — after
++        # The worker template references [ROLE] in many places — after
+         # substitution neither file should still contain the bracket form.
+         assert "[ROLE]" not in be_md
+         assert "[ROLE]" not in fe_md
+@@ -1188,9 +1188,9 @@ class TestScaffoldL4Files:
+     def test_l4_stack_details_created(self, tmp_path):
+         """TC-3: scaffold_install writes shared-stack-details.md."""
+         spec = _design_preset_spec()
+-        # Add a dev agent with stack and test_command
++        # Add a worker agent with stack and test_command
+         spec["agents"].append({
+-            "id": "skill", "alias": "skill", "role": "dev",
++            "id": "skill", "alias": "skill", "role": "worker",
+             "variant": "skill", "stack": "Python + pytest",
+             "test_command": "pytest",
+         })
+@@ -1205,7 +1205,7 @@ class TestScaffoldL4Files:
+         """TC-8: existing L4 files not overwritten on re-run."""
+         spec = _design_preset_spec()
+         spec["agents"].append({
+-            "id": "skill", "alias": "skill", "role": "dev",
++            "id": "skill", "alias": "skill", "role": "worker",
+             "variant": "skill", "stack": "original",
+             "test_command": "original-test",
+         })
+@@ -1232,9 +1232,9 @@ class TestScaffoldL4Files:
+         spec = wizard.generate_default_spec()
+         assert spec["preset"] == "software-dev"
+         assert len(spec["agents"]) >= 1
+-        dev_agents = [a for a in spec["agents"] if a["role"] == "dev"]
+-        assert len(dev_agents) == 1
+-        assert dev_agents[0].get("variant") is not None
++        worker_agents = [a for a in spec["agents"] if a["role"] == "worker"]
++        assert len(worker_agents) == 1
++        assert worker_agents[0].get("variant") is not None
+ 
+ 
+ # ===========================================================================
+@@ -2333,12 +2333,16 @@ class TestManifestResolution:
+         """TC-7: generate_default_spec derives variants from manifest."""
+         spec = wizard.generate_default_spec()
+         assert spec["preset"] == "software-dev"
+-        # Dev agent should have variant from manifest
+-        dev_agents = [a for a in spec["agents"] if a["role"] == "dev"]
+-        assert len(dev_agents) == 1
++        # Worker agent should have variant from manifest (role renamed dev→worker in #6274.2)
++        worker_agents = [a for a in spec["agents"] if a["role"] == "worker"]
++        assert len(worker_agents) == 1
+         manifest = wizard.load_preset_manifest("software-dev")
+-        expected_variant = manifest["domain_variants"]["dev"]
+-        assert dev_agents[0].get("variant") == expected_variant
++        # Manifest may have 'worker' or the legacy 'dev' key during dual-aware window
++        expected_variant = (
++            manifest["domain_variants"].get("worker")
++            or manifest["domain_variants"].get("dev")
++        )
++        assert worker_agents[0].get("variant") == expected_variant
+ 
+ 
+ # ---------------------------------------------------------------------------
