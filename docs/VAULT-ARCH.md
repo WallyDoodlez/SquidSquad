@@ -14,11 +14,12 @@ This doc describes:
 
 - What the vault *is* — its purpose, the storage model, the entity types it holds
 - Where it lives on disk
-- Who reads and who writes (per agent role)
 - The sub-skills and scripts that operate on it
 - How it integrates into the cycle (boot, pre-cycle, creative phase, post-cycle, quiet ticks)
 - What is actually present in this repo's vault as of the snapshot date
 - Known gaps between the spec and the live behavior
+
+It does NOT describe per-agent-role access (read/write); that lives in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) and [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) where the per-role `includes.yml` mapping is composed.
 
 It does NOT describe:
 
