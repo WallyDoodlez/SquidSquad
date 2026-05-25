@@ -159,8 +159,6 @@ source: conversation | review | observation | research
 ---
 ```
 
-There is no `links` frontmatter field. Cross-note references live exclusively in the body as `[[bare-wikilinks]]` (see §4.5) — the body is the single source of truth, no separate index in frontmatter.
-
 **Tag convention** (for searchability):
 
 - **Required**: at least one **domain tag** identifying the subsystem, feature, or area the note is about. Domain tags are **project-specific** — they reflect the vocabulary of the codebase the vault serves (e.g., a billing app might use `payments`, `subscription`, `invoicing`; a content platform might use `editor`, `publishing`, `cdn`). Use whatever a teammate searching for related notes would naturally type.
