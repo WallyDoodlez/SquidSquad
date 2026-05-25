@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-05-25 03:39
+
+- **Files scanned**: none — minimal no-op cycle (3 PRs in pending-test, no new work).
+- **Findings**: none.
+- **Notes**: cycle 1390, state similar to 1389. Context 61%.
+
 ## Scan — 2026-05-25 02:10
 
 - **Files scanned**: references/scripts/thin_launcher.py (focused: `_write_pid` L122-128 + `_check_singleton` L102-119 + npm shim resolution path)
