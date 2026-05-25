@@ -1,5 +1,10 @@
 # Scan History
 
+## Scan — 2026-05-25 06:39
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1401. #10007 PASSED QA (commit 3e066a92, PR #10162 — duplicate session's atomic_write_text + 10 call sites). My cycle-1400 scan-history edit was overwritten — confirmed dual-session git race on `.squidsquad/skill/` state files. Lower-priority race than the queue-pickup race; just causes log-entry drops.
+
 ## Scan — 2026-05-25 05:39
 
 - **Files scanned**: none.
