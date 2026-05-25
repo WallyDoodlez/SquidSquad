@@ -8,16 +8,16 @@ _How a SquidSquad agent's operating model is defined — what triggers it to act
 
 ## Terminology (L2 categorical role names)
 
-This document uses the L2 categorical role names from `responsibility.md`. The four canonical roles:
+This document uses the L2 categorical role names from `responsibility.md`. The four canonical roles (post-#6274 rename — `dev` → `worker`, `qa` → `verifier`):
 
 | Role | Responsibility (one line) |
 |---|---|
 | **`pm`** | Coordinates the team and the human; manages workflow and process |
-| **`qa`** | Verifies the product being delivered; does not do technical implementation |
+| **`verifier`** | Verifies the product being delivered; does not do technical implementation |
 | **`worker`** | Implements technical work to acceptance criteria |
 | **`dm`** | Delivers (CHANGELOG, version bumps, releases) |
 
-Installs may add `worker` variants (`ios`, `android`, `web`, etc.) or specialized `qa` variants. The architecture below works at the categorical level — wire-format payloads, permission tables, and routing rules name only these four roles.
+Installs may add `worker` variants (`ios`, `android`, `web`, etc.) or specialized `verifier` variants. The architecture below works at the categorical level — wire-format payloads, permission tables, and routing rules name only these four roles.
 
 ---
 
@@ -54,7 +54,7 @@ The cycle wrapper (pre → creative → post) is the same in both modes — only
 
 Loop mode has three persistent problems v2's event-driven mode fixes:
 
-1. **Latency floor** — an agent can be idle up to 30 min after work arrives. Worst case end-to-end ship: qa completes at min 0, dm doesn't notice until min 30, ships at min 32. Polling gaps dominate shipping latency.
+1. **Latency floor** — an agent can be idle up to 30 min after work arrives. Worst case end-to-end ship: verifier completes at min 0, dm doesn't notice until min 30, ships at min 32. Polling gaps dominate shipping latency.
 2. **Tokens burned on idle cycles** — every cycle costs context window even when nothing is happening.
 3. **Cycle/work coupling** — the cycle wrapper fires on the timer, not on the work. State churn happens regardless.
 
@@ -114,8 +114,8 @@ flowchart TB
         PMTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
     end
 
-    subgraph qa_box["QA agent"]
-        QATree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
+    subgraph verifier_box["Verifier agent"]
+        VerifierTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
     end
 
     subgraph worker_box["Worker agent"]
@@ -129,17 +129,17 @@ flowchart TB
     Operator --> Harness
 
     Harness -.->|spawns + monitors| PMTree
-    Harness -.->|spawns + monitors| QATree
+    Harness -.->|spawns + monitors| VerifierTree
     Harness -.->|spawns + monitors| WorkerTree
     Harness -.->|spawns + monitors| DMTree
 
     PMTree <--> Harness
-    QATree <--> Harness
+    VerifierTree <--> Harness
     WorkerTree <--> Harness
     DMTree <--> Harness
 
     PMTree <--> Forge
-    QATree <--> Forge
+    VerifierTree <--> Forge
     WorkerTree <--> Forge
     DMTree <--> Forge
 
@@ -150,7 +150,7 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    subgraph agent_tree["Per-agent subprocess tree (pm, qa, worker, dm each look like this)"]
+    subgraph agent_tree["Per-agent subprocess tree (pm, verifier, worker, dm each look like this)"]
         Cmd["cmd.exe (Windows)<br/>or shell (POSIX)"]
         TL["thin_launcher.py<br/>· writes .claude-pid<br/>· singleton enforcement (#8692)<br/>· spawns claude, waits for exit"]
         Claude["claude.exe (the agent)<br/>· runs composed CLAUDE.md<br/>· has Monitor tool built in"]
@@ -362,7 +362,7 @@ Events are filtered to what each role cares about. Today's per-role filter (loop
 graph TD
     ALL["All Events in EventStream"]
     ALL --> PM["pm sees:<br/>pr-merged, compose-completed<br/>verification-failed, verification-passed<br/>cycle-start, cycle-end<br/>status-transition, agent-health"]
-    ALL --> QA["qa sees:<br/>pr-merged, compose-completed<br/>status-transition, cycle-end<br/>verification-failed"]
+    ALL --> VERIFIER["verifier sees:<br/>pr-merged, compose-completed<br/>status-transition, cycle-end<br/>verification-failed"]
     ALL --> WORKER["worker sees:<br/>pr-merged, compose-completed<br/>verification-failed, status-transition"]
     ALL --> DM["dm sees:<br/>status-transition, pr-merged<br/>verification-passed, compose-completed"]
 ```
@@ -796,8 +796,8 @@ sequenceDiagram
     participant TR as tracker.py
     participant F as Forge<br/>(GitHub)
     participant H as Harness
-    participant VEP as QA event_poll
-    participant VC as QA claude
+    participant VEP as Verifier event_poll
+    participant VC as Verifier claude
 
     Note over W: Implementation complete<br/>locally
     W->>F: push branch, open PR #9943
@@ -806,25 +806,25 @@ sequenceDiagram
     TR->>F: gh issue edit (label change)
     F-->>TR: 200 OK
     Note over F: Forge label updated<br/>(source of truth)
-    TR->>H: POST /work/assign<br/>{issue_number:9926, target_role:qa,<br/>event_context:"verification-needed",<br/>payload:{pr_number:9943}}
-    H->>H: validate worker→qa<br/>per L2 permission table
-    H->>H: emit assigned-to(target_role=qa,...)<br/>append to deque
+    TR->>H: POST /work/assign<br/>{issue_number:9926, target_role:verifier,<br/>event_context:"verification-needed",<br/>payload:{pr_number:9943}}
+    H->>H: validate worker→verifier<br/>per L2 permission table
+    H->>H: emit assigned-to(target_role=verifier,...)<br/>append to deque
     H-->>TR: 200 OK + event_id
     TR-->>W: transition successful<br/>(+ assignment event_id)
 
-    Note over H,VEP: QA's event_poll<br/>polling loop continues
+    Note over H,VEP: Verifier's event_poll<br/>polling loop continues
 
-    VEP->>H: GET /events/for/qa?since=cursor
+    VEP->>H: GET /events/for/verifier?since=cursor
     H-->>VEP: [assigned-to event]
     VEP->>VC: write nudge line to stdout
     Note over VC: Monitor sees stdin line<br/>wakes Claude session
 
-    VC->>H: GET /events/for/qa?since=cursor
+    VC->>H: GET /events/for/verifier?since=cursor
     H-->>VC: [assigned-to event]
-    VC->>VC: care filter:<br/>target_role==qa? YES
+    VC->>VC: care filter:<br/>target_role==verifier? YES
     VC->>VC: run pre-cycle + work + post-cycle
-    VC->>H: POST /events {type:ack-cursor, event_id, role:qa}
-    H->>H: advance qa cursor past event_id
+    VC->>H: POST /events {type:ack-cursor, event_id, role:verifier}
+    H->>H: advance verifier cursor past event_id
     H-->>VC: 200 OK
 ```
 
@@ -834,9 +834,9 @@ In practice agents never call `/work/assign` directly for transition-driven hand
 
 | Transition (from → to) | Implied `target_role` | event_context |
 |---|---|---|
-| `in-progress → pending-test` | `qa` | `"verification-needed"` |
+| `in-progress → pending-test` | `verifier` | `"verification-needed"` |
 | `pending-test → pending-ship` | `dm` | `"delivery-needed"` |
-| `pending-test → in-progress` | assigned role from `role:*` label; if none, route to `pm` with `event_context="unowned-rejection"` | `"qa-rejected"` |
+| `pending-test → in-progress` | assigned role from `role:*` label; if none, route to `pm` with `event_context="unowned-rejection"` | `"verifier-rejected"` |
 | `pending-ship → in-progress` | assigned role from `role:*` label; if none, route to `pm` with `event_context="unowned-rejection"` | `"merge-conflict"` |
 | `pending → planning` | `pm` | `"planning-needed"` |
 | `planning → planned` | (no assign — self-routing) | — |
@@ -875,7 +875,7 @@ sequenceDiagram
     participant F as Forge
     participant EAD as EAD (in harness)
     participant H as Harness deque
-    participant V as QA agent tree
+    participant V as Verifier agent tree
 
     Note over W: Forge state changes via<br/>some path OTHER than tracker.py
     W->>F: change forge state directly
@@ -883,8 +883,8 @@ sequenceDiagram
     Note over EAD: EAD's forge polling loop ticks
     EAD->>F: gh api repos/.../issues?since=...
     F-->>EAD: status:pending-test added to #9926
-    EAD->>EAD: map: "status:pending-test"<br/>→ target_role=qa
-    EAD->>H: append assigned-to(target_role=qa,...)
+    EAD->>EAD: map: "status:pending-test"<br/>→ target_role=verifier
+    EAD->>H: append assigned-to(target_role=verifier,...)
     EAD->>EAD: persist last-seen forge id
 
     Note over V: Same delivery as §7.3<br/>(event_poll → nudge → Monitor → walk)
@@ -947,7 +947,7 @@ flowchart TD
 
 **What the subloop does** (role-specific, one bounded task per fire):
 - **pm**: pipeline sentinel + improvement scan (process gaps, stalled items, doc drift)
-- **qa**: TEST-PLAN backlog catch-up
+- **verifier**: TEST-PLAN backlog catch-up
 - **worker**: doc-scan or test-coverage scan on owned modules
 - **dm**: doc realignment + CHANGELOG hygiene + version-bump readiness
 
@@ -1111,3 +1111,8 @@ PM agents recognize this set as their care-filter; new values added in future re
   - **Mode flag**: dropped per-role event-driven config (`event-driven-pm: yes` etc.). `event-driven:` is now a single global flag for the install — the whole squad runs in loop mode together or event-driven mode together. §8.1 rewritten; §8.2 mode-flip steps now install-wide; §8.3 boot decision tree simplified to one ConfigGate before the harness probe. Rationale: keeps the harness contract uniform (load-bearing for everyone, or observational for everyone), avoids the cross-role coordination puzzle of mixed modes.
 - **2026-05-23 (rev 7) — post-rev-6 DS verification + §7.6 diagram fix.** DS round-7 verification found 2 actionable findings (1 MED, 1 LOW); both applied: §8.1 clarified that mixed modes are not *configurable* but degraded fallback can produce a transient mixed-mode state per-agent (the previous wording falsely implied install-wide uniformity even under fallback); §8.4 reworded to distinguish the configured `event-driven: no` path (loop mode by design) from the `event-driven: yes` + probe-fail fallback path (the prior "regardless of config" wording collapsed the two). Also: §7.6 subloop diagram nodes now use quoted-label form ({"…"}, ["…"]) so unquoted parentheses can't break Mermaid rendering. The "sub-skill" terminology is retained as the canonical compose-fragment term and is distinct from the "skill" agent-role term that was removed in rev 6 (DS flagged as info, accepted as intentional). DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-7.md`.
 - **2026-05-23 (rev 8) — final convergence + cadence-math fixes.** DS round-8 confirmed all R7 fixes correct and returned 2 LOW math errors: EAD cadence "≈3 minutes" → "≈2 minutes" (correct: 6 polls × 10/20/30/60/90/120s = 120s = 2 min); event_poll cadence "≈2.5 minutes idle" → "≈1.75 minutes idle" (correct: 6 polls × 5/10/15/45/75/105s = 105s ≈ 1.75 min). Both fixed. The doc is now mathematically and architecturally converged. DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-8.md`.
+- **2026-05-25 (rev 9) — post-#6274 `qa` → `verifier` rename + loop/event mutual-exclusivity on event-bus axis + vault invocation polish.** Three coordinated edits:
+  - **Role rename**: post-#6274 (shipped 2026-05-23) the canonical role is `verifier`, not `qa`. Swept all instance-level references in this doc (Terminology table, §2.1 latency-floor example, §3.1 + §3.2 mermaid subgraph and tree labels, §4.3 role-filtering diagram, §7.3 verification-needed sequence diagram + routing table, §7.5 EAD safety-net sequence diagram, §7.6 subloop role list). Wire-format strings updated too: `target_role:qa` → `target_role:verifier`, `role:qa` → `role:verifier`, `event_context:"qa-rejected"` → `event_context:"verifier-rejected"`, `GET /events/for/qa` → `GET /events/for/verifier`. Note: live code (`references/scripts/triage.py`, `cycle_pre.py:614`) still emits `qa-rejected` — doc now describes architectural target; code task to skill.
+  - **Loop/event mutual exclusivity** (§2 + §4.5 + §4.6 + §6.1 + §6.3 + §7 lead): loop mode is now documented as emit-only on the event bus (no consume, no cursor); event mode is the exclusive home for bus consumption + cursor logic. Loop-mode mechanical reactions derive from tracker state changes since last cycle (timestamp dedup in working-state.md), not from event-bus reads. Rationale: keeps the harness contract uniform — loop is observational-only, event is load-bearing.
+  - **Vault invocation** (§6.1 diagram + §6.5 new sub-section): named the four Phase 2 vault touchpoints + boot-time BRIEFING read + the inline-vs-subagent execution lane principle (heavy sub-skills `vault-remember` and `vault-synthesis` run on the `sonnet` tier via background subagent; light ones `vault-protocol` and `vault-optimize` stay inline). Cross-references VAULT-ARCH §7 for the lane principle's full rationale.
+  - **Vault flag retirement** (§6.1 diagram): dropped the `· read vault-remember + vault-optimize flags` line from Phase 1 and the `· advance event cursor` line from Phase 3 (both per the above changes). The vault-remember/vault-optimize `Enabled` flags in `config.md` are being retired; both sub-skills are always-on and self-gate via their per-cycle conditions. Code task to skill.
