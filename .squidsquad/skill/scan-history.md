@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-24 20:33
+
+- **Files scanned**: not applicable — active implementation cycle (not improvement scan)
+- **Findings**: not applicable
+- **Items rejected by human**: not applicable
+- **Notes**: cycle 1374 was a substantial implementation cycle, not a scan rotation. Human lifted STOP on #9965 at start; skill picked up AC2.4-2.7 + AC2.9. Spawned 2 subagents for the implementation work (the second to re-apply DS-hardening that I accidentally reverted via a misuse of `git checkout HEAD -- ...`). Lessons captured below for future reference.
+
 ## Scan — 2026-05-24 19:09
 
 - **Files scanned**: references/scripts/event_validator.py (re-check; previously scanned 2026-05-20 with no findings — confirmed still applies, no re-read this cycle)

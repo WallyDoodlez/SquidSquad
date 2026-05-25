@@ -1,0 +1,341 @@
+diff --git a/references/scripts/wizard.py b/references/scripts/wizard.py
+index 1a48cefd..433c0564 100644
+--- a/references/scripts/wizard.py
++++ b/references/scripts/wizard.py
+@@ -1357,31 +1357,102 @@ def upgrade_install(base_dir=None):
+         migrated.append(".squidsquad/qa/ -> .squidsquad/verifier/")
+ 
+     # --- 4. Update .harness-state.json agent keys ---
++    # DS F1: an OSError after dirs/config were already renamed leaves the
++    # install inconsistent (dirs+config say new schema; state file still
++    # keyed by old role names). Idempotency check would then see no-op on
++    # re-run because it only inspects dirs+config, not the state file.
++    # → On OSError: return ok=False/exit_code=2 so the operator knows to
++    # intervene rather than silently mark the upgrade complete.
++    # DS F4: if both old and new keys already exist (e.g. partially-applied
++    # prior upgrade or manual edit), `agents.pop("qa")` would silently
++    # clobber the existing "verifier" entry → treat as partial-migration
++    # error and refuse to proceed.
+     state_path = squid / ".harness-state.json"
+     if state_path.exists():
+         try:
+-            state = json.loads(state_path.read_text(encoding="utf-8"))
++            state_raw = state_path.read_text(encoding="utf-8")
++        except OSError as exc:
++            msg = (
++                f".harness-state.json read failed after dir/config renames: "
++                f"{exc}; manual intervention required"
++            )
++            print(msg, file=sys.stderr)
++            return {
++                "ok": False,
++                "action": "error",
++                "exit_code": 2,
++                "summary": msg,
++                "migrated": migrated,
++            }
++        try:
++            state = json.loads(state_raw)
++        except json.JSONDecodeError:
++            state = None  # Malformed file → skip key rename (not fatal)
++
++        if isinstance(state, dict):
+             agents = state.get("agents", {})
+-            changed = False
+-            # qa → verifier
+-            if "qa" in agents:
+-                agents["verifier"] = agents.pop("qa")
+-                changed = True
+-                migrated.append(".harness-state.json: agents.qa -> agents.verifier")
+-            # dev → worker (rare — variant keys like 'skill' are unchanged)
+-            if "dev" in agents:
+-                agents["worker"] = agents.pop("dev")
+-                changed = True
+-                migrated.append(".harness-state.json: agents.dev -> agents.worker")
+-            if changed:
+-                state["agents"] = agents
+-                tmp_state = state_path.with_suffix(".json.tmp")
+-                tmp_state.write_text(
+-                    json.dumps(state, indent=2) + "\n", encoding="utf-8"
+-                )
+-                tmp_state.replace(state_path)
+-        except (json.JSONDecodeError, OSError):
+-            pass  # Non-fatal: state file absent or malformed; skip key rename
++            if isinstance(agents, dict):
++                # DS F4 — refuse if both old and new keys present
++                collisions = []
++                if "qa" in agents and "verifier" in agents:
++                    collisions.append(
++                        ".harness-state.json has both agents.qa and agents.verifier"
++                    )
++                if "dev" in agents and "worker" in agents:
++                    collisions.append(
++                        ".harness-state.json has both agents.dev and agents.worker"
++                    )
++                if collisions:
++                    msg = (
++                        "partial migration detected: "
++                        + "; ".join(collisions)
++                        + "; manual intervention required"
++                    )
++                    print(msg, file=sys.stderr)
++                    return {
++                        "ok": False,
++                        "action": "error",
++                        "exit_code": 2,
++                        "summary": msg,
++                        "migrated": migrated,
++                    }
++
++                changed = False
++                # qa → verifier
++                if "qa" in agents:
++                    agents["verifier"] = agents.pop("qa")
++                    changed = True
++                    migrated.append(
++                        ".harness-state.json: agents.qa -> agents.verifier"
++                    )
++                # dev → worker (rare — variant keys like 'skill' are unchanged)
++                if "dev" in agents:
++                    agents["worker"] = agents.pop("dev")
++                    changed = True
++                    migrated.append(
++                        ".harness-state.json: agents.dev -> agents.worker"
++                    )
++                if changed:
++                    state["agents"] = agents
++                    tmp_state = state_path.with_suffix(".json.tmp")
++                    try:
++                        tmp_state.write_text(
++                            json.dumps(state, indent=2) + "\n", encoding="utf-8"
++                        )
++                        tmp_state.replace(state_path)
++                    except OSError as exc:
++                        msg = (
++                            f".harness-state.json write failed after dir/config "
++                            f"renames: {exc}; manual intervention required"
++                        )
++                        print(msg, file=sys.stderr)
++                        return {
++                            "ok": False,
++                            "action": "error",
++                            "exit_code": 2,
++                            "summary": msg,
++                            "migrated": migrated,
++                        }
+ 
+     summary_str = (
+         "upgrade: migrated — " + ", ".join(migrated)
+@@ -1404,7 +1475,10 @@ def cmd_upgrade(args):
+     """
+     target = args[0] if args else "."
+     result = upgrade_install(target)
+-    exit_code = result.get("exit_code", 0 if result["ok"] else 1)
++    # DS F5: `exit_code` is an internal control-flow artifact; strip it
++    # from the JSON payload (which is the public stdout contract) so we
++    # don't leak a field that's undocumented in upgrade_install's docstring.
++    exit_code = result.pop("exit_code", 0 if result["ok"] else 1)
+     _print_json(result)
+     return exit_code
+ 
+diff --git a/tests/test_wizard.py b/tests/test_wizard.py
+index da34ac20..5291eeba 100644
+--- a/tests/test_wizard.py
++++ b/tests/test_wizard.py
+@@ -1237,6 +1237,196 @@ class TestScaffoldL4Files:
+         assert worker_agents[0].get("variant") is not None
+ 
+ 
++# ---------------------------------------------------------------------------
++# #6274.2 D4 — upgrade_install: dev/qa → worker/verifier migration
++# ---------------------------------------------------------------------------
++
++class TestUpgradeInstall:
++    """D4 spec coverage per CONTEXT-6274.md and DS finding F6.
++
++    Paths covered: (a) full dev+qa migration, (b) idempotent re-run,
++    (c) partial-migration detection, (d) no-op on new-style install,
++    (e) .harness-state.json key rename, (f) missing config.md / .squidsquad/.
++    Plus regression tests for DS F1, F4, F5.
++    """
++
++    @staticmethod
++    def _seed_old_install(root, *, with_dev=True, with_qa=True,
++                          with_config=True, harness_agents=None):
++        """Lay down a pre-rename install layout under `root/.squidsquad/`."""
++        squid = root / ".squidsquad"
++        squid.mkdir(parents=True, exist_ok=True)
++        if with_config:
++            (squid / "config.md").write_text(
++                "# SquidSquad Config\n\n- **Dev Agents**: skill\n",
++                encoding="utf-8",
++            )
++        if with_dev:
++            (squid / "dev").mkdir()
++            (squid / "dev" / "marker.txt").write_text("dev", encoding="utf-8")
++        if with_qa:
++            (squid / "qa").mkdir()
++            (squid / "qa" / "marker.txt").write_text("qa", encoding="utf-8")
++        if harness_agents is not None:
++            (squid / ".harness-state.json").write_text(
++                json.dumps({"agents": harness_agents}, indent=2) + "\n",
++                encoding="utf-8",
++            )
++        return squid
++
++    # (a) full dev+qa → worker+verifier migration
++    def test_full_migration_renames_dirs_and_rewrites_config(self, tmp_path):
++        squid = self._seed_old_install(tmp_path)
++        result = wizard.upgrade_install(tmp_path)
++        assert result["ok"] is True
++        assert result["action"] == "migrated"
++        assert (squid / "worker").is_dir()
++        assert (squid / "verifier").is_dir()
++        assert not (squid / "dev").exists()
++        assert not (squid / "qa").exists()
++        # subfiles travel with the rename
++        assert (squid / "worker" / "marker.txt").read_text(encoding="utf-8") == "dev"
++        assert (squid / "verifier" / "marker.txt").read_text(encoding="utf-8") == "qa"
++        # config.md rewritten atomically (no .tmp left behind)
++        config_text = (squid / "config.md").read_text(encoding="utf-8")
++        assert "Workers" in config_text and "Dev Agents" not in config_text
++        assert not (squid / "config.md.tmp").exists()
++
++    # (b) idempotent re-run after successful migration
++    def test_idempotent_rerun_returns_noop(self, tmp_path):
++        self._seed_old_install(tmp_path)
++        wizard.upgrade_install(tmp_path)  # first run does the work
++        result2 = wizard.upgrade_install(tmp_path)
++        assert result2["ok"] is True
++        assert result2["action"] == "no-op"
++        assert result2["migrated"] == []
++
++    # (c) partial-migration detection (both dirs exist)
++    def test_partial_migration_both_dirs_exist_errors(self, tmp_path):
++        squid = self._seed_old_install(tmp_path)
++        (squid / "worker").mkdir()  # corrupt state: both dev/ and worker/
++        result = wizard.upgrade_install(tmp_path)
++        assert result["ok"] is False
++        assert result["action"] == "error"
++        assert result["exit_code"] == 2
++        assert "partial migration" in result["summary"]
++        # No changes applied — dev/ still present, config.md untouched
++        assert (squid / "dev").is_dir()
++        assert "Dev Agents" in (squid / "config.md").read_text(encoding="utf-8")
++
++    def test_partial_migration_config_workers_with_dev_dir_errors(self, tmp_path):
++        squid = self._seed_old_install(tmp_path, with_qa=False)
++        # config says new but dev/ still around → partial
++        (squid / "config.md").write_text(
++            "# SquidSquad Config\n\n- **Workers**: skill\n",
++            encoding="utf-8",
++        )
++        result = wizard.upgrade_install(tmp_path)
++        assert result["ok"] is False
++        assert result["action"] == "error"
++        assert result["exit_code"] == 2
++
++    # (d) no-op on new-style install (already migrated)
++    def test_noop_on_already_migrated_install(self, tmp_path):
++        squid = tmp_path / ".squidsquad"
++        squid.mkdir(parents=True)
++        (squid / "config.md").write_text(
++            "# SquidSquad Config\n\n- **Workers**: skill\n",
++            encoding="utf-8",
++        )
++        (squid / "worker").mkdir()
++        (squid / "verifier").mkdir()
++        result = wizard.upgrade_install(tmp_path)
++        assert result["ok"] is True
++        assert result["action"] == "no-op"
++        assert result["migrated"] == []
++
++    # (e) .harness-state.json key rename (covers qa→verifier and dev→worker)
++    def test_harness_state_keys_renamed(self, tmp_path):
++        squid = self._seed_old_install(
++            tmp_path,
++            harness_agents={
++                "pm": {"pid": 100, "intent": "running"},
++                "qa": {"pid": 101, "intent": "running"},
++                "dev": {"pid": 102, "intent": "running"},
++                "skill": {"pid": 103, "intent": "running"},  # variant key untouched
++            },
++        )
++        result = wizard.upgrade_install(tmp_path)
++        assert result["ok"] is True
++        state = json.loads((squid / ".harness-state.json").read_text(encoding="utf-8"))
++        agents = state["agents"]
++        assert "verifier" in agents and agents["verifier"]["pid"] == 101
++        assert "worker" in agents and agents["worker"]["pid"] == 102
++        assert "qa" not in agents and "dev" not in agents
++        # Variant keys (D5) untouched per CONTEXT-6274 line 66
++        assert agents["skill"]["pid"] == 103
++        assert agents["pm"]["pid"] == 100
++
++    # (f) missing config.md / .squidsquad/ — graceful degradation
++    def test_missing_squidsquad_dir_returns_noop(self, tmp_path):
++        # No .squidsquad/ at all
++        result = wizard.upgrade_install(tmp_path)
++        assert result["ok"] is True
++        assert result["action"] == "no-op"
++
++    def test_missing_config_md_with_dev_dir_still_migrates(self, tmp_path):
++        squid = self._seed_old_install(tmp_path, with_config=False)
++        result = wizard.upgrade_install(tmp_path)
++        assert result["ok"] is True
++        assert result["action"] == "migrated"
++        assert (squid / "worker").is_dir()
++        assert not (squid / "config.md").exists()
++
++    # DS F4 regression: both old+new keys in harness-state.json → error
++    def test_harness_state_both_keys_present_errors(self, tmp_path):
++        squid = self._seed_old_install(
++            tmp_path,
++            harness_agents={
++                "qa": {"pid": 101, "intent": "running"},
++                "verifier": {"pid": 999, "intent": "running"},  # collision
++            },
++        )
++        result = wizard.upgrade_install(tmp_path)
++        assert result["ok"] is False
++        assert result["action"] == "error"
++        assert result["exit_code"] == 2
++        assert "verifier" in result["summary"] and "qa" in result["summary"]
++        # The pre-existing verifier entry must NOT be clobbered
++        state = json.loads((squid / ".harness-state.json").read_text(encoding="utf-8"))
++        assert state["agents"]["verifier"]["pid"] == 999
++        assert state["agents"]["qa"]["pid"] == 101
++
++    def test_harness_state_malformed_json_is_non_fatal(self, tmp_path):
++        """DS F1 carve-out: a malformed state file is non-fatal (skip key rename).
++
++        OSError on read/write IS fatal (F1 fix), but a parse error is treated
++        as "agent never wrote a valid state file" — directory + config renames
++        still apply, and the upgrade reports migrated for those.
++        """
++        squid = self._seed_old_install(tmp_path)
++        (squid / ".harness-state.json").write_text("{bad json", encoding="utf-8")
++        result = wizard.upgrade_install(tmp_path)
++        assert result["ok"] is True
++        assert result["action"] == "migrated"
++        # Dir + config renames still happened
++        assert (squid / "worker").is_dir()
++        assert "Workers" in (squid / "config.md").read_text(encoding="utf-8")
++
++    # DS F5 regression: cmd_upgrade JSON output must NOT include `exit_code`
++    def test_cmd_upgrade_json_does_not_leak_exit_code(self, tmp_path, capsys):
++        # Trigger the error path (which sets exit_code internally)
++        squid = self._seed_old_install(tmp_path)
++        (squid / "worker").mkdir()  # partial — triggers exit_code=2
++        rc = wizard.cmd_upgrade([str(tmp_path)])
++        assert rc == 2
++        out = capsys.readouterr().out
++        payload = json.loads(out)
++        assert "exit_code" not in payload
++        assert payload["ok"] is False
++        assert payload["action"] == "error"
++
++
+ # ===========================================================================
+ # Step 7 — label inventory + ensure_labels + migrate_label
+ # ===========================================================================
