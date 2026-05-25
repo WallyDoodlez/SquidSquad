@@ -1221,6 +1221,70 @@ class TestEnforceBranch:
         assert len(task_begin_calls) == 1
         assert "4942" in task_begin_calls[0]
 
+    @pytest.mark.parametrize("task_field,expected_number", [
+        ("#9965", "9965"),
+        ("9965", "9965"),
+        ("#9965 — 6274.2 AC2.8 catch-up (PM option-3 path) [PAUSED]", "9965"),
+        ("#10072 — verbose description with em-dash", "10072"),
+        ("9965 — bare-number verbose form", "9965"),
+        # Whitespace tolerance (DS review Finding 1 — was a regression vs old code)
+        ("# 9965", "9965"),
+        ("  #9965", "9965"),
+        ("#\t9965", "9965"),
+        ("#9965 - ASCII dash separator", "9965"),
+    ])
+    def test_extracts_number_from_verbose_task_field(
+        self, monkeypatch, task_field, expected_number
+    ):
+        """#10072: regex extraction handles both bare and verbose task forms."""
+        calls = []
+
+        def fake_run_script(*args, **kwargs):
+            calls.append(args)
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(cycle_pre, "_config_get",
+                            lambda f: "yes" if f == "branch-workflow" else "main")
+        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_pre, "_run",
+                            lambda cmd, **kw: MagicMock(returncode=0, stdout="main\n", stderr=""))
+
+        ws = {"task": task_field, "status": "in-progress"}
+        cycle_pre._enforce_branch("skill", ws)
+
+        task_begin_calls = [c for c in calls if "task-begin" in c]
+        assert len(task_begin_calls) == 1, f"task-begin not called for {task_field!r}"
+        assert expected_number in task_begin_calls[0], \
+            f"expected {expected_number} in {task_begin_calls[0]} for {task_field!r}"
+
+    @pytest.mark.parametrize("task_field", [
+        "no-number-here",
+        "#",                # DS review Finding 2: hash with no digits
+        "#abc",             # hash followed by non-digits
+        "9965-fix",         # DS review Finding 3: glued suffix — old code rejected
+        "9965abc",          # digits glued to letters
+    ])
+    def test_skips_task_begin_for_non_numeric_task(self, monkeypatch, task_field):
+        """#10072: malformed task fields skip task-begin without crashing."""
+        calls = []
+
+        def fake_run_script(*args, **kwargs):
+            calls.append(args)
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(cycle_pre, "_config_get",
+                            lambda f: "yes" if f == "branch-workflow" else "main")
+        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_pre, "_run",
+                            lambda cmd, **kw: MagicMock(returncode=0, stdout="main\n", stderr=""))
+
+        ws = {"task": task_field, "status": "in-progress"}
+        cycle_pre._enforce_branch("skill", ws)
+
+        task_begin_calls = [c for c in calls if "task-begin" in c]
+        assert len(task_begin_calls) == 0, \
+            f"task-begin unexpectedly called for {task_field!r}: {task_begin_calls}"
+
     def test_switches_to_working_branch_when_no_task(self, monkeypatch):
         """When no active task, switches to working branch."""
         checkout_targets = []
