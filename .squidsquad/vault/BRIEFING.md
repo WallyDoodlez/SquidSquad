@@ -4,22 +4,19 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #8999 Event-mode integration tests — TEST-PLAN-8694 §4 + AC-1 M-1.3 CQ run (in-progress, medium, role:skill) — re-planned cycle 1495 after §4.9 scope drop; PR-phased delivery
-- #9184 PM defines ACs only / QA owns TEST-PLAN + CQs (shipped today, cycle 1499 — workflow restructure across pm/dev/qa sub-skills)
-- #9272 boot-remote-agents fragment fix — L1 wording contradicts manual-boot policy (approved, low, role:skill)
-- #9318 config.md Dev Agents value stale since #6055 (approved, low, role:skill)
-- #9265 in-stream gap decision — revise CONTEXT-8694 §2 or monotonic event ids (approved, medium, role:skill)
-- #9242 Harness unreachable for 5+ consecutive cycles (open issue, role:skill) — harness still down; agents tolerate via direct gh CLI
-- #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — awaiting human greenlight
-- #6574 Zero-prereq install — gh repo creation + local forge fallback (pending, medium, role:skill)
+- #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — paused per 2026-05-24 scope refocus; awaiting human disposition (close / re-scope / keep)
+- #9968 EPIC: L1-L4 review + compose-architecture doc (in-progress, medium, role:pm) — HELD pending doc-closure of arch docs
+- #10003 Massage docs/VAULT-ARCH.md (in-progress, medium, role:pm) — active PR #10004; current PM focus
 - #5855 Vault is static decision log, not living memory (pending, high, role:skill)
 - #3963 EPIC: Web dashboard — Harness Phase 4 (pending, high, role:skill)
-- #6274 Generalize 'dev' to 'worker' across architecture (pending, medium, role:skill)
-- #5783 L3: bug investigation boundary — PM symptoms, dev RCA (pending, medium, role:skill)
 - #5620 L3 PM stuck-rebase recovery (pending, high, role:skill)
+- #6574 Zero-prereq install — gh repo creation + local forge fallback (pending, medium, role:skill)
+- #5783 L3: bug investigation boundary — PM symptoms, dev RCA (pending, medium, role:skill)
 - #5773 Document start.sh as boot entry point (pending, medium, role:dm)
+
 ## Recently Shipped
 
+- #6274 Generalize 'dev' to 'worker' across architecture (shipped 2026-05-23) — terminology rename: dev→worker, qa→verifier across L1-L4
 - #9184 PM defines ACs only / QA owns TEST-PLAN + CQs (shipped 2026-05-19, cycle 1499) — workflow restructure across pm/dev/qa sub-skills + L3 CQ directive rewrite + #8950 patch
 - #9243 Harness /status exposes code_version (shipped 2026-05-19, cycle 1498)
 - #7630 EPIC: Event-driven agent architecture (shipped) — harness owns cycle, agents react to events
