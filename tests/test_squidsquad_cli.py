@@ -233,6 +233,38 @@ class TestCommandsWithHarness:
         assert result == 0
         mock_api.assert_called_once_with(8080, "POST", "/agents/all/stop")
 
+    def test_stop_all_empty_results_returns_0(self, capsys):
+        """#10006: cmd_stop with an empty results list (no agents to stop)
+        must return 0, not 1 — matches cmd_status's treatment of the
+        no-agents case. Defensive teardown scripts (`squidsquad stop &&
+        next-step`) previously saw exit 1 when the squad was already
+        idle."""
+        with patch.object(squidsquad_cli, "_discover_harness", return_value=8080), \
+             patch.object(squidsquad_cli, "_api_call",
+                          return_value={"results": []}):
+            result = squidsquad_cli.cmd_stop()
+        assert result == 0
+        out = capsys.readouterr().out
+        assert "No agents detected" in out, (
+            "empty-results case must print an informational message "
+            "(matches cmd_status wording) so the user knows the no-op "
+            "was a real no-op, not a silent success that hid a bug"
+        )
+
+    def test_stop_all_missing_results_key_returns_0(self, capsys):
+        """#10006: cmd_stop must handle the case where the harness
+        response omits the 'results' key entirely (early-return code
+        path or older API version). result.get('results', []) makes
+        the production path robust, but without this test a future
+        refactor to `result['results']` would silently regress to
+        KeyError + exit 1."""
+        with patch.object(squidsquad_cli, "_discover_harness", return_value=8080), \
+             patch.object(squidsquad_cli, "_api_call",
+                          return_value={}):
+            result = squidsquad_cli.cmd_stop()
+        assert result == 0
+        assert "No agents detected" in capsys.readouterr().out
+
     def test_restart_success(self, capsys):
         with patch.object(squidsquad_cli, "_discover_harness", return_value=8080), \
              patch.object(squidsquad_cli, "_api_call", return_value={
