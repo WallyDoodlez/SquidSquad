@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-26 08:09
+
+- **Files scanned**: references/scripts/health_check.py (full 424 lines; focus on config-read robustness, dead imports, TOCTOU on state-file mtime+content reads).
+- **Findings**: #10348 (low — `_read_interval` catches `(ImportError, ValueError, TypeError)` but `config.get_field` raises `SystemExit` on missing field; documented 30-min default never fires; misleading exit-1 instead. Same family as cycle_post._config_get's `except BaseException:` fix).
+- **Items rejected by human**: none yet
+- **Notes**: dead imports at L26-29 (`os`, `platform`, `subprocess`) — cosmetic, called out as out-of-scope in #10348. `_read_file_head` reads whole file then slices — fine for current-state-sized files. `_get_file_mtime` and `_read_file_head` are separate stat+read calls on the same file (mild TOCTOU), but the staleness check tolerates the gap. `check_agent_health` correctly handles missing `.claude-pid` (mtime fallback) and missing both files (UNKNOWN); the harness is the authoritative liveness source per #4966 so this offline-fallback script's role is bounded.
+
 ## Scan — 2026-05-25 18:09
 
 - **Files scanned**: none.
