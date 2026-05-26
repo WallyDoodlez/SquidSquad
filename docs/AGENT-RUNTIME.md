@@ -4,7 +4,7 @@ _How a SquidSquad agent's operating model is defined — what triggers it to act
 
 > **Status**: DRAFT, consolidating prior docs now under `docs/archive/`: `EVENT-ARCHITECTURE.md` (v2 nudge-driven design), `EVENT-BUS-ARCHITECTURE.md` (v1 PRD), and `event-bus.md` (v1 narrative). Those three are kept for traceability; this doc is the canonical reference going forward.
 >
-> **Companion docs**: [`HARNESS-ARCH.md`](HARNESS-ARCH.md) (harness internals — process model, HTTP API, state files, restart safety), [`VAULT-ARCH.md`](VAULT-ARCH.md) (vault layer), [`ARCHITECTURE.md`](ARCHITECTURE.md) (system overview), [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) (compose layer).
+> **Companion docs**: [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) — **the agent compiler**; owns the format of the composed `CLAUDE.md` that every agent runs on (L1-L4 layering, slot order, frontmatter). The most load-bearing piece of the system: every runtime concern in this doc depends on what compose produced at build time. [`HARNESS-ARCH.md`](HARNESS-ARCH.md) — harness internals (process model, HTTP API, state files, restart safety). [`VAULT-ARCH.md`](VAULT-ARCH.md) — vault layer. [`ARCHITECTURE.md`](ARCHITECTURE.md) — system overview.
 
 ---
 
@@ -192,6 +192,8 @@ flowchart TB
 | Linux | login shell (`bash` / `zsh`) | `claude` | new terminal-emulator window (gnome-terminal / xterm / wezterm, per install) |
 
 `thin_launcher` (Python) and `event_poll.py` (Python) are cross-platform — they run identically on all three OSes. Singleton enforcement via `.claude-pid` and the Monitor stdin contract behave the same regardless of host OS.
+
+**The composed `CLAUDE.md`** that `claude` reads at boot is the agent's full instruction artifact — produced by `compose.py` from L1 (base) + L2 (role class) + L3 (domain) + L4 (install overrides) + per-agent `SOUL.md`, selected per the agent's alias from `config.md`. AGENT-RUNTIME is intentionally silent on the format itself — see [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) for the layering model, slot order, frontmatter spec, and how the L1-L4 + SOUL.md inputs become one composed file. **Compose is the agent compiler**; every runtime behavior described in this doc is downstream of what compose produced.
 
 `thin_launcher` and `event_poll` are intentionally separate processes (decided 2026-05-22):
 
