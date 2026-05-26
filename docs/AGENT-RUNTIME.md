@@ -164,9 +164,9 @@ flowchart TB
 ```mermaid
 flowchart TB
     subgraph agent_tree["Per-agent subprocess tree (pm, verifier, worker, dm each look like this)"]
-        Cmd["cmd.exe (Windows)<br/>or shell (POSIX)"]
+        Cmd["Entry process<br/>cmd.exe (Windows) /<br/>bash | zsh (macOS, Linux)"]
         TL["thin_launcher.py<br/>· writes .claude-pid<br/>· singleton enforcement (#8692)<br/>· spawns claude, waits for exit"]
-        Claude["claude.exe (the agent)<br/>· runs composed CLAUDE.md<br/>· has Monitor tool built in"]
+        Claude["claude (the agent)<br/>· runs composed CLAUDE.md<br/>· has Monitor tool built in"]
         Monitor["Monitor tool<br/>(inside claude)<br/>reads stdin → wakes session"]
         Poll["event_poll.py --wait --role <role> --target stdout<br/>(separate sibling process)<br/>· polls harness for events<br/>· writes one nudge line per batch"]
 
@@ -180,6 +180,16 @@ flowchart TB
     Poll -- "GET /events/for/{role}<br/>?since=cursor" --> HarnessAPI
     Claude -- "POST /events<br/>(booted, ack)<br/>POST /work/assign" --> HarnessAPI
 ```
+
+**OS variants** (tree shape is identical across platforms; only the entry-process differs):
+
+| Platform | Entry process | Claude binary | Terminal window |
+|---|---|---|---|
+| Windows | `cmd.exe` | `claude.exe` | new `cmd.exe` window (visible) |
+| macOS | login shell (`bash` / `zsh`) | `claude` | new Terminal.app / iTerm tab via AppleScript (see `boot_remote.py`) |
+| Linux | login shell (`bash` / `zsh`) | `claude` | new terminal-emulator window (gnome-terminal / xterm / wezterm, per install) |
+
+`thin_launcher` (Python) and `event_poll.py` (Python) are cross-platform — they run identically on all three OSes. Singleton enforcement via `.claude-pid` and the Monitor stdin contract behave the same regardless of host OS.
 
 `thin_launcher` and `event_poll` are intentionally separate processes (decided 2026-05-22):
 
