@@ -832,16 +832,13 @@ sequenceDiagram
 
 Three gates (DS audit, mini-CQ, dry-run) must all pass before any write commits. Any failure aborts cleanly with no partial state.
 
-### 7.7 Curation lifecycle (drift, conflict, promotion)
+### 7.7 Curation is one-shot + durable
 
-Writes are only half of L4 ownership. Once an L4 entry exists, it can rot — the L1–L3 anchor it overrides may be renamed or deleted, a second entry may step on it, or upstream may absorb the rule it pioneered. The `l4-curation` sub-skill defines two quiet-cycle scans run by PM:
+L4 entries are captured once via the elicitation dialog (see `l4-curation` sub-skill) and persist across cycles without further intervention. There is no recurring scan, no drift detector, and no auto-conflict-resolver running over `.squidsquad/project/*.md`. Each entry is written once, lives until the human asks to change it, and is removed only through the same dialog path that produced it.
 
-- **Drift scan**: every `.squidsquad/project/*.md` entry's `target` (anchor) is checked against current L1–L3 content. Missing/moved/redundant anchors are surfaced as plain-language questions to the human; nothing is auto-resolved.
-- **Conflict scan**: overlapping `target` + incompatible op combinations across L4 entries are surfaced the same way.
+If a customization needs to change later, the human surfaces a new request and the dialog re-runs — the agent writes either a counter-entry (per §7.5) or, with the human's explicit confirmation, replaces the prior entry. All such changes go through the §7.4 gates (DS audit + mini-CQ + dry-run) like any fresh write.
 
-Both scans emit pending questions through the same queue mechanism `vault-optimize` uses. Resolution is always a human call; the agent never deletes, rewrites, or merges L4 entries unilaterally. Counter-L4 writes (per §7.5) remain the only agent-initiated unwind path, and they go through the same §7.4 gates as a fresh write.
-
-A retired L4 entry — one whose project-pioneered rule has been absorbed into a later L1–L3 release — is removed via the `git revert` path on the original write commit, or via a counter-L4 with `op: replace` and empty body. The curation sub-skill flags candidates; the human chooses.
+Drift between L4 and L1–L3 (e.g., upstream renamed an anchor an L4 entry pointed at) is caught at recompose time by §7.4's dry-run gate, not by a separate curation pass. A failing dry-run surfaces the conflict to the agent, which raises it to the human in plain terms via the same sub-skill dialog.
 
 ---
 
