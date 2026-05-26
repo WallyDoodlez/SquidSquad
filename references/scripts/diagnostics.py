@@ -22,6 +22,49 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 MAX_LOG_BYTES = 1_000_000  # 1MB cap
 
+# Substring keywords that mark a key as sensitive; values under matching keys
+# are redacted from the bug-report output. Shared between _sanitize_config
+# (operates on config.md key:value lines) and _redact_entry (#10005, walks
+# diagnostic-entry context dicts). Keep this list in one place so the
+# redaction surface stays uniform across the two flows.
+#
+# "raw" is included because log_entry wraps non-JSON context as {"raw": text}
+# (line 59). That wrapper opts the caller out of structured redaction, so
+# treat it as sensitive by default — bug reports default to safety; callers
+# wanting visible content should pass structured JSON.
+_SENSITIVE_KEYWORDS = (
+    "repo", "path", "email", "token", "secret", "key",
+    "url", "clone", "webhook", "password", "raw",
+)
+
+
+def _is_sensitive_key(name):
+    """True if any sensitive keyword is a substring of ``name`` (case-insensitive)."""
+    if not isinstance(name, str):
+        return False
+    lower = name.lower()
+    return any(k in lower for k in _SENSITIVE_KEYWORDS)
+
+
+def _redact_entry(obj):
+    """Return a deep-redacted copy of ``obj`` suitable for inclusion in a
+    bug report. Walks dicts recursively; any value whose key matches the
+    sensitive-keyword list is replaced with ``"[REDACTED]"``. List values
+    are recursed into element-by-element (lists have no keys of their own).
+    Scalars and non-matching keys pass through unchanged. The input is not
+    mutated."""
+    if isinstance(obj, dict):
+        out = {}
+        for k, v in obj.items():
+            if _is_sensitive_key(k):
+                out[k] = "[REDACTED]"
+            else:
+                out[k] = _redact_entry(v)
+        return out
+    if isinstance(obj, list):
+        return [_redact_entry(v) for v in obj]
+    return obj
+
 # Import config reader and state_bus path resolution (#3664)
 sys.path.insert(0, str(SCRIPT_DIR))
 try:
@@ -111,12 +154,10 @@ def _sanitize_config():
     # and a colon is treated as a key-value pair and redacted (#7518).
     lines = []
     for line in text.splitlines():
-        lower = line.lower()
-        if any(k in lower for k in ["repo", "path", "email", "token", "secret", "key", "url", "clone", "webhook", "password"]):
-            if ":" in line:
-                field = line.split(":", 1)[0]
-                lines.append(f"{field}: [REDACTED]")
-                continue
+        if _is_sensitive_key(line) and ":" in line:
+            field = line.split(":", 1)[0]
+            lines.append(f"{field}: [REDACTED]")
+            continue
         lines.append(line)
     return "\n".join(lines)
 
@@ -162,7 +203,7 @@ def generate_report():
     if entries:
         diag_text = "\n### Recent Diagnostics\n\n```json\n"
         for e in entries:
-            diag_text += json.dumps(e) + "\n"
+            diag_text += json.dumps(_redact_entry(e)) + "\n"
         diag_text += "```\n"
 
     report = f"""## Issue Report — SquidSquad
