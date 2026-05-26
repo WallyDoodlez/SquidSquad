@@ -1,0 +1,86 @@
+diff --git a/references/sub-skills/roles/dm/delivery-packaging.md b/references/sub-skills/roles/dm/delivery-packaging.md
+index 3a005baf..c7016452 100644
+--- a/references/sub-skills/roles/dm/delivery-packaging.md
++++ b/references/sub-skills/roles/dm/delivery-packaging.md
+@@ -39,9 +39,23 @@ For each Pending Ship task that is NOT skipped:
+ 
+ 0b. **PR merge gate** (#9478: branch+PR is the only mode): check for an associated PR:
+    ```bash
+-   gh pr list --search "squidsquad/" --state open --json number,headRefName,body --limit 20
++   gh pr list --search "squidsquad/" --state open --json number,headRefName,baseRefName,body --limit 20
+    ```
+-   Find the PR matching this issue number. If found, **first** apply the contract-citation soft gate (#8950 Gate #4):
++   Find the PR matching this issue number. If found, **first** check the PR's base branch (#10287 stacked-PR auto-close trap):
++
++   ```bash
++   WORKING_BRANCH=$(python references/scripts/config.py get working-branch 2>/dev/null || echo "main")
++   PR_BASE=$(gh pr view [PR_NUMBER] --json baseRefName -q .baseRefName)
++   ```
++
++   - **If `$PR_BASE` != `$WORKING_BRANCH`**: the PR is stacked on another feature branch. Merging the parent would squash-delete its source and auto-close this PR (`state=CLOSED, mergeable=CONFLICTING`); the PR cannot be re-targeted in place once that happens. Do **not** request a harness merge. Route back to in-progress so the worker agent rebases onto `$WORKING_BRANCH`:
++     ```bash
++     python references/scripts/tracker.py transition [NUMBER] pending-ship in-progress --role dm-lead
++     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR #[PR_NUMBER] is stacked on \`$PR_BASE\` instead of \`$WORKING_BRANCH\`. Stacked PRs auto-close when their parent merges (squash-delete) and cannot be re-targeted in place. Rebase onto \`$WORKING_BRANCH\` (or wait for the parent to merge first) and re-route to pending-ship."
++     ```
++     Skip this item and move to the next.
++
++   If the base check passes, apply the contract-citation soft gate (#8950 Gate #4):
+ 
+    ```bash
+    ARTIFACTS=$(ls .squidsquad/pm/planning/*[NUMBER]* .squidsquad/qa/planning/*[NUMBER]* 2>/dev/null)
+diff --git a/tests/test_feat_6126_harness_merge.py b/tests/test_feat_6126_harness_merge.py
+index 6e54c64c..120f15b4 100644
+--- a/tests/test_feat_6126_harness_merge.py
++++ b/tests/test_feat_6126_harness_merge.py
+@@ -330,6 +330,51 @@ class TestTemplateUpdates:
+         content = path.read_text(encoding="utf-8")
+         assert "POST" in content and "/merge" in content
+ 
++    def test_dm_delivery_has_stacked_pr_base_check(self):
++        """#10287: DM Step 2c.0b must check baseRefName before requesting
++        harness merge — stacked PRs auto-close when their parent squash-merges
++        and cannot be re-targeted in place. Without this gate the trap recurs
++        on every multi-issue ship sequence with one PR stacked on another."""
++        path = REPO_ROOT / "references" / "sub-skills" / "roles" / "dm" / "delivery-packaging.md"
++        content = path.read_text(encoding="utf-8")
++        assert "baseRefName" in content, (
++            "delivery-packaging.md must read the PR's baseRefName before "
++            "requesting merge (#10287 stacked-PR auto-close trap)"
++        )
++        assert "PR_BASE" in content, (
++            "delivery-packaging.md must compare PR_BASE against the configured "
++            "working-branch (#10287)"
++        )
++        assert "10287" in content, (
++            "the stacked-PR check should cite #10287 so future readers can "
++            "find the incident context"
++        )
++
++    def test_dm_delivery_routes_back_on_stacked_pr(self):
++        """#10287: when base != working-branch, DM must route the issue back to
++        in-progress rather than requesting the harness merge. The route-back
++        comment must explain rebase-onto-main as the remediation so the
++        worker agent knows exactly what to do."""
++        path = REPO_ROOT / "references" / "sub-skills" / "roles" / "dm" / "delivery-packaging.md"
++        content = path.read_text(encoding="utf-8")
++        # The route-back transition must appear in the base-check block, before
++        # the citation gate or merge POST.
++        base_check_idx = content.find("baseRefName")
++        citation_idx = content.find("Gate #4")
++        assert base_check_idx >= 0 and citation_idx >= 0
++        assert base_check_idx < citation_idx, (
++            "the baseRefName check must come BEFORE the citation gate — if a "
++            "PR is stacked, no other gate matters because the merge will trap"
++        )
++        # Route-back transition is the in-block remediation
++        block = content[base_check_idx:citation_idx]
++        assert "pending-ship in-progress" in block, (
++            "stacked-PR detection must route the issue back to in-progress"
++        )
++        assert "rebase" in block.lower(), (
++            "the route-back comment must mention rebase as the remediation"
++        )
++
+     def test_pm_post_merge_recompose_deleted(self):
+         """PM post-merge-recompose.md should be deleted (#6126 AC-6)."""
+         path = REPO_ROOT / "references" / "sub-skills" / "roles" / "pm" / "post-merge-recompose.md"
