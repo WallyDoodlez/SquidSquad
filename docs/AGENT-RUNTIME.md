@@ -468,32 +468,27 @@ Some state-change patterns are predictable enough to handle deterministically in
 ```mermaid
 flowchart TD
     subgraph event_mode["Event mode: bus-derived"]
-        EVENTS["recent_events<br/>(from event bus)"] --> SF{"Self-event?<br/>event.emitter_alias == my_alias"}
-        SF -->|Yes| SKIP_E["Skip<br/>(cascade protection)<br/>— no entry"]
-        SF -->|No| TYPE_E{"Event type +<br/>my role class?"}
-        TYPE_E -->|pr-merged + pm-class| R1E["Reaction:<br/>pr-merge-detected"]
-        TYPE_E -->|verification-failed + worker-class| R2E["Reaction:<br/>rework-needed"]
-        TYPE_E -->|other| PASS_E["No match<br/>→ creative phase<br/>— no entry"]
+        EVENTS["recent_events<br/>(from event bus)"] --> SF{"Self-event?<br/>event.role == my_role"}
+        SF -->|Yes| SKIP["Skip (cascade protection)"]
+        SF -->|No| TYPE_E{"Event type?"}
+        TYPE_E -->|pr-merged + PM| R1E["Reaction: pr-merge-detected"]
+        TYPE_E -->|verification-failed + worker| R2E["Reaction: rework-needed"]
+        TYPE_E -->|other| PASS_E["No reaction → creative phase"]
     end
 
     subgraph loop_mode["Loop mode: tracker-derived"]
-        TRACKER["tracker query<br/>(gh pr list / gh issue list)"] --> ST{"Self-transition?<br/>last actor == my_alias"}
-        ST -->|Yes| SKIP_L["Skip<br/>(cascade protection)<br/>— no entry"]
-        ST -->|No| DELTA{"State change since<br/>last cycle?<br/>(timestamp dedup) +<br/>my role class?"}
-        DELTA -->|PR merged + pm-class| R1L["Reaction:<br/>pr-merge-detected"]
-        DELTA -->|issue rejected + worker-class| R2L["Reaction:<br/>rework-needed"]
-        DELTA -->|none| PASS_L["No match<br/>→ creative phase<br/>— no entry"]
+        TRACKER["tracker query<br/>(gh pr list / gh issue list)"] --> DELTA{"State change since<br/>last cycle?<br/>(timestamp dedup)"}
+        DELTA -->|PR merged + PM| R1L["Reaction: pr-merge-detected"]
+        DELTA -->|issue verification-failed + worker| R2L["Reaction: rework-needed"]
+        DELTA -->|none| PASS_L["No reaction → creative phase"]
     end
 
-    R1E --> CIJ["cycle-input.json<br/>mechanical_reactions: [...]<br/>(only matched reactions land here)"]
+    R1E --> CIJ["cycle-input.json<br/>mechanical_reactions: [...]"]
     R2E --> CIJ
+    PASS_E --> CIJ
     R1L --> CIJ
     R2L --> CIJ
-
-    style SKIP_E stroke-dasharray: 5 5
-    style SKIP_L stroke-dasharray: 5 5
-    style PASS_E stroke-dasharray: 5 5
-    style PASS_L stroke-dasharray: 5 5
+    PASS_L --> CIJ
 ```
 
 Today only two patterns qualify in either mode:
