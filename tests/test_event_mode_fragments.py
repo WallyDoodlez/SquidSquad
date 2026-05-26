@@ -178,7 +178,9 @@ class TestAc6M62ManifestWiring:
         "common-events/idle-cooldown-loop",
         "common-events/comment-handling",
     ]
-    ROLES = ["dev", "pm", "qa", "dm"]
+    # #10156: post-#6274.2 rename — dev→worker, qa→verifier. Directories
+    # on disk are references/roles/{worker,pm,verifier,dm}/.
+    ROLES = ["worker", "pm", "verifier", "dm"]
 
     @pytest.fixture(scope="class")
     def includes_by_role(self):
