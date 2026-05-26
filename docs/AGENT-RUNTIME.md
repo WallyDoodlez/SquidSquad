@@ -3,6 +3,8 @@
 _How a SquidSquad agent's operating model is defined — what triggers it to act, and what one act looks like._
 
 > **Status**: DRAFT, consolidating prior docs now under `docs/archive/`: `EVENT-ARCHITECTURE.md` (v2 nudge-driven design), `EVENT-BUS-ARCHITECTURE.md` (v1 PRD), and `event-bus.md` (v1 narrative). Those three are kept for traceability; this doc is the canonical reference going forward.
+>
+> **Companion docs**: [`HARNESS-ARCH.md`](HARNESS-ARCH.md) (harness internals — process model, HTTP API, state files, restart safety), [`VAULT-ARCH.md`](VAULT-ARCH.md) (vault layer), [`ARCHITECTURE.md`](ARCHITECTURE.md) (system overview), [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) (compose layer).
 
 ---
 
@@ -268,6 +270,8 @@ Removed under v2 (collectively 20 catalog entries):
 > **Loop-mode reality check**: today's loop-mode codebase still emits and reacts to most of the above. The catalog trim is part of the v2 migration (see §8); under loop mode they remain available as observability events.
 
 ### 4.3 Harness internals
+
+> **Note**: full harness architecture (process model, HTTP API surface, state files, restart safety, failure modes) is now in [`HARNESS-ARCH.md`](HARNESS-ARCH.md). This subsection covers what an agent author needs to know about the harness's bus + lifecycle interfaces. For internals, follow the cross-references inline.
 
 ```mermaid
 flowchart TB
