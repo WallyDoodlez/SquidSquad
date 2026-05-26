@@ -211,10 +211,12 @@ def cmd_stop(role: str | None = None):
     results = result.get("results", [])
     if not results:
         # #10006: nothing to stop is a no-op success, matching cmd_status's
-        # treatment of the empty-agents case. Without this, defensive
-        # teardown scripts (`squidsquad stop && next-step`) saw exit 1
-        # when the squad was already idle.
-        print("No agents to stop.")
+        # treatment of the empty-agents case. Same wording as cmd_status
+        # so operators grepping logs / writing shell predicates see one
+        # string for "no agents are registered with the harness." Without
+        # this, defensive teardown scripts (`squidsquad stop && next-step`)
+        # saw exit 1 when the squad was already idle.
+        print("No agents detected.")
         return 0
     for r in results:
         status = "OK" if r.get("success") else "FAIL"

@@ -245,11 +245,25 @@ class TestCommandsWithHarness:
             result = squidsquad_cli.cmd_stop()
         assert result == 0
         out = capsys.readouterr().out
-        assert "No agents to stop" in out, (
+        assert "No agents detected" in out, (
             "empty-results case must print an informational message "
-            "so the user knows the no-op was a real no-op, not a "
-            "silent success that hid a bug"
+            "(matches cmd_status wording) so the user knows the no-op "
+            "was a real no-op, not a silent success that hid a bug"
         )
+
+    def test_stop_all_missing_results_key_returns_0(self, capsys):
+        """#10006: cmd_stop must handle the case where the harness
+        response omits the 'results' key entirely (early-return code
+        path or older API version). result.get('results', []) makes
+        the production path robust, but without this test a future
+        refactor to `result['results']` would silently regress to
+        KeyError + exit 1."""
+        with patch.object(squidsquad_cli, "_discover_harness", return_value=8080), \
+             patch.object(squidsquad_cli, "_api_call",
+                          return_value={}):
+            result = squidsquad_cli.cmd_stop()
+        assert result == 0
+        assert "No agents detected" in capsys.readouterr().out
 
     def test_restart_success(self, capsys):
         with patch.object(squidsquad_cli, "_discover_harness", return_value=8080), \
