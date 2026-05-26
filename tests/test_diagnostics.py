@@ -280,6 +280,62 @@ class TestGenerateReport:
         assert "not json" not in report
 
 
+class TestRedactEntry:
+    """#10005: diagnostic entries must be redacted before inclusion in the
+    bug-report output. The keyword list mirrors `_sanitize_config`'s — values
+    under matching keys are replaced with `[REDACTED]`."""
+
+    def test_redacts_sensitive_context_key(self):
+        entry = {"severity": "error", "context": {"token": "abc123", "ok": "safe"}}
+        result = diagnostics._redact_entry(entry)
+        assert result["context"]["token"] == "[REDACTED]"
+        assert result["context"]["ok"] == "safe"
+
+    def test_redacts_nested_dict(self):
+        entry = {"context": {"outer": {"clone_url": "https://x.y/repo.git", "name": "ok"}}}
+        result = diagnostics._redact_entry(entry)
+        assert result["context"]["outer"]["clone_url"] == "[REDACTED]"
+        assert result["context"]["outer"]["name"] == "ok"
+
+    def test_recurses_through_lists(self):
+        entry = {"context": {"items": [{"password": "p1"}, {"name": "ok"}]}}
+        result = diagnostics._redact_entry(entry)
+        assert result["context"]["items"][0]["password"] == "[REDACTED]"
+        assert result["context"]["items"][1]["name"] == "ok"
+
+    def test_non_matching_top_level_keys_pass_through(self):
+        entry = {"severity": "info", "source": "boot", "message": "ok"}
+        result = diagnostics._redact_entry(entry)
+        assert result == entry
+
+    def test_does_not_mutate_input(self):
+        entry = {"context": {"token": "abc"}}
+        diagnostics._redact_entry(entry)
+        assert entry["context"]["token"] == "abc"
+
+    def test_generate_report_redacts_diagnostic_context(self, tmp_path):
+        """End-to-end: a token logged into context must not appear in the
+        rendered report. This is the public-tracker leak path from the
+        original finding."""
+        log_file = tmp_path / "diagnostic.jsonl"
+        log_file.write_text(
+            json.dumps({
+                "severity": "error",
+                "source": "boot",
+                "message": "fail",
+                "context": {"token": "abc-secret-123", "ok": "visible"},
+            }) + "\n",
+            encoding="utf-8",
+        )
+        with patch.object(diagnostics, "get_field", return_value="1.0.0"), \
+             patch.object(diagnostics, "_sanitize_config", return_value="cfg"), \
+             patch.object(diagnostics, "LOG_FILE", log_file):
+            report = diagnostics.generate_report()
+        assert "abc-secret-123" not in report
+        assert "[REDACTED]" in report
+        assert "visible" in report
+
+
 class TestLastFlagValidation:
     """#7519: --last flag must reject non-integer arguments."""
 
