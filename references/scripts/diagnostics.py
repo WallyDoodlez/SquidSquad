@@ -27,9 +27,14 @@ MAX_LOG_BYTES = 1_000_000  # 1MB cap
 # (operates on config.md key:value lines) and _redact_entry (#10005, walks
 # diagnostic-entry context dicts). Keep this list in one place so the
 # redaction surface stays uniform across the two flows.
+#
+# "raw" is included because log_entry wraps non-JSON context as {"raw": text}
+# (line 59). That wrapper opts the caller out of structured redaction, so
+# treat it as sensitive by default — bug reports default to safety; callers
+# wanting visible content should pass structured JSON.
 _SENSITIVE_KEYWORDS = (
     "repo", "path", "email", "token", "secret", "key",
-    "url", "clone", "webhook", "password",
+    "url", "clone", "webhook", "password", "raw",
 )
 
 

@@ -313,6 +313,35 @@ class TestRedactEntry:
         diagnostics._redact_entry(entry)
         assert entry["context"]["token"] == "abc"
 
+    def test_redacts_non_json_raw_fallback(self):
+        """log_entry wraps non-JSON context as {'raw': text}. That wrapper
+        is a default-deny path — secrets pasted as free-form context strings
+        must be redacted, since the caller opted out of structured JSON."""
+        entry = {"context": {"raw": "plain text with secret-token-xyz"}}
+        result = diagnostics._redact_entry(entry)
+        assert result["context"]["raw"] == "[REDACTED]"
+
+    def test_generate_report_redacts_non_json_context_end_to_end(self, tmp_path):
+        """End-to-end: a non-JSON context (which log_entry wraps in {'raw': ...})
+        must not leak into the rendered report. Closes the bypass path called
+        out in the #10005 DS review."""
+        log_file = tmp_path / "diagnostic.jsonl"
+        log_file.write_text(
+            json.dumps({
+                "severity": "error",
+                "source": "git",
+                "message": "clone failed",
+                "context": {"raw": "https://user:abc-secret-token@github.com/x.git"},
+            }) + "\n",
+            encoding="utf-8",
+        )
+        with patch.object(diagnostics, "get_field", return_value="1.0.0"), \
+             patch.object(diagnostics, "_sanitize_config", return_value="cfg"), \
+             patch.object(diagnostics, "LOG_FILE", log_file):
+            report = diagnostics.generate_report()
+        assert "abc-secret-token" not in report
+        assert "[REDACTED]" in report
+
     def test_generate_report_redacts_diagnostic_context(self, tmp_path):
         """End-to-end: a token logged into context must not appear in the
         rendered report. This is the public-tracker leak path from the
