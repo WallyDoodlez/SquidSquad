@@ -18,7 +18,7 @@ The human says something that sounds durable: a rule that should apply across cy
 
 - "From now on, when X, do Y"
 - "In this project, the PM should always Z"
-- "QA should focus on W"
+- "Verifier should focus on W"
 - "The worker should not touch X"
 - "Whenever there's a Y, route it to Z"
 - "Make sure you always remember to A"
@@ -65,7 +65,7 @@ When a customization request is detected, walk this dialog before writing L4:
    | Bucket | What it overrides | Examples |
    |---|---|---|
    | `instructions` | what the role *does* — cycle steps, decision rules, when-then patterns | "PM should also nudge designer for design:in-progress > 24h" |
-   | `soul-directives` | who the role *is* — values, tone, professional identity | "QA's tone with the human is friendly but no hedging" |
+   | `soul-directives` | who the role *is* — values, tone, professional identity | "Verifier's tone with the human is friendly but no hedging" |
    | `responsibility` | what's in/out of the role's lane | "Worker also owns Dockerfile changes in this project" |
 
    Ask the human if the target is ambiguous. Don't guess between buckets — the bucket choice changes who reads the rule at compose time.
