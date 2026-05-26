@@ -922,6 +922,7 @@ class TestVersionBumpHappyPath:
                 r.returncode = 1
             elif "tag" in cmd and "-l" in cmd:
                 r.stdout = ""
+                r.returncode = 0
             else:
                 r.returncode = 0
             return r
@@ -980,10 +981,12 @@ class TestVersionBumpPushFailure:
     reset, and (c) skip the success print. Otherwise DM-side state claims the
     bump shipped while no v<NEW> tag exists on origin."""
 
-    def _fake_run_factory(self, failing_cmd_prefix, run_calls):
+    def _fake_run_factory(self, failing_cmd, run_calls):
         """Returns a fake _run that fails (rc=1, stderr filled) when the
-        supplied command prefix matches; success otherwise. The diff guard
-        always returns rc=1 (staged changes present) so the commit path runs."""
+        supplied command matches exactly; success otherwise. Exact-match
+        (not prefix-match) avoids false-positives where ['git', 'push']
+        would also match ['git', 'push', '--tags']. The diff guard always
+        returns rc=1 (staged changes present) so the commit path runs."""
         def fake_run(cmd, **kwargs):
             run_calls.append(cmd)
             r = MagicMock()
@@ -994,7 +997,7 @@ class TestVersionBumpPushFailure:
             elif "tag" in cmd and "-l" in cmd:
                 r.stdout = ""  # tag doesn't exist yet
                 r.returncode = 0
-            elif failing_cmd_prefix is not None and cmd[:len(failing_cmd_prefix)] == failing_cmd_prefix:
+            elif failing_cmd is not None and cmd == failing_cmd:
                 r.returncode = 1
                 r.stderr = "fatal: simulated failure"
             else:
@@ -1070,7 +1073,9 @@ class TestVersionBumpPushFailure:
 
         monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
         monkeypatch.setattr(cycle_post, "_run",
-                            self._fake_run_factory(["git", "commit"], run_calls))
+                            self._fake_run_factory(
+                                ["git", "commit", "-m", "chore: bump version to v5.2.0"],
+                                run_calls))
         monkeypatch.setattr(cycle_post, "REPO_ROOT", Path("/fake"))
 
         data = {"version_bump": {"new_version": "5.2.0"}}
@@ -1087,6 +1092,50 @@ class TestVersionBumpPushFailure:
         captured = capsys.readouterr()
         assert "ERROR" in captured.err
         assert "commit" in captured.err.lower()
+
+    def test_tag_list_failure_aborts_bump(self, monkeypatch, capsys):
+        """`git tag -l` itself fails (rc != 0) -> abort before tag-create
+        or push; counter NOT reset. Pairs with the returncode check added
+        to the `git tag -l` call so a listing failure cannot mask an
+        already-existing tag and produce a misleading downstream error."""
+        script_calls = []
+        run_calls = []
+
+        def fake_run_script(script, *args, **kwargs):
+            script_calls.append((script, args))
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        def fake_run(cmd, **kwargs):
+            run_calls.append(cmd)
+            r = MagicMock()
+            r.stdout = ""
+            r.stderr = ""
+            if cmd == ["git", "diff", "--cached", "--quiet"]:
+                r.returncode = 1
+            elif cmd == ["git", "tag", "-l", "v5.4.0"]:
+                r.returncode = 1
+                r.stderr = "fatal: simulated tag-list failure"
+            else:
+                r.returncode = 0
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "REPO_ROOT", Path("/fake"))
+
+        data = {"version_bump": {"new_version": "5.4.0"}}
+        cycle_post._do_version_bump(data, "dm")
+
+        assert ["git", "tag", "v5.4.0"] not in run_calls
+        assert ["git", "push"] not in run_calls
+        assert ["git", "push", "--tags"] not in run_calls
+        reset_calls = [c for c in script_calls
+                       if c[0] == "config.py" and "shipped-since-bump" in c[1]]
+        assert reset_calls == []
+
+        captured = capsys.readouterr()
+        assert "ERROR" in captured.err
+        assert "tag -l" in captured.err
 
     def test_tag_create_failure_skips_push_and_counter(self, monkeypatch, capsys):
         """`git tag v<NEW>` fails -> push not attempted, counter not reset."""

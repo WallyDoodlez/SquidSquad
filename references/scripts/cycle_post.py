@@ -611,6 +611,14 @@ def _do_version_bump(data, role):
 
     # Check if tag exists
     tag_check = _run(["git", "tag", "-l", f"v{new_version}"])
+    if tag_check.returncode != 0:
+        print(
+            f"  ERROR: git tag -l failed (rc={tag_check.returncode}): "
+            f"{tag_check.stderr.strip() or '(no stderr)'} — "
+            f"cannot determine if tag v{new_version} exists; aborting bump",
+            file=sys.stderr,
+        )
+        return
     if not tag_check.stdout.strip():
         tag_result = _run(["git", "tag", f"v{new_version}"])
         if tag_result.returncode != 0:
