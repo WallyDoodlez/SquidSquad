@@ -1345,6 +1345,7 @@ class TestOrphanedTagRecovery:
         assert "ERROR" in captured.err
         assert "recovery push failed" in captured.err
         assert "v6.3.0" in captured.err
+        assert "skipping commit/tag/push" in captured.out
 
     def test_ls_remote_failure_aborts_recovery_safely(self, monkeypatch, capsys):
         """ls-remote network/auth failure → leave state untouched (no
@@ -1368,6 +1369,37 @@ class TestOrphanedTagRecovery:
         reset_calls = [c for c in script_calls
                        if c[0] == "config.py" and "shipped-since-bump" in c[1]]
         assert reset_calls == []
+
+        captured = capsys.readouterr()
+        assert "skipping commit/tag/push" in captured.out
+
+    def test_tag_l_failure_aborts_recovery_safely(self, monkeypatch, capsys):
+        """`git tag -l` itself failing inside the recovery probe → no
+        ls-remote attempted, no push attempted, no counter reset, fall
+        through to skip message. Closes the dead-parameter coverage gap."""
+        script_calls = []
+        run_calls = []
+        monkeypatch.setattr(cycle_post, "_run_script",
+                            self._build_run_script(script_calls))
+        monkeypatch.setattr(cycle_post, "_run",
+                            self._build_fake_run(run_calls,
+                                                  local_has_tag=True,
+                                                  remote_has_tag=False,
+                                                  tag_l_succeeds=False))
+        monkeypatch.setattr(cycle_post, "REPO_ROOT", Path("/fake"))
+
+        cycle_post._do_version_bump(
+            {"version_bump": {"new_version": "6.5.0"}}, "dm",
+        )
+
+        assert not any(c[:3] == ["git", "ls-remote", "--tags"] for c in run_calls)
+        assert not any(c[:3] == ["git", "push", "origin"] for c in run_calls)
+        reset_calls = [c for c in script_calls
+                       if c[0] == "config.py" and "shipped-since-bump" in c[1]]
+        assert reset_calls == []
+
+        captured = capsys.readouterr()
+        assert "skipping commit/tag/push" in captured.out
 
 
 # ---------------------------------------------------------------------------
