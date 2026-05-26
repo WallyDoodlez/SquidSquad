@@ -112,7 +112,6 @@ Both modes use the same per-agent subprocess shape. Differences are inside the C
 ```mermaid
 flowchart TB
     Operator(["Human operator"])
-    Forge[("Forge<br/>GitHub Issues")]
 
     subgraph harness_box["Harness host (one process per project)"]
         Harness[["harness.py<br/>HTTP API :7373<br/>EventLifecycleManager"]]
@@ -122,20 +121,22 @@ flowchart TB
         Harness --- StateFiles
     end
 
-    subgraph pm_box["PM agent"]
-        PMTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
-    end
+    Forge[("Forge<br/>GitHub Issues")]
 
-    subgraph verifier_box["Verifier agent"]
-        VerifierTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
-    end
-
-    subgraph worker_box["Worker agent"]
-        WorkerTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
-    end
-
-    subgraph dm_box["DM agent"]
-        DMTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
+    subgraph agents_row["Agents (one box per running alias; multi-instance installs add boxes here)"]
+        direction LR
+        subgraph pm_box["PM agent"]
+            PMTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
+        end
+        subgraph verifier_box["Verifier agent"]
+            VerifierTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
+        end
+        subgraph worker_box["Worker agent"]
+            WorkerTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
+        end
+        subgraph dm_box["DM agent"]
+            DMTree["cmd → thin_launcher → claude<br/>+ sibling event_poll"]
+        end
     end
 
     Operator --> Harness
