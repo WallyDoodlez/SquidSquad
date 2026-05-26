@@ -2,11 +2,11 @@
 
 #### Purpose
 
-L4 is `.squidsquad/project/*.md` — the install-local layer that **overrides or supplements** L1–L3 with project-specific rules. This sub-skill defines how an agent recognizes when the human is asking for a project-role customization, dialogs to capture the rule clearly, and produces the correct L4 entry (`instructions` or `soul-directives`).
+L4 is `.squidsquad/project/*.md` — the install-local layer that **overrides or supplements** L1–L3 with project-specific rules. This sub-skill defines how an agent recognizes when the human is asking for a project-role customization, dialogs to capture the rule clearly, and produces a well-formed L4 file that the compose pipeline can persist.
 
-L4 *writes* are owned by the compose pipeline (see `COMPOSE-ARCHITECTURE.md §7` — frontmatter ops, DeepSeek audit, mini-CQ gate). This sub-skill is the *upstream dialog* that produces a well-formed L4 entry; compose §7 then validates and persists it.
+L4 *writes* are owned by the compose pipeline. The frontmatter grammar (`slot`, `op`, `target`), the file naming convention, and the three safety gates (DeepSeek audit → mini-CQ → compose dry-run) are all defined in `COMPOSE-ARCHITECTURE.md` §3.3, §7.3, and §7.4. This sub-skill is the *upstream dialog* that produces the L4 entry before those gates run.
 
-L4 curation is **one-shot and durable**: each customization is captured once via the dialog below, written to the right L4 file, and then persists across cycles without further intervention. There is no recurring scan over L4 entries.
+L4 curation is **one-shot and durable** (see `COMPOSE-ARCHITECTURE.md` §7.7): each customization is captured once via the dialog below, written to the right L4 file, and persists across cycles without further intervention. There is no recurring scan over L4 entries; drift between L4 and L1–L3 is caught at recompose time by the existing dry-run gate, not by a separate curation pass.
 
 #### Talking to the user
 
@@ -16,7 +16,7 @@ Throughout this sub-skill, when the agent is conversing with the human about a c
 - Use functional descriptions: "your project's PM agent", "what the role does on each cycle", "the role's personality" — describe the *behaviour* the user sees, never the implementation that produces it.
 - If the human's request would contradict how SquidSquad is built (e.g., asking an agent to write code directly when delivery agents only package, or asking for a behaviour the architecture forbids), explain the relevant capability in plain terms and guide the user to a request the system can fulfill. Do not narrate why the original ask fails at the implementation layer.
 
-The dialog steps below describe agent-internal mechanics; surface to the user only the functional shape (durability, role, why, edge cases, draft preview, approval).
+The dialog steps below distinguish user-facing turns from agent-internal mechanics; the human sees only the functional shape (durability, role, why, edge cases, draft preview, approval).
 
 #### Activation — customization request detected
 
@@ -44,41 +44,42 @@ If unsure, **ask** before assuming durable. One short clarifying question is che
 
 When a customization request is detected, walk this dialog before writing L4. Steps 1–4 and 7 are user-facing (use plain language per the "Talking to the user" rule above); steps 5, 6, 8 are agent-internal mechanics.
 
-1. **Confirm durability.** "I heard you want X to always happen in this project. Want me to lock that in as a per-project rule, or is it just for this task?"
+1. **Confirm durability** (user-facing). "I heard you want X to always happen in this project. Want me to lock that in as a per-project rule, or is it just for this task?"
 
-2. **Identify the target role + bucket.** Two buckets:
+2. **Identify the target role and the shape of the customization** (user-facing). Two conceptual shapes drive the L4 slot the agent will pick internally:
 
-   | Bucket | What it customizes | Examples |
-   |---|---|---|
-   | `instructions` | what the role *does* — cycle steps, decision rules, when-then patterns, scope of work | "PM should also nudge designer for design:in-progress > 24h"; "Worker also owns Dockerfile changes in this project" |
-   | `soul-directives` | who the role *is* — values, tone, professional identity, priorities | "Verifier's tone with the human is friendly but no hedging" |
-
-   Scope additions or restrictions (what's in/out of a role's lane) flow through `instructions` — they're rules the role follows during its cycle, not a separate metadata layer. Ask the human only the functional question ("does this change what the role *does* or who the role *is*?"); don't expose the bucket names.
-
-3. **Surface the why.** Soul-directive customizations especially need the WHY captured. Ask: "Is there a past incident or strong preference behind this? Capturing it helps future judgement on edge cases."
-
-4. **Surface edge cases.** "When should this rule *not* apply?" Edge cases written upfront save a future override on top of this override.
-
-5. **Pick the target file** (agent-internal):
-
-   | Target file | When to use |
+   | What the user describes | Which slot the agent will write |
    |---|---|
-   | `.squidsquad/project/<role>-instructions.md` | per-role instruction override |
-   | `.squidsquad/project/<role>-soul-directives.md` | per-role personality/values overlay |
-   | `.squidsquad/project/shared-instructions.md` | rule that applies to *every* role |
-   | `.squidsquad/project/shared-soul-directives.md` | shared persona traits |
+   | What the role *does* — cycle behaviour, decision rules, when-then patterns, scope of work | `slot: instructions` |
+   | Who the role *is* — values, tone, professional identity, priorities | `slot: soul` |
 
-6. **Pick the op + anchor** (agent-internal). The L4 frontmatter system supports `replace`, `insert`, `append` (see COMPOSE-ARCHITECTURE §3.3 / §7). Choose:
+   Ask the human only the functional question ("does this change what the role *does* on each cycle, or who the role *is*?"); don't expose slot names. If a customization concerns both (e.g., "be more conservative when filing bugs") split it into two L4 entries — one per slot — and walk the human through each.
 
-   - `append` — new rule that extends existing L1–L3 content. Safest default.
-   - `insert` — new rule that should appear at a specific position within an L1–L3 section.
-   - `replace` — existing L1–L3 behaviour is *wrong* for this project; overwrite it. Use sparingly — flag in the entry's `rationale` field.
+   Step-specific *prohibitions* ("during step X, do not do Y") do NOT belong in L4. Per `COMPOSE-ARCHITECTURE.md` §6.3, those live in the relevant L1–L3 sub-skill source; if the human asks for one, route the request to the sub-skill owner rather than writing an L4 entry.
 
-   The `anchor` points to the L1–L3 location. If no clean anchor exists, ask the human a plain-language question about whether the new behaviour is meant to *replace* or *add to* the role's current work — don't expose anchor mechanics.
+3. **Surface the why** (user-facing). Soul customizations especially need the WHY captured. Ask: "Is there a past incident or strong preference behind this? Capturing it helps future judgement on edge cases."
 
-7. **Propose a draft and read it back.** Show the human the rule in plain prose (rule + why + when-not-to-apply) and get explicit approval before writing. The agent translates that approved prose into the L4 file; the human never sees the frontmatter.
+4. **Surface edge cases** (user-facing). "When should this rule *not* apply?" Edge cases written upfront save a future override on top of this override.
 
-8. **Persist via compose §7** (agent-internal). The compose pipeline runs the DeepSeek audit + mini-CQ gate. The agent does not bypass that gate — even with human approval, the audit catches structural problems that the dialog may not have surfaced.
+5. **Pick the op + target** (agent-internal). The op set is `append`, `insert-before`, `insert-after`, `replace` (`COMPOSE-ARCHITECTURE.md` §3.3):
+
+   - `append` — new rule that extends existing content of the chosen slot. Safest default; no `target` required.
+   - `insert-before <target>` / `insert-after <target>` — the rule should appear at a specific position relative to an existing L1–L3 step. The `target` is a stable step ID declared in L1–L3 (see §6.1). Pick the variant based on whether the new rule runs before or after the anchor step — the user-facing question is "should this happen before or after [existing behaviour]?", not "which op?".
+   - `replace <target>` — existing L1–L3 behaviour is *wrong* for this project; overwrite the step's content entirely. Use sparingly; the step ID is preserved so later L4 inserts targeting it still resolve.
+
+   Every non-`append` op requires a `target` that resolves to a real L1–L3 step ID. If no clean target exists, ask the human a plain-language question about whether the new behaviour is meant to *replace* or *add to* the role's current work; don't expose target mechanics.
+
+6. **Pick the file** (agent-internal). One file per L4 customization, named `<slot>-<short-kebab-description>.md` (`COMPOSE-ARCHITECTURE.md` §7.3), e.g. `instructions-pre-check-incidents.md`. Files live in `.squidsquad/project/`. Role-scoping is implicit — `compose.py deploy <role>` applies all files in that directory to the named role. Cross-role L4 (a single file that customizes multiple roles) is an open question (`COMPOSE-ARCHITECTURE.md` §11.1 Q3) and is not currently supported; if the human asks for the same customization across roles, write one file per role.
+
+7. **Propose a draft and read it back** (user-facing). Show the human the rule in plain prose (rule + why + when-not-to-apply) and get explicit approval before writing. The agent translates that approved prose into the L4 file; the human never sees the frontmatter.
+
+8. **Run the safety gates** (agent-internal). Before persisting, the agent runs the three §7.4 gates in order:
+
+   1. **DeepSeek decision-tree audit**: a deepseek-class model reviews the agent's `slot` + `op` + `target` classification and rejects if the call is wrong.
+   2. **Mini-CQ**: the agent reads the draft back to the human one final time and gets explicit yes/no. Rejection aborts; no file written.
+   3. **Compose dry-run**: `compose.py --check` validates the new file resolves cleanly (target exists, no DRY violation, no orphan).
+
+   Only after all three gates pass does the agent write the file and commit. The gates are agent-side, not part of the compose pipeline itself — the file does not hit disk until all three are green.
 
 #### When the request can't be fulfilled
 
@@ -90,13 +91,18 @@ Example, in user-facing voice:
 
 #### What this sub-skill does NOT do
 
-- Does NOT silently auto-write L4 from any heuristic without human confirmation. The dialog is mandatory; "L4 autonomous writes" (COMPOSE §7) covers a narrower path with explicit gating and an audit trail.
-- Does NOT scan or audit existing L4 entries on a recurring schedule. Curation is one-shot per request; entries are durable until the human asks to change them.
+- Does NOT silently auto-write L4 from any heuristic without human confirmation. The dialog is mandatory; the §7.4 gates run on every write.
+- Does NOT scan or audit existing L4 entries on a recurring schedule. Curation is one-shot per request; entries are durable until the human asks to change them (`COMPOSE-ARCHITECTURE.md` §7.7).
 - Does NOT modify L1–L3. Project-pioneered rules that should be promoted upstream get filed as a normal tracker task, not handled here.
-- Does NOT prune L4 unilaterally. Any removal goes through the same dialog (confirm with human, then write the removal as a counter-entry).
-- Does NOT cross into vault territory. L4 is *agent-instruction* customization; the vault is *knowledge* customization. Soul directives live in L4; rationale notes about why a soul directive exists live in vault.
+- Does NOT author step-specific prohibitions as L4. Those live in L1–L3 sub-skill sources (`COMPOSE-ARCHITECTURE.md` §6.3).
+- Does NOT prune L4 unilaterally. Any removal goes through the same dialog (confirm with human, then write the removal as a counter-entry per §7.5).
+- Does NOT cross into vault territory. L4 is *agent-instruction* customization; the vault is *knowledge* customization. Soul customizations live in L4; rationale notes about why a soul customization exists live in vault.
 
 #### Cross-references
 
-- `COMPOSE-ARCHITECTURE.md §3.3` — L4 frontmatter ops (`replace` / `insert` / `append`)
-- `COMPOSE-ARCHITECTURE.md §7` — L4 autonomous writes (DeepSeek audit + mini-CQ gate, audit trail)
+- `COMPOSE-ARCHITECTURE.md` §3.3 — L4 op grammar (`append` / `insert-before` / `insert-after` / `replace`) and the `target` field
+- `COMPOSE-ARCHITECTURE.md` §6.3 — step-specific prohibitions live in sub-skills, not L4
+- `COMPOSE-ARCHITECTURE.md` §7.3 — L4 file naming (`<slot>-<short-kebab-description>.md`) and frontmatter shape
+- `COMPOSE-ARCHITECTURE.md` §7.4 — the three safety gates (DeepSeek audit → mini-CQ → compose dry-run)
+- `COMPOSE-ARCHITECTURE.md` §7.7 — one-shot + durable model; drift caught at recompose time
+- `COMPOSE-ARCHITECTURE.md` §11.1 Q3 — cross-role L4 (open question, not currently supported)
