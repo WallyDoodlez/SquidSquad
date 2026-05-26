@@ -126,7 +126,7 @@ step-ids: [step:cycle/<name>, step:boot/<name>, ...]  # for instructions slot on
 
 Ordinals are integers, non-dense (gaps allowed). Authors use gaps of 10 (e.g. 10, 20, 30) so future inserts don't require renumbering.
 
-> **Important** — The `instructions/cycle` sub-slot has **two parallel manifests** (#8697): `includes.yml` (polling/`/loop`) and `includes-events.yml` (event-driven). `compose.py` selects one at compose time via `config.get_wake_mode(role)`; the chosen manifest is rendered in full into composed CLAUDE.md. The two manifests produce structurally distinct cycle sub-trees — they are *not* runtime branches inside a single composed output. See §6.5.
+> **Important** — The `instructions/cycle` sub-slot has **two parallel manifests** (#8697): `includes.yml` (polling/`/loop`) and `includes-events.yml` (event-driven). `compose.py` selects one at compose time via `config.get_wake_mode()` (global flag; see AGENT-RUNTIME §8.1); the chosen manifest is rendered in full into composed CLAUDE.md. The two manifests produce structurally distinct cycle sub-trees — they are *not* runtime branches inside a single composed output. See §6.5.
 
 ### 3.3 L4 operations (creative overlay)
 
@@ -452,23 +452,30 @@ This section is intentionally short — most vault detail belongs in `references
        2. Mode detect               (step:boot/mode-detect)
        3. Bootup-complete handshake (step:boot/bootup-complete)
        4. Read role fragments       (step:boot/load-fragments)
-   3.2 Per event (persistent event-stream loop — see common-events/l1-base)
-       1. Open event stream         (step:cycle/event-stream-open)
-                                    — Monitor `event_poll.py <role> --wait 5 --target`
-       2. Case dispatch             (step:cycle/case-dispatch)
-                                    A: bootup, B: work-queue, C: status-transition,
-                                    D: pr-merge (dm only), E: stop-requested
-       3. Forge-read before act     (step:cycle/forge-read)
-       4. Process one event         (step:cycle/process-event)
-                                    — react, transition, comment, commit
-       5. Advance cursor            (step:cycle/cursor-advance)
-                                    — atomic .tmp + mv into working-state.md
-       6. Comment-handling rules    (step:cycle/comment-handling)
-                                    — comments are NOT triggers; dm end-of-task exception
-       7. Idle cool-down            (step:cycle/idle-cooldown)
-                                    — improvement-scan loop when work_queue empty
-       8. Context-pressure honor    (step:cycle/stop-requested)
-                                    — honor stop-requested at next task boundary
+   3.2 Per nudge (idle → walk → idle — see AGENT-RUNTIME §7.1 for the canonical contract)
+       1. Wake on nudge             (step:cycle/wake)
+                                    — Monitor receives `NUDGE\n` from the
+                                      sibling `event_poll.py --wait --role <role>
+                                      --target stdout` process
+       2. Read cursor + events      (step:cycle/read-cursor)
+                                    — GET /events/cursor/{role},
+                                      GET /events/for/{role}?since=cursor
+       3. Walk events with care     (step:cycle/walk)
+                                    filter (target_role match)
+       4. Per cared event           (step:cycle/process-event)
+                                    — pre-cycle → do work → post-cycle,
+                                      one wrapper per cared event
+       5. Batched cursor ack        (step:cycle/cursor-ack)
+                                    — POST /events {type:ack-cursor,
+                                      event_id:last_tended, role}; cursor
+                                      lives in .event-state.json (harness-owned)
+       6. Return to idle            (step:cycle/return-idle)
+                                    — no /loop sleep; next nudge resumes
+       Improvement subloop          handled separately when the work queue
+                                    drains — see AGENT-RUNTIME §7.6
+       Shutdown / stop intent       arrives as an `assigned-to` event with
+                                    event_context="stop-intent" and is
+                                    handled by step 4 like any other event
    3.3 On shutdown
        1. Graceful stop             (step:shutdown/graceful-stop)
 
@@ -612,29 +619,29 @@ Migration from today's mixed numbering is mechanical (one-time renumber as part 
 
 ### 6.5 Wake-mode handling — two parallel manifests, compose-time selection
 
-SquidSquad agents support two wake mechanisms: **event-driven** (the harness dispatches work as events; agent processes one event at a time off a streaming `event_poll.py`) and **polling** (the agent reschedules itself via `/loop` at a fixed interval and runs a full Ralph Loop cycle on each fire). They produce identical *outcomes* but very different `instructions/cycle` shapes.
+SquidSquad agents support two wake mechanisms: **event-driven** (a sibling `event_poll.py` polls the harness with adaptive backoff and writes one `NUDGE\n` line to stdout per batch; Monitor wakes the agent, which then walks all events past its cursor and acks once at the end — see AGENT-RUNTIME §7.0 / §7.1) and **polling** (the agent reschedules itself via `/loop` at a fixed interval and runs a full Ralph Loop cycle on each fire). They produce identical *outcomes* but very different `instructions/cycle` shapes.
 
 **Architectural rule** (matches today's `compose.py` implementation per #8697): the two modes are **two parallel manifests selected at compose time**, not a runtime branch.
 
 - `references/roles/<role>/includes.yml`        — polling manifest (default)
 - `references/roles/<role>/includes-events.yml` — event-driven manifest (falls back to polling manifest if absent)
 
-`compose.py:_load_manifest` reads `config.get_wake_mode(role)` and chooses the manifest; `_resolve_includes_with_manifest` then renders the chosen manifest in full. There are **no mode-conditional directives inside fragments** — the manifest is the gate. The agent receives one fully-resolved CLAUDE.md whose §3.2 is shaped for exactly one mode. Mid-session mode flips do not exist; an operator flipping `config.md` from `polling` to `event-driven` (or vice versa) takes effect on the next compose+restart.
+`compose.py:_load_manifest` reads `config.get_wake_mode()` (a global flag — there is no per-role wake mode; see AGENT-RUNTIME §8.1) and chooses the manifest; `_resolve_includes_with_manifest` then renders the chosen manifest in full. There are **no mode-conditional directives inside fragments** — the manifest is the gate. The agent receives one fully-resolved CLAUDE.md whose §3.2 is shaped for exactly one mode. Mid-session mode flips do not exist; an operator flipping `config.md` from `polling` to `event-driven` (or vice versa) takes effect on the next compose+restart.
 
 ```mermaid
 flowchart LR
-  Cfg[".squidsquad/config.md<br/>event-driven: yes | no"] --> Reader["compose.py<br/>config.get_wake_mode(role)"]
-  Reader -->|polling| MP["includes.yml<br/>(polling manifest)"]
-  Reader -->|event| ME["includes-events.yml<br/>(event manifest)"]
-  MP --> RP["Composed CLAUDE.md<br/>§3.2 = 10 Ralph Loop steps<br/>(see §5.6.1)"]
-  ME --> RE["Composed CLAUDE.md<br/>§3.2 = 8 per-event steps<br/>(see §5.6.2)"]
+  Cfg[".squidsquad/config.md<br/>event-driven: yes | no<br/>(global flag)"] --> Reader["compose.py<br/>config.get_wake_mode()"]
+  Reader -->|polling| MP["includes.yml<br/>(polling manifest)<br/>+ ralph-loop-overview.md"]
+  Reader -->|event| ME["includes-events.yml<br/>(event manifest)<br/>+ common-events/*.md"]
+  MP --> RP["Composed CLAUDE.md<br/>(loop-mode body inlined,<br/>§3.2 = Ralph Loop — see §5.6.1)"]
+  ME --> RE["Composed CLAUDE.md<br/>(event-mode body inlined,<br/>§3.2 = nudge-walk — see §5.6.2)"]
   RP -.->|"agent sees ONE flavored output<br/>never both"| Agent[("agent session")]
   RE -.->|"agent sees ONE flavored output<br/>never both"| Agent
   style RP fill:#dfe7fd
   style RE fill:#fde7d3
 ```
 
-Mode flip = next compose + agent restart, never mid-session. The two outputs differ only at §3.2 + one step of §3.1 (see §5.6.3).
+Mode flip = recompose + agent restart, never mid-session. The two outputs differ at §3.2 (procedural body) plus one step of §3.1 (mode-detect handshake; see §5.6.3).
 
 **Why two parallel manifests instead of one branchy file**:
 
@@ -704,7 +711,7 @@ Agents may delegate work to subagents via the Agent tool. Under v2, subagent gui
 
 ## 7. Runtime L4 writes by the agent
 
-This is the **new architectural dimension** that goes beyond the original Phase 1 research scope. The agent (any role) writes to L4 at runtime in response to human instructions in the deployed project.
+The agent (any role) writes to L4 at runtime in response to human instructions in the deployed project. This section covers the *write path* — the structural compose mechanics, the safety gates, and the audit trail. The *upstream dialog* (how the agent detects a customization request, elicits scope and rationale from the human, and chooses the right L4 bucket) is owned by `references/sub-skills/common/l4-curation.md` — see §7.7 for the boundary.
 
 ### 7.1 The trigger
 
@@ -715,6 +722,8 @@ When the human gives the agent a new instruction in conversation:
 - "Stop checking the production deploy log on every cycle; only check it on Tuesdays."
 
 These are project-specific instruction changes. They don't belong in L1-L3 (which ships globally) — they belong in L4 (which is project-local).
+
+The `l4-curation` sub-skill defines the detection patterns (durable vs one-off, customization vs feature request) and the elicitation dialog (role + bucket + why + edge cases + draft + approval). By the time §7.2's decision tree fires, the curation sub-skill has already produced a well-scoped request with an identified bucket; §7.2 just classifies the structural op.
 
 ### 7.2 Agent decision tree
 
@@ -822,6 +831,17 @@ sequenceDiagram
 ```
 
 Three gates (DS audit, mini-CQ, dry-run) must all pass before any write commits. Any failure aborts cleanly with no partial state.
+
+### 7.7 Curation lifecycle (drift, conflict, promotion)
+
+Writes are only half of L4 ownership. Once an L4 entry exists, it can rot — the L1–L3 anchor it overrides may be renamed or deleted, a second entry may step on it, or upstream may absorb the rule it pioneered. The `l4-curation` sub-skill defines two quiet-cycle scans run by PM:
+
+- **Drift scan**: every `.squidsquad/project/*.md` entry's `target` (anchor) is checked against current L1–L3 content. Missing/moved/redundant anchors are surfaced as plain-language questions to the human; nothing is auto-resolved.
+- **Conflict scan**: overlapping `target` + incompatible op combinations across L4 entries are surfaced the same way.
+
+Both scans emit pending questions through the same queue mechanism `vault-optimize` uses. Resolution is always a human call; the agent never deletes, rewrites, or merges L4 entries unilaterally. Counter-L4 writes (per §7.5) remain the only agent-initiated unwind path, and they go through the same §7.4 gates as a fresh write.
+
+A retired L4 entry — one whose project-pioneered rule has been absorbed into a later L1–L3 release — is removed via the `git revert` path on the original write commit, or via a counter-L4 with `op: replace` and empty body. The curation sub-skill flags candidates; the human chooses.
 
 ---
 
