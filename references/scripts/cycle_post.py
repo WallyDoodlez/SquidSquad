@@ -599,17 +599,51 @@ def _do_version_bump(data, role):
         print(f"  Version bump v{new_version}: no staged changes — skipping commit/tag/push")
         return
 
-    _run(["git", "commit", "-m", f"chore: bump version to v{new_version}"])
+    commit_result = _run(["git", "commit", "-m", f"chore: bump version to v{new_version}"])
+    if commit_result.returncode != 0:
+        print(
+            f"  ERROR: version bump commit failed (rc={commit_result.returncode}): "
+            f"{commit_result.stderr.strip() or '(no stderr)'} — "
+            f"shipped-since-bump NOT reset; v{new_version} NOT pushed",
+            file=sys.stderr,
+        )
+        return
 
     # Check if tag exists
     tag_check = _run(["git", "tag", "-l", f"v{new_version}"])
     if not tag_check.stdout.strip():
-        _run(["git", "tag", f"v{new_version}"])
+        tag_result = _run(["git", "tag", f"v{new_version}"])
+        if tag_result.returncode != 0:
+            print(
+                f"  ERROR: git tag v{new_version} failed (rc={tag_result.returncode}): "
+                f"{tag_result.stderr.strip() or '(no stderr)'} — "
+                f"shipped-since-bump NOT reset; tag/push NOT completed",
+                file=sys.stderr,
+            )
+            return
 
-    _run(["git", "push"])
-    _run(["git", "push", "--tags"])
+    push_result = _run(["git", "push"])
+    if push_result.returncode != 0:
+        print(
+            f"  ERROR: git push failed (rc={push_result.returncode}): "
+            f"{push_result.stderr.strip() or '(no stderr)'} — "
+            f"local commit + tag v{new_version} exist but did NOT reach origin; "
+            f"shipped-since-bump NOT reset",
+            file=sys.stderr,
+        )
+        return
 
-    # Reset counter
+    push_tags_result = _run(["git", "push", "--tags"])
+    if push_tags_result.returncode != 0:
+        print(
+            f"  ERROR: git push --tags failed (rc={push_tags_result.returncode}): "
+            f"{push_tags_result.stderr.strip() or '(no stderr)'} — "
+            f"commit pushed but tag v{new_version} did NOT reach origin; "
+            f"shipped-since-bump NOT reset",
+            file=sys.stderr,
+        )
+        return
+
     _run_script("config.py", "set", "shipped-since-bump", "0")
 
     print(f"  Version v{new_version} tagged and pushed")
