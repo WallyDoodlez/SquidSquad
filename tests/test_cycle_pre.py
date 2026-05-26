@@ -553,10 +553,21 @@ class TestEnrichWithComments:
 class TestBuildPmInputNewFields:
     """Tests for #2494: approved_items, human_blocked, recently_commented."""
 
-    def _make_mocks(self, monkeypatch, tracker_responses=None, gh_responses=None):
-        """Set up mocks for _run_script and _run with configurable responses."""
+    def _make_mocks(self, monkeypatch, tracker_responses=None, gh_responses=None,
+                     gh_fetch_responses=None):
+        """Set up mocks for _run_script, _run, and _gh_fetch.
+
+        `gh_fetch_responses` maps (label_filter, state) tuples -> list of issue
+        dicts and is the post-refactor injection point: PM/QA/DM builders now
+        derive every subset via Python filters over a small set of bulk
+        `_gh_fetch` calls instead of fanning out tracker.py subprocesses.
+        Tests built against the old per-call tracker mocks supply the same
+        items via this map and label each fixture appropriately so the
+        filters route them into the right bucket.
+        """
         tracker_responses = tracker_responses or {}
         gh_responses = gh_responses or {}
+        gh_fetch_responses = gh_fetch_responses or {}
 
         def fake_run_script(*args, **kwargs):
             fake = MagicMock()
@@ -589,9 +600,14 @@ class TestBuildPmInputNewFields:
                     break
             return fake
 
+        def fake_gh_fetch(label_filter, state, **kwargs):
+            return gh_fetch_responses.get((label_filter, state), [])
+
         monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
         monkeypatch.setattr(cycle_pre, "_run", fake_run)
+        monkeypatch.setattr(cycle_pre, "_gh_fetch", fake_gh_fetch)
         monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
+            "dev-agents": "skill",
             "branch-workflow": "no", "pr-flow": "no",
             "improvement-scanning": "no", "vault-remember": "no",
             "vault-optimize": "no", "ship-threshold": "10",
@@ -602,9 +618,12 @@ class TestBuildPmInputNewFields:
 
     def test_approved_items_present(self, patch_dirs, squid_dir, monkeypatch):
         """PM input includes approved_items field."""
-        approved = [{"number": 100, "title": "Approved task", "labels": []}]
-        self._make_mocks(monkeypatch, tracker_responses={
-            "list-by-labels:squidsquad,status:approved": approved,
+        approved = [{
+            "number": 100, "title": "Approved task",
+            "labels": [{"name": "squidsquad"}, {"name": "status:approved"}],
+        }]
+        self._make_mocks(monkeypatch, gh_fetch_responses={
+            ("squidsquad", "open"): approved,
         })
         result = cycle_pre._build_pm_input("pm")
         assert "approved_items" in result
@@ -619,12 +638,14 @@ class TestBuildPmInputNewFields:
 
     def test_human_blocked_items(self, patch_dirs, squid_dir, monkeypatch):
         """PM input includes human_blocked field with items from all three labels."""
-        blocked = [{"number": 200, "title": "Needs human setup", "labels": []}]
-        review = [{"number": 201, "title": "Needs human review", "labels": []}]
-        self._make_mocks(monkeypatch, tracker_responses={
-            "list-by-labels:squidsquad,blocked:human-action": blocked,
-            "list-by-labels:squidsquad,status:pending-human-setup": [],
-            "list-by-labels:squidsquad,status:pending-human-review": review,
+        items = [
+            {"number": 200, "title": "Needs human action",
+              "labels": [{"name": "squidsquad"}, {"name": "blocked:human-action"}]},
+            {"number": 201, "title": "Needs human review",
+              "labels": [{"name": "squidsquad"}, {"name": "status:pending-human-review"}]},
+        ]
+        self._make_mocks(monkeypatch, gh_fetch_responses={
+            ("squidsquad", "open"): items,
         })
         result = cycle_pre._build_pm_input("pm")
         assert "human_blocked" in result
@@ -633,12 +654,23 @@ class TestBuildPmInputNewFields:
         assert numbers == {200, 201}
 
     def test_human_blocked_deduplicates(self, patch_dirs, squid_dir, monkeypatch):
-        """Items appearing in multiple blocked queries are not duplicated."""
-        same_item = [{"number": 300, "title": "Same item", "labels": []}]
-        self._make_mocks(monkeypatch, tracker_responses={
-            "list-by-labels:squidsquad,blocked:human-action": same_item,
-            "list-by-labels:squidsquad,status:pending-human-setup": same_item,
-            "list-by-labels:squidsquad,status:pending-human-review": [],
+        """Items carrying multiple blocked labels are not duplicated.
+
+        Bulk-fetch refactor: each item appears once in squid_open and is
+        appended once to human_blocked regardless of how many blocked labels
+        it carries. Old per-label-query path needed an explicit `seen` set
+        for the same guarantee.
+        """
+        same_item = [{
+            "number": 300, "title": "Same item",
+            "labels": [
+                {"name": "squidsquad"},
+                {"name": "blocked:human-action"},
+                {"name": "status:pending-human-setup"},
+            ],
+        }]
+        self._make_mocks(monkeypatch, gh_fetch_responses={
+            ("squidsquad", "open"): same_item,
         })
         result = cycle_pre._build_pm_input("pm")
         assert len(result["human_blocked"]) == 1
@@ -647,45 +679,60 @@ class TestBuildPmInputNewFields:
         """PM input includes recently_commented field."""
         from datetime import datetime, timezone
         now_iso = datetime.now(timezone.utc).isoformat()
-        items = [{"number": 400, "title": "Recent", "labels": [], "updatedAt": now_iso}]
-        self._make_mocks(monkeypatch, gh_responses={
-            "issue list": items,
+        items = [{
+            "number": 400, "title": "Recent",
+            "labels": [{"name": "squidsquad"}],
+            "updatedAt": now_iso,
+        }]
+        self._make_mocks(monkeypatch, gh_fetch_responses={
+            ("squidsquad", "open"): items,
         })
         result = cycle_pre._build_pm_input("pm")
         assert "recently_commented" in result
+        assert len(result["recently_commented"]) == 1
 
     def test_recently_commented_filters_old(self, patch_dirs, squid_dir, monkeypatch):
         """Items updated more than 2x interval ago are excluded."""
-        items = [{"number": 500, "title": "Old", "labels": [], "updatedAt": "2020-01-01T00:00:00Z"}]
-        self._make_mocks(monkeypatch, gh_responses={
-            "issue list": items,
+        items = [{
+            "number": 500, "title": "Old",
+            "labels": [{"name": "squidsquad"}],
+            "updatedAt": "2020-01-01T00:00:00Z",
+        }]
+        self._make_mocks(monkeypatch, gh_fetch_responses={
+            ("squidsquad", "open"): items,
         })
         result = cycle_pre._build_pm_input("pm")
         assert len(result["recently_commented"]) == 0
 
     def test_all_new_fields_enriched_with_comments(self, patch_dirs, squid_dir, monkeypatch):
-        """All three new fields are enriched with latest comments."""
+        """All three new fields are enriched with latest comments.
+
+        Bulk-fetch refactor: `latest_comment` is now extracted from the
+        inline `comments` field on each fetched item rather than from a
+        per-item subprocess. The test fixture embeds `comments` directly.
+        """
         from datetime import datetime, timezone
         now_iso = datetime.now(timezone.utc).isoformat()
-        comment = {"author": "human", "body": "Please fix", "createdAt": now_iso}
+        comment_inline = [{
+            "author": {"login": "human"}, "body": "Please fix", "createdAt": now_iso,
+        }]
+        expected = {"author": "human", "body": "Please fix", "createdAt": now_iso}
 
-        approved = [{"number": 600, "title": "A", "labels": []}]
-        blocked = [{"number": 601, "title": "B", "labels": []}]
-
-        self._make_mocks(monkeypatch, tracker_responses={
-            "list-by-labels:squidsquad,status:approved": approved,
-            "list-by-labels:squidsquad,blocked:human-action": blocked,
-            "list-by-labels:squidsquad,status:pending-human-setup": [],
-            "list-by-labels:squidsquad,status:pending-human-review": [],
-        }, gh_responses={
-            "issue list": [{"number": 602, "title": "C", "labels": [], "updatedAt": now_iso}],
+        items = [
+            {"number": 600, "title": "A",
+              "labels": [{"name": "squidsquad"}, {"name": "status:approved"}],
+              "updatedAt": now_iso, "comments": comment_inline},
+            {"number": 601, "title": "B",
+              "labels": [{"name": "squidsquad"}, {"name": "blocked:human-action"}],
+              "updatedAt": now_iso, "comments": comment_inline},
+        ]
+        self._make_mocks(monkeypatch, gh_fetch_responses={
+            ("squidsquad", "open"): items,
         })
-        # Override comment enrichment to add comments
-        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: comment)
 
         result = cycle_pre._build_pm_input("pm")
-        assert result["approved_items"][0].get("latest_comment") == comment
-        assert result["human_blocked"][0].get("latest_comment") == comment
+        assert result["approved_items"][0].get("latest_comment") == expected
+        assert result["human_blocked"][0].get("latest_comment") == expected
 
     def test_agent_health_parsed_on_nonzero_exit(self, patch_dirs, squid_dir, monkeypatch):
         """Regression #2713: health JSON must be parsed even when health_check.py exits 1."""
@@ -989,86 +1036,67 @@ class TestGetVerifiableRoles:
 
 
 class TestQAInputMultiRole:
-    """Regression #4803: QA input must query all verifiable roles, not just skill."""
+    """Regression #4803: QA input must cover all verifiable roles, not just skill.
+
+    Post-refactor: there's no per-role tracker.py loop to inspect — items
+    flow through a single labeled `_gh_fetch` call and are routed into the
+    verification queue by their `role:*` label. Tests assert routing/attribution
+    on labeled fixtures.
+    """
+
+    def _setup(self, monkeypatch, gh_fetch_responses=None):
+        gh_fetch_responses = gh_fetch_responses or {}
+
+        def fake_gh_fetch(label_filter, state, **kwargs):
+            return gh_fetch_responses.get((label_filter, state), [])
+
+        monkeypatch.setattr(cycle_pre, "_gh_fetch", fake_gh_fetch)
+        monkeypatch.setattr(cycle_pre, "_run_script", lambda *a, **k: MagicMock(
+            returncode=0, stdout="[]"))
+        monkeypatch.setattr(cycle_pre, "_run", lambda cmd, **kw: MagicMock(
+            returncode=0, stdout="[]", stderr=""))
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
+            "dev-agents": "skill",
+            "e2e-tests": "(none)",
+            "interval": "30",
+            "branch-workflow": "no", "pr-flow": "no",
+            "improvement-scanning": "no", "vault-remember": "no",
+            "vault-optimize": "no",
+        }.get(f, ""))
 
     def test_qa_queries_all_roles(self, patch_dirs, squid_dir, monkeypatch):
-        """QA input includes pending-test items from dm and other roles."""
-        dm_issue = [{"number": 3969, "title": "DM task", "labels": []}]
-        skill_issue = [{"number": 4000, "title": "Skill task", "labels": []}]
-        queried_roles = []
-
-        def fake_run_script(*args, **kwargs):
-            fake = MagicMock()
-            fake.returncode = 0
-            fake.stdout = "[]"
-            if len(args) >= 2 and "tracker.py" in str(args[0]):
-                subcmd = args[1] if len(args) > 1 else ""
-                if subcmd == "list-issues" and len(args) > 2:
-                    role_arg = args[2]
-                    queried_roles.append(role_arg)
-                    if role_arg == "dm":
-                        fake.stdout = json.dumps(dm_issue)
-                    elif role_arg == "skill":
-                        fake.stdout = json.dumps(skill_issue)
-                elif subcmd == "list-tasks" and len(args) > 2:
-                    queried_roles.append(args[2])
-            elif len(args) >= 1 and "health_check.py" in str(args[0]):
-                fake.stdout = "[]"
-            return fake
-
-        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
-        monkeypatch.setattr(cycle_pre, "_run", lambda cmd, **kw: MagicMock(
-            returncode=0, stdout="[]", stderr=""))
-        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
-            "dev-agents": "skill",
-            "e2e-tests": "(none)",
-            "interval": "30",
-            "branch-workflow": "no", "pr-flow": "no",
-            "improvement-scanning": "no", "vault-remember": "no",
-            "vault-optimize": "no",
-        }.get(f, ""))
-        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
+        """Items from dm, skill, pm, qa all appear in the QA verification queue."""
+        items = [
+            {"number": 3969, "title": "DM task",
+              "labels": [{"name": "squidsquad"}, {"name": "role:dm"},
+                          {"name": "type:issue"}, {"name": "status:pending-test"}]},
+            {"number": 4000, "title": "Skill task",
+              "labels": [{"name": "squidsquad"}, {"name": "role:skill"},
+                          {"name": "type:issue"}, {"name": "status:pending-test"}]},
+            {"number": 4001, "title": "PM task",
+              "labels": [{"name": "squidsquad"}, {"name": "role:pm"},
+                          {"name": "type:issue"}, {"name": "status:pending-test"}]},
+            {"number": 4002, "title": "QA task",
+              "labels": [{"name": "squidsquad"}, {"name": "role:qa"},
+                          {"name": "type:issue"}, {"name": "status:pending-test"}]},
+        ]
+        self._setup(monkeypatch, gh_fetch_responses={("squidsquad", "open"): items})
 
         result = cycle_pre._build_qa_input("qa")
-        # Verify dm was queried (the core bug fix)
-        assert "dm" in queried_roles, "QA input must query dm role for pending-test items"
-        assert "pm" in queried_roles, "QA input must query pm role for pending-test items"
-        # #9318: qa is a mandatory role and must also be queried — otherwise
-        # QA wouldn't verify its own pending-test items.
-        assert "qa" in queried_roles, "QA input must query qa role for pending-test items"
-        # Verify dm items appear in verification queue
         numbers = [i["number"] for i in result["verification_queue"]["pending_test_issues"]]
-        assert 3969 in numbers, "DM pending-test issue must appear in QA verification queue"
-        assert 4000 in numbers, "Skill pending-test issue must appear in QA verification queue"
+        assert 3969 in numbers, "DM pending-test issue must appear in QA queue"
+        assert 4000 in numbers, "Skill pending-test issue must appear in QA queue"
+        assert 4001 in numbers, "PM pending-test issue must appear in QA queue"
+        assert 4002 in numbers, "QA pending-test issue must appear in QA queue"
 
     def test_qa_items_have_source_role(self, patch_dirs, squid_dir, monkeypatch):
-        """Each item in QA verification queue has source_role field."""
-        dm_issue = [{"number": 3969, "title": "DM task", "labels": []}]
-
-        def fake_run_script(*args, **kwargs):
-            fake = MagicMock()
-            fake.returncode = 0
-            fake.stdout = "[]"
-            if len(args) >= 2 and "tracker.py" in str(args[0]):
-                subcmd = args[1] if len(args) > 1 else ""
-                if subcmd == "list-issues" and len(args) > 2 and args[2] == "dm":
-                    fake.stdout = json.dumps(dm_issue)
-            elif len(args) >= 1 and "health_check.py" in str(args[0]):
-                fake.stdout = "[]"
-            return fake
-
-        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
-        monkeypatch.setattr(cycle_pre, "_run", lambda cmd, **kw: MagicMock(
-            returncode=0, stdout="[]", stderr=""))
-        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
-            "dev-agents": "skill",
-            "e2e-tests": "(none)",
-            "interval": "30",
-            "branch-workflow": "no", "pr-flow": "no",
-            "improvement-scanning": "no", "vault-remember": "no",
-            "vault-optimize": "no",
-        }.get(f, ""))
-        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
+        """Each item in QA verification queue is attributed by role label."""
+        items = [{
+            "number": 3969, "title": "DM task",
+            "labels": [{"name": "squidsquad"}, {"name": "role:dm"},
+                        {"name": "type:issue"}, {"name": "status:pending-test"}],
+        }]
+        self._setup(monkeypatch, gh_fetch_responses={("squidsquad", "open"): items})
 
         result = cycle_pre._build_qa_input("qa")
         dm_items = [i for i in result["verification_queue"]["pending_test_issues"]
@@ -1078,32 +1106,12 @@ class TestQAInputMultiRole:
 
     def test_qa_branch_uses_correct_role_prefix(self, patch_dirs, squid_dir, monkeypatch):
         """Branch path uses the item's source role, not hardcoded 'skill'."""
-        qa_task = [{"number": 5000, "title": "QA task", "labels": []}]
-
-        def fake_run_script(*args, **kwargs):
-            fake = MagicMock()
-            fake.returncode = 0
-            fake.stdout = "[]"
-            if len(args) >= 2 and "tracker.py" in str(args[0]):
-                subcmd = args[1] if len(args) > 1 else ""
-                if subcmd == "list-tasks" and len(args) > 2 and args[2] == "qa":
-                    fake.stdout = json.dumps(qa_task)
-            elif len(args) >= 1 and "health_check.py" in str(args[0]):
-                fake.stdout = "[]"
-            return fake
-
-        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
-        monkeypatch.setattr(cycle_pre, "_run", lambda cmd, **kw: MagicMock(
-            returncode=0, stdout="[]", stderr=""))
-        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
-            "dev-agents": "skill, qa",
-            "e2e-tests": "(none)",
-            "interval": "30",
-            "branch-workflow": "no", "pr-flow": "no",
-            "improvement-scanning": "no", "vault-remember": "no",
-            "vault-optimize": "no",
-        }.get(f, ""))
-        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
+        items = [{
+            "number": 5000, "title": "QA task",
+            "labels": [{"name": "squidsquad"}, {"name": "role:qa"},
+                        {"name": "type:task"}, {"name": "status:pending-test"}],
+        }]
+        self._setup(monkeypatch, gh_fetch_responses={("squidsquad", "open"): items})
 
         result = cycle_pre._build_qa_input("qa")
         qa_items = [i for i in result["verification_queue"]["pending_test_tasks"]
@@ -1113,79 +1121,57 @@ class TestQAInputMultiRole:
 
 
 class TestPMInputMultiRole:
-    """Regression #4803: PM input must also query all verifiable roles."""
+    """Regression #4803: PM input must cover all verifiable roles.
+
+    Post-refactor: items flow through a single labeled `_gh_fetch` call and
+    are routed by role label. Tests assert routing/attribution on labeled
+    fixtures.
+    """
+
+    def _setup(self, monkeypatch, gh_fetch_responses=None):
+        gh_fetch_responses = gh_fetch_responses or {}
+
+        def fake_gh_fetch(label_filter, state, **kwargs):
+            return gh_fetch_responses.get((label_filter, state), [])
+
+        monkeypatch.setattr(cycle_pre, "_gh_fetch", fake_gh_fetch)
+        monkeypatch.setattr(cycle_pre, "_run_script", lambda *a, **k: MagicMock(
+            returncode=0, stdout="[]"))
+        monkeypatch.setattr(cycle_pre, "_run", lambda cmd, **kw: MagicMock(
+            returncode=0, stdout="[]", stderr=""))
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
+            "dev-agents": "skill",
+            "interval": "30", "ship-threshold": "10", "shipped-since-bump": "0",
+            "branch-workflow": "no", "pr-flow": "no",
+            "improvement-scanning": "no", "vault-remember": "no",
+            "vault-optimize": "no",
+        }.get(f, ""))
 
     def test_pm_queries_all_roles(self, patch_dirs, squid_dir, monkeypatch):
-        """PM input includes pending-test items from dm and other roles."""
-        dm_task = [{"number": 3969, "title": "DM task", "labels": []}]
-        queried_roles = []
-
-        def fake_run_script(*args, **kwargs):
-            fake = MagicMock()
-            fake.returncode = 0
-            fake.stdout = "[]"
-            if len(args) >= 2 and "tracker.py" in str(args[0]):
-                subcmd = args[1] if len(args) > 1 else ""
-                if subcmd == "list-issues" and len(args) > 2:
-                    queried_roles.append(args[2])
-                    if args[2] == "dm":
-                        fake.stdout = json.dumps(dm_task)
-                elif subcmd == "list-tasks" and len(args) > 2:
-                    queried_roles.append(args[2])
-                elif subcmd == "list-by-labels":
-                    fake.stdout = "[]"
-            elif len(args) >= 1 and "health_check.py" in str(args[0]):
-                fake.stdout = "[]"
-            return fake
-
-        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
-        monkeypatch.setattr(cycle_pre, "_run", lambda cmd, **kw: MagicMock(
-            returncode=0, stdout="[]", stderr=""))
-        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
-            "dev-agents": "skill",
-            "interval": "30", "ship-threshold": "10", "shipped-since-bump": "0",
-            "branch-workflow": "no", "pr-flow": "no",
-            "improvement-scanning": "no", "vault-remember": "no",
-            "vault-optimize": "no",
-        }.get(f, ""))
-        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
+        """PM pending-test queue surfaces items from every verifiable role."""
+        items = [
+            {"number": 3969, "title": "DM issue",
+              "labels": [{"name": "squidsquad"}, {"name": "role:dm"},
+                          {"name": "type:issue"}, {"name": "status:pending-test"}]},
+            {"number": 3970, "title": "QA issue",
+              "labels": [{"name": "squidsquad"}, {"name": "role:qa"},
+                          {"name": "type:issue"}, {"name": "status:pending-test"}]},
+        ]
+        self._setup(monkeypatch, gh_fetch_responses={("squidsquad", "open"): items})
 
         result = cycle_pre._build_pm_input("pm")
-        assert "dm" in queried_roles, "PM input must query dm role for pending-test items"
-        # #9318: qa is a mandatory role and must also be queried — otherwise
-        # PM wouldn't see QA's pending-test items.
-        assert "qa" in queried_roles, "PM input must query qa role for pending-test items"
-        assert 3969 in [i["number"] for i in result["tracker"]["pending_test_issues"]]
+        numbers = {i["number"] for i in result["tracker"]["pending_test_issues"]}
+        assert 3969 in numbers, "DM pending-test item must reach PM queue"
+        assert 3970 in numbers, "QA pending-test item must reach PM queue"
 
     def test_pm_items_have_source_role(self, patch_dirs, squid_dir, monkeypatch):
-        """PM pending-test items include source_role field."""
-        dm_issue = [{"number": 3969, "title": "DM task", "labels": []}]
-
-        def fake_run_script(*args, **kwargs):
-            fake = MagicMock()
-            fake.returncode = 0
-            fake.stdout = "[]"
-            if len(args) >= 2 and "tracker.py" in str(args[0]):
-                subcmd = args[1] if len(args) > 1 else ""
-                if subcmd == "list-issues" and len(args) > 2 and args[2] == "dm":
-                    fake.stdout = json.dumps(dm_issue)
-                elif subcmd == "list-by-labels":
-                    fake.stdout = "[]"
-            elif len(args) >= 1 and "health_check.py" in str(args[0]):
-                fake.stdout = "[]"
-            return fake
-
-        monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
-        monkeypatch.setattr(cycle_pre, "_run", lambda cmd, **kw: MagicMock(
-            returncode=0, stdout="[]", stderr=""))
-        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
-            "dev-agents": "skill",
-            "interval": "30", "ship-threshold": "10", "shipped-since-bump": "0",
-            "branch-workflow": "no", "pr-flow": "no",
-            "improvement-scanning": "no", "vault-remember": "no",
-            "vault-optimize": "no",
-        }.get(f, ""))
-        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
+        """PM pending-test items include source_role attribution."""
+        items = [{
+            "number": 3969, "title": "DM issue",
+            "labels": [{"name": "squidsquad"}, {"name": "role:dm"},
+                        {"name": "type:issue"}, {"name": "status:pending-test"}],
+        }]
+        self._setup(monkeypatch, gh_fetch_responses={("squidsquad", "open"): items})
 
         result = cycle_pre._build_pm_input("pm")
         dm_items = [i for i in result["tracker"]["pending_test_issues"]
