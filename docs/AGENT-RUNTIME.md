@@ -24,8 +24,8 @@ SquidSquad has a small fixed set of **role classes** and a per-install set of **
 - Every running agent has a unique alias. The alias IS the agent's name in all routing.
 - A single-instance install can use the class name as its alias (default: a `worker`-class agent is named `worker`).
 - A multi-instance install MUST give each agent of the same class a distinct alias. Example: an install with 2 frontend + 2 backend worker-class agents might use aliases `frontend-1`, `frontend-2`, `backend-1`, `backend-2` — four worker-class agents, four distinct aliases.
-- Specialty/skill (FE vs BE vs iOS, etc.) lives in each agent's `SOUL.md` + L4 directives, not in the role-class definition. All worker-class agents share the same L2/L3 responsibilities and bus contract; per-agent specialization is an L4 concern.
-- Each agent knows the other aliases on the team and their declared specialties; mis-routed work is re-assigned via `/work/assign` to the correct alias (see §7.3 mis-route recovery).
+- Specialty/skill (FE vs BE vs iOS, etc.) lives in **L3 (the domain layer)** and is shared across all agents of the same domain. Two FE-worker agents share L1 + L2 (worker class) + L3 (FE domain); two BE-worker agents share L1 + L2 + L3 (BE domain). The same layering applies to verifier-class agents — FE verifiers share an FE L3 with other FE verifiers, BE verifiers with other BE verifiers. Per-agent identity (personality, situational tone) lives in `SOUL.md`; install/operator-specific overrides live in L4.
+- Each agent knows the other aliases on the team and their declared specialties (visible from each agent's composed CLAUDE.md and from the install's `config.md` `## Aliases` registry); mis-routed work is re-assigned via `/work/assign` to the correct alias (see §7.3 mis-route recovery).
 
 **Routing rule**: `/work/assign` always names a **target alias**. The harness validates the alias is registered (returns 404 if unknown) but does NOT enforce class-from-class permissions — process discipline lives in each agent's L2/L3/L4, not in a harness gate (see §7.3).
 
