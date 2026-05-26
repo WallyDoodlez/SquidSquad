@@ -238,12 +238,19 @@ class EventModeE2ETestBase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls._port_file = SQUID_DIR / ".harness-port"
-        cls._port_backup = (
-            cls._port_file.read_bytes() if cls._port_file.exists() else None
-        )
+        # #10265: route this test's port file and per-role state to an
+        # isolated SQUIDSQUAD_DIR so a tearDown crash, KeyboardInterrupt,
+        # or restored-backup race can never leave the LIVE
+        # `.squidsquad/.harness-port` pointing at a test-only random
+        # port. event_poll.py (the subprocess under test) was updated
+        # in lockstep to honor SQUIDSQUAD_DIR.
+        import tempfile
+        cls._squid_tmpdir = tempfile.mkdtemp(prefix="sq-e2e-")
+        cls._squid_dir = Path(cls._squid_tmpdir)
+        cls._squid_dir.mkdir(parents=True, exist_ok=True)
+        cls._port_file = cls._squid_dir / ".harness-port"
 
-        cls._test_role_dir = SQUID_DIR / TEST_ROLE
+        cls._test_role_dir = cls._squid_dir / TEST_ROLE
         cls._test_role_dir.mkdir(parents=True, exist_ok=True)
 
         cls._stream = EventStream(maxlen=1000)
@@ -257,7 +264,6 @@ class EventModeE2ETestBase(unittest.TestCase):
         cls._thread.start()
 
         # event_poll.py discovers the server via this file.
-        cls._port_file.parent.mkdir(parents=True, exist_ok=True)
         cls._port_file.write_text(str(cls._port), encoding="utf-8")
 
     @classmethod
@@ -266,15 +272,10 @@ class EventModeE2ETestBase(unittest.TestCase):
         cls._server.server_close()
         cls._thread.join(timeout=5)
 
-        if cls._port_backup is not None:
-            cls._port_file.write_bytes(cls._port_backup)
-        else:
-            try:
-                cls._port_file.unlink()
-            except FileNotFoundError:
-                pass
-
-        shutil.rmtree(cls._test_role_dir, ignore_errors=True)
+        # #10265: rmtree the isolated SQUIDSQUAD_DIR — no live file to
+        # restore, no backup race window where a crashed test leaves
+        # a stale port in the live discovery file.
+        shutil.rmtree(cls._squid_tmpdir, ignore_errors=True)
 
     def setUp(self):
         with self._stream._lock:
@@ -308,9 +309,15 @@ class EventModeE2ETestBase(unittest.TestCase):
             cmd += ["--since", since]
         if limit is not None:
             cmd += ["--limit", str(limit)]
+        # #10265: route the subprocess to the isolated test SQUIDSQUAD_DIR so
+        # event_poll.py reads our port file (not the live one) and writes its
+        # working-state under our test role dir.
+        import os
+        env = os.environ.copy()
+        env["SQUIDSQUAD_DIR"] = str(self._squid_dir)
         return subprocess.run(
             cmd, capture_output=True, text=True,
-            cwd=str(REPO_ROOT), timeout=20,
+            cwd=str(REPO_ROOT), timeout=20, env=env,
         )
 
     def _read_cursor(self) -> str:
@@ -321,6 +328,64 @@ class EventModeE2ETestBase(unittest.TestCase):
             if line.startswith("- **Last Processed Event ID**:"):
                 return line.split(":", 1)[1].strip()
         return ""
+
+
+class TestLiveHarnessPortNotTouched(EventModeE2ETestBase):
+    """#10265: this test class must NOT modify the live
+    `.squidsquad/.harness-port` file. Prior to #10265 the e2e test
+    base wrote its random server port directly to the live file,
+    relying on a tearDownClass restore — a teardown crash or
+    KeyboardInterrupt would leak the test port into the live
+    discovery surface and other SquidSquad processes (DM cycles,
+    statusline, event poll from agents) would mis-route. Now the
+    test uses an isolated SQUIDSQUAD_DIR + event_poll.py honors
+    that env var, so the live file is untouched."""
+
+    def test_live_squidsquad_harness_port_untouched(self):
+        live_port = REPO_ROOT / ".squidsquad" / ".harness-port"
+        if not live_port.exists():
+            self.skipTest("no live .harness-port to guard against")
+        # The fixture has already set up by the time this test runs
+        # (setUpClass on EventModeE2ETestBase fires before the first
+        # test method). The fact that setUpClass touched it should
+        # be invisible to the live file — assert that.
+        live_content = live_port.read_text(encoding="utf-8").strip()
+        try:
+            live_port_value = int(live_content)
+        except ValueError:
+            self.fail(
+                f"live .harness-port content is not a valid int: "
+                f"{live_content!r}"
+            )
+        # The test's server port (self._port) was bound from
+        # _find_free_port() — a random ephemeral port. If the
+        # isolation broke, the live file would contain this exact
+        # value.
+        self.assertNotEqual(
+            live_port_value, self._port,
+            msg=(
+                "Live .squidsquad/.harness-port has been clobbered with "
+                f"the e2e fixture's random test port ({self._port}). "
+                "This means SQUIDSQUAD_DIR isolation is broken and any "
+                "concurrent SquidSquad process reading the live port "
+                "file will route to a dead test server. Root cause "
+                "#10265."
+            ),
+        )
+
+    def test_test_port_file_is_in_isolated_tmpdir(self):
+        """The test's own port file must live under the isolated
+        SQUIDSQUAD_DIR, NOT under the live `.squidsquad/`."""
+        self.assertEqual(
+            self._port_file.parent.resolve(),
+            self._squid_dir.resolve(),
+            msg="test port file must be inside the isolated SQUIDSQUAD_DIR",
+        )
+        live_squid = (REPO_ROOT / ".squidsquad").resolve()
+        self.assertNotEqual(
+            self._port_file.parent.resolve(), live_squid,
+            msg="test port file must NOT be under the live .squidsquad/",
+        )
 
 
 class TestCursorLongLag(EventModeE2ETestBase):
