@@ -28,6 +28,7 @@ Exit codes: 0 = events found / loop exit, 1 = no events, 2 = invocation error.
 import argparse
 import http.client
 import json
+import os
 import sys
 import time
 import urllib.error
@@ -37,7 +38,23 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
-SQUID_DIR = REPO_ROOT / ".squidsquad"
+
+
+def _resolve_squid_dir() -> Path:
+    """#10265: honor SQUIDSQUAD_DIR env var so isolated test harnesses
+    can be discovered by event_poll subprocesses without the live
+    .harness-port file getting in the way. Without this, e2e tests
+    that spawn event_poll.py have to write their port to the LIVE
+    `.squidsquad/.harness-port` (which other SquidSquad processes
+    then route to). Matches harness._resolve_squidsquad_dir and
+    event_bus._resolve_squid_dir."""
+    raw = (os.environ.get("SQUIDSQUAD_DIR") or "").strip()
+    if not raw:
+        return REPO_ROOT / ".squidsquad"
+    return Path(raw).expanduser()
+
+
+SQUID_DIR = _resolve_squid_dir()
 
 _DEFAULT_HTTP_TIMEOUT = 2.0
 _BACKOFF_CAP = 300
