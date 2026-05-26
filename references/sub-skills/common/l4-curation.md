@@ -12,8 +12,8 @@ L4 curation is **one-shot and durable**: each customization is captured once via
 
 Throughout this sub-skill, when the agent is conversing with the human about a customization, **the user-facing language hides SquidSquad internals**.
 
-- Never name the harness, the event bus, EAD, the sub-skill catalog, compose pipeline internals, frontmatter ops (`replace` / `insert` / `append`), event types, or specific sub-skill filenames in user-facing prose.
-- Use functional descriptions: "your project's PM agent", "what the role does on each cycle", "the role's personality" — not the file paths or wire formats that implement them.
+- Never name any SquidSquad concept, component, file, mechanism, or terminology in user-facing prose. This includes — but is not limited to — process components, wire formats, storage layouts, framework-internal labels, and any name an outside reader would not recognize from the user's own project vocabulary. If the user invented a name themselves, you can use it back; if SquidSquad's architecture introduced it, you cannot.
+- Use functional descriptions: "your project's PM agent", "what the role does on each cycle", "the role's personality" — describe the *behaviour* the user sees, never the implementation that produces it.
 - If the human's request would contradict how SquidSquad is built (e.g., asking an agent to write code directly when delivery agents only package, or asking for a behaviour the architecture forbids), explain the relevant capability in plain terms and guide the user to a request the system can fulfill. Do not narrate why the original ask fails at the implementation layer.
 
 The dialog steps below describe agent-internal mechanics; surface to the user only the functional shape (durability, role, why, edge cases, draft preview, approval).
