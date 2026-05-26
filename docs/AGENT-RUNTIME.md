@@ -794,20 +794,23 @@ In practice agents never call `/work/assign` directly for transition-driven hand
 
 Mitigates an entire class of pickup-fidelity bugs (#9946) — agents can't forget to call `/work/assign` because `tracker.py` does it. Replaces the deprecated `status-transition` emit.
 
-#### Routing and mis-routes — agent-side, not harness-side
+#### Routing — agent-side discipline
 
-There is no harness-side permission table and no `responsibility.md` artifact. Each agent's composed CLAUDE.md (L1–L4 inlined) carries a **team-awareness block**: a short description of every other role's lane, sourced from the L2 capability layer. This is the same content for every agent — they all read the same map of who does what.
+Each agent's composed CLAUDE.md (L1–L4 inlined) carries a **team-awareness block**: a short description of every other role's lane, sourced from the L2 capability layer. This is the same content for every agent — they all read the same map of who does what. The harness's only job in routing is delivery; correctness lives in the composed instructions on both ends of the wire.
 
-Work routing is enforced by the **receiving** agent, not the harness:
+Routing is a two-sided discipline:
 
-- On nudge, the agent reads the assigned-to event and checks whether the work belongs in its lane (using the team-awareness block as the rulebook).
-- If yes → handle the event normally.
-- If no, but the agent can identify the correct lane → forward via `tracker.py work-assign --target <correct-role> --event-context "forwarded-from:<my-role>"`. Comment on the issue with a one-line rationale.
-- If no, and the agent cannot identify the correct lane → route back to origin (the role that emitted the original assigned-to) via the same `work-assign` call with `event-context="rejected-misrouted"`.
+**Sending agent.** Before emitting an `assigned-to` (via `tracker.py transition` auto-routing, direct `tracker.py work-assign`, or any other path), the sender consults its team-awareness block and picks the role whose lane the work belongs in. Mis-routes are not "fix it on the receiver" tickets — every send is a deliberate decision, and the sender comments on the issue with the routing rationale when the lane isn't obvious from the status transition alone.
 
-**Self-assign** is still a hard invariant — an agent that receives an event whose `target_role` equals its own role and recognizes the work as its own simply handles it; an agent never re-routes to itself.
+**Receiving agent.** On nudge, the agent reads the `assigned-to` event and confirms the work is in its lane (using the same team-awareness block as the rulebook):
 
-Because each agent has the full team map, mis-routes always resolve at the first hop: the wrong agent forwards or returns; the right agent handles. The harness's only role in routing is delivery; correctness is in the composed instructions.
+- **Yes** → handle normally.
+- **No, but I can name the correct lane** → forward via `tracker.py work-assign --target <correct-role> --event-context "forwarded-from:<my-role>"`. Comment on the issue with a one-line rationale.
+- **No, and the correct lane is unclear** → route back to origin (the role that emitted the original `assigned-to`) via the same `work-assign` call with `event-context="rejected-misrouted"`.
+
+**Self-assign** is a hard invariant — an agent that receives an event whose `target_role` equals its own role and recognizes the work as its own simply handles it; an agent never re-routes to itself.
+
+Because each agent has the full team map on both sides, mis-routes are rare (sender discipline catches them) and self-resolving at the first hop when they slip through (receiver discipline forwards or returns).
 
 For non-transition routing (e.g., process concerns surfaced to PM without a state change), agents call `/work/assign` directly:
 
