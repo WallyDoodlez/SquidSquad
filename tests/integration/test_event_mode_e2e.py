@@ -227,9 +227,10 @@ class EventModeE2ETestBase(unittest.TestCase):
     _server: ThreadingHTTPServer
     _thread: threading.Thread
     _stream: "EventStream"
-    _port_backup: bytes | None
     _test_role_dir: Path
     _port_file: Path
+    _squid_tmpdir: str
+    _squid_dir: Path
 
     # Reacts-to fixture for the role-targeted /events/for/{role} endpoint.
     # Subclasses exercising role filtering override this to lock in a
@@ -244,27 +245,43 @@ class EventModeE2ETestBase(unittest.TestCase):
         # `.squidsquad/.harness-port` pointing at a test-only random
         # port. event_poll.py (the subprocess under test) was updated
         # in lockstep to honor SQUIDSQUAD_DIR.
+        #
+        # Snapshot the live file's mtime BEFORE any test setup so the
+        # isolation-guard test can assert the live file was never
+        # touched, without relying on the test's random port being
+        # different from the live port (a coincidence-prone check).
         import tempfile
-        cls._squid_tmpdir = tempfile.mkdtemp(prefix="sq-e2e-")
-        cls._squid_dir = Path(cls._squid_tmpdir)
-        cls._squid_dir.mkdir(parents=True, exist_ok=True)
-        cls._port_file = cls._squid_dir / ".harness-port"
-
-        cls._test_role_dir = cls._squid_dir / TEST_ROLE
-        cls._test_role_dir.mkdir(parents=True, exist_ok=True)
-
-        cls._stream = EventStream(maxlen=1000)
-        cls._port = _find_free_port()
-        handler_cls = _make_handler(cls._stream, reacts_to=cls.REACTS_TO)
-        cls._server = ThreadingHTTPServer(("127.0.0.1", cls._port), handler_cls)
-        cls._thread = threading.Thread(
-            target=cls._server.serve_forever, daemon=True,
-            name="test-event-stream-http",
+        live_port_file = REPO_ROOT / ".squidsquad" / ".harness-port"
+        cls._live_port_mtime_before_setup = (
+            live_port_file.stat().st_mtime_ns if live_port_file.exists()
+            else None
         )
-        cls._thread.start()
 
-        # event_poll.py discovers the server via this file.
-        cls._port_file.write_text(str(cls._port), encoding="utf-8")
+        cls._squid_tmpdir = tempfile.mkdtemp(prefix="sq-e2e-")
+        # If any step below raises, unittest does NOT call tearDownClass —
+        # wrap the rest of setup so a failed mid-setup still cleans up.
+        try:
+            cls._squid_dir = Path(cls._squid_tmpdir)
+            cls._port_file = cls._squid_dir / ".harness-port"
+
+            cls._test_role_dir = cls._squid_dir / TEST_ROLE
+            cls._test_role_dir.mkdir(parents=True, exist_ok=True)
+
+            cls._stream = EventStream(maxlen=1000)
+            cls._port = _find_free_port()
+            handler_cls = _make_handler(cls._stream, reacts_to=cls.REACTS_TO)
+            cls._server = ThreadingHTTPServer(("127.0.0.1", cls._port), handler_cls)
+            cls._thread = threading.Thread(
+                target=cls._server.serve_forever, daemon=True,
+                name="test-event-stream-http",
+            )
+            cls._thread.start()
+
+            # event_poll.py discovers the server via this file.
+            cls._port_file.write_text(str(cls._port), encoding="utf-8")
+        except BaseException:
+            shutil.rmtree(cls._squid_tmpdir, ignore_errors=True)
+            raise
 
     @classmethod
     def tearDownClass(cls):
@@ -343,33 +360,28 @@ class TestLiveHarnessPortNotTouched(EventModeE2ETestBase):
 
     def test_live_squidsquad_harness_port_untouched(self):
         live_port = REPO_ROOT / ".squidsquad" / ".harness-port"
-        if not live_port.exists():
+        if self._live_port_mtime_before_setup is None:
             self.skipTest("no live .harness-port to guard against")
-        # The fixture has already set up by the time this test runs
-        # (setUpClass on EventModeE2ETestBase fires before the first
-        # test method). The fact that setUpClass touched it should
-        # be invisible to the live file — assert that.
-        live_content = live_port.read_text(encoding="utf-8").strip()
-        try:
-            live_port_value = int(live_content)
-        except ValueError:
+        # Assert the live file's mtime is unchanged since before
+        # setUpClass. This catches the clobber without false-positives
+        # on the rare port collision between _find_free_port() and the
+        # live harness's bound port (which the value-based check would
+        # have flagged as "isolation broken").
+        if not live_port.exists():
             self.fail(
-                f"live .harness-port content is not a valid int: "
-                f"{live_content!r}"
+                "Live .squidsquad/.harness-port existed before setUpClass "
+                "but is gone now — the test deleted it (a stronger "
+                "clobber than the value-mismatch case). Root cause #10265."
             )
-        # The test's server port (self._port) was bound from
-        # _find_free_port() — a random ephemeral port. If the
-        # isolation broke, the live file would contain this exact
-        # value.
-        self.assertNotEqual(
-            live_port_value, self._port,
+        live_mtime_now = live_port.stat().st_mtime_ns
+        self.assertEqual(
+            self._live_port_mtime_before_setup, live_mtime_now,
             msg=(
-                "Live .squidsquad/.harness-port has been clobbered with "
-                f"the e2e fixture's random test port ({self._port}). "
-                "This means SQUIDSQUAD_DIR isolation is broken and any "
-                "concurrent SquidSquad process reading the live port "
-                "file will route to a dead test server. Root cause "
-                "#10265."
+                "Live .squidsquad/.harness-port mtime changed during the "
+                "e2e fixture lifetime. This means SQUIDSQUAD_DIR isolation "
+                "is broken: setUpClass touched the live discovery file "
+                "and any concurrent SquidSquad process reading it will "
+                "route to a dead test server. Root cause #10265."
             ),
         )
 

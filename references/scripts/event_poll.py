@@ -28,6 +28,7 @@ Exit codes: 0 = events found / loop exit, 1 = no events, 2 = invocation error.
 import argparse
 import http.client
 import json
+import os
 import sys
 import time
 import urllib.error
@@ -47,7 +48,6 @@ def _resolve_squid_dir() -> Path:
     `.squidsquad/.harness-port` (which other SquidSquad processes
     then route to). Matches harness._resolve_squidsquad_dir and
     event_bus._resolve_squid_dir."""
-    import os
     raw = (os.environ.get("SQUIDSQUAD_DIR") or "").strip()
     if not raw:
         return REPO_ROOT / ".squidsquad"

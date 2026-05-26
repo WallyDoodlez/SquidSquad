@@ -10,6 +10,7 @@ Usage:
 """
 
 import json
+import os
 import sys
 import urllib.request
 import urllib.error
@@ -25,7 +26,6 @@ def _resolve_squid_dir() -> Path:
     can be discovered by event_bus_reader without the live
     .harness-port file getting in the way. Matches the pattern in
     harness._resolve_squidsquad_dir and event_bus._resolve_squid_dir."""
-    import os
     raw = (os.environ.get("SQUIDSQUAD_DIR") or "").strip()
     if not raw:
         return REPO_ROOT / ".squidsquad"
