@@ -76,18 +76,24 @@ class TestPMDelegatesToVerifier:
         )
 
     def test_pm_does_not_check_human_required_label(self, content):
-        """Same deal for the per-ticket override label."""
-        assert "review:human-required" not in content, (
+        """Same deal for the per-ticket override label. Case-normalized
+        so any uppercase drift (e.g. `Review:Human-Required`) is also
+        caught — matches the lowercase check in the auto-merge test."""
+        assert "review:human-required" not in content.lower(), (
             "PM testing-and-verification.md must not check "
             "review:human-required — verifier owns the routing decision"
         )
 
     def test_pm_delegates_to_verifier(self, content):
         """The delegation statement must remain — it's the contract that
-        prevents the gate from drifting back into PM."""
-        assert "erifier" in content, (
+        prevents the gate from drifting back into PM. Bare `"erifier" in
+        content` would pass for any verifier mention (e.g. 'the verifier
+        is not involved'); require the active delegation verb so the
+        contract isn't gameable by an unrelated reference."""
+        assert "erifier handles" in content.lower(), (
             "PM testing-and-verification.md must contain a delegation "
-            "statement that names verifier"
+            "statement of the form 'Verifier handles ...' — verifier "
+            "owns verification post-#6274.2"
         )
 
 
