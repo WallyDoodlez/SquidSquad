@@ -278,7 +278,7 @@ flowchart TB
     Resolve{"resolve each &lt;name&gt;"}
     Catalog[("sub-skill-catalog.md")]
     Source[("references/sub-skills/")]
-    Skills[("`.claude/skills/`<br/>(target state)")]
+    Skills[(".claude/skills/<br/>(target state)")]
     Drift{"catalog ⇆ source<br/>in sync?"}
     Abort([Abort — unresolved ref])
     Warn([Warn — catalog drift])
