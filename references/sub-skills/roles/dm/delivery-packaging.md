@@ -39,9 +39,23 @@ For each Pending Ship task that is NOT skipped:
 
 0b. **PR merge gate** (#9478: branch+PR is the only mode): check for an associated PR:
    ```bash
-   gh pr list --search "squidsquad/" --state open --json number,headRefName,body --limit 20
+   gh pr list --search "squidsquad/" --state open --json number,headRefName,baseRefName,body --limit 20
    ```
-   Find the PR matching this issue number. If found, **first** apply the contract-citation soft gate (#8950 Gate #4):
+   Find the PR matching this issue number. If found, **first** check the PR's base branch (#10287 stacked-PR auto-close trap):
+
+   ```bash
+   WORKING_BRANCH=$(python references/scripts/config.py get working-branch 2>/dev/null || echo "main")
+   PR_BASE=$(gh pr view [PR_NUMBER] --json baseRefName -q .baseRefName)
+   ```
+
+   - **If `$PR_BASE` != `$WORKING_BRANCH`**: the PR is stacked on another feature branch. Merging the parent would squash-delete its source and auto-close this PR (`state=CLOSED, mergeable=CONFLICTING`); the PR cannot be re-targeted in place once that happens. Do **not** request a harness merge. Route back to in-progress so the worker agent rebases onto `$WORKING_BRANCH`:
+     ```bash
+     python references/scripts/tracker.py transition [NUMBER] pending-ship in-progress --role dm-lead
+     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR #[PR_NUMBER] is stacked on \`$PR_BASE\` instead of \`$WORKING_BRANCH\`. Stacked PRs auto-close when their parent merges (squash-delete) and cannot be re-targeted in place. Rebase onto \`$WORKING_BRANCH\` (or wait for the parent to merge first) and re-route to pending-ship."
+     ```
+     Skip this item and move to the next.
+
+   If the base check passes, apply the contract-citation soft gate (#8950 Gate #4):
 
    ```bash
    ARTIFACTS=$(ls .squidsquad/pm/planning/*[NUMBER]* .squidsquad/qa/planning/*[NUMBER]* 2>/dev/null)

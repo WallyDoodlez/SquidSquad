@@ -330,6 +330,51 @@ class TestTemplateUpdates:
         content = path.read_text(encoding="utf-8")
         assert "POST" in content and "/merge" in content
 
+    def test_dm_delivery_has_stacked_pr_base_check(self):
+        """#10287: DM Step 2c.0b must check baseRefName before requesting
+        harness merge — stacked PRs auto-close when their parent squash-merges
+        and cannot be re-targeted in place. Without this gate the trap recurs
+        on every multi-issue ship sequence with one PR stacked on another."""
+        path = REPO_ROOT / "references" / "sub-skills" / "roles" / "dm" / "delivery-packaging.md"
+        content = path.read_text(encoding="utf-8")
+        assert "baseRefName" in content, (
+            "delivery-packaging.md must read the PR's baseRefName before "
+            "requesting merge (#10287 stacked-PR auto-close trap)"
+        )
+        assert "PR_BASE" in content, (
+            "delivery-packaging.md must compare PR_BASE against the configured "
+            "working-branch (#10287)"
+        )
+        assert "10287" in content, (
+            "the stacked-PR check should cite #10287 so future readers can "
+            "find the incident context"
+        )
+
+    def test_dm_delivery_routes_back_on_stacked_pr(self):
+        """#10287: when base != working-branch, DM must route the issue back to
+        in-progress rather than requesting the harness merge. The route-back
+        comment must explain rebase-onto-main as the remediation so the
+        worker agent knows exactly what to do."""
+        path = REPO_ROOT / "references" / "sub-skills" / "roles" / "dm" / "delivery-packaging.md"
+        content = path.read_text(encoding="utf-8")
+        # The route-back transition must appear in the base-check block, before
+        # the citation gate or merge POST.
+        base_check_idx = content.find("baseRefName")
+        citation_idx = content.find("Gate #4")
+        assert base_check_idx >= 0 and citation_idx >= 0
+        assert base_check_idx < citation_idx, (
+            "the baseRefName check must come BEFORE the citation gate — if a "
+            "PR is stacked, no other gate matters because the merge will trap"
+        )
+        # Route-back transition is the in-block remediation
+        block = content[base_check_idx:citation_idx]
+        assert "pending-ship in-progress" in block, (
+            "stacked-PR detection must route the issue back to in-progress"
+        )
+        assert "rebase" in block.lower(), (
+            "the route-back comment must mention rebase as the remediation"
+        )
+
     def test_pm_post_merge_recompose_deleted(self):
         """PM post-merge-recompose.md should be deleted (#6126 AC-6)."""
         path = REPO_ROOT / "references" / "sub-skills" / "roles" / "pm" / "post-merge-recompose.md"
