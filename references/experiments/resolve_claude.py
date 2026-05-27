@@ -28,28 +28,34 @@ import sys
 from pathlib import Path
 
 
-# Match either Windows .cmd quoted-path forwarding (npm shim pattern):
-#     "%dp0%\node_modules\@anthropic-ai\claude-code\bin\claude.exe"   %*
-# or PowerShell/sh shim equivalents. Greedy on the path so we catch
-# subdirectories.
-_WIN_CMD_FORWARD = re.compile(
-    r'"%dp0%\\(?P<rel>[^"]+\.exe)"',
-    re.IGNORECASE,
-)
+# Windows .cmd / .bat shim patterns. npm has shipped two forms:
+#   newer multi-line: SET dp0=%~dp0   then   "%dp0%\path\to\bin.exe" %*
+#   older one-line:   @"%~dp0\path\to\bin.exe" %*
+# Match either. Greedy on the path so we catch subdirectories.
+_WIN_CMD_DP0 = re.compile(r'"%dp0%\\(?P<rel>[^"]+\.exe)"', re.IGNORECASE)
+_WIN_CMD_TILDE = re.compile(r'"%~dp0\\?(?P<rel>[^"]+\.exe)"', re.IGNORECASE)
+
+# PowerShell shim (less common). Matches `& "$basedir/path/binary.exe"`.
 _PS_FORWARD = re.compile(
-    r'\$basedir[/\\](?P<rel>[^\s"\']+\.exe)',
+    r'"\$basedir[/\\](?P<rel>[^"\']+\.exe)"',
     re.IGNORECASE,
 )
-_SH_FORWARD = re.compile(
-    r'exec\s+(?:"\$basedir"|"\$\{basedir\}")[/\\](?P<rel>\S+?)\s',
-)
+
+# POSIX npm shim. Real format is:
+#     exec "$basedir/node"  "$basedir/../node_modules/foo/bin/cli.js" "$@"
+# (separator inside the quotes, often with an `exec node` fallback for
+# missing-basedir-node case). We want the LAST $basedir-rooted argument
+# on the exec line — that's the script we should Popen.
+_SH_EXEC_LINE = re.compile(r'^\s*exec\s+.+$', re.MULTILINE)
+_SH_BASEDIR_ARG = re.compile(r'"\$\{?basedir\}?/(?P<rel>[^"]+)"')
 
 
 def _parse_shim(shim_path: Path) -> Path | None:
     """Parse a Windows/POSIX npm shim and return the forwarded binary path.
 
-    Returns None if the file is not a recognizable shim. Caller should
-    treat that as "use as-is" (already a real binary).
+    Returns None if the file does not parse as a known shim format.
+    Callers MUST NOT treat None as "use this path as-is" — that was the
+    silent-fallback bug. Use `_walk_shim_chain` which surfaces the error.
     """
     try:
         text = shim_path.read_text(encoding="utf-8", errors="replace")
@@ -58,38 +64,62 @@ def _parse_shim(shim_path: Path) -> Path | None:
 
     suffix = shim_path.suffix.lower()
     if suffix in (".cmd", ".bat"):
-        m = _WIN_CMD_FORWARD.search(text)
-        if m:
-            rel = m.group("rel").replace("/", "\\")
-            return (shim_path.parent / rel).resolve()
-    elif suffix == ".ps1":
+        # Try the newer multi-line form first, then the older one-line form.
+        for pattern in (_WIN_CMD_DP0, _WIN_CMD_TILDE):
+            m = pattern.search(text)
+            if m:
+                rel = m.group("rel").replace("/", "\\").lstrip("\\")
+                return (shim_path.parent / rel).resolve()
+        return None
+    if suffix == ".ps1":
         m = _PS_FORWARD.search(text)
         if m:
             return (shim_path.parent / m.group("rel")).resolve()
-    elif suffix == "" or suffix in (".sh",):
-        # POSIX npm shim — bash script that execs the real binary
-        m = _SH_FORWARD.search(text)
-        if m:
-            return (shim_path.parent / m.group("rel")).resolve()
+        return None
+    if suffix in ("", ".sh"):
+        # POSIX npm shim: find the exec line, then grab the LAST
+        # "$basedir/..." argument on it (the script the shim is forwarding to).
+        for exec_line in _SH_EXEC_LINE.findall(text):
+            args = _SH_BASEDIR_ARG.findall(exec_line)
+            if args:
+                # Last $basedir-rooted arg = the script / target.
+                # For `exec "$basedir/node" "$basedir/cli.js"`, this is cli.js.
+                # For `exec "$basedir/binary"`, this is the binary.
+                return (shim_path.parent / args[-1]).resolve()
+        return None
+    # Unknown suffix → not a shim we recognize.
     return None
 
 
-def _walk_shim_chain(start: Path, max_hops: int = 4) -> tuple[Path, list[Path]]:
-    """Follow shim → shim → … → real-binary, returning (final, chain).
+class BrokenShimChain(FileNotFoundError):
+    """A shim forwarded to a path that doesn't exist on disk."""
 
-    `chain` includes every intermediate path. Stops at `max_hops` to
-    avoid infinite loops on misconfigured installs (none observed in
-    practice, but defensive).
+
+def _walk_shim_chain(start: Path, max_hops: int = 4) -> tuple[Path, list[Path]]:
+    """Follow shim -> shim -> ... -> real-binary, returning (final, chain).
+
+    Raises:
+        BrokenShimChain: if a shim's target doesn't exist on disk. Earlier
+            versions silently returned the broken-shim path, which is the
+            §3.1-defeating bug (caller would still Popen the .cmd wrapper).
+
+    `chain` includes every intermediate path. Capped at `max_hops` to
+    avoid infinite loops on misconfigured installs.
     """
     chain = [start]
     current = start
     for _ in range(max_hops):
         nxt = _parse_shim(current)
         if nxt is None:
+            # Not a shim (or unrecognized format) — current is the final.
             return current, chain
         if not nxt.exists():
-            # Shim points somewhere broken — return the last known good
-            return current, chain
+            raise BrokenShimChain(
+                f"shim {current} points to {nxt} which does not exist on disk. "
+                f"Resolver cannot safely fall back to the shim itself — that "
+                f"would re-introduce the cmd.exe wrapper PID this resolver "
+                f"exists to avoid."
+            )
         chain.append(nxt)
         current = nxt
     return current, chain
@@ -137,6 +167,9 @@ def main() -> int:
 
     try:
         resolved, chain, mechanism = resolve_claude()
+    except BrokenShimChain as e:
+        print(f"FAIL (broken shim chain): {e}", file=sys.stderr)
+        return 6
     except FileNotFoundError as e:
         print(f"FAIL: {e}", file=sys.stderr)
         return 1

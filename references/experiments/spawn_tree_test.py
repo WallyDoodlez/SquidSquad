@@ -28,9 +28,19 @@ import time
 from ctypes import wintypes
 from pathlib import Path
 
-# Import the resolver from the sibling file
+# Import the resolver from the sibling file. The sys.path manipulation is
+# fragile if these files are moved or run from a different cwd — catch the
+# ImportError and give a clear message instead of letting the traceback fly.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from resolve_claude import resolve_claude  # noqa: E402
+try:
+    from resolve_claude import resolve_claude  # noqa: E402
+except ImportError as e:
+    print(f"FAIL: cannot import resolve_claude from {Path(__file__).parent}: {e}",
+          file=sys.stderr)
+    print("Ensure both files live in the same directory and the script "
+          "is run with that directory accessible to Python.",
+          file=sys.stderr)
+    sys.exit(7)
 
 
 # ---------- toolhelp32 process snapshot (Windows only) ----------
@@ -101,10 +111,17 @@ def _descendants_of(procs: dict[int, tuple[int, str]], parent: int,
 def _spawn_and_snapshot(label: str, argv: list[str]) -> dict:
     """Popen the given argv, immediately snapshot process tree, report.
 
-    Uses `--version` because it's the fastest claude invocation that
-    forces the full binary to load (so the process actually shows up
-    in toolhelp32). The race window between Popen and snapshot is
-    typically 1-50ms on a modern machine.
+    Uses `--help` (not `--version`) so the process produces enough stdout
+    to stay alive past the snapshot window. `--version` exits in <100ms
+    on modern hardware, which can race the first toolhelp32 sample.
+
+    Note on DETACHED_PROCESS + conhost: passing DETACHED_PROCESS does
+    suppress conhost for the direct child (Test A's claude.exe). But
+    when the direct child is itself a console host (Test B's cmd.exe
+    shim), it spawns its own grandchild console — so we DO observe a
+    `conhost.exe` descendant in Test B. That asymmetry is informative,
+    not a bug — it directly mirrors why thin_launcher needed the
+    descendant walker in the first place.
     """
     print(f"\n=== {label} ===")
     print(f"  argv: {argv}")
@@ -165,7 +182,8 @@ def _spawn_and_snapshot(label: str, argv: list[str]) -> dict:
     else:
         print("    (none captured)")
 
-    print(f"  --version stdout: {out.decode('utf-8', 'replace').strip()[:120]!r}")
+    flag = argv[-1] if argv else "?"
+    print(f"  {flag} stdout: {out.decode('utf-8', 'replace').strip()[:120]!r}")
     print(f"  exit code: {proc.returncode}")
 
     return {
@@ -195,13 +213,14 @@ def main() -> int:
     print(f"resolved : {real_exe}")
 
     # Test B: spawn via the shim (what subprocess.Popen does today
-    # if you give it `shutil.which('claude')`)
+    # if you give it `shutil.which('claude')`). Use --help: longer
+    # stdout than --version, gives the snapshot loop more time.
     test_b = _spawn_and_snapshot("Test B: Popen(claude.cmd) — CURRENT BEHAVIOR",
-                                  [str(shim_path), "--version"])
+                                  [str(shim_path), "--help"])
 
     # Test A: spawn the resolved .exe directly (what §3.1 proposes)
     test_a = _spawn_and_snapshot("Test A: Popen(claude.exe) — PROPOSED",
-                                  [str(real_exe), "--version"])
+                                  [str(real_exe), "--help"])
 
     # Verdict
     print("\n=== Verdict ===")
@@ -217,9 +236,10 @@ def main() -> int:
         return 0
     elif test_a["is_claude_directly"] and test_b["is_claude_directly"]:
         print("\n[INCONCLUSIVE] Both paths produced Popen.pid=claude.exe directly.")
-        print("     The shim may have been short-lived enough that we caught")
-        print("     the post-exec state. Re-run, or trust Test A as proof.")
-        return 0
+        print("     The shim's cmd.exe may have already exec'd into claude before")
+        print("     the first snapshot. Re-run, or trust Test A as proof.")
+        print("     (Non-zero exit so CI does NOT treat this as success.)")
+        return 3
     else:
         print("\n[UNEXPECTED] Direct spawn did NOT give claude.exe as Popen.pid.")
         return 2

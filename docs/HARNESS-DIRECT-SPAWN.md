@@ -10,12 +10,26 @@ _What was learned from investigating "can the harness spawn `claude` directly in
 
 ## 1. The verdict
 
-A real terminal is required to keep agent sessions on the interactive Claude subscription billing model. When `claude.exe`'s stdout is a pipe instead of a TTY, it auto-detects non-interactive mode and switches to the Agent SDK billing pool — separately metered ($20/$100/$200/mo SDK credit for Pro/Max-5x/Max-20x respectively from 2026-06-15, then API rates per-token). This is true even without the `-p` flag.
+A **TTY is required** to keep agent sessions on the interactive Claude subscription billing model. When `claude.exe`'s stdout is a pipe instead of a TTY, it auto-detects non-interactive mode and switches to the Agent SDK billing pool — separately metered ($20/$100/$200/mo SDK credit for Pro/Max-5x/Max-20x respectively from 2026-06-15, then API rates per-token). This is true even without the `-p` flag.
 
 Concretely:
-- The harness **cannot** own `claude.exe`'s stdin/stdout via plain pipes and still bill against the existing Max 20x subscription.
-- The only way to harness-own `claude` while keeping subscription billing is full PTY emulation + driving the TUI programmatically. That is strictly *more* complex than today's chain, not less — defeats the purpose.
-- `wt.exe` (Windows Terminal) is the cheapest TTY provider Windows has. It stays.
+
+- The harness **cannot** own `claude.exe`'s stdin/stdout via plain pipes and still bill against the existing Max 20x subscription. Verified by §4.3.
+- `wt.exe` (Windows Terminal) is the simplest way to provide a TTY today, and is what the existing chain already uses. The corollary doesn't follow that `wt.exe` is the *only* viable TTY provider — see the open ConPTY question below.
+
+### 1.1 Open question — ConPTY as a middle ground
+
+The pipe-vs-TTY test proved *"pipes cause API billing; a real terminal keeps subscription billing"*. It did NOT test *"a programmatic pseudoterminal (ConPTY on Windows, `pty.openpty` on POSIX) keeps subscription billing"*. The two are not the same thing.
+
+A ConPTY-based middle ground would look like:
+
+1. Harness allocates a ConPTY pair (master FD + slave FD).
+2. Spawns `claude.exe -p --input-format stream-json --output-format stream-json` with the slave FD attached as its stdin/stdout. From claude's perspective, it has a TTY.
+3. Harness reads/writes stream-json on the master FD — same protocol as the closed pipe-based proposal, but over a PTY.
+
+If claude treats the PTY as a TTY for billing purposes (likely — the detection is almost certainly `isatty(stdout)`, which returns true for PTY slaves), then we'd get *both* subscription billing and programmatic harness control without screen-scraping. The first time this doc made the "PTY emulation is strictly more complex" claim it conflated PTY allocation with TUI scraping — those are distinct.
+
+**Status:** untested. Listed in §7 follow-ups. The "TTY required" verdict stands either way; the question is *which* TTY provider, not *whether*. Until tested, `wt.exe` remains the operational answer and §3's smaller proposal stands.
 
 ---
 
@@ -128,20 +142,30 @@ HOP 1: C:\Users\naaht\AppData\Roaming\npm\node_modules\@anthropic-ai\claude-code
 verify: --version OK -> '2.1.140 (Claude Code)'
 ```
 
-The resolver also handles `.bat` / `.ps1` shim variants and POSIX bash shims (untested here; this Windows machine doesn't have those install layouts).
+**Coverage caveats** (post-DeepSeek audit):
+
+- **Tested:** the multi-line npm `.cmd` shim format (`SET dp0=%~dp0` followed by `"%dp0%\…\.exe"`) — that's what this machine ships.
+- **Code path written but untested:** the older one-line `%~dp0` npm `.cmd` format; `.bat` (shares the cmd regex); `.ps1`; POSIX bash shims. The synthetic-string unit tests in the file's regex match correctly against literal samples of each format, but no real install of those variants was available to verify end-to-end. The POSIX parser specifically targets the standard npm POSIX shim shape (`exec "$basedir/node" "$basedir/.../cli.js" "$@"`) — earlier review noted the prior regex was structurally incompatible with that shape; the fixed regex picks the LAST `$basedir`-rooted argument off the `exec` line.
+- **Broken-chain handling:** if a shim points to a non-existent target on disk, the resolver raises `BrokenShimChain` rather than silently returning the shim itself. Earlier review caught that a silent fallback to the shim would re-introduce the cmd.exe wrapper PID problem this resolver exists to avoid.
 
 ### 4.1.2 Test: `Popen(claude.cmd)` vs `Popen(claude.exe)` process trees ✅
 
 Script: [`references/experiments/spawn_tree_test.py`](../references/experiments/spawn_tree_test.py)
 
-Spawns `--version` two ways and snapshots the process tree immediately via toolhelp32:
+Spawns `--help` two ways (longer-running than `--version` to widen the toolhelp32 snapshot window — see audit note below) and snapshots the process tree immediately:
 
 | | `Popen.pid` resolves to | Descendants captured | stdout captured |
 |---|---|---|---|
-| **Test B** (`claude.cmd` shim) | **cmd.exe** | `claude.exe` (depth 1) + `conhost.exe` (depth 2) | `''` |
-| **Test A** (resolved `claude.exe`) | **claude.exe** | none (process exited fast) | `'2.1.140 (Claude Code)'` |
+| **Test B** (`claude.cmd` shim) | **cmd.exe** | `claude.exe` (depth 1) + `conhost.exe` (depth 2) | empty (cmd wrapper's stdout, not claude's) |
+| **Test A** (resolved `claude.exe`) | **claude.exe** | `reg.exe` × 2 + `conhost.exe` × 2 (claude probes the registry at startup) | `'Usage: claude [options] [command] [prompt]...'` |
 
 The short-lived `cmd.exe` in Test B is exactly what `_resolve_claude_exe_pid` was built to walk past. With Test A's direct spawn, there's nothing to walk — `Popen.pid` is already claude.exe. The descendant-walker becomes unnecessary code; the singleton race class (cmd-wrapper exits before next thin_launcher invocation → stale `.claude-pid`) becomes structurally impossible.
+
+**Audit notes** (post-DeepSeek):
+
+- **conhost descendant asymmetry is informative, not a bug.** The test uses `creationflags=DETACHED_PROCESS`, which suppresses console inheritance for the *direct* child. In Test A, claude.exe is the direct child, so no console — no conhost as its direct descendant. In Test B, `cmd.exe` is the direct child *and* it's a console host, so it spawns its own grandchild console for claude.exe (depth 2). That asymmetry directly mirrors why `thin_launcher` needed the descendant walker in the first place.
+- **Cross-reference for the "deletable" claim:** `_resolve_claude_exe_pid` + `_win32_list_descendants` + `_posix_list_descendants` are called only from `references/scripts/thin_launcher.py` itself, with one dedicated test in `tests/test_thin_launcher_10101.py`. No other consumers in the codebase. The "~250 lines deletable" estimate holds (modulo updating that test file alongside).
+- **Race window in the snapshot loop is bounded but not eliminated.** The test now uses `--help` instead of `--version` (longer output, longer-lived process) to give toolhelp32 a wider window. If the spawn is missed entirely on a fast machine, the `INCONCLUSIVE` branch now exits with code 3 (not 0) so CI does not mark inconclusive runs as success.
 
 ### 4.2 Test: `--input-format stream-json` supports multi-turn over stdin
 
@@ -149,9 +173,9 @@ Two `{"type":"user",...}` lines on stdin → two complete init/result event pair
 
 This confirmed that the architecture *would have worked technically* — Claude Code's official streaming I/O is the right shape for what was wanted. The blocker was §4.3, not the protocol.
 
-### 4.3 Test: pipe-vs-TTY determines billing mode ⚠️
+### 4.3 Test: pipe-vs-TTY mode-switching ⚠️
 
-The critical test. Two variants, same conclusion:
+The most consequential test in this investigation. Two variants, same observed behavior:
 
 ```sh
 # Variant A: no -p, piped stdin/stdout
@@ -163,11 +187,21 @@ printf 'reply pong\n' | claude.exe --output-format stream-json --verbose --model
 # → {"type":"result", ..., "total_cost_usd": 0.0157, ...}
 ```
 
-`total_cost_usd` in the result envelope is the smoking gun: subscription-billed interactive turns don't carry per-turn USD; only API-billed turns do. From `claude --help`:
+What this directly proves:
 
-> "The workspace trust dialog is skipped when Claude is run in non-interactive mode (via -p, **or when stdout is not a TTY**, e.g. piped or redirected output)."
+- **Pipes auto-trigger non-interactive mode.** `claude --help` is explicit:
+  > "The workspace trust dialog is skipped when Claude is run in non-interactive mode (via -p, **or when stdout is not a TTY**, e.g. piped or redirected output)."
+- **Non-interactive turns carry `total_cost_usd` in the stream-json result envelope.** Verified above (Variant B).
 
-Claude actively detects no-TTY and self-demotes. There is no flag that disables this detection without also disabling subscription billing.
+**What this is an *inference* about — not a citation-backed proof:** that the presence of `total_cost_usd` definitively indicates the Agent SDK / API billing pool (rather than subscription billing). The chain of reasoning rests on:
+
+1. `total_cost_usd` is a per-turn USD figure. Interactive subscription billing is flat-rate (no per-turn USD), so reporting per-turn USD only makes sense for metered API billing.
+2. The Anthropic [Claude Help Center article on the Agent SDK](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan) and the [June 2026 billing change reporting](https://the-decoder.com/claude-subscriptions-get-separate-budgets-for-programmatic-use-billed-at-full-api-prices/) describe `claude -p` as drawing from a separate Agent SDK credit pool / API rates — distinct from the interactive subscription.
+3. Anthropic issues [#43333](https://github.com/anthropics/claude-code/issues/43333) and [#37686](https://github.com/anthropics/claude-code/issues/37686) document users observing `claude -p` billing against API charges, not subscription, while OAuth-authenticated to a Max plan.
+
+None of those sources explicitly state *"the presence of `total_cost_usd` in stream-json output indicates non-subscription billing."* The verdict in §1 is a synthesis — strong enough that this proposal is closed, but readers should treat it as a load-bearing inference, not a quoted Anthropic guarantee.
+
+**Reproducible script:** the test above can be re-run by anyone with this Claude Code install. It is intentionally NOT scripted into `references/experiments/` because each run incurs API cost (~$0.01–$0.10 at Haiku rates). Re-running is operator-discretion, not a hands-off CI check.
 
 ---
 
@@ -221,12 +255,18 @@ These were on the list before the §4.3 verdict closed the broader investigation
 
 ## 9. Recommended next step
 
-Three independent follow-ups, in increasing scope:
+Four independent follow-ups, in increasing scope:
 
 1. **The visual-confusion fix (smallest, near-trivial).** Make `wt.exe new-tab` close the tab when its child exits — invoke through a wrapper that waits-and-exits, or set `wt` to non-persistent mode. Removes the operator-confusion source that triggered this whole investigation. One-line change to `boot_remote._spawn_windows`.
 
 2. **§3.2: drop `bash` layer (small).** `wt.exe` invokes `python thin_launcher.py` directly. One fewer process per agent, no functional change. Cross-platform: same change in `_spawn_macos` and `_spawn_linux` (which probably already use the script's shebang anyway).
 
-3. **§3.1: drop `cmd.exe` shim (medium).** Requires productizing the portable install resolver. A working ~190-line prototype exists at [`references/experiments/resolve_claude.py`](../references/experiments/resolve_claude.py) and is validated by [`spawn_tree_test.py`](../references/experiments/spawn_tree_test.py) — see §4.1.1 / §4.1.2. Productizing means: move into `references/scripts/`, wire into `thin_launcher.py` boot path, cache the resolved path in `.squidsquad/config.md`, add POSIX integration test coverage (the prototype's POSIX path is written but untested here). Once landed: ~250 lines of descendant-walker out, ~190 lines of resolver in (net ~60 lines deleted), singleton race class gone.
+3. **§3.1: drop `cmd.exe` shim (medium).** Requires productizing the portable install resolver. A working ~190-line prototype exists at [`references/experiments/resolve_claude.py`](../references/experiments/resolve_claude.py) and is validated by [`spawn_tree_test.py`](../references/experiments/spawn_tree_test.py) — see §4.1.1 / §4.1.2. Productizing means: move into `references/scripts/`, wire into `thin_launcher.py` boot path, cache the resolved path in `.squidsquad/config.md`, add real-install integration tests for the older `%~dp0` Windows shim, `.bat`/`.ps1` variants, and POSIX (the prototype handles these code paths but only the standard Windows shim was end-to-end-verified). Once landed: ~250 lines of descendant-walker out, ~190 lines of resolver in (net ~60 lines deleted), singleton race class gone. Verified that `_resolve_claude_exe_pid` + descendant walkers have no other callers in the codebase (only `thin_launcher.py` + its dedicated test file).
 
-Defer the bigger direct-spawn redesign indefinitely; revisit if Anthropic's billing model changes.
+4. **§1.1: ConPTY spike (medium, conditional).** Test whether a programmatic ConPTY (Windows) or `pty.openpty` (POSIX) keeps subscription billing while still letting the harness drive `claude -p --input-format stream-json` over the PTY's master FD. This is the *one* path that could reopen the closed redesign — see §1.1. If billing stays interactive under PTY, the entire "harness owns claude" architecture becomes viable. If it doesn't, follow-up #3 remains the only achievable simplification. **Strictly experimental until the PTY billing question is answered.**
+
+Defer the bigger direct-spawn redesign until follow-up #4 returns a result.
+
+### 9.1 Audit history
+
+This doc went through a DeepSeek code-review pass (output: `.squidsquad/skill/planning/REVIEW-HARNESS-DIRECT-SPAWN-DEEPSEEK.md`). 11 findings filed — F1/F2/F3 (resolver silent-failure bugs), F4 (DETACHED_PROCESS + conhost asymmetry — confirmed correct), F5/F6/F11 (test ergonomics), F7 (ConPTY untested — surfaced as follow-up #4), F8 (no other callers — verified), F9 (untested shim variants — caveated in §4.1.1), F10 (billing inference, not citation-backed proof — caveated in §4.3). All addressed in-thread; the resolver and test scripts were corrected before this section was added.
