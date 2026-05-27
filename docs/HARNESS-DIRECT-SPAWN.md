@@ -17,19 +17,23 @@ Concretely:
 - The harness **cannot** own `claude.exe`'s stdin/stdout via plain pipes and still bill against the existing Max 20x subscription. Verified by §4.3.
 - `wt.exe` (Windows Terminal) is the simplest way to provide a TTY today, and is what the existing chain already uses. The corollary doesn't follow that `wt.exe` is the *only* viable TTY provider — see the open ConPTY question below.
 
-### 1.1 Open question — ConPTY as a middle ground
+### 1.1 ConPTY as a middle ground — **TESTED, closed**
 
-The pipe-vs-TTY test proved *"pipes cause API billing; a real terminal keeps subscription billing"*. It did NOT test *"a programmatic pseudoterminal (ConPTY on Windows, `pty.openpty` on POSIX) keeps subscription billing"*. The two are not the same thing.
+The pipe-vs-TTY test (§4.3) proved *"pipes cause API billing; a real terminal keeps subscription billing"*. It did NOT directly prove *"a programmatic pseudoterminal keeps subscription billing"*. The two are distinct, so this was held open as a potential reopening of the big redesign.
 
-A ConPTY-based middle ground would look like:
+**Tested 2026-05-27** via [`references/experiments/conpty_spike.py`](../references/experiments/conpty_spike.py): spawned `claude.exe -p` under a Windows ConPTY (via `pywinpty`), confirmed `isatty() == True` from claude's POV, ran one Haiku turn end-to-end. Result envelope:
 
-1. Harness allocates a ConPTY pair (master FD + slave FD).
-2. Spawns `claude.exe -p --input-format stream-json --output-format stream-json` with the slave FD attached as its stdin/stdout. From claude's perspective, it has a TTY.
-3. Harness reads/writes stream-json on the master FD — same protocol as the closed pipe-based proposal, but over a PTY.
+```
+result.result: 'PTY-SPIKE-OK'
+result.total_cost_usd: $0.0987
+result.usage.service_tier: 'standard'
+```
 
-If claude treats the PTY as a TTY for billing purposes (likely — the detection is almost certainly `isatty(stdout)`, which returns true for PTY slaves), then we'd get *both* subscription billing and programmatic harness control without screen-scraping. The first time this doc made the "PTY emulation is strictly more complex" claim it conflated PTY allocation with TUI scraping — those are distinct.
+`total_cost_usd` is reported under ConPTY — **identical telemetry shape to the pipe-mode test in §4.3**. By the same inference-chain as §4.3, this indicates the turn went to the Agent SDK billing pool, NOT subscription. **`-p` is the dominant trigger for non-interactive billing; TTY presence does not override it.** See §4.4 for the full test record.
 
-**Status:** untested. Listed in §7 follow-ups. The "TTY required" verdict stands either way; the question is *which* TTY provider, not *whether*. Until tested, `wt.exe` remains the operational answer and §3's smaller proposal stands.
+Secondary finding from the spike: `claude -p --input-format stream-json` (stream-json INPUT mode) is non-functional over a PTY — claude errors with *"Input must be provided either through stdin or as a prompt argument when using --print"* because its stdin-readiness detection differs between PTY and plain pipes. Even if billing weren't blocking, the stream-json input channel doesn't work over a PTY anyway.
+
+**Net:** follow-up #4 closes. The big "harness owns claude" redesign stays closed. `wt.exe` remains the operational TTY provider; §3's smaller proposal is the only achievable simplification.
 
 ---
 
@@ -203,6 +207,37 @@ None of those sources explicitly state *"the presence of `total_cost_usd` in str
 
 **Reproducible script:** the test above can be re-run by anyone with this Claude Code install. It is intentionally NOT scripted into `references/experiments/` because each run incurs API cost (~$0.01–$0.10 at Haiku rates). Re-running is operator-discretion, not a hands-off CI check.
 
+### 4.4 Test: ConPTY does not change the billing signal ⚠️
+
+Script: [`references/experiments/conpty_spike.py`](../references/experiments/conpty_spike.py) (run cost: $0.0987 on Haiku).
+
+Spawned `claude.exe -p "<prompt>" --output-format stream-json --verbose --model haiku --dangerously-skip-permissions` via Windows ConPTY (using `pywinpty 3.0.3`). Confirmed `proc.isatty() == True` — claude was running under a real TTY-attached stdin/stdout.
+
+Result envelope (key fields):
+
+| field | value |
+|---|---|
+| `init.apiKeySource` | `'none'` (OAuth-authed via keychain) |
+| `init.model` | `'claude-haiku-4-5-20251001'` |
+| `result.is_error` | `false` |
+| `result.result` | `'PTY-SPIKE-OK'` (claude executed and replied correctly) |
+| `result.total_cost_usd` | `0.0987` |
+| `result.usage.service_tier` | `'standard'` |
+
+**Same telemetry shape as the pipe-mode test in §4.3.** By the same inference chain there (per-turn `total_cost_usd` is reported on metered/API turns, not flat-rate subscription turns), this indicates ConPTY does not change the billing pool. **`-p` is the dominant trigger; TTY presence under `-p` does not flip billing back to subscription.**
+
+**Secondary finding** (recorded in the script):
+
+The first attempt of this spike used `--input-format stream-json` and wrote a user-message JSON line to the PTY master FD. Claude responded with:
+
+```
+Error: Input must be provided either through stdin or as a prompt argument when using --print
+```
+
+despite the message being written before any drain attempt. Diagnosis: under a PTY, claude's stdin-readiness detection apparently does not wait on PTY-buffered input the same way it waits on `subprocess.PIPE` stdin. The test had to fall back to a positional prompt to get past arg parsing. So even *if* billing weren't the blocker, the stream-json input channel — which the closed redesign assumed as the harness↔agent wire — does not work over a PTY in `-p` mode.
+
+**Operator follow-up:** confirm against the Anthropic billing dashboard that this $0.0987 charge appears as an Agent SDK / API charge (and not subscription). If it does, the inference chain is verified end-to-end. Raw spike output saved to `.squidsquad/skill/planning/conpty-spike-raw-output.txt` for reference.
+
 ---
 
 ## 5. Investigation: the duplicate-spawn race
@@ -263,9 +298,9 @@ Four independent follow-ups, in increasing scope:
 
 3. **§3.1: drop `cmd.exe` shim (medium).** Requires productizing the portable install resolver. A working ~190-line prototype exists at [`references/experiments/resolve_claude.py`](../references/experiments/resolve_claude.py) and is validated by [`spawn_tree_test.py`](../references/experiments/spawn_tree_test.py) — see §4.1.1 / §4.1.2. Productizing means: move into `references/scripts/`, wire into `thin_launcher.py` boot path, cache the resolved path in `.squidsquad/config.md`, add real-install integration tests for the older `%~dp0` Windows shim, `.bat`/`.ps1` variants, and POSIX (the prototype handles these code paths but only the standard Windows shim was end-to-end-verified). Once landed: ~250 lines of descendant-walker out, ~190 lines of resolver in (net ~60 lines deleted), singleton race class gone. Verified that `_resolve_claude_exe_pid` + descendant walkers have no other callers in the codebase (only `thin_launcher.py` + its dedicated test file).
 
-4. **§1.1: ConPTY spike (medium, conditional).** Test whether a programmatic ConPTY (Windows) or `pty.openpty` (POSIX) keeps subscription billing while still letting the harness drive `claude -p --input-format stream-json` over the PTY's master FD. This is the *one* path that could reopen the closed redesign — see §1.1. If billing stays interactive under PTY, the entire "harness owns claude" architecture becomes viable. If it doesn't, follow-up #3 remains the only achievable simplification. **Strictly experimental until the PTY billing question is answered.**
+4. ~~**§1.1: ConPTY spike**~~ **TESTED AND CLOSED, 2026-05-27.** See §1.1 and §4.4. ConPTY does not change the billing signal — `-p` is the dominant trigger. Plus stream-json INPUT doesn't even function over PTY (claude can't read PTY-buffered stdin in `-p` mode). The "harness owns claude" redesign stays closed.
 
-Defer the bigger direct-spawn redesign until follow-up #4 returns a result.
+Net achievable simplifications: follow-ups #1, #2, #3. The bigger direct-spawn redesign is permanently closed under current Anthropic billing.
 
 ### 9.1 Audit history
 
