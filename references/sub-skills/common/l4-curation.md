@@ -97,7 +97,7 @@ If the customization the human asks for contradicts how SquidSquad is built — 
 
 Example, in user-facing voice:
 
-> "The delivery role on this team packages and ships work that's been verified — it doesn't write the implementation itself, that's the worker's role. If you want X to happen as part of delivery, I can give the delivery role a rule about *when* to ask the worker for it, or I can give the worker a rule about *what* to include when X comes up. Which fits what you have in mind?"
+> "Packaging and shipping completed work is handled separately from writing the implementation — different specialists on this team. If you want X to happen *as part of shipping*, I can lock that into the rules for whoever does the shipping (with a step that asks the implementer to provide X). If you want it *built into the implementation itself*, I can lock it into the rules for whoever does the building. Which fits what you have in mind?"
 
 #### What this sub-skill does NOT do
 
