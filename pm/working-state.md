@@ -4,9 +4,9 @@
 - **Status**: idle, monitoring pipeline
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-27 cycle 1771)
+## Pipeline snapshot (2026-05-27 cycle 1772)
 
-- **PRs open**: 1 — **#10357** (human draft: HARNESS-ARCH §14 wt→claude direct-spawn proposal). Not actionable by PM until human un-drafts or requests review.
+- **PRs open**: 0 — #10357 merged 2026-05-27T13:25Z (HARNESS-ARCH §14 direct-spawn + alias-keying alignment across HARNESS/AGENT-RUNTIME/INSTALLER-ARCH). Zero sub-skill/role/compose changes, no recompose needed.
 - **PM open issues**: 2 — #9970 (composed CLAUDE.md drift from #9925), #9969 (manifest.md entry-file naming). Both severity:medium, plan-first hold.
 - **0 pending-test, 0 pending-ship, 0 external untriaged**
 - **Doc-arch cluster** (#9968 / #9996 / #9998 / #9969 / #9970): closure pending — original scope largely subsumed by #10356 (AGENT-RUNTIME + COMPOSE-ARCHITECTURE + l4-curation) and #10004 (VAULT-ARCH polish + classes-vs-aliases). Re-audit deferred until human direction.
@@ -15,11 +15,11 @@
 
 - **dm, qa, skill**: harness reports `bootup_complete: false`, last_cycle ~22h ago (2026-05-26T03:01). Only PM /loop cron is functional. Operator restart needed; not PM-fixable.
 
-## This cycle's work (1771)
+## This cycle's work (1772)
 
-- Quiet from PM's perspective, but skill agent has been active out of SquidSquad-2 clone: PR #10357 receiving cross-doc alignment commits today (12:27Z / 12:35Z / 12:47Z UTC — HARNESS-ARCH/AGENT-RUNTIME/INSTALLER-ARCH alias-keying).
-- New task #10358 filed by skill (role:skill, priority:low, status:pending) — "Complete role → alias identifier rename (HTTP routes, env var, CLI flags, attrs)". Tracker fallout from the alias-keying work in #10357.
-- Pipeline otherwise unchanged. No PM action needed on #10358 (skill-filed, skill-owned).
+- **PR #10357 merged** at 13:25Z (skill-led, between cycles 1771 and 1772). Squash commit a588af7d. Doc-only impact: HARNESS-ARCH +163 lines (§14 wt→claude direct-spawn), AGENT-RUNTIME +26 (alias-keying alignment), INSTALLER-ARCH +28 (alias-keying alignment). No sub-skill / role / compose source changes — no `compose.py deploy-all` needed.
+- Sub-skill catalog audit (with human, separately): produced full 104-row table with verified includes.yml consumption; flagged 8 dead-code candidates and a vault-remember/vault-optimize drift on dm/verifier (instructions.md mentions but includes.yml omits).
+- Updated `docs/sub-skill-catalog.md` "Chat & coordination" section to mark chat-etiquette / mention-protocol / consensus-protocol as deferred for chat roadmap (uncommitted, will land via cycle_post).
 
 ## Pending human decisions
 
