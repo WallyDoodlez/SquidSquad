@@ -209,9 +209,9 @@ Each role is a different configuration of the behavior and soul layers, assemble
 
 | Agent | Behavior (L3) | Soul (L5) | Mode |
 |-------|--------------|-----------|------|
-| **Dev Lead** | Bug triage, feature implementation, tests | Pragmatic engineer, correctness-first | Autonomous |
+| **Worker** | Bug triage, feature implementation, tests | Pragmatic engineer, correctness-first | Autonomous |
 | **PM** | Human check-in, feature intake, backlog, pipeline health | Process guardian, user-centric | Interactive |
-| **QA** | E2E tests, verification, regression testing | Skeptical tester, zero-tolerance for gaps | Autonomous |
+| **Verifier** | E2E tests, verification, regression testing | Skeptical tester, zero-tolerance for gaps | Autonomous |
 | **DM** | Delivery packaging, docs, CHANGELOG, version bumps | User-first communicator, last-mile owner | Autonomous |
 
 ---
@@ -223,7 +223,7 @@ Features flow through the behavior layer with human approval gates at key transi
 ```
 Pending → Planning → Planned → Approved → In Progress → Pending Test → Pending Ship → Shipped
    │         │          │          │           │    │           │              │            │
-   │     PM runs     Human      Human       Dev  HITL loop   QA verifies    DM delivers   Done
+   │     PM runs     Human      Human     Worker HITL loop  Verifier checks DM delivers   Done
    │     research    reviews    approves    builds  ↓↑          it            docs+changelog
    │     + planning   plan     execution     it  Pending
    │                                             Human Review
