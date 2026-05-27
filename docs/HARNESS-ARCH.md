@@ -133,7 +133,7 @@ ELM owns the event bus. Located at `references/scripts/harness.py` (`class Event
 ### 5.3 Event IDs
 
 ```
-event_id = sha256(timestamp + role + event_type + payload + nonce)[:16]
+event_id = sha256(timestamp + alias + event_type + payload + nonce)[:16]
 ```
 
 16-character hex (64-bit, per #9415). Content hash with per-emit nonce; same event emitted twice produces distinct IDs.
@@ -239,21 +239,25 @@ One file per install (at the install root). Persisted across harness restarts. S
 
 ```json
 {
-  "version": 1,
+  "harness_pid": 12345,
+  "start_time": 1748371200.0,
+  "port": 7373,
   "agents": {
     "<alias>": {
-      "role": "<categorical role: pm|qa|worker|dm>",
-      "intent": "running" | "stopping" | "restarting" | "stopped",
-      "pid": 12345,
-      "clone_path": "D:/Dev/Dev/SquidSquad-2",
+      "intent": "running",
+      "intent_set_at": "2026-05-25T18:30:00Z",
+      "status": "running",
       "boot_time": "2026-05-25T18:00:00Z",
-      "intent_set_at": "2026-05-25T18:30:00Z"
+      "clone_path": "D:/Dev/Dev/SquidSquad-2",
+      "claude_pid": 23456,
+      "terminal_pid": 34567,
+      "bootup_complete": true
     }
   }
 }
 ```
 
-Atomic writes (`.tmp` + `mv`). On harness restart, the file is read; each agent is checked for liveness (PID still alive?); intents are preserved.
+Atomic writes (`.tmp` + `mv`). On harness restart, the file is read; each agent is checked for liveness (PIDs still alive?); intents are preserved. Note: the outer agent key is the **alias** (e.g. `skill`, `verifier`); each agent's *categorical* role is not currently persisted in this file — it's derived from `config.md` at boot. Source of truth: `HarnessState.save_state()` in `references/scripts/harness.py`.
 
 ---
 
@@ -292,7 +296,7 @@ Per-agent directories under `.squidsquad/` are keyed by **alias**, not by the L2
 
 All harness-owned files are atomic-write (`.tmp` + `mv`) and persisted across restarts. The deque is the one piece of harness state that is NOT persisted.
 
-> **Vocabulary note — `role` vs `alias`:** the codebase (FastAPI routes, `AgentState.role`, event-poll `--role` flag, `SQUIDSQUAD_ROLE` env var) uses the identifier `role` everywhere; the §4 HTTP API path-parameter `{role}` reflects that. **In every one of those places, the value is actually the alias** (e.g. `skill`, `verifier`, `human`) — not the L2 categorical role (`pm`/`qa`/`worker`/`dm`). The naming predates the alias concept and is misleading. The doc keeps the literal `{role}` token in §4 only where it faithfully tracks the code; everywhere else (on-disk paths, state-file shapes, cursor maps) it uses `<alias>` because that's the only thing actually keyed in those structures. A code-level rename `role` → `alias` would close the mismatch but is invasive (touches every HTTP route + most agent-side scripts) and not yet planned.
+> **Vocabulary note — `role` vs `alias`:** the codebase (FastAPI routes, `AgentState.role`, event-poll `--role` flag, `SQUIDSQUAD_ROLE` env var) uses the identifier `role` everywhere; the §4 HTTP API path-parameter `{role}` reflects that. **In every one of those places, the value is actually the alias** (e.g. `skill`, `verifier`, `human`) — not the L2 categorical role (`pm`/`qa`/`worker`/`dm`). The naming predates the alias concept and is misleading. The doc keeps the literal `{role}` token in §4 only where it faithfully tracks the code; everywhere else (on-disk paths, state-file shapes, cursor maps) it uses `<alias>` because that's the only thing actually keyed in those structures. A code-level rename `role` → `alias` would close the mismatch; it's filed as #10358 (sibling to the bundled #10182 architectural-decisions task) and is on hold pending PR #10357 merging and #10182 progressing.
 
 ---
 

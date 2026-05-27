@@ -11,6 +11,34 @@ Audit triggered by request: "audit the document, and fix all mentioning of just 
 - **Q6:** all doc edits landed on PR #10357 as a follow-up cleanup commit.
 - **Q7 (role:* label):** deferred (mentioned in #10358 "Out of scope").
 
+**FOLLOWUP — DeepSeek review (2026-05-27):**
+
+DS surfaced 10 findings; 7 were clear in-scope mechanical fixes and were applied directly:
+- HARNESS-ARCH.md L136 — event ID hash now uses `alias`
+- HARNESS-ARCH.md §7.5 — `.harness-state.json` JSON shape rewritten to match `HarnessState.save_state()` actual output (DS proved my prior invented `version` / `pid` / inner `role` fields don't exist; real fields are `harness_pid`, `start_time`, `port`, and per-agent `intent`, `intent_set_at`, `status`, `boot_time`, `clone_path`, `claude_pid`, `terminal_pid`, `bootup_complete`)
+- HARNESS-ARCH.md §9 footnote — "not yet planned" → "filed as #10358"
+- AGENT-RUNTIME.md L578 — cycle-input.json path uses `<alias>`
+- AGENT-RUNTIME.md L301 — EAD diagram "state-change → alias mapping rules"
+- AGENT-RUNTIME.md L1138 glossary — Cursor defined per-alias
+- INSTALLER-ARCH.md — 4 prose spots (L27, 165, 228, 309) + 4 path spots (L242, 322, 437, 443-444, 474) cleaned up
+
+**STILL OPEN — DS findings 6 + 10 (§4 response-shape inconsistency):**
+
+DS observed that `docs/HARNESS-ARCH.md` §4.1 documents response shapes containing fields that don't actually exist in `AgentState.to_dict()`:
+- Doc claims `[{role, alias, intent, pid, clone_path, boot_time, ...}]` (line 72) — but code returns no `alias` field, and `pid` doesn't exist (code returns `claude_pid` + `terminal_pid` as separate fields)
+- Different rows in the same table mention `alias` only sometimes — internally inconsistent regardless of code accuracy
+
+**Question for user (Q8):** how to resolve §4 response shape claims?
+
+Options:
+- (a) Update response shapes to faithfully match current code: remove `alias`, replace `pid` with `claude_pid` + `terminal_pid`. Doc stays accurate to code.
+- (b) Mark `alias` as aspirational (will appear when #10358 lands), explicitly note current code uses `role`-named field. Documents the future shape.
+- (c) Cross-reference: leave the table abstract ("{intent, PIDs, clone_path, …}") and link to `AgentState.to_dict()` in source for the exact field list. Avoids the maintenance burden.
+
+I leaned (a) is most honest for a current-state architecture doc, but it removes the only place the doc tries to make the alias-vs-categorical distinction visible at the API level. (b) is more aspirational; risk of doc drift if #10358 stalls. (c) is the cleanest separation of concerns but the table is currently relied on for orientation.
+
+No edit applied to §4.1 yet — your call.
+
 Historical record below.
 
 ## Key vocabulary distinction (for context)
