@@ -19,6 +19,8 @@ This manifest defines how shared sub-skill source files compose into agent templ
 
 > **`file-conventions` is being retired entirely (2026-05-27)**: Today's `file-conventions.md` per-role sub-skill is a centralized path manifest, but every path it lists is already named inline in the specific instruction that uses it (PM's task-intake names `RESEARCH.md`'s location; verifier's `verification` names `TEST-PLAN-<N>.md`'s location; etc.). The centralized map duplicates facts that already live in the instruction. Resolution: delete `file-conventions.md` entirely; paths stay inline in the instruction sub-skills. L4 path overrides use `### replace step:<step-id>` on the specific instruction.
 
+> **`agent-boundaries` is being retired entirely (2026-05-27)**: Today's `common/agent-boundaries.md` (5 lines) is two pieces of foundational content — a team-awareness baseline (`{{role-roster}}` + "know your teammates") and a decline-and-route discipline rule. Both are L1/L2 foundational content, not focused how-to. Resolution: inline the team-roster + awareness sentence into each role's Identity slot ([§5.1](../../docs/COMPOSE-ARCHITECTURE.md#51-identity)); inline the decline-and-route rule into each role's Responsibility slot ([§5.2](../../docs/COMPOSE-ARCHITECTURE.md#52-responsibility)). Delete `common/agent-boundaries.md` at implementation time.
+
 ## Layer 4 — Project Sub-skills (auto-included)
 
 Project-specific L4 content lives in `.squidsquad/project/` (project-local, not distributed). `compose.py` reads `*.md` files from this directory and auto-includes them in every agent's CLAUDE.md after all other layers.

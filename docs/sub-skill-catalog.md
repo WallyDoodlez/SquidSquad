@@ -186,6 +186,8 @@ Role-specific event extras:
 
 > **Note on `file-conventions` — retired entirely (not moved to a slot)** — Today's `file-conventions.md` per-role sub-skill is a centralized path manifest, but every path in it is already used by exactly one specific instruction sub-skill (PM's task-intake names where `RESEARCH.md` goes; verifier's `verification` names where `TEST-PLAN-<N>.md` goes; etc.). The centralized map duplicates facts that already live in the instruction that touches them. Resolution: drop `file-conventions.md` entirely; paths stay inline in the instruction sub-skills that use them. L4 path overrides use `### replace step:<step-id>` on the specific instruction. Tracked in #10360.
 
+> **Note on `agent-boundaries` — retired entirely (inlined into L1/L2)** — Today's `common/agent-boundaries.md` (5 lines) is two pieces of foundational content: a team-awareness baseline (`{{role-roster}}` + "know your teammates") and a decline-and-route discipline rule. Both are L1/L2 foundational content, not focused how-to. Resolution: inline the team-roster + awareness sentence into each role's Identity slot ([§5.1](COMPOSE-ARCHITECTURE.md#51-identity)); inline the decline-and-route rule into each role's Responsibility slot ([§5.2](COMPOSE-ARCHITECTURE.md#52-responsibility)). The `agent-boundaries` row below stays as the historical authoring location until #10360 ships, then the sub-skill file is deleted.
+
 ### PM (`roles/pm/`)
 
 | Sub-skill | One-liner |
