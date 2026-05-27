@@ -99,7 +99,7 @@ flowchart TB
 Compose has **two distinct input axes**, easy to conflate:
 
 - **L1-L4 content layers** (this section's main subject) — *what* the agent reads in its composed CLAUDE.md. Layered by specificity (universal → role → variant → project-local). Files: `references/sub-skills/`, `references/roles/<role>/`, and `.squidsquad/project/<role>.md` (the per-role-class L4 file).
-- **`.squidsquad/config.md`** — the install's **configuration**, not a content layer. It declares install-level parameters like `Workers:` (the roster), `Iteration Interval`, `event-driven:` (mode flag), `Improvement Scanning:`, feature toggles. Compose reads it to make compose-time *decisions* — which manifest to load (polling vs event per §6.5), what placeholder values to substitute, which roles exist for `compose.py deploy-all`, etc.
+- **`.squidsquad/config.md`** (always referenced by full path under `.squidsquad/`; never just `config.md`) — the install's **configuration**, not a content layer. It declares install-level parameters like `Workers:` (the roster), `Iteration Interval`, `event-driven:` (mode flag), `Improvement Scanning:`, feature toggles. Compose reads it to make compose-time *decisions* — which manifest to load (polling vs event per §6.5), what placeholder values to substitute, which roles exist for `compose.py deploy-all`, etc.
 
 The two axes interact at compose time. Examples:
 
@@ -110,14 +110,14 @@ The two axes interact at compose time. Examples:
 | Polling vs event manifest selection | — | ✅ `event-driven:` flag |
 | Placeholder substitution (e.g. `{{role-roster}}`) | ✅ template lives in L1-L3 | ✅ values come from `config.md` (e.g. `Workers:` list) |
 | Iteration interval baked into boot's `/loop` invocation | — | ✅ `Iteration Interval > Minutes` |
-| Whether vault-remember / improvement-scan runs | ✅ sub-skill self-gates on flag | ✅ flag value lives in `config.md` |
+| Whether vault-remember / improvement-scan runs | ✅ sub-skill self-gates on flag | ✅ flag value lives in `.squidsquad/config.md` |
 
-**Mental model:** L1-L4 is the *content* the install ships; `config.md` is the install's *parameters*. Both feed compose; neither is a layer of the other.
+**Mental model:** L1-L4 is the *content* the install ships; `.squidsquad/config.md` is the install's *parameters*. Both feed compose; neither is a layer of the other.
 
 Per-install customization paths therefore split:
 
 - **Project-local content changes** (new instructions, role-boundary additions, soul tweaks, project facts) → L4 file (`.squidsquad/project/<role>.md` with H2 slot sections)
-- **Install configuration changes** (different Workers roster, different cycle interval, mode flip, feature toggle) → `config.md`
+- **Install configuration changes** (different Workers roster, different cycle interval, mode flip, feature toggle) → `.squidsquad/config.md`
 
 A project that wants to *describe* its team differently in agent prompts adds an L4 `## Identity` `### append` block. A project that wants to *change the install's actual roster* (e.g. add an `fe-worker` class) edits `config.md`'s Workers list and re-runs `compose.py deploy-all`. Both can coexist.
 
@@ -297,7 +297,7 @@ Compose processes L1-L3 deterministically:
 
 1. **Collect**: walk `references/sub-skills/`, `references/roles/<role>/`. For each file with frontmatter, read its `slot` and `ordinal`. For files in the `instructions` slot, also extract the sub-skill name referenced in the file body (e.g. from `→ run sub-skill: <name>` directives) — this is a body-extracted reference, not a frontmatter field.
 2. **Filter by role**: each file may declare which roles it applies to (via `roles:` frontmatter list; default = all). Files not applicable to the current role are dropped.
-3. **Sort**: stable sort by `(slot_index, ordinal)`. `slot_index` is a fixed enum: identity=0, soul=1, instructions=2, project-context=3, vault=4.
+3. **Sort**: stable sort by `(slot_index, ordinal)`. `slot_index` is a fixed enum: identity=0, responsibility=1, soul=2, instructions=3, project-context=4, vault=5.
 4. **Emit orchestration**: under the appropriate top-level section header, emit each file's orchestration content verbatim. Inside the `instructions` slot, step bodies are **references to sub-skills by name** (e.g. `→ run sub-skill: pipeline-sentinel`) rather than inlined sub-skill content. The catalog of available sub-skills lives at [`sub-skill-catalog.md`](sub-skill-catalog.md) — composed CLAUDE.md never duplicates it.
 
 The output of step 4 is the **L1-L3 base composition** — purely the SquidSquad-shipped orchestration, with sub-skill names referenced (not their bodies), and no project customization yet applied.
@@ -828,7 +828,7 @@ Mode flip = recompose + agent restart, never mid-session. The two outputs differ
 
 - Polling has proven stable across harness outages — it does not depend on a live harness HTTP endpoint.
 - The polling manifest is the documented compose-time fallback when `includes-events.yml` is absent for a role (e.g. a new role not yet ported to event mode).
-- Polling stays available as the **manual recovery target** when event-mode is failing for any reason (harness wedged, event-bus regression, etc.). Recovery is an explicit operator action — flip `event-driven: no` in `config.md`, recompose, restart. There is no automatic runtime fallback (see AGENT-RUNTIME §8.4).
+- Polling stays available as the **manual recovery target** when event-mode is failing for any reason (harness wedged, event-bus regression, etc.). Recovery is an explicit operator action — flip `event-driven: no` in `.squidsquad/config.md`, recompose, restart. There is no automatic runtime fallback (see AGENT-RUNTIME §8.4).
 - Operators may explicitly select polling via `config.md` (`event-driven: no`) while debugging the event bus, or until event mode reaches GA in their install.
 
 **Authoring discipline**: both manifests must stay in sync on what an agent *does* — same status transitions, same comment etiquette, same vault behaviors. Only the *how* differs (event stream vs `/loop` tick). The two `5.7.x` worked examples should diff only on §4.2; if a non-§4.2 section diverges between modes, that is a bug, not a feature.
@@ -1222,7 +1222,7 @@ Total: ~14 sub-PRs. Comparable to event-arch v2's implementation epic (6 PRs in 
 | Term | Definition |
 |---|---|
 | **L1 / L2 / L3 / L4** | The four layers of the SquidSquad composition model (§2). L1-L3 are SquidSquad-shipped; L4 is project-local. |
-| **Slot** | A named top-level section in the composed output: `identity`, `soul`, `instructions`, `project-context`, `vault`. Every L1-L4 source file declares one slot. |
+| **Slot** | A named top-level section in the composed output: `identity`, `responsibility`, `soul`, `instructions`, `project-context`, `vault`. Every L1-L4 source file declares one slot. |
 | **Ordinal** | An integer that determines order within a slot. Authors use gaps (10, 20, 30) so inserts don't require renumbering. |
 | **Op** | An L4-only operation that determines how an L4 file merges with the L1-L3 base: `replace`, `insert-before`, `insert-after`, `append`. |
 | **Target** | A step ID that an L4 op points at. Required for non-`append` ops. |
