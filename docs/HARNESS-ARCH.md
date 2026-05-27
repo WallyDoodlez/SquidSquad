@@ -92,11 +92,15 @@ All endpoints serve from `http://127.0.0.1:<port>`. Localhost-only; no authentic
 | GET | `/events/in-flight/{role}` | List events delivered to role but not yet acked | `[event, ...]` |
 | GET | `/events/lifecycle` | Recent lifecycle events for TUI display | `[event, ...]` |
 
-### 4.3 Human-queue endpoint
+### 4.3 Work-queue endpoint
 
 | Method | Path | Purpose | Returns |
 |---|---|---|---|
-| GET | `/human/queue` | Lists issues currently flagged as needing human attention (forge query) | `[{number, title, summary, ...}]` |
+| GET | `/queue/{alias}` | Lists issues currently flagged as actionable for the given alias (forge query, priority-then-age sort) | `{count, items: [{number, title, summary, priority, ...}]}` |
+
+The endpoint wraps the deterministic work-queue logic in `tracker.py work-queue` so TUIs / web UIs can poll over HTTP without spawning a subprocess per refresh. `{alias}` is the install-time agent name; for the human, the alias is `human` (filter is `status:pending-human-*`); for other aliases, the filter is the same one `tracker.py work-queue` produces (priority-sorted approved + in-progress items for that alias).
+
+> **Current implementation gap:** the harness today exposes only `/human/queue` (special-cased to human). The generic `/queue/{alias}` shape above is the principled form; the migration is tracked in §13.6.
 
 ---
 
@@ -361,6 +365,10 @@ EAD's polling loop hard-codes the GitHub `gh api` shape. Non-GitHub backends (Fo
 ### 13.5 Permission table reads `responsibility.md` (deprecated)
 
 Per [`decision-class-vs-alias-routing-model`](../.squidsquad/vault/galaxy/decision-class-vs-alias-routing-model.md) (locked 2026-05-25), the harness permission table is being retired in favor of a simpler alias-existence check. Current code still reads `responsibility.md` `## Bus contract` sections at boot and enforces a class-from-class permission table on `POST /work/assign`. Code change tracked in #10182 (bundled task, on hold pending PR #10004 merge).
+
+### 13.6 Work-queue endpoint is special-cased to human only
+
+§4.3 documents the principled `/queue/{alias}` shape. Current code only implements `/human/queue` (`harness.py:2046`, ticket #8704). The work-queue logic itself (priority sort, status filter) already lives in `tracker.py work-queue` and is alias-parameterized; the harness route just needs to be renamed and the status-label filter generalized so it derives from the alias's responsibility set rather than hard-coding `status:pending-human-*`. Land-time work: rename the route, parameterize the filter, update any TUI clients polling the old path.
 
 ---
 
