@@ -207,7 +207,7 @@ Conceptually they form "the agent's launcher subprocess tree." Implementation-wi
 
 ### 3.3 The `.claude-pid` convention
 
-`thin_launcher` writes its own `cmd.exe` PID (not `claude.exe`'s PID) into `.squidsquad/<role>/.claude-pid` at boot. This is the singleton handle the harness watches. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the "three claude.exe populations" and orphan-reaping rules.
+`thin_launcher` writes its own `cmd.exe` PID (not `claude.exe`'s PID) into `.squidsquad/<alias>/.claude-pid` at boot. This is the singleton handle the harness watches. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the "three claude.exe populations" and orphan-reaping rules.
 
 In loop mode, `event_poll` is not spawned — only `cmd → thin_launcher → claude` runs.
 
@@ -290,7 +290,7 @@ flowchart TB
 
         subgraph elm["EventLifecycleManager (ELM)"]
             Deque[("deque maxlen=1000<br/>in-memory event store")]
-            Cursors[("_cursors<br/>dict[role, event_id]")]
+            Cursors[("_cursors<br/>dict[alias, event_id]")]
             InFlight[("_in_flight<br/>delivered, not yet acked")]
             AckConsumer["ack-cursor consumer task<br/>(asyncio)"]
             Timeout["timeout_scan<br/>(every 30s)"]
@@ -298,7 +298,7 @@ flowchart TB
 
         subgraph ead_sub["ExternalActivityDetector (EAD)"]
             EAPoll["forge polling loop"]
-            EAMap["state-change → role<br/>mapping rules"]
+            EAMap["state-change → alias<br/>mapping rules"]
             EALast[("last-seen<br/>github event id")]
         end
 
@@ -345,13 +345,13 @@ flowchart TB
 
 #### Cursor model
 
-- Per-role, owned by harness. Persisted in `.squidsquad/.event-state.json`. Agents observe the cursor only through the harness API; they never write it directly.
+- Per-alias, owned by harness. Persisted in `.squidsquad/.event-state.json`. Agents observe the cursor only through the harness API; they never write it directly.
 - `null` at first boot → agent reads from the head of the deque.
 - Advances via `ack-cursor` consumed by the ack consumer task.
 - Cursor-regression attempts rejected (CONTEXT-9873-A D15).
 - `GET /events/cursor/{role}` returns `{cursor: <event_id> | null, role}`, HTTP 200 always.
 
-**Event IDs**: `sha256(timestamp + role + event_type + payload + nonce)[:16]` — 16-char hex (64-bit, per #9415). Content hash with per-emit nonce; same event emitted twice produces distinct IDs.
+**Event IDs**: `sha256(timestamp + alias + event_type + payload + nonce)[:16]` — 16-char hex (64-bit, per #9415). Content hash with per-emit nonce; same event emitted twice produces distinct IDs.
 
 ```mermaid
 sequenceDiagram
@@ -544,12 +544,12 @@ Each agent typically runs in its own git clone. The harness writes its port to `
 
 | What | Where | Owner | Why |
 |---|---|---|---|
-| Per-role cursor | `.squidsquad/.event-state.json` | harness | Harness owns delivery state |
+| Per-alias cursor | `.squidsquad/.event-state.json` | harness | Harness owns delivery state |
 | In-flight events | `.squidsquad/.event-state.json` | harness | Re-delivery on timeout (#9873-E) |
 | Agent intent + PID | `.squidsquad/.harness-state.json` | harness | Harness owns agent lifecycle |
-| Agent singleton PID | `.squidsquad/<role>/.claude-pid` | agent (thin_launcher) | Singleton enforcement (#8692) + harness health-poller's process-liveness check (see §3.3) |
-| Agent current-work state | `.squidsquad/<role>/working-state.md` | agent | Resume-from-crash checkpoint for the agent's OWN current work. Does NOT carry an event queue (harness deque + cursor own that) AND does NOT carry a nudge flag (per §7.5 — nudge memory lives only in conversation context) |
-| Improvement subloop throttle | `.squidsquad/<role>/.subloop-last-run` | agent | Last-fire timestamp; gates next eligibility (§7.6) |
+| Agent singleton PID | `.squidsquad/<alias>/.claude-pid` | agent (thin_launcher) | Singleton enforcement (#8692) + harness health-poller's process-liveness check (see §3.3) |
+| Agent current-work state | `.squidsquad/<alias>/working-state.md` | agent | Resume-from-crash checkpoint for the agent's OWN current work. Does NOT carry an event queue (harness deque + cursor own that) AND does NOT carry a nudge flag (per §7.5 — nudge memory lives only in conversation context) |
+| Improvement subloop throttle | `.squidsquad/<alias>/.subloop-last-run` | agent | Last-fire timestamp; gates next eligibility (§7.6) |
 | Last-seen forge event | EAD-internal persistence | harness | Don't re-emit assigned-to on restart |
 | Work state | GitHub Issues (forge) | forge | Source of truth for status, comments, PRs |
 | Decisions / institutional memory | `.squidsquad/vault/` | shared | Long-lived rationale — see [`VAULT-ARCH.md`](VAULT-ARCH.md) for architecture (PARAG model, sub-skills, scripts, cycle integration) |
@@ -575,7 +575,7 @@ Boot (session start, once):
 │ · query work queue (tracker)                     │
 │ · derive mechanical reactions from tracker       │
 │   state changes since last cycle (§6.3)          │
-│ · build .squidsquad/<role>/cycle-input.json      │
+│ · build .squidsquad/<alias>/cycle-input.json     │
 └──────────────────────────────────────────────────┘
                        ↓
 ┌─── Phase 2: Creative work (agent) ───────────────┐
@@ -882,7 +882,7 @@ In practice agents never call `/work/assign` directly for transition-driven hand
 | `* → pending-human-review` | `pm` | `"human-needed"` |
 | `* → pending-human-setup` | `pm` | `"human-needed"` |
 
-The issue's `role:*` label IS the target alias (aliases and label values use the same namespace). In a single-instance install, alias = class name; in a multi-instance install, the label is the specific agent's alias (e.g., `role:frontend-1`, not `role:worker`).
+The issue's `role:*` label IS the target alias (aliases and label values use the same namespace). The label *key* is `role:` for legacy code-compat reasons, but the label *value* is always alias-typed — in a single-instance install, alias = class name; in a multi-instance install, the label is the specific agent's alias (e.g., `role:frontend-1`, not `role:worker`). A rename of the label key from `role:` to `alias:` is in the same family as #10358 (`role` → `alias` identifier rename) but is currently out of scope on that task to limit blast radius — every existing issue label would need editing in lockstep with `tracker.py`, every care-filter caller, and every composed agent file that mentions `role:<name>`. Revisit once #10358 has phased through code-side first.
 
 Mitigates an entire class of pickup-fidelity bugs (#9946) — agents can't forget to call `/work/assign` because `tracker.py` does it. Replaces the deprecated `status-transition` emit.
 
@@ -998,7 +998,7 @@ flowchart TD
     Subloop --> Idle
 ```
 
-**Throttle** (time-based, NOT token-counting): at most one subloop per agent per N minutes (default 30, matching the old `/loop` cadence — so observable improvement-scan frequency stays the same as loop mode). `.squidsquad/<role>/.subloop-last-run` records the last-fire timestamp; the agent checks this file's age before triggering.
+**Throttle** (time-based, NOT token-counting): at most one subloop per agent per N minutes (default 30, matching the old `/loop` cadence — so observable improvement-scan frequency stays the same as loop mode). `.squidsquad/<alias>/.subloop-last-run` records the last-fire timestamp; the agent checks this file's age before triggering.
 
 **What the subloop does** (role-specific, one bounded task per fire):
 - **pm**: pipeline sentinel + improvement scan (process gaps, stalled items, doc drift)
@@ -1135,7 +1135,7 @@ PM agents recognize this set as their care-filter; new values added in future re
 
 - **Cycle wrapper**: the pre/creative/post phase trio that runs around one unit of agent work. Same shape in both modes.
 - **Nudge**: a single stdin line written by `event_poll` to wake a Claude session via the Monitor tool.
-- **Cursor**: per-role harness-owned pointer to "events tended through here."
+- **Cursor**: per-alias harness-owned pointer to "events tended through here."
 - **EAD**: ExternalActivityDetector — the harness's forge poller that translates forge state changes into `assigned-to` events.
 - **Care filter**: the per-role decision of whether to act on an event or skip it.
 - **Improvement subloop**: time-throttled self-care work the agent runs when its queue is empty. Applies in both modes — quiet cycles in loop mode (§6.4) and drained-queue detection in event mode (§7.6).

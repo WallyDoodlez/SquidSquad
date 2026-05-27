@@ -24,11 +24,11 @@ Throughout this doc, **prose talks about the categorical classes** (PM, workers,
 
 ### 1.2 Per-agent clone isolation (mandatory)
 
-**Every agent runs in its own git clone of the project repo.** This is a base architectural commitment — not a configurable mode. The installer always sets up per-role clones; there is no flag to disable clone isolation.
+**Every agent runs in its own git clone of the project repo.** This is a base architectural commitment — not a configurable mode. The installer always sets up per-alias clones (one clone per installed agent instance); there is no flag to disable clone isolation.
 
 Why: agents work autonomously and concurrently. If they shared one working tree they would step on each other's `git pull`, `git checkout`, branch switches, and uncommitted state. Per-agent clones make each agent's working tree disjoint while still coordinating through the same remote (the source-of-truth git repo) and forge (GitHub Issues).
 
-The clones live wherever the operator places them on disk; their paths are registered in `~/.squidsquad/clones/<role>` (one file per role, contents = absolute path to that role's clone). The harness reads this registry at boot, and `start.sh` uses it to sync all clones with `git pull` before booting the squad.
+The clones live wherever the operator places them on disk; their paths are registered in `~/.squidsquad/clones/<alias>` (one file per alias, contents = absolute path to that alias's clone). The harness reads this registry at boot, and `start.sh` uses it to sync all clones with `git pull` before booting the squad.
 
 In scope:
 
@@ -95,13 +95,13 @@ Three commitments:
 | Destination | What the installer writes |
 |---|---|
 | `.squidsquad/config.md` | Project config — iter interval, ship threshold, model routing, tracker backend, git workflow |
-| `.squidsquad/<role>/` | Per-role agent directory (CLAUDE.md composed, SOUL.md, working-state.md skeleton, planning/, iterations/) — one per role in the chosen team preset: PM, each worker, each verifier, DM |
+| `.squidsquad/<alias>/` | Per-alias agent directory (CLAUDE.md composed, SOUL.md, working-state.md skeleton, planning/, iterations/) — one per alias in the chosen team preset: PM, each worker, each verifier, DM |
 | `.squidsquad/project/` | L4 project-local seeds (copied from `references/sub-skills/project/` and enriched with conversational answers) |
 | `.squidsquad/vault/` | Shared memory layer skeleton (BRIEFING.md + the five vault dirs: projects/, areas/, resources/, archives/, galaxy/). Vault architecture documented in [`VAULT-ARCH.md`](VAULT-ARCH.md). |
-| `.squidsquad/.local-config` | Per-clone role→path mapping for `start.sh` to sync clones |
+| `.squidsquad/.local-config` | Per-clone alias→path mapping for `start.sh` to sync clones |
 | `.squidsquad/.harness-port`, `.harness-state.json`, `.event-state.json` (at runtime) | Harness-owned runtime files — written when the harness boots, not by the installer. Listed here for completeness; their schemas are documented in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §4–§5. |
 | `~/.squidsquad/secrets` | API keys for external models (restricted permissions, never committed to repo) |
-| `~/.squidsquad/clones/` | Per-role clone-path registry. One file per role (`pm`, each worker, each verifier, `dm`) whose contents is the absolute path to that role's clone. Always created — clone isolation is mandatory (see §1.2), not a configurable mode. |
+| `~/.squidsquad/clones/` | Per-alias clone-path registry. One file per alias (`pm`, each worker, each verifier, `dm`) whose contents is the absolute path to that alias's clone. Always created — clone isolation is mandatory (see §1.2), not a configurable mode. |
 | **Forge (GitHub)** | Issue labels created via `gh label create` — status/role/type/priority/severity taxonomy |
 | **Git commit** | Single atomic install commit on `main` (or the operator's chosen branch) |
 
@@ -162,7 +162,7 @@ Helper: `references/scripts/wizard.py check-gh` returns a JSON envelope with `ok
 ~/.squidsquad/
 ├── secrets        # API keys, restricted perms (0600)
 ├── config         # cross-install config
-└── clones/        # per-role clone-path registry (one file per role; mandatory per §1.2)
+└── clones/        # per-alias clone-path registry (one file per alias; mandatory per §1.2)
 ```
 
 Helper: `references/scripts/shared_fs.py init`. Idempotent — re-runs are safe.
@@ -225,7 +225,7 @@ Once approved, the installer:
 
 1. **Cleans up** any prior partial state (if a previous interrupted install left artifacts).
 2. **Serializes the install spec** to a temporary location for the scaffold step.
-3. **Scaffolds `.squidsquad/`** — creates the role dirs, vault skeleton, project-local L4 directory, config.md, and per-role SOUL.md files. No tool/MCP wiring (per §8).
+3. **Scaffolds `.squidsquad/`** — creates the per-alias agent dirs, vault skeleton, project-local L4 directory, config.md, and per-alias SOUL.md files. No tool/MCP wiring (per §8).
 4. **Enriches L4 project files** (#6581) — fills in the seed templates from `references/sub-skills/project/` with the conversational answers (e.g. project domain, audience, conventions).
 5. **Ensures GitHub labels** — creates the status/role/type/priority/severity label taxonomy via `gh label create` (idempotent per-label check).
 
@@ -239,7 +239,7 @@ For each role in the chosen team preset (PM, each worker, each verifier, DM), th
 python references/scripts/compose.py deploy <role>
 ```
 
-`compose.py` reads the L1-L3 sub-skill sources + L4 project-local files and emits `.squidsquad/<role>/CLAUDE.md` per the [compose pipeline](COMPOSE-ARCHITECTURE.md). The composed output is a thin orchestration layer that references sub-skills — see [COMPOSE-ARCHITECTURE.md §4.5](COMPOSE-ARCHITECTURE.md).
+`compose.py` reads the L1-L3 sub-skill sources + L4 project-local files and emits `.squidsquad/<alias>/CLAUDE.md` per the [compose pipeline](COMPOSE-ARCHITECTURE.md). The composed output is a thin orchestration layer that references sub-skills — see [COMPOSE-ARCHITECTURE.md §4.5](COMPOSE-ARCHITECTURE.md). (The `compose.py deploy <role>` CLI accepts the alias as its argument; the param name `<role>` in the helper signature predates the alias concept.)
 
 ### 4.10 Phase 7 — Tracker setup
 
@@ -296,7 +296,7 @@ The full `.squidsquad/` tree post-install. PM and DM dirs are always present (si
 │   ├── resources/
 │   ├── archives/
 │   └── galaxy/
-├── .local-config                # per-clone role→path map (read by start.sh)
+├── .local-config                # per-clone alias→path map (read by start.sh)
 └── (runtime) .harness-port, .harness-state.json, .event-state.json — created when the harness boots
 ```
 
@@ -306,7 +306,7 @@ And the per-user shared filesystem (not part of any single repo):
 ~/.squidsquad/
 ├── secrets         # API keys (chmod 0600)
 ├── config          # cross-install config
-└── clones/         # per-role clone-path registry — one file per role, contents = absolute path
+└── clones/         # per-alias clone-path registry — one file per alias, contents = absolute path
 ```
 
 ---
@@ -434,14 +434,14 @@ flowchart LR
 
 - `.squidsquad/project/` — L4 project-local customizations
 - `.squidsquad/vault/` — shared memory layer
-- `.squidsquad/<role>/working-state.md`, `iterations/`, `planning/` — agent state
+- `.squidsquad/<alias>/working-state.md`, `iterations/`, `planning/` — agent state
 - `config.md` — project configuration (the installer may *add* new fields with defaults if the new version requires them, but it never overwrites existing fields)
 - GitHub Issue labels — already present from prior install
 
 **What's regenerated:**
 
-- `.squidsquad/<role>/CLAUDE.md` — composed orchestration
-- `.squidsquad/<role>/SOUL.md` — copied fresh from the new `references/roles/<role>/SOUL.md`
+- `.squidsquad/<alias>/CLAUDE.md` — composed orchestration
+- `.squidsquad/<alias>/SOUL.md` — copied fresh from the new `references/roles/<role-class>/SOUL.md` (template lives under the role-class directory; deployed copy lives under the alias directory)
 
 **Migration steps** when an upgrade requires structural changes (e.g. a new sub-skill that needs a config field, or a renamed L4 file): the upgrade flow may invoke a one-off migration helper before recompose. Each such migration is filed as a separate helper script with idempotent semantics. As of this doc no such migrations exist.
 
@@ -471,7 +471,7 @@ Across both upgrade and clean-rebuild, these are always preserved:
 
 - `.squidsquad/vault/` — shared memory; lossy here is irrecoverable
 - `.squidsquad/project/` — L4 customizations; lossy here means the install loses its bespoke configuration
-- `.squidsquad/<role>/working-state.md`, `iterations/`, `planning/` — agent state
+- `.squidsquad/<alias>/working-state.md`, `iterations/`, `planning/` — agent state
 
 ---
 

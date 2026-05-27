@@ -1,0 +1,306 @@
+diff --git a/.squidsquad/skill/planning/REVIEW-ROLE-ALIAS-AUDIT.md b/.squidsquad/skill/planning/REVIEW-ROLE-ALIAS-AUDIT.md
+new file mode 100644
+index 00000000..3766cfb6
+--- /dev/null
++++ b/.squidsquad/skill/planning/REVIEW-ROLE-ALIAS-AUDIT.md
+@@ -0,0 +1,129 @@
++# role/alias vocabulary audit — review queue
++
++Audit triggered by request: "audit the document, and fix all mentioning of just {role}" (in HARNESS-ARCH.md), then extended to other arch docs.
++
++## Status
++
++**RESOLUTION (2026-05-27):**
++- **Q1 (code rename):** filed as **#10358** (`TASK: Complete role → alias identifier rename`), linked as sibling to #10182. Deferred until docs land + #10182 progresses.
++- **Q3 + Q4 (Tier-1 doc fixes):** applied to AGENT-RUNTIME.md (7 edits) and INSTALLER-ARCH.md (5 edits). Committed alongside HARNESS-ARCH.md edits on PR #10357.
++- **Q5:** VAULT-ARCH / COMPOSE / ARCHITECTURE confirmed clean.
++- **Q6:** all doc edits landed on PR #10357 as a follow-up cleanup commit.
++- **Q7 (role:* label):** deferred (mentioned in #10358 "Out of scope").
++
++Historical record below.
++
++## Key vocabulary distinction (for context)
++
++- **L2 categorical role** = one of `pm` / `qa` / `worker` / `dm`. Fixed set, determines responsibilities/permissions.
++- **Alias** = install-time agent instance name (`skill`, `verifier`, `human`, `fe-worker`, `be-worker`, etc.). One categorical role can map to multiple aliases per install. Aliases are what live as directory names under `.squidsquad/<alias>/` and what key harness state.
++
++**The bug pattern:** the codebase uses the identifier `role` everywhere (FastAPI path params, `AgentState.role`, `SQUIDSQUAD_ROLE` env var, dict keys, CLI flags) but the VALUE is always the alias. Docs inherit this misleading vocabulary.
++
++---
++
++## Applied edits — HARNESS-ARCH.md (uncommitted)
++
++| Section | Change |
++|---|---|
++| §5 table (lines 114–115) | `dict[role, event_id]` → `dict[alias, event_id]`; "Per-role progress" → "Per-alias progress" |
++| §5.2 (line 126) | "Per-role, owned by harness" → "Per-alias, owned by harness" |
++| §7.3 (line 221) | `.squidsquad/<role>/.claude-pid` → `.squidsquad/<alias>/.claude-pid` |
++| §7.5 (line 244) | State-file shape: outer key `"<role>"` → `"<alias>"`; added `"role"` field with categorical-role semantics (now matches §9 + line 285 prose that says alias-keyed) |
++| §9 (line 295) | Tightened the band-aid note to explicitly say "in every one of those places, the value is actually the alias" and acknowledge a code-level rename would close the mismatch but is invasive |
++| §14.2 (lines 398–402) | "per-role PIDs" → "per-alias PIDs"; `SQUIDSQUAD_ROLE=<role>` → `SQUIDSQUAD_ROLE=<alias>` (with code-compat caveat); `/agents/<role>/restart` → `/agents/{alias}/restart` |
++
++**Deliberately NOT changed in HARNESS-ARCH.md:**
++- §4 HTTP API path templates (`/agents/{role}`, `/events/for/{role}`, etc.) — these faithfully reflect the actual FastAPI route definitions in `harness.py:1406, 1420, 1460, 1500, 1794, 1864, 1943, 2101, 2124`. Renaming them in the doc without renaming code would create doc-vs-code divergence.
++- §4 response shapes (`{role, alias, ...}`, `{cursor, role}`) — match what the code returns. Note: `AgentState.to_dict()` actually only returns `role` (no `alias` field) — so doc and code are slightly inconsistent there, but it's not a `{role}` issue per se.
++- `boot_agent(role)`, `--role` CLI flag, `event_poll.py --role` — actual code identifiers.
++
++---
++
++## Questions for you
++
++### Q1. Code-level rename — yes/no?
++
++The cleanest fix to the whole role/alias mess is a code-wide rename: FastAPI routes `{role}` → `{alias}`, `AgentState.role` → `AgentState.alias`, `SQUIDSQUAD_ROLE` env var → `SQUIDSQUAD_ALIAS`, `--role` CLI flag → `--alias`, etc.
++
++- **Pros:** vocabulary finally matches what the code actually does. Docs become unambiguous. New contributors stop being confused.
++- **Cons:** invasive — touches every HTTP route in `harness.py`, every agent-side script that POSTs to the harness, the `event_poll.py` CLI, possibly `cycle_pre.py`/`cycle_post.py`, the env var name. Requires a migration plan (backward-compat shim period? hard cutover?). Big PR.
++
++**Options:**
++- (a) Plan the rename as a phased PR (route aliasing first → migrate clients → drop old names).
++- (b) Hard cutover in one PR.
++- (c) Leave code as-is; doc keeps the band-aid note (current state of HARNESS-ARCH.md §9).
++- (d) Do nothing for now; revisit later.
++
++### Q2. Should the JSON response field name `role` change to `alias`?
++
++`AgentState.to_dict()` returns `{"role": <alias-value>, ...}`. Any TUI/CLI client reading this sees a field named `role` whose value is the alias. Even if you keep the path param `{role}` for now, you could:
++- (a) Add an `alias` field alongside `role` (deprecate `role` later).
++- (b) Rename `role` → `alias` in the response (breaks any existing client).
++- (c) Leave it.
++
++This is independent of Q1's path-param question.
++
++### Q3. AGENT-RUNTIME.md — apply the same surgical fixes (Tier 1)?
++
++Subagent identified ~15 clear fixes in AGENT-RUNTIME.md, same pattern as HARNESS-ARCH.md (on-disk paths, internal data structures). Specific items:
++
++| Line | Fix |
++|---|---|
++| 209 | `.squidsquad/<role>/.claude-pid` → `<alias>` (prose) |
++| 293 | `dict[role, event_id]` → `dict[alias, event_id]` |
++| 301–302 | "state-change → role mapping rules" — wording check |
++| 348, 352, 354 | "per-role cursor"/"Per-role, owned by harness"/`sha256(… + role + ...)` — alias semantics |
++| 472, 506 | `event.role == my_role` filter prose |
++| 547–552, 1003–1009 | `.squidsquad/<role>/...` paths → `<alias>` |
++
++Plus all the §4-style API path-param references — same Q1 dependency.
++
++**Options:**
++- (a) Apply Tier-1 fixes (paths + internal structures) tomorrow; defer API-path fixes pending Q1.
++- (b) Wait on Q1 first, then do everything in one pass.
++
++### Q4. INSTALLER-ARCH.md — apply 6 clear fixes?
++
++| Line | Fix |
++|---|---|
++| 31 | `~/.squidsquad/clones/<role>` → `~/.squidsquad/clones/<alias>` (registry is literally alias-keyed) |
++| 98 | "one per role" → "one per alias" |
++| 101 | `.squidsquad/<role>/` → `<alias>/` |
++| 104–105 | "Per-role clone-path registry" → "Per-alias …" |
++| 299 | `.local-config` "Per-clone role→path mapping" → "Per-clone alias→path mapping" |
++| 273–290 | Placeholders like `<worker-role>/`, `<verifier-role>/` — subagent suggests leaving these because the surrounding prose clarifies they are preset-default names; could argue either way. |
++
++**Note:** subagent flagged that the registry at `~/.squidsquad/clones/` literally has one file *per installed agent instance* (alias), not per role-class. That's a true alias-keyed structure.
++
++### Q5. VAULT-ARCH.md, COMPOSE-ARCHITECTURE.md, ARCHITECTURE.md — leave alone?
++
++Subagent found:
++- **VAULT-ARCH.md:** 0 role/alias issues. (Separate concern: `owner:` field has some `-lead` drift, off-topic for this audit.)
++- **COMPOSE-ARCHITECTURE.md:** 0 issues — this doc is already precise. It correctly uses *role-class* terminology where relevant (`compose.py deploy <role-class>` reads exactly one L4 file per role-class).
++- **ARCHITECTURE.md:** 0 issues found.
++
++**Decision needed:** confirm we leave these untouched? Or anything to flag?
++
++### Q6. Commit strategy for the HARNESS-ARCH.md edits already applied?
++
++The applied edits sit on top of PR #10357 (`docs/harness-direct-spawn-draft`). Options:
++- (a) Commit + push to that PR as a follow-up cleanup commit (one-liner: "docs: HARNESS-ARCH §5/§7/§9/§14 — clarify alias-keyed vocabulary").
++- (b) Park the edits uncommitted until you decide on Q1/Q2 (so the rename + doc cleanup land together if you go that direction).
++- (c) Split into a separate PR off main (doesn't depend on #10357).
++
++### Q7. The `role:*` GitHub-issue-label convention
++
++AGENT-RUNTIME.md §L873–885 already documents that issues are labeled `role:<value>`, where `<value>` is the **alias**, not the categorical role-class. This is yet another vocabulary trap — the label *key* is `role`, but its *value* is alias-typed. Worth a callout in the doc? Or leave it as the prose-only clarification that already exists at line 885?
++
++---
++
++## Summary of pending decisions
++
++1. **Big rename in code?** (Q1, Q2) — strategic, blocks the rest.
++2. **Apply Tier-1 doc fixes to AGENT-RUNTIME.md + INSTALLER-ARCH.md?** (Q3, Q4) — ~21 mechanical fixes total. Independent of Q1 if scoped to paths/internal structures.
++3. **Leave VAULT-ARCH / COMPOSE-ARCHITECTURE / ARCHITECTURE alone?** (Q5) — likely yes.
++4. **HARNESS-ARCH.md commit?** (Q6) — current edits are uncommitted; PR #10357 is the natural home.
++5. **Callout for `role:*` label?** (Q7) — minor.
++
++I haven't pushed anything. Awaiting your call tomorrow.
+diff --git a/docs/AGENT-RUNTIME.md b/docs/AGENT-RUNTIME.md
+index 112cd31b..84fd3a3e 100644
+--- a/docs/AGENT-RUNTIME.md
++++ b/docs/AGENT-RUNTIME.md
+@@ -207,7 +207,7 @@ Conceptually they form "the agent's launcher subprocess tree." Implementation-wi
+ 
+ ### 3.3 The `.claude-pid` convention
+ 
+-`thin_launcher` writes its own `cmd.exe` PID (not `claude.exe`'s PID) into `.squidsquad/<role>/.claude-pid` at boot. This is the singleton handle the harness watches. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the "three claude.exe populations" and orphan-reaping rules.
++`thin_launcher` writes its own `cmd.exe` PID (not `claude.exe`'s PID) into `.squidsquad/<alias>/.claude-pid` at boot. This is the singleton handle the harness watches. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the "three claude.exe populations" and orphan-reaping rules.
+ 
+ In loop mode, `event_poll` is not spawned — only `cmd → thin_launcher → claude` runs.
+ 
+@@ -290,7 +290,7 @@ flowchart TB
+ 
+         subgraph elm["EventLifecycleManager (ELM)"]
+             Deque[("deque maxlen=1000<br/>in-memory event store")]
+-            Cursors[("_cursors<br/>dict[role, event_id]")]
++            Cursors[("_cursors<br/>dict[alias, event_id]")]
+             InFlight[("_in_flight<br/>delivered, not yet acked")]
+             AckConsumer["ack-cursor consumer task<br/>(asyncio)"]
+             Timeout["timeout_scan<br/>(every 30s)"]
+@@ -345,13 +345,13 @@ flowchart TB
+ 
+ #### Cursor model
+ 
+-- Per-role, owned by harness. Persisted in `.squidsquad/.event-state.json`. Agents observe the cursor only through the harness API; they never write it directly.
++- Per-alias, owned by harness. Persisted in `.squidsquad/.event-state.json`. Agents observe the cursor only through the harness API; they never write it directly.
+ - `null` at first boot → agent reads from the head of the deque.
+ - Advances via `ack-cursor` consumed by the ack consumer task.
+ - Cursor-regression attempts rejected (CONTEXT-9873-A D15).
+ - `GET /events/cursor/{role}` returns `{cursor: <event_id> | null, role}`, HTTP 200 always.
+ 
+-**Event IDs**: `sha256(timestamp + role + event_type + payload + nonce)[:16]` — 16-char hex (64-bit, per #9415). Content hash with per-emit nonce; same event emitted twice produces distinct IDs.
++**Event IDs**: `sha256(timestamp + alias + event_type + payload + nonce)[:16]` — 16-char hex (64-bit, per #9415). Content hash with per-emit nonce; same event emitted twice produces distinct IDs.
+ 
+ ```mermaid
+ sequenceDiagram
+@@ -544,12 +544,12 @@ Each agent typically runs in its own git clone. The harness writes its port to `
+ 
+ | What | Where | Owner | Why |
+ |---|---|---|---|
+-| Per-role cursor | `.squidsquad/.event-state.json` | harness | Harness owns delivery state |
++| Per-alias cursor | `.squidsquad/.event-state.json` | harness | Harness owns delivery state |
+ | In-flight events | `.squidsquad/.event-state.json` | harness | Re-delivery on timeout (#9873-E) |
+ | Agent intent + PID | `.squidsquad/.harness-state.json` | harness | Harness owns agent lifecycle |
+-| Agent singleton PID | `.squidsquad/<role>/.claude-pid` | agent (thin_launcher) | Singleton enforcement (#8692) + harness health-poller's process-liveness check (see §3.3) |
+-| Agent current-work state | `.squidsquad/<role>/working-state.md` | agent | Resume-from-crash checkpoint for the agent's OWN current work. Does NOT carry an event queue (harness deque + cursor own that) AND does NOT carry a nudge flag (per §7.5 — nudge memory lives only in conversation context) |
+-| Improvement subloop throttle | `.squidsquad/<role>/.subloop-last-run` | agent | Last-fire timestamp; gates next eligibility (§7.6) |
++| Agent singleton PID | `.squidsquad/<alias>/.claude-pid` | agent (thin_launcher) | Singleton enforcement (#8692) + harness health-poller's process-liveness check (see §3.3) |
++| Agent current-work state | `.squidsquad/<alias>/working-state.md` | agent | Resume-from-crash checkpoint for the agent's OWN current work. Does NOT carry an event queue (harness deque + cursor own that) AND does NOT carry a nudge flag (per §7.5 — nudge memory lives only in conversation context) |
++| Improvement subloop throttle | `.squidsquad/<alias>/.subloop-last-run` | agent | Last-fire timestamp; gates next eligibility (§7.6) |
+ | Last-seen forge event | EAD-internal persistence | harness | Don't re-emit assigned-to on restart |
+ | Work state | GitHub Issues (forge) | forge | Source of truth for status, comments, PRs |
+ | Decisions / institutional memory | `.squidsquad/vault/` | shared | Long-lived rationale — see [`VAULT-ARCH.md`](VAULT-ARCH.md) for architecture (PARAG model, sub-skills, scripts, cycle integration) |
+@@ -998,7 +998,7 @@ flowchart TD
+     Subloop --> Idle
+ ```
+ 
+-**Throttle** (time-based, NOT token-counting): at most one subloop per agent per N minutes (default 30, matching the old `/loop` cadence — so observable improvement-scan frequency stays the same as loop mode). `.squidsquad/<role>/.subloop-last-run` records the last-fire timestamp; the agent checks this file's age before triggering.
++**Throttle** (time-based, NOT token-counting): at most one subloop per agent per N minutes (default 30, matching the old `/loop` cadence — so observable improvement-scan frequency stays the same as loop mode). `.squidsquad/<alias>/.subloop-last-run` records the last-fire timestamp; the agent checks this file's age before triggering.
+ 
+ **What the subloop does** (role-specific, one bounded task per fire):
+ - **pm**: pipeline sentinel + improvement scan (process gaps, stalled items, doc drift)
+diff --git a/docs/HARNESS-ARCH.md b/docs/HARNESS-ARCH.md
+index 31d7f458..32b31303 100644
+--- a/docs/HARNESS-ARCH.md
++++ b/docs/HARNESS-ARCH.md
+@@ -111,8 +111,8 @@ ELM owns the event bus. Located at `references/scripts/harness.py` (`class Event
+ | Piece | Type | Persisted | Purpose |
+ |---|---|---|---|
+ | `_deque` | `collections.deque(maxlen=1000)` | No (in-memory only) | Event store, FIFO with bounded retention |
+-| `_cursors` | `dict[role, event_id]` | Yes (`.event-state.json`) | Per-role progress through the deque |
+-| `_in_flight` | `dict[event_id, {role, delivered_at}]` | Yes (`.event-state.json`) | Events delivered but not yet acked |
++| `_cursors` | `dict[alias, event_id]` | Yes (`.event-state.json`) | Per-alias progress through the deque |
++| `_in_flight` | `dict[event_id, {alias, delivered_at}]` | Yes (`.event-state.json`) | Events delivered but not yet acked |
+ 
+ ### 5.1 Event store (deque)
+ 
+@@ -123,7 +123,7 @@ ELM owns the event bus. Located at `references/scripts/harness.py` (`class Event
+ 
+ ### 5.2 Cursor model
+ 
+-- Per-role, owned by harness (was per-agent in `working-state.md` pre-#9873-A; migrated to harness).
++- Per-alias, owned by harness (was per-agent in `working-state.md` pre-#9873-A; migrated to harness).
+ - `null` on first boot → agent reads from the head of the deque.
+ - Advances via `ack-cursor` consumed by the ack consumer task (asyncio).
+ - Cursor-regression attempts are rejected (CONTEXT-9873-A D15).
+@@ -218,7 +218,7 @@ Transitions are HTTP-API-driven (`POST /agents/{role}/start|stop|restart`). The
+ 
+ Every 5 seconds, for each agent with intent=`running`:
+ 
+-1. Read `.claude-pid` from agent's `.squidsquad/<role>/.claude-pid`.
++1. Read `.claude-pid` from agent's `.squidsquad/<alias>/.claude-pid`.
+ 2. Check process liveness (`OpenProcess` on Windows, `kill -0` on POSIX).
+ 3. If dead AND intent=`running`: re-spawn (auto-respawn).
+ 4. If dead AND intent=`stopping` or `restarting`: handle per intent.
+@@ -241,8 +241,8 @@ One file per install (at the install root). Persisted across harness restarts. S
+ {
+   "version": 1,
+   "agents": {
+-    "<role>": {
+-      "alias": "<alias>",
++    "<alias>": {
++      "role": "<categorical role: pm|qa|worker|dm>",
+       "intent": "running" | "stopping" | "restarting" | "stopped",
+       "pid": 12345,
+       "clone_path": "D:/Dev/Dev/SquidSquad-2",
+@@ -292,7 +292,7 @@ Per-agent directories under `.squidsquad/` are keyed by **alias**, not by the L2
+ 
+ All harness-owned files are atomic-write (`.tmp` + `mv`) and persisted across restarts. The deque is the one piece of harness state that is NOT persisted.
+ 
+-> **Naming convention note:** the HTTP API in §4 uses `{role}` as the path-parameter name (e.g. `/agents/{role}`, `/events/for/{role}`). That parameter accepts the **alias** value — the harness internally resolves alias → categorical role where the distinction matters. The API parameter name predates the alias concept; the on-disk directories were always alias-keyed.
++> **Vocabulary note — `role` vs `alias`:** the codebase (FastAPI routes, `AgentState.role`, event-poll `--role` flag, `SQUIDSQUAD_ROLE` env var) uses the identifier `role` everywhere; the §4 HTTP API path-parameter `{role}` reflects that. **In every one of those places, the value is actually the alias** (e.g. `skill`, `verifier`, `human`) — not the L2 categorical role (`pm`/`qa`/`worker`/`dm`). The naming predates the alias concept and is misleading. The doc keeps the literal `{role}` token in §4 only where it faithfully tracks the code; everywhere else (on-disk paths, state-file shapes, cursor maps) it uses `<alias>` because that's the only thing actually keyed in those structures. A code-level rename `role` → `alias` would close the mismatch but is invasive (touches every HTTP route + most agent-side scripts) and not yet planned.
+ 
+ ---
+ 
+@@ -395,11 +395,11 @@ Two processes per agent, down from five. TTY still provided by `wt.exe`, so subs
+ 
+ | Today: `thin_launcher.py` | Direct path: where it lives |
+ |---|---|
+-| Singleton check (`.claude-pid` + descendant walk) | **Harness** — already maintains `.harness-state.json` with per-role PIDs; pre-spawn check against existing in-memory state |
+-| Env var `SQUIDSQUAD_ROLE=<role>` | **Harness** — `Popen(env=...)` propagates through `wt.exe → WindowsTerminal.exe` to the tab child (validated, see §14.4) |
++| Singleton check (`.claude-pid` + descendant walk) | **Harness** — already maintains `.harness-state.json` with per-alias PIDs; pre-spawn check against existing in-memory state |
++| Env var `SQUIDSQUAD_ROLE=<alias>` | **Harness** — `Popen(env=...)` propagates through `wt.exe → WindowsTerminal.exe` to the tab child (validated, see §14.4). (Env var name is `SQUIDSQUAD_ROLE` for code-compat; value is the alias.) |
+ | Claude arg-list construction (`--append-system-prompt`, `--name`, `--effort`, bootstrap `/loop` prompt) | **Harness / `boot_remote`** — same arg list, emitted as `wt new-tab … claude.exe <flags>` |
+ | Write `.claude-pid` after resolving descendant | **Harness** — post-spawn, snapshot processes once, filter `name='claude.exe' AND parent_pid==WindowsTerminal.exe_pid AND pid NOT IN pre_spawn_set`. Shallow tree, no toolhelp32 ctypes machinery needed. |
+-| Wait for claude exit, return code 42 to surface context pressure | **Nothing needed.** Harness's auto-reboot fires on `dead-process-with-intent-running` regardless of who relays the exit code. `cycle_post.py` already POSTs `/agents/<role>/restart` to set the intent before claude exits, so the signal reaches the harness directly. `thin_launcher` was a relay, not the source of truth. |
++| Wait for claude exit, return code 42 to surface context pressure | **Nothing needed.** Harness's auto-reboot fires on `dead-process-with-intent-running` regardless of who relays the exit code. `cycle_post.py` already POSTs `/agents/{alias}/restart` to set the intent before claude exits, so the signal reaches the harness directly. `thin_launcher` was a relay, not the source of truth. |
+ 
+ ### 14.3 Net impact
+ 
+diff --git a/docs/INSTALLER-ARCH.md b/docs/INSTALLER-ARCH.md
+index 23dd327b..fc782f58 100644
+--- a/docs/INSTALLER-ARCH.md
++++ b/docs/INSTALLER-ARCH.md
+@@ -28,7 +28,7 @@ Throughout this doc, **prose talks about the categorical classes** (PM, workers,
+ 
+ Why: agents work autonomously and concurrently. If they shared one working tree they would step on each other's `git pull`, `git checkout`, branch switches, and uncommitted state. Per-agent clones make each agent's working tree disjoint while still coordinating through the same remote (the source-of-truth git repo) and forge (GitHub Issues).
+ 
+-The clones live wherever the operator places them on disk; their paths are registered in `~/.squidsquad/clones/<role>` (one file per role, contents = absolute path to that role's clone). The harness reads this registry at boot, and `start.sh` uses it to sync all clones with `git pull` before booting the squad.
++The clones live wherever the operator places them on disk; their paths are registered in `~/.squidsquad/clones/<alias>` (one file per alias, contents = absolute path to that alias's clone). The harness reads this registry at boot, and `start.sh` uses it to sync all clones with `git pull` before booting the squad.
+ 
+ In scope:
+ 
+@@ -95,13 +95,13 @@ Three commitments:
+ | Destination | What the installer writes |
+ |---|---|
+ | `.squidsquad/config.md` | Project config — iter interval, ship threshold, model routing, tracker backend, git workflow |
+-| `.squidsquad/<role>/` | Per-role agent directory (CLAUDE.md composed, SOUL.md, working-state.md skeleton, planning/, iterations/) — one per role in the chosen team preset: PM, each worker, each verifier, DM |
++| `.squidsquad/<alias>/` | Per-alias agent directory (CLAUDE.md composed, SOUL.md, working-state.md skeleton, planning/, iterations/) — one per alias in the chosen team preset: PM, each worker, each verifier, DM |
+ | `.squidsquad/project/` | L4 project-local seeds (copied from `references/sub-skills/project/` and enriched with conversational answers) |
+ | `.squidsquad/vault/` | Shared memory layer skeleton (BRIEFING.md + the five vault dirs: projects/, areas/, resources/, archives/, galaxy/). Vault architecture documented in [`VAULT-ARCH.md`](VAULT-ARCH.md). |
+-| `.squidsquad/.local-config` | Per-clone role→path mapping for `start.sh` to sync clones |
++| `.squidsquad/.local-config` | Per-clone alias→path mapping for `start.sh` to sync clones |
+ | `.squidsquad/.harness-port`, `.harness-state.json`, `.event-state.json` (at runtime) | Harness-owned runtime files — written when the harness boots, not by the installer. Listed here for completeness; their schemas are documented in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §4–§5. |
+ | `~/.squidsquad/secrets` | API keys for external models (restricted permissions, never committed to repo) |
+-| `~/.squidsquad/clones/` | Per-role clone-path registry. One file per role (`pm`, each worker, each verifier, `dm`) whose contents is the absolute path to that role's clone. Always created — clone isolation is mandatory (see §1.2), not a configurable mode. |
++| `~/.squidsquad/clones/` | Per-alias clone-path registry. One file per alias (`pm`, each worker, each verifier, `dm`) whose contents is the absolute path to that alias's clone. Always created — clone isolation is mandatory (see §1.2), not a configurable mode. |
+ | **Forge (GitHub)** | Issue labels created via `gh label create` — status/role/type/priority/severity taxonomy |
+ | **Git commit** | Single atomic install commit on `main` (or the operator's chosen branch) |
+ 
+@@ -296,7 +296,7 @@ The full `.squidsquad/` tree post-install. PM and DM dirs are always present (si
+ │   ├── resources/
+ │   ├── archives/
+ │   └── galaxy/
+-├── .local-config                # per-clone role→path map (read by start.sh)
++├── .local-config                # per-clone alias→path map (read by start.sh)
+ └── (runtime) .harness-port, .harness-state.json, .event-state.json — created when the harness boots
+ ```
+ 
