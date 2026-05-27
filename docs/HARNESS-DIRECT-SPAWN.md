@@ -2,9 +2,11 @@
 
 _A proposal to collapse the agent process tree by having the harness spawn `claude` directly and drive cycles through the official `--input-format stream-json` channel on an owned stdin pipe._
 
-> **Status**: DRAFT, proposal. Not implemented. Sketches a target architecture that would replace the current `wt → bash → thin_launcher → cmd → claude` chain with `harness → claude`. Companion to [`HARNESS-ARCH.md`](HARNESS-ARCH.md) (current state) and [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) (cycle integration / v2 event-driven mode).
+> **Status**: DRAFT, proposal — **NOT recommended for implementation as currently sketched**. Technical feasibility confirmed in §10. Billing-model investigation in §11 found that `claude -p` (the mechanism this proposal relies on) bills against a separate Agent SDK credit pool, not the interactive Claude subscription — projected ongoing cost is $200–$450/month on top of the existing Max 20x plan. The four mitigations in §11.4 are the live discussion points; the most promising is **Mitigation #1 (hybrid spawn keeping interactive `claude`)** which needs a stdin-pipe-as-TTY test before it can be confirmed.
 >
-> **Audience**: anyone evaluating whether to take the migration. The original draft of this doc proposed using the Monitor tool over an ad-hoc JSON pipe; live feasibility testing (see §10) found that Claude Code's official `--input-format stream-json` / `--output-format stream-json` modes already do exactly what the proposal needs — multi-turn over stdin, persistent session, cache-amortized cost. The Monitor angle has been dropped; the architecture below uses the supported streaming I/O.
+> Companion to [`HARNESS-ARCH.md`](HARNESS-ARCH.md) (current state) and [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) (cycle integration / v2 event-driven mode).
+>
+> **Audience**: anyone evaluating whether to take the migration. The original draft of this doc proposed using the Monitor tool over an ad-hoc JSON pipe; live feasibility testing (see §10) found that Claude Code's official `--input-format stream-json` / `--output-format stream-json` modes already do exactly what the proposal needs — multi-turn over stdin, persistent session, cache-amortized cost. That part is fine. The blocker is billing (§11).
 
 ---
 
@@ -368,6 +370,63 @@ This is the strongest result. **Cache amortization means N-cycle sessions are dr
 - Context-pressure exit behavior in stream-json mode (assumed clean; needs verification)
 - Tool-call timeout / wedge behavior (Q2 in §7, unchanged)
 - Behavior under stdin write while a prior turn is still mid-tool-call (Q2-adjacent; supervisor should serialize)
+
+---
+
+## 11. Billing model — **proposal-blocking finding**
+
+The technical feasibility tests in §10 were successful. Subsequent billing research (sources at end of section) found a separate problem that may make the proposal cost-prohibitive in its current form.
+
+### 11.1 What changes June 15, 2026
+
+Anthropic is splitting Claude subscription billing into two pools effective 2026-06-15:
+
+| Surface | Billing pool |
+|---|---|
+| Interactive `claude` CLI (TUI), claude.ai web chat, native desktop app | Existing subscription limits (Pro/Max 5x/Max 20x) — flat-rate, no per-token charges |
+| Agent SDK + **`claude -p` (print/headless mode)** — what this proposal uses | New separate monthly "Agent SDK credit": **$20 Pro / $100 Max 5x / $200 Max 20x**, billed at full API token rates against that credit |
+
+Once the SDK credit runs out, additional usage either flows to API-rate usage credits (if enabled) or requests halt until the credit refreshes. Agent SDK / `claude -p` usage **no longer counts toward the interactive subscription's usage limits** — they're now structurally separate billing surfaces.
+
+### 11.2 Pre-June 15 (current) state is even worse
+
+Per Anthropic issues #37686 and #43333: even today, with an active Max subscription and OAuth auth, `claude -p` was silently billing as per-token API charges rather than subscription. One user reported $1,800 in surprise charges over two days of automation usage. The issue was acknowledged as a bug and (per the closed status) presumably patched in a recent version, but the new June 15 model formalizes this separation — `claude -p` will *definitionally* not be subscription-covered.
+
+### 11.3 Cost projection for SquidSquad under direct-spawn
+
+Per the §10 telemetry: turn 1 = 70K cache-creation tokens (≈$0.10 on Haiku, ≈$1.05 on Sonnet 4.6, ≈$1.75 on Opus 4.7); turn 2+ = ~85 new tokens + 70K cache-read (≈$0.002–$0.01 depending on model).
+
+Realistic napkin math for the four-agent SquidSquad fleet at Sonnet 4.6:
+
+| Item | Estimate |
+|---|---|
+| Cycles per agent per active hour | 2–4 |
+| Active hours per day across 4 agents | 8–16 agent-hours |
+| Cache-hit per-cycle marginal cost (Sonnet 4.6, ~5K new input tokens, ~500 output) | ~$0.02 |
+| First-cycle-per-session cost (cache creation, ~70K tokens) | ~$1.00 |
+| Daily cost (one ctx-pressure respawn per agent per day, ~30 cycles/agent/day) | **$5–$15/day** |
+| Monthly cost | **$150–$450/month** |
+| Less Max 20x SDK credit | −$200/month |
+| Net overage above the $200 Max 20x subscription | **$0 to ~$250/month on top of the $200 plan** |
+
+vs. the current architecture, where interactive `claude` sessions live inside subscription limits and incur no per-token overage. Today, four agents under Max 20x is ≈ flat $200/month. Direct-spawn pushes it to **$200–$450/month** depending on cycle volume.
+
+### 11.4 What this means for the proposal
+
+The architecture is technically sound (§10). The economics are not — at least not in the form sketched in §3–§4. **Recommend: do not proceed to implementation without first addressing one of:**
+
+1. **Hybrid spawn:** keep interactive `claude` (subscription billing) as the agent process but have the harness be its parent. Open question: does interactive `claude` work when stdin is a pipe instead of a TTY? Would need testing. If yes, we get the process-tree simplification without the billing-pool switch.
+2. **Cost cap + circuit-breaker:** accept the API billing pool, enforce a per-day USD ceiling per role using the `total_cost_usd` in each `result` event. Burn the SDK credit and stop when it's gone. Lossy operation acceptable for a side-project, not for production.
+3. **Cheaper-model routing:** use Haiku 4.5 for routine cycles (≈10× cheaper than Sonnet); only escalate to Sonnet/Opus for cycles that hit a complexity threshold. Cuts the projection roughly an order of magnitude — might fit inside $200 SDK credit alone.
+4. **Wait and accept:** keep today's architecture, accept the duplicate-spawn race class and ~1100 lines of complexity, until Anthropic's billing model changes or our scale justifies the API spend.
+
+### 11.5 Sources
+
+- [Claude subscriptions get separate budgets for programmatic use — the-decoder.com](https://the-decoder.com/claude-subscriptions-get-separate-budgets-for-programmatic-use-billed-at-full-api-prices/)
+- [Use the Claude Agent SDK with your Claude plan — Anthropic Support](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan)
+- [Issue #43333: `claude -p` with OAuth (no API key) bills as API usage, not Max subscription](https://github.com/anthropics/claude-code/issues/43333)
+- [Issue #37686: `claude -p` suggested to Max subscriber — caused unintended API billing ($1,800+ in two days)](https://github.com/anthropics/claude-code/issues/37686)
+- [Claude Code Billing Change June 15, 2026 — buildthisnow.com](https://www.buildthisnow.com/blog/guide/mechanics/claude-billing-change-june-2026)
 
 ---
 
