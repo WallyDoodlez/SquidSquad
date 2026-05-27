@@ -182,6 +182,8 @@ Role-specific event extras:
 
 > **Note on `responsibility`** — The `responsibility` content (what each role does / does NOT do / why it matters) is **no longer a sub-skill**. It is the L2-and-up authoring of the dedicated **Responsibility slot** in the composed CLAUDE.md (see [COMPOSE-ARCHITECTURE.md §5.2](COMPOSE-ARCHITECTURE.md#52-responsibility)). The `responsibility` rows below remain in the per-role tables for now as the historical authoring location (`references/sub-skills/roles/<role>/responsibility.md`); once compose.py grows the responsibility slot, that content moves into each role's L2 source and these rows will be removed. Filing tracker: see follow-up task for the implementation move.
 
+> **Note on `status-line` and `file-conventions`** — Same architectural reclassification: both are descriptive *project-shaped facts* (what the statusline shows, where role files live on disk), not how-to procedures. They are L2-and-up authoring of the **Project Context slot** ([COMPOSE-ARCHITECTURE.md §5.5](COMPOSE-ARCHITECTURE.md#55-project-context)). The `status-line` and `file-conventions` rows below (in both `common/` and per-role tables) stay as historical authoring locations until the migration ships alongside the responsibility move (#10360 scope expansion). After migration: authored via L2 source files with `slot: project-context` frontmatter; the sub-skill files are deleted.
+
 ### PM (`roles/pm/`)
 
 | Sub-skill | One-liner |

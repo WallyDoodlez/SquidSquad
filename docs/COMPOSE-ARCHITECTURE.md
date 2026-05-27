@@ -481,8 +481,21 @@ See §6 for step ID grammar, reference grammar, and the relationship to sub-skil
 
 ### 5.5 Project Context
 
-- Project-specific facts that aren't instructions: domain, audience, conventions, repositories of record, external systems, sensitive constraints.
-- Most content here comes from L4. L3 may seed defaults ("This is a SquidSquad install — public roadmap on GitHub.").
+Project-shaped descriptive facts — *what is true about this project / role*, not *how the role does work*. Concretely the slot covers:
+
+- **Domain / audience** — what this project is, who uses it, what kind of project it is.
+- **File conventions** — where things live on disk for this role (planning artifacts, iteration logs, working-state file, etc.). Today this is one of the per-role sub-skills (`file-conventions.md`) that mis-classifies declarative path mapping as a how-to procedure — it belongs in this slot as descriptive content, not as a sub-skill reference.
+- **Status line** — what each role's statusline shows during cycles. Same architectural reclassification as file-conventions: today's `status-line.md` per-role sub-skill is descriptive UI content, not a procedure. Belongs in this slot.
+- **Repositories of record, external systems, sensitive constraints, project-specific tone-or-language notes** — anything that's a project-level fact the agent needs to know but isn't an instruction.
+
+**Authoring across layers:**
+
+- **L1** — universal project-context conventions (rare; most content is role- or project-specific).
+- **L2** — role-shaped facts (e.g. PM's "status line shows agent health for the whole fleet"; verifier's "planning artifacts live under `.squidsquad/verifier/planning/`"). The primary authoring location.
+- **L3** — variant-specific facts (per-stack file conventions, per-stack statusline elements).
+- **L4** — project-local. Append-only (per §3.3). Adds project-specific context to the role's L4 file under `## Project Context`.
+
+> **Not a sub-skill.** Per-role `status-line` / `file-conventions` content currently lives under `references/sub-skills/{common,roles/<role>}/` as "sub-skills" but is structurally Project Context. Same architectural mis-classification pattern as Responsibility and Soul; same fix — content authored with `slot: project-context` frontmatter (or via L2 source files), not via the sub-skill catalog. The migration is tracked alongside #10360.
 
 ### 5.6 Vault
 

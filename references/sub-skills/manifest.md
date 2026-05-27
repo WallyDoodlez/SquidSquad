@@ -15,6 +15,8 @@ This manifest defines how shared sub-skill source files compose into agent templ
 
 > **`responsibility` is not a sub-skill (2026-05-27 architectural decision)**: The `responsibility` content for each role is identity-layer authoring of the dedicated **Responsibility slot** in the composed CLAUDE.md (see [COMPOSE-ARCHITECTURE.md §5.2](../../docs/COMPOSE-ARCHITECTURE.md#52-responsibility)). The current `references/sub-skills/roles/<role>/responsibility.md` files remain as transitional authoring locations until compose.py grows the responsibility slot and the content moves into each role's L2 source. Sub-skills are *focused units of how-to*; `responsibility` is "what this role is" — a category mismatch. Filed for implementation as follow-up task.
 
+> **`status-line` and `file-conventions` are not sub-skills (2026-05-27 architectural decision)**: Both are descriptive project-shaped facts (what the statusline shows, where role files live on disk) — they belong to the **Project Context slot** ([COMPOSE-ARCHITECTURE.md §5.5](../../docs/COMPOSE-ARCHITECTURE.md#55-project-context)), not the sub-skill catalog. Same migration path as responsibility: current `references/sub-skills/{common,roles/<role>}/{status-line,file-conventions}.md` stay as transitional authoring locations until compose.py grows uniform Project Context emission and the content moves into each role's L2 source.
+
 ## Layer 4 — Project Sub-skills (auto-included)
 
 Project-specific L4 content lives in `.squidsquad/project/` (project-local, not distributed). `compose.py` reads `*.md` files from this directory and auto-includes them in every agent's CLAUDE.md after all other layers.
