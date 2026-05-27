@@ -255,16 +255,22 @@ Role-specific event extras:
 
 These are **seed templates** copied to `.squidsquad/project/` at install time. The runtime versions in `.squidsquad/project/` are auto-included by `compose.py` as the L4 layer of the composed CLAUDE.md. The seeds in this directory are NOT consumed at compose time — they're the starting point a fresh install begins from.
 
+**Target state — one seed per role-class** (per [COMPOSE-ARCHITECTURE.md §3.3 + §7.3](COMPOSE-ARCHITECTURE.md#33-l4-operations-creative-overlay)):
+
 | Seed | Purpose |
 |---|---|
-| `shared-instructions.md` | Cross-role L4 baseline (every agent sees this) |
-| `shared-responsibility.md` | Cross-role L4 boundaries |
-| `shared-soul-directives.md` | Cross-role L4 SOUL prepend |
-| `pm-instructions.md`, `pm-responsibility.md`, `pm-soul-directives.md` | PM-only L4 overrides |
-| `qa-instructions.md`, `qa-responsibility.md`, `qa-soul-directives.md` | QA-only L4 overrides |
-| `dm-instructions.md`, `dm-responsibility.md`, `dm-soul-directives.md` | DM-only L4 overrides |
-| `dev-instructions.md`, `dev-responsibility.md`, `dev-soul-directives.md` | dev-only L4 overrides |
-| `setup-upgrade-gate.md` | Setup/upgrade gate L4 hook |
+| `pm.md` | PM L4 — H2 sections for Identity / Responsibility / Soul / Instructions / Project Context / Vault as needed |
+| `verifier.md` | Verifier L4 — same H2 grammar |
+| `dm.md` | DM L4 — same H2 grammar |
+| `worker.md` *(or specialty variants `fe-worker.md`, `be-worker.md`, etc.)* | Worker L4 — same H2 grammar |
+
+Per §3.3 the filename IS the role-class identity; `compose.py deploy <role-class>` reads exactly one L4 file. Multi-instance installs (e.g. two `fe-worker` agents) share the one L4 file for that class — instances of the same class compose to byte-identical output.
+
+**Legacy multi-file L4 seeds (deprecated)** — earlier installs scattered L4 content across per-slot files. These remain on disk under `references/sub-skills/project/` until the unified model is implemented (see #10359 doc spec; implementation tracked separately), at which point they collapse into the per-role-class files above:
+
+- ~~`shared-instructions.md`~~, ~~`shared-responsibility.md`~~, ~~`shared-soul-directives.md`~~ — cross-role baselines fold into each role's `<role>.md` as appropriate H2 sections, or remain as a project-level shared baseline if a clean "shared" precedent emerges
+- ~~`<role>-instructions.md`~~, ~~`<role>-responsibility.md`~~, ~~`<role>-soul-directives.md`~~ (per role pm/verifier/dm/worker) — fold into `<role>.md` under their slot's H2
+- ~~`setup-upgrade-gate.md`~~ — folds into each role's L4 file as a sub-section of the appropriate slot, or is retired if its content is no longer load-bearing
 
 ---
 

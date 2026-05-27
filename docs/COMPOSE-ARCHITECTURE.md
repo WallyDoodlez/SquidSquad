@@ -116,13 +116,22 @@ Every L1-L3 sub-skill source file declares **structured frontmatter** at the top
 
 ```yaml
 ---
-slot: identity | soul | instructions | project-context | vault
+slot: identity | responsibility | soul | instructions | project-context | vault
 ordinal: <integer, ascending within slot>
 step-ids: [step:cycle/<name>, step:boot/<name>, ...]  # for instructions slot only
 ---
 ```
 
-`compose.py` reads frontmatter from every L1-L3 file, sorts by `(slot, ordinal)`, and emits the content of each in that order under the appropriate top-level section (see §5) — emitted verbatim for non-instructions slots (`identity`, `soul`, `project-context`, `vault`); the `instructions` slot is emitted as **sub-skill references**, not inlined sub-skill bodies, per §4.1 step 4. Concretely: the source files in the `instructions` slot already contain the reference text directly (e.g., `→ run sub-skill: pipeline-sentinel`), and compose emits that text verbatim without transformation — there is no compile step that converts inlined sub-skill bodies into references.
+`compose.py` reads frontmatter from every L1-L3 file, sorts by `(slot, ordinal)`, and emits the content of each in that order under the appropriate top-level section (see §5) — emitted verbatim for non-instructions slots (`identity`, `responsibility`, `soul`, `project-context`, `vault`); the `instructions` slot is emitted as **sub-skill references**, not inlined sub-skill bodies, per §4.1 step 4. Concretely: the source files in the `instructions` slot already contain the reference text directly (e.g., `→ run sub-skill: pipeline-sentinel`), and compose emits that text verbatim without transformation — there is no compile step that converts inlined sub-skill bodies into references.
+
+> **Filename conventions for slot authoring.** Most L1-L3 source files declare `slot:` via frontmatter explicitly. Two filenames are reserved shorthands that compose treats as implicit slot assignments — they exist so the canonical authoring location is easy to find:
+>
+> | Filename pattern | Implicit slot | Implicit ordinal |
+> |---|---|---|
+> | `references/roles/<role>/SOUL.md` | `soul` | 1 |
+> | `references/sub-skills/roles/<role>/responsibility.md` | `responsibility` | 1 |
+>
+> Either may be replaced by a regular `.md` with explicit frontmatter; the shorthands are equivalent, not load-bearing.
 
 Ordinals are integers, non-dense (gaps allowed). Authors use gaps of 10 (e.g. 10, 20, 30) so future inserts don't require renumbering.
 
@@ -141,6 +150,8 @@ Example — a team preset spawning `pm + 2 fe-worker + 1 be-worker + verifier + 
 - `.squidsquad/project/dm.md` — used by the dm
 
 The filename IS the role-class identity. `compose.py deploy <role-class>` reads exactly one L4 file when composing that class — no per-customization files, no cross-class files, no fallback or inheritance between classes (e.g., no generic `worker.md` that fe-worker and be-worker both inherit from). Two instances of the same class compose to byte-identical output because they share the same L4.
+
+> **Deprecates the multi-file L4 pattern.** Earlier installs scattered L4 content across per-slot files (`<role>-instructions.md`, `<role>-responsibility.md`, `<role>-soul-directives.md`, `shared-instructions.md`, etc.) under `.squidsquad/project/`. Those are legacy. Under the unified L1-L4 model every slot's L4 content lives inside the same per-role-class `<role>.md` under its slot H2. The legacy seed files in `references/sub-skills/project/` are slated for collapse to one seed per role-class (see §7.3 and the L4-seed section of [`sub-skill-catalog.md`](sub-skill-catalog.md)).
 
 Inside the L4 file, content is organized by slot using H2 headings that mirror the composed-output grammar (§5):
 
@@ -424,11 +435,18 @@ Cross-reference: [`common/agent-boundaries`](../references/sub-skills/common/age
 
 ### 5.3 Soul
 
-- The agent's professional identity, voice, perspective.
-- **Emitted verbatim** into the composed CLAUDE.md (not a reference link to `.squidsquad/<role>/SOUL.md`). The source SOUL.md file is the authoring location; compose copies its content into the composed output. Soul is orchestration-layer identity content, not a sub-skill — it is rendered directly, not referenced through the catalog.
-- L4 may **`append` only** to this slot (per §3.3 per-slot op constraints). Project-specific tone adjustments are added as appends; semantic-merge precedence (§3.4) resolves any conflict between shipped soul and L4 in the agent's favour at runtime, without rewriting the shipped content.
+The agent's professional identity, voice, perspective. **A regular L1-L4 slot, not a special-case** — authored and composed by the same `(slot, ordinal)` mechanism as every other slot (§3.2). Earlier versions of SquidSquad treated `SOUL.md` as a "sidecar" copied verbatim outside the catalog; that special-case is retired.
 
-This is one of the simpler slots — typically one to three short paragraphs.
+**Authoring across layers:**
+
+- **L1** — universal voice baseline (e.g. "speak in first person; never invent claims you cannot verify").
+- **L2** — role-specific persona. The conventional authoring filename is `references/roles/<role>/SOUL.md`, which compose treats as **shorthand for a file with `slot: soul, ordinal: 1` frontmatter**. No magic — just a documented filename convention so the source file is easy to find. A regular `.md` with explicit `slot: soul` frontmatter under `references/sub-skills/` or `references/roles/<role>/` works identically.
+- **L3** — variant-specific persona adjustments (e.g. a frontend-specialized worker's voice). Same frontmatter mechanism.
+- **L4** — optional. Lives inside the per-role-class L4 file (`.squidsquad/project/<role>.md`) under a `## Soul` H2 section per §3.3. The legacy `*-soul-directives.md` multi-file L4 pattern is deprecated (see §7.3).
+
+**Op constraints (per §3.3):** L4 Soul is **`append` only**. No `### insert-before` / `### insert-after` (Soul has no step IDs); no `### replace` (semantic-merge precedence — see §3.4 — handles override without rewriting the shipped content).
+
+This is one of the simpler slots — typically one to three short paragraphs per layer.
 
 ### 5.4 Instructions
 
