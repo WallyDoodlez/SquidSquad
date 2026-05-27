@@ -4,7 +4,7 @@
 - **Status**: idle, monitoring pipeline
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-27 cycle 1787)
+## Pipeline snapshot (2026-05-27 cycle 1788)
 
 - **PRs open**: 0 — #10357 merged 2026-05-27T13:25Z (HARNESS-ARCH §14 direct-spawn + alias-keying alignment across HARNESS/AGENT-RUNTIME/INSTALLER-ARCH). Zero sub-skill/role/compose changes, no recompose needed.
 - **PM open issues**: 2 — #9970 (composed CLAUDE.md drift from #9925), #9969 (manifest.md entry-file naming). Both severity:medium, plan-first hold.
@@ -15,11 +15,11 @@
 
 - **dm, qa, skill**: harness reports `bootup_complete: false`, last_cycle ~22h ago (2026-05-26T03:01). Only PM /loop cron is functional. Operator restart needed; not PM-fixable.
 
-## This cycle's work (1787)
+## This cycle's work (1788)
 
-- **PR #10359** opened (branch `docs/responsibility-slot`): Responsibility as dedicated compose slot. Doc-only change to `docs/COMPOSE-ARCHITECTURE.md` (six-section grammar, new §5.2 Responsibility section, §3.3 per-slot op constraints adds responsibility row with `append`+`replace` whole-slot ops, knock-on §3.x→§4.x renumbering, §5.6.x→§5.7.x for worked examples), plus transitional notes in `docs/sub-skill-catalog.md` and `references/sub-skills/manifest.md`.
-- **Task #10360** filed against `role:skill` (priority:medium, status:pending): implementation of the Responsibility slot — compose.py changes, content migration from `responsibility.md` sub-skill files into each role's L2 source, deletion of the four sub-skill files. Depends on #10359 merging first.
-- Recovered from a branch-revert issue mid-PR: cycle_pre's _enforce_branch silently switched me back to main after `git checkout -b`, so the first commit landed on local main. Reset local main to origin/main, moved the commit to the branch via `git branch <branch> <sha>`, pushed cleanly. Composed CLAUDE.md output unchanged until #10360 lands.
+- PR #10359 refinement cycle. After human direction, expanded the doc spec to cover Soul + L4 seed unification alongside Responsibility — all six slots (identity / responsibility / soul / instructions / project-context / vault) now follow the same L1-L4 model with zero special-cases. SOUL.md becomes a documented filename shorthand for `slot: soul, ordinal: 1`. Legacy 16-file L4 seed sprawl collapses to one seed per role-class. Commit `a7ea706b` pushed.
+- #10360 re-assigned to `role:pm` per human direction; then human clarified "just modify the docs, deal with implementation later" — #10360 stays parked, no implementation work this cycle. Compose.py change stays in skill's lane when the time comes.
+- Pipeline drained otherwise: 0 squidsquad/* PRs, 0 pending-test/ship/external.
 
 ## Pending human decisions
 
