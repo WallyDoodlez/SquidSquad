@@ -130,7 +130,17 @@ Ordinals are integers, non-dense (gaps allowed). Authors use gaps of 10 (e.g. 10
 
 ### 3.3 L4 operations (creative overlay)
 
-**There is exactly one L4 file per agent class** in an install: `.squidsquad/project/<role>.md`. The base case has four classes (`pm.md`, `verifier.md`, `worker.md`, `dm.md`); a team preset with worker or verifier variants gets one L4 file per variant — e.g., a preset with `worker-frontend` and `worker-backend` has `.squidsquad/project/worker-frontend.md` and `.squidsquad/project/worker-backend.md`. The filename IS the agent class. `compose.py deploy <role>` reads exactly one L4 file when composing that class — no per-customization files, no cross-class files, no fallback or inheritance between variants.
+**There is exactly one L4 file per role-class** in an install: `.squidsquad/project/<role-class>.md`. Class is the *kind* of agent (pm, fe-worker, be-worker, verifier, dm); instance is a spawned agent process. **Multiple instances of the same class share one L4 file.**
+
+Example — a team preset spawning `pm + 2 fe-worker + 1 be-worker + verifier + dm` produces **5 L4 files**, not 7:
+
+- `.squidsquad/project/pm.md` — used by the pm agent
+- `.squidsquad/project/fe-worker.md` — shared by both fe-worker instances
+- `.squidsquad/project/be-worker.md` — used by the be-worker agent
+- `.squidsquad/project/verifier.md` — used by the verifier
+- `.squidsquad/project/dm.md` — used by the dm
+
+The filename IS the role-class identity. `compose.py deploy <role-class>` reads exactly one L4 file when composing that class — no per-customization files, no cross-class files, no fallback or inheritance between classes (e.g., no generic `worker.md` that fe-worker and be-worker both inherit from). Two instances of the same class compose to byte-identical output because they share the same L4.
 
 Inside the L4 file, content is organized by slot using H2 headings that mirror the composed-output grammar (§5):
 
@@ -794,19 +804,22 @@ If the agent cannot decide between `replace` and `insert-after` (e.g. the new in
 
 ### 7.3 L4 file format
 
-There is exactly **one L4 file per agent class** in an install. The base team preset has four classes:
+There is exactly **one L4 file per role-class** in an install — see §3.3 for the class-vs-instance distinction. The base team preset has four classes:
 
 - `.squidsquad/project/pm.md`
 - `.squidsquad/project/verifier.md`
 - `.squidsquad/project/worker.md`
 - `.squidsquad/project/dm.md`
 
-Team presets with worker or verifier variants get one L4 file per spawned class. For example, a preset that spawns `worker-frontend` and `worker-backend` produces:
+Team presets with specialized worker or verifier classes get one L4 file per class. For example, a preset that spawns `pm + 2 fe-worker + 1 be-worker + verifier + dm` produces **5 L4 files** (not 7) — the two fe-worker instances share `fe-worker.md`:
 
-- `.squidsquad/project/worker-frontend.md`
-- `.squidsquad/project/worker-backend.md`
+- `.squidsquad/project/pm.md`
+- `.squidsquad/project/fe-worker.md` *(shared by both fe-worker instances)*
+- `.squidsquad/project/be-worker.md`
+- `.squidsquad/project/verifier.md`
+- `.squidsquad/project/dm.md`
 
-Each variant is its own class with its own L4; there is no fallback or inheritance from a generic `worker.md`. The filename IS the agent class. `compose.py deploy <role>` reads exactly one L4 file when composing that class. The file is created on the first project customization for that class and grows over time as more customizations are added.
+Each class is independent — no fallback or inheritance from a generic `worker.md`. The filename IS the role-class. `compose.py deploy <role-class>` reads exactly one L4 file when composing that class. The file is created on the first project customization for that class and grows over time as more customizations are added.
 
 Internal structure mirrors the composed-output grammar (§5): top-level H2 sections name the slot; under `## Instructions`, H3 blocks name the op + target:
 
