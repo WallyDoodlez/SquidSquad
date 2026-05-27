@@ -4,7 +4,7 @@
 - **Status**: idle, monitoring pipeline
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-27 cycle 1769)
+## Pipeline snapshot (2026-05-27 cycle 1770)
 
 - **PRs open**: 1 — **#10357** (human draft: HARNESS-ARCH §14 wt→claude direct-spawn proposal). Not actionable by PM until human un-drafts or requests review.
 - **PM open issues**: 2 — #9970 (composed CLAUDE.md drift from #9925), #9969 (manifest.md entry-file naming). Both severity:medium, plan-first hold.
@@ -15,10 +15,9 @@
 
 - **dm, qa, skill**: harness reports `bootup_complete: false`, last_cycle ~22h ago (2026-05-26T03:01). Only PM /loop cron is functional. Operator restart needed; not PM-fixable.
 
-## This cycle's work (1769)
+## This cycle's work (1770)
 
-- Quiet (12th consecutive). State identical to 1768.
-- `git pull` timed out at 60s (network blip); cycle_pre handled gracefully and continued with local state.
+- Quiet (13th consecutive). State identical to 1769. Network recovered (pull ok).
 
 ## Pending human decisions
 
