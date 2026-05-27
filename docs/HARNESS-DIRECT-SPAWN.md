@@ -1,462 +1,178 @@
-# Harness Direct-Spawn Architecture (draft)
+# Harness Spawn Architecture — Feasibility Investigation
 
-_A proposal to collapse the agent process tree by having the harness spawn `claude` directly and drive cycles through the official `--input-format stream-json` channel on an owned stdin pipe._
+_What was learned from investigating "can the harness spawn `claude` directly instead of via `wt → bash → thin_launcher → cmd → claude`?" — and what's actionable from it._
 
-> **Status**: DRAFT, proposal — **NOT recommended for implementation as currently sketched**. Technical feasibility confirmed (§10). Billing-model investigation (§11) found that `claude -p` bills against the separate Agent SDK credit pool, not the interactive Claude subscription — projected ongoing cost is $150–$450/month above the existing Max 20x plan. Pipe-vs-TTY follow-up test (§11.4.1) confirmed that even invoking `claude` *without* `-p` over pipes drops it to non-interactive billing (auto-detects no-TTY). The "hybrid spawn keeping subscription billing" mitigation is therefore closed. Remaining choices reduce to **(A) defer** or **(B) partial-direct-spawn with cost guard + Haiku routing** — see §11.5.
+> **Status**: investigation complete, 2026-05-26. **Verdict: the big "harness owns claude directly" redesign is not viable on the current Anthropic billing model.** A real terminal is required to keep subscription billing; piping stdin/stdout to `claude` auto-demotes it to the Agent SDK billing pool. Today's `wt → bash → thin_launcher → cmd → claude` chain is *not* legacy cruft — `wt.exe` is load-bearing because it provides the TTY that keeps the session on subscription billing. The achievable simplifications are smaller: drop the `cmd.exe` npm shim and the `bash` layer. See §3 for the actionable smaller proposal. Sections §4–§7 record the investigation that led to the verdict.
 >
 > Companion to [`HARNESS-ARCH.md`](HARNESS-ARCH.md) (current state) and [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) (cycle integration / v2 event-driven mode).
->
-> **Audience**: anyone evaluating whether to take the migration. The original draft of this doc proposed using the Monitor tool over an ad-hoc JSON pipe; live feasibility testing (see §10) found that Claude Code's official `--input-format stream-json` / `--output-format stream-json` modes already do exactly what the proposal needs — multi-turn over stdin, persistent session, cache-amortized cost. That part is fine. The blocker is billing (§11).
 
 ---
 
-## 1. Goal & scope
+## 1. The verdict
 
-This doc proposes a redesign of how the harness spawns and supervises agent Claude processes.
+A real terminal is required to keep agent sessions on the interactive Claude subscription billing model. When `claude.exe`'s stdout is a pipe instead of a TTY, it auto-detects non-interactive mode and switches to the Agent SDK billing pool — separately metered ($20/$100/$200/mo SDK credit for Pro/Max-5x/Max-20x respectively from 2026-06-15, then API rates per-token). This is true even without the `-p` flag.
 
-In scope:
-
-- The per-agent process tree (what spawns what, who owns whose stdin)
-- The signaling channel between harness and agent (replaces today's `event_poll` sibling + Monitor pipe)
-- Lifecycle: spawn, cycle, exit, restart, crash recovery
-- What's deleted from the current architecture
-- A staged migration plan
-
-Out of scope:
-
-- The event bus *contract* (`booted`, `assigned-to`, `ack-cursor`, `ack-stop`) — unchanged; see [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §4.2
-- The cycle wrapper (pre → creative → post) — unchanged; see [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §6
-- Compose / installer / forge integration — orthogonal
+Concretely:
+- The harness **cannot** own `claude.exe`'s stdin/stdout via plain pipes and still bill against the existing Max 20x subscription.
+- The only way to harness-own `claude` while keeping subscription billing is full PTY emulation + driving the TUI programmatically. That is strictly *more* complex than today's chain, not less — defeats the purpose.
+- `wt.exe` (Windows Terminal) is the cheapest TTY provider Windows has. It stays.
 
 ---
 
-## 2. Context: what the current chain looks like
+## 2. What this means for today's chain
 
-Per [`HARNESS-ARCH.md`](HARNESS-ARCH.md) and [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §3.2, the agent subprocess tree on Windows today is:
+The current per-agent process tree (Windows) is:
 
 ```
-wt.exe (Windows Terminal tab)
+wt.exe (Windows Terminal tab, provides TTY)
  └ bash.exe
     └ python.exe (thin_launcher.py)
        └ cmd.exe (npm claude.CMD shim)
-          └ claude.exe (the agent)
-  +  sibling: python.exe (event_poll.py --target stdout → claude's stdin via Monitor)
+          └ claude.exe (the agent, sees TTY → subscription billing)
 ```
 
-Five processes per agent, plus a sixth (`event_poll`) for the nudge channel under v2 event-driven mode. The harness is **not** the parent of `claude.exe`; it watches a `.claude-pid` file maintained by `thin_launcher` after a descendant-walk (ticket #10101) to find the real `claude.exe` past the `cmd.exe` shim.
-
-This chain exists for historical reasons, not principled ones:
-
-| Layer | Why it's there |
-|---|---|
-| `wt.exe` | Operator wants a visible terminal tab to watch / interact |
-| `bash.exe` | `_spawn_windows` historically invoked `bash thin_launcher.py` rather than `python` directly |
-| `thin_launcher.py` | Singleton lock, `--append-system-prompt`, restart-on-exit-42, atomic `.claude-pid` write |
-| `cmd.exe` | npm-installed `claude` is a `.cmd` shim around the real `.exe` |
-| `event_poll.py` (v2 only) | Long-lived stdin source for Monitor; can't be `thin_launcher` because the launcher exits when claude exits |
-
-The cost of this layering is non-trivial: `_resolve_claude_exe_pid` + `_win32_list_descendants` + the toolhelp32 ctypes block (~250 lines in `thin_launcher.py`); a singleton check that fails open if the wrapper PID is stale; two duplicate-spawn race classes (concurrent `thin_launcher` invocations, concurrent harness auto-reboots); and an `event_poll` sibling whose only job is to keep a stdin pipe alive.
+Every layer except `cmd.exe` (and arguably `bash.exe`) is doing real work. The investigation's mistake was assuming the chain was incidental complexity. It's not — most of it is in service of "give `claude.exe` a real terminal so subscription billing applies." That's load-bearing.
 
 ---
 
-## 3. The proposal in one diagram
+## 3. Actionable smaller proposal
 
-```mermaid
-flowchart TB
-    subgraph harness_proc["harness.py — single process"]
-        Sup["AgentSupervisor<br/>(one per role)"]
-        Bus[["EventLifecycleManager<br/>(unchanged from v2)"]]
-        Sup --- Bus
-    end
+What *can* be simplified without changing the billing model:
 
-    subgraph agent_proc["claude.exe -p (per role, direct child)"]
-        SJin["--input-format stream-json<br/>reads stdin line-by-line"]
-        Turn["each line = one user-message turn<br/>(Ralph Loop cycle)"]
-        SJout["--output-format stream-json<br/>emits init / assistant / result events"]
-        SJin --> Turn --> SJout
-    end
+### 3.1 Drop the `cmd.exe` shim — Popen `claude.exe` directly
 
-    Sup -- "Popen(claude.exe -p ..., ...)<br/>owns stdin/stdout/stderr" --> agent_proc
-    Sup -- "writes user-message JSON line<br/>to claude's stdin" --> SJin
-    SJout -- "structured JSON on stdout<br/>(result.is_error, result.usage, etc.)" --> Sup
-    Sup -- "proc.wait() / poll()<br/>direct liveness" --> agent_proc
+`claude.cmd` is a 7-line npm wrapper that resolves to and `EXEC`s `node_modules/@anthropic-ai/claude-code/bin/claude.exe`. Bypassing it means:
 
-    Bus -. "ELM events → Supervisor<br/>(assigned-to → next stdin write)" .-> Sup
-```
+- `Popen([CLAUDE_EXE, ...])` returns claude.exe's PID directly. No descendant walk.
+- Singleton enforcement becomes trivial: the PID file holds the actual `claude.exe` PID, alive == alive, dead == dead.
+- The entire `_resolve_claude_exe_pid` + `_win32_list_descendants` + `_posix_list_descendants` machinery in `thin_launcher.py` (~250 lines) is deletable.
+- The `#10101` ticket's failure mode (stale-wrapper PID after cmd exits) cannot recur because there's no wrapper to exit.
 
-**Three properties:**
+Cost of finding the real `.exe`: one lookup at startup against a stable path under `npm root -g`/`@anthropic-ai/claude-code/bin/claude.exe`. Fallback to `shutil.which("claude")` on non-Windows where there's no shim.
 
-1. **The harness is the direct parent of `claude.exe`.** No `wt`, no `bash`, no `thin_launcher`, no `cmd` shim, no `event_poll` sibling. `Popen(...).pid` *is* the claude PID, full stop.
-2. **The stdin pipe is the nudge channel — via Claude Code's native `stream-json` input mode.** Each newline-delimited user-message JSON the supervisor writes triggers one turn of the same session (same `session_id`, context carried forward, cached). When stdin is open but empty, claude blocks waiting for the next event — standard pipe semantics, no polling, no Monitor, no custom protocol. (See §10 feasibility result for proof.)
-3. **Stdout is the response channel — also native `stream-json` output mode.** Each turn produces `system:init` → `assistant:message` → `result:success/error` events the supervisor reads line-by-line. This is the same format the Anthropic SDK uses; we're not inventing a protocol. (The HTTP bus stays for inter-role signaling and forge events — see §5.4.)
+**Caveat:** Anthropic could change install layout in a future Claude Code release. The shim-walking code was the defensive answer to "we don't know what shape the install will take." We accept that maintenance cost in exchange for ~250 lines deleted and the singleton race class going away.
 
-Process count per agent: **1** (was 5–6).
+### 3.2 Drop the `bash` layer — `wt.exe` invokes Python directly
 
----
-
-## 4. Process model
-
-### 4.1 Spawning
-
-The supervisor resolves a canonical path to the real `claude.exe` once at startup (skipping the npm shim):
+`boot_remote._spawn_windows` today shells out roughly as:
 
 ```python
-# pseudocode; lives on AgentSupervisor
-CLAUDE_EXE = find_claude_exe()  # NPM_ROOT/@anthropic-ai/claude-code/bin/claude.exe on Windows;
-                                 # shutil.which("claude") elsewhere
-
-proc = subprocess.Popen(
-    [str(CLAUDE_EXE), "-p",
-     "--input-format", "stream-json",
-     "--output-format", "stream-json",
-     "--verbose",                     # required for stream-json output
-     "--append-system-prompt", f"SQUIDSQUAD_ROLE={role}",
-     "--name", f"squidsquad-{role}",
-     "--effort", effort,
-     "--dangerously-skip-permissions"],
-    stdin=subprocess.PIPE,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE,
-    cwd=clone_path,
-    env=env_with_role,
-)
-# Confirmed working: cmd.exe shim bypassed, proc.pid IS claude.exe.
-# See §10 for the live test that proved this.
+[wt, "new-tab", "--title", f"squidsquad-{role}", "-d", str(clone_root),
+ "bash", str(thin_launcher_path)]
 ```
 
-No descendant walk: `proc.pid` is the actual `claude.exe` because we bypassed the `.cmd` shim. No `.claude-pid` file: the supervisor holds the `Popen` handle.
+The `bash` invocation exists because `thin_launcher.py` has a bash-style shebang and originally was a shell script. Just replace `bash <path>` with `python <path>` (or `pythonw.exe` if we don't want the python console to show). One fewer process per agent, no functional change.
 
-### 4.2 The bootstrap prompt
+### 3.3 Net per-agent tree under both changes
 
-Passed via `--append-system-prompt`, not as the positional prompt (the positional slot is the *first* user message in stream-json mode and we want the supervisor to send all user messages itself):
-
-```text
-You are running as SquidSquad role <role>. Each user message you receive
-is one Ralph Loop cycle command. Follow .squidsquad/<role>/CLAUDE.md to
-execute the cycle. Your assistant response IS the cycle result; the
-supervisor parses it from the stream-json output envelope.
-
-If the cycle exits via context pressure, your final assistant text must
-be exactly the line "CYCLE-CTX-PRESSURE" so the supervisor can detect
-it and respawn cleanly.
+```
+wt.exe (TTY, unchanged)
+ └ python.exe (thin_launcher.py, unchanged role)
+    └ claude.exe (no cmd shim)
 ```
 
-The session stays alive across cycles because (a) stdin is open, (b) the supervisor only writes one user message per cycle, (c) Claude Code keeps the session warm waiting for the next stdin line. Confirmed in §10.
+Three processes instead of five. Singleton check is direct (`Popen.pid` == claude PID). No descendant walker. Process count for the v2 event-driven path still adds a sibling `event_poll.py`, but the main tree is leaner.
 
-### 4.3 Nudge protocol (supervisor → agent)
+### 3.4 What does NOT change
 
-Newline-delimited JSON on stdin, conforming to Claude Code's `stream-json` user-message schema:
-
-```json
-{"type":"user","message":{"role":"user","content":[{"type":"text","text":"execute cycle 1436"}]}}
-{"type":"user","message":{"role":"user","content":[{"type":"text","text":"execute cycle 1437 — assigned-to ticket #10401: <title>"}]}}
-```
-
-The "event" is whatever text the supervisor packs into the user message. The supervisor is the translation point between the v2 HTTP bus (`assigned-to`, etc.) and the agent's stdin.
-
-### 4.4 Response protocol (agent → supervisor)
-
-Newline-delimited JSON on stdout in Claude Code's `stream-json` output schema — **this is not a SquidSquad invention**:
-
-```json
-{"type":"system","subtype":"init","session_id":"...","tools":[...],"model":"...",...}
-{"type":"assistant","message":{"content":[{"type":"thinking",...},{"type":"text",...}],"usage":{...}}}
-{"type":"result","subtype":"success","is_error":false,"duration_ms":3198,"result":"...","usage":{...},"total_cost_usd":...}
-```
-
-The supervisor parses `result` events for cycle completion and turns them into v2 bus `ack-cursor` events. Cost / token usage / cache hit rate are visible per-cycle in `result.usage` — much better observability than today.
-
-### 4.5 Liveness
-
-`proc.poll()` returns `None` while alive, an integer exit code when dead. The supervisor's main loop is:
-
-```python
-while not stopping:
-    line = await proc.stdout.readline()
-    if not line:
-        rc = await proc.wait()
-        handle_exit(rc)            # 42 = ctx pressure, !=0 = crash, 0 = clean stop
-        if intent_running and rc != 0:
-            respawn()
-        break
-    handle_response(json.loads(line))
-```
-
-No HTTP health probe, no PID file staleness, no 30-second polling tick. The supervisor knows the agent is alive iff the `Popen` is alive.
-
-### 4.6 Crash recovery
-
-If the agent dies with unacked events in flight (last cycle was `ev-1437` but no `cycle-done` arrived), the supervisor:
-
-1. Reads the cycle log (`.squidsquad/<role>/cycle-<N>.log`) to determine how far the agent got.
-2. Decides per-event-type whether to redeliver:
-   - `cycle-start`: idempotent — redeliver. Worst case: one cycle's work is redone.
-   - `stop`: not redelivered; supervisor records intent locally instead.
-3. Respawns and replays the queue from the last acked cursor.
-
-Stronger guarantee than today's model, because:
-- The supervisor has the full cycle log inline (vs. today's grep across git commits to figure out what happened).
-- There's only one in-flight event at a time (no race between `event_poll` polling and the agent processing).
+- `wt.exe` stays — load-bearing for TTY/subscription billing.
+- `thin_launcher.py` stays — singleton lock, `--append-system-prompt`, restart-on-exit-42, atomic `.claude-pid` write. Slimmed by ~250 lines (drop the descendant walker) but conceptually unchanged.
+- The harness's HTTP API, EventLifecycleManager, EAD, intent state machine — all unchanged.
+- The duplicate-spawn race that triggered this investigation in the first place is *not* fixed by these changes alone. That's a separate concern — see §5.
 
 ---
 
-## 5. What the harness keeps, gains, and loses
+## 4. Feasibility evidence (what was actually tested)
 
-### 5.1 Kept verbatim
+Conducted 2026-05-26.
 
-- HTTP API (`:7373`) and the v2 event bus contract (`booted`, `assigned-to`, `ack-*`)
-- EventLifecycleManager (ELM): deque + cursors + in-flight + background tasks
-- ExternalActivityDetector (EAD): forge → bus bridge
-- Intent state machine: `RUNNING` / `STOPPING` / `RESTARTING`
-- Clone path / port discovery / restart safety
-
-### 5.2 Gained
-
-- **Direct liveness:** `proc.poll()` replaces the 30s health-poll loop in `update_health` (`harness.py:218–373`).
-- **Synchronous backpressure:** stdin write blocks if the agent's Monitor hasn't consumed prior events. The supervisor cannot over-fire cycles.
-- **Crash log inline:** stderr → cycle log file in real time, no after-the-fact reconstruction.
-- **Singleton for free:** only the supervisor can spawn its child. Two concurrent spawns are structurally impossible.
-
-### 5.3 Lost (with mitigations)
-
-| Lost | Mitigation |
-|---|---|
-| Visible terminal tab per agent | New CLI: `squidsquad watch <role>` tails `.squidsquad/<role>/cycle-<N>.log` live. Operator ergonomics close to a tab. |
-| Agent survives harness restart | Harness becomes load-bearing for agent lifetime. Run the harness under a supervisor (Windows Service / NSSM / systemd). Trade matches the v2 event-driven assumption already (`AGENT-RUNTIME.md` §2.1). |
-| `claude --resume` chat-into-session | An operator wanting to "chat" with a stuck agent loses the wt tab. They can stop the agent, attach a `claude --resume <session>` interactively, then return control to the supervisor. This is a rare-enough op to take the hit. |
-
-### 5.4 Removed (the appealing part)
-
-- `thin_launcher.py` (~700 lines) — gone entirely
-- `_resolve_claude_exe_pid` + `_win32_list_descendants` + `_posix_list_descendants` (~250 lines)
-- `event_poll.py` as a sibling process (its job becomes "the supervisor writes to stdin")
-- `boot_remote._spawn_windows` / `_spawn_macos` / `_spawn_linux` — collapsed to one cross-platform `Popen`
-- `.claude-pid` files and the singleton-lock machinery
-- `wt new-tab` invocations and the lingering-empty-tab UX bug
-- The 60s force-kill safety net in `harness.update_health` (replaced by `Popen.terminate()` + `wait(timeout=30)` + `kill()`)
-- The harness's "auto-reboot on death" PID-polling tick (replaced by `proc.wait()` returning, then respawn-if-intent-running)
-- The duplicate-spawn race class entirely
-
----
-
-## 6. Migration
-
-Cutover by role, not big-bang. Suggested ordering:
-
-1. **`skill` first.** Smallest surface (no forge writes, no inter-role choreography on the critical path). The skill agent's Ralph Loop is the closest to a pure cycle pump — easiest to rewrite as a Monitor handler.
-2. **`dm` second.** Mostly mechanical (CHANGELOG bumps, releases). Low coordination cost.
-3. **`qa` third.** Tooling-heavy but no concurrent coordination with itself.
-4. **`pm` last.** Highest coordination load; needs the supervisor to be fully proven before pm migrates.
-
-Each role flips a config flag (`spawn-mode: direct` vs `spawn-mode: legacy`). Old `thin_launcher.py` stays in tree until all four roles are on `direct`. Then it gets deleted in one PR.
-
-Per-role rollout per migration:
-
-- Stand up the supervisor for the role in parallel with the legacy launcher. Different ports / different clone paths if necessary to side-by-side them.
-- Soak for 48 hours minimum (covers a context-pressure exit + respawn at least once per role given current cycle rates).
-- Compare cycle outcomes against the legacy run; only flip the default after parity.
-
----
-
-## 7. Open questions / risks
-
-### ~~Q1: Does `claude -p` + `Monitor(persistent:true)` actually run indefinitely?~~ **RESOLVED — see §10**
-
-Original concern: a `-p` invocation kept alive by Monitor was the load-bearing assumption. Live testing found we don't need Monitor at all: `--input-format stream-json` + `--output-format stream-json` is Claude Code's official multi-turn streaming mode, and it does exactly what we need. Multi-turn over stdin with persistent session_id, cache reused across turns, blocks on stdin EOF.
-
-Residual: 24-hour soak still recommended before production cutover to characterize context-window behavior under sustained event load. Not blocking the design.
-
-### Q2: How does the agent handle a wedged tool call?
-
-Today: a hung tool call inside the live agent blocks all subsequent events for that role. Today's model recovers via a fresh process per cycle; the new model recovers via supervisor timeout + kill.
-
-**Decision needed:** what's the per-event timeout, and what's the kill semantics (process kill = lose context; tool-cancel signal = preserve context but unknown support)?
-
-### Q3: Stdout JSON discipline
-
-The agent must emit JSON only on completion events, not chat-style text. Claude Code's tendency to narrate work intrudes here.
-
-**Decision needed:** is the bootstrap prompt strong enough to enforce this, or does the supervisor need a parser that filters non-JSON to a log and keeps only the event stream? Probably the latter; cheap to build.
-
-### Q4: Operator ergonomics replacement
-
-The wt tab is gone. The replacement is `squidsquad watch <role>` tailing the cycle log. Need to gut-check whether operators actually use the wt tab today and what they use it for (passive watching vs. active interjection).
-
-### Q5: Windows Service supervision of the harness
-
-If the harness becomes the parent of all agents, it must not die unsupervised. NSSM is the obvious choice on Windows. Need to verify ELM startup recovery handles an NSSM-induced kill -9.
-
-### Q6: How does this interact with the loop-mode fallback?
-
-[`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §2.1 commits to loop mode as the fallback when the harness is down. Under direct-spawn, the harness *is* the spawn mechanism — there's no agent at all without a live harness. Loop mode survives by definition because the harness is up; the "harness down" failure mode is now "no agents run." Need to confirm this is acceptable given the operator-supervised harness model (Q5).
-
----
-
-## 8. Estimated impact
-
-| Metric | Today | Under direct-spawn | Delta |
-|---|---|---|---|
-| Processes per agent | 5–6 | 1 | −80% |
-| Files watched for liveness | `.claude-pid` per role | none | −100% |
-| Lines deleted from `thin_launcher.py` | n/a | ~700 | — |
-| Lines deleted from `harness.py` (PID polling, descendant-walk, force-kill nets) | n/a | ~400 | — |
-| Race classes (concurrent spawn, stale-PID singleton, .claude-pid clobber) | 3 | 0 | structurally impossible |
-| Per-cycle latency (best case, warm-cache) | full-context reload | event-only round-trip | ~3× faster (estimated; needs Q1 spike) |
-| Per-cycle latency (worst case, ctx-pressure respawn) | same as today | same as today | no change |
-
----
-
-## 9. Decision needed
-
-This doc is a **proposal**, not a plan. To turn it into a plan we need:
-
-- A decision on Q2 / Q3 / Q4 / Q5 / Q6 from the human + pm
-- A skill-role spike PR demonstrating the supervisor + stream-json wiring end-to-end (now small: §10 already proved the protocol works)
-
-If those land cleanly, the migration in §6 is straightforward: per-role cutover, ~1 sub-phase per role, with `thin_launcher.py` deleted in a final cleanup PR.
-
----
-
-## 10. Feasibility check — what was actually tested
-
-Conducted 2026-05-26 as part of the PR review. Three tests run against the same `claude.exe` binary the harness uses today.
-
-### 10.1 Test 1: direct spawn bypasses the npm shim
+### 4.1 Test: direct spawn bypasses the npm shim ✅
 
 ```sh
 "C:/Users/naaht/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/bin/claude.exe" -p \
    --output-format stream-json --verbose --model haiku <<< 'Reply pong'
 ```
 
-Result: ✅ direct invocation works. `Popen.pid` returns the claude.exe PID (no descendant walk needed). The cmd.exe shim is purely cosmetic — it just forwards args. This invalidates one entire layer of `thin_launcher.py`'s complexity (`_resolve_claude_exe_pid` + toolhelp32 walker, ~250 lines).
+Direct invocation works. `Popen.pid` is the real claude.exe — no `cmd.exe` in the tree. Validates §3.1.
 
-### 10.2 Test 2: `--input-format stream-json` accepts multi-turn input
+### 4.2 Test: `--input-format stream-json` supports multi-turn over stdin
 
-```sh
-printf '%s\n%s\n' \
-  '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"msg 1"}]}}' \
-  '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"msg 2"}]}}' \
-  | claude.exe -p --input-format stream-json --output-format stream-json --verbose --model haiku
-```
+Two `{"type":"user",...}` lines on stdin → two complete init/result event pairs in stdout, same `session_id`. Process exits on EOF, blocks on empty stdin (pipe semantics). Token cache fully reused across turns: turn-1 `cache_creation_input_tokens: 70,255`; turn-2 `cache_read_input_tokens: 70,255` + `cache_creation: 85`.
 
-Result: ✅ two `system:init` + two `result:success` events in the output stream, **same `session_id` across both**. One process handled two turns from stdin. Process exited on stdin EOF.
+This confirmed that the architecture *would have worked technically* — Claude Code's official streaming I/O is the right shape for what was wanted. The blocker was §4.3, not the protocol.
 
-### 10.3 Test 3: context persists across turns + cache is reused
+### 4.3 Test: pipe-vs-TTY determines billing mode ⚠️
+
+The critical test. Two variants, same conclusion:
 
 ```sh
-turn 1: "Remember this token: HARNESS-FEASIBILITY-7K2X. Reply only OK."
-turn 2: "What was the token?"
+# Variant A: no -p, piped stdin/stdout
+printf 'reply pong\n' | claude.exe --model haiku
+# → "pong" + exit 0     (print-mode behavior, not interactive)
+
+# Variant B: same path, stream-json output
+printf 'reply pong\n' | claude.exe --output-format stream-json --verbose --model haiku
+# → {"type":"result", ..., "total_cost_usd": 0.0157, ...}
 ```
 
-Result: ✅ turn-2 reply was exactly `HARNESS-FEASIBILITY-7K2X`. Token usage telemetry:
+`total_cost_usd` in the result envelope is the smoking gun: subscription-billed interactive turns don't carry per-turn USD; only API-billed turns do. From `claude --help`:
 
-| Turn | `cache_creation_input_tokens` | `cache_read_input_tokens` | Why it matters |
-|---|---|---|---|
-| 1 | 70,255 | 0 | First turn populates the prompt cache |
-| 2 | 85 | **70,255** | Second turn reads the entire prior context from cache — near-zero per-turn cost |
+> "The workspace trust dialog is skipped when Claude is run in non-interactive mode (via -p, **or when stdout is not a TTY**, e.g. piped or redirected output)."
 
-This is the strongest result. **Cache amortization means N-cycle sessions are dramatically cheaper than N separate `claude -p` invocations**, validating one of the proposal's main claims (§8: "~3× faster, warm cache").
-
-### 10.4 What this means for the proposal
-
-- The Monitor angle from the first revision is unnecessary. `--input-format stream-json` is the official, supported mechanism. No persistent-Monitor longevity risk.
-- The architecture is no longer "off the beaten path" — it's the same pattern the Anthropic Agent SDK uses for managed agents.
-- The original Q1 soak-test risk is downgraded to "characterize before production rollout," not "go/no-go gate."
-- Cost projection improves: per-cycle marginal token cost drops by ~99% after the first cycle (cache read vs. cache creation pricing differential).
-
-### 10.5 What was NOT tested
-
-- 24-hour soak under sustained event load (still wanted for production confidence; not gating the design)
-- Context-pressure exit behavior in stream-json mode (assumed clean; needs verification)
-- Tool-call timeout / wedge behavior (Q2 in §7, unchanged)
-- Behavior under stdin write while a prior turn is still mid-tool-call (Q2-adjacent; supervisor should serialize)
+Claude actively detects no-TTY and self-demotes. There is no flag that disables this detection without also disabling subscription billing.
 
 ---
 
-## 11. Billing model — **proposal-blocking finding**
+## 5. Investigation: the duplicate-spawn race
 
-The technical feasibility tests in §10 were successful. Subsequent billing research (sources at end of section) found a separate problem that may make the proposal cost-prohibitive in its current form.
+The investigation was triggered by an observation that two `SQUIDSQUAD_ROLE=skill` Claude sessions appeared to be running concurrently. Root cause: the harness's auto-reboot loop spawned a fresh skill agent ~30 seconds after the prior skill session exited following its last cycle. From the operator's POV, the lingering `wt.exe` tab (which doesn't auto-close when its child claude.exe exits) made it look like both were live concurrently. In reality only one claude.exe was running at any time; the duplicate was visual, not actual.
 
-### 11.1 What changes June 15, 2026
+This is *not* a bug. It's the harness's intended behavior. The proposal's framing of "delete the duplicate-spawn race" turned out to overstate the problem — the race class that *can* still occur (two concurrent `thin_launcher` invocations before either writes a `.claude-pid`) is mostly defused by `thin_launcher`'s singleton check at boot. Closing the visual-confusion gap is a separate small task — making `wt.exe new-tab` close the tab when its child exits, via a wrapper script.
 
-Anthropic is splitting Claude subscription billing into two pools effective 2026-06-15:
+---
 
-| Surface | Billing pool |
+## 6. Investigation: billing model
+
+The big proposal would have used `claude -p`, putting all four agents on the Agent SDK billing pool. Researched billing (sources §8):
+
+- **Today (pre-2026-06-15):** per Anthropic issues #37686 and #43333, `claude -p` with OAuth/Max auth silently billed as per-token API charges. One reporter hit $1,800 in 2 days of automation. Acknowledged bug.
+- **2026-06-15 onward:** Anthropic formalizes the split. `claude -p` and Agent SDK draw from a new monthly SDK credit ($20 Pro / $100 Max 5x / $200 Max 20x), then fall through to API rates. SDK usage no longer counts toward the interactive subscription's limits.
+
+Cost projection for the four-agent SquidSquad fleet on Sonnet 4.6 was **$150–$450/month above the existing $200/mo Max 20x plan**, depending on cycle rate and model mix. Mitigations considered:
+
+| Mitigation | Verdict |
 |---|---|
-| Interactive `claude` CLI (TUI), claude.ai web chat, native desktop app | Existing subscription limits (Pro/Max 5x/Max 20x) — flat-rate, no per-token charges |
-| Agent SDK + **`claude -p` (print/headless mode)** — what this proposal uses | New separate monthly "Agent SDK credit": **$20 Pro / $100 Max 5x / $200 Max 20x**, billed at full API token rates against that credit |
+| Hybrid spawn (keep interactive billing, harness owns pipes) | **Closed by §4.3** — pipes always trigger print-mode billing |
+| Cost cap via `total_cost_usd` circuit breaker | Possible, but degrades to "agents halt when credit runs out" — operationally fragile |
+| Cheaper-model routing (Haiku for routine cycles) | Possible — Haiku 4.5 is ~10× cheaper than Sonnet. Stacks with cost cap. Still > $0 above subscription. |
+| Defer / keep today's architecture | **Recommended.** Cost is flat at the Max 20x subscription. |
 
-Once the SDK credit runs out, additional usage either flows to API-rate usage credits (if enabled) or requests halt until the credit refreshes. Agent SDK / `claude -p` usage **no longer counts toward the interactive subscription's usage limits** — they're now structurally separate billing surfaces.
+---
 
-### 11.2 Pre-June 15 (current) state is even worse
+## 7. Out of scope (what didn't get tested)
 
-Per Anthropic issues #37686 and #43333: even today, with an active Max subscription and OAuth auth, `claude -p` was silently billing as per-token API charges rather than subscription. One user reported $1,800 in surprise charges over two days of automation usage. The issue was acknowledged as a bug and (per the closed status) presumably patched in a recent version, but the new June 15 model formalizes this separation — `claude -p` will *definitionally* not be subscription-covered.
+These were on the list before the §4.3 verdict closed the broader investigation. Listed for completeness; not needed unless a future Anthropic billing change reopens the design space.
 
-### 11.3 Cost projection for SquidSquad under direct-spawn
+- 24-hour soak of `claude -p` with stream-json multi-turn input under sustained load
+- Context-pressure exit behavior in stream-json mode
+- Tool-call timeout / wedge semantics under harness ownership
+- Stdin-write-while-prior-turn-mid-flight (would need supervisor-side serialization)
+- PTY emulation + TUI screen-scraping (rejected for complexity)
 
-Per the §10 telemetry: turn 1 = 70K cache-creation tokens (≈$0.10 on Haiku, ≈$1.05 on Sonnet 4.6, ≈$1.75 on Opus 4.7); turn 2+ = ~85 new tokens + 70K cache-read (≈$0.002–$0.01 depending on model).
+---
 
-Realistic napkin math for the four-agent SquidSquad fleet at Sonnet 4.6:
+## 8. Sources
 
-| Item | Estimate |
-|---|---|
-| Cycles per agent per active hour | 2–4 |
-| Active hours per day across 4 agents | 8–16 agent-hours |
-| Cache-hit per-cycle marginal cost (Sonnet 4.6, ~5K new input tokens, ~500 output) | ~$0.02 |
-| First-cycle-per-session cost (cache creation, ~70K tokens) | ~$1.00 |
-| Daily cost (one ctx-pressure respawn per agent per day, ~30 cycles/agent/day) | **$5–$15/day** |
-| Monthly cost | **$150–$450/month** |
-| Less Max 20x SDK credit | −$200/month |
-| Net overage above the $200 Max 20x subscription | **$0 to ~$250/month on top of the $200 plan** |
-
-vs. the current architecture, where interactive `claude` sessions live inside subscription limits and incur no per-token overage. Today, four agents under Max 20x is ≈ flat $200/month. Direct-spawn pushes it to **$200–$450/month** depending on cycle volume.
-
-### 11.4 What this means for the proposal
-
-The architecture is technically sound (§10). The economics are not — at least not in the form sketched in §3–§4. **Recommend: do not proceed to implementation without first addressing one of:**
-
-1. ~~**Hybrid spawn:** keep interactive `claude` (subscription billing) as the agent process but have the harness be its parent.~~ **TESTED, dead** (see §11.4.1). Claude auto-detects non-TTY stdout and switches to print-mode billing — pipes alone don't preserve subscription billing. The only path back to subscription billing under harness control is full PTY emulation + screen-scraping the TUI, which is uglier than today's architecture.
-2. **Cost cap + circuit-breaker:** accept the API billing pool, enforce a per-day USD ceiling per role using the `total_cost_usd` in each `result` event. Burn the SDK credit and stop when it's gone. Lossy operation acceptable for a side-project, not for production.
-3. **Cheaper-model routing:** use Haiku 4.5 for routine cycles (≈10× cheaper than Sonnet); only escalate to Sonnet/Opus for cycles that hit a complexity threshold. Cuts the projection roughly an order of magnitude — might fit inside $200 SDK credit alone. Stacks with #2.
-4. **Wait and accept:** keep today's architecture, accept the duplicate-spawn race class and ~1100 lines of complexity, until Anthropic's billing model changes or our scale justifies the API spend.
-
-#### 11.4.1 Pipe-vs-TTY test (Mitigation #1 verdict)
-
-Two follow-up tests run 2026-05-26 to verify Mitigation #1's viability:
-
-```sh
-# Test A: claude without -p, stdin/stdout piped
-printf 'reply pong\n' | claude.exe --model haiku
-# → prints "pong", exits 0. Same behavior as -p mode.
-
-# Test B: same but with --output-format stream-json
-printf 'reply pong\n' | claude.exe --output-format stream-json --verbose --model haiku
-# → emits the full {"type":"result","subtype":"success",...,"total_cost_usd":0.0157,...}
-# → cost telemetry present = tracked against API/SDK billing pool, NOT subscription
-```
-
-Per the `claude --help` text: *"The workspace trust dialog is skipped when Claude is run in non-interactive mode (via -p, or when stdout is not a TTY, e.g. piped or redirected output)."* Claude actively detects the absence of a TTY and behaves as `-p`. The `total_cost_usd` field in the result envelope is the smoking gun — interactive subscription-billed turns don't report per-turn USD; only API-billed turns do.
-
-**Implication:** The harness *cannot* own claude's stdin/stdout via plain pipes while keeping subscription billing. To preserve subscription billing, claude needs a real (or PTY-emulated) terminal as both stdin and stdout. PTY emulation + driving a TUI programmatically (scraping rendered ANSI output, sending keystrokes) is technically possible but is *more* complex than today's `wt → bash → thin_launcher → cmd → claude` chain — defeats the proposal's whole purpose.
-
-### 11.5 Recommendation post-feasibility
-
-Given §11.4.1 closes the hybrid-spawn path, the realistic choices reduce to:
-
-- **(A) Defer (Mitigation #4):** preserve today's interactive/subscription model. Keep `thin_launcher.py`. Accept the duplicate-spawn race and the process-tree complexity. *Lowest cost, no architectural progress.*
-- **(B) Partial-direct-spawn with cost guard (Mitigation #2 + #3):** route routine cycles to Haiku 4.5 via `claude -p` under harness ownership, escalate to Sonnet/Opus only on demand, enforce daily USD caps. *Captures most of the architectural simplification, accepts $100–$200/mo above subscription depending on Haiku ratio, requires building the budget guard.*
-
-**Suggested next step:** decide between (A) and (B) explicitly before any code change. If (B), the minimum viable path is a skill-only spike that runs ~50 Haiku cycles end-to-end and reports actual marginal cost — confirms the Haiku math before committing.
-
-### 11.6 Sources
-
-- [Claude subscriptions get separate budgets for programmatic use — the-decoder.com](https://the-decoder.com/claude-subscriptions-get-separate-budgets-for-programmatic-use-billed-at-full-api-prices/)
 - [Use the Claude Agent SDK with your Claude plan — Anthropic Support](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan)
-- [Issue #43333: `claude -p` with OAuth (no API key) bills as API usage, not Max subscription](https://github.com/anthropics/claude-code/issues/43333)
-- [Issue #37686: `claude -p` suggested to Max subscriber — caused unintended API billing ($1,800+ in two days)](https://github.com/anthropics/claude-code/issues/37686)
+- [Claude subscriptions get separate budgets for programmatic use — the-decoder.com](https://the-decoder.com/claude-subscriptions-get-separate-budgets-for-programmatic-use-billed-at-full-api-prices/)
+- [Issue #43333: `claude -p` with OAuth bills as API usage, not Max subscription](https://github.com/anthropics/claude-code/issues/43333)
+- [Issue #37686: `claude -p` caused $1,800 in two days of unintended API billing](https://github.com/anthropics/claude-code/issues/37686)
 - [Claude Code Billing Change June 15, 2026 — buildthisnow.com](https://www.buildthisnow.com/blog/guide/mechanics/claude-billing-change-june-2026)
 
-
 ---
 
-_Filed as a draft for discussion. Comments / counter-proposals welcome inline on the PR._
+## 9. Recommended next step
+
+Land §3 (drop `cmd.exe` shim + drop `bash` layer) as a small focused PR — modest concrete win, no architectural risk, deletes ~250 lines, makes singleton enforcement robust. Defer the bigger redesign indefinitely; revisit if Anthropic's billing model changes.
+
+The visual-confusion gap (§5 — lingering `wt.exe` tabs after child exit) is worth a separate small task: a wrapper script that the wt tab invokes, which exits cleanly when claude exits. One-line change to the spawn command, removes the operator-confusion source that triggered this whole investigation.
