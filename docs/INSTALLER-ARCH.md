@@ -28,7 +28,7 @@ Throughout this doc, **prose talks about the categorical classes** (PM, workers,
 
 Why: agents work autonomously and concurrently. If they shared one working tree they would step on each other's `git pull`, `git checkout`, branch switches, and uncommitted state. Per-agent clones make each agent's working tree disjoint while still coordinating through the same remote (the source-of-truth git repo) and forge (GitHub Issues).
 
-The clones live wherever the operator places them on disk; their paths are registered in `~/.squidsquad/clones/<role>` (one file per role, contents = absolute path to that role's clone). The harness reads this registry at boot, and `start.sh` uses it to sync all clones with `git pull` before booting the squad.
+The clones live wherever the operator places them on disk; their paths are registered in `~/.squidsquad/clones/<alias>` (one file per alias, contents = absolute path to that alias's clone). The harness reads this registry at boot, and `start.sh` uses it to sync all clones with `git pull` before booting the squad.
 
 In scope:
 
@@ -95,13 +95,13 @@ Three commitments:
 | Destination | What the installer writes |
 |---|---|
 | `.squidsquad/config.md` | Project config — iter interval, ship threshold, model routing, tracker backend, git workflow |
-| `.squidsquad/<role>/` | Per-role agent directory (CLAUDE.md composed, SOUL.md, working-state.md skeleton, planning/, iterations/) — one per role in the chosen team preset: PM, each worker, each verifier, DM |
+| `.squidsquad/<alias>/` | Per-alias agent directory (CLAUDE.md composed, SOUL.md, working-state.md skeleton, planning/, iterations/) — one per alias in the chosen team preset: PM, each worker, each verifier, DM |
 | `.squidsquad/project/` | L4 project-local seeds (copied from `references/sub-skills/project/` and enriched with conversational answers) |
 | `.squidsquad/vault/` | Shared memory layer skeleton (BRIEFING.md + the five vault dirs: projects/, areas/, resources/, archives/, galaxy/). Vault architecture documented in [`VAULT-ARCH.md`](VAULT-ARCH.md). |
-| `.squidsquad/.local-config` | Per-clone role→path mapping for `start.sh` to sync clones |
+| `.squidsquad/.local-config` | Per-clone alias→path mapping for `start.sh` to sync clones |
 | `.squidsquad/.harness-port`, `.harness-state.json`, `.event-state.json` (at runtime) | Harness-owned runtime files — written when the harness boots, not by the installer. Listed here for completeness; their schemas are documented in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §4–§5. |
 | `~/.squidsquad/secrets` | API keys for external models (restricted permissions, never committed to repo) |
-| `~/.squidsquad/clones/` | Per-role clone-path registry. One file per role (`pm`, each worker, each verifier, `dm`) whose contents is the absolute path to that role's clone. Always created — clone isolation is mandatory (see §1.2), not a configurable mode. |
+| `~/.squidsquad/clones/` | Per-alias clone-path registry. One file per alias (`pm`, each worker, each verifier, `dm`) whose contents is the absolute path to that alias's clone. Always created — clone isolation is mandatory (see §1.2), not a configurable mode. |
 | **Forge (GitHub)** | Issue labels created via `gh label create` — status/role/type/priority/severity taxonomy |
 | **Git commit** | Single atomic install commit on `main` (or the operator's chosen branch) |
 
@@ -296,7 +296,7 @@ The full `.squidsquad/` tree post-install. PM and DM dirs are always present (si
 │   ├── resources/
 │   ├── archives/
 │   └── galaxy/
-├── .local-config                # per-clone role→path map (read by start.sh)
+├── .local-config                # per-clone alias→path map (read by start.sh)
 └── (runtime) .harness-port, .harness-state.json, .event-state.json — created when the harness boots
 ```
 

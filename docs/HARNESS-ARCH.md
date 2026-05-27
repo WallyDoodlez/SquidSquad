@@ -111,8 +111,8 @@ ELM owns the event bus. Located at `references/scripts/harness.py` (`class Event
 | Piece | Type | Persisted | Purpose |
 |---|---|---|---|
 | `_deque` | `collections.deque(maxlen=1000)` | No (in-memory only) | Event store, FIFO with bounded retention |
-| `_cursors` | `dict[role, event_id]` | Yes (`.event-state.json`) | Per-role progress through the deque |
-| `_in_flight` | `dict[event_id, {role, delivered_at}]` | Yes (`.event-state.json`) | Events delivered but not yet acked |
+| `_cursors` | `dict[alias, event_id]` | Yes (`.event-state.json`) | Per-alias progress through the deque |
+| `_in_flight` | `dict[event_id, {alias, delivered_at}]` | Yes (`.event-state.json`) | Events delivered but not yet acked |
 
 ### 5.1 Event store (deque)
 
@@ -123,7 +123,7 @@ ELM owns the event bus. Located at `references/scripts/harness.py` (`class Event
 
 ### 5.2 Cursor model
 
-- Per-role, owned by harness (was per-agent in `working-state.md` pre-#9873-A; migrated to harness).
+- Per-alias, owned by harness (was per-agent in `working-state.md` pre-#9873-A; migrated to harness).
 - `null` on first boot → agent reads from the head of the deque.
 - Advances via `ack-cursor` consumed by the ack consumer task (asyncio).
 - Cursor-regression attempts are rejected (CONTEXT-9873-A D15).
@@ -218,7 +218,7 @@ Transitions are HTTP-API-driven (`POST /agents/{role}/start|stop|restart`). The 
 
 Every 5 seconds, for each agent with intent=`running`:
 
-1. Read `.claude-pid` from agent's `.squidsquad/<role>/.claude-pid`.
+1. Read `.claude-pid` from agent's `.squidsquad/<alias>/.claude-pid`.
 2. Check process liveness (`OpenProcess` on Windows, `kill -0` on POSIX).
 3. If dead AND intent=`running`: re-spawn (auto-respawn).
 4. If dead AND intent=`stopping` or `restarting`: handle per intent.
@@ -241,8 +241,8 @@ One file per install (at the install root). Persisted across harness restarts. S
 {
   "version": 1,
   "agents": {
-    "<role>": {
-      "alias": "<alias>",
+    "<alias>": {
+      "role": "<categorical role: pm|qa|worker|dm>",
       "intent": "running" | "stopping" | "restarting" | "stopped",
       "pid": 12345,
       "clone_path": "D:/Dev/Dev/SquidSquad-2",
@@ -292,7 +292,7 @@ Per-agent directories under `.squidsquad/` are keyed by **alias**, not by the L2
 
 All harness-owned files are atomic-write (`.tmp` + `mv`) and persisted across restarts. The deque is the one piece of harness state that is NOT persisted.
 
-> **Naming convention note:** the HTTP API in §4 uses `{role}` as the path-parameter name (e.g. `/agents/{role}`, `/events/for/{role}`). That parameter accepts the **alias** value — the harness internally resolves alias → categorical role where the distinction matters. The API parameter name predates the alias concept; the on-disk directories were always alias-keyed.
+> **Vocabulary note — `role` vs `alias`:** the codebase (FastAPI routes, `AgentState.role`, event-poll `--role` flag, `SQUIDSQUAD_ROLE` env var) uses the identifier `role` everywhere; the §4 HTTP API path-parameter `{role}` reflects that. **In every one of those places, the value is actually the alias** (e.g. `skill`, `verifier`, `human`) — not the L2 categorical role (`pm`/`qa`/`worker`/`dm`). The naming predates the alias concept and is misleading. The doc keeps the literal `{role}` token in §4 only where it faithfully tracks the code; everywhere else (on-disk paths, state-file shapes, cursor maps) it uses `<alias>` because that's the only thing actually keyed in those structures. A code-level rename `role` → `alias` would close the mismatch but is invasive (touches every HTTP route + most agent-side scripts) and not yet planned.
 
 ---
 
@@ -395,11 +395,11 @@ Two processes per agent, down from five. TTY still provided by `wt.exe`, so subs
 
 | Today: `thin_launcher.py` | Direct path: where it lives |
 |---|---|
-| Singleton check (`.claude-pid` + descendant walk) | **Harness** — already maintains `.harness-state.json` with per-role PIDs; pre-spawn check against existing in-memory state |
-| Env var `SQUIDSQUAD_ROLE=<role>` | **Harness** — `Popen(env=...)` propagates through `wt.exe → WindowsTerminal.exe` to the tab child (validated, see §14.4) |
+| Singleton check (`.claude-pid` + descendant walk) | **Harness** — already maintains `.harness-state.json` with per-alias PIDs; pre-spawn check against existing in-memory state |
+| Env var `SQUIDSQUAD_ROLE=<alias>` | **Harness** — `Popen(env=...)` propagates through `wt.exe → WindowsTerminal.exe` to the tab child (validated, see §14.4). (Env var name is `SQUIDSQUAD_ROLE` for code-compat; value is the alias.) |
 | Claude arg-list construction (`--append-system-prompt`, `--name`, `--effort`, bootstrap `/loop` prompt) | **Harness / `boot_remote`** — same arg list, emitted as `wt new-tab … claude.exe <flags>` |
 | Write `.claude-pid` after resolving descendant | **Harness** — post-spawn, snapshot processes once, filter `name='claude.exe' AND parent_pid==WindowsTerminal.exe_pid AND pid NOT IN pre_spawn_set`. Shallow tree, no toolhelp32 ctypes machinery needed. |
-| Wait for claude exit, return code 42 to surface context pressure | **Nothing needed.** Harness's auto-reboot fires on `dead-process-with-intent-running` regardless of who relays the exit code. `cycle_post.py` already POSTs `/agents/<role>/restart` to set the intent before claude exits, so the signal reaches the harness directly. `thin_launcher` was a relay, not the source of truth. |
+| Wait for claude exit, return code 42 to surface context pressure | **Nothing needed.** Harness's auto-reboot fires on `dead-process-with-intent-running` regardless of who relays the exit code. `cycle_post.py` already POSTs `/agents/{alias}/restart` to set the intent before claude exits, so the signal reaches the harness directly. `thin_launcher` was a relay, not the source of truth. |
 
 ### 14.3 Net impact
 
