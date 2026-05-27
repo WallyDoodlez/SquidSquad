@@ -4,7 +4,7 @@
 - **Status**: idle, monitoring pipeline
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-27 cycle 1788)
+## Pipeline snapshot (2026-05-27 cycle 1789)
 
 - **PRs open**: 0 — #10357 merged 2026-05-27T13:25Z (HARNESS-ARCH §14 direct-spawn + alias-keying alignment across HARNESS/AGENT-RUNTIME/INSTALLER-ARCH). Zero sub-skill/role/compose changes, no recompose needed.
 - **PM open issues**: 2 — #9970 (composed CLAUDE.md drift from #9925), #9969 (manifest.md entry-file naming). Both severity:medium, plan-first hold.
@@ -15,11 +15,12 @@
 
 - **dm, qa, skill**: harness reports `bootup_complete: false`, last_cycle ~22h ago (2026-05-26T03:01). Only PM /loop cron is functional. Operator restart needed; not PM-fixable.
 
-## This cycle's work (1788)
+## This cycle's work (1789)
 
-- PR #10359 refinement cycle. After human direction, expanded the doc spec to cover Soul + L4 seed unification alongside Responsibility — all six slots (identity / responsibility / soul / instructions / project-context / vault) now follow the same L1-L4 model with zero special-cases. SOUL.md becomes a documented filename shorthand for `slot: soul, ordinal: 1`. Legacy 16-file L4 seed sprawl collapses to one seed per role-class. Commit `a7ea706b` pushed.
-- #10360 re-assigned to `role:pm` per human direction; then human clarified "just modify the docs, deal with implementation later" — #10360 stays parked, no implementation work this cycle. Compose.py change stays in skill's lane when the time comes.
-- Pipeline drained otherwise: 0 squidsquad/* PRs, 0 pending-test/ship/external.
+- PR #10359 grew to 5 commits with additional architectural reclassifications: (1) `status-line` → Project Context slot (9c02f56c); (2) `file-conventions` retired entirely, paths inline in instructions (4cc0f279); (3) `agent-boundaries` retired entirely, split inline into Identity + Responsibility (14b88b36).
+- Cumulative cleanup categories now: responsibility (→ new slot), soul (→ regular slot via SOUL.md shorthand), status-line (→ Project Context), file-conventions (retired, inline), agent-boundaries (retired, split inline), L4 seeds (16→4-5 per role-class).
+- #10360 scope comments updated alongside each commit. Implementation still parked.
+- Pipeline otherwise unchanged.
 
 ## Pending human decisions
 
