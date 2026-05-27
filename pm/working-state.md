@@ -4,7 +4,7 @@
 - **Status**: idle, monitoring pipeline
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-27 cycle 1757)
+## Pipeline snapshot (2026-05-27 cycle 1758)
 
 - **PRs open**: 1 — **#10357** (human draft: HARNESS-ARCH §14 wt→claude direct-spawn proposal). Not actionable by PM until human un-drafts or requests review.
 - **PM open issues**: 2 — #9970 (composed CLAUDE.md drift from #9925), #9969 (manifest.md entry-file naming). Both severity:medium, plan-first hold.
@@ -15,10 +15,10 @@
 
 - **dm, qa, skill**: harness reports `bootup_complete: false`, last_cycle ~22h ago (2026-05-26T03:01). Only PM /loop cron is functional. Operator restart needed; not PM-fixable.
 
-## This cycle's work (1757)
+## This cycle's work (1758)
 
-- Diagnosed why cycle 1756 working-state update didn't persist: `.squidsquad/` files live on a separate `squid-squad` git branch via `.squidsquad-state/` worktree. Write to `.squidsquad/pm/working-state.md` in main worktree was a no-op for cycle_pre's `state_path`. Now writing through the state worktree.
-- DS audit findings on merged doc-arch: H1/L1/M3/L2 all verified resolved or false-positive on current main (audit was on pre-merge draft).
+- Posted post-#10356 audit-trail updates on #9970 and #9969 — both clean-superseded tickets had their supersedes claims conditional on docs landing on main; PR #10356 squash-merged 2026-05-27T05:23Z, so those claims are now materialized. No status change yet (still under #9968 plan-first batch-close hold).
+- Verified the three implementation sub-PR tickets (#10017 / #10018 / #10019) exist as pending tasks against role:skill, awaiting human approval to enter planning.
 
 ## Pending human decisions
 
