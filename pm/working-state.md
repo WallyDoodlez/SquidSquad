@@ -4,7 +4,7 @@
 - **Status**: idle, monitoring pipeline
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-27 cycle 1789)
+## Pipeline snapshot (2026-05-27 cycle 1790)
 
 - **PRs open**: 0 — #10357 merged 2026-05-27T13:25Z (HARNESS-ARCH §14 direct-spawn + alias-keying alignment across HARNESS/AGENT-RUNTIME/INSTALLER-ARCH). Zero sub-skill/role/compose changes, no recompose needed.
 - **PM open issues**: 2 — #9970 (composed CLAUDE.md drift from #9925), #9969 (manifest.md entry-file naming). Both severity:medium, plan-first hold.
@@ -15,11 +15,10 @@
 
 - **dm, qa, skill**: harness reports `bootup_complete: false`, last_cycle ~22h ago (2026-05-26T03:01). Only PM /loop cron is functional. Operator restart needed; not PM-fixable.
 
-## This cycle's work (1789)
+## This cycle's work (1790)
 
-- PR #10359 grew to 5 commits with additional architectural reclassifications: (1) `status-line` → Project Context slot (9c02f56c); (2) `file-conventions` retired entirely, paths inline in instructions (4cc0f279); (3) `agent-boundaries` retired entirely, split inline into Identity + Responsibility (14b88b36).
-- Cumulative cleanup categories now: responsibility (→ new slot), soul (→ regular slot via SOUL.md shorthand), status-line (→ Project Context), file-conventions (retired, inline), agent-boundaries (retired, split inline), L4 seeds (16→4-5 per role-class).
-- #10360 scope comments updated alongside each commit. Implementation still parked.
+- PR #10359 grew to 7 commits (latest 72e5e4ad): added §3.0 framing distinguishing L1-L4 content layers from `config.md` install configuration as two distinct compose-time input axes. Includes a 6-row interaction table mapping concerns to axes.
+- DS audit pass on the PR (3 docs): 12 findings (4 HIGH / 5 MED / 3 LOW). Output at `C:/Users/naaht/audit-tmp/ds_output_10359.md`. Awaiting human direction on fix batch.
 - Pipeline otherwise unchanged.
 
 ## Pending human decisions
