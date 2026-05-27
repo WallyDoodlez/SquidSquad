@@ -67,9 +67,11 @@ For §3.1 to land, we need an install-aware resolver. Sketch:
 4. If it ends in `.exe` already (non-shim path), use it directly
 5. Cache the resolved path in `.squidsquad/config.md` or similar so we only do it once per install
 
-This is essentially "what `_resolve_claude_exe_pid` already does, but at boot instead of runtime, and against the shim *script* instead of the process tree." It's a different problem with a similar shape — maybe 80–150 lines, far less than the 250 lines deleted, but not free.
+This is essentially "what `_resolve_claude_exe_pid` already does, but at boot instead of runtime, and against the shim *script* instead of the process tree."
 
-**Net:** §3.1 is real but more work than the original sketch implied. The savings (descendant walker + race class gone) still justify it, but the build is "write a portable install resolver," not "one-line change to use absolute path."
+A working prototype lives at [`references/experiments/resolve_claude.py`](../references/experiments/resolve_claude.py) — **~190 lines** including comments, docstrings, and the chain-walker. Validated end-to-end on this Windows/npm install (§4.1.1) and against the Popen-tree comparison (§4.1.2). The prototype covers Windows `.cmd` / `.bat` / `.ps1` shims and POSIX bash shims; the POSIX paths are written but untested (no POSIX install on the test machine).
+
+**Net:** §3.1 is real but more work than the one-line sketch implied. The savings still justify it — ~250 lines of `_resolve_claude_exe_pid` + descendant-walker out, ~190 lines of boot-time resolver in, the singleton race class gone. Net `~60 lines deleted + a much simpler invariant` (Popen.pid IS claude.exe, always).
 
 ### 3.2 Drop the `bash` layer — `wt.exe` invokes Python directly
 
@@ -225,6 +227,6 @@ Three independent follow-ups, in increasing scope:
 
 2. **§3.2: drop `bash` layer (small).** `wt.exe` invokes `python thin_launcher.py` directly. One fewer process per agent, no functional change. Cross-platform: same change in `_spawn_macos` and `_spawn_linux` (which probably already use the script's shebang anyway).
 
-3. **§3.1: drop `cmd.exe` shim (medium).** Requires building the portable install resolver described in §3.1's caveat — parse the shim script or read npm metadata to locate the real `claude.exe`/`cli.js`, cache the result. Once done: ~250 lines of descendant-walker + the singleton race class go away. Worth doing but not free.
+3. **§3.1: drop `cmd.exe` shim (medium).** Requires productizing the portable install resolver. A working ~190-line prototype exists at [`references/experiments/resolve_claude.py`](../references/experiments/resolve_claude.py) and is validated by [`spawn_tree_test.py`](../references/experiments/spawn_tree_test.py) — see §4.1.1 / §4.1.2. Productizing means: move into `references/scripts/`, wire into `thin_launcher.py` boot path, cache the resolved path in `.squidsquad/config.md`, add POSIX integration test coverage (the prototype's POSIX path is written but untested here). Once landed: ~250 lines of descendant-walker out, ~190 lines of resolver in (net ~60 lines deleted), singleton race class gone.
 
 Defer the bigger direct-spawn redesign indefinitely; revisit if Anthropic's billing model changes.
