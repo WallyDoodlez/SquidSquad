@@ -2,7 +2,7 @@
 
 _A proposal to collapse the agent process tree by having the harness spawn `claude` directly and drive cycles through the official `--input-format stream-json` channel on an owned stdin pipe._
 
-> **Status**: DRAFT, proposal — **NOT recommended for implementation as currently sketched**. Technical feasibility confirmed in §10. Billing-model investigation in §11 found that `claude -p` (the mechanism this proposal relies on) bills against a separate Agent SDK credit pool, not the interactive Claude subscription — projected ongoing cost is $200–$450/month on top of the existing Max 20x plan. The four mitigations in §11.4 are the live discussion points; the most promising is **Mitigation #1 (hybrid spawn keeping interactive `claude`)** which needs a stdin-pipe-as-TTY test before it can be confirmed.
+> **Status**: DRAFT, proposal — **NOT recommended for implementation as currently sketched**. Technical feasibility confirmed (§10). Billing-model investigation (§11) found that `claude -p` bills against the separate Agent SDK credit pool, not the interactive Claude subscription — projected ongoing cost is $150–$450/month above the existing Max 20x plan. Pipe-vs-TTY follow-up test (§11.4.1) confirmed that even invoking `claude` *without* `-p` over pipes drops it to non-interactive billing (auto-detects no-TTY). The "hybrid spawn keeping subscription billing" mitigation is therefore closed. Remaining choices reduce to **(A) defer** or **(B) partial-direct-spawn with cost guard + Haiku routing** — see §11.5.
 >
 > Companion to [`HARNESS-ARCH.md`](HARNESS-ARCH.md) (current state) and [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) (cycle integration / v2 event-driven mode).
 >
@@ -415,18 +415,47 @@ vs. the current architecture, where interactive `claude` sessions live inside su
 
 The architecture is technically sound (§10). The economics are not — at least not in the form sketched in §3–§4. **Recommend: do not proceed to implementation without first addressing one of:**
 
-1. **Hybrid spawn:** keep interactive `claude` (subscription billing) as the agent process but have the harness be its parent. Open question: does interactive `claude` work when stdin is a pipe instead of a TTY? Would need testing. If yes, we get the process-tree simplification without the billing-pool switch.
+1. ~~**Hybrid spawn:** keep interactive `claude` (subscription billing) as the agent process but have the harness be its parent.~~ **TESTED, dead** (see §11.4.1). Claude auto-detects non-TTY stdout and switches to print-mode billing — pipes alone don't preserve subscription billing. The only path back to subscription billing under harness control is full PTY emulation + screen-scraping the TUI, which is uglier than today's architecture.
 2. **Cost cap + circuit-breaker:** accept the API billing pool, enforce a per-day USD ceiling per role using the `total_cost_usd` in each `result` event. Burn the SDK credit and stop when it's gone. Lossy operation acceptable for a side-project, not for production.
-3. **Cheaper-model routing:** use Haiku 4.5 for routine cycles (≈10× cheaper than Sonnet); only escalate to Sonnet/Opus for cycles that hit a complexity threshold. Cuts the projection roughly an order of magnitude — might fit inside $200 SDK credit alone.
+3. **Cheaper-model routing:** use Haiku 4.5 for routine cycles (≈10× cheaper than Sonnet); only escalate to Sonnet/Opus for cycles that hit a complexity threshold. Cuts the projection roughly an order of magnitude — might fit inside $200 SDK credit alone. Stacks with #2.
 4. **Wait and accept:** keep today's architecture, accept the duplicate-spawn race class and ~1100 lines of complexity, until Anthropic's billing model changes or our scale justifies the API spend.
 
-### 11.5 Sources
+#### 11.4.1 Pipe-vs-TTY test (Mitigation #1 verdict)
+
+Two follow-up tests run 2026-05-26 to verify Mitigation #1's viability:
+
+```sh
+# Test A: claude without -p, stdin/stdout piped
+printf 'reply pong\n' | claude.exe --model haiku
+# → prints "pong", exits 0. Same behavior as -p mode.
+
+# Test B: same but with --output-format stream-json
+printf 'reply pong\n' | claude.exe --output-format stream-json --verbose --model haiku
+# → emits the full {"type":"result","subtype":"success",...,"total_cost_usd":0.0157,...}
+# → cost telemetry present = tracked against API/SDK billing pool, NOT subscription
+```
+
+Per the `claude --help` text: *"The workspace trust dialog is skipped when Claude is run in non-interactive mode (via -p, or when stdout is not a TTY, e.g. piped or redirected output)."* Claude actively detects the absence of a TTY and behaves as `-p`. The `total_cost_usd` field in the result envelope is the smoking gun — interactive subscription-billed turns don't report per-turn USD; only API-billed turns do.
+
+**Implication:** The harness *cannot* own claude's stdin/stdout via plain pipes while keeping subscription billing. To preserve subscription billing, claude needs a real (or PTY-emulated) terminal as both stdin and stdout. PTY emulation + driving a TUI programmatically (scraping rendered ANSI output, sending keystrokes) is technically possible but is *more* complex than today's `wt → bash → thin_launcher → cmd → claude` chain — defeats the proposal's whole purpose.
+
+### 11.5 Recommendation post-feasibility
+
+Given §11.4.1 closes the hybrid-spawn path, the realistic choices reduce to:
+
+- **(A) Defer (Mitigation #4):** preserve today's interactive/subscription model. Keep `thin_launcher.py`. Accept the duplicate-spawn race and the process-tree complexity. *Lowest cost, no architectural progress.*
+- **(B) Partial-direct-spawn with cost guard (Mitigation #2 + #3):** route routine cycles to Haiku 4.5 via `claude -p` under harness ownership, escalate to Sonnet/Opus only on demand, enforce daily USD caps. *Captures most of the architectural simplification, accepts $100–$200/mo above subscription depending on Haiku ratio, requires building the budget guard.*
+
+**Suggested next step:** decide between (A) and (B) explicitly before any code change. If (B), the minimum viable path is a skill-only spike that runs ~50 Haiku cycles end-to-end and reports actual marginal cost — confirms the Haiku math before committing.
+
+### 11.6 Sources
 
 - [Claude subscriptions get separate budgets for programmatic use — the-decoder.com](https://the-decoder.com/claude-subscriptions-get-separate-budgets-for-programmatic-use-billed-at-full-api-prices/)
 - [Use the Claude Agent SDK with your Claude plan — Anthropic Support](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan)
 - [Issue #43333: `claude -p` with OAuth (no API key) bills as API usage, not Max subscription](https://github.com/anthropics/claude-code/issues/43333)
 - [Issue #37686: `claude -p` suggested to Max subscriber — caused unintended API billing ($1,800+ in two days)](https://github.com/anthropics/claude-code/issues/37686)
 - [Claude Code Billing Change June 15, 2026 — buildthisnow.com](https://www.buildthisnow.com/blog/guide/mechanics/claude-billing-change-june-2026)
+
 
 ---
 
