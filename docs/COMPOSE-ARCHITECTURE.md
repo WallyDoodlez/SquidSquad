@@ -484,18 +484,19 @@ See §6 for step ID grammar, reference grammar, and the relationship to sub-skil
 Project-shaped descriptive facts — *what is true about this project / role*, not *how the role does work*. Concretely the slot covers:
 
 - **Domain / audience** — what this project is, who uses it, what kind of project it is.
-- **File conventions** — where things live on disk for this role (planning artifacts, iteration logs, working-state file, etc.). Today this is one of the per-role sub-skills (`file-conventions.md`) that mis-classifies declarative path mapping as a how-to procedure — it belongs in this slot as descriptive content, not as a sub-skill reference.
-- **Status line** — what each role's statusline shows during cycles. Same architectural reclassification as file-conventions: today's `status-line.md` per-role sub-skill is descriptive UI content, not a procedure. Belongs in this slot.
+- **Status line** — what each role's statusline shows during cycles. Today's `status-line.md` per-role sub-skill is descriptive UI content, not a procedure — it belongs in this slot, not as a sub-skill reference.
 - **Repositories of record, external systems, sensitive constraints, project-specific tone-or-language notes** — anything that's a project-level fact the agent needs to know but isn't an instruction.
 
 **Authoring across layers:**
 
 - **L1** — universal project-context conventions (rare; most content is role- or project-specific).
-- **L2** — role-shaped facts (e.g. PM's "status line shows agent health for the whole fleet"; verifier's "planning artifacts live under `.squidsquad/verifier/planning/`"). The primary authoring location.
-- **L3** — variant-specific facts (per-stack file conventions, per-stack statusline elements).
+- **L2** — role-shaped facts (e.g. PM's "status line shows agent health for the whole fleet"). The primary authoring location.
+- **L3** — variant-specific facts (per-stack statusline elements).
 - **L4** — project-local. Append-only (per §3.3). Adds project-specific context to the role's L4 file under `## Project Context`.
 
-> **Not a sub-skill.** Per-role `status-line` / `file-conventions` content currently lives under `references/sub-skills/{common,roles/<role>}/` as "sub-skills" but is structurally Project Context. Same architectural mis-classification pattern as Responsibility and Soul; same fix — content authored with `slot: project-context` frontmatter (or via L2 source files), not via the sub-skill catalog. The migration is tracked alongside #10360.
+> **Status-line is not a sub-skill.** Per-role `status-line.md` content currently lives under `references/sub-skills/{common,roles/<role>}/` as a "sub-skill" but is structurally Project Context. Same architectural mis-classification pattern as Responsibility and Soul; same fix — content authored with `slot: project-context` frontmatter (or via L2 source files), not via the sub-skill catalog. The migration is tracked alongside #10360.
+
+> **`file-conventions` is being retired entirely** — not moved to this slot. Today's `file-conventions.md` sub-skill is a path manifest (where each role's iteration logs / working state / planning artifacts live on disk). Every path in it is already used by exactly one specific instruction (e.g. `pm/task-intake` writes `.squidsquad/pm/planning/RESEARCH.md`; `pm/pipeline-sentinel` reads `.squidsquad/pm/qa-log.md`). A separate centralized path map duplicates facts that already live in the instruction that touches them. Resolution: drop `file-conventions.md` entirely; paths stay inline in the instruction sub-skills that use them. L4 path overrides (rare) use `### replace step:<step-id>` on the specific instruction — more surgical than rewriting a global path map. Tracked in #10360.
 
 ### 5.6 Vault
 
