@@ -157,7 +157,7 @@ Not every op is legal on every slot. The soul slot is identity, not instruction,
 | Slot | Legal ops | Notes |
 |---|---|---|
 | `identity` | all four | rarely customized; identity overlays follow standard semantics |
-| `soul` | **`append` only** | no `ordinal`, no `target`, no `insert-*`, no `replace`. See §3.4 for semantic-merge precedence. |
+| `soul` | **`append` only** | no `ordinal`, no `target`, no `insert-*`, no `replace`. Multiple soul appends order by file name ascending (the §4.2 step 3.iii tiebreak applies; since no soul entry can carry an `ordinal`, all soul appends fall through to the file-name tiebreak). See §3.4 for semantic-merge precedence. |
 | `instructions` | all four | the primary surface for behaviour customization |
 | `project-context` | all four | net-new content typically uses `append` |
 | `vault` | all four | typically `append`; see VAULT-ARCH for vault-specific overlay rules |
@@ -357,7 +357,7 @@ Authored across multiple L1-L3 files (each contributes via `slot: identity`); L4
 
 - The agent's professional identity, voice, perspective.
 - **Emitted verbatim** into the composed CLAUDE.md (not a reference link to `.squidsquad/<role>/SOUL.md`). The source SOUL.md file is the authoring location; compose copies its content into the composed output. Soul is orchestration-layer identity content, not a sub-skill — it is rendered directly, not referenced through the catalog.
-- L4 may append project-specific tone adjustments or `replace` core traits as needed.
+- L4 may **`append` only** to this slot (per §3.3 per-slot op constraints). Project-specific tone adjustments are added as appends; semantic-merge precedence (§3.4) resolves any conflict between shipped soul and L4 in the agent's favour at runtime, without rewriting the shipped content.
 
 This is one of the simpler slots — typically one to three short paragraphs.
 
@@ -616,7 +616,7 @@ This eliminates two problems v1 created: (a) sub-skill bodies bloated composed C
 Today's standalone H2 sections like `## What You Must Never Do`, `## File Conventions`, `## Status Line` are **also folded** under v2 — but with the reference-only discipline applied:
 
 - **"Never do" prohibitions that apply broadly** fold into **Identity** as "Boundaries" (one or two short lists at the bottom of the Identity section). These are orchestration-layer assertions about the agent's overall character — short, top-level, emitted verbatim.
-- **"Never do" prohibitions that are step-specific** are NOT inlined into the composed CLAUDE.md. Under v2, step-specific prohibitions live in the **sub-skill** that owns the step (e.g. "Never amend a published commit" lives in the `git-commit` sub-skill's source file, not in the composed orchestration). The step reference in §3.2 pulls them in implicitly when the model invokes the sub-skill.
+- **"Never do" prohibitions that are step-specific** are NOT inlined into the composed CLAUDE.md. Under v2, step-specific prohibitions live in the **sub-skill** that owns the step (e.g. "Never amend a published commit" lives in the `git-commit` sub-skill's source file, not in the composed orchestration). The step reference in §3.2 pulls them in implicitly when the model invokes the sub-skill. Step-specific prohibitions are part of SquidSquad's **shipped behaviour layer** — they are not the intended target of L4 `replace` ops, and projects that need to lift a prohibition file the change upstream against the SquidSquad repo rather than overriding it per-install. Compose does not block a `replace` op pointed at a prohibition-bearing step (the op grammar in §3.3 is structurally permissive), but `l4-curation`'s elicitation dialog routes such requests to the upstream feature-request path.
 - **File conventions** fold into **Project Context** when they're project-shaped (most are). When they're sub-skill-shaped (e.g. "verifier writes `TEST-PLAN-<n>.md` under `.squidsquad/verifier/planning/`"), they live in the relevant sub-skill's source file.
 - **Status Line description** folds into **Project Context** — it's a project-display fact, not an instruction.
 
@@ -776,7 +776,7 @@ If the agent cannot decide between `replace` and `insert-after` (e.g. the new in
 
 ### 7.3 L4 file format
 
-Each L4 customization is one file in `.squidsquad/project/`, named `<slot>-<short-kebab-description>.md`:
+Each L4 customization is one file in `.squidsquad/project/`, named `<slot>-<short-kebab-description>.md`. File names must be **globally unique** within `.squidsquad/project/` — compose aborts on collision. When the same customization applies to more than one role, write one file per role (the file is the unit of customization, and role-scoping is implicit by directory walk during `compose.py deploy <role>`); a future `roles: [pm, verifier]` frontmatter list is being considered (§11.1 Q3) and would collapse those into one file. Until that lands, one file per role is the required form.
 
 ```markdown
 ---
@@ -997,7 +997,7 @@ This collapses today's two-system memory architecture (per-user memory + L4) int
 - **G2** — Compose's role-filter (§4.1 step 2) is sketched but not fully specified: what does the `roles:` frontmatter list support beyond literal role names? (e.g. wildcards like `*`, role classes like `worker:*`.) For v2, only literal role names are supported; wildcards/classes are deferred.
 - **G3** — Boot/cycle/shutdown sub-slot boundaries inside `instructions` are still informal. v2 working definition: `boot` = one-time session-start work; `cycle` = repeated work (per `/loop` tick in polling mode, per nudge in event mode — see [AGENT-RUNTIME.md](AGENT-RUNTIME.md)); `shutdown` = clean-stop work. Formal acceptance tests for sub-slot membership are a follow-up.
 - **G4** — ✅ PARTIALLY CLOSED (2026-05-24). [`VAULT-ARCH.md`](VAULT-ARCH.md) now covers entity types (§4), wikilink grammar (§4.5), confidence levels (§4.4), and the relationship to `vault-protocol.md` (§7). What remains open here: defining the *slot contract* (what content fragments are valid under `slot: vault` in L1-L4 sources, beyond the short descriptor pattern in §5.5).
-- **G5** — L4 file naming convention beyond `<slot>-<desc>.md` needs collision rules. Open: what happens when two L4 files share the same `<slot>-<desc>` after `<desc>` normalization? v2 proposal: file names must be globally unique within `.squidsquad/project/`; compose aborts on collision.
+- ~~**G5** — L4 file naming collision rules~~ **CLOSED** — see §7.3. File names must be globally unique within `.squidsquad/project/`; compose aborts on collision. No normalization happens — the literal file name is the uniqueness key.
 - **G6** — ✅ CLOSED (v2). Subagent usage rules now in §6.6 (default-model + per-role overrides + spawn-vs-inline + prompt hygiene + parallelism + trust-but-verify). L3 `replace` overlays on the L1 default cover the per-role Sonnet defaults for `worker`/`dm`.
 - **G7** — Sub-skill reference resolution semantics for L4. Open: can L4 *insert* a new step that references a sub-skill not yet referenced anywhere in L1-L3? Yes per §4.5 (catalog is the source of truth, not the L1-L3 reference set), but the L4-write decision tree in §7.2 should explicitly cover the "introduce a new sub-skill reference" case.
 

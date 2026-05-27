@@ -1043,7 +1043,7 @@ PM agents recognize this set as their care-filter; new values added in future re
 - **Cursor**: per-role harness-owned pointer to "events tended through here."
 - **EAD**: ExternalActivityDetector — the harness's forge poller that translates forge state changes into `assigned-to` events.
 - **Care filter**: the per-role decision of whether to act on an event or skip it.
-- **Improvement subloop**: time-throttled self-care work the agent runs when its queue is empty (event mode only).
+- **Improvement subloop**: time-throttled self-care work the agent runs when its queue is empty. Applies in both modes — quiet cycles in loop mode (§6.4) and drained-queue detection in event mode (§7.6).
 
 ### 10.2 Related docs
 
