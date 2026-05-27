@@ -114,6 +114,33 @@ Conducted 2026-05-26.
 
 Direct invocation works. `Popen.pid` is the real claude.exe — no `cmd.exe` in the tree. Validates §3.1.
 
+### 4.1.1 Test: portable install resolver works on this machine ✅
+
+Script: [`references/experiments/resolve_claude.py`](../references/experiments/resolve_claude.py)
+
+Starts from `shutil.which("claude")`, parses the `.cmd` shim's quoted forward path, resolves the relative `node_modules\@anthropic-ai\claude-code\bin\claude.exe`, then Popens `--version` against the resolved path to confirm it runs. Output on this machine:
+
+```
+ENTRY: C:\Users\naaht\AppData\Roaming\npm\claude.CMD
+HOP 1: C:\Users\naaht\AppData\Roaming\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe
+verify: --version OK -> '2.1.140 (Claude Code)'
+```
+
+The resolver also handles `.bat` / `.ps1` shim variants and POSIX bash shims (untested here; this Windows machine doesn't have those install layouts).
+
+### 4.1.2 Test: `Popen(claude.cmd)` vs `Popen(claude.exe)` process trees ✅
+
+Script: [`references/experiments/spawn_tree_test.py`](../references/experiments/spawn_tree_test.py)
+
+Spawns `--version` two ways and snapshots the process tree immediately via toolhelp32:
+
+| | `Popen.pid` resolves to | Descendants captured | stdout captured |
+|---|---|---|---|
+| **Test B** (`claude.cmd` shim) | **cmd.exe** | `claude.exe` (depth 1) + `conhost.exe` (depth 2) | `''` |
+| **Test A** (resolved `claude.exe`) | **claude.exe** | none (process exited fast) | `'2.1.140 (Claude Code)'` |
+
+The short-lived `cmd.exe` in Test B is exactly what `_resolve_claude_exe_pid` was built to walk past. With Test A's direct spawn, there's nothing to walk — `Popen.pid` is already claude.exe. The descendant-walker becomes unnecessary code; the singleton race class (cmd-wrapper exits before next thin_launcher invocation → stale `.claude-pid`) becomes structurally impossible.
+
 ### 4.2 Test: `--input-format stream-json` supports multi-turn over stdin
 
 Two `{"type":"user",...}` lines on stdin → two complete init/result event pairs in stdout, same `session_id`. Process exits on EOF, blocks on empty stdin (pipe semantics). Token cache fully reused across turns: turn-1 `cache_creation_input_tokens: 70,255`; turn-2 `cache_read_input_tokens: 70,255` + `cache_creation: 85`.
