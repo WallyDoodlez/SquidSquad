@@ -4,7 +4,7 @@
 - **Status**: idle, monitoring pipeline
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-27 cycle 1759)
+## Pipeline snapshot (2026-05-27 cycle 1760)
 
 - **PRs open**: 1 — **#10357** (human draft: HARNESS-ARCH §14 wt→claude direct-spawn proposal). Not actionable by PM until human un-drafts or requests review.
 - **PM open issues**: 2 — #9970 (composed CLAUDE.md drift from #9925), #9969 (manifest.md entry-file naming). Both severity:medium, plan-first hold.
@@ -15,10 +15,10 @@
 
 - **dm, qa, skill**: harness reports `bootup_complete: false`, last_cycle ~22h ago (2026-05-26T03:01). Only PM /loop cron is functional. Operator restart needed; not PM-fixable.
 
-## This cycle's work (1759)
+## This cycle's work (1760)
 
-- Posted doc-set landing status on umbrella #9968 — refreshed the closure-proposal doc anchors with post-#10356 / post-#10004 shipped state. All 14 sub-PRs A-N (#10010-#10023) confirmed filed and pending. Plan-first hold still in force.
-- Scanned full pending queue (40+ items >57h pending). Mass-nudge would be noise per `feedback_pm_checkin` — human is aware of the queue; nudging each item adds nothing. No tier-1 nudges sent this cycle.
+- True quiet cycle. No fleet recovery, no PR activity, no new events. Repeating audit-trail comments from 1758/1759 would be noise; held off.
+- Forward unblock remains operator-side (fleet restart).
 
 ## Pending human decisions
 
