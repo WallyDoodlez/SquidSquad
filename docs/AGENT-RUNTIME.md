@@ -46,7 +46,7 @@ Every agent in an install runs in the same mode — there is one global mode for
 | **Loop (polling)** | Cron timer (`/loop 30m execute one Ralph Loop cycle`) | Battle-tested fallback; works without the harness; current default |
 | **Event-driven (nudge)** | A nudge from the harness, delivered via the Claude Monitor tool's stdin | Target steady-state; lower latency; no idle token burn |
 
-The cycle wrapper (pre → creative → post) is the same in both modes — only *what initiates the wrapper* differs.
+The cycle wrapper (pre → creative → post) is the same in both modes — only *what initiates the wrapper* differs. In loop mode the wrapper fires once per `/loop` timer tick. In event mode it fires once **per cared event** during a nudge-walk; a single nudge can produce multiple cycle wrappers (one per cared event) or zero (if every event in the batch is filtered out by the care filter). See §7.1 for the per-event sequence.
 
 ### 2.1 Why both exist
 
@@ -565,7 +565,13 @@ Today's reactions:
 
 Both are idempotent against already-handled issues (e.g., transitioning a closed issue is a no-op).
 
-### 6.4 Context-pressure exit-42 and respawn
+### 6.4 Improvement subloop (loop mode)
+
+In loop mode, when a cycle finds no work in the queue (no pending-test, no pending-ship, no nudges to process, no human input), the cycle is **quiet**. Quiet cycles run an improvement scan as their creative phase — the same activity event mode triggers via §7.6's drained-queue path. The trigger is "the cycle wrapper fired and found nothing else to do," not a separate timer; throttling, ownership per role, and output routing all match §7.6.
+
+See §7.6 for the substantive scan rules; this section's purpose is to anchor that those rules are not event-mode-exclusive.
+
+### 6.5 Context-pressure exit-42 and respawn
 
 When the cycle's context usage exceeds the configured threshold (default 70%), the agent checkpoints `working-state.md`, commits and pushes, and `cycle_post.py` exits with code 42. What respawns the agent depends on whether the harness is up:
 

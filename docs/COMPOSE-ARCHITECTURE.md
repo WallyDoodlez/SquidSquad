@@ -150,7 +150,33 @@ ordinal: <integer>                # only for append, optional
 
 `target` is a stable step ID declared in L1-L3 frontmatter (see §6.1). Compose **must validate** that every L4 `target` resolves to a real L1-L3 step ID before emitting output.
 
-Visual semantics of the four ops, all acting on the same L1-L3 base:
+#### Per-slot op constraints
+
+Not every op is legal on every slot. The soul slot is identity, not instruction, and is constrained to additive customization only:
+
+| Slot | Legal ops | Notes |
+|---|---|---|
+| `identity` | all four | rarely customized; identity overlays follow standard semantics |
+| `soul` | **`append` only** | no `ordinal`, no `target`, no `insert-*`, no `replace`. See §3.4 for semantic-merge precedence. |
+| `instructions` | all four | the primary surface for behaviour customization |
+| `project-context` | all four | net-new content typically uses `append` |
+| `vault` | all four | typically `append`; see VAULT-ARCH for vault-specific overlay rules |
+
+Compose **must reject** any L4 file whose `slot` + `op` combination is illegal per this table.
+
+#### 3.4 Soul slot — semantic-merge precedence
+
+The soul slot encodes a role's identity (values, tone, professional posture). Because identity is not safe to overwrite positionally, soul L4 ops are restricted to `append`-only (per §3.3 above). At compose time, the L4 append content is concatenated after the shipped L1–L3 soul content within the slot.
+
+The composed CLAUDE.md therefore presents both views: shipped soul first, project-local append second. When an agent reads the composed soul section and notices that the L4 append contradicts the shipped L1–L3 soul, **the L4 append wins**. This semantic-merge precedence is a runtime rule the agent applies when interpreting its own composed identity, not a compose-time rewrite — the shipped soul stays on disk for traceability, and the precedence is settled by ordering convention (L4 last) plus an explicit precedence note that the soul slot emits at the L4 append boundary.
+
+Practical implications:
+
+- Projects can supplement shipped persona safely with `append` (e.g., "in this project, also prioritize X").
+- Projects can override shipped persona on specific points by appending a directly contradictory rule — the agent follows the appended rule.
+- Projects cannot scrub or rewrite the shipped persona. The shipped soul remains visible in the composed output; only the agent's interpretation is overridden.
+
+Visual semantics of the four ops, all acting on the same L1-L3 base (the table below shows mechanics for slots that accept all four ops; soul-specific behaviour is described above):
 
 ```mermaid
 flowchart TB
@@ -211,9 +237,9 @@ After the L1-L3 base is in memory, compose iterates over `.squidsquad/project/*.
 2. Group L4 ops by `slot`.
 3. Within each slot, apply ops in this order to the L1-L3 base for that slot:
    1. All `replace` ops first (deterministic — each `target` matches at most one L1-L3 step).
-   2. All `insert-before` and `insert-after` ops (ordered by their declared `target` step's position in the current base).
-   3. All `append` ops last (sorted by their own `ordinal`).
-4. Validate: every `target` ID resolves; no two `replace` ops target the same ID; no orphan L4 file (frontmatter missing).
+   2. All `insert-before` and `insert-after` ops (ordered by their declared `target` step's position in the **post-replace** base — i.e., positions are evaluated after step 3.i completes).
+   3. All `append` ops last. Ordering rule: sort by `ordinal` ascending where present; entries without `ordinal` sort *after* all ordinal-bearing entries; ties (identical or missing ordinal) break by file name ascending. The semantics differ from L1–L3 `ordinal` (which orders source files within a slot at compose-load time); L4 `ordinal` orders only the L4 append entries within the slot.
+4. Validate: every `target` ID resolves; no two `replace` ops target the same ID; the `slot` + `op` combination is legal per §3.3 per-slot constraints; no orphan L4 file (frontmatter missing).
 
 If validation fails, compose **aborts with a diagnostic** naming the offending L4 file. No partial output is written.
 
@@ -624,7 +650,7 @@ SquidSquad agents support two wake mechanisms: **event-driven** (a sibling `even
 **Architectural rule** (matches today's `compose.py` implementation per #8697): the two modes are **two parallel manifests selected at compose time**, not a runtime branch.
 
 - `references/roles/<role>/includes.yml`        — polling manifest (default)
-- `references/roles/<role>/includes-events.yml` — event-driven manifest (falls back to polling manifest if absent)
+- `references/roles/<role>/includes-events.yml` — event-driven manifest. If the role hasn't been ported to event mode yet and this file is absent while `event-driven: yes` is set globally, compose silently uses the polling manifest for that role; this is a **per-role compose-time** fallback distinct from the operator-level mode flip in AGENT-RUNTIME §8.2.
 
 `compose.py:_load_manifest` reads `config.get_wake_mode()` (a global flag — there is no per-role wake mode; see AGENT-RUNTIME §8.1) and chooses the manifest; `_resolve_includes_with_manifest` then renders the chosen manifest in full. There are **no mode-conditional directives inside fragments** — the manifest is the gate. The agent receives one fully-resolved CLAUDE.md whose §3.2 is shaped for exactly one mode. Mid-session mode flips do not exist; an operator flipping `config.md` from `polling` to `event-driven` (or vice versa) takes effect on the next compose+restart.
 
@@ -959,7 +985,7 @@ This collapses today's two-system memory architecture (per-user memory + L4) int
 
 ### 11.1 Open questions for follow-up discussion
 
-1. **Soul overlay semantics** — when L4 `replace` targets a soul section, is that allowed? Soul is identity, not instruction. Should L4 be allowed to *replace* shipped soul content, or only *append*?
+1. ~~**Soul overlay semantics**~~ **CLOSED** — see §3.3 per-slot op constraints + §3.4. Soul L4 is `append`-only (no `ordinal`, no `target`, no `insert-*`, no `replace`). The composed CLAUDE.md presents shipped soul + L4 append in order; on semantic conflict between them, L4 wins at the agent's interpretation layer. The shipped soul stays on disk for traceability; only the agent's runtime interpretation is overridden.
 2. **L4 conflict resolution** — if two L4 files both `replace` the same target with different content, what's the resolution rule? (Proposal: most recent commit wins; emit warning.)
 3. **Multi-role L4 files** — can one L4 file apply to multiple roles, or must there be one file per role? (Proposal: support `roles: [pm, verifier]` frontmatter list.)
 4. **L4 versioning** — when the SquidSquad upgrade changes an L1-L3 step ID that L4 targets, how does the upgrade handle pending L4 files? (See §6.1 — needs more detail.)
