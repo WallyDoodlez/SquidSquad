@@ -1,6 +1,6 @@
-# Harness Architecture (current state)
+# Harness Architecture
 
-> **Status**: Descriptive snapshot, 2026-05-25. Documents the harness as it exists in code today (`references/scripts/harness.py` ~2900 lines). **No proposals or recommendations.** Where a section says "specification" it reflects what the code implements; where it says "current state" it reflects observable behavior of a running install.
+> **Status**: §§1–13 are a descriptive snapshot of the harness as it exists in code today (`references/scripts/harness.py` ~2900 lines). §14 is a **proposed simplification** of the per-agent spawn chain — not implemented; validated end-to-end by the experiment scripts under `references/experiments/`.
 >
 > **Companion docs**: [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) (cycle integration, event-bus contract from the agent's side), [`ARCHITECTURE.md`](ARCHITECTURE.md) (overall system; harness appears in the system overview), [`INSTALLER-ARCH.md`](INSTALLER-ARCH.md) (how harness gets installed and started).
 
@@ -360,6 +360,93 @@ Per [`decision-class-vs-alias-routing-model`](../.squidsquad/vault/galaxy/decisi
 
 ---
 
-## 14. Revision log
+## 14. Proposed simplification: `wt → claude` direct spawn
 
+The current per-agent spawn chain on Windows is `wt.exe → bash → thin_launcher.py → cmd.exe → claude.exe` (five processes). Most of the layering exists for historical reasons; the only structurally load-bearing piece is `wt.exe` itself, which provides the TTY that keeps claude on the interactive Claude subscription billing model. Piping stdin/stdout to `claude.exe` auto-demotes it to the Agent SDK billing pool, which is separately metered — so any "harness owns claude's I/O over pipes" redesign is closed under the current Anthropic billing model.
+
+What remains achievable: **delete `thin_launcher.py` entirely** and have `wt.exe` invoke `claude.exe` directly.
+
+### 14.1 The tree, before and after
+
+```
+Before (current):                 After (proposed):
+wt.exe                            wt.exe
+ └ bash.exe                        └ claude.exe
+   └ python.exe (thin_launcher)
+     └ cmd.exe (npm claude.CMD shim)
+       └ claude.exe
+```
+
+Two processes per agent, down from five. TTY still provided by `wt.exe`, so subscription billing is preserved.
+
+### 14.2 What `thin_launcher.py` does today, and where each piece moves
+
+| Today: `thin_launcher.py` | Direct path: where it lives |
+|---|---|
+| Singleton check (`.claude-pid` + descendant walk) | **Harness** — already maintains `.harness-state.json` with per-role PIDs; pre-spawn check against existing in-memory state |
+| Env var `SQUIDSQUAD_ROLE=<role>` | **Harness** — `Popen(env=...)` propagates through `wt.exe → WindowsTerminal.exe` to the tab child (validated, see §14.4) |
+| Claude arg-list construction (`--append-system-prompt`, `--name`, `--effort`, bootstrap `/loop` prompt) | **Harness / `boot_remote`** — same arg list, emitted as `wt new-tab … claude.exe <flags>` |
+| Write `.claude-pid` after resolving descendant | **Harness** — post-spawn, snapshot processes once, filter `name='claude.exe' AND parent_pid==WindowsTerminal.exe_pid AND pid NOT IN pre_spawn_set`. Shallow tree, no toolhelp32 ctypes machinery needed. |
+| Wait for claude exit, return code 42 to surface context pressure | **Nothing needed.** Harness's auto-reboot fires on `dead-process-with-intent-running` regardless of who relays the exit code. `cycle_post.py` already POSTs `/agents/<role>/restart` to set the intent before claude exits, so the signal reaches the harness directly. `thin_launcher` was a relay, not the source of truth. |
+
+### 14.3 Net impact
+
+**Deleted:**
+- Entirety of `thin_launcher.py` (~700 lines)
+- `_resolve_claude_exe_pid` + `_win32_list_descendants` + `_posix_list_descendants` (~250 of those 700)
+- `tests/test_thin_launcher_10101.py`
+- Singleton race class (#8692)
+- Stale-wrapper-PID failure mode (#10101)
+
+**Added to `harness.py` / `boot_remote.py`:**
+- ~20 lines: pre-spawn singleton check using existing harness state
+- ~30 lines: arg-list construction (recovered from the deletion)
+- ~30 lines: portable install resolver for the real `claude.exe` path (parses the npm `.cmd` / `.bat` / `.ps1` / POSIX shim — required because `shutil.which("claude")` returns the cmd shim, not the actual binary)
+- ~30 lines: post-spawn PID resolution (one process snapshot, three-line filter)
+
+**Net: ~600 lines deleted.**
+
+### 14.4 Validation
+
+Two non-API smoke tests (cost $0 — uses `--version`) under `references/experiments/wt_direct_spawn_test.py`:
+
+**Env-var propagation through `wt new-tab`** — parent set `WT_DIRECT_SPAWN_TEST_TOKEN=PROPAGATED-<ts>`, spawned `wt new-tab cmd /c "echo %TOKEN% > file"`, file contained the literal sentinel value. Env vars set on `wt.exe`'s parent DO reach the tab child. (`wt.exe` is technically a client that talks to a running `WindowsTerminal.exe` daemon; the env nevertheless flows through.)
+
+**Direct claude.exe spawn under wt** — spawned `wt new-tab <resolved claude.exe> --version`, polled `toolhelp32` for new claude.exe PIDs. Result:
+
+```
+claude.exe (240324)
+ └ WindowsTerminal.exe (2772032)
+    └ svchost.exe → services.exe → wininit.exe
+```
+
+Zero `cmd.exe` anywhere in the ancestry. The harness's post-spawn PID lookup is therefore a three-line filter — no descendant-walker needed.
+
+Supporting prototypes under `references/experiments/`:
+- `resolve_claude.py` (~190 lines) — portable shim resolver. Parses `.cmd` / `.bat` / `.ps1` / POSIX bash shims, raises `BrokenShimChain` on missing targets (rather than silently falling back to the shim, which would re-introduce the cmd-wrapper PID problem).
+- `spawn_tree_test.py` — proves `Popen(claude.cmd)` gives `Popen.pid == cmd.exe`, while `Popen(<resolved claude.exe>)` gives `Popen.pid == claude.exe` directly.
+- `wt_direct_spawn_test.py` — the two smoke tests cited above.
+
+### 14.5 Land-time risks
+
+1. **`wt new-tab` arg quoting for multi-word bootstrap prompts.** Simple flags (`--version`) pass cleanly through `wt`'s argv parser. The Ralph-Loop bootstrap prompt has internal spaces (`"execute one Ralph Loop cycle"`). The well-trodden `Popen([wt, "new-tab", str(claude_exe), "-p", "prompt with spaces", "--flag", ...])` shape should work without surprise, but should be smoke-tested at land time before committing to the full deletion of `thin_launcher.py`.
+2. **`resolve_claude.py` shim variants not end-to-end-tested.** The prototype handles the multi-line `%dp0%` Windows shim (verified on the dev machine), the older one-line `%~dp0` form, `.bat`, `.ps1`, and POSIX bash shims. Only the multi-line form was validated against a real install. Integration tests against the other variants need to land alongside.
+3. **Operator ergonomics gap.** A lingering `wt.exe` tab after its child claude exits is the operator-confusion source that triggered this investigation. Solve this either by (a) making the spawned command a wrapper that closes the tab on child exit, or (b) configuring `wt`'s profile to non-persistent mode. Trivial change, but needs to land alongside #14 or the operator confusion stays.
+
+### 14.6 Implementation outline
+
+In landing order:
+
+1. Productize `references/experiments/resolve_claude.py` into `references/scripts/resolve_claude.py`. Add tests for each shim variant (real or fixture).
+2. Add helper to `boot_remote.py` (Windows) that constructs the `wt new-tab … claude.exe …` argv. POSIX equivalents follow.
+3. Move the singleton check into `harness.py:start_agent` (uses existing `AgentState`).
+4. Move post-spawn PID resolution into `boot_remote.boot_agent` (process snapshot + filter).
+5. Cut the spawn path over to direct-claude. Validate live on `skill` agent first.
+6. Once stable: delete `thin_launcher.py`, `tests/test_thin_launcher_10101.py`, and dead references in `boot_remote.py`.
+
+---
+
+## 15. Revision log
+
+- **2026-05-27 (v2)** — Added §14 proposed-simplification block. End-to-end validated by experiment scripts under `references/experiments/`. Status banner updated to reflect that the doc now contains both descriptive (§§1–13) and proposal (§14) content.
 - **2026-05-25 (v1 draft, descriptive snapshot)** — Initial draft. Consolidates harness internals that previously lived scattered across AGENT-RUNTIME.md §4.3, §4.4, §4.7, §6.4. Created alongside the class-vs-alias / permission-table-retirement architectural pass in PR #10004 to give the harness its own dedicated architecture treatment, parallel to VAULT-ARCH.md for the vault layer.

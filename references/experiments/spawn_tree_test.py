@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """Compare Popen(claude.cmd) vs Popen(resolved-claude.exe) process trees.
 
-Feasibility check for docs/HARNESS-DIRECT-SPAWN.md §3.1: prove that
-spawning the resolved claude.exe directly produces a process tree
-where `Popen.pid` IS claude.exe, whereas spawning the .cmd shim
-produces a process tree where `Popen.pid` is cmd.exe (or
-short-lived) with claude.exe as a descendant.
+Validation supporting docs/HARNESS-ARCH.md §14 (Proposed simplification):
+prove that spawning the resolved claude.exe directly produces a process
+tree where `Popen.pid` IS claude.exe, whereas spawning the .cmd shim
+produces a process tree where `Popen.pid` is cmd.exe (or short-lived)
+with claude.exe as a descendant.
 
-If §3.1 holds, the descendant-walker (`_resolve_claude_exe_pid` +
-`_win32_list_descendants` in thin_launcher.py, ~250 lines) can be
-deleted: there's nothing to walk anymore because `Popen.pid` is
-already what we want.
+This is what makes the descendant-walker (`_resolve_claude_exe_pid` +
+`_win32_list_descendants` in thin_launcher.py, ~250 lines) deletable
+under the §14 proposal: there's nothing to walk anymore because
+`Popen.pid` is already what we want.
 
 Run:
     python references/experiments/spawn_tree_test.py

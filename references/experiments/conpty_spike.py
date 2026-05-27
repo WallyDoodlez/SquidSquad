@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
-"""ConPTY spike — does a programmatic PTY change claude's billing pool?
+"""ConPTY spike — historical research script.
 
-Tests the §1.1 open question in docs/HARNESS-DIRECT-SPAWN.md:
+Tested whether a programmatic Windows pseudo-terminal (ConPTY, via
+`pywinpty`) would change `claude.exe`'s billing pool when invoked with
+`-p`. The hypothesis was that since pipes auto-demote claude to the
+Agent SDK billing pool, a real TTY (PTY) might keep it on subscription
+billing while still allowing the harness to drive I/O programmatically.
 
-  When `claude.exe`'s stdout is a real-TTY pipe (piped via Windows ConPTY)
-  instead of a plain `subprocess.PIPE`, does the billing surface change?
+Result: ConPTY does NOT change the billing signal. `total_cost_usd`
+appeared in the result envelope identically to pipe-mode runs, indicating
+the `-p` flag is the dominant trigger for non-interactive billing
+regardless of TTY-presence. Plus, `--input-format stream-json` was found
+non-functional over a PTY (claude errors with "Input must be provided
+either through stdin or as a prompt argument").
 
-If billing on ConPTY-attached `claude -p` differs from billing on plain
-`subprocess.PIPE` `claude -p`, the closed "harness owns claude" redesign
-could be reopened: harness drives stream-json I/O over the PTY master FD
-while claude sees a TTY and stays on subscription billing.
-
-If billing is identical (which the `claude --help` text suggests:
-"non-interactive mode via -p OR when stdout is not a TTY"), then `-p` is
-the dominant signal and ConPTY doesn't help. Closes follow-up #4.
+Kept in the repo as historical evidence — the §14 proposed simplification
+in docs/HARNESS-ARCH.md takes a different path (keep wt.exe for the TTY,
+delete the middle layers, no PTY needed).
 
 The test cannot directly confirm which billing pool was charged — that
 requires checking the Anthropic dashboard out-of-band. What it CAN

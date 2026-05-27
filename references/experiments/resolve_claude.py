@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Locate the real claude binary across install variants.
 
-Exploratory feasibility check for docs/HARNESS-DIRECT-SPAWN.md §3.1.
+Prototype supporting docs/HARNESS-ARCH.md §14 (Proposed simplification).
 The current architecture uses `shutil.which("claude")` which on Windows
 returns the npm `claude.cmd` shim, not the real `claude.exe`. This
 script tries to resolve to the actual binary so `Popen()` can target
