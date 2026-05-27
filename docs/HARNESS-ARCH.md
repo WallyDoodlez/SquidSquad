@@ -273,18 +273,22 @@ When the port file is missing, the harness is treated as not running. Event-bus 
 
 ## 9. State files (summary)
 
+Per-agent directories under `.squidsquad/` are keyed by **alias**, not by the L2 categorical role (which can have multiple aliases per install — e.g. the `worker` role aliased as `skill` here, `frontend`/`backend` elsewhere). The alias is the install-time name the operator assigned to an agent instance, and is what shows up as a directory on disk. The harness-owned files in the top-level `.squidsquad/` directory hold per-alias state internally (e.g. `.harness-state.json` keys agents by alias).
+
 | File | Owner | Persisted | Purpose |
 |---|---|---|---|
 | `.squidsquad/.harness-port` | harness | yes | Port number for clone-isolated agents to discover |
-| `.squidsquad/.harness-state.json` | harness | yes | Per-agent intent, PID, clone path, boot time |
-| `.squidsquad/.event-state.json` | harness | yes | Cursors per role + in-flight events |
-| `.squidsquad/<role>/.claude-pid` | agent (thin_launcher) | yes (sentinel) | Agent's `cmd.exe`/shell PID (singleton handle) |
-| `.squidsquad/<role>/cycle-input.json` | `cycle_pre.py` | per cycle | Mechanical-phase output → agent input |
-| `.squidsquad/<role>/cycle-output.json` | agent | per cycle | Agent output → `cycle_post.py` input |
-| `.squidsquad/<role>/working-state.md` | agent | yes | Per-cycle crash-recovery checkpoint |
-| `.squidsquad/<role>/iterations/iter-N.md` | `cycle_post.py` | yes | Per-cycle activity log |
+| `.squidsquad/.harness-state.json` | harness | yes | Per-alias intent, PID, clone path, boot time |
+| `.squidsquad/.event-state.json` | harness | yes | Cursors per alias + in-flight events |
+| `.squidsquad/<alias>/.claude-pid` | agent (thin_launcher) | yes (sentinel) | Agent's `cmd.exe`/shell PID (singleton handle) |
+| `.squidsquad/<alias>/cycle-input.json` | `cycle_pre.py` | per cycle | Mechanical-phase output → agent input |
+| `.squidsquad/<alias>/cycle-output.json` | agent | per cycle | Agent output → `cycle_post.py` input |
+| `.squidsquad/<alias>/working-state.md` | agent | yes | Per-cycle crash-recovery checkpoint |
+| `.squidsquad/<alias>/iterations/iter-N.md` | `cycle_post.py` | yes | Per-cycle activity log |
 
 All harness-owned files are atomic-write (`.tmp` + `mv`) and persisted across restarts. The deque is the one piece of harness state that is NOT persisted.
+
+> **Naming convention note:** the HTTP API in §4 uses `{role}` as the path-parameter name (e.g. `/agents/{role}`, `/events/for/{role}`). That parameter accepts the **alias** value — the harness internally resolves alias → categorical role where the distinction matters. The API parameter name predates the alias concept; the on-disk directories were always alias-keyed.
 
 ---
 
