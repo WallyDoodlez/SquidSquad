@@ -180,6 +180,8 @@ Role-specific event extras:
 
 ## `roles/<role>/` — Role-specific sub-skills
 
+> **Note on `responsibility`** — The `responsibility` content (what each role does / does NOT do / why it matters) is **no longer a sub-skill**. It is the L2-and-up authoring of the dedicated **Responsibility slot** in the composed CLAUDE.md (see [COMPOSE-ARCHITECTURE.md §5.2](COMPOSE-ARCHITECTURE.md#52-responsibility)). The `responsibility` rows below remain in the per-role tables for now as the historical authoring location (`references/sub-skills/roles/<role>/responsibility.md`); once compose.py grows the responsibility slot, that content moves into each role's L2 source and these rows will be removed. Filing tracker: see follow-up task for the implementation move.
+
 ### PM (`roles/pm/`)
 
 | Sub-skill | One-liner |
