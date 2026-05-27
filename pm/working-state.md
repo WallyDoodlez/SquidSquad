@@ -4,7 +4,7 @@
 - **Status**: idle, monitoring pipeline
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-27 cycle 1770)
+## Pipeline snapshot (2026-05-27 cycle 1771)
 
 - **PRs open**: 1 — **#10357** (human draft: HARNESS-ARCH §14 wt→claude direct-spawn proposal). Not actionable by PM until human un-drafts or requests review.
 - **PM open issues**: 2 — #9970 (composed CLAUDE.md drift from #9925), #9969 (manifest.md entry-file naming). Both severity:medium, plan-first hold.
@@ -15,9 +15,11 @@
 
 - **dm, qa, skill**: harness reports `bootup_complete: false`, last_cycle ~22h ago (2026-05-26T03:01). Only PM /loop cron is functional. Operator restart needed; not PM-fixable.
 
-## This cycle's work (1770)
+## This cycle's work (1771)
 
-- Quiet (13th consecutive). State identical to 1769. Network recovered (pull ok).
+- Quiet from PM's perspective, but skill agent has been active out of SquidSquad-2 clone: PR #10357 receiving cross-doc alignment commits today (12:27Z / 12:35Z / 12:47Z UTC — HARNESS-ARCH/AGENT-RUNTIME/INSTALLER-ARCH alias-keying).
+- New task #10358 filed by skill (role:skill, priority:low, status:pending) — "Complete role → alias identifier rename (HTTP routes, env var, CLI flags, attrs)". Tracker fallout from the alias-keying work in #10357.
+- Pipeline otherwise unchanged. No PM action needed on #10358 (skill-filed, skill-owned).
 
 ## Pending human decisions
 
