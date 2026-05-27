@@ -88,7 +88,7 @@ Sub-skills live in five source directories under `references/sub-skills/`:
 | `common-events/` | roles in event-driven mode | **runtime-loaded** by `boot-bootstrap` on session start (not inlined) |
 | `roles/<role>/` | one role | inlined at compose time |
 | `project/` | seed templates for L4 | copied to `.squidsquad/project/` at install (not consumed by compose) |
-| `capabilities/<tool>/` | _deprecated — slated for removal_ | _was: tool integrations; superseded by per-agent post-install tool setup, see [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md)_ |
+| ~~`capabilities/<tool>/`~~ | _removed 2026-05-27_ | _was: tool integrations; superseded by per-agent post-install tool setup, see [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md)_ |
 
 ---
 
@@ -154,7 +154,6 @@ The three chat sub-skills below are **intentionally unwired** today. They're sca
 | `chat-etiquette` | Behavior rules for the team chat room | deferred — chat roadmap |
 | `mention-protocol` | @mention escalation tiers and noise budget | deferred — chat roadmap |
 | `consensus-protocol` | Multi-party decision flow for chat-driven decisions | deferred — chat roadmap |
-| `iteration-log` | Per-cycle iteration log format | legacy; roles use their own variant |
 
 ---
 
@@ -235,8 +234,6 @@ Role-specific event extras:
 | `file-conventions` | DM's on-disk layout |
 | `status-line` | DM's statusline content |
 | `prohibitions` | DM "never do" rules |
-| `git-commit` | DM's commit/push protocol (state-only, no feature code) |
-| `iteration-log` | DM's per-cycle log |
 | `ralph-loop-overview` | Runtime-loaded polling-mode cycle contract |
 | Domain context | Per-stack DM notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
 
@@ -269,11 +266,11 @@ These are **seed templates** copied to `.squidsquad/project/` at install time. T
 
 ---
 
-## ~~`capabilities/<tool>/` — Tool-binding sub-skills (DEPRECATED)~~
+## ~~`capabilities/<tool>/` — Tool-binding sub-skills (REMOVED)~~
 
-**This category is being removed.** The original model bound a role to a specific external tool via a `capabilities/<tool>/` sub-skill plus a `setup.md` walked at install time. That model is superseded — tool/MCP/CLI configuration is now a **per-agent, post-install runtime concern**. See [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md) for the replacement model: the human tells each agent what tools to use, and the agent persists via L4 writes per [COMPOSE-ARCHITECTURE.md §7](COMPOSE-ARCHITECTURE.md).
+**Removed 2026-05-27.** The original model bound a role to a specific external tool via a `capabilities/<tool>/` sub-skill plus a `setup.md` walked at install time. Superseded — tool/MCP/CLI configuration is now a **per-agent, post-install runtime concern**. See [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md) for the replacement model: the human tells each agent what tools to use, and the agent persists via L4 writes per [COMPOSE-ARCHITECTURE.md §7](COMPOSE-ARCHITECTURE.md).
 
-Currently-deployed installs may still have `figma/`, `google_stitch/`, `local_html/`, `local_delivery/` under `references/sub-skills/capabilities/`. These will be deleted in a follow-up task against `worker` (skill) — no replacement sub-skill is needed because tool-specific instructions become L4 content in each install.
+The `figma/`, `google_stitch/`, `local_html/`, and `local_delivery/` directories under `references/sub-skills/capabilities/` were deleted along with the parent directory; tool-specific instructions belong in each install's L4 content.
 
 ---
 
