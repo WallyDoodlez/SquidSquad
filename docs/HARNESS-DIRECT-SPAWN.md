@@ -48,9 +48,28 @@ What *can* be simplified without changing the billing model:
 - The entire `_resolve_claude_exe_pid` + `_win32_list_descendants` + `_posix_list_descendants` machinery in `thin_launcher.py` (~250 lines) is deletable.
 - The `#10101` ticket's failure mode (stale-wrapper PID after cmd exits) cannot recur because there's no wrapper to exit.
 
-Cost of finding the real `.exe`: one lookup at startup against a stable path under `npm root -g`/`@anthropic-ai/claude-code/bin/claude.exe`. Fallback to `shutil.which("claude")` on non-Windows where there's no shim.
+**Caveat — and this is the actual hard part:** path resolution. `shutil.which("claude")` returns the `cmd.exe` shim because that's what's on `PATH` (npm installs it that way deliberately). The real `claude.exe` lives several directories deep under `node_modules/@anthropic-ai/claude-code/bin/` and is *not* on `PATH`. So "just Popen the .exe directly" only works if we can reliably locate it across install variants:
 
-**Caveat:** Anthropic could change install layout in a future Claude Code release. The shim-walking code was the defensive answer to "we don't know what shape the install will take." We accept that maintenance cost in exchange for ~250 lines deleted and the singleton race class going away.
+| Install method | Where `claude.exe` (or equivalent) actually lives |
+|---|---|
+| npm global on Windows | `%APPDATA%\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe` |
+| npm global on macOS/Linux | `<npm-prefix>/lib/node_modules/@anthropic-ai/claude-code/cli.js` (no `.exe`; runs via node) |
+| Anthropic native installer (Windows) | Under `%LOCALAPPDATA%\Programs\...` or similar, varies by version |
+| Anthropic native installer (macOS) | `/Applications/Claude.app/Contents/MacOS/...` or `~/Applications/...` |
+
+The shim-walking code (`_resolve_claude_exe_pid` + toolhelp32 ctypes block) exists *because* this path-resolution problem was hard enough that earlier direct-spawn attempts ran into it. The current architecture sidesteps it by letting `shutil.which("claude")` return the shim and then walking the process tree to find whatever the shim actually executed — that works for any install layout without needing to know it.
+
+For §3.1 to land, we need an install-aware resolver. Sketch:
+
+1. Start from `shutil.which("claude")` to get *some* entry point
+2. If it ends in `.cmd`/`.bat`/`.ps1`, parse the script to find the `.exe` it forwards to (the npm shim's pattern is consistent: line 8 of `claude.cmd` literally contains the `.exe` path)
+3. If it's a node CLI shim, resolve to the node binary + `cli.js` path
+4. If it ends in `.exe` already (non-shim path), use it directly
+5. Cache the resolved path in `.squidsquad/config.md` or similar so we only do it once per install
+
+This is essentially "what `_resolve_claude_exe_pid` already does, but at boot instead of runtime, and against the shim *script* instead of the process tree." It's a different problem with a similar shape — maybe 80–150 lines, far less than the 250 lines deleted, but not free.
+
+**Net:** §3.1 is real but more work than the original sketch implied. The savings (descendant walker + race class gone) still justify it, but the build is "write a portable install resolver," not "one-line change to use absolute path."
 
 ### 3.2 Drop the `bash` layer — `wt.exe` invokes Python directly
 
@@ -173,6 +192,12 @@ These were on the list before the §4.3 verdict closed the broader investigation
 
 ## 9. Recommended next step
 
-Land §3 (drop `cmd.exe` shim + drop `bash` layer) as a small focused PR — modest concrete win, no architectural risk, deletes ~250 lines, makes singleton enforcement robust. Defer the bigger redesign indefinitely; revisit if Anthropic's billing model changes.
+Three independent follow-ups, in increasing scope:
 
-The visual-confusion gap (§5 — lingering `wt.exe` tabs after child exit) is worth a separate small task: a wrapper script that the wt tab invokes, which exits cleanly when claude exits. One-line change to the spawn command, removes the operator-confusion source that triggered this whole investigation.
+1. **The visual-confusion fix (smallest, near-trivial).** Make `wt.exe new-tab` close the tab when its child exits — invoke through a wrapper that waits-and-exits, or set `wt` to non-persistent mode. Removes the operator-confusion source that triggered this whole investigation. One-line change to `boot_remote._spawn_windows`.
+
+2. **§3.2: drop `bash` layer (small).** `wt.exe` invokes `python thin_launcher.py` directly. One fewer process per agent, no functional change. Cross-platform: same change in `_spawn_macos` and `_spawn_linux` (which probably already use the script's shebang anyway).
+
+3. **§3.1: drop `cmd.exe` shim (medium).** Requires building the portable install resolver described in §3.1's caveat — parse the shim script or read npm metadata to locate the real `claude.exe`/`cli.js`, cache the result. Once done: ~250 lines of descendant-walker + the singleton race class go away. Worth doing but not free.
+
+Defer the bigger direct-spawn redesign indefinitely; revisit if Anthropic's billing model changes.
