@@ -4,7 +4,7 @@
 
 L4 is `.squidsquad/project/*.md` — the install-local layer that **overrides or supplements** L1–L3 with project-specific rules. This sub-skill defines how an agent recognizes when the human is asking for a project-role customization, dialogs to capture the rule clearly, and produces a well-formed L4 file that the compose pipeline can persist.
 
-L4 *writes* are owned by the compose pipeline. The frontmatter grammar (`slot`, `op`, `target`), the file naming convention, and the three safety gates (DeepSeek audit → mini-CQ → compose dry-run) are all defined in `COMPOSE-ARCHITECTURE.md` §3.3, §7.3, and §7.4. This sub-skill is the *upstream dialog* that produces the L4 entry before those gates run.
+L4 *writes* are owned by the compose pipeline. The L4 file structure (one file per agent class, H2 slot sections, H3 op blocks), the op grammar, and the three safety gates (DeepSeek audit → mini-CQ → compose dry-run) are all defined in `COMPOSE-ARCHITECTURE.md` §3.3, §7.3, and §7.4. This sub-skill is the *upstream dialog* that produces an L4 H3 block before those gates run.
 
 L4 curation is **one-shot and durable** (see `COMPOSE-ARCHITECTURE.md` §7.7): each customization is captured once via the dialog below, written to the right L4 file, and persists across cycles without further intervention. There is no recurring scan over L4 entries; drift between L4 and L1–L3 is caught at recompose time by the existing dry-run gate, not by a separate curation pass.
 
@@ -56,8 +56,8 @@ When a customization request is detected, walk this dialog before writing L4. St
 
    | What the user describes | Which slot the agent will write | Op constraints |
    |---|---|---|
-   | What the role *does* — cycle behaviour, decision rules, when-then patterns, scope of work | `slot: instructions` | all four ops legal per §3.3 |
-   | Who the role *is* — values, tone, professional identity, priorities | `slot: soul` | **`append`-only** per §3.3 + §3.4; no `target`, no `ordinal`. Composed soul carries shipped content + L4 append in order; on conflict the agent follows L4. |
+   | What the role *does* — cycle behaviour, decision rules, when-then patterns, scope of work | `## Instructions` H2 | all four ops legal per §3.3 (`### append`, `### insert-before step:cycle/<id>`, `### insert-after step:cycle/<id>`, `### replace step:cycle/<id>`) |
+   | Who the role *is* — values, tone, professional identity, priorities | `## Soul` H2 | **append-only** per §3.3 + §3.4; no targeted ops. Composed soul carries shipped content + L4 append in order; on conflict the agent follows L4. |
 
    If a customization concerns both (e.g., "be more conservative when filing bugs") split it into two L4 entries — one per slot — and walk the human through each.
 
@@ -67,27 +67,29 @@ When a customization request is detected, walk this dialog before writing L4. St
 
 4. **Surface edge cases** (user-facing). "When should this rule *not* apply?" Edge cases written upfront save a future override on top of this override.
 
-5. **Pick the op + target** (agent-internal). The op set is `append`, `insert-before`, `insert-after`, `replace` (`COMPOSE-ARCHITECTURE.md` §3.3). When `slot: soul`, only `append` is legal — skip the rest of this step and go to step 6. Otherwise:
+5. **Pick the op + target** (agent-internal). The op set is `append`, `insert-before <step-id>`, `insert-after <step-id>`, `replace <step-id>` (`COMPOSE-ARCHITECTURE.md` §3.3). The op surface is **per-slot**:
 
-   - `append` — new rule that extends existing content of the chosen slot. Safest default; no `target` required.
-   - `insert-before <target>` / `insert-after <target>` — the rule should appear at a specific position relative to an existing L1–L3 step. The `target` is a stable step ID declared in L1–L3 (see §6.1). Pick the variant based on whether the new rule runs before or after the anchor step — the user-facing question is "should this happen before or after [existing behaviour]?", not "which op?".
-   - `replace <target>` — existing L1–L3 behaviour is *wrong* for this project; overwrite the step's content entirely. Use sparingly; the step ID is preserved so later L4 inserts targeting it still resolve.
+   - `## Identity`, `## Soul`, `## Project Context`, `## Vault` slots are **append-only** — no targeted ops are legal. Skip the rest of this step and go to step 6.
+   - `## Instructions` slot accepts all four ops. Pick by intent:
+     - `append` — new rule that doesn't relate to a specific existing step. Safest default.
+     - `insert-before` / `insert-after` — new rule that should run adjacent to a specific existing step. The user-facing question is "should this happen before or after [existing behaviour]?", not "which op?". Resolve to a real `step:cycle/<step-id>`.
+     - `replace` — the existing step's behaviour is wrong for this project. Use sparingly; the step ID is preserved so later inserts targeting it still resolve.
 
-   Every non-`append` op requires a `target` that resolves to a real L1–L3 step ID. If no clean target exists, ask the human a plain-language question about whether the new behaviour is meant to *replace* or *add to* the role's current work; don't expose target mechanics.
+   Every non-append op requires a `step:cycle/<step-id>` target that resolves to a real L1–L3 step. If no clean target exists, ask the human a plain-language question about whether the new behaviour is meant to *replace* or *add to* the role's current work; don't expose target mechanics.
 
-6. **Pick the file** (agent-internal). One file per L4 customization, named `<slot>-<short-kebab-description>.md` (`COMPOSE-ARCHITECTURE.md` §7.3), e.g. `instructions-pre-check-incidents.md`. Files live in `.squidsquad/project/`. Role-scoping is implicit — `compose.py deploy-all` (or `compose.py deploy <role>` for single-role) walks `.squidsquad/project/*.md` for each role and applies them.
+6. **Pick the file** (agent-internal). There is exactly **one L4 file per agent class** — `.squidsquad/project/<role>.md` (e.g., `pm.md`, `verifier.md`, `worker.md`, `dm.md`, or variant-specific files like `worker-frontend.md` for installs with worker variants). The file is appended to in place; existing slot sections are kept and new H3 op-blocks are added under the appropriate `## <Slot>` H2.
 
-   **Provisional**: cross-role L4 (a single file that customizes multiple roles) is an open question (`COMPOSE-ARCHITECTURE.md` §11.1 Q3). Until that question is closed, write one file per role for any customization that applies to multiple roles. This guidance may change if multi-role frontmatter (e.g. `roles: [pm, verifier]`) is added.
+   If the customization applies to more than one agent class (e.g., "all roles should also check incidents/"), the dialog repeats per class — one H3 block written to each class's L4 file. The wording can be reused verbatim; the placement is per-file.
 
 7. **Propose a draft and read it back** (user-facing). Show the human the rule in plain prose (rule + why + when-not-to-apply) and get explicit approval before writing. The agent translates that approved prose into the L4 file; the human never sees the frontmatter.
 
 8. **Run the safety gates** (agent-internal). Before persisting, the agent runs the three §7.4 gates in order:
 
-   1. **DeepSeek decision-tree audit**: a deepseek-class model reviews the agent's `slot` + `op` + `target` classification and rejects if the call is wrong.
-   2. **Mini-CQ**: the agent gives the human a one-sentence confirmation of the change in functional terms (e.g., "Adding a project rule that you want PM to check incidents before filing any bug — OK?") and gets explicit yes/no. The detailed prose draft was already shown in step 7; this is the final go/no-go in one line. Rejection aborts; no file written.
-   3. **Compose dry-run**: `compose.py deploy-all --check` validates the new file resolves cleanly (target exists, slot+op combination legal, no DRY violation, no orphan).
+   1. **DeepSeek decision-tree audit**: a deepseek-class model reviews the agent's slot + op + target classification (which H2 the H3 block goes under, which op type, which step-id target if any) and rejects if the call is wrong.
+   2. **Mini-CQ**: the agent gives the human a one-sentence confirmation of the change in functional terms (e.g., "Adding a project rule that you want PM to check incidents before filing any bug — OK?") and gets explicit yes/no. The detailed prose draft was already shown in step 7; this is the final go/no-go in one line. Rejection aborts; no file changed.
+   3. **Compose dry-run**: `compose.py deploy-all --check` validates the updated L4 file resolves cleanly (step-id targets exist, op type is legal for the enclosing slot, no validation errors).
 
-   Only after all three gates pass does the agent write the file and commit. The gates are agent-side, not part of the compose pipeline itself — the file does not hit disk until all three are green.
+   Only after all three gates pass does the agent append the H3 block to the L4 file and commit. The gates are agent-side, not part of the compose pipeline itself — the file does not change until all three are green.
 
 #### When the request can't be fulfilled
 
@@ -108,10 +110,9 @@ Example, in user-facing voice:
 
 #### Cross-references
 
-- `COMPOSE-ARCHITECTURE.md` §3.3 — L4 op grammar (`append` / `insert-before` / `insert-after` / `replace`), per-slot op constraints (soul = append-only), and the `target` field
+- `COMPOSE-ARCHITECTURE.md` §3.3 — L4 file structure (one file per agent class, H2 slot sections, H3 op blocks), op grammar, per-slot op constraints (only Instructions accepts targeted ops; Soul/Identity/Project Context/Vault are append-only)
 - `COMPOSE-ARCHITECTURE.md` §3.4 — soul slot semantic-merge precedence (L4 wins on conflict at the agent's reading layer)
 - `COMPOSE-ARCHITECTURE.md` §6.3 — step-specific prohibitions live in sub-skills, not L4
-- `COMPOSE-ARCHITECTURE.md` §7.3 — L4 file naming (`<slot>-<short-kebab-description>.md`) and frontmatter shape
+- `COMPOSE-ARCHITECTURE.md` §7.3 — concrete L4 file format with worked example
 - `COMPOSE-ARCHITECTURE.md` §7.4 — the three safety gates (DeepSeek audit → mini-CQ → compose dry-run)
 - `COMPOSE-ARCHITECTURE.md` §7.7 — one-shot + durable model; drift caught at recompose time
-- `COMPOSE-ARCHITECTURE.md` §11.1 Q3 — cross-role L4 (open question, provisional one-file-per-role)

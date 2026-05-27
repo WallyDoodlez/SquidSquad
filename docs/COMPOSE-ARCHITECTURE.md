@@ -130,25 +130,43 @@ Ordinals are integers, non-dense (gaps allowed). Authors use gaps of 10 (e.g. 10
 
 ### 3.3 L4 operations (creative overlay)
 
-L4 sub-skill source files **also** carry frontmatter, but with richer semantics that drive how compose merges them on top of L1-L3:
+**There is exactly one L4 file per agent class** in an install: `.squidsquad/project/<role>.md`. The base case has four classes (`pm.md`, `verifier.md`, `worker.md`, `dm.md`); a team preset with worker or verifier variants gets one L4 file per variant — e.g., a preset with `worker-frontend` and `worker-backend` has `.squidsquad/project/worker-frontend.md` and `.squidsquad/project/worker-backend.md`. The filename IS the agent class. `compose.py deploy <role>` reads exactly one L4 file when composing that class — no per-customization files, no cross-class files, no fallback or inheritance between variants.
 
-```yaml
----
-slot: identity | soul | instructions | project-context | vault
-op: append | insert-before | insert-after | replace
-target: <step-id or section-id>   # required for non-append ops
-ordinal: <integer>                # only for append, optional
----
+Inside the L4 file, content is organized by slot using H2 headings that mirror the composed-output grammar (§5):
+
+```markdown
+## Identity
+...
+
+## Soul
+...
+
+## Instructions
+
+### insert-after step:cycle/file-bug
+...
+
+### replace step:cycle/triage
+...
+
+### append
+...
+
+## Project Context
+...
+
+## Vault
+...
 ```
 
-`op` values:
+Each `## <Slot>` section holds the project's customizations for that slot. Within `## Instructions`, individual operations are H3 headings using the form `### <op> [step-id]`:
 
-- **`append`** — add this content at the end of the named slot (default behaviour, used for net-new project context/instructions that don't relate to a specific L1-L3 step).
-- **`insert-before <target>`** — insert this content immediately before the L1-L3 step identified by `target` (a step ID).
-- **`insert-after <target>`** — insert immediately after.
-- **`replace <target>`** — replace the L1-L3 step's content entirely with this content. The original step ID is preserved (so downstream L4 inserts targeting it still resolve).
+- **`### append`** — content appended at the end of the slot. Used for net-new project rules that don't relate to a specific L1-L3 step. The slot may have multiple `### append` entries; they merge in file order.
+- **`### insert-before step:cycle/<step-id>`** — content inserted immediately before the named L1-L3 step.
+- **`### insert-after step:cycle/<step-id>`** — inserted immediately after.
+- **`### replace step:cycle/<step-id>`** — replaces the L1-L3 step's content entirely. The step ID is preserved so later inserts targeting it still resolve.
 
-`target` is a stable step ID declared in L1-L3 frontmatter (see §6.1). Compose **must validate** that every L4 `target` resolves to a real L1-L3 step ID before emitting output.
+Compose **must validate** that every `step:` reference in an `## Instructions` H3 resolves to a real L1-L3 step ID before emitting output. Unresolved references abort compose with a diagnostic.
 
 #### Per-slot op constraints
 
@@ -156,24 +174,24 @@ Not every op is legal on every slot. The soul slot is identity, not instruction,
 
 | Slot | Legal ops | Notes |
 |---|---|---|
-| `identity` | all four | rarely customized; identity overlays follow standard semantics |
-| `soul` | **`append` only** | no `ordinal`, no `target`, no `insert-*`, no `replace`. Multiple soul appends order by file name ascending (the §4.2 step 3.iii tiebreak applies; since no soul entry can carry an `ordinal`, all soul appends fall through to the file-name tiebreak). See §3.4 for semantic-merge precedence. |
-| `instructions` | all four | the primary surface for behaviour customization |
-| `project-context` | all four | net-new content typically uses `append` |
-| `vault` | all four | typically `append`; see VAULT-ARCH for vault-specific overlay rules |
+| `identity` | append only | the slot is short prose; project additions go at the end |
+| `soul` | **append only** | no targeted ops; see §3.4 for semantic-merge precedence |
+| `instructions` | all four (append, insert-before, insert-after, replace) | the primary surface for behaviour customization |
+| `project-context` | append only | net-new project facts go at the end of the slot |
+| `vault` | append only | see VAULT-ARCH for vault-specific overlay rules |
 
-Compose **must reject** any L4 file whose `slot` + `op` combination is illegal per this table.
+Compose **must reject** any L4 file whose section structure violates these constraints (e.g., a `### replace` H3 under `## Soul`).
 
 #### 3.4 Soul slot — semantic-merge precedence
 
-The soul slot encodes a role's identity (values, tone, professional posture). Because identity is not safe to overwrite positionally, soul L4 ops are restricted to `append`-only (per §3.3 above). At compose time, the L4 append content is concatenated after the shipped L1–L3 soul content within the slot.
+The soul slot encodes a role's identity (values, tone, professional posture). Because identity is not safe to overwrite positionally, soul L4 is restricted to append-only (per §3.3 above). At compose time, the L4 `## Soul` section content is concatenated after the shipped L1–L3 soul content within the slot.
 
 The composed CLAUDE.md therefore presents both views: shipped soul first, project-local append second. When an agent reads the composed soul section and notices that the L4 append contradicts the shipped L1–L3 soul, **the L4 append wins**. This semantic-merge precedence is a runtime rule the agent applies when interpreting its own composed identity, not a compose-time rewrite — the shipped soul stays on disk for traceability, and the precedence is settled by ordering convention (L4 last) plus an explicit precedence note that the soul slot emits at the L4 append boundary.
 
 Practical implications:
 
-- Projects can supplement shipped persona safely with `append` (e.g., "in this project, also prioritize X").
-- Projects can override shipped persona on specific points by appending a directly contradictory rule — the agent follows the appended rule.
+- Projects can supplement shipped persona safely (e.g., "in this project, also prioritize X").
+- Projects can override shipped persona on specific points by writing a directly contradictory rule in `## Soul` — the agent follows the L4 rule.
 - Projects cannot scrub or rewrite the shipped persona. The shipped soul remains visible in the composed output; only the agent's interpretation is overridden.
 
 Visual semantics of the four ops, all acting on the same L1-L3 base (the table below shows mechanics for slots that accept all four ops; soul-specific behaviour is described above):
@@ -231,17 +249,16 @@ The output of step 4 is the **L1-L3 base composition** — purely the SquidSquad
 
 ### 4.2 Creative L4 application
 
-After the L1-L3 base is in memory, compose iterates over `.squidsquad/project/*.md` (L4 files):
+After the L1-L3 base is in memory, compose reads exactly one L4 file: `.squidsquad/project/<role>.md` (the role being deployed). If the file is absent, the L4 step is a no-op — the composed output is L1-L3 only.
 
-1. For each L4 file, read its frontmatter.
-2. Group L4 ops by `slot`.
-3. Within each slot, apply ops in this order to the L1-L3 base for that slot:
-   1. All `replace` ops first (deterministic — each `target` matches at most one L1-L3 step).
-   2. All `insert-before` and `insert-after` ops (ordered by their declared `target` step's position in the **post-replace** base — i.e., positions are evaluated after step 3.i completes).
-   3. All `append` ops last. Ordering rule: sort by `ordinal` ascending where present; entries without `ordinal` sort *after* all ordinal-bearing entries; ties (identical or missing ordinal) break by file name ascending. The semantics differ from L1–L3 `ordinal` (which orders source files within a slot at compose-load time); L4 `ordinal` orders only the L4 append entries within the slot.
-4. Validate: every `target` ID resolves; no two `replace` ops target the same ID; the `slot` + `op` combination is legal per §3.3 per-slot constraints; no orphan L4 file (frontmatter missing).
+1. Parse the L4 file. Top-level H2 sections name the slot: `## Identity` / `## Soul` / `## Instructions` / `## Project Context` / `## Vault`. Sections may appear in any order; missing sections are skipped.
+2. For each slot section present, apply ops in this order to the L1-L3 base for that slot:
+   1. All `### replace step:cycle/<step-id>` H3 blocks first. Each H3 targets at most one L1-L3 step; duplicate replace targets abort compose.
+   2. All `### insert-before step:cycle/<step-id>` and `### insert-after step:cycle/<step-id>` H3 blocks. Positions are evaluated against the **post-replace** base (i.e., after step 2.i completes).
+   3. All `### append` H3 blocks last, in file order (the order they appear in the L4 file). No ordinal field; the author controls ordering by reordering H3 blocks within the source file.
+3. Validate: every `step:` reference resolves to a real L1-L3 step ID; no two `replace` H3 blocks target the same ID; H3 op-types are legal for the enclosing slot per §3.3 per-slot constraints (e.g., `### replace` is forbidden under `## Soul`).
 
-If validation fails, compose **aborts with a diagnostic** naming the offending L4 file. No partial output is written.
+If validation fails, compose **aborts with a diagnostic** naming the offending H3 block. No partial output is written.
 
 ### 4.3 Multi-domain L4
 
@@ -272,7 +289,7 @@ flowchart TB
   MP --> Sort
   ME --> Sort[Stable sort by<br/>slot_index, ordinal]
   Sort --> Base[L1-L3 base composition<br/>built in memory]
-  Base --> L4Walk[Walk .squidsquad/project/<br/>read L4 frontmatter]
+  Base --> L4Walk["Read .squidsquad/project/&lt;role&gt;.md<br/>(one file; H2 slot sections + H3 op blocks)"]
   L4Walk --> L4Group[Group L4 ops by slot]
   L4Group --> L4Apply[Within each slot, apply ops:<br/>1. all replace<br/>2. all insert-before / insert-after<br/>3. all append]
   L4Apply --> Validate{Validate:<br/>L4 targets resolve?<br/>DRY ok? no orphans?}
@@ -757,43 +774,79 @@ When the agent receives a new instruction, it walks this decision tree:
 
 ```
 1. Does the instruction REPLACE an existing L1-L3 step?
-   → Use op: replace, target: <step-id>
+   → Add an H3 block "### replace step:cycle/<step-id>" under ## Instructions.
    Example: "Stop checking the deploy log every cycle." replaces step:cycle/deploy-log-check.
 
 2. Does the instruction INSERT a new step BEFORE/AFTER an existing one?
-   → Use op: insert-before or insert-after, target: <step-id>
-   Example: "Before filing a bug, also check incidents/" inserts before step:cycle/file-bug.
+   → Add an H3 block "### insert-before step:cycle/<step-id>" or
+     "### insert-after step:cycle/<step-id>" under ## Instructions.
+   Example: "Before filing a bug, also check incidents/" → insert-before step:cycle/file-bug.
 
 3. Is the instruction a new standalone step with no clear anchor?
-   → Use op: append, slot: instructions, ordinal: <next available>
-   Example: "Once a week, run the security smoke tests." — append to cycle slot.
+   → Add an H3 block "### append" under ## Instructions.
+   Example: "Once a week, run the security smoke tests." — append to Instructions.
 
 4. Is the instruction not an instruction at all — but a project context fact?
-   → Use slot: project-context (with appropriate op).
+   → Add prose under ## Project Context (append-only; no H3 op grammar).
 ```
 
 If the agent cannot decide between `replace` and `insert-after` (e.g. the new instruction is ambiguous), the agent **asks the human a single clarifying question** before persisting.
 
 ### 7.3 L4 file format
 
-Each L4 customization is one file in `.squidsquad/project/`, named `<slot>-<short-kebab-description>.md`. File names must be **globally unique** within `.squidsquad/project/` — compose aborts on collision. When the same customization applies to more than one role, write one file per role (the file is the unit of customization, and role-scoping is implicit by directory walk during `compose.py deploy <role>`); a future `roles: [pm, verifier]` frontmatter list is being considered (§11.1 Q3) and would collapse those into one file. Until that lands, one file per role is the required form.
+There is exactly **one L4 file per agent class** in an install. The base team preset has four classes:
+
+- `.squidsquad/project/pm.md`
+- `.squidsquad/project/verifier.md`
+- `.squidsquad/project/worker.md`
+- `.squidsquad/project/dm.md`
+
+Team presets with worker or verifier variants get one L4 file per spawned class. For example, a preset that spawns `worker-frontend` and `worker-backend` produces:
+
+- `.squidsquad/project/worker-frontend.md`
+- `.squidsquad/project/worker-backend.md`
+
+Each variant is its own class with its own L4; there is no fallback or inheritance from a generic `worker.md`. The filename IS the agent class. `compose.py deploy <role>` reads exactly one L4 file when composing that class. The file is created on the first project customization for that class and grows over time as more customizations are added.
+
+Internal structure mirrors the composed-output grammar (§5): top-level H2 sections name the slot; under `## Instructions`, H3 blocks name the op + target:
 
 ```markdown
----
-slot: instructions
-op: insert-before
-target: step:cycle/file-bug
+# Project L4 — PM
+
+## Identity
+...project-specific identity overlay (append-only)...
+
+## Soul
+...project-specific persona append (see §3.4 for merge semantics)...
+
+## Instructions
+
+### insert-before step:cycle/file-bug
+
+**Pre-check: scan incidents/ directory**
+
+Before filing any bug, list `incidents/` and surface any SEV1 tickets newer than 7 days. If any exist, mention them in the bug's reproduction notes (they may share a root cause).
+
+<!--
 authored-by: pm-lead
 authored-at: 2026-05-23T10:42:00
 source-conversation: "Human directive 2026-05-23 — check incidents/ before bug filing."
----
+-->
 
-### Pre-check: scan incidents/ directory
+### append
 
-Before filing any bug, list `incidents/` and surface any SEV1 tickets newer than 7 days. If any exist, mention them in the bug's reproduction notes (they may share a root cause).
+**Weekly security smoke**
+
+Once a week, run the security smoke tests as part of the cycle.
+
+## Project Context
+...project-specific facts...
+
+## Vault
+...project-specific vault customization...
 ```
 
-The frontmatter contains the structural compose metadata. The `source-conversation` field is an audit-trail pointer back to the human directive that triggered the write.
+Each H3 op-block carries an optional HTML-comment metadata trailer (`authored-by`, `authored-at`, `source-conversation`) for the audit trail. The trailer is invisible to compose's parser but preserved in the file for human review and `git blame` traceability. Compose does not require or validate the metadata; only the section structure (H2 slot, H3 op + target) is load-bearing.
 
 ### 7.4 Safety: deepseek audit + mini-CQ
 
@@ -928,7 +981,7 @@ The checklist (suggested initial content):
 1. **Heading-level check** — Did my source change introduce a new H2 section in any composed output? If yes, does it belong as an H2 under one of the five canonical sections, or should it be H3+ inside an existing section?
 2. **DRY check** — Did I introduce content that already exists in another L1-L4 layer? Use `grep -r` to confirm.
 3. **Step-ID stability** — Did I rename or remove any step IDs? If yes, did I follow the §6.1 breaking-change protocol?
-4. **L4 resolution** — Did I delete or rename a step that L4 files target? If yes, find them and update them.
+4. **L4 resolution** — Did I delete or rename a step that L4 H3 blocks target? If yes, find them (grep `.squidsquad/project/*.md` for the step ID) and update them.
 5. **Composed-output regen** — Did I run `compose.py deploy-all` after my change? Is the resulting diff included in this PR?
 6. **Visual check** — Did I open the regenerated `.squidsquad/<role>/CLAUDE.md` and read the changed section? Does it read coherently in context?
 
@@ -973,7 +1026,7 @@ A future automation could check catalog/source drift in CI (per §8.1's PR-check
 The `pm` auto-memory directory (`C:\Users\...\memory\`) contains 30+ feedback files that today represent project-local customization stored *outside* L4. As part of this migration:
 
 - Each memory file is reviewed against the new L4 model.
-- Memory entries that are durable behaviour overrides become L4 files (with proper frontmatter and target step IDs).
+- Memory entries that are durable behaviour overrides become L4 H3 blocks in the relevant `.squidsquad/project/<role>.md` file (under the appropriate `## Slot` H2, with op + target step ID as needed).
 - Memory entries that are session-context or user-profile facts stay in the memory system.
 - A one-time migration tool (`migrate_memory_to_l4.py`) does the conversion; `pm` reviews each output before commit.
 
@@ -985,10 +1038,10 @@ This collapses today's two-system memory architecture (per-user memory + L4) int
 
 ### 11.1 Open questions for follow-up discussion
 
-1. ~~**Soul overlay semantics**~~ **CLOSED** — see §3.3 per-slot op constraints + §3.4. Soul L4 is `append`-only (no `ordinal`, no `target`, no `insert-*`, no `replace`). The composed CLAUDE.md presents shipped soul + L4 append in order; on semantic conflict between them, L4 wins at the agent's interpretation layer. The shipped soul stays on disk for traceability; only the agent's runtime interpretation is overridden.
-2. **L4 conflict resolution** — if two L4 files both `replace` the same target with different content, what's the resolution rule? (Proposal: most recent commit wins; emit warning.)
-3. **Multi-role L4 files** — can one L4 file apply to multiple roles, or must there be one file per role? (Proposal: support `roles: [pm, verifier]` frontmatter list.)
-4. **L4 versioning** — when the SquidSquad upgrade changes an L1-L3 step ID that L4 targets, how does the upgrade handle pending L4 files? (See §6.1 — needs more detail.)
+1. ~~**Soul overlay semantics**~~ **CLOSED** — see §3.3 per-slot op constraints + §3.4. Soul L4 is append-only (no targeted ops). The composed CLAUDE.md presents shipped soul + L4 append in order; on semantic conflict between them, L4 wins at the agent's interpretation layer. The shipped soul stays on disk for traceability; only the agent's runtime interpretation is overridden.
+2. ~~**L4 conflict resolution**~~ **CLOSED** — see §3.3 + §7.3. Each agent class has exactly one L4 file; within that file, two `### replace step:cycle/<step-id>` H3 blocks targeting the same step is a validation error and aborts compose. The author resolves the conflict by editing the file.
+3. ~~**Multi-role L4 files**~~ **CLOSED** — see §3.3 + §7.3. L4 is **one file per agent class** (`.squidsquad/project/<role>.md`); role-scoping is the filename. There is no multi-role L4; cross-role customizations expand to one per-role file.
+4. **L4 versioning** — when the SquidSquad upgrade changes an L1-L3 step ID that L4 H3 blocks target, how does the upgrade handle the orphaned blocks? (See §6.1 — needs more detail.)
 5. **Composed output as derived artifact** — should `.squidsquad/<role>/CLAUDE.md` be `.gitignore`d (always regenerated, never committed) instead of committed-and-diffed? (Trade-off: gitignore eliminates §8.1 PR-check entirely but loses easy historical review.)
 
 ### 11.2 Known gaps in this doc
@@ -997,7 +1050,7 @@ This collapses today's two-system memory architecture (per-user memory + L4) int
 - **G2** — Compose's role-filter (§4.1 step 2) is sketched but not fully specified: what does the `roles:` frontmatter list support beyond literal role names? (e.g. wildcards like `*`, role classes like `worker:*`.) For v2, only literal role names are supported; wildcards/classes are deferred.
 - **G3** — Boot/cycle/shutdown sub-slot boundaries inside `instructions` are still informal. v2 working definition: `boot` = one-time session-start work; `cycle` = repeated work (per `/loop` tick in polling mode, per nudge in event mode — see [AGENT-RUNTIME.md](AGENT-RUNTIME.md)); `shutdown` = clean-stop work. Formal acceptance tests for sub-slot membership are a follow-up.
 - **G4** — ✅ PARTIALLY CLOSED (2026-05-24). [`VAULT-ARCH.md`](VAULT-ARCH.md) now covers entity types (§4), wikilink grammar (§4.5), confidence levels (§4.4), and the relationship to `vault-protocol.md` (§7). What remains open here: defining the *slot contract* (what content fragments are valid under `slot: vault` in L1-L4 sources, beyond the short descriptor pattern in §5.5).
-- ~~**G5** — L4 file naming collision rules~~ **CLOSED** — see §7.3. File names must be globally unique within `.squidsquad/project/`; compose aborts on collision. No normalization happens — the literal file name is the uniqueness key.
+- ~~**G5** — L4 file naming collision rules~~ **CLOSED** — see §7.3. There is exactly one L4 file per agent class, named `<role>.md` (e.g. `pm.md`, `worker-frontend.md`, `worker-backend.md`). The filename IS the role identity — collision is structurally impossible since each agent class has exactly one expected filename.
 - **G6** — ✅ CLOSED (v2). Subagent usage rules now in §6.6 (default-model + per-role overrides + spawn-vs-inline + prompt hygiene + parallelism + trust-but-verify). L3 `replace` overlays on the L1 default cover the per-role Sonnet defaults for `worker`/`dm`.
 - **G7** — Sub-skill reference resolution semantics for L4. Open: can L4 *insert* a new step that references a sub-skill not yet referenced anywhere in L1-L3? Yes per §4.5 (catalog is the source of truth, not the L1-L3 reference set), but the L4-write decision tree in §7.2 should explicitly cover the "introduce a new sub-skill reference" case.
 
