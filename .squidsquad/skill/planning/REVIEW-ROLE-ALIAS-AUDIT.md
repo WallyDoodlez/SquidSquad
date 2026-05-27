@@ -22,7 +22,17 @@ DS surfaced 10 findings; 7 were clear in-scope mechanical fixes and were applied
 - AGENT-RUNTIME.md L1138 glossary — Cursor defined per-alias
 - INSTALLER-ARCH.md — 4 prose spots (L27, 165, 228, 309) + 4 path spots (L242, 322, 437, 443-444, 474) cleaned up
 
-**STILL OPEN — DS findings 6 + 10 (§4 response-shape inconsistency):**
+**RESOLVED — DS findings 6 + 10 (§4 response-shape inconsistency, 2026-05-27):**
+
+User chose **option (b) aspirational**. §4.1 response shapes now consistently include `alias` across all per-agent endpoints; an explicit status note clarifies they're aspirational (lands with #10358) and tells current clients to read `claude_pid` + treat `role`-field value as alias.
+
+**RESOLVED — Q7 follow-up (`role:*` label rename, 2026-05-27):**
+
+User chose **doc-only convention update**. AGENT-RUNTIME.md §L885 updated to clarify the `role:` label *key* is legacy and the *value* is alias-typed, and to note a key-rename to `alias:` is in #10358's family but currently out of scope to limit blast radius. No `gh label edit` operations performed.
+
+---
+
+(Historical context for the resolved items above:)
 
 DS observed that `docs/HARNESS-ARCH.md` §4.1 documents response shapes containing fields that don't actually exist in `AgentState.to_dict()`:
 - Doc claims `[{role, alias, intent, pid, clone_path, boot_time, ...}]` (line 72) — but code returns no `alias` field, and `pid` doesn't exist (code returns `claude_pid` + `terminal_pid` as separate fields)

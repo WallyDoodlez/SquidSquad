@@ -71,14 +71,16 @@ All endpoints serve from `http://127.0.0.1:<port>`. Localhost-only; no authentic
 | GET | `/` | Root — alias for `/status` (legacy convenience) | Same as `/status` |
 | GET | `/agents` | List all known agents + their current state | `[{role, alias, intent, pid, clone_path, boot_time, ...}]` |
 | GET | `/agents/{role}` | Single agent state | `{role, alias, intent, pid, clone_path, boot_time, last_seen}` |
-| GET | `/agents/{role}/health` | PID-based liveness probe for one agent | `{role, alive, pid, last_seen}` |
+| GET | `/agents/{role}/health` | PID-based liveness probe for one agent | `{role, alias, alive, pid, last_seen}` |
 | GET | `/agents/{role}/config` | Per-agent install config (clone path, etc.) | `{clone_path, ...}` |
-| POST | `/agents/{role}/start` | Set intent=running, spawn if not alive | `{ok, role, action}` |
-| POST | `/agents/{role}/stop` | Set intent=stopping; cooperative shutdown | `{ok, role}` |
-| POST | `/agents/{role}/restart` | Set intent=restarting; respawn after death | `{ok, role}` |
+| POST | `/agents/{role}/start` | Set intent=running, spawn if not alive | `{ok, role, alias, action}` |
+| POST | `/agents/{role}/stop` | Set intent=stopping; cooperative shutdown | `{ok, role, alias}` |
+| POST | `/agents/{role}/restart` | Set intent=restarting; respawn after death | `{ok, role, alias}` |
 | POST | `/agents/all/start` | Start all configured agents | `{ok, started: [...]}` |
 | POST | `/agents/all/stop` | Stop all running agents | `{ok, stopped: [...]}` |
 | POST | `/shutdown` | Graceful harness shutdown (status 202) | Async; harness exits after returning |
+
+> **Response-shape status:** the response shapes above are **aspirational** — they document the target shape that lands with **#10358** (the `role` → `alias` code rename). Today `AgentState.to_dict()` returns a `role` field only (whose value is the alias) and no separate `alias` field. `pid` is shorthand for `claude_pid` + `terminal_pid`, which the code returns as separate fields. Existing clients that read these endpoints should treat the alias as the value of `role` and read `claude_pid` directly until #10358 ships.
 
 ### 4.2 Event bus endpoints
 
