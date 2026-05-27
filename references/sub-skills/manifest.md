@@ -135,18 +135,9 @@ Entry file with includes. **Source of truth**: `references/roles/dm/includes.yml
 18. `common/agent-boundaries` — #9925 inter-role responsibility layering rules (#9944)
 19. `roles/dm/responsibility` — DM-specific responsibility narrowing
 
-### Legacy Sub-Skills (not included by any role)
+### Legacy Sub-Skills
 
-These files exist on disk but are no longer referenced by any role's includes.yml after the cycle-runner migration (#2487). cycle-runner and cycle_post.py handle their responsibilities. Kept for reference; may be deleted in a future cleanup.
-
-- `common/pull-latest` — replaced by cycle_pre.py git pull
-- `common/iteration-log` — replaced by cycle_post.py iteration logging
-- ~~roles/pm/iteration-log~~ — deleted (#3499), replaced by cycle_post.py
-- ~~roles/pm/git-commit~~ — deleted (#3499), replaced by cycle_post.py
-- `roles/verifier/iteration-log` — replaced by cycle_post.py
-- `roles/verifier/git-commit` — replaced by cycle_post.py
-- `roles/dm/iteration-log` — replaced by cycle_post.py
-- `roles/dm/git-commit` — replaced by cycle_post.py
+All previously-legacy sub-skills (`common/pull-latest`, `common/iteration-log`, `common/event-reactions`, `roles/verifier/iteration-log`, `roles/verifier/git-commit`, `roles/dm/iteration-log`, `roles/dm/git-commit`) and the entire deprecated `capabilities/` directory (`figma/`, `google_stitch/`, `local_html/`, `local_delivery/`) were deleted 2026-05-27 as orphan cleanup. None were referenced in any `includes.yml`; `cycle_pre.py` and `cycle_post.py` cover their former responsibilities, and `capabilities/` was superseded by per-agent L4 tool config (see INSTALLER-ARCH §8).
 
 ## Include Directive Format
 
@@ -193,7 +184,6 @@ references/sub-skills/
 │   ├── vault-protocol.md             (Vault operations — shared by all roles)
 │   ├── boot-remote-agents.md         (Boot stalled/missing agents — shared by all roles)
 │   ├── improvement-scan.md           (Quiet-cycle improvement scanning — shared by all roles)
-│   ├── iteration-log.md              (Step 4 — iteration log format + cleanup — shared by dev)
 │   ├── git-commit.md                 (Step 5 — commit/push + PR flow — shared by dev)
 │   ├── discussion-protocol.md        (Discussion entry format — shared by dev)
 │   ├── issue-filing.md                 (Self-file + cross-file bug templates — shared by dev)
@@ -205,7 +195,6 @@ references/sub-skills/
 │   ├── status-line.md                (Status line description — shared by dev)
 │   ├── prohibitions.md               (Shared "never do" rules — shared by dev)
 │   ├── capability-check.md          (Startup capability verification — shared by roles with requires_sub_skills)
-│   ├── event-reactions.md            (Event bus reaction handling — all roles)
 │   ├── task-pickup.md               (Task pickup from approved queue — PM, verifier, DM)
 │   ├── cycle-runner.md              (Cycle runner transport layer — opt-in via feature flag, all roles)
 │   ├── agent-lifecycle.md           (Agent lifecycle: reboot, heartbeat, singleton — all roles)
@@ -246,9 +235,7 @@ references/sub-skills/
 │   ├── file-conventions.md           (Verifier file conventions)
 │   ├── status-line.md                (Verifier status line)
 │   ├── prohibitions.md               (Verifier "never do" rules)
-│   ├── responsibility.md             (Verifier-specific responsibility narrowing)
-│   ├── iteration-log.md             (LEGACY — replaced by cycle_post.py)
-│   └── git-commit.md                (LEGACY — replaced by cycle_post.py)
+│   └── responsibility.md             (Verifier-specific responsibility narrowing)
 └── roles/dm/
     ├── issue-triage.md                (Step 1e — triage bugs assigned to DM)
     ├── delivery-packaging.md          (Steps 2-2c — scan, skip, deliver)
@@ -260,7 +247,5 @@ references/sub-skills/
     ├── file-conventions.md           (DM file conventions)
     ├── status-line.md                (DM status line)
     ├── prohibitions.md               (DM "never do" rules)
-    ├── responsibility.md             (DM-specific responsibility narrowing)
-    ├── iteration-log.md             (LEGACY — replaced by cycle_post.py)
-    └── git-commit.md                (LEGACY — replaced by cycle_post.py)
+    └── responsibility.md             (DM-specific responsibility narrowing)
 ```

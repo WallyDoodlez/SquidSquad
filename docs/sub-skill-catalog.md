@@ -143,14 +143,18 @@ Reusable across multiple roles.
 | `improvement-scan-slim` | Filing-only variant (no auto-fix) for read-only roles | QA |
 | `capability-check` | _deprecated — slated for removal_; was: verify the agent's environment has the tools it expects | DM (currently; manifest removal pending — see [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md)) |
 
-### Chat & coordination (optional, not on by default)
+### Chat & coordination (deferred — chat-integration roadmap)
 
-| Sub-skill | One-liner | Used by |
+The three chat sub-skills below are **intentionally unwired** today. They're scaffolding for the harness chat-room roadmap (see [HARNESS-ARCH.md](HARNESS-ARCH.md) — chat-room is part of the supervisor + event-bus + web-terminal harness vision). When chat lands, these become the behavioral contracts every role agent loads.
+
+**Do not delete these as "dead sub-skills" in future improvement scans** — they're parked, not abandoned. Defer any wiring/usage work until chat integration is on the active roadmap.
+
+| Sub-skill | One-liner | Status |
 |---|---|---|
-| `chat-etiquette` | Behavior rules for the team chat room | (none yet) |
-| `mention-protocol` | @mention escalation tiers and noise budget | (none yet) |
-| `consensus-protocol` | Multi-party decision flow for chat-driven decisions | (none yet) |
-| `iteration-log` | Per-cycle iteration log format | (legacy; roles use their own variant) |
+| `chat-etiquette` | Behavior rules for the team chat room | deferred — chat roadmap |
+| `mention-protocol` | @mention escalation tiers and noise budget | deferred — chat roadmap |
+| `consensus-protocol` | Multi-party decision flow for chat-driven decisions | deferred — chat roadmap |
+| `iteration-log` | Per-cycle iteration log format | legacy; roles use their own variant |
 
 ---
 
