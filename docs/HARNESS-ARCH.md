@@ -80,7 +80,7 @@ All endpoints serve from `http://127.0.0.1:<port>`. Localhost-only; no authentic
 | POST | `/agents/all/stop` | Stop all running agents | `{ok, stopped: [...]}` |
 | POST | `/shutdown` | Graceful harness shutdown (status 202) | Async; harness exits after returning |
 
-> **Response-shape status:** the response shapes above are **aspirational** — they document the target shape that lands with **#10358** (the `role` → `alias` code rename). Today `AgentState.to_dict()` returns a `role` field only (whose value is the alias) and no separate `alias` field. `pid` is shorthand for `claude_pid` + `terminal_pid`, which the code returns as separate fields. Existing clients that read these endpoints should treat the alias as the value of `role` and read `claude_pid` directly until #10358 ships.
+> **Response-shape status:** the response shapes above are **aspirational** — they document the target shape that lands with **#10358** (the `role` → `alias` code rename). Today `AgentState.to_dict()` returns a `role` field (whose value is the alias) but no separate `alias` field. `pid` is shorthand for `claude_pid` + `terminal_pid`, which the code returns as separate fields. Existing clients that read these endpoints should treat the alias as the value of `role` and read `claude_pid` directly until #10358 ships.
 
 ### 4.2 Event bus endpoints
 
