@@ -112,7 +112,47 @@ wt.exe (TTY, unchanged)
 
 Three processes instead of five. Singleton check is direct (`Popen.pid` == claude PID). No descendant walker. Process count for the v2 event-driven path still adds a sibling `event_poll.py`, but the main tree is leaner.
 
-### 3.4 What does NOT change
+### 3.5 The bigger smaller-proposal — `wt → claude` directly
+
+The §3.1 / §3.2 / §3.3 proposal above keeps `thin_launcher.py` (slimmed by the descendant walker). A stronger version: **delete `thin_launcher.py` entirely** and have `wt.exe` invoke `claude.exe` directly. Per-agent tree becomes:
+
+```
+wt.exe (TTY, unchanged) -> claude.exe
+```
+
+**Two processes per agent, down from five.** TTY still provided by `wt.exe` so subscription billing stays. What `thin_launcher.py` does today, and where each piece moves:
+
+| Today: `thin_launcher.py` | Direct path: where it lives |
+|---|---|
+| Singleton check (`.claude-pid` + descendant walk) | **Harness** — already maintains `.harness-state.json` with per-role PIDs; pre-spawn check |
+| Env var `SQUIDSQUAD_ROLE=<role>` | **Harness** — `Popen(env=...)`, child inherits (subject to wt's env propagation behavior — needs verification, see §4.5) |
+| Claude arg-list construction (`--append-system-prompt`, `--name`, `--effort`, bootstrap prompt) | **Harness / boot_remote** — same arg list, emitted as `wt new-tab … claude.exe <flags>` |
+| Write `.claude-pid` after resolving descendant | **Harness** — walks `wt.exe`'s children once at spawn to find claude.exe and record PID; shallow tree, no toolhelp32 ctypes machinery needed |
+| Wait for claude exit, return code 42 | **Nothing needed** — harness's auto-reboot fires on dead-process-with-intent-running regardless of who relays the exit code. `cycle_post.py` already POSTs `/agents/<role>/restart` to set intent before exit, so the signal reaches harness directly. `thin_launcher` was a relay, not the source of truth. |
+
+**What this deletes:**
+- Entirety of `thin_launcher.py` (~700 lines)
+- `_resolve_claude_exe_pid` + `_win32_list_descendants` + `_posix_list_descendants` (already covered ~250 of those)
+- `tests/test_thin_launcher_10101.py`
+- Singleton race class (#8692)
+- Stale-wrapper-PID failure mode (#10101)
+
+**What it adds to `harness.py` / `boot_remote.py`:**
+- ~20 lines: pre-spawn singleton check using existing harness state
+- ~30 lines: arg-list construction (recovered from the thin_launcher deletion)
+- ~30 lines: post-spawn PID resolution (one walk of `wt.exe`'s direct children — much simpler than today)
+
+**Net: ~600 lines deleted** vs §3.1's ~60 lines. Same TTY/billing properties.
+
+**Known risks — and what the §4.5 smoke test found:**
+
+1. ~~`wt new-tab` env-var propagation~~ **VERIFIED.** Parent's env DOES propagate through `wt.exe` → `WindowsTerminal.exe` → tab child. `SQUIDSQUAD_ROLE` set in the harness's Python process reaches claude.exe. See §4.5 Test 1.
+2. **`wt new-tab` arg quoting** — partially verified. Simple flags (`--version`) pass cleanly. Multi-word positional prompts (the /loop bootstrap) not yet end-to-end tested but follow standard subprocess quoting; the well-trodden `Popen([wt, "new-tab", str(claude_exe), "-p", "prompt with spaces", "--flag", ...])` shape should work without surprise. Land-time validation recommended.
+3. ~~PID tracking across wt client/daemon boundary~~ **VERIFIED.** claude.exe appears in toolhelp32 with parent = `WindowsTerminal.exe`. Harness post-spawn lookup: snapshot processes, filter `name='claude.exe' AND parent_pid==WindowsTerminal.exe_pid AND pid NOT IN pre_spawn_set`. Three lines of code; no descendant tree walking needed. See §4.5 Test 2.
+
+All blocking risks cleared. **§3.5 is the recommended landing target**, not §3.1+§3.2+§3.3. The smaller incremental path is still useful as a fallback if implementation runs into a surprise.
+
+### 3.6 What does NOT change
 
 - `wt.exe` stays — load-bearing for TTY/subscription billing.
 - `thin_launcher.py` stays — singleton lock, `--append-system-prompt`, restart-on-exit-42, atomic `.claude-pid` write. Slimmed by ~250 lines (drop the descendant walker) but conceptually unchanged.
@@ -238,6 +278,38 @@ despite the message being written before any drain attempt. Diagnosis: under a P
 
 **Operator follow-up:** confirm against the Anthropic billing dashboard that this $0.0987 charge appears as an Agent SDK / API charge (and not subscription). If it does, the inference chain is verified end-to-end. Raw spike output saved to `.squidsquad/skill/planning/conpty-spike-raw-output.txt` for reference.
 
+### 4.5 Test: `wt → claude` direct spawn (§3.5 viability) ✅
+
+Script: [`references/experiments/wt_direct_spawn_test.py`](../references/experiments/wt_direct_spawn_test.py) (run cost: $0 — uses `--version`, no API call).
+
+Two questions tested:
+
+**Test 1 — Env-var propagation through `wt new-tab`.** Parent set `WT_DIRECT_SPAWN_TEST_TOKEN=PROPAGATED-1779857480`. Spawned:
+
+```sh
+wt new-tab --title env-probe cmd.exe /c "echo %WT_DIRECT_SPAWN_TEST_TOKEN% > <file>"
+```
+
+Result: the file contained `'PROPAGATED-1779857480'`. **Env vars set on the parent of `wt.exe` reach the tab child.** The earlier worry about `wt.exe` being a daemon client (and the env being lost between client and `WindowsTerminal.exe` daemon) was unfounded.
+
+**Test 2 — Direct claude.exe spawn under wt.** Spawned:
+
+```sh
+wt new-tab --title direct-spawn-test -d <cwd> "<resolved claude.exe>" --version
+```
+
+Polled toolhelp32 for new `claude.exe` PIDs (excluding pre-existing). Found one new claude.exe with parent chain:
+
+```
+claude.exe (240324)
+ └ WindowsTerminal.exe (2772032)
+    └ svchost.exe → services.exe → wininit.exe
+```
+
+**No `cmd.exe` anywhere in the ancestry.** The harness's post-spawn PID lookup is therefore three lines: snapshot processes, filter `name='claude.exe' AND parent_pid == WindowsTerminal_pid AND pid NOT IN pre_spawn_set`. No descendant-walker, no `_resolve_claude_exe_pid` heroics.
+
+**Combined verdict:** §3.5 is implementable as proposed. Both blocker risks (env propagation, process-tree locatability) are cleared. The remaining "wt arg quoting for multi-word bootstrap prompts" question is a land-time validation, not a research item.
+
 ---
 
 ## 5. Investigation: the duplicate-spawn race
@@ -290,17 +362,17 @@ These were on the list before the §4.3 verdict closed the broader investigation
 
 ## 9. Recommended next step
 
-Four independent follow-ups, in increasing scope:
+Three independent follow-ups, in landing order:
 
 1. **The visual-confusion fix (smallest, near-trivial).** Make `wt.exe new-tab` close the tab when its child exits — invoke through a wrapper that waits-and-exits, or set `wt` to non-persistent mode. Removes the operator-confusion source that triggered this whole investigation. One-line change to `boot_remote._spawn_windows`.
 
-2. **§3.2: drop `bash` layer (small).** `wt.exe` invokes `python thin_launcher.py` directly. One fewer process per agent, no functional change. Cross-platform: same change in `_spawn_macos` and `_spawn_linux` (which probably already use the script's shebang anyway).
+2. **§3.5: `wt → claude` direct spawn (medium, RECOMMENDED).** Delete `thin_launcher.py` entirely. Have `wt.exe new-tab` invoke `claude.exe` (resolved via §3.1's install resolver) directly. Move the singleton check + arg-list construction + post-spawn PID resolution into the harness (~80 net lines added; thin_launcher's ~700 lines deleted; tests removed accordingly). Net ~600 lines deleted. Validated end-to-end by [`references/experiments/wt_direct_spawn_test.py`](../references/experiments/wt_direct_spawn_test.py) — see §4.5 — confirming env-var propagation and a clean process tree (claude.exe direct child of `WindowsTerminal.exe`, zero cmd.exe in ancestry). The portable install resolver from sequence 1 (`references/experiments/resolve_claude.py`) is the building block; productize it into `references/scripts/` and add integration tests for the untested shim variants (older `%~dp0` form, `.bat`, `.ps1`, POSIX). The two singleton-related failure modes (#8692 race, #10101 stale-wrapper) become structurally impossible.
 
-3. **§3.1: drop `cmd.exe` shim (medium).** Requires productizing the portable install resolver. A working ~190-line prototype exists at [`references/experiments/resolve_claude.py`](../references/experiments/resolve_claude.py) and is validated by [`spawn_tree_test.py`](../references/experiments/spawn_tree_test.py) — see §4.1.1 / §4.1.2. Productizing means: move into `references/scripts/`, wire into `thin_launcher.py` boot path, cache the resolved path in `.squidsquad/config.md`, add real-install integration tests for the older `%~dp0` Windows shim, `.bat`/`.ps1` variants, and POSIX (the prototype handles these code paths but only the standard Windows shim was end-to-end-verified). Once landed: ~250 lines of descendant-walker out, ~190 lines of resolver in (net ~60 lines deleted), singleton race class gone. Verified that `_resolve_claude_exe_pid` + descendant walkers have no other callers in the codebase (only `thin_launcher.py` + its dedicated test file).
+3. ~~**§1.1: ConPTY spike**~~ **TESTED AND CLOSED, 2026-05-27.** See §1.1 and §4.4. ConPTY does not change the billing signal — `-p` is the dominant trigger. Plus stream-json INPUT doesn't even function over PTY (claude can't read PTY-buffered stdin in `-p` mode). The "harness owns claude" redesign stays closed.
 
-4. ~~**§1.1: ConPTY spike**~~ **TESTED AND CLOSED, 2026-05-27.** See §1.1 and §4.4. ConPTY does not change the billing signal — `-p` is the dominant trigger. Plus stream-json INPUT doesn't even function over PTY (claude can't read PTY-buffered stdin in `-p` mode). The "harness owns claude" redesign stays closed.
+Follow-up #2 supersedes the smaller incremental §3.1+§3.2+§3.3 path from an earlier revision of this doc; that path remains valid as a *fallback* if implementation of #2 hits a surprise, but the §4.5 results make #2 the obvious target.
 
-Net achievable simplifications: follow-ups #1, #2, #3. The bigger direct-spawn redesign is permanently closed under current Anthropic billing.
+Net achievable simplification: ~600 lines of process-management code deleted. The bigger "harness owns claude over stream-json" redesign stays permanently closed under current Anthropic billing.
 
 ### 9.1 Audit history
 
