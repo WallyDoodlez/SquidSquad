@@ -511,6 +511,39 @@ Boot / cycle / shutdown are the three sub-slots within the `instructions` slot. 
 
 See §6 for step ID grammar, reference grammar, and the relationship to sub-skills.
 
+#### 5.4.1 Cycle statusline-write pattern
+
+There is no `status-line` sub-skill. Statusline updates are inlined into the cycle. The pattern:
+
+```mermaid
+sequenceDiagram
+  participant LR as /loop or harness nudge
+  participant CR as cycle-runner (pre)
+  participant S1 as step:cycle/pipeline-sentinel
+  participant S2 as step:cycle/vault
+  participant S3 as step:cycle/own-domain-fix
+  participant CR2 as cycle-runner (post)
+  participant SB as cycle.py status-bar
+
+  LR->>CR: fire cycle
+  CR->>SB: status-bar <role> "running" "pre-cycle"
+  CR-->>S1: control passes
+  S1->>SB: status-bar <role> "verifying" "pipeline-sentinel..."
+  S1-->>S2: ...
+  S2->>SB: status-bar <role> "verifying" "vault-remember..."
+  S2-->>S3: ...
+  S3->>SB: status-bar <role> "verifying" "own-domain auto-fix..."
+  S3-->>CR2: control passes
+  CR2->>SB: status-bar <role> "idle" ""
+```
+
+Two write sites:
+
+- **Cycle-runner bookend writes** (mechanical): `cycle_pre.py` / `cycle_post.py` write `"running"` at pre-cycle entry and `"idle"` at post-cycle exit. The agent's `cycle-runner` sub-skill references these scripts; no per-step authoring needed.
+- **Mid-cycle progress writes** (per step, optional): any sub-skill that wants to surface its state to the human invokes `python references/scripts/cycle.py status-bar <role> <state> <message>` as a one-line tool call inside its own body. Examples in this repo: `pipeline-sentinel` writes `"verifying"` + sweep description; `task-intake` writes `"researching"` / `"discussing"` / `"planning"` across the 5 phases.
+
+Why no sub-skill: statusline writes are too granular (a single `cycle.py status-bar` invocation) and too contextual (each step knows its own state) to centralize into a shared procedure. Same architectural pattern as `file-conventions` (paths live inline in the step that uses them).
+
 ### 5.5 Project Context
 
 Project-shaped descriptive facts — *what is true about this project / role*, not *how the role does work*. Concretely the slot covers:
