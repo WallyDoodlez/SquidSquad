@@ -115,12 +115,11 @@ Reusable across multiple roles.
 | Sub-skill | One-liner | Used by |
 |---|---|---|
 | `discussion` | Append-only tracker comment format — the inter-agent communication channel named in [COMPOSE-ARCHITECTURE.md §5.1](COMPOSE-ARCHITECTURE.md#51-identity) (renamed from `discussion-protocol` at #10360) | all roles (per-role overrides retire at #10360) |
-| `issue-filing` | Self-file and cross-file bug templates | dev (roles override) |
-| `working-state` | Working-state file format and update rules | dev |
-| `pickup-comment-fidelity` | Pickup comments must accurately reflect tracker state | dev |
-| `prohibitions` | "Never do" rules (no force push, no skip hooks, etc.) | dev (roles override) |
+| `issue-filing` | Self-file and cross-file bug templates | all roles (per-role overrides retire at #10360) |
+| `working-state` | Working-state file format and update rules | worker |
+| `pickup-comment-fidelity` | Pickup comments must accurately reflect tracker state | worker |
 
-> Rows removed: `agent-boundaries`, `file-conventions`, `status-line` — these are no longer classified as sub-skills (see the per-role section notes below for migration targets: agent-boundaries → Identity + Responsibility slots; file-conventions → inline in instructions; status-line → Project Context slot). The source files remain on disk under `references/sub-skills/common/` until #10360 implements the migration; this catalog reflects target architecture.
+> Rows removed: `agent-boundaries`, `file-conventions`, `status-line`, `prohibitions` — these are no longer classified as sub-skills. Migration targets (see retirement notes above for full detail): `agent-boundaries` → Identity + Responsibility slots; `file-conventions` → inline in instructions; `status-line` → cycle-inlined (no slot); `prohibitions` → Identity Boundaries + Responsibility "does NOT do". Source files remain on disk under `references/sub-skills/common/` and per-role overrides until #10360 deletes them; this catalog reflects target architecture, not v1 disk state.
 
 ### Vault (institutional memory)
 
@@ -181,7 +180,7 @@ Role-specific event extras:
 
 ## `roles/<role>/` — Role-specific sub-skills
 
-> **Note on `responsibility`** — The `responsibility` content (what each role does / does NOT do / why it matters) is **no longer a sub-skill**. It is the L2-and-up authoring of the dedicated **Responsibility slot** in the composed CLAUDE.md (see [COMPOSE-ARCHITECTURE.md §5.2](COMPOSE-ARCHITECTURE.md#52-responsibility)). The `responsibility` rows below remain in the per-role tables for now as the historical authoring location (`references/sub-skills/roles/<role>/responsibility.md`); once compose.py grows the responsibility slot, that content moves into each role's L2 source and these rows will be removed. Filing tracker: see follow-up task for the implementation move.
+> **Note on `responsibility`** — The `responsibility` content (what each role does / does NOT do / why it matters) is **no longer a sub-skill**. It is the L2-and-up authoring of the dedicated **Responsibility slot** in the composed CLAUDE.md (see [COMPOSE-ARCHITECTURE.md §5.2](COMPOSE-ARCHITECTURE.md#52-responsibility)) — authored directly in the role's L2 source with explicit `slot: responsibility` frontmatter. The legacy per-role `responsibility.md` files remain on disk until #10360 deletes them; this catalog reflects target architecture, not v1 disk state.
 
 > **Note on `status-line` — retired entirely (corrected twice, 2026-05-27)** — First draft of this PR moved status-line to Project Context (wrong: not descriptive). Second draft kept it as a `common/` sub-skill (wrong: not a single procedure the agent invokes). Final: same pattern as `file-conventions` — statusline updates are inlined wherever a cycle step needs to surface progress. The bookend writes (pre-cycle "idle", post-cycle "idle") live in the `cycle-runner` sub-skill. Mid-cycle progress updates use a one-line `cycle.py status-bar` invocation directly in the step that's running. No standalone `status-line` sub-skill is needed. All 4 `status-line.md` files delete at #10360 implementation time.
 
@@ -210,7 +209,6 @@ Role-specific event extras:
 | `improvement-scan` | PM variant — process-focused, never code |
 | `issue-filing` | PM's bug-filing protocol (behavior-only, no RCA) |
 | `discussion-protocol` | PM's comment format (→ retires; common/`discussion` is the canonical) |
-| `prohibitions` | PM "never do" rules |
 | `vault-synthesis` | Cross-agent pattern detection (PM-only) |
 | `ralph-loop-overview` | Runtime-loaded polling-mode cycle contract |
 
@@ -221,7 +219,6 @@ Role-specific event extras:
 | `verification` | Steps 2–6 — E2E tests, AC verification, health check |
 | `issue-filing` | QA's bug template (with reproduction + AC reference) |
 | `discussion-protocol` | QA's comment format (→ retires; common/`discussion` is the canonical) |
-| `prohibitions` | QA "never do" rules (e.g. no shipping with failed tests) |
 | `ralph-loop-overview` | Runtime-loaded polling-mode cycle contract |
 | Domain context | Per-stack QA notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
 | `skill/finding-categories` | Skill-domain finding taxonomy for QA reports |
@@ -237,7 +234,6 @@ Role-specific event extras:
 | `doc-improvement-loop` | DM's scan: drift between source docs and shipped state |
 | `issue-filing` | DM's bug template |
 | `discussion-protocol` | DM's comment format (→ retires; common/`discussion` is the canonical) |
-| `prohibitions` | DM "never do" rules |
 | `ralph-loop-overview` | Runtime-loaded polling-mode cycle contract |
 | Domain context | Per-stack DM notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
 

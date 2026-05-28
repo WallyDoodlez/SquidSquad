@@ -153,14 +153,15 @@ step-ids: [step:cycle/<name>, step:boot/<name>, ...]  # for instructions slot on
 
 `compose.py` reads frontmatter from every L1-L3 file, sorts by `(slot, ordinal)`, and emits the content of each in that order under the appropriate top-level section (see §5) — emitted verbatim for non-instructions slots (`identity`, `responsibility`, `soul`, `project-context`, `vault`); the `instructions` slot is emitted as **sub-skill references**, not inlined sub-skill bodies, per §4.1 step 4. Concretely: the source files in the `instructions` slot already contain the reference text directly (e.g., `→ run sub-skill: pipeline-sentinel`), and compose emits that text verbatim without transformation — there is no compile step that converts inlined sub-skill bodies into references.
 
-> **Filename conventions for slot authoring.** Most L1-L3 source files declare `slot:` via frontmatter explicitly. Two filenames are reserved shorthands that compose treats as implicit slot assignments — they exist so the canonical authoring location is easy to find:
+> **Filename convention for slot authoring.** Most L1-L3 source files declare `slot:` via frontmatter explicitly. One filename is a reserved shorthand that compose treats as an implicit slot assignment — it exists so the canonical authoring location is easy to find:
 >
 > | Filename pattern | Implicit slot | Implicit ordinal |
 > |---|---|---|
 > | `references/roles/<role>/SOUL.md` | `soul` | 1 |
-> | `references/sub-skills/roles/<role>/responsibility.md` | `responsibility` | 1 |
 >
-> Either may be replaced by a regular `.md` with explicit frontmatter; the shorthands are equivalent, not load-bearing.
+> May be replaced by a regular `.md` with explicit frontmatter; the shorthand is equivalent, not load-bearing.
+>
+> (Responsibility-slot content used to have a parallel shorthand at `references/sub-skills/roles/<role>/responsibility.md`. That file is retired per §5.5; responsibility content now lives in the role's L2 source via explicit `slot: responsibility` frontmatter, not via filename convention. The shorthand is gone.)
 
 Ordinals are integers, non-dense (gaps allowed). Authors use gaps of 10 (e.g. 10, 20, 30) so future inserts don't require renumbering.
 
