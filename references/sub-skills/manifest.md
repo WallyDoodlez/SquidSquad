@@ -1,5 +1,17 @@
 # Sub-skill Composition Manifest
 
+> **⚠️ SUPERSEDED — v1 reference only**
+>
+> This file describes the **v1** composition mechanism (`{{include: path}}` directives, per-role entry files with hand-curated include-order lists, `SOUL.md` copied verbatim as a sidecar, `responsibility.md` and `agent-boundaries.md` treated as sub-skills, etc.). The v1 mechanism is **the implementation today**.
+>
+> The **v2 target architecture** is specified in [docs/COMPOSE-ARCHITECTURE.md](../../docs/COMPOSE-ARCHITECTURE.md): frontmatter-driven discovery, `(slot, ordinal)` sorting, sub-skill references not inlining, six top-level slots (identity / responsibility / soul / instructions / project-context / vault), one L4 file per role-class.
+>
+> **Do not implement from this file.** It is retained for two reasons: (1) documents what the current compose pipeline actually does, so existing behavior can be audited; (2) preserves the per-role include-order lists that v2 implementation will need to reference when migrating each include line to frontmatter on the source file. When v2 implementation lands (#10360), this file gets rewritten or retired.
+>
+> Architectural callouts below (responsibility / soul / status-line / file-conventions / agent-boundaries reclassifications) describe what v2 will change about each item — they do NOT describe the current v1 behavior.
+
+---
+
 This manifest defines how shared sub-skill source files compose into agent templates. The composition engine reads each role's entry file, resolves `{{include: path}}` directives by inlining the referenced sub-skill content, and wraps each inclusion with `<!-- sub-skill: name -->` section markers.
 
 ## Architecture
@@ -145,7 +157,9 @@ Entry file with includes. **Source of truth**: `references/roles/dm/includes.yml
 
 ### Legacy Sub-Skills
 
-All previously-legacy sub-skills (`common/pull-latest`, `common/iteration-log`, `common/event-reactions`, `roles/verifier/iteration-log`, `roles/verifier/git-commit`, `roles/dm/iteration-log`, `roles/dm/git-commit`) and the entire deprecated `capabilities/` directory (`figma/`, `google_stitch/`, `local_html/`, `local_delivery/`) were deleted 2026-05-27 as orphan cleanup. None were referenced in any `includes.yml`; `cycle_pre.py` and `cycle_post.py` cover their former responsibilities, and `capabilities/` was superseded by per-agent L4 tool config (see INSTALLER-ARCH §8).
+All previously-legacy sub-skills (`common/pull-latest`, `common/iteration-log`, `common/event-reactions`, `roles/verifier/iteration-log`, `roles/verifier/git-commit`, `roles/dm/iteration-log`, `roles/dm/git-commit`) and the entire deprecated `capabilities/` directory (`figma/`, `google_stitch/`, `local_html/`, `local_delivery/`) were deleted 2026-05-27 as orphan cleanup. **None of the files in that specific list** were referenced in any `includes.yml`; `cycle_pre.py` and `cycle_post.py` cover their former responsibilities, and `capabilities/` was superseded by per-agent L4 tool config (see INSTALLER-ARCH §8).
+
+> **Not in the deletion list above:** `common/capability-check` is **still actively included** by DM (item 2 in the DM composition order below) and was not part of the 2026-05-27 cleanup. The catalog flags it as "deprecated — slated for removal" but its removal is paired with the broader capability-framework retirement (INSTALLER-ARCH §8 and #10025 / capability follow-ups), not this PR.
 
 ## Include Directive Format
 
