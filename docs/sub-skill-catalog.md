@@ -160,7 +160,7 @@ The three chat sub-skills below are **intentionally unwired** today. They're sca
 
 ## `common-events/` — Event-mode sub-skills
 
-Loaded at runtime by `boot-bootstrap` when the role's `config.md` says `event-driven: yes`. **Not inlined at compose time** — read fresh on every session start so an `event-driven:` flip takes effect on next agent restart without a recompose.
+Selected at compose time when `.squidsquad/config.md` says `event-driven: yes` (per [COMPOSE-ARCHITECTURE.md §6.5](COMPOSE-ARCHITECTURE.md#65-wake-mode-handling--two-parallel-manifests-compose-time-selection) — the `includes-events.yml` manifest is the gate). The fragments themselves are **loaded by `boot-bootstrap` at agent boot** (Read tool calls per AGENT-RUNTIME), not inlined into the composed CLAUDE.md body. An `event-driven:` flip in `.squidsquad/config.md` therefore takes effect on **next compose + agent restart** (mid-session flips don't exist).
 
 | Sub-skill | One-liner |
 |---|---|

@@ -459,7 +459,9 @@ Typical structure within the section:
 
 The composed section stacks all L1-L3 responsibility content in `(slot, ordinal)` order (per §3.2), then applies any L4 op. With no L4 responsibility section, the role inherits L1-L3 unchanged.
 
-Cross-reference: [`common/agent-boundaries`](../references/sub-skills/common/agent-boundaries.md) (a sub-skill) names the role roster every agent sees — the *team-awareness* counterpart to this slot's *self-awareness* content.
+> **Whole-slot `replace` on responsibility is an escape hatch, not a default tool.** Unlike `soul` (which is append-only with §3.4 semantic-merge precedence so shipped persona stays on disk), an L4 `### replace` on `## Responsibility` **silently discards the entire L1-L3 responsibility block** for that role — including L1's universal team-discipline base ("decline by routing to the correct role") and L2's role-specific does/does-NOT/why contract. The `l4-curation` elicitation dialog must surface this consequence to the human before persisting any whole-slot replace on responsibility, and route most "I want to change PM's boundaries" requests toward `append` instead. Whole-slot replace is intended for genuinely unusual installs where the shipped role contract doesn't apply (e.g. a single-human project that has no DM at all), not for incremental tweaks.
+
+Cross-reference: [`common/agent-boundaries`](../references/sub-skills/common/agent-boundaries.md) (being retired into this slot per §5.5) names the role roster every agent sees — the *team-awareness* counterpart to this slot's *self-awareness* content.
 
 ### 5.3 Soul
 
@@ -483,21 +485,21 @@ The single ordered checklist for what the agent does. Each step is a **reference
 Structure (suggested H3 grouping within the H2):
 
 ```markdown
-## 3. Instructions
+## 4. Instructions
 
-### 3.1 On boot (one-time, session start)
+### 4.1 On boot (one-time, session start)
 1. **step:boot/permission-check** → see sub-skill `permission-check`
 2. **step:boot/mode-detect** → see sub-skill `boot-bootstrap`
 3. **step:boot/load-fragments** → see sub-skill `boot-bootstrap`
 
-### 3.2 Each cycle
+### 4.2 Each cycle
 1. **step:cycle/pre-cycle** → see sub-skill `cycle-runner` (pre phase)
 2. **step:cycle/context-pressure** → see sub-skill `context-pressure`
 3. **step:cycle/pipeline-sentinel** → see sub-skill `pipeline-sentinel`
    *(pm-only; see [sub-skill-catalog.md](sub-skill-catalog.md))*
    ...
 
-### 3.3 On shutdown
+### 4.3 On shutdown
 1. **step:shutdown/graceful-stop** → see sub-skill `agent-lifecycle` (shutdown)
 ```
 
@@ -911,6 +913,22 @@ When the agent receives a new instruction, it walks this decision tree:
 
 4. Is the instruction not an instruction at all — but a project context fact?
    → Add prose under ## Project Context (append-only; no H3 op grammar).
+
+5. Does the instruction require functionality that maps to a NEW sub-skill
+   not yet in the catalog?
+   → Stop. This is shipped-content work, not L4 customization.
+     a. Check the catalog (sub-skill-catalog.md) and disk
+        (references/sub-skills/) for an existing sub-skill that covers
+        the need — usually one exists and the instruction can become a
+        cycle/insert-after that references it.
+     b. If genuinely no existing sub-skill fits, the agent surfaces
+        this to the human as a "feature request against the SquidSquad
+        repo" — new sub-skills are part of shipped L1-L3 behaviour and
+        must be authored upstream, then released, then composed in.
+     c. Do NOT write an L4 op that references a sub-skill name not
+        already in the catalog — §4.5 catalog-drift validation will
+        reject it, and the failure mode is confusing (compose error,
+        not a clear "you can't add new sub-skills here").
 ```
 
 If the agent cannot decide between `replace` and `insert-after` (e.g. the new instruction is ambiguous), the agent **asks the human a single clarifying question** before persisting.
