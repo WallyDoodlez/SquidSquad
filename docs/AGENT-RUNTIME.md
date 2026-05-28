@@ -386,20 +386,18 @@ At-least-once delivery: cursor advances only after a successful ack. Crashed age
 
 #### Role-based filtering
 
-Events are filtered to what each role cares about. Today's per-role filter (loop mode):
+Under v2 the filter collapses to a single rule: **every role reacts only to `assigned-to`**. Specificity moves to `event_context` and the alias-match care filter (§7.4). There is no per-role event-type allowlist in the v2 catalog because the v2 catalog itself collapses to 3 signal concepts (§4.2) — multi-type filtering is moot once the catalog has one routing signal.
 
 ```mermaid
 graph TD
-    ALL["All Events in EventStream"]
-    ALL --> PM["pm sees:<br/>pr-merged, compose-completed<br/>verification-failed, verification-passed<br/>cycle-start, cycle-end<br/>status-transition, agent-health"]
-    ALL --> VERIFIER["verifier sees:<br/>pr-merged, compose-completed<br/>status-transition, cycle-end<br/>verification-failed"]
-    ALL --> WORKER["worker sees:<br/>pr-merged, compose-completed<br/>verification-failed, status-transition"]
-    ALL --> DM["dm sees:<br/>status-transition, pr-merged<br/>verification-passed, compose-completed"]
+    ALL["All bus signals (v2 catalog)"]
+    ALL --> PM["pm: assigned-to (care filter on alias)"]
+    ALL --> VERIFIER["verifier: assigned-to (care filter on alias)"]
+    ALL --> WORKER["worker: assigned-to (care filter on alias)"]
+    ALL --> DM["dm: assigned-to (care filter on alias)"]
 ```
 
-Filtering is client-side in `cycle_pre.py` via `_ROLE_EVENT_TYPES` dict. Roles not in the dict receive all events.
-
-Under v2 this filter collapses dramatically: every role reacts-to `assigned-to` only. Specificity moves to `event_context` and target-role match (§7.4 care filter).
+> **v1 loop-mode legacy**. Today's loop-mode codebase still has a per-role event-type allowlist (client-side filter in `cycle_pre.py` via `_ROLE_EVENT_TYPES` dict; roles not in the dict receive all events). That filter exists because loop mode still emits the broader v1 catalog (lifecycle ticks, git/PR/tracker activity, etc. — see §4.2 "What is OUT of the v2 catalog"). The filter is retired as the v2 catalog migration completes (see §8); the diagram above is the v2 target.
 
 ### 4.4 ExternalActivityDetector (EAD)
 
@@ -562,7 +560,7 @@ Each agent typically runs in its own git clone. The harness writes its port to `
 
 ### 6.1 The Ralph Loop cycle
 
-A cycle has three phases (vault touchpoints inlined; see §6.5 + VAULT-ARCH §7 for execution-lane detail):
+A cycle has three phases (vault touchpoints inlined; see §6.6 + VAULT-ARCH §7 for execution-lane detail):
 
 ```
 Boot (session start, once):
@@ -608,7 +606,7 @@ Boot (session start, once):
 └──────────────────────────────────────────────────┘
 ```
 
-The agent only writes the creative phase. Mechanical phases are deterministic scripts. Vault sub-skills split between inline execution (`vault-protocol`, `vault-optimize`) and background-subagent execution (`vault-remember`, `vault-synthesis`) — see §6.5.
+The agent only writes the creative phase. Mechanical phases are deterministic scripts. Vault sub-skills split between inline execution (`vault-protocol`, `vault-optimize`) and background-subagent execution (`vault-remember`, `vault-synthesis`) — see §6.6.
 
 ### 6.2 What wakes the agent in loop mode
 
@@ -643,7 +641,7 @@ When the cycle's context usage exceeds the configured threshold (default 70%), t
 
 This is loop mode's primary form of session lifecycle — agents don't shut down cleanly between cycles; they respawn (with harness) or stop (without) on context pressure.
 
-### 6.5 Vault touchpoints within Phase 2
+### 6.6 Vault touchpoints within Phase 2
 
 Vault sub-skills participate in the creative phase at four touchpoints. They split into two execution lanes by weight — anything that requires meaningful reasoning over vault content runs out of process to keep the consuming agent's context lean:
 
@@ -1171,7 +1169,7 @@ PM agents recognize this set as their care-filter; new values added in future re
 - **2026-05-25 (rev 9) — post-#6274 `qa` → `verifier` rename + loop/event mutual-exclusivity on event-bus axis + vault invocation polish.** Three coordinated edits:
   - **Role rename**: post-#6274 (shipped 2026-05-23) the canonical role is `verifier`, not `qa`. Swept all instance-level references in this doc (Terminology table, §2.1 latency-floor example, §3.1 + §3.2 mermaid subgraph and tree labels, §4.3 role-filtering diagram, §7.3 verification-needed sequence diagram + routing table, §7.5 EAD safety-net sequence diagram, §7.6 subloop role list). Wire-format strings updated too: `target_role:qa` → `target_alias:verifier`, `role:qa` → `role:verifier`, `event_context:"qa-rejected"` → `event_context:"verifier-rejected"`, `GET /events/for/qa` → `GET /events/for/verifier`. Note: live code (`references/scripts/triage.py`, `cycle_pre.py:614`) still emits `qa-rejected` — doc now describes architectural target; code task to skill.
   - **Loop/event mutual exclusivity** (§2 + §4.5 + §4.6 + §6.1 + §6.3 + §7 lead): loop mode is now documented as emit-only on the event bus (no consume, no cursor); event mode is the exclusive home for bus consumption + cursor logic. Loop-mode mechanical reactions derive from tracker state changes since last cycle (timestamp dedup in working-state.md), not from event-bus reads. Rationale: keeps the harness contract uniform — loop is observational-only, event is load-bearing.
-  - **Vault invocation** (§6.1 diagram + §6.5 new sub-section): named the four Phase 2 vault touchpoints + boot-time BRIEFING read + the inline-vs-subagent execution lane principle (heavy sub-skills `vault-remember` and `vault-synthesis` run on the `sonnet` tier via background subagent; light ones `vault-protocol` and `vault-optimize` stay inline). Cross-references VAULT-ARCH §7 for the lane principle's full rationale.
+  - **Vault invocation** (§6.1 diagram + §6.6 new sub-section): named the four Phase 2 vault touchpoints + boot-time BRIEFING read + the inline-vs-subagent execution lane principle (heavy sub-skills `vault-remember` and `vault-synthesis` run on the `sonnet` tier via background subagent; light ones `vault-protocol` and `vault-optimize` stay inline). Cross-references VAULT-ARCH §7 for the lane principle's full rationale.
   - **Vault flag retirement** (§6.1 diagram): dropped the `· read vault-remember + vault-optimize flags` line from Phase 1 and the `· advance event cursor` line from Phase 3 (both per the above changes). The vault-remember/vault-optimize `Enabled` flags in `config.md` are being retired; both sub-skills are always-on and self-gate via their per-cycle conditions. Code task to skill.
 - **2026-05-25 (rev 10) — class vs alias as routing primitive + responsibility.md / permission-table retirement.** Architectural simplification arc:
   - **Class vs alias** (Terminology refactor + wire-format swap): role classes (pm/dm/worker/verifier) are categorical and have uniform L2/L3 + bus contract per class; aliases are per-agent unique names from `config.md` `## Aliases`. An install may have 1..N agents per class — e.g., 2 frontend + 2 backend worker-class agents named `frontend-1`, `frontend-2`, `backend-1`, `backend-2` (four worker-class agents, four distinct aliases). Specialty/skill (FE/BE/iOS/etc.) lives in SOUL.md + L4, not in a separate class. Wire-format field `target_role` renamed to `target_alias` across all 16 catalog + sequence-diagram + routing-table references; care filter is now `target_alias == my_alias`; EAD emits one assigned-to per (forge change, target_alias) pair.
