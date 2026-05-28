@@ -67,7 +67,7 @@ Four layers, in shipping/precedence order:
 
 | Layer | Purpose | Authoring location | Authored by |
 |---|---|---|---|
-| **L1** — Base | What ANY SquidSquad agent is. Universal baseline: identity foundation, core principles, tracker protocol, cycle runner transport, inter-agent communication channels (§5.1). Every role on every install starts from here. | `references/sub-skills/common/` (sub-skills L1 references) and the L1 portion of role source files | SquidSquad maintainers (shipped) |
+| **L1** — Base | What ANY SquidSquad agent is. Universal baseline: identity foundation, core principles, tracker protocol, cycle runner transport, inter-agent communication via forge (§5.1.1). Every role on every install starts from here. | `references/sub-skills/common/` (sub-skills L1 references) and the L1 portion of role source files | SquidSquad maintainers (shipped) |
 | **L2** — Role | Role-specific behaviours: `pm` coordinates, `verifier` verifies, `dm` packages, `worker` implements. The role-defining contract (responsibility, role-specific instructions, role-specific tone). | `references/roles/<role>/instructions.md` + `references/roles/<role>/SOUL.md` + `references/sub-skills/roles/<role>/` | SquidSquad maintainers (shipped) |
 | **L3** — Variant (role + domain) | Per-stack or per-domain specialization of a role: a `worker` for the android stack, a `verifier` for the web stack, etc. Same role contract narrowed to a domain. | `references/roles/<role>/<domain>/` (e.g. `roles/worker/android/`, `roles/verifier/web/`) | SquidSquad maintainers (shipped) |
 | **L4** — Project (per-install + role-class) | Project-local customizations of one role-class for this install. Sourced from human conversation in the deployed project. Includes project-specific instructions, project context, identity overlays, vault customization. | `.squidsquad/project/<role-class>.md` (project-local, not distributed) | Agent (via human conversation), persisted by `compose.py` |
@@ -80,7 +80,7 @@ Four layers, in shipping/precedence order:
 flowchart TB
   subgraph SHIP["SquidSquad-shipped (versioned in main repo)"]
     direction TB
-    L1["<b>L1 — Base</b><br/>What ANY agent is.<br/>Universal baseline: identity, principles,<br/>tracker protocol, inter-agent comm channels.<br/><i>references/sub-skills/common/ + L1 portion of role files</i>"]
+    L1["<b>L1 — Base</b><br/>What ANY agent is.<br/>Universal baseline: identity, principles,<br/>tracker protocol, forge-as-comm-truth.<br/><i>references/sub-skills/common/ + L1 portion of role files</i>"]
     L2["<b>L2 — Role</b><br/>What THIS role is.<br/>pm coordinates · verifier verifies ·<br/>worker implements · dm packages.<br/><i>references/roles/&lt;role&gt;/ + references/sub-skills/roles/&lt;role&gt;/</i>"]
     L3["<b>L3 — Variant</b><br/>Role + domain specialization.<br/>e.g. fe-worker, be-worker, android-verifier.<br/><i>references/roles/&lt;role&gt;/&lt;domain&gt;/</i>"]
     L1 --> L2 --> L3
@@ -430,9 +430,51 @@ No other H2 may appear at the document top level. (Sub-sections at H3+ are unres
 - Team membership ("You are a SquidSquad agent on a four-role team: pm, verifier, worker, dm — see [AGENT-RUNTIME.md](AGENT-RUNTIME.md) Terminology section.").
 - Lifecycle governance ("Your wake mechanism — polling or event-driven — is determined by the harness. The harness owns all start/stop/restart authority.").
 - Team-awareness: who the other roles are and what they do (one short paragraph each).
-- **Inter-agent communication channels** (L1 universal): "You communicate with other agents via (a) **tracker comments** (append-only, async) — use the `discussion` sub-skill for the procedure; and (b) the **event bus** — see [AGENT-RUNTIME.md](AGENT-RUNTIME.md) §7. Never wait synchronously for another agent; file a tracker comment or event and continue your cycle."
+- **Inter-agent communication** (L1 universal): "All communication between agents flows through the **forge** (the tracker — Issues/PRs and their comments). Forge is the source of truth; events are nudges, not a channel. To message another agent: write a tracker comment via the `discussion` sub-skill, assign/route to the target, then fire a nudge event so the target wakes if idle. See §5.1.1 for the full sequence and [AGENT-RUNTIME.md](AGENT-RUNTIME.md) §7 for the event bus mechanics."
 
 Authored across multiple L1-L3 files (each contributes via `slot: identity`); L4 may insert/replace project-specific identity facts.
+
+#### 5.1.1 Inter-agent communication: forge as truth, events as wake
+
+The **forge** (the tracker — GitHub Issues/PRs and their comments) is the *only* communication channel between agents. Every message one agent needs another agent to see is written there: append-only, durable, role-tagged via `tracker.py`, queryable across cycles. Agents read forge state at the start of each cycle and act on what they observe.
+
+Events are **not** a communication channel — they carry no semantic payload. An event is a nudge that tells a target "something changed for you on the forge; consider waking now instead of at your next polling tick." If the target is mid-cycle, the nudge is ignored (no preemption); the target picks up the forge change on its next natural cycle. If the target is idle, the nudge wakes it early via its Monitor subscription.
+
+**To send another agent a message:**
+
+1. **Write to forge** — append a tracker comment via the `discussion` sub-skill (durable, role-tagged, visible to humans and future agents).
+2. **Route to target** — update issue state (assignee, labels) so the message lands in the target's normal pipeline queries.
+3. **Nudge** — fire a nudge event with `target=<role>` so an idle target wakes early. Lost or missed nudges are harmless: the next natural polling cycle still picks up the forge change.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant W as Writer agent
+    participant F as Forge (tracker)
+    participant E as Event bus
+    participant M as Target's Monitor
+    participant T as Target agent
+
+    W->>F: 1. Append tracker comment + update assignee/labels
+    W->>E: 2. Fire nudge event (target=T)
+    E->>M: 3. Dispatch nudge
+    alt T is idle
+        M->>T: 4a. Wake signal
+        T->>F: 5a. Read forge state
+        T->>T: 6a. Act on forge content
+    else T is mid-cycle
+        M-->>M: 4b. Nudge ignored (no preemption)
+        T->>F: 5b. Read forge state on next natural cycle
+        T->>T: 6b. Act on forge content
+    end
+```
+
+**Why forge-as-truth, not events-as-channel:**
+
+- **Durability** — forge messages survive cycle ends, context resets, harness restarts. Event payloads do not.
+- **Auditability** — every cross-agent message is a tracker comment, visible to humans and future agents reading the thread.
+- **Idempotence** — a lost or missed nudge just delays a wake; the next polling cycle still sees the forge change. An events-as-channel model would silently lose the message.
+- **No synchronous waits** — an agent never blocks waiting for a reply; it writes to forge, optionally nudges, and continues its own cycle.
 
 ### 5.2 Responsibility
 
