@@ -114,7 +114,7 @@ Reusable across multiple roles.
 
 | Sub-skill | One-liner | Used by |
 |---|---|---|
-| `discussion-protocol` | Append-only tracker comment format | dev (roles override) |
+| `discussion` | Append-only tracker comment format — the inter-agent communication channel named in [COMPOSE-ARCHITECTURE.md §5.1](COMPOSE-ARCHITECTURE.md#51-identity) (renamed from `discussion-protocol` at #10360) | all roles (per-role overrides retire at #10360) |
 | `issue-filing` | Self-file and cross-file bug templates | dev (roles override) |
 | `working-state` | Working-state file format and update rules | dev |
 | `pickup-comment-fidelity` | Pickup comments must accurately reflect tracker state | dev |
@@ -191,7 +191,7 @@ Role-specific event extras:
 
 > **Note on `prohibitions` — retired entirely (inlined into L1/L2)** — 4 files today (`common/prohibitions.md` + per-role overrides in `pm/`, `verifier/`, `dm/`, ~63 lines total). Content is role-boundary content, not focused how-to. Splits cleanly: universal "never do" rules ("never push without pulling", "never edit composed CLAUDE.md", etc.) go to **L1 Identity Boundaries** ([§5.1](COMPOSE-ARCHITECTURE.md#51-identity)); role-specific rules ("PM never verifies", "QA never ships with failed tests") go to **L2 Responsibility "does NOT do"** ([§5.2](COMPOSE-ARCHITECTURE.md#52-responsibility)) — substantially duplicates what's already in each role's responsibility content. The 4 files are deleted at #10360 implementation time.
 
-> **Note on `discussion-protocol` and `issue-filing` — keep `common/` only, collapse per-role overrides** — Both ARE legitimate sub-skills (focused how-to procedures for tracker comments and bug filing). The per-role overrides in `pm/`, `verifier/`, `dm/` exist only to bake the role name into the bash example instead of using the `[ROLE]` placeholder — pure DRY violations with no functional difference. Resolution: keep `common/discussion-protocol.md` and `common/issue-filing.md` as the single authoring location, with `[ROLE]` placeholder substitution per the manifest's Placeholder Substitution rules; delete the 6 per-role overrides at #10360.
+> **Note on `discussion` and `issue-filing` — keep `common/` only, collapse per-role overrides; `discussion-protocol` renames to `discussion`** — Both ARE legitimate sub-skills (focused how-to procedures for tracker comments and bug filing). `discussion` is the procedure for the **inter-agent communication channel** named at L1 Identity ([COMPOSE-ARCHITECTURE.md §5.1](COMPOSE-ARCHITECTURE.md#51-identity)). The per-role overrides in `pm/`, `verifier/`, `dm/` exist only to bake the role name into the bash example instead of using the `[ROLE]` placeholder — pure DRY violations with no functional difference. Resolution: keep `common/discussion.md` (renamed from `discussion-protocol.md` — the "protocol" suffix added no information; L1 Identity references the short name) and `common/issue-filing.md` as the single authoring location, with `[ROLE]` placeholder substitution per the manifest's Placeholder Substitution rules; delete the 6 per-role overrides at #10360.
 
 ### PM (`roles/pm/`)
 
@@ -209,7 +209,7 @@ Role-specific event extras:
 | `soul-shepherd` | Detect character signals in new tasks; update SOUL adaptations |
 | `improvement-scan` | PM variant — process-focused, never code |
 | `issue-filing` | PM's bug-filing protocol (behavior-only, no RCA) |
-| `discussion-protocol` | PM's comment format |
+| `discussion-protocol` | PM's comment format (→ retires; common/`discussion` is the canonical) |
 | `prohibitions` | PM "never do" rules |
 | `vault-synthesis` | Cross-agent pattern detection (PM-only) |
 | `ralph-loop-overview` | Runtime-loaded polling-mode cycle contract |
@@ -220,7 +220,7 @@ Role-specific event extras:
 |---|---|
 | `verification` | Steps 2–6 — E2E tests, AC verification, health check |
 | `issue-filing` | QA's bug template (with reproduction + AC reference) |
-| `discussion-protocol` | QA's comment format |
+| `discussion-protocol` | QA's comment format (→ retires; common/`discussion` is the canonical) |
 | `prohibitions` | QA "never do" rules (e.g. no shipping with failed tests) |
 | `ralph-loop-overview` | Runtime-loaded polling-mode cycle contract |
 | Domain context | Per-stack QA notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
@@ -236,7 +236,7 @@ Role-specific event extras:
 | `version-bumps` | Bump rules (uses `shipped_since_bump` counter) |
 | `doc-improvement-loop` | DM's scan: drift between source docs and shipped state |
 | `issue-filing` | DM's bug template |
-| `discussion-protocol` | DM's comment format |
+| `discussion-protocol` | DM's comment format (→ retires; common/`discussion` is the canonical) |
 | `prohibitions` | DM "never do" rules |
 | `ralph-loop-overview` | Runtime-loaded polling-mode cycle contract |
 | Domain context | Per-stack DM notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
