@@ -211,6 +211,7 @@ Role-specific event extras:
 | `discussion-protocol` | PM's comment format (→ retires; common/`discussion` is the canonical) |
 | `vault-synthesis` | Cross-agent pattern detection (PM-only) |
 | `ralph-loop-overview` | Runtime-loaded polling-mode cycle contract |
+| Domain context | Per-stack PM notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
 
 ### QA (`roles/qa/`)
 
