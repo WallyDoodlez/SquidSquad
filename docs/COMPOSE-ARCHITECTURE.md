@@ -25,10 +25,10 @@ The composition must:
 ```mermaid
 flowchart LR
     subgraph SOURCES["Sources (compose inputs)"]
-        L1["L1 — Base<br/>(universal orchestration)"]
-        L2["L2 — Capability<br/>(cross-cutting orchestration)"]
-        L3["L3 — Role<br/>(role-specific orchestration)"]
-        L4["L4 — Project<br/>(project-local overlay)"]
+        L1["L1 — Base<br/>(universal: every agent)"]
+        L2["L2 — Role<br/>(role-specific: pm / verifier / worker / dm)"]
+        L3["L3 — Variant<br/>(role + domain: e.g. fe-worker)"]
+        L4["L4 — Project<br/>(per-install overlay)"]
     end
 
     Compose["compose.py<br/>(stacks L1→L4)"]
@@ -67,10 +67,12 @@ Four layers, in shipping/precedence order:
 
 | Layer | Purpose | Authoring location | Authored by |
 |---|---|---|---|
-| **L1** — Base | What ANY SquidSquad agent is. Identity foundation, core principles, tracker protocol, cycle runner transport. | `references/sub-skills/common/` and parts of `references/sub-skills/manifest.md` | SquidSquad maintainers (shipped) |
-| **L2** — Capability | Cross-cutting behaviours that some roles share: vault, improvement scanning, agent lifecycle, git commit protocol, working-state format. | `references/sub-skills/common/` (the bulk) | SquidSquad maintainers (shipped) |
-| **L3** — Role | Role-specific behaviours: `pm`'s pipeline sentinel, `verifier`'s verification, `dm`'s delivery packaging, `worker`'s task implementation. | `references/sub-skills/roles/<role>/` and `references/roles/<role>/instructions.md` | SquidSquad maintainers (shipped) |
-| **L4** — Project | Project-local customizations sourced from human conversation in the deployed install. Includes project-specific instructions, project context, identity overlays, vault customization. | `.squidsquad/project/` (project-local, not distributed) | Agent (via human conversation), persisted by `compose.py` |
+| **L1** — Base | What ANY SquidSquad agent is. Universal baseline: identity foundation, core principles, tracker protocol, cycle runner transport, inter-agent communication channels (§5.1). Every role on every install starts from here. | `references/sub-skills/common/` (sub-skills L1 references) and the L1 portion of role source files | SquidSquad maintainers (shipped) |
+| **L2** — Role | Role-specific behaviours: `pm` coordinates, `verifier` verifies, `dm` packages, `worker` implements. The role-defining contract (responsibility, role-specific instructions, role-specific tone). | `references/roles/<role>/instructions.md` + `references/roles/<role>/SOUL.md` + `references/sub-skills/roles/<role>/` | SquidSquad maintainers (shipped) |
+| **L3** — Variant (role + domain) | Per-stack or per-domain specialization of a role: a `worker` for the android stack, a `verifier` for the web stack, etc. Same role contract narrowed to a domain. | `references/roles/<role>/<domain>/` (e.g. `roles/worker/android/`, `roles/verifier/web/`) | SquidSquad maintainers (shipped) |
+| **L4** — Project (per-install + role-class) | Project-local customizations of one role-class for this install. Sourced from human conversation in the deployed project. Includes project-specific instructions, project context, identity overlays, vault customization. | `.squidsquad/project/<role-class>.md` (project-local, not distributed) | Agent (via human conversation), persisted by `compose.py` |
+
+**Each layer is *more specific* than the previous**: L1 = every agent → L2 = this role → L3 = this role + this domain → L4 = this role + this domain + this install. Cross-cutting sub-skills like `vault-protocol`, `improvement-scan`, `git-commit`, `agent-lifecycle` live in `references/sub-skills/common/` and are **referenced from** the appropriate layer (usually L1) — they aren't a layer themselves; they're shared procedures that layered instructions invoke.
 
 **Key invariant** — L1-L3 are part of the SquidSquad repo and ship globally. L4 is *generated and maintained per-install* by the agent in response to human instruction in the deployed project. L4 is the **memory of how this project diverges from default SquidSquad behaviour**.
 
@@ -78,13 +80,13 @@ Four layers, in shipping/precedence order:
 flowchart TB
   subgraph SHIP["SquidSquad-shipped (versioned in main repo)"]
     direction TB
-    L1["<b>L1 — Base</b><br/>What ANY agent is.<br/>Identity, principles, tracker protocol.<br/><i>references/sub-skills/common/</i>"]
-    L2["<b>L2 — Capability</b><br/>Cross-cutting: vault, scanning,<br/>git, lifecycle.<br/><i>references/sub-skills/common/</i>"]
-    L3["<b>L3 — Role</b><br/>Role-specific: pm, verifier, worker, dm.<br/><i>references/sub-skills/roles/&lt;role&gt;/</i>"]
+    L1["<b>L1 — Base</b><br/>What ANY agent is.<br/>Universal baseline: identity, principles,<br/>tracker protocol, inter-agent comm channels.<br/><i>references/sub-skills/common/ + L1 portion of role files</i>"]
+    L2["<b>L2 — Role</b><br/>What THIS role is.<br/>pm coordinates · verifier verifies ·<br/>worker implements · dm packages.<br/><i>references/roles/&lt;role&gt;/ + references/sub-skills/roles/&lt;role&gt;/</i>"]
+    L3["<b>L3 — Variant</b><br/>Role + domain specialization.<br/>e.g. fe-worker, be-worker, android-verifier.<br/><i>references/roles/&lt;role&gt;/&lt;domain&gt;/</i>"]
     L1 --> L2 --> L3
   end
   subgraph LOCAL["Project-local (per-install, not distributed)"]
-    L4["<b>L4 — Project</b><br/>Customizations from human conversation.<br/>replace / insert / append ops on L1-L3.<br/><i>.squidsquad/project/</i>"]
+    L4["<b>L4 — Project</b><br/>Per-install + role-class customizations.<br/>replace / insert / append ops on L1-L3.<br/><i>.squidsquad/project/&lt;role-class&gt;.md</i>"]
   end
   L3 --> L4
   L4 -->|"compose.py deploy &lt;role&gt;"| OUT["<b>.squidsquad/&lt;role&gt;/CLAUDE.md</b><br/>composed output — DO NOT EDIT"]
