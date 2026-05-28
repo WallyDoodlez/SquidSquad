@@ -226,7 +226,7 @@ Once approved, the installer:
 1. **Cleans up** any prior partial state (if a previous interrupted install left artifacts).
 2. **Serializes the install spec** to a temporary location for the scaffold step.
 3. **Scaffolds `.squidsquad/`** — creates the per-alias agent dirs, vault skeleton, project-local L4 directory, config.md, and per-alias SOUL.md files. No tool/MCP wiring (per §8).
-4. **Enriches L4 project files** (#6581) — fills in the seed templates from `references/sub-skills/project/` with the conversational answers (e.g. project domain, audience, conventions).
+4. **Seeds L4 Project Context** — for each role-class in the chosen preset, writes the Phase 1 project-intake answers (domain, audience, primary language/stack, repositories of record, external systems, project-specific tone notes) into `.squidsquad/project/<role-class>.md` under the `## Project Context` H2 section. This is the single unified L4 file per role-class (per [COMPOSE-ARCHITECTURE.md §3.3 + §7.3](COMPOSE-ARCHITECTURE.md) and the "two complementary sources" callout in [§5.5](COMPOSE-ARCHITECTURE.md)). The legacy multi-file enrichment pattern (`references/sub-skills/project/<role>-instructions.md`, `<role>-responsibility.md`, `<role>-soul-directives.md`, `shared-*.md`, `setup-upgrade-gate.md`) is retired; the unified L4 file replaces it. Other L4 slots (Identity / Soul / Instructions / etc.) start empty at install time and are populated at runtime by the `l4-curation` sub-skill (per [COMPOSE-ARCHITECTURE.md §7](COMPOSE-ARCHITECTURE.md)).
 5. **Ensures GitHub labels** — creates the status/role/type/priority/severity label taxonomy via `gh label create` (idempotent per-label check).
 
 Writes are local but not yet committed. Helpers handle the mechanical work; the installer agent acts on JSON outputs only.
@@ -285,10 +285,11 @@ The full `.squidsquad/` tree post-install. PM and DM dirs are always present (si
 │   ├── CLAUDE.md, SOUL.md
 │   ├── working-state.md
 │   └── iterations/
-├── project/                     # L4 (enriched from references/sub-skills/project/ seeds)
-│   ├── shared-{instructions,responsibility,soul-directives}.md
-│   ├── <role>-{instructions,responsibility,soul-directives}.md per role in preset
-│   └── setup-upgrade-gate.md
+├── project/                     # L4 — one unified file per role-class
+│   ├── pm.md                    # H2 slot sections; ## Project Context seeded from Phase 1
+│   ├── <worker-class>.md        # one per worker class in the preset
+│   ├── <verifier-class>.md      # one per verifier class in the preset
+│   └── dm.md                    # H2 slot sections; ## Project Context seeded from Phase 1
 ├── vault/                       # shared memory (PM + workers R/W, verifiers + DM read-only)
 │   ├── BRIEFING.md
 │   ├── projects/
