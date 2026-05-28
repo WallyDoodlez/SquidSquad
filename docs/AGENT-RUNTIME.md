@@ -26,7 +26,7 @@ SquidSquad has a small fixed set of **role classes** and a per-install set of **
 - Every running agent has a unique alias. The alias IS the agent's name in all routing.
 - A single-instance install can use the class name as its alias (default: a `worker`-class agent is named `worker`).
 - A multi-instance install MUST give each agent of the same class a distinct alias. Example: an install with 2 frontend + 2 backend worker-class agents might use aliases `frontend-1`, `frontend-2`, `backend-1`, `backend-2` — four worker-class agents, four distinct aliases.
-- **Instances of the same class-role are interchangeable.** All instances of a given class-role compose from byte-identical L1–L4 and share one L4 file (per `COMPOSE-ARCHITECTURE.md` §3.3 / §7.3). Aliases differ only as routing addresses; the *behaviour* behind each alias of a given class is the same. Sender-side routing logic that needs to pick between same-class aliases (e.g., for load balancing) can compare queue depth or any other observable signal — class-role behaviour is by definition uniform.
+- **Instances of the same class + L3 domain are interchangeable.** All instances of the same `(L2 class, L3 domain)` pair (e.g., two FE-worker agents, or two PM agents) compose from byte-identical L1–L4 and share **one L4 file per `(class, domain)` pair** (per `COMPOSE-ARCHITECTURE.md` §3.3 / §7.3). Aliases differ only as routing addresses; the *behaviour* behind each alias within a `(class, domain)` is the same. Sender-side routing logic that needs to pick between interchangeable aliases (e.g., for load balancing) can compare queue depth or any other observable signal. Note: different L3 domains of the *same* L2 class are NOT interchangeable — an FE-worker and a BE-worker have separate L4 files (`fe-worker.md` and `be-worker.md`) and different specialty rules. The simple `worker.md` case applies only to installs without L3 domain specialization.
 - Specialty/skill (FE vs BE vs iOS, etc.) lives in **L3 (the domain layer)** and is shared across all agents of the same domain. Two FE-worker agents share L1 + L2 (worker class) + L3 (FE domain); two BE-worker agents share L1 + L2 + L3 (BE domain). The same layering applies to verifier-class agents — FE verifiers share an FE L3 with other FE verifiers, BE verifiers with other BE verifiers. Per-agent identity (personality, situational tone) lives in `SOUL.md`; install/operator-specific overrides live in L4.
 - Each agent knows the other aliases on the team and their declared specialties (visible from each agent's composed CLAUDE.md and from the install's `config.md` `## Aliases` registry); mis-routed work is re-assigned via `/work/assign` to the correct alias (see §7.3 mis-route recovery).
 
@@ -336,6 +336,10 @@ flowchart TB
     Forge[("Forge<br/>(GitHub Issues)")]
     EAPoll <-- "gh api repos/.../issues?since=..." --> Forge
 ```
+
+#### Vocabulary note — `{role}` in HTTP paths is actually `{alias}`
+
+The endpoints throughout this section use `{role}` in path parameters (e.g., `GET /events/for/{role}`, `GET /events/cursor/{role}`, `GET /agents/{role}`). **The value passed is always the agent's alias** (e.g., `skill`, `verifier`, `human`, `frontend-1`), not the L2 categorical class (`pm`/`verifier`/`worker`/`dm`). The path-parameter name `{role}` predates the alias concept and is misleading; see [HARNESS-ARCH.md §9](HARNESS-ARCH.md#9-vocabulary-notes) for the canonical statement. A rename to `{alias}` is in the same family as #10358 (`role` → `alias` identifier rename) but is out of scope on that task to limit blast radius. Implementers should treat `{role}` as a synonym for `{alias}` until the rename lands.
 
 #### Event store (deque)
 
@@ -650,11 +654,11 @@ Vault sub-skills participate in the creative phase at four touchpoints. They spl
 | Touchpoint | Sub-skill | Lane | When |
 |---|---|---|---|
 | Continuous reads/writes during work | `vault-protocol` | **inline** | Throughout Phase 2; the agent IS doing the read/write the protocol governs |
-| End-of-Phase-2 reflection | `vault-remember` | **background subagent** (`sonnet`) | Step 4b, gated by the non-quiet-cycle check only (always-on; no feature toggle). Returns `{action, path, type, body, reason}` per candidate; consuming agent applies the write list deterministically |
-| Quiet-cycle housekeeping | `vault-optimize` | **inline** | Quiet cycle, after improvement-scan check; gated by 20+ note count. Wrapper around `vault_optimize.py run` — no reasoning to offload |
-| Every-5-quiet cross-agent synthesis | `vault-synthesis` | **background subagent** (`sonnet`) | PM only; counter resets on real work or completed synthesis. Returns ≤1 posture descriptor; consuming agent writes it via `vault-create` + files the pending-review task |
+| End-of-Phase-2 reflection | `vault-remember` | **background subagent** (`sonnet`) *— target lane; see §6.6 Implementation gap* | Step 4b, gated by the non-quiet-cycle check only (always-on; no feature toggle). Default write budget 2/cycle (configurable via `config.md` `Vault Remember > Writes Per Cycle`; surplus deferred by priority decisions > learnings > patterns — see [VAULT-ARCH §7.2](VAULT-ARCH.md#72-vault-remember) for full reflection rules). Returns `{action, path, type, body, reason}` per candidate; consuming agent applies the write list deterministically |
+| Quiet-cycle housekeeping | `vault-optimize` | **inline** | Quiet cycle, after improvement-scan check (skips if the scan would fire this cycle); gated by 20+ note count. Wrapper around `vault_optimize.py run` — no reasoning to offload |
+| Every-5-quiet cross-agent synthesis | `vault-synthesis` | **background subagent** (`sonnet`) *— target lane; see §6.6 Implementation gap* | PM only; fires after 5 consecutive quiet cycles **and** vault has 10+ galaxy notes. Counter resets on real work or completed synthesis. Returns ≤1 posture descriptor; consuming agent writes it via `vault-create` + files the pending-review task |
 
-A fifth touchpoint sits **outside** the per-cycle phases: at boot (session start, once per session), every agent reads `.squidsquad/vault/BRIEFING.md` for active context. That's part of `vault-protocol` and is always inline.
+A fifth touchpoint sits **outside** the per-cycle phases: at boot (session start, once per session), every agent reads `.squidsquad/vault/BRIEFING.md` for active context. That's part of `vault-protocol` and is always inline. The **BRIEFING.md staleness check** runs *every* cycle including quiet cycles (always-on; not subject to the quiet-cycle gate; doesn't consume the write budget) — see [VAULT-ARCH §5](VAULT-ARCH.md#5-briefingmd) + §7.2 for the staleness rules.
 
 The model pin for subagent-lane sub-skills is the **`sonnet`** tier — see [`VAULT-ARCH.md`](VAULT-ARCH.md) §7 Execution model and `[[decision-vault-subagent-model-sonnet]]` for rationale. The pin is by tier, not by dated version.
 
@@ -892,7 +896,7 @@ Mitigates an entire class of pickup-fidelity bugs (#9946) — agents can't forge
 
 1. Class match — the work belongs to which role-class (verifier, worker, dm)?
 2. Specialty match — within that class, which L3 domain (FE, BE, etc.) does the work map to?
-3. Instance selection — if multiple aliases of the matched class+specialty exist, the sender picks one. Selection logic is sender-defined: queue depth (`GET /events/queue-depth/{alias}` or equivalent), most recent reachability, round-robin, etc. Same-class agents are interchangeable by construction (instances compose from byte-identical L1–L4 + one shared L4 file per class), so any of them can handle the work.
+3. Instance selection — if multiple aliases of the matched class+specialty exist, the sender picks one. Selection logic is sender-defined: queue depth (`GET /events/queue-depth/{alias}` or equivalent), most recent reachability, round-robin, etc. Agents within the same `(class, L3 domain)` are interchangeable by construction (instances compose from byte-identical L1–L4 + one shared L4 file per `(class, domain)` pair — see Terminology), so any of them can handle the work.
 
 The sender comments on the issue with a one-line routing rationale when the lane isn't obvious from the status transition alone.
 
