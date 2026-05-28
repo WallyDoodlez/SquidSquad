@@ -221,6 +221,7 @@ Each `## <Slot>` section holds the project's customizations for that slot. Withi
 - **`### insert-before step:cycle/<step-id>`** — content inserted immediately before the named L1-L3 step.
 - **`### insert-after step:cycle/<step-id>`** — inserted immediately after.
 - **`### replace step:cycle/<step-id>`** — replaces the L1-L3 step's content entirely. The step ID is preserved so later inserts targeting it still resolve.
+- **`### replace`** (no `step:` target) — **whole-slot replace**. Valid only on slots that have no step IDs to target (currently `responsibility` per §3.3). Replaces the entire L1-L3 slot body with the L4 H3 block body. Compose **must reject** a bare `### replace` (no target) under any slot whose op constraints don't list whole-slot `replace`.
 
 Compose **must validate** that every `step:` reference in an `## Instructions` H3 resolves to a real L1-L3 step ID before emitting output. Unresolved references abort compose with a diagnostic.
 
@@ -583,9 +584,8 @@ This section is intentionally short — most vault detail belongs in `references
 
 ## 5. Project Context
    5.1 Domain / audience
-   5.2 File conventions (folded from today's standalone H2)
-   5.3 Status line (folded — display fact, not instruction)
-   5.4 Repositories of record
+   5.2 Status line (folded — display fact, not instruction)
+   5.3 Repositories of record
 
 ## 6. Vault
    6.1 Description
@@ -647,9 +647,8 @@ This section is intentionally short — most vault detail belongs in `references
 
 ## 5. Project Context
    5.1 Domain / audience
-   5.2 File conventions (folded from today's standalone H2)
-   5.3 Status line (folded — display fact, not instruction)
-   5.4 Repositories of record
+   5.2 Status line (folded — display fact, not instruction)
+   5.3 Repositories of record
 
 ## 6. Vault
    6.1 Description
@@ -669,7 +668,7 @@ The two TOCs are identical at §1, §2, §3, §5, §6 — and §4.1 differs by e
 | §4.1 On boot — other steps | permission-check, mode-detect, load-fragments | permission-check, mode-detect, load-fragments | No |
 | §4.2 cycle structure | 10 numbered Ralph Loop steps | 8 numbered per-event steps | **Yes — whole sub-slot** |
 | §4.3 On shutdown | graceful-stop | graceful-stop | No |
-| §5 Project Context | 5.1-5.4 | 5.1-5.4 | No |
+| §5 Project Context | 5.1-5.3 | 5.1-5.3 | No |
 | §6 Vault | 6.1-6.2 | 6.1-6.2 | No |
 
 So the **only** mode-driven divergence is `step:boot/schedule-loop` ↔ `step:boot/bootup-complete` plus the whole §4.2 sub-slot. Everything else composes bit-identically across the two manifests. Any unintentional divergence in §1, §2, §3, §4.3, §5, §6 between the two flavored outputs is a bug per §6.5 "authoring discipline".

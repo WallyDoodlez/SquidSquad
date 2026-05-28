@@ -114,14 +114,13 @@ Reusable across multiple roles.
 
 | Sub-skill | One-liner | Used by |
 |---|---|---|
-| `agent-boundaries` | "Know your teammates" — declines route to the right role, not generic "not mine" | PM, QA, DM, dev |
 | `discussion-protocol` | Append-only tracker comment format | dev (roles override) |
 | `issue-filing` | Self-file and cross-file bug templates | dev (roles override) |
 | `working-state` | Working-state file format and update rules | dev |
 | `pickup-comment-fidelity` | Pickup comments must accurately reflect tracker state | dev |
 | `prohibitions` | "Never do" rules (no force push, no skip hooks, etc.) | dev (roles override) |
-| `file-conventions` | Where things go on disk — overridable per role | dev (roles override) |
-| `status-line` | What the statusline shows during a cycle — overridable per role | dev (roles override) |
+
+> Rows removed: `agent-boundaries`, `file-conventions`, `status-line` — these are no longer classified as sub-skills (see the per-role section notes below for migration targets: agent-boundaries → Identity + Responsibility slots; file-conventions → inline in instructions; status-line → Project Context slot). The source files remain on disk under `references/sub-skills/common/` until #10360 implements the migration; this catalog reflects target architecture.
 
 ### Vault (institutional memory)
 
@@ -141,7 +140,7 @@ Reusable across multiple roles.
 | `git-commit` | Commit/push protocol with PR flow | dev (DM has its own variant) |
 | `improvement-scan` | Full proactive scan for process/template gaps | PM, dev |
 | `improvement-scan-slim` | Filing-only variant (no auto-fix) for read-only roles | QA |
-| `capability-check` | _deprecated — slated for removal_; was: verify the agent's environment has the tools it expects | DM (currently; manifest removal pending — see [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md)) |
+| `capability-check` | _deprecated — slated for removal_; was: verify the agent's environment has the tools it expects | DM (currently; removal paired with the broader capability-framework retirement per [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md), not this PR) |
 | `l4-curation` | Elicitation dialog for runtime L4 writes — detect customization request, scope bucket + rationale, draft + approve | dev (runtime-invoked from §7 of [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md); not yet wired into any role's `includes.yml`) |
 | `compose-output-review` | Sub-procedure for reviewing composed CLAUDE.md output for source-output drift — invoked during code review | dev (planned per COMPOSE-ARCHITECTURE.md §9; implementation pending) |
 
@@ -194,7 +193,6 @@ Role-specific event extras:
 
 | Sub-skill | One-liner |
 |---|---|
-| `responsibility` | What PM does and (importantly) does NOT do |
 | `checkin` | Step 2 — non-blocking human check-in; issue/task/approval intake |
 | `task-intake` | 5-phase feature lifecycle (Research → Discussion → Planning → human-approve → Execution) |
 | `task-approval` | Feature-approval gate; planned → approved transition |
@@ -208,8 +206,6 @@ Role-specific event extras:
 | `improvement-scan` | PM variant — process-focused, never code |
 | `issue-filing` | PM's bug-filing protocol (behavior-only, no RCA) |
 | `discussion-protocol` | PM's comment format |
-| `file-conventions` | PM's on-disk file layout |
-| `status-line` | PM's statusline content |
 | `prohibitions` | PM "never do" rules |
 | `vault-synthesis` | Cross-agent pattern detection (PM-only) |
 | `ralph-loop-overview` | Runtime-loaded polling-mode cycle contract |
@@ -218,12 +214,9 @@ Role-specific event extras:
 
 | Sub-skill | One-liner |
 |---|---|
-| `responsibility` | QA scope: verify against ACs, file results, don't ship |
 | `verification` | Steps 2–6 — E2E tests, AC verification, health check |
 | `issue-filing` | QA's bug template (with reproduction + AC reference) |
 | `discussion-protocol` | QA's comment format |
-| `file-conventions` | QA's planning-artifact layout (`TEST-PLAN-<n>.md`, `QA-RESULTS-<n>.md`) |
-| `status-line` | QA's statusline content |
 | `prohibitions` | QA "never do" rules (e.g. no shipping with failed tests) |
 | `ralph-loop-overview` | Runtime-loaded polling-mode cycle contract |
 | Domain context | Per-stack QA notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
@@ -233,7 +226,6 @@ Role-specific event extras:
 
 | Sub-skill | One-liner |
 |---|---|
-| `responsibility` | DM scope: package, ship, version-bump; never write features |
 | `task-pickup` | DM's queue: pending-ship items |
 | `issue-triage` | Triage DM-owned bug reports |
 | `delivery-packaging` | The packaging step: docs, CHANGELOG, release notes |
@@ -241,8 +233,6 @@ Role-specific event extras:
 | `doc-improvement-loop` | DM's scan: drift between source docs and shipped state |
 | `issue-filing` | DM's bug template |
 | `discussion-protocol` | DM's comment format |
-| `file-conventions` | DM's on-disk layout |
-| `status-line` | DM's statusline content |
 | `prohibitions` | DM "never do" rules |
 | `ralph-loop-overview` | Runtime-loaded polling-mode cycle contract |
 | Domain context | Per-stack DM notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
@@ -251,11 +241,12 @@ Role-specific event extras:
 
 | Sub-skill | One-liner |
 |---|---|
-| `responsibility` | Dev scope: implement, run own unit tests, hand to QA |
 | `triage-issues` | Step 2 — deterministic work-queue triage |
 | `implement-tasks` | Step 2b — pick up approved tasks; commit on feature branch; open PR |
 | `ralph-loop-overview` | Runtime-loaded polling-mode cycle contract |
 | Domain context | Per-stack dev notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
+
+> Removed from all per-role tables: `responsibility`, `file-conventions`, `status-line`. These are no longer sub-skills (see the migration notes earlier in this section). Source files remain on disk under `references/sub-skills/roles/<role>/` until #10360 implements the migration; this catalog reflects target architecture, not v1 disk state.
 
 ---
 
