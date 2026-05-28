@@ -4,12 +4,12 @@
 - **Status**: idle, pipeline-monitoring
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-28 cycle 1803)
+## Pipeline snapshot (2026-05-28 cycle 1804)
 
 - **PRs open**: 3
-  - **#10359** (`docs/responsibility-slot`, 23 commits, CLEAN, doc-arch / Responsibility-slot / forge-as-truth / §4.5 catalog-gated / §4.5.1 installer-Gap / §3.2 mental-model mermaid) — awaiting human merge call
+  - **#10359** (`docs/responsibility-slot`, **24 commits** +PM domain-context catalog row, CLEAN) — awaiting human merge call
   - **#10364** (`docs/agent-runtime-internal-fixes`, 3 commits, CLEAN, DS-audited AGENT-RUNTIME internal + cross-doc fixes) — awaiting human merge call
-  - **#10366 NEW** (`cleanup/l3-responsibility-stubs`, 1 commit, removes 20 orphan L3 variant `responsibility.md` stubs) — quiet-cycle improvement scan; safe to merge anytime
+  - **#10366** (`cleanup/l3-responsibility-stubs`, 1 commit, removes 20 orphan L3 variant `responsibility.md` stubs) — quiet-cycle improvement scan; safe to merge anytime
 - **PM open tasks**: 5
   - **#10360** (Responsibility compose slot impl) — parked pending #10359 merge
   - **#10361** (AGENT-RUNTIME alignment with #10359: forge-as-channel §7 + `.squidsquad/config.md` path sweep across all arch docs)
@@ -24,15 +24,15 @@
 - `squidsquad_cli.py status` reports **harness not running**. dm/qa/skill all down.
 - PM /loop cron is the only functional path. Operator restart needed (`squidsquad start`).
 
-## This cycle's work (1803)
+## This cycle's work (1804)
 
-- User confirmed COMPOSE §6.6 subagent rules should move to AGENT-RUNTIME (not AGENTS.md). Filed **#10365** as follow-up (depends on both #10359 + #10364 to avoid tangled branch state).
-- **Quiet-cycle improvement scan**: discovered 20 pure-orphan L3 variant `responsibility.md` stubs (7-line placeholders pointing at L2 with zero content). Gated 3-grep audit clean (0 yml, 0 py, 3 historical-only md refs). Per `feedback_pm_can_delete_orphans`, deleted inline → **PR #10366 opened**.
-- L2 responsibility.md cleanup (`references/sub-skills/roles/<role>/`, 4 files) deferred to #10360 (Responsibility compose slot impl) since those are still manifest-included.
+- **Quiet-cycle catalog drift scan**: compared sub-skill-catalog.md against `references/sub-skills/` actual source tree. Found PM's "Domain context" row missing despite 5 `domain-context.md` files on disk (QA/DM/Dev sections all have the row). Per PR #10359 §4.5 catalog-gated resolution this would block compose post-#10360.
+- Fixed inline on PR #10359 branch (now 24 commits). No other per-role catalog gaps — the deprecated multi-file L4 seed templates (*-instructions, *-responsibility, *-soul-directives, shared-*) are already documented as deprecated in the project/ section.
+- No other improvement-scan targets surfaced that aren't already covered by the existing follow-up tasks (#10361/#10362/#10363/#10365/#10360).
 
 ## Pending human decisions
 
-1. **#10359 merge** — 23 commits, clean. Awaiting merge call.
+1. **#10359 merge** — 24 commits, clean. Awaiting merge call.
 2. **#10364 merge** — 3 commits, clean. Awaiting merge call.
 3. **#10366 merge** — 1 commit, low-risk orphan cleanup. Safe to merge anytime.
 4. **Fleet restart** — harness not running; `squidsquad start`.
