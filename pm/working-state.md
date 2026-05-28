@@ -4,7 +4,7 @@
 - **Status**: idle, monitoring pipeline
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-27 cycle 1796)
+## Pipeline snapshot (2026-05-27 cycle 1797)
 
 - **PRs open**: 0 — #10357 merged 2026-05-27T13:25Z (HARNESS-ARCH §14 direct-spawn + alias-keying alignment across HARNESS/AGENT-RUNTIME/INSTALLER-ARCH). Zero sub-skill/role/compose changes, no recompose needed.
 - **PM open issues**: 2 — #9970 (composed CLAUDE.md drift from #9925), #9969 (manifest.md entry-file naming). Both severity:medium, plan-first hold.
@@ -15,9 +15,10 @@
 
 - **dm, qa, skill**: harness reports `bootup_complete: false`, last_cycle ~22h ago (2026-05-26T03:01). Only PM /loop cron is functional. Operator restart needed; not PM-fixable.
 
-## This cycle's work (1796)
+## This cycle's work (1797)
 
-- Quiet. State identical to 1795.
+- PR #10359 at 14 commits. Tier 2 sub-skill verdicts applied (prohibitions retired into Identity+Responsibility; discussion-protocol→discussion + collapse per-role overrides; issue-filing collapse per-role overrides; L1 Identity now names inter-agent comm channels).
+- Tier 3 (per-stack domain-context) and Tier 4 (vault-synthesis / ralph-loop-overview / triage-issues) still pending human direction.
 
 ## Pending human decisions
 
