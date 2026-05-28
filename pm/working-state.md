@@ -4,7 +4,7 @@
 - **Status**: idle, monitoring pipeline
 - **Last Processed Event ID**: df9f33751a6a
 
-## Pipeline snapshot (2026-05-27 cycle 1792)
+## Pipeline snapshot (2026-05-27 cycle 1793)
 
 - **PRs open**: 0 — #10357 merged 2026-05-27T13:25Z (HARNESS-ARCH §14 direct-spawn + alias-keying alignment across HARNESS/AGENT-RUNTIME/INSTALLER-ARCH). Zero sub-skill/role/compose changes, no recompose needed.
 - **PM open issues**: 2 — #9970 (composed CLAUDE.md drift from #9925), #9969 (manifest.md entry-file naming). Both severity:medium, plan-first hold.
@@ -15,9 +15,10 @@
 
 - **dm, qa, skill**: harness reports `bootup_complete: false`, last_cycle ~22h ago (2026-05-26T03:01). Only PM /loop cron is functional. Operator restart needed; not PM-fixable.
 
-## This cycle's work (1792)
+## This cycle's work (1793)
 
-- Quiet. State identical to 1791. PR #10359 still awaiting human direction (second DS pass or merge).
+- Iterated PR #10359 through DS audit passes 2-7. PR now at 12 commits. Convergence trajectory: 12 → 4 → 6 → 7 → 7 → 6 → 5 findings per pass, with real-fix yield dropping from 6 to 1. Remaining DS gripes are persistent rejections (manifest.md SUPERSEDED banner adequacy, qa→verifier rename deferral). Spec converged on what's in PR scope; flagged to human as "stop iterating" recommendation.
+- Pipeline otherwise unchanged.
 
 ## Pending human decisions
 
