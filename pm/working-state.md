@@ -49,4 +49,4 @@
 5. **#9969 / #9970** — plan-first hold; may be partially obsolete post-#10356.
 6. **#10361 / #10362 / #10363 / #10365 ordering** — all proceed once their respective parents merge.
 
-- **Quiet Cycle Counter**: 10
+- **Quiet Cycle Counter**: 11
