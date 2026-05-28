@@ -24,11 +24,14 @@
 - `squidsquad_cli.py status` reports **harness not running**. dm/qa/skill all down.
 - PM /loop cron is the only functional path. Operator restart needed (`squidsquad start`).
 
-## This cycle's work (1804)
+## This cycle's work (1805)
 
-- **Quiet-cycle catalog drift scan**: compared sub-skill-catalog.md against `references/sub-skills/` actual source tree. Found PM's "Domain context" row missing despite 5 `domain-context.md` files on disk (QA/DM/Dev sections all have the row). Per PR #10359 §4.5 catalog-gated resolution this would block compose post-#10360.
-- Fixed inline on PR #10359 branch (now 24 commits). No other per-role catalog gaps — the deprecated multi-file L4 seed templates (*-instructions, *-responsibility, *-soul-directives, shared-*) are already documented as deprecated in the project/ section.
-- No other improvement-scan targets surfaced that aren't already covered by the existing follow-up tasks (#10361/#10362/#10363/#10365/#10360).
+- Quiet cycle. Pipeline static; verified no new human activity on any PR/task thread via tracker comments scan (the latest #10361 "comment" was my own earlier H1-reframe scope update auto-prefixed by tracker.py).
+- No improvement-scan targets surfaced beyond what's already filed.
+
+## Previous cycle (1804)
+
+- **Quiet-cycle catalog drift scan**: PM's "Domain context" row missing from `sub-skill-catalog.md` despite 5 files on disk → fixed inline on PR #10359 (now 24 commits).
 
 ## Pending human decisions
 
@@ -39,4 +42,4 @@
 5. **#9969 / #9970** — plan-first hold; may be partially obsolete post-#10356.
 6. **#10361 / #10362 / #10363 / #10365 ordering** — all proceed once their respective parents merge.
 
-- **Quiet Cycle Counter**: 0
+- **Quiet Cycle Counter**: 1
