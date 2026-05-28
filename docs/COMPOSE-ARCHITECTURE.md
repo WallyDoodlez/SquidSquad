@@ -221,7 +221,7 @@ Each `## <Slot>` section holds the project's customizations for that slot. Withi
 - **`### insert-before step:cycle/<step-id>`** — content inserted immediately before the named L1-L3 step.
 - **`### insert-after step:cycle/<step-id>`** — inserted immediately after.
 - **`### replace step:cycle/<step-id>`** — replaces the L1-L3 step's content entirely. The step ID is preserved so later inserts targeting it still resolve.
-- **`### replace`** (no `step:` target) — **whole-slot replace**. Valid only on slots that have no step IDs to target (currently `responsibility` per §3.3). Replaces the entire L1-L3 slot body with the L4 H3 block body. Compose **must reject** a bare `### replace` (no target) under any slot whose op constraints don't list whole-slot `replace`.
+- **`### replace`** (no `step:` target) — **whole-slot replace**. Replaces the entire L1-L3 slot body with the L4 H3 block body. Valid only under `## Responsibility` (the only slot whose op constraints list whole-slot `replace`). A bare `### replace` (no target) under `## Identity`, `## Soul`, `## Instructions`, `## Project Context`, or `## Vault` is a validation error.
 
 Compose **must validate** that every `step:` reference in an `## Instructions` H3 resolves to a real L1-L3 step ID before emitting output. Unresolved references abort compose with a diagnostic.
 
@@ -234,11 +234,11 @@ Not every op is legal on every slot. The soul slot is identity, not instruction,
 | `identity` | append only | the slot is short prose; project additions go at the end |
 | `responsibility` | append + replace (whole-slot) | role-boundary prose has no step IDs, so step-targeted ops do not apply; `replace` swaps the entire L1-L3 responsibility block for the L4 body |
 | `soul` | **append only** | no targeted ops; see §3.4 for semantic-merge precedence |
-| `instructions` | all four (append, insert-before, insert-after, replace) | the primary surface for behaviour customization |
+| `instructions` | append + insert-before + insert-after + replace (step-targeted only) | the primary surface for behaviour customization; whole-slot `replace` is forbidden (the slot has step IDs and must target one) |
 | `project-context` | append only | net-new project facts go at the end of the slot |
 | `vault` | append only | see VAULT-ARCH for vault-specific overlay rules |
 
-Compose **must reject** any L4 file whose section structure violates these constraints (e.g., a `### replace` H3 under `## Soul`).
+Compose **must reject** any L4 file whose section structure violates these constraints. Examples of rejections: a `### replace` (any form) H3 under `## Soul`; a bare `### replace` (no target) under any slot except `## Responsibility`; a step-targeted `### replace step:cycle/<step-id>` under `## Responsibility` (no step IDs to target there).
 
 #### 3.4 Soul slot — semantic-merge precedence
 
@@ -309,12 +309,13 @@ The output of step 4 is the **L1-L3 base composition** — purely the SquidSquad
 
 After the L1-L3 base is in memory, compose reads exactly one L4 file: `.squidsquad/project/<role>.md` (the role being deployed). If the file is absent, the L4 step is a no-op — the composed output is L1-L3 only.
 
-1. Parse the L4 file. Top-level H2 sections name the slot: `## Identity` / `## Soul` / `## Instructions` / `## Project Context` / `## Vault`. Sections may appear in any order; missing sections are skipped.
+1. Parse the L4 file. Top-level H2 sections name the slot: `## Identity` / `## Responsibility` / `## Soul` / `## Instructions` / `## Project Context` / `## Vault`. Sections may appear in any order; missing sections are skipped.
 2. For each slot section present, apply ops in this order to the L1-L3 base for that slot:
-   1. All `### replace step:cycle/<step-id>` H3 blocks first. Each H3 targets at most one L1-L3 step; duplicate replace targets abort compose.
-   2. All `### insert-before step:cycle/<step-id>` and `### insert-after step:cycle/<step-id>` H3 blocks. Positions are evaluated against the **post-replace** base (i.e., after step 2.i completes).
-   3. All `### append` H3 blocks last, in file order (the order they appear in the L4 file). No ordinal field; the author controls ordering by reordering H3 blocks within the source file.
-3. Validate: every `step:` reference resolves to a real L1-L3 step ID; no two `replace` H3 blocks target the same ID; H3 op-types are legal for the enclosing slot per §3.3 per-slot constraints (e.g., `### replace` is forbidden under `## Soul`).
+   1. **Whole-slot replace (responsibility only).** If the slot is `responsibility` and the section contains a bare `### replace` (no `step:` target), apply it first — the L4 H3 block body replaces the entire L1-L3 responsibility base. Whole-slot replace is **terminal**: no other ops are applied to that slot in this L4 file (multiple `### replace` blocks under `## Responsibility` is a validation error; mixing whole-slot replace with `### append` under the same `## Responsibility` is a validation error). If the slot has no bare `### replace`, skip this sub-step and proceed.
+   2. All `### replace step:cycle/<step-id>` H3 blocks. Each H3 targets at most one L1-L3 step; duplicate replace targets abort compose.
+   3. All `### insert-before step:cycle/<step-id>` and `### insert-after step:cycle/<step-id>` H3 blocks. Positions are evaluated against the **post-replace** base (i.e., after step 2.ii completes).
+   4. All `### append` H3 blocks last, in file order (the order they appear in the L4 file). No ordinal field; the author controls ordering by reordering H3 blocks within the source file.
+3. Validate: every `step:` reference resolves to a real L1-L3 step ID; no two `replace` H3 blocks target the same ID; H3 op-types are legal for the enclosing slot per §3.3 per-slot constraints (e.g., `### replace` in any form is forbidden under `## Soul`, `## Identity`, `## Project Context`, and `## Vault`; bare `### replace` (no target) is forbidden under `## Instructions` (only step-targeted `replace` is legal there); step-targeted `### replace step:…` is forbidden under `## Responsibility` (no step IDs to target)).
 
 If validation fails, compose **aborts with a diagnostic** naming the offending H3 block. No partial output is written.
 

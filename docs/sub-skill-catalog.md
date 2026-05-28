@@ -284,6 +284,8 @@ The `figma/`, `google_stitch/`, `local_html/`, and `local_delivery/` directories
 ## How to navigate this catalog
 
 - Adding a new sub-skill? See [`sub-skill-guide.md`](sub-skill-guide.md) and update both `references/sub-skills/manifest.md` and this catalog.
-- Wiring a sub-skill into a role? Edit that role's `references/roles/<role>/includes.yml`, then `compose.py deploy <role>` and `reboot_agent.py --role <role>`.
+- Wiring a sub-skill into a role?
+  - **v2 (target — [COMPOSE-ARCHITECTURE.md §3.2](COMPOSE-ARCHITECTURE.md#32-slot--ordinal-contract-l1-l3))**: add `slot:` and `ordinal:` frontmatter to the sub-skill source file. Compose discovers it automatically; no per-role manifest edit needed.
+  - **v1 (current implementation)**: edit that role's `references/roles/<role>/includes.yml`, then `compose.py deploy <role>` and `reboot_agent.py --role <role>`. The v1 includes.yml mechanism is retired at implementation time (#10360).
 - Looking for the upgrade path to real Claude skills? See #9968 (EPIC: L1-L4 review + compose-architecture doc).
 - Looking for the L1-L4 composition layer model? See `RESEARCH-9968.md` and the forthcoming `COMPOSE-ARCHITECTURE.md`.
