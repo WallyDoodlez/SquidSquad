@@ -99,7 +99,7 @@ flowchart TB
 Compose has **two distinct input axes**, easy to conflate:
 
 - **L1-L4 content layers** (this section's main subject) — *what* the agent reads in its composed CLAUDE.md. Layered by specificity (universal → role → variant → project-local). Files: `references/sub-skills/`, `references/roles/<role>/`, and `.squidsquad/project/<role>.md` (the per-role-class L4 file).
-- **`.squidsquad/config.md`** (always referenced by full path under `.squidsquad/`; never just `config.md`) — the install's **configuration**, not a content layer. It declares install-level parameters like `Workers:` (the roster), `Iteration Interval`, `event-driven:` (mode flag), `Improvement Scanning:`, feature toggles. Compose reads it to make compose-time *decisions* — which manifest to load (polling vs event per §6.5), what placeholder values to substitute, which roles exist for `compose.py deploy-all`, etc.
+- **`.squidsquad/config.md`** (prose references in this doc always use the full path; code identifiers like `config.get_wake_mode()` are not subject to this rule) — the install's **configuration**, not a content layer. It declares install-level parameters like `Workers:` (the roster), `Iteration Interval`, `event-driven:` (mode flag), `Improvement Scanning:`, feature toggles. Compose reads it to make compose-time *decisions* — which manifest to load (polling vs event per §6.5), what placeholder values to substitute, which roles exist for `compose.py deploy-all`, etc.
 
 The two axes interact at compose time. Examples:
 
@@ -365,7 +365,7 @@ The pipeline is fully deterministic: given `(role, wake-mode, source-tree-hash, 
 
 Because composed CLAUDE.md emits sub-skill *references* (not bodies) in the `instructions` slot, compose must validate that every reference resolves to a real sub-skill. The validation runs after L4 overlay and before output emission:
 
-1. **Extract** every `→ run sub-skill: <name>` (or equivalent reference grammar from §4.1 step 4 and §5.3) from the composed-in-memory `instructions` content.
+1. **Extract** every `→ run sub-skill: <name>` reference from the composed-in-memory `instructions` content (grammar defined in §6.2).
 2. **Resolve** each `<name>` against the union of:
    - Sub-skills indexed in [`sub-skill-catalog.md`](sub-skill-catalog.md), AND
    - Sub-skills discoverable on disk under `references/sub-skills/` (today's source files), AND
@@ -489,19 +489,19 @@ Structure (suggested H3 grouping within the H2):
 ## 4. Instructions
 
 ### 4.1 On boot (one-time, session start)
-1. **step:boot/permission-check** → see sub-skill `permission-check`
-2. **step:boot/mode-detect** → see sub-skill `boot-bootstrap`
-3. **step:boot/load-fragments** → see sub-skill `boot-bootstrap`
+1. **step:boot/permission-check** → run sub-skill: permission-check
+2. **step:boot/mode-detect** → run sub-skill: boot-bootstrap
+3. **step:boot/load-fragments** → run sub-skill: boot-bootstrap
 
 ### 4.2 Each cycle
-1. **step:cycle/pre-cycle** → see sub-skill `cycle-runner` (pre phase)
-2. **step:cycle/context-pressure** → see sub-skill `context-pressure`
-3. **step:cycle/pipeline-sentinel** → see sub-skill `pipeline-sentinel`
+1. **step:cycle/pre-cycle** → run sub-skill: cycle-runner
+2. **step:cycle/context-pressure** → run sub-skill: context-pressure
+3. **step:cycle/pipeline-sentinel** → run sub-skill: pipeline-sentinel
    *(pm-only; see [sub-skill-catalog.md](sub-skill-catalog.md))*
    ...
 
 ### 4.3 On shutdown
-1. **step:shutdown/graceful-stop** → see sub-skill `agent-lifecycle` (shutdown)
+1. **step:shutdown/graceful-stop** → run sub-skill: agent-lifecycle
 ```
 
 Step bodies in the composed CLAUDE.md are **short references** — typically one line each — that name a step ID and point at the sub-skill that implements it. The full how-to for "pipeline-sentinel" or "context-pressure" is in that sub-skill's source file, indexed in [`sub-skill-catalog.md`](sub-skill-catalog.md).
@@ -730,20 +730,39 @@ Examples:
 
 **Renaming a sub-skill** is also a breaking change: it requires updating the catalog entry + every step that references it. compose.py validates that all references resolve after the rename (§4.5) before emitting output.
 
-### 6.2 Sub-procedures are sub-skills, not inlined H2 sections
+### 6.2 Sub-skill reference grammar
+
+The composed CLAUDE.md references each sub-skill by name. The **canonical reference grammar** is a single line at the end of (or replacing) a step body:
+
+```
+→ run sub-skill: <name>
+```
+
+Where `<name>` is a sub-skill identifier matching the catalog (e.g. `pipeline-sentinel`, `issue-filing`, `vault-remember`). Compose's reference-extraction regex (§4.5 step 1) matches exactly this form.
+
+A step may carry both a step-ID label and a sub-skill reference; the step-ID label is display-only and is not part of the extracted reference:
+
+```markdown
+1. **step:cycle/file-bug-if-found** — when pipeline scrutiny surfaces a bug
+   → run sub-skill: issue-filing
+```
+
+Earlier draft examples in this doc used `→ see sub-skill <name>` (no colon, prose-style) as an informal-rendering variant. **Going forward only `→ run sub-skill: <name>` is canonical**; the prose-style variant is retired. Compose extracts only the canonical form, so a `→ see sub-skill` directive that escaped a copy-paste will not be found by validation and the composed CLAUDE.md will silently lack that reference. (Catalog-drift validation in §4.5 catches the resulting orphan reference at the catalog side, but the better fix is authoring discipline: always emit the canonical form.)
+
+### 6.2.1 Sub-procedures are sub-skills, not inlined H2 sections
 
 Today's standalone H2 sections like `## Issue Filing Protocol`, `## Discussion Protocol`, `## Task Lifecycle (5-Phase)` are **eliminated** as top-level sections — and v2 does NOT fold them inline into step bodies (the v1 model). Instead, each becomes a **sub-skill** with its own source file and catalog entry, referenced from the cycle steps that invoke it:
 
 ```markdown
-### 3.2 Each cycle
+### 4.2 Each cycle
 
 ...
 
 5. **step:cycle/file-bug-if-found** — when pipeline scrutiny surfaces a bug
-   → see sub-skill `issue-filing` ([sub-skill-catalog.md](sub-skill-catalog.md))
+   → run sub-skill: issue-filing
 
 6. **step:cycle/post-cycle** — commit, push, advance cursor
-   → see sub-skill `cycle-runner` (post phase)
+   → run sub-skill: cycle-runner
 
 ...
 ```
@@ -795,7 +814,7 @@ SquidSquad agents support two wake mechanisms: **event-driven** (a sibling `even
 - `references/roles/<role>/includes.yml`        — polling manifest (default)
 - `references/roles/<role>/includes-events.yml` — event-driven manifest. If the role hasn't been ported to event mode yet and this file is absent while `event-driven: yes` is set globally, compose silently uses the polling manifest for that role; this is a **per-role compose-time** fallback distinct from the operator-level mode flip in AGENT-RUNTIME §8.2.
 
-`compose.py:_load_manifest` reads `config.get_wake_mode()` (a global flag — there is no per-role wake mode; see AGENT-RUNTIME §8.1) and chooses the manifest; `_resolve_includes_with_manifest` then renders the chosen manifest in full. There are **no mode-conditional directives inside fragments** — the manifest is the gate. The agent receives one fully-resolved CLAUDE.md whose §4.2 is shaped for exactly one mode. Mid-session mode flips do not exist; an operator flipping `config.md` from `polling` to `event-driven` (or vice versa) takes effect on the next compose+restart.
+`compose.py:_load_manifest` reads `config.get_wake_mode()` (a global flag — there is no per-role wake mode; see AGENT-RUNTIME §8.1) and chooses the manifest; `_resolve_includes_with_manifest` then renders the chosen manifest in full. There are **no mode-conditional directives inside fragments** — the manifest is the gate. The agent receives one fully-resolved CLAUDE.md whose §4.2 is shaped for exactly one mode. Mid-session mode flips do not exist; an operator flipping `.squidsquad/config.md` from `polling` to `event-driven` (or vice versa) takes effect on the next compose+restart.
 
 ```mermaid
 flowchart LR

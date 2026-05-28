@@ -261,7 +261,7 @@ These are **seed templates** copied to `.squidsquad/project/` at install time. T
 | `pm.md` | PM L4 — H2 sections for Identity / Responsibility / Soul / Instructions / Project Context / Vault as needed |
 | `verifier.md` | Verifier L4 — same H2 grammar |
 | `dm.md` | DM L4 — same H2 grammar |
-| `<worker-class>.md` | Worker L4 — exactly one file per worker class. A generic worker install creates `worker.md`; a stack-specialized install creates per-class files like `fe-worker.md` and `be-worker.md` (and no generic `worker.md`). No fallback or inheritance between classes — the filename IS the class identity (per [COMPOSE-ARCHITECTURE.md §3.3](COMPOSE-ARCHITECTURE.md#33-l4-operations-creative-overlay)). Same H2 grammar as the other role-class seeds. |
+| `<worker-class>.md` | Worker L4 — exactly one file per worker class. The class name is whatever the install declares in `.squidsquad/config.md` Workers: an install with a single class named `worker` creates `worker.md`; an install with `fe-worker` and `be-worker` classes creates `fe-worker.md` and `be-worker.md`. The two configurations are alternatives, not a base + variants (no inheritance — `worker` is just one possible class name, not a parent of `fe-worker`/`be-worker`). The filename IS the class identity (per [COMPOSE-ARCHITECTURE.md §3.3](COMPOSE-ARCHITECTURE.md#33-l4-operations-creative-overlay)). Same H2 grammar as the other role-class seeds. |
 
 Per §3.3 the filename IS the role-class identity; `compose.py deploy <role-class>` reads exactly one L4 file. Multi-instance installs (e.g. two `fe-worker` agents) share the one L4 file for that class — instances of the same class compose to byte-identical output.
 
