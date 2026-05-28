@@ -35,6 +35,10 @@ This manifest defines how shared sub-skill source files compose into agent templ
 
 > **`agent-boundaries` is being retired entirely (2026-05-27)**: Today's `common/agent-boundaries.md` (5 lines) is two pieces of foundational content — a team-awareness baseline (`{{role-roster}}` + "know your teammates") and a decline-and-route discipline rule. Both are L1/L2 foundational content, not focused how-to. Resolution: inline the team-roster + awareness sentence into each role's Identity slot ([§5.1](../../docs/COMPOSE-ARCHITECTURE.md#51-identity)); inline the decline-and-route rule into each role's Responsibility slot ([§5.2](../../docs/COMPOSE-ARCHITECTURE.md#52-responsibility)). Delete `common/agent-boundaries.md` at implementation time.
 
+> **`prohibitions` is being retired entirely (2026-05-27)**: 4 prohibitions files today (`common/prohibitions.md` + per-role overrides in `pm/`, `verifier/`, `dm/`) — ~63 lines of role-boundary content. Universal "never do" rules go to L1 Identity Boundaries ([§5.1](../../docs/COMPOSE-ARCHITECTURE.md#51-identity)); role-specific rules go to L2 Responsibility "does NOT do" ([§5.2](../../docs/COMPOSE-ARCHITECTURE.md#52-responsibility)). Delete all 4 files at implementation time. Significant overlap with existing responsibility content — de-duplication is part of the migration.
+
+> **`discussion-protocol` and `issue-filing` per-role overrides retire (2026-05-27)**: Both ARE legitimate sub-skills (how-to procedures), but the per-role overrides in `pm/`, `verifier/`, `dm/` exist only to bake role name into bash examples instead of using the `[ROLE]` placeholder. Resolution: keep `common/discussion-protocol.md` and `common/issue-filing.md` as the single authoring location with `[ROLE]` substitution; delete the 6 per-role override files at implementation time.
+
 ## Layer 4 — Project Sub-skills (auto-included)
 
 Project-specific L4 content lives in `.squidsquad/project/` (project-local, not distributed). `compose.py` reads `*.md` files from this directory and auto-includes them in every agent's CLAUDE.md after all other layers.
