@@ -467,18 +467,18 @@ Some state-change patterns are predictable enough to handle deterministically in
 ```mermaid
 flowchart TD
     subgraph event_mode["Event mode: bus-derived"]
-        EVENTS["recent_events<br/>(from event bus)"] --> SF{"Self-event?<br/>event.role == my_role"}
+        EVENTS["recent_events<br/>(assigned-to signals<br/>from event bus)"] --> SF{"Self-event?<br/>emitter == my_alias"}
         SF -->|Yes| SKIP["Skip (cascade protection)"]
-        SF -->|No| TYPE_E{"Event type?"}
-        TYPE_E -->|pr-merged + PM| R1E["Reaction: pr-merge-detected"]
-        TYPE_E -->|verification-failed + worker| R2E["Reaction: rework-needed"]
-        TYPE_E -->|other| PASS_E["No reaction → creative phase"]
+        SF -->|No| CTX_E{"event_context?"}
+        CTX_E -->|"merge-detected + PM"| R1E["Reaction: pr-merge-detected"]
+        CTX_E -->|"verifier-rejected + worker"| R2E["Reaction: rework-needed"]
+        CTX_E -->|other| PASS_E["No reaction → creative phase"]
     end
 
     subgraph loop_mode["Loop mode: tracker-derived"]
-        TRACKER["tracker query<br/>(gh pr list / gh issue list)"] --> DELTA{"State change since<br/>last cycle?<br/>(timestamp dedup)"}
+        TRACKER["tracker state diff<br/>(since last-cycle timestamp<br/>in working-state.md)"] --> DELTA{"State change since<br/>last cycle?<br/>(timestamp dedup)"}
         DELTA -->|PR merged + PM| R1L["Reaction: pr-merge-detected"]
-        DELTA -->|issue verification-failed + worker| R2L["Reaction: rework-needed"]
+        DELTA -->|issue verifier-rejected + worker| R2L["Reaction: rework-needed"]
         DELTA -->|none| PASS_L["No reaction → creative phase"]
     end
 
@@ -489,6 +489,8 @@ flowchart TD
     R2L --> CIJ
     PASS_L --> CIJ
 ```
+
+> **v2 catalog alignment**. Event mode branches on `event_context` within `assigned-to` (per §4.2's collapsed catalog) — never on event type, because v1 types like `pr-merged` and `verification-failed` no longer exist as top-level signals. Loop mode still polls forge state directly (no bus consumption per §2 mutual-exclusivity); its branches are state-transition shapes, not v1 event types.
 
 Today only two patterns qualify in either mode:
 
