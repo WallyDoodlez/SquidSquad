@@ -141,6 +141,61 @@ When extension is needed across layers, the *lower* layer extracts a referenceab
 
 ### 3.2 Slot + ordinal contract (L1-L3)
 
+**Mental model first.** A layer is *not* a single file — it's a **collection of source files spread across multiple slots**. A slot is a section of the composed output (the six sections in §5). Each source file declares one slot via frontmatter (`slot:`) and a position within it (`ordinal:`). For a target role, `compose.py` gathers every L1-L4 file that applies, groups by slot, sorts each group by ordinal, applies L4 ops on top, and emits the result into the composed `CLAUDE.md`'s six H2 sections.
+
+```mermaid
+flowchart LR
+    subgraph L1["L1 — Base<br/><i>references/sub-skills/common/<br/>+ L1 portions of role files</i>"]
+        L1A["fragment A<br/>slot: identity<br/>ord: 10"]
+        L1B["fragment B<br/>slot: instructions<br/>ord: 20"]
+        L1C["fragment C<br/>slot: vault<br/>ord: 10"]
+    end
+
+    subgraph L2["L2 — Role<br/><i>references/roles/&lt;role&gt;/<br/>+ references/sub-skills/roles/&lt;role&gt;/</i>"]
+        L2A["instructions fragment<br/>slot: instructions<br/>ord: 100"]
+        L2B["SOUL.md<br/><i>(filename shorthand:<br/>slot: soul, ord: 1)</i>"]
+        L2C["responsibility fragment<br/>slot: responsibility<br/>ord: 10"]
+    end
+
+    subgraph L3["L3 — Variant<br/><i>references/roles/&lt;role&gt;/&lt;domain&gt;/</i>"]
+        L3A["variant fragment<br/>slot: instructions<br/>ord: 200"]
+    end
+
+    subgraph L4["L4 — Project<br/><i>.squidsquad/project/&lt;role-class&gt;.md</i>"]
+        L4A["one file, multiple<br/>H2 sections — each<br/>declares an op against<br/>one slot (§3.3)"]
+    end
+
+    Gather{{"compose.py deploy &lt;role&gt;<br/><br/>1. Gather all L1-L4 files for target role<br/>2. Group by slot<br/>3. Sort each group by ordinal<br/>4. Apply L4 ops<br/>&nbsp;&nbsp;&nbsp;(append / insert-before /<br/>&nbsp;&nbsp;&nbsp;insert-after / replace)<br/>5. Emit each slot into its composed §"}}
+
+    L1A & L1B & L1C --> Gather
+    L2A & L2B & L2C --> Gather
+    L3A --> Gather
+    L4A --> Gather
+
+    Gather --> OUT[["composed<br/>CLAUDE.md"]]
+
+    subgraph Sections["Six composed sections (§5)"]
+        direction TB
+        S1["§1 Identity"]
+        S2["§2 Responsibility"]
+        S3["§3 Soul"]
+        S4["§4 Instructions"]
+        S5["§5 Project Context"]
+        S6["§6 Vault"]
+    end
+
+    OUT --> Sections
+
+    style Gather fill:#e8f0ff
+    style OUT fill:#dfd
+```
+
+**Read this diagram from left to right**: each layer holds *many* files; each file declares one slot via frontmatter; compose gathers + groups + sorts, applies L4 ops, and the result lands in one of six composed sections. The same composed section is fed by files from multiple layers — Identity in the composed output is the concatenation of every `slot: identity` file from L1 + L2 + L3 (in ordinal order), then any L4 op applied on top.
+
+**Why this model** — sub-skills, role-specific fragments, and cross-cutting content can each live in their own source file with their own frontmatter, but still land in the right composed section. L4 ops target slots + step IDs (not source filenames), so reorganizing L1-L3 files doesn't break L4 customizations.
+
+---
+
 Every L1-L3 sub-skill source file declares **structured frontmatter** at the top:
 
 ```yaml
