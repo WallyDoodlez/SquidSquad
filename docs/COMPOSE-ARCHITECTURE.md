@@ -516,17 +516,16 @@ See §6 for step ID grammar, reference grammar, and the relationship to sub-skil
 Project-shaped descriptive facts — *what is true about this project / role*, not *how the role does work*. Concretely the slot covers:
 
 - **Domain / audience** — what this project is, who uses it, what kind of project it is.
-- **Status line** — what each role's statusline shows during cycles. Today's `status-line.md` per-role sub-skill is descriptive UI content, not a procedure — it belongs in this slot, not as a sub-skill reference.
 - **Repositories of record, external systems, sensitive constraints, project-specific tone-or-language notes** — anything that's a project-level fact the agent needs to know but isn't an instruction.
 
 **Authoring across layers:**
 
 - **L1** — universal project-context conventions (rare; most content is role- or project-specific).
-- **L2** — role-shaped facts (e.g. PM's "status line shows agent health for the whole fleet"). The primary authoring location.
-- **L3** — variant-specific facts (per-stack statusline elements).
+- **L2** — role-shaped facts. The primary authoring location.
+- **L3** — variant-specific facts (per-stack notes).
 - **L4** — project-local. Append-only (per §3.3). Adds project-specific context to the role's L4 file under `## Project Context`.
 
-> **Status-line is not a sub-skill.** Per-role `status-line.md` content currently lives under `references/sub-skills/{common,roles/<role>}/` as a "sub-skill" but is structurally Project Context. Same architectural mis-classification pattern as Responsibility and Soul; same fix — content authored with `slot: project-context` frontmatter (or via L2 source files), not via the sub-skill catalog. The migration is tracked alongside #10360.
+> **`status-line` stays as a `common/` sub-skill (correction)** — Earlier draft of this PR moved status-line content here on the (wrong) assumption that it was descriptive UI content. The actually-useful content in `status-line.md` is the **procedure for the agent to populate its own statusline** during each cycle — that's a focused how-to and belongs in the catalog. The L1 Instructions slot references this sub-skill as a regular cycle step ("update status line"). Per-role status-line override files still retire — universal procedure, single common/ authoring location with `[ROLE]` substitution. Tracked in #10360.
 
 > **`file-conventions` is being retired entirely** — not moved to this slot. Today's `file-conventions.md` sub-skill is a path manifest (where each role's iteration logs / working state / planning artifacts live on disk). Every path in it is already used by exactly one specific instruction (e.g. `pm/task-intake` writes `.squidsquad/pm/planning/RESEARCH.md`; `pm/pipeline-sentinel` reads `.squidsquad/pm/qa-log.md`). A separate centralized path map duplicates facts that already live in the instruction that touches them. Resolution: drop `file-conventions.md` entirely; paths stay inline in the instruction sub-skills that use them. L4 path overrides (rare) use `### replace step:<step-id>` on the specific instruction — more surgical than rewriting a global path map. Tracked in #10360.
 
@@ -592,8 +591,7 @@ This section is intentionally short — most vault detail belongs in `references
 
 ## 5. Project Context
    5.1 Domain / audience
-   5.2 Status line (folded — display fact, not instruction)
-   5.3 Repositories of record
+   5.2 Repositories of record
 
 ## 6. Vault
    6.1 Description
@@ -655,8 +653,7 @@ This section is intentionally short — most vault detail belongs in `references
 
 ## 5. Project Context
    5.1 Domain / audience
-   5.2 Status line (folded — display fact, not instruction)
-   5.3 Repositories of record
+   5.2 Repositories of record
 
 ## 6. Vault
    6.1 Description
@@ -676,7 +673,7 @@ The two TOCs are identical at §1, §2, §3, §5, §6 — and §4.1 differs by e
 | §4.1 On boot — other steps | permission-check, mode-detect, load-fragments | permission-check, mode-detect, load-fragments | No |
 | §4.2 cycle structure | 10 numbered Ralph Loop steps | 8 numbered per-event steps | **Yes — whole sub-slot** |
 | §4.3 On shutdown | graceful-stop | graceful-stop | No |
-| §5 Project Context | 5.1-5.3 | 5.1-5.3 | No |
+| §5 Project Context | 5.1-5.2 | 5.1-5.2 | No |
 | §6 Vault | 6.1-6.2 | 6.1-6.2 | No |
 
 So the **only** mode-driven divergence is `step:boot/schedule-loop` ↔ `step:boot/bootup-complete` plus the whole §4.2 sub-slot. Everything else composes bit-identically across the two manifests. Any unintentional divergence in §1, §2, §3, §4.3, §5, §6 between the two flavored outputs is a bug per §6.5 "authoring discipline".
