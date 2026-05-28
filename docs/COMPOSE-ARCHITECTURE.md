@@ -10,7 +10,17 @@
 
 ### Goal
 
-Establish a single source of truth for how SquidSquad **composes** the per-role agent instruction document (`.squidsquad/<role>/CLAUDE.md`) from layered source files.
+Establish a single source of truth for how SquidSquad **composes** the per-agent instruction document (`.squidsquad/<alias>/CLAUDE.md`) from layered source files.
+
+> **Path-keying terminology** — this doc uses three distinct path patterns. Conflating them is a common reader trap:
+>
+> | Path pattern | Keyed by | Meaning |
+> |---|---|---|
+> | `.squidsquad/<alias>/CLAUDE.md` | **alias** (install-time agent instance name) | The composed output — one per running agent. Two `worker`-class instances named `frontend-1` and `backend-1` produce two distinct CLAUDE.md files at two distinct paths. |
+> | `.squidsquad/project/<role-class>.md` | **role-class** (categorical: pm/verifier/worker/dm or sub-classes like fe-worker) | The L4 source — one per role-class. Both `frontend-1` and `backend-1` *share* the same L4 file if they belong to the same role-class. |
+> | `references/roles/<role>/...` and `references/sub-skills/roles/<role>/...` | **role-class** | The L1-L3 authoring source paths. The literal `<role>` segment in these paths is role-class-typed; the directory name predates the class/alias distinction. |
+>
+> CLI flag names in this codebase (`--role`, `SQUIDSQUAD_ROLE`, `cycle.py status-bar <role>`) accept **alias** values for code-compat reasons. See [AGENT-RUNTIME §4.3 Vocabulary note](AGENT-RUNTIME.md) and [HARNESS-ARCH §9](HARNESS-ARCH.md).
 
 The composed CLAUDE.md is a **thin orchestration layer** — it declares an agent's identity, soul, ordered step references, project context, and vault description. It does **not** contain the bodies of sub-skills; instead it references them by name from [`sub-skill-catalog.md`](sub-skill-catalog.md). Sub-skill bodies live in their authored sources under `references/sub-skills/` (plain markdown fragments). A **project-scoped Claude-skills installer** that materializes each sub-skill into the project's local `.claude/skills/<name>/SKILL.md` is target-state but not yet shipped — see §4.5.1 Gap.
 
@@ -1185,7 +1195,7 @@ Every L4 write is:
 - Logged in the role's iteration file for the cycle that performed the write.
 - Reversible: a human can `git revert` the L4 commit, or the agent can produce a counter-L4 file (`replace` with empty body, or matching `insert-before` removal).
 
-The composed `.squidsquad/<role>/CLAUDE.md` regenerates on every L4 write (compose runs as a post-commit hook for files in `.squidsquad/project/`).
+The composed `.squidsquad/<alias>/CLAUDE.md` for **every alias** of the affected role-class regenerates on each L4 write (compose runs as a post-commit hook for files in `.squidsquad/project/`). Two `worker`-class instances sharing one L4 file produce two regenerated CLAUDE.md files at their respective alias paths.
 
 ### 7.6 End-to-end sequence
 
@@ -1247,8 +1257,8 @@ Three reinforcing mechanisms to prevent the drift class observed in #9970 (sub-s
 
 A GitHub Actions check (or local pre-commit hook) inspects every PR:
 
-- If any file in `references/sub-skills/`, `references/roles/`, or `references/sub-skills/manifest.md` is changed, the PR **must** also include the regenerated `.squidsquad/<role>/CLAUDE.md` outputs.
-- The check runs `compose.py deploy-all --check` against the PR's tree and compares output to the committed `.squidsquad/<role>/CLAUDE.md` files. Diff = check fails.
+- If any file in `references/sub-skills/`, `references/roles/`, or `references/sub-skills/manifest.md` is changed, the PR **must** also include the regenerated `.squidsquad/<alias>/CLAUDE.md` outputs for every alias whose composition is affected.
+- The check runs `compose.py deploy-all --check` against the PR's tree and compares output to the committed `.squidsquad/<alias>/CLAUDE.md` files. Diff = check fails.
 - Failure message links to the offending source/output mismatch and suggests `compose.py deploy-all` to fix.
 
 ### 8.2 Auto-recompose on merge
@@ -1301,7 +1311,7 @@ The checklist (suggested initial content):
 3. **Step-ID stability** — Did I rename or remove any step IDs? If yes, did I follow the §6.1 breaking-change protocol?
 4. **L4 resolution** — Did I delete or rename a step that L4 H3 blocks target? If yes, find them (grep `.squidsquad/project/*.md` for the step ID) and update them.
 5. **Composed-output regen** — Did I run `compose.py deploy-all` after my change? Is the resulting diff included in this PR?
-6. **Visual check** — Did I open the regenerated `.squidsquad/<role>/CLAUDE.md` and read the changed section? Does it read coherently in context?
+6. **Visual check** — Did I open the regenerated `.squidsquad/<alias>/CLAUDE.md` (at least one alias per affected role-class) and read the changed section? Does it read coherently in context?
 
 The checklist is referenced from `step:cycle/code-review` (skill's existing code-review sub-procedure). Skill is required to confirm each item before transitioning a task to pending-test.
 
@@ -1360,7 +1370,7 @@ This collapses today's two-system memory architecture (per-user memory + L4) int
 2. ~~**L4 conflict resolution**~~ **CLOSED** — see §3.3 + §7.3. Each agent class has exactly one L4 file; within that file, two `### replace step:cycle/<step-id>` H3 blocks targeting the same step is a validation error and aborts compose. The author resolves the conflict by editing the file.
 3. ~~**Multi-role L4 files**~~ **CLOSED** — see §3.3 + §7.3. L4 is **one file per agent class** (`.squidsquad/project/<role>.md`); role-scoping is the filename. There is no multi-role L4; cross-role customizations expand to one per-role file.
 4. ~~**L4 versioning**~~ **CLOSED** — see §6.1 "Renaming a step ID". Compose-time migration emits a warning when it sees an L4 H3 block targeting an old (renamed) step ID, and offers an auto-rewrite or aborts pending operator confirmation.
-5. **Composed output as derived artifact** — should `.squidsquad/<role>/CLAUDE.md` be `.gitignore`d (always regenerated, never committed) instead of committed-and-diffed? (Trade-off: gitignore eliminates §8.1 PR-check entirely but loses easy historical review.)
+5. **Composed output as derived artifact** — should `.squidsquad/<alias>/CLAUDE.md` be `.gitignore`d (always regenerated, never committed) instead of committed-and-diffed? (Trade-off: gitignore eliminates §8.1 PR-check entirely but loses easy historical review.)
 
 ### 11.2 Known gaps in this doc
 
@@ -1421,7 +1431,7 @@ Total: ~14 sub-PRs. Comparable to event-arch v2's implementation epic (6 PRs in 
 | **Sub-slot** | A sub-grouping within the `instructions` slot: `boot`, `cycle`, `shutdown`. |
 | **Sub-procedure** | A reusable named procedure (e.g. "file a bug") authored as a **sub-skill** with its own source file and catalog entry in [`sub-skill-catalog.md`](sub-skill-catalog.md). Referenced by name from cycle steps in the composed CLAUDE.md; **never inlined** into it. Replaces today's standalone H2 protocol sections. |
 | **Sub-skill** | A self-contained unit of agent functionality (e.g. `pipeline-sentinel`, `cycle-runner`, `vault-remember`). Authored source lives under `references/sub-skills/` as a markdown fragment. Once the project-scoped Claude-skills installer ships (§4.5.1), the same source is also materialized per-install at `<project-root>/.claude/skills/<name>/SKILL.md` for Skill-tool invocation. Catalogued in [`sub-skill-catalog.md`](sub-skill-catalog.md); referenced from composed CLAUDE.md by name. Distinct from the L1-L4 layers — see "Sub-skills vs L1-L4" in the catalog. |
-| **Composed output** | The generated `.squidsquad/<role>/CLAUDE.md` file. Marked `DO NOT EDIT`; regenerated on every compose run. |
+| **Composed output** | The generated `.squidsquad/<alias>/CLAUDE.md` file — one per running agent instance (alias-keyed, not role-class-keyed; see §1 path-keying terminology). Marked `DO NOT EDIT`; regenerated on every compose run. |
 | **Compose pipeline** | The deterministic L1-L3 merge + creative L4 overlay process implemented in `references/scripts/compose.py`. |
 
 ---
