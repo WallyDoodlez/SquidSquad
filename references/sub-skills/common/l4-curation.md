@@ -31,6 +31,15 @@ The human says something that sounds durable: a rule that should apply across cy
 - "Whenever there's a Y, route it to Z"
 - "Make sure you always remember to A"
 
+Prohibition-shaped patterns are also durable customizations — watch for these too:
+
+- "In this project, never X" / "no one ever X"
+- "The PM here should never Y"
+- "Don't ever Z, regardless of the task"
+- "We forbid X" / "X is off-limits in this project"
+
+Universal prohibitions ("no agent ever X") and role-specific prohibitions ("the PM here never Y") are both valid L4 customizations — they land in different slots (see Step 2 mapping).
+
 Distinguishing a customization request from a one-off task:
 
 | Signal | One-off task | L4 customization |
@@ -50,7 +59,11 @@ When a customization request is detected, walk this dialog before writing L4. St
 
 2. **Identify the target role and the shape of the customization** (user-facing).
 
-   Ask the human only the functional question: "does this change what the role *does* on each cycle, or who the role *is*?" Don't expose slot names or any of the structural detail below to the user.
+   Ask the human a small set of functional questions — never expose slot names or structural detail:
+
+   - "Does this change what the role *does* each cycle, who the role *is*, or what the role *never does*?"
+   - For "never does" — "is this a rule for *every* role here, or specific to one role?"
+   - For project facts (domain, audience, repos, external systems) — usually surfaced at install; if it comes up later, treat it as a project-context customization
 
    **Agent-internal mapping** (never shown to the user):
 
@@ -58,28 +71,36 @@ When a customization request is detected, walk this dialog before writing L4. St
    |---|---|---|
    | What the role *does* — cycle behaviour, decision rules, when-then patterns, scope of work | `## Instructions` H2 | all four ops legal per §3.3 (`### append`, `### insert-before step:cycle/<id>`, `### insert-after step:cycle/<id>`, `### replace step:cycle/<id>`) |
    | Who the role *is* — values, tone, professional identity, priorities | `## Soul` H2 | **append-only** per §3.3 + §3.4; no targeted ops. Composed soul carries shipped content + L4 append in order; on conflict the agent follows L4. |
+   | What no role *ever* does — universal prohibition that applies to every role in this install (e.g., "no agent merges without a CHANGELOG entry", "no agent edits composed CLAUDE.md by hand") | `## Identity` H2 (Boundaries sub-section) | **append-only** per §3.3. Adds to the L1-shipped universal "never do" list. Cannot remove or override shipped universal prohibitions inline — those are floor-level safety rules; a removal request routes upstream as a feature request against the SquidSquad repo. The dialog produces one H3 `### append` block per universal prohibition under `## Identity`. The customization fan-outs across role-class files (see Step 6 below). |
+   | What this role *never* does — role-specific contract rule (e.g., "PM here also never approves migrations without a rollback plan", "Worker on this project never modifies the build pipeline without DM approval") | `## Responsibility` H2 ("does NOT do" sub-section) | `append` + whole-slot `replace` per §3.3. **Default to `append`** — adds a "does NOT do" bullet to the role's contract. Whole-slot replace is an escape hatch for genuinely unusual installs that need to fully redefine a role; per §5.2 it silently discards the entire L1-L3 responsibility block including universal team-discipline. Surface the consequence and route most boundary tweaks toward `append`. |
+   | Project-level facts — domain, audience, repositories of record, external systems, project-specific tone or language notes | `## Project Context` H2 | **append-only** per §3.3. Initial content is usually seeded by the installer's Phase 1 conversation (see `COMPOSE-ARCHITECTURE.md` §5.5 + `INSTALLER-ARCH.md` §4.4). Runtime adds via this sub-skill accumulate facts that surface organically post-install. |
 
-   If a customization concerns both (e.g., "be more conservative when filing bugs") split it into two L4 entries — one per slot — and walk the human through each.
+   If a customization concerns more than one (e.g., "be more conservative when filing bugs AND never file bugs about deprecated code") split it into the matching number of L4 entries — one per slot — and walk the human through each.
 
-   Step-specific *prohibitions* ("during step X, do not do Y") do NOT belong in L4. Per `COMPOSE-ARCHITECTURE.md` §6.3, those live in the relevant L1–L3 sub-skill source — they are built into SquidSquad's shipped behaviour and cannot be overridden per-project. If the human asks for one, explain that this kind of rule is part of SquidSquad's core (in plain language, never naming the layer) and offer to file an upstream feature request against the SquidSquad repo if the change would be broadly useful.
+   **Step-specific prohibitions** ("during step X, do not do Y") do NOT belong in L4. Per `COMPOSE-ARCHITECTURE.md` §6.3, those live in the relevant L1–L3 sub-skill source — they are built into SquidSquad's shipped behaviour and cannot be overridden per-project. If the human asks for one, explain that this kind of rule is part of SquidSquad's core (in plain language, never naming the layer) and offer to file an upstream feature request against the SquidSquad repo if the change would be broadly useful.
+
+   **Vault customizations** stay out of scope here per the "Does NOT cross into vault territory" rule below — l4-curation handles agent-instruction customization, not knowledge customization.
 
 3. **Surface the why** (user-facing). Soul customizations especially need the WHY captured. Ask: "Is there a past incident or strong preference behind this? Capturing it helps future judgement on edge cases."
 
 4. **Surface edge cases** (user-facing). "When should this rule *not* apply?" Edge cases written upfront save a future override on top of this override.
 
-5. **Pick the op + target** (agent-internal). The op set is `append`, `insert-before <step-id>`, `insert-after <step-id>`, `replace <step-id>` (`COMPOSE-ARCHITECTURE.md` §3.3). The op surface is **per-slot**:
+5. **Pick the op + target** (agent-internal). The op set is `append`, `insert-before <step-id>`, `insert-after <step-id>`, `replace <step-id>`, plus whole-slot `replace` (for Responsibility only) per `COMPOSE-ARCHITECTURE.md` §3.3. The op surface is **per-slot**:
 
    - `## Identity`, `## Soul`, `## Project Context`, `## Vault` slots are **append-only** — no targeted ops are legal. Skip the rest of this step and go to step 6.
-   - `## Instructions` slot accepts all four ops. Pick by intent:
+   - `## Responsibility` slot accepts `append` plus whole-slot `replace`. **Default to `append`** — adds a "does NOT do" bullet to the role's contract. Use whole-slot `replace` only for the genuinely unusual install case where the entire L1-L3 role contract doesn't apply (e.g., a single-human project with no DM at all); the dialog must surface that whole-slot replace silently discards the entire L1-L3 responsibility block including universal team-discipline. Route most boundary tweaks toward `append`.
+   - `## Instructions` slot accepts all four step-targeted ops. Pick by intent:
      - `append` — new rule that doesn't relate to a specific existing step. Safest default.
      - `insert-before` / `insert-after` — new rule that should run adjacent to a specific existing step. The user-facing question is "should this happen before or after [existing behaviour]?", not "which op?". Resolve to a real `step:cycle/<step-id>`.
      - `replace` — the existing step's behaviour is wrong for this project. Use sparingly; the step ID is preserved so later inserts targeting it still resolve.
 
-   Every non-append op requires a `step:cycle/<step-id>` target that resolves to a real L1–L3 step. If no clean target exists, ask the human a plain-language question about whether the new behaviour is meant to *replace* or *add to* the role's current work; don't expose target mechanics.
+   Every non-append op requires either a `step:cycle/<step-id>` target that resolves to a real L1–L3 step (for Instructions) or whole-slot scope (for Responsibility). If no clean target exists, ask the human a plain-language question about whether the new behaviour is meant to *replace* or *add to* the role's current work; don't expose target mechanics.
 
-6. **Pick the file** (agent-internal). There is exactly **one L4 file per agent class** — `.squidsquad/project/<role>.md` (e.g., `pm.md`, `verifier.md`, `worker.md`, `dm.md`, or variant-specific files like `worker-frontend.md` for installs with worker variants). The file is appended to in place; existing slot sections are kept and new H3 op-blocks are added under the appropriate `## <Slot>` H2.
+6. **Pick the file** (agent-internal). There is exactly **one L4 file per role-class** — `.squidsquad/project/<role-class>.md` (e.g., `pm.md`, `verifier.md`, `worker.md`, `dm.md`, or variant-specific files like `worker-frontend.md` for installs with worker variants). The file is appended to in place; existing slot sections are kept and new H3 op-blocks are added under the appropriate `## <Slot>` H2.
 
-   If the customization applies to more than one agent class (e.g., "all roles should also check incidents/"), the dialog repeats per class — one H3 block written to each class's L4 file. The wording can be reused verbatim; the placement is per-file.
+   **Universal customizations fan out across every role-class file.** When a customization applies to all roles in this install — most commonly universal prohibitions (`## Identity` Boundaries) and shared project facts (`## Project Context`) — the dialog repeats per role-class. One H3 block is written under the same H2 in *every* role-class's L4 file. The wording is reused verbatim; only the file placement differs. The human is asked to confirm the rule applies team-wide before the fan-out commits.
+
+   Role-specific customizations (most `## Instructions` rules, role-specific `## Responsibility` "does NOT do" bullets, role-shaped `## Soul` tweaks) go in a single file — the role-class the human named.
 
 7. **Propose a draft and read it back** (user-facing). Show the human the rule in plain prose (rule + why + when-not-to-apply) and get explicit approval before writing. The agent translates that approved prose into the L4 file; the human never sees the frontmatter.
 
@@ -110,8 +131,11 @@ Example, in user-facing voice:
 
 #### Cross-references
 
-- `COMPOSE-ARCHITECTURE.md` §3.3 — L4 file structure (one file per agent class, H2 slot sections, H3 op blocks), op grammar, per-slot op constraints (only Instructions accepts targeted ops; Soul/Identity/Project Context/Vault are append-only)
+- `COMPOSE-ARCHITECTURE.md` §3.3 — L4 file structure (one file per role-class, H2 slot sections, H3 op blocks), op grammar, per-slot op constraints (Instructions accepts all four targeted ops; Responsibility accepts append + whole-slot replace; Identity/Soul/Project Context/Vault are append-only)
 - `COMPOSE-ARCHITECTURE.md` §3.4 — soul slot semantic-merge precedence (L4 wins on conflict at the agent's reading layer)
+- `COMPOSE-ARCHITECTURE.md` §5.1 — Identity slot, including Boundaries sub-section for universal prohibitions
+- `COMPOSE-ARCHITECTURE.md` §5.2 — Responsibility slot, including "does NOT do" sub-section and the whole-slot replace safety callout
+- `COMPOSE-ARCHITECTURE.md` §5.5 — Project Context slot, including the installer-seeded + agent-curated two-source model
 - `COMPOSE-ARCHITECTURE.md` §6.3 — step-specific prohibitions live in sub-skills, not L4
 - `COMPOSE-ARCHITECTURE.md` §7.3 — concrete L4 file format with worked example
 - `COMPOSE-ARCHITECTURE.md` §7.4 — the three safety gates (DeepSeek audit → mini-CQ → compose dry-run)
