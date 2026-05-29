@@ -26,7 +26,7 @@ SquidSquad has a small fixed set of **role classes** and a per-install set of **
 - Every running agent has a unique alias. The alias IS the agent's name in all routing.
 - A single-instance install can use the class name as its alias (default: a `worker`-class agent is named `worker`).
 - A multi-instance install MUST give each agent of the same class a distinct alias. Example: an install with 2 frontend + 2 backend worker-class agents might use aliases `frontend-1`, `frontend-2`, `backend-1`, `backend-2` — four worker-class agents, four distinct aliases.
-- **Instances of the same class-role are interchangeable.** All instances of a given class-role compose from byte-identical L1–L4 and share one L4 file (per `COMPOSE-ARCHITECTURE.md` §3.3 / §7.3). Aliases differ only as routing addresses; the *behaviour* behind each alias of a given class is the same. Sender-side routing logic that needs to pick between same-class aliases (e.g., for load balancing) can compare queue depth or any other observable signal — class-role behaviour is by definition uniform.
+- **Instances of the same class + L3 domain are interchangeable.** All instances of the same `(L2 class, L3 domain)` pair (e.g., two FE-worker agents, or two PM agents) compose from byte-identical L1–L4 and share **one L4 file per `(class, domain)` pair** (per `COMPOSE-ARCHITECTURE.md` §3.3 / §7.3). Aliases differ only as routing addresses; the *behaviour* behind each alias within a `(class, domain)` is the same. Sender-side routing logic that needs to pick between interchangeable aliases (e.g., for load balancing) can compare queue depth or any other observable signal. Note: different L3 domains of the *same* L2 class are NOT interchangeable — an FE-worker and a BE-worker have separate L4 files (`fe-worker.md` and `be-worker.md`) and different specialty rules. The simple `worker.md` case applies only to installs without L3 domain specialization.
 - Specialty/skill (FE vs BE vs iOS, etc.) lives in **L3 (the domain layer)** and is shared across all agents of the same domain. Two FE-worker agents share L1 + L2 (worker class) + L3 (FE domain); two BE-worker agents share L1 + L2 + L3 (BE domain). The same layering applies to verifier-class agents — FE verifiers share an FE L3 with other FE verifiers, BE verifiers with other BE verifiers. Per-agent identity (personality, situational tone) lives in `SOUL.md`; install/operator-specific overrides live in L4.
 - Each agent knows the other aliases on the team and their declared specialties (visible from each agent's composed CLAUDE.md and from the install's `config.md` `## Aliases` registry); mis-routed work is re-assigned via `/work/assign` to the correct alias (see §7.3 mis-route recovery).
 
@@ -337,6 +337,10 @@ flowchart TB
     EAPoll <-- "gh api repos/.../issues?since=..." --> Forge
 ```
 
+#### Vocabulary note — `{role}` in HTTP paths is actually `{alias}`
+
+The endpoints throughout this section use `{role}` in path parameters (e.g., `GET /events/for/{role}`, `GET /events/cursor/{role}`, `GET /agents/{role}`). **The value passed is always the agent's alias** (e.g., `skill`, `verifier`, `human`, `frontend-1`), not the L2 categorical class (`pm`/`verifier`/`worker`/`dm`). The path-parameter name `{role}` predates the alias concept and is misleading; see [HARNESS-ARCH.md §9](HARNESS-ARCH.md#9-vocabulary-notes) for the canonical statement. A rename to `{alias}` is in the same family as #10358 (`role` → `alias` identifier rename) but is out of scope on that task to limit blast radius. Implementers should treat `{role}` as a synonym for `{alias}` until the rename lands.
+
 #### Event store (deque)
 
 - `collections.deque(maxlen=1000)` — in-memory, capped at 1000 events.
@@ -386,20 +390,18 @@ At-least-once delivery: cursor advances only after a successful ack. Crashed age
 
 #### Role-based filtering
 
-Events are filtered to what each role cares about. Today's per-role filter (loop mode):
+Under v2 the filter collapses to a single rule: **every role reacts only to `assigned-to`**. Specificity moves to `event_context` and the alias-match care filter (§7.4). There is no per-role event-type allowlist in the v2 catalog because the v2 catalog itself collapses to 3 signal concepts (§4.2) — multi-type filtering is moot once the catalog has one routing signal.
 
 ```mermaid
 graph TD
-    ALL["All Events in EventStream"]
-    ALL --> PM["pm sees:<br/>pr-merged, compose-completed<br/>verification-failed, verification-passed<br/>cycle-start, cycle-end<br/>status-transition, agent-health"]
-    ALL --> VERIFIER["verifier sees:<br/>pr-merged, compose-completed<br/>status-transition, cycle-end<br/>verification-failed"]
-    ALL --> WORKER["worker sees:<br/>pr-merged, compose-completed<br/>verification-failed, status-transition"]
-    ALL --> DM["dm sees:<br/>status-transition, pr-merged<br/>verification-passed, compose-completed"]
+    ALL["All bus signals (v2 catalog)"]
+    ALL --> PM["pm: assigned-to (care filter on alias)"]
+    ALL --> VERIFIER["verifier: assigned-to (care filter on alias)"]
+    ALL --> WORKER["worker: assigned-to (care filter on alias)"]
+    ALL --> DM["dm: assigned-to (care filter on alias)"]
 ```
 
-Filtering is client-side in `cycle_pre.py` via `_ROLE_EVENT_TYPES` dict. Roles not in the dict receive all events.
-
-Under v2 this filter collapses dramatically: every role reacts-to `assigned-to` only. Specificity moves to `event_context` and target-role match (§7.4 care filter).
+> **v1 loop-mode legacy**. Today's loop-mode codebase still has a per-role event-type allowlist (client-side filter in `cycle_pre.py` via `_ROLE_EVENT_TYPES` dict; roles not in the dict receive all events). That filter exists because loop mode still emits the broader v1 catalog (lifecycle ticks, git/PR/tracker activity, etc. — see §4.2 "What is OUT of the v2 catalog"). The filter is retired as the v2 catalog migration completes (see §8); the diagram above is the v2 target.
 
 ### 4.4 ExternalActivityDetector (EAD)
 
@@ -469,18 +471,18 @@ Some state-change patterns are predictable enough to handle deterministically in
 ```mermaid
 flowchart TD
     subgraph event_mode["Event mode: bus-derived"]
-        EVENTS["recent_events<br/>(from event bus)"] --> SF{"Self-event?<br/>event.role == my_role"}
+        EVENTS["recent_events<br/>(assigned-to signals<br/>from event bus)"] --> SF{"Self-event?<br/>emitter == my_alias"}
         SF -->|Yes| SKIP["Skip (cascade protection)"]
-        SF -->|No| TYPE_E{"Event type?"}
-        TYPE_E -->|pr-merged + PM| R1E["Reaction: pr-merge-detected"]
-        TYPE_E -->|verification-failed + worker| R2E["Reaction: rework-needed"]
-        TYPE_E -->|other| PASS_E["No reaction → creative phase"]
+        SF -->|No| CTX_E{"event_context?"}
+        CTX_E -->|"merge-detected + PM"| R1E["Reaction: pr-merge-detected"]
+        CTX_E -->|"verifier-rejected + worker"| R2E["Reaction: rework-needed"]
+        CTX_E -->|other| PASS_E["No reaction → creative phase"]
     end
 
     subgraph loop_mode["Loop mode: tracker-derived"]
-        TRACKER["tracker query<br/>(gh pr list / gh issue list)"] --> DELTA{"State change since<br/>last cycle?<br/>(timestamp dedup)"}
+        TRACKER["tracker state diff<br/>(since last-cycle timestamp<br/>in working-state.md)"] --> DELTA{"State change since<br/>last cycle?<br/>(timestamp dedup)"}
         DELTA -->|PR merged + PM| R1L["Reaction: pr-merge-detected"]
-        DELTA -->|issue verification-failed + worker| R2L["Reaction: rework-needed"]
+        DELTA -->|issue verifier-rejected + worker| R2L["Reaction: rework-needed"]
         DELTA -->|none| PASS_L["No reaction → creative phase"]
     end
 
@@ -491,6 +493,8 @@ flowchart TD
     R2L --> CIJ
     PASS_L --> CIJ
 ```
+
+> **v2 catalog alignment**. Event mode branches on `event_context` within `assigned-to` (per §4.2's collapsed catalog) — never on event type, because v1 types like `pr-merged` and `verification-failed` no longer exist as top-level signals. Loop mode still polls forge state directly (no bus consumption per §2 mutual-exclusivity); its branches are state-transition shapes, not v1 event types.
 
 Today only two patterns qualify in either mode:
 
@@ -562,7 +566,7 @@ Each agent typically runs in its own git clone. The harness writes its port to `
 
 ### 6.1 The Ralph Loop cycle
 
-A cycle has three phases (vault touchpoints inlined; see §6.5 + VAULT-ARCH §7 for execution-lane detail):
+A cycle has three phases (vault touchpoints inlined; see §6.6 + VAULT-ARCH §7 for execution-lane detail):
 
 ```
 Boot (session start, once):
@@ -608,7 +612,7 @@ Boot (session start, once):
 └──────────────────────────────────────────────────┘
 ```
 
-The agent only writes the creative phase. Mechanical phases are deterministic scripts. Vault sub-skills split between inline execution (`vault-protocol`, `vault-optimize`) and background-subagent execution (`vault-remember`, `vault-synthesis`) — see §6.5.
+The agent only writes the creative phase. Mechanical phases are deterministic scripts. Vault sub-skills split between inline execution (`vault-protocol`, `vault-optimize`) and background-subagent execution (`vault-remember`, `vault-synthesis`) — see §6.6.
 
 ### 6.2 What wakes the agent in loop mode
 
@@ -643,18 +647,18 @@ When the cycle's context usage exceeds the configured threshold (default 70%), t
 
 This is loop mode's primary form of session lifecycle — agents don't shut down cleanly between cycles; they respawn (with harness) or stop (without) on context pressure.
 
-### 6.5 Vault touchpoints within Phase 2
+### 6.6 Vault touchpoints within Phase 2
 
 Vault sub-skills participate in the creative phase at four touchpoints. They split into two execution lanes by weight — anything that requires meaningful reasoning over vault content runs out of process to keep the consuming agent's context lean:
 
 | Touchpoint | Sub-skill | Lane | When |
 |---|---|---|---|
 | Continuous reads/writes during work | `vault-protocol` | **inline** | Throughout Phase 2; the agent IS doing the read/write the protocol governs |
-| End-of-Phase-2 reflection | `vault-remember` | **background subagent** (`sonnet`) | Step 4b, gated by the non-quiet-cycle check only (always-on; no feature toggle). Returns `{action, path, type, body, reason}` per candidate; consuming agent applies the write list deterministically |
-| Quiet-cycle housekeeping | `vault-optimize` | **inline** | Quiet cycle, after improvement-scan check; gated by 20+ note count. Wrapper around `vault_optimize.py run` — no reasoning to offload |
-| Every-5-quiet cross-agent synthesis | `vault-synthesis` | **background subagent** (`sonnet`) | PM only; counter resets on real work or completed synthesis. Returns ≤1 posture descriptor; consuming agent writes it via `vault-create` + files the pending-review task |
+| End-of-Phase-2 reflection | `vault-remember` | **background subagent** (`sonnet`) *— target lane; see §6.6 Implementation gap* | Step 4b, gated by the non-quiet-cycle check only (always-on; no feature toggle). Default write budget 2/cycle (configurable via `config.md` `Vault Remember > Writes Per Cycle`; surplus deferred by priority decisions > learnings > patterns — see [VAULT-ARCH §7.2](VAULT-ARCH.md#72-vault-remember) for full reflection rules). Returns `{action, path, type, body, reason}` per candidate; consuming agent applies the write list deterministically |
+| Quiet-cycle housekeeping | `vault-optimize` | **inline** | Quiet cycle, after improvement-scan check (skips if the scan would fire this cycle); gated by 20+ note count. Wrapper around `vault_optimize.py run` — no reasoning to offload |
+| Every-5-quiet cross-agent synthesis | `vault-synthesis` | **background subagent** (`sonnet`) *— target lane; see §6.6 Implementation gap* | PM only; fires after 5 consecutive quiet cycles **and** vault has 10+ galaxy notes. Counter resets on real work or completed synthesis. Returns ≤1 posture descriptor; consuming agent writes it via `vault-create` + files the pending-review task |
 
-A fifth touchpoint sits **outside** the per-cycle phases: at boot (session start, once per session), every agent reads `.squidsquad/vault/BRIEFING.md` for active context. That's part of `vault-protocol` and is always inline.
+A fifth touchpoint sits **outside** the per-cycle phases: at boot (session start, once per session), every agent reads `.squidsquad/vault/BRIEFING.md` for active context. That's part of `vault-protocol` and is always inline. The **BRIEFING.md staleness check** runs *every* cycle including quiet cycles (always-on; not subject to the quiet-cycle gate; doesn't consume the write budget) — see [VAULT-ARCH §5](VAULT-ARCH.md#5-briefingmd) + §7.2 for the staleness rules.
 
 The model pin for subagent-lane sub-skills is the **`sonnet`** tier — see [`VAULT-ARCH.md`](VAULT-ARCH.md) §7 Execution model and `[[decision-vault-subagent-model-sonnet]]` for rationale. The pin is by tier, not by dated version.
 
@@ -892,7 +896,7 @@ Mitigates an entire class of pickup-fidelity bugs (#9946) — agents can't forge
 
 1. Class match — the work belongs to which role-class (verifier, worker, dm)?
 2. Specialty match — within that class, which L3 domain (FE, BE, etc.) does the work map to?
-3. Instance selection — if multiple aliases of the matched class+specialty exist, the sender picks one. Selection logic is sender-defined: queue depth (`GET /events/queue-depth/{alias}` or equivalent), most recent reachability, round-robin, etc. Same-class agents are interchangeable by construction (instances compose from byte-identical L1–L4 + one shared L4 file per class), so any of them can handle the work.
+3. Instance selection — if multiple aliases of the matched class+specialty exist, the sender picks one. Selection logic is sender-defined: queue depth (`GET /events/queue-depth/{alias}` or equivalent), most recent reachability, round-robin, etc. Agents within the same `(class, L3 domain)` are interchangeable by construction (instances compose from byte-identical L1–L4 + one shared L4 file per `(class, domain)` pair — see Terminology), so any of them can handle the work.
 
 The sender comments on the issue with a one-line routing rationale when the lane isn't obvious from the status transition alone.
 
@@ -1171,7 +1175,7 @@ PM agents recognize this set as their care-filter; new values added in future re
 - **2026-05-25 (rev 9) — post-#6274 `qa` → `verifier` rename + loop/event mutual-exclusivity on event-bus axis + vault invocation polish.** Three coordinated edits:
   - **Role rename**: post-#6274 (shipped 2026-05-23) the canonical role is `verifier`, not `qa`. Swept all instance-level references in this doc (Terminology table, §2.1 latency-floor example, §3.1 + §3.2 mermaid subgraph and tree labels, §4.3 role-filtering diagram, §7.3 verification-needed sequence diagram + routing table, §7.5 EAD safety-net sequence diagram, §7.6 subloop role list). Wire-format strings updated too: `target_role:qa` → `target_alias:verifier`, `role:qa` → `role:verifier`, `event_context:"qa-rejected"` → `event_context:"verifier-rejected"`, `GET /events/for/qa` → `GET /events/for/verifier`. Note: live code (`references/scripts/triage.py`, `cycle_pre.py:614`) still emits `qa-rejected` — doc now describes architectural target; code task to skill.
   - **Loop/event mutual exclusivity** (§2 + §4.5 + §4.6 + §6.1 + §6.3 + §7 lead): loop mode is now documented as emit-only on the event bus (no consume, no cursor); event mode is the exclusive home for bus consumption + cursor logic. Loop-mode mechanical reactions derive from tracker state changes since last cycle (timestamp dedup in working-state.md), not from event-bus reads. Rationale: keeps the harness contract uniform — loop is observational-only, event is load-bearing.
-  - **Vault invocation** (§6.1 diagram + §6.5 new sub-section): named the four Phase 2 vault touchpoints + boot-time BRIEFING read + the inline-vs-subagent execution lane principle (heavy sub-skills `vault-remember` and `vault-synthesis` run on the `sonnet` tier via background subagent; light ones `vault-protocol` and `vault-optimize` stay inline). Cross-references VAULT-ARCH §7 for the lane principle's full rationale.
+  - **Vault invocation** (§6.1 diagram + §6.6 new sub-section): named the four Phase 2 vault touchpoints + boot-time BRIEFING read + the inline-vs-subagent execution lane principle (heavy sub-skills `vault-remember` and `vault-synthesis` run on the `sonnet` tier via background subagent; light ones `vault-protocol` and `vault-optimize` stay inline). Cross-references VAULT-ARCH §7 for the lane principle's full rationale.
   - **Vault flag retirement** (§6.1 diagram): dropped the `· read vault-remember + vault-optimize flags` line from Phase 1 and the `· advance event cursor` line from Phase 3 (both per the above changes). The vault-remember/vault-optimize `Enabled` flags in `config.md` are being retired; both sub-skills are always-on and self-gate via their per-cycle conditions. Code task to skill.
 - **2026-05-25 (rev 10) — class vs alias as routing primitive + responsibility.md / permission-table retirement.** Architectural simplification arc:
   - **Class vs alias** (Terminology refactor + wire-format swap): role classes (pm/dm/worker/verifier) are categorical and have uniform L2/L3 + bus contract per class; aliases are per-agent unique names from `config.md` `## Aliases`. An install may have 1..N agents per class — e.g., 2 frontend + 2 backend worker-class agents named `frontend-1`, `frontend-2`, `backend-1`, `backend-2` (four worker-class agents, four distinct aliases). Specialty/skill (FE/BE/iOS/etc.) lives in SOUL.md + L4, not in a separate class. Wire-format field `target_role` renamed to `target_alias` across all 16 catalog + sequence-diagram + routing-table references; care filter is now `target_alias == my_alias`; EAD emits one assigned-to per (forge change, target_alias) pair.
