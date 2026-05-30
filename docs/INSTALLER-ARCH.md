@@ -465,10 +465,12 @@ If the release does NOT break L4 or config schema, **no migration file is needed
 
 ### 10.2 What stays untouched during upgrade
 
-- `.squidsquad/project/` — L4 project-local customizations (migrations may *modify* L4 contents, but only through the three-gate model in step 3; never bulk-overwritten)
-- `.squidsquad/vault/` — shared memory layer (never touched by upgrade)
+(This subsection's "untouched" invariants are scoped to the **upgrade flow** described in §10. Fresh install — §4.8 Phase 5 — legitimately creates these files for the first time; "untouched during upgrade" is not the same as "never written".)
+
+- `.squidsquad/project/` — L4 project-local customizations. Migrations may *modify* L4 contents, but only through the three-gate model in step 3; the upgrade flow never bulk-overwrites or regenerates L4 files. (Fresh install creates these files in Phase 5 step 4 from Phase 1 project-intake answers.)
+- `.squidsquad/vault/` — shared memory layer (never touched by upgrade; created at fresh install by `vault-init` per VAULT-ARCH §7.1)
 - `.squidsquad/<alias>/working-state.md`, `iterations/`, `planning/` — agent state
-- `.squidsquad/config.md` — project configuration (migrations may modify specific fields under the three-gate model; the installer never blindly overwrites)
+- `.squidsquad/config.md` — project configuration. Migrations may modify specific fields under the three-gate model; the installer never blindly overwrites. (Fresh install writes this file from Phase 1 + Phase 2 conversational output.)
 - GitHub Issue labels — already present from prior install
 
 ### 10.3 What's regenerated
