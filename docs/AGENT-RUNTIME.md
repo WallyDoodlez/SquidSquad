@@ -420,8 +420,14 @@ EAD is the bridge from forge → bus. It runs inside the harness on a polling lo
 
 1. Polls GitHub via REST API (`gh api repos/<owner>/<repo>/issues?since=<last_seen_iso>&state=all&per_page=100`).
 2. Diffs against last-seen timestamp on disk.
-3. For each changed issue, maps to a target alias per a rule table (status label changes, comments, PR state changes).
-4. Emits one `assigned-to` per (forge change, target_alias) pair into the deque.
+3. For each changed issue, maps to a target alias + `event_context` per a rule table:
+
+   | Forge change | Target alias | `event_context` |
+   |---|---|---|
+   | `status:*` label change | alias derived from new state per §7.3 routing table | matches §7.3 routing-table value for the transition |
+   | New comment authored by a human (not an agent) | `pm` | `"human-comment"` |
+   | PR state change (opened / merged / closed) | matches §7.3 routing-table value for the new linked-issue state | matches §7.3 |
+4. Emits one `assigned-to` per (forge change, target_alias) pair into the deque (with the harness's `role:*` label write per §7.3).
 5. Records the new last-seen timestamp so it doesn't re-emit on restart.
 
 EAD is the only emitter of `assigned-to` from forge state. Agents trigger `assigned-to` indirectly via `POST /work/assign` (typically called by `tracker.py`; see §7.3).
@@ -757,9 +763,9 @@ Two-tier backoff: 5s → 30s → 60s. A drained queue stabilizes at 60s after �
 
 Nudge format is literal `NUDGE\n` with no payload — the agent always does `GET /events/for/{role}?since=cursor` to find out what's new. False positives (a `NUDGE` arriving when no relevant events exist) are harmless because the GET returns `[]`.
 
-`event_poll`'s lifecycle is harness-owned: the health poller watches its PID and the harness respawns it on death while `intent=running`. `event_poll` discovers the harness port via the same mechanism documented for agents in §4.7 — reads `.squidsquad/.harness-port` from its CWD, walking up to 5 parent directories if needed. The harness does not pass a `--port` argument; the discovery file is sufficient and avoids stale-port hardcoding if the harness restarts on a different port. On harness restart, any `event_poll` orphaned by the prior harness exits when its `--wait` parent pipe closes; the new harness re-spawns it as part of the boot sequence for each `intent=running` agent. event_poll does not attempt independent reconnect — it dies with the harness it was spawned by.
+`event_poll`'s lifecycle is harness-owned: spawned at agent boot (paired with the agent via `--role <alias>`), terminated by the harness on agent stop. **There is no automatic respawn** — if `event_poll` dies mid-session, the health poller logs the death but does NOT restart it; the recovery path is restarting the paired agent (which spawns a fresh `event_poll` as part of the agent's boot sequence). If the harness itself dies, `event_poll` is left orphaned (silently no-ops once the HTTP target is gone); full team reboot is required to restore event-mode operation. `event_poll` discovers the harness port via the same mechanism documented for agents in §4.7 — reads `.squidsquad/.harness-port` from its CWD, walking up to 5 parent directories if needed. The harness does not pass a `--port` argument; the discovery file is sufficient and the harness flushes the port file to disk before spawning `event_poll` (HARNESS-ARCH §7.2 step 4).
 
-`event_poll`'s spawn ordering relative to the rest of the boot sequence is canonical in [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md). In summary: `event_poll` spawns as a harness-direct sibling of the `thin_launcher → claude` chain (not a descendant), begins polling immediately on spawn, and is unaffected by the `booted` handshake (which gates routed-work delivery, not `event_poll` activity).
+`event_poll`'s spawn ordering relative to the rest of the boot sequence is canonical in [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md). In summary: `event_poll` is spawned by `harness.py` as a **direct child of the harness process** (NOT under the agent's `thin_launcher → claude` subprocess tree — see §3.2), begins polling immediately on spawn, and is unaffected by the `booted` handshake (which gates routed-work delivery, not `event_poll` activity).
 
 **Initial-queue ordering invariant** (resolves the race between `event_poll` polls and the agent's boot sequence):
 
