@@ -554,6 +554,41 @@ The pass MUST NOT:
 - Add or rewrite step IDs (would break L4 ops in subsequent deploys)
 - Drop content silently (governed by length floor below)
 
+**Conflict resolution — higher L wins.** When the assemble pass encounters two pieces of linked prose that materially contradict each other (e.g., L2 says "verify pending-test items each cycle" and L4 appends "verifier handles all verification — PM does not"), the **higher layer's prose prevails** in the assembled output. Layer precedence (highest to lowest): **L4 > L3 > L2 > L1**. This matches the natural reading of the layered model: later/more-specific layers refine earlier/more-general ones, and L4 is the project's standing override. The link stage already places higher-layer content later in the linked body via `(slot_index, ordinal)` sort; the assemble pass collapses the resulting "do X / actually don't do X" into a single coherent statement aligned with the higher-layer position. The lower-layer prose is not silently erased — see the conflict report below.
+
+**Conflict report.** After the assemble pass completes for a role-class, compose emits a conflict report at `.squidsquad/<alias>/CLAUDE.conflicts.md` enumerating every conflict the assembler resolved. The report is the operator's audit surface for verifying that higher-L overrides did what the project intended.
+
+Conflict report format (markdown):
+
+```markdown
+# Compose Conflict Report — <role-class>
+Generated: <ISO-8601 timestamp>
+Compose run: <commit SHA of the source tree>
+Assemble model: <model-id>
+Total conflicts resolved: <N>
+
+## CONFLICT-001 — slot: <slot> — precedence: L<winner> > L<loser>
+- **L<loser> source**: `<path>` (ordinal <N>)
+  > <verbatim quote from L<loser>, max 200 chars + ellipsis>
+- **L<winner> source**: `<path>` (ordinal <N>[ + op: <op-type>])
+  > <verbatim quote from L<winner>, max 200 chars + ellipsis>
+- **Why this is a conflict**: <one-sentence assembler explanation>
+- **Resolution in assembled output**: <one-sentence description of what the assembled prose says>
+
+## CONFLICT-002 — slot: ...
+...
+```
+
+If zero conflicts were detected during the run, the report file is still emitted with `Total conflicts resolved: 0` and no CONFLICT sections — its presence confirms the assembler ran cleanly. The report is git-tracked alongside `CLAUDE.md` and `CLAUDE.linked.md`; PR review against an L4 change inspects this file to confirm overrides land as intended.
+
+**L4-curation should pre-empt conflicts at authoring time.** The `l4-curation` sub-skill (§7.1, §7.7) authors L4 entries from human conversation. Before writing a new L4 op, it MUST read the linked composite for the target slot and check whether the new entry would conflict with existing L1-L3 prose. If a conflict is detected:
+
+- **Reframe** the L4 entry to refine rather than contradict (preferred) — e.g., instead of "PM does not verify pending-test items" appended at L4, the curation step recognizes this contradicts L2's "verify pending-test items" and either rewords as `### replace step:cycle/pickup` swapping the body cleanly, OR escalates to the human for explicit confirmation that an override is intended.
+- **Convert to `### replace`** if the human confirms the override is intentional — replace is more honest than `append` for "we don't do this anymore" semantics, and the link stage handles it deterministically (no LLM interpretation needed at runtime).
+- **Surface to the human** if the curation step cannot determine whether the contradiction is intentional.
+
+In other words: the assembler's conflict-resolution rule is the runtime safety net; `l4-curation` is the authoring-time discipline that should make the safety net rarely fire. A conflict report with many entries is a signal that L4 curation is letting too many ambiguous overrides through and should be tightened.
+
 **Post-pass validation.** Before accepting the assembled output, the pipeline checks:
 
 1. **Sub-skill ref set equality** — extract all `→ run sub-skill: <name>` references from both linked and assembled bodies; the multisets must be identical.
@@ -571,10 +606,11 @@ If any check fails, the slot's assembled body is **rejected** and the linked bod
 
 **Model.** Default `sonnet` (cost/quality balance for prose rewriting). Configurable per install in `config.md` as `Assemble Model:` (`sonnet`, `opus`, `haiku`). Always temperature ≤ 0.3 to reduce first-run drift.
 
-**Audit artifacts.** Compose emits both outputs to `.squidsquad/<alias>/`:
+**Audit artifacts.** Compose emits three outputs to `.squidsquad/<alias>/`:
 
 - `CLAUDE.md` — the **assembled** output. This is what the runtime agent reads. Always present.
 - `CLAUDE.linked.md` — the **linked** output. Audit / debug / fallback artifact. Always present.
+- `CLAUDE.conflicts.md` — the **conflict report** from the assemble pass (see format above). Always present, even when zero conflicts (proof the pass ran). PR review against an L4 change inspects this file to confirm overrides resolved as intended.
 
 PR review compares the two when an L4 op lands; if the assembled output drops or distorts an op's intent, the reviewer catches it before merge. The assemble pass is not a black box.
 
@@ -1156,6 +1192,14 @@ When the human gives the agent a new instruction in conversation:
 These are project-specific instruction changes. They don't belong in L1-L3 (which ships globally) — they belong in L4 (which is project-local).
 
 The `l4-curation` sub-skill defines the detection patterns (durable vs one-off, customization vs feature request) and the elicitation dialog (role + bucket + why + edge cases + draft + approval). By the time §7.2's decision tree fires, the curation sub-skill has already produced a well-scoped request with an identified bucket; §7.2 just classifies the structural op.
+
+**Conflict pre-emption (paired with §4.6 assemble-pass conflict resolution).** Before drafting any new L4 op, `l4-curation` MUST read the linked composite for the target slot and check whether the new entry would materially contradict existing L1-L3 prose. The assemble pass (§4.6) WILL detect such conflicts at compose time and prefer the higher layer, but a clean L4 author avoids creating them in the first place. When `l4-curation` detects a likely conflict, it must:
+
+- **Prefer reframing** as `### replace step:cycle/<id>` (or whole-slot `### replace` for Responsibility) — replace is the honest op for "we don't do this anymore" semantics; the link stage resolves it deterministically with no LLM interpretation needed at runtime.
+- **Reword to refine, not contradict**, when the human's intent is genuinely additive ("we deploy through Buildkite, not GH Actions" → frame as project-context fact rather than instructions-slot negation).
+- **Surface the conflict to the human** when intent is ambiguous, with the linked prose quoted on both sides and the proposed reframings as choices.
+
+A conflict report (`.squidsquad/<alias>/CLAUDE.conflicts.md`) with many entries on the next compose run is a signal that `l4-curation` is letting too many ambiguous overrides through and should be tightened. The two systems are paired: curation pre-empts at write time; assemble resolves at compose time. Both name the same precedence rule (higher L wins) so the agent's authoring-time decision matches the assembler's runtime resolution.
 
 ### 7.2 Agent decision tree
 
