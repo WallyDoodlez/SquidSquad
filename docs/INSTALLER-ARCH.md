@@ -226,7 +226,9 @@ Once approved, the installer:
 1. **Cleans up** any prior partial state (if a previous interrupted install left artifacts).
 2. **Serializes the install spec** to a temporary location for the scaffold step.
 3. **Scaffolds `.squidsquad/`** — creates the per-alias agent dirs, vault skeleton, project-local L4 directory, config.md, and per-alias SOUL.md files. No tool/MCP wiring (per §8).
-4. **Seeds L4 Project Context** — for each role-class in the chosen preset, writes the Phase 1 project-intake answers (domain, audience, primary language/stack, repositories of record, external systems, project-specific tone notes) into `.squidsquad/project/<role-class>.md` under the `## Project Context` H2 section. This is the single unified L4 file per role-class (per [COMPOSE-ARCHITECTURE.md §3.3 + §7.3](COMPOSE-ARCHITECTURE.md) and the "two complementary sources" callout in [§5.5](COMPOSE-ARCHITECTURE.md)). The legacy multi-file enrichment pattern (`references/sub-skills/project/<role>-instructions.md`, `<role>-responsibility.md`, `<role>-soul-directives.md`, `shared-*.md`, `setup-upgrade-gate.md`) is retired; the unified L4 file replaces it. Other L4 slots (Identity / Soul / Instructions / etc.) start empty at install time and are populated at runtime by the `l4-curation` sub-skill (per [COMPOSE-ARCHITECTURE.md §7](COMPOSE-ARCHITECTURE.md)).
+4. **Seeds L4 Project Context** — for each role-class in the chosen preset, writes the Phase 1 project-intake answers (domain, audience, primary language/stack, repositories of record, external systems, project-specific tone notes) into `.squidsquad/project/<role-class>.md` under the `## Project Context` H2 section. This is the single unified L4 file per role-class (per [COMPOSE-ARCHITECTURE.md §3.3 + §7.3](COMPOSE-ARCHITECTURE.md) and the "two complementary sources" callout in [§5.5](COMPOSE-ARCHITECTURE.md)). Other L4 slots (Identity / Soul / Instructions / etc.) start empty at install time and are populated at runtime by the `l4-curation` sub-skill (per [COMPOSE-ARCHITECTURE.md §7](COMPOSE-ARCHITECTURE.md)).
+
+   > **Historical context (no installer code needed):** earlier installs used a multi-file L4 seed pattern (`references/sub-skills/project/<role>-instructions.md`, `<role>-responsibility.md`, `<role>-soul-directives.md`, `shared-*.md`, `setup-upgrade-gate.md`). That pattern is retired and replaced by the unified `<role-class>.md` model above. The installer does **not** carry migration code for the legacy pattern — fresh installs never see it, and existing installs are migrated by a separate one-time tool (out of scope for this doc). This callout exists only to disambiguate the docs; an implementer reading §4.8 should write the unified-file path and not the legacy multi-file path.
 5. **Ensures GitHub labels** — creates the status/role/type/priority/severity label taxonomy via `gh label create` (idempotent per-label check).
 
 Writes are local but not yet committed. Helpers handle the mechanical work; the installer agent acts on JSON outputs only.
@@ -426,10 +428,12 @@ flowchart LR
 4. **Recompose**: every role's CLAUDE.md by running `compose.py deploy-all`. The composed outputs reflect the new sub-skill versions.
 5. **Restart**: each affected agent so they pick up the new CLAUDE.md. The installer calls the harness's per-role lifecycle endpoints in sequence:
    ```
-   POST /agents/<role>/stop    # graceful stop; harness handles ack-stop / timeout
-   POST /agents/<role>/start   # boot with new composed CLAUDE.md
+   POST /agents/<alias>/stop    # graceful stop; harness handles ack-stop / timeout
+   POST /agents/<alias>/start   # boot with new composed CLAUDE.md
    ```
-   for each role. If the harness is not running, the installer instead invokes `start.sh` from the repo root (which boots the harness, which in turn boots the agents per `.local-config`). Either way, the next session each agent starts is reading the new composed CLAUDE.md.
+   for each alias. If the harness is not running, the installer instead invokes `start.sh` from the repo root (which boots the harness, which in turn boots the agents per `.local-config`). Either way, the next session each agent starts is reading the new composed CLAUDE.md.
+
+   **In-flight-work handling.** Before stopping each agent, the harness checks whether the agent has an active iteration (i.e., it is in the creative phase between `cycle_pre.py` and `cycle_post.py`). If so, the harness waits for the agent's `ack-stop` event — the agent finishes its current iteration, calls `cycle_post.py` (which commits and pushes `working-state.md` + any in-flight changes), and then exits via the normal exit-42 path. If the iteration does not complete within a configurable timeout (default 5 minutes), the harness logs a warning and proceeds with the stop; on next boot the agent reads `working-state.md` to recover from the checkpoint (see AGENT-RUNTIME §5 state-persistence map + §6.5 context-pressure exit-42 model). No in-flight state is lost because `working-state.md` is the durable checkpoint that survives restarts.
 
 **What stays untouched during upgrade:**
 
@@ -457,7 +461,7 @@ The installer is designed to be safe to re-run:
 - **Phases 0–4** make no changes the user can see in the target repo. (Phase 0a `shared_fs.py init` writes to `~/.squidsquad/` but is idempotent — creates dirs only if absent — and is shared across all installs, not specific to this one.)
 - **Phase 5 atomic write** is the first phase that writes to the target repo. It uses a "scaffold then write" pattern — failures partway leave the filesystem in a state the next re-run can clean up via WIZARD's Step 7.1 ("Full rebuild cleanup if applicable") cleanup path.
 - **Phase 5 label creation on the forge** is per-label idempotent (`gh label create` skips existing labels).
-- **Phase 6 compose** is fully deterministic — same sources + L4 → same composed CLAUDE.md.
+- **Phase 6 compose** is deterministic *for a given set of inputs* — the same L1-L3 sources + L4 file always produce the same composed CLAUDE.md. During an upgrade (§10), the L1-L3 sources change because the installer pulls newer SquidSquad releases, so the composed output legitimately changes; that is not a determinism violation, just a reflection of the input change. Re-running Phase 6 against an unchanged source set is safely idempotent.
 - **Phases 5–7** are pre-commit local + forge writes. A `git status` after Phase 5 shows untracked `.squidsquad/` files; forge labels created in Phase 5 / initial issues in Phase 7 are visible on GitHub immediately. The atomic git commit + push happens at Phase 8.
 
 ### 11.2 Interrupted install recovery
