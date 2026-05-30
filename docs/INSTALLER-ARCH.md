@@ -126,7 +126,7 @@ flowchart TB
     P8["Phase 8<br/>Commit + push"]
     P9(["Print 'SquidSquad ready' + exit"])
     Upgrade["Upgrade flow §10"]
-    Abort(["Abort — zero trace"])
+    Abort(["Abort — no repo changes"])
 
     Start --> P0 --> P0a --> P0b
     P0b -->|"no — fresh install"| P1
@@ -232,7 +232,7 @@ Once approved, the installer:
    > **Historical context (no installer code needed):** earlier installs used a multi-file L4 seed pattern (`references/sub-skills/project/<role>-instructions.md`, `<role>-responsibility.md`, `<role>-soul-directives.md`, `shared-*.md`, `setup-upgrade-gate.md`). That pattern is retired and replaced by the unified `<role-class>.md` model above. The installer does **not** carry migration code for the legacy pattern — fresh installs never see it, and existing installs are migrated by a separate one-time tool (out of scope for this doc). This callout exists only to disambiguate the docs; an implementer reading §4.8 should write the unified-file path and not the legacy multi-file path.
 5. **Ensures GitHub labels** — creates the status/role/type/priority/severity label taxonomy via `gh label create` (idempotent per-label check).
 
-Writes are local but not yet committed. Helpers handle the mechanical work; the installer agent acts on JSON outputs only.
+Writes land in the target repo's working tree (`.squidsquad/` appears in `git status`) but are not staged or committed — the atomic commit happens at Phase 8 (per §11.1's "Phase 5 is the first phase that writes to the target repo"). Helpers handle the mechanical work; the installer agent acts on JSON outputs only.
 
 ### 4.9 Phase 6 — Compose per-role CLAUDE.md
 
@@ -242,7 +242,7 @@ For each role in the chosen team preset (PM, each worker, each verifier, DM), th
 python references/scripts/compose.py deploy <role>
 ```
 
-`compose.py` reads the L1-L3 sub-skill sources + L4 project-local files and emits `.squidsquad/<alias>/CLAUDE.md` per the [compose pipeline](COMPOSE-ARCHITECTURE.md). The composed output is a thin orchestration layer that references sub-skills — see [COMPOSE-ARCHITECTURE.md §4.5](COMPOSE-ARCHITECTURE.md). (The `compose.py deploy <role>` CLI accepts the alias as its argument; the param name `<role>` in the helper signature predates the alias concept.)
+`compose.py` reads the L1-L3 sub-skill sources + L4 project-local files and emits `.squidsquad/<alias>/CLAUDE.md` per the [compose pipeline](COMPOSE-ARCHITECTURE.md). The output path is **alias-keyed**: `compose.py deploy <alias>` writes to `.squidsquad/<alias>/CLAUDE.md`, regardless of role-class. The composed output is a thin orchestration layer that references sub-skills — see [COMPOSE-ARCHITECTURE.md §4.5](COMPOSE-ARCHITECTURE.md). (The CLI's positional parameter is shown as `<role>` for code-compat — its value is always the alias; the rename to `<alias>` is tracked in [#10358](https://github.com/WallyDoodlez/SquidSquad/issues/10358).)
 
 ### 4.10 Phase 7 — Tracker setup
 
@@ -321,8 +321,8 @@ The installer agent never invents behavior the helpers already implement. Every 
 | Helper | Purpose |
 |---|---|
 | `references/scripts/wizard.py` | Main wizard helper with sub-commands per install step (`check-gh`, `detect-stack`, `scaffold`, `enrich-l4`, `ensure-labels`, `serialize-spec`, etc.) |
-| `references/scripts/shared_fs.py` | Initializes and manages `~/.squidsquad/` (secrets, clones registry, cross-install config) |
-| `references/scripts/compose.py` | Generates `.squidsquad/<role>/CLAUDE.md` from L1-L4 sources — see [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) |
+| `references/scripts/shared_fs.py` | Initializes and manages `~/.squidsquad/` (secrets, clones registry, cross-install config). Sub-commands: `init` (idempotent shared-filesystem bootstrap, invoked Phase 0a). |
+| `references/scripts/compose.py` | Generates `.squidsquad/<alias>/CLAUDE.md` from L1-L4 sources — output path is **alias-keyed**, not role-class-keyed (e.g. `compose.py deploy fe-1` writes `.squidsquad/fe-1/CLAUDE.md`). See [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md). |
 | `references/scripts/forgejo_setup.py` | Forgejo backend init (alternate tracker; see §9) |
 | `references/scripts/tracker.py` | The tracker abstraction layer — agents use this at runtime; the installer uses its label-creation paths at Phase 5 |
 | `start.sh` | Post-install boot script — ensures Python deps, syncs all clones, runs the harness |
