@@ -94,17 +94,17 @@ Three commitments:
 
 | Destination | What the installer writes |
 |---|---|
-| `.squidsquad/config.md` | Project config — iter interval, ship threshold, `event-driven:` mode flag (global; selects polling vs event-driven manifest per [AGENT-RUNTIME.md §2](AGENT-RUNTIME.md) + [COMPOSE-ARCHITECTURE.md §6.5](COMPOSE-ARCHITECTURE.md)), model routing, tracker backend, git workflow. Also includes the install's **SquidSquad version stamp** (`squidsquad_version: <semver>` field; written at Phase 5 from the installer's source release tag; read by the upgrade flow §10 step 1) and the **`## Aliases` registry section** mapping each install-time alias to its role-class + L3 domain (used by the harness for `/work/assign` alias-existence validation — see [AGENT-RUNTIME.md §7.3](AGENT-RUNTIME.md)). |
+| `.squidsquad/config.md` | Project config — iter interval, ship threshold, `event-driven:` mode flag (global; selects polling vs event-driven manifest per [AGENT-RUNTIME.md §2](AGENT-RUNTIME.md) + [COMPOSE-ARCHITECTURE.md §6.5](COMPOSE-ARCHITECTURE.md)); the installer writes `event-driven: no` as the default — the operator can flip it later per AGENT-RUNTIME §8.2. Also includes model routing, tracker backend, git workflow, the install's **SquidSquad version stamp** (`squidsquad_version: <semver>` field; written at Phase 5 from the installer's source release tag; read by the upgrade flow §10 step 1) and the **`## Aliases` registry section** mapping each install-time alias to its role-class + L3 domain (used by the harness for `/work/assign` alias-existence validation — see [AGENT-RUNTIME.md §7.3](AGENT-RUNTIME.md)). |
 | `.squidsquad/<alias>/` | Per-alias agent directory (CLAUDE.md composed, working-state.md skeleton, planning/, iterations/) — one per alias in the chosen team preset: PM, each worker, each verifier, DM. *Note: no separate `SOUL.md` per alias — `SOUL.md` is a filename shorthand for the soul-slot source at `references/roles/<role-class>/SOUL.md`; its content is composed into `CLAUDE.md §3 Soul`. The v1 per-alias sidecar is retired per [COMPOSE-ARCHITECTURE.md §5.3](COMPOSE-ARCHITECTURE.md).* |
 | `.squidsquad/project/` | L4 project-local files — one unified `<role-class>.md` per role-class (pm.md, `<worker-class>.md`, `<verifier-class>.md`, dm.md) with H2 slot sections. Initial `## Project Context` block in each is seeded from Phase 1 conversational answers (per §4.8 step 4); other slots start empty and accumulate at runtime via `l4-curation` (see [COMPOSE-ARCHITECTURE.md §5.5 + §7](COMPOSE-ARCHITECTURE.md)). |
 | `.squidsquad/vault/` | Shared memory layer skeleton (BRIEFING.md + the five vault dirs: projects/, areas/, resources/, archives/, galaxy/). Vault architecture documented in [`VAULT-ARCH.md`](VAULT-ARCH.md). |
-| `.squidsquad/.local-config` | Per-clone alias→path mapping for `start.sh` to sync clones |
+| `.squidsquad/.local-config` | Per-clone alias→path mapping for `start.sh` to sync clones. Installer-scaffolded; harness reads it at boot to populate per-alias `clone_path` into in-memory `AgentState` (see HARNESS-ARCH §7.2 step 1 + §7.5). At runtime the harness's `.harness-state.json` is the operational source; `.local-config` is the install-time source of truth. |
 | `~/.squidsquad/secrets` | API keys for external models (restricted permissions, never committed to repo) |
 | `~/.squidsquad/clones/` | Per-alias clone-path registry. One file per alias (`pm`, each worker, each verifier, `dm`) whose contents is the absolute path to that alias's clone. Always created — clone isolation is mandatory (see §1.2), not a configurable mode. |
 | **Forge (GitHub)** | Issue labels created via `gh label create` — status/role/type/priority/severity taxonomy |
 | **Git commit** | Single atomic install commit on `main` (or the operator's chosen branch) |
 
-> **Runtime files (not installer outputs):** `.squidsquad/.harness-port`, `.squidsquad/.harness-state.json`, `.squidsquad/.event-state.json` appear under `.squidsquad/` post-install but are **harness-owned**, written when the harness boots (not by the installer). Schemas are documented in [`HARNESS-ARCH.md`](HARNESS-ARCH.md) §7 + [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §5. Listed here as a pointer because operators inspecting the directory post-install will see them.
+> **Runtime files (not installer outputs):** `.squidsquad/.harness-port`, `.squidsquad/.harness-state.json`, `.squidsquad/.event-state.json` do not exist immediately after `squidsquad init` exits; they appear only after the harness is first started (`start.sh` / HARNESS-ARCH §2). They are harness-owned, not installer outputs. Schemas are documented in [`HARNESS-ARCH.md`](HARNESS-ARCH.md) §7 + [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §5. Listed here as a pointer because operators inspecting the directory post-install will see them.
 
 ---
 
@@ -176,7 +176,7 @@ If `.squidsquad/` exists in the target repo, this is an upgrade, not a fresh ins
 
 The installer talks to the human in domain terms — never internal jargon, never file paths, never script names. It collects:
 
-- **Project details**: name, domain, audience, primary language/stack
+- **Project details**: name, domain, audience, primary language/stack, repositories of record (primary repo paths, related repos), external systems (e.g., issue trackers if not GitHub, CI/CD platforms, monitoring/observability tools). These may be collected directly or via adaptive context questions depending on stack.
 - **Adaptive context questions**: branched based on stack and domain (e.g. mobile app vs CLI vs web service have different follow-ups)
 - **Team preset**: which preset roster to install. The installer offers a small set of named presets (e.g. a generalist preset with one worker + one verifier; a multi-stack preset with two workers + one verifier; a frontend+backend preset; a multi-platform preset). The wizard suggests a preset based on the project domain and asks the human to confirm or pick another. Custom presets are supported but not the default path.
 - **Loop interval**: cycle cadence (default 30 min for polling, irrelevant in event mode)
@@ -242,7 +242,9 @@ For each role in the chosen team preset (PM, each worker, each verifier, DM), th
 python references/scripts/compose.py deploy <role>
 ```
 
-`compose.py` reads the L1-L3 sub-skill sources + L4 project-local files and emits `.squidsquad/<alias>/CLAUDE.md` per the [compose pipeline](COMPOSE-ARCHITECTURE.md). The output path is **alias-keyed**: `compose.py deploy <alias>` writes to `.squidsquad/<alias>/CLAUDE.md`, regardless of role-class. The composed output is a thin orchestration layer that references sub-skills — see [COMPOSE-ARCHITECTURE.md §4.5](COMPOSE-ARCHITECTURE.md). (The CLI's positional parameter is shown as `<role>` for code-compat — its value is always the alias; the rename to `<alias>` is tracked in [#10358](https://github.com/WallyDoodlez/SquidSquad/issues/10358).)
+`compose.py` reads the L1-L3 sub-skill sources + L4 project-local files and emits `.squidsquad/<alias>/CLAUDE.md` per the [compose pipeline](COMPOSE-ARCHITECTURE.md). The output path is **alias-keyed**: `compose.py deploy <alias>` writes to `.squidsquad/<alias>/CLAUDE.md`, regardless of role-class. The composed output is a thin orchestration layer that references sub-skills — see [COMPOSE-ARCHITECTURE.md §4.5](COMPOSE-ARCHITECTURE.md). (The CLI's positional parameter is shown as `<role>` for code-compat — its value is always the alias; the rename to `<alias>` is tracked in [#10358](https://github.com/WallyDoodlez/SquidSquad/issues/10358).) The compose helper takes the alias as its positional argument and internally resolves the role-class (from the alias→class mapping in `.squidsquad/config.md`'s `## Aliases` registry) to pick the correct L4 file. Two aliases of the same role-class share an L4 file by design — see COMPOSE-ARCHITECTURE §3.3.
+
+Two aliases of the same role-class produce byte-identical composed output by design — same L1-L4 sources, same compose pipeline. The output path differs by alias (`.squidsquad/<alias>/CLAUDE.md`); the content is shared per class. See COMPOSE-ARCHITECTURE §3.3.
 
 ### 4.10 Phase 7 — Tracker setup
 
@@ -289,8 +291,8 @@ The full `.squidsquad/` tree post-install. PM and DM dirs are always present (si
 │   └── iterations/
 ├── project/                     # L4 — one unified file per role-class
 │   ├── pm.md                    # H2 slot sections; ## Project Context seeded from Phase 1
-│   ├── <worker-class>.md        # one per worker class in the preset
-│   ├── <verifier-class>.md      # one per verifier class in the preset
+│   ├── worker.md                # default preset: generalist worker class
+│   ├── verifier.md              # default preset: verifier class
 │   └── dm.md                    # H2 slot sections; ## Project Context seeded from Phase 1
 ├── vault/                       # shared memory (PM + workers R/W, verifiers + DM read-only)
 │   ├── BRIEFING.md
@@ -302,6 +304,8 @@ The full `.squidsquad/` tree post-install. PM and DM dirs are always present (si
 ├── .local-config                # per-clone alias→path map (read by start.sh)
 └── (runtime) .harness-port, .harness-state.json, .event-state.json — created when the harness boots
 ```
+
+> **L4 file naming**: the `project/` tree above shows default-preset filenames (`worker.md`, `verifier.md`). Specialized worker presets use concrete role-class names instead (e.g., `fe-worker.md`, `be-worker.md`). The filename is always the role-class identity, never a generic placeholder. See COMPOSE-ARCHITECTURE §3.3 and §7.3.
 
 And the per-user shared filesystem (not part of any single repo):
 
@@ -428,13 +432,19 @@ flowchart LR
    3. **Compose dry-run**: `compose.py deploy-all --check` validates the migrated content composes cleanly before any write
    
    Migrations are stepped through one at a time — failure at any gate aborts that step (and the rest of the walk) cleanly; nothing partial is written.
-4. **Recompose**: `compose.py deploy-all` regenerates every role's CLAUDE.md from the now-current source + migrated L4. The composed outputs reflect both the new sub-skill versions and the migrated L4 customizations.
-5. **Restart**: each affected agent so they pick up the new CLAUDE.md. The installer is an ephemeral Claude Code session but has full Bash tooling — it makes these HTTP calls via `curl` (or equivalent) against the harness's localhost port (read from `.squidsquad/.harness-port` per [HARNESS-ARCH.md §6](HARNESS-ARCH.md)). "Ephemeral" refers to lifetime, not capability: the installer can do anything its Claude Code tooling permits before it exits at Phase 9. The installer calls the harness's per-agent lifecycle endpoints in sequence:
+4. **Recompose**: `compose.py deploy-all` regenerates every role's CLAUDE.md from the now-current source + migrated L4. The composed outputs reflect both the new sub-skill versions and the migrated L4 customizations. `deploy-all` iterates the alias roster from `.squidsquad/config.md`'s `## Aliases` registry and runs `compose.py deploy <alias>` for each (see COMPOSE-ARCHITECTURE §8.2).
+5. **Restart**: each affected agent so they pick up the new CLAUDE.md. The installer is an ephemeral Claude Code session but has full Bash tooling — it makes these HTTP calls via `curl` (or equivalent) against the harness's localhost port (read from `.squidsquad/.harness-port` per [HARNESS-ARCH.md §6](HARNESS-ARCH.md)). "Ephemeral" refers to lifetime, not capability: the installer can do anything its Claude Code tooling permits before it exits at Phase 9.
+
+   The harness remains the sole lifecycle authority — agents are never spawned outside it. The installer's upgrade-flow restarts happen through the harness's public HTTP API; the installer is just another localhost client of the same endpoints the operator uses. See HARNESS-ARCH §2.
+
+   Detection logic: the installer issues a `GET http://localhost:<port>/health` (port read from `.squidsquad/.harness-port`) with a 5-second timeout. If the harness responds 200, proceed with per-agent lifecycle calls. If the file is missing, the port is unreachable, or the request times out, the installer invokes `start.sh` from the repo root as the cold-start path.
+
+   The installer calls the harness's per-agent lifecycle endpoints in sequence:
    ```
    POST /agents/{role}/stop    # graceful stop; harness handles ack-stop / timeout
    POST /agents/{role}/start   # boot with new composed CLAUDE.md
    ```
-   for each agent. The `{role}` path parameter is the harness's published URL-template name, but the **value passed is the alias** (e.g. `pm`, `frontend-1`, `verifier`) — the harness vocabulary note ([HARNESS-ARCH.md §9](HARNESS-ARCH.md)) explains the legacy parameter-name vs value-semantic mismatch. The full rename to `{alias}` is tracked in [#10358](https://github.com/WallyDoodlez/SquidSquad/issues/10358) but is out of scope on that task to limit blast radius (per AGENT-RUNTIME §4.3). If the harness is not running, the installer instead invokes `start.sh` from the repo root (which reads `.squidsquad/.local-config` to find clone paths, boots the harness, which in turn boots the agents). Either way, the next session each agent starts is reading the new composed CLAUDE.md. In event-driven mode the harness also respawns each agent's `event_poll.py` sidecar on agent restart (per [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md) `boot_agent`); the installer doesn't need to manage `event_poll` directly.
+   for each agent. Calls today look like `POST /agents/<alias>/stop` and `POST /agents/<alias>/start` against the current URL template — the URL-template token is named `{role}` for legacy reasons (HARNESS-ARCH §4.1 + #10358 rename) but the value is the alias. The full rename to `{alias}` is tracked in [#10358](https://github.com/WallyDoodlez/SquidSquad/issues/10358) but is out of scope on that task to limit blast radius (per AGENT-RUNTIME §4.3). If the harness is not running, the installer instead invokes `start.sh` from the repo root (which reads `.squidsquad/.local-config` to find clone paths, boots the harness, which in turn boots the agents). `start.sh` is a thin shell wrapper that invokes `squidsquad_cli.py start` with the right environment — see HARNESS-ARCH §2 for the underlying entry point. The installer uses `start.sh` for parity with how operators boot the harness manually. Either way, the next session each agent starts is reading the new composed CLAUDE.md. In event-driven mode the harness also respawns each agent's `event_poll.py` sidecar on agent restart (per [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md) `boot_agent`); the installer doesn't need to manage `event_poll` directly.
 
    **In-flight-work handling.** Before stopping each agent, the harness checks whether the agent has an active iteration (i.e., it is in the creative phase between `cycle_pre.py` and `cycle_post.py`). If so, the harness waits for the agent's `ack-stop` event — the agent finishes its current iteration, calls `cycle_post.py` (which commits and pushes `.squidsquad/<alias>/working-state.md` + any in-flight changes), and then exits via the normal exit-42 path. If the iteration does not complete within a configurable timeout (default 5 minutes), the harness logs a warning and proceeds with the stop; on next boot the agent reads `.squidsquad/<alias>/working-state.md` to recover from the checkpoint (see AGENT-RUNTIME §5 state-persistence map + §6.5 context-pressure exit-42 model). No in-flight state is lost because `.squidsquad/<alias>/working-state.md` is the durable checkpoint that survives restarts.
 
@@ -465,9 +475,11 @@ If the release does NOT break L4 or config schema, **no migration file is needed
 
 ### 10.2 What is preserved (not bulk-overwritten) during upgrade
 
-(This subsection's invariants are scoped to the **upgrade flow** described in §10. Fresh install — §4.8 Phase 5 — legitimately creates these files for the first time; "preserved during upgrade" is not the same as "never written". And migrations may modify specific fields through the three-gate model — "preserved" here means "not bulk-overwritten or regenerated", not "never touched".)
+During upgrade, the items below are preserved — never bulk-overwritten or regenerated. Fresh install creates these files in Phase 5 step 4 from Phase 1 project-intake answers; this section describes the upgrade-flow guarantee specifically.
 
-- `.squidsquad/project/` — L4 project-local customizations. Migrations may *modify* L4 contents, but only through the three-gate model in step 3; the upgrade flow never bulk-overwrites or regenerates L4 files. (Fresh install creates these files in Phase 5 step 4 from Phase 1 project-intake answers.)
+(Migrations may modify specific fields through the three-gate model — "preserved" here means "not bulk-overwritten or regenerated", not "never touched".)
+
+- `.squidsquad/project/` — L4 project-local customizations. Migrations may *modify* L4 contents, but only through the three-gate model in step 3; the upgrade flow never bulk-overwrites or regenerates L4 files.
 - `.squidsquad/vault/` — shared memory layer (never touched by upgrade; created at fresh install by `vault-init` per VAULT-ARCH §7.1)
 - `.squidsquad/<alias>/working-state.md`, `iterations/`, `planning/` — agent state
 - `.squidsquad/config.md` — project configuration. Migrations may modify specific fields under the three-gate model; the installer never blindly overwrites. (Fresh install writes this file from Phase 1 + Phase 2 conversational output.)
@@ -476,7 +488,7 @@ If the release does NOT break L4 or config schema, **no migration file is needed
 ### 10.3 What's regenerated
 
 - `.squidsquad/<alias>/CLAUDE.md` — composed orchestration. The Soul section (§3) is recomposed from the latest `references/roles/<role-class>/SOUL.md` source plus any L4 `## Soul` append, per [COMPOSE-ARCHITECTURE.md §3.2 + §5.3](COMPOSE-ARCHITECTURE.md). No separate per-alias SOUL.md file exists (sidecar retired).
-- `.squidsquad/config.md` `squidsquad_version:` field — updated to the current installer version after a successful walk (the only field the installer writes unconditionally; everything else moves through migrations).
+- `.squidsquad/config.md` `squidsquad_version:` field — updated to the current installer version after a successful walk (the only field the installer writes outside the three-gate model — it's updated by the installer itself *after* all migrations in the walk have completed successfully (not unconditionally; failure at any gate aborts the walk and the version field is not bumped); everything else moves through migrations).
 
 ### 10.4 Edge cases
 
@@ -507,7 +519,7 @@ The installer is designed to be safe to re-run:
 
 ### 11.2 Interrupted install recovery
 
-If the installer is interrupted mid-Phase-5 (filesystem partially scaffolded), re-running detects the partial state and offers a "clean rebuild" option that wipes `.squidsquad/` (preserving the full set documented in §11.3 (`vault/`, `project/`, per-alias `working-state.md`, `iterations/`, `planning/`)) and starts Phase 5 fresh.
+If the installer is interrupted mid-Phase-5 (filesystem partially scaffolded), re-running detects the partial state and offers a "clean rebuild" option that selectively deletes all files and directories under `.squidsquad/` **except** the preserved items listed in §11.3 (`vault/`, `project/`, per-alias `working-state.md`, `iterations/`, `planning/`), then starts Phase 5 fresh.
 
 If the installer is interrupted between Phase 7 and Phase 8 (forge labels created, no commit yet), re-running detects the no-commit state and offers to commit the existing scaffold rather than redoing it.
 

@@ -723,7 +723,7 @@ Event mode is the **exclusive home** for event-bus consumption and cursor logic 
 
 ### 7.0 The `event_poll` sidecar
 
-A sibling `event_poll.py --wait --role <role> --target stdout` process polls the harness on the agent's behalf and writes a literal `NUDGE\n` line to stdout whenever new events arrive past the agent's cursor. That line is what wakes the Claude session via Monitor. The `--role` flag accepts the **alias** value. The flag name is `--role` for code-compat with the wire format described in §4.3; rename to `--alias` ships with #10358.
+A sibling `event_poll.py --wait --role <role> --target stdout` process polls the harness on the agent's behalf and writes a literal `NUDGE\n` line to stdout whenever new events arrive past the agent's cursor. That line is what wakes the Claude session via Monitor. The `--role` flag accepts the **alias** value (e.g., `--role frontend-1` not `--role worker`). The flag name is `--role` for code-compat with the wire format described in §4.3; rename to `--alias` ships with #10358.
 
 **Polling cadence** (locked, same adaptive pattern as EAD §4.4 but for the harness HTTP API, not the forge):
 
@@ -742,7 +742,7 @@ Two-tier backoff: 5s → 30s → 60s. A drained queue stabilizes at 60s after �
 
 Nudge format is literal `NUDGE\n` with no payload — the agent always does `GET /events/for/{role}?since=cursor` to find out what's new. False positives (a `NUDGE` arriving when no relevant events exist) are harmless because the GET returns `[]`.
 
-`event_poll`'s lifecycle is harness-owned: `boot_agent(role)` spawns it alongside `thin_launcher`, the health poller watches its PID, and the harness respawns it on death while `intent=running`. `event_poll` discovers the harness port via the same mechanism documented for agents in §4.7 — reads `.squidsquad/.harness-port` from its CWD, walking up to 5 parent directories if needed. The harness does not pass a `--port` argument; the discovery file is sufficient and avoids stale-port hardcoding if the harness restarts on a different port.
+`event_poll`'s lifecycle is harness-owned: `boot_agent(role)` spawns it sequentially after `thin_launcher` has been launched and before the harness awaits the `booted` handshake (see §7.2 boot diagram), the health poller watches its PID, and the harness respawns it on death while `intent=running`. `event_poll` discovers the harness port via the same mechanism documented for agents in §4.7 — reads `.squidsquad/.harness-port` from its CWD, walking up to 5 parent directories if needed. The harness does not pass a `--port` argument; the discovery file is sufficient and avoids stale-port hardcoding if the harness restarts on a different port. On harness restart, any `event_poll` orphaned by the prior harness exits when its `--wait` parent pipe closes; the new harness re-spawns it as part of the §7.2 boot sequence for each `intent=running` agent. event_poll does not attempt independent reconnect — it dies with the harness it was spawned by.
 
 ### 7.1 The nudge contract
 
@@ -851,6 +851,8 @@ sequenceDiagram
 
     Note over C,EP: Agent now status=ready.<br/>Next nudge wakes it.
 ```
+
+event_poll begins polling immediately on spawn; the harness's deque retains events from boot onward so any work the agent should pick up is durably available — but cursor-clean handshake (`booted`) happens before the harness considers the agent ready to receive routed work via `POST /work/assign`. The race window is bounded by the deque maxlen=1000 and the typical sub-second boot delay.
 
 #### Agent state machine
 
@@ -1073,7 +1075,7 @@ Subloop output may emit a new `assigned-to` (e.g., pm-subloop files a bug and ro
 event-driven: no    # global — applies to all agents
 ```
 
-There is no per-role override and no runtime mode-detection — mode is settled at compose time for every agent in the install. An install is either entirely event-driven or entirely loop-mode at any given moment; mixed states only exist transiently during a recompose roll-out (some agents restarted, others not yet — §8.2).
+There is no per-role override and no runtime mode-detection — mode is settled at compose time for every agent in the install. An install is either entirely event-driven or entirely loop-mode at any given moment; mixed states only exist transiently during a recompose roll-out (some agents restarted, others not yet — §8.2). The installer writes `event-driven: no` as the default at install time (per INSTALLER-ARCH §4.8 Phase 5 step 1). The operator subsequently edits this field to flip modes per §8.2.
 
 **How mode selection actually works** (compose-time only):
 

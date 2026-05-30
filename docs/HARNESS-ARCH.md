@@ -33,7 +33,9 @@ Out of scope:
 
 ## 2. What the harness is
 
-The harness is **one process per SquidSquad install**, started by the operator (via `squidsquad_cli.py start` or `start_team.py` shim). It runs in the foreground in a terminal window — there is no daemonization. Operator owns the lifetime; closing the terminal stops the harness.
+The harness is **one process per SquidSquad install**, started by the operator via `start.sh` at the repo root (a thin shell wrapper that invokes `squidsquad_cli.py start` with the appropriate environment). `start_team.py` is a deprecated alias retained for compatibility. The installer's upgrade flow (INSTALLER-ARCH §10) invokes `start.sh` when it detects the harness is not running. The harness runs in the foreground in a terminal window — there is no daemonization. Operator owns the lifetime; closing the terminal stops the harness.
+
+**Lifecycle authority** sits with the harness's HTTP API: any localhost caller (operator CLIs, the installer during upgrade, automation) issues lifecycle changes by calling the harness API. The constraint is that *nothing else* spawns agents directly — start/stop/restart are exclusively the harness's domain via its API surface. The harness owns the implementation; the API is the only public surface.
 
 Three properties define it:
 
@@ -80,7 +82,7 @@ All endpoints serve from `http://127.0.0.1:<port>`. Localhost-only; no authentic
 | POST | `/agents/all/stop` | Stop all running agents | `{ok, stopped: [...]}` |
 | POST | `/shutdown` | Graceful harness shutdown (status 202) | Async; harness exits after returning |
 
-> **Response-shape status:** the response shapes above are **aspirational** — they document the target shape that lands with **#10358** (the `role` → `alias` code rename). **Today's actual return shape**: `AgentState.to_dict()` returns a `role` field (whose value is the alias; no separate `alias` field), plus `claude_pid` and `terminal_pid` as separate fields (no shorthand `pid` field). Existing clients should treat the alias as the value of `role` and read `claude_pid` + `terminal_pid` separately until #10358 ships. The "target shape" framing also applies to §9 (Vocabulary note) — both sections describe the post-rename state. The shorthand `pid` field in the post-#10358 response is a **derived view** over the two-field state record in §7.5 — the state file always carries both `claude_pid` and `terminal_pid` separately (see §7.5 for the canonical shape and rationale).
+> **Response-shape status:** the response shapes above are **aspirational** — they document the target shape that lands with **#10358** (the `role` → `alias` code rename). **Today's actual return shape**: `AgentState.to_dict()` returns a `role` field (whose value is the alias; no separate `alias` field), plus `claude_pid` and `terminal_pid` as separate fields (no shorthand `pid` field). Existing clients should treat the alias as the value of `role` and read `claude_pid` + `terminal_pid` separately until #10358 ships. The "target shape" framing also applies to §9 (Vocabulary note) — both sections describe the post-rename state. The shorthand `pid` field in the post-#10358 response is a **derived view** over the two-field state record in §7.5 — the state file always carries both `claude_pid` and `terminal_pid` separately (see §7.5 for the canonical shape and rationale). **Derivation rule:** `pid = claude_pid` (the agent process). `terminal_pid` remains available in `.harness-state.json` for diagnostics but is not exposed via the HTTP API.
 >
 > **Path-parameter vocabulary on lifecycle endpoints:** `{role}` on `POST /agents/{role}/start|stop|restart` and `GET /agents/{role}/*` accepts the **alias** value (same convention as event-bus endpoints §4.2). The naming predates the alias concept; the rename to `{alias}` is in #10358. There is no class-level lifecycle endpoint — every lifecycle call targets one specific alias.
 
@@ -99,7 +101,15 @@ All endpoints serve from `http://127.0.0.1:<port>`. Localhost-only; no authentic
 >
 > **No completion endpoint** (locked, per AGENT-RUNTIME §4.1 principle #4): there is no `POST /events/{event_id}/complete`. The bus uses events, not RPC, for state transitions. Receipt confirmation flows through `ack-cursor` (cursor advance) and `ack-stop` (graceful-shutdown acknowledgement) only — both emitted via `POST /events`. Any design that proposes a completion endpoint is rejected at architecture review.
 
-### 4.3 Work-queue endpoint
+### 4.3 Work-assignment endpoint
+
+| Method | Path | Purpose | Returns |
+|---|---|---|---|
+| POST | `/work/assign` | Route work to a target agent | `{ok}` on 200, 404 if alias unknown, 400 on malformed payload |
+
+Request body: `{issue_number: int, target_alias: str, event_context: str}`. The harness validates `target_alias` resolves to a registered agent (alias-existence check only, no role-class permission filtering — see §13.5). Forwards the assignment as an `assigned-to` event on the bus. Returns 200 on accepted, 404 if alias unknown, 400 on malformed payload.
+
+### 4.4 Work-queue endpoint
 
 | Method | Path | Purpose | Returns |
 |---|---|---|---|
@@ -157,9 +167,9 @@ event_id = sha256(timestamp + alias + event_type + payload + nonce)[:16]
 
 | Task | Cadence | Purpose |
 |---|---|---|
-| `ack-cursor consumer` | on-demand (drains asyncio.Queue) | Awaits on an `asyncio.Queue` populated by the `POST /events` handler — asyncio task, not callback. Drains the ack-cursor queue, advances cursors, persists cursor positions to `.squidsquad/.event-state.json` (the deque itself remains in-memory only, per §5.1) |
+| `ack-cursor consumer` | on-demand (drains asyncio.Queue) | Awaits on an `asyncio.Queue` that receives cursor-advance notifications extracted from `ack-cursor` events submitted via `POST /events` — the handler decodes the event, pushes the advance, and returns; the consumer drains the queue independently. Drains the ack-cursor queue, advances cursors, persists cursor positions to `.squidsquad/.event-state.json` (the deque itself remains in-memory only, per §5.1) |
 | `timeout_scan` | every 30s | Re-delivers in-flight events that have been pending past their TTL |
-| `health_poll` | every 5s | Per-agent PID liveness check (`OpenProcess` on Windows, `kill -0` on POSIX) |
+| `health_poll` | every 5s | Checks per-agent `claude` PID and the sibling `event_poll` PID; restarts either on death while `intent=running` (see [AGENT-RUNTIME.md §7.0](AGENT-RUNTIME.md)). Liveness probed via `OpenProcess` on Windows, `kill -0` on POSIX. |
 | `EAD poller` | adaptive (10s active / 30s idle, 60s ceiling) | Polls forge for state changes; see §6 |
 
 ---
@@ -194,7 +204,7 @@ Two-tier backoff: 10s → 30s → 60s. A drained queue stabilizes at 60s after �
 ### 6.3 Restart safety
 
 - **Lost last-seen-id**: on missing/corrupt last-seen file, EAD defaults to `now - 5 minutes`. Bounded dup-emit window; agents dedup via care-filter on `(issue_number, target_alias, event_context)` tuple.
-- **EAD crash**: harness logs the exception and restarts the asyncio task. While EAD is down, forge state changes do not reach the bus; agents continue consuming whatever's already in the deque.
+- **EAD crash**: harness logs the exception and restarts the asyncio task. While EAD is down, forge state changes do not reach the bus; agents continue consuming whatever's already in the deque. **Mechanism:** the EAD poller runs inside a `try/except` loop that catches all exceptions, logs them, and re-enters the polling loop after a 5-second backoff. No separate supervisor coroutine is used.
 
 ---
 
@@ -235,9 +245,9 @@ Crash transitions: `booting → crashed` (boot failure — `booted` event never 
 
 ### 7.2 Spawn (`boot_agent`)
 
-1. Read agent's clone path from `.local-config` or per-agent config.
+1. Read agent's clone path from the in-memory `AgentState` (which the harness populated at boot from `.squidsquad/.harness-state.json`'s per-alias `clone_path` field — see §7.5). The installer-written `.squidsquad/.local-config` is the source-of-truth at install/boot time; once the harness is up, `.harness-state.json` is the operational source.
 2. Spawn platform-appropriate launcher → `thin_launcher.py` → `claude`.
-3. Spawn sibling `event_poll.py --wait --role <role> --target stdout` process.
+3. Spawn sibling `event_poll.py --wait --role <role> --target stdout` process. `event_poll` begins polling on spawn; the durable deque covers boot-time events. The `booted` handshake (step 4) gates whether the agent is considered ready to receive routed work, not whether `event_poll` is active.
 4. Wait for `booted` event from agent (cursor-clean handshake).
 5. Update `.squidsquad/.harness-state.json` with the new PID + boot time.
 
@@ -324,7 +334,7 @@ Per-agent directories under `.squidsquad/` are keyed by **alias**, not by the L2
 | `.squidsquad/.harness-port` | harness | yes | Port number for clone-isolated agents to discover |
 | `.squidsquad/.harness-state.json` | harness | yes | Per-alias intent, PID, clone path, boot time |
 | `.squidsquad/.event-state.json` | harness | yes | Cursors per alias + in-flight events |
-| `.squidsquad/<alias>/.claude-pid` | agent (thin_launcher) | yes (sentinel) | Agent's `cmd.exe`/shell PID (singleton handle) |
+| `.squidsquad/<alias>/.claude-pid` | agent (thin_launcher) | yes (sentinel) | Agent's `cmd.exe`/shell PID (singleton handle). *(Ownership moves to the harness under the §14 simplification — currently proposal-only.)* |
 | `.squidsquad/<alias>/cycle-input.json` | `cycle_pre.py` | per cycle | Mechanical-phase output → agent input |
 | `.squidsquad/<alias>/cycle-output.json` | agent | per cycle | Agent output → `cycle_post.py` input |
 | `.squidsquad/<alias>/working-state.md` | agent | yes | Per-cycle crash-recovery checkpoint |
@@ -344,6 +354,7 @@ When the harness restarts (operator-driven or after a crash):
 2. **Verify live PIDs** — for each agent with intent=`running`, check if the recorded PID is still alive.
    - Alive: resume monitoring.
    - Dead: respawn (since intent=`running`).
+   After this initial PID verification pass populates the in-memory `AgentState` with liveness flags, subsequent per-spawn singleton checks (see §14.2) consult the loaded in-memory state, not the state file directly.
 3. **Read `.squidsquad/.event-state.json`** — recover cursors and in-flight events.
 4. **Rebuild empty deque** — past events are lost; new events accumulate from the restart point forward.
 5. **Resume EAD** — read `ead_last_seen`; forge poll resumes from that timestamp (5-minute fallback if file missing/corrupt).
@@ -419,6 +430,8 @@ EAD's polling loop hard-codes the GitHub `gh api` shape. Non-GitHub backends (Fo
 ## 14. Proposed simplification: `wt → claude` direct spawn
 
 > **Scope reminder:** §§1–13 describe the harness as it exists in code today. §14 is a **proposed simplification — not implemented**. The current process tree (with `thin_launcher.py` as a load-bearing intermediate) is documented in [AGENT-RUNTIME.md §3.2](AGENT-RUNTIME.md) and remains authoritative for the current runtime. AGENT-RUNTIME describes the current state; this section describes a target. If §14 lands, AGENT-RUNTIME §3.2 ships an updated process tree in the same change.
+>
+> **Platform scope:** the simplification described in this section is Windows-specific (`wt.exe`/`cmd.exe`/`thin_launcher.py` chain). POSIX (macOS/Linux) boots agents via the system terminal emulator + direct `claude` invocation today — the equivalent simplification on POSIX is a no-op or a much smaller delta; we treat POSIX-side cleanup as a separate follow-up if §14 lands.
 
 The current per-agent spawn chain on Windows is `wt.exe → bash → thin_launcher.py → cmd.exe → claude.exe` (five processes). Most of the layering exists for historical reasons; the only structurally load-bearing piece is `wt.exe` itself, which provides the TTY that keeps claude on the interactive Claude subscription billing model. Piping stdin/stdout to `claude.exe` auto-demotes it to the Agent SDK billing pool, which is separately metered — so any "harness owns claude's I/O over pipes" redesign is closed under the current Anthropic billing model.
 
@@ -434,6 +447,8 @@ wt.exe                            wt.exe
      └ cmd.exe (npm claude.CMD shim)
        └ claude.exe
 ```
+
+> **Scope note:** this is the full launcher-and-runtime chain on Windows. The per-agent runtime subtree (zoomed: `cmd → thin_launcher → claude` plus sibling `event_poll`) is documented in [AGENT-RUNTIME.md §3.2](AGENT-RUNTIME.md). Both views describe the same current code from different zoom levels.
 
 Two processes per agent, down from five. TTY still provided by `wt.exe`, so subscription billing is preserved.
 
