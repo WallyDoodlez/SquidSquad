@@ -94,8 +94,8 @@ Three commitments:
 
 | Destination | What the installer writes |
 |---|---|
-| `.squidsquad/config.md` | Project config — iter interval, ship threshold, model routing, tracker backend, git workflow, plus the install's **SquidSquad version stamp** (`squidsquad_version: <semver>` field; written at Phase 5 from the installer's source release tag; read by the upgrade flow §10 step 1 to detect drift between installed and upstream versions) |
-| `.squidsquad/<alias>/` | Per-alias agent directory (CLAUDE.md composed, SOUL.md, working-state.md skeleton, planning/, iterations/) — one per alias in the chosen team preset: PM, each worker, each verifier, DM |
+| `.squidsquad/config.md` | Project config — iter interval, ship threshold, model routing, tracker backend, git workflow. Also includes the install's **SquidSquad version stamp** (`squidsquad_version: <semver>` field; written at Phase 5 from the installer's source release tag; read by the upgrade flow §10 step 1) and the **`## Aliases` registry section** mapping each install-time alias to its role-class + L3 domain (used by the harness for `/work/assign` alias-existence validation — see [AGENT-RUNTIME.md §7.3](AGENT-RUNTIME.md)). |
+| `.squidsquad/<alias>/` | Per-alias agent directory (CLAUDE.md composed, working-state.md skeleton, planning/, iterations/) — one per alias in the chosen team preset: PM, each worker, each verifier, DM. *Note: no separate `SOUL.md` per alias — `SOUL.md` is a filename shorthand for the soul-slot source at `references/roles/<role-class>/SOUL.md`; its content is composed into `CLAUDE.md §3 Soul`. The v1 per-alias sidecar is retired per [COMPOSE-ARCHITECTURE.md §5.3](COMPOSE-ARCHITECTURE.md).* |
 | `.squidsquad/project/` | L4 project-local files — one unified `<role-class>.md` per role-class (pm.md, `<worker-class>.md`, `<verifier-class>.md`, dm.md) with H2 slot sections. Initial `## Project Context` block in each is seeded from Phase 1 conversational answers (per §4.8 step 4); other slots start empty and accumulate at runtime via `l4-curation` (see [COMPOSE-ARCHITECTURE.md §5.5 + §7](COMPOSE-ARCHITECTURE.md)). |
 | `.squidsquad/vault/` | Shared memory layer skeleton (BRIEFING.md + the five vault dirs: projects/, areas/, resources/, archives/, galaxy/). Vault architecture documented in [`VAULT-ARCH.md`](VAULT-ARCH.md). |
 | `.squidsquad/.local-config` | Per-clone alias→path mapping for `start.sh` to sync clones |
@@ -225,7 +225,7 @@ Once approved, the installer:
 
 1. **Cleans up** any prior partial state (if a previous interrupted install left artifacts).
 2. **Serializes the install spec** to a temporary location for the scaffold step.
-3. **Scaffolds `.squidsquad/`** — creates the per-alias agent dirs, vault skeleton, project-local L4 directory, `config.md`, and per-alias `SOUL.md` files. `config.md` includes the **`squidsquad_version:` field** stamped with the SquidSquad source release this installer ships with (read at upgrade time per §10 step 1). No tool/MCP wiring (per §8).
+3. **Scaffolds `.squidsquad/`** — creates the per-alias agent dirs (CLAUDE.md placeholders, working-state.md skeletons, planning/, iterations/), vault skeleton, project-local L4 directory, and `config.md`. `config.md` includes the **`squidsquad_version:` field** stamped with the SquidSquad source release this installer ships with (read at upgrade time per §10 step 1). No per-alias `SOUL.md` files (the v1 sidecar is retired; SOUL.md content is composed into `CLAUDE.md §3 Soul` per [COMPOSE-ARCHITECTURE.md §5.3](COMPOSE-ARCHITECTURE.md)). No tool/MCP wiring (per §8).
 4. **Seeds L4 Project Context** — for each role-class in the chosen preset, writes the Phase 1 project-intake answers (domain, audience, primary language/stack, repositories of record, external systems, project-specific tone notes) into `.squidsquad/project/<role-class>.md` under the `## Project Context` H2 section. This is the single unified L4 file per role-class (per [COMPOSE-ARCHITECTURE.md §3.3 + §7.3](COMPOSE-ARCHITECTURE.md) and the "two complementary sources" callout in [§5.5](COMPOSE-ARCHITECTURE.md)). Other L4 slots (Identity / Soul / Instructions / etc.) start empty at install time and are populated at runtime by the `l4-curation` sub-skill (per [COMPOSE-ARCHITECTURE.md §7](COMPOSE-ARCHITECTURE.md)).
 
    > **Historical context (no installer code needed):** earlier installs used a multi-file L4 seed pattern (`references/sub-skills/project/<role>-instructions.md`, `<role>-responsibility.md`, `<role>-soul-directives.md`, `shared-*.md`, `setup-upgrade-gate.md`). That pattern is retired and replaced by the unified `<role-class>.md` model above. The installer does **not** carry migration code for the legacy pattern — fresh installs never see it, and existing installs are migrated by a separate one-time tool (out of scope for this doc). This callout exists only to disambiguate the docs; an implementer reading §4.8 should write the unified-file path and not the legacy multi-file path.
@@ -266,25 +266,24 @@ The full `.squidsquad/` tree post-install. PM and DM dirs are always present (si
 ├── config.md                    # project config (interval, threshold, routing, tracker, git workflow, team preset)
 ├── pm/                          # PM (singleton — always present)
 │   ├── CLAUDE.md                # composed orchestration (compose.py deploy pm)
-│   ├── SOUL.md                  # agent personality (copied from references/roles/pm/SOUL.md)
 │   ├── working-state.md         # crash-recovery checkpoint (skeleton)
 │   ├── enhancements.md          # product backlog seed
 │   ├── planning/                # RESEARCH/CONTEXT artifacts
 │   ├── iterations/              # iter-N.md cycle logs
 │   └── migrations/              # legacy migration logs
 ├── <worker-role>/               # one per worker in the preset (default: dev)
-│   ├── CLAUDE.md, SOUL.md
+│   ├── CLAUDE.md
 │   ├── working-state.md
 │   ├── planning/
 │   └── iterations/
 ├── <verifier-role>/             # one per verifier in the preset (default: qa); adds qa-log.md
-│   ├── CLAUDE.md, SOUL.md
+│   ├── CLAUDE.md
 │   ├── working-state.md
 │   ├── qa-log.md
 │   ├── planning/
 │   └── iterations/
 ├── dm/                          # DM (singleton — always present)
-│   ├── CLAUDE.md, SOUL.md
+│   ├── CLAUDE.md
 │   ├── working-state.md
 │   └── iterations/
 ├── project/                     # L4 — one unified file per role-class
@@ -426,12 +425,12 @@ flowchart LR
 2. **Confirm**: present the changeset summary in plain language ("This upgrade will update 14 sub-skills, add 2 new ones, and rename `verifier-rejected` → `qa-rejected`. Your L4 customizations are unaffected."). The human approves, edits (e.g. "skip the rename for now"), or aborts. Abort = no changes.
 3. **Pull**: the latest SquidSquad sources from upstream into `references/` (this includes the latest L1-L3 sub-skills, role files, manifests, and helper scripts).
 4. **Recompose**: every role's CLAUDE.md by running `compose.py deploy-all`. The composed outputs reflect the new sub-skill versions.
-5. **Restart**: each affected agent so they pick up the new CLAUDE.md. The installer calls the harness's per-role lifecycle endpoints in sequence:
+5. **Restart**: each affected agent so they pick up the new CLAUDE.md. The installer calls the harness's per-agent lifecycle endpoints in sequence:
    ```
-   POST /agents/<alias>/stop    # graceful stop; harness handles ack-stop / timeout
-   POST /agents/<alias>/start   # boot with new composed CLAUDE.md
+   POST /agents/{role}/stop    # graceful stop; harness handles ack-stop / timeout
+   POST /agents/{role}/start   # boot with new composed CLAUDE.md
    ```
-   for each alias. If the harness is not running, the installer instead invokes `start.sh` from the repo root (which boots the harness, which in turn boots the agents per `.local-config`). Either way, the next session each agent starts is reading the new composed CLAUDE.md.
+   for each agent. The `{role}` path parameter is the harness's published URL-template name, but the **value passed is the alias** (e.g. `pm`, `frontend-1`, `verifier`) — the harness vocabulary note ([HARNESS-ARCH.md §9](HARNESS-ARCH.md)) explains the legacy parameter-name vs value-semantic mismatch. The full rename to `{alias}` ships with [#10358](https://github.com/WallyDoodlez/SquidSquad/issues/10358). If the harness is not running, the installer instead invokes `start.sh` from the repo root (which boots the harness, which in turn boots the agents per `.local-config`). Either way, the next session each agent starts is reading the new composed CLAUDE.md.
 
    **In-flight-work handling.** Before stopping each agent, the harness checks whether the agent has an active iteration (i.e., it is in the creative phase between `cycle_pre.py` and `cycle_post.py`). If so, the harness waits for the agent's `ack-stop` event — the agent finishes its current iteration, calls `cycle_post.py` (which commits and pushes `working-state.md` + any in-flight changes), and then exits via the normal exit-42 path. If the iteration does not complete within a configurable timeout (default 5 minutes), the harness logs a warning and proceeds with the stop; on next boot the agent reads `working-state.md` to recover from the checkpoint (see AGENT-RUNTIME §5 state-persistence map + §6.5 context-pressure exit-42 model). No in-flight state is lost because `working-state.md` is the durable checkpoint that survives restarts.
 
@@ -445,8 +444,7 @@ flowchart LR
 
 **What's regenerated:**
 
-- `.squidsquad/<alias>/CLAUDE.md` — composed orchestration
-- `.squidsquad/<alias>/SOUL.md` — copied fresh from the new `references/roles/<role-class>/SOUL.md` (template lives under the role-class directory; deployed copy lives under the alias directory)
+- `.squidsquad/<alias>/CLAUDE.md` — composed orchestration. The Soul section (§3) is recomposed from the latest `references/roles/<role-class>/SOUL.md` source plus any L4 `## Soul` append, per [COMPOSE-ARCHITECTURE.md §3.2 + §5.3](COMPOSE-ARCHITECTURE.md). No separate per-alias SOUL.md file exists (sidecar retired).
 
 **Migration steps** when an upgrade requires structural changes (e.g. a new sub-skill that needs a config field, or a renamed L4 file): the upgrade flow may invoke a one-off migration helper before recompose. Each such migration is filed as a separate helper script with idempotent semantics. As of this doc no such migrations exist.
 
