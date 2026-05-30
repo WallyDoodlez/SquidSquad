@@ -371,7 +371,18 @@ flowchart TB
 
 ## 4. Compose pipeline behaviour
 
-### 4.1 Literal L1-L3 merge
+Compose is a **two-stage compiler**: **link** then **assemble**.
+
+| Stage | What it does | Determinism |
+|---|---|---|
+| **Link** (§4.1–§4.5) | Gather L1-L4 sources by slot, filter by role, sort by `(slot_index, ordinal)`, apply L4 ops (replace / insert-before / insert-after / append), validate sub-skill references. Produces the raw **linked** composite per slot. | Deterministic — given `(role, wake-mode, source-tree-hash, L4-tree-hash)`, the linked output is bit-stable. |
+| **Assemble** (§4.6) | Each linked slot body is rewritten by an agent into a single coherent voice — eliminates contradictions, conditional negations, awkward insertions left over from op layering. Produces the final agent-consumable **assembled** prose. | Stochastic on first run; cached by `(linked-body, slot-purpose, model-id)` hash, so deterministic from the caller's POV across re-deploys with unchanged inputs. |
+
+Runtime agents read the **assembled** output (`.squidsquad/<alias>/CLAUDE.md`). The **linked** output is preserved as a sibling artifact (`.squidsquad/<alias>/CLAUDE.linked.md`) for audit, debugging, and fallback when the assemble pass fails. Both are git-tracked.
+
+**Why two stages**: the slot+ops model is expressive at authoring time but composes a body that can carry contradictions, conditional negations of prior content, and inserts in awkward positions. A runtime agent reading the linked output would have to mentally reconcile all of that on every cycle — wasting context and creating ambiguity. The assemble pass collapses the layered linked output into a single coherent voice once at deploy time, so the runtime cost is zero.
+
+### 4.1 Link: Literal L1-L3 merge
 
 Compose processes L1-L3 deterministically:
 
@@ -384,7 +395,7 @@ The output of step 4 is the **L1-L3 base composition** — purely the SquidSquad
 
 **Why references and not inlining**: today's behavior inlined sub-skill bodies via `{{include}}` directives, producing 50KB+ composed CLAUDE.md files where most content was duplicated sub-skill text. Under v2, composed CLAUDE.md is the thin orchestration (5–10KB) and the model invokes sub-skills via the Skill tool when their description matches the situation. The transition is staged — see §10 migration plan.
 
-### 4.2 Creative L4 application
+### 4.2 Link: Creative L4 application
 
 After the L1-L3 base is in memory, compose reads exactly one L4 file: `.squidsquad/project/<role-class>.md` (the role-class being deployed). If the file is absent, the L4 step is a no-op — the composed output is L1-L3 only.
 
@@ -398,7 +409,7 @@ After the L1-L3 base is in memory, compose reads exactly one L4 file: `.squidsqu
 
 If validation fails, compose **aborts with a diagnostic** naming the offending H3 block. No partial output is written.
 
-### 4.3 Multi-domain L4
+### 4.3 Link: Multi-domain L4
 
 L4 is not instructions-only. Project customization spans every slot:
 
@@ -412,7 +423,7 @@ L4 is not instructions-only. Project customization spans every slot:
 
 Op grammar varies per slot (see §3.3 "Per-slot op constraints"): `instructions` accepts all four ops (`append` / `insert-before` / `insert-after` / `replace`); `responsibility` accepts `append` plus a whole-slot `replace` (no step targeting); `identity` and `soul` are append-only; `project-context` is L4-exclusive append-only (L1-L3 reject); `vault` is L1-exclusive append-only (L2-L4 reject). This makes L4 the **single project-level customization mechanism** — there is no other place where deployed projects add or override behaviour — *except* the vault slot, which is framework-owned for now (see §5.6 + G4).
 
-### 4.4 End-to-end pipeline
+### 4.4 End-to-end pipeline (link + assemble)
 
 The full compose run, source-walk to output-write:
 
@@ -432,15 +443,28 @@ flowchart TB
   L4Group --> L4Apply[Within each slot, apply ops:<br/>1. all replace<br/>2. all insert-before / insert-after<br/>3. all append]
   L4Apply --> Validate{Validate:<br/>L4 targets resolve?<br/>DRY ok? no orphans?}
   Validate -->|fail| Abort([Abort with diagnostic<br/>no output written])
-  Validate -->|pass| Emit[Emit composed CLAUDE.md]
-  Emit --> Write([Write .squidsquad/&lt;role&gt;/CLAUDE.md])
+  Validate -->|pass| EmitLinked["Emit linked composite<br/>(per-slot bodies in memory)"]
+  EmitLinked --> WriteLinked[Write .squidsquad/&lt;role&gt;/<b>CLAUDE.linked.md</b><br/>audit / debug / fallback artifact]
+  EmitLinked --> Assemble{{"§4.6 — Assemble pass<br/>(per slot)"}}
+  Assemble --> Cache{Cache hit on<br/>hash(linked, slot, model)?}
+  Cache -->|hit| FromCache[Reuse cached<br/>assembled body]
+  Cache -->|miss| LLM[Agent rewrites linked body<br/>into coherent voice]
+  LLM --> AsmValidate{Preservation check:<br/>sub-skill refs +<br/>step IDs preserved?<br/>length ≥ floor?}
+  AsmValidate -->|fail| Fallback[Use linked body<br/>+ emit warning]
+  AsmValidate -->|pass| StoreCache[Store in cache]
+  FromCache --> WriteAsm
+  StoreCache --> WriteAsm
+  Fallback --> WriteAsm
+  WriteAsm([Write .squidsquad/&lt;role&gt;/<b>CLAUDE.md</b><br/>assembled — what the agent reads])
   style Abort fill:#fdd
-  style Write fill:#dfd
+  style WriteLinked fill:#dfd
+  style WriteAsm fill:#dfd
+  style Fallback fill:#ffd
 ```
 
-The pipeline is fully deterministic: given `(role, wake-mode, source-tree-hash, L4-tree-hash)`, the composed output is bit-stable.
+**Link stage determinism**: through `EmitLinked`, the pipeline is fully deterministic — given `(role, wake-mode, source-tree-hash, L4-tree-hash)`, the linked composite is bit-stable. **Assemble stage determinism**: the first uncached run is stochastic (LLM rewrite), but the result is cached by `hash(linked-body, slot-purpose, model-id)`; subsequent re-deploys with unchanged inputs reuse the cached assembled body and produce bit-stable output. First-run drift between equivalent rewrites is the irreducible trade-off for collapsing the layered linked output into coherent prose.
 
-### 4.5 Sub-skill reference resolution
+### 4.5 Link: Sub-skill reference resolution
 
 Because composed CLAUDE.md emits sub-skill *references* (not bodies) in the `instructions` slot, compose must validate that every reference resolves to a real sub-skill. The validation runs after L4 overlay and before output emission:
 
@@ -497,6 +521,77 @@ The composed CLAUDE.md emits `→ run sub-skill: <name>` references in the `inst
 - Re-install / version-bump semantics, frontmatter generation, and skill-tool argument grammar all need to be specified in INSTALLER-ARCH before implementation.
 
 Tracker reference: [#10362](https://github.com/WallyDoodlez/SquidSquad/issues/10362) — installer spec follow-up filed against this PR (depends on #10359 merge).
+
+### 4.6 Assemble: coherence rewrite
+
+After the link stage produces a per-slot linked composite, each non-skipped slot's linked body passes through the **assemble pass** — an agent-driven rewrite that collapses the layered linked output into a single coherent voice the runtime agent can consume without on-the-fly reconciliation.
+
+**Motivation.** The slot+ops model in §4.2 is expressive: an L4 author can `replace` a step, `insert-before` to add a precondition, `insert-after` to add a follow-up, and `append` to extend the slot. After all ops land, the linked composite for a slot can look like: original step → "but first check Y (insert-before)" → original body → "and afterward Z (insert-after)" → "but only when W (append)". A runtime agent reading this has to mentally resolve "what does this slot actually tell me to do?" on every cycle. The assemble pass does that reconciliation **once at deploy time** and writes the resolved prose to disk.
+
+**When it runs.** Compose-time only, after all ops are applied and after sub-skill reference resolution (§4.5) validates the linked composite. The assemble pass never runs at agent runtime — the runtime artifact (`CLAUDE.md`) is the assembled output.
+
+**Per-slot scope.**
+
+| Slot | Assemble pass | Why |
+|---|---|---|
+| `identity` | ✅ runs | L4 appends can layer onto Boundaries; rewriting unifies tone |
+| `responsibility` | ✅ runs | L4 may replace whole-slot or append; rewrite reconciles |
+| `soul` | ✅ runs | L1 + L2 + L3 + L4 appends produce stacked dispositions; rewrite collapses to coherent voice |
+| `instructions` | ✅ runs | Op stack here is the highest-volume; rewrite is most impactful |
+| `project-context` | ❌ skipped | Append-only chronological facts; rewriting would lose timeline + supersession semantics (per §5.5 monotonic append) |
+| `vault` | ❌ skipped | L1-only short prose describing the vault contract; nothing layered to reconcile |
+
+**Hard preservation guarantees.** The assemble pass MUST preserve, verbatim, in the assembled output:
+
+- Every `→ run sub-skill: <name>` reference from the linked input (catalog-bound — see §4.5; dropping one would break runtime sub-skill resolution)
+- Every `step:cycle/<step-id>` reference (step IDs are stable contracts across layers per §6.1)
+- All literal code blocks, command invocations, and file paths (these are not paraphraseable)
+
+The pass MUST NOT:
+
+- Inline sub-skill bodies (would re-introduce v1's bloat; the catalog gate in §4.5 makes sub-skill bodies live elsewhere)
+- Add new sub-skill references not present in the linked input (would bypass catalog validation)
+- Add or rewrite step IDs (would break L4 ops in subsequent deploys)
+- Drop content silently (governed by length floor below)
+
+**Post-pass validation.** Before accepting the assembled output, the pipeline checks:
+
+1. **Sub-skill ref set equality** — extract all `→ run sub-skill: <name>` references from both linked and assembled bodies; the multisets must be identical.
+2. **Step ID set equality** — same check for `step:cycle/<id>` references.
+3. **Length floor** — `len(assembled) >= 0.8 * len(linked)` (configurable in `config.md` as `Assemble Length Floor`; default 0.8). Catches silent content drop.
+4. **Code-block parity** — count of fenced code blocks and inline backticks should match within ±10% (catches accidental stripping of literal blocks).
+
+If any check fails, the slot's assembled body is **rejected** and the linked body is used as the fallback. Compose emits a warning naming the slot and the failed check, and continues — compose itself does not abort on assemble-pass failure.
+
+**Caching.**
+
+- Cache key: `SHA256(linked_body || slot_name || slot_purpose || model_id || prompt_version)`.
+- Cache store: `.squidsquad/<alias>/.assemble-cache/` (git-tracked alongside the assembled output, so re-deploys on the same commit are free).
+- Cache invalidation is automatic via the hash — any change to the linked body, the slot's purpose statement (from this spec), the model, or the prompt produces a new key.
+
+**Model.** Default `sonnet` (cost/quality balance for prose rewriting). Configurable per install in `config.md` as `Assemble Model:` (`sonnet`, `opus`, `haiku`). Always temperature ≤ 0.3 to reduce first-run drift.
+
+**Audit artifacts.** Compose emits both outputs to `.squidsquad/<alias>/`:
+
+- `CLAUDE.md` — the **assembled** output. This is what the runtime agent reads. Always present.
+- `CLAUDE.linked.md` — the **linked** output. Audit / debug / fallback artifact. Always present.
+
+PR review compares the two when an L4 op lands; if the assembled output drops or distorts an op's intent, the reviewer catches it before merge. The assemble pass is not a black box.
+
+**Failure mode summary.**
+
+| Failure | Result | Compose succeeds? |
+|---|---|---|
+| LLM call errors (timeout, rate limit, network) | Use linked body + warning | Yes |
+| Sub-skill ref set inequality | Use linked body + warning | Yes |
+| Step ID set inequality | Use linked body + warning | Yes |
+| Length below floor | Use linked body + warning | Yes |
+| Cache corruption | Re-run LLM call; if that fails too, use linked body | Yes |
+| Link stage (§4.1–§4.5) fails | Abort (no assemble pass attempted) | **No** |
+
+The link stage is load-bearing; the assemble stage is enrichment. A failed assemble pass leaves the system in a working-but-uglier state, never broken.
+
+**First-run determinism trade-off.** The first deploy of unchanged inputs is stochastic — two operators deploying at the same commit may get prose that differs in wording. After the first deploy, the cached output is committed to git and subsequent deploys reuse it; the system is deterministic from that point forward for those inputs. This is the irreducible trade-off for collapsing layered linked output into a single coherent voice. Operators who want bit-stable assembled output across fresh deploys can disable the assemble pass via `Assemble: no` in `config.md` (compose then emits the linked body as `CLAUDE.md` directly, with no `CLAUDE.linked.md` sibling since the two would be identical).
 
 ---
 
