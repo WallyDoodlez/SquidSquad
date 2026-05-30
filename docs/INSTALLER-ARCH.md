@@ -99,11 +99,12 @@ Three commitments:
 | `.squidsquad/project/` | L4 project-local files — one unified `<role-class>.md` per role-class (pm.md, `<worker-class>.md`, `<verifier-class>.md`, dm.md) with H2 slot sections. Initial `## Project Context` block in each is seeded from Phase 1 conversational answers (per §4.8 step 4); other slots start empty and accumulate at runtime via `l4-curation` (see [COMPOSE-ARCHITECTURE.md §5.5 + §7](COMPOSE-ARCHITECTURE.md)). |
 | `.squidsquad/vault/` | Shared memory layer skeleton (BRIEFING.md + the five vault dirs: projects/, areas/, resources/, archives/, galaxy/). Vault architecture documented in [`VAULT-ARCH.md`](VAULT-ARCH.md). |
 | `.squidsquad/.local-config` | Per-clone alias→path mapping for `start.sh` to sync clones |
-| `.squidsquad/.harness-port`, `.harness-state.json`, `.event-state.json` (at runtime) | Harness-owned runtime files — written when the harness boots, not by the installer. Listed here for completeness; their schemas are documented in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §4–§5. |
 | `~/.squidsquad/secrets` | API keys for external models (restricted permissions, never committed to repo) |
 | `~/.squidsquad/clones/` | Per-alias clone-path registry. One file per alias (`pm`, each worker, each verifier, `dm`) whose contents is the absolute path to that alias's clone. Always created — clone isolation is mandatory (see §1.2), not a configurable mode. |
 | **Forge (GitHub)** | Issue labels created via `gh label create` — status/role/type/priority/severity taxonomy |
 | **Git commit** | Single atomic install commit on `main` (or the operator's chosen branch) |
+
+> **Runtime files (not installer outputs):** `.squidsquad/.harness-port`, `.squidsquad/.harness-state.json`, `.squidsquad/.event-state.json` appear under `.squidsquad/` post-install but are **harness-owned**, written when the harness boots (not by the installer). Schemas are documented in [`HARNESS-ARCH.md`](HARNESS-ARCH.md) §7 + [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §5. Listed here as a pointer because operators inspecting the directory post-install will see them.
 
 ---
 
@@ -324,8 +325,9 @@ The installer agent never invents behavior the helpers already implement. Every 
 | `references/scripts/compose.py` | Generates `.squidsquad/<role>/CLAUDE.md` from L1-L4 sources — see [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) |
 | `references/scripts/forgejo_setup.py` | Forgejo backend init (alternate tracker; see §9) |
 | `references/scripts/tracker.py` | The tracker abstraction layer — agents use this at runtime; the installer uses its label-creation paths at Phase 5 |
-| `references/scripts/event_poll.py` | Per-agent event-bus sidecar — harness-spawned in event-driven mode, polls the harness HTTP API and writes `NUDGE\n` to stdout when new events arrive past the agent's cursor (see [AGENT-RUNTIME.md §7.0](AGENT-RUNTIME.md)). The installer doesn't invoke it directly; it ships with the SquidSquad source and the harness uses it post-install. Listed here for completeness. |
 | `start.sh` | Post-install boot script — ensures Python deps, syncs all clones, runs the harness |
+
+> **Runtime-shipped components (not installer-invoked):** the SquidSquad source tree also ships `references/scripts/event_poll.py` (per-agent event-bus sidecar; harness-spawned in event-driven mode — see [AGENT-RUNTIME.md §7.0](AGENT-RUNTIME.md) + [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md)) and `references/scripts/harness.py` itself. The installer does NOT invoke these — they're part of the runtime. They're mentioned here because they live alongside the installer's helper scripts under `references/scripts/` and operators inspecting that directory will see them.
 
 ---
 
@@ -431,7 +433,7 @@ flowchart LR
    POST /agents/{role}/stop    # graceful stop; harness handles ack-stop / timeout
    POST /agents/{role}/start   # boot with new composed CLAUDE.md
    ```
-   for each agent. The `{role}` path parameter is the harness's published URL-template name, but the **value passed is the alias** (e.g. `pm`, `frontend-1`, `verifier`) — the harness vocabulary note ([HARNESS-ARCH.md §9](HARNESS-ARCH.md)) explains the legacy parameter-name vs value-semantic mismatch. The full rename to `{alias}` ships with [#10358](https://github.com/WallyDoodlez/SquidSquad/issues/10358). If the harness is not running, the installer instead invokes `start.sh` from the repo root (which boots the harness, which in turn boots the agents per `.local-config`). Either way, the next session each agent starts is reading the new composed CLAUDE.md. In event-driven mode the harness also respawns each agent's `event_poll.py` sidecar on agent restart (per [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md) `boot_agent`); the installer doesn't need to manage `event_poll` directly.
+   for each agent. The `{role}` path parameter is the harness's published URL-template name, but the **value passed is the alias** (e.g. `pm`, `frontend-1`, `verifier`) — the harness vocabulary note ([HARNESS-ARCH.md §9](HARNESS-ARCH.md)) explains the legacy parameter-name vs value-semantic mismatch. The full rename to `{alias}` is tracked in [#10358](https://github.com/WallyDoodlez/SquidSquad/issues/10358) but is out of scope on that task to limit blast radius (per AGENT-RUNTIME §4.3). If the harness is not running, the installer instead invokes `start.sh` from the repo root (which boots the harness, which in turn boots the agents per `.local-config`). Either way, the next session each agent starts is reading the new composed CLAUDE.md. In event-driven mode the harness also respawns each agent's `event_poll.py` sidecar on agent restart (per [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md) `boot_agent`); the installer doesn't need to manage `event_poll` directly.
 
    **In-flight-work handling.** Before stopping each agent, the harness checks whether the agent has an active iteration (i.e., it is in the creative phase between `cycle_pre.py` and `cycle_post.py`). If so, the harness waits for the agent's `ack-stop` event — the agent finishes its current iteration, calls `cycle_post.py` (which commits and pushes `.squidsquad/<alias>/working-state.md` + any in-flight changes), and then exits via the normal exit-42 path. If the iteration does not complete within a configurable timeout (default 5 minutes), the harness logs a warning and proceeds with the stop; on next boot the agent reads `.squidsquad/<alias>/working-state.md` to recover from the checkpoint (see AGENT-RUNTIME §5 state-persistence map + §6.5 context-pressure exit-42 model). No in-flight state is lost because `.squidsquad/<alias>/working-state.md` is the durable checkpoint that survives restarts.
 

@@ -80,7 +80,9 @@ All endpoints serve from `http://127.0.0.1:<port>`. Localhost-only; no authentic
 | POST | `/agents/all/stop` | Stop all running agents | `{ok, stopped: [...]}` |
 | POST | `/shutdown` | Graceful harness shutdown (status 202) | Async; harness exits after returning |
 
-> **Response-shape status:** the response shapes above are **aspirational** — they document the target shape that lands with **#10358** (the `role` → `alias` code rename). Today `AgentState.to_dict()` returns a `role` field (whose value is the alias) but no separate `alias` field. `pid` is shorthand for `claude_pid` + `terminal_pid`, which the code returns as separate fields. Existing clients that read these endpoints should treat the alias as the value of `role` and read `claude_pid` directly until #10358 ships.
+> **Response-shape status:** the response shapes above are **aspirational** — they document the target shape that lands with **#10358** (the `role` → `alias` code rename). **Today's actual return shape**: `AgentState.to_dict()` returns a `role` field (whose value is the alias; no separate `alias` field), plus `claude_pid` and `terminal_pid` as separate fields (no shorthand `pid` field). Existing clients should treat the alias as the value of `role` and read `claude_pid` + `terminal_pid` separately until #10358 ships. The "target shape" framing also applies to §9 (Vocabulary note) — both sections describe the post-rename state.
+>
+> **Path-parameter vocabulary on lifecycle endpoints:** `{role}` on `POST /agents/{role}/start|stop|restart` and `GET /agents/{role}/*` accepts the **alias** value (same convention as event-bus endpoints §4.2). The naming predates the alias concept; the rename to `{alias}` is in #10358. There is no class-level lifecycle endpoint — every lifecycle call targets one specific alias.
 
 ### 4.2 Event bus endpoints
 
@@ -155,7 +157,7 @@ event_id = sha256(timestamp + alias + event_type + payload + nonce)[:16]
 
 | Task | Cadence | Purpose |
 |---|---|---|
-| `ack-cursor consumer` | event-driven | Drains the ack-cursor queue, advances cursors, persists to `.squidsquad/.event-state.json` |
+| `ack-cursor consumer` | event-driven | Drains the ack-cursor queue, advances cursors, persists cursor positions to `.squidsquad/.event-state.json` (the deque itself remains in-memory only, per §5.1) |
 | `timeout_scan` | every 30s | Re-delivers in-flight events that have been pending past their TTL |
 | `health_poll` | every 5s | Per-agent PID liveness check (`OpenProcess` on Windows, `kill -0` on POSIX) |
 | `EAD poller` | adaptive (10s active / 30s idle, 60s ceiling) | Polls forge for state changes; see §6 |
