@@ -33,7 +33,7 @@ Out of scope:
 
 ## 2. What the harness is
 
-The harness is **one process per SquidSquad install**, started by the operator via `start.sh` at the repo root (a thin shell wrapper that invokes `squidsquad_cli.py start` with the appropriate environment). `start_team.py` is a deprecated alias retained for compatibility. The installer's upgrade flow (INSTALLER-ARCH §10) invokes `start.sh` when the harness is not running OR is unreachable on its discovered port; running-and-reachable upgrades use the harness's per-agent lifecycle endpoints directly (see INSTALLER-ARCH §10 step 5 for the detection logic). The harness runs in the foreground in a terminal window — there is no daemonization. Operator owns the lifetime; closing the terminal stops the harness.
+The harness is **one process per SquidSquad install**, started by the operator via `start.sh` at the repo root (a thin shell wrapper that invokes `squidsquad_cli.py start` with the appropriate environment). `start_team.py` is a deprecated alias retained for compatibility. The installer's upgrade flow (INSTALLER-ARCH §10) invokes `start.sh` when the harness is unreachable (port file missing or HTTP probe fails); running-and-reachable upgrades use the harness's per-agent lifecycle endpoints directly (see INSTALLER-ARCH §10 step 5). The harness runs in the foreground in a terminal window — there is no daemonization. Operator owns the lifetime; closing the terminal stops the harness.
 
 **Lifecycle authority** sits with the harness's HTTP API: any localhost caller (operator CLIs, the installer during upgrade, automation) issues lifecycle changes by calling the harness API. The constraint is that *nothing else* spawns agents directly — start/stop/restart are exclusively the harness's domain via its API surface. The harness owns the implementation; the API is the only public surface.
 
@@ -251,6 +251,10 @@ Crash transitions: `booting → crashed` (boot failure — `booted` event never 
 4. Wait for `booted` event from agent (cursor-clean handshake).
 5. Update `.squidsquad/.harness-state.json` with the new PID + boot time.
 
+#### First-boot discovery
+
+**First-boot discovery**: when `.squidsquad/.harness-state.json` does not exist (harness has never run on this install, or the file was deleted), the harness reads `.squidsquad/.local-config` to discover the alias list and per-alias clone paths. This populates the initial in-memory `AgentState`, which is persisted to `.harness-state.json` on the first state save. `.local-config` is installer-scaffolded (INSTALLER-ARCH §3.2) and is the install-time source-of-truth for clone-path mappings; once `.harness-state.json` exists, it becomes the operational source-of-truth and the harness consults it directly thereafter.
+
 ### 7.3 Health poll
 
 Every 5 seconds, for each agent with intent=`running`:
@@ -333,7 +337,7 @@ Per-agent directories under `.squidsquad/` are keyed by **alias**, not by the L2
 |---|---|---|---|
 | `.squidsquad/.harness-port` | harness | yes | Port number for clone-isolated agents to discover |
 | `.squidsquad/.harness-state.json` | harness | yes | Per-alias intent, PID, clone path, boot time |
-| `.squidsquad/.event-state.json` | harness | yes | Cursors per alias + in-flight events |
+| `.squidsquad/.event-state.json` | harness | yes | Cursors per alias + in-flight events (NOT the event deque — deque is in-memory only per §5.1) |
 | `.squidsquad/<alias>/.claude-pid` | agent (thin_launcher) | yes (sentinel) | Agent's `cmd.exe`/shell PID (singleton handle). *(Ownership moves to the harness under the §14 simplification — currently proposal-only.)* |
 | `.squidsquad/<alias>/cycle-input.json` | `cycle_pre.py` | per cycle | Mechanical-phase output → agent input |
 | `.squidsquad/<alias>/cycle-output.json` | agent | per cycle | Agent output → `cycle_post.py` input |
@@ -446,11 +450,15 @@ wt.exe                            wt.exe
    └ python.exe (thin_launcher)
      └ cmd.exe (npm claude.CMD shim)
        └ claude.exe
+
+(separate sibling, spawned by harness directly:)
+harness
+ └ python.exe (event_poll.py)
 ```
 
 > **Scope note:** this is the full launcher-and-runtime chain on Windows. The per-agent runtime subtree (zoomed: `cmd → thin_launcher → claude` plus sibling `event_poll`) is documented in [AGENT-RUNTIME.md §3.2](AGENT-RUNTIME.md). Both views describe the same current code from different zoom levels.
 >
-> **`event_poll.py` is not shown in the "Before" tree above** because it does not live inside the `wt.exe` chain. It is a **separate sibling subtree** spawned by `boot_agent` directly (see §7.2 step 3): `harness → python.exe (event_poll.py)`. The `wt.exe` ancestry shown is the launcher-and-claude chain only; `event_poll` runs in parallel under the harness process, not under `wt.exe`.
+> **`event_poll.py` does not live inside the `wt.exe` chain.** It is a **separate sibling subtree** spawned by `boot_agent` directly (see §7.2 step 3): `harness → python.exe (event_poll.py)`. The `wt.exe` ancestry shown is the launcher-and-claude chain only; `event_poll` runs in parallel under the harness process, not under `wt.exe`.
 
 Two processes per agent, down from five. TTY still provided by `wt.exe`, so subscription billing is preserved.
 
@@ -523,6 +531,7 @@ In landing order:
 
 ## 15. Revision log
 
+- **2026-05-30 (v4)** — PR #10378 round-5 audit pass. H1: moved `event_poll.py` INTO the §14.1 "Before" tree as an explicit sibling subtree under harness (was blockquote-only). H2: added "First-boot discovery" subsection in §7.2 documenting `.local-config` as the bootstrap source when `.harness-state.json` does not exist. M1: tightened §2 start.sh trigger wording to "unreachable (port file missing or HTTP probe fails)" — removes ambiguous "not running OR". M2: updated §9 `.event-state.json` Purpose column to explicitly exclude the deque (deque is in-memory only per §5.1).
 - **2026-05-30 (v3)** — PR #10378 round-4 audit pass. H1: annotated `event_poll.py` as a separate sibling subtree in §14.1 (was absent from the "Before" tree). Cross/INSTALLER M1: tightened §2 start.sh trigger wording to distinguish "not running OR unreachable" from "running-and-reachable" upgrade path. M1: added one-time `boot_agent(role)` alias-value clarification on first occurrence in §3 (rename tracked in #10358). H2 (§9 `.event-state.json` row): pre-existing on this branch — no change needed.
 - **2026-05-27 (v2)** — Added §14 proposed-simplification block. End-to-end validated by experiment scripts under `references/experiments/`. Status banner updated to reflect that the doc now contains both descriptive (§§1–13) and proposal (§14) content.
 - **2026-05-25 (v1 draft, descriptive snapshot)** — Initial draft. Consolidates harness internals that previously lived scattered across AGENT-RUNTIME.md §4.3, §4.4, §4.7, §6.4. Created alongside the class-vs-alias / permission-table-retirement architectural pass in PR #10004 to give the harness its own dedicated architecture treatment, parallel to VAULT-ARCH.md for the vault layer.
