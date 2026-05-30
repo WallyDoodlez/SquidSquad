@@ -10,9 +10,19 @@
 
 ### Goal
 
-Establish a single source of truth for how SquidSquad **composes** the per-role agent instruction document (`.squidsquad/<role>/CLAUDE.md`) from layered source files.
+Establish a single source of truth for how SquidSquad **composes** the per-agent instruction document (`.squidsquad/<alias>/CLAUDE.md`) from layered source files.
 
-The composed CLAUDE.md is a **thin orchestration layer** — it declares an agent's identity, soul, ordered step references, project context, and vault description. It does **not** contain the bodies of sub-skills; instead it references them by name from [`sub-skill-catalog.md`](sub-skill-catalog.md). Sub-skill bodies live in their source files (today as plain markdown fragments under `references/sub-skills/`, eventually as real Claude skills registered in `.claude/skills/`).
+> **Path-keying terminology** — this doc uses three distinct path patterns. Conflating them is a common reader trap:
+>
+> | Path pattern | Keyed by | Meaning |
+> |---|---|---|
+> | `.squidsquad/<alias>/CLAUDE.md` | **alias** (install-time agent instance name) | The composed output — one per running agent. Two `worker`-class instances named `frontend-1` and `backend-1` produce two distinct CLAUDE.md files at two distinct paths. |
+> | `.squidsquad/project/<role-class>.md` | **role-class** (categorical: pm/verifier/worker/dm or sub-classes like fe-worker) | The L4 source — one per role-class. Both `frontend-1` and `backend-1` *share* the same L4 file if they belong to the same role-class. |
+> | `references/roles/<role>/...` and `references/sub-skills/roles/<role>/...` | **role-class** | The L1-L3 authoring source paths. The literal `<role>` segment in these paths is role-class-typed; the directory name predates the class/alias distinction. |
+>
+> CLI flag names in this codebase (`--role`, `SQUIDSQUAD_ROLE`, `cycle.py status-bar <role>`) accept **alias** values for code-compat reasons. See [AGENT-RUNTIME §4.3 Vocabulary note](AGENT-RUNTIME.md) and [HARNESS-ARCH §9](HARNESS-ARCH.md).
+
+The composed CLAUDE.md is a **thin orchestration layer** — it declares an agent's identity, soul, ordered step references, project context, and vault description. It does **not** contain the bodies of sub-skills; instead it references them by name from [`sub-skill-catalog.md`](sub-skill-catalog.md). Sub-skill bodies live in their authored sources under `references/sub-skills/` (plain markdown fragments). A **project-scoped Claude-skills installer** that materializes each sub-skill into the project's local `.claude/skills/<name>/SKILL.md` is target-state but not yet shipped — see §4.5.1 Gap.
 
 The composition must:
 
@@ -25,10 +35,10 @@ The composition must:
 ```mermaid
 flowchart LR
     subgraph SOURCES["Sources (compose inputs)"]
-        L1["L1 — Base<br/>(universal orchestration)"]
-        L2["L2 — Capability<br/>(cross-cutting orchestration)"]
-        L3["L3 — Role<br/>(role-specific orchestration)"]
-        L4["L4 — Project<br/>(project-local overlay)"]
+        L1["L1 — Base<br/>(universal: every agent)"]
+        L2["L2 — Role<br/>(role-specific: pm / verifier / worker / dm)"]
+        L3["L3 — Variant<br/>(role + domain: e.g. fe-worker)"]
+        L4["L4 — Project<br/>(per-install overlay)"]
     end
 
     Compose["compose.py<br/>(stacks L1→L4)"]
@@ -67,10 +77,12 @@ Four layers, in shipping/precedence order:
 
 | Layer | Purpose | Authoring location | Authored by |
 |---|---|---|---|
-| **L1** — Base | What ANY SquidSquad agent is. Identity foundation, core principles, tracker protocol, cycle runner transport. | `references/sub-skills/common/` and parts of `references/sub-skills/manifest.md` | SquidSquad maintainers (shipped) |
-| **L2** — Capability | Cross-cutting behaviours that some roles share: vault, improvement scanning, agent lifecycle, git commit protocol, working-state format. | `references/sub-skills/common/` (the bulk) | SquidSquad maintainers (shipped) |
-| **L3** — Role | Role-specific behaviours: `pm`'s pipeline sentinel, `verifier`'s verification, `dm`'s delivery packaging, `worker`'s task implementation. | `references/sub-skills/roles/<role>/` and `references/roles/<role>/instructions.md` | SquidSquad maintainers (shipped) |
-| **L4** — Project | Project-local customizations sourced from human conversation in the deployed install. Includes project-specific instructions, project context, identity overlays, vault customization. | `.squidsquad/project/` (project-local, not distributed) | Agent (via human conversation), persisted by `compose.py` |
+| **L1** — Base | What ANY SquidSquad agent is. Universal baseline: identity foundation, core principles, tracker protocol, cycle runner transport, inter-agent communication via forge (§5.1.1). Every role on every install starts from here. | `references/sub-skills/common/` (sub-skills L1 references) and the L1 portion of role source files | SquidSquad maintainers (shipped) |
+| **L2** — Role | Role-specific behaviours: `pm` coordinates, `verifier` verifies, `dm` packages, `worker` implements. The role-defining contract (responsibility, role-specific instructions, role-specific tone). | `references/roles/<role>/instructions.md` + `references/roles/<role>/SOUL.md` + `references/sub-skills/roles/<role>/` | SquidSquad maintainers (shipped) |
+| **L3** — Variant (role + domain) | Per-stack or per-domain specialization of a role: a `worker` for the android stack, a `verifier` for the web stack, etc. Same role contract narrowed to a domain. | `references/roles/<role>/<domain>/` (e.g. `roles/worker/android/`, `roles/verifier/web/`) | SquidSquad maintainers (shipped) |
+| **L4** — Project (per-install + role-class) | Project-local customizations of one role-class for this install. Sourced from human conversation in the deployed project. Includes project-specific instructions, project context, identity overlays, vault customization. | `.squidsquad/project/<role-class>.md` (project-local, not distributed) | Agent (via human conversation), persisted by `compose.py` |
+
+**Each layer is *more specific* than the previous**: L1 = every agent → L2 = this role → L3 = this role + this domain → L4 = this role + this domain + this install. Cross-cutting sub-skills like `vault-protocol`, `improvement-scan`, `git-commit`, `agent-lifecycle` live in `references/sub-skills/common/` and are **referenced from** the appropriate layer (usually L1) — they aren't a layer themselves; they're shared procedures that layered instructions invoke.
 
 **Key invariant** — L1-L3 are part of the SquidSquad repo and ship globally. L4 is *generated and maintained per-install* by the agent in response to human instruction in the deployed project. L4 is the **memory of how this project diverges from default SquidSquad behaviour**.
 
@@ -78,13 +90,13 @@ Four layers, in shipping/precedence order:
 flowchart TB
   subgraph SHIP["SquidSquad-shipped (versioned in main repo)"]
     direction TB
-    L1["<b>L1 — Base</b><br/>What ANY agent is.<br/>Identity, principles, tracker protocol.<br/><i>references/sub-skills/common/</i>"]
-    L2["<b>L2 — Capability</b><br/>Cross-cutting: vault, scanning,<br/>git, lifecycle.<br/><i>references/sub-skills/common/</i>"]
-    L3["<b>L3 — Role</b><br/>Role-specific: pm, verifier, worker, dm.<br/><i>references/sub-skills/roles/&lt;role&gt;/</i>"]
+    L1["<b>L1 — Base</b><br/>What ANY agent is.<br/>Universal baseline: identity, principles,<br/>tracker protocol, forge-as-comm-truth.<br/><i>references/sub-skills/common/ + L1 portion of role files</i>"]
+    L2["<b>L2 — Role</b><br/>What THIS role is.<br/>pm coordinates · verifier verifies ·<br/>worker implements · dm packages.<br/><i>references/roles/&lt;role&gt;/ + references/sub-skills/roles/&lt;role&gt;/</i>"]
+    L3["<b>L3 — Variant</b><br/>Role + domain specialization.<br/>e.g. fe-worker, be-worker, android-verifier.<br/><i>references/roles/&lt;role&gt;/&lt;domain&gt;/</i>"]
     L1 --> L2 --> L3
   end
   subgraph LOCAL["Project-local (per-install, not distributed)"]
-    L4["<b>L4 — Project</b><br/>Customizations from human conversation.<br/>replace / insert / append ops on L1-L3.<br/><i>.squidsquad/project/</i>"]
+    L4["<b>L4 — Project</b><br/>Per-install + role-class customizations.<br/>replace / insert / append ops on L1-L3.<br/><i>.squidsquad/project/&lt;role-class&gt;.md</i>"]
   end
   L3 --> L4
   L4 -->|"compose.py deploy &lt;role&gt;"| OUT["<b>.squidsquad/&lt;role&gt;/CLAUDE.md</b><br/>composed output — DO NOT EDIT"]
@@ -93,6 +105,33 @@ flowchart TB
 ---
 
 ## 3. Authoring principles
+
+### 3.0 Compose inputs: L1-L4 content + `config.md` configuration
+
+Compose has **two distinct input axes**, easy to conflate:
+
+- **L1-L4 content layers** (this section's main subject) — *what* the agent reads in its composed CLAUDE.md. Layered by specificity (universal → role → variant → project-local). Files: `references/sub-skills/`, `references/roles/<role>/`, and `.squidsquad/project/<role-class>.md` (the per-role-class L4 file).
+- **`.squidsquad/config.md`** (prose references in this doc always use the full path; code identifiers like `config.get_wake_mode()` are not subject to this rule) — the install's **configuration**, not a content layer. It declares install-level parameters like `Workers:` (the roster), `Iteration Interval`, `event-driven:` (mode flag), `Improvement Scanning:`, feature toggles. Compose reads it to make compose-time *decisions* — which manifest to load (polling vs event per §6.5), what placeholder values to substitute, which roles exist for `compose.py deploy-all`, etc.
+
+The two axes interact at compose time. Examples:
+
+| Compose-time concern | Driven by L1-L4 content | Driven by `config.md` |
+|---|---|---|
+| Section text in the output | ✅ source file body content | — |
+| Slot ordering inside output | ✅ frontmatter `(slot, ordinal)` | — |
+| Polling vs event manifest selection | — | ✅ `event-driven:` flag |
+| Placeholder substitution (e.g. `{{role-roster}}`) | ✅ template lives in L1-L3 | ✅ values come from `config.md` (e.g. `Workers:` list) |
+| Iteration interval baked into boot's `/loop` invocation | — | ✅ `Iteration Interval > Minutes` |
+| Whether vault-remember / improvement-scan runs | ✅ sub-skill self-gates on flag | ✅ flag value lives in `.squidsquad/config.md` |
+
+**Mental model:** L1-L4 is the *content* the install ships; `.squidsquad/config.md` is the install's *parameters*. Both feed compose; neither is a layer of the other.
+
+Per-install customization paths therefore split:
+
+- **Project-local content changes** (new instructions, role-boundary additions, soul tweaks, project facts) → L4 file (`.squidsquad/project/<role-class>.md` with H2 slot sections)
+- **Install configuration changes** (different Workers roster, different cycle interval, mode flip, feature toggle) → `.squidsquad/config.md`
+
+A project that wants to *describe* its team differently in agent prompts adds an L4 `## Identity` `### append` block. A project that wants to *change the install's actual roster* (e.g. add an `fe-worker` class) edits `config.md`'s Workers list and re-runs `compose.py deploy-all`. Both can coexist.
 
 ### 3.1 DRY across layers + sub-skill catalog (single authoring location)
 
@@ -103,7 +142,7 @@ Each creative-work concept must have exactly **one authoring location**:
 
 DRY enforcement applies to:
 
-- Section titles at H2 level (per §5 five-section grammar).
+- Section titles at H2 level (per §5 six-section grammar).
 - Sub-skill names (each sub-skill has exactly one source file and one catalog entry).
 - Step IDs (see §6.1).
 - Vault note names.
@@ -112,17 +151,82 @@ When extension is needed across layers, the *lower* layer extracts a referenceab
 
 ### 3.2 Slot + ordinal contract (L1-L3)
 
+**Mental model first.** A layer is *not* a single file — it's a **collection of source files spread across multiple slots**. A slot is a section of the composed output (the six sections in §5). Each source file declares one slot via frontmatter (`slot:`) and a position within it (`ordinal:`). For a target role, `compose.py` gathers every L1-L4 file that applies, groups by slot, sorts each group by ordinal, applies L4 ops on top, and emits the result into the composed `CLAUDE.md`'s six H2 sections.
+
+```mermaid
+flowchart LR
+    subgraph L1["L1 — Base<br/><i>references/sub-skills/common/<br/>+ L1 portions of role files</i>"]
+        L1A["fragment A<br/>slot: identity<br/>ord: 10"]
+        L1B["fragment B<br/>slot: instructions<br/>ord: 20"]
+        L1C["fragment C<br/>slot: vault<br/>ord: 10"]
+    end
+
+    subgraph L2["L2 — Role<br/><i>references/roles/&lt;role&gt;/<br/>+ references/sub-skills/roles/&lt;role&gt;/</i>"]
+        L2A["instructions fragment<br/>slot: instructions<br/>ord: 100"]
+        L2B["SOUL.md<br/><i>(filename shorthand:<br/>slot: soul, ord: 1)</i>"]
+        L2C["responsibility fragment<br/>slot: responsibility<br/>ord: 10"]
+    end
+
+    subgraph L3["L3 — Variant<br/><i>references/roles/&lt;role&gt;/&lt;domain&gt;/</i>"]
+        L3A["variant fragment<br/>slot: instructions<br/>ord: 200"]
+    end
+
+    subgraph L4["L4 — Project<br/><i>.squidsquad/project/&lt;role-class&gt;.md</i>"]
+        L4A["one file, multiple<br/>H2 sections — each<br/>declares an op against<br/>one slot (§3.3)"]
+    end
+
+    Gather{{"compose.py deploy &lt;role&gt;<br/><br/>1. Gather all L1-L4 files for target role<br/>2. Group by slot<br/>3. Sort each group by ordinal<br/>4. Apply L4 ops<br/>&nbsp;&nbsp;&nbsp;(append / insert-before /<br/>&nbsp;&nbsp;&nbsp;insert-after / replace)<br/>5. Emit each slot into its composed §"}}
+
+    L1A & L1B & L1C --> Gather
+    L2A & L2B & L2C --> Gather
+    L3A --> Gather
+    L4A --> Gather
+
+    Gather --> OUT[["composed<br/>CLAUDE.md"]]
+
+    subgraph Sections["Six composed sections (§5)"]
+        direction TB
+        S1["§1 Identity"]
+        S2["§2 Responsibility"]
+        S3["§3 Soul"]
+        S4["§4 Instructions"]
+        S5["§5 Project Context"]
+        S6["§6 Vault"]
+    end
+
+    OUT --> Sections
+
+    style Gather fill:#e8f0ff
+    style OUT fill:#dfd
+```
+
+**Read this diagram from left to right**: each layer holds *many* files; each file declares one slot via frontmatter; compose gathers + groups + sorts, applies L4 ops, and the result lands in one of six composed sections. The same composed section is fed by files from multiple layers — Identity in the composed output is the concatenation of every `slot: identity` file from L1 + L2 + L3 (in ordinal order), then any L4 op applied on top.
+
+**Why this model** — sub-skills, role-specific fragments, and cross-cutting content can each live in their own source file with their own frontmatter, but still land in the right composed section. L4 ops target slots + step IDs (not source filenames), so reorganizing L1-L3 files doesn't break L4 customizations.
+
+---
+
 Every L1-L3 sub-skill source file declares **structured frontmatter** at the top:
 
 ```yaml
 ---
-slot: identity | soul | instructions | project-context | vault
+slot: identity | responsibility | soul | instructions | project-context | vault
 ordinal: <integer, ascending within slot>
 step-ids: [step:cycle/<name>, step:boot/<name>, ...]  # for instructions slot only
 ---
 ```
 
-`compose.py` reads frontmatter from every L1-L3 file, sorts by `(slot, ordinal)`, and emits the content of each in that order under the appropriate top-level section (see §5) — emitted verbatim for non-instructions slots (`identity`, `soul`, `project-context`, `vault`); the `instructions` slot is emitted as **sub-skill references**, not inlined sub-skill bodies, per §4.1 step 4. Concretely: the source files in the `instructions` slot already contain the reference text directly (e.g., `→ run sub-skill: pipeline-sentinel`), and compose emits that text verbatim without transformation — there is no compile step that converts inlined sub-skill bodies into references.
+`compose.py` reads frontmatter from every L1-L3 file, sorts by `(slot, ordinal)`, and emits the content of each in that order under the appropriate top-level section (see §5) — emitted verbatim for non-instructions slots (`identity`, `responsibility`, `soul`, `project-context`, `vault`); the `instructions` slot is emitted as **sub-skill references**, not inlined sub-skill bodies, per §4.1 step 4. Concretely: the source files in the `instructions` slot already contain the reference text directly (e.g., `→ run sub-skill: pipeline-sentinel`), and compose emits that text verbatim without transformation — there is no compile step that converts inlined sub-skill bodies into references.
+
+> **Filename convention for slot authoring.** Most L1-L3 source files declare `slot:` via frontmatter explicitly. One filename is a reserved shorthand that compose treats as an implicit slot assignment — it exists so the canonical authoring location is easy to find:
+>
+> | Filename pattern | Implicit slot | Implicit ordinal |
+> |---|---|---|
+> | `references/roles/<role>/SOUL.md` | `soul` | 1 |
+>
+> May be replaced by a regular `.md` with explicit frontmatter; the shorthand is equivalent, not load-bearing.
+>
+> (Responsibility-slot content used to have a parallel shorthand at `references/sub-skills/roles/<role>/responsibility.md`. That file is retired per §5.5; responsibility content now lives in the role's L2 source via explicit `slot: responsibility` frontmatter, not via filename convention. The shorthand is gone.)
 
 Ordinals are integers, non-dense (gaps allowed). Authors use gaps of 10 (e.g. 10, 20, 30) so future inserts don't require renumbering.
 
@@ -142,10 +246,20 @@ Example — a team preset spawning `pm + 2 fe-worker + 1 be-worker + verifier + 
 
 The filename IS the role-class identity. `compose.py deploy <role-class>` reads exactly one L4 file when composing that class — no per-customization files, no cross-class files, no fallback or inheritance between classes (e.g., no generic `worker.md` that fe-worker and be-worker both inherit from). Two instances of the same class compose to byte-identical output because they share the same L4.
 
+> **Deprecates the multi-file L4 pattern.** Earlier installs scattered L4 content across per-slot files (`<role>-instructions.md`, `<role>-responsibility.md`, `<role>-soul-directives.md`, `shared-instructions.md`, etc.) under `.squidsquad/project/`. Those are legacy. Under the unified L1-L4 model every slot's L4 content lives inside the same per-role-class `<role>.md` under its slot H2. The legacy seed files in `references/sub-skills/project/` are slated for collapse to one seed per role-class (see §7.3 and the L4-seed section of [`sub-skill-catalog.md`](sub-skill-catalog.md)).
+
 Inside the L4 file, content is organized by slot using H2 headings that mirror the composed-output grammar (§5):
 
 ```markdown
 ## Identity
+...
+
+## Responsibility
+
+### append
+...
+
+### replace
 ...
 
 ## Soul
@@ -175,6 +289,7 @@ Each `## <Slot>` section holds the project's customizations for that slot. Withi
 - **`### insert-before step:cycle/<step-id>`** — content inserted immediately before the named L1-L3 step.
 - **`### insert-after step:cycle/<step-id>`** — inserted immediately after.
 - **`### replace step:cycle/<step-id>`** — replaces the L1-L3 step's content entirely. The step ID is preserved so later inserts targeting it still resolve.
+- **`### replace`** (no `step:` target) — **whole-slot replace**. Replaces the entire L1-L3 slot body with the L4 H3 block body. Valid only under `## Responsibility` (the only slot whose op constraints list whole-slot `replace`). A bare `### replace` (no target) under `## Identity`, `## Soul`, `## Instructions`, `## Project Context`, or `## Vault` is a validation error.
 
 Compose **must validate** that every `step:` reference in an `## Instructions` H3 resolves to a real L1-L3 step ID before emitting output. Unresolved references abort compose with a diagnostic.
 
@@ -184,13 +299,14 @@ Not every op is legal on every slot. The soul slot is identity, not instruction,
 
 | Slot | Legal ops | Notes |
 |---|---|---|
-| `identity` | append only | the slot is short prose; project additions go at the end |
+| `identity` | append only | the slot is short prose; project additions go at the end. **Universal prohibitions** (the "Boundaries" sub-section per §5.1 + §6.3) are part of this slot — L4 may `append` new universal prohibitions ("in this project, no agent ever X") but cannot remove or modify the shipped L1-L3 Boundaries content. See `l4-curation` for the curation dialog. |
+| `responsibility` | append + replace (whole-slot) | role-boundary prose has no step IDs, so step-targeted ops do not apply; `replace` swaps the entire L1-L3 responsibility block for the L4 body |
 | `soul` | **append only** | no targeted ops; see §3.4 for semantic-merge precedence |
-| `instructions` | all four (append, insert-before, insert-after, replace) | the primary surface for behaviour customization |
-| `project-context` | append only | net-new project facts go at the end of the slot |
+| `instructions` | append + insert-before + insert-after + replace (step-targeted only) | the primary surface for behaviour customization; whole-slot `replace` is forbidden (the slot has step IDs and must target one) |
+| `project-context` | append only — **L4-exclusive** | L1-L3 do NOT author this slot (no cross-install layer can know about a specific project — see §5.5). Compose rejects any L1-L3 source file with `slot: project-context` frontmatter. L4 entries seeded by installer Phase 1 + accumulated at runtime by `l4-curation`. |
 | `vault` | append only | see VAULT-ARCH for vault-specific overlay rules |
 
-Compose **must reject** any L4 file whose section structure violates these constraints (e.g., a `### replace` H3 under `## Soul`).
+Compose **must reject** any L4 file whose section structure violates these constraints. Examples of rejections: a `### replace` (any form) H3 under `## Soul`; a bare `### replace` (no target) under any slot except `## Responsibility`; a step-targeted `### replace step:cycle/<step-id>` under `## Responsibility` (no step IDs to target there). Compose **also rejects** any L1-L3 source file that declares `slot: project-context` (Project Context is L4-exclusive — see §5.5).
 
 #### 3.4 Soul slot — semantic-merge precedence
 
@@ -250,7 +366,7 @@ Compose processes L1-L3 deterministically:
 
 1. **Collect**: walk `references/sub-skills/`, `references/roles/<role>/`. For each file with frontmatter, read its `slot` and `ordinal`. For files in the `instructions` slot, also extract the sub-skill name referenced in the file body (e.g. from `→ run sub-skill: <name>` directives) — this is a body-extracted reference, not a frontmatter field.
 2. **Filter by role**: each file may declare which roles it applies to (via `roles:` frontmatter list; default = all). Files not applicable to the current role are dropped.
-3. **Sort**: stable sort by `(slot_index, ordinal)`. `slot_index` is a fixed enum: identity=0, soul=1, instructions=2, project-context=3, vault=4.
+3. **Sort**: stable sort by `(slot_index, ordinal)`. `slot_index` is a fixed enum: identity=0, responsibility=1, soul=2, instructions=3, project-context=4, vault=5.
 4. **Emit orchestration**: under the appropriate top-level section header, emit each file's orchestration content verbatim. Inside the `instructions` slot, step bodies are **references to sub-skills by name** (e.g. `→ run sub-skill: pipeline-sentinel`) rather than inlined sub-skill content. The catalog of available sub-skills lives at [`sub-skill-catalog.md`](sub-skill-catalog.md) — composed CLAUDE.md never duplicates it.
 
 The output of step 4 is the **L1-L3 base composition** — purely the SquidSquad-shipped orchestration, with sub-skill names referenced (not their bodies), and no project customization yet applied.
@@ -259,14 +375,15 @@ The output of step 4 is the **L1-L3 base composition** — purely the SquidSquad
 
 ### 4.2 Creative L4 application
 
-After the L1-L3 base is in memory, compose reads exactly one L4 file: `.squidsquad/project/<role>.md` (the role being deployed). If the file is absent, the L4 step is a no-op — the composed output is L1-L3 only.
+After the L1-L3 base is in memory, compose reads exactly one L4 file: `.squidsquad/project/<role-class>.md` (the role-class being deployed). If the file is absent, the L4 step is a no-op — the composed output is L1-L3 only.
 
-1. Parse the L4 file. Top-level H2 sections name the slot: `## Identity` / `## Soul` / `## Instructions` / `## Project Context` / `## Vault`. Sections may appear in any order; missing sections are skipped.
+1. Parse the L4 file. Top-level H2 sections name the slot: `## Identity` / `## Responsibility` / `## Soul` / `## Instructions` / `## Project Context` / `## Vault`. Sections may appear in any order; missing sections are skipped.
 2. For each slot section present, apply ops in this order to the L1-L3 base for that slot:
-   1. All `### replace step:cycle/<step-id>` H3 blocks first. Each H3 targets at most one L1-L3 step; duplicate replace targets abort compose.
-   2. All `### insert-before step:cycle/<step-id>` and `### insert-after step:cycle/<step-id>` H3 blocks. Positions are evaluated against the **post-replace** base (i.e., after step 2.i completes).
-   3. All `### append` H3 blocks last, in file order (the order they appear in the L4 file). No ordinal field; the author controls ordering by reordering H3 blocks within the source file.
-3. Validate: every `step:` reference resolves to a real L1-L3 step ID; no two `replace` H3 blocks target the same ID; H3 op-types are legal for the enclosing slot per §3.3 per-slot constraints (e.g., `### replace` is forbidden under `## Soul`).
+   1. **Whole-slot replace (responsibility only).** If the slot is `responsibility` and the section contains a bare `### replace` (no `step:` target), apply it first — the L4 H3 block body replaces the entire L1-L3 responsibility base. Whole-slot replace is **terminal**: no other ops are applied to that slot in this L4 file (multiple `### replace` blocks under `## Responsibility` is a validation error; mixing whole-slot replace with `### append` under the same `## Responsibility` is a validation error). If the slot has no bare `### replace`, skip this sub-step and proceed.
+   2. All `### replace step:cycle/<step-id>` H3 blocks. Each H3 targets at most one L1-L3 step; duplicate replace targets abort compose.
+   3. All `### insert-before step:cycle/<step-id>` and `### insert-after step:cycle/<step-id>` H3 blocks. Positions are evaluated against the **post-replace** base (i.e., after step 2.ii completes).
+   4. All `### append` H3 blocks last, in file order (the order they appear in the L4 file). No ordinal field; the author controls ordering by reordering H3 blocks within the source file.
+3. Validate: every `step:` reference resolves to a real L1-L3 step ID; no two `replace` H3 blocks target the same ID; H3 op-types are legal for the enclosing slot per §3.3 per-slot constraints (e.g., `### replace` in any form is forbidden under `## Soul`, `## Identity`, `## Project Context`, and `## Vault`; bare `### replace` (no target) is forbidden under `## Instructions` (only step-targeted `replace` is legal there); step-targeted `### replace step:…` is forbidden under `## Responsibility` (no step IDs to target)).
 
 If validation fails, compose **aborts with a diagnostic** naming the offending H3 block. No partial output is written.
 
@@ -282,7 +399,7 @@ L4 is not instructions-only. Project customization spans every slot:
 | `project-context` | "Production deploys go through `infra/deploy.sh`, not `gh`. Use the bundled script for any deployment work." |
 | `vault` | "Vault note `clients/<name>.md` is required for any client-touching work — link from each related task." |
 
-Op grammar varies per slot (see §3.3 "Per-slot op constraints"): `instructions` accepts all four ops (`append` / `insert-before` / `insert-after` / `replace`); `identity`, `soul`, `project-context`, and `vault` are append-only. This makes L4 the **single project-level customization mechanism** — there is no other place where deployed projects add or override behaviour.
+Op grammar varies per slot (see §3.3 "Per-slot op constraints"): `instructions` accepts all four ops (`append` / `insert-before` / `insert-after` / `replace`); `responsibility` accepts `append` plus a whole-slot `replace` (no step targeting); `identity`, `soul`, `project-context`, and `vault` are append-only. This makes L4 the **single project-level customization mechanism** — there is no other place where deployed projects add or override behaviour.
 
 ### 4.4 End-to-end pipeline
 
@@ -316,33 +433,33 @@ The pipeline is fully deterministic: given `(role, wake-mode, source-tree-hash, 
 
 Because composed CLAUDE.md emits sub-skill *references* (not bodies) in the `instructions` slot, compose must validate that every reference resolves to a real sub-skill. The validation runs after L4 overlay and before output emission:
 
-1. **Extract** every `→ run sub-skill: <name>` (or equivalent reference grammar from §4.1 step 4 and §5.3) from the composed-in-memory `instructions` content.
-2. **Resolve** each `<name>` against the union of:
-   - Sub-skills indexed in [`sub-skill-catalog.md`](sub-skill-catalog.md), AND
-   - Sub-skills discoverable on disk under `references/sub-skills/` (today's source files), AND
-   - Sub-skills registered in `.claude/skills/` (target state — real Claude skills).
-3. **Reject** if any reference fails to resolve: abort with a diagnostic naming the offending step ID and unresolved sub-skill name. No partial output is written.
-4. **Catalog drift check**: every resolved sub-skill must have a catalog entry, AND every catalog entry must resolve to a real sub-skill source. If either side is out of sync, compose aborts with a diagnostic (same failure mode as an unresolved reference above) — this is an in-pipeline check, distinct from the §8 source-output sync gates which guard the orthogonal "composed CLAUDE.md is stale relative to its L1-L3 sources" failure mode.
+1. **Extract** every `→ run sub-skill: <name>` reference from the composed-in-memory `instructions` content (grammar defined in §6.2).
+2. **Resolve** each `<name>` against [`sub-skill-catalog.md`](sub-skill-catalog.md). The catalog is the **authoritative gate**:
+   - Every reference must have a matching catalog entry. Sub-skills not indexed in the catalog are *not* valid references, even if a same-named file exists on disk.
+   - The catalog's recorded **source path** for that entry must point at an existing file. Today that path is `references/sub-skills/<...>/<name>.md` (plain markdown fragments). Once the project-scoped Claude-skills installer ships (see §4.5.1 Gap callout below), the installer is responsible for materializing each catalog entry as a real Claude skill under the project's local `.claude/skills/` — at that point the catalog's source path stays the same (the `references/` source is authored once, then installed per-project).
+3. **Reject** if any reference fails either check above (no catalog entry OR catalog entry's source path missing on disk): abort with a diagnostic naming the offending step ID and unresolved sub-skill name. No partial output is written.
+4. **Catalog drift check**: every catalog entry must resolve to a real source file on disk, AND every sub-skill source file under `references/sub-skills/` must have a catalog entry. If either side is out of sync, compose aborts with a diagnostic (same failure mode as an unresolved reference above) — this is an in-pipeline check, distinct from the §8 source-output sync gates which guard the orthogonal "composed CLAUDE.md is stale relative to its L1-L3 sources" failure mode.
 
 ```mermaid
 flowchart TB
     Base["L1-L4 composed in memory<br/>(instructions slot has<br/>sub-skill references)"]
     Extract["Extract refs:<br/>→ run sub-skill: &lt;name&gt;"]
-    Resolve{"resolve each &lt;name&gt;"}
-    Catalog[("sub-skill-catalog.md")]
-    Source[("references/sub-skills/")]
-    Skills[(".claude/skills/<br/>(target state)")]
+    CatLookup{"in catalog?"}
+    Catalog[("sub-skill-catalog.md<br/>(authoritative gate)")]
+    SrcLookup{"catalog's source path<br/>exists on disk?"}
+    Source[("references/sub-skills/<br/>(authored source)")]
     Drift{"catalog ⇆ source<br/>in sync?"}
     Abort([Abort — unresolved ref])
     Warn([Warn — catalog drift])
     Emit([Emit composed CLAUDE.md])
 
-    Base --> Extract --> Resolve
-    Resolve -.->|"lookup"| Catalog
-    Resolve -.->|"lookup"| Source
-    Resolve -.->|"lookup"| Skills
-    Resolve -->|"any fail"| Abort
-    Resolve -->|"all resolve"| Drift
+    Base --> Extract --> CatLookup
+    CatLookup -.->|"lookup"| Catalog
+    CatLookup -->|"not indexed"| Abort
+    CatLookup -->|"indexed"| SrcLookup
+    SrcLookup -.->|"lookup"| Source
+    SrcLookup -->|"missing"| Abort
+    SrcLookup -->|"present"| Drift
     Drift -->|"drift"| Warn --> Abort
     Drift -->|"clean"| Emit
 
@@ -351,22 +468,40 @@ flowchart TB
     style Emit fill:#dfd
 ```
 
-This is the v2 analogue of v1's "every `{{include}}` directive must resolve to a file" rule — now expressed in terms of sub-skill names against a catalog rather than file paths.
+This is the v2 analogue of v1's "every `{{include}}` directive must resolve to a file" rule — now expressed in terms of sub-skill names against a catalog rather than file paths. The catalog-gated structure (catalog first, then source-path existence) is enforced sequentially: no "union of sources" — a sub-skill is only resolvable if its catalog entry exists *and* its catalog-recorded source file exists.
+
+#### 4.5.1 Gap — Project-scoped Claude-skills installer (not yet shipped)
+
+The composed CLAUDE.md emits `→ run sub-skill: <name>` references in the `instructions` slot, but **today there is no installer step that converts each `references/sub-skills/<name>.md` source into a real Claude skill the agent can invoke via the Skill tool**. Until this installer ships:
+
+- Catalog rows point at `references/sub-skills/<...>/<name>.md` (markdown sources).
+- An agent encountering `→ run sub-skill: pipeline-sentinel` resolves it by **reading the catalog-recorded source file** and executing its instructions in-context — *not* by invoking the Skill tool.
+- The §4.5 diagram's `references/sub-skills/` lookup is the only on-disk check; there is no `.claude/skills/` lookup today.
+
+**Target state** (deferred follow-up):
+
+- A new installer step (under `INSTALLER-ARCH.md`) materializes each sub-skill listed in the catalog as a project-local Claude skill at `<project-root>/.claude/skills/<name>/SKILL.md` with appropriate frontmatter. **Project-scope only** — never installed at user-scope (`~/.claude/skills/`); each SquidSquad install owns its own sub-skill set, and skills from one project must not leak into another.
+- Agents would then invoke sub-skills via the Skill tool (`Skill({skill: "<name>"})`) rather than reading source files. The `→ run sub-skill: <name>` reference grammar in composed CLAUDE.md stays the same; only the resolution mechanism changes.
+- Catalog source paths remain rooted at `references/sub-skills/` (the *authored* source). The installer reads from there and writes to the project-local `.claude/skills/`. Catalog entries do not point at `.claude/skills/` — that's an install artifact, not the canonical authoring location.
+- Re-install / version-bump semantics, frontmatter generation, and skill-tool argument grammar all need to be specified in INSTALLER-ARCH before implementation.
+
+Tracker reference: [#10362](https://github.com/WallyDoodlez/SquidSquad/issues/10362) — installer spec follow-up filed against this PR (depends on #10359 merge).
 
 ---
 
 ## 5. Composed-output structure
 
-Every role's composed `CLAUDE.md` has exactly **five top-level H2 sections**, in this order:
+Every role's composed `CLAUDE.md` has exactly **six top-level H2 sections**, in this order:
 
 ```
 # <Role> Agent
 
 ## 1. Identity
-## 2. Soul
-## 3. Instructions
-## 4. Project Context
-## 5. Vault
+## 2. Responsibility
+## 3. Soul
+## 4. Instructions
+## 5. Project Context
+## 6. Vault
 ```
 
 No other H2 may appear at the document top level. (Sub-sections at H3+ are unrestricted within each H2.)
@@ -377,40 +512,124 @@ No other H2 may appear at the document top level. (Sub-sections at H3+ are unres
 - Team membership ("You are a SquidSquad agent on a four-role team: pm, verifier, worker, dm — see [AGENT-RUNTIME.md](AGENT-RUNTIME.md) Terminology section.").
 - Lifecycle governance ("Your wake mechanism — polling or event-driven — is determined by the harness. The harness owns all start/stop/restart authority.").
 - Team-awareness: who the other roles are and what they do (one short paragraph each).
+- **Inter-agent communication** (L1 universal): "All communication between agents flows through the **forge** (the tracker — Issues/PRs and their comments). Forge is the source of truth; events are nudges, not a channel. To message another agent: write a tracker comment via the `discussion` sub-skill, assign/route to the target, then fire a nudge event so the target wakes if idle. See §5.1.1 for the full sequence and [AGENT-RUNTIME.md](AGENT-RUNTIME.md) §7 for the event bus mechanics."
 
 Authored across multiple L1-L3 files (each contributes via `slot: identity`); L4 may insert/replace project-specific identity facts.
 
-### 5.2 Soul
+#### 5.1.1 Inter-agent communication: forge as truth, events as wake
 
-- The agent's professional identity, voice, perspective.
-- **Emitted verbatim** into the composed CLAUDE.md (not a reference link to `.squidsquad/<role>/SOUL.md`). The source SOUL.md file is the authoring location; compose copies its content into the composed output. Soul is orchestration-layer identity content, not a sub-skill — it is rendered directly, not referenced through the catalog.
-- L4 may **`append` only** to this slot (per §3.3 per-slot op constraints). Project-specific tone adjustments are added as appends; semantic-merge precedence (§3.4) resolves any conflict between shipped soul and L4 in the agent's favour at runtime, without rewriting the shipped content.
+The **forge** (the tracker — GitHub Issues/PRs and their comments) is the *only* communication channel between agents. Every message one agent needs another agent to see is written there: append-only, durable, role-tagged via `tracker.py`, queryable across cycles. Agents read forge state at the start of each cycle and act on what they observe.
 
-This is one of the simpler slots — typically one to three short paragraphs.
+Events are **not** a communication channel — they carry no semantic payload. An event is a nudge that tells a target "something changed for you on the forge; consider waking now instead of at your next polling tick." If the target is mid-cycle, the nudge is ignored (no preemption); the target picks up the forge change on its next natural cycle. If the target is idle, the nudge wakes it early via its Monitor subscription.
 
-### 5.3 Instructions
+**To send another agent a message:**
+
+1. **Write to forge** — append a tracker comment via the `discussion` sub-skill (durable, role-tagged, visible to humans and future agents).
+2. **Route to target** — update issue state (assignee, labels) so the message lands in the target's normal pipeline queries.
+3. **Nudge** — fire a nudge event with `target=<role>` so an idle target wakes early. Lost or missed nudges are harmless: the next natural polling cycle still picks up the forge change.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant W as Writer agent
+    participant F as Forge (tracker)
+    participant E as Event bus
+    participant M as Target's Monitor
+    participant T as Target agent
+
+    W->>F: 1. Append tracker comment + update assignee/labels
+    W->>E: 2. Fire nudge event (target=T)
+    E->>M: 3. Dispatch nudge
+    alt T is idle
+        M->>T: 4a. Wake signal
+        T->>F: 5a. Read forge state
+        T->>T: 6a. Act on forge content
+    else T is mid-cycle
+        M-->>M: 4b. Nudge ignored (no preemption)
+        T->>F: 5b. Read forge state on next natural cycle
+        T->>T: 6b. Act on forge content
+    end
+```
+
+**Why forge-as-truth, not events-as-channel:**
+
+- **Durability** — forge messages survive cycle ends, context resets, harness restarts. Event payloads do not.
+- **Auditability** — every cross-agent message is a tracker comment, visible to humans and future agents reading the thread.
+- **Idempotence** — a lost or missed nudge just delays a wake; the next polling cycle still sees the forge change. An events-as-channel model would silently lose the message.
+- **No synchronous waits** — an agent never blocks waiting for a reply; it writes to forge, optionally nudges, and continues its own cycle.
+
+### 5.2 Responsibility
+
+The role-boundary contract: **what this role does, what it does NOT do, and why it matters.** Distinct from Identity (which is the short "what this agent is" headline) and from Soul (which is values/voice). Responsibility is the explicit enumeration of role scope that prevents drift into other roles' lanes.
+
+Typical structure within the section:
+
+```markdown
+## 2. Responsibility
+
+### What this role does
+- (bulleted list of in-scope activities)
+
+### What this role does NOT do
+- (bulleted list of out-of-scope activities, each with the role that DOES own that activity)
+
+### Why this matters
+(one paragraph framing the seam this role holds)
+```
+
+**Responsibility is not a sub-skill.** Sub-skills are focused units of how-to (per [`sub-skill-catalog.md`](sub-skill-catalog.md)); responsibility is identity-layer content that defines *who the role is*, not *how it does things*. It is therefore composed as a dedicated slot — not via the sub-skill catalog.
+
+**Authoring across layers:**
+
+- **L1** — universal team-discipline base (e.g. "every SquidSquad agent declines out-of-scope work by routing to the correct role, not by leaving it stalled").
+- **L2** — the role-specific does/doesn't/why contract. This is the primary authoring location for each role's responsibility content.
+- **L3** — variant-specific additions (e.g. a frontend-specialized worker may add stack-specific "does NOT" rules around backend work).
+- **L4** — optional. Project-local installs may `append` extra role-boundary rules (e.g. "this project's PM also owns release-note review") OR `replace` the whole slot to fully redefine the role for an unusual install. See §3.3 per-slot op constraints.
+
+The composed section stacks all L1-L3 responsibility content in `(slot, ordinal)` order (per §3.2), then applies any L4 op. With no L4 responsibility section, the role inherits L1-L3 unchanged.
+
+> **Whole-slot `replace` on responsibility is an escape hatch, not a default tool.** Unlike `soul` (which is append-only with §3.4 semantic-merge precedence so shipped persona stays on disk), an L4 `### replace` on `## Responsibility` **silently discards the entire L1-L3 responsibility block** for that role — including L1's universal team-discipline base ("decline by routing to the correct role") and L2's role-specific does/does-NOT/why contract. The `l4-curation` elicitation dialog must surface this consequence to the human before persisting any whole-slot replace on responsibility, and route most "I want to change PM's boundaries" requests toward `append` instead. Whole-slot replace is intended for genuinely unusual installs where the shipped role contract doesn't apply (e.g. a single-human project that has no DM at all), not for incremental tweaks.
+
+The team-awareness baseline (role roster — who else is on the team) lives in §5.1 Identity, *not* in this slot. Responsibility is the *self*-awareness content (what THIS role does and does NOT do); Identity carries the *team*-awareness content (who other roles are). The decline-and-route discipline that formerly lived in the retired `agent-boundaries` sub-skill is folded into this slot's "does NOT do" sub-section as the rule "decline out-of-scope work by routing to the role that owns it, never by leaving it stalled."
+
+### 5.3 Soul
+
+The agent's professional identity, voice, perspective. **A regular L1-L4 slot, not a special-case** — authored and composed by the same `(slot, ordinal)` mechanism as every other slot (§3.2). Earlier versions of SquidSquad treated `SOUL.md` as a "sidecar" copied verbatim outside the catalog; that special-case is retired.
+
+**Authoring across layers:**
+
+- **L1** — universal voice baseline (e.g. "speak in first person; never invent claims you cannot verify").
+- **L2** — role-specific persona. The conventional authoring filename is `references/roles/<role>/SOUL.md`, which compose treats as **shorthand for a file with `slot: soul, ordinal: 1` frontmatter**. No magic — just a documented filename convention so the source file is easy to find. A regular `.md` with explicit `slot: soul` frontmatter under `references/sub-skills/` or `references/roles/<role>/` works identically.
+- **L3** — variant-specific persona adjustments (e.g. a frontend-specialized worker's voice). Same frontmatter mechanism.
+- **L4** — optional. Lives inside the per-role-class L4 file (`.squidsquad/project/<role-class>.md`) under a `## Soul` H2 section per §3.3. The legacy `*-soul-directives.md` multi-file L4 pattern is deprecated (see §7.3).
+
+**Op constraints (per §3.3):** L4 Soul is **`append` only**. No `### insert-before` / `### insert-after` (Soul has no step IDs); no `### replace` (semantic-merge precedence — see §3.4 — handles override without rewriting the shipped content).
+
+This is one of the simpler slots — typically one to three short paragraphs per layer.
+
+### 5.4 Instructions
 
 The single ordered checklist for what the agent does. Each step is a **reference to a sub-skill by name**, not the sub-skill's body. Composed from all L1-L4 instructions-slot content.
 
 Structure (suggested H3 grouping within the H2):
 
 ```markdown
-## 3. Instructions
+## 4. Instructions
 
-### 3.1 On boot (one-time, session start)
-1. **step:boot/permission-check** → see sub-skill `permission-check`
-2. **step:boot/mode-detect** → see sub-skill `boot-bootstrap`
-3. **step:boot/load-fragments** → see sub-skill `boot-bootstrap`
+### 4.1 On boot (one-time, session start)
+1. **step:boot/permission-check** → run sub-skill: permission-check
+2. **step:boot/mode-detect** → run sub-skill: boot-bootstrap
+3. **step:boot/load-fragments** → run sub-skill: boot-bootstrap
 
-### 3.2 Each cycle
-1. **step:cycle/pre-cycle** → see sub-skill `cycle-runner` (pre phase)
-2. **step:cycle/context-pressure** → see sub-skill `context-pressure`
-3. **step:cycle/pipeline-sentinel** → see sub-skill `pipeline-sentinel`
+### 4.2 Each cycle
+1. **step:cycle/pre-cycle** → run sub-skill: cycle-runner
+2. **step:cycle/context-pressure** → run sub-skill: context-pressure
+3. **step:cycle/pipeline-sentinel** → run sub-skill: pipeline-sentinel
    *(pm-only; see [sub-skill-catalog.md](sub-skill-catalog.md))*
    ...
 
-### 3.3 On shutdown
-1. **step:shutdown/graceful-stop** → see sub-skill `agent-lifecycle` (shutdown)
+### 4.3 On shutdown
+1. **step:shutdown/graceful-stop** → run sub-skill: agent-lifecycle
 ```
 
 Step bodies in the composed CLAUDE.md are **short references** — typically one line each — that name a step ID and point at the sub-skill that implements it. The full how-to for "pipeline-sentinel" or "context-pressure" is in that sub-skill's source file, indexed in [`sub-skill-catalog.md`](sub-skill-catalog.md).
@@ -419,12 +638,68 @@ Boot / cycle / shutdown are the three sub-slots within the `instructions` slot. 
 
 See §6 for step ID grammar, reference grammar, and the relationship to sub-skills.
 
-### 5.4 Project Context
+#### 5.4.1 Cycle statusline-write pattern
 
-- Project-specific facts that aren't instructions: domain, audience, conventions, repositories of record, external systems, sensitive constraints.
-- Most content here comes from L4. L3 may seed defaults ("This is a SquidSquad install — public roadmap on GitHub.").
+There is no `status-line` sub-skill. Statusline updates are inlined into the cycle. The pattern:
 
-### 5.5 Vault
+```mermaid
+sequenceDiagram
+  participant LR as /loop or harness nudge
+  participant CR as cycle-runner (pre)
+  participant S1 as step:cycle/pipeline-sentinel
+  participant S2 as step:cycle/vault
+  participant S3 as step:cycle/own-domain-fix
+  participant CR2 as cycle-runner (post)
+  participant SB as cycle.py status-bar
+
+  LR->>CR: fire cycle
+  CR->>SB: status-bar <role> "running" "pre-cycle"
+  CR-->>S1: control passes
+  S1->>SB: status-bar <role> "verifying" "pipeline-sentinel..."
+  S1-->>S2: ...
+  S2->>SB: status-bar <role> "verifying" "vault-remember..."
+  S2-->>S3: ...
+  S3->>SB: status-bar <role> "verifying" "own-domain auto-fix..."
+  S3-->>CR2: control passes
+  CR2->>SB: status-bar <role> "idle" ""
+```
+
+Two write sites:
+
+- **Cycle-runner bookend writes** (mechanical): `cycle_pre.py` / `cycle_post.py` write `"running"` at pre-cycle entry and `"idle"` at post-cycle exit. The agent's `cycle-runner` sub-skill references these scripts; no per-step authoring needed.
+- **Mid-cycle progress writes** (per step, optional): any sub-skill that wants to surface its state to the human invokes `python references/scripts/cycle.py status-bar <role> <state> <message>` as a one-line tool call inside its own body. Examples in this repo: `pipeline-sentinel` writes `"verifying"` + sweep description; `task-intake` writes `"researching"` / `"discussing"` / `"planning"` across the 5 phases.
+
+Why no sub-skill: statusline writes are too granular (a single `cycle.py status-bar` invocation) and too contextual (each step knows its own state) to centralize into a shared procedure. Same architectural pattern as `file-conventions` (paths live inline in the step that uses them).
+
+### 5.5 Project Context
+
+Project-shaped descriptive facts — *what is true about this project / role*, not *how the role does work*. Concretely the slot covers:
+
+- **Domain / audience** — what this project is, who uses it, what kind of project it is.
+- **Repositories of record, external systems, sensitive constraints, project-specific tone-or-language notes** — anything that's a project-level fact the agent needs to know but isn't an instruction.
+
+**Authoring — L4-exclusive.** Project Context is the only slot that L1-L3 do NOT author. The reason is structural: L1 ships universal-across-all-installs, L2 ships role-across-all-installs, L3 ships variant-across-all-installs — none of those layers knows about any specific project, so none of them can author "what is true about *this* project." Anything that *seems* like cross-install project-context content (e.g., "PMs typically work in markdown") is actually role-identity content (Identity slot) or role-contract content (Responsibility) or tooling guidance (Instructions via a sub-skill) — not Project Context.
+
+A compose-pipeline validation rule (per [§3.3](#33-l4-operations-creative-overlay) per-slot constraints) rejects any L1-L3 source file that declares `slot: project-context` in its frontmatter. The slot identifier remains valid; it just has no authoring location above L4.
+
+**Where Project Context comes from** — two complementary sources, both at L4:
+
+1. **Installer-seeded at install time** — the installer's Phase 1 project-intake conversation collects domain, audience, primary language/stack, repositories of record, external systems, project-specific tone notes (per [INSTALLER-ARCH §4.4 Phase 1](INSTALLER-ARCH.md)). At Phase 5 the installer writes those answers into the `## Project Context` block of each role-class L4 file (`.squidsquad/project/<role-class>.md`). Every fresh install starts with a non-empty Project Context derived from the human's intake answers.
+2. **Agent-curated at runtime** — during cycles, the `l4-curation` sub-skill (§7) detects when the human says something project-context-shaped ("we deploy through Buildkite, not GH Actions"), elicits scope + rationale, and appends to the appropriate role-class L4 file's `## Project Context` block. This is the durable accumulation path for facts that surface organically after install.
+
+L4 op grammar for this slot is **`append`-only** per §3.3 — no targeted ops, no whole-slot replace. Project Context grows monotonically: every new fact is appended in chronological order. The slot has no built-in supersede mechanism — older facts remain in the composed output. If a project fact changes (e.g., the team migrates from GH Actions to Buildkite), the agent appends the new fact; the older entry stays as historical context. At runtime, the agent reads the slot top-to-bottom and treats later-appearing facts as more current — recency in the composed file order is the only ordering signal. If a project needs to retract a fact entirely (rare), that is a curation request the human files against the source `## Project Context` block directly, not via `l4-curation`.
+
+> **`status-line` is being retired entirely (corrected twice)** — First draft moved it to Project Context (wrong: it's not descriptive). Second draft kept it as a common/ sub-skill (wrong: it's not a single procedure the agent invokes). Final classification: **statusline updates are inlined into the cycle itself**, same pattern as `file-conventions`. The bookend writes (pre-cycle "idle", post-cycle "idle") live in the `cycle-runner` sub-skill. Mid-cycle progress updates ("verifying", "scanning", "discussing FEAT-PM-XXX...") are inlined in each step that wants to surface state via `python references/scripts/cycle.py status-bar <role> <state> <message>`. No standalone `status-line` sub-skill is needed; the `cycle.py status-bar` invocation is a one-line tool call wherever it's used. Resolution: delete all 4 `status-line.md` files (`common/` + per-role `pm/`/`verifier/`/`dm/`); cycle-runner handles bookend writes; other sub-skills inline status-bar calls at their own discretion. Tracked in #10360.
+
+> **`file-conventions` is being retired entirely** — not moved to this slot. Today's `file-conventions.md` sub-skill is a path manifest (where each role's iteration logs / working state / planning artifacts live on disk). Every path in it is already used by exactly one specific instruction (e.g. `pm/task-intake` writes `.squidsquad/pm/planning/RESEARCH.md`; `pm/pipeline-sentinel` reads `.squidsquad/pm/qa-log.md`). A separate centralized path map duplicates facts that already live in the instruction that touches them. Resolution: drop `file-conventions.md` entirely; paths stay inline in the instruction sub-skills that use them. L4 path overrides (rare) use `### replace step:<step-id>` on the specific instruction — more surgical than rewriting a global path map. Tracked in #10360.
+
+> **`agent-boundaries` is being retired entirely** — split across Identity (§5.1) and Responsibility (§5.2), not its own sub-skill. Today's `common/agent-boundaries.md` (5 lines) is two things: a team-awareness baseline (`{{role-roster}}` + "know your teammates") and a decline-and-route discipline rule. Neither is a how-to procedure. Resolution: inline the team-roster + awareness sentence into Identity (foundational fact about the team this agent belongs to); inline the decline-and-route discipline into Responsibility (a "what this role does when declining out-of-scope work" rule, structurally identical to other Responsibility "does NOT do" bullets). Delete `common/agent-boundaries.md` at implementation time. Tracked in #10360.
+
+> **`prohibitions` is being retired entirely** — split across Identity §5.1 (universal "never do" rules) and Responsibility §5.2 ("does NOT do" bullets, per role). Today there are 4 prohibitions files (`common/prohibitions.md` + per-role overrides in `pm/`, `verifier/`, `dm/`) totaling ~63 lines. Content splits cleanly: universal rules ("never push without pulling", "never edit another agent's comments", "never edit composed CLAUDE.md directly", "never construct gh issue edit label commands manually") belong in **L1 Identity's Boundaries sub-section** (already designated as the home for broad prohibitions per the §5.7.1 worked example). Role-specific rules ("PM never verifies", "QA never ships with failed tests", "DM never writes features") are already substantially captured in **Responsibility's "What this role does NOT do"** section — the prohibitions files mostly duplicate that content. Resolution: fold universal prohibitions into L1 Identity Boundaries; fold role-specific prohibitions into L2 Responsibility "does NOT do" (de-duplicating with what's already there); delete the 4 prohibitions.md files. Tracked in #10360.
+
+> **`discussion` and `issue-filing` stay as `common/` sub-skills; per-role overrides collapse** — these two ARE legitimate sub-skills (they're focused how-to procedures: `discussion` = "how to write a tracker comment correctly" — the inter-agent communication channel named in §5.1 Identity; `issue-filing` = "how to file a bug to the right tracker"). The per-role overrides in `pm/`, `verifier/`, `dm/` exist only to bake the role name into the bash example instead of using the `[ROLE]` placeholder — pure DRY violations with no functional difference. Resolution: keep `common/discussion.md` and `common/issue-filing.md` as the single authoring location, ensure they use the `[ROLE]` placeholder per the manifest's Placeholder Substitution rules; delete the 6 per-role override files. **Rename**: the existing `discussion-protocol.md` filename simplifies to `discussion.md` (the "protocol" suffix added no information and the L1 Identity reference uses the short name). Tracked in #10360.
+
+### 5.6 Vault
 
 - A short description of the shared memory layer the agent reads/writes.
 - Wikilink format reminder, entity model, confidence levels.
@@ -432,13 +707,13 @@ See §6 for step ID grammar, reference grammar, and the relationship to sub-skil
 
 This section is intentionally short — most vault detail belongs in `references/sub-skills/common/vault-protocol.md` (per-cycle usage contract) and [`VAULT-ARCH.md`](VAULT-ARCH.md) (vault architecture: PARAG model, entity types, sub-skills, scripts, cycle integration).
 
-### 5.6 Worked example: pm composed CLAUDE.md TOC (both modes)
+### 5.7 Worked example: pm composed CLAUDE.md TOC (both modes)
 
-`.squidsquad/pm/CLAUDE.md` looks **structurally different** depending on which manifest `compose.py` selects (per §3.2 callout and §6.5). Below are the two flavored outputs after L1-L4 + flat renumbering — §1, §2, §4, §5 are identical; §3.1 differs by exactly one step; §3.3 is identical; §3.2 (`instructions/cycle`) is fully divergent.
+`.squidsquad/pm/CLAUDE.md` looks **structurally different** depending on which manifest `compose.py` selects (per §3.2 callout and §6.5). Below are the two flavored outputs after L1-L4 + flat renumbering — §1, §2, §3, §5, §6 are identical; §4.1 differs by exactly one step; §4.3 is identical; §4.2 (`instructions/cycle`) is fully divergent.
 
 **Each step is a reference**, not an inlined sub-skill body. The right-column `step:cycle/<name>` is the step ID; the implementation lives in the sub-skill named after it (or referenced from it), catalogued in [`sub-skill-catalog.md`](sub-skill-catalog.md).
 
-#### 5.6.1 pm — polling mode (`includes.yml` selected)
+#### 5.7.1 pm — polling mode (`includes.yml` selected)
 
 ```
 # pm Agent
@@ -450,16 +725,21 @@ This section is intentionally short — most vault detail belongs in `references
    1.4 Team-awareness (one paragraph each: dm, verifier, worker)
    1.5 Boundaries (folded "never do" — broad prohibitions)
 
-## 2. Soul
+## 2. Responsibility
+   2.1 What pm does (coordinates, intakes, routes, triages, vault stewardship)
+   2.2 What pm does NOT do (verify, RCA in filings, write code, modify worker branches)
+   2.3 Why this matters (the seam discipline)
+
+## 3. Soul
    (SOUL.md inlined verbatim)
 
-## 3. Instructions
-   3.1 On boot
+## 4. Instructions
+   4.1 On boot
        1. Permission check          (step:boot/permission-check)
        2. Mode detect               (step:boot/mode-detect)
        3. Schedule /loop            (step:boot/schedule-loop)
        4. Read role fragments       (step:boot/load-fragments)
-   3.2 Each cycle (Ralph Loop — fires every config.iter-interval)
+   4.2 Each cycle (Ralph Loop — fires every config.iter-interval)
        1. Pre-cycle script          (step:cycle/pre-cycle)
        2. Context pressure check    (step:cycle/context-pressure)
        3. Resume working state      (step:cycle/resume-state)
@@ -470,21 +750,19 @@ This section is intentionally short — most vault detail belongs in `references
        8. Vault remember/optimize   (step:cycle/vault)
        9. Own-domain auto-fix       (step:cycle/own-domain-fix)
       10. Post-cycle script         (step:cycle/post-cycle)
-   3.3 On shutdown
+   4.3 On shutdown
        1. Graceful stop             (step:shutdown/graceful-stop)
 
-## 4. Project Context
-   4.1 Domain / audience
-   4.2 File conventions (folded from today's standalone H2)
-   4.3 Status line (folded — display fact, not instruction)
-   4.4 Repositories of record
+## 5. Project Context
+   5.1 Domain / audience
+   5.2 Repositories of record
 
-## 5. Vault
-   5.1 Description
-   5.2 Wikilink + entity model
+## 6. Vault
+   6.1 Description
+   6.2 Wikilink + entity model
 ```
 
-#### 5.6.2 pm — event-driven mode (`includes-events.yml` selected)
+#### 5.7.2 pm — event-driven mode (`includes-events.yml` selected)
 
 ```
 # pm Agent
@@ -496,16 +774,21 @@ This section is intentionally short — most vault detail belongs in `references
    1.4 Team-awareness (one paragraph each: dm, verifier, worker)
    1.5 Boundaries (folded "never do" — broad prohibitions)
 
-## 2. Soul
+## 2. Responsibility
+   2.1 What pm does (coordinates, intakes, routes, triages, vault stewardship)
+   2.2 What pm does NOT do (verify, RCA in filings, write code, modify worker branches)
+   2.3 Why this matters (the seam discipline)
+
+## 3. Soul
    (SOUL.md inlined verbatim)
 
-## 3. Instructions
-   3.1 On boot
+## 4. Instructions
+   4.1 On boot
        1. Permission check          (step:boot/permission-check)
        2. Mode detect               (step:boot/mode-detect)
        3. Bootup-complete handshake (step:boot/bootup-complete)
        4. Read role fragments       (step:boot/load-fragments)
-   3.2 Per nudge (idle → walk → idle — see AGENT-RUNTIME §7.1 for the canonical contract)
+   4.2 Per nudge (idle → walk → idle — see AGENT-RUNTIME §7.1 for the canonical contract)
        1. Wake on nudge             (step:cycle/wake)
                                     — Monitor receives `NUDGE\n` from the
                                       sibling `event_poll.py --wait --role <role>
@@ -529,42 +812,41 @@ This section is intentionally short — most vault detail belongs in `references
        Shutdown / stop intent       arrives as an `assigned-to` event with
                                     event_context="stop-intent" and is
                                     handled by step 4 like any other event
-   3.3 On shutdown
+   4.3 On shutdown
        1. Graceful stop             (step:shutdown/graceful-stop)
 
-## 4. Project Context
-   4.1 Domain / audience
-   4.2 File conventions (folded from today's standalone H2)
-   4.3 Status line (folded — display fact, not instruction)
-   4.4 Repositories of record
+## 5. Project Context
+   5.1 Domain / audience
+   5.2 Repositories of record
 
-## 5. Vault
-   5.1 Description
-   5.2 Wikilink + entity model
+## 6. Vault
+   6.1 Description
+   6.2 Wikilink + entity model
 ```
 
-#### 5.6.3 Diff between the two modes (where they actually differ)
+#### 5.7.3 Diff between the two modes (where they actually differ)
 
-The two TOCs are identical at §1, §2, §4, §5 — and §3.1 differs by exactly one step, §3.3 is identical, §3.2 is fully divergent.
+The two TOCs are identical at §1, §2, §3, §5, §6 — and §4.1 differs by exactly one step, §4.3 is identical, §4.2 is fully divergent.
 
-| Section | Polling (5.6.1) | Event (5.6.2) | Differs? |
+| Section | Polling (5.7.1) | Event (5.7.2) | Differs? |
 |---|---|---|---|
 | §1 Identity | 1.1-1.5 | 1.1-1.5 | No |
-| §2 Soul | SOUL.md inlined | SOUL.md inlined | No |
-| §3.1 On boot — step 3 | `step:boot/schedule-loop` (`/loop` scheduling) | `step:boot/bootup-complete` (handshake to harness) | **Yes — 1 step** |
-| §3.1 On boot — other steps | permission-check, mode-detect, load-fragments | permission-check, mode-detect, load-fragments | No |
-| §3.2 cycle structure | 10 numbered Ralph Loop steps | 8 numbered per-event steps | **Yes — whole sub-slot** |
-| §3.3 On shutdown | graceful-stop | graceful-stop | No |
-| §4 Project Context | 4.1-4.4 | 4.1-4.4 | No |
-| §5 Vault | 5.1-5.2 | 5.1-5.2 | No |
+| §2 Responsibility | 2.1-2.3 | 2.1-2.3 | No |
+| §3 Soul | SOUL.md inlined | SOUL.md inlined | No |
+| §4.1 On boot — step 3 | `step:boot/schedule-loop` (`/loop` scheduling) | `step:boot/bootup-complete` (handshake to harness) | **Yes — 1 step** |
+| §4.1 On boot — other steps | permission-check, mode-detect, load-fragments | permission-check, mode-detect, load-fragments | No |
+| §4.2 cycle structure | 10 numbered Ralph Loop steps | 8 numbered per-event steps | **Yes — whole sub-slot** |
+| §4.3 On shutdown | graceful-stop | graceful-stop | No |
+| §5 Project Context | 5.1-5.2 | 5.1-5.2 | No |
+| §6 Vault | 6.1-6.2 | 6.1-6.2 | No |
 
-So the **only** mode-driven divergence is `step:boot/schedule-loop` ↔ `step:boot/bootup-complete` plus the whole §3.2 sub-slot. Everything else composes bit-identically across the two manifests. Any unintentional divergence in §1, §2, §3.3, §4, §5 between the two flavored outputs is a bug per §6.5 "authoring discipline".
+So the **only** mode-driven divergence is `step:boot/schedule-loop` ↔ `step:boot/bootup-complete` plus the whole §4.2 sub-slot. Everything else composes bit-identically across the two manifests. Any unintentional divergence in §1, §2, §3, §4.3, §5, §6 between the two flavored outputs is a bug per §6.5 "authoring discipline".
 
 Notes that apply to both:
 
 - All standalone H2s from today's output ("Issue Filing Protocol", "Task Lifecycle", "What You Must Never Do", "Status Line", "File Conventions") are absorbed per §6.2 / §6.3.
 - Step numbering inside each sub-slot is flat (per §6.4); no `Step 6f` / `Step Nb` / `Phase N`.
-- §3.2 is the only sub-slot whose authoring source differs by mode (polling reads `roles/pm/ralph-loop-overview.md` and friends; event reads `common-events/*` fragments). Per #8697 there are NO mode-conditional directives inside fragments — the manifest IS the gate.
+- §4.2 is the only sub-slot whose authoring source differs by mode (polling reads `roles/pm/ralph-loop-overview.md` and friends; event reads `common-events/*` fragments). Per #8697 there are NO mode-conditional directives inside fragments — the manifest IS the gate.
 
 ---
 
@@ -614,25 +896,44 @@ Examples:
 
 **Renaming a sub-skill** is also a breaking change: it requires updating the catalog entry + every step that references it. compose.py validates that all references resolve after the rename (§4.5) before emitting output.
 
-### 6.2 Sub-procedures are sub-skills, not inlined H2 sections
+### 6.2 Sub-skill reference grammar
+
+The composed CLAUDE.md references each sub-skill by name. The **canonical reference grammar** is a single line at the end of (or replacing) a step body:
+
+```
+→ run sub-skill: <name>
+```
+
+Where `<name>` is a sub-skill identifier matching the catalog (e.g. `pipeline-sentinel`, `issue-filing`, `vault-remember`). Compose's reference-extraction regex (§4.5 step 1) matches exactly this form.
+
+A step may carry both a step-ID label and a sub-skill reference; the step-ID label is display-only and is not part of the extracted reference:
+
+```markdown
+1. **step:cycle/file-bug-if-found** — when pipeline scrutiny surfaces a bug
+   → run sub-skill: issue-filing
+```
+
+Earlier draft examples in this doc used `→ see sub-skill <name>` (no colon, prose-style) as an informal-rendering variant. **Going forward only `→ run sub-skill: <name>` is canonical**; the prose-style variant is retired. Compose extracts only the canonical form, so a `→ see sub-skill` directive that escaped a copy-paste will not be found by validation and the composed CLAUDE.md will silently lack that reference. (Catalog-drift validation in §4.5 catches the resulting orphan reference at the catalog side, but the better fix is authoring discipline: always emit the canonical form.)
+
+### 6.2.1 Sub-procedures are sub-skills, not inlined H2 sections
 
 Today's standalone H2 sections like `## Issue Filing Protocol`, `## Discussion Protocol`, `## Task Lifecycle (5-Phase)` are **eliminated** as top-level sections — and v2 does NOT fold them inline into step bodies (the v1 model). Instead, each becomes a **sub-skill** with its own source file and catalog entry, referenced from the cycle steps that invoke it:
 
 ```markdown
-### 3.2 Each cycle
+### 4.2 Each cycle
 
 ...
 
 5. **step:cycle/file-bug-if-found** — when pipeline scrutiny surfaces a bug
-   → see sub-skill `issue-filing` ([sub-skill-catalog.md](sub-skill-catalog.md))
+   → run sub-skill: issue-filing
 
 6. **step:cycle/post-cycle** — commit, push, advance cursor
-   → see sub-skill `cycle-runner` (post phase)
+   → run sub-skill: cycle-runner
 
 ...
 ```
 
-The how-to for issue filing lives in `references/sub-skills/common/issue-filing.md` (today, a markdown fragment) or in `.claude/skills/issue-filing/SKILL.md` (target state, a real Claude skill). The composed CLAUDE.md never duplicates that content.
+The how-to for issue filing lives in `references/sub-skills/common/issue-filing.md` (the authored source — a markdown fragment). Once the project-scoped Claude-skills installer ships (§4.5.1), the same source will also be materialized as `<project-root>/.claude/skills/issue-filing/SKILL.md` for invocation via the Skill tool. The composed CLAUDE.md never duplicates that content.
 
 If the same sub-skill is referenced from multiple steps, the catalog is the single index — composed CLAUDE.md references the sub-skill by name from each step that uses it, and the catalog disambiguates which roles use it and how.
 
@@ -643,7 +944,7 @@ This eliminates two problems v1 created: (a) sub-skill bodies bloated composed C
 Today's standalone H2 sections like `## What You Must Never Do`, `## File Conventions`, `## Status Line` are **also folded** under v2 — but with the reference-only discipline applied:
 
 - **"Never do" prohibitions that apply broadly** fold into **Identity** as "Boundaries" (one or two short lists at the bottom of the Identity section). These are orchestration-layer assertions about the agent's overall character — short, top-level, emitted verbatim.
-- **"Never do" prohibitions that are step-specific** are NOT inlined into the composed CLAUDE.md. Under v2, step-specific prohibitions live in the **sub-skill** that owns the step (e.g. "Never amend a published commit" lives in the `git-commit` sub-skill's source file, not in the composed orchestration). The step reference in §3.2 pulls them in implicitly when the model invokes the sub-skill. Step-specific prohibitions are part of SquidSquad's **shipped behaviour layer** — they are not the intended target of L4 `replace` ops, and projects that need to lift a prohibition file the change upstream against the SquidSquad repo rather than overriding it per-install. Compose does not block a `replace` op pointed at a prohibition-bearing step (the op grammar in §3.3 is structurally permissive), but `l4-curation`'s elicitation dialog routes such requests to the upstream feature-request path.
+- **"Never do" prohibitions that are step-specific** are NOT inlined into the composed CLAUDE.md. Under v2, step-specific prohibitions live in the **sub-skill** that owns the step (e.g. "Never amend a published commit" lives in the `git-commit` sub-skill's source file, not in the composed orchestration). The step reference in §4.2 pulls them in implicitly when the model invokes the sub-skill. Step-specific prohibitions are part of SquidSquad's **shipped behaviour layer** — they are not the intended target of L4 `replace` ops, and projects that need to lift a prohibition file the change upstream against the SquidSquad repo rather than overriding it per-install. Compose does not block a `replace` op pointed at a prohibition-bearing step (the op grammar in §3.3 is structurally permissive), but `l4-curation`'s elicitation dialog routes such requests to the upstream feature-request path.
 - **File conventions** fold into **Project Context** when they're project-shaped (most are). When they're sub-skill-shaped (e.g. "verifier writes `TEST-PLAN-<n>.md` under `.squidsquad/verifier/planning/`"), they live in the relevant sub-skill's source file.
 - **Status Line description** folds into **Project Context** — it's a project-display fact, not an instruction.
 
@@ -679,22 +980,24 @@ SquidSquad agents support two wake mechanisms: **event-driven** (a sibling `even
 - `references/roles/<role>/includes.yml`        — polling manifest (default)
 - `references/roles/<role>/includes-events.yml` — event-driven manifest. If the role hasn't been ported to event mode yet and this file is absent while `event-driven: yes` is set globally, compose silently uses the polling manifest for that role; this is a **per-role compose-time** fallback distinct from the operator-level mode flip in AGENT-RUNTIME §8.2.
 
-`compose.py:_load_manifest` reads `config.get_wake_mode()` (a global flag — there is no per-role wake mode; see AGENT-RUNTIME §8.1) and chooses the manifest; `_resolve_includes_with_manifest` then renders the chosen manifest in full. There are **no mode-conditional directives inside fragments** — the manifest is the gate. The agent receives one fully-resolved CLAUDE.md whose §3.2 is shaped for exactly one mode. Mid-session mode flips do not exist; an operator flipping `config.md` from `polling` to `event-driven` (or vice versa) takes effect on the next compose+restart.
+`compose.py:_load_manifest` reads `config.get_wake_mode()` (a global flag — there is no per-role wake mode; see AGENT-RUNTIME §8.1) and chooses the manifest; `_resolve_includes_with_manifest` then renders the chosen manifest in full. There are **no mode-conditional directives inside fragments** — the manifest is the gate. The agent receives one fully-resolved CLAUDE.md whose §4.2 is shaped for exactly one mode. Mid-session mode flips do not exist; an operator flipping `.squidsquad/config.md` from `polling` to `event-driven` (or vice versa) takes effect on the next compose+restart.
+
+> **Compose-time inline vs runtime Read — two-tier mechanism for `common-events/`.** The `includes-events.yml` manifest's sub-skills (`boot-bootstrap`, the event-mode cycle-runner sibling, etc.) ARE inlined into the composed CLAUDE.md at compose time, same as polling-mode sub-skills. But one of those inlined sub-skills — `boot-bootstrap` — contains Read-tool instructions that pull the `common-events/*` fragments (`l1-base`, `event-driven-workflow`, `cursor-management`, `forge-read-pattern`, `idle-cooldown-loop`, `comment-handling`) into context **at agent session start**, not at compose time. So the manifest selection is compose-time (which sub-skills get inlined); the `common-events/` fragments themselves are runtime-loaded (they sit on disk, not in any composed CLAUDE.md body). This two-tier shape is intentional: it keeps the composed CLAUDE.md small while still letting event-mode add ~6 fragments of behavior. The catalog's `common-events/` section header documents this; this paragraph is the spec.
 
 ```mermaid
 flowchart LR
   Cfg[".squidsquad/config.md<br/>event-driven: yes | no<br/>(global flag)"] --> Reader["compose.py<br/>config.get_wake_mode()"]
   Reader -->|polling| MP["includes.yml<br/>(polling manifest)<br/>+ ralph-loop-overview.md"]
   Reader -->|event| ME["includes-events.yml<br/>(event manifest)<br/>+ common-events/*.md"]
-  MP --> RP["Composed CLAUDE.md<br/>(loop-mode body inlined,<br/>§3.2 = Ralph Loop — see §5.6.1)"]
-  ME --> RE["Composed CLAUDE.md<br/>(event-mode body inlined,<br/>§3.2 = nudge-walk — see §5.6.2)"]
+  MP --> RP["Composed CLAUDE.md<br/>(loop-mode body inlined,<br/>§4.2 = Ralph Loop — see §5.7.1)"]
+  ME --> RE["Composed CLAUDE.md<br/>(event-mode body inlined,<br/>§4.2 = nudge-walk — see §5.7.2)"]
   RP -.->|"agent sees ONE flavored output<br/>never both"| Agent[("agent session")]
   RE -.->|"agent sees ONE flavored output<br/>never both"| Agent
   style RP fill:#dfe7fd
   style RE fill:#fde7d3
 ```
 
-Mode flip = recompose + agent restart, never mid-session. The two outputs differ at §3.2 (procedural body) plus one step of §3.1 (mode-detect handshake; see §5.6.3).
+Mode flip = recompose + agent restart, never mid-session. The two outputs differ at §4.2 (procedural body) plus one step of §4.1 (mode-detect handshake; see §5.7.3).
 
 **Why two parallel manifests instead of one branchy file**:
 
@@ -714,10 +1017,10 @@ Mode flip = recompose + agent restart, never mid-session. The two outputs differ
 
 - Polling has proven stable across harness outages — it does not depend on a live harness HTTP endpoint.
 - The polling manifest is the documented compose-time fallback when `includes-events.yml` is absent for a role (e.g. a new role not yet ported to event mode).
-- Polling stays available as the **manual recovery target** when event-mode is failing for any reason (harness wedged, event-bus regression, etc.). Recovery is an explicit operator action — flip `event-driven: no` in `config.md`, recompose, restart. There is no automatic runtime fallback (see AGENT-RUNTIME §8.4).
+- Polling stays available as the **manual recovery target** when event-mode is failing for any reason (harness wedged, event-bus regression, etc.). Recovery is an explicit operator action — flip `event-driven: no` in `.squidsquad/config.md`, recompose, restart. There is no automatic runtime fallback (see AGENT-RUNTIME §8.4).
 - Operators may explicitly select polling via `config.md` (`event-driven: no`) while debugging the event bus, or until event mode reaches GA in their install.
 
-**Authoring discipline**: both manifests must stay in sync on what an agent *does* — same status transitions, same comment etiquette, same vault behaviors. Only the *how* differs (event stream vs `/loop` tick). The two `5.6.x` worked examples should diff only on §3.2; if a non-§3.2 section diverges between modes, that is a bug, not a feature.
+**Authoring discipline**: both manifests must stay in sync on what an agent *does* — same status transitions, same comment etiquette, same vault behaviors. Only the *how* differs (event stream vs `/loop` tick). The two `5.7.x` worked examples should diff only on §4.2; if a non-§4.2 section diverges between modes, that is a bug, not a feature.
 
 **Current development convention** (as of this doc — pre-event-GA): every role's `includes.yml` and `includes-events.yml` are both maintained, but most installs ship with `config.md` `event-driven: no` so the polling manifest is what gets composed in production. The event manifest is exercised in CI and on opt-in installs; it becomes the default once event mode reaches GA. This lets us iterate the event-mode authoring (and lets reviewers diff the two flavored outputs) without forcing production fleets onto event mode before it is proven.
 
@@ -798,6 +1101,22 @@ When the agent receives a new instruction, it walks this decision tree:
 
 4. Is the instruction not an instruction at all — but a project context fact?
    → Add prose under ## Project Context (append-only; no H3 op grammar).
+
+5. Does the instruction require functionality that maps to a NEW sub-skill
+   not yet in the catalog?
+   → Stop. This is shipped-content work, not L4 customization.
+     a. Check the catalog (sub-skill-catalog.md) and disk
+        (references/sub-skills/) for an existing sub-skill that covers
+        the need — usually one exists and the instruction can become a
+        cycle/insert-after that references it.
+     b. If genuinely no existing sub-skill fits, the agent surfaces
+        this to the human as a "feature request against the SquidSquad
+        repo" — new sub-skills are part of shipped L1-L3 behaviour and
+        must be authored upstream, then released, then composed in.
+     c. Do NOT write an L4 op that references a sub-skill name not
+        already in the catalog — §4.5 catalog-drift validation will
+        reject it, and the failure mode is confusing (compose error,
+        not a clear "you can't add new sub-skills here").
 ```
 
 If the agent cannot decide between `replace` and `insert-after` (e.g. the new instruction is ambiguous), the agent **asks the human a single clarifying question** before persisting.
@@ -880,7 +1199,7 @@ Every L4 write is:
 - Logged in the role's iteration file for the cycle that performed the write.
 - Reversible: a human can `git revert` the L4 commit, or the agent can produce a counter-L4 file (`replace` with empty body, or matching `insert-before` removal).
 
-The composed `.squidsquad/<role>/CLAUDE.md` regenerates on every L4 write (compose runs as a post-commit hook for files in `.squidsquad/project/`).
+The composed `.squidsquad/<alias>/CLAUDE.md` for **every alias** of the affected role-class regenerates on each L4 write (compose runs as a post-commit hook for files in `.squidsquad/project/`). Two `worker`-class instances sharing one L4 file produce two regenerated CLAUDE.md files at their respective alias paths.
 
 ### 7.6 End-to-end sequence
 
@@ -942,8 +1261,8 @@ Three reinforcing mechanisms to prevent the drift class observed in #9970 (sub-s
 
 A GitHub Actions check (or local pre-commit hook) inspects every PR:
 
-- If any file in `references/sub-skills/`, `references/roles/`, or `references/sub-skills/manifest.md` is changed, the PR **must** also include the regenerated `.squidsquad/<role>/CLAUDE.md` outputs.
-- The check runs `compose.py deploy-all --check` against the PR's tree and compares output to the committed `.squidsquad/<role>/CLAUDE.md` files. Diff = check fails.
+- If any file in `references/sub-skills/`, `references/roles/`, or `references/sub-skills/manifest.md` is changed, the PR **must** also include the regenerated `.squidsquad/<alias>/CLAUDE.md` outputs for every alias whose composition is affected.
+- The check runs `compose.py deploy-all --check` against the PR's tree and compares output to the committed `.squidsquad/<alias>/CLAUDE.md` files. Diff = check fails.
 - Failure message links to the offending source/output mismatch and suggests `compose.py deploy-all` to fix.
 
 ### 8.2 Auto-recompose on merge
@@ -996,7 +1315,7 @@ The checklist (suggested initial content):
 3. **Step-ID stability** — Did I rename or remove any step IDs? If yes, did I follow the §6.1 breaking-change protocol?
 4. **L4 resolution** — Did I delete or rename a step that L4 H3 blocks target? If yes, find them (grep `.squidsquad/project/*.md` for the step ID) and update them.
 5. **Composed-output regen** — Did I run `compose.py deploy-all` after my change? Is the resulting diff included in this PR?
-6. **Visual check** — Did I open the regenerated `.squidsquad/<role>/CLAUDE.md` and read the changed section? Does it read coherently in context?
+6. **Visual check** — Did I open the regenerated `.squidsquad/<alias>/CLAUDE.md` (at least one alias per affected role-class) and read the changed section? Does it read coherently in context?
 
 The checklist is referenced from `step:cycle/code-review` (skill's existing code-review sub-procedure). Skill is required to confirm each item before transitioning a task to pending-test.
 
@@ -1039,7 +1358,7 @@ A future automation could check catalog/source drift in CI (per §8.1's PR-check
 The `pm` auto-memory directory (`C:\Users\...\memory\`) contains 30+ feedback files that today represent project-local customization stored *outside* L4. As part of this migration:
 
 - Each memory file is reviewed against the new L4 model.
-- Memory entries that are durable behaviour overrides become L4 H3 blocks in the relevant `.squidsquad/project/<role>.md` file (under the appropriate `## Slot` H2, with op + target step ID as needed).
+- Memory entries that are durable behaviour overrides become L4 H3 blocks in the relevant `.squidsquad/project/<role-class>.md` file (under the appropriate `## Slot` H2, with op + target step ID as needed).
 - Memory entries that are session-context or user-profile facts stay in the memory system.
 - A one-time migration tool (`migrate_memory_to_l4.py`) does the conversion; `pm` reviews each output before commit.
 
@@ -1055,7 +1374,7 @@ This collapses today's two-system memory architecture (per-user memory + L4) int
 2. ~~**L4 conflict resolution**~~ **CLOSED** — see §3.3 + §7.3. Each agent class has exactly one L4 file; within that file, two `### replace step:cycle/<step-id>` H3 blocks targeting the same step is a validation error and aborts compose. The author resolves the conflict by editing the file.
 3. ~~**Multi-role L4 files**~~ **CLOSED** — see §3.3 + §7.3. L4 is **one file per agent class** (`.squidsquad/project/<role>.md`); role-scoping is the filename. There is no multi-role L4; cross-role customizations expand to one per-role file.
 4. ~~**L4 versioning**~~ **CLOSED** — see §6.1 "Renaming a step ID". Compose-time migration emits a warning when it sees an L4 H3 block targeting an old (renamed) step ID, and offers an auto-rewrite or aborts pending operator confirmation.
-5. **Composed output as derived artifact** — should `.squidsquad/<role>/CLAUDE.md` be `.gitignore`d (always regenerated, never committed) instead of committed-and-diffed? (Trade-off: gitignore eliminates §8.1 PR-check entirely but loses easy historical review.)
+5. **Composed output as derived artifact** — should `.squidsquad/<alias>/CLAUDE.md` be `.gitignore`d (always regenerated, never committed) instead of committed-and-diffed? (Trade-off: gitignore eliminates §8.1 PR-check entirely but loses easy historical review.)
 
 ### 11.2 Known gaps in this doc
 
@@ -1063,7 +1382,7 @@ This collapses today's two-system memory architecture (per-user memory + L4) int
 - **G2** — Compose's role-filter (§4.1 step 2) is sketched but not fully specified: what does the `roles:` frontmatter list support beyond literal role names? (e.g. wildcards like `*`, role classes like `worker:*`.) For v2, only literal role names are supported; wildcards/classes are deferred.
 - **G3** — Boot/cycle/shutdown sub-slot boundaries inside `instructions` are still informal. v2 working definition: `boot` = one-time session-start work; `cycle` = repeated work (per `/loop` tick in polling mode, per nudge in event mode — see [AGENT-RUNTIME.md](AGENT-RUNTIME.md)); `shutdown` = clean-stop work. Formal acceptance tests for sub-slot membership are a follow-up.
 - **G4** — ✅ PARTIALLY CLOSED (2026-05-24). [`VAULT-ARCH.md`](VAULT-ARCH.md) now covers entity types (§4), wikilink grammar (§4.5), confidence levels (§4.4), and the relationship to `vault-protocol.md` (§7). What remains open here: defining the *slot contract* (what content fragments are valid under `slot: vault` in L1-L4 sources, beyond the short descriptor pattern in §5.5).
-- ~~**G5** — L4 file naming collision rules~~ **CLOSED** — see §7.3. There is exactly one L4 file per agent class, named `<role>.md` (e.g. `pm.md`, `worker-frontend.md`, `worker-backend.md`). The filename IS the role identity — collision is structurally impossible since each agent class has exactly one expected filename.
+- ~~**G5** — L4 file naming collision rules~~ **CLOSED** — see §7.3. There is exactly one L4 file per role-class, named `<role-class>.md` (e.g. `pm.md`, `fe-worker.md`, `be-worker.md` in installs with worker specialization; `pm.md`, `worker.md`, `verifier.md`, `dm.md` in installs without). The filename IS the role-class identity — collision is structurally impossible since each role-class has exactly one expected filename.
 - **G6** — ✅ CLOSED (v2). Subagent usage rules now in §6.6 (default-model + per-role overrides + spawn-vs-inline + prompt hygiene + parallelism + trust-but-verify). L3 `replace` overlays on the L1 default cover the per-role Sonnet defaults for `worker`/`dm`.
 - **G7** — Sub-skill reference resolution semantics for L4. Open: can L4 *insert* a new step that references a sub-skill not yet referenced anywhere in L1-L3? Yes per §4.5 (catalog is the source of truth, not the L1-L3 reference set), but the L4-write decision tree in §7.2 should explicitly cover the "introduce a new sub-skill reference" case.
 
@@ -1078,7 +1397,7 @@ Once this doc is merged, the implementation epic spawns these sub-PRs in order. 
 | # | Title | Owner | Depends on |
 |---|---|---|---|
 | **A** | Add frontmatter to all L1-L3 sub-skill source files (slot, ordinal, step-ids) | skill | doc merge + #9965 ship |
-| **B** | compose.py: parse frontmatter; sort by (slot, ordinal); emit five-section output | skill | A |
+| **B** | compose.py: parse frontmatter; sort by (slot, ordinal); emit six-section output (incl. responsibility slot) | skill | A |
 | **C** | compose.py: L4 op processor (replace / insert-before / insert-after / append) | skill | B |
 | **D** | compose.py: validation (DRY check, target-resolution check, duplicate-H2 check) | skill | B |
 | **E** | Renumber Instructions slot to flat grammar; preserve step IDs | skill | A, B |
@@ -1108,15 +1427,15 @@ Total: ~14 sub-PRs. Comparable to event-arch v2's implementation epic (6 PRs in 
 | Term | Definition |
 |---|---|
 | **L1 / L2 / L3 / L4** | The four layers of the SquidSquad composition model (§2). L1-L3 are SquidSquad-shipped; L4 is project-local. |
-| **Slot** | A named top-level section in the composed output: `identity`, `soul`, `instructions`, `project-context`, `vault`. Every L1-L4 source file declares one slot. |
+| **Slot** | A named top-level section in the composed output: `identity`, `responsibility`, `soul`, `instructions`, `project-context`, `vault`. Every L1-L4 source file declares one slot. |
 | **Ordinal** | An integer that determines order within a slot. Authors use gaps (10, 20, 30) so inserts don't require renumbering. |
 | **Op** | An L4-only operation that determines how an L4 file merges with the L1-L3 base: `replace`, `insert-before`, `insert-after`, `append`. |
 | **Target** | A step ID that an L4 op points at. Required for non-`append` ops. |
 | **Step ID** | A stable identifier for an instruction step. Grammar: `step:<sub-slot>/<kebab-name>`. Stable across refactors. |
 | **Sub-slot** | A sub-grouping within the `instructions` slot: `boot`, `cycle`, `shutdown`. |
 | **Sub-procedure** | A reusable named procedure (e.g. "file a bug") authored as a **sub-skill** with its own source file and catalog entry in [`sub-skill-catalog.md`](sub-skill-catalog.md). Referenced by name from cycle steps in the composed CLAUDE.md; **never inlined** into it. Replaces today's standalone H2 protocol sections. |
-| **Sub-skill** | A self-contained unit of agent functionality (e.g. `pipeline-sentinel`, `cycle-runner`, `vault-remember`). Lives in its own source file under `references/sub-skills/` (today, as a markdown fragment) or under `.claude/skills/` (target state, as a real Claude skill). Catalogued in [`sub-skill-catalog.md`](sub-skill-catalog.md); referenced from composed CLAUDE.md by name. Distinct from the L1-L4 layers — see "Sub-skills vs L1-L4" in the catalog. |
-| **Composed output** | The generated `.squidsquad/<role>/CLAUDE.md` file. Marked `DO NOT EDIT`; regenerated on every compose run. |
+| **Sub-skill** | A self-contained unit of agent functionality (e.g. `pipeline-sentinel`, `cycle-runner`, `vault-remember`). Authored source lives under `references/sub-skills/` as a markdown fragment. Once the project-scoped Claude-skills installer ships (§4.5.1), the same source is also materialized per-install at `<project-root>/.claude/skills/<name>/SKILL.md` for Skill-tool invocation. Catalogued in [`sub-skill-catalog.md`](sub-skill-catalog.md); referenced from composed CLAUDE.md by name. Distinct from the L1-L4 layers — see "Sub-skills vs L1-L4" in the catalog. |
+| **Composed output** | The generated `.squidsquad/<alias>/CLAUDE.md` file — one per running agent instance (alias-keyed, not role-class-keyed; see §1 path-keying terminology). Marked `DO NOT EDIT`; regenerated on every compose run. |
 | **Compose pipeline** | The deterministic L1-L3 merge + creative L4 overlay process implemented in `references/scripts/compose.py`. |
 
 ---
