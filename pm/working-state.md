@@ -1,19 +1,22 @@
 # Working State
 
-- **Task**: investigate Claude audit findings (5 actionable issues found in COMPOSE-ARCHITECTURE.md)
-- **Status**: awaiting user direction on which finding to dig into first
+- **Task**: docs/root-cause-fixes branch — 3 root-cause fixes + Claude-audit fixes
+- **Status**: branch ready for review/merge
 
-## Claude audit findings (post-root-cause-fix)
+## Branch state
 
-- H1: §6.5 callout says manifest sub-skills 'ARE inlined' — contradicts v2 thesis
-- H2: §5.7 worked examples 'SOUL.md inlined verbatim' — retired terminology
-- M2: <role> still in §4.4 + §2 diagrams (prose-rename diagram leakage)
-- M3: Boundaries position contradiction — §3.3 vs §6.3 vs worked examples
-- M4: §9 'five canonical sections' vs doc-wide 'six'
+- commit 44306a78 (root-cause fixes: vault disambiguation + boot canonicalization + role/alias contextual rename)
+- commit 6963dabb (Claude-audit fixes: 7 issues incl. 2 HIGHs DS missed)
 
-## DS vs Claude
+## Outstanding
 
-Claude says DS over-flags vault/role-terminology; DS missed Claude's H1+H2 contradictions. Switching audit pipeline to Claude recommended.
+- PR #10380 (post-merge audit fixes, 3 small) still open
+- docs/root-cause-fixes not yet PR'd
+
+## Audit pipeline saved to memory
+
+- DS = primary during iteration (catches surface ambiguity)
+- Claude = final-pass before declaring settled (Claude is the runtime consumer)
 
 ## Plan-First Hold
 
