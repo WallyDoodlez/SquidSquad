@@ -7,7 +7,7 @@
 
 ## 1. Goal & scope
 
-The SquidSquad installer turns a fresh git repo into a working multi-agent setup. It runs as an **ephemeral Claude Code agent** that walks the user through configuration, generates `.squidsquad/`, composes per-role CLAUDE.md outputs, sets up the tracker, and boots the harness.
+The SquidSquad installer turns a fresh git repo into a working multi-agent setup. It runs as an **ephemeral Claude Code agent** that walks the user through configuration, generates `.squidsquad/`, composes per-role-class CLAUDE.md outputs, sets up the tracker, and boots the harness.
 
 ### 1.1 Terminology — categorical roles vs team preset
 
@@ -236,7 +236,7 @@ Writes land in the target repo's working tree (`.squidsquad/` appears in `git st
 
 ### 4.9 Phase 6 — Compose per-role CLAUDE.md
 
-For each role in the chosen team preset (PM, each worker, each verifier, DM), the installer invokes:
+For each alias in the chosen team preset (PM, each worker, each verifier, DM), the installer invokes:
 
 ```bash
 python references/scripts/compose.py deploy <role>
@@ -354,11 +354,11 @@ Key contracts:
 
 ## 8. Tool/MCP/CLI setup is per-agent and post-install
 
-SquidSquad's install does NOT pre-wire tool integrations. There is no "capability" concept in the install — no design-tool selection, no delivery-target selection, no MCP/CLI bundling per role. The installer leaves every agent **tool-naked at first boot**.
+SquidSquad's install does NOT pre-wire tool integrations. There is no "capability" concept in the install — no design-tool selection, no delivery-target selection, no MCP/CLI bundling per role-class. The installer leaves every agent **tool-naked at first boot**.
 
 ### 8.1 Why
 
-The space of role × tool combinations is large and project-specific (designer worker uses Figma here, Sketch there, local HTML somewhere else; a `worker` may need `kubectl` here, `gcloud` there, neither in a third install). Predefining role+capability bundles would either be too narrow to cover real installs, or too broad to be useful. Trying to capture it via PM-driven "choose your capabilities" conversation at install time produces vague, low-fidelity decisions before the human knows what they need.
+The space of role-class × tool combinations is large and project-specific (designer worker uses Figma here, Sketch there, local HTML somewhere else; a `worker` may need `kubectl` here, `gcloud` there, neither in a third install). Predefining role-class+capability bundles would either be too narrow to cover real installs, or too broad to be useful. Trying to capture it via PM-driven "choose your capabilities" conversation at install time produces vague, low-fidelity decisions before the human knows what they need.
 
 ### 8.2 The model: agent learns its own tools post-install
 
@@ -381,7 +381,7 @@ API keys and secrets stay in `~/.squidsquad/secrets` (created by the installer's
 
 - No `capabilities/` sub-skill set in the install scaffold.
 - No `setup.md` walk per tool.
-- No `common/capability-check` sub-skill in any role's compose manifest.
+- No `common/capability-check` sub-skill in any role-class's compose manifest.
 - No `Capabilities:` section in `.squidsquad/config.md`.
 
 The existing `references/sub-skills/capabilities/` directory and `common/capability-check.md` are slated for removal — they are architectural deadwood from the prior model. Tracker: follow-up issue against the worker class (default-preset assignee: `skill`) when this doc lands.
@@ -427,7 +427,7 @@ flowchart LR
 
 **Steps:**
 
-1. **Pull**: latest SquidSquad sources into `references/` (L1-L3 sub-skills, role files, manifests, helper scripts, and any new `migrations/v*-to-v*.md` files shipped with this release).
+1. **Pull**: latest SquidSquad sources into `references/` (L1-L3 sub-skills, role-class files, manifests, helper scripts, and any new `migrations/v*-to-v*.md` files shipped with this release).
 2. **Read installed version**: one-line read of `.squidsquad/config.md`'s `squidsquad_version:` field (written at install time per §3.2 + §4.8). If the operator's `squidsquad_version:` field is absent — possible on installs predating the version-stamp convention — treat as `pre-1.0` and walk all migration files in order.
 
    **Version sources**: `installed-version` reads from `.squidsquad/config.md`'s `squidsquad_version:` field. `installer-version` reads from `references/VERSION` *after* step 1's pull — meaning it reflects the source the operator pulled in this upgrade session, not the version of the running installer binary. If the operator's installer binary is older than what's on `main`, step 1's pull still refreshes `references/VERSION` to current main, so the comparison always reflects what they're upgrading *to*.
@@ -439,7 +439,7 @@ flowchart LR
    3. **Compose dry-run**: `compose.py deploy-all --check` validates the migrated content composes cleanly before any write
    
    Migrations are stepped through one at a time — failure at any gate aborts that step (and the rest of the walk) cleanly; nothing partial is written.
-4. **Recompose**: `compose.py deploy-all` regenerates every role's CLAUDE.md from the now-current source + migrated L4. The composed outputs reflect both the new sub-skill versions and the migrated L4 customizations. `deploy-all` iterates the alias roster from `.squidsquad/config.md`'s `## Aliases` registry and runs `compose.py deploy <alias>` for each (see COMPOSE-ARCHITECTURE §8.2).
+4. **Recompose**: `compose.py deploy-all` regenerates every role-class's CLAUDE.md from the now-current source + migrated L4. The composed outputs reflect both the new sub-skill versions and the migrated L4 customizations. `deploy-all` iterates the alias roster from `.squidsquad/config.md`'s `## Aliases` registry and runs `compose.py deploy <alias>` for each (see COMPOSE-ARCHITECTURE §8.2).
 5. **Restart**: each affected agent so they pick up the new CLAUDE.md. The installer is an ephemeral Claude Code session but has full Bash tooling — it makes these HTTP calls via `curl` (or equivalent) against the harness's localhost port (read from `.squidsquad/.harness-port` per [HARNESS-ARCH.md §6](HARNESS-ARCH.md)). "Ephemeral" refers to lifetime, not capability: the installer can do anything its Claude Code tooling permits before it exits at Phase 9.
 
    The harness remains the sole lifecycle authority — agents are never spawned outside it. The installer's upgrade-flow restarts happen through the harness's public HTTP API; the installer is just another localhost client of the same endpoints the operator uses. See HARNESS-ARCH §2.

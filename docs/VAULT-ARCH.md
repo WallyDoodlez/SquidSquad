@@ -19,21 +19,31 @@ This doc describes:
 - What is actually present in this repo's vault as of the snapshot date
 - Known gaps between the spec and the live behavior
 
-It does NOT describe per-agent-role access (read/write); that lives in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) and [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) where the per-role `includes.yml` mapping is composed.
+It does NOT describe per-role-class access (read/write); that lives in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) and [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) where the per-role-class `includes.yml` mapping is composed.
 
-**Vault slot authorship is L1-exclusive** (guardrail dated 2026-05-29). The composed `## Vault` section in every agent's CLAUDE.md is authored entirely by L1 fragments shipped from this repo — L2 / L3 / L4 cannot contribute `slot: vault` content. The contract documented here (PARAG model, entity types, wikilink grammar, confidence levels) is framework-owned and is not customizable per-role, per-domain, or per-install. Projects that need bespoke vault behaviour file a framework feature request — see [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) §3.3, §5.6, and §11.2 G4 for the policy and revisit conditions.
+**Vault slot authorship is L1-exclusive** (guardrail dated 2026-05-29). The composed `## Vault` section in every agent's CLAUDE.md is authored entirely by L1 fragments shipped from this repo — L2 / L3 / L4 cannot contribute `slot: vault` content. The contract documented here (PARAG model, entity types, wikilink grammar, confidence levels) is framework-owned and is not customizable per-role-class, per-domain, or per-install. Projects that need bespoke vault behaviour file a framework feature request — see [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) §3.3, §5.6, and §11.2 G4 for the policy and revisit conditions.
 
 It does NOT describe:
 
 - Proposed fixes for the gaps in §11 (out of scope; planned for follow-up under #5855)
-- How vault content gets into composed CLAUDE.md (see [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) §5.5)
+- How vault slot content gets into composed CLAUDE.md (see [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) §5.5)
 - The L4 project-local layer in `.squidsquad/project/` (different system; see [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) §3)
 
 ---
 
 ## 2. What the vault is
 
-The vault is a **shared, git-tracked, per-install knowledge store** at `.squidsquad/vault/`. It holds institutional knowledge that outlives any single cycle, task, or session — decisions, learnings, patterns, project context, ongoing concerns, and human preferences as the agents have observed them.
+> **Vault terminology** — this doc and COMPOSE-ARCHITECTURE use three distinct terms; conflating them is the source of long-running audit confusion:
+>
+> | Term | What it is | Authored by | Read by |
+> |---|---|---|---|
+> | **vault slot** | The `## Vault` H2 section in composed CLAUDE.md — short framework-shipped prose describing the vault contract | L1 only (this slot is L1-exclusive per COMPOSE-ARCHITECTURE §3.3) | Runtime agents at boot |
+> | **vault store** | The on-disk knowledge store at `.squidsquad/vault/` (markdown notes organized via PARAG) | All agents at runtime via vault sub-skills (vault-remember, etc.) | All agents at runtime |
+> | **vault contract** | The framework-owned design spec — PARAG taxonomy, entity types, wikilink grammar, confidence levels | SquidSquad framework (`references/sub-skills/common/vault-protocol.md` + this doc) | Vault sub-skills + agents that read the slot |
+>
+> When this doc says "vault" without a qualifier, assume the most specific applicable term from context. When the meaning is structurally significant (e.g., "L1-exclusive"), the qualifier is mandatory.
+
+The vault store is a **shared, git-tracked, per-install knowledge store** at `.squidsquad/vault/`. It holds institutional knowledge that outlives any single cycle, task, or session — decisions, learnings, patterns, project context, ongoing concerns, and human preferences as the agents have observed them.
 
 Three properties define it:
 
@@ -443,9 +453,9 @@ For completeness, behaviors that some readers might expect but that are not impl
 
 - **No automatic propagation across SquidSquad installs.** Each install has its own vault; there is no shared/federated layer. (See `project_memory_layer_vision` in PM auto-memory for an aspirational note on cross-install sharing; not implemented.)
 - **No queryable index or embedded search.** All search is `grep` over the markdown files (per the 4 search modes in `vault-protocol.md` §vault-search).
-- **No machine-learning on vault content.** No embedding store, no semantic search, no RAG. Confidence levels and tags are agent-assigned, not computed.
+- **No machine-learning on vault store content.** No embedding store, no semantic search, no RAG. Confidence levels and tags are agent-assigned, not computed.
 - **No write-ahead log or transactional guarantees.** Writes are file overwrites + git commits.
-- **No per-note access control.** Read/write is at the role level (full vs slim variant), not the note level.
+- **No per-note access control.** Read/write is at the role-class level (full vs slim variant), not the note level.
 
 ---
 
@@ -483,7 +493,7 @@ What is actually in `.squidsquad/vault/` right now in this repo:
 | `skill-lead` | 6 |
 | `pm-lead` | 2 |
 
-**Two owner-label conventions are in use** (`skill` vs `skill-lead`; `pm` vs `pm-lead`). The spec in `vault-protocol.md` says `owner: pm | skill | qa | dm | shared`, so the `-lead` suffix variant is non-spec and looks like organic drift — agents have been writing `<role>-lead` (their tracker-comment role tag) instead of the spec'd bare role name. Not flagged in any open issue today; recorded here for traceability.
+**Two owner-label conventions are in use** (`skill` vs `skill-lead`; `pm` vs `pm-lead`). The spec in `vault-protocol.md` says `owner: pm | skill | qa | dm | shared`, so the `-lead` suffix variant is non-spec and looks like organic drift — agents have been writing `<role>-lead` (their tracker-comment role tag) instead of the spec'd bare role-class name. Not flagged in any open issue today; recorded here for traceability.
 
 ### 10.4 Confidence distribution (galaxy notes, 28 total)
 
@@ -511,7 +521,7 @@ No notes are `archived` or `superseded` — consistent with the empty `archives/
 | `decision-phase-4-event-ack-lifecycle-deferred.md` | 2026-05-21 |
 | `learning-broadcast-deque-cannot-have-in-stream-gaps.md` | 2026-05-19 |
 
-Oldest galaxy notes are dated 2026-04-25 (vault initialization), e.g. `decision-deterministic-testing.md`, `decision-comprehension-test-pipeline.md`, `decision-branch-per-feature-workflow.md`.
+Oldest galaxy notes are dated 2026-04-25 (vault store initialization), e.g. `decision-deterministic-testing.md`, `decision-comprehension-test-pipeline.md`, `decision-branch-per-feature-workflow.md`.
 
 ### 10.7 Vault templates
 
@@ -622,7 +632,7 @@ Consequences today:
 Closing this gap requires:
 
 1. **Sub-skill source split** — the `references/sub-skills/common/vault-remember.md` body becomes two parts: a short stub composed into the consuming agent (defines the "spawn subagent at Step 4b with these inputs and apply the returned write list" contract) and a longer subagent prompt template stored separately (the actual 4-gate reflection instructions, loaded only by the subagent). Same split for `vault-synthesis.md`.
-2. **Compose-time awareness** — `compose.py` must know to compose the stub into the role's CLAUDE.md but leave the subagent prompt at its source path for the spawned subagent to read.
+2. **Compose-time awareness** — `compose.py` must know to compose the stub into the role-class's CLAUDE.md but leave the subagent prompt at its source path for the spawned subagent to read.
 3. **Subagent contract** — defined by the structured return shape on each sub-skill's §7 entry (vault-remember returns `{action, path, type, body, reason}` per candidate; vault-synthesis returns at most one posture descriptor).
 4. **Model pin** — `sonnet` per §7's rationale; honor `feedback_skill_sonnet_subagents` / `feedback_dm_sonnet_subagents` consistency.
 

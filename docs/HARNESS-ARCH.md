@@ -245,11 +245,32 @@ Crash transitions: `booting → crashed` (boot failure — `booted` event never 
 
 ### 7.2 Spawn (`boot_agent`)
 
-1. Read agent's clone path from the in-memory `AgentState` (which the harness populated at boot from `.squidsquad/.harness-state.json`'s per-alias `clone_path` field — see §7.5). The installer-written `.squidsquad/.local-config` is the source-of-truth at install/boot time; once the harness is up, `.harness-state.json` is the operational source.
-2. Spawn platform-appropriate launcher → `thin_launcher.py` → `claude`.
-3. Spawn sibling `event_poll.py --wait --role <role> --target stdout` process. `event_poll` begins polling on spawn; the durable deque covers boot-time events. The `booted` handshake (step 4) gates whether the agent is considered ready to receive routed work, not whether `event_poll` is active.
-4. Wait for `booted` event from agent (cursor-clean handshake).
-5. Update `.squidsquad/.harness-state.json` with the new PID + boot time.
+This is the **canonical step-by-step ordering** for the agent boot sequence. All other docs defer here for process-spawn ordering.
+
+1. Resolve clone path for the alias from in-memory `AgentState` (loaded from `.squidsquad/.harness-state.json` at harness start; on first boot, populated from `.squidsquad/.local-config` per §7.2 "First-boot discovery" below).
+2. Spawn the platform-appropriate launcher (`wt.exe` / Terminal / x-terminal-emulator) → `thin_launcher.py` in the agent's clone dir.
+3. `thin_launcher.py` writes its PID to `.squidsquad/<alias>/.claude-pid` (sentinel: "harness has spawned this alias"), then spawns `claude` (Anthropic CLI) as its child.
+4. **In parallel** with steps 2–3, the harness spawns the sibling `event_poll.py --wait --role <alias> --target stdout` directly (not under the launcher chain). `event_poll` begins polling the harness HTTP API immediately on spawn. **Note**: `event_poll` and `claude` are siblings — neither is the other's parent. The harness owns both.
+5. The harness awaits the `booted` event from the agent (cursor-clean handshake). Until `booted` arrives, the agent is in `status=booting`; any `assigned-to` events queued for this alias remain in the harness deque and are delivered only after `status=ready`.
+6. On `booted` receipt, agent transitions `status=booting → ready`. Routed work (`POST /work/assign`) is now deliverable. The harness then updates `.squidsquad/.harness-state.json` with the new PID + boot time.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant H as Harness
+    participant L as Launcher (wt.exe / Terminal)
+    participant TL as thin_launcher.py
+    participant C as claude.exe
+    participant EP as event_poll.py
+    H->>L: spawn launcher in clone dir
+    L->>TL: launch thin_launcher
+    TL->>TL: write .claude-pid
+    TL->>C: spawn claude (child)
+    H->>EP: spawn event_poll (sibling — parallel)
+    EP->>H: GET /events/for/<alias> (begins polling)
+    C->>H: POST /events { type: booted }
+    H->>H: status: booting → ready
+```
 
 #### First-boot discovery
 
@@ -307,7 +328,7 @@ Two fields, not one, so recovery semantics are explicit: after a host reboot the
 
 **PID fields**: the state file always carries `claude_pid` and `terminal_pid` as separate fields — they are independently useful for diagnostics (which process is Claude vs. which is the terminal wrapper) and for singleton checks (harness checks `claude_pid` liveness directly). The API response's post-#10358 single `pid` field (see §4.1) is a derived view computed from these two state-file fields, not a replacement for them.
 
-Atomic writes (`.tmp` + `mv`). On harness restart, the file is read; each agent is checked for liveness (PIDs still alive?); intents are preserved. Note: the outer agent key is the **alias** (e.g. `skill`, `verifier`); each agent's *categorical* role is not currently persisted in this file — it's derived from `.squidsquad/config.md` at boot. Source of truth: `HarnessState.save_state()` in `references/scripts/harness.py`.
+Atomic writes (`.tmp` + `mv`). On harness restart, the file is read; each agent is checked for liveness (PIDs still alive?); intents are preserved. Note: the outer agent key is the **alias** (e.g. `skill`, `verifier`); each agent's *categorical* role-class is not currently persisted in this file — it's derived from `.squidsquad/config.md` at boot. Source of truth: `HarnessState.save_state()` in `references/scripts/harness.py`.
 
 ---
 
@@ -331,7 +352,7 @@ When the port file is missing, the harness is treated as not running. Event-bus 
 
 ## 9. State files (summary)
 
-Per-agent directories under `.squidsquad/` are keyed by **alias**, not by the L2 categorical role (which can have multiple aliases per install — e.g. the `worker` role aliased as `skill` here, `frontend`/`backend` elsewhere). The alias is the install-time name the operator assigned to an agent instance, and is what shows up as a directory on disk. The harness-owned files in the top-level `.squidsquad/` directory hold per-alias state internally (e.g. `.squidsquad/.harness-state.json` keys agents by alias).
+Per-agent directories under `.squidsquad/` are keyed by **alias**, not by the L2 categorical role-class (which can have multiple aliases per install — e.g. the `worker` role-class aliased as `skill` here, `frontend`/`backend` elsewhere). The alias is the install-time name the operator assigned to an agent instance, and is what shows up as a directory on disk. The harness-owned files in the top-level `.squidsquad/` directory hold per-alias state internally (e.g. `.squidsquad/.harness-state.json` keys agents by alias).
 
 | File | Owner | Persisted | Purpose |
 |---|---|---|---|
@@ -531,6 +552,7 @@ In landing order:
 
 ## 15. Revision log
 
+- **2026-05-30 (v5)** — Root-cause fix #3: boot sequence cross-doc fragmentation. §7.2 designated canonical authoritative source for agent boot sequence; expanded from 5 to 6 prose steps with explicit parallel-spawn language; added Mermaid sequence diagram (first and only process-spawn diagram in the docs). AGENT-RUNTIME §7.0 spawn-ordering sentence removed and replaced with cross-reference. AGENT-RUNTIME §7.2 full sequence diagram removed; replaced with agent-side-only 5-step list + cross-reference to this section.
 - **2026-05-30 (v4)** — PR #10378 round-5 audit pass. H1: moved `event_poll.py` INTO the §14.1 "Before" tree as an explicit sibling subtree under harness (was blockquote-only). H2: added "First-boot discovery" subsection in §7.2 documenting `.local-config` as the bootstrap source when `.harness-state.json` does not exist. M1: tightened §2 start.sh trigger wording to "unreachable (port file missing or HTTP probe fails)" — removes ambiguous "not running OR". M2: updated §9 `.event-state.json` Purpose column to explicitly exclude the deque (deque is in-memory only per §5.1).
 - **2026-05-30 (v3)** — PR #10378 round-4 audit pass. H1: annotated `event_poll.py` as a separate sibling subtree in §14.1 (was absent from the "Before" tree). Cross/INSTALLER M1: tightened §2 start.sh trigger wording to distinguish "not running OR unreachable" from "running-and-reachable" upgrade path. M1: added one-time `boot_agent(role)` alias-value clarification on first occurrence in §3 (rename tracked in #10358). H2 (§9 `.event-state.json` row): pre-existing on this branch — no change needed.
 - **2026-05-27 (v2)** — Added §14 proposed-simplification block. End-to-end validated by experiment scripts under `references/experiments/`. Status banner updated to reflect that the doc now contains both descriptive (§§1–13) and proposal (§14) content.
