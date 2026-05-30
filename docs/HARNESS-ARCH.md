@@ -421,7 +421,7 @@ Two processes per agent, down from five. TTY still provided by `wt.exe`, so subs
 
 | Today: `thin_launcher.py` | Direct path: where it lives |
 |---|---|
-| Singleton check (`.claude-pid` + descendant walk) | **Harness** — already maintains `.squidsquad/.harness-state.json` with per-alias PIDs; pre-spawn check against existing in-memory state |
+| Singleton check (`.claude-pid` + descendant walk) | **Harness** — already maintains `.squidsquad/.harness-state.json` with per-alias PIDs. **Algorithm**: pre-spawn, look up the alias's recorded `claude_pid` in in-memory state; verify the process is still alive via `OpenProcess` (Windows) / `kill -0` (POSIX). Spawn proceeds only if no alive PID exists for that alias. Stale PIDs (recorded but dead — e.g. harness crashed and restarted with a still-loaded state file) are treated as "no live agent" and the alias is eligible for spawn. No descendant walk needed: the harness owns its own state file as the truth source. |
 | Env var `SQUIDSQUAD_ROLE=<alias>` | **Harness** — `Popen(env=...)` propagates through `wt.exe → WindowsTerminal.exe` to the tab child (validated, see §14.4). (Env var name is `SQUIDSQUAD_ROLE` for code-compat; value is the alias.) |
 | Claude arg-list construction (`--append-system-prompt`, `--name`, `--effort`, bootstrap `/loop` prompt) | **Harness / `boot_remote`** — same arg list, emitted as `wt new-tab … claude.exe <flags>` |
 | Write `.claude-pid` after resolving descendant | **Harness** — post-spawn, snapshot processes once, filter `name='claude.exe' AND parent_pid==WindowsTerminal.exe_pid AND pid NOT IN pre_spawn_set`. Shallow tree, no toolhelp32 ctypes machinery needed. |
