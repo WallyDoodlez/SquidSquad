@@ -5,14 +5,15 @@
 
 ## Recent Cycle Work
 
-- BRIEFING.md staleness fix (cycle 1884): removed closed #10003 from active priorities, added PR #10378 + #10379 as in-flight items
-- Cycle 1883: closed L1-L3 seed gap (commit 87ef9305 on PR #10379)
+- Cycle 1885 (this): quiet — improvement scan found config.md Dev Agents key drift (not fixed; pm_docs_only)
+- Cycle 1884: BRIEFING.md staleness fix
+- Cycle 1883: closed L1-L3 seed gap on PR #10379
 
-## Pipeline Health (cycle 1884)
+## Pipeline Health
 
-- pm 🦑 / dm 🦑 / skill 👻 stale ~92h (pre-existing, intent=running) / verifier ❓
+- pm 🦑 / dm 🦑 / skill 👻 (pre-existing) / verifier ❓
 - Both PRs MERGEABLE, 0 reviews
 
-## Plan-First Hold (per feedback_plan_first)
+## Plan-First Hold
 
-Active. Tier 1 inline fixes allowed (BRIEFING.md staleness done). No Tier 2/3 task filing, no transitions, no merges.
+Active. Improvement-scan finding (config.md Dev Agents key) deliberately not auto-fixed — crosses pm_docs_only boundary into code-consumed data. Worth flagging for human disposition; not filing as Tier 2 task per plan-first hold (only Tier 1 own-domain fixes).
